@@ -3,6 +3,8 @@
 #include "erhe_dataformat/dataformat.hpp"
 
 #include <cstddef>
+#include <string>
+#include <type_traits> // enable_if
 
 namespace erhe::graphics {
 

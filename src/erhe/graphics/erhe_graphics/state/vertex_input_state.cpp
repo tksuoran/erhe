@@ -3,6 +3,8 @@
 #include "erhe_dataformat/vertex_format.hpp"
 #include "erhe_verify/verify.hpp"
 
+#include <fmt/format.h>
+
 #include <memory>
 
 namespace erhe::graphics {

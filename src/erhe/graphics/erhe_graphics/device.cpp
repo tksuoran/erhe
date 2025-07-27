@@ -6,6 +6,7 @@
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/compute_command_encoder.hpp"
 #include "erhe_graphics/gl/gl_device.hpp"
+#include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/sampler.hpp"

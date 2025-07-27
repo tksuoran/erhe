@@ -3,6 +3,8 @@
 #include "erhe_dataformat/dataformat.hpp"
 
 #include <array>
+#include <memory>
+#include <string>
 
 namespace erhe::graphics {
 

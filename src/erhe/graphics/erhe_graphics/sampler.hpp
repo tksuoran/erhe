@@ -3,6 +3,7 @@
 #include "erhe_graphics/enums.hpp"
 
 #include <array>
+#include <memory>
 #include <string>
 
 namespace erhe::graphics {

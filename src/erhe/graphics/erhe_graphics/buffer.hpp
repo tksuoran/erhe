@@ -2,6 +2,7 @@
 
 #include "erhe_graphics/enums.hpp"
 
+#include <memory>
 #include <optional>
 #include <span>
 #include <string>

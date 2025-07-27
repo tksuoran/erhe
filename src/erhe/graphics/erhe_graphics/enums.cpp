@@ -2,6 +2,8 @@
 #include "erhe_utility/bit_helpers.hpp"
 #include "erhe_verify/verify.hpp"
 
+#include <sstream>
+
 namespace erhe::graphics {
 
 auto to_string(Buffer_usage usage) -> std::string
