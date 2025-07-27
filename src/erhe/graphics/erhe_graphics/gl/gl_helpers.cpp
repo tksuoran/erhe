@@ -1,5 +1,3 @@
-#pragma once
-
 #include "erhe_graphics/gl/gl_helpers.hpp"
 #include "erhe_verify/verify.hpp"
 

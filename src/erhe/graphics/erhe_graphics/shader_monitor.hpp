@@ -46,8 +46,8 @@ private:
     {
     public:
         Reload_entry(const Shader_stages_create_info& create_info, Shader_stages* shader_stages)
-            : create_info  {create_info}
-            , shader_stages{shader_stages}
+            : shader_stages{shader_stages}
+            , create_info  {create_info}
         {
         }
 

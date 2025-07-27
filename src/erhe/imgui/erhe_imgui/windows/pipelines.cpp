@@ -51,12 +51,12 @@ const char* depth_function_strings[] = {
 const char* stencil_op_strings[] = {
     "Zero",
     "Decrement",
-    "Decrement with Wrap"
+    "Decrement with Wrap",
     "Increment",
     "Increment with Wrap",
     "Invert",
     "Keep",
-    "Replace",
+    "Replace"
 };
 
 const char* stencil_function_strings[] = {
@@ -71,11 +71,11 @@ const char* stencil_function_strings[] = {
 };
 
 const char* equation_mode_strings[] = {
-    "Add",             // 0
-    "Reverse Subtract" // 1
-    "Substract",       // 2
-    "Max",             // 3
-    "Min"              // 4
+    "Add",              // 0
+    "Reverse Subtract", // 1
+    "Substract",        // 2
+    "Max",              // 3
+    "Min"               // 4
 };
 
 const char* blending_factor_strings[] = {
@@ -89,7 +89,7 @@ const char* blending_factor_strings[] = {
     "1 - Constant Color",
     "1 - Destination Alpha",
     "1 - Destination Color",
-    "1 - Source 1 Alpha"
+    "1 - Source 1 Alpha",
     "1 - Source 1 Color",
     "1 - Source Alpha",
     "1 - Source Color",
@@ -408,9 +408,9 @@ void pipeline_imgui(erhe::graphics::Render_pipeline_state& pipeline)
                     ImGui::PushID(attribute_index);
                     if (ImGui::TreeNodeEx(attribute_label.c_str(), ImGuiTreeNodeFlags_Framed)) {
                         ImGui::Text("Location: %u", attribute.layout_location);
-                        ImGui::Text("Stride: %d",   attribute.stride);
+                        ImGui::Text("Stride: %zu",   attribute.stride);
                         ImGui::Text("Format: %s",   c_str(attribute.format) ? "yes" : "no");
-                        ImGui::Text("Offset: %u",   attribute.offset);
+                        ImGui::Text("Offset: %zu",   attribute.offset);
                         ImGui::TreePop();
                     }
                     ImGui::PopID();
@@ -420,9 +420,9 @@ void pipeline_imgui(erhe::graphics::Render_pipeline_state& pipeline)
                     std::string binding_label = fmt::format("Binding {}", binding_index++);
                     ImGui::PushID(100 + binding_index);
                     if (ImGui::TreeNodeEx(binding_label.c_str(), ImGuiTreeNodeFlags_Framed)) {
-                        ImGui::Text("Binding: %u", binding.binding);
-                        ImGui::Text("Stride: %d",  binding.stride);
-                        ImGui::Text("Divisor: %d", binding.divisor);
+                        ImGui::Text("Binding: %zu", binding.binding);
+                        ImGui::Text("Stride: %zu",  binding.stride);
+                        ImGui::Text("Divisor: %u", binding.divisor);
                         ImGui::TreePop();
                     }
                     ImGui::PopID();

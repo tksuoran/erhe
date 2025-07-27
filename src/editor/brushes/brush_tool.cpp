@@ -100,8 +100,8 @@ auto Brush_pick_command::try_call() -> bool
 
 Brush_rotate_command::Brush_rotate_command(erhe::commands::Commands& commands, App_context& context, int direction)
     : Command    {commands, "Brush_tool.rotate"}
-    , m_direction{direction}
     , m_context  {context}
+    , m_direction{direction}
 {
 }
 
@@ -128,7 +128,6 @@ Brush_tool::Brush_tool(
     , m_pick_command                  {commands, context}
     , m_rotate_cw_command             {commands, context, 1}
     , m_rotate_ccw_command            {commands, context, -1}
-    , m_pick_using_float_input_command{commands, m_pick_command, 0.6f, 0.4f}
     , m_toggle_brush_preview_command  {
         commands,
         "Brush.toggle_preview",
@@ -138,6 +137,7 @@ Brush_tool::Brush_tool(
             return true;
         }
     }
+    , m_pick_using_float_input_command{commands, m_pick_command, 0.6f, 0.4f}
 {
     ERHE_PROFILE_FUNCTION();
 

@@ -42,13 +42,7 @@ Shadow_renderer::Shadow_renderer(erhe::graphics::Device& graphics_device, Progra
             }
         )
     }
-    , m_vertex_input        {graphics_device}
-    , m_draw_indirect_buffer{graphics_device}
-    , m_joint_buffer        {graphics_device, program_interface.joint_interface}
-    , m_light_buffer        {graphics_device, program_interface.light_interface}
-    , m_primitive_buffer    {graphics_device, program_interface.primitive_interface}
-    , m_material_buffer     {graphics_device, program_interface.material_interface}
-    , m_gpu_timer           {graphics_device, "Shadow_renderer"}
+    , m_dummy_texture{graphics_device.create_dummy_texture()}
     , m_fallback_sampler{
         graphics_device,
         erhe::graphics::Sampler_create_info{
@@ -61,7 +55,13 @@ Shadow_renderer::Shadow_renderer(erhe::graphics::Device& graphics_device, Progra
             .debug_label       = "Shadow_renderer::m_fallback_sampler"
         }
     }
-    , m_dummy_texture{graphics_device.create_dummy_texture()}
+    , m_vertex_input        {graphics_device}
+    , m_draw_indirect_buffer{graphics_device}
+    , m_joint_buffer        {graphics_device, program_interface.joint_interface}
+    , m_light_buffer        {graphics_device, program_interface.light_interface}
+    , m_primitive_buffer    {graphics_device, program_interface.primitive_interface}
+    , m_material_buffer     {graphics_device, program_interface.material_interface}
+    , m_gpu_timer           {graphics_device, "Shadow_renderer"}
 {
     m_pipeline_cache_entries.resize(8);
 }
