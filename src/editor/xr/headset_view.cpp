@@ -15,6 +15,7 @@
 
 #include "erhe_utility/bit_helpers.hpp"
 #include "erhe_graphics/blit_command_encoder.hpp"
+#include "erhe_graphics/compute_command_encoder.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/texture.hpp"
@@ -463,6 +464,11 @@ auto Headset_view::render_headset() -> bool
             m_context.app_rendering ->render_viewport_renderables(render_context);
 
             m_context.debug_renderer->update(render_context.viewport, *render_context.camera);
+
+            {
+                erhe::graphics::Compute_command_encoder compute_encoder = graphics_device.make_compute_command_encoder();
+                m_context.debug_renderer->compute(compute_encoder);
+            }
 
             {
                 erhe::graphics::Render_command_encoder encoder = graphics_device.make_render_command_encoder(*render_pass);

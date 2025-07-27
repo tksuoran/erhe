@@ -445,11 +445,32 @@ void Render_pass_impl::start_render_pass()
                 .height = static_cast<float>(m_render_target_height)
             }
         );
-        // gl::viewport(0, 0, m_render_target_width, m_render_target_height);
     }
 
-    // Color mask state is part of blend and it affects clears
-    m_device.get_impl().m_gl_state_tracker.color_blend.execute(Color_blend_state::color_blend_disabled);
+    // To be able to clear color the color write masks must be enabled (part of color blend state)
+    m_device.get_impl().m_gl_state_tracker.color_blend.execute(
+        Color_blend_state{
+            .write_mask = {
+                .red   = true,
+                .green = true,
+                .blue  = true,
+                .alpha = true
+            }
+        }
+    );
+
+    // To be able to clear depth and stencil, depth write mask and stencil write masks must be enabled
+    m_device.get_impl().m_gl_state_tracker.depth_stencil.execute(
+        Depth_stencil_state{
+            .depth_write_enable = true,
+            .stencil_front = {
+                .write_mask = 0xff
+            },
+            .stencil_back = {
+                .write_mask = 0xff
+            }
+        }
+    );
 
 #if !defined(NDEBUG)
     if (!m_uses_default_framebuffer) {

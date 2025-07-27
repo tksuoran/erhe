@@ -112,10 +112,7 @@ auto Debug_renderer_bucket::make_draw(std::size_t vertex_byte_count, std::size_t
     constexpr std::size_t min_range_size = 8192; // TODO
     if (m_draws.empty()) {
         m_draws.emplace_back(
-            m_vertex_ssbo_buffer.acquire(
-                erhe::graphics::Ring_buffer_usage::CPU_write,
-                std::max(vertex_byte_count, min_range_size)
-            ),
+            m_vertex_ssbo_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, std::max(vertex_byte_count, min_range_size)),
             erhe::graphics::Buffer_range{},
             0
         );
@@ -136,6 +133,8 @@ auto Debug_renderer_bucket::make_draw(std::size_t vertex_byte_count, std::size_t
     const auto        buffer_range_span   = draw.input_buffer_range.get_span();
     draw.input_buffer_range.bytes_written(vertex_byte_count);
     draw.primitive_count += primitive_count;
+    draw.compute_dispatched = false;
+
     return buffer_range_span.subspan(buffer_range_offset, vertex_byte_count);
 }
 
@@ -184,6 +183,7 @@ void Debug_renderer_bucket::dispatch_compute(erhe::graphics::Compute_command_enc
         //      previous GPU reads, and possibly also
         //      gl::memory_barrier(gl::Memory_barrier_mask::shader_storage_barrier_bit)
         draw.draw_buffer_range = m_triangle_vertex_buffer.acquire(erhe::graphics::Ring_buffer_usage::GPU_access, triangle_byte_count);
+        ERHE_VERIFY(draw.draw_buffer_range.get_buffer() != nullptr);
         draw.draw_buffer_range.bytes_gpu_used(triangle_byte_count);
         draw.draw_buffer_range.close();
 
@@ -192,6 +192,7 @@ void Debug_renderer_bucket::dispatch_compute(erhe::graphics::Compute_command_enc
         encoder.dispatch_compute(draw.primitive_count, 1, 1);
 
         draw.input_buffer_range.release();
+        draw.compute_dispatched = true;
     }
 }
 
@@ -208,6 +209,9 @@ void Debug_renderer_bucket::render(erhe::graphics::Render_command_encoder& rende
     if (draw_hidden && m_config.draw_hidden) {
         render_encoder.set_render_pipeline_state(m_pipeline_hidden);
         for (const Debug_draw_entry& draw : m_draws) {
+            if (!draw.compute_dispatched) {
+                continue; // This should never happen - TODO Remove
+            }
             erhe::graphics::Buffer* triangle_vertex_buffer        = draw.draw_buffer_range.get_buffer()->get_buffer();
             size_t                  triangle_vertex_buffer_offset = draw.draw_buffer_range.get_byte_start_offset_in_buffer();
             render_encoder.set_vertex_buffer(triangle_vertex_buffer, triangle_vertex_buffer_offset, 0);

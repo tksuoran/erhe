@@ -31,6 +31,7 @@ public:
     erhe::graphics::Buffer_range input_buffer_range;
     erhe::graphics::Buffer_range draw_buffer_range;
     std::size_t                  primitive_count;
+    bool                         compute_dispatched{false};
 };
 
 class Debug_renderer_bucket
