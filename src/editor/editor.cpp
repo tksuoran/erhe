@@ -299,6 +299,12 @@ public:
 
         m_thumbnails->update();
 
+        // Update scene transforms
+        m_viewport_scene_views->update_transforms();
+        if (m_app_context.OpenXR) {
+            m_headset_view->update_transforms();
+        }
+
         // Execute rendergraph
         m_rendergraph->execute();
 

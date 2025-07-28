@@ -110,6 +110,7 @@ public:
     void set_world_from_control    (const glm::mat4& world_from_control);
     void reset_control_transform   ();
     void reset_hover_slots         ();
+    void update_transforms         ();
     void update_hover_with_raytrace();
     void update_grid_hover         ();
 

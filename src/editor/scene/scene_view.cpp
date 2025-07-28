@@ -18,6 +18,7 @@
 #include "erhe_raytrace/ray.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/mesh_raytrace.hpp"
+#include "erhe_scene/scene.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_profile/profile.hpp"
 
@@ -402,6 +403,17 @@ auto Scene_view::get_closest_point_on_plane(const glm::vec3 N, const glm::vec3 P
 
     const vec3 drag_point_new_position_in_world = Q0 + intersection.value() * v;
     return drag_point_new_position_in_world;
+}
+
+void Scene_view::update_transforms()
+{
+    std::shared_ptr<Scene_root> scene_root = get_scene_root();
+    if (!scene_root) {
+        return;
+    }
+
+    erhe::scene::Scene& scene = scene_root->get_scene();
+    scene.update_node_transforms();
 }
 
 }

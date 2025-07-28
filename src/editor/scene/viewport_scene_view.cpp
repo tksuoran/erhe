@@ -155,10 +155,6 @@ void Viewport_scene_view::execute_rendergraph_node()
     // TODO This would be? needed for basic (non-ImGui) viewports?
     // encoder.set_scissor_rect(context.viewport.x, context.viewport.y, context.viewport.width, context.viewport.height);
 
-    scene_root->get_scene().update_node_transforms();
-
-    m_context.tools->get_tool_scene_root()->get_hosted_scene()->update_node_transforms();
-
     m_context.app_message_bus->send_message(
         App_message{
             .update_flags = Message_flag_bit::c_flag_bit_render_scene_view,

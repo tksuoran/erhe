@@ -463,4 +463,11 @@ auto Scene_views::get_post_processing_nodes() const -> const std::vector<std::sh
     return m_post_processing_nodes;
 }
 
+void Scene_views::update_transforms()
+{
+    for (auto& view : m_viewport_scene_views) {
+        view->update_transforms();
+    }
+}
+
 }

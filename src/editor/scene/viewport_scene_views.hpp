@@ -97,6 +97,8 @@ public:
 
     void update_hover_info(erhe::imgui::Imgui_host* imgui_host);
 
+    void update_transforms();
+
     void debug_imgui();
 
     // Returns the Viewport_scene_view instance which is currently under pointer
