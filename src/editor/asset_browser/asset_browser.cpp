@@ -203,7 +203,6 @@ Asset_browser::Asset_browser(erhe::imgui::Imgui_renderer& imgui_renderer, erhe::
     : m_context{context}
 {
     ERHE_PROFILE_FUNCTION();
-    scan();
 
     m_node_tree_window = std::make_shared<Asset_browser_window>(
         *this,
@@ -213,7 +212,6 @@ Asset_browser::Asset_browser(erhe::imgui::Imgui_renderer& imgui_renderer, erhe::
         "Asset Browser",
         "asset_browser"
     );
-    m_node_tree_window->set_root(m_root);
     m_node_tree_window->set_item_filter(
         erhe::Item_filter{
             .require_all_bits_set           = 0,
@@ -227,6 +225,7 @@ Asset_browser::Asset_browser(erhe::imgui::Imgui_renderer& imgui_renderer, erhe::
             return item_callback(item);
         }
     );
+    scan();
 }
 
 void Asset_browser::scan(const std::filesystem::path& path, Asset_node* parent)
@@ -281,6 +280,7 @@ void Asset_browser::scan()
 
     m_root = make_node(assets_root, nullptr);
     scan(assets_root, m_root.get());
+    m_node_tree_window->set_root(m_root);
 }
 
 auto Asset_browser::try_import(const std::shared_ptr<Asset_file_gltf>& gltf) -> bool
