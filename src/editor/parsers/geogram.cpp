@@ -58,6 +58,16 @@ void import_geogram(
         return;
     }
 
+    const uint64_t flags =
+        erhe::geometry::Geometry::process_flag_connect |
+        erhe::geometry::Geometry::process_flag_build_edges |
+        erhe::geometry::Geometry::process_flag_compute_facet_centroids |
+        erhe::geometry::Geometry::process_flag_compute_smooth_vertex_normals |
+        erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates;
+
+    geo_mesh.vertices.set_single_precision();
+    geometry->process(flags);
+
     constexpr uint64_t mesh_flags =
         erhe::Item_flags::visible     |
         erhe::Item_flags::content     |
@@ -77,9 +87,7 @@ void import_geogram(
         build_info,
         normal_style
     };
-    const bool renderable_ok = primitive.make_renderable_mesh(build_info, normal_style);
     const bool raytrace_ok   = primitive.make_raytrace();
-    static_cast<void>(renderable_ok);
     static_cast<void>(raytrace_ok);
 
     auto node = std::make_shared<erhe::scene::Node>(path_string);
