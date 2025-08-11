@@ -64,11 +64,11 @@ public:
     [[nodiscard]] auto get_handle_material  (Handle handle, Mode mode) -> std::shared_ptr<erhe::primitive::Material>;
     [[nodiscard]] auto get_handle_visibility(Handle handle) const -> bool;
     void viewport_toolbar (bool& hovered);
-    void update_visibility();
+    void update_visibility(Transform_tool_settings& settings);
     void update_for_view  (Scene_view* scene_view);
     void update_transforms(); //const uint64_t serial);
 
-    void update_mesh_visibility(const std::shared_ptr<erhe::scene::Mesh>& mesh);
+    void update_mesh_visibility(bool precondition, const std::shared_ptr<erhe::scene::Mesh>& mesh);
 
     void set_anchor(const erhe::scene::Trs_transform& world_from_anchor);
 
@@ -100,8 +100,8 @@ private:
     ) -> std::shared_ptr<erhe::primitive::Material>;
 
     App_context& m_context;
-    float           m_scale     {1.0f};
-    Scene_view*     m_scene_view{nullptr};
+    float        m_scale     {1.0f};
+    Scene_view*  m_scene_view{nullptr};
 
     std::map<erhe::scene::Mesh*, Handle>             m_handles;
     erhe::scene::Trs_transform                       m_world_from_anchor;

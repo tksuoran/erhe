@@ -111,7 +111,7 @@ selection_bounding_sphere = false #
 edge_color                = [ 0.0, 0.0, 0.0, 0.5 ] # Note - use premultiplied linear values
 selection_edge_color      = [ 0.0, 0.0, 0.0, 0.5 ] #
 clear_color               = [ 0.05, 0.05, 0.05 ]
-gizmo_scale               = 8.0
+gizmo_scale               = 10.0
 
 
 [transform_tool]

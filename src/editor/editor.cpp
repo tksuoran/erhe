@@ -300,6 +300,7 @@ public:
         m_thumbnails->update();
 
         // Update scene transforms
+        m_tools->update_transforms();
         m_viewport_scene_views->update_transforms();
         if (m_app_context.OpenXR) {
             m_headset_view->update_transforms();
@@ -703,6 +704,7 @@ public:
                     *m_scene_message_bus.get(),
                     m_app_context,
                     *m_app_rendering.get(),
+                    *m_app_settings.get(),
                     *m_mesh_memory.get(),
                     *m_programs
                 );

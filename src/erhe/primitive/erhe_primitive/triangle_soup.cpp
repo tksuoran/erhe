@@ -219,7 +219,8 @@ private:
         };
         GEO::index_t vertex{0};
         std::size_t point_share_count{0};
-        for (std::size_t index : m_sorted_vertex_indices) {
+        for (std::size_t i = 0, end = m_sorted_vertex_indices.size(); i < end; ++i) {
+            const std::size_t index = m_sorted_vertex_indices[i];
             if (index == std::numeric_limits<std::size_t>::max()) {
                 continue;
             }

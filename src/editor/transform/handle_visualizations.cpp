@@ -40,7 +40,7 @@ namespace {
     constexpr float arrow_cone_length_collision        = arrow_cone_length_render * 2.0f;
     constexpr float arrow_cone_radius_render           = 0.15f;
     constexpr float arrow_cone_radius_collision        = arrow_cone_radius_render * 3.0f;
-    constexpr float box_half_thickness_render          = 0.1f;
+    constexpr float box_half_thickness_render          = 0.01f;
     constexpr float box_half_thickness_collision       = box_half_thickness_render * 2.0f;
     constexpr float box_length_render                  = 0.6f;
     constexpr float box_length_collision               = box_length_render * 1.3f;
@@ -274,7 +274,7 @@ auto Handle_visualizations::get_handle_visibility(const Handle handle) const -> 
     }
 }
 
-void Handle_visualizations::update_mesh_visibility(const std::shared_ptr<erhe::scene::Mesh>& mesh)
+void Handle_visualizations::update_mesh_visibility(bool precondition, const std::shared_ptr<erhe::scene::Mesh>& mesh)
 {
     auto& transform_tool = *m_context.transform_tool;
     const auto active_handle = transform_tool.get_active_handle();
@@ -287,6 +287,7 @@ void Handle_visualizations::update_mesh_visibility(const std::shared_ptr<erhe::s
     const bool scale         = m_context.scale_tool->is_active() && ((m_context.scale_tool->get_axis_mask() & axis_mask) == axis_mask);
 
     const bool visible = 
+        precondition &&
         !transform_tool.shared.entries.empty() && 
         show &&
         (
@@ -319,32 +320,39 @@ void Handle_visualizations::update_mesh_visibility(const std::shared_ptr<erhe::s
     );
 }
 
-void Handle_visualizations::update_visibility()
+void Handle_visualizations::update_visibility(Transform_tool_settings& settings)
 {
-    update_mesh_visibility(m_x_arrow_pos_cylinder_mesh);
-    update_mesh_visibility(m_x_arrow_neg_cylinder_mesh);
-    update_mesh_visibility(m_x_arrow_pos_cone_mesh);
-    update_mesh_visibility(m_x_arrow_neg_cone_mesh);
-    update_mesh_visibility(m_y_arrow_pos_cylinder_mesh);
-    update_mesh_visibility(m_y_arrow_neg_cylinder_mesh);
-    update_mesh_visibility(m_y_arrow_pos_cone_mesh);
-    update_mesh_visibility(m_y_arrow_neg_cone_mesh);
-    update_mesh_visibility(m_z_arrow_pos_cylinder_mesh);
-    update_mesh_visibility(m_z_arrow_neg_cylinder_mesh);
-    update_mesh_visibility(m_z_arrow_pos_cone_mesh);
-    update_mesh_visibility(m_z_arrow_neg_cone_mesh);
-    update_mesh_visibility(m_xy_translate_box_mesh);
-    update_mesh_visibility(m_xz_translate_box_mesh);
-    update_mesh_visibility(m_yz_translate_box_mesh);
-    update_mesh_visibility(m_x_rotate_ring_mesh   );
-    update_mesh_visibility(m_y_rotate_ring_mesh   );
-    update_mesh_visibility(m_z_rotate_ring_mesh   );
-    update_mesh_visibility(m_x_neg_scale_mesh     );
-    update_mesh_visibility(m_x_pos_scale_mesh     );
-    update_mesh_visibility(m_y_neg_scale_mesh     );
-    update_mesh_visibility(m_y_pos_scale_mesh     );
-    update_mesh_visibility(m_z_neg_scale_mesh     );
-    update_mesh_visibility(m_z_pos_scale_mesh     );
+    const bool translate = settings.show_translate;
+    const bool rotate    = settings.show_rotate;
+    const bool scale     = settings.show_scale;
+    update_mesh_visibility(translate, m_x_arrow_pos_cylinder_mesh);
+    update_mesh_visibility(translate, m_x_arrow_neg_cylinder_mesh);
+    update_mesh_visibility(translate, m_x_arrow_pos_cone_mesh);
+    update_mesh_visibility(translate, m_x_arrow_neg_cone_mesh);
+    update_mesh_visibility(translate, m_y_arrow_pos_cylinder_mesh);
+    update_mesh_visibility(translate, m_y_arrow_neg_cylinder_mesh);
+    update_mesh_visibility(translate, m_y_arrow_pos_cone_mesh);
+    update_mesh_visibility(translate, m_y_arrow_neg_cone_mesh);
+    update_mesh_visibility(translate, m_z_arrow_pos_cylinder_mesh);
+    update_mesh_visibility(translate, m_z_arrow_neg_cylinder_mesh);
+    update_mesh_visibility(translate, m_z_arrow_pos_cone_mesh);
+    update_mesh_visibility(translate, m_z_arrow_neg_cone_mesh);
+    update_mesh_visibility(translate, m_xy_translate_box_mesh);
+    update_mesh_visibility(translate, m_xz_translate_box_mesh);
+    update_mesh_visibility(translate, m_yz_translate_box_mesh);
+    update_mesh_visibility(rotate,    m_x_rotate_ring_mesh   );
+    update_mesh_visibility(rotate,    m_y_rotate_ring_mesh   );
+    update_mesh_visibility(rotate,    m_z_rotate_ring_mesh   );
+    update_mesh_visibility(scale,     m_x_neg_scale_mesh     );
+    update_mesh_visibility(scale,     m_x_pos_scale_mesh     );
+    update_mesh_visibility(scale,     m_y_neg_scale_mesh     );
+    update_mesh_visibility(scale,     m_y_pos_scale_mesh     );
+    update_mesh_visibility(scale,     m_z_neg_scale_mesh     );
+    update_mesh_visibility(scale,     m_z_pos_scale_mesh     );
+    update_mesh_visibility(scale,     m_xy_scale_box_mesh    );
+    update_mesh_visibility(scale,     m_xz_scale_box_mesh    );
+    update_mesh_visibility(scale,     m_yz_scale_box_mesh    );
+
 }
 
 auto Handle_visualizations::get_mode_material(
@@ -646,7 +654,7 @@ void Handle_visualizations::viewport_toolbar(bool& hovered)
         }
         if (translate_pressed) {
             settings.show_translate = !settings.show_translate;
-            update_visibility();
+            update_visibility(settings);
         }
     }
 
@@ -662,7 +670,7 @@ void Handle_visualizations::viewport_toolbar(bool& hovered)
         }
         if (rotate_pressed) {
             settings.show_rotate = !settings.show_rotate;
-            update_visibility();
+            update_visibility(settings);
         }
     }
 
@@ -678,7 +686,7 @@ void Handle_visualizations::viewport_toolbar(bool& hovered)
         }
         if (scale_pressed) {
             settings.show_scale = !settings.show_scale;
-            update_visibility();
+            update_visibility(settings);
         }
     }
 

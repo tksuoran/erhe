@@ -118,7 +118,7 @@ auto Scene_builder::make_camera(std::string_view name, vec3 position, vec3 look_
     camera->projection()->fov_y           = glm::radians(35.0f);
     camera->projection()->projection_type = erhe::scene::Projection::Type::perspective_vertical;
     camera->projection()->z_near          = 0.03f;
-    camera->projection()->z_far           = 80.0f;
+    camera->projection()->z_far           = 1000.0f;
     camera->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui | Item_flags::show_debug_visualizations);
     camera->set_exposure(camera_exposure);
     camera->set_shadow_range(shadow_range);
@@ -161,7 +161,7 @@ void Scene_builder::setup_cameras(
         vec3{0.0f, camera_elevation, camera_distance},
         vec3{0.0f, 0.25f, 0.0f}
     );
-    camera_a->projection()->z_far = 64.0f;
+    camera_a->projection()->z_far = 1000.0f;
     //// camera_a->set_wireframe_color(glm::vec4{1.0f, 0.6f, 0.3f, 1.0f});
 
 #if defined(ERHE_ENABLE_SECOND_CAMERA)

@@ -258,8 +258,10 @@ void Mesh_operation::make_entries(const std::function<void(const erhe::geometry:
                     .motion_mode     = motion_mode
                 };
 
-                entry.after.node_physics = std::make_shared<Node_physics>(rigid_body_create_info);
-                entry.after.node_physics->physics_motion_mode = entry.before.node_physics->physics_motion_mode;
+                if (entry.before.node_physics) {
+                    entry.after.node_physics = std::make_shared<Node_physics>(rigid_body_create_info);
+                    entry.after.node_physics->physics_motion_mode = entry.before.node_physics->physics_motion_mode;
+                }
             }
 
         }

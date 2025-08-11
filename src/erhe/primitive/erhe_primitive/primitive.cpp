@@ -263,6 +263,9 @@ Primitive_shape::~Primitive_shape() noexcept
 
 auto Primitive_shape::make_geometry() -> bool
 {
+    if (m_geometry) {
+        return true;
+    }
     if (m_triangle_soup) {
         ERHE_VERIFY(m_element_mappings.triangle_to_mesh_facet.empty());
         ERHE_VERIFY(m_element_mappings.mesh_corner_to_vertex_buffer_index.empty());
@@ -382,6 +385,7 @@ auto Primitive_render_shape::make_buffer_mesh(const Build_info& build_info, Norm
         // TODO temp hack
         m_element_mappings.triangle_to_mesh_facet.clear();
         m_element_mappings.mesh_corner_to_vertex_buffer_index.clear();
+        m_element_mappings.mesh_vertex_to_vertex_buffer_index.clear();
         return build_buffer_mesh(
             m_renderable_mesh,
             m_geometry->get_mesh(),

@@ -221,6 +221,7 @@ Tools::Tools(
     erhe::scene::Scene_message_bus& scene_message_bus,
     App_context&                    app_context,
     App_rendering&                  app_rendering,
+    App_settings&                   app_settings,
     Mesh_memory&                    mesh_memory,
     Programs&                       programs
 )
@@ -230,26 +231,6 @@ Tools::Tools(
     ERHE_PROFILE_FUNCTION();
 
     const auto tools_content_library = std::make_shared<Content_library>();
-
-    if (app_context.developer_mode) {
-        m_content_library_tree_window = std::make_shared<Item_tree_window>(
-            imgui_renderer,
-            imgui_windows,
-            app_context,
-            "Tools Library",
-            "tools_content_library"
-        );
-        m_content_library_tree_window->set_root(tools_content_library->root);
-        m_content_library_tree_window->set_item_filter(
-            erhe::Item_filter{
-                .require_all_bits_set           = 0,
-                .require_at_least_one_bit_set   = 0,
-                .require_all_bits_clear         = 0,
-                .require_at_least_one_bit_clear = 0
-            }
-        );
-        m_content_library_tree_window->set_developer();
-    }
 
     m_scene_root = std::make_shared<Scene_root>(
         nullptr,
@@ -288,6 +269,30 @@ Tools::Tools(
     };
     tool->override_scene_root = get_tool_scene_root();
     tool->allow_shader_stages_override = false;
+
+    if (app_context.developer_mode) {
+        m_content_library_tree_window = std::make_shared<Item_tree_window>(
+            imgui_renderer,
+            imgui_windows,
+            app_context,
+            "Tools Library",
+            "tools_content_library"
+        );
+        m_content_library_tree_window->set_root(tools_content_library->root);
+        m_content_library_tree_window->set_item_filter(
+            erhe::Item_filter{
+                .require_all_bits_set           = 0,
+                .require_at_least_one_bit_set   = 0,
+                .require_all_bits_clear         = 0,
+                .require_at_least_one_bit_clear = 0
+            }
+        );
+        m_content_library_tree_window->set_developer();
+
+        m_tool_scene_browser = m_scene_root->make_browser_window(
+            imgui_renderer, imgui_windows, app_context, app_settings
+        );
+    }
 }
 
 auto Tools::get_tool_scene_root() -> std::shared_ptr<Scene_root>
@@ -305,6 +310,12 @@ void Tools::register_tool(Tool* tool)
     } else {
         m_tools.emplace_back(tool);
     }
+}
+
+void Tools::update_transforms()
+{
+    erhe::scene::Scene& scene = m_scene_root->get_scene();
+    scene.update_node_transforms();
 }
 
 void Tools::render_viewport_tools(const Render_context& context)

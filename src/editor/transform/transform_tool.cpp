@@ -327,7 +327,7 @@ void Transform_tool::update_target_nodes(erhe::scene::Node* node_filter)
     Handle_visualizations* visualizations = shared.get_visualizations();
     if (visualizations != nullptr) {
         visualizations->set_anchor(shared.world_from_anchor);
-        visualizations->update_visibility();
+        visualizations->update_visibility(shared.settings);
     }
 }
 
@@ -669,7 +669,7 @@ void Transform_tool::update_visibility()
 {
     Handle_visualizations* visualizations = shared.get_visualizations();
     if (visualizations != nullptr) {
-        visualizations->update_visibility();
+        visualizations->update_visibility(shared.settings);
     }
     update_transforms();
 }

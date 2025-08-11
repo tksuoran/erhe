@@ -57,6 +57,9 @@ void import_geogram(
     if (!load_ok) {
         return;
     }
+    if ((geo_mesh.vertices.nb() == 0) || (geo_mesh.facets.nb() == 0)) {
+        return;
+    }
 
     const uint64_t flags =
         erhe::geometry::Geometry::process_flag_connect |
@@ -98,7 +101,9 @@ void import_geogram(
     mesh->enable_flag_bits(mesh_flags);
     node->attach          (mesh);
     node->enable_flag_bits(node_flags);
-    //node->set_world_from_node(instance_create_info.world_from_node);
+    node->set_world_from_node(
+        erhe::scene::Trs_transform(glm::vec3{0.0f, 0.1f, 0.0f})
+    );
     node->set_parent(scene_root_node);
 }
 

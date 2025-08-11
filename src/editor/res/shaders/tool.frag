@@ -15,7 +15,7 @@ void main()
     vec3  v     = normalize(view_position_in_world - v_position);
     vec3  n     = normalize(v_normal);
     float NdotV = max(dot(n, v), 0.0);
-    out_color.rgb = srgb_to_linear(material.materials[v_material_index].base_color.rgb * (0.5 + pow(NdotV, 5.0) * 2.5));
+    out_color.rgb = srgb_to_linear(material.materials[v_material_index].base_color.rgb);// * (0.9 + pow(NdotV, 5.0) * 0.1));
 
 #if 0
     const vec3 palette[24] = vec3[24](

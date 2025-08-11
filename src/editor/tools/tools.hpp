@@ -67,11 +67,13 @@ public:
         erhe::scene::Scene_message_bus& scene_message_bus,
         App_context&                    context,
         App_rendering&                  app_rendering,
+        App_settings&                   app_settings,
         Mesh_memory&                    mesh_memory,
         Programs&                       programs
     );
 
     // Public API
+    void update_transforms    ();
     void render_viewport_tools(const Render_context& context);
     void register_tool        (Tool* tool);
     void set_priority_tool    (Tool* tool);
@@ -87,7 +89,9 @@ private:
     std::vector<Tool*>                m_tools;
     std::vector<Tool*>                m_background_tools;
     std::shared_ptr<Scene_root>       m_scene_root;
+
     std::shared_ptr<Item_tree_window> m_content_library_tree_window;
+    std::shared_ptr<Item_tree_window> m_tool_scene_browser;
 };
 
 }
