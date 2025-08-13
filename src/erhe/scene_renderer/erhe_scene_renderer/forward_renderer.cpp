@@ -7,6 +7,7 @@
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
+#include "erhe_graphics/texture_heap.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/light.hpp"
 #include "erhe_scene_renderer/scene_renderer_log.hpp"
@@ -106,8 +107,8 @@ void Forward_renderer::render(const Render_parameters& parameters)
     const auto& filter         = parameters.filter;
     const auto  primitive_mode = parameters.primitive_mode;
 
-    using Buffer_range = erhe::graphics::Buffer_range;
-    std::optional<Buffer_range> camera_buffer_range{};
+    using Ring_buffer_range = erhe::graphics::Ring_buffer_range;
+    std::optional<Ring_buffer_range> camera_buffer_range{};
     if (camera != nullptr) {
         camera_buffer_range = m_camera_buffer.update(
             *camera->projection(),
@@ -128,15 +129,15 @@ void Forward_renderer::render(const Render_parameters& parameters)
         erhe::scene_renderer::c_texture_heap_slot_count_reserved
     };
 
-    Buffer_range material_range = m_material_buffer.update(texture_heap, materials);
+    Ring_buffer_range material_range = m_material_buffer.update(texture_heap, materials);
     m_material_buffer.bind(parameters.render_encoder, material_range);
 
-    Buffer_range joint_range = m_joint_buffer.update(parameters.debug_joint_indices, parameters.debug_joint_colors, skins);
+    Ring_buffer_range joint_range = m_joint_buffer.update(parameters.debug_joint_indices, parameters.debug_joint_colors, skins);
     m_joint_buffer.bind(parameters.render_encoder, joint_range);
 
     // This must be done even if lights is empty.
     // For example, the number of lights is read from the light buffer.
-    Buffer_range light_range = m_light_buffer.update(lights, parameters.light_projections, parameters.ambient_light, texture_heap);
+    Ring_buffer_range light_range = m_light_buffer.update(lights, parameters.light_projections, parameters.ambient_light, texture_heap);
     m_light_buffer.bind_light_buffer(parameters.render_encoder, light_range);
 
     texture_heap.bind();
@@ -179,7 +180,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
             }
 
             std::size_t primitive_count{0};
-            Buffer_range primitive_range = m_primitive_buffer.update(meshes, primitive_mode, filter, parameters.primitive_settings, primitive_count);
+            Ring_buffer_range primitive_range = m_primitive_buffer.update(meshes, primitive_mode, filter, parameters.primitive_settings, primitive_count);
             if (primitive_count == 0){
                 primitive_range.cancel();
                 continue;
@@ -239,13 +240,13 @@ void Forward_renderer::draw_primitives(const Render_parameters& parameters, cons
         erhe::scene_renderer::c_texture_heap_slot_count_reserved
     };
 
-    using Buffer_range = erhe::graphics::Buffer_range;
-    Buffer_range material_range = m_material_buffer.update(texture_heap, parameters.materials);
+    using Ring_buffer_range = erhe::graphics::Ring_buffer_range;
+    Ring_buffer_range material_range = m_material_buffer.update(texture_heap, parameters.materials);
     if (material_range.get_buffer() != nullptr) {
         m_material_buffer.bind(parameters.render_encoder, material_range);
     }
 
-    std::optional<Buffer_range> camera_range;
+    std::optional<Ring_buffer_range> camera_range;
     if (camera != nullptr) {
         camera_range = m_camera_buffer.update(
             *camera->projection(),
@@ -259,7 +260,7 @@ void Forward_renderer::draw_primitives(const Render_parameters& parameters, cons
         m_camera_buffer.bind(parameters.render_encoder, camera_range.value());
     }
 
-    std::optional<Buffer_range> light_control_range{};
+    std::optional<Ring_buffer_range> light_control_range{};
     if (light != nullptr) {
         const auto* light_projection_transforms = parameters.light_projections->get_light_projection_transforms_for_light(light);
         if (light_projection_transforms != nullptr) {
@@ -270,7 +271,7 @@ void Forward_renderer::draw_primitives(const Render_parameters& parameters, cons
         }
     }
 
-    Buffer_range light_range = m_light_buffer.update(lights, parameters.light_projections, parameters.ambient_light, texture_heap);
+    Ring_buffer_range light_range = m_light_buffer.update(lights, parameters.light_projections, parameters.ambient_light, texture_heap);
     m_light_buffer.bind_light_buffer(parameters.render_encoder, light_range);
 
     texture_heap.bind();

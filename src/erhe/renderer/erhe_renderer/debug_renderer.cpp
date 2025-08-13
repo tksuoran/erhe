@@ -189,20 +189,20 @@ auto Debug_renderer::get(unsigned int stencil, bool visible, bool hidden) -> Pri
 
 static constexpr std::string_view c_line_renderer_render{"Debug_renderer::render()"};
 
-auto Debug_renderer::update_view_buffer(const erhe::math::Viewport viewport, const erhe::scene::Camera& camera) -> erhe::graphics::Buffer_range
+auto Debug_renderer::update_view_buffer(const erhe::math::Viewport viewport, const erhe::scene::Camera& camera) -> erhe::graphics::Ring_buffer_range
 {
     const auto* camera_node = camera.get_node();
     ERHE_VERIFY(camera_node != nullptr);
 
     const erhe::graphics::Shader_resource& view_block = *m_program_interface.view_block.get();
-    erhe::graphics::Buffer_range view_buffer_range = m_view_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, view_block.get_size_bytes());
-    const auto                   view_gpu_data     = view_buffer_range.get_span();
-    size_t                       view_write_offset = 0;
-    std::byte* const             start             = view_gpu_data.data();
-    const std::size_t            byte_count        = view_gpu_data.size_bytes();
-    const std::size_t            word_count        = byte_count / sizeof(float);
-    const std::span<float>       gpu_float_data {reinterpret_cast<float*   >(start), word_count};
-    const std::span<uint32_t>    gpu_uint32_data{reinterpret_cast<uint32_t*>(start), word_count};
+    erhe::graphics::Ring_buffer_range view_buffer_range = m_view_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, view_block.get_size_bytes());
+    const auto                        view_gpu_data     = view_buffer_range.get_span();
+    size_t                            view_write_offset = 0;
+    std::byte* const                  start             = view_gpu_data.data();
+    const std::size_t                 byte_count        = view_gpu_data.size_bytes();
+    const std::size_t                 word_count        = byte_count / sizeof(float);
+    const std::span<float>            gpu_float_data {reinterpret_cast<float*   >(start), word_count};
+    const std::span<uint32_t>         gpu_uint32_data{reinterpret_cast<uint32_t*>(start), word_count};
 
     const auto      projection_transforms  = camera.projection_transforms(viewport);
     const glm::mat4 clip_from_world        = projection_transforms.clip_from_world.get_matrix();

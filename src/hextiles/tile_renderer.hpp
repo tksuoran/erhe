@@ -11,6 +11,7 @@
 #include "erhe_graphics/fragment_outputs.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/render_pipeline_state.hpp"
+#include "erhe_graphics/ring_buffer_client.hpp"
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
@@ -135,13 +136,13 @@ private:
     std::shared_ptr<erhe::graphics::Texture>  m_tileset_texture;
     Image                                     m_tileset_image;
 
-    erhe::graphics::GPU_ring_buffer_client    m_vertex_buffer;
-    erhe::graphics::GPU_ring_buffer_client    m_projection_buffer;
+    erhe::graphics::Ring_buffer_client        m_vertex_buffer;
+    erhe::graphics::Ring_buffer_client        m_projection_buffer;
     erhe::graphics::Vertex_input_state        m_vertex_input;
     erhe::graphics::Render_pipeline_state     m_pipeline;
 
-    std::optional<erhe::graphics::Buffer_range> m_vertex_buffer_range;
-    size_t                                      m_index_count        {0};
+    std::optional<erhe::graphics::Ring_buffer_range> m_vertex_buffer_range;
+    size_t                                           m_index_count        {0};
 
     // Tile layout:
     // - 8 * 7 : terrain group tiles 8 x 8, 7 groups

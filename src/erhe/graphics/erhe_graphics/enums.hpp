@@ -8,6 +8,13 @@
 
 namespace erhe::graphics {
 
+enum class Vendor : unsigned int {
+    Unknown = 0,
+    Nvidia  = 1,
+    Amd     = 2,
+    Intel   = 3
+};
+
 enum class Glsl_type
 {
     invalid = 0,
@@ -267,6 +274,14 @@ enum class Memory_barrier_mask : unsigned int {
     transform_feedback_barrier_bit   = 0x00000800u,
     uniform_barrier_bit              = 0x00000004u,
     vertex_attrib_array_barrier_bit  = 0x00000001u
+};
+
+enum class Ring_buffer_usage : unsigned int
+{
+    None       = 0,
+    CPU_write  = 1,
+    CPU_read   = 2,
+    GPU_access = 3
 };
 
 template<typename Enum>

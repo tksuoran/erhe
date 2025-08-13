@@ -20,6 +20,9 @@
 #include "erhe_graphics/draw_indirect.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/render_pass.hpp"
+#include "erhe_graphics/ring_buffer.hpp"
+#include "erhe_graphics/ring_buffer_client.hpp"
+#include "erhe_graphics/ring_buffer_range.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_utility/align.hpp"
 #include "erhe_window/window.hpp"
@@ -714,8 +717,8 @@ auto Device_impl::create_dummy_texture() -> std::shared_ptr<Texture>
 
     std::span<const std::uint8_t> src_span{dummy_pixel.data(), dummy_pixel.size()};
     std::size_t                   byte_count   = src_span.size_bytes();
-    GPU_ring_buffer_client        texture_upload_buffer{m_device, erhe::graphics::Buffer_target::pixel, "dummy texture upload"};
-    Buffer_range                  buffer_range = texture_upload_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, byte_count);
+    Ring_buffer_client            texture_upload_buffer{m_device, erhe::graphics::Buffer_target::pixel, "dummy texture upload"};
+    Ring_buffer_range             buffer_range = texture_upload_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, byte_count);
     std::span<std::byte>          dst_span     = buffer_range.get_span();
     memcpy(dst_span.data(), src_span.data(), byte_count);
     buffer_range.bytes_written(byte_count);
@@ -749,224 +752,6 @@ auto Device_impl::get_shader_monitor() -> Shader_monitor&
 auto Device_impl::get_info() const -> const Device_info&
 {
     return m_info;
-}
-
-Texture_heap_impl::Texture_heap_impl(
-    Device&        device,
-    const Texture& fallback_texture,
-    const Sampler& fallback_sampler,
-    std::size_t    reserved_slot_count
-)
-    : m_device             {device}
-    , m_fallback_texture   {fallback_texture}
-    , m_fallback_sampler   {fallback_sampler}
-    , m_reserved_slot_count{reserved_slot_count}
-    , m_used_slot_count    {0}
-{
-    // log_texture_frame->trace("Texture_heap_impl::Texture_heap_impl()");
-
-    if (m_device.get_info().use_bindless_texture) {
-        const uint64_t fallback_texture_handle = m_device.get_handle(m_fallback_texture, m_fallback_sampler);
-        m_textures.resize(m_reserved_slot_count);
-        m_samplers.resize(m_reserved_slot_count);
-        m_assigned.resize(m_reserved_slot_count);
-        m_gl_bindless_texture_handles.resize(m_reserved_slot_count);
-        m_gl_bindless_texture_resident.resize(m_reserved_slot_count);
-        std::fill(m_assigned.begin(), m_assigned.end(), false);
-        std::fill(m_textures.begin(), m_textures.end(), &m_fallback_texture);
-        std::fill(m_samplers.begin(), m_samplers.end(), &m_fallback_sampler);
-        std::fill(m_gl_bindless_texture_handles.begin(), m_gl_bindless_texture_handles.end(), fallback_texture_handle);
-        std::fill(m_gl_bindless_texture_resident.begin(), m_gl_bindless_texture_resident.end(), false);
-        m_used_slot_count = 0;
-    } else {
-        m_textures.resize(device.get_info().max_texture_image_units);
-        m_samplers.resize(device.get_info().max_texture_image_units);
-        m_gl_textures.resize(device.get_info().max_texture_image_units);
-        m_gl_samplers.resize(device.get_info().max_texture_image_units);
-        m_zero_vector.resize(device.get_info().max_texture_image_units);
-        reset();
-    }
-}
-
-Texture_heap_impl::~Texture_heap_impl()
-{
-    // log_texture_frame->trace("Texture_heap_impl::~Texture_heap_impl()");
-}
-
-void Texture_heap_impl::reset()
-{
-    // log_texture_frame->trace("Texture_heap_impl::reset()");
-
-    if (!m_device.get_info().use_bindless_texture) {
-        const GLuint fallback_texture_name = m_fallback_texture.get_impl().gl_name();
-        const GLuint fallback_sampler_name = m_fallback_sampler.get_impl().gl_name();
-        std::fill(m_textures.begin(), m_textures.end(), &m_fallback_texture);
-        std::fill(m_samplers.begin(), m_samplers.end(), &m_fallback_sampler);
-        std::fill(m_gl_textures.begin(), m_gl_textures.end(), fallback_texture_name);
-        std::fill(m_gl_samplers.begin(), m_gl_samplers.end(), fallback_sampler_name);
-        m_used_slot_count = 0;
-    } else {
-        ERHE_FATAL("This should not happen");
-    }
-}
-
-auto Texture_heap_impl::get_shader_handle(const Texture* texture, const Sampler* sampler) -> uint64_t
-{
-    ERHE_VERIFY(texture != nullptr);
-    ERHE_VERIFY(sampler != nullptr);
-
-    for (std::size_t slot = 0; slot < m_reserved_slot_count + m_used_slot_count; ++slot) {
-        if ((m_textures[slot] == texture) && (m_samplers[slot] == sampler)) {
-            if (m_device.get_info().use_bindless_texture) {
-                return m_gl_bindless_texture_handles[slot];
-            } else {
-                return static_cast<uint64_t>(slot - m_reserved_slot_count);
-            }
-        }
-    }
-    ERHE_FATAL("texture %u sampler %u not found in texture heap", texture->get_impl().gl_name(), sampler->get_impl().gl_name());
-}
-
-auto Texture_heap_impl::assign(std::size_t slot, const Texture* texture, const Sampler* sampler) -> uint64_t
-{
-    if (texture == nullptr) {
-        texture = &m_fallback_texture;
-    }
-    if (sampler == nullptr) {
-        sampler = &m_fallback_sampler;
-    }
-
-    if (m_device.get_info().use_bindless_texture) {
-        const uint64_t gl_bindless_texture_handle = m_device.get_handle(*texture, *sampler);
-        m_assigned                    [slot] = true;
-        m_gl_bindless_texture_handles [slot] = gl_bindless_texture_handle;
-        m_gl_bindless_texture_resident[slot] = false;
-        m_textures                    [slot] = texture;
-        m_samplers                    [slot] = sampler;
-        // log_texture_frame->trace("assigned texture heap slot {} for texture {}, sampler {} bindless handle {}", slot, texture->gl_name(), sampler->gl_name(), format_texture_handle(gl_bindless_texture_handle));
-        return gl_bindless_texture_handle;
-
-    } else {
-
-        m_textures   [slot] = texture;
-        m_samplers   [slot] = sampler;
-        m_gl_textures[slot] = texture->get_impl().gl_name();
-        m_gl_samplers[slot] = sampler->get_impl().gl_name();
-        // log_texture_frame->trace("assigned texture heap slot {} for texture {}, sampler {}", slot, texture->gl_name(), sampler->gl_name());
-        return slot;
-    }
-}
-
-auto Texture_heap_impl::allocate(const Texture* texture, const Sampler* sampler) -> uint64_t
-{
-    if ((texture == nullptr) || (sampler == nullptr)) {
-        return invalid_texture_handle;
-    }
-
-    // const GLuint texture_name = texture->gl_name(); // get_texture_from_handle(handle);
-    // const GLuint sampler_name = sampler->gl_name(); // get_sampler_from_handle(handle);
-
-    for (std::size_t slot = 0; slot < m_reserved_slot_count + m_used_slot_count; ++slot) {
-        if ((m_textures[slot] == texture) && (m_samplers[slot] == sampler)) {
-            // log_texture_frame->trace("cache hit texture heap slot {} for texture {}, sampler {}", slot, texture_name, sampler_name);
-            if (m_device.get_info().use_bindless_texture) {
-                return m_gl_bindless_texture_handles[slot];
-            } else {
-                return static_cast<uint64_t>(slot);
-            }
-        }
-    }
-
-    if (m_device.get_info().use_bindless_texture) {
-        // const std::size_t slot = m_reserved_slot_count + m_used_slot_count;
-        const uint64_t gl_bindless_texture_handle = m_device.get_handle(*texture, *sampler);
-        m_gl_bindless_texture_handles .push_back(gl_bindless_texture_handle);
-        m_gl_bindless_texture_resident.push_back(false);
-        m_textures                    .push_back(texture);
-        m_samplers                    .push_back(sampler);
-        ++m_used_slot_count;
-        // log_texture_frame->trace(
-        //     "allocated texture heap slot {} for texture {}, sampler {} bindless handle = {}",
-        //     slot, texture_name, sampler_name, format_texture_handle(gl_bindless_texture_handle)
-        // );
-        return gl_bindless_texture_handle;
-
-    } else {
-
-        if (m_reserved_slot_count + m_used_slot_count < m_textures.size()) {
-            const std::size_t slot = m_reserved_slot_count + m_used_slot_count;
-            m_textures   [slot] = texture;
-            m_samplers   [slot] = sampler;
-            m_gl_textures[slot] = texture->get_impl().gl_name();
-            m_gl_samplers[slot] = sampler->get_impl().gl_name();
-            ++m_used_slot_count;
-            // log_texture_frame->trace("allocated texture heap slot {} for texture {}, sampler {}", slot, texture_name, sampler_name);
-            return static_cast<uint64_t>(slot - m_reserved_slot_count);
-        }
-
-        // log_texture_frame->trace("texture heap is full, unable to allocate slot for texture {}, sampler {}", texture_name, sampler_name);
-        return {};
-    }
-}
-
-// TODO Maybe this should use Render_command_encoder?
-void Texture_heap_impl::unbind()
-{
-    // log_texture_frame->trace("Texture_heap_impl::unbind()");
-
-    if (m_device.get_info().use_bindless_texture) {
-        for (std::size_t slot = 0; slot < m_reserved_slot_count + m_used_slot_count; ++slot) {
-            if ((slot < m_reserved_slot_count) && !m_assigned[slot]) {
-                continue;
-            }
-            if (m_gl_bindless_texture_resident[slot]) {
-                const uint64_t gl_bindless_texture_handle = m_gl_bindless_texture_handles[slot];
-                // log_texture_frame->trace(
-                //     "making texture handle {} non-resident / texture {}, sampler {}",
-                //     format_texture_handle(gl_bindless_texture_handle),
-                //     m_textures[slot]->gl_name(),
-                //     m_samplers[slot]->gl_name()
-                // );
-                gl::make_texture_handle_non_resident_arb(gl_bindless_texture_handle);
-                m_gl_bindless_texture_resident[slot] = false;
-            }
-        }
-    } else {
-        gl::bind_textures(0, m_device.get_info().max_texture_image_units, m_zero_vector.data());
-        gl::bind_samplers(0, m_device.get_info().max_texture_image_units, m_zero_vector.data());
-    }
-}
-
-// TODO Maybe this should use Render_command_encoder?
-auto Texture_heap_impl::bind() -> std::size_t
-{
-    // log_texture_frame->trace("Texture_heap_impl::bind()");
-
-    if (m_device.get_info().use_bindless_texture) {
-        for (std::size_t slot = 0; slot < m_reserved_slot_count + m_used_slot_count; ++slot) {
-            if ((slot < m_reserved_slot_count) && !m_assigned[slot]) {
-                continue;
-            }
-            if (!m_gl_bindless_texture_resident[slot]) {
-                const uint64_t gl_bindless_texture_handle = m_gl_bindless_texture_handles[slot];
-                // log_texture_frame->trace(
-                //     "making texture handle {} resident / texture {}, sampler {}",
-                //     format_texture_handle(gl_bindless_texture_handle),
-                //     m_textures[slot]->gl_name(),
-                //     m_samplers[slot]->gl_name()
-                // );
-                gl::make_texture_handle_resident_arb(gl_bindless_texture_handle);
-                m_gl_bindless_texture_resident[slot] = true;
-            }
-        }
-        return m_used_slot_count;
-
-    } else {
-
-        gl::bind_textures(0, m_device.get_info().max_texture_image_units, m_gl_textures.data());
-        gl::bind_samplers(0, m_device.get_info().max_texture_image_units, m_gl_samplers.data());
-        return m_used_slot_count;
-    }
 }
 
 auto Device_impl::get_buffer_alignment(Buffer_target target) -> std::size_t
@@ -1027,7 +812,7 @@ inline auto access_mask(Device& device) -> gl::Map_buffer_access_mask
 
 void Device_impl::upload_to_buffer(Buffer& buffer, size_t offset, const void* data, size_t length)
 {
-    // TODO Use persistent staging buffer, maybe GPU_ring_buffer_impl?
+    // TODO Use persistent staging buffer, maybe Ring_buffer_impl?
     Buffer_create_info create_info{
         .capacity_byte_count = length,
         .usage               = Buffer_usage     ::transfer,
@@ -1052,285 +837,9 @@ void Device_impl::on_thread_enter()
     m_gl_state_tracker.on_thread_enter();
 }
 
-// Ring buffer
-
-[[nodiscard]] auto get_direction(const Ring_buffer_usage ring_buffer_usage) -> Buffer_direction
-{
-    switch (ring_buffer_usage) {
-        default:
-        case Ring_buffer_usage::None      : ERHE_FATAL("Device_impl::allocate_ring_buffer_entry() - bad usage"); return Buffer_direction::cpu_to_gpu;
-        case Ring_buffer_usage::CPU_write : return Buffer_direction::cpu_to_gpu;
-        case Ring_buffer_usage::CPU_read  : return Buffer_direction::gpu_to_cpu;
-        case Ring_buffer_usage::GPU_access: return Buffer_direction::gpu_only;
-    }
-}
-
-GPU_ring_buffer_impl::GPU_ring_buffer_impl(
-    Device&                            device,
-    GPU_ring_buffer&                   ring_buffer,
-    const GPU_ring_buffer_create_info& create_info
-)
-    : m_device           {device}
-    , m_ring_buffer      {ring_buffer}
-    , m_ring_buffer_usage{create_info.ring_buffer_usage}
-    , m_buffer{
-        std::make_unique<Buffer>(
-            m_device,
-            Buffer_create_info{
-                .capacity_byte_count = create_info.size,
-                .usage               = create_info.buffer_usage,
-                .direction           = get_direction(create_info.ring_buffer_usage),
-                .cache_mode          = Buffer_cache_mode::default_,
-                .mapping             = (create_info.ring_buffer_usage != Ring_buffer_usage::GPU_access) ? Buffer_mapping::persistent : Buffer_mapping::not_mappable,
-                .coherency           = (create_info.ring_buffer_usage != Ring_buffer_usage::GPU_access) ? Buffer_coherency::on       : Buffer_coherency::off,
-                .debug_label         = create_info.debug_label
-            }
-        )
-    }
-    , m_read_wrap_count{0}
-    , m_read_offset    {m_buffer->get_capacity_byte_count()}
-{
-    // CPU read/write buffers are persistently mapped
-    // GPU only buffers are not mappable
-}
-
-auto GPU_ring_buffer_impl::get_buffer() -> Buffer*
-{
-    return m_buffer.get();
-}
-
-auto GPU_ring_buffer_impl::get_name() const -> const std::string&
-{
-    return m_name;
-}
-
-void GPU_ring_buffer_impl::sanity_check()
-{
-    ERHE_VERIFY(m_write_position <= m_buffer->get_capacity_byte_count());
-
-    if (m_write_wrap_count == m_read_wrap_count + 1) {
-        ERHE_VERIFY(m_read_offset >= m_write_position);
-    } else if (m_read_wrap_count == m_write_wrap_count) {
-        ERHE_VERIFY(m_write_position >= m_read_offset);
-    } else {
-        ERHE_FATAL("buffer issue");
-    }
-}
-
-void GPU_ring_buffer_impl::get_size_available_for_write(
-    std::size_t  required_alignment,
-    std::size_t& out_alignment_byte_count_without_wrap,
-    std::size_t& out_available_byte_count_without_wrap,
-    std::size_t& out_available_byte_count_with_wrap
-) const
-{
-    // Initial situation:
-    //   +--------------------------+
-    //   ^                          ^
-    //   w1                         r0
-
-    //  CPU progress:
-    //   +------+---------------+---+
-    //                          ^   ^
-    //                          w1  r0
-
-    //  GPU progress:
-    //   +------+---------------+---+
-    //          ^               ^    
-    //          r1              w1   
-
-    //  CPU progress:
-    //   +----+---+---+--------------+-+
-    //        ^   ^                     
-    //        w2  r1                    
-    const std::size_t aligned_write_position = erhe::utility::align_offset_power_of_two(m_write_position, required_alignment);
-    ERHE_VERIFY(aligned_write_position >= m_write_position);
-    out_alignment_byte_count_without_wrap    = aligned_write_position - m_write_position;
-
-    if (m_write_wrap_count == m_read_wrap_count + 1) {
-        ERHE_VERIFY(m_read_offset >= m_write_position);
-        out_available_byte_count_without_wrap = m_read_offset - m_write_position;
-        out_available_byte_count_with_wrap = 0; // cannot wrap because GPU is still using the buffer from this point
-        if (out_available_byte_count_without_wrap > out_alignment_byte_count_without_wrap) {
-            out_available_byte_count_without_wrap -= out_alignment_byte_count_without_wrap;
-        } else {
-            out_alignment_byte_count_without_wrap = 0;
-            out_available_byte_count_without_wrap = 0;
-        }
-        return;
-    } else if (m_read_wrap_count == m_write_wrap_count) {
-        ERHE_VERIFY(m_write_position >= m_read_offset);
-        out_available_byte_count_without_wrap = m_buffer->get_capacity_byte_count() - m_write_position;
-        out_available_byte_count_with_wrap = m_read_offset;
-        if (out_available_byte_count_without_wrap > out_alignment_byte_count_without_wrap) {
-            out_available_byte_count_without_wrap -= out_alignment_byte_count_without_wrap;
-        } else {
-            out_alignment_byte_count_without_wrap = 0;
-            out_available_byte_count_without_wrap = 0;
-        }
-        return;
-    } else {
-        ERHE_FATAL("buffer issue");
-        out_available_byte_count_without_wrap = 0;
-        out_available_byte_count_with_wrap = 0;
-        return;
-    }
-}
-
-auto GPU_ring_buffer_impl::acquire(std::size_t required_alignment, Ring_buffer_usage ring_buffer_usage, std::size_t byte_count) -> Buffer_range
-{
-    ERHE_PROFILE_FUNCTION();
-
-    ERHE_VERIFY(ring_buffer_usage == m_ring_buffer_usage); // TODO Cleanup this API
-
-    sanity_check();
-
-    std::size_t alignment_byte_count_without_wrap{0};
-    std::size_t available_byte_count_without_wrap{0};
-    std::size_t available_byte_count_with_wrap   {0};
-    bool wrap{false};
-
-    sanity_check();
-
-    get_size_available_for_write(required_alignment, alignment_byte_count_without_wrap, available_byte_count_without_wrap, available_byte_count_with_wrap);
-
-    if (byte_count == 0) {
-        byte_count = std::max(available_byte_count_without_wrap, available_byte_count_with_wrap);
-    }
-
-    wrap = (byte_count > available_byte_count_without_wrap);
-    if (wrap && (byte_count > available_byte_count_with_wrap)) {
-        return {}; // Not enough space currently available
-    }
-
-    if (wrap) {
-        wrap_write();
-    } else {
-        m_write_position += alignment_byte_count_without_wrap;
-    }
-
-    sanity_check();
-
-    if (!m_device.get_info().use_persistent_buffers) {
-        if (ring_buffer_usage == Ring_buffer_usage::CPU_write) {
-            m_buffer->begin_write(m_write_position, byte_count); // maps requested range
-        }
-        Buffer_range result{
-            m_ring_buffer,
-            ring_buffer_usage,
-            (ring_buffer_usage != Ring_buffer_usage::GPU_access)
-                ? m_buffer->get_map()
-                : std::span<std::byte>{},
-            m_write_wrap_count,
-            m_write_position
-        };
-        m_write_position += byte_count;
-        sanity_check();
-        return result;
-    } else {
-        //// TODO size_t buffer_mapped_span_byte_count = m_buffer->get_map().size_bytes();
-        //// ERHE_VERIFY(m_write_position + byte_count <= buffer_mapped_span_byte_count);
-        Buffer_range result{
-            m_ring_buffer,
-            ring_buffer_usage,
-            (ring_buffer_usage != Ring_buffer_usage::GPU_access)
-                ? m_buffer->get_map().subspan(m_write_position, byte_count)
-                : std::span<std::byte>{},
-            m_write_wrap_count,
-            m_write_position
-        };
-        m_write_position += byte_count;
-        sanity_check();
-        return result;
-    }
-}
-
-auto GPU_ring_buffer_impl::match(const Ring_buffer_usage ring_buffer_usage) const -> bool
-{
-    return m_ring_buffer_usage == ring_buffer_usage; // TODO some usages might be compatible with each other?
-}
-
-void GPU_ring_buffer_impl::flush(std::size_t byte_offset, std::size_t byte_count)
-{
-    ERHE_PROFILE_FUNCTION();
-
-    sanity_check();
-
-    ERHE_VERIFY(m_ring_buffer_usage == Ring_buffer_usage::CPU_write);
-    if (
-        !m_device.get_info().use_persistent_buffers &&
-        (m_ring_buffer_usage != Ring_buffer_usage::GPU_access)
-    ) {
-        m_buffer->flush_bytes(byte_offset, byte_count);
-    }
-}
-
-void GPU_ring_buffer_impl::close(std::size_t byte_offset, std::size_t byte_write_count)
-{
-    ERHE_PROFILE_FUNCTION();
-
-    sanity_check();
-
-    if (m_ring_buffer_usage == Ring_buffer_usage::CPU_write) {
-        if (!m_device.get_info().use_persistent_buffers) {
-            m_buffer->end_write(byte_offset, byte_write_count); // flush and unmap
-        }
-    }
-    //m_map = {};
-}
-
-GPU_ring_buffer_impl::~GPU_ring_buffer_impl()
-{
-    ERHE_PROFILE_FUNCTION();
-
-    sanity_check();
-}
-
-void GPU_ring_buffer_impl::frame_completed(uint64_t completed_frame)
-{
-    ERHE_PROFILE_FUNCTION();
-
-    sanity_check();
-
-    for (Ring_buffer_sync_entry& entry : m_sync_entries) {
-        if (entry.waiting_for_frame == completed_frame) {
-            if (
-                (entry.wrap_count > m_read_wrap_count) ||
-                (
-                    (entry.wrap_count == m_read_wrap_count) &&
-                    (entry.byte_offset + entry.byte_count > m_read_offset)
-                )
-            ) {
-                size_t new_read_wrap_count = entry.wrap_count;
-                size_t new_read_offset     = entry.byte_offset + entry.byte_count;
-                if (m_write_wrap_count == new_read_wrap_count + 1) {
-                    ERHE_VERIFY(new_read_offset >= m_write_position);
-                } else if (new_read_wrap_count == m_write_wrap_count) {
-                    ERHE_VERIFY(m_write_position >= new_read_offset);
-                } else {
-                    ERHE_FATAL("buffer issue");
-                }
-
-                m_read_wrap_count = new_read_wrap_count;
-                m_read_offset = new_read_offset;
-                sanity_check();
-            }
-        }
-    }
-
-    auto i = std::remove_if(
-        m_sync_entries.begin(),
-        m_sync_entries.end(),
-        [completed_frame](Ring_buffer_sync_entry& entry) { return entry.waiting_for_frame == completed_frame; }
-    );
-    if (i != m_sync_entries.end()) {
-        m_sync_entries.erase(i, m_sync_entries.end());
-    }
-}
-
 void Device_impl::frame_completed(const uint64_t completed_frame)
 {
-    for (const std::unique_ptr<GPU_ring_buffer>& ring_buffer : m_ring_buffers) {
+    for (const std::unique_ptr<Ring_buffer>& ring_buffer : m_ring_buffers) {
         ring_buffer->frame_completed(completed_frame);
     }
     for (const Completion_handler& entry : m_completion_handlers) {
@@ -1410,49 +919,6 @@ void Device_impl::end_of_frame()
     }
 }
 
-void GPU_ring_buffer_impl::wrap_write()
-{
-    ERHE_PROFILE_FUNCTION();
-
-    sanity_check();
-
-    ++m_write_wrap_count;
-    m_write_position = 0;
-
-    sanity_check();
-}
-
-void GPU_ring_buffer_impl::make_sync_entry(std::size_t wrap_count, std::size_t byte_offset, std::size_t byte_count)
-{
-    ERHE_PROFILE_FUNCTION();
-
-    sanity_check();
-
-    // Merge to existing sync
-    for (Ring_buffer_sync_entry& entry : m_sync_entries) {
-        if (
-            (entry.waiting_for_frame == m_device.get_frame_number()) &&
-            (entry.wrap_count == wrap_count)
-        ) {
-            if (byte_offset + byte_count > entry.byte_offset + entry.byte_count) {
-                entry.byte_offset = byte_offset;
-                entry.byte_count  = byte_count;
-            }
-            return;
-        }
-    }
-
-    // Make new sync entry
-    m_sync_entries.push_back(
-        Ring_buffer_sync_entry{
-            .waiting_for_frame = m_device.get_frame_number(),
-            .wrap_count        = wrap_count,
-            .byte_offset       = byte_offset,
-            .byte_count        = byte_count
-        }
-    );
-}
-
 auto Device_impl::get_frame_number() const -> uint64_t
 {
     return m_frame_number;
@@ -1462,7 +928,7 @@ auto Device_impl::allocate_ring_buffer_entry(
     Buffer_target     buffer_target,
     Ring_buffer_usage ring_buffer_usage,
     std::size_t       byte_count
-) -> Buffer_range
+) -> Ring_buffer_range
 {
     m_need_sync = true;
     const std::size_t required_alignment = erhe::utility::next_power_of_two_16bit(get_buffer_alignment(buffer_target));
@@ -1471,7 +937,7 @@ auto Device_impl::allocate_ring_buffer_entry(
     std::size_t available_byte_count_with_wrap{0};
 
     // Pass 1: Do we have buffer that can be used without a wrap?
-    for (const std::unique_ptr<GPU_ring_buffer>& ring_buffer : m_ring_buffers) {
+    for (const std::unique_ptr<Ring_buffer>& ring_buffer : m_ring_buffers) {
         if (!ring_buffer->match(ring_buffer_usage)) {
             continue;
         }
@@ -1487,7 +953,7 @@ auto Device_impl::allocate_ring_buffer_entry(
     }
 
     // Pass 2: Do we have buffer that can be used with a wrap?
-    for (const std::unique_ptr<GPU_ring_buffer>& ring_buffer : m_ring_buffers) {
+    for (const std::unique_ptr<Ring_buffer>& ring_buffer : m_ring_buffers) {
         if (!ring_buffer->match(ring_buffer_usage)) {
             continue;
         }
@@ -1503,12 +969,12 @@ auto Device_impl::allocate_ring_buffer_entry(
     }
 
     // No existing usable buffer found, create new buffer
-    GPU_ring_buffer_create_info create_info{
+    Ring_buffer_create_info create_info{
         .size              = std::max(m_min_buffer_size, 4 * byte_count),
         .ring_buffer_usage = ring_buffer_usage,
-        .debug_label       = "GPU_ring_buffer"
+        .debug_label       = "Ring_buffer"
     };
-    m_ring_buffers.push_back(std::make_unique<GPU_ring_buffer>(m_device, create_info));
+    m_ring_buffers.push_back(std::make_unique<Ring_buffer>(m_device, create_info));
     return m_ring_buffers.back()->acquire(required_alignment, ring_buffer_usage, byte_count);
 }
 

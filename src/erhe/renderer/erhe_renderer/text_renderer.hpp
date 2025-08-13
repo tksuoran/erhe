@@ -3,6 +3,7 @@
 #include "erhe_graphics/fragment_outputs.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/render_pipeline_state.hpp"
+#include "erhe_graphics/ring_buffer_client.hpp"
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_graphics/shader_stages.hpp"
@@ -86,12 +87,12 @@ private:
     erhe::graphics::Sampler                m_nearest_sampler;
     erhe::graphics::Shader_stages          m_shader_stages;
     std::unique_ptr<erhe::ui::Font>        m_font;
-    erhe::graphics::GPU_ring_buffer_client m_vertex_ssbo_buffer;
-    erhe::graphics::GPU_ring_buffer_client m_projection_buffer;
+    erhe::graphics::Ring_buffer_client     m_vertex_ssbo_buffer;
+    erhe::graphics::Ring_buffer_client     m_projection_buffer;
     erhe::graphics::Vertex_input_state     m_vertex_input;
     erhe::graphics::Render_pipeline_state  m_pipeline;
 
-    std::vector<erhe::graphics::Buffer_range> m_vertex_buffer_ranges;
+    std::vector<erhe::graphics::Ring_buffer_range> m_vertex_buffer_ranges;
 };
 
 } // namespace erhe::renderer

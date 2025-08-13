@@ -1,13 +1,12 @@
 #pragma once
 
 #include "erhe_graphics/device.hpp"
+#include "erhe_graphics/ring_buffer_client.hpp"
 #include "erhe_graphics/shader_resource.hpp"
 
 #include <glm/glm.hpp>
 
-namespace erhe::scene {
-    class Skin;
-}
+namespace erhe::scene { class Skin; }
 
 namespace erhe::scene_renderer {
 
@@ -42,7 +41,7 @@ public:
     std::size_t                     max_joint_count{1000};
 };
 
-class Joint_buffer : public erhe::graphics::GPU_ring_buffer_client
+class Joint_buffer : public erhe::graphics::Ring_buffer_client
 {
 public:
     Joint_buffer(erhe::graphics::Device& graphics_device, Joint_interface& joint_interface);
@@ -51,7 +50,7 @@ public:
         const glm::uvec4&                                          debug_joint_indices,
         const std::span<glm::vec4>&                                debug_joint_colors,
         const std::span<const std::shared_ptr<erhe::scene::Skin>>& skins
-    ) -> erhe::graphics::Buffer_range;
+    ) -> erhe::graphics::Ring_buffer_range;
 
 private:
     erhe::graphics::Device& m_graphics_device;

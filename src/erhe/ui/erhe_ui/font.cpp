@@ -4,6 +4,9 @@
 #include "erhe_dataformat/dataformat.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/blit_command_encoder.hpp"
+#include "erhe_graphics/ring_buffer.hpp"
+#include "erhe_graphics/ring_buffer_client.hpp"
+#include "erhe_graphics/ring_buffer_range.hpp"
 #include "erhe_profile/profile.hpp"
 
 #include <fmt/printf.h>
@@ -458,11 +461,11 @@ void Font::post_process()
 
     m_texture = std::make_unique<Texture>(m_graphics_device, create_info);
 
-    std::span<std::uint8_t>                src_span   = bm.as_span();
-    std::size_t                            byte_count = src_span.size_bytes();
-    erhe::graphics::GPU_ring_buffer_client texture_upload_buffer{m_graphics_device, erhe::graphics::Buffer_target::pixel, "font upload"};
-    erhe::graphics::Buffer_range           buffer_range = texture_upload_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, byte_count);
-    std::span<std::byte>                   dst_span     = buffer_range.get_span();
+    std::span<std::uint8_t>            src_span   = bm.as_span();
+    std::size_t                        byte_count = src_span.size_bytes();
+    erhe::graphics::Ring_buffer_client texture_upload_buffer{m_graphics_device, erhe::graphics::Buffer_target::pixel, "font upload"};
+    erhe::graphics::Ring_buffer_range  buffer_range = texture_upload_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, byte_count);
+    std::span<std::byte>               dst_span     = buffer_range.get_span();
     memcpy(dst_span.data(), src_span.data(), byte_count);
     buffer_range.bytes_written(byte_count);
     buffer_range.close();

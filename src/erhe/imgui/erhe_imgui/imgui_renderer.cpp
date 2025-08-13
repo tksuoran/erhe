@@ -14,7 +14,11 @@
 #include "erhe_graphics/draw_indirect.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/render_pipeline_state.hpp"
+#include "erhe_graphics/ring_buffer.hpp"
+#include "erhe_graphics/ring_buffer_client.hpp"
+#include "erhe_graphics/ring_buffer_range.hpp"
 #include "erhe_graphics/texture.hpp"
+#include "erhe_graphics/texture_heap.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_graphics/span.hpp"
 #include "erhe_profile/profile.hpp"
@@ -742,10 +746,10 @@ void Imgui_renderer::update_texture(ImTextureData* tex)
             static_cast<size_t>(tex->GetSizeInBytes())
         };
 
-        std::size_t                            byte_count = src_span.size_bytes();
-        erhe::graphics::GPU_ring_buffer_client texture_upload_buffer{m_graphics_device, erhe::graphics::Buffer_target::pixel, "font upload"};
-        erhe::graphics::Buffer_range           buffer_range = texture_upload_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, byte_count);
-        std::span<std::byte>                   dst_span     = buffer_range.get_span();
+        std::size_t                        byte_count = src_span.size_bytes();
+        erhe::graphics::Ring_buffer_client texture_upload_buffer{m_graphics_device, erhe::graphics::Buffer_target::pixel, "font upload"};
+        erhe::graphics::Ring_buffer_range  buffer_range = texture_upload_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, byte_count);
+        std::span<std::byte>               dst_span     = buffer_range.get_span();
         memcpy(dst_span.data(), src_span.data(), byte_count);
         buffer_range.bytes_written(byte_count);
         buffer_range.close();
@@ -797,10 +801,10 @@ void Imgui_renderer::update_texture(ImTextureData* tex)
             std::size_t buffer_offset = r.x * tex->BytesPerPixel + r.y * tex->GetPitch();
 
             // TODO We don't necessarily always need full texture size buffer range, just for the rectangle
-            std::size_t                            byte_count   = src_span.size_bytes();
-            erhe::graphics::GPU_ring_buffer_client texture_upload_buffer{m_graphics_device, erhe::graphics::Buffer_target::pixel, "ImGui Draw Texture Update"};
-            erhe::graphics::Buffer_range           buffer_range = texture_upload_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, byte_count);
-            std::span<std::byte>                   dst_span     = buffer_range.get_span();
+            std::size_t                        byte_count   = src_span.size_bytes();
+            erhe::graphics::Ring_buffer_client texture_upload_buffer{m_graphics_device, erhe::graphics::Buffer_target::pixel, "ImGui Draw Texture Update"};
+            erhe::graphics::Ring_buffer_range  buffer_range = texture_upload_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, byte_count);
+            std::span<std::byte>               dst_span     = buffer_range.get_span();
             memcpy(dst_span.data(), src_span.data(), byte_count);
             buffer_range.bytes_written(byte_count);
             buffer_range.close();
@@ -885,7 +889,7 @@ void Imgui_renderer::render_draw_data(erhe::graphics::Render_command_encoder& re
         -1.0f - draw_data->DisplayPos.y * scale[1]
     };
 
-    using Buffer_range = erhe::graphics::Buffer_range;
+    using Ring_buffer_range = erhe::graphics::Ring_buffer_range;
     using erhe::graphics::write;
     constexpr erhe::graphics::Ring_buffer_usage usage{erhe::graphics::Ring_buffer_usage::CPU_write};
 
@@ -963,10 +967,10 @@ void Imgui_renderer::render_draw_data(erhe::graphics::Render_command_encoder& re
                 continue;
             }
 
-            Buffer_range         draw_parameter_buffer_range = m_draw_parameter_buffer.acquire(usage, draw_parameter_byte_count);
-            Buffer_range         draw_indirect_buffer_range  = m_draw_indirect_buffer .acquire(usage, draw_indirect_byte_count);
-            Buffer_range         vertex_buffer_range         = m_vertex_buffer        .acquire(usage, vertex_byte_count);
-            Buffer_range         index_buffer_range          = m_index_buffer         .acquire(usage, index_byte_count);
+            Ring_buffer_range    draw_parameter_buffer_range = m_draw_parameter_buffer.acquire(usage, draw_parameter_byte_count);
+            Ring_buffer_range    draw_indirect_buffer_range  = m_draw_indirect_buffer .acquire(usage, draw_indirect_byte_count);
+            Ring_buffer_range    vertex_buffer_range         = m_vertex_buffer        .acquire(usage, vertex_byte_count);
+            Ring_buffer_range    index_buffer_range          = m_index_buffer         .acquire(usage, index_byte_count);
             size_t               draw_parameter_write_offset = 0;
             size_t               draw_indirect_write_offset  = 0;
             size_t               vertex_write_offset         = 0;

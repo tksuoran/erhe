@@ -3,6 +3,7 @@
 #include "erhe_graphics/blit_command_encoder.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/image_loader.hpp"
+#include "erhe_graphics/ring_buffer.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -18,16 +19,16 @@ Image_transfer::Image_transfer(erhe::graphics::Device& graphics_device)
 {
 }
 
-auto Image_transfer::acquire_range(const std::size_t byte_count) -> erhe::graphics::Buffer_range
+auto Image_transfer::acquire_range(const std::size_t byte_count) -> erhe::graphics::Ring_buffer_range
 {
     return m_texture_upload_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, byte_count);
 }
 
 void Image_transfer::upload_to_texture(
-    const erhe::graphics::Image_info& image_info,
-    erhe::graphics::Buffer_range&     buffer_range,
-    erhe::graphics::Texture&          texture,
-    bool                              generate_mipmap
+    const erhe::graphics::Image_info&  image_info,
+    erhe::graphics::Ring_buffer_range& buffer_range,
+    erhe::graphics::Texture&           texture,
+    bool                               generate_mipmap
 )
 {
     erhe::graphics::Blit_command_encoder encoder{m_graphics_device};

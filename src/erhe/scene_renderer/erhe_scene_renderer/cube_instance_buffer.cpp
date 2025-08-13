@@ -73,7 +73,7 @@ auto Cube_instance_buffer::bind(erhe::graphics::Render_command_encoder& encoder)
 }
 
 Cube_control_buffer::Cube_control_buffer(erhe::graphics::Device& graphics_device, Cube_interface& cube_interface)
-    : GPU_ring_buffer_client{
+    : Ring_buffer_client{
         graphics_device,
         erhe::graphics::Buffer_target::storage,
         "cube_control",
@@ -89,15 +89,15 @@ auto Cube_control_buffer::update(
     const glm::vec4& color_scale,
     const glm::vec4& color_start,
     const glm::vec4& color_end
-) -> erhe::graphics::Buffer_range
+) -> erhe::graphics::Ring_buffer_range
 {
     const std::size_t primitive_count = 1;
     const auto        entry_size      = m_cube_interface.cube_control_struct.get_size_bytes();
     const auto&       offsets         = m_cube_interface.cube_control_offsets;
     const std::size_t max_byte_count  = primitive_count * entry_size;
-    erhe::graphics::Buffer_range buffer_range = acquire(erhe::graphics::Ring_buffer_usage::CPU_write, max_byte_count);
-    std::span<std::byte>         gpu_data     = buffer_range.get_span();
-    std::size_t                  write_offset = 0;
+    erhe::graphics::Ring_buffer_range buffer_range = acquire(erhe::graphics::Ring_buffer_usage::CPU_write, max_byte_count);
+    std::span<std::byte>              gpu_data     = buffer_range.get_span();
+    std::size_t                       write_offset = 0;
     using erhe::graphics::as_span;
     using erhe::graphics::write;
     write(gpu_data, write_offset + offsets.cube_size,   as_span(cube_size));

@@ -7,6 +7,7 @@
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_graphics/span.hpp"
+#include "erhe_graphics/texture_heap.hpp"
 #include "erhe_math/viewport.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_profile/profile.hpp"
@@ -163,12 +164,12 @@ void Text_renderer::print(const glm::vec3 text_position, const uint32_t text_col
             )
         );
     }
-    erhe::graphics::Buffer_range& vertex_buffer_range = m_vertex_buffer_ranges.back();
-    std::size_t                   span_write_offset   = vertex_buffer_range.get_written_byte_count();
-    const auto                    vertex_gpu_data     = vertex_buffer_range.get_span();
-    std::byte* const              start               = vertex_gpu_data.data();
-    const std::size_t             word_count          = vertex_byte_count / sizeof(float);
-    const std::span<uint32_t>     gpu_uint_data {reinterpret_cast<uint32_t*>(start + span_write_offset), word_count};
+    erhe::graphics::Ring_buffer_range& vertex_buffer_range = m_vertex_buffer_ranges.back();
+    std::size_t                        span_write_offset   = vertex_buffer_range.get_written_byte_count();
+    const auto                         vertex_gpu_data     = vertex_buffer_range.get_span();
+    std::byte* const                   start               = vertex_gpu_data.data();
+    const std::size_t                  word_count          = vertex_byte_count / sizeof(float);
+    const std::span<uint32_t>          gpu_uint_data {reinterpret_cast<uint32_t*>(start + span_write_offset), word_count};
 
     erhe::ui::Rectangle bounding_box;
     const glm::vec3     snapped_position{
@@ -214,7 +215,7 @@ void Text_renderer::render(erhe::graphics::Render_command_encoder& encoder, erhe
         0
     };
 
-    erhe::graphics::Buffer_range projection_buffer_range = m_projection_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, m_projection_block.get_size_bytes());
+    erhe::graphics::Ring_buffer_range projection_buffer_range = m_projection_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, m_projection_block.get_size_bytes());
     {
         const std::span<std::byte> gpu_data = projection_buffer_range.get_span();
         const glm::mat4 clip_from_window = erhe::math::create_orthographic(
@@ -242,7 +243,7 @@ void Text_renderer::render(erhe::graphics::Render_command_encoder& encoder, erhe
     const std::size_t vertex_ssbo_stride = m_u_vertex_data_size;
     const std::size_t bytes_per_quad     = 4 * vertex_ssbo_stride;
 
-    for (erhe::graphics::Buffer_range& vertex_buffer_range : m_vertex_buffer_ranges) {
+    for (erhe::graphics::Ring_buffer_range& vertex_buffer_range : m_vertex_buffer_ranges) {
         vertex_buffer_range.close();
 
         const std::size_t byte_count = vertex_buffer_range.get_written_byte_count();

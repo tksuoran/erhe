@@ -99,8 +99,8 @@ void Cube_renderer::render(const Render_parameters& parameters)
 
     parameters.render_encoder.set_viewport_rect(viewport.x, viewport.y, viewport.width, viewport.height);
 
-    using Buffer_range = erhe::graphics::Buffer_range;
-    std::optional<Buffer_range> camera_buffer_range{};
+    using Ring_buffer_range = erhe::graphics::Ring_buffer_range;
+    std::optional<Ring_buffer_range> camera_buffer_range{};
     ERHE_VERIFY(camera != nullptr);
     camera_buffer_range = m_camera_buffer.update(
         *camera->projection(),
@@ -113,13 +113,13 @@ void Cube_renderer::render(const Render_parameters& parameters)
     );
     m_camera_buffer.bind(parameters.render_encoder, camera_buffer_range.value());
 
-    Buffer_range primitive_range = m_primitive_buffer.update(
+    Ring_buffer_range primitive_range = m_primitive_buffer.update(
         erhe::graphics::as_span(parameters.node),
         parameters.primitive_settings
     );
     m_primitive_buffer.bind(parameters.render_encoder, primitive_range);
 
-    Buffer_range cube_control_range = m_cube_control_buffer.update(
+    Ring_buffer_range cube_control_range = m_cube_control_buffer.update(
         parameters.cube_size,
         parameters.color_bias,
         parameters.color_scale,

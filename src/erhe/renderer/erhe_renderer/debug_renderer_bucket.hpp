@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_graphics/render_pipeline_state.hpp"
+#include "erhe_graphics/ring_buffer_client.hpp"
 #include "erhe_graphics/device.hpp"
 #include <vector>
 
@@ -28,10 +29,10 @@ auto operator==(const Debug_renderer_config& lhs, const Debug_renderer_config& r
 class Debug_draw_entry
 {
 public:
-    erhe::graphics::Buffer_range input_buffer_range;
-    erhe::graphics::Buffer_range draw_buffer_range;
-    std::size_t                  primitive_count;
-    bool                         compute_dispatched{false};
+    erhe::graphics::Ring_buffer_range input_buffer_range;
+    erhe::graphics::Ring_buffer_range draw_buffer_range;
+    std::size_t                       primitive_count;
+    bool                              compute_dispatched{false};
 };
 
 class Debug_renderer_bucket
@@ -51,8 +52,8 @@ private:
 
     erhe::graphics::Device&                m_graphics_device;
     Debug_renderer&                        m_debug_renderer;
-    erhe::graphics::GPU_ring_buffer_client m_vertex_ssbo_buffer;
-    erhe::graphics::GPU_ring_buffer_client m_triangle_vertex_buffer;
+    erhe::graphics::Ring_buffer_client     m_vertex_ssbo_buffer;
+    erhe::graphics::Ring_buffer_client     m_triangle_vertex_buffer;
     Debug_renderer_config                  m_config;
     erhe::graphics::Shader_stages*         m_compute_shader_stages{nullptr};
     erhe::graphics::Render_pipeline_state  m_compute;

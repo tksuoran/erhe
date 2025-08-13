@@ -40,7 +40,7 @@ Camera_interface::Camera_interface(erhe::graphics::Device& graphics_device)
 }
 
 Camera_buffer::Camera_buffer(erhe::graphics::Device& graphics_device, Camera_interface& camera_interface)
-    : GPU_ring_buffer_client{
+    : Ring_buffer_client{
         graphics_device,
         erhe::graphics::Buffer_target::uniform,
         "Camera_buffer",
@@ -58,7 +58,7 @@ auto Camera_buffer::update(
     glm::vec4                      grid_size,
     glm::vec4                      grid_line_width,
     uint64_t                       frame_number
-) -> erhe::graphics::Buffer_range
+) -> erhe::graphics::Ring_buffer_range
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -68,9 +68,9 @@ auto Camera_buffer::update(
     const auto& offsets          = m_camera_interface.offsets;
     const auto  clip_from_camera = camera_projection.clip_from_node_transform(viewport);
 
-    erhe::graphics::Buffer_range buffer_range = acquire(erhe::graphics::Ring_buffer_usage::CPU_write, entry_size);
-    std::span<std::byte>         gpu_data     = buffer_range.get_span();
-    size_t                       write_offset = 0;
+    erhe::graphics::Ring_buffer_range buffer_range = acquire(erhe::graphics::Ring_buffer_usage::CPU_write, entry_size);
+    std::span<std::byte>              gpu_data     = buffer_range.get_span();
+    size_t                            write_offset = 0;
 
     const glm::mat4 world_from_node = camera_node.world_from_node();
     const glm::mat4 world_from_clip = world_from_node * clip_from_camera.get_inverse_matrix();

@@ -41,7 +41,7 @@ Primitive_interface::Primitive_interface(erhe::graphics::Device& graphics_device
 }
 
 Primitive_buffer::Primitive_buffer(erhe::graphics::Device& graphics_device, Primitive_interface& primitive_interface)
-    : GPU_ring_buffer_client{
+    : Ring_buffer_client{
         graphics_device,
         erhe::graphics::Buffer_target::storage,
         "Primitive_buffer",
@@ -74,7 +74,7 @@ auto Primitive_buffer::update(
     const Primitive_interface_settings&                        settings,
     std::size_t&                                               out_primitive_count,
     bool                                                       use_id_ranges
-) -> erhe::graphics::Buffer_range
+) -> erhe::graphics::Ring_buffer_range
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -124,9 +124,9 @@ auto Primitive_buffer::update(
     const auto&       offsets        = m_primitive_interface.offsets;
     const std::size_t max_byte_count = primitive_count * entry_size;
 
-    erhe::graphics::Buffer_range buffer_range       = acquire(erhe::graphics::Ring_buffer_usage::CPU_write, max_byte_count);
-    std::span<std::byte>         primitive_gpu_data = buffer_range.get_span();
-    std::size_t                  write_offset       = 0;
+    erhe::graphics::Ring_buffer_range buffer_range       = acquire(erhe::graphics::Ring_buffer_usage::CPU_write, max_byte_count);
+    std::span<std::byte>              primitive_gpu_data = buffer_range.get_span();
+    std::size_t                       write_offset       = 0;
 
     std::size_t primitive_index = 0;
     mesh_index = 0;
@@ -240,16 +240,16 @@ auto Primitive_buffer::update(
 auto Primitive_buffer::update(
     const std::span<const std::shared_ptr<erhe::scene::Node>>& nodes,
     const Primitive_interface_settings&                        primitive_settings
-) -> erhe::graphics::Buffer_range
+) -> erhe::graphics::Ring_buffer_range
 {
     const std::size_t primitive_count = nodes.size();
     const auto        entry_size      = m_primitive_interface.primitive_struct.get_size_bytes();
     const auto&       offsets         = m_primitive_interface.offsets;
     const std::size_t max_byte_count  = primitive_count * entry_size;
 
-    erhe::graphics::Buffer_range buffer_range       = acquire(erhe::graphics::Ring_buffer_usage::CPU_write, max_byte_count);
-    std::span<std::byte>         primitive_gpu_data = buffer_range.get_span();
-    std::size_t                  write_offset       = 0;
+    erhe::graphics::Ring_buffer_range buffer_range       = acquire(erhe::graphics::Ring_buffer_usage::CPU_write, max_byte_count);
+    std::span<std::byte>              primitive_gpu_data = buffer_range.get_span();
+    std::size_t                       write_offset       = 0;
 
     for (const auto& node : nodes) {
         const glm::mat4 world_from_node  = node->world_from_node();

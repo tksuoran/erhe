@@ -2,6 +2,7 @@
 
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/gpu_timer.hpp"
+#include "erhe_graphics/ring_buffer_range.hpp"
 #include "erhe_renderer/draw_indirect_buffer.hpp"
 #include "erhe_scene_renderer/camera_buffer.hpp"
 #include "erhe_scene_renderer/primitive_buffer.hpp"
@@ -92,13 +93,13 @@ private:
             Read_complete
         };
 
-        erhe::graphics::Buffer_range buffer_range;
-        std::vector<uint8_t>         data           {};
-        glm::mat4                    clip_from_world{1.0f};
-        int                          x_offset       {0};
-        int                          y_offset       {0};
-        uint64_t                     frame_number   {0};
-        State                        state          {State::Unused};
+        erhe::graphics::Ring_buffer_range buffer_range;
+        std::vector<uint8_t>              data           {};
+        glm::mat4                         clip_from_world{1.0f};
+        int                               x_offset       {0};
+        int                               y_offset       {0};
+        uint64_t                          frame_number   {0};
+        State                             state          {State::Unused};
     };
 
     [[nodiscard]] auto get_current_transfer_entry() -> Transfer_entry&;
@@ -121,7 +122,7 @@ private:
     std::unique_ptr<erhe::graphics::Texture>     m_color_texture;
     std::unique_ptr<erhe::graphics::Texture>     m_depth_texture;
     std::unique_ptr<erhe::graphics::Render_pass> m_render_pass;
-    erhe::graphics::GPU_ring_buffer_client       m_texture_read_buffer;
+    erhe::graphics::Ring_buffer_client           m_texture_read_buffer;
 
     std::array<Transfer_entry, s_transfer_entry_count> m_transfer_entries;
     std::size_t                                        m_current_transfer_entry_slot{0};

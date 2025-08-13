@@ -8,11 +8,14 @@
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
+#include "erhe_graphics/ring_buffer.hpp"
+#include "erhe_graphics/ring_buffer_client.hpp"
 #include "erhe_graphics/scoped_buffer_mapping.hpp"
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/span.hpp"
 #include "erhe_graphics/texture.hpp"
+#include "erhe_graphics/texture_heap.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_math/viewport.hpp"
 #include "erhe_math/math_util.hpp"
@@ -320,16 +323,16 @@ void Tile_renderer::compose_tileset_texture()
 
     // Upload everything before single unit tiles
     erhe::graphics::Blit_command_encoder encoder{m_graphics_device};
-    erhe::graphics::GPU_ring_buffer_client texture_upload_buffer{
+    erhe::graphics::Ring_buffer_client texture_upload_buffer{
         m_graphics_device,
         erhe::graphics::Buffer_target::pixel,
         "Tile_renderer::m_tileset_texture upload"
     };
     {
-        std::span<std::uint8_t>      src_span{m_tileset_image.data.data(), m_tileset_image.data.size()};
-        std::size_t                  byte_count   = src_span.size_bytes();
-        erhe::graphics::Buffer_range buffer_range = texture_upload_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, byte_count);
-        std::span<std::byte>         dst_span     = buffer_range.get_span();
+        std::span<std::uint8_t>           src_span{m_tileset_image.data.data(), m_tileset_image.data.size()};
+        std::size_t                       byte_count   = src_span.size_bytes();
+        erhe::graphics::Ring_buffer_range buffer_range = texture_upload_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, byte_count);
+        std::span<std::byte>              dst_span     = buffer_range.get_span();
         memcpy(dst_span.data(), src_span.data(), byte_count);
         buffer_range.bytes_written(byte_count);
         buffer_range.close();
@@ -402,8 +405,8 @@ void Tile_renderer::compose_tileset_texture()
                 }
             }
 
-            erhe::graphics::Buffer_range buffer_range = texture_upload_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, src_bytes_per_image);
-            std::span<std::byte>         dst_span     = buffer_range.get_span();
+            erhe::graphics::Ring_buffer_range buffer_range = texture_upload_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, src_bytes_per_image);
+            std::span<std::byte>              dst_span     = buffer_range.get_span();
             memcpy(dst_span.data(), src_span.data(), src_bytes_per_image);
             buffer_range.bytes_written(src_bytes_per_image);
             buffer_range.close();
@@ -455,8 +458,8 @@ void Tile_renderer::compose_tileset_texture()
                             (ty0_single_unit_tiles + 6) * Tile_shape::height
                         );
 
-                        erhe::graphics::Buffer_range buffer_range = texture_upload_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, src_bytes_per_image);
-                        std::span<std::byte>         dst_span     = buffer_range.get_span();
+                        erhe::graphics::Ring_buffer_range buffer_range = texture_upload_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, src_bytes_per_image);
+                        std::span<std::byte>              dst_span     = buffer_range.get_span();
                         memcpy(dst_span.data(), src_span.data(), src_bytes_per_image);
                         buffer_range.bytes_written(src_bytes_per_image);
                         buffer_range.close();
@@ -713,15 +716,15 @@ void Tile_renderer::render(erhe::graphics::Render_command_encoder& render_encode
 
     const auto handle = m_graphics_device.get_handle(*m_tileset_texture.get(), m_nearest_sampler);
 
-    erhe::graphics::Buffer_range& vertex_buffer_range     = m_vertex_buffer_range.value();
-    erhe::graphics::Buffer_range  projection_buffer_range = m_projection_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, m_projection_block.get_size_bytes());
-    const auto                    projection_gpu_data     = projection_buffer_range.get_span();
-    size_t                        projection_write_offset = 0;
-    std::byte* const              start                   = projection_gpu_data.data();
-    const size_t                  byte_count              = projection_gpu_data.size_bytes();
-    const size_t                  word_count              = byte_count / sizeof(float);
-    const std::span<float>        gpu_float_data {reinterpret_cast<float*   >(start), word_count};
-    const std::span<uint32_t>     gpu_uint32_data{reinterpret_cast<uint32_t*>(start), word_count};
+    erhe::graphics::Ring_buffer_range& vertex_buffer_range     = m_vertex_buffer_range.value();
+    erhe::graphics::Ring_buffer_range  projection_buffer_range = m_projection_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, m_projection_block.get_size_bytes());
+    const auto                         projection_gpu_data     = projection_buffer_range.get_span();
+    size_t                             projection_write_offset = 0;
+    std::byte* const                   start                   = projection_gpu_data.data();
+    const size_t                       byte_count              = projection_gpu_data.size_bytes();
+    const size_t                       word_count              = byte_count / sizeof(float);
+    const std::span<float>             gpu_float_data {reinterpret_cast<float*   >(start), word_count};
+    const std::span<uint32_t>          gpu_uint32_data{reinterpret_cast<uint32_t*>(start), word_count};
 
     const glm::mat4 clip_from_window = erhe::math::create_orthographic(
         static_cast<float>(viewport.x), static_cast<float>(viewport.width),

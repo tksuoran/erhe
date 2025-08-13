@@ -10,6 +10,7 @@
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_graphics/texture.hpp"
+#include "erhe_graphics/texture_heap.hpp"
 #include "erhe_scene/light.hpp"
 #include "erhe_scene_renderer/program_interface.hpp"
 #include "erhe_scene_renderer/scene_renderer_log.hpp"
@@ -133,7 +134,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
         .require_at_least_one_bit_clear = 0u
     };
 
-    using Buffer_range = erhe::graphics::Buffer_range;
+    using Ring_buffer_range          = erhe::graphics::Ring_buffer_range;
     using Draw_indirect_buffer_range = erhe::renderer::Draw_indirect_buffer_range;
 
     erhe::graphics::Texture_heap texture_heap{
@@ -143,9 +144,9 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
         erhe::scene_renderer::c_texture_heap_slot_count_reserved
     };
 
-    Buffer_range material_range = m_material_buffer.update(texture_heap, parameters.materials);
-    Buffer_range joint_range = m_joint_buffer.update(glm::uvec4{0, 0, 0, 0}, {}, parameters.skins);
-    Buffer_range light_range = m_light_buffer.update(lights, &parameters.light_projections, glm::vec3{0.0f}, texture_heap);
+    Ring_buffer_range material_range = m_material_buffer.update(texture_heap, parameters.materials);
+    Ring_buffer_range joint_range    = m_joint_buffer.update(glm::uvec4{0, 0, 0, 0}, {}, parameters.skins);
+    Ring_buffer_range light_range    = m_light_buffer.update(lights, &parameters.light_projections, glm::vec3{0.0f}, texture_heap);
 
     log_shadow_renderer->trace("Rendering shadow map to '{}'", parameters.texture->get_debug_label());
 
@@ -185,14 +186,14 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
             );
         }
 
-        Buffer_range control_range = m_light_buffer.update_control(light_index);
+        Ring_buffer_range control_range = m_light_buffer.update_control(light_index);
         m_light_buffer.bind_control_buffer(encoder, control_range);
 
         texture_heap.bind();
 
         for (const auto& meshes : mesh_spans) {
             std::size_t primitive_count{0};
-            Buffer_range primitive_range = m_primitive_buffer.update(meshes, primitive_mode, shadow_filter, Primitive_interface_settings{}, primitive_count);
+            Ring_buffer_range primitive_range = m_primitive_buffer.update(meshes, primitive_mode, shadow_filter, Primitive_interface_settings{}, primitive_count);
             if (primitive_count == 0) {
                 primitive_range.cancel();
                 continue;

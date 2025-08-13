@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_graphics/device.hpp"
+#include "erhe_graphics/ring_buffer_client.hpp"
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_graphics/shader_resource.hpp"
 
@@ -8,6 +9,7 @@
 
 namespace erhe::graphics {
     class Sampler;
+    class Texture_heap;
 }
 namespace erhe::primitive {
     class Material;
@@ -45,12 +47,12 @@ public:
     std::size_t                     max_material_count;
 };
 
-class Material_buffer : public erhe::graphics::GPU_ring_buffer_client
+class Material_buffer : public erhe::graphics::Ring_buffer_client
 {
 public:
     Material_buffer(erhe::graphics::Device& graphics_device, Material_interface& material_interface);
 
-    auto update(erhe::graphics::Texture_heap& texture_heap, const std::span<const std::shared_ptr<erhe::primitive::Material>>& materials) -> erhe::graphics::Buffer_range;
+    auto update(erhe::graphics::Texture_heap& texture_heap, const std::span<const std::shared_ptr<erhe::primitive::Material>>& materials) -> erhe::graphics::Ring_buffer_range;
 
 private:
     erhe::graphics::Device& m_graphics_device;

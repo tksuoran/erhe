@@ -21,61 +21,6 @@ public:
     gl::Sync_status result      {gl::Sync_status::timeout_expired};
 };
 
-struct Ring_buffer_sync_entry
-{
-    uint64_t    waiting_for_frame{0};
-    std::size_t wrap_count {0};
-    size_t      byte_offset{0};
-    size_t      byte_count {0};
-};
-
-class GPU_ring_buffer_impl final
-{
-public:
-    GPU_ring_buffer_impl(Device& device, GPU_ring_buffer& ring_buffer, const GPU_ring_buffer_create_info& create_info);
-    ~GPU_ring_buffer_impl();
-
-    void sanity_check();
-    void get_size_available_for_write(
-        std::size_t  required_alignment,
-        std::size_t& out_alignment_byte_count_without_wrap,
-        std::size_t& out_available_byte_count_without_wrap,
-        std::size_t& out_available_byte_count_with_wrap
-    ) const;
-    [[nodiscard]] auto acquire(std::size_t required_alignment, Ring_buffer_usage ring_buffer_usage, std::size_t byte_count) -> Buffer_range;
-    [[nodiscard]] auto match  (Ring_buffer_usage ring_buffer_usage) const -> bool;
-
-    // For Buffer_range
-    void flush(std::size_t byte_offset, std::size_t byte_count);
-    void close(std::size_t byte_offset, std::size_t byte_write_count);
-    void make_sync_entry(std::size_t wrap_count, std::size_t byte_offset, std::size_t byte_count);
-
-    [[nodiscard]] auto get_buffer() -> Buffer*;
-    [[nodiscard]] auto get_name  () const -> const std::string&;
-
-    // For Device
-    void frame_completed(uint64_t frame);
-
-private:
-    void wrap_write();
-
-    Device&                 m_device;
-    GPU_ring_buffer&        m_ring_buffer;
-    Ring_buffer_usage       m_ring_buffer_usage;
-
-    std::unique_ptr<Buffer> m_buffer;
-
-    std::size_t             m_map_offset           {0};
-    std::size_t             m_write_position       {0};
-    std::size_t             m_write_wrap_count     {1};
-    std::size_t             m_last_write_wrap_count{1}; // for handling write wraps wraps
-    std::size_t             m_read_wrap_count      {0};
-    std::size_t             m_read_offset          {0}; // This is the first offset where we cannot write
-
-    std::string             m_name;
-
-    std::vector<Ring_buffer_sync_entry> m_sync_entries;
-};
 
 class Device;
 class Device_impl final
@@ -100,7 +45,7 @@ public:
     [[nodiscard]] auto create_dummy_texture        () -> std::shared_ptr<Texture>;
     [[nodiscard]] auto get_buffer_alignment        (Buffer_target target) -> std::size_t;
     [[nodiscard]] auto get_frame_number            () const -> uint64_t;
-    [[nodiscard]] auto allocate_ring_buffer_entry  (Buffer_target buffer_target, Ring_buffer_usage usage, std::size_t byte_count) -> Buffer_range;
+    [[nodiscard]] auto allocate_ring_buffer_entry  (Buffer_target buffer_target, Ring_buffer_usage usage, std::size_t byte_count) -> Ring_buffer_range;
     [[nodiscard]] auto make_blit_command_encoder   () -> Blit_command_encoder;
     [[nodiscard]] auto make_compute_command_encoder() -> Compute_command_encoder;
     [[nodiscard]] auto make_render_command_encoder (Render_pass& render_pass) -> Render_command_encoder;
@@ -130,8 +75,8 @@ private:
 
     std::unordered_map<gl::Internal_format, Format_properties> format_properties;
 
-    std::vector<std::unique_ptr<GPU_ring_buffer>> m_ring_buffers;
-    std::size_t                                   m_min_buffer_size = 2 * 1024 * 1024; // TODO
+    std::vector<std::unique_ptr<Ring_buffer>> m_ring_buffers;
+    std::size_t                               m_min_buffer_size = 2 * 1024 * 1024; // TODO
 
     std::array<Frame_sync, 16> m_frame_syncs;
     uint64_t                   m_frame_number{1};
@@ -149,42 +94,5 @@ private:
     std::vector<Completion_handler> m_completion_handlers;
 };
 
-// Unified API for bindless textures and texture unit cache emulating bindless textures
-// using sampler arrays. Also candidate for future metal argument buffer / vulkan
-// descriptor indexing based implementations
-class Texture_heap_impl final
-{
-public:
-    Texture_heap_impl(
-        Device&        device,
-        const Texture& fallback_texture,
-        const Sampler& fallback_sampler,
-        std::size_t    reserved_slot_count
-    );
-    ~Texture_heap_impl();
-
-    auto assign           (std::size_t slot, const Texture* texture, const Sampler* sample) -> uint64_t;
-    void reset            ();
-    auto allocate         (const Texture* texture, const Sampler* sample) -> uint64_t;
-    auto get_shader_handle(const Texture* texture, const Sampler* sample) -> uint64_t; // bindless ? handle : slot
-    auto bind             () -> std::size_t;
-    void unbind           ();
-
-protected:
-    Device&                     m_device;
-    const Texture&              m_fallback_texture;
-    const Sampler&              m_fallback_sampler;
-    std::size_t                 m_reserved_slot_count;
-    std::vector<bool>           m_assigned;
-    std::vector<uint64_t>       m_gl_bindless_texture_handles;
-    std::vector<bool>           m_gl_bindless_texture_resident;
-    std::vector<bool>           m_reserved;
-    std::vector<const Texture*> m_textures;
-    std::vector<const Sampler*> m_samplers;
-    std::vector<GLuint>         m_gl_textures;
-    std::vector<GLuint>         m_gl_samplers;
-    std::vector<GLuint>         m_zero_vector;
-    std::size_t                 m_used_slot_count{0};
-};
 
 } // namespace erhe::graphics

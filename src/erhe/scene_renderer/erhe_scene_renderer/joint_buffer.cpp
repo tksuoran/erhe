@@ -38,7 +38,7 @@ Joint_interface::Joint_interface(erhe::graphics::Device& graphics_device)
 }
 
 Joint_buffer::Joint_buffer(erhe::graphics::Device& graphics_device, Joint_interface& joint_interface)
-    : GPU_ring_buffer_client{
+    : Ring_buffer_client{
         graphics_device,
         erhe::graphics::Buffer_target::storage,
         "Joint_buffer",
@@ -53,7 +53,7 @@ auto Joint_buffer::update(
     const glm::uvec4&                                          debug_joint_indices,
     const std::span<glm::vec4>&                                debug_joint_colors,
     const std::span<const std::shared_ptr<erhe::scene::Skin>>& skins
-) -> erhe::graphics::Buffer_range
+) -> erhe::graphics::Ring_buffer_range
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -73,9 +73,9 @@ auto Joint_buffer::update(
     const auto&       offsets          = m_joint_interface.offsets;
     const std::size_t exact_byte_count = offsets.joint_struct + joint_count * entry_size;
 
-    erhe::graphics::Buffer_range buffer_range       = acquire(erhe::graphics::Ring_buffer_usage::CPU_write, exact_byte_count);
-    std::span<std::byte>         primitive_gpu_data = buffer_range.get_span();
-    std::size_t                  write_offset       = 0;
+    erhe::graphics::Ring_buffer_range buffer_range       = acquire(erhe::graphics::Ring_buffer_usage::CPU_write, exact_byte_count);
+    std::span<std::byte>              primitive_gpu_data = buffer_range.get_span();
+    std::size_t                       write_offset       = 0;
 
     using erhe::graphics::as_span;
     using erhe::graphics::write;

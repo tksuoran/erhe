@@ -2,6 +2,7 @@
 
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/shader_resource.hpp"
+#include "erhe_graphics/ring_buffer_client.hpp"
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/light.hpp"
@@ -121,17 +122,17 @@ public:
         const Light_projections*                                    light_projections,
         const glm::vec3&                                            ambient_light,
         erhe::graphics::Texture_heap&                               texture_heap
-    ) -> erhe::graphics::Buffer_range;
+    ) -> erhe::graphics::Ring_buffer_range;
 
-    auto update_control(std::size_t light_index) -> erhe::graphics::Buffer_range;
+    auto update_control(std::size_t light_index) -> erhe::graphics::Ring_buffer_range;
 
-    void bind_light_buffer  (erhe::graphics::Command_encoder& encoder, const erhe::graphics::Buffer_range& range);
-    void bind_control_buffer(erhe::graphics::Command_encoder& encoder, const erhe::graphics::Buffer_range& range);
+    void bind_light_buffer  (erhe::graphics::Command_encoder& encoder, const erhe::graphics::Ring_buffer_range& range);
+    void bind_control_buffer(erhe::graphics::Command_encoder& encoder, const erhe::graphics::Ring_buffer_range& range);
 
 private:
-    Light_interface&                       m_light_interface;
-    erhe::graphics::GPU_ring_buffer_client m_light_buffer;
-    erhe::graphics::GPU_ring_buffer_client m_control_buffer;
+    Light_interface&                   m_light_interface;
+    erhe::graphics::Ring_buffer_client m_light_buffer;
+    erhe::graphics::Ring_buffer_client m_control_buffer;
 };
 
 } // namespace erhe::scene_renderer

@@ -8,6 +8,7 @@
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/span.hpp"
 #include "erhe_graphics/texture.hpp"
+#include "erhe_graphics/texture_heap.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_utility/align.hpp"
 

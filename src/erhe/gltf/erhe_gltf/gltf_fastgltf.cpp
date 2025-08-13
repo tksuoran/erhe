@@ -1005,7 +1005,7 @@ private:
         const int byte_count = image_info.row_stride * image_info.height;
         ERHE_VERIFY(byte_count >= 1);
 
-        erhe::graphics::Buffer_range buffer_range = m_arguments.image_transfer.acquire_range(byte_count);
+        erhe::graphics::Ring_buffer_range buffer_range = m_arguments.image_transfer.acquire_range(byte_count);
         std::span<std::byte> byte_span = buffer_range.get_span();
         std::span<std::uint8_t> u8_span{
             reinterpret_cast<std::uint8_t*>(byte_span.data()),
@@ -1093,7 +1093,7 @@ private:
                     const int byte_count = image_info.row_stride * image_info.height;
                     ERHE_VERIFY(byte_count >= 1);
 
-                    erhe::graphics::Buffer_range buffer_range = m_arguments.image_transfer.acquire_range(byte_count);
+                    erhe::graphics::Ring_buffer_range buffer_range = m_arguments.image_transfer.acquire_range(byte_count);
                     std::span<std::byte> byte_span = buffer_range.get_span();
                     std::span<std::uint8_t> u8_span{
                         reinterpret_cast<std::uint8_t*>(byte_span.data()),

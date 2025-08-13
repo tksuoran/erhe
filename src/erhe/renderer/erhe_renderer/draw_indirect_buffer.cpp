@@ -19,7 +19,7 @@ auto Draw_indirect_buffer::get_max_draw_count() -> int
 }
 
 Draw_indirect_buffer::Draw_indirect_buffer(erhe::graphics::Device& graphics_device)
-    : GPU_ring_buffer_client{
+    : Ring_buffer_client{
         graphics_device,
         erhe::graphics::Buffer_target::draw_indirect,
         "Draw_indirect_buffer"
@@ -55,14 +55,14 @@ auto Draw_indirect_buffer::update(
         return {};
     }
 
-    const std::size_t            entry_size     = sizeof(erhe::graphics::Draw_indexed_primitives_indirect_command);
-    const std::size_t            max_byte_count = primitive_count * entry_size;
-    erhe::graphics::Buffer_range buffer_range   = acquire(erhe::graphics::Ring_buffer_usage::CPU_write, max_byte_count);
-    const auto                   gpu_data       = buffer_range.get_span();
-    size_t                       write_offset   = 0;
-    uint32_t                     instance_count     {1};
-    uint32_t                     base_instance      {0};
-    std::size_t                  draw_indirect_count{0};
+    const std::size_t                 entry_size     = sizeof(erhe::graphics::Draw_indexed_primitives_indirect_command);
+    const std::size_t                 max_byte_count = primitive_count * entry_size;
+    erhe::graphics::Ring_buffer_range buffer_range   = acquire(erhe::graphics::Ring_buffer_usage::CPU_write, max_byte_count);
+    const auto                        gpu_data       = buffer_range.get_span();
+    size_t                            write_offset   = 0;
+    uint32_t                          instance_count     {1};
+    uint32_t                          base_instance      {0};
+    std::size_t                       draw_indirect_count{0};
     
     for (const auto& mesh : meshes) {
         const auto* node = mesh->get_node();

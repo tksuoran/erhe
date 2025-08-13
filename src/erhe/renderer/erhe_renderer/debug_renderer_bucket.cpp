@@ -3,6 +3,7 @@
 
 #include "erhe_graphics/compute_command_encoder.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
+#include "erhe_graphics/ring_buffer.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -113,7 +114,7 @@ auto Debug_renderer_bucket::make_draw(std::size_t vertex_byte_count, std::size_t
     if (m_draws.empty()) {
         m_draws.emplace_back(
             m_vertex_ssbo_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, std::max(vertex_byte_count, min_range_size)),
-            erhe::graphics::Buffer_range{},
+            erhe::graphics::Ring_buffer_range{},
             0
         );
     }
@@ -123,7 +124,7 @@ auto Debug_renderer_bucket::make_draw(std::size_t vertex_byte_count, std::size_t
                 erhe::graphics::Ring_buffer_usage::CPU_write,
                 std::max(vertex_byte_count, min_range_size)
             ),
-            erhe::graphics::Buffer_range{},
+            erhe::graphics::Ring_buffer_range{},
             0
         );
     }

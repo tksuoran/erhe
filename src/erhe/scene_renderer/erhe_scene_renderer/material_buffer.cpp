@@ -9,6 +9,7 @@
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_graphics/span.hpp"
 #include "erhe_graphics/texture.hpp"
+#include "erhe_graphics/texture_heap.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_scene_renderer/scene_renderer_log.hpp"
 #include "erhe_profile/profile.hpp"
@@ -45,7 +46,7 @@ Material_interface::Material_interface(erhe::graphics::Device& graphics_device)
 }
 
 Material_buffer::Material_buffer(erhe::graphics::Device& graphics_device, Material_interface& material_interface)
-    : GPU_ring_buffer_client{
+    : Ring_buffer_client{
         graphics_device,
         erhe::graphics::Buffer_target::storage,
         "Material_buffer",
@@ -77,7 +78,7 @@ Material_buffer::Material_buffer(erhe::graphics::Device& graphics_device, Materi
 auto Material_buffer::update(
     erhe::graphics::Texture_heap&                                      texture_heap,
     const std::span<const std::shared_ptr<erhe::primitive::Material>>& materials
-) -> erhe::graphics::Buffer_range
+) -> erhe::graphics::Ring_buffer_range
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -96,9 +97,9 @@ auto Material_buffer::update(
     const auto&       offsets        = m_material_interface.offsets;
     const std::size_t max_byte_count = materials.size() * entry_size;
 
-    erhe::graphics::Buffer_range buffer_range = acquire(erhe::graphics::Ring_buffer_usage::CPU_write, max_byte_count);
-    std::span<std::byte>         gpu_data     = buffer_range.get_span();
-    std::size_t                  write_offset = 0;
+    erhe::graphics::Ring_buffer_range buffer_range = acquire(erhe::graphics::Ring_buffer_usage::CPU_write, max_byte_count);
+    std::span<std::byte>              gpu_data     = buffer_range.get_span();
+    std::size_t                       write_offset = 0;
     
     uint32_t material_index = 0;
     for (const auto& material : materials) {

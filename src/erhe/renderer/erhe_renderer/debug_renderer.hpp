@@ -5,6 +5,7 @@
 #include "erhe_graphics/compute_pipeline_state.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/fragment_outputs.hpp"
+#include "erhe_graphics/ring_buffer_client.hpp"
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_math/viewport.hpp"
@@ -74,14 +75,14 @@ private:
     [[nodiscard]] auto update_view_buffer(
         const erhe::math::Viewport viewport,
         const erhe::scene::Camera& camera
-    ) -> erhe::graphics::Buffer_range;
+    ) -> erhe::graphics::Ring_buffer_range;
 
     erhe::graphics::Device&                m_graphics_device;
     Debug_renderer_program_interface       m_program_interface;
 
-    erhe::graphics::GPU_ring_buffer_client m_view_buffer;
+    erhe::graphics::Ring_buffer_client     m_view_buffer;
     erhe::graphics::Vertex_input_state     m_vertex_input;
-    erhe::graphics::Buffer_range           m_view_buffer_range;
+    erhe::graphics::Ring_buffer_range      m_view_buffer_range;
     erhe::graphics::Compute_pipeline_state m_lines_to_triangles_compute_pipeline;
 
     // NOTE: Elements in m_buckets must be stable, etl::vector<> works, std::vector<> does not work.

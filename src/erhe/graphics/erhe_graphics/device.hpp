@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_graphics/buffer.hpp"
+#include "erhe_graphics/ring_buffer_range.hpp"
 #include "erhe_graphics/shader_monitor.hpp"
 
 #include <array>
@@ -53,108 +54,9 @@ public:
 
 class Texture;
 class Sampler;
-
-enum class Vendor : unsigned int {
-    Unknown = 0,
-    Nvidia  = 1,
-    Amd     = 2,
-    Intel   = 3
-};
-
-class GPU_ring_buffer;
+class Ring_buffer;
 
 class Device;
-
-enum class Ring_buffer_usage : unsigned int
-{
-    None       = 0,
-    CPU_write  = 1,
-    CPU_read   = 2,
-    GPU_access = 3
-};
-
-class Buffer_range
-{
-public:
-    Buffer_range();
-    Buffer_range(
-        GPU_ring_buffer&     ring_buffer,
-        Ring_buffer_usage    usage,
-        std::span<std::byte> span,
-        std::size_t          wrap_count,
-        size_t               start_byte_offset_in_buffer
-    );
-    Buffer_range(Buffer_range&& old) noexcept;
-    Buffer_range& operator=(Buffer_range&) = delete;
-    Buffer_range& operator=(Buffer_range&& old) noexcept;
-    ~Buffer_range();
-
-    void bytes_gpu_used                 (std::size_t byte_count);
-    void bytes_written                  (std::size_t byte_count);
-    void flush                          (std::size_t byte_write_position_in_span);
-    void close                          ();
-    void release                        ();
-    void cancel                         ();
-    auto get_span                       () const -> std::span<std::byte>;
-    auto get_byte_start_offset_in_buffer() const -> std::size_t;
-    auto get_writable_byte_count        () const -> std::size_t;
-    auto get_written_byte_count         () const -> std::size_t;
-    auto is_closed                      () const -> bool;
-
-    [[nodiscard]] auto get_buffer() const -> GPU_ring_buffer*;
-
-private:
-    GPU_ring_buffer*       m_ring_buffer{nullptr};
-    std::vector<std::byte> m_cpu_buffer;
-    std::span<std::byte>   m_span;
-    std::size_t            m_wrap_count{0};
-    size_t                 m_byte_span_start_offset_in_buffer{0};
-    size_t                 m_byte_write_position_in_span{0};
-    size_t                 m_byte_flush_position_in_span{0};
-    Ring_buffer_usage      m_usage{Ring_buffer_usage::None};
-    bool                   m_is_closed{false};
-    bool                   m_is_released{false};
-    bool                   m_is_cancelled{false};
-};
-
-class GPU_ring_buffer_create_info
-{
-public:
-    std::size_t       size             {0};
-    Ring_buffer_usage ring_buffer_usage{Ring_buffer_usage::None};
-    Buffer_usage      buffer_usage     {0xff}; // TODO
-    const char*       debug_label      {nullptr};
-};
-
-class GPU_ring_buffer_impl;
-
-class GPU_ring_buffer
-{
-public:
-    GPU_ring_buffer(Device& device, const GPU_ring_buffer_create_info& create_info);
-    ~GPU_ring_buffer();
-
-    void get_size_available_for_write(
-        std::size_t  required_alignment,
-        std::size_t& out_alignment_byte_count_without_wrap,
-        std::size_t& out_available_byte_count_without_wrap,
-        std::size_t& out_available_byte_count_with_wrap
-    ) const;
-    [[nodiscard]] auto acquire(std::size_t required_alignment, Ring_buffer_usage usage, std::size_t byte_count) -> Buffer_range;
-    [[nodiscard]] auto match  (Ring_buffer_usage ring_buffer_usage) const -> bool;
-
-    // For Buffer_range
-    void flush(std::size_t byte_offset, std::size_t byte_count);
-    void close(std::size_t byte_offset, std::size_t byte_write_count);
-    void make_sync_entry(std::size_t wrap_count, std::size_t byte_offset, std::size_t byte_count);
-
-    [[nodiscard]] auto get_buffer() -> Buffer*;
-
-    void frame_completed(uint64_t frame);
-
-private:
-    std::unique_ptr<GPU_ring_buffer_impl> m_impl;
-};
 
 static constexpr unsigned int format_flag_require_depth     = 0x01u;
 static constexpr unsigned int format_flag_require_stencil   = 0x02u;
@@ -255,7 +157,7 @@ public:
     [[nodiscard]] auto create_dummy_texture        () -> std::shared_ptr<Texture>;
     [[nodiscard]] auto get_buffer_alignment        (Buffer_target target) -> std::size_t;
     [[nodiscard]] auto get_frame_number            () const -> uint64_t;
-    [[nodiscard]] auto allocate_ring_buffer_entry  (Buffer_target buffer_target, Ring_buffer_usage usage, std::size_t byte_count) -> Buffer_range;
+    [[nodiscard]] auto allocate_ring_buffer_entry  (Buffer_target buffer_target, Ring_buffer_usage usage, std::size_t byte_count) -> Ring_buffer_range;
     [[nodiscard]] auto make_blit_command_encoder   () -> Blit_command_encoder;
     [[nodiscard]] auto make_compute_command_encoder() -> Compute_command_encoder;
     [[nodiscard]] auto make_render_command_encoder (Render_pass& render_pass) -> Render_command_encoder;
@@ -272,54 +174,6 @@ private:
 
 [[nodiscard]] auto get_depth_clear_value_pointer(bool reverse_depth = true) -> const float *; // reverse_depth ? 0.0f : 1.0f;
 [[nodiscard]] auto get_depth_function(Compare_operation depth_function, bool reverse_depth = true) -> Compare_operation;
-
-// Unified API for bindless textures and texture unit cache emulating bindless textures
-// using sampler arrays. Also candidate for future metal argument buffer / vulkan
-// descriptor indexing based implementations
-class Texture_heap_impl;
-class Texture_heap final
-{
-public:
-    Texture_heap(
-        Device&        device,
-        const Texture& fallback_texture,
-        const Sampler& fallback_sampler,
-        std::size_t    reserved_slot_count
-    );
-    ~Texture_heap();
-
-    auto assign           (std::size_t slot, const Texture* texture, const Sampler* sample) -> uint64_t;
-    void reset            ();
-    auto allocate         (const Texture* texture, const Sampler* sample) -> uint64_t;
-    auto get_shader_handle(const Texture* texture, const Sampler* sample) -> uint64_t; // bindless ? handle : slot
-    auto bind             () -> std::size_t;
-    void unbind           ();
-
-private:
-    std::unique_ptr<Texture_heap_impl> m_impl;
-};
-
-class GPU_ring_buffer_client
-{
-public:
-    GPU_ring_buffer_client(
-        Device&                     graphics_device,
-        Buffer_target               buffer_target,
-        std::string_view            debug_label, 
-        std::optional<unsigned int> binding_point = {}
-    );
-
-    auto acquire(Ring_buffer_usage usage, std::size_t byte_count) -> Buffer_range;
-    auto bind   (Command_encoder& command_encoder, const Buffer_range& range) -> bool;
-
-protected:
-    Device&                     m_graphics_device;
-
-private:
-    Buffer_target               m_buffer_target;
-    std::string                 m_debug_label;
-    std::optional<unsigned int> m_binding_point;
-};
 
 class Scoped_debug_group final
 {

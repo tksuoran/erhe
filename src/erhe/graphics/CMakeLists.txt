@@ -40,6 +40,12 @@ erhe_target_sources_grouped(
     erhe_graphics/render_pass.hpp
     erhe_graphics/render_pipeline_state.cpp
     erhe_graphics/render_pipeline_state.hpp
+    erhe_graphics/ring_buffer.cpp
+    erhe_graphics/ring_buffer.hpp
+    erhe_graphics/ring_buffer_range.cpp
+    erhe_graphics/ring_buffer_range.hpp
+    erhe_graphics/ring_buffer_client.cpp
+    erhe_graphics/ring_buffer_client.hpp
     erhe_graphics/sampler.cpp
     erhe_graphics/sampler.hpp
     erhe_graphics/shader_monitor.cpp
@@ -68,6 +74,8 @@ erhe_target_sources_grouped(
     erhe_graphics/state/viewport_state.hpp
     erhe_graphics/texture.cpp
     erhe_graphics/texture.hpp
+    erhe_graphics/texture_heap.cpp
+    erhe_graphics/texture_heap.hpp
 
     erhe_graphics/gl/gl_blit_command_encoder.cpp
     erhe_graphics/gl/gl_blit_command_encoder.hpp
@@ -95,8 +103,10 @@ erhe_target_sources_grouped(
     erhe_graphics/gl/gl_render_command_encoder.hpp
     erhe_graphics/gl/gl_render_pass.cpp
     erhe_graphics/gl/gl_render_pass.hpp
-    erhe_graphics/gl/gl_renderbuffer.cpp
-    erhe_graphics/gl/gl_renderbuffer.hpp
+    #erhe_graphics/gl/gl_renderbuffer.cpp
+    #erhe_graphics/gl/gl_renderbuffer.hpp
+    erhe_graphics/gl/gl_ring_buffer.cpp
+    erhe_graphics/gl/gl_ring_buffer.hpp
     erhe_graphics/gl/gl_sampler.cpp
     erhe_graphics/gl/gl_sampler.hpp
     erhe_graphics/gl/gl_shader_stages.cpp
@@ -104,6 +114,8 @@ erhe_target_sources_grouped(
     erhe_graphics/gl/gl_shader_stages_prototype.cpp
     erhe_graphics/gl/gl_texture.cpp
     erhe_graphics/gl/gl_texture.hpp
+    erhe_graphics/gl/gl_texture_heap.cpp
+    erhe_graphics/gl/gl_texture_heap.hpp
     erhe_graphics/gl/gl_vertex_input_state.cpp
     erhe_graphics/gl/gl_vertex_input_state.hpp
 )

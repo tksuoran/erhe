@@ -1,28 +1,26 @@
 #pragma once
 
 #include "erhe_graphics/device.hpp"
+#include "erhe_graphics/ring_buffer_client.hpp"
+#include "erhe_graphics/ring_buffer_range.hpp"
 #include "erhe_primitive/enums.hpp"
 
 #include <memory>
 #include <span>
 
-namespace erhe {
-    class Item_filter;
-}
-namespace erhe::scene {
-    class Mesh;
-}
+namespace erhe { class Item_filter; }
+namespace erhe::scene { class Mesh; }
 
 namespace erhe::renderer {
 
 class Draw_indirect_buffer_range
 {
 public:
-    erhe::graphics::Buffer_range range;
-    std::size_t                  draw_indirect_count{0};
+    erhe::graphics::Ring_buffer_range range;
+    std::size_t                       draw_indirect_count{0};
 };
 
-class Draw_indirect_buffer : public erhe::graphics::GPU_ring_buffer_client
+class Draw_indirect_buffer : public erhe::graphics::Ring_buffer_client
 {
 public:
     explicit Draw_indirect_buffer(erhe::graphics::Device& graphics_device);

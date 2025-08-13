@@ -12,6 +12,8 @@
 #include "erhe_graphics/gpu_timer.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/render_pass.hpp"
+#include "erhe_graphics/ring_buffer.hpp"
+#include "erhe_graphics/ring_buffer_range.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_profile/profile.hpp"
@@ -184,7 +186,7 @@ void Id_renderer::render(erhe::graphics::Render_command_encoder& render_encoder,
 
     const erhe::primitive::Primitive_mode primitive_mode{erhe::primitive::Primitive_mode::polygon_fill};
     std::size_t primitive_count{0};
-    erhe::graphics::Buffer_range               primitive_range            = m_primitive_buffers.update(meshes, primitive_mode, id_filter, settings, primitive_count, true);
+    erhe::graphics::Ring_buffer_range          primitive_range            = m_primitive_buffers.update(meshes, primitive_mode, id_filter, settings, primitive_count, true);
     erhe::renderer::Draw_indirect_buffer_range draw_indirect_buffer_range = m_draw_indirect_buffers.update(meshes, primitive_mode, id_filter);
     if (draw_indirect_buffer_range.draw_indirect_count == 0) {
         return;
@@ -255,7 +257,7 @@ void Id_renderer::render(const Render_parameters& parameters)
     entry.y_offset        = std::max(y - (static_cast<int>(s_extent / 2)), 0);
     entry.clip_from_world = clip_from_world;
 
-    Buffer_range camera_range = m_camera_buffers.update(
+    Ring_buffer_range camera_range = m_camera_buffers.update(
         *camera.projection(),
         *camera.get_node(),
         viewport,

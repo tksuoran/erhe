@@ -2,15 +2,14 @@
 
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/device.hpp"
+#include "erhe_graphics/ring_buffer_client.hpp"
 #include "erhe_graphics/shader_resource.hpp"
 
 #include <glm/glm.hpp>
 
 #include <vector>
 
-namespace erhe::graphics {
-    class Device;
-}
+namespace erhe::graphics { class Device; }
 
 namespace erhe::scene_renderer {
 
@@ -100,7 +99,7 @@ private:
     std::size_t             m_cube_count;
 };
 
-class Cube_control_buffer : public erhe::graphics::GPU_ring_buffer_client
+class Cube_control_buffer : public erhe::graphics::Ring_buffer_client
 {
 public:
     Cube_control_buffer(erhe::graphics::Device& graphics_device, Cube_interface& cube_interface);
@@ -111,7 +110,7 @@ public:
         const glm::vec4& color_scale,
         const glm::vec4& color_start,
         const glm::vec4& color_end
-    ) -> erhe::graphics::Buffer_range;
+    ) -> erhe::graphics::Ring_buffer_range;
 
 private:
     Cube_interface& m_cube_interface;
