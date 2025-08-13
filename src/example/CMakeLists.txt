@@ -18,7 +18,8 @@ erhe_target_sources_grouped(
     res/shaders/depth.frag
     res/shaders/standard.vert
     res/shaders/standard.frag
-    erhe.ini
+    erhe.toml
+    logging.toml
 )
 target_link_libraries(
     ${_target}

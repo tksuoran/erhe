@@ -1,6 +1,6 @@
-;
-; erhe configuration file
-;
+#
+# erhe configuration file for example
+#
 
 [headset]
 openxr = false
@@ -22,6 +22,9 @@ gl_major         = 4
 gl_minor         = 6
 width            = 512
 height           = 512
+use_finish       = false
+use_sleep        = false
+swap_interval    = 1 # try 0
 
 [graphics]
 post_processing             = false
@@ -29,7 +32,7 @@ initial_clear               = true
 force_no_bindless           = false
 force_no_persistent_buffers = false
 
-; NOTE: Primitive is as GLTF primitive (NOT triangle etc)
+# NOTE: Primitive is as GLTF primitive (NOT triangle etc)
 [renderer]
 max_material_count  = 20
 max_light_count     = 8
@@ -37,16 +40,16 @@ max_camera_count    = 8
 max_primitive_count = 20
 max_draw_count      = 200
 
-;  D e v e l o p e r   S e c t i o n  ;
-;                                     ;
-;       ..                            ;
-;      .::':::. .::::.   .:''.  .     ;
-;    .::'   '::::::' .:::'    ''      ;
-;     `     ..:'    ..:'              ;
-;                                     ;
-;    H e r e   b e   d r a g o n s    ;
+#  D e v e l o p e r   S e c t i o n  
+#                                     
+#       ..                            
+#      .::':::. .::::.   .:''.  .     
+#    .::'   '::::::' .:::'    ''      
+#     `     ..:'    ..:'              
+#                                     
+#    H e r e   b e   d r a g o n s    
 
-; Buffer sizes use megabytes as unit
+# Buffer sizes use megabytes as unit
 [mesh_memory]
 vertex_buffer_size = 20
 index_buffer_size  =  8
@@ -66,8 +69,3 @@ font_size = 14
 
 [shader_monitor]
 enabled = true
-
-[window]
-use_finish    = false
-use_sleep     = false
-swap_interval = 1 ; try 0
