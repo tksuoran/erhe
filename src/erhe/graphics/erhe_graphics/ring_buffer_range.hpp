@@ -1,6 +1,8 @@
 #pragma once
 
 #include "erhe_graphics/enums.hpp"
+#include <vector>
+#include <span>
 
 namespace erhe::graphics {
 

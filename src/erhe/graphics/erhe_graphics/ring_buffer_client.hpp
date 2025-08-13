@@ -2,6 +2,8 @@
 
 #include "erhe_graphics/enums.hpp"
 
+#include <optional>
+
 namespace erhe::graphics {
 
 class Command_encoder;

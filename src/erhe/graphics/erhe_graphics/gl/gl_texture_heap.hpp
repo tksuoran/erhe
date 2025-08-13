@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_graphics/texture_heap.hpp"
+#include <vector>
 
 namespace erhe::graphics {
 

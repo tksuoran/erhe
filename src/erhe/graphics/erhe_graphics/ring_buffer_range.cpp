@@ -2,6 +2,7 @@
 
 #include "erhe_graphics/ring_buffer_range.hpp"
 #include "erhe_graphics/ring_buffer.hpp"
+#include "erhe_graphics/graphics_log.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 

@@ -46,15 +46,15 @@ auto Ring_buffer_client::bind(Command_encoder& command_encoder, const Ring_buffe
     Buffer* buffer = ring_buffer->get_buffer();
     ERHE_VERIFY(buffer != nullptr);
 
-    SPDLOG_LOGGER_TRACE(
-        log_gpu_ring_buffer,
-        "binding {} {} buffer offset = {} byte count = {}",
-        m_name,
-        m_binding_point.has_value() ? "uses binding point" : "non-indexed binding",
-        m_binding_point.has_value() ? m_binding_point.value() : 0,
-        range.first_byte_offset,
-        range.byte_count
-    );
+    //SPDLOG_LOGGER_TRACE(
+    //    log_gpu_ring_buffer,
+    //    "binding {} {} buffer offset = {} byte count = {}",
+    //    m_name,
+    //    m_binding_point.has_value() ? "uses binding point" : "non-indexed binding",
+    //    m_binding_point.has_value() ? m_binding_point.value() : 0,
+    //    range.first_byte_offset,
+    //    range.byte_count
+    //);
 
     ERHE_VERIFY(
         (m_buffer_target != Buffer_target::uniform) ||
