@@ -319,7 +319,7 @@ void Tile_renderer::compose_tileset_texture()
     };
 
     m_tileset_texture = std::make_shared<erhe::graphics::Texture>(m_graphics_device, texture_create_info);
-    m_graphics_device.clear_texture(*m_tileset_texture.get(), { 1.0, 0.0, 1.0, 1.0 });
+    m_graphics_device.clear_texture(*m_tileset_texture.get(), { 0.0, 1.0, 1.0, 1.0 });
 
     // Upload everything before single unit tiles
     erhe::graphics::Blit_command_encoder encoder{m_graphics_device};
@@ -415,11 +415,19 @@ void Tile_renderer::compose_tileset_texture()
                 buffer_range.get_byte_start_offset_in_buffer(),   // source_offset
                 src_bytes_per_row,                                // source_bytes_per_row
                 src_bytes_per_image,                              // source_bytes_per_image
-                glm::ivec3{m_tileset_image.info.width, ty0_single_unit_tiles * Tile_shape::height, 1}, // source_size
+                glm::ivec3{                                       // source_size
+                    scratch.info.width,                           //   x
+                    scratch.info.height,                          //   y
+                    1                                             //   z
+                },
                 m_tileset_texture.get(),                          // destination_texture
                 0,                                                // destination_slice
                 0,                                                // destination_level
-                glm::ivec3{0, 0, 0}                               // destination_origin
+                glm::ivec3{                                       // destination_origin
+                    0,                                                                     // x
+                    (ty0_single_unit_tiles + i * Unit_group::height) * Tile_shape::height, // y
+                    0                                                                      // z
+                }
             );
             buffer_range.release();
         }
@@ -468,11 +476,19 @@ void Tile_renderer::compose_tileset_texture()
                             buffer_range.get_byte_start_offset_in_buffer(),   // source_offset
                             src_bytes_per_row,                                // source_bytes_per_row
                             src_bytes_per_image,                              // source_bytes_per_image
-                            glm::ivec3{m_tileset_image.info.width, ty0_single_unit_tiles * Tile_shape::height, 1}, // source_size
+                            glm::ivec3{                                       // source_size
+                                scratch.info.width,                           //   x
+                                scratch.info.height,                          //   y
+                                1                                             //   z
+                            },
                             m_tileset_texture.get(),                          // destination_texture
                             0,                                                // destination_slice
                             0,                                                // destination_level
-                            glm::ivec3{0, 0, 0}                               // destination_origin
+                            glm::ivec3{                                       // destination_origin
+                                tx * Tile_shape::full_width,                  //   x
+                                ty * Tile_shape::height,                      //   y
+                                0                                             //   z
+                            }
                         );
                         buffer_range.release();
 
