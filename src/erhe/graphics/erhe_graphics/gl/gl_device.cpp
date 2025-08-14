@@ -619,6 +619,7 @@ Device_impl::Device_impl(Device& device, erhe::window::Context_window& context_w
     gl::enable      (gl::Enable_cap::scissor_test);
     gl::clip_control(gl::Clip_control_origin::lower_left, gl::Clip_control_depth::zero_to_one);
     gl::enable      (gl::Enable_cap::framebuffer_srgb);
+    gl::enable      (gl::Enable_cap::primitive_restart_fixed_index);
 
     std::fill(
         m_frame_syncs.begin(),
