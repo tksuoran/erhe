@@ -352,11 +352,18 @@ void Node::update_transform(uint64_t serial)
             log_frame->trace("{} TX update parent {}", get_name(), current_parent->get_name());
         }
 
-        node_data.transforms.world_from_node.set(
-            current_parent->world_from_node() * parent_from_node(),
-            node_from_parent() * current_parent->node_from_world()
-        );
+        const glm::mat4 world_from_node = current_parent->world_from_node() * parent_from_node();
+        const glm::mat4 node_from_world = node_from_parent() * current_parent->node_from_world();
+        const float     determinant     = glm::determinant(world_from_node);
+
+        node_data.transforms.world_from_node.set(world_from_node, node_from_world);
         handle_transform_update(serial);
+
+        if (determinant < 0.0f) {
+            enable_flag_bits(erhe::Item_flags::negative_determinant);
+        } else {
+            disable_flag_bits(erhe::Item_flags::negative_determinant);
+        }
     }
 }
 

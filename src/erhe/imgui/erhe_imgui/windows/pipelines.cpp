@@ -381,6 +381,7 @@ void Pipelines::imgui()
     //const auto button_size = ImVec2{ImGui::GetContentRegionAvail().x, 0.0f};
     auto pipelines = erhe::graphics::Render_pipeline_state::get_pipelines();
     for (size_t i = 0, end = pipelines.size(); i < end; ++i) {
+        ImGui::PushID(static_cast<int>(i));
         auto* pipeline = pipelines[i];
         if (
             (pipeline == nullptr) ||
@@ -389,6 +390,7 @@ void Pipelines::imgui()
             continue;
         }
         pipeline_imgui(*pipeline);
+        ImGui::PopID();
     }
 }
 

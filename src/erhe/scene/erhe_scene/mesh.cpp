@@ -198,6 +198,12 @@ void Mesh::handle_flag_bits_update(uint64_t old_flag_bits, uint64_t new_flag_bit
 void Mesh::handle_node_transform_update()
 {
     const glm::mat4& world_from_node = (get_node() != nullptr) ? get_node()->world_from_node() : glm::mat4{1.0f};
+    const float determinant = glm::determinant(world_from_node);
+    if (determinant < 0.0f) {
+        enable_flag_bits(Item_flags::negative_determinant);
+    } else {
+        disable_flag_bits(Item_flags::negative_determinant);
+    }
     for (const auto& rt_primitive : m_rt_primitives) {
         rt_primitive->rt_instance->set_transform(world_from_node);
         rt_primitive->rt_instance->commit();

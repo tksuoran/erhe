@@ -47,8 +47,10 @@ public:
     Pipeline_renderpasses(erhe::graphics::Device& graphics_device, Mesh_memory& mesh_memory, Programs& programs);
 
     erhe::graphics::Vertex_input_state m_empty_vertex_input;
-    erhe::renderer::Pipeline_pass      polygon_fill_standard_opaque;
-    erhe::renderer::Pipeline_pass      polygon_fill_standard_opaque_selected;
+    erhe::renderer::Pipeline_pass      polygon_fill_standard_opaque_positive_determinant;
+    erhe::renderer::Pipeline_pass      polygon_fill_standard_opaque_negative_determinant;
+    erhe::renderer::Pipeline_pass      polygon_fill_standard_opaque_selected_positive_determinant;
+    erhe::renderer::Pipeline_pass      polygon_fill_standard_opaque_selected_negative_determinant;
     erhe::renderer::Pipeline_pass      polygon_fill_standard_translucent;
     erhe::renderer::Pipeline_pass      line_hidden_blend;
     erhe::renderer::Pipeline_pass      brush_back;
@@ -112,7 +114,8 @@ private:
     [[nodiscard]] auto get_pipeline_pass(
         const Composition_pass&    renderpass,
         erhe::renderer::Blend_mode blend_mode,
-        bool                       selected
+        bool                       selected,
+        bool                       negative_determinant
     ) -> erhe::renderer::Pipeline_pass*;
 
     [[nodiscard]] auto width () const -> int;

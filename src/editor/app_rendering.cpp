@@ -84,13 +84,43 @@ App_rendering::App_rendering(
         .require_at_least_one_bit_set = Item_flags::content     | Item_flags::controller,
         .require_all_bits_clear       = Item_flags::translucent | Item_flags::selected | Item_flags::hovered_in_item_tree
     };
+    const Item_filter opaque_not_selected_filter_positive_determinant{
+        .require_all_bits_set         = Item_flags::visible     | Item_flags::opaque,
+        .require_at_least_one_bit_set = Item_flags::content     | Item_flags::controller,
+        .require_all_bits_clear       = Item_flags::translucent | Item_flags::selected | Item_flags::hovered_in_item_tree | Item_flags::negative_determinant
+    };
+    const Item_filter opaque_not_selected_filter_negative_determinant{
+        .require_all_bits_set         = Item_flags::visible     | Item_flags::opaque   | Item_flags::negative_determinant,
+        .require_at_least_one_bit_set = Item_flags::content     | Item_flags::controller,
+        .require_all_bits_clear       = Item_flags::translucent | Item_flags::selected | Item_flags::hovered_in_item_tree
+    };
     const Item_filter opaque_selected_filter{
         .require_all_bits_set         = Item_flags::content | Item_flags::visible | Item_flags::opaque,
         .require_at_least_one_bit_set = Item_flags::selected,
         .require_all_bits_clear       = Item_flags::translucent
     };
-    const Item_filter opaque_selected_or_hovered_filter{
+    const Item_filter opaque_selected_filter_positive_determinant{
         .require_all_bits_set         = Item_flags::content | Item_flags::visible | Item_flags::opaque,
+        .require_at_least_one_bit_set = Item_flags::selected,
+        .require_all_bits_clear       = Item_flags::translucent | Item_flags::negative_determinant
+    };
+    const Item_filter opaque_selected_filter_negative_determinant{
+        .require_all_bits_set         = Item_flags::content | Item_flags::visible | Item_flags::opaque | Item_flags::negative_determinant,
+        .require_at_least_one_bit_set = Item_flags::selected,
+        .require_all_bits_clear       = Item_flags::translucent
+    };
+    const Item_filter opaque_selected_or_hovered_filter{
+        .require_all_bits_set         = Item_flags::content     | Item_flags::visible | Item_flags::opaque,
+        .require_at_least_one_bit_set = Item_flags::selected    | Item_flags::hovered_in_item_tree,
+        .require_all_bits_clear       = Item_flags::translucent
+    };
+    const Item_filter opaque_selected_or_hovered_filter_positive_determinant{
+        .require_all_bits_set         = Item_flags::content     | Item_flags::visible | Item_flags::opaque,
+        .require_at_least_one_bit_set = Item_flags::selected    | Item_flags::hovered_in_item_tree,
+        .require_all_bits_clear       = Item_flags::translucent | Item_flags::negative_determinant
+    };
+    const Item_filter opaque_selected_or_hovered_filter_negative_determinant{
+        .require_all_bits_set         = Item_flags::content  | Item_flags::visible | Item_flags::opaque | Item_flags::negative_determinant,
         .require_at_least_one_bit_set = Item_flags::selected | Item_flags::hovered_in_item_tree,
         .require_all_bits_clear       = Item_flags::translucent
     };
@@ -106,30 +136,44 @@ App_rendering::App_rendering(
 
     using namespace erhe::primitive;
     using Blend_mode = erhe::renderer::Blend_mode;
-    auto opaque_fill_not_selected = make_composition_pass("Content fill opaque not selected");
-    opaque_fill_not_selected->mesh_layers      = { Mesh_layer_id::content, Mesh_layer_id::controller };
-    opaque_fill_not_selected->primitive_mode   = Primitive_mode::polygon_fill;
-    opaque_fill_not_selected->filter           = opaque_not_selected_filter;
-    opaque_fill_not_selected->get_render_style = render_style_not_selected;
-    opaque_fill_not_selected->passes           = { get_pipeline_pass(*opaque_fill_not_selected.get(), Blend_mode::opaque, false) };
+    auto opaque_fill_not_selected_positive_determinant = make_composition_pass("Content fill opaque not selected positive determinant");
+    opaque_fill_not_selected_positive_determinant->mesh_layers      = { Mesh_layer_id::content, Mesh_layer_id::controller };
+    opaque_fill_not_selected_positive_determinant->primitive_mode   = Primitive_mode::polygon_fill;
+    opaque_fill_not_selected_positive_determinant->filter           = opaque_not_selected_filter_positive_determinant;
+    opaque_fill_not_selected_positive_determinant->get_render_style = render_style_not_selected;
+    opaque_fill_not_selected_positive_determinant->passes           = { get_pipeline_pass(*opaque_fill_not_selected_positive_determinant.get(), Blend_mode::opaque, false, false) };
+
+    auto opaque_fill_not_selected_negative_determinant = make_composition_pass("Content fill opaque not selected negative determinant");
+    opaque_fill_not_selected_negative_determinant->mesh_layers      = { Mesh_layer_id::content, Mesh_layer_id::controller };
+    opaque_fill_not_selected_negative_determinant->primitive_mode   = Primitive_mode::polygon_fill;
+    opaque_fill_not_selected_negative_determinant->filter           = opaque_not_selected_filter_negative_determinant;
+    opaque_fill_not_selected_negative_determinant->get_render_style = render_style_not_selected;
+    opaque_fill_not_selected_negative_determinant->passes           = { get_pipeline_pass(*opaque_fill_not_selected_negative_determinant.get(), Blend_mode::opaque, false, true) };
 
     const auto& render_style_selected = [](const Render_context& context) -> const Render_style_data& {
         return context.viewport_config.render_style_selected;
     };
 
-    auto opaque_fill_selected = make_composition_pass("Content fill opaque selected");
-    opaque_fill_selected->mesh_layers      = { Mesh_layer_id::content, Mesh_layer_id::controller };
-    opaque_fill_selected->primitive_mode   = Primitive_mode::polygon_fill;
-    opaque_fill_selected->filter           = opaque_selected_or_hovered_filter;
-    opaque_fill_selected->get_render_style = render_style_selected;
-    opaque_fill_selected->passes           = { get_pipeline_pass(*opaque_fill_selected.get(), Blend_mode::opaque, true)};
+    auto opaque_fill_selected_positive_determinant = make_composition_pass("Content fill opaque selected positive determinant");
+    opaque_fill_selected_positive_determinant->mesh_layers      = { Mesh_layer_id::content, Mesh_layer_id::controller };
+    opaque_fill_selected_positive_determinant->primitive_mode   = Primitive_mode::polygon_fill;
+    opaque_fill_selected_positive_determinant->filter           = opaque_selected_or_hovered_filter_positive_determinant;
+    opaque_fill_selected_positive_determinant->get_render_style = render_style_selected;
+    opaque_fill_selected_positive_determinant->passes           = { get_pipeline_pass(*opaque_fill_selected_positive_determinant.get(), Blend_mode::opaque, true, false)};
+
+    auto opaque_fill_selected_negative_determinant = make_composition_pass("Content fill opaque selected negative determinant");
+    opaque_fill_selected_negative_determinant->mesh_layers      = { Mesh_layer_id::content, Mesh_layer_id::controller };
+    opaque_fill_selected_negative_determinant->primitive_mode   = Primitive_mode::polygon_fill;
+    opaque_fill_selected_negative_determinant->filter           = opaque_selected_or_hovered_filter_negative_determinant;
+    opaque_fill_selected_negative_determinant->get_render_style = render_style_selected;
+    opaque_fill_selected_negative_determinant->passes           = { get_pipeline_pass(*opaque_fill_selected_negative_determinant.get(), Blend_mode::opaque, true, true)};
 
     auto opaque_edge_lines_not_selected = make_composition_pass("Content edge lines opaque not selected");
     opaque_edge_lines_not_selected->mesh_layers      = { Mesh_layer_id::content };
     opaque_edge_lines_not_selected->primitive_mode   = Primitive_mode::edge_lines;
     opaque_edge_lines_not_selected->filter           = opaque_not_selected_filter;
     opaque_edge_lines_not_selected->get_render_style = render_style_not_selected;
-    opaque_edge_lines_not_selected->passes           = { get_pipeline_pass(*opaque_edge_lines_not_selected.get(), Blend_mode::opaque, false) };
+    opaque_edge_lines_not_selected->passes           = { get_pipeline_pass(*opaque_edge_lines_not_selected.get(), Blend_mode::opaque, false, false) };
     opaque_edge_lines_not_selected->allow_shader_stages_override = false;
 
     auto opaque_edge_lines_selected = make_composition_pass("Content edge lines opaque selected");
@@ -137,7 +181,7 @@ App_rendering::App_rendering(
     opaque_edge_lines_selected->primitive_mode   = Primitive_mode::edge_lines;
     opaque_edge_lines_selected->filter           = opaque_selected_filter;
     opaque_edge_lines_selected->get_render_style = render_style_selected;
-    opaque_edge_lines_selected->passes           = { get_pipeline_pass(*opaque_edge_lines_selected.get(), Blend_mode::opaque, true) };
+    opaque_edge_lines_selected->passes           = { get_pipeline_pass(*opaque_edge_lines_selected.get(), Blend_mode::opaque, true, false) };
     opaque_edge_lines_selected->allow_shader_stages_override = false;
 
     selection_outline = make_composition_pass("Content outline opaque selected");
@@ -185,13 +229,13 @@ App_rendering::App_rendering(
     translucent_fill->mesh_layers    = { Mesh_layer_id::content };
     translucent_fill->primitive_mode = Primitive_mode::polygon_fill;
     translucent_fill->filter         = translucent_filter;
-    translucent_fill->passes         = { get_pipeline_pass(*translucent_fill.get(), Blend_mode::translucent, false) };
+    translucent_fill->passes         = { get_pipeline_pass(*translucent_fill.get(), Blend_mode::translucent, false, false) };
 
     auto translucent_outline = make_composition_pass("Content outline translucent");
     translucent_outline->mesh_layers    = { Mesh_layer_id::content };
     translucent_outline->primitive_mode = Primitive_mode::edge_lines;
     translucent_outline->filter         = translucent_filter;
-    translucent_outline->passes         = { get_pipeline_pass(*translucent_outline.get(), Blend_mode::translucent, false) };
+    translucent_outline->passes         = { get_pipeline_pass(*translucent_outline.get(), Blend_mode::translucent, false, false) };
 
     auto brush = make_composition_pass("Brush");
     brush->mesh_layers    = { Mesh_layer_id::brush };
@@ -305,7 +349,8 @@ auto App_rendering::get_all_shadow_nodes() -> const std::vector<std::shared_ptr<
 auto App_rendering::get_pipeline_pass(
     const Composition_pass&          composition_pass,
     const erhe::renderer::Blend_mode blend_mode,
-    const bool                       selected
+    const bool                       selected,
+    const bool                       negative_determinant
 ) -> erhe::renderer::Pipeline_pass*
 {
     using namespace erhe::primitive;
@@ -314,8 +359,14 @@ auto App_rendering::get_pipeline_pass(
             switch (blend_mode) {
                 case erhe::renderer::Blend_mode::opaque:
                     return selected
-                        ? &m_pipeline_passes.polygon_fill_standard_opaque_selected
-                        : &m_pipeline_passes.polygon_fill_standard_opaque;
+                        ? (negative_determinant
+                            ? &m_pipeline_passes.polygon_fill_standard_opaque_selected_negative_determinant
+                            : &m_pipeline_passes.polygon_fill_standard_opaque_selected_positive_determinant
+                        )
+                        : (negative_determinant
+                            ? &m_pipeline_passes.polygon_fill_standard_opaque_negative_determinant
+                            : &m_pipeline_passes.polygon_fill_standard_opaque_positive_determinant
+                        );
                 case erhe::renderer::Blend_mode::translucent:
                     return &m_pipeline_passes.polygon_fill_standard_translucent;
                 default:
@@ -351,8 +402,8 @@ using Color_blend_state          = erhe::graphics::Color_blend_state;
 
 Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_device, Mesh_memory&mesh_memory, Programs& programs)
     : m_empty_vertex_input{graphics_device}
-    , polygon_fill_standard_opaque{erhe::graphics::Render_pipeline_state{{
-        .name           = "Polygon Fill Opaque",
+    , polygon_fill_standard_opaque_positive_determinant{erhe::graphics::Render_pipeline_state{{
+        .name           = "Polygon Fill Opaque Positive Determinant",
         .shader_stages  = &programs.circular_brushed_metal.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangle,
@@ -360,12 +411,53 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(),
         .color_blend    = Color_blend_state::color_blend_disabled
     }}}
-    , polygon_fill_standard_opaque_selected{erhe::graphics::Render_pipeline_state{{
-        .name           = "Polygon Fill Opaque Selected",
+    , polygon_fill_standard_opaque_negative_determinant{erhe::graphics::Render_pipeline_state{{
+        .name           = "Polygon Fill Opaque Negative Determinant",
+        .shader_stages  = &programs.circular_brushed_metal.shader_stages,
+        .vertex_input   = &mesh_memory.vertex_input,
+        .input_assembly = Input_assembly_state::triangle,
+        .rasterization  = Rasterization_state::cull_mode_back_cw,
+        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(),
+        .color_blend    = Color_blend_state::color_blend_disabled
+    }}}
+    , polygon_fill_standard_opaque_selected_positive_determinant{erhe::graphics::Render_pipeline_state{{
+        .name           = "Polygon Fill Opaque Selected Positive Determinant",
         .shader_stages  = &programs.circular_brushed_metal.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangle,
         .rasterization  = Rasterization_state::cull_mode_back_ccw,
+        .depth_stencil  = {
+            .depth_test_enable   = true,
+            .depth_write_enable  = true,
+            .depth_compare_op    = erhe::graphics::get_depth_function(erhe::graphics::Compare_operation::less, true),
+            .stencil_test_enable = true,
+            .stencil_front = {
+                .stencil_fail_op = erhe::graphics::Stencil_op::replace,
+                .z_fail_op       = erhe::graphics::Stencil_op::replace,
+                .z_pass_op       = erhe::graphics::Stencil_op::replace,
+                .function        = erhe::graphics::Compare_operation::always,
+                .reference       = 0b10000000u,
+                .test_mask       = 0b00000000u, // always does not use
+                .write_mask      = 0b10000000u  // = 0x80 = 128
+            },
+            .stencil_back = {
+                .stencil_fail_op = erhe::graphics::Stencil_op::replace,
+                .z_fail_op       = erhe::graphics::Stencil_op::replace,
+                .z_pass_op       = erhe::graphics::Stencil_op::replace,
+                .function        = erhe::graphics::Compare_operation::always,
+                .reference       = 0b10000000u,
+                .test_mask       = 0b00000000u,
+                .write_mask      = 0b10000000u
+            },
+        },
+        .color_blend    = Color_blend_state::color_blend_disabled
+    }}}
+    , polygon_fill_standard_opaque_selected_negative_determinant{erhe::graphics::Render_pipeline_state{{
+        .name           = "Polygon Fill Opaque Selected Negative Determinant",
+        .shader_stages  = &programs.circular_brushed_metal.shader_stages,
+        .vertex_input   = &mesh_memory.vertex_input,
+        .input_assembly = Input_assembly_state::triangle,
+        .rasterization  = Rasterization_state::cull_mode_back_cw,
         .depth_stencil  = {
             .depth_test_enable   = true,
             .depth_write_enable  = true,

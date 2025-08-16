@@ -749,6 +749,12 @@ Edit_state::Edit_state(
     m_translation = m_transform->get_translation();
     m_skew        = m_transform->get_skew       ();
 
+    const glm::mat4 m           = m_transform->get_matrix();
+    const float     determinant = glm::determinant(m);
+    if (determinant < 0.0f) {
+        ImGui::Text("Negative determinant (%.9f)", determinant);
+    }
+
     const std::shared_ptr<erhe::scene::Node> first_parent = m_first_node->get_parent_node();
     const bool euler_matches_gizmo = !m_multiselect &&
         (

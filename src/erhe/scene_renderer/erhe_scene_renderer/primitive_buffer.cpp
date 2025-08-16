@@ -145,10 +145,19 @@ auto Primitive_buffer::update(
 
         const bool use_primary_color = mesh->is_selected() || !mesh->is_hovered();
 
-        const glm::mat4 world_from_node = node->world_from_node();
+        const glm::mat4 world_from_node      = node->world_from_node();
+        const bool      negative_determinant = (node->get_flag_bits() & erhe::Item_flags::negative_determinant) == erhe::Item_flags::negative_determinant;
 
-        // TODO Use compute shader ?
-        const glm::mat4 normal_transform = glm::transpose(glm::adjugate(world_from_node));
+        constexpr glm::mat4 invert_normal{
+            -1.0f,  0.0f,  0.0f, 0.0f,
+             0.0f, -1.0f,  0.0f, 0.0f,
+             0.0f,  0.0f, -1.0f, 0.0f,
+             0.0f,  0.0f,  0.0f, 1.0f
+        };
+        const glm::mat4 normal_transform_ = glm::transpose(glm::adjugate(world_from_node));
+        const glm::mat4 normal_transform  = negative_determinant
+            ? invert_normal * normal_transform_
+            : normal_transform_;
 
         std::size_t mesh_primitive_index{0};
         for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh->get_primitives()) {

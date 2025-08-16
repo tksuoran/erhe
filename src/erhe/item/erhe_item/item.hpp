@@ -39,7 +39,8 @@ public:
     static constexpr uint64_t expand                    = (1u << 21);
     static constexpr uint64_t hovered_in_viewport       = (1u << 22);
     static constexpr uint64_t hovered_in_item_tree      = (1u << 23);
-    static constexpr uint64_t count                     = 24;
+    static constexpr uint64_t negative_determinant      = (1u << 24);
+    static constexpr uint64_t count                     = 25;
 
     static constexpr const char* c_bit_labels[] =
     {
@@ -66,7 +67,8 @@ public:
         "Rendertarget",
         "Expand",
         "Hovered in Viewport",
-        "Hovered in Item Tree"
+        "Hovered in Item Tree",
+        "Negative Determinant",
     };
 
     [[nodiscard]] static auto to_string(uint64_t mask) -> std::string;
