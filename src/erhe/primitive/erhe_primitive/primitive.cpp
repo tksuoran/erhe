@@ -599,11 +599,17 @@ auto Primitive::make_geometry() -> bool
 auto Primitive::make_raytrace() -> bool
 {
     if (collision_shape) {
+        if (collision_shape->has_raytrace_triangles()) {
+            return true;
+        }
         if (collision_shape->make_raytrace()) {
             return true;
         }
     }
     if (render_shape) {
+        if (render_shape->has_raytrace_triangles()) {
+            return true;
+        }
         if (render_shape->make_raytrace()) {
             return true;
         }
@@ -615,6 +621,9 @@ auto Primitive::make_renderable_mesh(const Build_info& build_info, Normal_style 
 {
     if (!render_shape) {
         return false;
+    }
+    if (render_shape->has_buffer_mesh_triangles()) {
+        return true;
     }
     return render_shape->make_buffer_mesh(build_info, normal_style);
 }
