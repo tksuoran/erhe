@@ -994,8 +994,8 @@ void Scene_builder::add_cubes(glm::ivec3 shape, float scale, float gap)
     );
     ERHE_VERIFY(buffer_mesh_ok); // TODO
 
-    erhe::primitive::Primitive primitive{std::move(buffer_mesh), material};
-    ERHE_VERIFY(primitive.render_shape->make_raytrace(cube_geo_mesh));
+    std::shared_ptr<erhe::primitive::Primitive> primitive = std::make_shared<erhe::primitive::Primitive>(buffer_mesh);
+    ERHE_VERIFY(primitive->render_shape->make_raytrace(cube_geo_mesh));
     const vec3 root_pos{0.0, 1.0f + y_half_extent, 0.0f};
     std::shared_ptr<erhe::scene::Node> root = std::make_shared<erhe::scene::Node>("Cubes");
     root->enable_flag_bits(Item_flags::content | Item_flags::visible | Item_flags::show_in_ui);
@@ -1007,7 +1007,8 @@ void Scene_builder::add_cubes(glm::ivec3 shape, float scale, float gap)
             for (int z = 0; z < z_count; ++z) {
                 const float pz = erhe::math::remap(static_cast<float>(z), 0.0f, static_cast<float>(z_count - 1), -z_half_extent, z_half_extent);
                 auto node = std::make_shared<erhe::scene::Node>("Cube");
-                auto mesh = std::make_shared<erhe::scene::Mesh>("", primitive);
+                auto mesh = std::make_shared<erhe::scene::Mesh>("");
+                mesh->add_primitive(primitive, material);
                 mesh->layer_id = m_scene_root->layers().content()->id;
                 mesh->enable_flag_bits(Item_flags::content | Item_flags::shadow_cast | Item_flags::opaque);
                 node->attach(mesh);

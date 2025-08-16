@@ -73,7 +73,7 @@ public:
     {
     public:
         int                                              scale_key;
-        erhe::primitive::Primitive                       primitive;
+        std::shared_ptr<erhe::primitive::Primitive>      primitive;
         std::shared_ptr<erhe::physics::ICollision_shape> collision_shape;
         float                                            volume;
         glm::mat4                                        local_inertia;
@@ -111,12 +111,12 @@ public:
 private:
     void update_facet_statistics();
 
-    Brush_data                   m_data;
-    erhe::primitive::Primitive   m_primitive;
-    std::vector<Reference_frame> m_reference_frames;
-    std::vector<Scaled>          m_scaled_entries;
+    Brush_data                                        m_data;
+    std::shared_ptr<erhe::primitive::Primitive>       m_primitive;
+    std::vector<Reference_frame>                      m_reference_frames;
+    std::vector<Scaled>                               m_scaled_entries;
     std::map<GEO::index_t, std::vector<GEO::index_t>> m_corner_count_to_facets;
-    GEO::index_t                 m_max_corner_count{0};
+    GEO::index_t                                      m_max_corner_count{0};
 };
 
 }

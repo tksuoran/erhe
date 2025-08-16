@@ -474,8 +474,8 @@ auto Item_tree::drag_and_drop_target(const std::shared_ptr<erhe::Item_base>& ite
     if (material) {
         const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(node.get());
         if (mesh) {
-            std::vector<erhe::primitive::Primitive>& primitives = mesh->get_mutable_primitives();
-            if (!primitives.empty()) {
+            std::vector<erhe::scene::Mesh_primitive>& mesh_primitives = mesh->get_mutable_primitives();
+            if (!mesh_primitives.empty()) {
                 const ImRect rect{rect_min, rect_max};
                 if (ImGui::BeginDragDropTargetCustom(rect, imgui_id_top)) {
                     drag_and_drop_rectangle_preview(rect);
@@ -485,8 +485,8 @@ auto Item_tree::drag_and_drop_target(const std::shared_ptr<erhe::Item_base>& ite
                     if (payload != nullptr) {
                         // TODO payload->Preview
                         if (payload->Delivery) {
-                            for (erhe::primitive::Primitive& primitive : primitives) {
-                                primitive.material = material;
+                            for (erhe::scene::Mesh_primitive& mesh_primitive : mesh_primitives) {
+                                mesh_primitive.material = material;
                             }
                         }
                     }

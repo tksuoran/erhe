@@ -154,8 +154,8 @@ void import_gltf(
         auto mesh = erhe::scene::get_mesh(node.get());
         if (mesh) {
             ++mesh_count;
-            std::vector<erhe::primitive::Primitive>& primitives = mesh->get_mutable_primitives();
-            primitive_count += primitives.size();
+            std::vector<erhe::scene::Mesh_primitive>& mesh_primitives = mesh->get_mutable_primitives();
+            primitive_count += mesh_primitives.size();
         }
     }
     log_parsers->info("Processing {} nodes, {} meshes, {} primitives", gltf_data.nodes.size(), mesh_count, primitive_count);
@@ -180,8 +180,9 @@ void import_gltf(
         auto mesh = erhe::scene::get_mesh(node.get());
         if (mesh) {
             // TODO Defer geometry / raytrace / renderable mesh generation
-            std::vector<erhe::primitive::Primitive>& primitives = mesh->get_mutable_primitives();
-            for (erhe::primitive::Primitive& primitive : primitives) {
+            std::vector<erhe::scene::Mesh_primitive>& mesh_primitives = mesh->get_mutable_primitives();
+            for (erhe::scene::Mesh_primitive& mesh_primitive : mesh_primitives) {
+                erhe::primitive::Primitive& primitive = *mesh_primitive.primitive.get();
                 // Ensure geometry exists
                 const bool geometry_ok = primitive.make_geometry();
                 if (!geometry_ok) {

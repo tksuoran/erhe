@@ -73,10 +73,10 @@ void Material_preview::make_preview_scene(Mesh_memory& mesh_memory)
         dummy,
         erhe::primitive::Normal_style::corner_normals
     );
+
     if (buffer_mesh_ok) {
-        m_mesh->add_primitive(
-            erhe::primitive::Primitive{buffer_mesh}
-        );
+        std::shared_ptr<erhe::primitive::Primitive> new_primitive = std::make_shared<erhe::primitive::Primitive>(buffer_mesh);
+        m_mesh->add_primitive(new_primitive);
     } else {
         // TODO handle error
         log_render->error("Unable to create material preview mesh - out of memory?");

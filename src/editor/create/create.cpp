@@ -210,7 +210,8 @@ void Create::imgui()
             if (!mesh) {
                 continue;
             }
-            for (const auto& primitive : mesh->get_primitives()) {
+            for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh->get_primitives()) {
+                const erhe::primitive::Primitive& primitive = *mesh_primitive.primitive.get();
                 if (!primitive.render_shape) {
                     continue;
                 }

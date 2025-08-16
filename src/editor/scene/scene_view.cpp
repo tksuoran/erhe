@@ -331,13 +331,14 @@ void Scene_view::update_hover_with_raytrace()
             entry.scene_mesh_primitive_index = raytrace_primitive->primitive_index;
             auto* const node = scene_mesh->get_node();
             ERHE_VERIFY(node != nullptr);
-            const std::vector<erhe::primitive::Primitive>& scene_mesh_primitives = scene_mesh->get_primitives();
+            const std::vector<erhe::scene::Mesh_primitive>& scene_mesh_primitives = scene_mesh->get_primitives();
             ERHE_VERIFY(raytrace_primitive->primitive_index < scene_mesh_primitives.size());
-            const erhe::primitive::Primitive& scene_mesh_primitive = scene_mesh_primitives[raytrace_primitive->primitive_index];
+            const erhe::scene::Mesh_primitive& scene_mesh_primitive = scene_mesh_primitives[raytrace_primitive->primitive_index];
+            const erhe::primitive::Primitive&  primitive            = *scene_mesh_primitive.primitive.get();
             SPDLOG_LOGGER_TRACE(log_controller_ray, "{}: Hit node: {}", Hover_entry::slot_names[slot], node->get_name());
             ERHE_VERIFY(raytrace_primitive->rt_instance);
             SPDLOG_LOGGER_TRACE(log_controller_ray, "{}: RT instance {}", Hover_entry::slot_names[slot], raytrace_primitive->rt_instance->is_enabled());
-            const std::shared_ptr<erhe::primitive::Primitive_shape> shape = scene_mesh_primitive.get_shape_for_raytrace();
+            const std::shared_ptr<erhe::primitive::Primitive_shape> shape = primitive.get_shape_for_raytrace();
             ERHE_VERIFY(shape);
             entry.geometry = shape->get_geometry();
             if (entry.geometry) {

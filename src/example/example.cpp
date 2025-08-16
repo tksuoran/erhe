@@ -445,8 +445,9 @@ void run_example()
     for (const auto& node : gltf_data.nodes) {
         auto mesh = erhe::scene::get_mesh(node.get());
         if (mesh) {
-            std::vector<erhe::primitive::Primitive>& primitives = mesh->get_mutable_primitives();
-            for (erhe::primitive::Primitive& primitive : primitives) {
+            std::vector<erhe::scene::Mesh_primitive>& mesh_primitives = mesh->get_mutable_primitives();
+            for (erhe::scene::Mesh_primitive& mesh_primitive : mesh_primitives) {
+                erhe::primitive::Primitive& primitive = *mesh_primitive.primitive.get();
                 if (!primitive.has_renderable_triangles()) {
                     ERHE_VERIFY(primitive.make_renderable_mesh(buffer_info));
                 }

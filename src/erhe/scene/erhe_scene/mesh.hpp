@@ -22,6 +22,13 @@ using Layer_id = uint64_t;
 class Raytrace_primitive;
 class Skin;
 
+class Mesh_primitive
+{
+public:
+    std::shared_ptr<erhe::primitive::Primitive> primitive;
+    std::shared_ptr<erhe::primitive::Material>  material;
+};
+
 class Mesh : public erhe::Item<Item_base, Node_attachment, Mesh, erhe::Item_kind::clone_using_custom_clone_constructor>
 {
 public:
@@ -34,7 +41,10 @@ public:
     Mesh& operator=(const Mesh&) = delete;
 
     explicit Mesh(const std::string_view name);
-    Mesh(const std::string_view name, const erhe::primitive::Primitive& primitive);
+    Mesh(
+        const std::string_view                             name,
+        const std::shared_ptr<erhe::primitive::Primitive>& primitive
+    );
     Mesh(const Mesh&, erhe::for_clone);
 
     // Implements Item_base
@@ -52,13 +62,13 @@ public:
     // Public API
     void clear_primitives    ();
     void update_rt_primitives();
-    void add_primitive       (erhe::primitive::Primitive primitive, const std::shared_ptr<erhe::primitive::Material>& material = {});
-    void set_primitives      (const std::vector<erhe::primitive::Primitive>& primitives);
+    void add_primitive       (const std::shared_ptr<erhe::primitive::Primitive>& primitive, const std::shared_ptr<erhe::primitive::Material>& material = {});
+    void set_primitives      (const std::vector<Mesh_primitive>& primitives);
     void set_rt_mask         (uint32_t rt_mask);
     void attach_rt_to_scene  (erhe::raytrace::IScene* rt_scene);
     void detach_rt_from_scene();
-    [[nodiscard]] auto get_mutable_primitives()       ->       std::vector<erhe::primitive::Primitive>&;
-    [[nodiscard]] auto get_primitives        () const -> const std::vector<erhe::primitive::Primitive>&;
+    [[nodiscard]] auto get_mutable_primitives()       ->       std::vector<Mesh_primitive>&;
+    [[nodiscard]] auto get_primitives        () const -> const std::vector<Mesh_primitive>&;
     [[nodiscard]] auto get_rt_scene          () const -> erhe::raytrace::IScene*;
     [[nodiscard]] auto get_rt_primitives     () const -> const std::vector<std::unique_ptr<Raytrace_primitive>>&;
 
@@ -68,7 +78,7 @@ public:
     float                 line_width{1.0f};
 
 private:
-    std::vector<erhe::primitive::Primitive>          m_primitives;
+    std::vector<Mesh_primitive>                      m_primitives;
     erhe::raytrace::IScene*                          m_rt_scene{nullptr};
     std::vector<std::unique_ptr<Raytrace_primitive>> m_rt_primitives;
     bool                                             m_rt_primitives_dirty{false};

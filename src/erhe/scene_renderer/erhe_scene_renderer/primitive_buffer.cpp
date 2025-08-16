@@ -151,7 +151,9 @@ auto Primitive_buffer::update(
         const glm::mat4 normal_transform = glm::transpose(glm::adjugate(world_from_node));
 
         std::size_t mesh_primitive_index{0};
-        for (const auto& primitive : mesh->get_primitives()) {
+        for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh->get_primitives()) {
+            const erhe::primitive::Primitive&   primitive   = *mesh_primitive.primitive.get();
+            const erhe::primitive::Material*    material    = mesh_primitive.material.get();
             const erhe::primitive::Buffer_mesh* buffer_mesh = primitive.get_renderable_mesh();
             ERHE_VERIFY(buffer_mesh != nullptr);
             const erhe::primitive::Index_range  index_range = buffer_mesh->index_range(primitive_mode);
@@ -167,7 +169,6 @@ auto Primitive_buffer::update(
                 m_id_offset += add;
             }
 
-            erhe::primitive::Material* material = primitive.material.get();
             const glm::vec4 wireframe_color  = glm::vec4{1.0f, 1.0f, 1.0f, 1.0f}; //// mesh->get_wireframe_color();
             const glm::vec3 id_offset_vec3   = erhe::math::vec3_from_uint(m_id_offset);
             const glm::vec4 id_offset_vec4   = glm::vec4{id_offset_vec3, 0.0f};

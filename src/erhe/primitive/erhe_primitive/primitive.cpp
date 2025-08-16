@@ -527,35 +527,27 @@ Primitive::~Primitive()
 {
 }
 
-Primitive::Primitive(
-    const std::shared_ptr<Triangle_soup>& triangle_soup,
-    const std::shared_ptr<Material>&      material
-)
+Primitive::Primitive(const std::shared_ptr<Triangle_soup>& triangle_soup)
     : render_shape{std::make_shared<Primitive_render_shape>(triangle_soup)}
-    , material    {material}
 {
 }
 
-Primitive::Primitive(const Buffer_mesh& renderable_mesh, const std::shared_ptr<Material>& material)
+Primitive::Primitive(const Buffer_mesh& renderable_mesh)
     : render_shape{std::make_shared<Primitive_render_shape>(renderable_mesh)}
-    , material    {material}
 {
 }
 
-Primitive::Primitive(const std::shared_ptr<erhe::geometry::Geometry>& geometry, const std::shared_ptr<Material>& material)
+Primitive::Primitive(const std::shared_ptr<erhe::geometry::Geometry>& geometry)
     : render_shape{std::make_shared<Primitive_render_shape>(geometry)}
-    , material    {material}
 {
 }
 
 Primitive::Primitive(
     const std::shared_ptr<erhe::geometry::Geometry>& geometry,
-    const std::shared_ptr<Material>&                 material,
     const Build_info&                                build_info,
     const Normal_style                               normal_style
 )
     : render_shape{std::make_shared<Primitive_render_shape>(geometry)}
-    , material    {material}
 {
     const bool ok = make_renderable_mesh(build_info, normal_style);
     ERHE_VERIFY(ok);
@@ -563,12 +555,10 @@ Primitive::Primitive(
 
 Primitive::Primitive(
     const std::shared_ptr<erhe::geometry::Geometry>& render_geometry,
-    const std::shared_ptr<erhe::geometry::Geometry>& collision_geometry,
-    const std::shared_ptr<Material>&                 material
+    const std::shared_ptr<erhe::geometry::Geometry>& collision_geometry
 )
     : render_shape   {std::make_shared<Primitive_render_shape>(render_geometry)}
     , collision_shape{std::make_shared<Primitive_shape>(collision_geometry)}
-    , material       {material}
 {
     ERHE_VERIFY(render_geometry);
     ERHE_VERIFY(collision_geometry);

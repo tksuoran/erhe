@@ -117,20 +117,19 @@ void Rendertarget_mesh::resize_rendertarget(erhe::graphics::Device& graphics_dev
     std::shared_ptr<erhe::geometry::Geometry> geometry = std::make_shared<erhe::geometry::Geometry>();
     erhe::geometry::shapes::make_rectangle(geometry->get_mesh(), m_local_width, m_local_height, true, false);
 
-    erhe::primitive::Primitive primitive{
+    std::shared_ptr<erhe::primitive::Primitive> primitive = std::make_shared<erhe::primitive::Primitive>(
         geometry,
-        m_material,
         erhe::primitive::Build_info{
             .primitive_types{ .fill_triangles = true },
             .buffer_info = mesh_memory.buffer_info
         },
         erhe::primitive::Normal_style::polygon_normals
-    };
+    );
 
-    ERHE_VERIFY(primitive.make_raytrace());
+    ERHE_VERIFY(primitive->make_raytrace());
 
     clear_primitives();
-    add_primitive(primitive);
+    add_primitive(primitive, m_material);
 
     mesh_memory.buffer_transfer_queue.flush();
 

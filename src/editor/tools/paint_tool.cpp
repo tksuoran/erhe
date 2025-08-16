@@ -293,11 +293,12 @@ auto Paint_tool::vertex_buffer_index_from_scnene_mesh_primitive_corner(
     const GEO::index_t       geo_mesh_corner
 ) -> std::optional<uint32_t>
 {
-    const std::vector<erhe::primitive::Primitive>& primitives = scene_mesh.get_primitives();
-    if (scene_mesh_primitive_index >= primitives.size()) {
+    const std::vector<erhe::scene::Mesh_primitive>& mesh_primitives = scene_mesh.get_primitives();
+    if (scene_mesh_primitive_index >= mesh_primitives.size()) {
         return {};
     }
-    const erhe::primitive::Primitive& primitive = primitives[scene_mesh_primitive_index];
+    const erhe::scene::Mesh_primitive& mesh_primitive = mesh_primitives.at(scene_mesh_primitive_index);
+    const erhe::primitive::Primitive&  primitive      = *mesh_primitive.primitive.get();
     if (!primitive.render_shape) {
         return {};
     }
@@ -341,15 +342,16 @@ void Paint_tool::paint_vertex(
 
     std::vector<std::uint8_t> buffer;
 
-    const std::vector<erhe::primitive::Primitive>& primitives = scene_mesh.get_mutable_primitives();
-    const erhe::primitive::Primitive& primitive = primitives[scene_mesh_primitive_index];
+    const std::vector<erhe::scene::Mesh_primitive>& mesh_primitives = scene_mesh.get_mutable_primitives();
+    const erhe::scene::Mesh_primitive& mesh_primitive = mesh_primitives.at(scene_mesh_primitive_index);
+    const erhe::primitive::Primitive&  primitive      = *mesh_primitive.primitive.get();
     if (!primitive.render_shape) {
         return ;
     }
 
     //  const std::shared_ptr<GEO::Mesh>& geo_mesh = primitive.render_shape->get_mesh();
-    const erhe::primitive::Buffer_mesh& buffer_mesh = primitive.render_shape->get_renderable_mesh();
-    const std::size_t range_byte_offset = buffer_mesh.vertex_buffer_ranges.at(stream_index).byte_offset;
+    const erhe::primitive::Buffer_mesh& buffer_mesh       = primitive.render_shape->get_renderable_mesh();
+    const std::size_t                   range_byte_offset = buffer_mesh.vertex_buffer_ranges.at(stream_index).byte_offset;
     if (attribute_stream.attribute->format == erhe::dataformat::Format::format_32_vec4_float) {
         buffer.resize(sizeof(float) * 4);
         auto* const ptr = reinterpret_cast<float*>(buffer.data());
@@ -526,9 +528,10 @@ void Paint_tool::imgui()
                     continue;
                 }
             }
-            std::vector<erhe::primitive::Primitive>& primitives = mesh->get_mutable_primitives();
-            for (size_t primitive_index = 0, end = primitives.size(); primitive_index < end; ++primitive_index) {
-                erhe::primitive::Primitive& primitive = primitives[primitive_index];
+            std::vector<erhe::scene::Mesh_primitive>& mesh_primitives = mesh->get_mutable_primitives();
+            for (size_t primitive_index = 0, end = mesh_primitives.size(); primitive_index < end; ++primitive_index) {
+                erhe::scene::Mesh_primitive& mesh_primitive = mesh_primitives.at(primitive_index);
+                erhe::primitive::Primitive&  primitive      = *mesh_primitive.primitive.get();
                 if (!primitive.render_shape) {
                     continue;
                 }

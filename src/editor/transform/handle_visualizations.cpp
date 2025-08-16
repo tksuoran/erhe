@@ -405,7 +405,7 @@ auto Handle_visualizations::make_mesh(
     auto node = std::make_shared<erhe::scene::Node>(name);
     auto mesh = std::make_shared<erhe::scene::Mesh>(name);
     mesh->add_primitive(part.primitive, material);
-    ERHE_VERIFY(mesh->get_mutable_primitives().front().has_raytrace_triangles());
+    ERHE_VERIFY(mesh->get_mutable_primitives().front().primitive->has_raytrace_triangles());
 
     mesh->enable_flag_bits(erhe::Item_flags::tool | erhe::Item_flags::id);
     node->attach(mesh);
@@ -422,9 +422,11 @@ Handle_visualizations::Part::Part(
     const std::shared_ptr<erhe::geometry::Geometry>& render_geometry,
     const std::shared_ptr<erhe::geometry::Geometry>& collision_geometry
 )
-    : primitive{render_geometry, collision_geometry}
+    : primitive{
+        std::make_shared<erhe::primitive::Primitive>(render_geometry, collision_geometry)
+    }
 {
-    const bool render_ok = primitive.make_renderable_mesh(
+    const bool render_ok = primitive->make_renderable_mesh(
         erhe::primitive::Build_info{
             .primitive_types{
                 .fill_triangles = true
@@ -435,7 +437,7 @@ Handle_visualizations::Part::Part(
     );
     ERHE_VERIFY(render_ok);
 
-    const bool raytrace_ok = primitive.make_raytrace();
+    const bool raytrace_ok = primitive->make_raytrace();
     ERHE_VERIFY(raytrace_ok);
 }
 

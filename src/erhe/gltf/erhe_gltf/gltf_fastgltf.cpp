@@ -15,6 +15,7 @@
 #include "erhe_log/log_glm.hpp"
 #include "erhe_primitive/buffer_sink.hpp"
 #include "erhe_primitive/material.hpp"
+#include "erhe_primitive/primitive.hpp"
 #include "erhe_primitive/primitive_builder.hpp"
 #include "erhe_primitive/triangle_soup.hpp"
 #include "erhe_profile/profile.hpp"
@@ -1501,7 +1502,7 @@ private:
         Primitive_entry primitive_entry;
         get_primitive_geometry(primitive, primitive_entry);
 
-        erhe::primitive::Primitive new_primitive{primitive_entry.triangle_soup};
+        auto new_primitive = std::make_shared<erhe::primitive::Primitive>(primitive_entry.triangle_soup);
         erhe_mesh->add_primitive(new_primitive, erhe_material);
     }
     void parse_skin(const std::size_t skin_index)
@@ -2181,7 +2182,8 @@ private:
         }
 
         fastgltf::Mesh gltf_mesh{};
-        for (const erhe::primitive::Primitive& erhe_primitive : erhe_mesh->get_primitives()) {
+        for (const erhe::scene::Mesh_primitive& erhe_mesh_primitive : erhe_mesh->get_primitives()) {
+            const erhe::primitive::Primitive& erhe_primitive = *erhe_mesh_primitive.primitive.get();
             fastgltf::Primitive gltf_primitive;
             const erhe::primitive::Primitive_render_shape* primitive_render_shape = erhe_primitive.render_shape.get();
             if (primitive_render_shape == nullptr) {
@@ -2200,8 +2202,8 @@ private:
                 gltf_primitive.attributes.emplace_back(attribute.name, attribute.accessorIndex);
             }
             gltf_primitive.indicesAccessor = export_entry.index_buffer_accessor;
-            if (erhe_primitive.material) {
-                gltf_primitive.materialIndex = process_material(erhe_primitive.material.get());
+            if (erhe_mesh_primitive.material) {
+                gltf_primitive.materialIndex = process_material(erhe_mesh_primitive.material.get());
             }
             gltf_mesh.primitives.emplace_back(std::move(gltf_primitive));
         }

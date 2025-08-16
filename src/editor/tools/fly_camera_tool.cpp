@@ -15,6 +15,7 @@
 #include "erhe_configuration/configuration.hpp"
 #include "erhe_file/file.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_primitive/primitive.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/mesh.hpp"
@@ -337,8 +338,9 @@ auto Fly_camera_frame_command::try_call() -> bool
         if (!mesh) {
             continue;
         }
-        const std::vector<erhe::primitive::Primitive>& primitives = mesh->get_primitives();
-        for (const erhe::primitive::Primitive& primitive : primitives) {
+        const std::vector<erhe::scene::Mesh_primitive>& mesh_primitives = mesh->get_primitives();
+        for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh_primitives) {
+            const erhe::primitive::Primitive& primitive = *mesh_primitive.primitive.get();
             const auto bounding_box = primitive.get_bounding_box();
             if (!bounding_box.is_valid()) {
                 continue;

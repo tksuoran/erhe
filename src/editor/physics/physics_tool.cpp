@@ -440,8 +440,9 @@ auto Physics_tool::on_drag() -> bool
         m_grab_position_world = glm::vec3{m_target_mesh->get_node()->world_from_node() * glm::vec4{m_grab_position_in_node, 1.0f}};
 
         erhe::math::Aabb mesh_bounding_box;
-        for (const erhe::primitive::Primitive& primitive : m_target_mesh->get_primitives()) {
-            erhe::math::Aabb primitive_bounding_box = primitive.get_bounding_box();
+        for (const erhe::scene::Mesh_primitive& mesh_primitive : m_target_mesh->get_primitives()) {
+            const erhe::primitive::Primitive& primitive              = *mesh_primitive.primitive.get();
+            erhe::math::Aabb                  primitive_bounding_box = primitive.get_bounding_box();
             if (primitive_bounding_box.is_valid()) {
                 mesh_bounding_box.include(primitive_bounding_box);
             }

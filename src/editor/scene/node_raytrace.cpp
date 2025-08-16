@@ -73,7 +73,8 @@ auto get_hit_normal(const erhe::raytrace::Hit& hit) -> std::optional<glm::vec3>
     ERHE_VERIFY(node != nullptr);
     const auto& mesh_primitives = mesh->get_primitives();
     ERHE_VERIFY(raytrace_primitive->primitive_index < mesh_primitives.size());
-    const erhe::primitive::Primitive& primitive = mesh_primitives[raytrace_primitive->primitive_index];
+    const erhe::scene::Mesh_primitive& mesh_primitive = mesh_primitives.at(raytrace_primitive->primitive_index);
+    const erhe::primitive::Primitive&  primitive      = *mesh_primitive.primitive.get();
 
     using namespace erhe::primitive;
     const std::shared_ptr<Primitive_shape> shape = primitive.get_shape_for_raytrace();

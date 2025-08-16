@@ -168,7 +168,7 @@ void Brush_preview::render_preview(
     //const glm::vec3 target_position = world_aabb.center();
     //const float     size            = glm::length(world_aabb.diagonal());
 
-    const erhe::primitive::Buffer_mesh* renderable_mesh = brush_scaled.primitive.get_renderable_mesh();
+    const erhe::primitive::Buffer_mesh* renderable_mesh = brush_scaled.primitive->get_renderable_mesh();
     ERHE_VERIFY(renderable_mesh != nullptr);
     const erhe::math::Sphere primitive_local_bounding_sphere = renderable_mesh->bounding_sphere;
     const erhe::math::Sphere world_sphere    = primitive_local_bounding_sphere.transformed_by(m_node->world_from_node());

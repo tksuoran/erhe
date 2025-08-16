@@ -456,15 +456,17 @@ void Properties::mesh_properties(erhe::scene::Mesh& mesh)
         push_group("Primitives", ImGuiTreeNodeFlags_DefaultOpen, m_indent);
     }
     int primitive_index = 0;
-    for (auto& primitive : mesh.get_mutable_primitives()) { // may edit material
+    for (erhe::scene::Mesh_primitive& mesh_primitive : mesh.get_mutable_primitives()) { // may edit material
         std::string label = fmt::format("Primitive {}", primitive_index++);
         push_group(label, ImGuiTreeNodeFlags_DefaultOpen, m_indent);
-        add_entry("Material", [&](){ material_library->combo(m_context, "##", primitive.material, false); });
+        add_entry("Material", [&](){ material_library->combo(m_context, "##", mesh_primitive.material, false); });
         if (m_context.developer_mode) {
-            if (primitive.material) {
-                add_entry("Material Buffer Index", [&](){ ImGui::Text("%u", primitive.material->material_buffer_index); });
+            if (mesh_primitive.material) {
+                add_entry("Material Buffer Index", [&](){ ImGui::Text("%u", mesh_primitive.material->material_buffer_index); });
             }
         }
+
+        erhe::primitive::Primitive& primitive = *mesh_primitive.primitive.get();
         if (primitive.render_shape) {
             shape_properties("Render shape", primitive.render_shape.get());
             const erhe::primitive::Buffer_mesh& renderable_mesh = primitive.render_shape->get_renderable_mesh();

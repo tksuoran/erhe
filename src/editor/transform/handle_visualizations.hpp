@@ -57,7 +57,7 @@ public:
             const std::shared_ptr<erhe::geometry::Geometry>& collision_geometry
         );
 
-        erhe::primitive::Primitive primitive;
+        std::shared_ptr<erhe::primitive::Primitive> primitive;
     };
 
     [[nodiscard]] auto get_handle           (erhe::scene::Mesh* mesh) const -> Handle;

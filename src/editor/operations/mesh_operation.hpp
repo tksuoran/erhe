@@ -40,8 +40,8 @@ protected:
         class Version
         {
         public:
-            std::shared_ptr<Node_physics>           node_physics{};
-            std::vector<erhe::primitive::Primitive> primitives{};
+            std::shared_ptr<Node_physics>            node_physics{};
+            std::vector<erhe::scene::Mesh_primitive> primitives{};
         };
         Version before{};
         Version after{};

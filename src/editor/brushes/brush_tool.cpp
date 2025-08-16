@@ -591,7 +591,7 @@ void Brush_tool::update_preview_mesh_node_transform()
     //      This is a workaround for clear_primitives() issue below
     m_preview_node->set_parent({});
 
-    const std::shared_ptr<erhe::primitive::Primitive_render_shape> shape = m_preview_mesh->get_primitives().front().render_shape;
+    const std::shared_ptr<erhe::primitive::Primitive_render_shape> shape = m_preview_mesh->get_primitives().front().primitive->render_shape;
     ERHE_VERIFY(shape);
 
     // TODO Brush mesh does not really need RT primitives at all

@@ -208,9 +208,10 @@ void Mesh_operation::make_entries(const std::function<void(const erhe::geometry:
             }
         }
 
-        for (auto& primitive : scene_mesh->get_mutable_primitives()) {
-            const std::shared_ptr<erhe::primitive::Primitive_render_shape>& render_shape = primitive.render_shape;
-            const std::shared_ptr<erhe::geometry::Geometry>& before_geometry = render_shape->get_geometry();
+        for (erhe::scene::Mesh_primitive& mesh_primitive : scene_mesh->get_mutable_primitives()) {
+            const erhe::primitive::Primitive&                               primitive       = *mesh_primitive.primitive.get();
+            const std::shared_ptr<erhe::primitive::Primitive_render_shape>& render_shape    = primitive.render_shape;
+            const std::shared_ptr<erhe::geometry::Geometry>&                before_geometry = render_shape->get_geometry();
             if (!before_geometry) {
                 continue;
             }
@@ -225,11 +226,11 @@ void Mesh_operation::make_entries(const std::function<void(const erhe::geometry:
 
             after_geometry->process(flags);
 
-            erhe::primitive::Primitive after_primitive{after_geometry, primitive.material};
-            const bool renderable_ok = after_primitive.make_renderable_mesh(m_parameters.build_info, render_shape->get_normal_style());
-            const bool raytrace_ok   = after_primitive.make_raytrace();
+            std::shared_ptr<erhe::primitive::Primitive> after_primitive = std::make_shared<erhe::primitive::Primitive>(after_geometry);
+            const bool renderable_ok = after_primitive->make_renderable_mesh(m_parameters.build_info, render_shape->get_normal_style());
+            const bool raytrace_ok   = after_primitive->make_raytrace();
             ERHE_VERIFY(renderable_ok && raytrace_ok);
-            entry.after.primitives.push_back(after_primitive);
+            entry.after.primitives.emplace_back(after_primitive, mesh_primitive.material);
 
             if (m_parameters.context.app_settings->physics.static_enable) {
 

@@ -381,7 +381,8 @@ void Viewport_scene_view::update_hover_with_id_render()
     if (scene_mesh) {
         const erhe::scene::Node* node = scene_mesh->get_node();
         ERHE_VERIFY(node != nullptr);
-        const erhe::primitive::Primitive& primitive = scene_mesh->get_primitives()[entry.scene_mesh_primitive_index];
+        const erhe::scene::Mesh_primitive& mesh_primitive = scene_mesh->get_primitives()[entry.scene_mesh_primitive_index];
+        const erhe::primitive::Primitive&  primitive      = *mesh_primitive.primitive.get();
         const std::shared_ptr<erhe::primitive::Primitive_shape> shape = primitive.get_shape_for_raytrace();
         if (shape) {
             entry.geometry = shape->get_geometry();

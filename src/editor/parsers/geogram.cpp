@@ -84,13 +84,12 @@ void import_geogram(
         erhe::Item_flags::show_in_ui;
     constexpr erhe::primitive::Normal_style normal_style = erhe::primitive::Normal_style::corner_normals;
 
-    erhe::primitive::Primitive primitive{
+    std::shared_ptr<erhe::primitive::Primitive> primitive = std::make_shared<erhe::primitive::Primitive>(
         geometry,
-        std::shared_ptr<erhe::primitive::Material>{},
         build_info,
         normal_style
-    };
-    const bool raytrace_ok   = primitive.make_raytrace();
+    );
+    const bool raytrace_ok = primitive->make_raytrace();
     static_cast<void>(raytrace_ok);
 
     auto node = std::make_shared<erhe::scene::Node>(path_string);

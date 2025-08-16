@@ -48,8 +48,8 @@ private:
     Parameters                                                 m_parameters;
     std::vector<Entry>                                         m_sources;
     std::shared_ptr<Node_physics>                              m_combined_node_physics;
-    std::vector<erhe::primitive::Primitive>                    m_first_mesh_primitives_before{};
-    std::vector<erhe::primitive::Primitive>                    m_first_mesh_primitives_after{};
+    std::vector<erhe::scene::Mesh_primitive>                   m_first_mesh_primitives_before{};
+    std::vector<erhe::scene::Mesh_primitive>                   m_first_mesh_primitives_after{};
 
     std::vector<std::shared_ptr<erhe::Item_base>>              m_selection_before;
     std::vector<std::shared_ptr<erhe::Item_base>>              m_selection_after;

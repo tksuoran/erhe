@@ -302,8 +302,9 @@ auto Binary_mesh_operation::make_operations(
         }
 
         std::vector<Entry>& entries = lhs_entries.empty() ? lhs_entries : rhs_entries;
-        for (auto& primitive : mesh->get_mutable_primitives()) {
-            const auto& shape = primitive.render_shape;
+        for (erhe::scene::Mesh_primitive& mesh_primitive : mesh->get_mutable_primitives()) {
+            const erhe::primitive::Primitive&                               primitive = *mesh_primitive.primitive.get();
+            const std::shared_ptr<erhe::primitive::Primitive_render_shape>& shape     = primitive.render_shape;
             if (!shape) {
                 continue;
             }
@@ -316,7 +317,7 @@ auto Binary_mesh_operation::make_operations(
                 normal_style = shape->get_normal_style();
             }
             if (!material) {
-                material = primitive.material;
+                material = mesh_primitive.material;
             }
             if (item_host == nullptr) {
                 item_host = raw_node->get_item_host();
@@ -379,9 +380,9 @@ auto Binary_mesh_operation::make_operations(
         erhe::Item_flags::content     |
         erhe::Item_flags::show_in_ui;
 
-    erhe::primitive::Primitive primitive{out_geometry, material};
-    const bool renderable_ok = primitive.make_renderable_mesh(parameters.build_info, normal_style);
-    const bool raytrace_ok   = primitive.make_raytrace();
+    std::shared_ptr<erhe::primitive::Primitive> primitive = std::make_shared<erhe::primitive::Primitive>(out_geometry);
+    const bool renderable_ok = primitive->make_renderable_mesh(parameters.build_info, normal_style);
+    const bool raytrace_ok   = primitive->make_raytrace();
     ERHE_VERIFY(renderable_ok);
     ERHE_VERIFY(raytrace_ok);
 

@@ -162,7 +162,8 @@ void Debug_visualizations::mesh_visualization(const Render_context& render_conte
         ? used_camera_node->world_from_node_transform()
         : Trs_transform{};
 
-    for (const auto& primitive : mesh->get_primitives()) {
+    for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh->get_primitives()) {
+        const erhe::primitive::Primitive& primitive = *mesh_primitive.primitive.get();
         if (!primitive.render_shape) {
             continue;
         }
@@ -738,7 +739,8 @@ void Debug_visualizations::camera_visualization(const Render_context& render_con
                     continue;
                 }
 
-                for (const auto& primitive : mesh->get_primitives()) {
+                for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh->get_primitives()) {
+                    const erhe::primitive::Primitive& primitive                 = *mesh_primitive.primitive.get();
                     erhe::scene::Node*                node                      = mesh->get_node();
                     const erhe::scene::Trs_transform& world_from_node_transform = node->world_from_node_transform();
                     const glm::mat4                   world_from_node           = world_from_node_transform.get_matrix();
@@ -1257,7 +1259,8 @@ void Debug_visualizations::mesh_labels(const Render_context& context, erhe::scen
         hovered_scene_mesh = content_hover.scene_mesh_weak.lock().get();
     }
 
-    for (erhe::primitive::Primitive& primitive : scene_mesh->get_mutable_primitives()) {
+    for (erhe::scene::Mesh_primitive& mesh_primitive : scene_mesh->get_mutable_primitives()) {
+        const erhe::primitive::Primitive& primitive = *mesh_primitive.primitive.get();
         if (!primitive.render_shape) {
             continue;
         }

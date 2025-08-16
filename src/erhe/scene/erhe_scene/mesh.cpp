@@ -24,13 +24,14 @@ void Mesh::update_rt_primitives()
 {
     m_rt_primitives.clear();
     for (std::size_t i = 0, end = m_primitives.size(); i < end; ++i) {
-        const erhe::primitive::Primitive& primitive = m_primitives[i];
-        const std::shared_ptr<erhe::primitive::Primitive_shape>& shape = primitive.get_shape_for_raytrace();
+        const Mesh_primitive&                                    mesh_primitive = m_primitives[i];
+        const erhe::primitive::Primitive&                        primitive      = *mesh_primitive.primitive.get();
+        const std::shared_ptr<erhe::primitive::Primitive_shape>& shape          = primitive.get_shape_for_raytrace();
         if (!shape) {
             continue;
         }
-        const erhe::primitive::Primitive_raytrace& primitive_raytrace = shape->get_raytrace();
-        const std::shared_ptr<erhe::raytrace::IGeometry>& rt_geometry = primitive_raytrace.get_raytrace_geometry();
+        const erhe::primitive::Primitive_raytrace&        primitive_raytrace = shape->get_raytrace();
+        const std::shared_ptr<erhe::raytrace::IGeometry>& rt_geometry        = primitive_raytrace.get_raytrace_geometry();
         if (rt_geometry) {
             m_rt_primitives.emplace_back(
                 new Raytrace_primitive(this, i, rt_geometry.get())
@@ -39,27 +40,27 @@ void Mesh::update_rt_primitives()
     }
 }
 
-void Mesh::add_primitive(erhe::primitive::Primitive primitive, const std::shared_ptr<erhe::primitive::Material>& material)
+void Mesh::add_primitive(
+    const std::shared_ptr<erhe::primitive::Primitive>& primitive,
+    const std::shared_ptr<erhe::primitive::Material>&  material
+)
 {
-    m_primitives.push_back(primitive);
-    if (material) {
-        m_primitives.back().material = material;
-    }
+    m_primitives.emplace_back(primitive, material);
     update_rt_primitives();
 }
 
-void Mesh::set_primitives(const std::vector<erhe::primitive::Primitive>& primitives)
+void Mesh::set_primitives(const std::vector<Mesh_primitive>& primitives)
 {
     m_primitives = primitives;
     update_rt_primitives();
 }
 
-auto Mesh::get_mutable_primitives() -> std::vector<erhe::primitive::Primitive>&
+auto Mesh::get_mutable_primitives() -> std::vector<Mesh_primitive>&
 {
     return m_primitives;
 }
 
-auto Mesh::get_primitives() const -> const std::vector<erhe::primitive::Primitive>&
+auto Mesh::get_primitives() const -> const std::vector<Mesh_primitive>&
 {
     return m_primitives;
 }
@@ -73,7 +74,10 @@ Mesh::Mesh(const std::string_view name)
 {
 }
 
-Mesh::Mesh(const std::string_view name, const erhe::primitive::Primitive& primitive)
+Mesh::Mesh(
+    const std::string_view                             name,
+    const std::shared_ptr<erhe::primitive::Primitive>& primitive
+)
     : Item{name}
 {
     add_primitive(primitive, {});

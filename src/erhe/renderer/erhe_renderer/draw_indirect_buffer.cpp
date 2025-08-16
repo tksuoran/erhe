@@ -75,7 +75,8 @@ auto Draw_indirect_buffer::update(
             continue;
         }
 
-        for (auto& primitive : mesh->get_primitives()) {
+        for (auto& mesh_primitive : mesh->get_primitives()) {
+            const erhe::primitive::Primitive&   primitive   = *mesh_primitive.primitive.get();
             const erhe::primitive::Buffer_mesh& buffer_mesh = primitive.render_shape->get_renderable_mesh();
             const erhe::primitive::Index_range  index_range = buffer_mesh.index_range(primitive_mode);
             if (index_range.index_count == 0) {

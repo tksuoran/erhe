@@ -133,7 +133,8 @@ Merge_operation::Merge_operation(Parameters&& parameters)
             }
         }
 
-        for (auto& primitive : mesh->get_mutable_primitives()) {
+        for (erhe::scene::Mesh_primitive& mesh_primitive : mesh->get_mutable_primitives()) {
+            const erhe::primitive::Primitive& primitive = *mesh_primitive.primitive.get();
             const auto& shape = primitive.render_shape;
             if (!shape) {
                 continue;
@@ -149,7 +150,7 @@ Merge_operation::Merge_operation(Parameters&& parameters)
                     normal_style = shape->get_normal_style();
                 }
                 if (!material) {
-                    material = primitive.material;
+                    material = mesh_primitive.material;
                 }
             }
         }
@@ -186,12 +187,11 @@ Merge_operation::Merge_operation(Parameters&& parameters)
         erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates;
     combined_geometry->process(flags);
 
-    erhe::primitive::Primitive after_primitive{combined_geometry, material};
-    const bool renderable_ok = after_primitive.make_renderable_mesh(m_parameters.build_info, normal_style);
-    const bool raytrace_ok   = after_primitive.make_raytrace();
+    std::shared_ptr<erhe::primitive::Primitive> new_primitive = std::make_shared<erhe::primitive::Primitive>(combined_geometry);
+    const bool renderable_ok = new_primitive->make_renderable_mesh(m_parameters.build_info, normal_style);
+    const bool raytrace_ok   = new_primitive->make_raytrace();
     ERHE_VERIFY(renderable_ok && raytrace_ok);
-
-    m_first_mesh_primitives_after.push_back(after_primitive);
+    m_first_mesh_primitives_after.emplace_back(new_primitive, material);
 }
 
 void Merge_operation::execute(App_context& context)

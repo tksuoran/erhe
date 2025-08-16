@@ -83,15 +83,15 @@ void Brush::late_initialize()
 {
     const auto geometry = get_geometry();
     ERHE_VERIFY(geometry);
-    m_primitive = erhe::primitive::Primitive{geometry};
-    if (!m_primitive.has_renderable_triangles()) {
-        bool brush_renderable_mesh_ok = m_primitive.make_renderable_mesh(m_data.build_info, m_data.normal_style);
+    m_primitive = std::make_shared<erhe::primitive::Primitive>(geometry);
+    if (!m_primitive->has_renderable_triangles()) {
+        bool brush_renderable_mesh_ok = m_primitive->make_renderable_mesh(m_data.build_info, m_data.normal_style);
         if (!brush_renderable_mesh_ok) {
             log_brush->warn("Brush has no renderable mesh. This is likely due to memory configuration.");
         }
     }
-    ERHE_VERIFY(m_primitive.render_shape);
-    const std::shared_ptr<erhe::primitive::Primitive_render_shape>& render_shape = m_primitive.render_shape;
+    ERHE_VERIFY(m_primitive->render_shape);
+    const std::shared_ptr<erhe::primitive::Primitive_render_shape>& render_shape = m_primitive->render_shape;
 
     if (!render_shape->has_raytrace_triangles()) {
         render_shape->make_raytrace();
@@ -166,7 +166,7 @@ auto Brush::get_reference_frame(const GEO::index_t corner_count, const GEO::inde
 
 auto Brush::get_scaled(const double scale) -> const Scaled&
 {
-    if (!m_primitive.render_shape) {
+    if (!m_primitive || !m_primitive->render_shape) {
         late_initialize();
     }
     const int scale_key = static_cast<int>(scale * c_scale_factor);
@@ -177,8 +177,8 @@ auto Brush::get_scaled(const double scale) -> const Scaled&
     }
     Scaled& scaled = m_scaled_entries.emplace_back(create_scaled(scale_key));
 
-    ERHE_VERIFY(m_primitive.render_shape);
-    const std::shared_ptr<erhe::primitive::Primitive_render_shape>& scaled_render_shape = scaled.primitive.render_shape;
+    ERHE_VERIFY(m_primitive->render_shape);
+    const std::shared_ptr<erhe::primitive::Primitive_render_shape>& scaled_render_shape = scaled.primitive->render_shape;
     if (!scaled_render_shape->has_raytrace_triangles()) {
         scaled_render_shape->make_raytrace();
     }
@@ -230,15 +230,14 @@ auto Brush::create_scaled(const int scale_key) -> Scaled
 
     // Must create transformed copy for Geometry to deal with Geometry::m_edge_to_facets for example
     auto scaled_geometry = std::make_shared<erhe::geometry::Geometry>();
-    scaled_geometry->copy_with_transform(*m_primitive.render_shape->get_geometry().get(), GEO::create_scaling_matrix(scale));
-    scaled_geometry->set_name(fmt::format("{} scaled by {}", m_primitive.get_name(), scale));
+    scaled_geometry->copy_with_transform(*m_primitive->render_shape->get_geometry().get(), GEO::create_scaling_matrix(scale));
+    scaled_geometry->set_name(fmt::format("{} scaled by {}", m_primitive->get_name(), scale));
 
-    erhe::primitive::Primitive scaled_primitive{
+    std::shared_ptr<erhe::primitive::Primitive> scaled_primitive = std::make_shared<erhe::primitive::Primitive>(
         scaled_geometry,
-        std::shared_ptr<erhe::primitive::Material>{},
         m_data.build_info,
         m_data.normal_style
-    };
+    );
 
     glm::mat4 local_inertia{0.0f};
     if (m_data.app_settings.physics.static_enable) {
@@ -346,12 +345,13 @@ auto Brush::make_instance(const Instance_create_info& instance_create_info) -> s
 auto Brush::get_bounding_box() -> erhe::math::Aabb
 {
     if (
-        !m_primitive.has_renderable_triangles() ||
-        !m_primitive.render_shape->get_renderable_mesh().bounding_box.is_valid() // TODO is this condition needed?
+        !m_primitive ||
+        !m_primitive->has_renderable_triangles() ||
+        !m_primitive->render_shape->get_renderable_mesh().bounding_box.is_valid() // TODO is this condition needed?
     ) {
         late_initialize();
     }
-    return m_primitive.get_bounding_box();
+    return m_primitive->get_bounding_box();
 }
 
 }

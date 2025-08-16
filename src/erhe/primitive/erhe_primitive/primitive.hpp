@@ -112,19 +112,17 @@ public:
     Primitive& operator=(const Primitive&);
     Primitive& operator=(Primitive&&);
     ~Primitive();
-    explicit Primitive(const std::shared_ptr<Triangle_soup>& triangle_soup, const std::shared_ptr<Material>& material = {});
-    explicit Primitive(const Buffer_mesh& renderable_mesh, const std::shared_ptr<Material>& material = {});
-    explicit Primitive(const std::shared_ptr<erhe::geometry::Geometry>& geometry, const std::shared_ptr<Material>& material = {});
+    explicit Primitive(const std::shared_ptr<Triangle_soup>& triangle_soup);
+    explicit Primitive(const Buffer_mesh& renderable_mesh);
+    explicit Primitive(const std::shared_ptr<erhe::geometry::Geometry>& geometry);
     Primitive(
         const std::shared_ptr<erhe::geometry::Geometry>& geometry,
-        const std::shared_ptr<Material>&                 material,
         const Build_info&                                build_info,
         Normal_style                                     normal_style
     );
     Primitive(
         const std::shared_ptr<erhe::geometry::Geometry>& render_geometry,
-        const std::shared_ptr<erhe::geometry::Geometry>& collision_geometry,
-        const std::shared_ptr<Material>&                 material = {}
+        const std::shared_ptr<erhe::geometry::Geometry>& collision_geometry
     );
 
     [[nodiscard]] auto has_renderable_triangles() const -> bool;
@@ -140,7 +138,6 @@ public:
     
     std::shared_ptr<Primitive_render_shape> render_shape;
     std::shared_ptr<Primitive_shape>        collision_shape;
-    std::shared_ptr<Material>               material;
 };
 
 auto build_buffer_mesh_from_triangle_soup(const Triangle_soup& triangle_soup, const Buffer_info& buffer_info) -> std::optional<Buffer_mesh>;
