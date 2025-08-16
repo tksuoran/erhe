@@ -334,7 +334,7 @@ using namespace erhe::geometry;
         return 0;
     }
 
-    std::string_view number_part = gltf_attribute_name.substr(last_underscore_pos);
+    std::string_view number_part = gltf_attribute_name.substr(last_underscore_pos + 1);
     bool is_indexed = is_number(number_part);
     if (!is_indexed) {
         return 0;
@@ -344,6 +344,8 @@ using namespace erhe::geometry;
     try {
         integer_value = std::stoi(number_string);
     } catch (...) {
+        static int counter = 0;
+        ++counter; // breakpoint placeholder
     }
     return integer_value;
     //// auto result = std::from_chars(number_part.data(), number_part.data() + number_part.size(), integer_value);
@@ -660,7 +662,8 @@ void accessor_read_u32s(
 }
 
 // Derived from fastgltf::copyComponentsFromAccessor()
-void copyComponentsFromAccessor(const fastgltf::Asset& asset, const fastgltf::Accessor& accessor, void* dest, std::size_t destStride)
+// because I need stride
+void copyFromAccessorWithOutStride(const fastgltf::Asset& asset, const fastgltf::Accessor& accessor, void* dest, std::size_t destStride)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -1234,7 +1237,7 @@ private:
                 if (texture.samplerIndex.has_value()) {
                     create_info.samplers.base_color = m_data_out.samplers[texture.samplerIndex.value()];
                 }
-                create_info.tex_coords.base_color = static_cast<uint8_t>(texture_info.textureIndex);
+                create_info.tex_coords.base_color = static_cast<uint8_t>(texture_info.texCoordIndex);
                 // TODO texture transform
             }
             if (pbr_data.metallicRoughnessTexture.has_value()) {
@@ -1246,7 +1249,7 @@ private:
                 if (texture.samplerIndex.has_value()) {
                     create_info.samplers.metallic_roughness = m_data_out.samplers[texture.samplerIndex.value()];
                 }
-                create_info.tex_coords.metallic_roughness = static_cast<uint8_t>(texture_info.textureIndex);
+                create_info.tex_coords.metallic_roughness = static_cast<uint8_t>(texture_info.texCoordIndex);
             }
             const std::unique_ptr<fastgltf::MaterialSpecularGlossiness>& specular_glossiness = material.specularGlossiness;
             if (specular_glossiness) {
@@ -1259,7 +1262,8 @@ private:
                     if (texture.samplerIndex.has_value()) {
                         create_info.samplers.base_color = m_data_out.samplers[texture.samplerIndex.value()];
                     }
-                    create_info.tex_coords.base_color = static_cast<uint8_t>(texture_info.textureIndex);
+                    ERHE_VERIFY(texture_info.texCoordIndex == 0);
+                    create_info.tex_coords.base_color = 0;
                 }
                 if (specular_glossiness->specularGlossinessTexture.has_value()) {
                     log_gltf->warn("MaterialSpecularGlossiness specularGlossinessTexture is deprated and not supported");
@@ -1454,7 +1458,7 @@ private:
             const erhe::dataformat::Attribute_stream&      erhe_attribute  = erhe_attributes[i];
             ERHE_VERIFY(erhe_attribute.attribute != nullptr);
             ERHE_VERIFY(erhe_attribute.stream != nullptr);
-            copyComponentsFromAccessor(
+            copyFromAccessorWithOutStride(
                 m_asset.get(),
                 accessor,
                 triangle_soup.vertex_data.data() + erhe_attribute.attribute->offset,

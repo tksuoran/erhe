@@ -257,18 +257,18 @@ void Properties::light_properties(erhe::scene::Light& light)
     add_entry("Color",     [&](){ ImGui::ColorEdit3 ("##", &light.color.x,   ImGuiColorEditFlags_Float); });
 
     // TODO Move to scene
-    //// const auto* node = light.get_node();
-    //// if (node != nullptr) {
-    ////     auto* scene_root = static_cast<Scene_root*>(node->get_item_host());
-    ////     if (scene_root != nullptr) {
-    ////         const auto& layers = scene_root->layers();
-    ////         ImGui::ColorEdit3(
-    ////             "Ambient",
-    ////             &layers.light()->ambient_light.x,
-    ////             ImGuiColorEditFlags_Float
-    ////         );
-    ////     }
-    //// }
+    const auto* node = light.get_node();
+    if (node != nullptr) {
+        auto* scene_root = static_cast<Scene_root*>(node->get_item_host());
+        if (scene_root != nullptr) {
+            const auto& layers = scene_root->layers();
+            ImGui::ColorEdit3(
+                "Ambient",
+                &layers.light()->ambient_light.x,
+                ImGuiColorEditFlags_Float
+            );
+        }
+    }
 }
 
 void Properties::skin_properties(erhe::scene::Skin& skin)
