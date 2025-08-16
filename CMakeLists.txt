@@ -330,6 +330,10 @@ if (${ERHE_GLTF_LIBRARY} STREQUAL "fastgltf")
         NAME              fastgltf
         GIT_TAG           v0.9.0
         GITHUB_REPOSITORY spnda/fastgltf
+        OPTIONS
+                  "FASTGLTF_ENABLE_DEPRECATED_EXT ON"
+                       "FASTGLTF_COMPILE_AS_CPP20 ON"
+        "FASTGLTF_ENABLE_KHR_PHYSICS_RIGID_BODIES ON"
     )
     message(STATUS "Erhe configured to use fastgltf for glTF.")
     add_definitions(-DERHE_GLTF_LIBRARY_FASTGLTF)
