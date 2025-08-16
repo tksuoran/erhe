@@ -78,24 +78,12 @@ public:
     {
         int64_t timestamp_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
         while (!m_close_requested) {
-            m_graphics_device.start_of_frame();
             m_context_window.poll_events();
-            auto& input_events = m_context_window.get_input_events();
-            for (erhe::window::Input_event& input_event : input_events) {
-                dispatch_input_event(input_event);
-                if (!input_event.handled) {
-                    m_imgui_windows.dispatch_input_event(input_event);
-                }
-                if (!input_event.handled) {
-                    m_commands.dispatch_input_event(input_event);
-                }
-            }
             int64_t new_timestamp_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
             int64_t delta_time = new_timestamp_ns - timestamp_ns;
             double dt_s = static_cast<double>(delta_time) / 1'000'000'000.0f;
             tick(static_cast<float>(dt_s), timestamp_ns);
-            m_graphics_device.end_of_frame();
-            m_context_window.swap_buffers();
+            timestamp_ns = new_timestamp_ns;
         }
     }
 
@@ -239,18 +227,27 @@ public:
 
     void tick(float dt_s, int64_t timestamp_ns)
     {
-        if (m_map_window.is_window_visible()) {
-            m_map_window.render();
-        }
-        auto& input_events = m_context_window.get_input_events();
+        std::vector<erhe::window::Input_event>& input_events = m_context_window.get_input_events();
+
         m_imgui_windows .process_events(dt_s, timestamp_ns);
+        m_commands.tick(timestamp_ns, input_events);
+
         m_imgui_windows .begin_frame();
         viewport_menu();
         m_imgui_windows .draw_imgui_windows();
         m_imgui_windows .end_frame();
-        m_commands.tick(timestamp_ns, input_events);
+
+        // editor does this via m_app_rendering->begin_frame()
+        m_graphics_device.start_of_frame();
+
+        if (m_map_window.is_window_visible()) {
+            m_map_window.render();
+        }
         m_rendergraph   .execute();
         m_imgui_renderer.next_frame();
+        m_graphics_device.end_of_frame();
+
+        m_context_window.swap_buffers();
     }
 
     auto on_window_close_event(const erhe::window::Input_event&) -> bool override
