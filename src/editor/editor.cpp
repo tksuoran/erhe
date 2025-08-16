@@ -1509,6 +1509,7 @@ void run_editor()
         ERHE_PROFILE_SCOPE("initialize geogram");
         GEO::initialize(GEO::GEOGRAM_INSTALL_NONE);
         GEO::CmdLine::import_arg_group("algo");
+        GEO::CmdLine::set_arg("sys:multithread", "true");
         // TODO
         // GEO::Logger::unregister_all_clients();
         // GEO::Logger::register_client(s_geogram_logger_client.get());

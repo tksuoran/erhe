@@ -199,8 +199,7 @@ auto to_erhe_attribute(const fastgltf::Accessor& accessor) -> erhe::dataformat::
 
 [[nodiscard]] auto c_str(const fastgltf::AnimationInterpolation value) -> const char*
 {
-    switch (value)
-    {
+    switch (value) {
         case fastgltf::AnimationInterpolation::Linear:      return "Linear";
         case fastgltf::AnimationInterpolation::Step:        return "Step";
         case fastgltf::AnimationInterpolation::CubicSpline: return "CubicSpline";
@@ -286,7 +285,7 @@ using namespace erhe::geometry;
     }
 }
 
-auto is_number(std::string_view s) -> bool
+[[nodiscard]] auto is_number(std::string_view s) -> bool
 {
     return 
         !s.empty() &&
@@ -297,7 +296,7 @@ auto is_number(std::string_view s) -> bool
         ) == s.end();
 }
 
-auto get_attribute_index(std::string_view lhs, std::string_view rhs) -> std::size_t
+[[nodiscard]] auto get_attribute_index(std::string_view lhs, std::string_view rhs) -> std::size_t
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -320,7 +319,7 @@ auto get_attribute_index(std::string_view lhs, std::string_view rhs) -> std::siz
     //return integer_value;
 }
 
-auto is_indexed_attribute(std::string_view lhs, std::string_view rhs) -> bool
+[[nodiscard]] auto is_indexed_attribute(std::string_view lhs, std::string_view rhs) -> bool
 {
     return lhs.starts_with(rhs) && is_number(lhs.substr(rhs.length()));
 };
@@ -962,7 +961,7 @@ private:
         }
         m_data_out.animations[animation_index] = erhe_animation;
     }
-    auto load_image_file(
+    [[nodiscard]] auto load_image_file(
         const std::filesystem::path& path,
         std::string_view             image_name
     ) -> std::shared_ptr<erhe::graphics::Texture>
@@ -1026,7 +1025,7 @@ private:
 
         return texture;
     }
-    auto load_image_buffer(
+    [[nodiscard]] auto load_image_buffer(
         const std::size_t buffer_view_index,
         const std::size_t image_index,
         std::string_view  image_name

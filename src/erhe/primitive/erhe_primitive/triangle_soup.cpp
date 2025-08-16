@@ -6,6 +6,7 @@
 
 #include <geogram/mesh/mesh.h>
 #include <geogram/mesh/mesh_geometry.h>
+#include <geogram/points/colocate.h>
 
 #include <numeric>
 #include <set>
@@ -175,67 +176,44 @@ private:
         //// log_primitive->trace("Secondary axis = {}", "XYZ"[axis1]);
         //// log_primitive->trace("Tertiary  axis = {}", "XYZ"[axis2]);
 
-        m_sorted_vertex_indices.resize(vertex_count);
         m_vertex_from_index    .resize(vertex_count);
-
-        std::fill(
-            m_sorted_vertex_indices.begin(),
-            m_sorted_vertex_indices.end(),
-            std::numeric_limits<std::size_t>::max()
-        );
-        std::fill(
-            m_vertex_from_index.begin(),
-            m_vertex_from_index.end(),
-            GEO::NO_INDEX
-        );
-        for (std::size_t index : m_used_indices) {
-            m_sorted_vertex_indices[index - m_min_index] = index;
-        }
-
-        std::sort(
-            m_sorted_vertex_indices.begin(),
-            m_sorted_vertex_indices.end(),
-            [this, axis0, axis1, axis2](const std::size_t lhs_index, const std::size_t rhs_index) {
-                if (rhs_index == std::numeric_limits<std::size_t>::max()) {
-                    return true;
-                }
-                const GEO::vec3 position_lhs = m_vertex_positions[lhs_index - m_min_index];
-                const GEO::vec3 position_rhs = m_vertex_positions[rhs_index - m_min_index];
-                if (position_lhs[axis0] != position_rhs[axis0]) {
-                    return position_lhs[axis0] < position_rhs[axis0];
-                }
-                if (position_lhs[axis1] != position_rhs[axis1]) {
-                    return position_lhs[axis1] < position_rhs[axis1];
-                }
-                return position_lhs[axis2] < position_rhs[axis2];
-            }
-        );
+        std::fill(m_vertex_from_index.begin(), m_vertex_from_index.end(), GEO::NO_INDEX);
 
         // Create points for each unique vertex
-        GEO::vec3 previous_position{
-            std::numeric_limits<float>::lowest(),
-            std::numeric_limits<float>::lowest(),
-            std::numeric_limits<float>::lowest()
-        };
-        GEO::index_t vertex{0};
-        std::size_t point_share_count{0};
-        for (std::size_t i = 0, end = m_sorted_vertex_indices.size(); i < end; ++i) {
-            const std::size_t index = m_sorted_vertex_indices[i];
-            if (index == std::numeric_limits<std::size_t>::max()) {
-                continue;
-            }
-            const GEO::vec3 position = m_vertex_positions[index - m_min_index];
-            if (
-                (position.x != previous_position.x) ||
-                (position.y != previous_position.y) ||
-                (position.z != previous_position.z)
-            ) {
-                vertex = m_mesh.vertices.create_vertices(1);
-                previous_position = position;
-            } else {
-                ++point_share_count;
-            }
-            m_vertex_from_index[index - m_min_index] = vertex;
+        GEO::index_t initial_point_count = m_vertex_positions.size();
+        GEO::vector<GEO::index_t> old_to_new(initial_point_count, GEO::NO_INDEX);
+        const double tolerance = 0.001; // 1mm
+        const GEO::index_t point_count = GEO::Geom::colocate(
+            m_vertex_positions.data()->data(),                    // const double* points,
+            3,                                                    // coord_index_t dim,
+            static_cast<GEO::index_t>(m_vertex_positions.size()), // index_t nb_points,
+            old_to_new,                                           // vector<index_t>& old2new,
+            tolerance,                                            // double tolerance,
+            3,                                                    // index_t stride,
+            "default"                                             // const std::string& nn_algo
+        );
+        GEO::vector<GEO::index_t> unique_vertices = old_to_new;
+        std::sort(unique_vertices.begin(), unique_vertices.end());
+        unique_vertices.erase(std::unique(unique_vertices.begin(), unique_vertices.end()), unique_vertices.end());
+
+        const GEO::index_t base_vertex = m_mesh.vertices.create_vertices(point_count);
+        m_mesh.vertices.set_double_precision();
+        GEO::vector<GEO::index_t> new_to_unique(initial_point_count, GEO::NO_INDEX);
+        for (GEO::index_t i = 0, end = unique_vertices.size(); i < end ; ++i) {
+            const GEO::index_t old_index    = unique_vertices.at(i);
+            const GEO::index_t new_index    = old_to_new.at(old_index);
+            const std::size_t  vertex_index = old_index - m_min_index;
+            const GEO::vec3    position     = m_vertex_positions.at(vertex_index);
+            new_to_unique.at(new_index) = i;
+            m_mesh.vertices.point<3>(i) = position;
+        }
+        m_mesh.vertices.set_single_precision();
+        for (std::size_t old_index : m_used_indices) {
+            const GEO::index_t new_index    = old_to_new.at(old_index);
+            const GEO::index_t unique_index = new_to_unique.at(new_index);
+            ERHE_VERIFY(unique_index != GEO::NO_INDEX);
+            ERHE_VERIFY(unique_index < point_count);
+            m_vertex_from_index.at(old_index - m_min_index) = base_vertex + unique_index;
         }
         //log_primitive->trace(
         //    "point count = {}, point share count = {}",
@@ -442,9 +420,8 @@ private:
     std::size_t               m_min_index            {0};
     std::size_t               m_max_index            {0};
     std::vector<uint32_t>     m_used_indices         {};
-    std::vector<GEO::vec3>    m_vertex_positions     {};
-    std::vector<std::size_t>  m_sorted_vertex_indices{};
-    std::vector<GEO::index_t> m_vertex_from_index    {};
+    GEO::vector<GEO::vec3>    m_vertex_positions     {};
+    GEO::vector<GEO::index_t> m_vertex_from_index    {};
     GEO::index_t              m_corner_start         {};
     GEO::index_t              m_corner_end           {};
     std::vector<GEO::index_t> m_index_from_corner    {};
