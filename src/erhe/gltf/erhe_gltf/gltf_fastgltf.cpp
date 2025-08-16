@@ -1248,6 +1248,23 @@ private:
                 }
                 create_info.tex_coords.metallic_roughness = static_cast<uint8_t>(texture_info.textureIndex);
             }
+            const std::unique_ptr<fastgltf::MaterialSpecularGlossiness>& specular_glossiness = material.specularGlossiness;
+            if (specular_glossiness) {
+                if (specular_glossiness->diffuseTexture.has_value()) {
+                    const fastgltf::TextureInfo& texture_info = specular_glossiness->diffuseTexture.value();
+                    const fastgltf::Texture& texture = m_asset->textures[texture_info.textureIndex];
+                    if (texture.imageIndex.has_value()) {
+                        create_info.textures.base_color = m_data_out.images[texture.imageIndex.value()];
+                    }
+                    if (texture.samplerIndex.has_value()) {
+                        create_info.samplers.base_color = m_data_out.samplers[texture.samplerIndex.value()];
+                    }
+                    create_info.tex_coords.base_color = static_cast<uint8_t>(texture_info.textureIndex);
+                }
+                if (specular_glossiness->specularGlossinessTexture.has_value()) {
+                    log_gltf->warn("MaterialSpecularGlossiness specularGlossinessTexture is deprated and not supported");
+                }
+            }
             create_info.base_color = glm::vec3{
                 pbr_data.baseColorFactor[0],
                 pbr_data.baseColorFactor[1],

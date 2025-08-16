@@ -313,12 +313,12 @@ void Properties::texture_properties(const std::shared_ptr<erhe::graphics::Textur
 
     push_group("Texture", ImGuiTreeNodeFlags_DefaultOpen, m_indent);
 
-    add_entry("Name",   [&](){ ImGui::TextUnformatted(texture->get_name().c_str()); });
-    add_entry("Width",  [&](){ ImGui::Text("%d", texture->get_width()); });
-    add_entry("Height", [&](){ ImGui::Text("%d", texture->get_height()); });
-    add_entry("Format", [&](){ ImGui::TextUnformatted(erhe::dataformat::c_str(texture->get_pixelformat())); });
+    add_entry("Name",   [texture](){ ImGui::TextUnformatted(texture->get_name().c_str()); });
+    add_entry("Width",  [texture](){ ImGui::Text("%d", texture->get_width()); });
+    add_entry("Height", [texture](){ ImGui::Text("%d", texture->get_height()); });
+    add_entry("Format", [texture](){ ImGui::TextUnformatted(erhe::dataformat::c_str(texture->get_pixelformat())); });
 
-    add_entry("Preview", [&](){
+    add_entry("Preview", [this, texture](){
         // TODO Draw to available size respecting aspect ratio
         m_context.imgui_renderer->image(texture.get(), texture->get_width(), texture->get_height());
     });
