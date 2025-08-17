@@ -53,7 +53,7 @@ void Graphics_settings::get_limits(const erhe::graphics::Device& instance, erhe:
         format_properties.texture_2d_array_max_width,
         format_properties.texture_2d_array_max_height
     );
-    max_depth_layers = std::min(10, format_properties.texture_2d_array_max_layers);
+    max_depth_layers = std::min(20, format_properties.texture_2d_array_max_layers);
 }
 
 template <typename T>
