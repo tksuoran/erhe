@@ -117,8 +117,8 @@ public:
     Image_loader_impl (Image_loader_impl&&)      = delete;
     auto operator=    (Image_loader_impl&&)      = delete;
 
-    [[nodiscard]] auto open(const std::filesystem::path& path, Image_info& image_info) -> bool;
-    [[nodiscard]] auto open(const std::span<const std::uint8_t>& buffer_view, Image_info& image_info) -> bool;
+    [[nodiscard]] auto open(const std::filesystem::path& path, Image_info& image_info, const bool linear) -> bool;
+    [[nodiscard]] auto open(const std::span<const std::uint8_t>& buffer_view, Image_info& image_info, const bool linear) -> bool;
 
     [[nodiscard]] auto load(std::span<std::uint8_t> transfer_buffer) -> bool;
 
@@ -163,7 +163,7 @@ Image_loader_impl::~Image_loader_impl() noexcept
     close();
 }
 
-auto Image_loader_impl::open(const std::filesystem::path& path, Image_info& info) -> bool
+auto Image_loader_impl::open(const std::filesystem::path& path, Image_info& info, const bool linear) -> bool
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -173,10 +173,10 @@ auto Image_loader_impl::open(const std::filesystem::path& path, Image_info& info
     mango::filesystem::File& file = *m_file;
 
     const std::span<const std::uint8_t>& buffer_view{const_cast<uint8_t*>(file.data()), file.size()};
-    return open(buffer_view, info);
+    return open(buffer_view, info, linear);
 }
 
-auto Image_loader_impl::open(const std::span<const std::uint8_t>& buffer_view, Image_info& info) -> bool
+auto Image_loader_impl::open(const std::span<const std::uint8_t>& buffer_view, Image_info& info, const bool linear) -> bool
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -296,7 +296,7 @@ auto Image_loader_impl::open(const std::span<const std::uint8_t>& buffer_view, I
     m_info.depth       = 1;
     m_info.level_count = 1;
     m_info.row_stride  = width * 4;
-    m_info.format      = erhe::dataformat::Format::format_8_vec4_srgb;
+    m_info.format      = linear ? erhe::dataformat::Format::format_8_vec4_unorm : erhe::dataformat::Format::format_8_vec4_srgb;
 
     info = m_info;
 
@@ -372,14 +372,14 @@ Image_loader::~Image_loader() noexcept
     close();
 }
 
-auto Image_loader::open(const std::filesystem::path& path, Image_info& image_info) -> bool
+auto Image_loader::open(const std::filesystem::path& path, Image_info& image_info, const bool linear) -> bool
 {
-    return m_impl->open(path, image_info);
+    return m_impl->open(path, image_info, linear);
 }
 
-auto Image_loader::open(const std::span<const std::uint8_t>& buffer_view, Image_info& image_info) -> bool
+auto Image_loader::open(const std::span<const std::uint8_t>& buffer_view, Image_info& image_info, const bool linear) -> bool
 {
-    return m_impl->open(buffer_view, image_info);
+    return m_impl->open(buffer_view, image_info, linear);
 }
 
 auto Image_loader::load(std::span<std::uint8_t> transfer_buffer) -> bool

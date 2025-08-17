@@ -101,10 +101,21 @@ void main() {
     // Mix tangent space geometric .. texcoord generated
     vec3  T                   = circular_anisotropy_magnitude > 0.0 ? mix(T0, T_circular.x * T0 + T_circular.y * B0, v_aniso_control.y) : T0;
     vec3  B                   = circular_anisotropy_magnitude > 0.0 ? mix(B0, T_circular.y * T0 - T_circular.x * B0, v_aniso_control.y) : B0;
-    float isotropic_roughness = 0.5 * material.roughness.x + 0.5 * material.roughness.y;
-    // Mix roughness based on anisotropy_strength
-    float roughness_x         = mix(isotropic_roughness, material.roughness.x, anisotropy_strength);
-    float roughness_y         = mix(isotropic_roughness, material.roughness.y, anisotropy_strength);
+
+    float metallic;
+    float roughness_x;
+    float roughness_y;
+    if (metallic_roughness_texture.x != max_u32) {
+        metallic    = sample_texture(metallic_roughness_texture, v_texcoord).b;
+        roughness_x = sample_texture(metallic_roughness_texture, v_texcoord).g;
+        roughness_y = roughness_x;
+    } else {
+        metallic    = material.metallic;
+        float isotropic_roughness = 0.5 * material.roughness.x + 0.5 * material.roughness.y;
+        // Mix roughness based on anisotropy_strength
+        roughness_x = mix(isotropic_roughness, material.roughness.x, anisotropy_strength);
+        roughness_y = mix(isotropic_roughness, material.roughness.y, anisotropy_strength);
+    }
 
     uint directional_light_count  = light_block.directional_light_count;
     uint spot_light_count         = light_block.spot_light_count;
@@ -113,7 +124,8 @@ void main() {
     uint spot_light_offset        = directional_light_count;
     uint point_light_offset       = spot_light_offset + spot_light_count;
     vec3 color = vec3(0);
-    color += (0.5 + 0.5 * N.y) * light_block.ambient_light.rgb * base_color;
+    //color += (0.5 + 0.5 * N.y) * light_block.ambient_light.rgb * base_color;
+    color += light_block.ambient_light.rgb * base_color;
     color += material.emissive.rgb;
 
     for (uint i = 0; i < directional_light_count; ++i) {
@@ -128,7 +140,7 @@ void main() {
                 base_color,
                 roughness_x,
                 roughness_y,
-                material.metallic,
+                metallic,
                 material.reflectance,
                 L,
                 V,
@@ -154,7 +166,7 @@ void main() {
                 base_color,
                 roughness_x,
                 roughness_y,
-                material.metallic,
+                metallic,
                 material.reflectance,
                 L,
                 V,
@@ -179,7 +191,7 @@ void main() {
                 base_color,
                 roughness_x,
                 roughness_y,
-                material.metallic,
+                metallic,
                 material.reflectance,
                 L,
                 V,

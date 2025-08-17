@@ -680,11 +680,11 @@ public:
             return;
         }
 
-        log_gltf->trace("parsing images");
+        /// log_gltf->trace("parsing images");
         m_data_out.images.resize(m_asset->images.size());
-        for (std::size_t i = 0, end = m_asset->images.size(); i < end; ++i) {
-            parse_image(i);
-        }
+        /// for (std::size_t i = 0, end = m_asset->images.size(); i < end; ++i) {
+        ///     parse_image(i);
+        /// }
 
         log_gltf->trace("parsing samplers");
         m_data_out.samplers.resize(m_asset->samplers.size());
@@ -921,6 +921,7 @@ private:
     }
     [[nodiscard]] auto load_image_file(
         const std::filesystem::path& path,
+        const bool                   linear,
         std::string_view             image_name
     ) -> std::shared_ptr<erhe::graphics::Texture>
     {
@@ -934,7 +935,7 @@ private:
         erhe::graphics::Image_info image_info;
         erhe::graphics::Image_loader loader;
 
-        if (!loader.open(path, image_info)) {
+        if (!loader.open(path, image_info, linear)) {
             return {};
         }
 
@@ -986,6 +987,7 @@ private:
     [[nodiscard]] auto load_image_buffer(
         const std::size_t buffer_view_index,
         const std::size_t image_index,
+        const bool        linear,
         std::string_view  image_name
     ) -> std::shared_ptr<erhe::graphics::Texture>
     {
@@ -1022,7 +1024,7 @@ private:
                         reinterpret_cast<const std::uint8_t*>(data.bytes.data()) + buffer_view.byteOffset,
                         buffer_view.byteLength
                     };
-                    if (!loader.open(image_encoded_buffer_view, image_info)) {
+                    if (!loader.open(image_encoded_buffer_view, image_info, linear)) {
                         log_gltf->error("Failed to parse image from buffer view '{}'", name);
                         return;
                     }
@@ -1088,10 +1090,16 @@ private:
 
         return texture;
     }
-    void parse_image(const std::size_t image_index)
+    [[nodiscard]] auto get_image(const std::size_t image_index, const bool linear)
+    {
+        if (!m_data_out.images[image_index]) {
+            parse_image(image_index, linear);
+        }
+        return m_data_out.images[image_index];
+    }
+    void parse_image(const std::size_t image_index, const bool linear)
     {
         ERHE_PROFILE_FUNCTION();
-
         const fastgltf::Image& image      = m_asset->images[image_index];
         const std::string      image_name = safe_resource_name(image.name, "image", image_index);
         log_gltf->trace("Image: image index = {}, name = {}", image_index, image_name);
@@ -1103,11 +1111,11 @@ private:
                     ERHE_FATAL("TODO Unsupported image source");
                 },
                 [&](const fastgltf::sources::BufferView& buffer_view_source){
-                    erhe_texture = load_image_buffer(buffer_view_source.bufferViewIndex, image_index, image_name);
+                    erhe_texture = load_image_buffer(buffer_view_source.bufferViewIndex, image_index, linear, image_name);
                 },
                 [&](const fastgltf::sources::URI& uri){
                     std::filesystem::path relative_path = uri.uri.fspath();
-                    erhe_texture = load_image_file(m_arguments.path.replace_filename(relative_path), image_name);
+                    erhe_texture = load_image_file(m_arguments.path.replace_filename(relative_path), linear, image_name);
                 }
             },
             image.data
@@ -1183,12 +1191,13 @@ private:
 
         auto apply_texture = [this](
             const fastgltf::TextureInfo&               gltf_texture_info,
-            erhe::primitive::Material_texture_sampler& erhe_texture_sampler
+            erhe::primitive::Material_texture_sampler& erhe_texture_sampler,
+            const bool                                 linear
         )
         {
             const fastgltf::Texture& texture = m_asset->textures[gltf_texture_info.textureIndex];
             if (texture.imageIndex.has_value()) {
-                erhe_texture_sampler.texture = m_data_out.images[texture.imageIndex.value()];
+                erhe_texture_sampler.texture = get_image(texture.imageIndex.value(), linear);
             }
             if (texture.samplerIndex.has_value()) {
                 erhe_texture_sampler.sampler = m_data_out.samplers[texture.samplerIndex.value()];
@@ -1198,24 +1207,24 @@ private:
         };
 
         if (material.normalTexture.has_value()) {
-            apply_texture(material.normalTexture.value(), create_info.texture_samplers.normal);
+            apply_texture(material.normalTexture.value(), create_info.texture_samplers.normal, true);
             create_info.normal_texture_scale = material.normalTexture.value().scale;
         }
         if (material.occlusionTexture.has_value()) {
-            apply_texture(material.occlusionTexture.value(), create_info.texture_samplers.occlusion);
+            apply_texture(material.occlusionTexture.value(), create_info.texture_samplers.occlusion, true);
             create_info.occlusion_texture_strength = material.occlusionTexture.value().strength;
         }
         {
             const fastgltf::PBRData& pbr_data = material.pbrData;
             if (pbr_data.baseColorTexture.has_value()) {
-                apply_texture(pbr_data.baseColorTexture.value(), create_info.texture_samplers.base_color);
+                apply_texture(pbr_data.baseColorTexture.value(), create_info.texture_samplers.base_color, false);
             }
             if (pbr_data.metallicRoughnessTexture.has_value()) {
-                apply_texture(pbr_data.metallicRoughnessTexture.value(), create_info.texture_samplers.metallic_roughness);
+                apply_texture(pbr_data.metallicRoughnessTexture.value(), create_info.texture_samplers.metallic_roughness, true);
             }
             const std::unique_ptr<fastgltf::MaterialSpecularGlossiness>& specular_glossiness = material.specularGlossiness;
             if (specular_glossiness && specular_glossiness->diffuseTexture.has_value()) {
-                apply_texture(specular_glossiness->diffuseTexture.value(), create_info.texture_samplers.base_color);
+                apply_texture(specular_glossiness->diffuseTexture.value(), create_info.texture_samplers.base_color, false);
             }
             create_info.base_color = glm::vec3{
                 pbr_data.baseColorFactor[0],

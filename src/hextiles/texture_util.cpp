@@ -60,7 +60,8 @@ auto load_png(const std::filesystem::path& path) -> Image
     Image image;
     erhe::graphics::Image_loader loader;
 
-    if (!loader.open(path, image.info)) {
+    const bool linear = false;
+    if (!loader.open(path, image.info, linear)) {
         log_image->error("Unable to load image '{}'. Exiting program.", path.string());
         std::abort();
     }

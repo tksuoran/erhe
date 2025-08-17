@@ -18,7 +18,9 @@ enum class Shader_stages_variant : int {
     anisotropic_engine_ready,
     circular_brushed_metal,
     debug_depth,
-    debug_normal,
+    debug_vertex_normal,
+    debug_fragment_normal,
+    debug_normal_texture,
     debug_tangent,
     debug_vertex_tangent_w,
     debug_bitangent,
@@ -38,6 +40,10 @@ enum class Shader_stages_variant : int {
     debug_omega_g,
     debug_vertex_valency,
     debug_polygon_edge_count,
+    debug_metallic,
+    debug_roughness,
+    debug_occlusion,
+    debug_emission,
     debug_misc
 };
 
@@ -50,7 +56,9 @@ static constexpr const char* c_shader_stages_variant_strings[] =
     "Anisotropic Engine-Ready",
     "Circular Brushed Metal",
     "Depth",
-    "Normal",
+    "Vertex Normal",
+    "Fragment Normal",
+    "Normal Texture",
     "Tangent",
     "Vertex Tangent W",
     "Bitangent",
@@ -70,6 +78,10 @@ static constexpr const char* c_shader_stages_variant_strings[] =
     "Omega g",
     "Vertex Valency",
     "Polygon Edge Count",
+    "Metallic",
+    "Roughness",
+    "Occlusion",
+    "Emission",
     "Debug Miscellaneous"
 };
 
@@ -111,7 +123,9 @@ public:
     erhe::graphics::Reloadable_shader_stages id;
     erhe::graphics::Reloadable_shader_stages tool;
     erhe::graphics::Reloadable_shader_stages debug_depth;
-    erhe::graphics::Reloadable_shader_stages debug_normal;
+    erhe::graphics::Reloadable_shader_stages debug_vertex_normal;
+    erhe::graphics::Reloadable_shader_stages debug_fragment_normal;
+    erhe::graphics::Reloadable_shader_stages debug_normal_texture;
     erhe::graphics::Reloadable_shader_stages debug_tangent;
     erhe::graphics::Reloadable_shader_stages debug_vertex_tangent_w;
     erhe::graphics::Reloadable_shader_stages debug_bitangent;
@@ -131,6 +145,10 @@ public:
     erhe::graphics::Reloadable_shader_stages debug_omega_g;
     erhe::graphics::Reloadable_shader_stages debug_vertex_valency;
     erhe::graphics::Reloadable_shader_stages debug_polygon_edge_count;
+    erhe::graphics::Reloadable_shader_stages debug_metallic;
+    erhe::graphics::Reloadable_shader_stages debug_roughness;
+    erhe::graphics::Reloadable_shader_stages debug_occlusion;
+    erhe::graphics::Reloadable_shader_stages debug_emission;
     erhe::graphics::Reloadable_shader_stages debug_misc;
 
     class Shader_stages_builder

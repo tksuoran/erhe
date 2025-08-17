@@ -66,12 +66,21 @@ void main() {
     uvec2 occlusion_texture          = material.occlusion_texture;
     uvec2 emission_texture           = material.emission_texture;
 
+    float metallic;
+    float roughness;
+    if (metallic_roughness_texture.x != max_u32) {
+        metallic  = sample_texture(metallic_roughness_texture, v_texcoord).b;
+        roughness = sample_texture(metallic_roughness_texture, v_texcoord).g;
+    } else {
+        metallic  = material.metallic;
+        roughness = material.roughness.x;
+    }
+
     if (normal_texture.x != max_u32) {
         vec3 ntex = sample_texture(normal_texture, v_texcoord).xyz * 2.0 - vec3(1.0);
         ntex.xy   = ntex.xy * material.normal_texture_scale;
         ntex      = normalize(ntex);
         N         = normalize(mat3(T0, B0, N) * ntex);
-        N         = sample_texture(normal_texture, v_texcoord).xyz * 2.0 - vec3(1.0);
     }
 
     vec2  T_circular                    = normalize(v_texcoord);
@@ -101,9 +110,26 @@ void main() {
     vec3 wi    = normalize(TBN_t * L);
     vec3 wg    = normalize(TBN_t * N);
 
-#if defined(ERHE_DEBUG_NORMAL)
-    //out_color.rgb = srgb_to_linear(vec3(0.5) + 0.5 * N);
-    out_color.rgb = vec3(0.5) + 0.5 * N;
+    out_color = vec4(1.0);
+    {
+        float frequency = 0.02;
+        float gray = 0.9;
+
+        vec2 v1 = step(0.5, fract(frequency * gl_FragCoord.xy));
+        vec2 v2 = step(0.5, vec2(1.0) - fract(frequency * gl_FragCoord.xy));
+        out_color.rgb *= gray + v1.x * v1.y + v2.x * v2.y;
+    }
+
+#if defined(ERHE_DEBUG_VERTEX_NORMAL)
+    out_color.rgb = srgb_to_linear(vec3(0.5) + 0.5 * normalize(v_N));
+#endif
+#if defined(ERHE_DEBUG_FRAGMENT_NORMAL)
+    out_color.rgb = srgb_to_linear(vec3(0.5) + 0.5 * N);
+#endif
+#if defined(ERHE_DEBUG_NORMAL_TEXTURE)
+    if (normal_texture.x != max_u32) {
+        out_color.rgb = srgb_to_linear(sample_texture(normal_texture, v_texcoord).rgb);
+    }
 #endif
 #if defined(ERHE_DEBUG_TANGENT)
     out_color.rgb = vec3(0.5) + 0.5 * T0;
@@ -119,74 +145,92 @@ void main() {
         //} else { 
         //    out_color.rgb = vec3(0.0, 1.0, 0.0);
         //}
-        out_color.rgb = vec3(0.5) + 0.5 * B0);
+        out_color.rgb = vec3(0.5) + 0.5 * B0;
         //out_color.rgb = vec3(0.5) + 0.5 * v_B);
         //out_color.rgb = srgb_to_linear(vec3(0.5) + 0.5 * b);
     }
 #endif
 #if defined(ERHE_DEBUG_TANGENT_W)
-    out_color.rgb = srgb_to_linear(vec3(0.5 + 0.5 * v_tangent_scale));
+    out_color.rgb = vec3(0.5 + 0.5 * v_tangent_scale);
 #endif
 #if defined(ERHE_DEBUG_VDOTN)
     float V_dot_N = dot(V, N);
-    out_color.rgb = srgb_to_linear(vec3(V_dot_N));
+    out_color.rgb = vec3(V_dot_N);
 #endif
 #if defined(ERHE_DEBUG_LDOTN)
     float L_dot_N = dot(L, N);
-    out_color.rgb = srgb_to_linear(vec3(L_dot_N));
+    out_color.rgb = vec3(L_dot_N);
 #endif
 #if defined(ERHE_DEBUG_HDOTV)
     vec3  H       = normalize(L + V);
     float H_dot_N = dot(H, N);
-    out_color.rgb = srgb_to_linear(vec3(H_dot_N));
+    out_color.rgb = vec3(H_dot_N);
 #endif
 #if defined(ERHE_DEBUG_JOINT_INDICES)
-    out_color.rgb = srgb_to_linear(vec3(1.0));
+    out_color.rgb = vec3(1.0);
 #endif
 #if defined(ERHE_DEBUG_JOINT_WEIGHTS)
     out_color.rgb = srgb_to_linear(v_bone_color.rgb);
 #endif
 #if defined(ERHE_DEBUG_OMEGA_O)
-    out_color.rgb = srgb_to_linear(vec3(0.5) + 0.5 * wo);
+    out_color.rgb = vec3(0.5) + 0.5 * wo;
     out_color.r = 1.0;
 #endif
 #if defined(ERHE_DEBUG_OMEGA_I)
-    out_color.rgb = srgb_to_linear(vec3(0.5) + 0.5 * wi);
+    out_color.rgb = vec3(0.5) + 0.5 * wi;
     out_color.g = 1.0;
 #endif
 #if defined(ERHE_DEBUG_OMEGA_G)
-    out_color.rgb = srgb_to_linear(vec3(0.5) + 0.5 * wg);
+    out_color.rgb = vec3(0.5) + 0.5 * wg;
     out_color.b = 1.0;
 #endif
 #if defined(ERHE_DEBUG_TEXCOORD)
     out_color.rgb = srgb_to_linear(vec3(v_texcoord, 0.0));
 #endif
 #if defined(ERHE_DEBUG_BASE_COLOR_TEXTURE)
-    out_color.rgb = srgb_to_linear(sample_texture(base_color_texture, v_texcoord).rgb);
+    if (base_color_texture.x != max_u32) {
+        out_color.rgb = srgb_to_linear(sample_texture(base_color_texture, v_texcoord).rgb);
+    }
 #endif
 #if defined(ERHE_DEBUG_VERTEX_COLOR_RGB)
     out_color.rgb = srgb_to_linear(v_color.rgb);
 #endif
 #if defined(ERHE_DEBUG_VERTEX_COLOR_ALPHA)
-    out_color.rgb = srgb_to_linear(vec3(v_color.a));
+    out_color.rgb = vec3(v_color.a);
 #endif
 #if defined(ERHE_DEBUG_ANISO_STRENGTH)
-    out_color.rgb = srgb_to_linear(vec3(v_aniso_control.x));
+    out_color.rgb = vec3(v_aniso_control.x);
 #endif
 #if defined(ERHE_DEBUG_ANISO_TEXCOORD)
-    out_color.rgb = srgb_to_linear(vec3(v_aniso_control.y));
+    out_color.rgb = vec3(v_aniso_control.y);
 #endif
 #if defined(ERHE_DEBUG_VERTEX_VALENCY)
-    out_color.rgb = srgb_to_linear(palette[v_valency_edge_count.x % 24]);
+    out_color.rgb = palette[v_valency_edge_count.x % 24];
 #endif
 #if defined(ERHE_DEBUG_POLYGON_EDGE_COUNT)
-    out_color.rgb = srgb_to_linear(palette[v_valency_edge_count.y % 24]);
+    out_color.rgb = palette[v_valency_edge_count.y % 24];
+#endif
+#if defined(ERHE_DEBUG_METALLIC)
+    out_color.rgb = vec3(metallic);
+#endif
+#if defined(ERHE_DEBUG_ROUGHNESS)
+    out_color.rgb = vec3(roughness);
+#endif
+#if defined(ERHE_DEBUG_OCCLUSION)
+    if (occlusion_texture.x != max_u32) {
+        out_color.rgb = sample_texture(occlusion_texture, v_texcoord).rrr;
+    }
+#endif
+#if defined(ERHE_DEBUG_EMISSION)
+    if (emission_texture.x != max_u32) {
+        out_color.rgb = sample_texture(emission_texture, v_texcoord).rrr;
+    }
 #endif
 #if defined(ERHE_DEBUG_MISC)
     // Show Draw ID
 
     // Show Directional light L . N
-    out_color.rgb = srgb_to_linear(palette[v_material_index % 24]);
+    out_color.rgb = palette[v_material_index % 24];
 
     float N_dot_L = dot(N, L);
     float N_dot_V = dot(N, V);
@@ -194,7 +238,7 @@ void main() {
     float N_dot_B = dot(N, B);
     float T_dot_B = dot(T, B);
 
-    out_color.rgb = srgb_to_linear(vec3(N_dot_T, N_dot_B, T_dot_B));
+    out_color.rgb = vec3(N_dot_T, N_dot_B, T_dot_B);
 
     // Show material
     //Material material = material.materials[v_material_index];

@@ -142,7 +142,7 @@ void import_gltf(
     std::unordered_map<erhe::scene::Node*, int> node_colors;
 
     bool add_default_camera = true;
-    bool add_default_light = false;
+    bool add_default_light = true;
     log_parsers->info("Processing {} nodes", gltf_data.nodes.size());
 
     size_t mesh_count = 0;
@@ -215,8 +215,8 @@ void import_gltf(
     }
 
     if (add_default_camera) {
-        auto node   = std::make_shared<erhe::scene::Node>("Default Camera Node");
-        auto camera = std::make_shared<erhe::scene::Camera>("Default Camera"); //content_library->cameras.make("Default Camera");
+        auto node   = std::make_shared<erhe::scene::Node>("Camera");
+        auto camera = std::make_shared<erhe::scene::Camera>("Camera");
         camera->projection()->fov_y           = glm::radians(35.0f);
         camera->projection()->projection_type = erhe::scene::Projection::Type::perspective_vertical;
         camera->projection()->z_near          = 0.03f;
@@ -226,33 +226,41 @@ void import_gltf(
         node->set_parent(scene_root_node);
 
         const glm::mat4 m = erhe::math::create_look_at(
-            glm::vec3{0.0f, 1.80f, -8.0f}, // eye
-            glm::vec3{0.0f, 1.80f,  0.0f}, // center
-            glm::vec3{0.0f, 1.00f,  0.0f}  // up
+            glm::vec3{0.0f, 0.00f, 8.0f}, // eye
+            glm::vec3{0.0f, 0.00f, 0.0f}, // center
+            glm::vec3{0.0f, 1.00f, 0.0f}  // up
         );
         node->set_parent_from_node(m);
         node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
     }
 
     if (add_default_light) {
-        auto node  = std::make_shared<erhe::scene::Node>("Default Light Node");
-        auto light = std::make_shared<erhe::scene::Light>("Default Light"); //content_library->lights.make("Default Light");
-        light->type      = erhe::scene::Light::Type::directional;
-        light->color     = glm::vec3{1.0f, 1.0f, 1.0};
-        light->intensity = 1.0f;
-        light->range     = 0.0f;
-        light->layer_id  = scene_root.layers().light()->id;
-        light->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::visible | erhe::Item_flags::show_in_ui);
-        node->attach          (light);
-        node->set_parent      (scene_root_node);
-        node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::visible | erhe::Item_flags::show_in_ui);
-
-        const glm::mat4 m = erhe::math::create_look_at(
-            glm::vec3{0.0f, 8.0f, 0.0f}, // eye
-            glm::vec3{0.0f, 0.0f, 0.0f}, // center
-            glm::vec3{1.0f, 0.0f, 0.0f}  // up
-        );
-        node->set_parent_from_node(m);
+        auto key_node   = std::make_shared<erhe::scene::Node>("Key Light");
+        auto key_light  = std::make_shared<erhe::scene::Light>("Key Light");
+        key_light->type      = erhe::scene::Light::Type::directional;
+        key_light->color     = glm::vec3{1.0f, 1.0f, 1.0};
+        key_light->intensity = 1.0f;
+        key_light->range     = 0.0f;
+        key_light->layer_id  = scene_root.layers().light()->id;
+        key_light->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::visible | erhe::Item_flags::show_in_ui);
+        key_node->attach          (key_light);
+        key_node->set_parent      (scene_root_node);
+        key_node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::visible | erhe::Item_flags::show_in_ui);
+        const glm::quat key_quat{0.8535534f, -0.3535534f, -0.353553385f, -0.146446586f};
+        key_node->set_parent_from_node(glm::mat4{key_quat});
+        auto fill_node  = std::make_shared<erhe::scene::Node>("Fill Light Node");
+        auto fill_light = std::make_shared<erhe::scene::Light>("Fill Light");
+        fill_light->type      = erhe::scene::Light::Type::directional;
+        fill_light->color     = glm::vec3{1.0f, 1.0f, 1.0};
+        fill_light->intensity = 0.5f;
+        fill_light->range     = 0.0f;
+        fill_light->layer_id  = scene_root.layers().light()->id;
+        fill_light->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::visible | erhe::Item_flags::show_in_ui);
+        fill_node->attach          (fill_light);
+        fill_node->set_parent      (scene_root_node);
+        fill_node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::visible | erhe::Item_flags::show_in_ui);
+        const glm::quat fill_quat{-0.353553444f, -0.8535534f, 0.146446645f, -0.353553325f};
+        fill_node->set_parent_from_node(glm::mat4{fill_quat});
     }
 
     // Move to final scene

@@ -103,7 +103,9 @@ Programs::Programs(erhe::graphics::Device& graphics_device)
     , id                      {graphics_device, "id-not_loaded"}
     , tool                    {graphics_device, "tool-not_loaded"}
     , debug_depth             {graphics_device, "debug_depth-not_loaded"}
-    , debug_normal            {graphics_device, "debug_normal-not_loaded"}
+    , debug_vertex_normal     {graphics_device, "debug_vertex_normal-not_loaded"}
+    , debug_fragment_normal   {graphics_device, "debug_fragment_normal-not_loaded"}
+    , debug_normal_texture    {graphics_device, "debug_normal_texture-not_loaded"}
     , debug_tangent           {graphics_device, "debug_tangent-not_loaded"}
     , debug_vertex_tangent_w  {graphics_device, "debug_vertex_tangent_w-not_loaded"}
     , debug_bitangent         {graphics_device, "debug_bitangent-not_loaded"}
@@ -123,6 +125,10 @@ Programs::Programs(erhe::graphics::Device& graphics_device)
     , debug_omega_g           {graphics_device, "debug_omega_g-not_loaded"}
     , debug_vertex_valency    {graphics_device, "debug_vertex_valency-not_loaded"}
     , debug_polygon_edge_count{graphics_device, "debug_polygon_edge_count_g-not_loaded"}
+    , debug_metallic          {graphics_device, "debug_metallic-not_loaded"}
+    , debug_roughness         {graphics_device, "debug_roughness-not_loaded"}
+    , debug_occlusion         {graphics_device, "debug_occlusion-not_loaded"}
+    , debug_emission          {graphics_device, "debug_emission-not_loaded"}
     , debug_misc              {graphics_device, "debug_misc-not_loaded"}
 {
 }
@@ -168,7 +174,9 @@ void Programs::load_programs(
     add_shader(id                      , CI{ .name = "id"     } );
     add_shader(tool                    , CI{ .name = "tool"   } );
     add_shader(debug_depth             , CI{ .name = "visualize_depth", .default_uniform_block = &default_uniform_block } );
-    add_shader(debug_normal            , CI{ .name = "standard_debug", .defines = {{"ERHE_DEBUG_NORMAL",             "1"}}, .default_uniform_block = &default_uniform_block } );
+    add_shader(debug_vertex_normal     , CI{ .name = "standard_debug", .defines = {{"ERHE_DEBUG_VERTEX_NORMAL",      "1"}}, .default_uniform_block = &default_uniform_block } );
+    add_shader(debug_fragment_normal   , CI{ .name = "standard_debug", .defines = {{"ERHE_DEBUG_FRAGMENT_NORMAL",    "1"}}, .default_uniform_block = &default_uniform_block } );
+    add_shader(debug_normal_texture    , CI{ .name = "standard_debug", .defines = {{"ERHE_DEBUG_NORMAL_TEXTURE",     "1"}}, .default_uniform_block = &default_uniform_block } );
     add_shader(debug_tangent           , CI{ .name = "standard_debug", .defines = {{"ERHE_DEBUG_TANGENT",            "1"}}, .default_uniform_block = &default_uniform_block } );
     add_shader(debug_vertex_tangent_w  , CI{ .name = "standard_debug", .defines = {{"ERHE_DEBUG_TANGENT_W",          "1"}}, .default_uniform_block = &default_uniform_block } );
     add_shader(debug_bitangent         , CI{ .name = "standard_debug", .defines = {{"ERHE_DEBUG_BITANGENT",          "1"}}, .default_uniform_block = &default_uniform_block } );
@@ -188,6 +196,10 @@ void Programs::load_programs(
     add_shader(debug_omega_g           , CI{ .name = "standard_debug", .defines = {{"ERHE_DEBUG_OMEGA_G",            "1"}}, .default_uniform_block = &default_uniform_block } );
     add_shader(debug_vertex_valency    , CI{ .name = "standard_debug", .defines = {{"ERHE_DEBUG_VERTEX_VALENCY",     "1"}}, .default_uniform_block = &default_uniform_block } );
     add_shader(debug_polygon_edge_count, CI{ .name = "standard_debug", .defines = {{"ERHE_DEBUG_POLYGON_EDGE_COUNT", "1"}}, .default_uniform_block = &default_uniform_block } );
+    add_shader(debug_metallic          , CI{ .name = "standard_debug", .defines = {{"ERHE_DEBUG_METALLIC",           "1"}}, .default_uniform_block = &default_uniform_block } );
+    add_shader(debug_roughness         , CI{ .name = "standard_debug", .defines = {{"ERHE_DEBUG_ROUGHNESS",          "1"}}, .default_uniform_block = &default_uniform_block } );
+    add_shader(debug_occlusion         , CI{ .name = "standard_debug", .defines = {{"ERHE_DEBUG_OCCLUSION",          "1"}}, .default_uniform_block = &default_uniform_block } );
+    add_shader(debug_emission          , CI{ .name = "standard_debug", .defines = {{"ERHE_DEBUG_EMISSIOn",           "1"}}, .default_uniform_block = &default_uniform_block } );
     add_shader(debug_misc              , CI{ .name = "standard_debug", .defines = {{"ERHE_DEBUG_MISC",               "1"}}, .default_uniform_block = &default_uniform_block } );
 
     // Compile shaders
@@ -233,7 +245,9 @@ auto Programs::get_variant_shader_stages(Shader_stages_variant variant) const ->
         case Shader_stages_variant::anisotropic_engine_ready: return &anisotropic_engine_ready.shader_stages;
         case Shader_stages_variant::circular_brushed_metal:   return &circular_brushed_metal.shader_stages;
         case Shader_stages_variant::debug_depth:              return &debug_depth.shader_stages;
-        case Shader_stages_variant::debug_normal:             return &debug_normal.shader_stages;
+        case Shader_stages_variant::debug_vertex_normal:      return &debug_vertex_normal.shader_stages;
+        case Shader_stages_variant::debug_fragment_normal:    return &debug_fragment_normal.shader_stages;
+        case Shader_stages_variant::debug_normal_texture:     return &debug_normal_texture.shader_stages;
         case Shader_stages_variant::debug_tangent:            return &debug_tangent.shader_stages;
         case Shader_stages_variant::debug_vertex_tangent_w:   return &debug_vertex_tangent_w.shader_stages;
         case Shader_stages_variant::debug_bitangent:          return &debug_bitangent.shader_stages;
@@ -253,6 +267,10 @@ auto Programs::get_variant_shader_stages(Shader_stages_variant variant) const ->
         case Shader_stages_variant::debug_omega_g:            return &debug_omega_g.shader_stages;
         case Shader_stages_variant::debug_vertex_valency:     return &debug_vertex_valency.shader_stages;
         case Shader_stages_variant::debug_polygon_edge_count: return &debug_polygon_edge_count.shader_stages;
+        case Shader_stages_variant::debug_metallic:           return &debug_metallic.shader_stages;
+        case Shader_stages_variant::debug_roughness:          return &debug_roughness.shader_stages;
+        case Shader_stages_variant::debug_occlusion:          return &debug_occlusion.shader_stages;
+        case Shader_stages_variant::debug_emission:           return &debug_emission.shader_stages;
         case Shader_stages_variant::debug_misc:               return &debug_misc.shader_stages;
         default:                                              return &error.shader_stages;
     }

@@ -273,6 +273,11 @@ auto Primitive_shape::make_geometry() -> bool
         GEO::Mesh& mesh = m_geometry->get_mesh();
 
         mesh_from_triangle_soup(*m_triangle_soup.get(), mesh, m_element_mappings);
+
+        const erhe::dataformat::Attribute_stream tangent_stream = m_triangle_soup->vertex_format.find_attribute(erhe::dataformat::Vertex_attribute_usage::tangent);
+        if (tangent_stream.attribute == nullptr) {
+            compute_mesh_tangents(mesh, false);
+        }
         //mesh.vertices.set_double_precision();
         //mesh.facets.connect();
         //mesh.edges.create_edges(

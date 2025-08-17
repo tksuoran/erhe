@@ -40,8 +40,8 @@ public:
     Image_loader  (Image_loader&&)      = delete;
     auto operator=(Image_loader&&)      = delete;
 
-    [[nodiscard]] auto open(const std::filesystem::path& path, Image_info& image_info) -> bool;
-    [[nodiscard]] auto open(const std::span<const std::uint8_t>& buffer_view, Image_info& image_info) -> bool;
+    [[nodiscard]] auto open(const std::filesystem::path& path, Image_info& image_info, const bool linear) -> bool;
+    [[nodiscard]] auto open(const std::span<const std::uint8_t>& buffer_view, Image_info& image_info, const bool linear) -> bool;
     [[nodiscard]] auto load(std::span<std::uint8_t> transfer_buffer) -> bool;
     void close();
 
