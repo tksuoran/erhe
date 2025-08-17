@@ -71,7 +71,17 @@ void main() {
 
     uvec2 base_color_texture         = material.base_color_texture;
     uvec2 metallic_roughness_texture = material.metallic_roughness_texture;
+    uvec2 normal_texture             = material.normal_texture;
+    uvec2 occlusion_texture          = material.occlusion_texture;
+    uvec2 emission_texture           = material.emission_texture;
     vec3  base_color                 = v_color.rgb * material.base_color.rgb * sample_texture(base_color_texture, v_texcoord).rgb;
+
+    if (normal_texture.x != max_u32) {
+        vec3 ntex = sample_texture(normal_texture, v_texcoord).xyz * 2.0 - vec3(1.0);
+        ntex.xy   = ntex.xy * material.normal_texture_scale;
+        ntex      = normalize(ntex);
+        N         = normalize(mat3(T0, B0, N) * ntex);
+    }
 
     // Generating circular anisotropy direction from texcoord
     float circular_anisotropy_magnitude = pow(length(v_texcoord) * 8.0, 0.25);

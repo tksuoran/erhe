@@ -107,8 +107,8 @@ void Rendertarget_mesh::resize_rendertarget(erhe::graphics::Device& graphics_dev
             .base_color = glm::vec3{0.1f, 0.1f, 0.2f}
         }
     );
-    m_material->textures.base_color = m_texture;
-    m_material->samplers.base_color = m_sampler;
+    m_material->texture_samplers.base_color.texture = m_texture;
+    m_material->texture_samplers.base_color.sampler = m_sampler;
     m_material->disable_flag_bits(erhe::Item_flags::show_in_ui);
 
     m_local_width  = static_cast<float>(m_texture->get_width ()) / m_pixels_per_meter;
@@ -316,7 +316,7 @@ void Rendertarget_mesh::render_done(App_context& context)
                 .debug_label = "Rendertarget_mesh"
             }
         );
-        m_material->samplers.base_color = m_sampler;
+        m_material->texture_samplers.base_color.sampler = m_sampler;
     }
 }
 

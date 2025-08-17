@@ -24,14 +24,24 @@ Material_interface::Material_interface(erhe::graphics::Device& graphics_device)
         .roughness                  = material_struct.add_vec2 ("roughness"                 )->get_offset_in_parent(),
         .metallic                   = material_struct.add_float("metallic"                  )->get_offset_in_parent(),
         .reflectance                = material_struct.add_float("reflectance"               )->get_offset_in_parent(),
+
         .base_color                 = material_struct.add_vec4 ("base_color"                )->get_offset_in_parent(),
         .emissive                   = material_struct.add_vec4 ("emissive"                  )->get_offset_in_parent(),
+
         .base_color_texture         = material_struct.add_uvec2("base_color_texture"        )->get_offset_in_parent(),
         .metallic_roughness_texture = material_struct.add_uvec2("metallic_roughness_texture")->get_offset_in_parent(),
+
+        .normal_texture             = material_struct.add_uvec2("normal_texture"            )->get_offset_in_parent(),
+        .occlusion_texture          = material_struct.add_uvec2("occlusion_texture"         )->get_offset_in_parent(),
+
+        .emission_texture           = material_struct.add_uvec2("emission_texture"          )->get_offset_in_parent(),
         .opacity                    = material_struct.add_float("opacity"                   )->get_offset_in_parent(),
+        .normal_texture_scale       = material_struct.add_float("normal_texture_scale"      )->get_offset_in_parent(),
+
+        .occlusion_texture_strength = material_struct.add_float("occlusion_texture_strength")->get_offset_in_parent(),
         .reserved1                  = material_struct.add_float("reserved1"                 )->get_offset_in_parent(),
         .reserved2                  = material_struct.add_float("reserved2"                 )->get_offset_in_parent(),
-        .reserved3                  = material_struct.add_float("reserved3"                 )->get_offset_in_parent()
+        .reserved3                  = material_struct.add_float("reserved3"                 )->get_offset_in_parent(),
     }
 {
     const auto& ini = erhe::configuration::get_ini_file_section(c_erhe_config_file_path, "renderer");
@@ -108,40 +118,23 @@ auto Material_buffer::update(
         using erhe::graphics::as_span;
         using erhe::graphics::write;
 
-        uint64_t base_color_shader_handle         = erhe::graphics::invalid_texture_handle;
-        uint64_t metallic_roughness_shader_handle = erhe::graphics::invalid_texture_handle;
+        auto get_texture_sampler_shader_handle = [this, &texture_heap](const erhe::primitive::Material_texture_sampler& data) -> uint64_t
+        {
+            if (data.texture) {
+                const erhe::graphics::Sampler* sampler = data.sampler ? data.sampler.get() : &m_linear_sampler;
+                const uint64_t shader_handle = texture_heap.allocate(data.texture.get(), sampler);
+                ERHE_VERIFY(shader_handle != erhe::graphics::invalid_texture_handle);
+                return shader_handle;
+            } else {
+                return erhe::graphics::invalid_texture_handle;
+            }
+        };
 
-        if (material->textures.base_color) {
-            const erhe::graphics::Sampler* sampler = material->samplers.base_color ? material->samplers.base_color.get() : &m_linear_sampler;
-            base_color_shader_handle = texture_heap.allocate(material->textures.base_color.get(), sampler);
-            ERHE_VERIFY(base_color_shader_handle != erhe::graphics::invalid_texture_handle);
-
-            SPDLOG_LOGGER_TRACE(
-                log_material_buffer,
-                "[{}] {} base_color_handle = {} - {} - {}",
-                material_index,
-                material->get_name(),
-                material->textures.base_color->get_name(),
-                material->textures.base_color->get_source_path().string(),
-                erhe::graphics::format_texture_handle(base_color_shader_handle)
-            );
-        }
-
-        if (material->textures.metallic_roughness) {
-            erhe::graphics::Sampler* sampler = material->samplers.metallic_roughness ? material->samplers.metallic_roughness.get() : &m_linear_sampler;
-            metallic_roughness_shader_handle = texture_heap.allocate(material->textures.metallic_roughness.get(), sampler);
-            ERHE_VERIFY(metallic_roughness_shader_handle  != erhe::graphics::invalid_texture_handle);
-
-            SPDLOG_LOGGER_TRACE(
-                log_material_buffer,
-                "[{}] {} metallic_roughness_handle = {} - {}",
-                material->get_name(),
-                material->get_name(),
-                material->textures.metallic_roughness->get_name(),
-                material->textures.metallic_roughness->get_source_path().string(),
-                erhe::graphics::format_texture_handle(metallic_roughness_shader_handle)
-            );
-        }
+        const uint64_t base_color_shader_handle         = get_texture_sampler_shader_handle(material->texture_samplers.base_color);
+        const uint64_t metallic_roughness_shader_handle = get_texture_sampler_shader_handle(material->texture_samplers.metallic_roughness);
+        const uint64_t normal_shader_handle             = get_texture_sampler_shader_handle(material->texture_samplers.normal);
+        const uint64_t occlusion_shader_handle          = get_texture_sampler_shader_handle(material->texture_samplers.occlusion);
+        const uint64_t emission_shader_handle           = get_texture_sampler_shader_handle(material->texture_samplers.emission);
 
         material->material_buffer_index = material_index;
 
@@ -151,8 +144,13 @@ auto Material_buffer::update(
         write(gpu_data, write_offset + offsets.base_color ,                as_span(material->base_color ));
         write(gpu_data, write_offset + offsets.emissive   ,                as_span(material->emissive   ));
         write(gpu_data, write_offset + offsets.opacity    ,                as_span(material->opacity    ));
+        write(gpu_data, write_offset + offsets.normal_texture_scale,       as_span(material->normal_texture_scale));
+        write(gpu_data, write_offset + offsets.occlusion_texture_strength, as_span(material->occlusion_texture_strength));
         write(gpu_data, write_offset + offsets.base_color_texture,         as_span(base_color_shader_handle));
         write(gpu_data, write_offset + offsets.metallic_roughness_texture, as_span(metallic_roughness_shader_handle));
+        write(gpu_data, write_offset + offsets.normal_texture,             as_span(normal_shader_handle));
+        write(gpu_data, write_offset + offsets.occlusion_texture,          as_span(occlusion_shader_handle));
+        write(gpu_data, write_offset + offsets.emission_texture,           as_span(emission_shader_handle));
 
         write_offset += entry_size;
         ++material_index;

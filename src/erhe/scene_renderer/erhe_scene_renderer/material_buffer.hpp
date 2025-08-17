@@ -26,11 +26,22 @@ public:
     std::size_t roughness;                  // vec2
     std::size_t metallic;                   // float
     std::size_t reflectance;                // float
+
     std::size_t base_color;                 // vec4
     std::size_t emissive;                   // vec4
+
     std::size_t base_color_texture;         // uvec2
     std::size_t metallic_roughness_texture; // uvec2
+
+    std::size_t normal_texture;             // uvec2
+    std::size_t occlusion_texture;          // uvec2
+
+    std::size_t emission_texture;           // uvec2
+
     std::size_t opacity;                    // float
+    std::size_t normal_texture_scale;       // float
+
+    std::size_t occlusion_texture_strength; // float
     std::size_t reserved1;                  // float
     std::size_t reserved2;                  // float
     std::size_t reserved3;                  // float

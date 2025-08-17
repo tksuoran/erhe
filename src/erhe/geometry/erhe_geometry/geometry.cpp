@@ -11,6 +11,8 @@
 
 #include <fmt/format.h>
 
+#include <geogram/mesh/mesh_reorder.h>
+
 #include <cmath>
 #include <unordered_map>
 
@@ -1064,18 +1066,21 @@ void Geometry::build_edges()
 
 void Geometry::process(const uint64_t flags)
 {
+    //GEO::mesh_reorder(m_mesh);
+
     if (flags & process_flag_connect) {
         m_mesh.facets.connect();
     }
-    if (flags & process_flag_build_edges) {
-        update_connectivity();
-        build_edges();
-    }
+
     if (flags & process_flag_merge_coplanar_neighbors) {
         merge_coplanar_neighbors();
         update_connectivity();
         build_edges();
+    } else if (flags & process_flag_build_edges) {
+        update_connectivity();
+        build_edges();
     }
+
     if (flags & process_flag_compute_smooth_vertex_normals) {
         compute_mesh_vertex_normal_smooth(m_mesh, m_attributes);
     }

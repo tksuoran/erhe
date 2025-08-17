@@ -15,58 +15,40 @@ namespace erhe::graphics {
 
 namespace erhe::primitive {
 
+struct Material_texture_sampler
+{
+    std::shared_ptr<erhe::graphics::Texture> texture;
+    std::shared_ptr<erhe::graphics::Sampler> sampler;
+    uint8_t                                  tex_coord;
+};
+
+struct Material_texture_samplers
+{
+    Material_texture_sampler base_color;
+    Material_texture_sampler metallic_roughness;
+    Material_texture_sampler normal;
+    Material_texture_sampler occlusion;
+    Material_texture_sampler emission;
+};
+
 class Material_create_info
 {
 public:
-    struct Textures
-    {
-        std::shared_ptr<erhe::graphics::Texture> base_color;
-        std::shared_ptr<erhe::graphics::Texture> metallic_roughness;
-    };
-    struct Samplers
-    {
-        std::shared_ptr<erhe::graphics::Sampler> base_color;
-        std::shared_ptr<erhe::graphics::Sampler> metallic_roughness;
-    };
-    struct TexCoords
-    {
-        uint8_t base_color        {0};
-        uint8_t metallic_roughness{0};
-    };
-
-    std::string name;
-    glm::vec3   base_color {1.0f, 1.0f, 1.0f};
-    glm::vec2   roughness  {0.5f, 0.5f};
-    float       metallic   {0.0f};
-    float       reflectance{0.5f};
-    glm::vec3   emissive   {0.0f, 0.0f, 0.0f};
-    float       opacity    {1.0f};
-
-    Textures    textures{};
-    Samplers    samplers{};
-    TexCoords   tex_coords{};
-
+    std::string               name;
+    glm::vec3                 base_color                {1.0f, 1.0f, 1.0f};
+    glm::vec2                 roughness                 {0.5f, 0.5f};
+    float                     metallic                  {0.0f};
+    float                     reflectance               {0.5f};
+    glm::vec3                 emissive                  {0.0f, 0.0f, 0.0f};
+    float                     opacity                   {1.0f};
+    float                     normal_texture_scale      {1.0f};
+    float                     occlusion_texture_strength{1.0f};
+    Material_texture_samplers texture_samplers;
 };
 
 class Material : public erhe::Item<erhe::Item_base, erhe::Item_base, Material>
 {
 public:
-    struct Textures
-    {
-        std::shared_ptr<erhe::graphics::Texture> base_color;
-        std::shared_ptr<erhe::graphics::Texture> metallic_roughness;
-    };
-    struct Samplers
-    {
-        std::shared_ptr<erhe::graphics::Sampler> base_color;
-        std::shared_ptr<erhe::graphics::Sampler> metallic_roughness;
-    };
-    struct TexCoords
-    {
-        uint8_t base_color        {0};
-        uint8_t metallic_roughness{0};
-    };
-
     Material();
     explicit Material(const Material&);
     Material& operator=(const Material&);
@@ -80,17 +62,17 @@ public:
     auto get_type     () const -> uint64_t         override;
     auto get_type_name() const -> std::string_view override;
 
-    uint32_t                material_buffer_index{0}; // updated by Material_buffer::update()
-    glm::vec3               base_color  {1.0f, 1.0f, 1.0f};
-    float                   opacity     {1.0f};
-    glm::vec2               roughness   {0.5f, 0.5f};
-    float                   metallic    {0.0f};
-    float                   reflectance {0.5f};
-    glm::vec3               emissive    {0.0f, 0.0f, 0.0f};
+    uint32_t  material_buffer_index{0}; // updated by Material_buffer::update()
+    glm::vec3 base_color  {1.0f, 1.0f, 1.0f};
+    float     opacity     {1.0f};
+    glm::vec2 roughness   {0.5f, 0.5f};
+    float     metallic    {0.0f};
+    float     reflectance {0.5f};
+    glm::vec3 emissive    {0.0f, 0.0f, 0.0f};
+    float     normal_texture_scale      {1.0f};
+    float     occlusion_texture_strength{1.0f};
 
-    Textures                textures;
-    Samplers                samplers;
-    TexCoords               tex_coords{};
+    Material_texture_samplers texture_samplers;
 
     std::optional<uint32_t> preview_slot;
 };

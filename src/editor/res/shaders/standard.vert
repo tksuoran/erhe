@@ -30,8 +30,10 @@ void main()
 
     mat4 clip_from_world = camera.cameras[0].clip_from_world;
     vec3 normal          = normalize(vec3(world_from_node_normal * vec4(a_normal,      0.0)));
-    vec3 tangent         = normalize(vec3(world_from_node        * vec4(a_tangent.xyz, 0.0)));
-    vec3 bitangent       = normalize(cross(normal, tangent)) * a_tangent.w;
+    vec3 tangent         = vec3(world_from_node * vec4(a_tangent.xyz, 0.0));
+    vec3 bitangent       = cross(normal, tangent) * a_tangent.w;
+    tangent              = normalize(tangent  );
+    bitangent            = normalize(bitangent);
     vec4 position        = world_from_node * vec4(a_position, 1.0);
 
     v_T              = tangent;

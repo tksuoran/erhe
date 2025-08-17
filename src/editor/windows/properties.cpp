@@ -140,8 +140,6 @@ void Properties::camera_properties(erhe::scene::Camera& camera)
             case erhe::scene::Projection::Type::perspective: {
                 add_entry("Fov X",  [=](){ImGui::SliderFloat("##", &projection->fov_x,  0.0f, glm::pi<float>());});
                 add_entry("Fov Y",  [=](){ImGui::SliderFloat("##", &projection->fov_y,  0.0f, glm::pi<float>());});
-                add_entry("Z Near", [=](){ImGui::SliderFloat("##", &projection->z_near, 0.0f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic);});
-                add_entry("Z Far",  [=](){ImGui::SliderFloat("##", &projection->z_far,  0.0f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic);});
                 break;
             }
 
@@ -150,44 +148,32 @@ void Properties::camera_properties(erhe::scene::Camera& camera)
                 add_entry("Fov Right", [=](){ ImGui::SliderFloat("##", &projection->fov_right, -glm::pi<float>() / 2.0f, glm::pi<float>() / 2.0f);});
                 add_entry("Fov Up",    [=](){ ImGui::SliderFloat("##", &projection->fov_up,    -glm::pi<float>() / 2.0f, glm::pi<float>() / 2.0f);});
                 add_entry("Fov Down",  [=](){ ImGui::SliderFloat("##", &projection->fov_down,  -glm::pi<float>() / 2.0f, glm::pi<float>() / 2.0f);});
-                add_entry("Z Near",    [=](){ ImGui::SliderFloat("##", &projection->z_near,    0.0f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic);});
-                add_entry("Z Far",     [=](){ ImGui::SliderFloat("##", &projection->z_far,     0.0f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic);});
                 break;
             }
 
             case erhe::scene::Projection::Type::perspective_horizontal: {
                 add_entry("Fov X",  [=](){ ImGui::SliderFloat("##", &projection->fov_x,  0.0f, glm::pi<float>()); });
-                add_entry("Z Near", [=](){ ImGui::SliderFloat("##", &projection->z_near, 0.0f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic); });
-                add_entry("Z Far",  [=](){ ImGui::SliderFloat("##", &projection->z_far,  0.0f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic); });
                 break;
             }
 
             case erhe::scene::Projection::Type::perspective_vertical: {
                 add_entry("Fov Y",  [=](){ ImGui::SliderFloat("##", &projection->fov_y,  0.0f, glm::pi<float>()); });
-                add_entry("Z Near", [=](){ ImGui::SliderFloat("##", &projection->z_near, 0.0f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic); });
-                add_entry("Z Far",  [=](){ ImGui::SliderFloat("##", &projection->z_far,  0.0f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic); });
                 break;
             }
 
             case erhe::scene::Projection::Type::orthogonal_horizontal: {
                 add_entry("Width",  [=](){ ImGui::SliderFloat("##", &projection->ortho_width, 0.0f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic); });
-                add_entry("Z Near", [=](){ ImGui::SliderFloat("##", &projection->z_near,      0.0f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic); });
-                add_entry("Z Far",  [=](){ ImGui::SliderFloat("##", &projection->z_far,       0.0f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic); });
                 break;
             }
 
             case erhe::scene::Projection::Type::orthogonal_vertical: {
                 add_entry("Height", [=](){ ImGui::SliderFloat("##", &projection->ortho_height, 0.0f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic); });
-                add_entry("Z Near", [=](){ ImGui::SliderFloat("##", &projection->z_near,       0.0f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic); });
-                add_entry("Z Far",  [=](){ ImGui::SliderFloat("##", &projection->z_far,        0.0f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic); });
                 break;
             }
 
             case erhe::scene::Projection::Type::orthogonal: {
                 add_entry("Width",  [=](){ ImGui::SliderFloat("##", &projection->ortho_width,  0.0f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic); });
                 add_entry("Height", [=](){ ImGui::SliderFloat("##", &projection->ortho_height, 0.0f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic); });
-                add_entry("Z Near", [=](){ ImGui::SliderFloat("##", &projection->z_near,       0.0f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic); });
-                add_entry("Z Far",  [=](){ ImGui::SliderFloat("##", &projection->z_far,        0.0f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic); });
                 break;
             }
 
@@ -196,8 +182,6 @@ void Properties::camera_properties(erhe::scene::Camera& camera)
                 add_entry("Width",  [=](){ ImGui::SliderFloat("##", &projection->ortho_width,  0.0f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic); });
                 add_entry("Bottom", [=](){ ImGui::SliderFloat("##", &projection->ortho_bottom, 0.0f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic); });
                 add_entry("Height", [=](){ ImGui::SliderFloat("##", &projection->ortho_height, 0.0f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic); });
-                add_entry("Z Near", [=](){ ImGui::SliderFloat("##", &projection->z_near,       0.0f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic); });
-                add_entry("Z Far",  [=](){ ImGui::SliderFloat("##", &projection->z_far,        0.0f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic); });
                 break;
             }
 
@@ -206,8 +190,6 @@ void Properties::camera_properties(erhe::scene::Camera& camera)
                 add_entry("Right",  [=](){ ImGui::SliderFloat("##", &projection->frustum_right,  0.0f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic); });
                 add_entry("Bottom", [=](){ ImGui::SliderFloat("##", &projection->frustum_bottom, 0.0f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic); });
                 add_entry("Top",    [=](){ ImGui::SliderFloat("##", &projection->frustum_top,    0.0f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic); });
-                add_entry("Z Near", [=](){ ImGui::SliderFloat("##", &projection->z_near,         0.0f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic); });
-                add_entry("Z Far",  [=](){ ImGui::SliderFloat("##", &projection->z_far,          0.0f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic); });
                 break;
             }
 
@@ -216,6 +198,8 @@ void Properties::camera_properties(erhe::scene::Camera& camera)
                 break;
             }
         }
+        add_entry("Z Near", [=](){ImGui::SliderFloat("##", &projection->z_near, 0.0f, 1000.0f, "%.4f", ImGuiSliderFlags_Logarithmic | ImGuiSliderFlags_NoRoundToFormat);});
+        add_entry("Z Far",  [=](){ImGui::SliderFloat("##", &projection->z_far,  0.0f, 1000.0f, "%.4f", ImGuiSliderFlags_Logarithmic | ImGuiSliderFlags_NoRoundToFormat);});
 
         pop_group();
     }
@@ -851,8 +835,41 @@ void Properties::material_properties()
             const std::shared_ptr<Content_library_node>& textures_ = content_library->textures;
             if (textures_) {
                 Content_library_node* textures = textures_.get();
-                add_entry("Base Color Texture",         [this, textures, selected_material](){ textures->combo(m_context, "##", selected_material->textures.base_color,         true); });
-                add_entry("Metallic Roughness Texture", [this, textures, selected_material](){ textures->combo(m_context, "##", selected_material->textures.metallic_roughness, true); });
+                add_entry(
+                    "Base Color Texture",
+                    [this, textures, selected_material]()
+                    {
+                        textures->combo(m_context, "##", selected_material->texture_samplers.base_color.texture, true);
+                    }
+                );
+                add_entry(
+                    "Metallic Roughness Texture",
+                    [this, textures, selected_material]()
+                    {
+                        textures->combo(m_context, "##", selected_material->texture_samplers.metallic_roughness.texture, true);
+                    }
+                );
+                add_entry(
+                    "Normal Texture",
+                    [this, textures, selected_material]()
+                    {
+                        textures->combo(m_context, "##", selected_material->texture_samplers.normal.texture, true);
+                    }
+                );
+                add_entry(
+                    "Occlusion Texture",
+                    [this, textures, selected_material]()
+                    {
+                        textures->combo(m_context, "##", selected_material->texture_samplers.occlusion.texture, true);
+                    }
+                );
+                add_entry(
+                    "Emission Texture",
+                    [this, textures, selected_material]()
+                    {
+                        textures->combo(m_context, "##", selected_material->texture_samplers.emission.texture, true);
+                    }
+                );
             }
         }
     }

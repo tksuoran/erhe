@@ -62,6 +62,17 @@ void main() {
     Material material = material.materials[v_material_index];
     uvec2 base_color_texture         = material.base_color_texture;
     uvec2 metallic_roughness_texture = material.metallic_roughness_texture;
+    uvec2 normal_texture             = material.normal_texture;
+    uvec2 occlusion_texture          = material.occlusion_texture;
+    uvec2 emission_texture           = material.emission_texture;
+
+    if (normal_texture.x != max_u32) {
+        vec3 ntex = sample_texture(normal_texture, v_texcoord).xyz * 2.0 - vec3(1.0);
+        ntex.xy   = ntex.xy * material.normal_texture_scale;
+        ntex      = normalize(ntex);
+        N         = normalize(mat3(T0, B0, N) * ntex);
+        N         = sample_texture(normal_texture, v_texcoord).xyz * 2.0 - vec3(1.0);
+    }
 
     vec2  T_circular                    = normalize(v_texcoord);
     float circular_anisotropy_magnitude = pow(length(v_texcoord) * 8.0, 0.25);
@@ -91,10 +102,11 @@ void main() {
     vec3 wg    = normalize(TBN_t * N);
 
 #if defined(ERHE_DEBUG_NORMAL)
-    out_color.rgb = srgb_to_linear(vec3(0.5) + 0.5 * N);
+    //out_color.rgb = srgb_to_linear(vec3(0.5) + 0.5 * N);
+    out_color.rgb = vec3(0.5) + 0.5 * N;
 #endif
 #if defined(ERHE_DEBUG_TANGENT)
-    out_color.rgb = srgb_to_linear(vec3(0.5) + 0.5 * T0);
+    out_color.rgb = vec3(0.5) + 0.5 * T0;
 #endif
 #if defined(ERHE_DEBUG_BITANGENT)
     {
@@ -107,7 +119,8 @@ void main() {
         //} else { 
         //    out_color.rgb = vec3(0.0, 1.0, 0.0);
         //}
-        out_color.rgb = srgb_to_linear(vec3(0.5) + 0.5 * v_B);
+        out_color.rgb = vec3(0.5) + 0.5 * B0);
+        //out_color.rgb = vec3(0.5) + 0.5 * v_B);
         //out_color.rgb = srgb_to_linear(vec3(0.5) + 0.5 * b);
     }
 #endif

@@ -152,52 +152,6 @@ auto to_erhe_attribute(const fastgltf::Accessor& accessor) -> erhe::dataformat::
     ERHE_FATAL("Unsupported attribute type");
 }
 
-#if 0
-[[nodiscard]] auto is_per_point(erhe::graphics::Vertex_attribute::Usage_type value) -> bool
-{
-    switch (value)
-    {
-        case erhe::graphics::Vertex_attribute::Usage_type::none         : return false;
-        case erhe::graphics::Vertex_attribute::Usage_type::automatic    : return false;
-        case erhe::graphics::Vertex_attribute::Usage_type::position     : return true;
-        case erhe::graphics::Vertex_attribute::Usage_type::tangent      : return false;
-        case erhe::graphics::Vertex_attribute::Usage_type::bitangent    : return false;
-        case erhe::graphics::Vertex_attribute::Usage_type::normal       : return false;
-        case erhe::graphics::Vertex_attribute::Usage_type::color        : return false;
-        case erhe::graphics::Vertex_attribute::Usage_type::joint_indices: return true;
-        case erhe::graphics::Vertex_attribute::Usage_type::joint_weights: return true;
-        case erhe::graphics::Vertex_attribute::Usage_type::tex_coord    : return false;
-        case erhe::graphics::Vertex_attribute::Usage_type::id           : return false;
-        case erhe::graphics::Vertex_attribute::Usage_type::material     : return false;
-        case erhe::graphics::Vertex_attribute::Usage_type::aniso_control: return false;
-        case erhe::graphics::Vertex_attribute::Usage_type::custom       : return false;
-        default: return "?";
-    }
-}
-
-[[nodiscard]] auto is_per_corner(erhe::graphics::Vertex_attribute::Usage_type value) -> bool
-{
-    switch (value)
-    {
-        case erhe::graphics::Vertex_attribute::Usage_type::none         : return false;
-        case erhe::graphics::Vertex_attribute::Usage_type::automatic    : return false;
-        case erhe::graphics::Vertex_attribute::Usage_type::position     : return false;
-        case erhe::graphics::Vertex_attribute::Usage_type::tangent      : return true;
-        case erhe::graphics::Vertex_attribute::Usage_type::bitangent    : return true;
-        case erhe::graphics::Vertex_attribute::Usage_type::normal       : return true;
-        case erhe::graphics::Vertex_attribute::Usage_type::color        : return false;
-        case erhe::graphics::Vertex_attribute::Usage_type::joint_indices: return false;
-        case erhe::graphics::Vertex_attribute::Usage_type::joint_weights: return false;
-        case erhe::graphics::Vertex_attribute::Usage_type::tex_coord    : return true;
-        case erhe::graphics::Vertex_attribute::Usage_type::id           : return false;
-        case erhe::graphics::Vertex_attribute::Usage_type::material     : return false;
-        case erhe::graphics::Vertex_attribute::Usage_type::aniso_control: return false;
-        case erhe::graphics::Vertex_attribute::Usage_type::custom       : return false;
-        default: return "?";
-    }
-}
-#endif
-
 [[nodiscard]] auto c_str(const fastgltf::AnimationInterpolation value) -> const char*
 {
     switch (value) {
@@ -1226,48 +1180,42 @@ private:
         erhe::primitive::Material_create_info create_info{
             .name = material_name
         };
+
+        auto apply_texture = [this](
+            const fastgltf::TextureInfo&               gltf_texture_info,
+            erhe::primitive::Material_texture_sampler& erhe_texture_sampler
+        )
+        {
+            const fastgltf::Texture& texture = m_asset->textures[gltf_texture_info.textureIndex];
+            if (texture.imageIndex.has_value()) {
+                erhe_texture_sampler.texture = m_data_out.images[texture.imageIndex.value()];
+            }
+            if (texture.samplerIndex.has_value()) {
+                erhe_texture_sampler.sampler = m_data_out.samplers[texture.samplerIndex.value()];
+            }
+            erhe_texture_sampler.tex_coord = static_cast<uint8_t>(gltf_texture_info.texCoordIndex);
+            // TODO texture transform
+        };
+
+        if (material.normalTexture.has_value()) {
+            apply_texture(material.normalTexture.value(), create_info.texture_samplers.normal);
+            create_info.normal_texture_scale = material.normalTexture.value().scale;
+        }
+        if (material.occlusionTexture.has_value()) {
+            apply_texture(material.occlusionTexture.value(), create_info.texture_samplers.occlusion);
+            create_info.occlusion_texture_strength = material.occlusionTexture.value().strength;
+        }
         {
             const fastgltf::PBRData& pbr_data = material.pbrData;
             if (pbr_data.baseColorTexture.has_value()) {
-                const fastgltf::TextureInfo& texture_info = pbr_data.baseColorTexture.value();
-                const fastgltf::Texture& texture = m_asset->textures[texture_info.textureIndex];
-                if (texture.imageIndex.has_value()) {
-                    create_info.textures.base_color = m_data_out.images[texture.imageIndex.value()];
-                }
-                if (texture.samplerIndex.has_value()) {
-                    create_info.samplers.base_color = m_data_out.samplers[texture.samplerIndex.value()];
-                }
-                create_info.tex_coords.base_color = static_cast<uint8_t>(texture_info.texCoordIndex);
-                // TODO texture transform
+                apply_texture(pbr_data.baseColorTexture.value(), create_info.texture_samplers.base_color);
             }
             if (pbr_data.metallicRoughnessTexture.has_value()) {
-                const fastgltf::TextureInfo& texture_info = pbr_data.metallicRoughnessTexture.value();
-                const fastgltf::Texture& texture = m_asset->textures[texture_info.textureIndex];
-                if (texture.imageIndex.has_value()) {
-                    create_info.textures.metallic_roughness = m_data_out.images[texture.imageIndex.value()];
-                }
-                if (texture.samplerIndex.has_value()) {
-                    create_info.samplers.metallic_roughness = m_data_out.samplers[texture.samplerIndex.value()];
-                }
-                create_info.tex_coords.metallic_roughness = static_cast<uint8_t>(texture_info.texCoordIndex);
+                apply_texture(pbr_data.metallicRoughnessTexture.value(), create_info.texture_samplers.metallic_roughness);
             }
             const std::unique_ptr<fastgltf::MaterialSpecularGlossiness>& specular_glossiness = material.specularGlossiness;
-            if (specular_glossiness) {
-                if (specular_glossiness->diffuseTexture.has_value()) {
-                    const fastgltf::TextureInfo& texture_info = specular_glossiness->diffuseTexture.value();
-                    const fastgltf::Texture& texture = m_asset->textures[texture_info.textureIndex];
-                    if (texture.imageIndex.has_value()) {
-                        create_info.textures.base_color = m_data_out.images[texture.imageIndex.value()];
-                    }
-                    if (texture.samplerIndex.has_value()) {
-                        create_info.samplers.base_color = m_data_out.samplers[texture.samplerIndex.value()];
-                    }
-                    ERHE_VERIFY(texture_info.texCoordIndex == 0);
-                    create_info.tex_coords.base_color = 0;
-                }
-                if (specular_glossiness->specularGlossinessTexture.has_value()) {
-                    log_gltf->warn("MaterialSpecularGlossiness specularGlossinessTexture is deprated and not supported");
-                }
+            if (specular_glossiness && specular_glossiness->diffuseTexture.has_value()) {
+                apply_texture(specular_glossiness->diffuseTexture.value(), create_info.texture_samplers.base_color);
             }
             create_info.base_color = glm::vec3{
                 pbr_data.baseColorFactor[0],
@@ -1400,6 +1348,7 @@ private:
         std::size_t                                     index_accessor;
         std::vector<std::size_t>                        attribute_accessors;
         std::shared_ptr<erhe::primitive::Triangle_soup> triangle_soup;
+        std::shared_ptr<erhe::primitive::Primitive>     primitive;
     };
     std::vector<Primitive_entry> m_primitive_entries;
 
@@ -1480,6 +1429,8 @@ private:
                 accessor.byteOffset
             );
         }
+
+        primitive_entry.primitive = std::make_shared<erhe::primitive::Primitive>(primitive_entry.triangle_soup);
     }
     auto get_primitive_geometry(const fastgltf::Primitive& primitive, Primitive_entry& primitive_entry)
     {
@@ -1504,6 +1455,7 @@ private:
         }
 
         load_new_primitive_geometry(primitive, primitive_entry);
+        m_primitive_entries.push_back(primitive_entry);
     }
 
     void parse_primitive(
@@ -1522,9 +1474,7 @@ private:
 
         Primitive_entry primitive_entry;
         get_primitive_geometry(primitive, primitive_entry);
-
-        auto new_primitive = std::make_shared<erhe::primitive::Primitive>(primitive_entry.triangle_soup);
-        erhe_mesh->add_primitive(new_primitive, erhe_material);
+        erhe_mesh->add_primitive(primitive_entry.primitive, erhe_material);
     }
     void parse_skin(const std::size_t skin_index)
     {
@@ -1561,13 +1511,6 @@ private:
                 }
             );
         }
-
-        //if (skin->skeleton != nullptr) {
-        //    const std::size_t skeleton_node_index = skin->skeleton - m_data->nodes;
-        //    erhe_skin->skin_data.skeleton = m_data_out.nodes.at(skeleton_node_index);
-        //} else {
-        //    erhe_skin->skin_data.skeleton.reset();;
-        //}
     }
     void parse_mesh(const std::size_t mesh_index)
     {

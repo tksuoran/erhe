@@ -270,7 +270,28 @@ auto Primitive_shape::make_geometry() -> bool
         ERHE_VERIFY(m_element_mappings.triangle_to_mesh_facet.empty());
         ERHE_VERIFY(m_element_mappings.mesh_corner_to_vertex_buffer_index.empty());
         m_geometry = std::make_shared<erhe::geometry::Geometry>();
-        mesh_from_triangle_soup(*m_triangle_soup.get(), m_geometry->get_mesh(), m_element_mappings);
+        GEO::Mesh& mesh = m_geometry->get_mesh();
+
+        mesh_from_triangle_soup(*m_triangle_soup.get(), mesh, m_element_mappings);
+        //mesh.vertices.set_double_precision();
+        //mesh.facets.connect();
+        //mesh.edges.create_edges(
+        //if (mesh.edges.nb() == 0) {
+        //    static int count_bad = 0;
+        //    ++count_bad; // breakpoint placeholder
+        //} else {
+        //    static int count_good = 0;
+        //    ++count_good; // breakpoint placeholder
+        //}
+        //mesh.vertices.set_single_precision();
+        //m_geometry->update_connectivity();
+        m_geometry->process(
+            erhe::geometry::Geometry::process_flag_connect                       |
+            erhe::geometry::Geometry::process_flag_build_edges                   |
+            erhe::geometry::Geometry::process_flag_compute_smooth_vertex_normals | 
+            erhe::geometry::Geometry::process_flag_compute_facet_centroids
+        );
+        // compute_mesh_tangents();
         return true;
     }
     return false;

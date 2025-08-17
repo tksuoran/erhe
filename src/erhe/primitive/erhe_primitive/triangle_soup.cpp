@@ -182,7 +182,7 @@ private:
         // Create points for each unique vertex
         GEO::index_t initial_point_count = m_vertex_positions.size();
         GEO::vector<GEO::index_t> old_to_new(initial_point_count, GEO::NO_INDEX);
-        const double tolerance = 0.001; // 1mm
+        const double tolerance = 0.00001; // 0.01mm if node has scale = 1.0, 1mm if node scale is 100.0
         const GEO::index_t point_count = GEO::Geom::colocate(
             m_vertex_positions.data()->data(),                    // const double* points,
             3,                                                    // coord_index_t dim,
@@ -223,59 +223,85 @@ private:
     }
     void parse_triangles()
     {
-        const std::size_t triangle_count = m_triangle_soup.index_data.size() / 3;
-        auto& corner_to_vertex = m_element_mappings.mesh_corner_to_vertex_buffer_index;
-        // Fill in one to one mapping
-        auto& primitive_to_facet = m_element_mappings.triangle_to_mesh_facet;
-        primitive_to_facet.resize(triangle_count);
-        std::iota(primitive_to_facet.begin(), primitive_to_facet.end(), 0);
-        m_mesh.facets.create_triangles(static_cast<GEO::index_t>(triangle_count));
-        m_index_from_corner.resize(m_mesh.facet_corners.nb());
-        corner_to_vertex.resize(m_mesh.facet_corners.nb());
-        for (GEO::index_t facet : m_mesh.facets) {
-            const uint32_t     i0 = m_triangle_soup.index_data[facet * 3 + 0];
-            const uint32_t     i1 = m_triangle_soup.index_data[facet * 3 + 1];
-            const uint32_t     i2 = m_triangle_soup.index_data[facet * 3 + 2];
+        // Count non-degenerate triangles
+        const std::size_t triangle_soup_triangle_count = m_triangle_soup.index_data.size() / 3;
+        std::size_t mesh_triangle_facet_count = 0;
+        for (size_t i = 0; i < triangle_soup_triangle_count; ++i) {
+            const uint32_t i0 = m_triangle_soup.index_data[i * 3 + 0];
+            const uint32_t i1 = m_triangle_soup.index_data[i * 3 + 1];
+            const uint32_t i2 = m_triangle_soup.index_data[i * 3 + 2];
             const GEO::index_t v0 = m_vertex_from_index.at(i0 - m_min_index);
             const GEO::index_t v1 = m_vertex_from_index.at(i1 - m_min_index);
             const GEO::index_t v2 = m_vertex_from_index.at(i2 - m_min_index);
-            const GEO::index_t c0 = m_mesh.facets.corner(facet, 0);
-            const GEO::index_t c1 = m_mesh.facets.corner(facet, 1);
-            const GEO::index_t c2 = m_mesh.facets.corner(facet, 2);
             ERHE_VERIFY(v0 != GEO::NO_INDEX);
             ERHE_VERIFY(v1 != GEO::NO_INDEX);
             ERHE_VERIFY(v2 != GEO::NO_INDEX);
-            ERHE_VERIFY(c0 != GEO::NO_INDEX);
-            ERHE_VERIFY(c1 != GEO::NO_INDEX);
-            ERHE_VERIFY(c2 != GEO::NO_INDEX);
+            if ((v0 == v1) || (v0 == v2) || (v1 == v2)) {
+                continue;
+            }
+            ++mesh_triangle_facet_count;
+        }
+
+        auto& corner_to_vertex = m_element_mappings.mesh_corner_to_vertex_buffer_index;
+
+        auto& primitive_to_facet = m_element_mappings.triangle_to_mesh_facet;
+        primitive_to_facet.resize(triangle_soup_triangle_count);
+
+        GEO::index_t facet = m_mesh.facets.create_triangles(static_cast<GEO::index_t>(mesh_triangle_facet_count));
+        m_index_from_corner.resize(m_mesh.facet_corners.nb());
+        corner_to_vertex.resize(m_mesh.facet_corners.nb());
+        for (size_t i = 0, end = m_triangle_soup.index_data.size() / 3; i < end; ++i) {
+            const uint32_t     i0 = m_triangle_soup.index_data[i * 3 + 0];
+            const uint32_t     i1 = m_triangle_soup.index_data[i * 3 + 1];
+            const uint32_t     i2 = m_triangle_soup.index_data[i * 3 + 2];
+            const GEO::index_t v0 = m_vertex_from_index.at(i0 - m_min_index);
+            const GEO::index_t v1 = m_vertex_from_index.at(i1 - m_min_index);
+            const GEO::index_t v2 = m_vertex_from_index.at(i2 - m_min_index);
+            ERHE_VERIFY(v0 != GEO::NO_INDEX);
+            ERHE_VERIFY(v1 != GEO::NO_INDEX);
+            ERHE_VERIFY(v2 != GEO::NO_INDEX);
+            if ((v0 == v1) || (v0 == v2) || (v1 == v2)) {
+                primitive_to_facet[i] = GEO::NO_INDEX;
+                continue;
+            }
+            primitive_to_facet[i] = facet;
             m_mesh.facets.set_vertex(facet, 0, v0);
             m_mesh.facets.set_vertex(facet, 1, v1);
             m_mesh.facets.set_vertex(facet, 2, v2);
+
+            const GEO::index_t c0 = m_mesh.facets.corner(facet, 0);
+            const GEO::index_t c1 = m_mesh.facets.corner(facet, 1);
+            const GEO::index_t c2 = m_mesh.facets.corner(facet, 2);
+            ERHE_VERIFY(c0 != GEO::NO_INDEX);
+            ERHE_VERIFY(c1 != GEO::NO_INDEX);
+            ERHE_VERIFY(c2 != GEO::NO_INDEX);
+
             m_index_from_corner[c0] = i0;
             m_index_from_corner[c1] = i1;
             m_index_from_corner[c2] = i2;
             corner_to_vertex   [c0] = i0;
             corner_to_vertex   [c1] = i1;
             corner_to_vertex   [c2] = i2;
+            ++facet;
         }
     }
     void parse_vertex_data()
     {
         ERHE_VERIFY(m_triangle_soup.vertex_format.streams.size() == 1);
         using namespace erhe::dataformat;
-        const Vertex_stream& vertex_stream = m_triangle_soup.vertex_format.streams.front();
-        const std::vector<Vertex_attribute>& attributes = vertex_stream.attributes;
-        //std::size_t vertex_stride = m_triangle_soup.vertex_format.stride();
-        std::size_t vertex_count = m_triangle_soup.vertex_data.size() / vertex_stream.stride;
+        const Vertex_stream&                 vertex_stream = m_triangle_soup.vertex_format.streams.front();
+        const std::vector<Vertex_attribute>& attributes    = vertex_stream.attributes;
+
+        std::size_t         vertex_count     = m_triangle_soup.vertex_data.size() / vertex_stream.stride;
         const std::uint8_t* vertex_data_base = m_triangle_soup.vertex_data.data();
         for (std::size_t attribute_index = 0, end = attributes.size(); attribute_index < end; ++attribute_index) {
-            const Vertex_attribute& attribute = attributes[attribute_index];
-            const std::uint8_t* attribute_data_base = vertex_data_base + attribute.offset;
+            const Vertex_attribute& attribute          = attributes[attribute_index];
+            const std::uint8_t*     attribute_data_base = vertex_data_base + attribute.offset;
 
             if (is_per_point(attribute.usage_type)) {
                 for (std::size_t vertex_index = 0; vertex_index < vertex_count; ++vertex_index) {
-                    const std::uint8_t* src = attribute_data_base + vertex_stream.stride * vertex_index;
-                    const GEO::index_t vertex = m_vertex_from_index.at(vertex_index - m_min_index);
+                    const std::uint8_t* src    = attribute_data_base + vertex_stream.stride * vertex_index;
+                    const GEO::index_t  vertex = m_vertex_from_index.at(vertex_index - m_min_index);
                     ERHE_VERIFY(vertex != GEO::NO_INDEX); // TODO Is this better or worse than using if condition below?
                     if (vertex == GEO::NO_INDEX) {
                         continue;
@@ -421,7 +447,7 @@ private:
     std::size_t               m_max_index            {0};
     std::vector<uint32_t>     m_used_indices         {};
     GEO::vector<GEO::vec3>    m_vertex_positions     {};
-    GEO::vector<GEO::index_t> m_vertex_from_index    {};
+    GEO::vector<GEO::index_t> m_vertex_from_index    {}; // GEO::Mesh vertex (point) from triangle soup vertex index
     GEO::index_t              m_corner_start         {};
     GEO::index_t              m_corner_end           {};
     std::vector<GEO::index_t> m_index_from_corner    {};
