@@ -69,8 +69,9 @@ void main() {
     float metallic;
     float roughness;
     if (metallic_roughness_texture.x != max_u32) {
-        metallic  = sample_texture(metallic_roughness_texture, v_texcoord).b;
-        roughness = sample_texture(metallic_roughness_texture, v_texcoord).g;
+        vec4 metallic_roughness = sample_texture(metallic_roughness_texture, v_texcoord);
+        metallic  = metallic_roughness.b;
+        roughness = metallic_roughness.g;
     } else {
         metallic  = material.metallic;
         roughness = material.roughness.x;

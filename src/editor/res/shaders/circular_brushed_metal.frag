@@ -106,9 +106,10 @@ void main() {
     float roughness_x;
     float roughness_y;
     if (metallic_roughness_texture.x != max_u32) {
-        metallic    = sample_texture(metallic_roughness_texture, v_texcoord).b;
-        roughness_x = sample_texture(metallic_roughness_texture, v_texcoord).g;
-        roughness_y = roughness_x;
+        vec4 metallic_roughness = sample_texture(metallic_roughness_texture, v_texcoord);
+        metallic    = metallic_roughness.b;
+        roughness_x = metallic_roughness.g;
+        roughness_y = metallic_roughness.g;
     } else {
         metallic    = material.metallic;
         float isotropic_roughness = 0.5 * material.roughness.x + 0.5 * material.roughness.y;

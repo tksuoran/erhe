@@ -5,8 +5,10 @@
 layout(location = 0) in vec2      v_texcoord;
 layout(location = 1) in vec4      v_position;
 layout(location = 2) in vec4      v_color;
-layout(location = 3) in mat3      v_TBN;
-layout(location = 6) in flat uint v_material_index;
+layout(location = 4) in vec3      v_T;
+layout(location = 5) in vec3      v_B;
+layout(location = 6) in vec3      v_N;
+layout(location = 7) in flat uint v_material_index;
 
 void main()
 {
@@ -14,14 +16,16 @@ void main()
         camera.cameras[0].world_from_node[3][0],
         camera.cameras[0].world_from_node[3][1],
         camera.cameras[0].world_from_node[3][2]
-    );
+    ); 
 
-    vec3  V = normalize(view_position_in_world - v_position.xyz);
-    vec3  T = normalize(v_TBN[0]);
-    vec3  B = normalize(v_TBN[1]);
-    vec3  N = normalize(v_TBN[2]);
+    vec3  V       = normalize(view_position_in_world - v_position.xyz);
+    vec3  T       = normalize(v_T);
+    vec3  B       = normalize(v_B);
+    vec3  N       = normalize(v_N);
+
 
     Material material = material.materials[v_material_index];
+
     uvec2 base_color_texture         = material.base_color_texture;
     uvec2 metallic_roughness_texture = material.metallic_roughness_texture;
     uvec2 normal_texture             = material.normal_texture;
@@ -33,9 +37,10 @@ void main()
     float roughness_x;
     float roughness_y;
     if (metallic_roughness_texture.x != max_u32) {
-        metallic    = sample_texture(metallic_roughness_texture, v_texcoord).b;
-        roughness_x = sample_texture(metallic_roughness_texture, v_texcoord).g;
-        roughness_y = roughness_x;
+        vec4 metallic_roughness = sample_texture(metallic_roughness_texture, v_texcoord);
+        metallic    = metallic_roughness.b;
+        roughness_x = metallic_roughness.g;
+        roughness_y = metallic_roughness.g;
     } else {
         metallic    = material.metallic;
         roughness_x = material.roughness.x;
@@ -48,23 +53,26 @@ void main()
         ntex      = normalize(ntex);
         N         = normalize(mat3(T, B, N) * ntex);
     }
-
+    
     float N_dot_V = clamped_dot(N, V);
 
-    uint  directional_light_count    = light_block.directional_light_count;
-    uint  spot_light_count           = light_block.spot_light_count;
-    uint  point_light_count          = light_block.point_light_count;
-    uint  directional_light_offset   = 0;
-    uint  spot_light_offset          = directional_light_count;
-    uint  point_light_offset         = spot_light_offset + spot_light_count;
+    uint directional_light_count  = light_block.directional_light_count;
+    uint spot_light_count         = light_block.spot_light_count;
+    uint point_light_count        = light_block.point_light_count;
+    uint directional_light_offset = 0;
+    uint spot_light_offset        = directional_light_count;
+    uint point_light_offset       = spot_light_offset + spot_light_count;
+
     vec3 color = vec3(0);
-    color += (0.5 + 0.5 * N.y) * light_block.ambient_light.rgb * base_color;
+    //color += (0.5 + 0.5 * N.y) * light_block.ambient_light.rgb * base_color;
+    color += light_block.ambient_light.rgb * base_color;
     color += material.emissive.rgb;
+
     for (uint i = 0; i < directional_light_count; ++i) {
         uint  light_index    = directional_light_offset + i;
         Light light          = light_block.lights[light_index];
         vec3  point_to_light = light.direction_and_outer_spot_cos.xyz;
-        vec3  L              = normalize(point_to_light);
+        vec3  L              = normalize(point_to_light);   // Direction from surface point to light
         float N_dot_L        = clamped_dot(N, L);
         if (N_dot_L > 0.0 || N_dot_V > 0.0) {
             vec3 intensity = light.radiance_and_range.rgb * sample_light_visibility(v_position, light_index, N_dot_L);

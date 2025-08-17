@@ -23,9 +23,6 @@ void main() {
     vec3  B       = normalize(v_B);
     vec3  N       = normalize(v_N);
 
-    mat3  TBN     = mat3(T, B, N);
-    mat3  TBN_t   = transpose(TBN);
-    float N_dot_V = clamped_dot(N, V);
 
     Material material = material.materials[v_material_index];
 
@@ -38,9 +35,10 @@ void main() {
 
     float metallic;
     float roughness;
-    if (normal_texture.x != max_u32) {
-        metallic  = sample_texture(normal_texture, v_texcoord).b;
-        roughness = sample_texture(normal_texture, v_texcoord).g;
+    if (metallic_roughness_texture.x != max_u32) {
+        vec4 metallic_roughness = sample_texture(metallic_roughness_texture, v_texcoord);
+        metallic  = metallic_roughness.b;
+        roughness = metallic_roughness.g;
     } else {
         metallic  = material.metallic;
         roughness = material.roughness.x;
@@ -52,6 +50,8 @@ void main() {
         ntex      = normalize(ntex);
         N         = normalize(mat3(T, B, N) * ntex);
     }
+    
+    float N_dot_V = clamped_dot(N, V);
 
     uint directional_light_count  = light_block.directional_light_count;
     uint spot_light_count         = light_block.spot_light_count;

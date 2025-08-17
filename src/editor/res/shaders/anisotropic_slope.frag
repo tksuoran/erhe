@@ -32,9 +32,10 @@ void main() {
     float roughness_x;
     float roughness_y;
     if (metallic_roughness_texture.x != max_u32) {
-        metallic    = sample_texture(metallic_roughness_texture, v_texcoord).b;
-        roughness_x = sample_texture(metallic_roughness_texture, v_texcoord).g;
-        roughness_y = roughness_x;
+        vec4 metallic_roughness = sample_texture(metallic_roughness_texture, v_texcoord);
+        metallic    = metallic_roughness.b;
+        roughness_x = metallic_roughness.g;
+        roughness_y = metallic_roughness.g;
     } else {
         metallic    = material.metallic;
         roughness_x = material.roughness.x;
@@ -95,7 +96,7 @@ void main() {
         if (N_dot_L > 0.0 || N_dot_V > 0.0) {
             float range_attenuation = get_range_attenuation(light.radiance_and_range.w, length(point_to_light));
             float spot_attenuation  = get_spot_attenuation(-point_to_light, light.direction_and_outer_spot_cos.xyz, light.direction_and_outer_spot_cos.w, light.position_and_inner_spot_cos.w);
-            float light_visibility  = 1.0; // TODO sample_light_visibility(v_position, light_index, N_dot_L);
+            float light_visibility  = sample_light_visibility(v_position, light_index, N_dot_L);
             vec3  intensity         = range_attenuation * spot_attenuation * light.radiance_and_range.rgb * light_visibility;
             color += intensity * slope_brdf(
                 base_color,
@@ -121,7 +122,7 @@ void main() {
         float N_dot_L        = clamped_dot(N, L);
         if (N_dot_L > 0.0 || N_dot_V > 0.0) {
             float range_attenuation = get_range_attenuation(light.radiance_and_range.w, length(point_to_light));
-            float light_visibility  = 1.0; // TODO sample_light_visibility(v_position, light_index, N_dot_L);
+            float light_visibility  = sample_light_visibility(v_position, light_index, N_dot_L);
             vec3  intensity         = range_attenuation * light.radiance_and_range.rgb * light_visibility;
             color += intensity * slope_brdf(
                 base_color,
