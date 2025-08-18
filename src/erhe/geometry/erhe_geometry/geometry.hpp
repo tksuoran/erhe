@@ -297,7 +297,7 @@ void transform_mesh(
 void compute_facet_normals                   (GEO::Mesh& mesh, Mesh_attributes& attributes);
 void compute_facet_centroids                 (GEO::Mesh& mesh, Mesh_attributes& attributes);
 void compute_mesh_vertex_normal_smooth       (GEO::Mesh& mesh, Mesh_attributes& attributes);
-auto compute_mesh_tangents                   (GEO::Mesh& mesh, bool make_facets_flat) -> bool;
+auto compute_mesh_tangents                   (GEO::Mesh& mesh, bool orthonormalize, bool make_facets_flat) -> bool;
 void generate_mesh_facet_texture_coordinates (GEO::Mesh& mesh, GEO::index_t facet, Mesh_attributes& attributes);
 void generate_mesh_facet_texture_coordinates (GEO::Mesh& mesh, Mesh_attributes& attributes);
 
@@ -712,6 +712,8 @@ public:
     static constexpr uint64_t process_flag_generate_facet_texture_coordinates = (1u << 4u);
     static constexpr uint64_t process_flag_debug_trace                        = (1u << 5u);
     static constexpr uint64_t process_flag_merge_coplanar_neighbors           = (1u << 6u);
+    static constexpr uint64_t process_flag_generate_tangents                  = (1u << 7u);
+    static constexpr uint64_t process_flag_generate_tangents_ortho            = (1u << 8u);
 
     void process(uint64_t flags);
     void generate_mesh_facet_texture_coordinates();

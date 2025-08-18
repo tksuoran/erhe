@@ -1090,6 +1090,12 @@ void Geometry::process(const uint64_t flags)
     if (flags & process_flag_generate_facet_texture_coordinates) {
         generate_mesh_facet_texture_coordinates();
     }
+    if (flags & process_flag_generate_tangents_ortho) {
+        compute_mesh_tangents(m_mesh, true, false);
+    } else
+    if (flags & process_flag_generate_tangents) {
+        compute_mesh_tangents(m_mesh, false, false);
+    }
     if (flags & process_flag_debug_trace) {
         debug_trace();
     }

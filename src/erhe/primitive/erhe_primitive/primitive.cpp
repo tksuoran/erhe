@@ -276,7 +276,7 @@ auto Primitive_shape::make_geometry() -> bool
 
         const erhe::dataformat::Attribute_stream tangent_stream = m_triangle_soup->vertex_format.find_attribute(erhe::dataformat::Vertex_attribute_usage::tangent);
         if (tangent_stream.attribute == nullptr) {
-            compute_mesh_tangents(mesh, false);
+            compute_mesh_tangents(mesh, false, false);
         }
         //mesh.vertices.set_double_precision();
         //mesh.facets.connect();

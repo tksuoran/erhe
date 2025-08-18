@@ -46,10 +46,11 @@ auto Vertex_stream::find_attribute(Vertex_attribute_usage usage_type, std::size_
     return nullptr;
 }
 
-void Vertex_stream::emplace_back(erhe::dataformat::Format format, Vertex_attribute_usage usage_type, std::size_t usage_index)
+auto Vertex_stream::emplace_back(erhe::dataformat::Format format, Vertex_attribute_usage usage_type, std::size_t usage_index) -> Vertex_attribute&
 {
-    attributes.emplace_back(format, usage_type, usage_index, stride);
+    Vertex_attribute& result = attributes.emplace_back(format, usage_type, usage_index, stride);
     stride += get_format_size(format);
+    return result;
 }
 
 Vertex_format::Vertex_format()

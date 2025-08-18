@@ -98,6 +98,7 @@ void main() {
         v_aniso_control.y
     ) * v_aniso_control.x;
     // Mix tangent space geometric .. texcoord generated
+    // Note: T and B are brushed metal computed, not generic shading.
     vec3  T                   = circular_anisotropy_magnitude > 0.0 ? mix(T0, T_circular.x * T0 + T_circular.y * B0, v_aniso_control.y) : T0;
     vec3  B                   = circular_anisotropy_magnitude > 0.0 ? mix(B0, T_circular.y * T0 - T_circular.x * B0, v_aniso_control.y) : B0;
     float isotropic_roughness = 0.5 * material.roughness.x + 0.5 * material.roughness.y;
@@ -133,7 +134,7 @@ void main() {
     }
 #endif
 #if defined(ERHE_DEBUG_TANGENT)
-    out_color.rgb = vec3(0.5) + 0.5 * T0;
+    out_color.rgb = srgb_to_linear(vec3(0.5) + 0.5 * T0);
 #endif
 #if defined(ERHE_DEBUG_BITANGENT)
     {

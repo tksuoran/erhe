@@ -38,6 +38,8 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
+#include "mikktspace/mikktspace.hpp"
+
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
@@ -1389,12 +1391,16 @@ private:
         // Gather attributes
         std::size_t vertex_count = std::numeric_limits<std::size_t>::max();
         triangle_soup.vertex_format.streams.emplace_back(0);
+        bool generate_tangents = true;
         for (std::size_t i = 0, end = primitive.attributes.size(); i < end; ++i) {
             const fastgltf::Attribute&                     gltf_attribute        = primitive.attributes[i];
             const erhe::dataformat::Vertex_attribute_usage attribute_usage_type  = to_erhe(gltf_attribute.name);
             const std::size_t                              attribute_usage_index = get_attribute_index(gltf_attribute.name);
             const fastgltf::Accessor&                      accessor              = m_asset->accessors[gltf_attribute.accessorIndex];
             const erhe::dataformat::Format                 format                = to_erhe_attribute(accessor);
+            if (attribute_usage_type == erhe::dataformat::Vertex_attribute_usage::tangent) {
+                generate_tangents = false;
+            }
             vertex_count = std::min(accessor.count, vertex_count);
             triangle_soup.vertex_format.streams.front().emplace_back(
                 format,
@@ -1402,7 +1408,15 @@ private:
                 attribute_usage_index
             );
         }
+        if (generate_tangents) {
+            triangle_soup.vertex_format.streams.front().emplace_back(
+                erhe::dataformat::Format::format_32_vec4_float,
+                erhe::dataformat::Vertex_attribute_usage::tangent,
+                0
+            );
+        }
         std::size_t vertex_stride = triangle_soup.vertex_format.streams.front().stride;
+
         ERHE_VERIFY(triangle_soup.vertex_format.streams.size() == 1);
         triangle_soup.vertex_data.resize(vertex_count * vertex_stride);
         const std::vector<erhe::dataformat::Attribute_stream> erhe_attributes = triangle_soup.vertex_format.get_attributes();
@@ -1437,6 +1451,109 @@ private:
                 accessor.count,
                 accessor.byteOffset
             );
+        }
+
+        if (generate_tangents) {
+            log_gltf->info("generating tangents using mikktspace");
+            // Generate tangents with mikktspace
+            using namespace erhe::dataformat;
+            const Attribute_stream position_attribute_ = triangle_soup.vertex_format.find_attribute(Vertex_attribute_usage::position);
+            const Attribute_stream normal_attribute_   = triangle_soup.vertex_format.find_attribute(Vertex_attribute_usage::normal);
+            const Attribute_stream texcoord_attribute_ = triangle_soup.vertex_format.find_attribute(Vertex_attribute_usage::tex_coord);
+            const Attribute_stream tangent_attribute_  = triangle_soup.vertex_format.find_attribute(Vertex_attribute_usage::tangent);
+
+            uint8_t* vertex_data = triangle_soup.vertex_data.data();
+            class Tangent_generation_context
+            {
+            public:
+                std::span<uint32_t> indices;
+                std::size_t         vertex_count; // = m_triangle_soup.vertex_data.size() / vertex_stream.stride;
+                std::size_t         stride; // = m_triangle_soup.vertex_data.size() / vertex_stream.stride;
+                const std::uint8_t* position_data;
+                const std::uint8_t* normal_data;
+                const std::uint8_t* texcoord_data;
+                std::uint8_t*       tangent_data;
+                Format              position_format;
+                Format              normal_format;
+                Format              texcoord_format;
+                Format              tangent_format;
+            };
+            Tangent_generation_context context{
+                .indices         = std::span<uint32_t>{triangle_soup.index_data.data(), triangle_soup.index_data.size()},
+                .vertex_count    = vertex_count,
+                .stride          = position_attribute_.stream->stride,
+                .position_data   = vertex_data + position_attribute_.attribute->offset,
+                .normal_data     = vertex_data + normal_attribute_  .attribute->offset,
+                .texcoord_data   = vertex_data + texcoord_attribute_.attribute->offset,
+                .tangent_data    = vertex_data + tangent_attribute_ .attribute->offset,
+                .position_format = position_attribute_.attribute->format,
+                .normal_format   = normal_attribute_  .attribute->format,
+                .texcoord_format = texcoord_attribute_.attribute->format,
+                .tangent_format  = tangent_attribute_ .attribute->format
+            };
+            SMikkTSpaceInterface mikktspace{
+                .m_getNumFaces = [](const SMikkTSpaceContext* mikk_tspace_context) -> int {
+                    Tangent_generation_context* context = static_cast<Tangent_generation_context*>(mikk_tspace_context->m_pUserData);
+                    return static_cast<int>(context->indices.size() / 3);
+                },
+                .m_getNumVerticesOfFace = [](const SMikkTSpaceContext*, int32_t) -> int {
+                    return 3;
+                },
+                .m_getPosition = [](const SMikkTSpaceContext* mikk_tspace_context, float posOut[], int32_t face, int32_t vert) {
+                    Tangent_generation_context* context = static_cast<Tangent_generation_context*>(mikk_tspace_context->m_pUserData);
+                    float value[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+                    const uint32_t v = context->indices[face * 3 + vert];
+                    const std::uint8_t* src = reinterpret_cast<const std::uint8_t*>(context->position_data + context->stride * v);
+                    convert(src, context->position_format, &value[0], Format::format_32_vec4_float, 1.0f);
+                    posOut[0] = value[0];
+                    posOut[1] = value[1];
+                    posOut[2] = value[2];
+                },
+                .m_getNormal = [](const SMikkTSpaceContext* mikk_tspace_context, float normOut[], int32_t face, int32_t vert) {
+                    Tangent_generation_context* context = static_cast<Tangent_generation_context*>(mikk_tspace_context->m_pUserData);
+                    float value[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+                    const uint32_t v = context->indices[face * 3 + vert];
+                    const std::uint8_t* src = reinterpret_cast<const std::uint8_t*>(context->normal_data + context->stride * v);
+                    convert(src, context->normal_format, &value[0], Format::format_32_vec4_float, 1.0f);
+                    normOut[0] = value[0];
+                    normOut[1] = value[1];
+                    normOut[2] = value[2];
+                },
+                .m_getTexCoord = [](const SMikkTSpaceContext* mikk_tspace_context, float texcOut[], int32_t face, int32_t vert) {
+                    Tangent_generation_context* context = static_cast<Tangent_generation_context*>(mikk_tspace_context->m_pUserData);
+                    float value[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+                    const uint32_t v = context->indices[face * 3 + vert];
+                    const std::uint8_t* src = reinterpret_cast<const std::uint8_t*>(context->texcoord_data + context->stride * v);
+                    convert(src, context->texcoord_format, &value[0], Format::format_32_vec4_float, 1.0f);
+                    texcOut[0] = value[0];
+                    texcOut[1] = value[1];
+                },
+                .m_setTSpaceBasic = nullptr,
+                .m_setTSpace = [](
+                    const SMikkTSpaceContext* mikk_tspace_context,
+                    const float               tangent[],
+                    const float               /*bitangent*/[],
+                    const float               /*mag_s*/,
+                    const float               /*mag_t*/,
+                    const tbool               is_orientation_preserving,
+                    const int                 face,
+                    const int                 vert
+                ) {
+                    Tangent_generation_context* context = static_cast<Tangent_generation_context*>(mikk_tspace_context->m_pUserData);
+                    float src[4] = { tangent[0], tangent[1], tangent[2], is_orientation_preserving ? 1.0f : -1.0f };
+                    const uint32_t v = context->indices[face * 3 + vert];
+                    std::uint8_t* dst = reinterpret_cast<std::uint8_t*>(context->tangent_data + context->stride * v);
+                    convert(src, Format::format_32_vec4_float, dst, context->tangent_format, 1.0f);
+                }
+            };
+            const SMikkTSpaceContext mikk_tspace_context {
+                .m_pInterface = &mikktspace,
+                .m_pUserData  = &context
+            };
+            const tbool res = genTangSpaceDefault(&mikk_tspace_context);
+            if (res == 0) {
+                log_gltf->warn("genTangSpaceDefault() failed");
+            }
         }
 
         primitive_entry.primitive = std::make_shared<erhe::primitive::Primitive>(primitive_entry.triangle_soup);

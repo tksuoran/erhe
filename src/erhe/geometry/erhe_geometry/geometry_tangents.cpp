@@ -2,9 +2,14 @@
 
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_geometry/geometry_log.hpp"
+#include "erhe_verify/verify.hpp"
 #include "mikktspace/mikktspace.hpp"
 
-auto compute_mesh_tangents(GEO::Mesh& mesh, const bool make_facets_flat) -> bool
+auto compute_mesh_tangents(
+    GEO::Mesh& mesh,
+    const bool orthonormalize, 
+    const bool make_facets_flat
+) -> bool
 {
     // compute_polygon_normals
     // compute_polygon_centroids
@@ -14,71 +19,66 @@ auto compute_mesh_tangents(GEO::Mesh& mesh, const bool make_facets_flat) -> bool
     class Mesh_context
     {
     public:
-        explicit Mesh_context(GEO::Mesh& mesh)
-            : mesh      {mesh}
-            , attributes{mesh}
+        explicit Mesh_context(GEO::Mesh& mesh, const bool orthonormalize)
+            : mesh          {mesh}
+            , attributes    {mesh}
+            , orthonormalize{orthonormalize}
         {
         }
 
         GEO::Mesh&      mesh;
         Mesh_attributes attributes;
-        int             triangle_count     {0};
+        bool            orthonormalize     {false};
+        int             face_count         {0};
         bool            override_existing  {false};
         int             tangent_error_count{0};
 
         // Polygons are triangulated.
-        class Triangle
+        class Face
         {
         public:
-            GEO::index_t facet;
-            GEO::index_t triangle_index;
+            GEO::index_t geo_facet;
+            GEO::index_t virtual_triangle_offset;
         };
 
-        [[nodiscard]] auto get_triangle(const int iFace) -> Triangle&
+        std::vector<Face> faces;
+
+        [[nodiscard]] auto get_face(const int iFace) -> Face&
         {
-            assert(iFace < triangles.size());
-            return triangles[iFace];
+            return faces.at(iFace);
         }
 
-        [[nodiscard]] auto get_triangle(const int iFace) const -> const Triangle&
+        [[nodiscard]] auto get_face(const int iFace) const -> const Face&
         {
-            assert(iFace < triangles.size());
-            return triangles[iFace];
+            return faces.at(iFace);
         }
 
         [[nodiscard]] auto get_facet(const int iFace) const -> GEO::index_t
         {
-            assert(iFace < triangles.size());
-            return get_triangle(iFace).facet;
-        }
-
-        [[nodiscard]] auto get_corner_triangulated(const int iFace, const int iVert) const -> GEO::index_t
-        {
-            assert(iVert > 0); // This only works for triangulated polygons, N > 3
-            const auto&        triangle      = get_triangle(iFace);
-            const GEO::index_t facet         = get_facet(iFace);
-            const GEO::index_t corner_count  = mesh.facets.nb_corners(facet);
-            assert(corner_count > 0);
-            const uint32_t     corner_offset = (iVert - 1 + triangle.triangle_index) % corner_count;
-            const GEO::index_t corner        = mesh.facets.corner(facet, corner_offset);
-            return corner;
-        }
-
-        [[nodiscard]] auto get_corner_direct(const int iFace, const int iVert) const -> GEO::index_t
-        {
-            assert(iVert < 3); // This only works for triangles
-            const GEO::index_t facet  = get_facet(iFace);
-            const GEO::index_t corner = mesh.facets.corner(facet, iVert);
-            return corner;
+            return get_face(iFace).geo_facet;
         }
 
         [[nodiscard]] auto get_corner(const int iFace, const int iVert) const -> GEO::index_t
         {
-            const GEO::index_t facet  = get_facet(iFace);
-            const GEO::index_t corner_count  = mesh.facets.nb_corners(facet);
-            return (corner_count == 3)
-                ? get_corner_direct(iFace, iVert)
-                : get_corner_triangulated(iFace, iVert);
+            const Face& face = get_face(iFace);
+            if (face.virtual_triangle_offset == GEO::NO_INDEX) {
+                return mesh.facets.corner(face.geo_facet, iVert);
+            }
+            ERHE_VERIFY(iVert > 0);
+            //     0________1
+            //     /\1    2/\
+            //    /2 \    / 1\
+            //   /    \  /    \
+            // 5/1_____\/_____2\2
+            //  \2     /\     1/
+            //   \    /  \    /
+            //    \1 /    \ 2/
+            //     \/2____1\/
+            //     4        3
+            const GEO::index_t corner_count  = mesh.facets.nb_corners(face.geo_facet);
+            const uint32_t     corner_offset = (iVert - 1 + face.virtual_triangle_offset) % corner_count;
+            const GEO::index_t corner        = mesh.facets.corner(face.geo_facet, corner_offset);
+            return corner;
         }
 
         [[nodiscard]] auto get_vertex(const int iFace, const int iVert) const -> GEO::index_t
@@ -102,74 +102,75 @@ auto compute_mesh_tangents(GEO::Mesh& mesh, const bool make_facets_flat) -> bool
 
         [[nodiscard]] auto get_normal(const int iFace, const int iVert) const -> GEO::vec3f
         {
-            static_cast<void>(iVert);
-            const GEO::index_t facet  = get_facet(iFace);
-            const GEO::vec3f   normal = mesh_facet_normalf(mesh, facet);
-            return normal;
-#if 0
             if (iVert == 0) {
-                const vec3 normal = polygon_normals->get(polygon_id);
-                return normal;
+                const GEO::index_t facet        = get_facet(iFace);
+                const GEO::vec3f   facet_normal = mesh_facet_normalf(mesh, facet);
+                return facet_normal;
             }
-            const Corner_id corner_id = get_corner_id(iFace, iVert);
-            const Point_id  point_id  = get_point_id (iFace, iVert);
-            if ((corner_normals != nullptr) && corner_normals->has(corner_id)) {
-                const vec3 normal = corner_normals->get(corner_id);
-                return normal;
-            } else if ((point_normals != nullptr) && point_normals->has(point_id)) {
-                const vec3 normal = point_normals->get(point_id);
-                return normal;
-            } else if ((point_normals_smooth != nullptr) && point_normals_smooth->has(point_id)) {
-                const vec3 normal = point_normals_smooth->get(point_id);
-                return normal;
-            } else if ((polygon_normals != nullptr) && polygon_normals->has(polygon_id)) {
-                const vec3 normal = polygon_normals->get(polygon_id);
-                return normal;
+
+            const GEO::index_t              corner          = get_corner(iFace, iVert);
+            const std::optional<GEO::vec3f> corner_normal_0 = attributes.corner_normal.try_get(corner);
+            if (corner_normal_0.has_value()) {
+                return corner_normal_0.value();
             }
-            ERHE_FATAL("No normal source");
-            // unreachable return vec3{0.0f, 1.0f, 0.0f};
-#endif
+
+            const GEO::index_t              vertex        = get_vertex(iFace, iVert);
+            const std::optional<GEO::vec3f> vertex_normal = attributes.vertex_normal.try_get(vertex);
+            if (vertex_normal.has_value()) {
+                return vertex_normal.value();
+            }
+
+            // Degenerate
+            const GEO::index_t facet        = get_facet(iFace);
+            const GEO::vec3f   facet_normal = mesh_facet_normalf(mesh, facet);
+            return facet_normal;
         }
 
         [[nodiscard]] auto get_texcoord(const int iFace, const int iVert) const -> GEO::vec2f
         {
-            if (iVert == 0) {
+            auto get_facet_average_texcoord = [this, iFace]() -> GEO::vec2f {
                 // Calculate and return average texture coordinate from all polygon vertices
-                GEO::vec2f texcoord_sum{0.0f, 0.0f};
-                const GEO::index_t facet = get_facet(iFace);
-                const GEO::index_t corner_count = mesh.facets.nb_corners(facet);
+                GEO::vec2f   texcoord_sum{0.0f, 0.0f};
+                GEO::index_t corner_count = 0;
+                const GEO::index_t facet        = get_facet(iFace);
                 for (GEO::index_t corner : mesh.facets.corners(facet)) {
                     const std::optional<GEO::vec2f> corner_texcoord_0 = attributes.corner_texcoord_0.try_get(corner);
                     if (corner_texcoord_0.has_value()) {
                         texcoord_sum += corner_texcoord_0.value();
+                        ++corner_count;
                     } else {
                         const GEO::index_t vertex = mesh.facet_corners.vertex(corner);
                         const std::optional<GEO::vec2f> vertex_texcoord_0 = attributes.vertex_texcoord_0.try_get(vertex);
                         if (vertex_texcoord_0.has_value()) {
                             texcoord_sum += vertex_texcoord_0.value();
-                        } else {
-                            return GEO::vec2f{0.0f, 0.0f}; // If we get here, facet is likely degenerate
+                            ++corner_count;
                         }
                     }
                 }
-                const GEO::vec2f average_texcoord = texcoord_sum / static_cast<float>(corner_count);
-                return average_texcoord;
+                if (corner_count > 0) {
+                    const GEO::vec2f average_texcoord = texcoord_sum / static_cast<float>(corner_count);
+                    return average_texcoord;
+                } else {
+                    return GEO::vec2f{0.0f, 0.0f};
+                }
+            };
+            if (iVert == 0) {
+                return get_facet_average_texcoord();
             }
 
-            const GEO::index_t corner = get_corner(iFace, iVert);
+            const GEO::index_t              corner            = get_corner(iFace, iVert);
             const std::optional<GEO::vec2f> corner_texcoord_0 = attributes.corner_texcoord_0.try_get(corner);
             if (corner_texcoord_0.has_value()) {
                 return corner_texcoord_0.value();
             }
 
-            const GEO::index_t vertex = get_vertex(iFace, iVert);
+            const GEO::index_t              vertex            = get_vertex(iFace, iVert);
             const std::optional<GEO::vec2f> vertex_texcoord_0 = attributes.vertex_texcoord_0.try_get(vertex);
             if (vertex_texcoord_0.has_value()) {
                 return vertex_texcoord_0.value();
             }
 
-            // degenerate polygon;
-            return GEO::vec2f{0.0f, 0.0f};
+            return get_facet_average_texcoord();
         }
 
         void set_tangent(
@@ -181,7 +182,7 @@ auto compute_mesh_tangents(GEO::Mesh& mesh, const bool make_facets_flat) -> bool
         {
             const GEO::index_t facet        = get_facet(iFace);
             const GEO::index_t corner_count = mesh.facets.nb_corners(facet);
-            if ((corner_count > 3) && (iVert == 0)) {
+            if ((corner_count > 4) && (iVert == 0)) {
                 return; // The center iVert is virtual, does not exist in Mesh
             }
             const GEO::index_t corner   = get_corner(iFace, iVert);
@@ -193,53 +194,67 @@ auto compute_mesh_tangents(GEO::Mesh& mesh, const bool make_facets_flat) -> bool
         void set_bitangent(
             const int        iFace,
             const int        iVert,
-            const GEO::vec3f bitangent,
-            const float      sign
+            const GEO::vec3f bitangent
         )
         {
             const GEO::index_t facet        = get_facet(iFace);
             const GEO::index_t corner_count = mesh.facets.nb_corners(facet);
-            if ((corner_count > 3) && (iVert == 0)) {
+            if ((corner_count > 4) && (iVert == 0)) {
                 return; // The center iVert is virtual, does not exist in Mesh
             }
             const GEO::index_t corner = get_corner(iFace, iVert);
             attributes.facet_bitangent .set(facet,  bitangent);
             attributes.corner_bitangent.set(corner, bitangent);
-            static_cast<void>(sign);
         }
-
-        std::vector<Triangle> triangles;
     };
 
-    Mesh_context mesh_context{mesh};
+    Mesh_context mesh_context{mesh, orthonormalize};
 
     // MikkTSpace can only handle triangles or quads.
-    // We triangulate all non-triangles by adding a virtual polygon centroid
+    // We triangulate face with more corners than 4 by adding a virtual polygon centroid
     // and presenting N virtual triangles to MikkTSpace.
-    int               virtual_face_index = 0;
-    const std::size_t triangle_count     = count_mesh_facet_triangles(mesh);
-    mesh_context.triangle_count = static_cast<int>(triangle_count);
-    mesh_context.triangles.resize(triangle_count);
+    int         virtual_face_index = 0;
+    std::size_t face_count = 0;
+    for (GEO::index_t facet : mesh.facets) {
+        GEO::index_t corner_count = mesh.facets.nb_vertices(facet);
+        if (corner_count < 3) {
+            continue;
+        }
+        if ((corner_count == 3) || (corner_count == 4)) {
+            ++face_count;
+            continue;
+        }
+        face_count += static_cast<std::size_t>(corner_count);
+    }
+
+    mesh_context.face_count = static_cast<int>(face_count);
+    mesh_context.faces.resize(face_count);
     for (GEO::index_t facet : mesh.facets) {
         const GEO::index_t corner_count = mesh.facets.nb_corners(facet);
         if (corner_count < 3) {
             continue;
         }
-        for (GEO::index_t i = 0; i < corner_count - 2; ++i) {
-            mesh_context.triangles[virtual_face_index++] = {facet, i};
+        if ((corner_count == 3) || (corner_count == 4)) {
+            mesh_context.faces[virtual_face_index++] = {facet, GEO::NO_INDEX};
+            continue;
+        }
+        for (GEO::index_t i = 0; i < corner_count; ++i) {
+            mesh_context.faces[virtual_face_index++] = {facet, i};
         }
     }
 
     SMikkTSpaceInterface mikktspace{
-        .m_getNumFaces = [](const SMikkTSpaceContext* pContext) {
+        .m_getNumFaces = [](const SMikkTSpaceContext* pContext) -> int {
             const auto* context   = static_cast<Mesh_context*>(pContext->m_pUserData);
-            const int   num_faces = context->triangle_count;
+            const int   num_faces = context->face_count;
             return num_faces;
         },
 
-        .m_getNumVerticesOfFace = [](const SMikkTSpaceContext*, int32_t) {
-            const int num_vertices_of_face = 3;
-            return num_vertices_of_face;
+        .m_getNumVerticesOfFace = [](const SMikkTSpaceContext* pContext, int32_t iFace) -> int {
+            Mesh_context*      context      = static_cast<Mesh_context*>(pContext->m_pUserData);
+            const GEO::index_t facet        = context->get_facet(iFace);
+            const GEO::index_t corner_count = context->mesh.facets.nb_corners(facet);
+            return static_cast<int>((corner_count <= 4) ? corner_count : 3);
         },
 
         .m_getPosition = [](
@@ -302,32 +317,39 @@ auto compute_mesh_tangents(GEO::Mesh& mesh, const bool make_facets_flat) -> bool
             Mesh_context*      context      = static_cast<Mesh_context*>(pContext->m_pUserData);
             const GEO::index_t facet        = context->get_facet(iFace);
             const GEO::index_t corner_count = context->mesh.facets.nb_corners(facet);
-            if ((corner_count > 3) && (iVert == 0)) {
+            if ((corner_count > 4) && (iVert == 0)) {
                 return;
             }
 
-            const GEO::index_t corner = context->get_corner  (iFace, iVert); static_cast<void>(corner);
-            const GEO::vec3f   P      = context->get_position(iFace, iVert); static_cast<void>(P);
-            const GEO::vec3f   N      = context->get_normal  (iFace, iVert);
-            const GEO::vec3f   N_a    = context->get_normal  (iFace, 0); static_cast<void>(N_a);
-            const GEO::vec3f   N_b    = context->get_normal  (iFace, 1); static_cast<void>(N_b);
-            const GEO::vec3f   N_c    = context->get_normal  (iFace, 2); static_cast<void>(N_c);
-            const GEO::vec3f   T0     = GEO::vec3f{fvTangent  [0], fvTangent  [1], fvTangent  [2]};
-            const GEO::vec3f   B0     = GEO::vec3f{fvBiTangent[0], fvBiTangent[1], fvBiTangent[2]};
-            const float N_dot_T0 = GEO::dot(N, T0);
-            const float N_dot_B0 = GEO::dot(N, B0);
-            if (
-                (std::abs(N_dot_T0) > 0.01f) ||
-                (std::abs(N_dot_B0) > 0.01f)
-            ) {
-                ++context->tangent_error_count;
+            if (context->orthonormalize) {
+                const GEO::index_t corner = context->get_corner  (iFace, iVert); static_cast<void>(corner);
+                const GEO::vec3f   P      = context->get_position(iFace, iVert); static_cast<void>(P);
+                const GEO::vec3f   N      = context->get_normal  (iFace, iVert);
+                const GEO::vec3f   N_a    = context->get_normal  (iFace, 0); static_cast<void>(N_a);
+                const GEO::vec3f   N_b    = context->get_normal  (iFace, 1); static_cast<void>(N_b);
+                const GEO::vec3f   N_c    = context->get_normal  (iFace, 2); static_cast<void>(N_c);
+                const GEO::vec3f   T0     = GEO::vec3f{fvTangent  [0], fvTangent  [1], fvTangent  [2]};
+                const GEO::vec3f   B0     = GEO::vec3f{fvBiTangent[0], fvBiTangent[1], fvBiTangent[2]};
+                const float N_dot_T0 = GEO::dot(N, T0);
+                const float N_dot_B0 = GEO::dot(N, B0);
+                if (
+                    (std::abs(N_dot_T0) > 0.01f) ||
+                    (std::abs(N_dot_B0) > 0.01f)
+                ) {
+                    ++context->tangent_error_count;
+                }
+                const GEO::vec3f T   = GEO::normalize(T0 - N_dot_T0 * N);
+                const float      t_w = (GEO::dot(GEO::cross(N, T0), B0) < 0.0f) ? -1.0f : 1.0f;
+                const GEO::vec3f B   = GEO::normalize(B0 - N_dot_B0 * N);
+                //const float      b_w = (GEO::dot(GEO::cross(B0, N), T0) < 0.0f) ? -1.0f : 1.0f;
+                context->set_tangent  (iFace, iVert, T, t_w);
+                context->set_bitangent(iFace, iVert, B);
+            } else {
+                const GEO::vec3f T = GEO::vec3f{fvTangent  [0], fvTangent  [1], fvTangent  [2]};
+                const GEO::vec3f B = GEO::vec3f{fvBiTangent[0], fvBiTangent[1], fvBiTangent[2]};
+                context->set_tangent  (iFace, iVert, T, bIsOrientationPreserving ? 1.0f : -1.0f);
+                context->set_bitangent(iFace, iVert, B);
             }
-            const GEO::vec3f T   = GEO::normalize(T0 - N_dot_T0 * N);
-            const float      t_w = (GEO::dot(GEO::cross(N, T0), B0) < 0.0f) ? -1.0f : 1.0f;
-            const GEO::vec3f B   = GEO::normalize(B0 - N_dot_B0 * N);
-            const float      b_w = (GEO::dot(GEO::cross(B0, N), T0) < 0.0f) ? -1.0f : 1.0f;
-            context->set_tangent  (iFace, iVert, T, t_w);
-            context->set_bitangent(iFace, iVert, B, b_w);
         }
     };
 

@@ -20,6 +20,8 @@ erhe_target_sources_grouped(
     erhe_geometry/operation/difference.hpp
     erhe_geometry/operation/dual.cpp
     erhe_geometry/operation/dual.hpp
+    erhe_geometry/operation/generate_tangents.cpp
+    erhe_geometry/operation/generate_tangents.hpp
     erhe_geometry/operation/geometry_operation.cpp
     erhe_geometry/operation/geometry_operation.hpp
     erhe_geometry/operation/gyro.cpp

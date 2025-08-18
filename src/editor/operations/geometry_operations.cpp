@@ -9,20 +9,21 @@
 #include "erhe_geometry/operation/bake_transform.hpp"
 #include "erhe_geometry/operation/catmull_clark_subdivision.hpp"
 #include "erhe_geometry/operation/chamfer.hpp"
+#include "erhe_geometry/operation/difference.hpp"
 #include "erhe_geometry/operation/dual.hpp"
+#include "erhe_geometry/operation/generate_tangents.hpp"
 #include "erhe_geometry/operation/gyro.hpp"
+#include "erhe_geometry/operation/intersection.hpp"
 #include "erhe_geometry/operation/join.hpp"
 #include "erhe_geometry/operation/kis.hpp"
 #include "erhe_geometry/operation/meta.hpp"
 #include "erhe_geometry/operation/normalize.hpp"
+#include "erhe_geometry/operation/repair.hpp"
 #include "erhe_geometry/operation/reverse.hpp"
 #include "erhe_geometry/operation/sqrt3_subdivision.hpp"
 #include "erhe_geometry/operation/subdivide.hpp"
 #include "erhe_geometry/operation/triangulate.hpp"
 #include "erhe_geometry/operation/truncate.hpp"
-#include "erhe_geometry/operation/repair.hpp"
-#include "erhe_geometry/operation/difference.hpp"
-#include "erhe_geometry/operation/intersection.hpp"
 #include "erhe_geometry/operation/union.hpp"
 #include "erhe_scene/scene.hpp"
 
@@ -182,6 +183,17 @@ Normalize_operation::Normalize_operation(Mesh_operation_parameters&& context)
     : Mesh_operation{std::move(context)}
 {
     make_entries(erhe::geometry::operation::normalize);
+}
+
+auto Generate_tangents_operation::describe() const -> std::string
+{
+    return fmt::format("Generate tangents {}", Mesh_operation::describe());
+}
+
+Generate_tangents_operation::Generate_tangents_operation(Mesh_operation_parameters&& context)
+    : Mesh_operation{std::move(context)}
+{
+    make_entries(erhe::geometry::operation::generate_tangents);
 }
 
 auto Bake_transform_operation::describe() const -> std::string

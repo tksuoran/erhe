@@ -136,39 +136,6 @@ private:
             m_vertex_positions.at(index - m_min_index) = position;
         }
 
-        // Sort vertices
-        std::set<GEO::index_t> available_axis = { 0, 1, 2 };
-        std::set<GEO::index_t> used_axis;
-
-        double xyzmin[3];
-        double xyzmax[3];
-        GEO::get_bbox(m_mesh, xyzmin, xyzmax);
-        const GEO::vec3 min_corner{xyzmin};
-        const GEO::vec3 max_corner{xyzmax};
-
-        const GEO::vec3 bounding_box_size0 = max_corner - min_corner;
-        const GEO::index_t axis0 = max_axis_index(bounding_box_size0);
-        available_axis.erase(axis0);
-        used_axis.insert(axis0);
-        GEO::vec3 bounding_box_size1 = bounding_box_size0;
-        bounding_box_size1[axis0] = 0.0f;
-
-        GEO::index_t axis1 = max_axis_index(bounding_box_size1);
-        if (used_axis.count(axis1) > 0) {
-            axis1 = *available_axis.begin();
-        }
-        available_axis.erase(axis1);
-        used_axis.insert(axis1);
-
-        GEO::vec3 bounding_box_size2 = bounding_box_size1;
-        bounding_box_size2[axis1] = 0.0f;
-        GEO::index_t axis2 = max_axis_index(bounding_box_size2);
-        if (used_axis.count(axis2) > 0) {
-            axis2 = * available_axis.begin();
-        }
-        available_axis.erase(axis2);
-        used_axis.insert(axis2);
-
         //// TODO
         ////
         //// log_primitive->trace("Bounding box   = {}", bounding_box_size0);
@@ -295,7 +262,7 @@ private:
         std::size_t         vertex_count     = m_triangle_soup.vertex_data.size() / vertex_stream.stride;
         const std::uint8_t* vertex_data_base = m_triangle_soup.vertex_data.data();
         for (std::size_t attribute_index = 0, end = attributes.size(); attribute_index < end; ++attribute_index) {
-            const Vertex_attribute& attribute          = attributes[attribute_index];
+            const Vertex_attribute& attribute           = attributes[attribute_index];
             const std::uint8_t*     attribute_data_base = vertex_data_base + attribute.offset;
 
             if (is_per_point(attribute.usage_type)) {

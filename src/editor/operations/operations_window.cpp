@@ -70,6 +70,7 @@ Operations::Operations(
     , m_truncate_command      {commands, "Geometry.Conway.Truncate",           [this]() -> bool { truncate      (); return true; } }
     , m_gyro_command          {commands, "Geometry.Conway.Gyro",               [this]() -> bool { gyro          (); return true; } }
     , m_chamfer_command       {commands, "Geometry.Conway.Chamfer",            [this]() -> bool { chamfer       (); return true; } }
+    , m_generate_tangents_command{commands, "Geometry.GenerateTangents",      [this]() -> bool { generate_tangents(); return true; } }
     , m_export_gltf_command   {commands, "File.Export.glTF",                   [this]() -> bool { export_gltf   (); return true; } }
     , m_create_material       {commands, "Create.Material",                    [this]() -> bool { create_material(); return true; } }
 {
@@ -93,12 +94,13 @@ Operations::Operations(
     commands.register_command(&m_join_command    );
     commands.register_command(&m_kis_command     );
     commands.register_command(&m_meta_command    );
-    commands.register_command(&m_ortho_command   );
     commands.register_command(&m_ambo_command    );
     commands.register_command(&m_truncate_command);
     commands.register_command(&m_gyro_command    );
     commands.register_command(&m_chamfer_command );
 
+    commands.register_command(&m_generate_tangents_command );
+    
     commands.register_command(&m_export_gltf_command);
     commands.register_command(&m_create_material);
 
@@ -126,6 +128,8 @@ Operations::Operations(
     commands.bind_command_to_menu(&m_truncate_command, "Geometry.Conway Operations.Truncate");
     commands.bind_command_to_menu(&m_gyro_command    , "Geometry.Conway Operations.Gyro");
     commands.bind_command_to_menu(&m_chamfer_command , "Geometry.Conway Operations.Chamfer");
+
+    commands.bind_command_to_menu(&m_generate_tangents_command, "Geometry.Generate Tangents");
 
     commands.bind_command_to_menu(&m_export_gltf_command, "File.Export glTF");
     commands.bind_command_to_menu(&m_create_material,     "Create.Material");
@@ -371,6 +375,9 @@ void Operations::imgui()
     if (make_button("Weld", has_selection_mode, button_size)) {
         weld();
     }
+    if (make_button("Gen Tangents", has_selection_mode, button_size)) {
+        generate_tangents();
+    }
     //// if (make_button("GUI Quad", erhe::imgui::Item_mode::normal, button_size)) {
     ////     Scene_builder* scene_builder = get<Scene_builder>().get();
     ////
@@ -476,6 +483,14 @@ void Operations::weld()
     /// tf::Executor& executor = m_context.operation_stack->get_executor();
     /// executor.silent_async([this](){
         m_context.operation_stack->queue(std::make_shared<Weld_operation>(mesh_context()));
+    /// });
+}
+
+void Operations::generate_tangents()
+{
+    /// tf::Executor& executor = m_context.operation_stack->get_executor();
+    /// executor.silent_async([this](){
+        m_context.operation_stack->queue(std::make_shared<Generate_tangents_operation>(mesh_context()));
     /// });
 }
 

@@ -104,6 +104,13 @@ public:
     auto describe() const -> std::string override;
 };
 
+class Generate_tangents_operation : public Mesh_operation
+{
+public:
+    explicit Generate_tangents_operation(Mesh_operation_parameters&& context);
+    auto describe() const -> std::string override;
+};
+
 class Bake_transform_operation : public Mesh_operation
 {
 public:

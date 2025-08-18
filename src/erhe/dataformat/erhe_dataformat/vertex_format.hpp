@@ -52,11 +52,11 @@ public:
     Vertex_stream(std::size_t binding, std::initializer_list<Vertex_attribute> attributes);
 
     [[nodiscard]] auto find_attribute(Vertex_attribute_usage usage_type, std::size_t index = 0) const -> const Vertex_attribute*;
-    void emplace_back(
+    auto emplace_back(
         erhe::dataformat::Format format,
         Vertex_attribute_usage   usage_type,
         std::size_t              usage_index = 0
-    );
+    ) -> Vertex_attribute&;
 
     std::vector<Vertex_attribute> attributes;
     std::size_t                   binding{0};
