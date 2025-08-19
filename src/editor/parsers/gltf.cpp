@@ -288,6 +288,13 @@ auto scan_gltf(const std::filesystem::path& path) -> std::vector<std::string>
     std::vector<std::string> out;
     erhe::gltf::Gltf_scan scan = erhe::gltf::scan_gltf(path);
 
+    if (!scan.errors.empty()) {
+        out.push_back("Errors:");
+        for (const std::string& error : scan.errors) {
+            out.push_back(" - " + error);
+        }
+    }
+
     if (!scan.scenes    .empty()) out.push_back(fmt::format("{} scenes",     scan.scenes    .size()));
     if (!scan.meshes    .empty()) out.push_back(fmt::format("{} meshes",     scan.meshes    .size()));
     if (!scan.animations.empty()) out.push_back(fmt::format("{} animations", scan.animations.size()));
@@ -298,6 +305,18 @@ auto scan_gltf(const std::filesystem::path& path) -> std::vector<std::string>
     if (!scan.lights    .empty()) out.push_back(fmt::format("{} lights",     scan.lights    .size()));
     if (!scan.images    .empty()) out.push_back(fmt::format("{} images",     scan.images    .size()));
     if (!scan.samplers  .empty()) out.push_back(fmt::format("{} samplers",   scan.samplers  .size()));
+    if (!scan.extensions_used.empty()) {
+        out.push_back("Extensions used:");
+        for (const std::string& extension : scan.extensions_used) {
+            out.push_back(" - " + extension);
+        }
+    }
+    if (!scan.extensions_required.empty()) {
+        out.push_back("Extensions required:");
+        for (const std::string& extension : scan.extensions_required) {
+            out.push_back(" - " + extension);
+        }
+    }
     return out;
 }
 

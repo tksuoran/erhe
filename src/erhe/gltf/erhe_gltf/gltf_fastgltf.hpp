@@ -45,6 +45,7 @@ public:
     std::vector<std::shared_ptr<erhe::primitive::Material>> materials;
     std::vector<std::shared_ptr<erhe::graphics::Texture>>   images;
     std::vector<std::shared_ptr<erhe::graphics::Sampler>>   samplers;
+    std::vector<std::string>                                extensions;
 };
 
 class Gltf_scan
@@ -60,6 +61,9 @@ public:
     std::vector<std::string> images;
     std::vector<std::string> samplers;
     std::vector<std::string> scenes;
+    std::vector<std::string> extensions_used;
+    std::vector<std::string> extensions_required;
+    std::vector<std::string> errors;
 };
 
 struct Gltf_parse_arguments

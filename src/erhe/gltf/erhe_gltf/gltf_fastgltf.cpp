@@ -1205,6 +1205,14 @@ private:
                 erhe_texture_sampler.sampler = m_data_out.samplers[texture.samplerIndex.value()];
             }
             erhe_texture_sampler.tex_coord = static_cast<uint8_t>(gltf_texture_info.texCoordIndex);
+            if (gltf_texture_info.transform) {
+                erhe_texture_sampler.rotation = gltf_texture_info.transform->rotation;
+                erhe_texture_sampler.offset   = glm::vec2{gltf_texture_info.transform->uvOffset[0], gltf_texture_info.transform->uvOffset[1]};
+                erhe_texture_sampler.scale    = glm::vec2{gltf_texture_info.transform->uvScale [0], gltf_texture_info.transform->uvScale [1]};
+                if (gltf_texture_info.transform->texCoordIndex.has_value()) {
+                    erhe_texture_sampler.tex_coord = static_cast<uint8_t>(gltf_texture_info.transform->texCoordIndex.value());
+                }
+            }
             // TODO texture transform
         };
 
@@ -1834,10 +1842,14 @@ auto scan_gltf(std::filesystem::path path) -> Gltf_scan
     erhe::time::Timer timer{"scan_gltf"};
     timer.begin();
 
+    Gltf_scan result;
+
     fastgltf::Expected<fastgltf::GltfDataBuffer> data = fastgltf::GltfDataBuffer::FromPath(path);
     if (data.error() != fastgltf::Error::None) {
-        log_gltf->error("glTF load error: {}", fastgltf::getErrorMessage(data.error()));
-        return {};
+        const std::string error_message = fmt::format("glTF load error: {}", fastgltf::getErrorMessage(data.error()));
+        log_gltf->error(error_message);
+        result.errors.push_back(error_message);
+        return result;
     }
 
     constexpr auto extensions =
@@ -1867,13 +1879,18 @@ auto scan_gltf(std::filesystem::path path) -> Gltf_scan
         fastgltf::Options::None
     );
     if (auto error = asset_expected.error(); error != fastgltf::Error::None) {
-        log_gltf->error("glTF parse error: {}", fastgltf::getErrorMessage(error));
-        return {};
+        const std::string error_message = fmt::format("glTF parse error: {}", fastgltf::getErrorMessage(error));
+        log_gltf->error(error_message);
+        result.errors.push_back(error_message);
+        return result;
     }
 
     fastgltf::Asset* asset = asset_expected.get_if();
     if (asset == nullptr) {
-        return {};
+        const std::string error_message = "asset nullptr";
+        log_gltf->error(error_message);
+        result.errors.push_back(error_message);
+        return result;
     }
 
     const auto resource_name = [&](
@@ -1888,7 +1905,13 @@ auto scan_gltf(std::filesystem::path path) -> Gltf_scan
         return std::string{name};
     };
 
-    Gltf_scan result;
+    for (const auto& extension : asset->extensionsUsed) {
+        result.extensions_used.push_back(std::string{extension.data(), extension.size()});
+    }
+    for (const auto& extension : asset->extensionsRequired) {
+        result.extensions_required.push_back(std::string{extension.data(), extension.size()});
+    }
+
     result.images.resize(asset->images.size());
     for (std::size_t i = 0, end = asset->images.size(); i < end; ++i) {
         result.images[i] = resource_name(asset->images[i].name, "image", i);

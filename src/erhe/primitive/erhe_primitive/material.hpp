@@ -19,7 +19,10 @@ struct Material_texture_sampler
 {
     std::shared_ptr<erhe::graphics::Texture> texture;
     std::shared_ptr<erhe::graphics::Sampler> sampler;
-    uint8_t                                  tex_coord;
+    uint32_t                                 tex_coord{0};
+    float                                    rotation {0.0f};
+    glm::vec2                                offset   {0.0f, 0.0f};
+    glm::vec2                                scale    {1.0f, 1.0f};
 };
 
 struct Material_texture_samplers
