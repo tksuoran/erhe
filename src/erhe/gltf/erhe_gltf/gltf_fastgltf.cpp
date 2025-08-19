@@ -1429,15 +1429,20 @@ private:
             const erhe::dataformat::Vertex_attribute_usage attribute_usage = to_erhe(gltf_attribute.name);
             const std::size_t                              attribute_index = get_attribute_index(gltf_attribute.name);
             const fastgltf::Accessor&                      accessor        = m_asset->accessors[gltf_attribute.accessorIndex];
+
             const erhe::dataformat::Attribute_stream&      erhe_attribute  = erhe_attributes[i];
             ERHE_VERIFY(erhe_attribute.attribute != nullptr);
             ERHE_VERIFY(erhe_attribute.stream != nullptr);
-            copyFromAccessorWithOutStride(
-                m_asset.get(),
-                accessor,
-                triangle_soup.vertex_data.data() + erhe_attribute.attribute->offset,
-                erhe_attribute.stream->stride
-            );
+            if (accessor.bufferViewIndex.has_value()) {
+                copyFromAccessorWithOutStride(
+                    m_asset.get(),
+                    accessor,
+                    triangle_soup.vertex_data.data() + erhe_attribute.attribute->offset,
+                    erhe_attribute.stream->stride
+                );
+            } else {
+                log_gltf->warn("Attribute without accessor buffer view");
+            }
 
             log_gltf->trace(
                 "Primitive attribute[{}]: name = {}, attribute type = {}[{}], "
@@ -1797,7 +1802,7 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
         fastgltf::Extensions::KHR_materials_clearcoat             |
         fastgltf::Extensions::KHR_materials_emissive_strength     |
         fastgltf::Extensions::KHR_materials_sheen                 |
-        fastgltf::Extensions::KHR_draco_mesh_compression          |
+        //fastgltf::Extensions::KHR_draco_mesh_compression          |
         fastgltf::Extensions::KHR_materials_unlit;
     fastgltf::Parser fastgltf_parser{extensions};
     fastgltf::Expected<fastgltf::Asset> asset = fastgltf_parser.loadGltf(
@@ -1853,7 +1858,7 @@ auto scan_gltf(std::filesystem::path path) -> Gltf_scan
         fastgltf::Extensions::KHR_materials_clearcoat             |
         fastgltf::Extensions::KHR_materials_emissive_strength     |
         fastgltf::Extensions::KHR_materials_sheen                 |
-        fastgltf::Extensions::KHR_draco_mesh_compression          |
+        //fastgltf::Extensions::KHR_draco_mesh_compression          | TODO
         fastgltf::Extensions::KHR_materials_unlit;
     fastgltf::Parser fastgltf_parser{extensions};
     fastgltf::Expected<fastgltf::Asset> asset_expected = fastgltf_parser.loadGltf(
