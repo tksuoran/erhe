@@ -1137,8 +1137,8 @@ private:
         log_gltf->trace("Sampler: sampler index = {}, name = {}", sampler_index, sampler_name);
 
         erhe::graphics::Sampler_create_info create_info;
-        fastgltf::Filter gl_min_filter = sampler.minFilter.has_value() ? sampler.minFilter.value() : fastgltf::Filter::NearestMipMapNearest;
-        fastgltf::Filter gl_mag_filter = sampler.magFilter.has_value() ? sampler.magFilter.value() : fastgltf::Filter::NearestMipMapNearest;
+        fastgltf::Filter gl_min_filter = sampler.minFilter.has_value() ? sampler.minFilter.value() : fastgltf::Filter::LinearMipMapLinear;
+        fastgltf::Filter gl_mag_filter = sampler.magFilter.has_value() ? sampler.magFilter.value() : fastgltf::Filter::Linear;
         erhe::graphics::Filter min_filter{erhe::graphics::Filter::nearest};
         erhe::graphics::Filter mag_filter{erhe::graphics::Filter::nearest};
         erhe::graphics::Sampler_mipmap_mode mipmap_mode{erhe::graphics::Sampler_mipmap_mode::not_mipmapped};
@@ -1216,7 +1216,10 @@ private:
             apply_texture(material.occlusionTexture.value(), create_info.texture_samplers.occlusion, true);
             create_info.occlusion_texture_strength = material.occlusionTexture.value().strength;
         }
-        {
+        create_info.emissive = material.emissiveStrength * glm::vec3{material.emissiveFactor[0], material.emissiveFactor[1], material.emissiveFactor[2]};
+        if (material.emissiveTexture.has_value()) {
+            apply_texture(material.emissiveTexture.value(), create_info.texture_samplers.emissive, false);
+        } {
             const fastgltf::PBRData& pbr_data = material.pbrData;
             if (pbr_data.baseColorTexture.has_value()) {
                 apply_texture(pbr_data.baseColorTexture.value(), create_info.texture_samplers.base_color, false);
@@ -1237,7 +1240,6 @@ private:
             create_info.metallic    = pbr_data.metallicFactor;
             create_info.roughness.x = std::max(pbr_data.roughnessFactor, 0.001f);
             create_info.roughness.y = std::max(pbr_data.roughnessFactor, 0.001f);
-            create_info.emissive    = glm::vec3{0.0f, 0.0f, 0.0f};
             log_gltf->trace(
                 "Material PBR metallic roughness base color factor = {}, {}, {}, {}",
                 pbr_data.baseColorFactor[0],

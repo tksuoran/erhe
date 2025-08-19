@@ -842,6 +842,9 @@ void Properties::material_properties()
                         textures->combo(m_context, "##", selected_material->texture_samplers.base_color.texture, true);
                     }
                 );
+                if (selected_material->texture_samplers.base_color.texture) {
+                    add_entry("Normal Map Scale", [=](){ ImGui::SliderFloat("##", &selected_material->normal_texture_scale, 0.0f, 1.0f); });
+                }
                 add_entry(
                     "Metallic Roughness Texture",
                     [this, textures, selected_material]()
@@ -864,10 +867,10 @@ void Properties::material_properties()
                     }
                 );
                 add_entry(
-                    "Emission Texture",
+                    "Emissive Texture",
                     [this, textures, selected_material]()
                     {
-                        textures->combo(m_context, "##", selected_material->texture_samplers.emission.texture, true);
+                        textures->combo(m_context, "##", selected_material->texture_samplers.emissive.texture, true);
                     }
                 );
             }

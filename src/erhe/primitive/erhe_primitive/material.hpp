@@ -28,7 +28,7 @@ struct Material_texture_samplers
     Material_texture_sampler metallic_roughness;
     Material_texture_sampler normal;
     Material_texture_sampler occlusion;
-    Material_texture_sampler emission;
+    Material_texture_sampler emissive;
 };
 
 class Material_create_info

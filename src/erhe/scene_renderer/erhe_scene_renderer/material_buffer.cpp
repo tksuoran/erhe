@@ -34,7 +34,7 @@ Material_interface::Material_interface(erhe::graphics::Device& graphics_device)
         .normal_texture             = material_struct.add_uvec2("normal_texture"            )->get_offset_in_parent(),
         .occlusion_texture          = material_struct.add_uvec2("occlusion_texture"         )->get_offset_in_parent(),
 
-        .emission_texture           = material_struct.add_uvec2("emission_texture"          )->get_offset_in_parent(),
+        .emissive_texture           = material_struct.add_uvec2("emissive_texture"          )->get_offset_in_parent(),
         .opacity                    = material_struct.add_float("opacity"                   )->get_offset_in_parent(),
         .normal_texture_scale       = material_struct.add_float("normal_texture_scale"      )->get_offset_in_parent(),
 
@@ -134,7 +134,7 @@ auto Material_buffer::update(
         const uint64_t metallic_roughness_shader_handle = get_texture_sampler_shader_handle(material->texture_samplers.metallic_roughness);
         const uint64_t normal_shader_handle             = get_texture_sampler_shader_handle(material->texture_samplers.normal);
         const uint64_t occlusion_shader_handle          = get_texture_sampler_shader_handle(material->texture_samplers.occlusion);
-        const uint64_t emission_shader_handle           = get_texture_sampler_shader_handle(material->texture_samplers.emission);
+        const uint64_t emissive_shader_handle           = get_texture_sampler_shader_handle(material->texture_samplers.emissive);
 
         material->material_buffer_index = material_index;
 
@@ -150,7 +150,7 @@ auto Material_buffer::update(
         write(gpu_data, write_offset + offsets.metallic_roughness_texture, as_span(metallic_roughness_shader_handle));
         write(gpu_data, write_offset + offsets.normal_texture,             as_span(normal_shader_handle));
         write(gpu_data, write_offset + offsets.occlusion_texture,          as_span(occlusion_shader_handle));
-        write(gpu_data, write_offset + offsets.emission_texture,           as_span(emission_shader_handle));
+        write(gpu_data, write_offset + offsets.emissive_texture,           as_span(emissive_shader_handle));
 
         write_offset += entry_size;
         ++material_index;

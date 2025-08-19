@@ -30,7 +30,7 @@ void main()
     uvec2 metallic_roughness_texture = material.metallic_roughness_texture;
     uvec2 normal_texture             = material.normal_texture;
     uvec2 occlusion_texture          = material.occlusion_texture;
-    uvec2 emission_texture           = material.emission_texture;
+    uvec2 emissive_texture           = material.emissive_texture;
     vec3  base_color                 = v_color.rgb * material.base_color.rgb * sample_texture(base_color_texture, v_texcoord).rgb;
 
     float metallic;
@@ -53,7 +53,14 @@ void main()
         ntex      = normalize(ntex);
         N         = normalize(mat3(T, B, N) * ntex);
     }
-    
+
+    vec3 emissive;
+    if (emissive_texture.x != max_u32) {
+        emissive = material.emissive.rgb * sample_texture(emissive_texture, v_texcoord).rgb;
+    } else {
+        emissive = material.emissive.rgb;
+    }
+
     float N_dot_V = clamped_dot(N, V);
 
     uint directional_light_count  = light_block.directional_light_count;
@@ -66,7 +73,7 @@ void main()
     vec3 color = vec3(0);
     //color += (0.5 + 0.5 * N.y) * light_block.ambient_light.rgb * base_color;
     color += light_block.ambient_light.rgb * base_color;
-    color += material.emissive.rgb;
+    color += emissive;
 
     for (uint i = 0; i < directional_light_count; ++i) {
         uint  light_index    = directional_light_offset + i;

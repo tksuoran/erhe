@@ -128,7 +128,7 @@ Programs::Programs(erhe::graphics::Device& graphics_device)
     , debug_metallic          {graphics_device, "debug_metallic-not_loaded"}
     , debug_roughness         {graphics_device, "debug_roughness-not_loaded"}
     , debug_occlusion         {graphics_device, "debug_occlusion-not_loaded"}
-    , debug_emission          {graphics_device, "debug_emission-not_loaded"}
+    , debug_emissive          {graphics_device, "debug_emissive-not_loaded"}
     , debug_misc              {graphics_device, "debug_misc-not_loaded"}
 {
 }
@@ -199,7 +199,7 @@ void Programs::load_programs(
     add_shader(debug_metallic          , CI{ .name = "standard_debug", .defines = {{"ERHE_DEBUG_METALLIC",           "1"}}, .default_uniform_block = &default_uniform_block } );
     add_shader(debug_roughness         , CI{ .name = "standard_debug", .defines = {{"ERHE_DEBUG_ROUGHNESS",          "1"}}, .default_uniform_block = &default_uniform_block } );
     add_shader(debug_occlusion         , CI{ .name = "standard_debug", .defines = {{"ERHE_DEBUG_OCCLUSION",          "1"}}, .default_uniform_block = &default_uniform_block } );
-    add_shader(debug_emission          , CI{ .name = "standard_debug", .defines = {{"ERHE_DEBUG_EMISSIOn",           "1"}}, .default_uniform_block = &default_uniform_block } );
+    add_shader(debug_emissive          , CI{ .name = "standard_debug", .defines = {{"ERHE_DEBUG_EMISSIVE",           "1"}}, .default_uniform_block = &default_uniform_block } );
     add_shader(debug_misc              , CI{ .name = "standard_debug", .defines = {{"ERHE_DEBUG_MISC",               "1"}}, .default_uniform_block = &default_uniform_block } );
 
     // Compile shaders
@@ -270,7 +270,7 @@ auto Programs::get_variant_shader_stages(Shader_stages_variant variant) const ->
         case Shader_stages_variant::debug_metallic:           return &debug_metallic.shader_stages;
         case Shader_stages_variant::debug_roughness:          return &debug_roughness.shader_stages;
         case Shader_stages_variant::debug_occlusion:          return &debug_occlusion.shader_stages;
-        case Shader_stages_variant::debug_emission:           return &debug_emission.shader_stages;
+        case Shader_stages_variant::debug_emissive:           return &debug_emissive.shader_stages;
         case Shader_stages_variant::debug_misc:               return &debug_misc.shader_stages;
         default:                                              return &error.shader_stages;
     }

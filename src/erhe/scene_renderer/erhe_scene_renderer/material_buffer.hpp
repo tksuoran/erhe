@@ -36,7 +36,7 @@ public:
     std::size_t normal_texture;             // uvec2
     std::size_t occlusion_texture;          // uvec2
 
-    std::size_t emission_texture;           // uvec2
+    std::size_t emissive_texture;           // uvec2
 
     std::size_t opacity;                    // float
     std::size_t normal_texture_scale;       // float

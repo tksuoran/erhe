@@ -64,7 +64,7 @@ void main() {
     uvec2 metallic_roughness_texture = material.metallic_roughness_texture;
     uvec2 normal_texture             = material.normal_texture;
     uvec2 occlusion_texture          = material.occlusion_texture;
-    uvec2 emission_texture           = material.emission_texture;
+    uvec2 emissive_texture           = material.emissive_texture;
 
     float metallic;
     float roughness;
@@ -82,6 +82,13 @@ void main() {
         ntex.xy   = ntex.xy * material.normal_texture_scale;
         ntex      = normalize(ntex);
         N         = normalize(mat3(T0, B0, N) * ntex);
+    }
+
+    vec3 emissive;
+    if (emissive_texture.x != max_u32) {
+        emissive = material.emissive.rgb * sample_texture(emissive_texture, v_texcoord).rgb;
+    } else {
+        emissive = material.emissive.rgb;
     }
 
     vec2  T_circular                    = normalize(v_texcoord);
@@ -223,10 +230,8 @@ void main() {
         out_color.rgb = sample_texture(occlusion_texture, v_texcoord).rrr;
     }
 #endif
-#if defined(ERHE_DEBUG_EMISSION)
-    if (emission_texture.x != max_u32) {
-        out_color.rgb = sample_texture(emission_texture, v_texcoord).rrr;
-    }
+#if defined(ERHE_DEBUG_EMISSIVE)
+    out_color.rgb = emissive;
 #endif
 #if defined(ERHE_DEBUG_MISC)
     // Show Draw ID
