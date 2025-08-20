@@ -37,14 +37,24 @@ public:
     std::size_t occlusion_texture;          // uvec2
 
     std::size_t emissive_texture;           // uvec2
-
     std::size_t opacity;                    // float
     std::size_t normal_texture_scale;       // float
 
-    std::size_t occlusion_texture_strength; // float
-    std::size_t reserved1;                  // float
-    std::size_t reserved2;                  // float
-    std::size_t reserved3;                  // float
+    std::size_t base_color_rotation_scale;         // uvec4
+    std::size_t metallic_roughness_rotation_scale; // uvec4
+    std::size_t normal_rotation_scale;             // uvec4
+    std::size_t occlusion_rotation_scale;          // uvec4
+    std::size_t emissive_rotation_scale;           // uvec4
+
+    std::size_t base_color_offset;                 // uvec2
+    std::size_t metallic_roughness_offset;         // uvec2
+
+    std::size_t normal_offset;                     // uvec2
+    std::size_t occlusion_offset;                  // uvec2
+
+    std::size_t emissive_offset;                   // uvec2
+    std::size_t occlusion_texture_strength;        // float
+    std::size_t reserved1;                         // float
 };
 
 class Material_interface

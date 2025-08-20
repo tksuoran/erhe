@@ -31,12 +31,22 @@ void main() {
     uvec2 normal_texture             = material.normal_texture;
     uvec2 occlusion_texture          = material.occlusion_texture;
     uvec2 emissive_texture           = material.emissive_texture;
-    vec3  base_color                 = v_color.rgb * material.base_color.rgb * sample_texture(base_color_texture, v_texcoord).rgb;
+    vec3  base_color                 = v_color.rgb * material.base_color.rgb * sample_texture(
+        base_color_texture,
+        v_texcoord,
+        material.base_color_rotation_scale,
+        material.base_color_offset
+    ).rgb;
 
     float metallic;
     float roughness;
     if (metallic_roughness_texture.x != max_u32) {
-        vec4 metallic_roughness = sample_texture(metallic_roughness_texture, v_texcoord);
+        vec4 metallic_roughness = sample_texture(
+            metallic_roughness_texture,
+            v_texcoord,
+            material.metallic_roughness_rotation_scale,
+            material.metallic_roughness_offset
+        );
         metallic  = metallic_roughness.b;
         roughness = metallic_roughness.g;
     } else {
@@ -45,7 +55,12 @@ void main() {
     }
 
     if (normal_texture.x != max_u32) {
-        vec3 ntex = sample_texture(normal_texture, v_texcoord).xyz * 2.0 - vec3(1.0);
+        vec3 ntex = sample_texture(
+            normal_texture,
+            v_texcoord,
+            material.normal_rotation_scale,
+            material.normal_offset
+        ).xyz * 2.0 - vec3(1.0);
         ntex.xy   = ntex.xy * material.normal_texture_scale;
         ntex      = normalize(ntex);
         N         = normalize(mat3(T, B, N) * ntex);

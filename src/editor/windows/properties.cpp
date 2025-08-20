@@ -843,7 +843,9 @@ void Properties::material_properties()
                     }
                 );
                 if (selected_material->texture_samplers.base_color.texture) {
-                    add_entry("Normal Map Scale", [=](){ ImGui::SliderFloat("##", &selected_material->normal_texture_scale, 0.0f, 1.0f); });
+                    add_entry("Base Color Offset",   [=](){ ImGui::SliderFloat2("##", &selected_material->texture_samplers.base_color.offset.x, -10.0f, 10.0f); });
+                    add_entry("Base Color Scale",    [=](){ ImGui::SliderFloat2("##", &selected_material->texture_samplers.base_color.scale.x,  -10.0f, 10.0f); });
+                    add_entry("Base Color Rotation", [=](){ ImGui::SliderFloat("##", &selected_material->texture_samplers.base_color.rotation, -10.0f, 10.0f); });
                 }
                 add_entry(
                     "Metallic Roughness Texture",
@@ -859,6 +861,9 @@ void Properties::material_properties()
                         textures->combo(m_context, "##", selected_material->texture_samplers.normal.texture, true);
                     }
                 );
+                if (selected_material->texture_samplers.normal.texture) {
+                    add_entry("Normal Map Scale", [=](){ ImGui::SliderFloat("##", &selected_material->normal_texture_scale, 0.0f, 1.0f); });
+                }
                 add_entry(
                     "Occlusion Texture",
                     [this, textures, selected_material]()
