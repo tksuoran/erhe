@@ -313,6 +313,27 @@ auto Build_context::get_facet_normal() -> GEO::vec3f
 
 /////////////////////////////
 
+auto sign(const float x) -> float
+{
+    return x < 0.0f ? -1.0f : 1.0f;
+}
+
+void ortho_basis_pixar_r1(const GEO::vec3f N, GEO::vec4f& T, GEO::vec3f& B)
+{
+    const float      sz    = sign(N.z);
+    const float      a     = 1.0f / (sz + N.z);
+    const float      sx    = sz * N.x;
+    const float      b     = N.x * N.y * a;
+    const GEO::vec3f t_    = GEO::vec3f{sx * N.x * a - 1.f, sz * b, sx};
+    const GEO::vec3f b_    = GEO::vec3f{b, N.y * N.y * a - sz, N.y};
+    const GEO::vec3f t_xyz = GEO::normalize(t_ - N * GEO::dot(N, t_));
+    const float      t_w   = (GEO::dot(GEO::cross(N, t_), b_) < 0.0f) ? -1.0f : 1.0f;
+    const GEO::vec3f b_xyz = GEO::normalize(b_ - N * GEO::dot(N, b_));
+    //const float      b_w   = (GEO::dot(GEO::cross(b_, N), t_) < 0.0f) ? -1.0f : 1.0f;
+    T = GEO::vec4f{t_xyz, t_w};
+    B = b_xyz;
+}
+
 void Build_context::build_tangent_frame()
 {
     v_normal = GEO::vec3f{0.0f, 1.0f, 0.0f};
@@ -357,17 +378,25 @@ void Build_context::build_tangent_frame()
         }
     }
 
-    v_tangent = GEO::vec4f{1.0f, 0.0f, 0.0, 1.0f};
-
     std::optional<GEO::vec4f> corner_tangent = mesh_attributes.corner_tangent.try_get(mesh_corner);
     std::optional<GEO::vec4f> facet_tangent  = mesh_attributes.facet_tangent .try_get(mesh_facet);
     std::optional<GEO::vec4f> vertex_tangent = mesh_attributes.vertex_tangent.try_get(mesh_vertex);
 
-    const GEO::vec3f fallback_tangent = min_axis(v_normal);
+    const bool gen_tangent = 
+        !corner_tangent.has_value() &&
+        !facet_tangent .has_value() &&
+        !vertex_tangent.has_value();
+
+    GEO::vec4f fallback_tangent;
+    GEO::vec3f fallback_bitangent;
+    if (gen_tangent) {
+        ortho_basis_pixar_r1(v_normal, fallback_tangent, fallback_bitangent);
+    }
+
     v_tangent =
         corner_tangent.has_value() ? corner_tangent.value() :
         facet_tangent .has_value() ? facet_tangent .value() :
-        vertex_tangent.has_value() ? vertex_tangent.value() : GEO::vec4f{fallback_tangent, 1.0f};
+        vertex_tangent.has_value() ? vertex_tangent.value() : fallback_tangent;
 
     const GEO::vec3f v_tangent3{v_tangent};
 
@@ -378,17 +407,7 @@ void Build_context::build_tangent_frame()
     v_bitangent =
         corner_bitangent.has_value() ? corner_bitangent.value() :
         facet_bitangent .has_value() ? facet_bitangent .value() :
-        vertex_bitangent.has_value() ? vertex_bitangent.value() : safe_normalize_cross(v_normal, v_tangent3);
-
-    GEO::vec3f n0{v_normal};
-    GEO::vec3f t0{v_tangent3};
-    GEO::vec3f b0{v_bitangent};
-    GEO::vec3f n{v_normal};
-    GEO::vec3f t{v_tangent3};
-    GEO::vec3f b{v_bitangent};
-    gram_schmidt(t0, b0, n0, t, b, n);
-    v_tangent   = GEO::vec4f{t, 1.0f};
-    v_bitangent = b;
+        vertex_bitangent.has_value() ? vertex_bitangent.value() : fallback_bitangent;
 }
 
 /////////////////////////////

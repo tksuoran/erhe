@@ -1355,9 +1355,9 @@ private:
         };
         erhe_light->intensity        = light.intensity;
         erhe_light->type             = to_erhe(light.type);
-        erhe_light->range            = light.range.has_value() ? light.range.value() : 0.0f;
+        erhe_light->range            = light.range.has_value() ? light.range.value() : 1000.0f; // TODO KHR_lights_punctual says infinite..
         erhe_light->inner_spot_angle = light.innerConeAngle.has_value() ? light.innerConeAngle.value() : 0.0f;
-        erhe_light->outer_spot_angle = light.outerConeAngle.has_value() ? light.outerConeAngle.value() : 0.0f;
+        erhe_light->outer_spot_angle = light.outerConeAngle.has_value() ? light.outerConeAngle.value() : glm::pi<float>() / 4.0f;
         // TODO Sensible defaults for inner and outer cone angles
         erhe_light->layer_id = 0;
         erhe_light->enable_flag_bits(Item_flags::content | Item_flags::visible | Item_flags::show_in_ui);

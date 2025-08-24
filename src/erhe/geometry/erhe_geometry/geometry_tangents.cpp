@@ -341,7 +341,6 @@ auto compute_mesh_tangents(
                 const GEO::vec3f T   = GEO::normalize(T0 - N_dot_T0 * N);
                 const float      t_w = (GEO::dot(GEO::cross(N, T0), B0) < 0.0f) ? -1.0f : 1.0f;
                 const GEO::vec3f B   = GEO::normalize(B0 - N_dot_B0 * N);
-                //const float      b_w = (GEO::dot(GEO::cross(B0, N), T0) < 0.0f) ? -1.0f : 1.0f;
                 context->set_tangent  (iFace, iVert, T, t_w);
                 context->set_bitangent(iFace, iVert, B);
             } else {
@@ -361,7 +360,7 @@ auto compute_mesh_tangents(
     {
         const auto res = genTangSpaceDefault(&context);
         if (res == 0) {
-            //// log_tangent_gen->trace("genTangSpaceDefault() returned 0");
+            erhe::geometry::log_tangent_gen->error("genTangSpaceDefault() returned 0");
             return false;
         }
     }

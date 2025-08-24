@@ -85,8 +85,8 @@ auto Light::spot_light_projection(const Light_projection_parameters& parameters)
     static_cast<void>(parameters); // TODO ignored for now
     return Projection{
         .projection_type = Projection::Type::perspective,
-        .z_near          =   1.0f, // TODO
-        .z_far           = 100.0f, // TODO
+        .z_near          = 0.04f, // TODO
+        .z_far           = range,
         .fov_x           = outer_spot_angle,
         .fov_y           = outer_spot_angle
     };

@@ -23,17 +23,63 @@ void main() {
 
     uvec2 base_color_texture         = material.base_color_texture;
     uvec2 metallic_roughness_texture = material.metallic_roughness_texture;
-    vec3  base_color                 = material.base_color.rgb * sample_texture(base_color_texture, v_texcoord).rgb;
-    uint  directional_light_count    = light_block.directional_light_count;
-    uint  spot_light_count           = light_block.spot_light_count;
-    uint  point_light_count          = light_block.point_light_count;
-    uint  directional_light_offset   = 0;
-    uint  spot_light_offset          = directional_light_count;
-    uint  point_light_offset         = spot_light_offset + spot_light_count;
+    vec3  base_color                 = v_color.rgb * material.base_color.rgb * sample_texture(
+        base_color_texture,
+        v_texcoord,
+        material.base_color_rotation_scale,
+        material.base_color_offset
+    ).rgb;
 
-    vec3 color = vec3(0);
-    color += (0.5 + 0.5 * N.y) * light_block.ambient_light.rgb * base_color;
-    color += material.emissive.rgb;
+    float metallic;
+    float roughness;
+    if (metallic_roughness_texture.x != max_u32) {
+        vec4 metallic_roughness = sample_texture(
+            metallic_roughness_texture,
+            v_texcoord,
+            material.metallic_roughness_rotation_scale,
+            material.metallic_roughness_offset
+        );
+        metallic  = metallic_roughness.b;
+        roughness = metallic_roughness.g;
+    } else {
+        metallic  = material.metallic;
+        roughness = material.roughness.x;
+    }
+
+    if (normal_texture.x != max_u32) {
+        vec3 ntex = sample_texture(
+            normal_texture,
+            v_texcoord,
+            material.normal_rotation_scale,
+            material.normal_offset
+        ).xyz * 2.0 - vec3(1.0);
+        ntex.xy   = ntex.xy * material.normal_texture_scale;
+        ntex      = normalize(ntex);
+        N         = normalize(mat3(T0, B0, N) * ntex);
+    }
+
+    vec3 emissive;
+    if (emissive_texture.x != max_u32) {
+        emissive = material.emissive.rgb * sample_texture(
+            emissive_texture,
+            v_texcoord,
+            material.emissive_rotation_scale,
+            material.emissive_offset
+        ).rgb;
+    } else {
+        emissive = material.emissive.rgb;
+    }
+
+    uint directional_light_count  = light_block.directional_light_count;
+    uint spot_light_count         = light_block.spot_light_count;
+    uint point_light_count        = light_block.point_light_count;
+    uint directional_light_offset = 0;
+    uint spot_light_offset        = directional_light_count;
+    uint point_light_offset       = spot_light_offset + spot_light_count;
+
+    //color = (0.5 + 0.5 * N.y) * light_block.ambient_light.rgb * base_color;
+    color = light_block.ambient_light.rgb * base_color;
+    color += emissive;
 
     for (uint i = 0; i < directional_light_count; ++i) {
         uint  light_index    = directional_light_offset + i;
@@ -45,8 +91,8 @@ void main() {
             vec3 intensity = light.radiance_and_range.rgb;
             color += intensity * isotropic_brdf(
                 base_color,
-                material.roughness.x,
-                material.metallic,
+                roughness,
+                metallic,
                 material.reflectance,
                 L,
                 V,
@@ -68,8 +114,8 @@ void main() {
             vec3  intensity         = range_attenuation * spot_attenuation * light.radiance_and_range.rgb * light_visibility;
             color += intensity * isotropic_brdf(
                 base_color,
-                material.roughness.x,
-                material.metallic,
+                roughness,
+                metallic,
                 material.reflectance,
                 L,
                 V,
@@ -90,8 +136,8 @@ void main() {
             vec3  intensity         = range_attenuation * light.radiance_and_range.rgb * light_visibility;
             color += intensity * isotropic_brdf(
                 base_color,
-                material.roughness.x,
-                material.metallic,
+                roughness,
+                metallic,
                 material.reflectance,
                 L,
                 V,

@@ -47,7 +47,7 @@ void main()
         camera.cameras[0].world_from_node[3][0],
         camera.cameras[0].world_from_node[3][1],
         camera.cameras[0].world_from_node[3][2]
-    ); 
+    );
     vec3  fragment_position = v_position.xyz / v_position.w;
     vec3  ro                = view_position_in_world;
     vec3  rd                = normalize(fragment_position - view_position_in_world);

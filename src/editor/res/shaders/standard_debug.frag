@@ -73,21 +73,15 @@ void main() {
         material.base_color_offset
     ).rgb;
 
-    float metallic;
-    float roughness;
-    if (metallic_roughness_texture.x != max_u32) {
-        vec4 metallic_roughness = sample_texture(
-            metallic_roughness_texture,
-            v_texcoord,
-            material.metallic_roughness_rotation_scale,
-            material.metallic_roughness_offset
-        );
-        metallic  = metallic_roughness.b;
-        roughness = metallic_roughness.g;
-    } else {
-        metallic  = material.metallic;
-        roughness = material.roughness.x;
-    }
+    vec4 metallic_roughness = sample_texture(
+        metallic_roughness_texture,
+        v_texcoord,
+        material.metallic_roughness_rotation_scale,
+        material.metallic_roughness_offset
+    );
+    float metallic    = material.metallic * metallic_roughness.b;
+    float roughness_x = material.roughness.x * metallic_roughness.g;
+    float roughness_y = material.roughness.x * metallic_roughness.g;
 
     if (normal_texture.x != max_u32) {
         vec3 ntex = sample_texture(
@@ -96,17 +90,24 @@ void main() {
             material.normal_rotation_scale,
             material.normal_offset
         ).xyz * 2.0 - vec3(1.0);
-        ntex.xy   = ntex.xy * material.normal_texture_scale;
-        ntex      = normalize(ntex);
-        N         = normalize(mat3(T0, B0, N) * ntex);
+        ntex.xy = ntex.xy * material.normal_texture_scale;
+        ntex    = normalize(ntex);
+        N       = normalize(mat3(T0, B0, N) * ntex);
     }
 
-    vec3 emissive;
-    if (emissive_texture.x != max_u32) {
-        emissive = material.emissive.rgb * sample_texture(emissive_texture, v_texcoord).rgb;
-    } else {
-        emissive = material.emissive.rgb;
-    }
+    vec3 emissive = material.emissive.rgb * sample_texture(
+        emissive_texture,
+        v_texcoord,
+        material.emissive_rotation_scale,
+        material.emissive_offset
+    ).rgb;
+
+    float occlusion = sample_texture(
+        occlusion_texture,
+        v_texcoord,
+        material.occlusion_rotation_scale,
+        material.occlusion_offset
+    ).r;
 
     vec2  T_circular                    = normalize(v_texcoord);
     float circular_anisotropy_magnitude = pow(length(v_texcoord) * 8.0, 0.25);
@@ -125,10 +126,10 @@ void main() {
     // Note: T and B are brushed metal computed, not generic shading.
     vec3  T                   = circular_anisotropy_magnitude > 0.0 ? mix(T0, T_circular.x * T0 + T_circular.y * B0, v_aniso_control.y) : T0;
     vec3  B                   = circular_anisotropy_magnitude > 0.0 ? mix(B0, T_circular.y * T0 - T_circular.x * B0, v_aniso_control.y) : B0;
-    float isotropic_roughness = 0.5 * material.roughness.x + 0.5 * material.roughness.y;
+    float isotropic_roughness = 0.5 * roughness_x + 0.5 * roughness_y;
     // Mix roughness based on anisotropy_strength
-    float roughness_x         = mix(isotropic_roughness, material.roughness.x, anisotropy_strength);
-    float roughness_y         = mix(isotropic_roughness, material.roughness.y, anisotropy_strength);
+    roughness_x = mix(isotropic_roughness, roughness_x, anisotropy_strength);
+    roughness_y = mix(isotropic_roughness, roughness_y, anisotropy_strength);
 
     mat3 TBN   = mat3(T0, B0, N);
     mat3 TBN_t = transpose(TBN);
@@ -171,7 +172,7 @@ void main() {
         //} else { 
         //    out_color.rgb = vec3(0.0, 1.0, 0.0);
         //}
-        out_color.rgb = vec3(0.5) + 0.5 * B0;
+        out_color.rgb = srgb_to_linear(vec3(0.5) + 0.5 * B0);
         //out_color.rgb = vec3(0.5) + 0.5 * v_B);
         //out_color.rgb = srgb_to_linear(vec3(0.5) + 0.5 * b);
     }
@@ -180,16 +181,16 @@ void main() {
     out_color.rgb = vec3(0.5 + 0.5 * v_tangent_scale);
 #endif
 #if defined(ERHE_DEBUG_VDOTN)
-    float V_dot_N = dot(V, N);
+    float V_dot_N = max(dot(V, N), 0.0);
     out_color.rgb = vec3(V_dot_N);
 #endif
 #if defined(ERHE_DEBUG_LDOTN)
-    float L_dot_N = dot(L, N);
+    float L_dot_N = max(dot(L, N), 0.0);
     out_color.rgb = vec3(L_dot_N);
 #endif
 #if defined(ERHE_DEBUG_HDOTV)
     vec3  H       = normalize(L + V);
-    float H_dot_N = dot(H, N);
+    float H_dot_N = max(dot(H, N), 0.0);
     out_color.rgb = vec3(H_dot_N);
 #endif
 #if defined(ERHE_DEBUG_JOINT_INDICES)
@@ -240,12 +241,10 @@ void main() {
     out_color.rgb = vec3(metallic);
 #endif
 #if defined(ERHE_DEBUG_ROUGHNESS)
-    out_color.rgb = vec3(roughness);
+    out_color.rgb = vec3(roughness_x, roughness_y, 0.0);
 #endif
 #if defined(ERHE_DEBUG_OCCLUSION)
-    if (occlusion_texture.x != max_u32) {
-        out_color.rgb = sample_texture(occlusion_texture, v_texcoord).rrr;
-    }
+    out_color.rgb = vec3(occlusion);
 #endif
 #if defined(ERHE_DEBUG_EMISSIVE)
     out_color.rgb = emissive;

@@ -46,6 +46,7 @@ public:
     float                     opacity                   {1.0f};
     float                     normal_texture_scale      {1.0f};
     float                     occlusion_texture_strength{1.0f};
+    bool                      unlit                     {false};
     Material_texture_samplers texture_samplers;
 };
 
@@ -65,15 +66,16 @@ public:
     auto get_type     () const -> uint64_t         override;
     auto get_type_name() const -> std::string_view override;
 
-    uint32_t  material_buffer_index{0}; // updated by Material_buffer::update()
-    glm::vec3 base_color  {1.0f, 1.0f, 1.0f};
-    float     opacity     {1.0f};
-    glm::vec2 roughness   {0.5f, 0.5f};
-    float     metallic    {0.0f};
-    float     reflectance {0.5f};
-    glm::vec3 emissive    {0.0f, 0.0f, 0.0f};
+    uint32_t  material_buffer_index     {0}; // updated by Material_buffer::update()
+    glm::vec3 base_color                {1.0f, 1.0f, 1.0f};
+    float     opacity                   {1.0f};
+    glm::vec2 roughness                 {0.5f, 0.5f};
+    float     metallic                  {0.0f};
+    float     reflectance               {0.5f};
+    glm::vec3 emissive                  {0.0f, 0.0f, 0.0f};
     float     normal_texture_scale      {1.0f};
     float     occlusion_texture_strength{1.0f};
+    bool      unlit                     {false};
 
     Material_texture_samplers texture_samplers;
 

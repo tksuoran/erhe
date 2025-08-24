@@ -820,6 +820,7 @@ void Properties::material_properties()
         //});
         //pop_group();
     }
+    add_entry("Unlit",       [=](){ ImGui::Checkbox("##",    &selected_material->unlit); });
     add_entry("Metallic",    [=](){ ImGui::SliderFloat("##", &selected_material->metallic,     0.0f,  1.0f); });
     add_entry("Reflectance", [=](){ ImGui::SliderFloat("##", &selected_material->reflectance,  0.35f, 1.0f); });
     add_entry("Roughness X", [=](){ ImGui::SliderFloat("##", &selected_material->roughness.x,  0.1f,  0.8f); });

@@ -19,8 +19,9 @@ Material::Material(const Material_create_info& create_info)
     , metallic                  {create_info.metallic}
     , reflectance               {create_info.reflectance}
     , emissive                  {create_info.emissive}
-    , normal_texture_scale      {create_info.normal_texture_scale      }
+    , normal_texture_scale      {create_info.normal_texture_scale}
     , occlusion_texture_strength{create_info.occlusion_texture_strength}
+    , unlit                     {create_info.unlit}
     , texture_samplers          {create_info.texture_samplers}
 {
     enable_flag_bits(erhe::Item_flags::show_in_ui);

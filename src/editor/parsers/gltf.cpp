@@ -98,8 +98,8 @@ void import_gltf(
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{scene_root.item_host_mutex};
 
     erhe::scene::Scene* scene = scene_root.get_hosted_scene();
-    auto& layers              = scene_root.layers();
-    layers.light()->ambient_light = glm::vec4{0.17f, 0.17f, 0.17f, 0.0f};
+    //auto& layers              = scene_root.layers();
+    //layers.light()->ambient_light = glm::vec4{0.17f, 0.17f, 0.17f, 0.0f};
 
     const auto scene_root_node = scene->get_root_node();
 

@@ -277,7 +277,8 @@ void Scene_builder::make_platonic_solid_brushes(App_settings& app_settings, Mesh
         erhe::geometry::Geometry::process_flag_build_edges |
         erhe::geometry::Geometry::process_flag_compute_facet_centroids |
         erhe::geometry::Geometry::process_flag_compute_smooth_vertex_normals |
-        erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates;
+        erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates |
+        erhe::geometry::Geometry::process_flag_generate_tangents;
 
     auto make_platonic_solid = [this, &folder, &app_settings, &mesh_memory, flags](const char* name, std::function<void(GEO::Mesh&)> builder)
     {
