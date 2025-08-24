@@ -105,7 +105,7 @@ private:
     Scene_view*                          m_hover_scene_view{nullptr};
     erhe::math::Bounding_volume_combiner m_selection_bounding_volume;
 
-    Visualization_mode m_lights                 {Visualization_mode::Selected};
+    Visualization_mode m_lights                 {Visualization_mode::All};
     Visualization_mode m_cameras                {Visualization_mode::Selected};
     Visualization_mode m_skins                  {Visualization_mode::All};
     Visualization_mode m_node_axis_visualization{Visualization_mode::None};

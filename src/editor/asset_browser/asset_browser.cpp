@@ -77,6 +77,7 @@ void Scene_open_operation::execute(App_context& context)
 
         import_gltf(
             *context.graphics_device,
+            *context.executor,
             erhe::primitive::Build_info{
                 .primitive_types = {
                     .fill_triangles  = true,
@@ -289,6 +290,7 @@ auto Asset_browser::try_import(const std::shared_ptr<Asset_file_gltf>& gltf) -> 
     if (ImGui::MenuItem(import_label.c_str())) {
         import_gltf(
             *m_context.graphics_device,
+            *m_context.executor,
             erhe::primitive::Build_info{
                 .primitive_types = {
                     .fill_triangles  = true,

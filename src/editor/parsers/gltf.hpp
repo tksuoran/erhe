@@ -7,6 +7,7 @@
 namespace erhe::graphics  { class Device; }
 namespace erhe::gltf      { class Image_transfer; }
 namespace erhe::primitive { class Build_info; }
+namespace tf              { class Executor; }
 
 namespace editor {
 
@@ -15,6 +16,7 @@ class Scene_root;
 
 void import_gltf(
     erhe::graphics::Device&      graphics_device,
+    tf::Executor&                executor,
     erhe::primitive::Build_info  build_info,
     Scene_root&                  scene_root,
     const std::filesystem::path& path

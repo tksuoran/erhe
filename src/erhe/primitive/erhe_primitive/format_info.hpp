@@ -20,6 +20,7 @@ public:
     bool joint_weights{false};
 };
 
+#if 0
 class Attribute_types
 {
 public:
@@ -33,5 +34,6 @@ public:
     erhe::dataformat::Format joint_indices{erhe::dataformat::Format::format_8_vec4_uint};
     erhe::dataformat::Format joint_weights{erhe::dataformat::Format::format_32_vec4_float};
 };
+#endif
 
 } // namespace erhe::primitive

@@ -73,6 +73,7 @@ void color_graph(
 
 void import_gltf(
     erhe::graphics::Device&      graphics_device,
+    tf::Executor&                executor,
     erhe::primitive::Build_info  build_info,
     Scene_root&                  scene_root,
     const std::filesystem::path& path
@@ -88,6 +89,7 @@ void import_gltf(
     erhe::gltf::Image_transfer image_transfer{graphics_device};
     erhe::gltf::Gltf_parse_arguments parse_arguments{
         .graphics_device = graphics_device,
+        .executor        = executor,
         .image_transfer  = image_transfer,
         .root_node       = root_node,
         .mesh_layer_id   = scene_root.layers().content()->id,
@@ -184,13 +186,13 @@ void import_gltf(
             for (erhe::scene::Mesh_primitive& mesh_primitive : mesh_primitives) {
                 erhe::primitive::Primitive& primitive = *mesh_primitive.primitive.get();
                 // Ensure geometry exists
-                const bool geometry_ok = primitive.make_geometry();
-                if (!geometry_ok) {
-                    continue;
-                }
+                //// const bool geometry_ok = primitive.make_geometry();
+                //// if (!geometry_ok) {
+                ////     continue;
+                //// }
 
                 // Ensure raytrace exists
-                ERHE_VERIFY(primitive.make_raytrace());
+                //// ERHE_VERIFY(primitive.make_raytrace());
 
                 // Ensure renderable mesh exists
                 ERHE_VERIFY(primitive.make_renderable_mesh(build_info, erhe::primitive::Normal_style::corner_normals));
@@ -295,16 +297,18 @@ auto scan_gltf(const std::filesystem::path& path) -> std::vector<std::string>
         }
     }
 
-    if (!scan.scenes    .empty()) out.push_back(fmt::format("{} scenes",     scan.scenes    .size()));
-    if (!scan.meshes    .empty()) out.push_back(fmt::format("{} meshes",     scan.meshes    .size()));
-    if (!scan.animations.empty()) out.push_back(fmt::format("{} animations", scan.animations.size()));
-    if (!scan.skins     .empty()) out.push_back(fmt::format("{} skins",      scan.skins     .size()));
-    if (!scan.materials .empty()) out.push_back(fmt::format("{} materials",  scan.materials .size()));
-    if (!scan.nodes     .empty()) out.push_back(fmt::format("{} nodes",      scan.nodes     .size()));
-    if (!scan.cameras   .empty()) out.push_back(fmt::format("{} cameras",    scan.cameras   .size()));
-    if (!scan.lights    .empty()) out.push_back(fmt::format("{} lights",     scan.lights    .size()));
-    if (!scan.images    .empty()) out.push_back(fmt::format("{} images",     scan.images    .size()));
-    if (!scan.samplers  .empty()) out.push_back(fmt::format("{} samplers",   scan.samplers  .size()));
+    if (!scan.scenes            .empty()) out.push_back(fmt::format("{} scenes",             scan.scenes            .size()));
+    if (!scan.meshes            .empty()) out.push_back(fmt::format("{} meshes",             scan.meshes            .size()));
+    if (!scan.animations        .empty()) out.push_back(fmt::format("{} animations",         scan.animations        .size()));
+    if (!scan.skins             .empty()) out.push_back(fmt::format("{} skins",              scan.skins             .size()));
+    if (!scan.materials         .empty()) out.push_back(fmt::format("{} materials",          scan.materials         .size()));
+    if (!scan.nodes             .empty()) out.push_back(fmt::format("{} nodes",              scan.nodes             .size()));
+    if (!scan.cameras           .empty()) out.push_back(fmt::format("{} cameras",            scan.cameras           .size()));
+    if (!scan.directional_lights.empty()) out.push_back(fmt::format("{} directional lights", scan.directional_lights.size()));
+    if (!scan.point_lights      .empty()) out.push_back(fmt::format("{} point lights",       scan.point_lights      .size()));
+    if (!scan.spot_lights       .empty()) out.push_back(fmt::format("{} spot lights",        scan.spot_lights       .size()));
+    if (!scan.images            .empty()) out.push_back(fmt::format("{} images",             scan.images            .size()));
+    if (!scan.samplers          .empty()) out.push_back(fmt::format("{} samplers",           scan.samplers          .size()));
     if (!scan.extensions_used.empty()) {
         out.push_back("Extensions used:");
         for (const std::string& extension : scan.extensions_used) {

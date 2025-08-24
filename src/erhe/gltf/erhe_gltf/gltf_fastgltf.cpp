@@ -40,13 +40,12 @@
 
 #include "mikktspace/mikktspace.hpp"
 
+#include <taskflow/taskflow.hpp>
+
 #include <algorithm>
 #include <filesystem>
-#include <fstream>
 #include <limits>
-#include <numeric>
 #include <string_view>
-#include <string>
 #include <string>
 #include <variant>
 #include <vector>
@@ -694,29 +693,47 @@ public:
             parse_sampler(i);
         }
 
-        log_gltf->trace("parsing materials");
-        m_data_out.materials.resize(m_asset->materials.size());
-        for (std::size_t i = 0, end = m_asset->materials.size(); i < end; ++i) {
+        const std::size_t material_count = m_asset->materials.size();
+        log_gltf->trace("parsing {} materials", material_count);
+        m_data_out.materials.resize(material_count);
+        for (std::size_t i = 0; i < material_count; ++i) {
             parse_material(i);
         }
 
-        log_gltf->trace("parsing cameras");
-        m_data_out.cameras.resize(m_asset->cameras.size());
-        for (std::size_t i = 0, end = m_asset->cameras.size(); i < end; ++i) {
+        const std::size_t camera_count = m_asset->cameras.size();
+        log_gltf->trace("parsing {} cameras", camera_count);
+        m_data_out.cameras.resize(camera_count);
+        for (std::size_t i = 0; i < camera_count; ++i) {
             parse_camera(i);
         }
 
-        log_gltf->trace("parsing lights");
-        m_data_out.lights.resize(m_asset->lights.size());
-        for (std::size_t i = 0, end = m_asset->lights.size(); i < end; ++i) {
+        const std::size_t light_count = m_asset->lights.size();
+        log_gltf->trace("parsing {} lights", light_count);
+        m_data_out.lights.resize(light_count);
+        for (std::size_t i = 0; i < light_count; ++i) {
             parse_light(i);
         }
 
-        log_gltf->trace("parsing meshes");
-        m_data_out.meshes.resize(m_asset->meshes.size());
-        for (std::size_t i = 0, end = m_asset->meshes.size(); i < end; ++i) {
-            parse_mesh(i);
+        const std::size_t mesh_count = m_asset->meshes.size();
+        log_gltf->trace("parsing {} meshes", mesh_count);
+        m_data_out.meshes.resize(mesh_count);
+        for (std::size_t i = 0; i < mesh_count; ++i) {
+            pre_parse_mesh(i);
         }
+
+        ::tf::Taskflow taskflow;
+        for (std::size_t i = 0; i < mesh_count; ++i) {
+            const fastgltf::Mesh& mesh = m_asset->meshes[i];
+            erhe::scene::Mesh& erhe_mesh = *m_data_out.meshes[i].get();
+            taskflow.emplace(
+                [this, &mesh, &erhe_mesh]()
+                {
+                    parse_mesh(mesh, erhe_mesh);
+                }
+            );
+        }
+        auto future = m_arguments.executor.run(taskflow);
+        future.wait();
 
         log_gltf->trace("parsing nodes");
         m_data_out.nodes.resize(m_asset->nodes.size());
@@ -1179,6 +1196,16 @@ private:
         m_data_out.samplers[sampler_index] = erhe_sampler;
         m_data_out.samplers.push_back(erhe_sampler);
     }
+    [[nodiscard]] auto is_tangent_frame_needed(const std::size_t material_index) -> bool {
+        const fastgltf::Material& material = m_asset->materials[material_index];
+        if (material.normalTexture.has_value()) {
+            return true;
+        }
+        if (material.anisotropy) {
+            return true;
+        }
+        return false;
+    }
     void parse_material(const std::size_t material_index)
     {
         ERHE_PROFILE_FUNCTION();
@@ -1235,10 +1262,14 @@ private:
             if (pbr_data.metallicRoughnessTexture.has_value()) {
                 apply_texture(pbr_data.metallicRoughnessTexture.value(), create_info.texture_samplers.metallic_roughness, true);
             }
+
+            // NOTE: MaterialSpecularGlossiness is only supported in a hacky way to load Hintze Hall
             const std::unique_ptr<fastgltf::MaterialSpecularGlossiness>& specular_glossiness = material.specularGlossiness;
             if (specular_glossiness && specular_glossiness->diffuseTexture.has_value()) {
+                create_info.unlit = true;
                 apply_texture(specular_glossiness->diffuseTexture.value(), create_info.texture_samplers.base_color, false);
             }
+
             create_info.base_color = glm::vec3{
                 pbr_data.baseColorFactor[0],
                 pbr_data.baseColorFactor[1],
@@ -1368,12 +1399,18 @@ private:
     public:
         std::size_t                                     index_accessor;
         std::vector<std::size_t>                        attribute_accessors;
+        bool                                            tangent_frame_needed;
         std::shared_ptr<erhe::primitive::Triangle_soup> triangle_soup;
         std::shared_ptr<erhe::primitive::Primitive>     primitive;
     };
-    std::vector<Primitive_entry> m_primitive_entries;
+    std::vector<Primitive_entry>   m_primitive_entries;
+    ERHE_PROFILE_MUTEX(std::mutex, m_primitive_entries_mutex);
 
-    void load_new_primitive_geometry(const fastgltf::Primitive& primitive, Primitive_entry& primitive_entry)
+    void load_new_primitive_geometry(
+        const fastgltf::Primitive& primitive,
+        Primitive_entry&           primitive_entry,
+        const bool                 tangent_frame_needed
+    )
     {
         ERHE_PROFILE_FUNCTION();
 
@@ -1401,7 +1438,8 @@ private:
         // Gather attributes
         std::size_t vertex_count = std::numeric_limits<std::size_t>::max();
         triangle_soup.vertex_format.streams.emplace_back(0);
-        bool generate_tangents = true;
+        bool generate_tangents   = tangent_frame_needed;
+        bool inject_vertex_color = true;
         for (std::size_t i = 0, end = primitive.attributes.size(); i < end; ++i) {
             const fastgltf::Attribute&                     gltf_attribute        = primitive.attributes[i];
             const erhe::dataformat::Vertex_attribute_usage attribute_usage_type  = to_erhe(gltf_attribute.name);
@@ -1410,6 +1448,9 @@ private:
             const erhe::dataformat::Format                 format                = to_erhe_attribute(accessor);
             if (attribute_usage_type == erhe::dataformat::Vertex_attribute_usage::tangent) {
                 generate_tangents = false;
+            }
+            if (attribute_usage_type == erhe::dataformat::Vertex_attribute_usage::color) {
+                inject_vertex_color = false;
             }
             vertex_count = std::min(accessor.count, vertex_count);
             triangle_soup.vertex_format.streams.front().emplace_back(
@@ -1422,6 +1463,18 @@ private:
             triangle_soup.vertex_format.streams.front().emplace_back(
                 erhe::dataformat::Format::format_32_vec4_float,
                 erhe::dataformat::Vertex_attribute_usage::tangent,
+                0
+            );
+            //triangle_soup.vertex_format.streams.front().emplace_back(
+            //    erhe::dataformat::Format::format_32_vec3_float,
+            //    erhe::dataformat::Vertex_attribute_usage::bitangent,
+            //    0
+            //);
+        }
+        if (inject_vertex_color) {
+            triangle_soup.vertex_format.streams.front().emplace_back(
+                erhe::dataformat::Format::format_32_vec4_float,
+                erhe::dataformat::Vertex_attribute_usage::color,
                 0
             );
         }
@@ -1470,16 +1523,18 @@ private:
 
         if (generate_tangents) {
             using namespace erhe::dataformat;
-            const Attribute_stream position_attribute_ = triangle_soup.vertex_format.find_attribute(Vertex_attribute_usage::position);
-            const Attribute_stream normal_attribute_   = triangle_soup.vertex_format.find_attribute(Vertex_attribute_usage::normal);
-            const Attribute_stream texcoord_attribute_ = triangle_soup.vertex_format.find_attribute(Vertex_attribute_usage::tex_coord);
-            const Attribute_stream tangent_attribute_  = triangle_soup.vertex_format.find_attribute(Vertex_attribute_usage::tangent);
+            const Attribute_stream position_attribute_  = triangle_soup.vertex_format.find_attribute(Vertex_attribute_usage::position);
+            const Attribute_stream normal_attribute_    = triangle_soup.vertex_format.find_attribute(Vertex_attribute_usage::normal);
+            const Attribute_stream texcoord_attribute_  = triangle_soup.vertex_format.find_attribute(Vertex_attribute_usage::tex_coord);
+            const Attribute_stream tangent_attribute_   = triangle_soup.vertex_format.find_attribute(Vertex_attribute_usage::tangent);
+            //const Attribute_stream bitangent_attribute_ = triangle_soup.vertex_format.find_attribute(Vertex_attribute_usage::bitangent);
 
             if (
-                (position_attribute_.attribute != nullptr) &&
-                (normal_attribute_  .attribute != nullptr) &&
-                (texcoord_attribute_.attribute != nullptr) &&
-                (tangent_attribute_ .attribute != nullptr)
+                (position_attribute_ .attribute != nullptr) &&
+                (normal_attribute_   .attribute != nullptr) &&
+                (texcoord_attribute_ .attribute != nullptr) &&
+                (tangent_attribute_  .attribute != nullptr)
+                //(bitangent_attribute_.attribute != nullptr)
             ) {
                 log_gltf->info("generating tangents using mikktspace");
                 // Generate tangents with mikktspace
@@ -1489,29 +1544,33 @@ private:
                 {
                 public:
                     std::span<uint32_t> indices;
-                    std::size_t         vertex_count; // = m_triangle_soup.vertex_data.size() / vertex_stream.stride;
-                    std::size_t         stride; // = m_triangle_soup.vertex_data.size() / vertex_stream.stride;
+                    std::size_t         vertex_count;
+                    std::size_t         stride;
                     const std::uint8_t* position_data;
                     const std::uint8_t* normal_data;
                     const std::uint8_t* texcoord_data;
                     std::uint8_t*       tangent_data;
+                    std::uint8_t*       bitangent_data;
                     Format              position_format;
                     Format              normal_format;
                     Format              texcoord_format;
                     Format              tangent_format;
+                    Format              bitangent_format;
                 };
                 Tangent_generation_context context{
-                    .indices         = std::span<uint32_t>{triangle_soup.index_data.data(), triangle_soup.index_data.size()},
-                    .vertex_count    = vertex_count,
-                    .stride          = position_attribute_.stream->stride,
-                    .position_data   = vertex_data + position_attribute_.attribute->offset,
-                    .normal_data     = vertex_data + normal_attribute_  .attribute->offset,
-                    .texcoord_data   = vertex_data + texcoord_attribute_.attribute->offset,
-                    .tangent_data    = vertex_data + tangent_attribute_ .attribute->offset,
-                    .position_format = position_attribute_.attribute->format,
-                    .normal_format   = normal_attribute_  .attribute->format,
-                    .texcoord_format = texcoord_attribute_.attribute->format,
-                    .tangent_format  = tangent_attribute_ .attribute->format
+                    .indices          = std::span<uint32_t>{triangle_soup.index_data.data(), triangle_soup.index_data.size()},
+                    .vertex_count     = vertex_count,
+                    .stride           = position_attribute_.stream->stride,
+                    .position_data    = vertex_data + position_attribute_ .attribute->offset,
+                    .normal_data      = vertex_data + normal_attribute_   .attribute->offset,
+                    .texcoord_data    = vertex_data + texcoord_attribute_ .attribute->offset,
+                    .tangent_data     = vertex_data + tangent_attribute_  .attribute->offset,
+                    //.bitangent_data   = vertex_data + bitangent_attribute_.attribute->offset,
+                    .position_format  = position_attribute_ .attribute->format,
+                    .normal_format    = normal_attribute_   .attribute->format,
+                    .texcoord_format  = texcoord_attribute_ .attribute->format,
+                    .tangent_format   = tangent_attribute_  .attribute->format,
+                    //.bitangent_format = bitangent_attribute_.attribute->format
                 };
                 SMikkTSpaceInterface mikktspace{
                     .m_getNumFaces = [](const SMikkTSpaceContext* mikk_tspace_context) -> int {
@@ -1562,10 +1621,13 @@ private:
                         const int                 vert
                     ) {
                         Tangent_generation_context* context = static_cast<Tangent_generation_context*>(mikk_tspace_context->m_pUserData);
-                        float src[4] = { tangent[0], tangent[1], tangent[2], is_orientation_preserving ? 1.0f : -1.0f };
+                        float tangent_src[4] = { tangent[0], tangent[1], tangent[2], is_orientation_preserving ? -1.0f : 1.0f };
                         const uint32_t v = context->indices[face * 3 + vert];
-                        std::uint8_t* dst = reinterpret_cast<std::uint8_t*>(context->tangent_data + context->stride * v);
-                        convert(src, Format::format_32_vec4_float, dst, context->tangent_format, 1.0f);
+                        std::uint8_t* tangent_dst = reinterpret_cast<std::uint8_t*>(context->tangent_data + context->stride * v);
+                        convert(tangent_src, Format::format_32_vec4_float, tangent_dst, context->tangent_format, 1.0f);
+                        //float bitangent_src[4] = { -bitangent[0], -bitangent[1], -bitangent[2], 0.0f };
+                        //std::uint8_t* bitangent_dst = reinterpret_cast<std::uint8_t*>(context->bitangent_data + context->stride * v);
+                        //convert(bitangent_src, Format::format_32_vec3_float, bitangent_dst, context->bitangent_format, 1.0f);
                     }
                 };
                 const SMikkTSpaceContext mikk_tspace_context {
@@ -1581,51 +1643,84 @@ private:
             }
         }
 
+        if (inject_vertex_color) {
+            using namespace erhe::dataformat;
+            const Attribute_stream color_attribute_ = triangle_soup.vertex_format.find_attribute(Vertex_attribute_usage::color);
+            ERHE_VERIFY(color_attribute_.attribute != nullptr);
+            const float       opaque_white[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
+            const std::size_t stride          = color_attribute_.stream->stride;
+            const auto        color_format    = color_attribute_.attribute->format;
+            uint8_t*          vertex_data     = triangle_soup.vertex_data.data();
+            std::uint8_t*     color_data      = vertex_data + color_attribute_.attribute->offset;
+            for (std::size_t v = 0; v < vertex_count; ++v) {
+                std::uint8_t* dst = reinterpret_cast<std::uint8_t*>(color_data + v * stride);
+                convert(opaque_white, Format::format_32_vec4_float, dst, color_format, 1.0f);
+            }
+        }
+
         primitive_entry.primitive = std::make_shared<erhe::primitive::Primitive>(primitive_entry.triangle_soup);
     }
-    auto get_primitive_geometry(const fastgltf::Primitive& primitive, Primitive_entry& primitive_entry)
+    auto get_primitive_geometry(
+        const fastgltf::Primitive& primitive, 
+        Primitive_entry&           primitive_entry,
+        const bool                 tangent_frame_needed
+    )
     {
         ERHE_PROFILE_FUNCTION();
 
         if (!primitive.indicesAccessor.has_value()) {
-            return; // TODO
+            return; // TODO likely draco compressed messed
         }
         primitive_entry.index_accessor = primitive.indicesAccessor.value();
         primitive_entry.attribute_accessors.clear();
+        primitive_entry.tangent_frame_needed = tangent_frame_needed;
         for (std::size_t i = 0, end = primitive.attributes.size(); i < end; ++i) {
             const fastgltf::Attribute& attribute = primitive.attributes[i];
             primitive_entry.attribute_accessors.push_back(attribute.accessorIndex);
         }
 
-        for (const auto& old_entry : m_primitive_entries) {
-            if (old_entry.index_accessor != primitive_entry.index_accessor) continue;
-            if (old_entry.attribute_accessors != primitive_entry.attribute_accessors) continue;
-            // Found existing entry
-            primitive_entry = old_entry;
-            return;
+        {
+            const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_primitive_entries_mutex};
+
+            for (const auto& old_entry : m_primitive_entries) {
+                if (old_entry.index_accessor != primitive_entry.index_accessor) continue;
+                if (old_entry.attribute_accessors != primitive_entry.attribute_accessors) continue;
+                if (old_entry.tangent_frame_needed != primitive_entry.tangent_frame_needed) continue;
+                // Found existing entry
+                primitive_entry = old_entry;
+                return;
+            }
         }
 
-        load_new_primitive_geometry(primitive, primitive_entry);
-        m_primitive_entries.push_back(primitive_entry);
+        load_new_primitive_geometry(primitive, primitive_entry, tangent_frame_needed);
+
+        {
+            const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_primitive_entries_mutex};
+
+            m_primitive_entries.push_back(primitive_entry);
+        }
     }
 
     void parse_primitive(
-        const std::shared_ptr<erhe::scene::Mesh>& erhe_mesh,
-        const fastgltf::Mesh&                     mesh,
-        const std::size_t                         primitive_index
+        erhe::scene::Mesh&    erhe_mesh,
+        const fastgltf::Mesh& mesh,
+        const std::size_t     primitive_index
     )
     {
         ERHE_PROFILE_FUNCTION();
 
         const fastgltf::Primitive& primitive = mesh.primitives[primitive_index];
         std::string name = fmt::format("{}[{}]", mesh.name.c_str(), primitive_index);
+        const bool tangent_frame_needed = primitive.materialIndex.has_value()
+            ? is_tangent_frame_needed(primitive.materialIndex.value())
+            : false;
         std::shared_ptr<erhe::primitive::Material> erhe_material = primitive.materialIndex.has_value()
             ? m_data_out.materials.at(primitive.materialIndex.value())
             : std::shared_ptr<erhe::primitive::Material>{};
 
         Primitive_entry primitive_entry;
-        get_primitive_geometry(primitive, primitive_entry);
-        erhe_mesh->add_primitive(primitive_entry.primitive, erhe_material);
+        get_primitive_geometry(primitive, primitive_entry, tangent_frame_needed);
+        erhe_mesh.add_primitive(primitive_entry.primitive, erhe_material);
     }
     void parse_skin(const std::size_t skin_index)
     {
@@ -1663,19 +1758,20 @@ private:
             );
         }
     }
-    void parse_mesh(const std::size_t mesh_index)
+    void pre_parse_mesh(const std::size_t mesh_index)
+    {
+        const fastgltf::Mesh& mesh = m_asset->meshes[mesh_index];
+        const std::string mesh_name = safe_resource_name(mesh.name, "mesh", mesh_index);
+        auto erhe_mesh = std::make_shared<erhe::scene::Mesh>(mesh_name);
+        m_data_out.meshes[mesh_index] = erhe_mesh;
+    }
+    void parse_mesh(const fastgltf::Mesh& mesh, erhe::scene::Mesh& erhe_mesh)
     {
         ERHE_PROFILE_FUNCTION();
 
-        const fastgltf::Mesh& mesh = m_asset->meshes[mesh_index];
-        const std::string mesh_name = safe_resource_name(mesh.name, "mesh", mesh_index);
-        log_gltf->trace("Mesh: mesh index = {}, name = {}", mesh_index, mesh_name);
-
-        auto erhe_mesh = std::make_shared<erhe::scene::Mesh>(mesh_name);
-        erhe_mesh->set_source_path(m_arguments.path);
-        erhe_mesh->layer_id = m_arguments.mesh_layer_id;
-        m_data_out.meshes[mesh_index] = erhe_mesh;
-        erhe_mesh->enable_flag_bits(
+        erhe_mesh.set_source_path(m_arguments.path);
+        erhe_mesh.layer_id = m_arguments.mesh_layer_id;
+        erhe_mesh.enable_flag_bits(
             Item_flags::content     |
             Item_flags::visible     |
             Item_flags::show_in_ui  |
@@ -1783,6 +1879,8 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
 {
     ERHE_PROFILE_FUNCTION();
 
+    log_gltf->info("glTF loading {}", arguments.path.string());
+
     erhe::time::Timer timer{"parse_gltf"};
     timer.begin();
 
@@ -1822,6 +1920,7 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
         log_gltf->error("glTF parse error: {}", fastgltf::getErrorMessage(error));
         return {};
     }
+
 
     Gltf_data result;
     Gltf_parser erhe_parser{std::move(asset), result, arguments};
@@ -1932,9 +2031,21 @@ auto scan_gltf(std::filesystem::path path) -> Gltf_scan
         result.cameras[i] = resource_name(asset->cameras[i].name, "camera", i);
     }
 
-    result.lights.resize(asset->lights.size());
     for (std::size_t i = 0, end = asset->lights.size(); i < end; ++i) {
-        result.lights[i] = resource_name(asset->lights[i].name, "light", i);
+        switch (asset->lights[i].type) {
+            case fastgltf::LightType::Directional: {
+                result.directional_lights.push_back(resource_name(asset->lights[i].name, "directional_light", result.directional_lights.size()));
+                break;
+            }
+            case fastgltf::LightType::Point: {
+                result.point_lights.push_back(resource_name(asset->lights[i].name, "point_light", result.point_lights.size()));
+                break;
+            }
+            case fastgltf::LightType::Spot: {
+                result.spot_lights.push_back(resource_name(asset->lights[i].name, "spot_light", result.spot_lights.size()));
+                break;
+            }
+        }
     }
 
     result.meshes.resize(asset->meshes.size());

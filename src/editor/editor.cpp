@@ -516,6 +516,7 @@ public:
                         { erhe::dataformat::Format::format_32_vec3_float, erhe::dataformat::Vertex_attribute_usage::normal,    0},
                         { erhe::dataformat::Format::format_32_vec3_float, erhe::dataformat::Vertex_attribute_usage::normal,    1}, // wireframe bias requires smooth normal attribute
                         { erhe::dataformat::Format::format_32_vec4_float, erhe::dataformat::Vertex_attribute_usage::tangent,   0},
+                        // { erhe::dataformat::Format::format_32_vec3_float, erhe::dataformat::Vertex_attribute_usage::bitangent, 0},
                         { erhe::dataformat::Format::format_32_vec2_float, erhe::dataformat::Vertex_attribute_usage::tex_coord, 0},
                         { erhe::dataformat::Format::format_32_vec4_float, erhe::dataformat::Vertex_attribute_usage::color,     0},
                         { erhe::dataformat::Format::format_8_vec2_unorm,  erhe::dataformat::Vertex_attribute_usage::custom,    erhe::dataformat::custom_attribute_aniso_control},
@@ -1197,6 +1198,8 @@ public:
     void fill_app_context()
     {
         ERHE_PROFILE_FUNCTION();
+
+        m_app_context.executor               = m_executor.get();
 
         m_app_context.commands               = m_commands              .get();
         m_app_context.graphics_device        = m_graphics_device       .get();

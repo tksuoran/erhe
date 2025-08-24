@@ -31,6 +31,10 @@ namespace erhe::window {
     class Context_window;
 }
 
+namespace tf {
+    class Executor;
+}
+
 namespace editor {
 
 class Brdf_slice;
@@ -93,6 +97,8 @@ public:
     bool  renderdoc     {false};
     bool  use_sleep     {false};
     float sleep_margin  {0.0f}; // TODO
+
+    tf::Executor*                           executor              {nullptr};
 
     erhe::commands::Commands*               commands              {nullptr};
     erhe::graphics::Device*                 graphics_device       {nullptr};

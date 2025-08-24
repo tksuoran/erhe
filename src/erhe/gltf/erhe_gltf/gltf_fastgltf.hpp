@@ -29,6 +29,8 @@ namespace erhe::scene {
     using Layer_id = uint64_t;
 }
 
+namespace tf { class Executor; }
+
 namespace erhe::gltf {
 
 class Image_transfer;
@@ -53,7 +55,9 @@ class Gltf_scan
 public:
     std::vector<std::string> animations;
     std::vector<std::string> cameras;
-    std::vector<std::string> lights;
+    std::vector<std::string> directional_lights;
+    std::vector<std::string> point_lights;
+    std::vector<std::string> spot_lights;
     std::vector<std::string> meshes;
     std::vector<std::string> skins;
     std::vector<std::string> nodes;
@@ -69,6 +73,7 @@ public:
 struct Gltf_parse_arguments
 {
     erhe::graphics::Device&                   graphics_device;
+    ::tf::Executor&                           executor;
     Image_transfer&                           image_transfer;
     const std::shared_ptr<erhe::scene::Node>& root_node;
     erhe::scene::Layer_id                     mesh_layer_id{};

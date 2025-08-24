@@ -1264,7 +1264,7 @@ void Debug_visualizations::mesh_labels(const Render_context& context, erhe::scen
         if (!primitive.render_shape) {
             continue;
         }
-        const std::shared_ptr<erhe::geometry::Geometry>& geometry = primitive.render_shape->get_geometry();
+        const std::shared_ptr<erhe::geometry::Geometry>& geometry = primitive.render_shape->get_geometry_const();
         if (!geometry) {
             continue;
         }

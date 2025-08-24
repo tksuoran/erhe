@@ -30,6 +30,7 @@ endif ()
 target_link_libraries(${_target}
     PRIVATE
         fmt::fmt
+        Taskflow
         erhe::file
         erhe::profile
         erhe::geometry

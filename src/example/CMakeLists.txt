@@ -24,6 +24,7 @@ erhe_target_sources_grouped(
 target_link_libraries(
     ${_target}
     PRIVATE
+    Taskflow
     erhe::utility
     erhe::dataformat
     erhe::file

@@ -40,6 +40,10 @@
 #include "erhe_window/window_event_handler.hpp"
 #include "erhe_window/window_log.hpp"
 
+#include <taskflow/taskflow.hpp>
+
+#include <thread>
+
 namespace example {
 
 class Example : public erhe::window::Input_event_handler
@@ -425,9 +429,13 @@ void run_example()
     erhe::scene_renderer::Forward_renderer  forward_renderer {graphics_device, program_interface};
     Programs                                programs         {graphics_device, program_interface};
 
+    const unsigned int thread_count = std::thread::hardware_concurrency();
+    tf::Executor executor{thread_count};
+
     erhe::gltf::Gltf_data gltf_data = erhe::gltf::parse_gltf(
         erhe::gltf::Gltf_parse_arguments{
             .graphics_device = graphics_device,
+            .executor        = executor,
             .image_transfer  = image_transfer,
             .root_node       = scene.get_root_node(),
             //.path          = "res/models/Box.gltf"
