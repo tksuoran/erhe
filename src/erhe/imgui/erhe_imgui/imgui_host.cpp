@@ -263,7 +263,7 @@ auto Imgui_host::on_mouse_move_event(const erhe::window::Input_event& input_even
     SPDLOG_LOGGER_TRACE(log_input_events, "Imgui_host::on_mouse_move_event(x = {}, y = {}) {}", input_event.u.mouse_move_event.x, input_event.u.mouse_move_event.y, get_name());
     ImGuiIO& io = m_imgui_context->IO;
     io.AddMousePosEvent(input_event.u.mouse_move_event.x, input_event.u.mouse_move_event.y);
-    return false;
+    return want_capture_mouse();
 }
 
 auto Imgui_host::on_mouse_button_event(const erhe::window::Input_event& input_event) -> bool
@@ -275,7 +275,7 @@ auto Imgui_host::on_mouse_button_event(const erhe::window::Input_event& input_ev
 
     ImGuiIO& io = m_imgui_context->IO;
     io.AddMouseButtonEvent(imgui_mouse_button, input_event.u.mouse_button_event.pressed);
-    return false;
+    return want_capture_mouse();
 }
 
 auto Imgui_host::on_mouse_wheel_event(const erhe::window::Input_event& input_event) -> bool
@@ -284,7 +284,7 @@ auto Imgui_host::on_mouse_wheel_event(const erhe::window::Input_event& input_eve
     //io.AddMouseSourceEvent(ImGuiMouseSource_TouchScreen);
     io.AddMouseWheelEvent(input_event.u.mouse_wheel_event.x, input_event.u.mouse_wheel_event.y);
     //io.AddMouseSourceEvent(ImGuiMouseSource_Mouse);
-    return false;
+    return want_capture_mouse();
 }
 
 auto Imgui_host::on_key_event(const erhe::window::Input_event& input_event) -> bool
@@ -294,21 +294,21 @@ auto Imgui_host::on_key_event(const erhe::window::Input_event& input_event) -> b
     ImGuiIO& io = m_imgui_context->IO;
     update_key_modifiers(io, input_event.u.key_event.modifier_mask);
     io.AddKeyEvent(from_erhe(input_event.u.key_event.keycode), input_event.u.key_event.pressed);
-    return false;
+    return want_capture_keyboard();
 }
 
 auto Imgui_host::on_text_event(const erhe::window::Input_event& input_event) -> bool
 {
     ImGuiIO& io = m_imgui_context->IO;
     io.AddInputCharactersUTF8(input_event.u.text_event.utf8_text);
-    return false;
+    return want_capture_keyboard();
 }
 
 auto Imgui_host::on_char_event(const erhe::window::Input_event& input_event) -> bool
 {
     ImGuiIO& io = m_imgui_context->IO;
     io.AddInputCharacter(input_event.u.char_event.codepoint);
-    return true;
+    return want_capture_keyboard();
 }
 
 #pragma endregion Events
