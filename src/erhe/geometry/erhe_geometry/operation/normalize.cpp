@@ -18,7 +18,9 @@ Normalize::Normalize(const Geometry& source, Geometry& destination)
 
 void Normalize::build()
 {
+    destination.get_attributes().unbind();
     destination_mesh.copy(source_mesh, true);
+    destination.get_attributes().bind();
     copy_mesh_attributes();
 
     for (GEO::index_t vertex : destination_mesh.vertices) {

@@ -18,7 +18,9 @@ Generate_tangents::Generate_tangents(const Geometry& source, Geometry& destinati
 
 void Generate_tangents::build()
 {
+    destination.get_attributes().unbind();
     destination_mesh.copy(source_mesh, true);
+    destination.get_attributes().bind();
     copy_mesh_attributes();
 
     const uint64_t flags =
