@@ -348,11 +348,13 @@ void Hotbar::init_radial_menu(Mesh_memory& mesh_memory, Scene_root&  scene_root)
 
     auto disc_material = std::make_shared<erhe::primitive::Material>(
         erhe::primitive::Material_create_info{
-            .name       = "Circular Menu Disc",
-            .base_color = glm::vec3{0.1f, 0.2f, 0.3f}
+            .name = "Circular Menu Disc",
+            .data = {
+                .base_color = glm::vec3{0.1f, 0.2f, 0.3f},
+                .opacity    = 0.5f
+            }
         }
     );
-    disc_material->opacity = 0.5f;
 
     GEO::Mesh disc_geo_mesh_shared;
     disc_geo_mesh_shared.vertices.set_single_precision();

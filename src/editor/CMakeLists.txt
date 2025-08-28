@@ -139,6 +139,8 @@ erhe_target_sources_grouped(
     operations/item_parent_change_operation.hpp
     operations/item_reposition_in_parent_operation.cpp
     operations/item_reposition_in_parent_operation.hpp
+    operations/material_change_operation.cpp
+    operations/material_change_operation.hpp
     operations/merge_operation.cpp
     operations/merge_operation.hpp
     operations/mesh_operation.cpp

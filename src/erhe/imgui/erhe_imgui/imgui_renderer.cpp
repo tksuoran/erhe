@@ -721,7 +721,6 @@ void Imgui_renderer::update_texture(ImTextureData* tex)
 
     if (tex->Status == ImTextureStatus_WantCreate) {
         // Create and upload new texture to graphics system
-        //IMGUI_DEBUG_LOG("UpdateTexture #%03d: WantCreate %dx%d\n", tex->UniqueID, tex->Width, tex->Height);
         IM_ASSERT(tex->TexID == ImTextureID_Invalid && tex->BackendUserData == nullptr);
 
         /// Create texture
@@ -777,31 +776,33 @@ void Imgui_renderer::update_texture(ImTextureData* tex)
             )
         );
         tex->SetStatus(ImTextureStatus_OK);
-    }
-    else if (tex->Status == ImTextureStatus_WantUpdates)
-    {
+
+    } else if (tex->Status == ImTextureStatus_WantUpdates) {
+
         // Update selected blocks. We only ever write to textures regions which have never been used before!
-        // This backend choose to use tex->Updates[] but you can use tex->UpdateRect to upload a single region.
         Erhe_ImTextureID                         texture_id        = tex->GetTexID();
         const erhe::graphics::Texture_reference* texture_reference = texture_id.texture_reference;
         const erhe::graphics::Texture*           texture           = texture_reference->get_referenced_texture();
         ERHE_VERIFY(texture != nullptr);
         log_imgui->trace("updating texture {}", fmt::ptr(texture));
 
-        for (ImTextureRect& r : tex->Updates) {
+        erhe::graphics::Blit_command_encoder encoder{m_graphics_device};
+
+        auto update_rect = [this, &encoder, texture, tex](ImTextureRect& r) -> void
+        {
             const std::span<const std::uint8_t> data{
                 static_cast<const std::uint8_t*>(tex->GetPixels()),
-                 static_cast<size_t>(tex->GetSizeInBytes())
+                static_cast<size_t>(tex->GetSizeInBytes())
             };
             const std::span<const std::uint8_t> src_span{
                 static_cast<const std::uint8_t*>(tex->GetPixels()),
                 static_cast<size_t>(tex->GetSizeInBytes())
             };
 
-            std::size_t buffer_offset = r.x * tex->BytesPerPixel + r.y * tex->GetPitch();
+            const std::size_t buffer_offset = r.x * tex->BytesPerPixel + r.y * tex->GetPitch();
 
             // TODO We don't necessarily always need full texture size buffer range, just for the rectangle
-            std::size_t                        byte_count   = src_span.size_bytes();
+            const std::size_t                  byte_count   = src_span.size_bytes();
             erhe::graphics::Ring_buffer_client texture_upload_buffer{m_graphics_device, erhe::graphics::Buffer_target::pixel, "ImGui Draw Texture Update"};
             erhe::graphics::Ring_buffer_range  buffer_range = texture_upload_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, byte_count);
             std::span<std::byte>               dst_span     = buffer_range.get_span();
@@ -809,7 +810,6 @@ void Imgui_renderer::update_texture(ImTextureData* tex)
             buffer_range.bytes_written(byte_count);
             buffer_range.close();
 
-            erhe::graphics::Blit_command_encoder encoder{m_graphics_device};
             encoder.copy_from_buffer(
                 buffer_range.get_buffer()->get_buffer(),                        // source_buffer
                 buffer_range.get_byte_start_offset_in_buffer() + buffer_offset, // source_offset
@@ -823,10 +823,19 @@ void Imgui_renderer::update_texture(ImTextureData* tex)
             );
 
             buffer_range.release();
+        };
+
+        if (tex->Updates.Size < 20) {
+            for (ImTextureRect& r : tex->Updates) {
+                update_rect(r);
+            }
+        } else {
+            update_rect(tex->UpdateRect);
         }
         tex->SetStatus(ImTextureStatus_OK);
-    }
-    else if (tex->Status == ImTextureStatus_WantDestroy && tex->UnusedFrames > 0) {
+
+    } else if (tex->Status == ImTextureStatus_WantDestroy && tex->UnusedFrames > 0) {
+
         Erhe_ImTextureID                         texture_id        = tex->GetTexID();
         const erhe::graphics::Texture_reference* texture_reference = texture_id.texture_reference;
         const erhe::graphics::Texture*           texture           = texture_reference->get_referenced_texture();

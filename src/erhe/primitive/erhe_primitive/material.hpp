@@ -15,8 +15,9 @@ namespace erhe::graphics {
 
 namespace erhe::primitive {
 
-struct Material_texture_sampler
+class Material_texture_sampler
 {
+public:
     std::shared_ptr<erhe::graphics::Texture> texture;
     std::shared_ptr<erhe::graphics::Sampler> sampler;
     uint32_t                                 tex_coord{0};
@@ -25,8 +26,12 @@ struct Material_texture_sampler
     glm::vec2                                scale    {1.0f, 1.0f};
 };
 
-struct Material_texture_samplers
+[[nodiscard]] auto operator==(const Material_texture_sampler& lhs, const Material_texture_sampler& rhs);
+[[nodiscard]] auto operator!=(const Material_texture_sampler& lhs, const Material_texture_sampler& rhs);
+
+class Material_texture_samplers
 {
+public:
     Material_texture_sampler base_color;
     Material_texture_sampler metallic_roughness;
     Material_texture_sampler normal;
@@ -34,20 +39,29 @@ struct Material_texture_samplers
     Material_texture_sampler emissive;
 };
 
-class Material_create_info
+[[nodiscard]] auto operator==(const Material_texture_samplers& lhs, const Material_texture_samplers& rhs);
+[[nodiscard]] auto operator!=(const Material_texture_samplers& lhs, const Material_texture_samplers& rhs);
+
+class Material_data
 {
 public:
-    std::string               name;
     glm::vec3                 base_color                {1.0f, 1.0f, 1.0f};
+    float                     opacity                   {1.0f};
     glm::vec2                 roughness                 {0.5f, 0.5f};
     float                     metallic                  {0.0f};
     float                     reflectance               {0.5f};
     glm::vec3                 emissive                  {0.0f, 0.0f, 0.0f};
-    float                     opacity                   {1.0f};
     float                     normal_texture_scale      {1.0f};
     float                     occlusion_texture_strength{1.0f};
     bool                      unlit                     {false};
     Material_texture_samplers texture_samplers;
+};
+
+class Material_create_info
+{
+public:
+    std::string   name;
+    Material_data data;
 };
 
 class Material : public erhe::Item<erhe::Item_base, erhe::Item_base, Material>
@@ -66,20 +80,15 @@ public:
     auto get_type     () const -> uint64_t         override;
     auto get_type_name() const -> std::string_view override;
 
-    uint32_t  material_buffer_index     {0}; // updated by Material_buffer::update()
-    glm::vec3 base_color                {1.0f, 1.0f, 1.0f};
-    float     opacity                   {1.0f};
-    glm::vec2 roughness                 {0.5f, 0.5f};
-    float     metallic                  {0.0f};
-    float     reflectance               {0.5f};
-    glm::vec3 emissive                  {0.0f, 0.0f, 0.0f};
-    float     normal_texture_scale      {1.0f};
-    float     occlusion_texture_strength{1.0f};
-    bool      unlit                     {false};
-
-    Material_texture_samplers texture_samplers;
-
+    uint32_t                material_buffer_index{0}; // updated by Material_buffer::update()
     std::optional<uint32_t> preview_slot;
+    Material_data           data;
 };
+
+[[nodiscard]] auto operator==(const Material_data& lhs, const Material_data& rhs) -> bool;
+[[nodiscard]] auto operator!=(const Material_data& lhs, const Material_data& rhs) -> bool;
+
+[[nodiscard]] auto operator==(const Material& lhs, const Material& rhs) -> bool;
+[[nodiscard]] auto operator!=(const Material& lhs, const Material& rhs) -> bool;
 
 } // namespace erhe::primitive

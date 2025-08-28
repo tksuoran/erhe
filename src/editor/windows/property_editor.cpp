@@ -120,6 +120,15 @@ void Property_editor::show_entries(const char* label, ImVec2 cell_padding)
             ImGui::TableSetColumnIndex(1);
             ImGui::SetNextItemWidth(-FLT_MIN); 
             entry.editor();
+            if (m_state != nullptr) {
+                if (ImGui::IsItemDeactivatedAfterEdit()) {
+                    set_dirty_completed();
+                } else if ((*m_state == Editor_state::dirty_editing) && ImGui::IsItemDeactivated()) {
+                    set_dirty_completed();
+                } else if (ImGui::IsItemEdited()) {
+                    set_dirty_editing();
+                }
+            }
         }
         ImGui::PopID();
     }
@@ -127,6 +136,31 @@ void Property_editor::show_entries(const char* label, ImVec2 cell_padding)
 
     ImGui::EndTable();
     ImGui::PopStyleVar(1);
+
+    m_entries.clear();
+}
+
+void Property_editor::use_state(Editor_state* state)
+{
+    m_state = state;
+}
+
+void Property_editor::set_dirty_editing()
+{
+    if (m_state == nullptr) {
+        return;
+    }
+    if (*m_state == Editor_state::clean) {
+        *m_state = Editor_state::dirty_editing;
+    }
+}
+
+void Property_editor::set_dirty_completed()
+{
+    if (m_state == nullptr) {
+        return;
+    }
+    *m_state = Editor_state::dirty_completed;
 }
 
 }

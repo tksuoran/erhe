@@ -19,10 +19,12 @@ void add_default_materials(Content_library& library)
     {
         materials.make<erhe::primitive::Material>(
             erhe::primitive::Material_create_info{
-                .name       = name, 
-                .base_color = glm::vec3{r, g, b},
-                .roughness  = roughness,
-                .metallic   = 1.0f
+                .name = name,
+                .data = {
+                    .base_color = glm::vec3{r, g, b},
+                    .roughness  = roughness,
+                    .metallic   = 1.0f
+                }
             }
         );
     };

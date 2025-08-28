@@ -2,6 +2,7 @@
 
 #include "windows/property_editor.hpp"
 
+#include "erhe_primitive/material.hpp"
 #include "erhe_imgui/imgui_window.hpp"
 
 #include <memory>
@@ -68,7 +69,14 @@ private:
     void item_flags                   (const std::shared_ptr<erhe::Item_base>& item);
     void item_properties              (const std::shared_ptr<erhe::Item_base>& item);
 
+    void end_material_inspect();
+
     App_context& m_context;
+
+    Editor_state                               m_material_state{Editor_state::clean};
+    std::shared_ptr<erhe::primitive::Material> m_inspected_material;
+    erhe::primitive::Material_data             m_inspected_material_initial_state;
+
 };
 
 }

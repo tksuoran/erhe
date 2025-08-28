@@ -698,10 +698,12 @@ void Scene_builder::add_room()
 
         floor_material = material_library.make<erhe::primitive::Material>(
             erhe::primitive::Material_create_info{
-                .name       = "Floor",
-                .base_color = glm::vec3{0.07f, 0.07f, 0.07f},
-                .roughness  = glm::vec2{0.9f, 0.9f},
-                .metallic   = 0.01f // TODO 0.0f ?
+                .name = "Floor",
+                .data = {
+                    .base_color = glm::vec3{0.07f, 0.07f, 0.07f},
+                    .roughness  = glm::vec2{0.9f, 0.9f},
+                    .metallic   = 0.01f // TODO 0.0f ?
+                }
             }
         );
     }
@@ -964,10 +966,12 @@ void Scene_builder::add_cubes(glm::ivec3 shape, float scale, float gap)
     auto& material_library = m_scene_root->get_content_library()->materials;
     auto material = material_library->make<erhe::primitive::Material>(
         erhe::primitive::Material_create_info{
-            .name       = "cube",
-            .base_color = glm::vec4{1.0, 1.0f, 1.0f, 1.0f},
-            .roughness  = glm::vec2{0.3f, 0.4f},
-            .metallic   = 0.0f
+            .name = "cube",
+            .data = {
+                .base_color = glm::vec4{1.0, 1.0f, 1.0f, 1.0f},
+                .roughness  = glm::vec2{0.3f, 0.4f},
+                .metallic   = 0.0f
+            }
         }
     );
 

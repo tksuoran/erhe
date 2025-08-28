@@ -705,10 +705,12 @@ void Operations::create_material()
 
     std::shared_ptr<erhe::primitive::Material> new_material = std::make_shared<erhe::primitive::Material>(
         erhe::primitive::Material_create_info{
-            .name       = "New Material",
-            .base_color = glm::vec3{0.5f, 0.5f, 0.5f},
-            .roughness  = glm::vec2{0.5f, 0.5f},
-            .metallic   = 1.0f
+            .name = "New Material",
+            .data = {
+                .base_color = glm::vec3{0.5f, 0.5f, 0.5f},
+                .roughness  = glm::vec2{0.5f, 0.5f},
+                .metallic   = 1.0f
+            }
         }
     );
     std::shared_ptr<Content_library_node> new_content_library_node = std::make_shared<Content_library_node>(new_material);

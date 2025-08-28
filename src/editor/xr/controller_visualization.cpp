@@ -24,8 +24,10 @@ Controller_visualization::Controller_visualization(erhe::scene::Node* view_root,
     auto& material_library = scene_root.get_content_library()->materials;
     auto controller_material = material_library->make<erhe::primitive::Material>(
         erhe::primitive::Material_create_info{
-            .name       = "Controller",
-            .base_color = glm::vec3{0.1f, 0.1f, 0.2f}
+            .name = "Controller",
+            .data = {
+                .base_color = glm::vec3{0.1f, 0.1f, 0.2f}
+            }
         }
     );
 

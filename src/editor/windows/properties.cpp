@@ -1,20 +1,23 @@
 #include "windows/properties.hpp"
 
+#include "animation/animation_curve.hpp"
+#include "animation/timeline_window.hpp"
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
-#include "rendertarget_mesh.hpp"
 #include "brushes/brush.hpp"
 #include "brushes/brush_placement.hpp"
-#include "content_library/content_library.hpp"
 #include "content_library/brdf_slice.hpp"
-#include "tools/selection_tool.hpp"
+#include "content_library/content_library.hpp"
+#include "editor_log.hpp"
+#include "operations/material_change_operation.hpp"
+#include "operations/operation_stack.hpp"
 #include "preview/material_preview.hpp"
+#include "rendertarget_mesh.hpp"
 #include "scene/frame_controller.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_commands.hpp"
 #include "scene/scene_root.hpp"
-#include "animation/animation_curve.hpp"
-#include "animation/timeline_window.hpp"
+#include "tools/selection_tool.hpp"
 
 #include "erhe_defer/defer.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
@@ -780,16 +783,58 @@ void Properties::item_properties(const std::shared_ptr<erhe::Item_base>& item_in
     pop_group();
 }
 
+void Properties::end_material_inspect()
+{
+    if (m_inspected_material && (m_inspected_material->data != m_inspected_material_initial_state)) {
+        log_operations->info("end_material_inspect - material changed");
+        m_context.operation_stack->queue(
+            std::make_shared<Material_change_operation>(
+                m_inspected_material, m_inspected_material_initial_state, m_inspected_material->data
+            )
+        );
+        m_inspected_material_initial_state = m_inspected_material->data;
+    } else {
+        log_operations->info("end_material_inspect - material not changed");
+    }
+    m_material_state = Editor_state::clean;
+}
+
 void Properties::material_properties()
 {
     ERHE_PROFILE_FUNCTION();
 
-    const std::shared_ptr<erhe::primitive::Material> selected_material_ = m_context.selection->get<erhe::primitive::Material>();
-    if (!selected_material_) {
+    const std::shared_ptr<erhe::primitive::Material> selected_material_shared = m_context.selection->get<erhe::primitive::Material>();
+    if (m_inspected_material != selected_material_shared) {
+        log_operations->info("m_inspected_material != selected_material_shared");
+        if (m_inspected_material) {
+            end_material_inspect();
+        }
+        m_inspected_material = selected_material_shared;
+        if (m_inspected_material) {
+            log_operations->info("have m_inspected_material - record initial state");
+            m_inspected_material_initial_state = m_inspected_material->data;
+            m_material_state = Editor_state::clean;
+        }
+    }
+
+    if (!selected_material_shared) {
         return;
     }
-    erhe::primitive::Material* selected_material = selected_material_.get();
+
+    use_state(&m_material_state);
+
+    erhe::primitive::Material* selected_material = selected_material_shared.get();
+
+    const std::string                           name_before = selected_material->get_name();
+    const erhe::primitive::Material_data        before      = selected_material->data;
+    erhe::primitive::Material_data&             data        = selected_material->data;
+    erhe::primitive::Material_texture_samplers& samplers    = data.texture_samplers;
     push_group("Material", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed, m_indent);
+
+    add_entry("state", [this]() {ImGui::TextUnformatted(
+        (m_material_state == Editor_state::clean          ) ? "clean" :
+        (m_material_state == Editor_state::dirty_editing  ) ? "dirty_editing" :
+        (m_material_state == Editor_state::dirty_completed) ? "dirty_completed" : "?"); });
 
     add_entry("Name", [=]() {
         std::string name = selected_material->get_name();
@@ -803,12 +848,12 @@ void Properties::material_properties()
     const int   area_size      = std::max(1, static_cast<int>(area_size_0));
     m_context.material_preview->resize(area_size, area_size);
     m_context.material_preview->update_rendertarget(*m_context.graphics_device);
-    m_context.material_preview->render_preview(selected_material_);
+    m_context.material_preview->render_preview(selected_material_shared);
     m_context.material_preview->show_preview();
 
     auto* node = m_context.brdf_slice->get_node();
     if (node != nullptr) {
-        node->set_material(selected_material_);
+        node->set_material(selected_material_shared);
         if (ImGui::TreeNodeEx("BRDF Slice", ImGuiTreeNodeFlags_None)) {
             m_context.brdf_slice->show_brdf_slice(area_size);
             ImGui::TreePop();
@@ -820,14 +865,14 @@ void Properties::material_properties()
         //});
         //pop_group();
     }
-    add_entry("Unlit",       [=](){ ImGui::Checkbox("##",    &selected_material->unlit); });
-    add_entry("Metallic",    [=](){ ImGui::SliderFloat("##", &selected_material->metallic,     0.0f,  1.0f); });
-    add_entry("Reflectance", [=](){ ImGui::SliderFloat("##", &selected_material->reflectance,  0.35f, 1.0f); });
-    add_entry("Roughness X", [=](){ ImGui::SliderFloat("##", &selected_material->roughness.x,  0.1f,  0.8f); });
-    add_entry("Roughness Y", [=](){ ImGui::SliderFloat("##", &selected_material->roughness.y,  0.1f,  0.8f); });
-    add_entry("Base Color",  [=](){ ImGui::ColorEdit4 ("##", &selected_material->base_color.x, ImGuiColorEditFlags_Float); });
-    add_entry("Emissive",    [=](){ ImGui::ColorEdit4 ("##", &selected_material->emissive.x,   ImGuiColorEditFlags_Float); });
-    add_entry("Opacity",     [=](){ ImGui::SliderFloat("##", &selected_material->opacity,      0.0f,  1.0f); });
+    add_entry("Unlit",       [&](){ ImGui::Checkbox("##",    &data.unlit); });
+    add_entry("Metallic",    [&](){ ImGui::SliderFloat("##", &data.metallic,     0.0f,  1.0f); });
+    add_entry("Reflectance", [&](){ ImGui::SliderFloat("##", &data.reflectance,  0.35f, 1.0f); });
+    add_entry("Roughness X", [&](){ ImGui::SliderFloat("##", &data.roughness.x,  0.1f,  0.8f); });
+    add_entry("Roughness Y", [&](){ ImGui::SliderFloat("##", &data.roughness.y,  0.1f,  0.8f); });
+    add_entry("Base Color",  [&](){ ImGui::ColorEdit4 ("##", &data.base_color.x, ImGuiColorEditFlags_Float); });
+    add_entry("Emissive",    [&](){ ImGui::ColorEdit4 ("##", &data.emissive.x,   ImGuiColorEditFlags_Float); });
+    add_entry("Opacity",     [&](){ ImGui::SliderFloat("##", &data.opacity,      0.0f,  1.0f); });
 
     Scene_root* scene_root = m_context.scene_commands->get_scene_root(selected_material);
     if (scene_root != nullptr) {
@@ -835,55 +880,32 @@ void Properties::material_properties()
         if (content_library) {
             const std::shared_ptr<Content_library_node>& textures_ = content_library->textures;
             if (textures_) {
-                Content_library_node* textures = textures_.get();
-                add_entry(
-                    "Base Color Texture",
-                    [this, textures, selected_material]()
-                    {
-                        textures->combo(m_context, "##", selected_material->texture_samplers.base_color.texture, true);
-                    }
-                );
-                if (selected_material->texture_samplers.base_color.texture) {
-                    add_entry("Base Color Offset",   [=](){ ImGui::SliderFloat2("##", &selected_material->texture_samplers.base_color.offset.x, -10.0f, 10.0f); });
-                    add_entry("Base Color Scale",    [=](){ ImGui::SliderFloat2("##", &selected_material->texture_samplers.base_color.scale.x,  -10.0f, 10.0f); });
-                    add_entry("Base Color Rotation", [=](){ ImGui::SliderFloat("##", &selected_material->texture_samplers.base_color.rotation, -10.0f, 10.0f); });
+                Content_library_node& textures = *textures_.get();
+                add_entry("Base Color Texture", [&, this]() { textures.combo(m_context, "##", samplers.base_color.texture, true);});
+                if (samplers.base_color.texture) {
+                    add_entry("Base Color Offset",   [&](){ ImGui::SliderFloat2("##", &samplers.base_color.offset.x, -10.0f, 10.0f); });
+                    add_entry("Base Color Scale",    [&](){ ImGui::SliderFloat2("##", &samplers.base_color.scale.x,  -10.0f, 10.0f); });
+                    add_entry("Base Color Rotation", [&](){ ImGui::SliderFloat ("##", &samplers.base_color.rotation, -10.0f, 10.0f); });
                 }
-                add_entry(
-                    "Metallic Roughness Texture",
-                    [this, textures, selected_material]()
-                    {
-                        textures->combo(m_context, "##", selected_material->texture_samplers.metallic_roughness.texture, true);
-                    }
-                );
-                add_entry(
-                    "Normal Texture",
-                    [this, textures, selected_material]()
-                    {
-                        textures->combo(m_context, "##", selected_material->texture_samplers.normal.texture, true);
-                    }
-                );
-                if (selected_material->texture_samplers.normal.texture) {
-                    add_entry("Normal Map Scale", [=](){ ImGui::SliderFloat("##", &selected_material->normal_texture_scale, 0.0f, 1.0f); });
+                add_entry("Metallic Roughness Texture",[&]() { textures.combo(m_context, "##", samplers.metallic_roughness.texture, true); });
+                add_entry("Normal Texture",            [&]() { textures.combo(m_context, "##", samplers.normal.texture, true); } );
+                if (samplers.normal.texture) {
+                    add_entry("Normal Map Scale", [&](){ ImGui::SliderFloat("##", &data.normal_texture_scale, 0.0f, 1.0f); });
                 }
-                add_entry(
-                    "Occlusion Texture",
-                    [this, textures, selected_material]()
-                    {
-                        textures->combo(m_context, "##", selected_material->texture_samplers.occlusion.texture, true);
-                    }
-                );
-                add_entry(
-                    "Emissive Texture",
-                    [this, textures, selected_material]()
-                    {
-                        textures->combo(m_context, "##", selected_material->texture_samplers.emissive.texture, true);
-                    }
-                );
+                add_entry("Occlusion Texture", [&, this]() { textures.combo(m_context, "##", samplers.occlusion.texture, true); });
+                add_entry("Emissive Texture",  [&, this]() { textures.combo(m_context, "##", samplers.emissive.texture, true); });
             }
         }
     }
 
     pop_group();
+
+    show_entries();
+
+    if (m_material_state == Editor_state::dirty_completed) {
+        log_operations->info("m_material_state == Editor_state::dirty_completed");
+        end_material_inspect();
+    }
 }
 
 void Properties::imgui()
@@ -911,9 +933,10 @@ void Properties::imgui()
         skin_properties(*selected_skin.get());
     }
 
+    show_entries();
+
     material_properties();
 
-    show_entries();
 }
 
 }

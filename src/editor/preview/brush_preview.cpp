@@ -61,10 +61,12 @@ void Brush_preview::make_preview_scene()
 
     m_material = std::make_shared<erhe::primitive::Material>(
         erhe::primitive::Material_create_info{
-            .name       = "Brush preview material",
-            .base_color = glm::vec3{1.0f, 0.2f, 0.1f},
-            .roughness  = glm::vec2{0.5f, 0.4f},
-            .metallic   = 0.5f
+            .name = "Brush preview material",
+            .data = {
+                .base_color = glm::vec3{1.0f, 0.2f, 0.1f},
+                .roughness  = glm::vec2{0.5f, 0.4f},
+                .metallic   = 0.5f
+            }
         }
     );
 

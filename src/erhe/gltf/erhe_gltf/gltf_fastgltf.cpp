@@ -1243,42 +1243,44 @@ private:
             // TODO texture transform
         };
 
+        erhe::primitive::Material_data&             create_data     = create_info.data;
+        erhe::primitive::Material_texture_samplers& create_samplers = create_data.texture_samplers;
         if (material.normalTexture.has_value()) {
-            apply_texture(material.normalTexture.value(), create_info.texture_samplers.normal, true);
-            create_info.normal_texture_scale = material.normalTexture.value().scale;
+            apply_texture(material.normalTexture.value(), create_data.texture_samplers.normal, true);
+            create_data.normal_texture_scale = material.normalTexture.value().scale;
         }
         if (material.occlusionTexture.has_value()) {
-            apply_texture(material.occlusionTexture.value(), create_info.texture_samplers.occlusion, true);
-            create_info.occlusion_texture_strength = material.occlusionTexture.value().strength;
+            apply_texture(material.occlusionTexture.value(), create_samplers.occlusion, true);
+            create_data.occlusion_texture_strength = material.occlusionTexture.value().strength;
         }
-        create_info.emissive = material.emissiveStrength * glm::vec3{material.emissiveFactor[0], material.emissiveFactor[1], material.emissiveFactor[2]};
+        create_data.emissive = material.emissiveStrength * glm::vec3{material.emissiveFactor[0], material.emissiveFactor[1], material.emissiveFactor[2]};
         if (material.emissiveTexture.has_value()) {
-            apply_texture(material.emissiveTexture.value(), create_info.texture_samplers.emissive, false);
+            apply_texture(material.emissiveTexture.value(), create_samplers.emissive, false);
         } {
             const fastgltf::PBRData& pbr_data = material.pbrData;
             if (pbr_data.baseColorTexture.has_value()) {
-                apply_texture(pbr_data.baseColorTexture.value(), create_info.texture_samplers.base_color, false);
+                apply_texture(pbr_data.baseColorTexture.value(), create_samplers.base_color, false);
             }
             if (pbr_data.metallicRoughnessTexture.has_value()) {
-                apply_texture(pbr_data.metallicRoughnessTexture.value(), create_info.texture_samplers.metallic_roughness, true);
+                apply_texture(pbr_data.metallicRoughnessTexture.value(), create_samplers.metallic_roughness, true);
             }
 
             // NOTE: MaterialSpecularGlossiness is only supported in a hacky way to load Hintze Hall
             const std::unique_ptr<fastgltf::MaterialSpecularGlossiness>& specular_glossiness = material.specularGlossiness;
             if (specular_glossiness && specular_glossiness->diffuseTexture.has_value()) {
-                create_info.unlit = true;
-                apply_texture(specular_glossiness->diffuseTexture.value(), create_info.texture_samplers.base_color, false);
+                create_data.unlit = true;
+                apply_texture(specular_glossiness->diffuseTexture.value(), create_samplers.base_color, false);
             }
 
-            create_info.base_color = glm::vec3{
+            create_data.base_color = glm::vec3{
                 pbr_data.baseColorFactor[0],
                 pbr_data.baseColorFactor[1],
                 pbr_data.baseColorFactor[2],
             };
-            create_info.opacity     = pbr_data.baseColorFactor[3];
-            create_info.metallic    = pbr_data.metallicFactor;
-            create_info.roughness.x = std::max(pbr_data.roughnessFactor, 0.001f);
-            create_info.roughness.y = std::max(pbr_data.roughnessFactor, 0.001f);
+            create_data.opacity     = pbr_data.baseColorFactor[3];
+            create_data.metallic    = pbr_data.metallicFactor;
+            create_data.roughness.x = std::max(pbr_data.roughnessFactor, 0.001f);
+            create_data.roughness.y = std::max(pbr_data.roughnessFactor, 0.001f);
             log_gltf->trace(
                 "Material PBR metallic roughness base color factor = {}, {}, {}, {}",
                 pbr_data.baseColorFactor[0],
@@ -2371,18 +2373,19 @@ private:
             return fi->second;
         }
 
+        const erhe::primitive::Material_data& data = material->data;
         const size_t gltf_material_index = m_gltf_asset.materials.size();
         {
             fastgltf::Material gltf_material{
                 .pbrData = {
                     .baseColorFactor = {
-                        material->base_color.r,
-                        material->base_color.g,
-                        material->base_color.b,
-                        material->opacity
+                        data.base_color.r,
+                        data.base_color.g,
+                        data.base_color.b,
+                        data.opacity
                     },
-                    .metallicFactor           = material->metallic,
-                    .roughnessFactor          = material->roughness.x,
+                    .metallicFactor           = data.metallic,
+                    .roughnessFactor          = data.roughness.x,
                     .baseColorTexture         = {},
                     .metallicRoughnessTexture = {}
                 },
@@ -2390,9 +2393,9 @@ private:
                 .occlusionTexture = {},
                 .emissiveTexture  = {},
                 .emissiveFactor = {
-                    material->emissive.r,
-                    material->emissive.g,
-                    material->emissive.b
+                    data.emissive.r,
+                    data.emissive.g,
+                    data.emissive.b
                 },
                 .anisotropy                               = {},
                 .clearcoat                                = {},

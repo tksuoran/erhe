@@ -558,8 +558,10 @@ auto Handle_visualizations::make_material(
         case Mode::Normal: {
             return material_library->make<erhe::primitive::Material>(
                 erhe::primitive::Material_create_info{
-                    .name       = name,
-                    .base_color = color
+                    .name = name,
+                    .data = {
+                        .base_color = color
+                    }
                 }
             );
         }
@@ -567,8 +569,10 @@ auto Handle_visualizations::make_material(
             // TODO ? glm::vec3(1.0f, 0.7f, 0.1f));
             return material_library->make<erhe::primitive::Material>(
                 erhe::primitive::Material_create_info{
-                    .name       = name,
-                    .base_color = color
+                    .name = name,
+                    .data = {
+                        .base_color = color
+                    }
                 }
             );
         }
@@ -576,8 +580,10 @@ auto Handle_visualizations::make_material(
             // TODO ? 2.0f * color);
             return material_library->make<erhe::primitive::Material>(
                 erhe::primitive::Material_create_info{
-                    .name       = name,
-                    .base_color = color
+                    .name = name,
+                    .data = {
+                        .base_color = color
+                    }
                 }
             );
         }
