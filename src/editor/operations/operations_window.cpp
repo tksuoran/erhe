@@ -6,6 +6,7 @@
 #include "operations/operation_stack.hpp"
 #include "operations/geometry_operations.hpp"
 #include "operations/merge_operation.hpp"
+#include "operations/mesh_operation.hpp"
 #include "operations/node_transform_operation.hpp"
 #include "operations/item_parent_change_operation.hpp"
 #include "renderers/mesh_memory.hpp"
@@ -22,6 +23,7 @@
 #include "erhe_imgui/imgui_helpers.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_math/math_util.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/scene.hpp"
@@ -44,12 +46,13 @@ Operations::Operations(
     App_context&                 app_context,
     App_message_bus&             app_message_bus
 )
-    : Imgui_window            {imgui_renderer, imgui_windows, "Operations", "operations"}
-    , m_context               {app_context}
-    , m_merge_command         {commands, "Geometry.Merge",                     [this]() -> bool { merge         (); return true; } }
-    , m_triangulate_command   {commands, "Geometry.Triangulate",               [this]() -> bool { triangulate   (); return true; } }
-    , m_normalize_command     {commands, "Geometry.Normalize",                 [this]() -> bool { normalize     (); return true; } }
-    , m_bake_transform_command{commands, "Geometry.BakeTransform",             [this]() -> bool { bake_transform(); return true; } }
+    : Imgui_window              {imgui_renderer, imgui_windows, "Operations", "operations"}
+    , m_context                 {app_context}
+    , m_merge_command           {commands, "Geometry.Merge",                     [this]() -> bool { merge           (); return true; } }
+    , m_triangulate_command     {commands, "Geometry.Triangulate",               [this]() -> bool { triangulate     (); return true; } }
+    , m_normalize_command       {commands, "Geometry.Normalize",                 [this]() -> bool { normalize       (); return true; } }
+    , m_bake_transform_command  {commands, "Geometry.BakeTransform",             [this]() -> bool { bake_transform  (); return true; } }
+    , m_center_transform_command{commands, "Geometry.CenterTransform",           [this]() -> bool { center_transform(); return true; } }
     , m_reverse_command       {commands, "Geometry.Reverse",                   [this]() -> bool { reverse       (); return true; } }
     , m_repair_command        {commands, "Geometry.Repair",                    [this]() -> bool { repair        (); return true; } }
     , m_weld_command          {commands, "Geometry.Weld",                      [this]() -> bool { weld          (); return true; } }
@@ -78,6 +81,7 @@ Operations::Operations(
     commands.register_command(&m_triangulate_command   );
     commands.register_command(&m_normalize_command     );
     commands.register_command(&m_bake_transform_command);
+    commands.register_command(&m_center_transform_command);
     commands.register_command(&m_reverse_command       );
     commands.register_command(&m_repair_command        );
     commands.register_command(&m_weld_command          );
@@ -108,6 +112,7 @@ Operations::Operations(
     commands.bind_command_to_menu(&m_triangulate_command,    "Geometry.Triangulate");
     commands.bind_command_to_menu(&m_normalize_command,      "Geometry.Normalize");
     commands.bind_command_to_menu(&m_bake_transform_command, "Geometry.Bake-Transform");
+    commands.bind_command_to_menu(&m_center_transform_command, "Geometry.Canter-Transform");
     commands.bind_command_to_menu(&m_reverse_command,        "Geometry.Reverse");
     commands.bind_command_to_menu(&m_repair_command,         "Geometry.Repair");
     commands.bind_command_to_menu(&m_weld_command,           "Geometry.Weld");
@@ -378,6 +383,12 @@ void Operations::imgui()
     if (make_button("Gen Tangents", has_selection_mode, button_size)) {
         generate_tangents();
     }
+    if (make_button("Bake Transform", has_selection_mode, button_size)) {
+        bake_transform();
+    }
+    if (make_button("Center Transform", has_selection_mode, button_size)) {
+        center_transform();
+    }
     //// if (make_button("GUI Quad", erhe::imgui::Item_mode::normal, button_size)) {
     ////     Scene_builder* scene_builder = get<Scene_builder>().get();
     ////
@@ -451,6 +462,59 @@ void Operations::bake_transform()
                             .node = node,
                             .parent_from_node_before = node->parent_from_node_transform(),
                             .parent_from_node_after = {}
+                        }
+                    )
+                );
+            }
+            m_context.operation_stack->queue(
+                std::make_shared<Compound_operation>(std::move(compound_operation_parameters))
+            );
+    ///    }
+    /// );
+}
+
+void Operations::center_transform()
+{
+    /// tf::Executor& executor = m_context.operation_stack->get_executor();
+    /// executor.silent_async(
+    ///     [this]()
+    ///     {
+            Compound_operation::Parameters compound_operation_parameters;
+
+            // First: Transform geometries using node transforms
+            Mesh_operation_parameters parameters = mesh_context();
+            //std::unordered_map<uint64_t, glm::mat4> mesh_transform;
+            parameters.node_callback = [](erhe::scene::Node* node, Mesh_operation_parameters& parameters) {
+                const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(node);
+                if (!mesh) {
+                    return;
+                }
+                const erhe::math::Aabb aabb_world  = mesh->get_aabb_world();
+                const glm::vec3        aabb_center = aabb_world.center();
+                parameters.transform = erhe::math::create_translation<float>(-aabb_center);
+            };
+            compound_operation_parameters.operations.push_back(
+                std::make_shared<Bake_transform_operation>(std::move(parameters))
+            );
+            // Second: Reset transform in all nodes
+            const std::vector<std::shared_ptr<erhe::scene::Node>> nodes = m_context.selection->get_all<erhe::scene::Node>();
+            for (const std::shared_ptr<erhe::scene::Node>& node : nodes) {
+                const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(node.get());
+                if (!mesh) {
+                    return;
+                }
+                const erhe::math::Aabb aabb_world       = mesh->get_aabb_world();
+                const glm::vec3        aabb_center      = aabb_world.center();
+                const glm::mat4        offset_transform = erhe::math::create_translation<float>(aabb_center);
+
+                const glm::mat4 world_from_node_before = node->world_from_node();
+                const glm::mat4 world_from_node_after  = offset_transform * node->world_from_node();
+                compound_operation_parameters.operations.push_back(
+                    std::make_shared<Node_transform_operation>(
+                        Node_transform_operation::Parameters{
+                            .node                    = node,
+                            .parent_from_node_before = node->parent_from_node_transform(),
+                            .parent_from_node_after  = erhe::scene::Transform{node->parent_from_world() * world_from_node_after}
                         }
                     )
                 );

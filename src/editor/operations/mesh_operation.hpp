@@ -5,7 +5,10 @@
 #include "erhe_primitive/build_info.hpp"
 #include "erhe_scene/mesh.hpp"
 
+#include <glm/glm.hpp>
+
 #include <functional>
+#include <optional>
 #include <vector>
 
 namespace erhe::geometry {
@@ -26,11 +29,18 @@ class Mesh_operation_parameters
 public:
     App_context&                context;
     erhe::primitive::Build_info build_info;
+    std::optional<glm::mat4>    transform;
+    std::function<
+        void (
+            erhe::scene::Node*,
+            Mesh_operation_parameters&
+        )
+    >                           node_callback;
 };
 
 class Mesh_operation : public Operation
 {
-protected:
+public:
     class Entry
     {
     public:

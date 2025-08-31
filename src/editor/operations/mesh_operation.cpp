@@ -120,7 +120,9 @@ void Mesh_operation::undo(App_context&)
     log_operations->trace("Op Undo End {}", describe());
 }
 
-void Mesh_operation::make_entries(const std::function<void(const erhe::geometry::Geometry& before_geometry, erhe::geometry::Geometry& after_geometry)> operation)
+void Mesh_operation::make_entries(
+    const std::function<void(const erhe::geometry::Geometry& before_geometry, erhe::geometry::Geometry& after_geometry)> operation
+)
 {
     make_entries(
         [&operation](const erhe::geometry::Geometry& before_geometry, erhe::geometry::Geometry& after_geometry, erhe::scene::Node*) -> void {
@@ -129,7 +131,9 @@ void Mesh_operation::make_entries(const std::function<void(const erhe::geometry:
     );
 }
 
-void Mesh_operation::make_entries(const std::function<void(const erhe::geometry::Geometry&, erhe::geometry::Geometry&, erhe::scene::Node*)> operation)
+void Mesh_operation::make_entries(
+    const std::function<void(const erhe::geometry::Geometry&, erhe::geometry::Geometry&, erhe::scene::Node*)> operation
+)
 {
     Selection& selection = *m_parameters.context.selection;
     const auto& selected_items = selection.get_selection();
@@ -189,6 +193,10 @@ void Mesh_operation::make_entries(const std::function<void(const erhe::geometry:
         if (node == nullptr) {
             node        = scene_mesh->get_node();
             node_shared = std::dynamic_pointer_cast<erhe::scene::Node>(node->shared_from_this());
+        }
+
+        if (m_parameters.node_callback) {
+            m_parameters.node_callback(node, m_parameters);
         }
 
         Entry entry{

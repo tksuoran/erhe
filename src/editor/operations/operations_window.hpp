@@ -80,6 +80,7 @@ public:
     void triangulate();
     void normalize();
     void bake_transform();
+    void center_transform();
     void reverse();
     void repair();
     void weld();
@@ -123,6 +124,7 @@ private:
     erhe::commands::Lambda_command m_triangulate_command;
     erhe::commands::Lambda_command m_normalize_command;
     erhe::commands::Lambda_command m_bake_transform_command;
+    erhe::commands::Lambda_command m_center_transform_command;
     erhe::commands::Lambda_command m_reverse_command;
     erhe::commands::Lambda_command m_repair_command;
     erhe::commands::Lambda_command m_weld_command;

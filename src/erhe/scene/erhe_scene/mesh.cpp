@@ -210,6 +210,20 @@ void Mesh::handle_node_transform_update()
     }
 }
 
+auto Mesh::get_aabb_world() const -> erhe::math::Aabb
+{
+    const erhe::scene::Node* node = get_node();
+    const glm::mat4 world_from_local = (node != nullptr) ? node->world_from_node() : glm::mat4{1.0f};
+    erhe::math::Aabb aabb;
+    for (const Mesh_primitive& mesh_primitive : m_primitives) {
+        const erhe::math::Aabb primitive_aabb_local = mesh_primitive.primitive->get_bounding_box();
+        const erhe::math::Aabb primitive_aabb_world = primitive_aabb_local.transformed_by(world_from_local);
+        aabb.include(primitive_aabb_world);
+    }
+    return aabb;
+}
+
+
 auto operator<(const Mesh& lhs, const Mesh& rhs) -> bool
 {
     return lhs.get_id() < rhs.get_id();

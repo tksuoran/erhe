@@ -1315,6 +1315,29 @@ void Geometry::merge_coplanar_neighbors()
     m_mesh.facets.connect();
 }
 
+auto Geometry::get_aabb(const glm::mat4& transform) const -> erhe::math::Aabb
+{
+    erhe::math::Aabb aabb{};
+    const GEO::mat4f geo_transform = to_geo_mat4f(transform);
+    for (GEO::index_t vertex : m_mesh.vertices) {
+        const GEO::vec3f p = get_pointf(m_mesh.vertices, vertex);
+        const GEO::vec4f q = geo_transform * GEO::vec4f{p.x, p.y, p.z, 1.0f};
+        aabb.include(glm::vec3{q.x, q.y, q.z});
+    }
+    return aabb;
+}
+
+auto Geometry::get_aabb() const -> erhe::math::Aabb
+{
+    // TODO: Cache aabb
+    erhe::math::Aabb aabb{};
+    for (GEO::index_t vertex : m_mesh.vertices) {
+        const GEO::vec3f p = get_pointf(m_mesh.vertices, vertex);
+        aabb.include(glm::vec3{p.x, p.y, p.z});
+    }
+    return aabb;
+}
+
 void Geometry::debug_trace() const
 {
     for (GEO::index_t corner : m_mesh.facet_corners) {

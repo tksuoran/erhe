@@ -1,5 +1,7 @@
 #pragma once
 
+#include "erhe_math/aabb.hpp"
+
 #include <geogram/mesh/mesh.h>
 
 #include <glm/glm.hpp>
@@ -699,6 +701,8 @@ public:
     [[nodiscard]] auto get_edge          (GEO::index_t v0, GEO::index_t v1) const -> GEO::index_t;
     [[nodiscard]] auto get_attributes    () -> Mesh_attributes&;
     [[nodiscard]] auto get_attributes    () const -> const Mesh_attributes&;
+    [[nodiscard]] auto get_aabb          (const glm::mat4& transform) const -> erhe::math::Aabb;
+    [[nodiscard]] auto get_aabb          () const -> erhe::math::Aabb;
 
     void merge_with_transform(const Geometry& src, const GEO::mat4f& transform);
     void copy_with_transform(const Geometry& source, const GEO::mat4f& transform);

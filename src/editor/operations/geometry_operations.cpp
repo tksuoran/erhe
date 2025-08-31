@@ -25,6 +25,7 @@
 #include "erhe_geometry/operation/triangulate.hpp"
 #include "erhe_geometry/operation/truncate.hpp"
 #include "erhe_geometry/operation/union.hpp"
+#include "erhe_math/math_util.hpp"
 #include "erhe_scene/scene.hpp"
 
 #include <fmt/format.h>
@@ -211,12 +212,13 @@ Bake_transform_operation::Bake_transform_operation(Mesh_operation_parameters&& c
             erhe::scene::Node*              node
         ) -> void
         {
-            const glm::mat4 transform = node->world_from_node();
+            const glm::mat4 transform = m_parameters.transform.has_value()
+                ? m_parameters.transform.value()
+                : node->world_from_node();
             erhe::geometry::operation::bake_transform(before_geometry, after_geometry, to_geo_mat4f(transform));
         }
     );
 }
-
 
 auto Repair_operation::describe() const -> std::string
 {
