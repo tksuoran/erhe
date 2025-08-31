@@ -1091,7 +1091,7 @@ auto Scene_builder::make_spot_light(
 void Scene_builder::setup_lights()
 {
     const auto& layers = m_scene_root->layers();
-    layers.light()->ambient_light = glm::vec4{0.018f, 0.019f, 0.021f, 0.0f};
+    layers.light()->ambient_light = glm::vec4{0.04f, 0.04f, 0.04f, 0.0f};
 
 #if 0
     make_directional_light(

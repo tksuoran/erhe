@@ -263,6 +263,11 @@ void Blit_command_encoder::copy_from_texture(
     std::size_t gl_pack_image_height = destination_bytes_per_image / destination_bytes_per_row;
     ERHE_VERIFY(destination_bytes_per_image % destination_bytes_per_row == 0);
 
+    // TODO Verify this is correct
+    std::size_t destination_size = source_size.z == 1
+        ? destination_bytes_per_row * source_size.y
+        : destination_bytes_per_image * source_size.z;
+
     const int alignment = (destination_bytes_per_row % 8 == 0) ? 8 :
                           (destination_bytes_per_row % 4 == 0) ? 4 :
                           (destination_bytes_per_row % 2 == 0) ? 2 : 1;
@@ -308,8 +313,8 @@ void Blit_command_encoder::copy_from_texture(
         gl_depth,
         gl_format,
         gl_type,
-        static_cast<GLsizei>(destination_offset),
-        nullptr
+        static_cast<GLsizei>(destination_size),
+        reinterpret_cast<void *>(destination_offset)
     );
 }
 

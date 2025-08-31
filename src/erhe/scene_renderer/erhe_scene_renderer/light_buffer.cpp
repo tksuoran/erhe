@@ -254,6 +254,10 @@ auto Light_buffer::update(
         const auto light_index          = light_projection_transforms->index;
         const auto light_offset         = light_array_offset + light_index * light_struct_size;
 
+        if (light_index >= m_light_interface.max_light_count) {
+            continue;
+        }
+
         ERHE_VERIFY(light_offset < exact_byte_count);
         max_light_index = std::max(max_light_index, light_index);
         write(light_gpu_data, light_offset + offsets.light.clip_from_world,              as_span(light_projection_transforms->clip_from_world.get_matrix()));
