@@ -5,27 +5,26 @@
 #include "scene/scene_root.hpp"
 
 #include "erhe_geometry/geometry.hpp"
-#include "erhe_geometry/operation/ambo.hpp"
 #include "erhe_geometry/operation/bake_transform.hpp"
-#include "erhe_geometry/operation/catmull_clark_subdivision.hpp"
-#include "erhe_geometry/operation/chamfer.hpp"
-#include "erhe_geometry/operation/difference.hpp"
-#include "erhe_geometry/operation/dual.hpp"
+#include "erhe_geometry/operation/conway/ambo.hpp"
+#include "erhe_geometry/operation/conway/chamfer.hpp"
+#include "erhe_geometry/operation/conway/dual.hpp"
+#include "erhe_geometry/operation/conway/gyro.hpp"
+#include "erhe_geometry/operation/conway/join.hpp"
+#include "erhe_geometry/operation/conway/kis.hpp"
+#include "erhe_geometry/operation/conway/meta.hpp"
+#include "erhe_geometry/operation/conway/truncate.hpp"
+#include "erhe_geometry/operation/csg/difference.hpp"
+#include "erhe_geometry/operation/csg/intersection.hpp"
+#include "erhe_geometry/operation/csg/union.hpp"
 #include "erhe_geometry/operation/generate_tangents.hpp"
-#include "erhe_geometry/operation/gyro.hpp"
-#include "erhe_geometry/operation/intersection.hpp"
-#include "erhe_geometry/operation/join.hpp"
-#include "erhe_geometry/operation/kis.hpp"
-#include "erhe_geometry/operation/meta.hpp"
 #include "erhe_geometry/operation/normalize.hpp"
 #include "erhe_geometry/operation/repair.hpp"
 #include "erhe_geometry/operation/reverse.hpp"
-#include "erhe_geometry/operation/sqrt3_subdivision.hpp"
 #include "erhe_geometry/operation/subdivide.hpp"
+#include "erhe_geometry/operation/subdivision/catmull_clark_subdivision.hpp"
+#include "erhe_geometry/operation/subdivision/sqrt3_subdivision.hpp"
 #include "erhe_geometry/operation/triangulate.hpp"
-#include "erhe_geometry/operation/truncate.hpp"
-#include "erhe_geometry/operation/union.hpp"
-#include "erhe_math/math_util.hpp"
 #include "erhe_scene/scene.hpp"
 
 #include <fmt/format.h>
@@ -284,7 +283,7 @@ auto Binary_mesh_operation::make_operations(
     struct Entry
     {
         std::shared_ptr<erhe::geometry::Geometry> geometry;
-        glm::mat4                                 transform;
+        glm::mat4                                 target_from_entry_node;
     };
     std::vector<Entry> lhs_entries;
     std::vector<Entry> rhs_entries;
@@ -292,9 +291,10 @@ auto Binary_mesh_operation::make_operations(
     erhe::primitive::Normal_style normal_style = erhe::primitive::Normal_style::none;
 
     auto& selected_items = parameters.context.selection->get_selection();
-    glm::mat4 reference_node_from_world = glm::mat4{1};
+    glm::mat4 target_node_from_world = glm::mat4{1};
+    glm::mat4 target_world_from_node = glm::mat4{1};
 
-    bool first_mesh = false;
+    bool first_mesh = true;
     erhe::Item_host* item_host = nullptr;
     for (const auto& item : selected_items) {
         std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
@@ -307,12 +307,14 @@ auto Binary_mesh_operation::make_operations(
             continue;
         }
 
-        glm::mat4 transform;
+        glm::mat4 target_from_entry_node;
         if (first_mesh) {
-            reference_node_from_world = raw_node->node_from_world();
-            transform                 = glm::mat4{1};
+            target_from_entry_node = glm::mat4{1};
+            target_node_from_world = raw_node->node_from_world();
+            target_world_from_node = raw_node->world_from_node();
+            first_mesh = false;
         } else {
-            transform = reference_node_from_world * raw_node->world_from_node();
+            target_from_entry_node = target_node_from_world * raw_node->world_from_node();
         }
 
         std::vector<Entry>& entries = lhs_entries.empty() ? lhs_entries : rhs_entries;
@@ -326,7 +328,7 @@ auto Binary_mesh_operation::make_operations(
             if (!geometry) {
                 continue;
             }
-            entries.emplace_back(geometry, transform);
+            entries.emplace_back(geometry, target_from_entry_node);
             if (normal_style == erhe::primitive::Normal_style::none) {
                 normal_style = shape->get_normal_style();
             }
@@ -354,10 +356,10 @@ auto Binary_mesh_operation::make_operations(
     erhe::geometry::Geometry transformed_lhs{};
     erhe::geometry::Geometry transformed_rhs{};
     for (const Entry& entry : lhs_entries) {
-        transformed_lhs.merge_with_transform(*entry.geometry.get(), to_geo_mat4f(entry.transform));
+        transformed_lhs.merge_with_transform(*entry.geometry.get(), to_geo_mat4f(entry.target_from_entry_node));
     }
     for (const Entry& entry : rhs_entries) {
-        transformed_rhs.merge_with_transform(*entry.geometry.get(), to_geo_mat4f(entry.transform));
+        transformed_rhs.merge_with_transform(*entry.geometry.get(), to_geo_mat4f(entry.target_from_entry_node));
     }
 
     // Perform operation
@@ -373,12 +375,15 @@ auto Binary_mesh_operation::make_operations(
 
     out_geometry->get_mesh().vertices.set_single_precision();
 
+    //transform_mesh(out_geometry->get_mesh(), to_geo_mat4f(target_node_from_world));
+
     const uint64_t flags =
         erhe::geometry::Geometry::process_flag_connect |
         erhe::geometry::Geometry::process_flag_build_edges |
         erhe::geometry::Geometry::process_flag_compute_facet_centroids |
         erhe::geometry::Geometry::process_flag_compute_smooth_vertex_normals |
         erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates;
+
     out_geometry->process(flags);
 
     // Create new Primitive
@@ -407,7 +412,7 @@ auto Binary_mesh_operation::make_operations(
     mesh->add_primitive(primitive, material);
     mesh->layer_id = scene_root->layers().content()->id;
     mesh->enable_flag_bits   (mesh_flags);
-    node->set_world_from_node(reference_node_from_world);
+    node->set_world_from_node(target_world_from_node);
     node->attach             (mesh);
     node->enable_flag_bits   (node_flags);
 
@@ -422,6 +427,11 @@ auto Binary_mesh_operation::make_operations(
             }
         )
     );
+
+    //if (parameters.make_operations_result_callback) {
+    //    parameters.make_operations_result_callback(node, compound_operation_parameters);
+    //}
+
     return compound_operation_parameters;
 }
 

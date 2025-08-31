@@ -1,4 +1,4 @@
-#include "erhe_geometry/operation/truncate.hpp"
+#include "erhe_geometry/operation/conway/truncate.hpp"
 #include "erhe_geometry/operation/geometry_operation.hpp"
 
 namespace erhe::geometry::operation {

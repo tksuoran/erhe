@@ -1,4 +1,4 @@
-#include "erhe_geometry/operation/catmull_clark_subdivision.hpp"
+#include "erhe_geometry/operation/subdivision/catmull_clark_subdivision.hpp"
 #include "erhe_geometry/operation/geometry_operation.hpp"
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_verify/verify.hpp"

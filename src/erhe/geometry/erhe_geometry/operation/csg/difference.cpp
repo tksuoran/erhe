@@ -1,4 +1,4 @@
-#include "erhe_geometry/operation/difference.hpp"
+#include "erhe_geometry/operation/csg/difference.hpp"
 #include "erhe_geometry/operation/geometry_operation.hpp"
 
 #include <geogram/mesh/mesh_intersection.h>

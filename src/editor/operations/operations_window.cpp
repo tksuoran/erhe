@@ -484,7 +484,7 @@ void Operations::center_transform()
             // First: Transform geometries using node transforms
             Mesh_operation_parameters parameters = mesh_context();
             //std::unordered_map<uint64_t, glm::mat4> mesh_transform;
-            parameters.node_callback = [](erhe::scene::Node* node, Mesh_operation_parameters& parameters) {
+            parameters.make_entry_node_callback = [](erhe::scene::Node* node, Mesh_operation_parameters& parameters) {
                 const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(node);
                 if (!mesh) {
                     return;
@@ -564,9 +564,10 @@ void Operations::difference()
     /// executor.silent_async(
     ///     [this]()
     ///     {
+            Mesh_operation_parameters parameters = mesh_context();
             m_context.operation_stack->queue(
                 std::make_shared<Difference_operation>(
-                    mesh_context()
+                    std::move(parameters)
                 )
             );
     ///     }

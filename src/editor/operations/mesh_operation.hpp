@@ -1,6 +1,7 @@
 #pragma once
 
 #include "operations/ioperation.hpp"
+#include "operations/compound_operation.hpp"
 
 #include "erhe_primitive/build_info.hpp"
 #include "erhe_scene/mesh.hpp"
@@ -30,12 +31,26 @@ public:
     App_context&                context;
     erhe::primitive::Build_info build_info;
     std::optional<glm::mat4>    transform;
+
+    // std::function<
+    //     bool(
+    //         const std::shared_ptr<erhe::Item_base>& item
+    //     )
+    // >                           make_entry_filter;
+
     std::function<
         void (
             erhe::scene::Node*,
             Mesh_operation_parameters&
         )
-    >                           node_callback;
+    >                           make_entry_node_callback;
+
+    // std::function<
+    //     void (
+    //         const std::shared_ptr<erhe::scene::Node>&,
+    //         Compound_operation::Parameters&
+    //     )
+    // >                           make_operations_result_callback;
 };
 
 class Mesh_operation : public Operation

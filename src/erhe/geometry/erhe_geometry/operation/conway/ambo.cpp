@@ -1,4 +1,4 @@
-#include "erhe_geometry/operation/ambo.hpp"
+#include "erhe_geometry/operation/conway/ambo.hpp"
 #include "erhe_geometry/operation/geometry_operation.hpp"
 #include "erhe_geometry/geometry_log.hpp"
 

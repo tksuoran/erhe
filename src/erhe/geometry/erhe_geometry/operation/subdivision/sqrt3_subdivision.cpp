@@ -1,4 +1,4 @@
-#include "erhe_geometry/operation/sqrt3_subdivision.hpp"
+#include "erhe_geometry/operation/subdivision/sqrt3_subdivision.hpp"
 #include "erhe_geometry/operation/geometry_operation.hpp"
 
 namespace erhe::geometry::operation {

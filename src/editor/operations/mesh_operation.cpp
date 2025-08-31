@@ -195,8 +195,8 @@ void Mesh_operation::make_entries(
             node_shared = std::dynamic_pointer_cast<erhe::scene::Node>(node->shared_from_this());
         }
 
-        if (m_parameters.node_callback) {
-            m_parameters.node_callback(node, m_parameters);
+        if (m_parameters.make_entry_node_callback) {
+            m_parameters.make_entry_node_callback(node, m_parameters);
         }
 
         Entry entry{

@@ -8,48 +8,53 @@ erhe_target_sources_grouped(
     erhe_geometry/geometry_log.cpp
     erhe_geometry/geometry_log.hpp
     erhe_geometry/geometry_tangents.cpp
-    erhe_geometry/operation/ambo.cpp
-    erhe_geometry/operation/ambo.hpp
+
+    erhe_geometry/operation/csg/difference.cpp
+    erhe_geometry/operation/csg/difference.hpp
+    erhe_geometry/operation/csg/intersection.cpp
+    erhe_geometry/operation/csg/intersection.hpp
+    erhe_geometry/operation/csg/union.cpp
+    erhe_geometry/operation/csg/union.hpp
+
+    erhe_geometry/operation/conway/ambo.cpp
+    erhe_geometry/operation/conway/ambo.hpp
+    erhe_geometry/operation/conway/chamfer.cpp
+    erhe_geometry/operation/conway/chamfer.hpp
+    erhe_geometry/operation/conway/dual.cpp
+    erhe_geometry/operation/conway/dual.hpp
+    erhe_geometry/operation/conway/gyro.cpp
+    erhe_geometry/operation/conway/gyro.hpp
+    erhe_geometry/operation/conway/join.cpp
+    erhe_geometry/operation/conway/join.hpp
+    erhe_geometry/operation/conway/kis.cpp
+    erhe_geometry/operation/conway/kis.hpp
+    erhe_geometry/operation/conway/meta.cpp
+    erhe_geometry/operation/conway/meta.hpp
+    erhe_geometry/operation/conway/truncate.cpp
+    erhe_geometry/operation/conway/truncate.hpp
+
+    erhe_geometry/operation/subdivision/catmull_clark_subdivision.cpp
+    erhe_geometry/operation/subdivision/catmull_clark_subdivision.hpp
+    erhe_geometry/operation/subdivision/sqrt3_subdivision.cpp
+    erhe_geometry/operation/subdivision/sqrt3_subdivision.hpp
+
     erhe_geometry/operation/bake_transform.cpp
     erhe_geometry/operation/bake_transform.hpp
-    erhe_geometry/operation/catmull_clark_subdivision.cpp
-    erhe_geometry/operation/catmull_clark_subdivision.hpp
-    erhe_geometry/operation/chamfer.cpp
-    erhe_geometry/operation/chamfer.hpp
-    erhe_geometry/operation/difference.cpp
-    erhe_geometry/operation/difference.hpp
-    erhe_geometry/operation/dual.cpp
-    erhe_geometry/operation/dual.hpp
     erhe_geometry/operation/generate_tangents.cpp
     erhe_geometry/operation/generate_tangents.hpp
     erhe_geometry/operation/geometry_operation.cpp
     erhe_geometry/operation/geometry_operation.hpp
-    erhe_geometry/operation/gyro.cpp
-    erhe_geometry/operation/gyro.hpp
-    erhe_geometry/operation/intersection.cpp
-    erhe_geometry/operation/intersection.hpp
-    erhe_geometry/operation/join.cpp
-    erhe_geometry/operation/join.hpp
-    erhe_geometry/operation/kis.cpp
-    erhe_geometry/operation/kis.hpp
-    erhe_geometry/operation/meta.cpp
-    erhe_geometry/operation/meta.hpp
     erhe_geometry/operation/normalize.cpp
     erhe_geometry/operation/normalize.hpp
     erhe_geometry/operation/repair.cpp
     erhe_geometry/operation/repair.hpp
     erhe_geometry/operation/reverse.cpp
     erhe_geometry/operation/reverse.hpp
-    erhe_geometry/operation/sqrt3_subdivision.cpp
-    erhe_geometry/operation/sqrt3_subdivision.hpp
     erhe_geometry/operation/subdivide.cpp
     erhe_geometry/operation/subdivide.hpp
     erhe_geometry/operation/triangulate.cpp
     erhe_geometry/operation/triangulate.hpp
-    erhe_geometry/operation/truncate.cpp
-    erhe_geometry/operation/truncate.hpp
-    erhe_geometry/operation/union.cpp
-    erhe_geometry/operation/union.hpp
+
     erhe_geometry/shapes/box.cpp
     erhe_geometry/shapes/box.hpp
     erhe_geometry/shapes/cone.cpp

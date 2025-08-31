@@ -1,4 +1,4 @@
-#include "erhe_geometry/operation/dual.hpp"
+#include "erhe_geometry/operation/conway/dual.hpp"
 #include "erhe_geometry/operation/geometry_operation.hpp"
 
 namespace erhe::geometry::operation {
