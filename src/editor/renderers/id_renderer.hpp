@@ -81,8 +81,8 @@ public:
 
 
 private:
-    static constexpr std::size_t s_transfer_entry_count = 4;
-    static constexpr std::size_t s_extent               = 256; // Bigger value handle faster mouse speeds
+    static constexpr int s_transfer_entry_count = 4;
+    static constexpr int s_extent               = 256; // Bigger value handle faster mouse speeds
 
     class Transfer_entry
     {
@@ -99,6 +99,7 @@ private:
         int                               x_offset       {0};
         int                               y_offset       {0};
         uint64_t                          frame_number   {0};
+        int                               slot           {0};
         State                             state          {State::Unused};
     };
 
@@ -125,7 +126,7 @@ private:
     erhe::graphics::Ring_buffer_client           m_texture_read_buffer;
 
     std::array<Transfer_entry, s_transfer_entry_count> m_transfer_entries;
-    std::size_t                                        m_current_transfer_entry_slot{0};
+    int                                                m_current_transfer_entry_slot{0};
     erhe::graphics::Gpu_timer                          m_gpu_timer;
 
     class Range

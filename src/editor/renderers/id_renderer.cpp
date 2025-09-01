@@ -35,14 +35,6 @@ using glm::mat4;
 
 // TODO Check mapping and coherency
 
-[[nodiscard]] auto get_max_draw_count() -> std::size_t
-{
-    int max_draw_count = 1000;
-    const auto& ini = erhe::configuration::get_ini_file_section(erhe::c_erhe_config_file_path, "renderer");
-    ini.get("max_draw_count", max_draw_count);
-    return max_draw_count;
-}
-
 using Vertex_input_state   = erhe::graphics::Vertex_input_state;
 using Input_assembly_state = erhe::graphics::Input_assembly_state;
 using Rasterization_state  = erhe::graphics::Rasterization_state;
@@ -197,18 +189,13 @@ void Id_renderer::render(erhe::graphics::Render_command_encoder& render_encoder,
 
     m_primitive_buffers    .bind(render_encoder, primitive_range);
     m_draw_indirect_buffers.bind(render_encoder, draw_indirect_buffer_range.range);
-    {
-        static constexpr std::string_view c_draw{"draw"};
-
-        ERHE_PROFILE_SCOPE("mdi");
-        render_encoder.multi_draw_indexed_primitives_indirect(
-            m_pipeline.data.input_assembly.primitive_topology,
-            m_mesh_memory.buffer_info.index_type,
-            draw_indirect_buffer_range.range.get_byte_start_offset_in_buffer(),
-            draw_indirect_buffer_range.draw_indirect_count,
-            sizeof(erhe::graphics::Draw_indexed_primitives_indirect_command)
-        );
-    }
+    render_encoder.multi_draw_indexed_primitives_indirect(
+        m_pipeline.data.input_assembly.primitive_topology,
+        m_mesh_memory.buffer_info.index_type,
+        draw_indirect_buffer_range.range.get_byte_start_offset_in_buffer(),
+        draw_indirect_buffer_range.draw_indirect_count,
+        sizeof(erhe::graphics::Draw_indexed_primitives_indirect_command)
+    );
 
     primitive_range.release();
     draw_indirect_buffer_range.range.release();
@@ -277,9 +264,6 @@ void Id_renderer::render(const Render_parameters& parameters)
         }
 
         //// TODO Abstraction for partial clear
-        //gl::clear_color(1.0f, 1.0f, 1.0f, 0.1f);
-        //gl::clear      (gl::Clear_buffer_mask::color_buffer_bit | gl::Clear_buffer_mask::depth_buffer_bit);
-
         m_primitive_buffers.reset_id_ranges();
 
         encoder.set_render_pipeline_state(m_pipeline);
@@ -300,8 +284,6 @@ void Id_renderer::render(const Render_parameters& parameters)
 
         // Resume normal depth usage
         {
-            //ERHE_PROFILE_GPU_SCOPE(c_id_renderer_render_tool)
-
             encoder.set_render_pipeline_state(m_pipeline);
             encoder.set_viewport_depth_range(0.0f, 1.0f);
             for (auto meshes : tool_mesh_spans) {
@@ -315,13 +297,19 @@ void Id_renderer::render(const Render_parameters& parameters)
         entry.buffer_range = m_texture_read_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_read, color_image_size + depth_image_size);
         Blit_command_encoder encoder = m_graphics_device.make_blit_command_encoder();
 
-        const Texture* source_texture              = m_color_texture.get();
-        std::uintptr_t source_slice                = 0;
-        std::uintptr_t source_level                = 0;
-        glm::ivec3     source_origin               = glm::ivec3{entry.x_offset, entry.y_offset, 0};
-        glm::ivec3     source_size                 = glm::ivec3{s_extent, s_extent, 1};
+        const Texture* source_texture = m_color_texture.get();
+        std::uintptr_t source_slice   = 0;
+        std::uintptr_t source_level   = 0;
+        glm::ivec3     source_origin  = glm::ivec3{entry.x_offset, entry.y_offset, 0};
+        glm::ivec3     source_min     = source_origin;
+        glm::ivec3     source_max     = glm::ivec3{
+            std::min(entry.x_offset + s_extent, parameters.viewport.width),
+            std::min(entry.y_offset + s_extent, parameters.viewport.height),
+            1
+        };
+        glm::ivec3     source_size                 = source_max - source_min;
         const Buffer*  destination_buffer          = entry.buffer_range.get_buffer()->get_buffer();
-        std::uintptr_t destination_offset          = 0;
+        std::uintptr_t destination_offset          = entry.buffer_range.get_byte_start_offset_in_buffer();
         std::uintptr_t destination_bytes_per_row   = s_extent * erhe::dataformat::get_format_size(m_color_texture->get_pixelformat());
         std::uintptr_t destination_bytes_per_image = s_extent * destination_bytes_per_row;
 
@@ -338,7 +326,7 @@ void Id_renderer::render(const Render_parameters& parameters)
         );
 
         source_texture     = m_depth_texture.get();
-        destination_offset = destination_bytes_per_image;
+        destination_offset += destination_bytes_per_image;
 
         encoder.copy_from_texture(
             source_texture             ,
@@ -354,12 +342,20 @@ void Id_renderer::render(const Render_parameters& parameters)
 
         entry.state        = Transfer_entry::State::Waiting_for_read;
         entry.frame_number = m_graphics_device.get_frame_number();
+        entry.slot         = m_current_transfer_entry_slot;
+        // log_id_render->debug("id submit draw & read slot = {}, frame = {}", entry.slot, entry.frame_number);
         m_graphics_device.add_completion_handler(
             [&entry]() {
                 std::span<std::byte> gpu_data = entry.buffer_range.get_span();
                 memcpy(&entry.data[0], gpu_data.data(), gpu_data.size_bytes());
+                entry.buffer_range.bytes_gpu_used(gpu_data.size_bytes());
+                entry.buffer_range.close();
                 entry.buffer_range.release();
                 entry.state = Transfer_entry::State::Read_complete;
+                // log_id_render->debug(
+                //     "completed id: slot = {}, frame = {} size = {} dst = {}",
+                //     entry.slot, entry.frame_number, gpu_data.size_bytes(), fmt::ptr(&entry.data[0])
+                // );
             }
         );
     }
@@ -379,7 +375,9 @@ inline T read_as(uint8_t const* raw_memory)
 auto Id_renderer::get(const int x, const int y, uint32_t& out_id, float& out_depth, uint64_t& out_frame_number) -> bool
 {
     int slot = static_cast<int>(m_current_transfer_entry_slot);
+    int used_slot = -1;
 
+    out_frame_number = 0;
     for (size_t i = 0; i < s_transfer_entry_count; ++i) {
         --slot;
         if (slot < 0) {
@@ -401,16 +399,20 @@ auto Id_renderer::get(const int x, const int y, uint32_t& out_id, float& out_dep
                     //     ++counter; // breakpoint placeholder
                     // }
                     const uint8_t* const depth_ptr = &entry.data[s_extent * s_extent * 4 + x_ * 4 + y_ * stride];
-                    out_id           = (r << 16u) | (g << 8u) | b;
-                    out_depth        = read_as<float>(depth_ptr);
-                    out_frame_number = entry.frame_number;
-                    // log_id_render->debug("id: r = {:>3} g = {:>3} b = {:>3} id = {} depth = {} frame = {}", r, g, b, out_id, out_depth, out_frame_number);
-                    return true;
+                    if (entry.frame_number > out_frame_number) {
+                        out_id           = (r << 16u) | (g << 8u) | b;
+                        out_depth        = read_as<float>(depth_ptr);
+                        out_frame_number = entry.frame_number;
+                        used_slot = slot;
+                    }
+                    ERHE_VERIFY(entry.slot == slot);
+                    // log_id_render->debug("id get candidate: r = {:>3} g = {:>3} b = {:>3} id = {} depth = {} slot {} frame = {}", r, g, b, out_id, out_depth, slot, out_frame_number);
                 }
             }
         }
     }
-    return false;
+    // log_id_render->debug("id get: id = {} depth = {} slot {} frame = {}", out_id, out_depth, used_slot, out_frame_number);
+    return out_frame_number > 0;
 }
 
 auto Id_renderer::get(const int x, const int y) -> Id_query_result
