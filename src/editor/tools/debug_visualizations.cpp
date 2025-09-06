@@ -116,7 +116,7 @@ Debug_visualizations::Debug_visualizations(
 auto Debug_visualizations::get_selected_camera(const Render_context& render_context) -> std::shared_ptr<erhe::scene::Camera>
 {
     const auto* scene     = render_context.get_scene();
-    const auto& selection = m_context.selection->get_selection();
+    const auto& selection = m_context.selection->get_selected_items();
 
     for (const auto& item : selection) {
         const auto& node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
@@ -779,7 +779,7 @@ void Debug_visualizations::selection_visualization(const Render_context& context
 
     const auto& viewport_config = context.viewport_scene_view->get_config();
     erhe::renderer::Primitive_renderer line_renderer = context.get_line_renderer(2, true, true);
-    const auto& selection = m_context.selection->get_selection();
+    const auto& selection = m_context.selection->get_selected_items();
 
     m_selection_bounding_volume = erhe::math::Bounding_volume_combiner{}; // reset
     for (const auto& item : selection) {
@@ -1451,7 +1451,7 @@ void Debug_visualizations::render(const Render_context& context)
     }
 
     std::shared_ptr<erhe::scene::Camera> selected_camera;
-    const auto& selection = m_context.selection->get_selection();
+    const auto& selection = m_context.selection->get_selected_items();
     for (const auto& item : selection) {
         if (erhe::scene::is_camera(item)) {
             selected_camera = std::dynamic_pointer_cast<erhe::scene::Camera>(item);

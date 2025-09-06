@@ -2,6 +2,7 @@
 
 #include "app_context.hpp"
 #include "app_windows.hpp"
+#include "items.hpp"
 #include "operations/compound_operation.hpp"
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/node_attach_operation.hpp"
@@ -101,8 +102,11 @@ auto Scene_commands::get_scene_root(erhe::scene::Node* parent) const -> Scene_ro
         return static_cast<Scene_root*>(parent->get_item_host());
     }
 
-    const auto  first_selected_node  = m_context.selection->get<erhe::scene::Node>();
-    const auto  first_selected_scene = m_context.selection->get<erhe::scene::Scene>();
+    Selection& selection = *m_context.selection;
+    const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items = selection.get_selected_items();
+
+    const auto  first_selected_node  = get<erhe::scene::Node>(selected_items);
+    const auto  first_selected_scene = get<erhe::scene::Scene>(selected_items);
     const auto& viewport_scene_view  = m_context.scene_views->last_scene_view();
 
     erhe::Item_host* item_host = first_selected_node ? first_selected_node->get_item_host() : nullptr;
@@ -121,8 +125,11 @@ auto Scene_commands::get_scene_root(erhe::scene::Node* parent) const -> Scene_ro
 
 auto Scene_commands::get_scene_root(erhe::primitive::Material* material) const -> Scene_root*
 {
-    const auto  first_selected_node  = m_context.selection->get<erhe::scene::Node>();
-    const auto  first_selected_scene = m_context.selection->get<erhe::scene::Scene>();
+    Selection& selection = *m_context.selection;
+    const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items = selection.get_selected_items();
+
+    const auto  first_selected_node  = get<erhe::scene::Node>(selected_items);
+    const auto  first_selected_scene = get<erhe::scene::Scene>(selected_items);
     const auto& viewport_scene_view  = m_context.scene_views->last_scene_view();
 
     erhe::Item_host* item_host = (material != nullptr) ? material->get_item_host() : nullptr;
@@ -243,7 +250,10 @@ auto Scene_commands::create_new_rendertarget(erhe::scene::Node* parent) -> std::
         return {};
     }
 
-    std::shared_ptr<erhe::scene::Camera> camera = m_context.selection->get<erhe::scene::Camera>();
+    Selection& selection = *m_context.selection;
+    const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items = selection.get_selected_items();
+
+    std::shared_ptr<erhe::scene::Camera> camera = get<erhe::scene::Camera>(selected_items);
     if (!camera) {
         return {};
     }

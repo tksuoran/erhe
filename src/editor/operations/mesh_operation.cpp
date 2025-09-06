@@ -3,13 +3,14 @@
 #include "app_context.hpp"
 #include "editor_log.hpp"
 #include "app_settings.hpp"
+#include "items.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_root.hpp"
-#include "tools/selection_tool.hpp"
 
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_physics/icollision_shape.hpp"
 #include "erhe_scene/scene.hpp"
+#include "erhe_scene/node.hpp"
 
 namespace editor {
 
@@ -135,14 +136,12 @@ void Mesh_operation::make_entries(
     const std::function<void(const erhe::geometry::Geometry&, erhe::geometry::Geometry&, erhe::scene::Node*)> operation
 )
 {
-    Selection& selection = *m_parameters.context.selection;
-    const auto& selected_items = selection.get_selection();
-    if (selected_items.empty()) {
+    if (m_parameters.items.empty()) {
         return;
     }
 
-    const auto first_mesh = selection.get<erhe::scene::Mesh>();
-    const auto first_node = selection.get<erhe::scene::Node>();
+    const auto first_mesh = get<erhe::scene::Mesh>(m_parameters.items);
+    const auto first_node = get<erhe::scene::Node>(m_parameters.items);
     if (!first_mesh && !first_node) {
         return;
     }
@@ -169,7 +168,7 @@ void Mesh_operation::make_entries(
     scene.sanity_check();
 #endif
 
-    for (auto& item : selected_items) {
+    for (auto& item : m_parameters.items) {
         // Prevent hotbar etc. from being operated
         const bool is_content = erhe::utility::test_bit_set(item->get_flag_bits(), erhe::Item_flags::content);
         if (!is_content) {

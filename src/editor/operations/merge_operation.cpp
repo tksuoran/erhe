@@ -38,7 +38,7 @@ Merge_operation::Merge_operation(Parameters&& parameters)
     : m_parameters{std::move(parameters)}
 {
     // TODO count meshes in selection
-    auto& selected_items = m_parameters.context.selection->get_selection();
+    const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items = parameters.context.selection->get_selected_items();
     if (selected_items.size() < 2) {
         return;
     }
@@ -54,7 +54,7 @@ Merge_operation::Merge_operation(Parameters&& parameters)
     mat4        reference_node_from_world = mat4{1};
     auto        normal_style              = Normal_style::none;
 
-    m_selection_before = m_parameters.context.selection->get_selection();
+    m_selection_before = selected_items;
 
     if (!m_parameters.operation) {
         // Sorting nodes ensures first node is not child of some other node.

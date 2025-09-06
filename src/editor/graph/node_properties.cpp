@@ -2,6 +2,7 @@
 #include "graph/shader_graph_node.hpp"
 
 #include "app_context.hpp"
+#include "items.hpp"
 #include "tools/selection_tool.hpp"
 
 #include "erhe_defer/defer.hpp"
@@ -150,16 +151,16 @@ void Node_properties_window::imgui()
 
     m_property_editor.reset();
 
-    const auto& selection = m_context.selection->get_selection();
+    const auto& selected_items = m_context.selection->get_selected_items();
     int id = 0;
-    for (const auto& item : selection) {
+    for (const auto& item : selected_items) {
         ImGui::PushID(id++);
         ERHE_DEFER( ImGui::PopID(); );
         ERHE_VERIFY(item);
         item_properties(item);
     }
 
-    const auto selected_graph_node = m_context.selection->get<erhe::graph::Node>();
+    const auto selected_graph_node = get<erhe::graph::Node>(selected_items);
     if (selected_graph_node) {
         Shader_graph_node* shader_graph_node = dynamic_cast<Shader_graph_node*>(selected_graph_node.get());
         if (shader_graph_node != nullptr) {

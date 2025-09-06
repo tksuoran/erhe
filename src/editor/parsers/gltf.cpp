@@ -162,24 +162,24 @@ void import_gltf(
     }
     log_parsers->info("Processing {} nodes, {} meshes, {} primitives", gltf_data.nodes.size(), mesh_count, primitive_count);
 
-    for (const auto& node : gltf_data.nodes) {
+    for (const std::shared_ptr<erhe::scene::Node>& node : gltf_data.nodes) {
         if (!node) {
             continue;
         }
         // Apply primitive data, attach node raytrace
-        auto camera = erhe::scene::get_camera(node.get());
+        const std::shared_ptr<erhe::scene::Camera> camera = erhe::scene::get_camera(node.get());
         if (camera) {
             //content_library->cameras.add(camera);
             add_default_camera = false;
         }
 
-        auto light = erhe::scene::get_light(node.get());
+        const std::shared_ptr<erhe::scene::Light> light = erhe::scene::get_light(node.get());
         if (light) {
             //content_library->lights.add(light);
             add_default_light = false;
         }
 
-        auto mesh = erhe::scene::get_mesh(node.get());
+        const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(node.get());
         if (mesh) {
             // TODO Defer geometry / raytrace / renderable mesh generation
             std::vector<erhe::scene::Mesh_primitive>& mesh_primitives = mesh->get_mutable_primitives();

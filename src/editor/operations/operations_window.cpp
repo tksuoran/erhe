@@ -2,6 +2,7 @@
 
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
+#include "items.hpp"
 #include "scene/scene_root.hpp"
 #include "operations/operation_stack.hpp"
 #include "operations/geometry_operations.hpp"
@@ -182,9 +183,9 @@ auto Operations::mesh_context() -> Mesh_operation_parameters
 // contains the mesh is seletected and mesh itself is not selected.
 auto Operations::count_selected_meshes() const -> size_t
 {
-    const auto& selection = m_context.selection->get_selection();
+    const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items = m_context.selection->get_selected_items();
     std::size_t count = 0;
-    for (const auto& item : selection) {
+    for (const auto& item : selected_items) {
         auto node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
         if (node) {
             for (const auto& attachment : node->get_attachments()) {
@@ -252,8 +253,10 @@ void Operations::imgui()
 
     ImGui::Separator();
 
-    auto& selection       = *m_context.selection;
-    auto& operation_stack = *m_context.operation_stack;
+    Operation_stack& operation_stack = *m_context.operation_stack;
+    Selection&       selection       = *m_context.selection;
+
+    const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items = selection.get_selected_items();
 
     //// for (unsigned int i = 0; i < static_cast<unsigned int>(m_active_tools.size()); ++i) {
     ////     auto* tool = m_active_tools.at(i);
@@ -285,7 +288,7 @@ void Operations::imgui()
     }
 
     const auto selected_mesh_count = count_selected_meshes();
-    const auto selected_node_count = selection.count<erhe::scene::Node>();
+    const auto selected_node_count = count<erhe::scene::Node>(selected_items);
     const auto multi_select_meshes = (selected_mesh_count >= 2) ? erhe::imgui::Item_mode::normal : erhe::imgui::Item_mode::disabled;
     const auto multi_select_nodes  = (selected_node_count >= 2) ? erhe::imgui::Item_mode::normal : erhe::imgui::Item_mode::disabled;
     const auto delete_mode         = (selected_mesh_count + selected_node_count) > 0 ? erhe::imgui::Item_mode::normal : erhe::imgui::Item_mode::disabled;
@@ -294,8 +297,8 @@ void Operations::imgui()
     }
 
     if (erhe::imgui::make_button("Attach", multi_select_nodes, button_size)) {
-        const auto& node0 = selection.get<erhe::scene::Node>(0);
-        const auto& node1 = selection.get<erhe::scene::Node>(1);
+        const auto& node0 = get<erhe::scene::Node>(selected_items, 0);
+        const auto& node1 = get<erhe::scene::Node>(selected_items, 1);
         if (node0 && node1) {
             operation_stack.queue(
                 std::make_shared<Item_parent_change_operation>(
@@ -454,7 +457,8 @@ void Operations::bake_transform()
                 std::make_shared<Bake_transform_operation>(mesh_context())
             );
             // Second: Reset transform in all nodes
-            const std::vector<std::shared_ptr<erhe::scene::Node>> nodes = m_context.selection->get_all<erhe::scene::Node>();
+            const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items = m_context.selection->get_selected_items();
+            const std::vector<std::shared_ptr<erhe::scene::Node>> nodes = get_all<erhe::scene::Node>(selected_items);
             for (const std::shared_ptr<erhe::scene::Node>& node : nodes) {
                 compound_operation_parameters.operations.push_back(
                     std::make_shared<Node_transform_operation>(
@@ -497,7 +501,8 @@ void Operations::center_transform()
                 std::make_shared<Bake_transform_operation>(std::move(parameters))
             );
             // Second: Reset transform in all nodes
-            const std::vector<std::shared_ptr<erhe::scene::Node>> nodes = m_context.selection->get_all<erhe::scene::Node>();
+            const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items = m_context.selection->get_selected_items();
+            const std::vector<std::shared_ptr<erhe::scene::Node>> nodes = get_all<erhe::scene::Node>(selected_items);
             for (const std::shared_ptr<erhe::scene::Node>& node : nodes) {
                 const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(node.get());
                 if (!mesh) {

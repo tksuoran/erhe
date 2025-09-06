@@ -328,7 +328,7 @@ auto Fly_camera_frame_command::try_call() -> bool
     const erhe::math::Viewport viewport = viewport_scene_view->get_projection_viewport();
 
     erhe::math::Aabb bbox{};
-    const std::vector<std::shared_ptr<erhe::Item_base>>& selection = m_context.selection->get_selection();
+    const std::vector<std::shared_ptr<erhe::Item_base>>& selection = m_context.selection->get_selected_items();
     for (const std::shared_ptr<erhe::Item_base>& item : selection) {
         const auto& node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
         if (!node) {

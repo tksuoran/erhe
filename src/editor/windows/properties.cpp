@@ -9,6 +9,7 @@
 #include "content_library/brdf_slice.hpp"
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
+#include "items.hpp"
 #include "operations/material_change_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "preview/material_preview.hpp"
@@ -803,7 +804,10 @@ void Properties::material_properties()
 {
     ERHE_PROFILE_FUNCTION();
 
-    const std::shared_ptr<erhe::primitive::Material> selected_material_shared = m_context.selection->get<erhe::primitive::Material>();
+    Selection& selection = *m_context.selection;
+    const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items = selection.get_selected_items();
+
+    const std::shared_ptr<erhe::primitive::Material> selected_material_shared = get<erhe::primitive::Material>(selected_items);
     if (m_inspected_material != selected_material_shared) {
         log_operations->info("m_inspected_material != selected_material_shared");
         if (m_inspected_material) {
@@ -914,21 +918,23 @@ void Properties::imgui()
 
     reset();
 
-    const auto& selection = m_context.selection->get_selection();
+    Selection& selection = *m_context.selection;
+    const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items = selection.get_selected_items();
+
     int id = 0;
-    for (const auto& item : selection) {
+    for (const auto& item : selected_items) {
         ImGui::PushID(id++);
         ERHE_DEFER( ImGui::PopID(); );
         ERHE_VERIFY(item);
         item_properties(item);
     }
 
-    const auto selected_animation = m_context.selection->get<erhe::scene::Animation>();
+    const auto selected_animation = get<erhe::scene::Animation>(selected_items);
     if (selected_animation) {
         animation_properties(*selected_animation.get());
     }
 
-    const auto selected_skin = m_context.selection->get<erhe::scene::Skin>();
+    const auto selected_skin = get<erhe::scene::Skin>(selected_items);
     if (selected_skin) {
         skin_properties(*selected_skin.get());
     }

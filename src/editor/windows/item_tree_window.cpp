@@ -121,7 +121,7 @@ void Item_tree::move_selection(const std::shared_ptr<erhe::Item_base>& target_no
     );
 
     Compound_operation::Parameters compound_parameters;
-    const auto& selection = m_context.selection->get_selection();
+    const auto& selection = m_context.selection->get_selected_items();
     const std::shared_ptr<erhe::Item_base> drag_item = payload_item->shared_from_this();
 
     std::shared_ptr<erhe::Item_base> anchor = target_node;
@@ -226,7 +226,7 @@ void Item_tree::reposition(
     }
 
     if (selection_usage == Selection_usage::Selection_used) {
-        const auto& selection = m_context.selection->get_selection();
+        const auto& selection = m_context.selection->get_selected_items();
 
         // Ignore nodes if their ancestors is in selection
         const auto ancestor_in_selection = get_ancestor_in(item, selection);
@@ -305,7 +305,7 @@ void Item_tree::try_add_to_attach(
     }
 
     if (selection_usage == Selection_usage::Selection_used) {
-        const auto& selection = m_context.selection->get_selection();
+        const auto& selection = m_context.selection->get_selected_items();
 
         // Ignore item if their ancestors is in selection
         const auto ancestor_in_selection = get_ancestor_in(item, selection);
@@ -340,7 +340,7 @@ void Item_tree::attach_selection_to(const std::shared_ptr<erhe::Item_base>& targ
     ////     payload_id
     //// );
     Compound_operation::Parameters compound_parameters;
-    const auto& selection = m_context.selection->get_selection();
+    const auto& selection = m_context.selection->get_selected_items();
     const std::shared_ptr<erhe::Item_base> drag_item = payload_item->shared_from_this();
 
     if (is_in(drag_item, selection)) {
@@ -366,7 +366,7 @@ void Item_tree::drag_and_drop_source(const std::shared_ptr<erhe::Item_base>& ite
         erhe::Item_base* item_raw = item.get();
         ImGui::SetDragDropPayload(item->get_type_name().data(), &item_raw, sizeof(item_raw));
 
-        const auto& selection = m_context.selection->get_selection();
+        const auto& selection = m_context.selection->get_selected_items();
         if (is_in(item, selection)) {
             for (const auto& selection_item : selection) {
                 item_icon_and_text(selection_item, 0);

@@ -1,6 +1,7 @@
 #include "grid/grid.hpp"
 
 #include "app_context.hpp"
+#include "items.hpp"
 #include "renderers/render_context.hpp"
 #include "tools/selection_tool.hpp"
 
@@ -237,7 +238,7 @@ void Grid::imgui(App_context& context)
                 }
             }
         }
-        const auto& host_node = context.selection->get<erhe::scene::Node>();
+        const auto& host_node = get<erhe::scene::Node>(context.selection->get_selected_items());
         if (host_node) {
             const std::string label = fmt::format("Attach to {}", host_node->get_name());
             if (ImGui::Button(label.c_str())) {

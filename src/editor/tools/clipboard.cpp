@@ -3,6 +3,7 @@
 #include "app_context.hpp"
 #include "editor_log.hpp"
 #include "app_message_bus.hpp"
+#include "items.hpp"
 #include "operations/compound_operation.hpp"
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/node_attach_operation.hpp"
@@ -77,7 +78,10 @@ void Clipboard::on_message(App_message& message)
 auto Clipboard::try_ready() -> bool
 {
     // TODO Paste into content library
-    const auto target_node = m_context.selection->get<erhe::scene::Node>();
+    Selection& selection = *m_context.selection;
+    const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items = selection.get_selected_items();
+
+    const auto target_node = get<erhe::scene::Node>(selected_items);
     return !m_contents.empty() && target_node;
 }
 
@@ -89,12 +93,15 @@ auto Clipboard::try_ready() -> bool
             return root;
         }
     }
-    const std::shared_ptr<erhe::Hierarchy>& selected_hierarchy = m_context.selection->get<erhe::Hierarchy>();
+
+    Selection& selection = *m_context.selection;
+    const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items = selection.get_selected_items();
+    const std::shared_ptr<erhe::Hierarchy>& selected_hierarchy = get<erhe::Hierarchy>(selected_items);
     if (selected_hierarchy) {
         return selected_hierarchy;
     }
 
-    const std::shared_ptr<erhe::Hierarchy>& last_selected_hierarchy = m_context.selection->get_last_selected<erhe::Hierarchy>();
+    const std::shared_ptr<erhe::Hierarchy>& last_selected_hierarchy = selection.get_last_selected<erhe::Hierarchy>();
     if (last_selected_hierarchy) {
         return last_selected_hierarchy;
     }

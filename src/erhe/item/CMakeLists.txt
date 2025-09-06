@@ -22,6 +22,7 @@ target_link_libraries(
     PUBLIC
         erhe::profile
         glm::glm-header-only
+        Taskflow
     PRIVATE
         erhe::utility
         erhe::log

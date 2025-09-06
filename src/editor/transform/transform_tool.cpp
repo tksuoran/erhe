@@ -270,7 +270,7 @@ void Transform_tool::imgui()
 
 void Transform_tool::update_target_nodes(erhe::scene::Node* node_filter)
 {
-    const auto& selection = m_context.selection->get_selection();
+    const auto& selection = m_context.selection->get_selected_items();
 
     vec3 cumulative_world_translation{0.0f, 0.0f, 0.0f};
     quat cumulative_world_rotation   {1.0f, 0.0f, 0.0f, 0.0f};

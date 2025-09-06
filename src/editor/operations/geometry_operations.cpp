@@ -290,7 +290,7 @@ auto Binary_mesh_operation::make_operations(
     std::shared_ptr<erhe::primitive::Material> material{};
     erhe::primitive::Normal_style normal_style = erhe::primitive::Normal_style::none;
 
-    auto& selected_items = parameters.context.selection->get_selection();
+    const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items = parameters.context.selection->get_selected_items();
     glm::mat4 target_node_from_world = glm::mat4{1};
     glm::mat4 target_world_from_node = glm::mat4{1};
 

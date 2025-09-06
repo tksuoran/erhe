@@ -52,11 +52,11 @@ Item_insert_remove_operation::Item_insert_remove_operation(const Parameters& par
 {
     auto& selection = *parameters.context.selection;
     m_item                   = parameters.item,
-    m_selection_before       = selection.get_selection();
+    m_selection_before       = selection.get_selected_items();
     m_index_in_parent_insert = parameters.index_in_parent;
 
     if (parameters.mode == Mode::insert) {
-        m_selection_after = selection.get_selection();
+        m_selection_after = selection.get_selected_items();
         m_after_parent    = parameters.parent;
     }
 

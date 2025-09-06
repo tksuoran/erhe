@@ -2,6 +2,7 @@
 
 #include "app_context.hpp"
 #include "app_settings.hpp"
+#include "items.hpp"
 #include "brushes/brush.hpp"
 #include "create/create_preview_settings.hpp"
 #include "operations/item_insert_remove_operation.hpp"
@@ -69,7 +70,10 @@ void Create::brush_create_button(const char* label, Create_shape* create_shape)
 
 auto Create::find_parent() -> std::shared_ptr<erhe::scene::Node>
 {
-    const auto selected_node       = m_context.selection->get<erhe::scene::Node>();
+    Selection& selection = *m_context.selection;
+    const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items = selection.get_selected_items();
+
+    const auto selected_node       = get<erhe::scene::Node>(selected_items);
     const auto viewport_scene_view = m_context.scene_views->last_scene_view();
 
     Scene_view* scene_view = get_hover_scene_view();
@@ -200,12 +204,14 @@ void Create::imgui()
     }
 
     {
-        const auto& selection = m_context.selection->get_selection();
-        if (selection.empty()) {
+        Selection& selection = *m_context.selection;
+        const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items = selection.get_selected_items();
+
+        if (selected_items.empty()) {
             return;
         }
         std::shared_ptr<erhe::geometry::Geometry> source_geometry;
-        for (const auto& item : selection) {
+        for (const auto& item : selected_items) {
             const auto& mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(item);
             if (!mesh) {
                 continue;

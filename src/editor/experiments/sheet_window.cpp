@@ -1,14 +1,11 @@
 #include "experiments/sheet_window.hpp"
 
 #include "app_context.hpp"
-//#include "editor_log.hpp"
 #include "app_message_bus.hpp"
-//#include "tools/selection_tool.hpp"
 
 #include "erhe_defer/defer.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
-//#include "erhe_verify/verify.hpp"
 
 #include <fmt/format.h>
 

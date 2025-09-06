@@ -516,7 +516,7 @@ void Paint_tool::imgui()
         }
     }
     if (ImGui::Button("Color Selection") && !m_ngon_colors.empty()) {
-        const auto& selection = m_context.selection->get_selection();
+        const auto& selection = m_context.selection->get_selected_items();
         for (const auto& item : selection) {
             auto* node = std::dynamic_pointer_cast<erhe::scene::Node>(item).get();
             auto mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(item);

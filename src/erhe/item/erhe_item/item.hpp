@@ -2,6 +2,8 @@
 
 #include "erhe_item/unique_id.hpp"
 
+#include <taskflow/taskflow.hpp>
+
 #include <cstdint>
 #include <filesystem>
 #include <memory>
@@ -273,6 +275,9 @@ public:
     [[nodiscard]] auto get_name                    () const -> const std::string&;
     [[nodiscard]] auto get_label                   () const -> const std::string&;
     [[nodiscard]] auto describe                    (int level = 0) const -> std::string;
+    [[nodiscard]] auto get_task                    () -> tf::AsyncTask&;
+    [[nodiscard]] void reset_task                  ();
+    [[nodiscard]] void set_task                    (tf::AsyncTask& task);
 
     void set_flag_bits    (uint64_t mask, bool value);
     void enable_flag_bits (uint64_t mask);
@@ -284,12 +289,14 @@ public:
     void hide             ();
     void set_source_path  (const std::filesystem::path& path);
 
+
 protected:
     Unique_id<Item_base>  m_id         {};
     uint64_t              m_flag_bits  {Item_flags::none};
     std::string           m_name       {};
     std::string           m_label      {};
     std::filesystem::path m_source_path{};
+    tf::AsyncTask         m_task       {};
 };
 
 template <typename T>
@@ -304,5 +311,6 @@ auto is(const std::shared_ptr<erhe::Item_base>& base) -> bool
 {
     return static_cast<bool>(std::dynamic_pointer_cast<T>(base));
 }
+
 
 } // namespace erhe

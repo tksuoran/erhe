@@ -324,7 +324,7 @@ void Selection_tool::handle_priority_update(int old_priority, int new_priority)
     }
 }
 
-auto Selection::get_selection() const -> const std::vector<std::shared_ptr<erhe::Item_base>>&
+auto Selection::get_selected_items() const -> const std::vector<std::shared_ptr<erhe::Item_base>>&
 {
     return m_selection;
 }

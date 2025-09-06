@@ -1,6 +1,7 @@
 #include "tools/tool.hpp"
 #include "editor_log.hpp"
 #include "app_message.hpp"
+#include "items.hpp"
 #include "content_library/content_library.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/scene_view.hpp"
@@ -144,15 +145,16 @@ auto Tool::get_material() const -> std::shared_ptr<erhe::primitive::Material>
 auto Tool::get_node() const -> std::shared_ptr<erhe::scene::Node>
 {
     Selection* selection = m_context.selection;
+    const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items = selection->get_selected_items();
     {
-        std::shared_ptr<erhe::scene::Node> node = selection->get<erhe::scene::Node>();
+        std::shared_ptr<erhe::scene::Node> node = get<erhe::scene::Node>(selected_items);
         if (node) {
             return node;
         }
     }
 
     {
-        std::shared_ptr<erhe::scene::Node_attachment> attachment = selection->get<erhe::scene::Node_attachment>();
+        std::shared_ptr<erhe::scene::Node_attachment> attachment = get<erhe::scene::Node_attachment>(selected_items);
         if (attachment) {
             erhe::scene::Node* node = attachment->get_node();
             if (node != nullptr) {

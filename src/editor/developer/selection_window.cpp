@@ -23,7 +23,7 @@ void Selection_window::imgui()
 {
     const float scale = get_scale_value();
 
-    const auto& items = m_context.selection->get_selection();
+    const auto& items = m_context.selection->get_selected_items();
     for (const auto& item : items) {
         m_context.icon_set->item_icon(item, scale);
         ImGui::TextUnformatted(item->get_name().c_str());

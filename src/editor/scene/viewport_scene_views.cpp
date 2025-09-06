@@ -217,7 +217,8 @@ auto Scene_views::open_new_viewport_scene_view(
 
     const int msaa_sample_count = m_app_context.app_settings->graphics.current_graphics_preset.msaa_sample_count;
     if (scene_root) {
-        for (const auto& item : m_app_context.selection->get_selection()) {
+        const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items = m_app_context.selection->get_selected_items();
+        for (const auto& item : selected_items) {
             const auto camera = std::dynamic_pointer_cast<erhe::scene::Camera>(item);
             if (camera) {
                 return create_viewport_scene_view(

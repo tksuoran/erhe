@@ -9,11 +9,15 @@
 #include <glm/glm.hpp>
 
 #include <functional>
+#include <memory>
 #include <optional>
 #include <vector>
 
 namespace erhe::geometry {
     class Geometry;
+}
+namespace erhe {
+    class Item_base;
 }
 namespace erhe::scene {
     class Mesh;
@@ -31,6 +35,8 @@ public:
     App_context&                context;
     erhe::primitive::Build_info build_info;
     std::optional<glm::mat4>    transform;
+
+    std::vector<std::shared_ptr<erhe::Item_base>> items;
 
     // std::function<
     //     bool(
