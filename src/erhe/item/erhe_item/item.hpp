@@ -276,8 +276,8 @@ public:
     [[nodiscard]] auto get_label                   () const -> const std::string&;
     [[nodiscard]] auto describe                    (int level = 0) const -> std::string;
     [[nodiscard]] auto get_task                    () -> tf::AsyncTask&;
-    [[nodiscard]] void reset_task                  ();
-    [[nodiscard]] void set_task                    (tf::AsyncTask& task);
+    void reset_task       ();
+    void set_task         (tf::AsyncTask& task);
 
     void set_flag_bits    (uint64_t mask, bool value);
     void enable_flag_bits (uint64_t mask);

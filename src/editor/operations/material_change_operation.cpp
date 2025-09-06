@@ -1,5 +1,7 @@
 #include "operations/material_change_operation.hpp"
 
+#include <fmt/format.h>
+
 namespace editor {
 
 Material_change_operation::Material_change_operation(
