@@ -11,6 +11,8 @@
 
 namespace editor {
 
+class Mesh_operation_parameters;
+
 template <typename T>
 auto get(const std::vector<std::shared_ptr<erhe::Item_base>>& items, const std::size_t index = 0) -> std::shared_ptr<T>
 {
@@ -118,5 +120,11 @@ auto count(const std::vector<std::shared_ptr<erhe::Item_base>>& items) -> std::s
     }
     return i;
 }
+
+void async_for_nodes_with_mesh(
+    App_context&                                         context,
+    const std::vector<std::shared_ptr<erhe::Item_base>>& items,
+    std::function<void(Mesh_operation_parameters&&)>     op
+);
 
 }

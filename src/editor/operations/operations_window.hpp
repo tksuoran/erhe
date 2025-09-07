@@ -115,12 +115,12 @@ public:
     void create_material();
 
 private:
-    void async_for_nodes_with_mesh(
-        std::function<void(Mesh_operation_parameters&& parameters)>
-    );
+    void async_for_selected_nodes_with_mesh(std::function<void(Mesh_operation_parameters&&)> op);
 
     [[nodiscard]] auto count_selected_meshes() const -> size_t;
     [[nodiscard]] auto mesh_context() -> Mesh_operation_parameters;
+
+    template<typename T> void async_mesh_operation();
 
     void on_message(App_message& message);
 

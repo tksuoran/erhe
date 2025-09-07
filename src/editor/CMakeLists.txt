@@ -127,6 +127,7 @@ erhe_target_sources_grouped(
     grid/grid_tool.hpp
     input_state.cpp
     input_state.hpp
+    items.cpp
     items.hpp
     ImViewGuizmo.h
     main.cpp
