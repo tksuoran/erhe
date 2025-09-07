@@ -36,11 +36,6 @@ void Headset_view::render_headset()
 {
 }
 
-auto Headset_view::get_scene_root() const -> std::shared_ptr<Scene_root>
-{
-    return {};
-}
-
 auto Headset_view::get_root_node() const -> std::shared_ptr<erhe::scene::Node>
 {
     return {};
