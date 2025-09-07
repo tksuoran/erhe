@@ -1,5 +1,7 @@
 #pragma once
 
+#include <atomic>
+
 namespace erhe::commands {
     class Commands;
 }
@@ -99,6 +101,8 @@ public:
     float sleep_margin  {0.0f}; // TODO
 
     tf::Executor*                           executor              {nullptr};
+    std::atomic_int                         pending_async_ops     {};
+    std::atomic_int                         running_async_ops     {};
 
     erhe::commands::Commands*               commands              {nullptr};
     erhe::graphics::Device*                 graphics_device       {nullptr};

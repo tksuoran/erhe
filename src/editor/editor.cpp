@@ -1082,6 +1082,22 @@ public:
             );
             window_imgui_host->set_status_bar_callback(
                 [this](erhe::imgui::Window_imgui_host&) {
+                    {
+                        std::stringstream ss;
+                        const int running_async_ops = m_app_context.running_async_ops.load();
+                        if (running_async_ops > 0) {
+                            ss << running_async_ops << " running operations";
+                        }
+                        const int pending_async_ops = m_app_context.pending_async_ops.load();
+                        if (pending_async_ops > 0) {
+                            if (running_async_ops > 0) {
+                                ss << ", ";
+                            }
+                            ss << pending_async_ops << " queued operations";
+                        }
+                        ImGui::TextUnformatted(ss.str().c_str());
+                        ImGui::SameLine();
+                    }
                     struct Input_record
                     {
                         bool shift              {false};

@@ -745,13 +745,16 @@ void Operations::async_for_nodes_with_mesh(
         return;
     }
 
-    tf::Executor& executor = m_context.operation_stack->get_executor();
-    tf::AsyncTask task = executor.silent_dependent_async(
+    ++m_context.pending_async_ops;
+    tf::AsyncTask task = m_context.executor->silent_dependent_async(
         [this, op, items]()
         {
+            ++m_context.running_async_ops;
             Mesh_operation_parameters parameters = mesh_context();
             parameters.items = items;
             op(std::move(parameters));
+            --m_context.running_async_ops;
+            --m_context.pending_async_ops;
         },
         item_tasks.begin(), item_tasks.end()
     );
