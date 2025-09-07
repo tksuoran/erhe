@@ -174,11 +174,6 @@ void Scene_preview::update_rendertarget(erhe::graphics::Device& graphics_device)
     m_render_pass = std::make_unique<erhe::graphics::Render_pass>(graphics_device, render_pass_descriptor);
 }
 
-auto Scene_preview::get_scene_root() const -> std::shared_ptr<Scene_root>
-{
-    return m_scene_root;
-}
-
 auto Scene_preview::get_camera() const -> std::shared_ptr<erhe::scene::Camera>
 {
     return m_camera;

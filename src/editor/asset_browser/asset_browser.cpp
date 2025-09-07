@@ -2,6 +2,8 @@
 
 #include "app_context.hpp"
 #include "app_scenes.hpp"
+#include "app_message.hpp"
+#include "app_message_bus.hpp"
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
 #include "operations/operation.hpp"
@@ -41,6 +43,9 @@ private:
 Scene_open_operation::Scene_open_operation(const std::filesystem::path& path)
     : m_path{path}
 {
+    set_description(
+        fmt::format("[{}] Scene_open_operation(path = {})", get_serial(), m_path.string())
+    );
 }
 
 void Scene_open_operation::execute(App_context& context)
@@ -87,8 +92,12 @@ void Scene_open_operation::execute(App_context& context)
         // Re-register
         m_scene_root->register_to_editor_scenes(*context.app_scenes);
     }
-    set_description(
-        fmt::format("[{}] Scene_open_operation(path = {})", get_serial(), m_path.string())
+
+    context.app_message_bus->send_message(
+        App_message{
+            .update_flags = Message_flag_bit::c_flag_bit_open_scene,
+            .scene_root   = m_scene_root
+        }
     );
 }
 

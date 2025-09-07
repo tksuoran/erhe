@@ -759,6 +759,7 @@ public:
                     *m_imgui_windows.get(),         //erhe::imgui::Imgui_windows&     imgui_windows
                     *m_rendergraph.get(),           //erhe::rendergraph::Rendergraph& rendergraph
                     m_app_context,                  //App_context&                    app_context
+                    *m_app_message_bus.get(),       //App_message_bus&                app_message_bus
                     *m_app_rendering.get(),         //App_rendering&                  app_rendering
                     *m_app_settings.get(),          //App_settings&                   app_settings
                     *m_mesh_memory.get(),           //Mesh_memory&                    mesh_memory

@@ -91,7 +91,6 @@ public:
     virtual ~Scene_view() noexcept;
 
     // Virtual interface
-    [[nodiscard]] virtual auto get_scene_root        () const -> std::shared_ptr<Scene_root> = 0;
     [[nodiscard]] virtual auto get_camera            () const -> std::shared_ptr<erhe::scene::Camera> = 0;
     [[nodiscard]] virtual auto get_perspective_scale () const -> float = 0;
     [[nodiscard]] virtual auto get_shadow_render_node() const -> Shadow_render_node* { return nullptr; }
@@ -100,6 +99,9 @@ public:
     [[nodiscard]] virtual auto get_light_projections () const -> const erhe::scene_renderer::Light_projections*;
     [[nodiscard]] virtual auto as_viewport_scene_view() -> Viewport_scene_view*;
     [[nodiscard]] virtual auto as_viewport_scene_view() const -> const Viewport_scene_view*;
+
+    void set_scene_root(const std::shared_ptr<Scene_root>& scene_root);
+    [[nodiscard]] auto get_scene_root() const -> std::shared_ptr<Scene_root>;
 
     // "Pointing"
     void set_world_from_control(glm::vec3 near_position_in_world, glm::vec3 far_position_in_world);
@@ -126,11 +128,12 @@ public:
 protected:
     void set_hover(std::size_t slot, const Hover_entry& entry);
 
-    App_context&             m_context;
-    std::optional<glm::mat4> m_world_from_control;
-    std::optional<glm::mat4> m_control_from_world;
-    Viewport_config          m_viewport_config;
-    bool                     m_hover_update_pending{true};
+    App_context&                m_context;
+    std::optional<glm::mat4>    m_world_from_control;
+    std::optional<glm::mat4>    m_control_from_world;
+    Viewport_config             m_viewport_config;
+    bool                        m_hover_update_pending{true};
+    std::weak_ptr<Scene_root>   m_scene_root;
 
 private:
     std::array<Hover_entry, Hover_entry::slot_count> m_hover_entries;

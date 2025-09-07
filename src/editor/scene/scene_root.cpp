@@ -334,7 +334,7 @@ auto Scene_root::make_browser_window(
             context.app_message_bus->send_message(
                 App_message{
                     .update_flags = Message_flag_bit::c_flag_bit_hover_scene_item_tree,
-                    .scene_root   = this
+                    .scene_root   = dynamic_pointer_cast<Scene_root>(shared_from_this())
                 }
             );
         }

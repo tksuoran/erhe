@@ -185,6 +185,7 @@ auto Scene_views::create_viewport_scene_view(
 auto Scene_views::create_viewport_window(
     erhe::imgui::Imgui_renderer&                                imgui_renderer,
     erhe::imgui::Imgui_windows&                                 imgui_windows,
+    App_message_bus&                                            app_message_bus,
     const std::shared_ptr<Viewport_scene_view>&                 viewport_scene_view,
     const std::shared_ptr<erhe::rendergraph::Rendergraph_node>& rendergraph_output_node,
     std::string_view                                            name,
@@ -198,6 +199,7 @@ auto Scene_views::create_viewport_window(
         imgui_windows,
         rendergraph_output_node,
         m_app_context,
+        app_message_bus,
         window_name,
         ini_name,
         viewport_scene_view
@@ -281,6 +283,7 @@ void Scene_views::open_new_viewport_scene_view_node()
     create_viewport_window(
         *m_app_context.imgui_renderer,
         *m_app_context.imgui_windows,
+        *m_app_context.app_message_bus,
         viewport_scene_view,
         rendergraph_output_node,
         "scene view",

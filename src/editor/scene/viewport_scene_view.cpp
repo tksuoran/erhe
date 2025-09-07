@@ -76,10 +76,11 @@ Viewport_scene_view::Viewport_scene_view(
     }
     , m_name                  {name}
     , m_ini_label             {ini_label}
-    , m_scene_root            {scene_root}
     , m_tool_scene_root       {tools.get_tool_scene_root()}
     , m_camera                {camera}
 {
+    set_scene_root(scene_root);
+
     // We need shadows rendered before
     register_input("shadow_maps", erhe::rendergraph::Rendergraph_node_key::shadow_maps);
 
@@ -194,11 +195,6 @@ auto Viewport_scene_view::is_scene_view_hovered() const -> bool
 {
     SPDLOG_LOGGER_TRACE(log_scene_view, "{}->is_scene_view_hovered() = {}", get_name(), m_is_scene_view_hovered);
     return m_is_scene_view_hovered;
-}
-
-auto Viewport_scene_view::get_scene_root() const -> std::shared_ptr<Scene_root>
-{
-    return m_scene_root.lock();
 }
 
 auto Viewport_scene_view::get_window_viewport() const -> const erhe::math::Viewport&

@@ -120,7 +120,6 @@ public:
     void update_fixed_step();
 
     // Implements Scene_view
-    auto get_scene_root        () const -> std::shared_ptr<Scene_root>          override;
     auto get_camera            () const -> std::shared_ptr<erhe::scene::Camera> override;
     auto get_perspective_scale () const -> float                                override;
     auto get_shadow_render_node() const -> Shadow_render_node*                  override;
@@ -158,7 +157,6 @@ private:
     erhe::window::Context_window&                        m_context_window;
     std::shared_ptr<Headset_view_node>                   m_rendergraph_node;
     std::shared_ptr<Shadow_render_node>                  m_shadow_render_node;
-    std::shared_ptr<Scene_root>                          m_scene_root;
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     erhe::xr::Headset*                                   m_headset;
 #endif

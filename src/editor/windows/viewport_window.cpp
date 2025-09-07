@@ -3,6 +3,8 @@
 #include "windows/viewport_window.hpp"
 
 #include "app_context.hpp"
+#include "app_message.hpp"
+#include "app_message_bus.hpp"
 #include "brushes/brush.hpp"
 #include "brushes/brush_tool.hpp"
 #include "content_library/content_library.hpp"
@@ -22,6 +24,7 @@
 #include "erhe_primitive/material.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_scene/node.hpp"
+#include "erhe_utility/bit_helpers.hpp"
 
 #include <imgui/imgui.h>
 #include <imgui/imgui_internal.h>
@@ -36,6 +39,7 @@ Viewport_window::Viewport_window(
     erhe::imgui::Imgui_windows&                                 imgui_windows,
     const std::shared_ptr<erhe::rendergraph::Rendergraph_node>& rendergraph_output_node,
     App_context&                                                app_context,
+    App_message_bus&                                            app_message_bus,
     const std::string_view                                      name,
     const std::string_view                                      ini_label,
     const std::shared_ptr<Viewport_scene_view>&                 viewport_scene_view
@@ -46,6 +50,23 @@ Viewport_window::Viewport_window(
     , m_rendergraph_output_node{rendergraph_output_node}
 {
     show_window();
+
+    app_message_bus.add_receiver(
+        [this](App_message& message) {
+            on_message(message);
+        }
+    );
+}
+
+void Viewport_window::on_message(App_message& message)
+{
+    using namespace erhe::utility;
+    if (test_bit_set(message.update_flags, Message_flag_bit::c_flag_bit_open_scene)) {
+        std::shared_ptr<Viewport_scene_view> scene_view = m_viewport_scene_view.lock();
+        if (scene_view) {
+            scene_view->set_scene_root(message.scene_root);
+        }
+    }
 }
 
 auto Viewport_window::viewport_scene_view() const -> std::shared_ptr<Viewport_scene_view>

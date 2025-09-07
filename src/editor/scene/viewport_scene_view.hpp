@@ -84,7 +84,6 @@ public:
     ~Viewport_scene_view() noexcept override;
 
     // Implements Scene_view
-    auto get_scene_root            () const -> std::shared_ptr<Scene_root>                              override;
     auto get_camera                () const -> std::shared_ptr<erhe::scene::Camera>                     override;
     auto get_perspective_scale     () const -> float                                                    override;
     auto get_rendergraph_node      () -> erhe::rendergraph::Rendergraph_node*                           override;
@@ -130,7 +129,6 @@ private:
 
     std::string                        m_name                 {};
     const char*                        m_ini_label            {nullptr};
-    std::weak_ptr<Scene_root>          m_scene_root           {};
     std::weak_ptr<Scene_root>          m_tool_scene_root      {};
     std::weak_ptr<erhe::scene::Camera> m_camera               {};
 

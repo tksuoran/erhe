@@ -148,7 +148,7 @@ void Headset_view::attach_to_scene(std::shared_ptr<Scene_root> scene_root, Mesh_
         m_controller_visualization = std::make_unique<Controller_visualization>(
             m_root_node.get(),
             mesh_memory,
-            *m_scene_root.get()
+            *get_scene_root().get()
         );
     }
 
@@ -591,7 +591,7 @@ void Headset_view::setup_root_camera()
         glm::vec3{0.0f, 1.0f,  0.0f}  // up
     );
 
-    m_root_node = m_scene_root->get_scene().get_root_node();
+    m_root_node = get_scene_root()->get_scene().get_root_node();
     m_headset_node = std::make_shared<erhe::scene::Node>("Headset Root Node");
     m_headset_node->set_parent(m_root_node);
     m_headset_node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui | erhe::Item_flags::visible);
@@ -629,15 +629,9 @@ auto Headset_view::get_camera_offset() const -> glm::vec3
     return m_camera_offset;
 }
 
-auto Headset_view::get_scene_root() const -> std::shared_ptr<Scene_root>
-{
-    ERHE_VERIFY(m_scene_root);
-    return m_scene_root;
-}
-
 auto Headset_view::get_root_node() const -> std::shared_ptr<erhe::scene::Node>
 {
-    ERHE_VERIFY(m_scene_root);
+    ERHE_VERIFY(get_scene_root());
     return m_root_node;
 }
 

@@ -78,6 +78,7 @@ public:
     auto create_viewport_window(
         erhe::imgui::Imgui_renderer&                                imgui_renderer,
         erhe::imgui::Imgui_windows&                                 imgui_windows,
+        App_message_bus&                                            app_message_bus,
         const std::shared_ptr<Viewport_scene_view>&                 viewport_scene_view,
         const std::shared_ptr<erhe::rendergraph::Rendergraph_node>& rendergraph_output_node,
         std::string_view                                            name,

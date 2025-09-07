@@ -54,6 +54,16 @@ Scene_view::Scene_view(App_context& context, Viewport_config viewport_config)
 
 Scene_view::~Scene_view() noexcept = default;
 
+void Scene_view::set_scene_root(const std::shared_ptr<Scene_root>& scene_root)
+{
+    m_scene_root = scene_root;
+}
+
+auto Scene_view::get_scene_root() const -> std::shared_ptr<Scene_root>
+{
+    return m_scene_root.lock();
+}
+
 void Scene_view::set_hover(const std::size_t slot, const Hover_entry& entry)
 {
     std::shared_ptr<erhe::scene::Mesh> hover_scene_mesh = m_hover_entries[slot].scene_mesh_weak.lock();

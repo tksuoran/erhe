@@ -50,7 +50,6 @@ public:
     ~Scene_preview();
 
     // Implements Scene_view
-    auto get_scene_root       () const -> std::shared_ptr<Scene_root>                    override;
     auto get_camera           () const -> std::shared_ptr<erhe::scene::Camera>           override;
     auto get_perspective_scale() const -> float                                          override;
     auto get_rendergraph_node ()       -> erhe::rendergraph::Rendergraph_node*           override;

@@ -68,8 +68,8 @@ void Clipboard::on_message(App_message& message)
         }
     }
     if (test_bit_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_item_tree)) {
-        m_last_hover_scene_item_tree = message.scene_root;
-        if (message.scene_root != nullptr) {
+        m_last_hover_scene_item_tree = message.scene_root.get();
+        if (message.scene_root) {
             m_last_hover_scene_view = nullptr;
         }
     }

@@ -25,6 +25,7 @@ public:
     static constexpr uint64_t c_flag_bit_node_touched_operation_stack = (1u << 9);
     static constexpr uint64_t c_flag_bit_node_touched_transform_tool  = (1u << 10);
     static constexpr uint64_t c_flag_bit_animation_update             = (1u << 11);
+    static constexpr uint64_t c_flag_bit_open_scene                   = (1u << 12);
 };
 
 class Scene_root;
@@ -35,7 +36,7 @@ class App_message
 public:
     uint64_t                                      update_flags      {0};
     Scene_view*                                   scene_view        {nullptr};
-    Scene_root*                                   scene_root        {nullptr};
+    std::shared_ptr<Scene_root>                   scene_root        {};
     erhe::scene::Node*                            node              {nullptr};
     std::shared_ptr<erhe::Item_base>              item              {};
     std::vector<std::shared_ptr<erhe::Item_base>> no_longer_selected{};
