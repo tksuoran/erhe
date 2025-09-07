@@ -609,7 +609,7 @@ auto Selection::on_viewport_select_try_ready() -> bool
         if (!m_hover_content) {
             log_selection->trace("Cannot select: Not hovering over content");
         }
-        if (!m_hover_tool) {
+        if (m_hover_tool) {
             log_selection->trace("Cannot select: Hovering over tool");
         }
         if (rendertarget.valid) {

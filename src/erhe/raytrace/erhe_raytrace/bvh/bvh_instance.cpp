@@ -99,7 +99,7 @@ auto Bvh_instance::intersect(Ray& ray, Hit& hit) -> bool
     auto*      bvh_scene         = reinterpret_cast<Bvh_scene*>(instance_scene);
     const bool is_hit            = bvh_scene->intersect_instance(local_ray, hit, this); // instance to scene -> depth increment
     ray.t_far = local_ray.t_far;
-    log_frame->trace("Bvh_instance::intersect() {}. is_hit = {}", m_debug_label, is_hit);
+    log_frame->trace("Bvh_instance::intersect() {}. is_hit = {} ray.mask = {:04x} mask = {:04x}", m_debug_label, is_hit, ray.mask, m_mask);
     return is_hit;
 }
 

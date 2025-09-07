@@ -422,6 +422,7 @@ void Scene_root::begin_mesh_rt_update(const std::shared_ptr<erhe::scene::Mesh>& 
 
 void Scene_root::end_mesh_rt_update(const std::shared_ptr<erhe::scene::Mesh>& mesh)
 {
+    mesh->set_rt_mask(get_node_rt_mask(mesh->get_node()));
     mesh->attach_rt_to_scene(m_raytrace_scene.get());
 }
 
