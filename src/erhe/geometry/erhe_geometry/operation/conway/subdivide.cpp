@@ -1,4 +1,4 @@
-#include "erhe_geometry/operation/subdivide.hpp"
+#include "erhe_geometry/operation/conway/subdivide.hpp"
 #include "erhe_geometry/operation/geometry_operation.hpp"
 
 #include <cstdint>

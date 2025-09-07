@@ -1,6 +1,6 @@
 #pragma once
 
-#include "operations/ioperation.hpp"
+#include "operations/operation.hpp"
 #include "operations/compound_operation.hpp"
 
 #include "erhe_primitive/build_info.hpp"
@@ -82,7 +82,6 @@ public:
     ~Mesh_operation() noexcept override;
 
     // Implements Operation
-    auto describe() const -> std::string override;
     void execute (App_context& context)  override;
     void undo    (App_context& context)  override;
 
@@ -95,7 +94,7 @@ public:
                 erhe::geometry::Geometry&       after_geo_mesh,
                 erhe::scene::Node*              node
             )
-        > operation
+        > geometry_operation
     );
     void make_entries(
         const std::function<
@@ -103,10 +102,13 @@ public:
                 const erhe::geometry::Geometry& before_geo_mesh,
                 erhe::geometry::Geometry&       after_geo_mesh
             )
-        > operation
+        > geometry_operation
     );
+    void make_entries(const std::function<void(const std::shared_ptr<erhe::scene::Mesh>& mesh)> mesh_operation);
 
 protected:
+    auto describe_entries() const -> std::string;
+
     Mesh_operation_parameters m_parameters;
     std::vector<Entry>        m_entries;
 };

@@ -134,7 +134,8 @@ erhe_target_sources_grouped(
     operations/compound_operation.hpp
     operations/geometry_operations.cpp
     operations/geometry_operations.hpp
-    operations/ioperation.hpp
+    operations/operation.cpp
+    operations/operation.hpp
     operations/item_insert_remove_operation.cpp
     operations/item_insert_remove_operation.hpp
     operations/item_parent_change_operation.cpp

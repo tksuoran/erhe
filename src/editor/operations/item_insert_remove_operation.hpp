@@ -1,6 +1,6 @@
 #pragma once
 
-#include "operations/ioperation.hpp"
+#include "operations/operation.hpp"
 
 #include "erhe_scene/node.hpp"
 #include "erhe_verify/verify.hpp"
@@ -43,9 +43,8 @@ public:
     explicit Item_insert_remove_operation(const Parameters& parameters);
 
     // Implements Operation
-    auto describe() const -> std::string override;
-    void execute (App_context& context)  override;
-    void undo    (App_context& context)  override;
+    void execute(App_context& context) override;
+    void undo   (App_context& context) override;
 
 private:
     Mode                                                       m_mode;

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "operations/ioperation.hpp"
+#include "operations/operation.hpp"
 #include "erhe_primitive/material.hpp"
 
 namespace editor {
@@ -18,9 +18,8 @@ public:
     ~Material_change_operation() noexcept override;
 
     // Implements Operation
-    auto describe() const -> std::string override;
-    void execute (App_context& context)  override;
-    void undo    (App_context& context)  override;
+    void execute(App_context& context) override;
+    void undo   (App_context& context) override;
 
 protected:
     std::shared_ptr<erhe::primitive::Material> m_material{};

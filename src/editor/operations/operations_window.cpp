@@ -2,17 +2,19 @@
 
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
+#include "content_library/content_library.hpp"
 #include "items.hpp"
-#include "scene/scene_root.hpp"
-#include "operations/operation_stack.hpp"
 #include "operations/geometry_operations.hpp"
+#include "operations/item_insert_remove_operation.hpp"
+#include "operations/item_parent_change_operation.hpp"
 #include "operations/merge_operation.hpp"
 #include "operations/mesh_operation.hpp"
 #include "operations/node_transform_operation.hpp"
-#include "operations/item_parent_change_operation.hpp"
+#include "operations/operation_stack.hpp"
 #include "renderers/mesh_memory.hpp"
-#include "content_library/content_library.hpp"
+#include "scene/node_physics.hpp"
 #include "scene/scene_builder.hpp"
+#include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
 #include "windows/property_editor.hpp"
 
@@ -26,9 +28,9 @@
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_primitive/material.hpp"
+#include "erhe_profile/profile.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/scene.hpp"
-#include "erhe_profile/profile.hpp"
 
 #include <imgui/imgui.h>
 
@@ -74,7 +76,11 @@ Operations::Operations(
     , m_truncate_command      {commands, "Geometry.Conway.Truncate",           [this]() -> bool { truncate      (); return true; } }
     , m_gyro_command          {commands, "Geometry.Conway.Gyro",               [this]() -> bool { gyro          (); return true; } }
     , m_chamfer_command       {commands, "Geometry.Conway.Chamfer",            [this]() -> bool { chamfer       (); return true; } }
+
     , m_generate_tangents_command{commands, "Geometry.GenerateTangents",      [this]() -> bool { generate_tangents(); return true; } }
+    , m_make_geometry_command    {commands, "Mesh.MakeGeometry",              [this]() -> bool { make_geometry(); return true; } }
+    , m_make_raytrace_command    {commands, "Mesh.MakeRaytrace",              [this]() -> bool { make_raytrace(); return true; } }
+
     , m_export_gltf_command   {commands, "File.Export.glTF",                   [this]() -> bool { export_gltf   (); return true; } }
     , m_create_material       {commands, "Create.Material",                    [this]() -> bool { create_material(); return true; } }
 {
@@ -105,18 +111,20 @@ Operations::Operations(
     commands.register_command(&m_chamfer_command );
 
     commands.register_command(&m_generate_tangents_command );
-    
+    commands.register_command(&m_make_geometry_command );
+    commands.register_command(&m_make_raytrace_command );
+
     commands.register_command(&m_export_gltf_command);
     commands.register_command(&m_create_material);
 
-    commands.bind_command_to_menu(&m_merge_command,          "Geometry.Merge");
-    commands.bind_command_to_menu(&m_triangulate_command,    "Geometry.Triangulate");
-    commands.bind_command_to_menu(&m_normalize_command,      "Geometry.Normalize");
-    commands.bind_command_to_menu(&m_bake_transform_command, "Geometry.Bake-Transform");
+    commands.bind_command_to_menu(&m_merge_command,            "Geometry.Merge");
+    commands.bind_command_to_menu(&m_triangulate_command,      "Geometry.Triangulate");
+    commands.bind_command_to_menu(&m_normalize_command,        "Geometry.Normalize");
+    commands.bind_command_to_menu(&m_bake_transform_command,   "Geometry.Bake-Transform");
     commands.bind_command_to_menu(&m_center_transform_command, "Geometry.Canter-Transform");
-    commands.bind_command_to_menu(&m_reverse_command,        "Geometry.Reverse");
-    commands.bind_command_to_menu(&m_repair_command,         "Geometry.Repair");
-    commands.bind_command_to_menu(&m_weld_command,           "Geometry.Weld");
+    commands.bind_command_to_menu(&m_reverse_command,          "Geometry.Reverse");
+    commands.bind_command_to_menu(&m_repair_command,           "Geometry.Repair");
+    commands.bind_command_to_menu(&m_weld_command,             "Geometry.Weld");
 
     commands.bind_command_to_menu(&m_difference_command,     "Geometry.CSG.Difference");
     commands.bind_command_to_menu(&m_intersection_command,   "Geometry.CSG.Intersection");
@@ -136,6 +144,8 @@ Operations::Operations(
     commands.bind_command_to_menu(&m_chamfer_command , "Geometry.Conway Operations.Chamfer");
 
     commands.bind_command_to_menu(&m_generate_tangents_command, "Geometry.Generate Tangents");
+    commands.bind_command_to_menu(&m_make_geometry_command,     "Mesh.Make Geometry");
+    commands.bind_command_to_menu(&m_make_raytrace_command,     "Mesh.Make Raytrace");
 
     commands.bind_command_to_menu(&m_export_gltf_command, "File.Export glTF");
     commands.bind_command_to_menu(&m_create_material,     "Create.Material");
@@ -386,6 +396,12 @@ void Operations::imgui()
     if (make_button("Gen Tangents", has_selection_mode, button_size)) {
         generate_tangents();
     }
+    if (make_button("Make Geometry", has_selection_mode, button_size)) {
+        make_geometry();
+    }
+    if (make_button("Make Raytrace", has_selection_mode, button_size)) {
+        make_raytrace();
+    }
     if (make_button("Bake Transform", has_selection_mode, button_size)) {
         bake_transform();
     }
@@ -431,18 +447,26 @@ void Operations::merge()
 
 void Operations::triangulate()
 {
-    /// tf::Executor& executor = m_context.operation_stack->get_executor();
-    /// executor.silent_async([this](){
-        m_context.operation_stack->queue(std::make_shared<Triangulate_operation>( mesh_context()));
-    /// });
+    async_for_nodes_with_mesh(
+        [this](Mesh_operation_parameters&& mesh_operation_parameters)
+        {
+            m_context.operation_stack->queue(
+                std::make_shared<Triangulate_operation>(std::move(mesh_operation_parameters))
+            );
+        }
+    );
 }
 
 void Operations::normalize()
 {
-    /// tf::Executor& executor = m_context.operation_stack->get_executor();
-    /// executor.silent_async([this](){
-        m_context.operation_stack->queue(std::make_shared<Normalize_operation>(mesh_context()));
-    /// });
+    async_for_nodes_with_mesh(
+        [this](Mesh_operation_parameters&& mesh_operation_parameters)
+        {
+            m_context.operation_stack->queue(
+                std::make_shared<Normalize_operation>(std::move(mesh_operation_parameters))
+            );
+        }
+    );
 }
 
 void Operations::bake_transform()
@@ -533,152 +557,363 @@ void Operations::center_transform()
 
 void Operations::reverse()
 {
-    /// tf::Executor& executor = m_context.operation_stack->get_executor();
-    /// executor.silent_async([this](){
-        m_context.operation_stack->queue(std::make_shared<Reverse_operation>(mesh_context()));
-    /// });
+    async_for_nodes_with_mesh(
+        [this](Mesh_operation_parameters&& mesh_operation_parameters)
+        {
+            m_context.operation_stack->queue(
+                std::make_shared<Reverse_operation>(std::move(mesh_operation_parameters))
+            );
+        }
+    );
 }
 
 void Operations::repair()
 {
-    /// tf::Executor& executor = m_context.operation_stack->get_executor();
-    /// executor.silent_async([this](){
-        m_context.operation_stack->queue(std::make_shared<Repair_operation>(mesh_context()));
-    /// });
+    async_for_nodes_with_mesh(
+        [this](Mesh_operation_parameters&& mesh_operation_parameters)
+        {
+            m_context.operation_stack->queue(
+                std::make_shared<Repair_operation>(std::move(mesh_operation_parameters))
+            );
+        }
+    );
 }
 
 void Operations::weld()
 {
-    /// tf::Executor& executor = m_context.operation_stack->get_executor();
-    /// executor.silent_async([this](){
-        m_context.operation_stack->queue(std::make_shared<Weld_operation>(mesh_context()));
-    /// });
+    async_for_nodes_with_mesh(
+        [this](Mesh_operation_parameters&& mesh_operation_parameters)
+        {
+            m_context.operation_stack->queue(
+                std::make_shared<Weld_operation>(std::move(mesh_operation_parameters))
+            );
+        }
+    );
 }
 
 void Operations::generate_tangents()
 {
-    /// tf::Executor& executor = m_context.operation_stack->get_executor();
-    /// executor.silent_async([this](){
-        m_context.operation_stack->queue(std::make_shared<Generate_tangents_operation>(mesh_context()));
-    /// });
+    async_for_nodes_with_mesh(
+        [this](Mesh_operation_parameters&& mesh_operation_parameters)
+        {
+            m_context.operation_stack->queue(
+                std::make_shared<Generate_tangents_operation>(std::move(mesh_operation_parameters))
+            );
+        }
+    );
+}
+void Operations::make_geometry()
+{
+    async_for_nodes_with_mesh(
+        [this](Mesh_operation_parameters&& mesh_operation_parameters)
+        {
+            Compound_operation::Parameters compound_parameters;
+            for (const std::shared_ptr<erhe::Item_base>& item : mesh_operation_parameters.items) {
+                std::shared_ptr<erhe::scene::Mesh> scene_mesh = erhe::scene::get_mesh(item);
+                ERHE_VERIFY(scene_mesh);
+
+                erhe::scene::Node*                              node              = scene_mesh->get_node();
+                std::shared_ptr<Node_physics>                   node_physics      = get_node_physics(node);
+                const std::vector<erhe::scene::Mesh_primitive>& primitives_before = scene_mesh->get_primitives();
+                std::vector<erhe::scene::Mesh_primitive>        primitives_after  = primitives_before;
+
+                for (erhe::scene::Mesh_primitive& mesh_primitive : primitives_after) {
+                    erhe::primitive::Primitive& primitive = *mesh_primitive.primitive.get();
+                    const bool geometry_ok = primitive.make_geometry();
+                    if (!geometry_ok) {
+                        continue;
+                    }
+                }
+
+                Mesh_operation_parameters parameters = mesh_context();
+                parameters.items.push_back(item);
+                std::shared_ptr<Mesh_operation> mesh_operation = std::make_shared<Mesh_operation>(std::move(parameters));
+                mesh_operation->add_entry(
+                    Mesh_operation::Entry{
+                        .scene_mesh = scene_mesh,
+                        .before = {
+                            .node_physics = node_physics,
+                            .primitives   = primitives_before
+                        },
+                        .after = {
+                            .node_physics = node_physics,
+                            .primitives   = primitives_after
+                        }
+                    }
+                );
+                compound_parameters.operations.push_back(std::move(mesh_operation));
+            }
+
+            if (!compound_parameters.operations.empty()) {
+                m_context.operation_stack->queue(
+                    std::make_shared<Compound_operation>(std::move(compound_parameters))
+                );
+            }
+        }
+    );
+}
+void Operations::make_raytrace()
+{
+    async_for_nodes_with_mesh(
+        [](Mesh_operation_parameters&& mesh_operation_parameters)
+        {
+            for (const std::shared_ptr<erhe::Item_base>& item : mesh_operation_parameters.items) {
+                std::shared_ptr<erhe::scene::Mesh> scene_mesh = erhe::scene::get_mesh(item);
+                ERHE_VERIFY(scene_mesh);
+                erhe::Item_host* item_host = item->get_item_host();
+                ERHE_VERIFY(item_host != nullptr);
+                Scene_root* scene_root = static_cast<Scene_root*>(item_host);
+                std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{scene_root->item_host_mutex};
+
+                scene_root->begin_mesh_rt_update(scene_mesh);
+                std::vector<erhe::scene::Mesh_primitive>& mesh_primitives = scene_mesh->get_mutable_primitives();
+                for (erhe::scene::Mesh_primitive& mesh_primitive : mesh_primitives) {
+                    erhe::primitive::Primitive& primitive = *mesh_primitive.primitive.get();
+                    // Ensure raytrace exists
+                    ERHE_VERIFY(primitive.make_raytrace());
+                }
+                scene_mesh->update_rt_primitives();
+                scene_root->end_mesh_rt_update(scene_mesh);
+            }
+        }
+    );
 }
 
 void Operations::difference()
 {
-    /// tf::Executor& executor = m_context.operation_stack->get_executor();
-    /// executor.silent_async(
-    ///     [this]()
-    ///     {
-            Mesh_operation_parameters parameters = mesh_context();
+    async_for_nodes_with_mesh(
+        [this](Mesh_operation_parameters&& mesh_operation_parameters)
+        {
             m_context.operation_stack->queue(
-                std::make_shared<Difference_operation>(
-                    std::move(parameters)
-                )
+                std::make_shared<Difference_operation>(std::move(mesh_operation_parameters))
             );
-    ///     }
-    /// );
+        }
+    );
 }
+
+void Operations::async_for_nodes_with_mesh(
+    std::function<void(Mesh_operation_parameters&& parameters)> op
+)
+{
+    // Locate item host
+    erhe::Item_host* item_host = nullptr;
+    {
+        const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items = m_context.selection->get_selected_items();
+        for (const auto& item : selected_items) {
+            if (item_host == nullptr) {
+                item_host = item->get_item_host();
+                break;
+            }
+        }
+    }
+    if (item_host == nullptr) {
+        return;
+    }
+    Scene_root* scene_root = static_cast<Scene_root*>(item_host);
+
+    // Grab item host lock. This is the master lock that prevents
+    // concurrent access to
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{scene_root->item_host_mutex};
+
+    // Gather items with mesh and their tasks
+    std::vector<std::shared_ptr<erhe::Item_base>> items;
+    std::vector<tf::AsyncTask> item_tasks;
+    const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items = m_context.selection->get_selected_items();
+    for (const std::shared_ptr<erhe::Item_base>& item : selected_items) {
+        const bool is_content = erhe::utility::test_bit_set(item->get_flag_bits(), erhe::Item_flags::content);
+        if (!is_content) {
+            continue;
+        }
+
+        const std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
+        if (!node) {
+            continue;
+        }
+        const erhe::scene::Node* raw_node = node.get();
+        std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(raw_node);
+        if (!mesh) {
+            continue;
+        }
+        items.push_back(item);
+        const tf::AsyncTask& previous_task = item->get_task();
+        if (!previous_task.empty()) {
+            item_tasks.push_back(item->get_task());
+        }
+    }
+
+    if (items.empty()) {
+        return;
+    }
+
+    tf::Executor& executor = m_context.operation_stack->get_executor();
+    tf::AsyncTask task = executor.silent_dependent_async(
+        [this, op, items]()
+        {
+            Mesh_operation_parameters parameters = mesh_context();
+            parameters.items = items;
+            op(std::move(parameters));
+        },
+        item_tasks.begin(), item_tasks.end()
+    );
+
+    for (const std::shared_ptr<erhe::Item_base>& item : items) {
+        item->set_task(task);
+    }
+}
+
 void Operations::intersection()
 {
-    /// tf::Executor& executor = m_context.operation_stack->get_executor();
-    /// executor.silent_async([this](){
-        m_context.operation_stack->queue(std::make_shared<Intersection_operation>(mesh_context()));
-    /// });
+    async_for_nodes_with_mesh(
+        [this](Mesh_operation_parameters&& mesh_operation_parameters)
+        {
+            m_context.operation_stack->queue(
+                std::make_shared<Intersection_operation>(std::move(mesh_operation_parameters))
+            );
+        }
+    );
 }
 void Operations::union_()
 {
-    /// tf::Executor& executor = m_context.operation_stack->get_executor();
-    /// executor.silent_async([this](){
-        m_context.operation_stack->queue(std::make_shared<Union_operation>(mesh_context()));
-    /// });
+    async_for_nodes_with_mesh(
+        [this](Mesh_operation_parameters&& mesh_operation_parameters)
+        {
+            m_context.operation_stack->queue(
+                std::make_shared<Union_operation>(std::move(mesh_operation_parameters))
+            );
+        }
+    );
 }
 
 void Operations::catmull_clark()
 {
-    /// tf::Executor& executor = m_context.operation_stack->get_executor();
-    /// executor.silent_async([this](){
-        m_context.operation_stack->queue(std::make_shared<Catmull_clark_subdivision_operation>(mesh_context()));
-    /// });
+    async_for_nodes_with_mesh(
+        [this](Mesh_operation_parameters&& mesh_operation_parameters)
+        {
+            m_context.operation_stack->queue(
+                std::make_shared<Catmull_clark_subdivision_operation>(std::move(mesh_operation_parameters))
+            );
+        }
+    );
 }
 
 void Operations::sqrt3()
 {
-    /// tf::Executor& executor = m_context.operation_stack->get_executor();
-    /// executor.silent_async([this](){
-        m_context.operation_stack->queue(std::make_shared<Sqrt3_subdivision_operation>(mesh_context()));
-    /// });
+    async_for_nodes_with_mesh(
+        [this](Mesh_operation_parameters&& mesh_operation_parameters)
+        {
+            m_context.operation_stack->queue(
+                std::make_shared<Sqrt3_subdivision_operation>(std::move(mesh_operation_parameters))
+            );
+        }
+    );
 }
 
 void Operations::dual()
 {
-    /// tf::Executor& executor = m_context.operation_stack->get_executor();
-    /// executor.silent_async([this](){
-        m_context.operation_stack->queue(std::make_shared<Dual_operation>(mesh_context()));
-    /// });
+    async_for_nodes_with_mesh(
+        [this](Mesh_operation_parameters&& mesh_operation_parameters)
+        {
+            m_context.operation_stack->queue(
+                std::make_shared<Dual_operation>(std::move(mesh_operation_parameters))
+            );
+        }
+    );
 }
 
 void Operations::join()
 {
-    /// tf::Executor& executor = m_context.operation_stack->get_executor();
-    /// executor.silent_async([this](){
-        m_context.operation_stack->queue(std::make_shared<Join_operation>(mesh_context()));
-    //// });
+    async_for_nodes_with_mesh(
+        [this](Mesh_operation_parameters&& mesh_operation_parameters)
+        {
+            m_context.operation_stack->queue(
+                std::make_shared<Join_operation>(std::move(mesh_operation_parameters))
+            );
+        }
+    );
 }
 
 void Operations::kis()
 {
-    /// tf::Executor& executor = m_context.operation_stack->get_executor();
-    /// executor.silent_async([this](){
-        m_context.operation_stack->queue(std::make_shared<Kis_operation>(mesh_context()));
-    /// });
+    async_for_nodes_with_mesh(
+        [this](Mesh_operation_parameters&& mesh_operation_parameters)
+        {
+            m_context.operation_stack->queue(
+                std::make_shared<Kis_operation>(std::move(mesh_operation_parameters))
+            );
+        }
+    );
 }
 
 void Operations::meta()
 {
-    /// tf::Executor& executor = m_context.operation_stack->get_executor();
-    /// executor.silent_async([this](){
-        m_context.operation_stack->queue(std::make_shared<Meta_operation>(mesh_context()));
-    /// });
+    async_for_nodes_with_mesh(
+        [this](Mesh_operation_parameters&& mesh_operation_parameters)
+        {
+            m_context.operation_stack->queue(
+                std::make_shared<Meta_operation>(std::move(mesh_operation_parameters))
+            );
+        }
+    );
 }
 
 void Operations::ortho()
 {
-    /// tf::Executor& executor = m_context.operation_stack->get_executor();
-    /// executor.silent_async([this](){
-        m_context.operation_stack->queue(std::make_shared<Subdivide_operation>(mesh_context()));
-    /// });
+    async_for_nodes_with_mesh(
+        [this](Mesh_operation_parameters&& mesh_operation_parameters)
+        {
+            m_context.operation_stack->queue(
+                std::make_shared<Subdivide_operation>(std::move(mesh_operation_parameters))
+            );
+        }
+    );
 }
 
 void Operations::ambo()
 {
-    /// tf::Executor& executor = m_context.operation_stack->get_executor();
-    /// executor.silent_async([this](){
-        m_context.operation_stack->queue(std::make_shared<Ambo_operation>(mesh_context()));
-    /// });
+    async_for_nodes_with_mesh(
+        [this](Mesh_operation_parameters&& mesh_operation_parameters)
+        {
+            m_context.operation_stack->queue(
+                std::make_shared<Ambo_operation>(std::move(mesh_operation_parameters))
+            );
+        }
+    );
 }
 
 void Operations::truncate()
 {
-    /// tf::Executor& executor = m_context.operation_stack->get_executor();
-    /// executor.silent_async([this](){
-        m_context.operation_stack->queue(std::make_shared<Truncate_operation>(mesh_context()));
-    /// });
+    async_for_nodes_with_mesh(
+        [this](Mesh_operation_parameters&& mesh_operation_parameters)
+        {
+            m_context.operation_stack->queue(
+                std::make_shared<Truncate_operation>(std::move(mesh_operation_parameters))
+            );
+        }
+    );
 }
 
 void Operations::gyro()
 {
-    /// tf::Executor& executor = m_context.operation_stack->get_executor();
-    /// executor.silent_async([this](){
-        m_context.operation_stack->queue(std::make_shared<Gyro_operation>(mesh_context()));
-    /// });
+    async_for_nodes_with_mesh(
+        [this](Mesh_operation_parameters&& mesh_operation_parameters)
+        {
+            m_context.operation_stack->queue(
+                std::make_shared<Gyro_operation>(std::move(mesh_operation_parameters))
+            );
+        }
+    );
 }
 
 void Operations::chamfer()
 {
-    /// tf::Executor& executor = m_context.operation_stack->get_executor();
-    /// executor.silent_async([this](){
-        m_context.operation_stack->queue(std::make_shared<Chamfer_operation>(mesh_context()));
-    /// });
+    async_for_nodes_with_mesh(
+        [this](Mesh_operation_parameters&& mesh_operation_parameters)
+        {
+            m_context.operation_stack->queue(
+                std::make_shared<Chamfer_operation>(std::move(mesh_operation_parameters))
+            );
+        }
+    );
 }
 
 #if defined(ERHE_WINDOW_LIBRARY_SDL)

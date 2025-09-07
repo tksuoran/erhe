@@ -415,6 +415,16 @@ auto Scene_root::get_node_rt_mask(erhe::scene::Node* node) -> uint32_t
     return mask;
 }
 
+void Scene_root::begin_mesh_rt_update(const std::shared_ptr<erhe::scene::Mesh>& mesh)
+{
+    mesh->detach_rt_from_scene();
+}
+
+void Scene_root::end_mesh_rt_update(const std::shared_ptr<erhe::scene::Mesh>& mesh)
+{
+    mesh->attach_rt_to_scene(m_raytrace_scene.get());
+}
+
 void Scene_root::register_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
 {
     ERHE_VERIFY(mesh);
@@ -453,7 +463,7 @@ void Scene_root::unregister_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
 
     log_scene->info("Unregistering Mesh '{}' from scene", mesh->get_name());
 
-    mesh->detach_rt_from_scene(); //m_raytrace_scene.get());
+    mesh->detach_rt_from_scene();
 
     if (is_rendertarget(mesh)) {
         const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_rendertarget_meshes_mutex};

@@ -30,6 +30,8 @@ erhe_target_sources_grouped(
     erhe_geometry/operation/conway/kis.hpp
     erhe_geometry/operation/conway/meta.cpp
     erhe_geometry/operation/conway/meta.hpp
+    erhe_geometry/operation/conway/subdivide.cpp
+    erhe_geometry/operation/conway/subdivide.hpp
     erhe_geometry/operation/conway/truncate.cpp
     erhe_geometry/operation/conway/truncate.hpp
 
@@ -50,8 +52,6 @@ erhe_target_sources_grouped(
     erhe_geometry/operation/repair.hpp
     erhe_geometry/operation/reverse.cpp
     erhe_geometry/operation/reverse.hpp
-    erhe_geometry/operation/subdivide.cpp
-    erhe_geometry/operation/subdivide.hpp
     erhe_geometry/operation/triangulate.cpp
     erhe_geometry/operation/triangulate.hpp
 

@@ -106,6 +106,8 @@ public:
     void chamfer();
 
     void generate_tangents();
+    void make_geometry();
+    void make_raytrace();
 
     void export_gltf();
     void export_callback(const char* const* filelist, int filter);
@@ -113,6 +115,10 @@ public:
     void create_material();
 
 private:
+    void async_for_nodes_with_mesh(
+        std::function<void(Mesh_operation_parameters&& parameters)>
+    );
+
     [[nodiscard]] auto count_selected_meshes() const -> size_t;
     [[nodiscard]] auto mesh_context() -> Mesh_operation_parameters;
 
@@ -147,8 +153,11 @@ private:
     erhe::commands::Lambda_command m_truncate_command;
     erhe::commands::Lambda_command m_gyro_command;
     erhe::commands::Lambda_command m_chamfer_command;
+
     erhe::commands::Lambda_command m_generate_tangents_command;
-    
+    erhe::commands::Lambda_command m_make_geometry_command;
+    erhe::commands::Lambda_command m_make_raytrace_command;
+
     erhe::commands::Lambda_command m_export_gltf_command;
 
     erhe::commands::Lambda_command m_create_material;

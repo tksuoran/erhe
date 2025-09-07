@@ -20,33 +20,6 @@ auto c_str(Item_insert_remove_operation::Mode mode) -> const char*
     }
 }
 
-auto Item_insert_remove_operation::describe() const -> std::string
-{
-    ERHE_VERIFY(m_item);
-    bool before_parent = m_before_parent.operator bool();
-    bool after_parent  = m_after_parent.operator bool();
-    const erhe::Hierarchy* parent = before_parent ? m_before_parent.get() : m_after_parent.get();
-    std::stringstream ss;
-    bool first = true;
-    for (const std::shared_ptr<Item_parent_change_operation>& op : m_parent_changes) {
-        if (!first) {
-            ss << ", ";
-        }
-        ss << op->describe();
-    }
-
-    return fmt::format(
-        "[{}] {} {}, {}{}, {} parent changes: {}",
-        get_serial(),
-        c_str(m_mode),
-        m_item->get_name(),
-        before_parent ? "before parent = " : after_parent ? "after parent = " : "no parent",
-        (parent != nullptr) ? parent->get_name() : "",
-        m_parent_changes.size(),
-        ss.str()
-    );
-}
-
 Item_insert_remove_operation::Item_insert_remove_operation(const Parameters& parameters)
     : m_mode{parameters.mode}
 {
@@ -78,6 +51,32 @@ Item_insert_remove_operation::Item_insert_remove_operation(const Parameters& par
 
         log_operations->trace("selection size = {}", m_selection_after.size());
     }
+
+    ERHE_VERIFY(m_item);
+    bool before_parent = m_before_parent.operator bool();
+    bool after_parent  = m_after_parent.operator bool();
+    const erhe::Hierarchy* parent = before_parent ? m_before_parent.get() : m_after_parent.get();
+    std::stringstream ss;
+    bool first = true;
+    for (const std::shared_ptr<Item_parent_change_operation>& op : m_parent_changes) {
+        if (!first) {
+            ss << ", ";
+        }
+        ss << op->describe();
+    }
+
+    set_description(
+        fmt::format(
+            "[{}] {} {}, {}{}, {} parent changes: {}",
+            get_serial(),
+            c_str(m_mode),
+            m_item->get_name(),
+            before_parent ? "before parent = " : after_parent ? "after parent = " : "no parent",
+            (parent != nullptr) ? parent->get_name() : "",
+            m_parent_changes.size(),
+            ss.str()
+        )
+    );
 }
 
 void Item_insert_remove_operation::execute(App_context& context)

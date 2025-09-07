@@ -1,4 +1,5 @@
 #include "operations/geometry_operations.hpp"
+#include "operations/item_insert_remove_operation.hpp"
 
 #include "app_context.hpp"
 #include "tools/selection_tool.hpp"
@@ -13,6 +14,7 @@
 #include "erhe_geometry/operation/conway/join.hpp"
 #include "erhe_geometry/operation/conway/kis.hpp"
 #include "erhe_geometry/operation/conway/meta.hpp"
+#include "erhe_geometry/operation/conway/subdivide.hpp"
 #include "erhe_geometry/operation/conway/truncate.hpp"
 #include "erhe_geometry/operation/csg/difference.hpp"
 #include "erhe_geometry/operation/csg/intersection.hpp"
@@ -21,7 +23,6 @@
 #include "erhe_geometry/operation/normalize.hpp"
 #include "erhe_geometry/operation/repair.hpp"
 #include "erhe_geometry/operation/reverse.hpp"
-#include "erhe_geometry/operation/subdivide.hpp"
 #include "erhe_geometry/operation/subdivision/catmull_clark_subdivision.hpp"
 #include "erhe_geometry/operation/subdivision/sqrt3_subdivision.hpp"
 #include "erhe_geometry/operation/triangulate.hpp"
@@ -31,174 +32,109 @@
 
 namespace editor {
 
-auto Catmull_clark_subdivision_operation::describe() const -> std::string
-{
-    return fmt::format("Catmull_clark {}", Mesh_operation::describe());
-}
-
 Catmull_clark_subdivision_operation::Catmull_clark_subdivision_operation(Mesh_operation_parameters&& context)
     : Mesh_operation{std::move(context)}
 {
     make_entries(erhe::geometry::operation::catmull_clark_subdivision);
-}
-
-auto Sqrt3_subdivision_operation::describe() const -> std::string
-{
-    return fmt::format("Sqrt3 {}", Mesh_operation::describe());
+    set_description(fmt::format("Catmull_clark {}", describe_entries()));
 }
 
 Sqrt3_subdivision_operation::Sqrt3_subdivision_operation(Mesh_operation_parameters&& context)
     : Mesh_operation{std::move(context)}
 {
     make_entries(erhe::geometry::operation::sqrt3_subdivision);
-}
-
-auto Triangulate_operation::describe() const -> std::string
-{
-    return fmt::format("Triangulate {}", Mesh_operation::describe());
+    set_description(fmt::format("Sqrt3 {}", describe_entries()));
 }
 
 Triangulate_operation::Triangulate_operation(Mesh_operation_parameters&& context)
     : Mesh_operation{std::move(context)}
 {
     make_entries(erhe::geometry::operation::triangulate);
-}
-
-auto Join_operation::describe() const -> std::string
-{
-    return fmt::format("Join {}", Mesh_operation::describe());
+    set_description(fmt::format("Triangulate {}", describe_entries()));
 }
 
 Join_operation::Join_operation(Mesh_operation_parameters&& context)
     : Mesh_operation{std::move(context)}
 {
     make_entries(erhe::geometry::operation::join);
-}
-
-auto Kis_operation::describe() const -> std::string
-{
-    return fmt::format("Kis {}", Mesh_operation::describe());
+    set_description(fmt::format("Join {}", describe_entries()));
 }
 
 Kis_operation::Kis_operation(Mesh_operation_parameters&& context)
     : Mesh_operation{std::move(context)}
 {
     make_entries(erhe::geometry::operation::kis);
-}
-
-auto Subdivide_operation::describe() const -> std::string
-{
-    return fmt::format("Subdivide {}", Mesh_operation::describe());
+    set_description(fmt::format("Kis {}", describe_entries()));
 }
 
 Subdivide_operation::Subdivide_operation(Mesh_operation_parameters&& context)
     : Mesh_operation{std::move(context)}
 {
     make_entries(erhe::geometry::operation::subdivide);
-}
-
-auto Meta_operation::describe() const -> std::string
-{
-    return fmt::format("Meta {}", Mesh_operation::describe());
+    set_description(fmt::format("Subdivide {}", describe_entries()));
 }
 
 Meta_operation::Meta_operation(Mesh_operation_parameters&& context)
     : Mesh_operation{std::move(context)}
 {
     make_entries(erhe::geometry::operation::meta);
-}
-
-auto Gyro_operation::describe() const -> std::string
-{
-    return fmt::format("Gyro {}", Mesh_operation::describe());
+    set_description(fmt::format("Meta {}", describe_entries()));
 }
 
 Gyro_operation::Gyro_operation(Mesh_operation_parameters&& context)
     : Mesh_operation{std::move(context)}
 {
     make_entries(erhe::geometry::operation::gyro);
-}
-
-auto Chamfer_operation::describe() const -> std::string
-{
-    return fmt::format("Chamfer {}", Mesh_operation::describe());
+    set_description(fmt::format("Gyro {}", describe_entries()));
 }
 
 Chamfer_operation::Chamfer_operation(Mesh_operation_parameters&& context)
     : Mesh_operation{std::move(context)}
 {
     make_entries(erhe::geometry::operation::chamfer);
-}
-
-auto Dual_operation::describe() const -> std::string
-{
-    return fmt::format("Dual {}", Mesh_operation::describe());
+    set_description(fmt::format("Chamfer {}", describe_entries()));
 }
 
 Dual_operation::Dual_operation(Mesh_operation_parameters&& context)
     : Mesh_operation{std::move(context)}
 {
     make_entries(erhe::geometry::operation::dual);
-}
-
-auto Ambo_operation::describe() const -> std::string
-{
-    return fmt::format("Ambo {}", Mesh_operation::describe());
+    set_description(fmt::format("Dual {}", describe_entries()));
 }
 
 Ambo_operation::Ambo_operation(Mesh_operation_parameters&& context)
     : Mesh_operation{std::move(context)}
 {
     make_entries(erhe::geometry::operation::ambo);
-}
-
-auto Truncate_operation::describe() const -> std::string
-{
-    return fmt::format("Truncate {}", Mesh_operation::describe());
+    set_description(fmt::format("Ambo {}", describe_entries()));
 }
 
 Truncate_operation::Truncate_operation(Mesh_operation_parameters&& context)
     : Mesh_operation{std::move(context)}
 {
     make_entries(erhe::geometry::operation::truncate);
-}
-
-auto Reverse_operation::describe() const -> std::string
-{
-    return fmt::format("Reverse {}", Mesh_operation::describe());
+    set_description(fmt::format("Truncate {}", describe_entries()));
 }
 
 Reverse_operation::Reverse_operation(Mesh_operation_parameters&& context)
     : Mesh_operation{std::move(context)}
 {
     make_entries(erhe::geometry::operation::reverse);
-}
-
-auto Normalize_operation::describe() const -> std::string
-{
-    return fmt::format("Normalize {}", Mesh_operation::describe());
+    set_description(fmt::format("Reverse {}", describe_entries()));
 }
 
 Normalize_operation::Normalize_operation(Mesh_operation_parameters&& context)
     : Mesh_operation{std::move(context)}
 {
     make_entries(erhe::geometry::operation::normalize);
-}
-
-auto Generate_tangents_operation::describe() const -> std::string
-{
-    return fmt::format("Generate tangents {}", Mesh_operation::describe());
+    set_description(fmt::format("Normalize {}", describe_entries()));
 }
 
 Generate_tangents_operation::Generate_tangents_operation(Mesh_operation_parameters&& context)
     : Mesh_operation{std::move(context)}
 {
     make_entries(erhe::geometry::operation::generate_tangents);
-}
-
-auto Bake_transform_operation::describe() const -> std::string
-{
-    return fmt::format("Bake tranform {}", Mesh_operation::describe());
+    set_description(fmt::format("Generate tangents {}", describe_entries()));
 }
 
 Bake_transform_operation::Bake_transform_operation(Mesh_operation_parameters&& context)
@@ -217,28 +153,21 @@ Bake_transform_operation::Bake_transform_operation(Mesh_operation_parameters&& c
             erhe::geometry::operation::bake_transform(before_geometry, after_geometry, to_geo_mat4f(transform));
         }
     );
-}
-
-auto Repair_operation::describe() const -> std::string
-{
-    return fmt::format("Repair {}", Mesh_operation::describe());
+    set_description(fmt::format("Bake tranform {}", describe_entries()));
 }
 
 Repair_operation::Repair_operation(Mesh_operation_parameters&& context)
     : Mesh_operation{std::move(context)}
 {
     make_entries(erhe::geometry::operation::repair);
-}
-
-auto Weld_operation::describe() const -> std::string
-{
-    return fmt::format("Weld {}", Mesh_operation::describe());
+    set_description(fmt::format("Repair {}", describe_entries()));
 }
 
 Weld_operation::Weld_operation(Mesh_operation_parameters&& context)
     : Mesh_operation{std::move(context)}
 {
     make_entries(erhe::geometry::operation::weld);
+    set_description(fmt::format("Weld {}", describe_entries()));
 }
 
 ///

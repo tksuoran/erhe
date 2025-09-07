@@ -19,7 +19,7 @@ Mesh_operation::Mesh_operation(Mesh_operation_parameters&& parameters)
 {
 }
 
-auto Mesh_operation::describe() const -> std::string
+auto Mesh_operation::describe_entries() const -> std::string
 {
     std::stringstream ss;
     ss << fmt::format("[{}] ", get_serial());
@@ -122,19 +122,110 @@ void Mesh_operation::undo(App_context&)
 }
 
 void Mesh_operation::make_entries(
-    const std::function<void(const erhe::geometry::Geometry& before_geometry, erhe::geometry::Geometry& after_geometry)> operation
+    const std::function<void(const erhe::geometry::Geometry& before_geometry, erhe::geometry::Geometry& after_geometry)> geometry_operation
 )
 {
     make_entries(
-        [&operation](const erhe::geometry::Geometry& before_geometry, erhe::geometry::Geometry& after_geometry, erhe::scene::Node*) -> void {
-            operation(before_geometry, after_geometry);
+        [&geometry_operation](
+            const erhe::geometry::Geometry& before_geometry,
+            erhe::geometry::Geometry&       after_geometry,
+            erhe::scene::Node*
+        ) -> void {
+            geometry_operation(before_geometry, after_geometry);
         }
     );
 }
 
 void Mesh_operation::make_entries(
-    const std::function<void(const erhe::geometry::Geometry&, erhe::geometry::Geometry&, erhe::scene::Node*)> operation
+    const std::function<void(const erhe::geometry::Geometry&, erhe::geometry::Geometry&, erhe::scene::Node*)> geometry_operation
 )
+{
+    make_entries(
+        [this, geometry_operation](const std::shared_ptr<erhe::scene::Mesh>& scene_mesh)
+        {
+            erhe::scene::Node* node = scene_mesh->get_node();
+            Entry entry{
+                // TODO consider keeping node alive always .node   = node_shared,
+                .scene_mesh = scene_mesh,
+                .before = {
+                    .node_physics = get_node_physics(node),
+                    .primitives   = scene_mesh->get_primitives()
+                },
+            };
+
+            erhe::physics::IRigid_body* rigid_body  = entry.before.node_physics ? entry.before.node_physics->get_rigid_body() : nullptr;
+            erhe::physics::Motion_mode  motion_mode = (rigid_body != nullptr) ? rigid_body->get_motion_mode() : erhe::physics::Motion_mode::e_invalid;
+            if (m_parameters.context.app_settings->physics.static_enable) {
+                if (entry.before.node_physics && (entry.before.node_physics->physics_motion_mode != motion_mode)) {
+                    motion_mode = entry.before.node_physics->physics_motion_mode;
+                }
+            }
+
+            for (erhe::scene::Mesh_primitive& mesh_primitive : scene_mesh->get_mutable_primitives()) {
+                const erhe::primitive::Primitive&                               primitive       = *mesh_primitive.primitive.get();
+                const std::shared_ptr<erhe::primitive::Primitive_render_shape>& render_shape    = primitive.render_shape;
+                const std::shared_ptr<erhe::geometry::Geometry>&                before_geometry = render_shape->get_geometry();
+                if (!before_geometry) {
+                    continue;
+                }
+                auto after_geometry = std::make_shared<erhe::geometry::Geometry>();
+                geometry_operation(*before_geometry.get(), *after_geometry.get(), node);
+
+                const uint64_t flags =
+                    erhe::geometry::Geometry::process_flag_connect |
+                    erhe::geometry::Geometry::process_flag_build_edges |
+                    erhe::geometry::Geometry::process_flag_compute_smooth_vertex_normals |
+                    erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates;
+
+                after_geometry->process(flags);
+
+                std::shared_ptr<erhe::primitive::Primitive> after_primitive = std::make_shared<erhe::primitive::Primitive>(after_geometry);
+                const bool renderable_ok = after_primitive->make_renderable_mesh(m_parameters.build_info, render_shape->get_normal_style());
+                const bool raytrace_ok   = after_primitive->make_raytrace();
+                ERHE_VERIFY(renderable_ok && raytrace_ok);
+                entry.after.primitives.emplace_back(after_primitive, mesh_primitive.material);
+
+                if (m_parameters.context.app_settings->physics.static_enable) {
+
+                    GEO::Mesh convex_hull{};
+                    const bool convex_hull_ok = make_convex_hull(after_geometry->get_mesh(), convex_hull);
+                    ERHE_VERIFY(convex_hull_ok); // TODO handle error
+
+                    std::vector<float> coordinates;
+                    coordinates.resize(convex_hull.vertices.nb() * 3);
+                    for (GEO::index_t vertex : convex_hull.vertices) {
+                        const GEO::vec3f p = get_pointf(convex_hull.vertices, vertex);
+                        coordinates[3 * vertex + 0] = p.x;
+                        coordinates[3 * vertex + 1] = p.y;
+                        coordinates[3 * vertex + 2] = p.z;
+                    }
+
+                    auto collision_shape = erhe::physics::ICollision_shape::create_convex_hull_shape_shared(
+                        coordinates.data(),
+                        static_cast<int>(convex_hull.vertices.nb()),
+                        static_cast<int>(3 * sizeof(float))
+                    );
+
+                    const erhe::physics::IRigid_body_create_info rigid_body_create_info{
+                        .collision_shape = collision_shape,
+                        .debug_label     = after_geometry->get_name(),
+                        .motion_mode     = motion_mode
+                    };
+
+                    if (entry.before.node_physics) {
+                        entry.after.node_physics = std::make_shared<Node_physics>(rigid_body_create_info);
+                        entry.after.node_physics->physics_motion_mode = entry.before.node_physics->physics_motion_mode;
+                    }
+                }
+
+            }
+            add_entry(std::move(entry));
+        }
+    );
+}
+
+void Mesh_operation::make_entries(
+    const std::function<void(const std::shared_ptr<erhe::scene::Mesh>& mesh)> mesh_operation)
 {
     if (m_parameters.items.empty()) {
         return;
@@ -198,82 +289,7 @@ void Mesh_operation::make_entries(
             m_parameters.make_entry_node_callback(node, m_parameters);
         }
 
-        Entry entry{
-            // TODO consider keeping node alive always .node   = node_shared,
-            .scene_mesh = scene_mesh,
-            .before = {
-                .node_physics = get_node_physics(node),
-                .primitives   = scene_mesh->get_primitives()
-            },
-        };
-
-        erhe::physics::IRigid_body* rigid_body  = entry.before.node_physics ? entry.before.node_physics->get_rigid_body() : nullptr;
-        erhe::physics::Motion_mode  motion_mode = (rigid_body != nullptr) ? rigid_body->get_motion_mode() : erhe::physics::Motion_mode::e_invalid;
-        if (m_parameters.context.app_settings->physics.static_enable) {
-            if (entry.before.node_physics && (entry.before.node_physics->physics_motion_mode != motion_mode)) {
-                motion_mode = entry.before.node_physics->physics_motion_mode;
-            }
-        }
-
-        for (erhe::scene::Mesh_primitive& mesh_primitive : scene_mesh->get_mutable_primitives()) {
-            const erhe::primitive::Primitive&                               primitive       = *mesh_primitive.primitive.get();
-            const std::shared_ptr<erhe::primitive::Primitive_render_shape>& render_shape    = primitive.render_shape;
-            const std::shared_ptr<erhe::geometry::Geometry>&                before_geometry = render_shape->get_geometry();
-            if (!before_geometry) {
-                continue;
-            }
-            auto after_geometry = std::make_shared<erhe::geometry::Geometry>();
-            operation(*before_geometry.get(), *after_geometry.get(), node);
-
-            const uint64_t flags =
-                erhe::geometry::Geometry::process_flag_connect |
-                erhe::geometry::Geometry::process_flag_build_edges |
-                erhe::geometry::Geometry::process_flag_compute_smooth_vertex_normals |
-                erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates;
-
-            after_geometry->process(flags);
-
-            std::shared_ptr<erhe::primitive::Primitive> after_primitive = std::make_shared<erhe::primitive::Primitive>(after_geometry);
-            const bool renderable_ok = after_primitive->make_renderable_mesh(m_parameters.build_info, render_shape->get_normal_style());
-            const bool raytrace_ok   = after_primitive->make_raytrace();
-            ERHE_VERIFY(renderable_ok && raytrace_ok);
-            entry.after.primitives.emplace_back(after_primitive, mesh_primitive.material);
-
-            if (m_parameters.context.app_settings->physics.static_enable) {
-
-                GEO::Mesh convex_hull{};
-                const bool convex_hull_ok = make_convex_hull(after_geometry->get_mesh(), convex_hull);
-                ERHE_VERIFY(convex_hull_ok); // TODO handle error
-
-                std::vector<float> coordinates;
-                coordinates.resize(convex_hull.vertices.nb() * 3);
-                for (GEO::index_t vertex : convex_hull.vertices) {
-                    const GEO::vec3f p = get_pointf(convex_hull.vertices, vertex);
-                    coordinates[3 * vertex + 0] = p.x;
-                    coordinates[3 * vertex + 1] = p.y;
-                    coordinates[3 * vertex + 2] = p.z;
-                }
-
-                auto collision_shape = erhe::physics::ICollision_shape::create_convex_hull_shape_shared(
-                    coordinates.data(),
-                    static_cast<int>(convex_hull.vertices.nb()),
-                    static_cast<int>(3 * sizeof(float))
-                );
-
-                const erhe::physics::IRigid_body_create_info rigid_body_create_info{
-                    .collision_shape = collision_shape,
-                    .debug_label     = after_geometry->get_name(),
-                    .motion_mode     = motion_mode
-                };
-
-                if (entry.before.node_physics) {
-                    entry.after.node_physics = std::make_shared<Node_physics>(rigid_body_create_info);
-                    entry.after.node_physics->physics_motion_mode = entry.before.node_physics->physics_motion_mode;
-                }
-            }
-
-        }
-        add_entry(std::move(entry));
+        mesh_operation(scene_mesh);
     }
 
 #if !defined(NDEBUG)

@@ -8,17 +8,6 @@
 
 namespace editor {
 
-auto Item_parent_change_operation::describe() const -> std::string
-{
-    return fmt::format(
-        "[{}] Item_parent_change_operation(child_node = {}, parent before = {}, parent after = {})",
-        get_serial(),
-        m_child->get_name(),
-        m_parent_before ? m_parent_before->get_name() : "(empty)",
-        m_parent_after  ? m_parent_after ->get_name() : "(empty)"
-    );
-}
-
 Item_parent_change_operation::Item_parent_change_operation() = default;
 
 Item_parent_change_operation::Item_parent_change_operation(
@@ -35,6 +24,16 @@ Item_parent_change_operation::Item_parent_change_operation(
 {
     // Only at most one place can be set
     ERHE_VERIFY(!place_before || !place_after);
+
+    set_description(
+        fmt::format(
+            "[{}] Item_parent_change_operation(child_node = {}, parent before = {}, parent after = {})",
+            get_serial(),
+            m_child->get_name(),
+            m_parent_before ? m_parent_before->get_name() : "(empty)",
+            m_parent_after  ? m_parent_after ->get_name() : "(empty)"
+        )
+    );
 }
 
 void Item_parent_change_operation::execute(App_context& context)

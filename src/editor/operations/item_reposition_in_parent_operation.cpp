@@ -21,17 +21,17 @@ Item_reposition_in_parent_operation::Item_reposition_in_parent_operation(
 {
     // Exactly one of before_node and after_node must be set
     ERHE_VERIFY(static_cast<bool>(place_before) != static_cast<bool>(place_after));
-}
 
-auto Item_reposition_in_parent_operation::describe() const -> std::string
-{
-    return fmt::format(
-        "[{}] Item_reposition_in_parent_operation(child = {}, place_before = {}, place_after = {})",
-        get_serial(),
-        m_child->get_name(),
-        m_place_before ? m_place_before->get_name() : "()",
-        m_place_after  ? m_place_after ->get_name() : "()"
+    set_description(
+        fmt::format(
+            "[{}] Item_reposition_in_parent_operation(child = {}, place_before = {}, place_after = {})",
+            get_serial(),
+            m_child->get_name(),
+            m_place_before ? m_place_before->get_name() : "()",
+            m_place_after  ? m_place_after ->get_name() : "()"
+        )
     );
+
 }
 
 void Item_reposition_in_parent_operation::execute(App_context& context)

@@ -18,22 +18,6 @@
 
 namespace editor {
 
-auto Merge_operation::describe() const -> std::string
-{
-    std::stringstream ss;
-    ss << fmt::format("[{}] Merge ", get_serial());
-    bool first = true;
-    for (const auto& entry : m_sources) {
-        if (first) {
-            first = false;
-        } else {
-            ss << ", ";
-        }
-        ss << entry.mesh->get_name();
-    }
-    return ss.str();
-}
-
 Merge_operation::Merge_operation(Parameters&& parameters)
     : m_parameters{std::move(parameters)}
 {
@@ -192,6 +176,19 @@ Merge_operation::Merge_operation(Parameters&& parameters)
     const bool raytrace_ok   = new_primitive->make_raytrace();
     ERHE_VERIFY(renderable_ok && raytrace_ok);
     m_first_mesh_primitives_after.emplace_back(new_primitive, material);
+
+    std::stringstream ss;
+    ss << fmt::format("[{}] Merge ", get_serial());
+    bool first = true;
+    for (const auto& entry : m_sources) {
+        if (first) {
+            first = false;
+        } else {
+            ss << ", ";
+        }
+        ss << entry.mesh->get_name();
+    }
+    set_description(ss.str());
 }
 
 void Merge_operation::execute(App_context& context)

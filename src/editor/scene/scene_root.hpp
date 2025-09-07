@@ -143,6 +143,9 @@ public:
     void unregister_light (const std::shared_ptr<erhe::scene::Light>&  light)  override;
     auto get_hosted_scene () -> erhe::scene::Scene* override;
 
+    void begin_mesh_rt_update(const std::shared_ptr<erhe::scene::Mesh>& mesh);
+    void end_mesh_rt_update  (const std::shared_ptr<erhe::scene::Mesh>& mesh);
+
     void register_node_physics  (const std::shared_ptr<Node_physics>& node_physics);
     void unregister_node_physics(const std::shared_ptr<Node_physics>& node_physics);
 

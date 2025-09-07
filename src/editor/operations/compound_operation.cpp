@@ -9,6 +9,18 @@ namespace editor {
 Compound_operation::Compound_operation(Parameters&& parameters)
     : m_parameters{std::move(parameters)}
 {
+    std::stringstream ss;
+    ss << fmt::format("[{}] Compound ", get_serial());
+    bool first = true;
+    for (auto& operation : m_parameters.operations) {
+        if (first) {
+            first = false;
+        } else {
+            ss << ", ";
+        }
+        ss << operation->describe();
+    }
+    set_description(ss.str());
 }
 
 Compound_operation::~Compound_operation() noexcept
@@ -36,22 +48,6 @@ void Compound_operation::undo(App_context& context)
     }
 
     log_operations->trace("Op Undo End {}", describe());
-}
-
-auto Compound_operation::describe() const -> std::string
-{
-    std::stringstream ss;
-    ss << fmt::format("[{}] Compound ", get_serial());
-    bool first = true;
-    for (auto& operation : m_parameters.operations) {
-        if (first) {
-            first = false;
-        } else {
-            ss << ", ";
-        }
-        ss << operation->describe();
-    }
-    return ss.str();
 }
 
 }

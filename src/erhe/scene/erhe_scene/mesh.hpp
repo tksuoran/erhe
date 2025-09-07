@@ -91,5 +91,6 @@ private:
 [[nodiscard]] auto is_mesh(const std::shared_ptr<erhe::Item_base>& item) -> bool;
 
 [[nodiscard]] auto get_mesh(const erhe::scene::Node* node) -> std::shared_ptr<Mesh>;
+[[nodiscard]] auto get_mesh(const std::shared_ptr<erhe::Item_base>& item) -> std::shared_ptr<Mesh>;
 
 } // namespace erhe::scene

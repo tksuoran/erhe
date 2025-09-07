@@ -1,6 +1,6 @@
 #pragma once
 
-#include "operations/ioperation.hpp"
+#include "operations/operation.hpp"
 
 #include "erhe_scene/node.hpp"
 
@@ -26,9 +26,8 @@ public:
     explicit Node_transform_operation(const Parameters& parameters);
 
     // Implements Operation
-    auto describe() const -> std::string override;
-    void execute (App_context& context)  override;
-    void undo    (App_context& context)  override;
+    void execute(App_context& context) override;
+    void undo   (App_context& context) override;
 
 private:
     Parameters m_parameters;

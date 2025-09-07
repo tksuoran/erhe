@@ -13,11 +13,7 @@ Material_change_operation::Material_change_operation(
     , m_before{before}
     , m_after{after}
 {
-}
-
-auto Material_change_operation::describe() const -> std::string
-{
-    return fmt::format("Material change {}", m_material->get_name());
+    set_description(fmt::format("Material change {}", m_material->get_name()));
 }
 
 Material_change_operation::~Material_change_operation() noexcept = default;

@@ -8,18 +8,6 @@
 
 namespace editor {
 
-auto Node_attach_operation::describe() const -> std::string
-{
-    return fmt::format(
-        "[{}] Node_attach_operation(attachment = {} {}, host node before = {}, host node after = {})",
-        get_serial(),
-        m_attachment->get_type_name(),
-        m_attachment->get_name(),
-        m_host_node_before ? m_host_node_before->get_name() : "(empty)",
-        m_host_node_after ? m_host_node_after->get_name() : "(empty)"
-    );
-}
-
 Node_attach_operation::Node_attach_operation() = default;
 
 Node_attach_operation::Node_attach_operation(
@@ -29,6 +17,16 @@ Node_attach_operation::Node_attach_operation(
     : m_attachment     {attachment}
     , m_host_node_after{host_node}
 {
+    set_description(
+        fmt::format(
+            "[{}] Node_attach_operation(attachment = {} {}, host node before = {}, host node after = {})",
+            get_serial(),
+            m_attachment->get_type_name(),
+            m_attachment->get_name(),
+            m_host_node_before ? m_host_node_before->get_name() : "(empty)",
+            m_host_node_after ? m_host_node_after->get_name() : "(empty)"
+        )
+    );
 }
 
 void Node_attach_operation::execute(App_context& context)

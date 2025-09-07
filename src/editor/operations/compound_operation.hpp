@@ -1,9 +1,8 @@
 #pragma once
 
-#include "operations/ioperation.hpp"
+#include "operations/operation.hpp"
 
 #include <memory>
-#include <string>
 #include <vector>
 
 namespace editor {
@@ -21,7 +20,6 @@ public:
     ~Compound_operation() noexcept override;
 
     // Implements Operation
-    auto describe() const -> std::string override;
     void execute (App_context& context) override;
     void undo    (App_context& context) override;
 

@@ -4,7 +4,7 @@
 #include "app_scenes.hpp"
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
-#include "operations/ioperation.hpp"
+#include "operations/operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "parsers/geogram.hpp"
 #include "parsers/gltf.hpp"
@@ -29,9 +29,8 @@ public:
     explicit Scene_open_operation(const std::filesystem::path& path);
 
     // Implements Operation
-    auto describe() const -> std::string override;
-    void execute (App_context& context)  override;
-    void undo    (App_context& context)  override;
+    void execute(App_context& context) override;
+    void undo   (App_context& context) override;
 
 private:
     std::filesystem::path            m_path;
@@ -42,11 +41,6 @@ private:
 Scene_open_operation::Scene_open_operation(const std::filesystem::path& path)
     : m_path{path}
 {
-}
-
-auto Scene_open_operation::describe() const -> std::string
-{
-    return fmt::format("[{}] Scene_open_operation(path = {})", get_serial(), m_path.string());
 }
 
 void Scene_open_operation::execute(App_context& context)
@@ -94,6 +88,9 @@ void Scene_open_operation::execute(App_context& context)
         // Re-register
         m_scene_root->register_to_editor_scenes(*context.app_scenes);
     }
+    set_description(
+        fmt::format("[{}] Scene_open_operation(path = {})", get_serial(), m_path.string())
+    );
 }
 
 void Scene_open_operation::undo(App_context& context)

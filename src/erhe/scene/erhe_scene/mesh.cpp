@@ -256,5 +256,23 @@ auto get_mesh(const erhe::scene::Node* const node) -> std::shared_ptr<Mesh>
     return {};
 }
 
+auto get_mesh(const std::shared_ptr<erhe::Item_base>& item) -> std::shared_ptr<Mesh>
+{
+    std::shared_ptr<Mesh> scene_mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(item);
+    if (scene_mesh) {
+        return scene_mesh;
+    }
+
+    // If we have node, get mesh from node
+    std::shared_ptr<Node> node_shared = std::dynamic_pointer_cast<erhe::scene::Node>(item);
+    Node* node = node_shared.get();
+    if (node != nullptr) {
+        return erhe::scene::get_mesh(node);
+    }
+
+    return {};
+}
+
+
 } // namespace erhe::scene
 
