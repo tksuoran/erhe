@@ -1085,9 +1085,10 @@ public:
                 [this](erhe::imgui::Window_imgui_host&) {
                     {
                         std::stringstream ss;
+                        ss << fmt::format("{:.2f} ms", m_time->get_frame_time_average_ms());
                         const int running_async_ops = m_app_context.running_async_ops.load();
                         if (running_async_ops > 0) {
-                            ss << running_async_ops << " running operations";
+                            ss << " " << running_async_ops << " running operations";
                         }
                         const int pending_async_ops = m_app_context.pending_async_ops.load();
                         if (pending_async_ops > 0) {

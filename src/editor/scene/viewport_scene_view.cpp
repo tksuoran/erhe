@@ -472,9 +472,30 @@ auto Viewport_scene_view::get_shadow_render_node() const -> Shadow_render_node*
     return shadow_render_node;
 }
 
+auto Viewport_scene_view::get_show_navigation_gizmo() const -> bool
+{
+    return m_show_navigation_gizmo;
+}
+
 auto Viewport_scene_view::viewport_toolbar() -> bool
 {
     bool hovered = false;
+
+    {
+        ImGui::PushID("viewport toolbar debug");
+
+        const auto navigation_gizmo_pressed = erhe::imgui::make_button("N", m_show_navigation_gizmo ? erhe::imgui::Item_mode::active : erhe::imgui::Item_mode::normal);
+        ImGui::SameLine();
+        if (ImGui::IsItemHovered()) {
+            hovered = true;
+            ImGui::SetTooltip("Show/Hide Navigation Gizmo");
+        }
+        if (navigation_gizmo_pressed) {
+            m_show_navigation_gizmo = !m_show_navigation_gizmo;
+        }
+        ImGui::PopID();
+    }
+
     m_context.scene_views->viewport_toolbar(*this, hovered);
 
     //// TODO Tool_flags::viewport_toolbar

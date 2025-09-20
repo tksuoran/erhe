@@ -121,42 +121,45 @@ void Viewport_window::toolbar(bool& hovered)
     if (viewport_scene_view->viewport_toolbar()) {
         hovered = true;
     }
-    const ImVec2 after_toolbar_cursor_pos = ImGui::GetCursorPos();
 
-    std::shared_ptr<erhe::scene::Camera> camera = viewport_scene_view->get_camera();
-    erhe::scene::Node* node = camera->get_node();
-    if (node == nullptr) {
-        return;
-    }
-    erhe::scene::Trs_transform transform = node->world_from_node_transform();
-    glm::vec3 camera_position = transform.get_translation();
-    glm::quat camera_rotation = transform.get_rotation();
+    if (viewport_scene_view->get_show_navigation_gizmo()) {
+        const ImVec2 after_toolbar_cursor_pos = ImGui::GetCursorPos();
 
-    ImVec2 window_position = ImGui::GetWindowPos();
-    ImVec2 window_size = ImGui::GetWindowSize();
-    ImViewGuizmo::Style& style = ImViewGuizmo::GetStyle();
-    const float rotate_radius = style.bigCircleRadius * style.scale;
-    const float button_radius = style.toolButtonRadius * style.scale;
-    ImViewGuizmo::BeginFrame();
-    ImVec2 position = window_position + ImVec2{window_size.x - rotate_radius, after_toolbar_cursor_pos.y + rotate_radius};
-    if (ImViewGuizmo::Rotate(camera_position, camera_rotation, position)) {
-        transform.set_rotation(camera_rotation);
-        node->set_world_from_node(transform);
-    }
-    position.y += rotate_radius;
-    position.x = window_position.x + window_size.x - 2.0f * button_radius;
-    if (ImViewGuizmo::Zoom(camera_position, camera_rotation, position)) {
-        transform.set_translation(camera_position);
-        node->set_world_from_node(transform);
-    }
-    position.y += 2.0f * button_radius;
-    if (ImViewGuizmo::Pan(camera_position, camera_rotation, position)) {
-        transform.set_translation(camera_position);
-        node->set_world_from_node(transform);
-    }
+        std::shared_ptr<erhe::scene::Camera> camera = viewport_scene_view->get_camera();
+        erhe::scene::Node* node = camera->get_node();
+        if (node == nullptr) {
+            return;
+        }
+        erhe::scene::Trs_transform transform = node->world_from_node_transform();
+        glm::vec3 camera_position = transform.get_translation();
+        glm::quat camera_rotation = transform.get_rotation();
 
-    if (ImViewGuizmo::IsOver()) {
-        hovered = true;
+        ImVec2 window_position = ImGui::GetWindowPos();
+        ImVec2 window_size = ImGui::GetWindowSize();
+        ImViewGuizmo::Style& style = ImViewGuizmo::GetStyle();
+        const float rotate_radius = style.bigCircleRadius * style.scale;
+        const float button_radius = style.toolButtonRadius * style.scale;
+        ImViewGuizmo::BeginFrame();
+        ImVec2 position = window_position + ImVec2{window_size.x - rotate_radius, after_toolbar_cursor_pos.y + rotate_radius};
+        if (ImViewGuizmo::Rotate(camera_position, camera_rotation, position)) {
+            transform.set_rotation(camera_rotation);
+            node->set_world_from_node(transform);
+        }
+        position.y += rotate_radius;
+        position.x = window_position.x + window_size.x - 2.0f * button_radius;
+        if (ImViewGuizmo::Zoom(camera_position, camera_rotation, position)) {
+            transform.set_translation(camera_position);
+            node->set_world_from_node(transform);
+        }
+        position.y += 2.0f * button_radius;
+        if (ImViewGuizmo::Pan(camera_position, camera_rotation, position)) {
+            transform.set_translation(camera_position);
+            node->set_world_from_node(transform);
+        }
+
+        if (ImViewGuizmo::IsOver()) {
+            hovered = true;
+        }
     }
 }
 

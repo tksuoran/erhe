@@ -117,6 +117,7 @@ public:
     [[nodiscard]] auto get_position_in_viewport            () const -> std::optional<glm::vec2>;
     [[nodiscard]] auto get_position_in_world_viewport_depth(float viewport_depth) const -> std::optional<glm::vec3>;
     [[nodiscard]] auto viewport_toolbar                    () -> bool;
+    [[nodiscard]] auto get_show_navigation_gizmo           () const -> bool;
 
 private:
     [[nodiscard]] auto get_override_shader_stages() const -> const erhe::graphics::Shader_stages*;
@@ -141,6 +142,7 @@ private:
     //Shader_stages_variant              m_shader_stages_variant{Shader_stages_variant::standard};
     Shader_stages_variant              m_shader_stages_variant{Shader_stages_variant::circular_brushed_metal};
     bool                               m_is_scene_view_hovered{false};
+    bool                               m_show_navigation_gizmo{true};
 };
 
 }

@@ -4,6 +4,7 @@
 #include "erhe_scene/transform.hpp"
 
 #include <cstdint>
+#include <deque>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -46,6 +47,8 @@ public:
     [[nodiscard]] auto get_host_system_time_ns               () const -> int64_t;
     [[nodiscard]] auto get_host_system_last_frame_duration_ns() const -> int64_t;
     [[nodiscard]] auto get_frame_number                      () const -> uint64_t;
+    [[nodiscard]] auto get_frame_time_average_ms             () const -> float;
+
     void prepare_update     ();
     void for_each_fixed_step(std::function<void(const Time_context&)> callback);
 
@@ -70,6 +73,8 @@ private:
     ERHE_PROFILE_MUTEX(std::mutex,         m_mutex);
     std::vector<Time_context>              m_this_frame_fixed_steps;
     std::vector<Transform_animation_entry> m_transform_animations;
+    std::deque<int64_t>                    m_frame_start_times;
+    float                                  m_frame_time_average_ms{0.0f};
 };
 
 }
