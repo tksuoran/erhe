@@ -466,7 +466,7 @@ void Hand_tracker::render(const Render_context& render_context)
     }
 
     const auto transform = root_node->world_from_node();
-    erhe::renderer::Primitive_renderer line_renderer = render_context.get_line_renderer(3, true, true);
+    erhe::renderer::Primitive_renderer line_renderer = render_context.get({erhe::graphics::Primitive_type::line, 3, true, true});
     m_left_hand .draw(line_renderer, transform);
     m_right_hand.draw(line_renderer, transform);
 }

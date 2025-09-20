@@ -122,8 +122,8 @@ void Grid::render(const Render_context& context, bool major)
     int cell;
 
     erhe::renderer::Primitive_renderer renderer =
-        major ? context.get_line_renderer(1, true, m_see_hidden_major) :
-                context.get_line_renderer(0, true, m_see_hidden_minor);
+        major ? context.get({erhe::graphics::Primitive_type::line, 1, true, m_see_hidden_major}) :
+                context.get({erhe::graphics::Primitive_type::line, 0, true, m_see_hidden_minor});
 
     renderer.set_thickness (major ? m_major_width : m_minor_width);
     renderer.set_line_color(major ? m_major_color : m_minor_color);

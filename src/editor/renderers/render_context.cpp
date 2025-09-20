@@ -26,19 +26,8 @@ auto Render_context::get_scene() const -> const erhe::scene::Scene*
     return camera_node->get_scene();
 }
 
-auto Render_context::get_line_renderer(const erhe::renderer::Debug_renderer_config& config) const -> erhe::renderer::Primitive_renderer
+auto Render_context::get(const erhe::renderer::Debug_renderer_config& config) const -> erhe::renderer::Primitive_renderer
 {
-    return app_context.debug_renderer->get(config);
-}
-
-auto Render_context::get_line_renderer(unsigned int stencil, bool visible, bool hidden) const -> erhe::renderer::Primitive_renderer
-{
-    erhe::renderer::Debug_renderer_config config{
-        .primitive_type    = erhe::graphics::Primitive_type::line,
-        .stencil_reference = stencil,
-        .draw_visible      = visible,
-        .draw_hidden       = hidden
-    };
     return app_context.debug_renderer->get(config);
 }
 

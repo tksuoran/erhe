@@ -606,7 +606,7 @@ void Transform_tool::render_rays(erhe::scene::Node& node)
         { 0.0f,  0.0f, -1.0f}
     };
 
-    erhe::renderer::Primitive_renderer line_renderer = m_context.debug_renderer->get(2, true, true);
+    erhe::renderer::Primitive_renderer line_renderer = m_context.debug_renderer->get({erhe::graphics::Primitive_type::line, 2, true, true});
 
     auto& raytrace_scene = scene_root->get_raytrace_scene();
 

@@ -237,7 +237,7 @@ void Theremin::render(const Render_context& context)
         return;
     }
 
-    erhe::renderer::Primitive_renderer line_renderer = m_context.debug_renderer->get(2, true, false);
+    erhe::renderer::Primitive_renderer line_renderer = m_context.debug_renderer->get({erhe::graphics::Primitive_type::line, 2, true, false});
 
     const auto& root_node = m_context.headset_view->get_root_node();
     if (!root_node) {

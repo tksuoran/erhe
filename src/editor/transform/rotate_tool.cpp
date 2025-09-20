@@ -193,7 +193,7 @@ void Rotate_tool::render(const Render_context& context)
     constexpr vec4 blue  {0.0f, 0.0f, 1.0f, 1.0f};
     constexpr vec4 orange{1.0f, 0.5f, 0.0f, 0.8f};
 
-    erhe::renderer::Primitive_renderer line_renderer = context.get_line_renderer(2, true, true);
+    erhe::renderer::Primitive_renderer line_renderer = context.get({erhe::graphics::Primitive_type::line, 2, true, true});
 
     {
         const int sector_count = shared.settings.rotate_snap_enable

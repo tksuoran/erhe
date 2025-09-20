@@ -1,8 +1,13 @@
 #pragma once
 
+#include "erhe_renderer/view.hpp"
 #include "erhe_graphics/render_pipeline_state.hpp"
 #include "erhe_graphics/ring_buffer_client.hpp"
 #include "erhe_graphics/device.hpp"
+
+#include <glm/glm.hpp>
+
+#include <optional>
 #include <vector>
 
 namespace erhe::graphics {
@@ -35,6 +40,14 @@ public:
     bool                              compute_dispatched{false};
 };
 
+class Debug_draw_view_span
+{
+public:
+    class View  view;
+    std::size_t begin;
+    std::size_t end;
+};
+
 class Debug_renderer_bucket
 {
 public:
@@ -46,20 +59,25 @@ public:
     void render          (erhe::graphics::Render_command_encoder& render_encoder, bool draw_hidden, bool draw_visible);
     void release_buffers ();
     auto make_draw       (std::size_t vertex_byte_count, std::size_t primitive_count) -> std::span<std::byte>;
+    void start_view      (const View& view);
 
 private:
-    [[nodiscard]] auto make_pipeline(bool visible, const bool reverse_depth = true) -> erhe::graphics::Render_pipeline_state;
+    [[nodiscard]] auto make_pipeline     (bool visible, const bool reverse_depth = true) -> erhe::graphics::Render_pipeline_state;
+    [[nodiscard]] auto update_view_buffer(const View& view) -> erhe::graphics::Ring_buffer_range;
 
-    erhe::graphics::Device&                m_graphics_device;
-    Debug_renderer&                        m_debug_renderer;
-    erhe::graphics::Ring_buffer_client     m_vertex_ssbo_buffer;
-    erhe::graphics::Ring_buffer_client     m_triangle_vertex_buffer;
-    Debug_renderer_config                  m_config;
-    erhe::graphics::Shader_stages*         m_compute_shader_stages{nullptr};
-    erhe::graphics::Render_pipeline_state  m_compute;
-    erhe::graphics::Render_pipeline_state  m_pipeline_visible;
-    erhe::graphics::Render_pipeline_state  m_pipeline_hidden;
-    std::vector<Debug_draw_entry>          m_draws;
+    erhe::graphics::Device&               m_graphics_device;
+    Debug_renderer&                       m_debug_renderer;
+    erhe::graphics::Ring_buffer_client    m_view_buffer;
+    erhe::graphics::Ring_buffer_client    m_vertex_ssbo_buffer;
+    erhe::graphics::Ring_buffer_client    m_triangle_vertex_buffer;
+    Debug_renderer_config                 m_config;
+    erhe::graphics::Shader_stages*        m_compute_shader_stages{nullptr};
+    erhe::graphics::Render_pipeline_state m_compute;
+    erhe::graphics::Render_pipeline_state m_pipeline_visible;
+    erhe::graphics::Render_pipeline_state m_pipeline_hidden;
+    std::vector<Debug_draw_entry>         m_draws;
+    std::vector<Debug_draw_view_span>     m_view_spans;
+    bool                                  m_start_new_draw{true};
 };
 
 } // namespace erhe::renderer

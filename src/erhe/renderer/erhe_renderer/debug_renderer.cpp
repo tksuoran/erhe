@@ -10,7 +10,6 @@
 #include "erhe_graphics/shader_monitor.hpp"
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_graphics/shader_stages.hpp"
-#include "erhe_graphics/span.hpp"
 #include "erhe_dataformat/vertex_format.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/node.hpp"
@@ -78,10 +77,9 @@ Debug_renderer_program_interface::Debug_renderer_program_interface(erhe::graphic
         erhe::graphics::Shader_resource::Type::uniform_block
     );
 
-    clip_from_world_offset        = view_block->add_mat4("clip_from_world"       )->get_offset_in_parent();
-    view_position_in_world_offset = view_block->add_vec4("view_position_in_world")->get_offset_in_parent();
-    viewport_offset               = view_block->add_vec4("viewport"              )->get_offset_in_parent();
-    fov_offset                    = view_block->add_vec4("fov"                   )->get_offset_in_parent();
+    clip_from_world_offset = view_block->add_mat4("clip_from_world")->get_offset_in_parent();
+    viewport_offset        = view_block->add_vec4("viewport"       )->get_offset_in_parent();
+    fov_offset             = view_block->add_vec4("fov"            )->get_offset_in_parent();
 
     const auto shader_path = std::filesystem::path("res") / std::filesystem::path("shaders");
 
@@ -142,12 +140,6 @@ Debug_renderer_program_interface::Debug_renderer_program_interface(erhe::graphic
 Debug_renderer::Debug_renderer(erhe::graphics::Device& graphics_device)
     : m_graphics_device  {graphics_device}
     , m_program_interface{graphics_device}
-    , m_view_buffer{
-        graphics_device,
-        erhe::graphics::Buffer_target::uniform,
-        "Debug_renderer::m_view_buffer",
-        m_program_interface.view_block->get_binding_point()
-    }
     , m_vertex_input{
         graphics_device,
         erhe::graphics::Vertex_input_state_data::make(m_program_interface.triangle_vertex_format)
@@ -169,75 +161,47 @@ auto Debug_renderer::get(const Debug_renderer_config& config) -> Primitive_rende
 {
     for (Debug_renderer_bucket& bucket : m_buckets) {
         if (bucket.match(config)) {
+            bucket.start_view(get_view());
             return Primitive_renderer{*this, bucket};
         }
     }
     Debug_renderer_bucket& bucket = m_buckets.emplace_back(m_graphics_device, *this, config);
+    bucket.start_view(get_view());
     return Primitive_renderer{*this, bucket};
-}
-
-auto Debug_renderer::get(unsigned int stencil, bool visible, bool hidden) -> Primitive_renderer
-{
-    return get(
-        Debug_renderer_config{
-            .stencil_reference = stencil,
-            .draw_visible      = visible,
-            .draw_hidden       = hidden
-        }
-    );
 }
 
 static constexpr std::string_view c_line_renderer_render{"Debug_renderer::render()"};
 
-auto Debug_renderer::update_view_buffer(const erhe::math::Viewport viewport, const erhe::scene::Camera& camera) -> erhe::graphics::Ring_buffer_range
+void Debug_renderer::begin_frame(const erhe::math::Viewport viewport, const erhe::scene::Camera& camera)
 {
     const auto* camera_node = camera.get_node();
     ERHE_VERIFY(camera_node != nullptr);
 
-    const erhe::graphics::Shader_resource& view_block = *m_program_interface.view_block.get();
-    erhe::graphics::Ring_buffer_range view_buffer_range = m_view_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, view_block.get_size_bytes());
-    const auto                        view_gpu_data     = view_buffer_range.get_span();
-    size_t                            view_write_offset = 0;
-    std::byte* const                  start             = view_gpu_data.data();
-    const std::size_t                 byte_count        = view_gpu_data.size_bytes();
-    const std::size_t                 word_count        = byte_count / sizeof(float);
-    const std::span<float>            gpu_float_data {reinterpret_cast<float*   >(start), word_count};
-    const std::span<uint32_t>         gpu_uint32_data{reinterpret_cast<uint32_t*>(start), word_count};
+    const erhe::scene::Camera_projection_transforms projection_transforms = camera.projection_transforms(viewport);
+    const glm::mat4                                 clip_from_world       = projection_transforms.clip_from_world.get_matrix();
+    const erhe::scene::Projection::Fov_sides        fov_sides             = camera.projection()->get_fov_sides(viewport);
 
-    const auto      projection_transforms  = camera.projection_transforms(viewport);
-    const glm::mat4 clip_from_world        = projection_transforms.clip_from_world.get_matrix();
-    const glm::vec4 view_position_in_world = camera_node->position_in_world();
-    const auto      fov_sides              = camera.projection()->get_fov_sides(viewport);
-    const float viewport_floats[4] {
-        static_cast<float>(viewport.x),
-        static_cast<float>(viewport.y),
-        static_cast<float>(viewport.width),
-        static_cast<float>(viewport.height)
-    };
-    const float fov_floats[4] {
-        fov_sides.left,
-        fov_sides.right,
-        fov_sides.up,
-        fov_sides.down
-    };
+    for (size_t i = 0, end = m_view_stack.size(); i < end; ++i) {
+        m_view_stack.pop();
+    }
 
-    using erhe::graphics::write;
-    using erhe::graphics::as_span;
-    write(view_gpu_data, m_program_interface.clip_from_world_offset,        as_span(clip_from_world       ));
-    write(view_gpu_data, m_program_interface.view_position_in_world_offset, as_span(view_position_in_world));
-    write(view_gpu_data, m_program_interface.viewport_offset,               as_span(viewport_floats       ));
-    write(view_gpu_data, m_program_interface.fov_offset,                    as_span(fov_floats            ));
-
-    view_write_offset += m_program_interface.view_block->get_size_bytes();
-    view_buffer_range.bytes_written(view_write_offset);
-    view_buffer_range.close();
-
-    return view_buffer_range;
-}
-
-void Debug_renderer::update(const erhe::math::Viewport viewport, const erhe::scene::Camera& camera)
-{
-    m_view_buffer_range = update_view_buffer(viewport, camera);
+    push_view(
+        {
+            .clip_from_world = clip_from_world,
+            .viewport        = glm::vec4{
+                static_cast<float>(viewport.x),
+                static_cast<float>(viewport.y),
+                static_cast<float>(viewport.width),
+                static_cast<float>(viewport.height)
+            },
+            .fov_sides = glm::vec4{
+                fov_sides.left,
+                fov_sides.right,
+                fov_sides.up,
+                fov_sides.down
+            }
+        }
+    );
 }
 
 void Debug_renderer::compute(erhe::graphics::Compute_command_encoder& command_encoder)
@@ -245,15 +209,12 @@ void Debug_renderer::compute(erhe::graphics::Compute_command_encoder& command_en
     ERHE_VERIFY(m_graphics_device.get_info().use_compute_shader);
 
     command_encoder.set_compute_pipeline_state(m_lines_to_triangles_compute_pipeline);
-    m_view_buffer.bind(command_encoder, m_view_buffer_range);
 
     // Convert all lines to triangles using compute shader
     command_encoder.set_compute_pipeline_state(m_lines_to_triangles_compute_pipeline);
     for (Debug_renderer_bucket& bucket : m_buckets) {
         bucket.dispatch_compute(command_encoder);
     }
-
-    // m_view_buffer_range.release(); done in release()
 }
 
 void Debug_renderer::render(erhe::graphics::Render_command_encoder& encoder, const erhe::math::Viewport viewport)
@@ -263,8 +224,6 @@ void Debug_renderer::render(erhe::graphics::Render_command_encoder& encoder, con
     erhe::graphics::Scoped_debug_group scoped_debug_group{"Debug_renderer::render()"};
 
     encoder.set_viewport_rect(viewport.x, viewport.y, viewport.width, viewport.height);
-
-    m_view_buffer.bind(encoder, m_view_buffer_range);
 
     // Draw hidden
     for (Debug_renderer_bucket& bucket : m_buckets) {
@@ -280,7 +239,6 @@ void Debug_renderer::render(erhe::graphics::Render_command_encoder& encoder, con
     }
 
     // Release buffers - now done in release()
-    // m_view_buffer_range.release();
     // for (Debug_renderer_bucket& bucket : m_buckets) {
     //     bucket.release_buffers();
     // }
@@ -292,9 +250,8 @@ void Debug_renderer::render(erhe::graphics::Render_command_encoder& encoder, con
     ///// TODO investigate m_graphics_device.opengl_state_tracker.depth_stencil.reset(); // workaround issue in stencil state tracking
 }
 
-void Debug_renderer::release()
+void Debug_renderer::end_frame()
 {
-    m_view_buffer_range.release();
     for (Debug_renderer_bucket& bucket : m_buckets) {
         bucket.release_buffers();
     }

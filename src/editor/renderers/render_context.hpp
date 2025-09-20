@@ -23,10 +23,9 @@ class Viewport_scene_view;
 class Render_context
 {
 public:
-    [[nodiscard]] auto get_camera_node  () const -> const erhe::scene::Node*;
-    [[nodiscard]] auto get_scene        () const -> const erhe::scene::Scene*;
-    [[nodiscard]] auto get_line_renderer(const erhe::renderer::Debug_renderer_config& config) const -> erhe::renderer::Primitive_renderer;
-    [[nodiscard]] auto get_line_renderer(unsigned int stencil, bool visible, bool hidden) const -> erhe::renderer::Primitive_renderer;
+    [[nodiscard]] auto get_camera_node() const -> const erhe::scene::Node*;
+    [[nodiscard]] auto get_scene      () const -> const erhe::scene::Scene*;
+    [[nodiscard]] auto get            (const erhe::renderer::Debug_renderer_config& config) const -> erhe::renderer::Primitive_renderer;
 
     erhe::graphics::Render_command_encoder* encoder{nullptr};
     App_context&                            app_context;

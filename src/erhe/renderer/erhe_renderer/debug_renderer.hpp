@@ -2,6 +2,7 @@
 
 #include "erhe_dataformat/vertex_format.hpp"
 #include "erhe_renderer/debug_renderer_bucket.hpp"
+#include "erhe_renderer/view.hpp"
 #include "erhe_graphics/compute_pipeline_state.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/fragment_outputs.hpp"
@@ -14,6 +15,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <stack>
 
 namespace erhe::graphics {
     class Buffer;
@@ -42,10 +44,9 @@ public:
     std::unique_ptr<erhe::graphics::Shader_resource> view_block;
     std::unique_ptr<erhe::graphics::Shader_stages>   compute_shader_stages;
     std::unique_ptr<erhe::graphics::Shader_stages>   graphics_shader_stages;
-    std::size_t                                      clip_from_world_offset       {0};
-    std::size_t                                      view_position_in_world_offset{0};
-    std::size_t                                      viewport_offset              {0};
-    std::size_t                                      fov_offset                   {0};
+    std::size_t                                      clip_from_world_offset{0};
+    std::size_t                                      viewport_offset       {0};
+    std::size_t                                      fov_offset            {0};
 };
 
 class Primitive_renderer;
@@ -59,31 +60,41 @@ public:
     ~Debug_renderer();
 
     // Public API
-    auto get    (const Debug_renderer_config& config) -> Primitive_renderer;
-    auto get    (unsigned int stencil, bool visible, bool hidden) -> Primitive_renderer;
+    auto get        (const Debug_renderer_config& config) -> Primitive_renderer;
+    void begin_frame(const erhe::math::Viewport viewport, const erhe::scene::Camera& camera);
+    void compute    (erhe::graphics::Compute_command_encoder& command_encoder);
+    void render     (erhe::graphics::Render_command_encoder& encoder, const erhe::math::Viewport camera_viewport);
+    void end_frame  ();
 
-    void update (const erhe::math::Viewport viewport, const erhe::scene::Camera& camera);
-    void compute(erhe::graphics::Compute_command_encoder& command_encoder);
-    void render (erhe::graphics::Render_command_encoder& encoder, const erhe::math::Viewport camera_viewport);
-    void release();
+    inline void push_view(const View& view) {
+        m_view_stack.push(view);
+        m_view = m_view_stack.top();
+    }
+    inline void pop_view() {
+        m_view_stack.pop();
+        if (!m_view_stack.empty()){
+            m_view = m_view_stack.top();
+        } else {
+            m_view.clip_from_world = glm::mat4{1.0f};
+            m_view.fov_sides       = glm::vec4{-1.0f, 1.0f, 1.0f, -1.0f};
+        }
+    }
+    inline auto get_view() -> const View&
+    {
+        return m_view;
+    }
 
     // API for Debug_renderer_bucket
     auto get_program_interface() const -> const Debug_renderer_program_interface& { return m_program_interface; }
     auto get_vertex_input     () -> erhe::graphics::Vertex_input_state* { return &m_vertex_input ;}
 
 private:
-    [[nodiscard]] auto update_view_buffer(
-        const erhe::math::Viewport viewport,
-        const erhe::scene::Camera& camera
-    ) -> erhe::graphics::Ring_buffer_range;
-
     erhe::graphics::Device&                m_graphics_device;
     Debug_renderer_program_interface       m_program_interface;
-
-    erhe::graphics::Ring_buffer_client     m_view_buffer;
     erhe::graphics::Vertex_input_state     m_vertex_input;
-    erhe::graphics::Ring_buffer_range      m_view_buffer_range;
     erhe::graphics::Compute_pipeline_state m_lines_to_triangles_compute_pipeline;
+    std::stack<View>                       m_view_stack{};
+    View                                   m_view      {};
 
     // NOTE: Elements in m_buckets must be stable, etl::vector<> works, std::vector<> does not work.
     etl::vector<Debug_renderer_bucket, 32> m_buckets;

@@ -129,10 +129,11 @@ void Viewport_scene_view::execute_rendergraph_node()
     erhe::graphics::Device& graphics_device = m_rendergraph.get_graphics_device();
 
     if (do_render) {
+        m_context.debug_renderer->begin_frame(context.viewport, *context.camera);
+
         m_context.tools         ->render_viewport_tools(context);
         m_context.app_rendering ->render_viewport_renderables(context);
 
-        m_context.debug_renderer->update(context.viewport, *context.camera);
         erhe::graphics::Compute_command_encoder compute_encoder = graphics_device.make_compute_command_encoder();
         m_context.debug_renderer->compute(compute_encoder);
     }
@@ -165,7 +166,7 @@ void Viewport_scene_view::execute_rendergraph_node()
 
     m_context.app_rendering ->render_viewport_main(context);
     m_context.debug_renderer->render(encoder, context.viewport);
-    m_context.debug_renderer->release();
+    m_context.debug_renderer->end_frame();
     m_context.text_renderer ->render(encoder, context.viewport);
 }
 

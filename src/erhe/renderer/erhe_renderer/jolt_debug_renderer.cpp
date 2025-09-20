@@ -19,7 +19,7 @@ Jolt_debug_renderer::~Jolt_debug_renderer()
 
 void Jolt_debug_renderer::DrawLine(JPH::RVec3Arg inFrom, JPH::RVec3Arg inTo, JPH::ColorArg inColor)
 {
-    Primitive_renderer r = m_debug_renderer.get(2, true, true);
+    Primitive_renderer r = m_debug_renderer.get({erhe::graphics::Primitive_type::line, 2, true, true});
     glm::vec4 color{inColor.r / 255.0f};
     float     width{1.0f};
     glm::vec3 p0{inFrom.GetX(), inFrom.GetY(), inFrom.GetZ()};
@@ -36,7 +36,7 @@ void Jolt_debug_renderer::DrawTriangle(
     ECastShadow   inCastShadow
 )
 {
-    Primitive_renderer r = m_debug_renderer.get(2, true, true);
+    Primitive_renderer r = m_debug_renderer.get({erhe::graphics::Primitive_type::line, 2, true, true});
     glm::vec4 color{inColor.r / 255.0f};
     float     width{1.0f};
     glm::vec3 p0{inV1.GetX(), inV1.GetY(), inV1.GetZ()};

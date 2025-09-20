@@ -19,7 +19,7 @@ Primitive_renderer::Primitive_renderer(Debug_renderer& debug_renderer, Debug_ren
 {
 }
 
-Primitive_renderer::Primitive_renderer(Primitive_renderer&& old)
+Primitive_renderer::Primitive_renderer(Primitive_renderer&& old) noexcept
     : m_debug_renderer              {std::exchange(old.m_debug_renderer, nullptr)}
     , m_bucket                      {std::exchange(old.m_bucket,         nullptr)}
     , m_line_vertex_stride          {m_debug_renderer->get_program_interface().line_vertex_struct->get_size_bytes()}
@@ -35,7 +35,7 @@ Primitive_renderer::Primitive_renderer(Primitive_renderer&& old)
     ERHE_VERIFY(old.m_last_allocate_word_count == 0);
 }
 
-auto Primitive_renderer::operator=(Primitive_renderer&& old) -> Primitive_renderer&
+auto Primitive_renderer::operator=(Primitive_renderer&& old) noexcept -> Primitive_renderer&
 {
     m_debug_renderer = std::exchange(old.m_debug_renderer, nullptr);
     m_bucket         = std::exchange(old.m_bucket, nullptr);

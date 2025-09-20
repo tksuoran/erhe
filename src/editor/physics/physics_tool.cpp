@@ -485,7 +485,7 @@ void Physics_tool::tool_render(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION();
 
-    erhe::renderer::Primitive_renderer line_renderer = context.get_line_renderer(2, true, true);
+    erhe::renderer::Primitive_renderer line_renderer = context.get({erhe::graphics::Primitive_type::line, 2, true, true});
 
     // TODO Make sure this has good enough perf, disable if not.
     if (m_target_mesh) {

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "erhe_renderer/debug_renderer.hpp"
+
 #include "erhe_verify/verify.hpp"
 
 #include <glm/glm.hpp>
@@ -40,8 +42,8 @@ public:
     Primitive_renderer(Debug_renderer& debug_renderer, Debug_renderer_bucket& bucket);
     Primitive_renderer(Primitive_renderer& other) = delete;
     auto operator=    (Primitive_renderer& other) -> Primitive_renderer& = delete;
-    Primitive_renderer(Primitive_renderer&& old);
-    auto operator=    (Primitive_renderer&& old) -> Primitive_renderer&;
+    Primitive_renderer(Primitive_renderer&& old) noexcept;
+    auto operator=    (Primitive_renderer&& old) noexcept -> Primitive_renderer&;
 
 #pragma region Draw API
     void set_line_color(float r, float g, float b, float a);
@@ -139,7 +141,7 @@ private:
     void make_lines(std::size_t line_count);
 
     inline void put(
-        const glm::vec3& point,
+        const glm::vec3& point_world,
         float            thickness,
         const glm::vec4& color
     )
@@ -148,9 +150,9 @@ private:
             return;
         }
         ERHE_VERIFY(m_last_allocate_word_offset + 8 <= m_last_allocate_word_count);
-        m_last_allocate_gpu_float_data[m_last_allocate_word_offset++] = point.x;
-        m_last_allocate_gpu_float_data[m_last_allocate_word_offset++] = point.y;
-        m_last_allocate_gpu_float_data[m_last_allocate_word_offset++] = point.z;
+        m_last_allocate_gpu_float_data[m_last_allocate_word_offset++] = point_world.x;
+        m_last_allocate_gpu_float_data[m_last_allocate_word_offset++] = point_world.y;
+        m_last_allocate_gpu_float_data[m_last_allocate_word_offset++] = point_world.z;
         m_last_allocate_gpu_float_data[m_last_allocate_word_offset++] = thickness;
         m_last_allocate_gpu_float_data[m_last_allocate_word_offset++] = color.r;
         m_last_allocate_gpu_float_data[m_last_allocate_word_offset++] = color.g;
@@ -172,8 +174,8 @@ private:
     std::size_t            m_last_allocate_word_count    {0};
 
     // Current state
-    glm::vec4              m_line_color         {1.0f, 1.0f, 1.0f, 1.0f};
-    float                  m_half_line_thickness{0.5f};
+    glm::vec4              m_line_color           {1.0f, 1.0f, 1.0f, 1.0f};
+    float                  m_half_line_thickness  {0.5f};
 };
 
 } // namespace erhe::renderer

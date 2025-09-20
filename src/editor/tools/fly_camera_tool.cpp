@@ -1,14 +1,16 @@
+
 #include "tools/fly_camera_tool.hpp"
 #include "tools/fly_camera_tool.hpp"
 
 #include "app_context.hpp"
 #include "editor_log.hpp"
 #include "app_message_bus.hpp"
-#include "tools/tools.hpp"
+#include "renderers/render_context.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/scene_view.hpp"
 #include "scene/viewport_scene_view.hpp"
 #include "scene/viewport_scene_views.hpp"
+#include "tools/tools.hpp"
 
 #include "erhe_commands/input_arguments.hpp"
 #include "erhe_commands/commands.hpp"
@@ -17,6 +19,7 @@
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_primitive/primitive.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_renderer/debug_renderer.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
@@ -77,6 +80,40 @@ void Jitter::sleep()
     }
     erhe::time::sleep_for_100ns(time_to_sleep);
 }
+
+//// void Fly_camera_tool::tool_render(const Render_context& render_context)
+//// {
+////     const erhe::scene::Node* node = render_context.get_camera_node();
+////     if (node == nullptr) {
+////         return;
+////     }
+//// 
+////     const erhe::scene::Trs_transform transform = node->world_from_node_transform();
+////     const glm::vec3 camera_position   = transform.get_translation();
+////     const glm::quat camera_rotation   = transform.get_rotation();
+////     const glm::quat node_from_world   = node->node_from_world();
+////     //const glm::mat4 gizmo_view_matrix = glm::mat4_cast(camera_rotation);
+////     const glm::mat4 gizmo_view_matrix = glm::mat4(glm::mat3(node_from_world));
+//// 
+////     constexpr glm::vec3 C    {0.0f, 0.0f, 0.0f};
+////     constexpr glm::vec3 C_t  {1.0f, 0.0f, 0.0f};
+////     constexpr glm::vec3 C_b  {0.0f, 1.0f, 0.0f};
+////     constexpr glm::vec3 C_n  {0.0f, 0.0f, 1.0f};
+////     constexpr glm::vec4 red  {1.0f, 0.0f, 0.0f, 1.0f};
+////     constexpr glm::vec4 green{0.0f, 1.0f, 0.0f, 1.0f};
+////     constexpr glm::vec4 blue {0.0f, 0.0f, 1.0f, 1.0f};
+////     erhe::renderer::Debug_renderer& debug_renderer = *render_context.app_context.debug_renderer;
+////     erhe::renderer::View view = debug_renderer.get_view();
+////     view.clip_from_world = glm::mat4{1.0f};
+////     view.fov_sides = glm::vec4{-1.0f, 1.0f,  1.0f, 1.0f};
+////     debug_renderer.push_view(view);
+////     erhe::renderer::Primitive_renderer line_renderer = render_context.get({erhe::graphics::Primitive_type::line, 2, true, true});
+////     line_renderer.set_thickness(10.0f);
+////     line_renderer.add_lines( gizmo_view_matrix, red,   { { C, C_t }});
+////     line_renderer.add_lines( gizmo_view_matrix, green, { { C, C_b }});
+////     line_renderer.add_lines( gizmo_view_matrix, blue,  { { C, C_n }});
+////     debug_renderer.pop_view();
+//// }
 
 auto Fly_camera_tool::try_ready() -> bool
 {

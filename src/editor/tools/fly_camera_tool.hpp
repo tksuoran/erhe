@@ -181,6 +181,9 @@ public:
     // Implements Window
     void imgui() override;
 
+    // Implements tool
+    //// void tool_render(const Render_context& context);
+
     void on_frame_begin       ();
     void on_frame_end         ();
     void update_fixed_step    (const Time_context& time_context);

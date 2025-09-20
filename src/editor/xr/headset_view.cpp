@@ -210,7 +210,7 @@ void Headset_view::render(const Render_context& render_context)
     }
 
     // TODO Handle selection stencil
-    erhe::renderer::Primitive_renderer line_renderer = render_context.get_line_renderer(2, true, true);
+    erhe::renderer::Primitive_renderer line_renderer = render_context.get({erhe::graphics::Primitive_type::line, 2, true, true});
 
     constexpr glm::vec4 red   {1.0f, 0.0f, 0.0f, 1.0f};
     constexpr glm::vec4 green {0.0f, 1.0f, 0.0f, 1.0f};
@@ -463,7 +463,7 @@ auto Headset_view::render_headset() -> bool
             m_context.tools         ->render_viewport_tools(render_context);
             m_context.app_rendering ->render_viewport_renderables(render_context);
 
-            m_context.debug_renderer->update(render_context.viewport, *render_context.camera);
+            m_context.debug_renderer->begin_frame(render_context.viewport, *render_context.camera);
 
             {
                 erhe::graphics::Compute_command_encoder compute_encoder = graphics_device.make_compute_command_encoder();
@@ -497,7 +497,7 @@ auto Headset_view::render_headset() -> bool
                     m_context.app_rendering ->render_composer(render_context);
                     m_context.debug_renderer->render(encoder, render_context.viewport);
                 }
-                m_context.debug_renderer->release();
+                m_context.debug_renderer->end_frame();
             } // end of render encoder scope - end of render pass
 
             if (m_context.OpenXR_mirror && first_view) {

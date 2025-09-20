@@ -187,7 +187,7 @@ void Paint_tool::tool_render(const Render_context& context)
     if (!is_enabled()) {
         return;
     }
-    erhe::renderer::Primitive_renderer line_renderer = context.get_line_renderer(2, true, true);
+    erhe::renderer::Primitive_renderer line_renderer = context.get({erhe::graphics::Primitive_type::line, 2, true, true});
     line_renderer.set_thickness(5.0f);
 
     Scene_view* scene_view = get_hover_scene_view();

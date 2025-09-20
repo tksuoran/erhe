@@ -299,7 +299,7 @@ void Hover_tool::tool_render(const Render_context& context)
     }
 
     if (m_show_hover_normal && entry->normal.has_value()) {
-        erhe::renderer::Primitive_renderer line_renderer = context.get_line_renderer(2, true, true);
+        erhe::renderer::Primitive_renderer line_renderer = context.get({erhe::graphics::Primitive_type::line, 2, true, true});
         const auto p0 = entry->position.value();
         const auto p1 = entry->position.value() + m_normal_length * entry->normal.value();
         line_renderer.set_thickness(3.0f);
@@ -424,7 +424,7 @@ void Hover_tool::tool_render(const Render_context& context)
     }
 
     const glm::mat4 world_from_node = node->world_from_node();
-    erhe::renderer::Primitive_renderer line_renderer = context.get_line_renderer(2, true, true);
+    erhe::renderer::Primitive_renderer line_renderer = context.get({erhe::graphics::Primitive_type::line, 2, true, true});
 
     const erhe::scene::Camera* camera                = context.camera;
     const auto                 projection_transforms = camera->projection_transforms(context.viewport);

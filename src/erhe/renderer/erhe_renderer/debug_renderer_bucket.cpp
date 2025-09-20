@@ -5,6 +5,7 @@
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/ring_buffer.hpp"
 #include "erhe_graphics/shader_stages.hpp"
+#include "erhe_graphics/span.hpp"
 #include "erhe_verify/verify.hpp"
 
 namespace erhe::renderer {
@@ -90,6 +91,12 @@ Debug_renderer_bucket::Debug_renderer_bucket(
 )
     : m_graphics_device   {graphics_device}
     , m_debug_renderer    {debug_renderer}
+    , m_view_buffer{
+        graphics_device,
+        erhe::graphics::Buffer_target::uniform,
+        "Debug_renderer::m_view_buffer",
+        debug_renderer.get_program_interface().view_block->get_binding_point()
+    }
     , m_vertex_ssbo_buffer{ // compute read
         graphics_device,
         erhe::graphics::Buffer_target::storage,
@@ -108,15 +115,45 @@ Debug_renderer_bucket::Debug_renderer_bucket(
 {
 }
 
+auto Debug_renderer_bucket::update_view_buffer(const View& view) -> erhe::graphics::Ring_buffer_range
+{
+    const Debug_renderer_program_interface& program_interface = m_debug_renderer.get_program_interface();
+    const erhe::graphics::Shader_resource&  view_block        = *program_interface.view_block.get();
+    erhe::graphics::Ring_buffer_range       view_buffer_range = m_view_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, view_block.get_size_bytes());
+    const auto                        view_gpu_data     = view_buffer_range.get_span();
+    size_t                            view_write_offset = 0;
+    std::byte* const                  start             = view_gpu_data.data();
+    const std::size_t                 byte_count        = view_gpu_data.size_bytes();
+    const std::size_t                 word_count        = byte_count / sizeof(float);
+    const std::span<float>            gpu_float_data {reinterpret_cast<float*   >(start), word_count};
+    const std::span<uint32_t>         gpu_uint32_data{reinterpret_cast<uint32_t*>(start), word_count};
+
+    using erhe::graphics::write;
+    using erhe::graphics::as_span;
+    write(view_gpu_data, program_interface.clip_from_world_offset, as_span(view.clip_from_world));
+    write(view_gpu_data, program_interface.viewport_offset,        as_span(view.viewport       ));
+    write(view_gpu_data, program_interface.fov_offset,             as_span(view.fov_sides      ));
+
+    view_write_offset += program_interface.view_block->get_size_bytes();
+    view_buffer_range.bytes_written(view_write_offset);
+    view_buffer_range.close();
+    return view_buffer_range;
+}
+
 auto Debug_renderer_bucket::make_draw(std::size_t vertex_byte_count, std::size_t primitive_count) -> std::span<std::byte>
 {
     constexpr std::size_t min_range_size = 8192; // TODO
-    if (m_draws.empty()) {
+    ERHE_VERIFY(!m_view_spans.empty());
+
+    if (m_draws.empty() || m_start_new_draw) {
+        m_start_new_draw = false;
         m_draws.emplace_back(
             m_vertex_ssbo_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, std::max(vertex_byte_count, min_range_size)),
             erhe::graphics::Ring_buffer_range{},
             0
         );
+        ++m_view_spans.back().end;
+        ERHE_VERIFY(m_view_spans.back().end == m_draws.size());
     }
     if (m_draws.back().input_buffer_range.get_writable_byte_count() < vertex_byte_count) {
         m_draws.emplace_back(
@@ -127,6 +164,8 @@ auto Debug_renderer_bucket::make_draw(std::size_t vertex_byte_count, std::size_t
             erhe::graphics::Ring_buffer_range{},
             0
         );
+        ++m_view_spans.back().end;
+        ERHE_VERIFY(m_view_spans.back().end == m_draws.size());
     }
 
     Debug_draw_entry& draw                = m_draws.back();
@@ -147,6 +186,22 @@ auto Debug_renderer_bucket::match(const Debug_renderer_config& config) const -> 
 void Debug_renderer_bucket::clear()
 {
     m_draws.clear();
+    m_view_spans.clear();
+}
+
+void Debug_renderer_bucket::start_view(const View& view)
+{
+    if (!m_view_spans.empty()) {
+        ERHE_VERIFY(m_view_spans.back().end == m_draws.size());
+    }
+    m_view_spans.push_back(
+        {
+            .view  = view,
+            .begin = m_draws.size(),
+            .end   = m_draws.size()
+        }
+    );
+    m_start_new_draw = true;
 }
 
 [[nodiscard]] auto vertex_count_from_primitive_count(
@@ -173,30 +228,37 @@ void Debug_renderer_bucket::dispatch_compute(erhe::graphics::Compute_command_enc
 
     const std::size_t triangle_vertex_stride = m_debug_renderer.get_program_interface().triangle_vertex_format.streams.front().stride;
 
-    for (Debug_draw_entry& draw : m_draws) {
-        ERHE_VERIFY(draw.primitive_count > 0);
+    for (Debug_draw_view_span& view_span : m_view_spans) {
+        erhe::graphics::Ring_buffer_range view_buffer_range = update_view_buffer(view_span.view);
+        m_view_buffer.bind(encoder, view_buffer_range);
 
-        draw.input_buffer_range.close();
-        m_vertex_ssbo_buffer.bind(encoder, draw.input_buffer_range);
+        for (size_t i = view_span.begin; i < view_span.end; ++i) {
+            Debug_draw_entry& draw = m_draws[i];
+            ERHE_VERIFY(draw.primitive_count > 0);
 
-        const std::size_t triangle_byte_count = 6 * draw.primitive_count * triangle_vertex_stride;
+            draw.input_buffer_range.close();
+            m_vertex_ssbo_buffer.bind(encoder, draw.input_buffer_range);
 
-        // TODO Instead of open(), close() there should be a dedicated
-        //      API for allocating GPU write range; Writing to that
-        //      range potentially needs gl::wait_sync() if there are
-        //      previous GPU reads, and possibly also
-        //      gl::memory_barrier(gl::Memory_barrier_mask::shader_storage_barrier_bit)
-        draw.draw_buffer_range = m_triangle_vertex_buffer.acquire(erhe::graphics::Ring_buffer_usage::GPU_access, triangle_byte_count);
-        ERHE_VERIFY(draw.draw_buffer_range.get_buffer() != nullptr);
-        draw.draw_buffer_range.bytes_gpu_used(triangle_byte_count);
-        draw.draw_buffer_range.close();
+            const std::size_t triangle_byte_count = 6 * draw.primitive_count * triangle_vertex_stride;
 
-        m_triangle_vertex_buffer.bind(encoder, draw.draw_buffer_range);
+            // TODO Instead of open(), close() there should be a dedicated
+            //      API for allocating GPU write range; Writing to that
+            //      range potentially needs gl::wait_sync() if there are
+            //      previous GPU reads, and possibly also
+            //      gl::memory_barrier(gl::Memory_barrier_mask::shader_storage_barrier_bit)
+            draw.draw_buffer_range = m_triangle_vertex_buffer.acquire(erhe::graphics::Ring_buffer_usage::GPU_access, triangle_byte_count);
+            ERHE_VERIFY(draw.draw_buffer_range.get_buffer() != nullptr);
+            draw.draw_buffer_range.bytes_gpu_used(triangle_byte_count);
+            draw.draw_buffer_range.close();
 
-        encoder.dispatch_compute(draw.primitive_count, 1, 1);
+            m_triangle_vertex_buffer.bind(encoder, draw.draw_buffer_range);
 
-        draw.input_buffer_range.release();
-        draw.compute_dispatched = true;
+            encoder.dispatch_compute(draw.primitive_count, 1, 1);
+
+            draw.input_buffer_range.release();
+            draw.compute_dispatched = true;
+        }
+        view_buffer_range.release();
     }
 }
 
@@ -205,7 +267,7 @@ void Debug_renderer_bucket::release_buffers()
     for (Debug_draw_entry& draw : m_draws) {
         draw.draw_buffer_range.release();
     }
-    m_draws.clear();
+    clear();
 }
 
 void Debug_renderer_bucket::render(erhe::graphics::Render_command_encoder& render_encoder, bool draw_hidden, bool draw_visible)
