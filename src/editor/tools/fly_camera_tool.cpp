@@ -81,67 +81,77 @@ void Jitter::sleep()
     erhe::time::sleep_for_100ns(time_to_sleep);
 }
 
-//// void Fly_camera_tool::tool_render(const Render_context& render_context)
-//// {
-////     const erhe::scene::Node* node = render_context.get_camera_node();
-////     if (node == nullptr) {
-////         return;
-////     }
-//// 
-////     const erhe::scene::Trs_transform transform = node->world_from_node_transform();
-////     const glm::vec3 position                 = transform.get_translation();
-////     const glm::mat4 node_from_world          = node->node_from_world();
-////     const glm::quat world_from_node_rotation = transform.get_rotation();
-////     const glm::quat node_from_world_rotation = glm::conjugate(world_from_node_rotation);
-////     const glm::mat4 gizmo_view_matrix_b      = glm::mat4_cast(node_from_world_rotation);
-////     const glm::mat4 gizmo_view_matrix_a      = glm::mat4{glm::mat3{node_from_world}};
-//// 
-////     using namespace glm;
-////     vec3 cameraPos       = position;
-////     quat cameraRot       = world_from_node_rotation;
-////     mat4 worldMatrix     = translate(mat4(1.0f), cameraPos) * mat4_cast(cameraRot);
-////     mat4 viewMatrix      = inverse(worldMatrix);
-////     mat4 gizmoViewMatrix = mat4{mat3{viewMatrix}};
-//// 
-////     //mat4 worldMatrix = node->world_from_node();
-////     //mat4 viewMatrix = node->node_from_world();
-////     //mat4 gizmoViewMatrix = mat4{mat3{node_from_world}};
-//// 
-////     const glm::mat4 gizmo_view_matrix_c = gizmoViewMatrix;
-//// 
-////     constexpr glm::vec3 C    {0.0f, 0.0f, 0.0f};
-////     constexpr glm::vec3 C_ta {0.3f, 0.0f, 0.0f};
-////     constexpr glm::vec3 C_ba {0.0f, 0.3f, 0.0f};
-////     constexpr glm::vec3 C_na {0.0f, 0.0f, 0.3f};
-////     constexpr glm::vec3 C_tb {0.6f, 0.0f, 0.0f};
-////     constexpr glm::vec3 C_bb {0.0f, 0.6f, 0.0f};
-////     constexpr glm::vec3 C_nb {0.0f, 0.0f, 0.6f};
-////     constexpr glm::vec3 C_tc {0.9f, 0.0f, 0.0f};
-////     constexpr glm::vec3 C_bc {0.0f, 0.9f, 0.0f};
-////     constexpr glm::vec3 C_nc {0.0f, 0.0f, 0.9f};
-////     constexpr glm::vec4 red  {1.0f, 0.0f, 0.0f, 1.0f};
-////     constexpr glm::vec4 green{0.0f, 1.0f, 0.0f, 1.0f};
-////     constexpr glm::vec4 blue {0.0f, 0.0f, 1.0f, 1.0f};
-////     erhe::renderer::Debug_renderer& debug_renderer = *render_context.app_context.debug_renderer;
-////     erhe::renderer::View view = debug_renderer.get_view();
-////     view.clip_from_world = glm::mat4{1.0f};
-////     view.fov_sides = glm::vec4{-1.0f, 1.0f,  1.0f, 1.0f};
-////     debug_renderer.push_view(view);
-////     erhe::renderer::Primitive_renderer line_renderer = render_context.get({erhe::graphics::Primitive_type::line, 2, true, true});
-////     line_renderer.set_thickness(10.0f);
-////     line_renderer.add_lines( gizmo_view_matrix_a, red,   { { C, C_ta }});
-////     line_renderer.add_lines( gizmo_view_matrix_a, green, { { C, C_ba }});
-////     line_renderer.add_lines( gizmo_view_matrix_a, blue,  { { C, C_na }});
-////     line_renderer.set_thickness(5.0f);
-////     line_renderer.add_lines( gizmo_view_matrix_b, red,   { { C, C_tb }});
-////     line_renderer.add_lines( gizmo_view_matrix_b, green, { { C, C_bb }});
-////     line_renderer.add_lines( gizmo_view_matrix_b, blue,  { { C, C_nb }});
-////     line_renderer.set_thickness(2.5f);
-////     line_renderer.add_lines( gizmo_view_matrix_c, red,   { { C, C_tc }});
-////     line_renderer.add_lines( gizmo_view_matrix_c, green, { { C, C_bc }});
-////     line_renderer.add_lines( gizmo_view_matrix_c, blue,  { { C, C_nc }});
-////     debug_renderer.pop_view();
-//// }
+#if 0
+void Fly_camera_tool::tool_render(const Render_context& render_context)
+{
+    const erhe::scene::Node* node = render_context.get_camera_node();
+    if (node == nullptr) {
+        return;
+    }
+
+    const erhe::scene::Trs_transform transform = node->world_from_node_transform();
+    const glm::vec3 position                 = transform.get_translation();
+    const glm::mat4 node_from_world          = node->node_from_world();
+    const glm::quat world_from_node_rotation = transform.get_rotation();
+    const glm::quat node_from_world_rotation = glm::conjugate(world_from_node_rotation);
+    const glm::mat4 gizmo_view_matrix_b      = glm::mat4_cast(node_from_world_rotation);
+    const glm::mat4 gizmo_view_matrix_a      = glm::mat4{glm::mat3{node_from_world}};
+
+    using namespace glm;
+    vec3 cameraPos       = position;
+    quat cameraRot       = world_from_node_rotation;
+    mat4 worldMatrix     = translate(mat4(1.0f), cameraPos) * mat4_cast(cameraRot);
+    mat4 viewMatrix      = inverse(worldMatrix);
+    mat4 gizmoViewMatrix = mat4{mat3{viewMatrix}};
+
+    //mat4 worldMatrix = node->world_from_node();
+    //mat4 viewMatrix = node->node_from_world();
+    //mat4 gizmoViewMatrix = mat4{mat3{node_from_world}};
+
+    const glm::mat4 gizmo_view_matrix_c = gizmoViewMatrix;
+
+    constexpr glm::vec3 C    {0.0f, 0.0f, 0.0f};
+    constexpr glm::vec3 C_ta {0.3f, 0.0f, 0.0f};
+    constexpr glm::vec3 C_ba {0.0f, 0.3f, 0.0f};
+    constexpr glm::vec3 C_na {0.0f, 0.0f, 0.3f};
+    constexpr glm::vec3 C_tb {0.6f, 0.0f, 0.0f};
+    constexpr glm::vec3 C_bb {0.0f, 0.6f, 0.0f};
+    constexpr glm::vec3 C_nb {0.0f, 0.0f, 0.6f};
+    constexpr glm::vec3 C_tc {0.9f, 0.0f, 0.0f};
+    constexpr glm::vec3 C_bc {0.0f, 0.9f, 0.0f};
+    constexpr glm::vec3 C_nc {0.0f, 0.0f, 0.9f};
+    constexpr glm::vec4 red  {1.0f, 0.0f, 0.0f, 1.0f};
+    constexpr glm::vec4 green{0.0f, 1.0f, 0.0f, 1.0f};
+    constexpr glm::vec4 blue {0.0f, 0.0f, 1.0f, 1.0f};
+    erhe::renderer::Debug_renderer& debug_renderer = *render_context.app_context.debug_renderer;
+    {
+        erhe::renderer::Primitive_renderer line_renderer = render_context.get({erhe::graphics::Primitive_type::line, 2, true, true});
+        line_renderer.set_thickness(-2.0f);
+        line_renderer.add_lines( red,   { { C, 100.0f * C_ta }});
+        line_renderer.add_lines( green, { { C, 100.0f * C_ba }});
+        line_renderer.add_lines( blue,  { { C, 100.0f * C_na }});
+    }
+
+    erhe::renderer::View view = debug_renderer.get_view();
+    view.clip_from_world = glm::mat4{1.0f};
+    view.fov_sides = glm::vec4{-1.0f, 1.0f,  1.0f, 1.0f};
+    debug_renderer.push_view(view);
+    erhe::renderer::Primitive_renderer line_renderer = render_context.get({erhe::graphics::Primitive_type::line, 2, true, true});
+    line_renderer.set_thickness(10.0f);
+    line_renderer.add_lines( gizmo_view_matrix_a, red,   { { C, C_ta }});
+    line_renderer.add_lines( gizmo_view_matrix_a, green, { { C, C_ba }});
+    line_renderer.add_lines( gizmo_view_matrix_a, blue,  { { C, C_na }});
+    line_renderer.set_thickness(5.0f);
+    line_renderer.add_lines( gizmo_view_matrix_b, red,   { { C, C_tb }});
+    line_renderer.add_lines( gizmo_view_matrix_b, green, { { C, C_bb }});
+    line_renderer.add_lines( gizmo_view_matrix_b, blue,  { { C, C_nb }});
+    line_renderer.set_thickness(2.5f);
+    line_renderer.add_lines( gizmo_view_matrix_c, red,   { { C, C_tc }});
+    line_renderer.add_lines( gizmo_view_matrix_c, green, { { C, C_bc }});
+    line_renderer.add_lines( gizmo_view_matrix_c, blue,  { { C, C_nc }});
+    debug_renderer.pop_view();
+}
+#endif
 
 auto Fly_camera_tool::try_ready() -> bool
 {
@@ -1195,6 +1205,21 @@ void Fly_camera_tool::on_frame_begin()
 void Fly_camera_tool::on_frame_end()
 {
     m_jitter.sleep();
+
+    const std::shared_ptr<Viewport_scene_view> viewport_scene_view = m_context.scene_views->hover_scene_view();
+    const std::shared_ptr<erhe::scene::Camera> camera = (viewport_scene_view)
+        ? viewport_scene_view->get_camera()
+        : std::shared_ptr<erhe::scene::Camera>{};
+    erhe::scene::Node* camera_node = camera ? camera->get_node() : nullptr;
+
+    if (camera_node != nullptr) {
+        m_context.app_message_bus->queue_message(
+            App_message{
+                .update_flags = Message_flag_bit::c_flag_bit_node_touched_fly_camera_tool,
+                .node         = camera_node
+            }
+        );
+    }
 }
 
 void Fly_camera_tool::update_fixed_step(const Time_context& time_context)

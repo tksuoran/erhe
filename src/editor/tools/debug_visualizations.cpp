@@ -1438,10 +1438,29 @@ void Debug_visualizations::label(
     m_context.text_renderer->print(p3_in_window_z_negated, text_color, label_text);
 }
 
+void Debug_visualizations::world_axes_visualization(const Render_context& render_context)
+{
+    constexpr glm::vec3 o    {0.0f, 0.0f, 0.0f};
+    constexpr glm::vec3 x    {1.0f, 0.0f, 0.0f};
+    constexpr glm::vec3 y    {0.0f, 1.0f, 0.0f};
+    constexpr glm::vec3 z    {0.0f, 0.0f, 1.0f};
+    constexpr glm::vec4 red  {1.0f, 0.0f, 0.0f, 1.0f};
+    constexpr glm::vec4 green{0.0f, 1.0f, 0.0f, 1.0f};
+    constexpr glm::vec4 blue {0.0f, 0.0f, 1.0f, 1.0f};
+    erhe::renderer::Primitive_renderer line_renderer = render_context.get({erhe::graphics::Primitive_type::line, 2, true, true});
+    line_renderer.set_thickness(-1.0f);
+    line_renderer.add_lines(red,   {{o, 100.0f * x}});
+    line_renderer.add_lines(green, {{o, 100.0f * y}});
+    line_renderer.add_lines(blue,  {{o, 100.0f * z}});
+}
 
 void Debug_visualizations::render(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION();
+
+    if (m_world_axes) {
+        world_axes_visualization(context);
+    }
 
     if (
         m_tool_hide &&

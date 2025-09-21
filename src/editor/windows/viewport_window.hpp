@@ -7,6 +7,9 @@
 
 #include <memory>
 
+namespace ImViewGuizmo {
+    class Context;
+}
 namespace erhe::imgui {
     class Imgui_host;
     class Imgui_windows;
@@ -37,6 +40,7 @@ public:
         const std::string_view                                      ini_label,
         const std::shared_ptr<Viewport_scene_view>&                 viewport_scene_view
     );
+    ~Viewport_window();
 
     // Implements Imgui_window
     void imgui               () override;
@@ -63,6 +67,8 @@ private:
     std::weak_ptr<Viewport_scene_view>                 m_viewport_scene_view;
     std::weak_ptr<erhe::rendergraph::Rendergraph_node> m_rendergraph_output_node;
     bool                                               m_brush_drag_and_drop_active{false};
+
+    std::unique_ptr<ImViewGuizmo::Context>             m_nagivation_gizmo;
 };
 
 }

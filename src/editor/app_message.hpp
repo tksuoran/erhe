@@ -13,19 +13,21 @@ class Graphics_preset;
 class Message_flag_bit
 {
 public:
-    static constexpr uint64_t c_flag_bit_selection                    = (1u << 0);
-    static constexpr uint64_t c_flag_bit_hover_viewport               = (1u << 1);
-    static constexpr uint64_t c_flag_bit_hover_mesh                   = (1u << 2);
-    static constexpr uint64_t c_flag_bit_hover_scene_view             = (1u << 3);
-    static constexpr uint64_t c_flag_bit_hover_scene_item_tree        = (1u << 4);
-    static constexpr uint64_t c_flag_bit_hover_tree_node              = (1u << 5);
-    static constexpr uint64_t c_flag_bit_graphics_settings            = (1u << 6);
-    static constexpr uint64_t c_flag_bit_render_scene_view            = (1u << 7);
-    static constexpr uint64_t c_flag_bit_tool_select                  = (1u << 8);
-    static constexpr uint64_t c_flag_bit_node_touched_operation_stack = (1u << 9);
-    static constexpr uint64_t c_flag_bit_node_touched_transform_tool  = (1u << 10);
-    static constexpr uint64_t c_flag_bit_animation_update             = (1u << 11);
-    static constexpr uint64_t c_flag_bit_open_scene                   = (1u << 12);
+    static constexpr uint64_t c_flag_bit_selection                      = (1u << 0);
+    static constexpr uint64_t c_flag_bit_hover_viewport                 = (1u << 1);
+    static constexpr uint64_t c_flag_bit_hover_mesh                     = (1u << 2);
+    static constexpr uint64_t c_flag_bit_hover_scene_view               = (1u << 3);
+    static constexpr uint64_t c_flag_bit_hover_scene_item_tree          = (1u << 4);
+    static constexpr uint64_t c_flag_bit_hover_tree_node                = (1u << 5);
+    static constexpr uint64_t c_flag_bit_graphics_settings              = (1u << 6);
+    static constexpr uint64_t c_flag_bit_render_scene_view              = (1u << 7);
+    static constexpr uint64_t c_flag_bit_tool_select                    = (1u << 8);
+    static constexpr uint64_t c_flag_bit_node_touched_operation_stack   = (1u << 9);  // TODO Merge to single
+    static constexpr uint64_t c_flag_bit_node_touched_transform_tool    = (1u << 10); //      flag, add event
+    static constexpr uint64_t c_flag_bit_node_touched_fly_camera_tool   = (1u << 11); //      source field to
+    static constexpr uint64_t c_flag_bit_node_touched_nagivation_gizmo  = (1u << 12); //      message.
+    static constexpr uint64_t c_flag_bit_animation_update               = (1u << 13);
+    static constexpr uint64_t c_flag_bit_open_scene                     = (1u << 14);
 };
 
 class Scene_root;

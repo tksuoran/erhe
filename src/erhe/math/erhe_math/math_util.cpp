@@ -39,10 +39,17 @@ auto create_frustum(
     const float z_far
 ) -> mat4
 {
-    const float x =  (2.0f  * z_near        ) / (right  - left  );
-    const float y =  (2.0f  * z_near        ) / (top    - bottom);
-    const float a =  (right + left          ) / (right  - left  );
-    const float b =  (top   + bottom        ) / (top    - bottom);
+    const float width          = right  - left;
+    const float height         = top    - bottom;
+    const float near_minus_far = z_near - z_far;
+    const float far_minus_near = z_far  - z_near;
+    if ((width == 0.0) || (height == 0.0f) || (near_minus_far == 0.0f) || (far_minus_near == 0.0f)) {
+        return glm::mat4{1.0f}; // TODO Log warning
+    }
+    const float x =  (2.0f  * z_near        ) / width;
+    const float y =  (2.0f  * z_near        ) / height;
+    const float a =  (right + left          ) / width;
+    const float b =  (top   + bottom        ) / height;
   //const float c = -(z_far + z_near        ) / (z_far  - z_near); -- negative one to one
     const float c =   z_far                   / (z_near - z_far ); // zero to one
   //const float d = -(2.0f  * z_far * z_near) / (z_far  - z_near); -- negative one to one
@@ -64,11 +71,17 @@ auto create_frustum_infinite_far(
     const float z_near
 ) -> mat4
 {
+    const float width  = right  - left;
+    const float height = top    - bottom;
+    if ((width == 0.0) || (height == 0.0f)) {
+        return glm::mat4{1.0f}; // TODO Log warning
+    }
+
     assert(z_near >= -0.0f);
-    const float x =  (2.0f  * z_near) / (right - left  );
-    const float y =  (2.0f  * z_near) / (top   - bottom);
-    const float a =  (right + left  ) / (right - left  );
-    const float b =  (top   + bottom) / (top   - bottom);
+    const float x =  (2.0f  * z_near) / width;
+    const float y =  (2.0f  * z_near) / height;
+    const float a =  (right + left  ) / width;
+    const float b =  (top   + bottom) / height;
   //const float c = -1.0f;           -- negative one to one
     const float c = -1.0f;           // zero to one
   //const float d = -2.0f * z_near;  -- negative one to one
@@ -139,8 +152,28 @@ auto create_perspective_vertical(
     const float z_far
 ) -> mat4
 {
-    const float fov_y_clamped = std::min(std::max(fov_y, epsilon), pi_minus_epsilon);
+    const float near_minus_far = z_near - z_far;
+    const float far_minus_near = z_far  - z_near;
+    if ((aspect_ratio == 0.0f) || (near_minus_far == 0.0f) || (far_minus_near == 0.0f)) {
+        return glm::mat4{1.0f}; // TODO log warning
+    }
+    const float fov_y_clamped  = std::min(std::max(fov_y, epsilon), pi_minus_epsilon);
     return glm::perspective(fov_y_clamped, aspect_ratio, z_near, z_far);
+
+    // See glm::perspectiveRH_ZO():
+
+    // const float tan_half_angle = std::tan(fov_y_clamped * 0.5f);
+    // const float x = 1.0f / (aspect_ratio * tan_half_angle);
+    // const float y = 1.0f / (tan_half_angle);
+    // const float c = z_far / (z_near - z_far);
+    // const float d = -(z_far * z_near) / (z_far - z_near);
+    // 
+    // return mat4{
+    //     x, 0, 0, 0,
+    //     0, y, 0, 0,
+    //     0, 0, c, -1.0f,
+    //     0, 0, d, 0,
+    // };
 }
 
 auto create_perspective_horizontal(
@@ -150,6 +183,9 @@ auto create_perspective_horizontal(
     const float z_far
 ) -> mat4
 {
+    if (aspect_ratio == 0.0f) {
+        return glm::mat4{1.0f}; // TODO log warning
+    }
     const auto fov_x_clamped  = std::min(std::max(fov_x, epsilon), pi_minus_epsilon);
     const auto tan_half_angle = std::tan(fov_x_clamped * 0.5f);
     const auto width          = 2.0f * z_near * tan_half_angle;
@@ -205,29 +241,35 @@ auto create_orthographic(
     const float z_far
 ) -> mat4
 {
+    const float width          = right  - left;
+    const float height         = top    - bottom;
+    const float far_minus_near = z_far  - z_near;
+    if ((width == 0.0) || (height == 0.0f) || (far_minus_near == 0.0f)) {
+        return glm::mat4{1.0f}; // TODO Log warning
+    }
     return mat4{
         {
-            2.0f / (right - left),
+            2.0f / width,
             0.0f,
             0.0f,
             0.0f
         },
         {
             0.0f,
-            2.0f / (top - bottom),
+            2.0f / height,
             0.0f,
             0.0f
         },
         {
             0.0f,
             0.0f,
-            -1.0f / (z_far - z_near),
+            -1.0f / far_minus_near,
             0.0f
         },
         {
-            -(right + left) / (right - left),
-            -(top + bottom) / (top - bottom),
-            -z_near / (z_far - z_near),
+            -(right + left) / width,
+            -(top + bottom) / height,
+            -z_near / far_minus_near,
             1.0f
         }
     };
@@ -870,7 +912,9 @@ auto extract_frustum_planes(const glm::mat4& clip_from_world, float clip_z_near,
 
     auto normalize = [](const glm::vec4 plane) -> glm::vec4 {
         const float length = glm::length(glm::vec3(plane));
-        return plane / length;
+        return (length != 0.0f)
+            ? plane / length
+            : vec4{0.0f, 0.0f, 0.0f, 0.0f};
     };
 
     return {
@@ -887,7 +931,7 @@ auto extract_frustum_planes(const glm::mat4& clip_from_world, float clip_z_near,
 {
     auto transform = [&world_from_clip](float x, float y, float z) -> glm::vec3 {
         const glm::vec4 h = world_from_clip * glm::vec4{x, y, z, 1.0f};
-        return h / h.w;
+        return h.w != 0.0f ? h / h.w : glm::vec3{0.0f, 0.0f, 0.0f};
     };
     return {
         transform(-1.0f, -1.0f, clip_z_near), // 0    2------3

@@ -2,6 +2,7 @@
 #include "erhe_scene/transform.hpp"
 #include "erhe_math/viewport.hpp"
 #include "erhe_math/math_util.hpp"
+#include "erhe_verify/verify.hpp"
 
 namespace erhe::scene {
 
@@ -60,6 +61,9 @@ auto Projection::get_projection_matrix(const float aspect_ratio, const bool reve
         }
 
         case Projection::Type::orthogonal_horizontal: {
+            if (aspect_ratio == 0.0f) {
+                return glm::mat4{1.0f};
+            }
             return erhe::math::create_orthographic(
                 -0.5f * ortho_width,
                  0.5f * ortho_width,
@@ -71,6 +75,9 @@ auto Projection::get_projection_matrix(const float aspect_ratio, const bool reve
         }
 
         case Projection::Type::orthogonal_vertical: {
+            if (aspect_ratio == 0.0f) {
+                return glm::mat4{1.0f};
+            }
             return erhe::math::create_orthographic(
                 -0.5f * ortho_height / aspect_ratio,
                  0.5f * ortho_height / aspect_ratio,

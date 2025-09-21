@@ -296,12 +296,20 @@ template <typename T>
     //const auto b = clip_negative_one_to_one ? ((depth_range_near + depth_range_far) * 0.5) : depth_range_near;
 
     const vec4 clip = clip_from_world * vec4{position_in_world, T{1.0}};
-
-    const vec3 ndc{
-        clip.x / clip.w,
-        clip.y / clip.w,
-        clip.z / clip.w
-    };
+    vec3 ndc;
+    if (clip.w == 0.0f) {
+        ndc.x = 0.0f;
+        ndc.y = 0.0f;
+        ndc.z = 0.0f;
+    } else {
+        ndc.x = clip.x / clip.w;
+        ndc.y = clip.y / clip.w;
+        ndc.z = clip.z / clip.w;
+    }
+    if (!std::isfinite(ndc.x) || !std::isfinite(ndc.y) || !std::isfinite(ndc.z)) {
+        static int counter = 0;
+        ++counter;
+    }
 
     return vec3{
         viewport_width  * T{0.5} * ndc.x + viewport_center_x,

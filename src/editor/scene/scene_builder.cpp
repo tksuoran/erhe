@@ -164,7 +164,7 @@ void Scene_builder::setup_cameras(
         vec3{0.0f, camera_elevation, camera_distance},
         vec3{0.0f, 0.25f, 0.0f}
     );
-    camera_a->projection()->z_far = 1000.0f;
+    camera_a->projection()->z_far = 20.0f;
     //// camera_a->set_wireframe_color(glm::vec4{1.0f, 0.6f, 0.3f, 1.0f});
 
 #if defined(ERHE_ENABLE_SECOND_CAMERA)
@@ -174,7 +174,7 @@ void Scene_builder::setup_cameras(
         vec3{ 0.0f, 0.5f, 0.0f}
     );
     camera_b->projection()->z_near = 1.0f;
-    camera_b->projection()->z_far  = 8.0f;
+    camera_b->projection()->z_far  = 1000.0f;
     //// camera_b->set_wireframe_color(glm::vec4{0.3f, 0.6f, 1.00f, 1.0f});
 #endif
 

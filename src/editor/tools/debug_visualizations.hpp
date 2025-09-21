@@ -72,6 +72,8 @@ private:
         glm::vec4                            half_light_color{0};
     };
 
+    void world_axes_visualization(const Render_context& render_context);
+
     void mesh_visualization(const Render_context& render_context, erhe::scene::Mesh* mesh);
     void skin_visualization(const Render_context& render_context, erhe::scene::Skin& skin);
 
@@ -122,6 +124,7 @@ private:
 
     float     m_gap                              {0.003f};
     bool      m_tool_hide                        {false};
+    bool      m_world_axes                       {true};
     bool      m_selection                        {true};
     bool      m_selection_bounding_points_visible{false};
     bool      m_selection_box                    {false};

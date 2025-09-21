@@ -129,6 +129,7 @@ erhe_target_sources_grouped(
     input_state.hpp
     items.cpp
     items.hpp
+    ImViewGuizmo.cpp
     ImViewGuizmo.h
     main.cpp
     operations/compound_operation.cpp

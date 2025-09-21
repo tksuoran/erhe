@@ -101,7 +101,6 @@ public:
     [[nodiscard]] auto get_quaternion () -> glm::quat;
     [[nodiscard]] auto get_euler_value(std::size_t i) const -> float;
     [[nodiscard]] auto get_axis       () const -> glm::vec3;
-    [[nodiscard]] auto get_angle      () const -> float;
 
 private:
     [[nodiscard]] auto get_label_color    (std::size_t i, bool text, bool matches_gizmo) const -> uint32_t;
