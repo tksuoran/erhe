@@ -1,16 +1,11 @@
 ﻿#pragma once
 
 /*===============================================
-ImViewGuizmo Single-Header Library by Marcel Kazemi
-
-To use, do this in one (and only one) of your C++ files:
-#define IMVIEWGUIZMO_IMPLEMENTATION
- #include "ImViewGuizmo.h"
-
-In all other files, just include the header as usual:
-#include "ImViewGuizmo.h"
+ImViewGuizmo by Marcel Kazemi
+Modified by Timo Suoranta
 
 Copyright (c) 2025 Marcel Kazemi
+Copyright (c) 2025 Timo Suoranta
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -40,49 +35,47 @@ SOFTWARE.
 
 
 namespace ImViewGuizmo {
-
-// INTERFACE
     
 struct Style {
     float scale = 1.f;
         
     // Axis visuals
-    float lineLength   = 0.5f;
-    float lineWidth    = 4.0f;
-    float circleRadius = 15.0f;
-    float fadeFactor   = 0.25f;
+    float lineLength     =  0.5f;
+    float lineWidth      =  4.0f;
+    float circleRadius   = 15.0f;
+    float fadeFactor     =  0.25f;
 
     // Highlight
-    ImU32 highlightColor   = IM_COL32(255, 255, 0, 255);
-    float highlightWidth   = 2.0f;
+    ImU32 highlightColor = IM_COL32(255, 255, 0, 255);
+    float highlightWidth = 2.0f;
         
     // Axis
     ImU32 axisColors[3] = {
-        IM_COL32(230, 51, 51, 255),   // X
-        IM_COL32(51, 230, 51, 255),   // Y
-        IM_COL32(51, 128, 255, 255)   // Z
+        IM_COL32(230,  51,  51, 255),  // X
+        IM_COL32( 51, 230,  51, 255),  // Y
+        IM_COL32( 51, 128, 255, 255)   // Z
     };
 
     // Labels
-    float labelSize = 1.0f;
-    const char* axisLabels[3] = {"X", "Y", "Z"};
-    ImU32 labelColorPos =  IM_COL32(255, 255, 255, 255);
-    ImU32 labelColorNeg =  IM_COL32(0, 0, 0, 255);
+    float       labelSize              = 1.0f;
+    const char* axisLabels[3]          = {"X", "Y", "Z"};
+    ImU32       labelColorPos          =  IM_COL32(255, 255, 255, 255);
+    ImU32       labelColorNeg          =  IM_COL32(  0,   0,   0, 255);
 
     //Big Circle
-    float bigCircleRadius  = 80.0f;
-    ImU32 bigCircleColor = IM_COL32(255, 255, 255, 50);
+    float       bigCircleRadius        = 80.0f;
+    ImU32       bigCircleColor         = IM_COL32(255, 255, 255, 50);
 
     // Animation
-    bool animateSnap = true;
-    float snapAnimationDuration = 2.0f; // in seconds
+    bool        animateSnap            = true;
+    float       snapAnimationDuration  = 0.2f; // in seconds
 
     // Zoom/Pan Button Visuals
-    float toolButtonRadius       = 25.f;
-    float toolButtonInnerPadding = 4.f;
-    ImU32 toolButtonColor        = IM_COL32(144, 144, 144, 50);
-    ImU32 toolButtonHoveredColor = IM_COL32(215, 215, 215, 50);
-    ImU32 toolButtonIconColor    = IM_COL32(215, 215, 215, 225);
+    float       toolButtonRadius       = 25.0f;
+    float       toolButtonInnerPadding =  4.0f;
+    ImU32       toolButtonColor        = IM_COL32(144, 144, 144,  50);
+    ImU32       toolButtonHoveredColor = IM_COL32(215, 215, 215,  50);
+    ImU32       toolButtonIconColor    = IM_COL32(215, 215, 215, 225);
 };
 
 inline Style& GetStyle() {
@@ -122,7 +115,7 @@ public:
     /// @param snapDistance The distance the camera will snap to when an axis is clicked.
     /// @param rotationSpeed The rotation speed when dragging the gizmo.
     /// @return True if the camera was modified, false otherwise.
-    bool Rotate(glm::vec3& cameraPos, glm::quat& cameraRot, ImVec2 position, float snapDistance =  5.f, float rotationSpeed = 0.005f);
+    bool Rotate(glm::vec3& cameraPos, glm::quat& cameraRot, ImVec2 position, float snapDistance = 5.f, float rotationSpeed = 0.005f);
 
     /// @brief Renders a zoom button and handles its logic.
     /// @param cameraPos The position of the camera (will be modified).
@@ -142,13 +135,13 @@ public:
 private:
     void BeginFrame();
 
-    int        m_hoveredAxisID = -1;
+    int        m_hoveredAxisID       = -1;
     bool       m_isZoomButtonHovered = false;
-    bool       m_isPanButtonHovered = false;
-    ActiveTool m_activeTool = TOOL_NONE;
+    bool       m_isPanButtonHovered  = false;
+    ActiveTool m_activeTool          = TOOL_NONE;
         
     // Animation state
-    bool      m_isAnimating = false;
+    bool      m_isAnimating        = false;
     float     m_animationStartTime = 0.f;
     glm::vec3 m_startPos;
     glm::vec3 m_targetPos;

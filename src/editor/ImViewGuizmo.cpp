@@ -60,11 +60,11 @@ void Context::BeginFrame()
 {
     int currentFrame = ImGui::GetFrameCount();
     if (m_lastFrame != currentFrame) {
-        m_lastFrame = currentFrame;
+        m_lastFrame           = currentFrame;
         // Reset hover states, but keep active tool state
-        m_hoveredAxisID = -1;
+        m_hoveredAxisID       = -1;
         m_isZoomButtonHovered = false;
-        m_isPanButtonHovered = false;
+        m_isPanButtonHovered  = false;
     }
 }
 
@@ -90,20 +90,11 @@ bool Context::Rotate(glm::vec3& cameraPos, glm::quat& cameraRot, ImVec2 position
 
         cameraRot = glm::slerp(m_startRot, m_targetRot, t);
         glm::vec3 currentDir = cameraRot * worldForward;
-        cameraPos = m_lookAtPos + m_snapDistance * currentDir;
-            
-        if (
-            !std::isfinite(cameraPos.x) || !std::isfinite(cameraPos.y) || !std::isfinite(cameraPos.z) ||
-            !std::isfinite(cameraRot.x) || !std::isfinite(cameraRot.y) || !std::isfinite(cameraRot.z) || !std::isfinite(cameraRot.w)
-        )
-        {
-            static int counter = 0;
-            ++counter;
-        }
-
+        cameraPos = m_lookAtPos - m_snapDistance * currentDir;
         wasModified = true;
 
         if (t >= 1.0f) {
+            glm::vec3 finalPos = m_lookAtPos + m_snapDistance * currentDir;
             cameraPos = m_targetPos;
             cameraRot = m_targetRot;
             m_isAnimating = false;
@@ -191,8 +182,8 @@ bool Context::Rotate(glm::vec3& cameraPos, glm::quat& cameraRot, ImVec2 position
         ImVec2 handlePos = worldToScreen(direction * style.lineLength);
 
         // Line stop at circle edge
-        ImVec2 lineDir = ImVec2(handlePos.x - originPos.x, handlePos.y - originPos.y);
-        float lineLength = sqrtf(lineDir.x * lineDir.x + lineDir.y * lineDir.y) + 1e-6f; // Avoid division by zero
+        ImVec2 lineDir    = ImVec2(handlePos.x - originPos.x, handlePos.y - originPos.y);
+        float  lineLength = sqrtf(lineDir.x * lineDir.x + lineDir.y * lineDir.y) + 1e-6f; // Avoid division by zero
         lineDir.x /= lineLength;
         lineDir.y /= lineLength;
         ImVec2 lineEndPos = ImVec2(handlePos.x - lineDir.x * scaledCircleRadius, handlePos.y - lineDir.y * scaledCircleRadius);
@@ -315,8 +306,8 @@ bool Context::Zoom(glm::vec3& cameraPos, const glm::quat& cameraRot, ImVec2 posi
     }
     drawList->AddCircleFilled(center, radius, bgColor);
 
-    const float p = style.toolButtonInnerPadding * style.scale;
-    const float th = 2.0f * style.scale;
+    const float p         = style.toolButtonInnerPadding * style.scale;
+    const float th        = 2.0f * style.scale;
     const ImU32 iconColor = style.toolButtonIconColor;
 
     constexpr float iconScale = 0.5f; 
