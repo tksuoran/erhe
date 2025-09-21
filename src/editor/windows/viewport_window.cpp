@@ -9,6 +9,7 @@
 #include "brushes/brush_tool.hpp"
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
+#include "time.hpp"
 
 #define IMVIEWGUIZMO_IMPLEMENTATION
 #include "ImViewGuizmo.h"
@@ -147,7 +148,8 @@ void Viewport_window::toolbar(bool& hovered)
         const float button_radius = style.toolButtonRadius * style.scale;
         ImVec2 position = window_position + ImVec2{window_size.x - rotate_radius, after_toolbar_cursor_pos.y + rotate_radius};
         bool modified = false;
-        if (m_nagivation_gizmo->Rotate(camera_position, camera_rotation, position)) {
+        const int64_t time_ns = m_app_context.time->get_host_system_time_ns();
+        if (m_nagivation_gizmo->Rotate(time_ns, camera_position, camera_rotation, position)) {
             modified = true;
         }
         position.y += rotate_radius;

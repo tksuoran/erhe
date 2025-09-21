@@ -68,7 +68,7 @@ void Context::BeginFrame()
     }
 }
 
-bool Context::Rotate(glm::vec3& cameraPos, glm::quat& cameraRot, ImVec2 position, float snapDistance, float rotationSpeed)
+bool Context::Rotate(int64_t timeNs, glm::vec3& cameraPos, glm::quat& cameraRot, ImVec2 position, float snapDistance, float rotationSpeed)
 {
     BeginFrame();
 
@@ -84,16 +84,16 @@ bool Context::Rotate(glm::vec3& cameraPos, glm::quat& cameraRot, ImVec2 position
 
     // Animation logic
     if (m_isAnimating) {
-        float elapsedTime = static_cast<float>(ImGui::GetTime()) - m_animationStartTime;
-        float t = std::min(1.0f, elapsedTime / style.snapAnimationDuration);
-        t = 1.0f - (1.0f - t) * (1.0f - t);
+        double elapsedTimeNs = static_cast<double>(timeNs - m_animationStartTimeNs);
+        double t = std::min(1.0, elapsedTimeNs / style.snapAnimationDurationNs);
+        t = 1.0 - (1.0 - t) * (1.0 - t);
 
-        cameraRot = glm::slerp(m_startRot, m_targetRot, t);
+        cameraRot = glm::slerp(m_startRot, m_targetRot, static_cast<float>(t));
         glm::vec3 currentDir = cameraRot * worldForward;
         cameraPos = m_lookAtPos - m_snapDistance * currentDir;
         wasModified = true;
 
-        if (t >= 1.0f) {
+        if (t >= 1.0) {
             glm::vec3 finalPos = m_lookAtPos + m_snapDistance * currentDir;
             cameraPos = m_targetPos;
             cameraRot = m_targetRot;
@@ -238,19 +238,19 @@ bool Context::Rotate(glm::vec3& cameraPos, glm::quat& cameraRot, ImVec2 position
         glm::vec3 lookAtPosition = cameraPos + cameraForward * snapDistance;
         glm::vec3 targetPosition = lookAtPosition + snapDistance * targetDir;
 
-        if (style.animateSnap && style.snapAnimationDuration > 0.0f) {
+        if (style.animateSnap && (style.snapAnimationDurationNs > 0.0)) {
             bool pos_is_different = glm::length2(cameraPos - targetPosition) > 0.0001f;
             bool rot_is_different = (1.0f - glm::abs(glm::dot(cameraRot, targetRotation))) > 0.0001f;
 
             if (pos_is_different || rot_is_different) {
-                m_isAnimating        = true;
-                m_animationStartTime = static_cast<float>(ImGui::GetTime());
-                m_startPos           = cameraPos;
-                m_targetPos          = targetPosition;
-                m_lookAtPos          = lookAtPosition;
-                m_snapDistance       = snapDistance;
-                m_startRot           = glm::normalize(cameraRot);
-                m_targetRot          = glm::normalize(targetRotation);
+                m_isAnimating          = true;
+                m_animationStartTimeNs = timeNs;
+                m_startPos             = cameraPos;
+                m_targetPos            = targetPosition;
+                m_lookAtPos            = lookAtPosition;
+                m_snapDistance         = snapDistance;
+                m_startRot             = glm::normalize(cameraRot);
+                m_targetRot            = glm::normalize(targetRotation);
             }
         } else {
             cameraRot = targetRotation;

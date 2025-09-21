@@ -57,25 +57,25 @@ struct Style {
     };
 
     // Labels
-    float       labelSize              = 1.0f;
-    const char* axisLabels[3]          = {"X", "Y", "Z"};
-    ImU32       labelColorPos          =  IM_COL32(255, 255, 255, 255);
-    ImU32       labelColorNeg          =  IM_COL32(  0,   0,   0, 255);
+    float       labelSize               = 1.0f;
+    const char* axisLabels[3]           = {"X", "Y", "Z"};
+    ImU32       labelColorPos           =  IM_COL32(255, 255, 255, 255);
+    ImU32       labelColorNeg           =  IM_COL32(  0,   0,   0, 255);
 
     //Big Circle
-    float       bigCircleRadius        = 80.0f;
-    ImU32       bigCircleColor         = IM_COL32(255, 255, 255, 50);
+    float       bigCircleRadius         = 80.0f;
+    ImU32       bigCircleColor          = IM_COL32(255, 255, 255, 50);
 
     // Animation
-    bool        animateSnap            = true;
-    float       snapAnimationDuration  = 0.2f; // in seconds
+    bool        animateSnap             = true;
+    double      snapAnimationDurationNs = 200'000'000.0; // in nano seconds
 
     // Zoom/Pan Button Visuals
-    float       toolButtonRadius       = 25.0f;
-    float       toolButtonInnerPadding =  4.0f;
-    ImU32       toolButtonColor        = IM_COL32(144, 144, 144,  50);
-    ImU32       toolButtonHoveredColor = IM_COL32(215, 215, 215,  50);
-    ImU32       toolButtonIconColor    = IM_COL32(215, 215, 215, 225);
+    float       toolButtonRadius        = 25.0f;
+    float       toolButtonInnerPadding  =  4.0f;
+    ImU32       toolButtonColor         = IM_COL32(144, 144, 144,  50);
+    ImU32       toolButtonHoveredColor  = IM_COL32(215, 215, 215,  50);
+    ImU32       toolButtonIconColor     = IM_COL32(215, 215, 215, 225);
 };
 
 inline Style& GetStyle() {
@@ -115,7 +115,7 @@ public:
     /// @param snapDistance The distance the camera will snap to when an axis is clicked.
     /// @param rotationSpeed The rotation speed when dragging the gizmo.
     /// @return True if the camera was modified, false otherwise.
-    bool Rotate(glm::vec3& cameraPos, glm::quat& cameraRot, ImVec2 position, float snapDistance = 5.f, float rotationSpeed = 0.005f);
+    bool Rotate(int64_t frameTimeNs, glm::vec3& cameraPos, glm::quat& cameraRot, ImVec2 position, float snapDistance = 5.f, float rotationSpeed = 0.005f);
 
     /// @brief Renders a zoom button and handles its logic.
     /// @param cameraPos The position of the camera (will be modified).
@@ -141,8 +141,8 @@ private:
     ActiveTool m_activeTool          = TOOL_NONE;
         
     // Animation state
-    bool      m_isAnimating        = false;
-    float     m_animationStartTime = 0.f;
+    bool      m_isAnimating          = false;
+    int64_t   m_animationStartTimeNs = 0;
     glm::vec3 m_startPos;
     glm::vec3 m_targetPos;
     glm::vec3 m_lookAtPos;
