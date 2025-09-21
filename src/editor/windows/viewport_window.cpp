@@ -131,8 +131,8 @@ void Viewport_window::toolbar(bool& hovered)
             return;
         }
         erhe::scene::Trs_transform transform = node->world_from_node_transform();
-        glm::vec3 camera_position = transform.get_translation();
         glm::quat camera_rotation = transform.get_rotation();
+        glm::vec3 camera_position = transform.get_translation();
 
         ImVec2 window_position = ImGui::GetWindowPos();
         ImVec2 window_size = ImGui::GetWindowSize();

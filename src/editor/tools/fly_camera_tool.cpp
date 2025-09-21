@@ -89,16 +89,36 @@ void Jitter::sleep()
 ////     }
 //// 
 ////     const erhe::scene::Trs_transform transform = node->world_from_node_transform();
-////     const glm::vec3 camera_position   = transform.get_translation();
-////     const glm::quat camera_rotation   = transform.get_rotation();
-////     const glm::quat node_from_world   = node->node_from_world();
-////     //const glm::mat4 gizmo_view_matrix = glm::mat4_cast(camera_rotation);
-////     const glm::mat4 gizmo_view_matrix = glm::mat4(glm::mat3(node_from_world));
+////     const glm::vec3 position                 = transform.get_translation();
+////     const glm::mat4 node_from_world          = node->node_from_world();
+////     const glm::quat world_from_node_rotation = transform.get_rotation();
+////     const glm::quat node_from_world_rotation = glm::conjugate(world_from_node_rotation);
+////     const glm::mat4 gizmo_view_matrix_b      = glm::mat4_cast(node_from_world_rotation);
+////     const glm::mat4 gizmo_view_matrix_a      = glm::mat4{glm::mat3{node_from_world}};
+//// 
+////     using namespace glm;
+////     vec3 cameraPos       = position;
+////     quat cameraRot       = world_from_node_rotation;
+////     mat4 worldMatrix     = translate(mat4(1.0f), cameraPos) * mat4_cast(cameraRot);
+////     mat4 viewMatrix      = inverse(worldMatrix);
+////     mat4 gizmoViewMatrix = mat4{mat3{viewMatrix}};
+//// 
+////     //mat4 worldMatrix = node->world_from_node();
+////     //mat4 viewMatrix = node->node_from_world();
+////     //mat4 gizmoViewMatrix = mat4{mat3{node_from_world}};
+//// 
+////     const glm::mat4 gizmo_view_matrix_c = gizmoViewMatrix;
 //// 
 ////     constexpr glm::vec3 C    {0.0f, 0.0f, 0.0f};
-////     constexpr glm::vec3 C_t  {1.0f, 0.0f, 0.0f};
-////     constexpr glm::vec3 C_b  {0.0f, 1.0f, 0.0f};
-////     constexpr glm::vec3 C_n  {0.0f, 0.0f, 1.0f};
+////     constexpr glm::vec3 C_ta {0.3f, 0.0f, 0.0f};
+////     constexpr glm::vec3 C_ba {0.0f, 0.3f, 0.0f};
+////     constexpr glm::vec3 C_na {0.0f, 0.0f, 0.3f};
+////     constexpr glm::vec3 C_tb {0.6f, 0.0f, 0.0f};
+////     constexpr glm::vec3 C_bb {0.0f, 0.6f, 0.0f};
+////     constexpr glm::vec3 C_nb {0.0f, 0.0f, 0.6f};
+////     constexpr glm::vec3 C_tc {0.9f, 0.0f, 0.0f};
+////     constexpr glm::vec3 C_bc {0.0f, 0.9f, 0.0f};
+////     constexpr glm::vec3 C_nc {0.0f, 0.0f, 0.9f};
 ////     constexpr glm::vec4 red  {1.0f, 0.0f, 0.0f, 1.0f};
 ////     constexpr glm::vec4 green{0.0f, 1.0f, 0.0f, 1.0f};
 ////     constexpr glm::vec4 blue {0.0f, 0.0f, 1.0f, 1.0f};
@@ -109,9 +129,17 @@ void Jitter::sleep()
 ////     debug_renderer.push_view(view);
 ////     erhe::renderer::Primitive_renderer line_renderer = render_context.get({erhe::graphics::Primitive_type::line, 2, true, true});
 ////     line_renderer.set_thickness(10.0f);
-////     line_renderer.add_lines( gizmo_view_matrix, red,   { { C, C_t }});
-////     line_renderer.add_lines( gizmo_view_matrix, green, { { C, C_b }});
-////     line_renderer.add_lines( gizmo_view_matrix, blue,  { { C, C_n }});
+////     line_renderer.add_lines( gizmo_view_matrix_a, red,   { { C, C_ta }});
+////     line_renderer.add_lines( gizmo_view_matrix_a, green, { { C, C_ba }});
+////     line_renderer.add_lines( gizmo_view_matrix_a, blue,  { { C, C_na }});
+////     line_renderer.set_thickness(5.0f);
+////     line_renderer.add_lines( gizmo_view_matrix_b, red,   { { C, C_tb }});
+////     line_renderer.add_lines( gizmo_view_matrix_b, green, { { C, C_bb }});
+////     line_renderer.add_lines( gizmo_view_matrix_b, blue,  { { C, C_nb }});
+////     line_renderer.set_thickness(2.5f);
+////     line_renderer.add_lines( gizmo_view_matrix_c, red,   { { C, C_tc }});
+////     line_renderer.add_lines( gizmo_view_matrix_c, green, { { C, C_bc }});
+////     line_renderer.add_lines( gizmo_view_matrix_c, blue,  { { C, C_nc }});
 ////     debug_renderer.pop_view();
 //// }
 

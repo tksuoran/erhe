@@ -112,10 +112,10 @@ namespace ImViewGuizmo {
 
     static constexpr float baseSize = 256.f;
     static constexpr vec3 origin = {0.0f, 0.0f, 0.0f};
-    static constexpr vec3 worldRight = vec3(1.0f,  0.0f,  0.0f); // +X
-    static constexpr vec3 worldUp = vec3(0.0f, -1.0f,  0.0f); // -Y
-    static constexpr vec3 worldForward = vec3(0.0f,  0.0f,  1.0f); // +Z
-    static constexpr vec3 axisVectors[3] = {{1,0,0}, {0,1,0}, {0,0,1}};
+    static constexpr vec3 worldRight = vec3(1.0f, 0.0f, 0.0f); // +X
+    static constexpr vec3 worldUp = vec3(0.0f, 1.0f, 0.0f); // +Y
+    static constexpr vec3 worldForward = vec3(0.0f, 0.0f, -1.0f); // +Z
+    static constexpr vec3 axisVectors[3] = {{1,0,0}, {0,1,0}, {0,0,-1}};
 
     struct Context {
         int hoveredAxisID = -1;
@@ -255,7 +255,7 @@ namespace ImViewGuizmo {
         mat4 viewMatrix = inverse(worldMatrix);
 
         mat4 gizmoViewMatrix = mat4(mat3(viewMatrix));
-        mat4 gizmoProjectionMatrix = ortho(1.f, -1.f, -1.f, 1.f, -100.0f, 100.0f);
+        mat4 gizmoProjectionMatrix = ortho(-1.f, 1.f, -1.f, 1.f, -100.0f, 100.0f);
         mat4 gizmoMvp = gizmoProjectionMatrix * gizmoViewMatrix;
 
         std::vector<GizmoAxis> axes;
