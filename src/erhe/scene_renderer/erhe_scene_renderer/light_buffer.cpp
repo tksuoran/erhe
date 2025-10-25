@@ -51,6 +51,7 @@ Light_interface::Light_interface(erhe::graphics::Device& graphics_device)
         .light = {
             .clip_from_world              = light_struct.add_mat4("clip_from_world"             )->get_offset_in_parent(),
             .texture_from_world           = light_struct.add_mat4("texture_from_world"          )->get_offset_in_parent(),
+            .world_from_texture           = light_struct.add_mat4("world_from_texture"          )->get_offset_in_parent(),
             .position_and_inner_spot_cos  = light_struct.add_vec4("position_and_inner_spot_cos" )->get_offset_in_parent(),
             .direction_and_outer_spot_cos = light_struct.add_vec4("direction_and_outer_spot_cos")->get_offset_in_parent(),
             .radiance_and_range           = light_struct.add_vec4("radiance_and_range"          )->get_offset_in_parent(),
@@ -63,8 +64,8 @@ Light_interface::Light_interface(erhe::graphics::Device& graphics_device)
     , shadow_sampler_compare{
         graphics_device,
         erhe::graphics::Sampler_create_info{
-            .min_filter        = erhe::graphics::Filter::linear,
-            .mag_filter        = erhe::graphics::Filter::linear,
+            .min_filter        = erhe::graphics::Filter::nearest,
+            .mag_filter        = erhe::graphics::Filter::nearest,
             .mipmap_mode       = erhe::graphics::Sampler_mipmap_mode::not_mipmapped,
             .compare_enable    = true,
             .compare_operation = erhe::graphics::Compare_operation::greater_or_equal,
@@ -77,7 +78,7 @@ Light_interface::Light_interface(erhe::graphics::Device& graphics_device)
     , shadow_sampler_no_compare{
         graphics_device,
         erhe::graphics::Sampler_create_info{
-            .min_filter     = erhe::graphics::Filter::linear,
+            .min_filter     = erhe::graphics::Filter::nearest,
             .mag_filter     = erhe::graphics::Filter::nearest,
             .mipmap_mode    = erhe::graphics::Sampler_mipmap_mode::not_mipmapped,
             .compare_enable = false,
@@ -244,6 +245,7 @@ auto Light_buffer::update(
         }
 
         const mat4 texture_from_world   = light_projection_transforms->texture_from_world.get_matrix();
+        const mat4 world_from_texture   = light_projection_transforms->texture_from_world.get_inverse_matrix();
         const vec3 direction            = vec3{node->world_from_node() * vec4{0.0f, 0.0f, 1.0f, 0.0f}};
         const vec3 position             = vec3{light_projection_transforms->world_from_light_camera.get_matrix() * vec4{0.0f, 0.0f, 0.0f, 1.0f}};
         const vec4 radiance             = vec4{light->intensity * light->color, light->range};
@@ -262,6 +264,7 @@ auto Light_buffer::update(
         max_light_index = std::max(max_light_index, light_index);
         write(light_gpu_data, light_offset + offsets.light.clip_from_world,              as_span(light_projection_transforms->clip_from_world.get_matrix()));
         write(light_gpu_data, light_offset + offsets.light.texture_from_world,           as_span(texture_from_world));
+        write(light_gpu_data, light_offset + offsets.light.world_from_texture,           as_span(world_from_texture));
         write(light_gpu_data, light_offset + offsets.light.position_and_inner_spot_cos,  as_span(position_inner_spot));
         write(light_gpu_data, light_offset + offsets.light.direction_and_outer_spot_cos, as_span(direction_outer_spot));
         write(light_gpu_data, light_offset + offsets.light.radiance_and_range,           as_span(radiance));

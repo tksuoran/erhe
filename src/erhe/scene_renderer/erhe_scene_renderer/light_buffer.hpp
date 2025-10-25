@@ -27,6 +27,7 @@ class Light_struct
 public:
     std::size_t clip_from_world;                // mat4
     std::size_t texture_from_world;             // mat4
+    std::size_t world_from_texture;             // mat4
     std::size_t position_and_inner_spot_cos;    // vec4 (vec3, float)
     std::size_t direction_and_outer_spot_cos;   // vec4 (vec3, float)
     std::size_t radiance_and_range;             // vec4 (float, float, padding, padding )

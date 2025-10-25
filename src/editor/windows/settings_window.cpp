@@ -159,8 +159,8 @@ void Settings_window::imgui()
             ImGui::Checkbox("##", &graphics_preset.shadow_enable);
         });
         add_entry("Shadow Resolution", [this, &graphics_preset](){
-            const int   shadow_resolution_values[] = {  256, 512, 1024, 1024 * 2, 1024 * 3, 1024 * 4, 1024 * 5, 1024 * 6, 1024 * 7, 1024 * 8 };
-            const char* shadow_resolution_items [] = { "256", "512", "1024", "2048", "3072", "4096", "5120", "6144", "7168", "8192" };
+            const int   shadow_resolution_values[] = {  32, 64, 128, 256, 512, 1024, 1024 * 2, 1024 * 3, 1024 * 4, 1024 * 5, 1024 * 6, 1024 * 7, 1024 * 8 };
+            const char* shadow_resolution_items [] = { "32", "64", "128", "256", "512", "1024", "2048", "3072", "4096", "5120", "6144", "7168", "8192" };
             m_shadow_resolution_index = 0;
             int min_distance = std::numeric_limits<int>::max();
             for (int i = 0, end = IM_ARRAYSIZE(shadow_resolution_values); i < end; ++i) {

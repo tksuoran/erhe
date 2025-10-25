@@ -148,7 +148,6 @@ void Composition_pass::render(const Render_context& context) const
                         : (render_style != nullptr)
                             ? render_style->get_primitive_settings(this->primitive_mode)
                             : erhe::scene_renderer::Primitive_interface_settings{},
-                .shadow_texture         = nullptr,
                 .viewport               = context.viewport,
                 .override_shader_stages = this->allow_shader_stages_override ? context.override_shader_stages : nullptr,
                 .error_shader_stages    = &context.app_context.programs->error.shader_stages,
@@ -201,7 +200,6 @@ void Composition_pass::render(const Render_context& context) const
                         : (render_style != nullptr)
                             ? render_style->get_primitive_settings(this->primitive_mode)
                             : erhe::scene_renderer::Primitive_interface_settings{},
-                .shadow_texture         = context.scene_view.get_shadow_texture(),
                 .viewport               = context.viewport,
                 .filter                 = this->filter,
                 .override_shader_stages = this->allow_shader_stages_override ? context.override_shader_stages : nullptr,

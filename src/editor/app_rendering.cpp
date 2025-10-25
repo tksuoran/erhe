@@ -321,6 +321,28 @@ void App_rendering::handle_graphics_settings_changed(Graphics_preset* graphics_p
     const int resolution  = (graphics_preset != nullptr) && graphics_preset->shadow_enable ? graphics_preset->shadow_resolution  : 1;
     const int light_count = (graphics_preset != nullptr) && graphics_preset->shadow_enable ? graphics_preset->shadow_light_count : 1;
 
+    ////erhe::scene_renderer::Light_projections::s_shadow_min_bias   = 0.00006f;
+    ////erhe::scene_renderer::Light_projections::s_shadow_max_bias   = 0.00237f;
+    //if (resolution >= 6144) {
+    //    erhe::scene_renderer::Light_projections::s_shadow_bias_scale = 0.00015f;
+    //} else if (resolution >= 5120) {
+    //    erhe::scene_renderer::Light_projections::s_shadow_bias_scale = 0.00025f;
+    //} else if (resolution >= 4096) {
+    //    erhe::scene_renderer::Light_projections::s_shadow_bias_scale = 0.00025f;
+    //} else if (resolution >= 3072) {
+    //    erhe::scene_renderer::Light_projections::s_shadow_bias_scale = 0.00032f;
+    //} else if (resolution >= 2048) {
+    //    erhe::scene_renderer::Light_projections::s_shadow_bias_scale = 0.00050f;
+    //} else if (resolution >= 1024) {
+    //    erhe::scene_renderer::Light_projections::s_shadow_bias_scale = 0.00090f;
+    //    erhe::scene_renderer::Light_projections::s_shadow_min_bias   = 0.00006f;
+    //    erhe::scene_renderer::Light_projections::s_shadow_max_bias   = 0.00237f;
+    //} else if (resolution >= 256) {
+    //    erhe::scene_renderer::Light_projections::s_shadow_bias_scale = 0.006f;
+    //    erhe::scene_renderer::Light_projections::s_shadow_min_bias   = 0.020f;
+    //    erhe::scene_renderer::Light_projections::s_shadow_max_bias   = 0.004f;
+    //}
+
     for (const auto& node : m_all_shadow_render_nodes) {
         node->reconfigure(*m_context.graphics_device, resolution, light_count);
     }

@@ -28,58 +28,21 @@ float sample_light_visibility(vec4 position, uint light_index, float N_dot_L) {
     }
 
 #if defined(ERHE_HAS_ARB_BINDLESS_TEXTURE)
-    //sampler2DArray s_shadow = sampler2DArray(light_block.shadow_texture_no_compare);
     sampler2DArrayShadow s_shadow_compare = sampler2DArrayShadow(light_block.shadow_texture_compare);
 #endif
 
     Light light       = light_block.lights[light_index];
     float array_layer = float(light_index);
-    //vec4  position_in_light_clip    = light.clip_from_world * position;
-    //vec3  position_in_light_ndc     = position_in_light_clip.xyz / position_in_light_clip.w;
-    //vec4  position_in_light_texture = texture_from_ndc * vec4(position_in_light_ndc, 1.0);
     vec4  position_in_light_texture_homogeneous = light.texture_from_world * position;
     vec3  position_in_light_texture = position_in_light_texture_homogeneous.xyz / position_in_light_texture_homogeneous.w;
     if (position_in_light_texture.z <= 0.0) {
         return 1.0;
     }
 
-    // TODO compute sqrt(1.0 - N_dot_L * N_dot_L) / N_dot_L in outer scope
-    float bias_        = light_block.shadow_bias_scale * sqrt(1.0 - N_dot_L * N_dot_L) / N_dot_L;
-    float bias         = clamp(bias_, light_block.shadow_min_bias, light_block.shadow_max_bias);
-
-    float D_ref        = position_in_light_texture.z + bias;
-    //vec4  uv_ref_layer = vec4(position_in_light_texture.xy, D_ref, array_layer);
+    float D_ref        = position_in_light_texture.z;
     vec4  uv_ref_layer = vec4(position_in_light_texture.xy, array_layer, D_ref);
-    //vec3  uv_layer     = vec3(position_in_light_texture.xy, array_layer);
-    //float D_t          = texture(s_shadow_no_compare, uv_layer).x;
-    //float compare      = (D_ref >= D_t) ? 1.0 : 0.0;
     float hw_compare   = texture(s_shadow_compare, uv_ref_layer);
     return hw_compare;
-    // float is_in = 1.0;
-    // if (
-    //     (position_in_light_texture.x < 0.0) ||
-    //     (position_in_light_texture.x > 1.0) ||
-    //     (position_in_light_texture.y < 0.0) ||
-    //     (position_in_light_texture.y > 1.0)
-    // ) {
-    //     is_in = 0.1;
-    // }
-
-    //out_color = vec4(hw_compare, hw_compare, hw_compare, 1.0);
-
-    //vec4  uv_reference_layer = vec4(
-    //    position_in_light_texture.xy,
-    //    position_in_light_texture.z,
-    //    float(light_index)
-    //);
-    //return texture(s_shadow_compare, uv_reference_layer);
-    ////float bias = max(light_block.shadow_bias_scale * sqrt(1.0 - N_dot_L * N_dot_L) / N_dot_L, light_block.shadow_min_bias);
-    //vec4  uv_reference_layer = vec4(
-    //    position_in_light_texture.xy,
-    //    position_in_light_texture.z// - bias,
-    //    float(light_index)
-    //);
-    //return texture(s_shadow_compare, uv_reference_layer);
 #else
     return 1.0;
 #endif

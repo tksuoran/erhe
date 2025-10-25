@@ -37,8 +37,8 @@ Forward_renderer::Forward_renderer(erhe::graphics::Device& graphics_device, Prog
     , m_shadow_sampler_compare{
         graphics_device,
         erhe::graphics::Sampler_create_info{
-            .min_filter        = erhe::graphics::Filter::linear,
-            .mag_filter        = erhe::graphics::Filter::linear,
+            .min_filter        = erhe::graphics::Filter::nearest,
+            .mag_filter        = erhe::graphics::Filter::nearest,
             .mipmap_mode       = erhe::graphics::Sampler_mipmap_mode::not_mipmapped,
             .address_mode      = { erhe::graphics::Sampler_address_mode::clamp_to_edge, erhe::graphics::Sampler_address_mode::clamp_to_edge, erhe::graphics::Sampler_address_mode::clamp_to_edge },
             .compare_enable    = true,
@@ -52,7 +52,7 @@ Forward_renderer::Forward_renderer(erhe::graphics::Device& graphics_device, Prog
     , m_shadow_sampler_no_compare{
         graphics_device,
         erhe::graphics::Sampler_create_info{
-            .min_filter        = erhe::graphics::Filter::linear,
+            .min_filter        = erhe::graphics::Filter::nearest,
             .mag_filter        = erhe::graphics::Filter::nearest,
             .mipmap_mode       = erhe::graphics::Sampler_mipmap_mode::not_mipmapped,
             .address_mode      = { erhe::graphics::Sampler_address_mode::clamp_to_edge, erhe::graphics::Sampler_address_mode::clamp_to_edge, erhe::graphics::Sampler_address_mode::clamp_to_edge },
@@ -76,8 +76,8 @@ Forward_renderer::Forward_renderer(erhe::graphics::Device& graphics_device, Prog
             .debug_label       = "Forward_renderer::m_fallback_sampler"
         }
     }
+    , m_dummy_texture{graphics_device.create_dummy_texture()}
 {
-    m_dummy_texture = graphics_device.create_dummy_texture();
 }
 
 static constexpr std::string_view c_forward_renderer_render{"Forward_renderer::render()"};

@@ -5,6 +5,7 @@
 #include "app_rendering.hpp"
 #include "app_settings.hpp"
 #include "renderers/render_context.hpp"
+#include "renderers/programs.hpp"
 #include "rendergraph/shadow_render_node.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/node_raytrace.hpp"
@@ -34,6 +35,7 @@
 #include "erhe_scene/projection.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene/skin.hpp"
+#include "erhe_scene_renderer/texel_renderer.hpp"
 
 #include <imgui/imgui.h>
 
@@ -92,14 +94,32 @@ constexpr vec3 axis_z         { 0.0f,  0.0f, 1.0f};
 }
 
 Debug_visualizations::Debug_visualizations(
-    erhe::imgui::Imgui_renderer& imgui_renderer,
-    erhe::imgui::Imgui_windows&  imgui_windows,
-    App_context&                 context,
-    App_message_bus&             app_message_bus,
-    App_rendering&               app_rendering
+    erhe::graphics::Device&                  graphics_device,
+    erhe::imgui::Imgui_renderer&             imgui_renderer,
+    erhe::imgui::Imgui_windows&              imgui_windows,
+    erhe::scene_renderer::Program_interface& program_interface,
+    App_context&                             context,
+    App_message_bus&                         app_message_bus,
+    App_rendering&                           app_rendering,
+    Programs&                                programs
 )
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Debug Visualizations", "debug_visualizations"}
     , m_context{context}
+    , m_empty_vertex_input{graphics_device, erhe::graphics::Vertex_input_state_data{}}
+    , m_shadow_texel_renderer{std::make_unique<erhe::scene_renderer::Texel_renderer>(graphics_device, program_interface)}
+    , m_shadow_texel_pipeline{
+        erhe::graphics::Render_pipeline_state{
+            erhe::graphics::Render_pipeline_data{
+                .name           = "Shadow_debug",
+                .shader_stages  = &programs.debug_shadow.shader_stages,
+                .vertex_input   = &m_empty_vertex_input,
+                .input_assembly = erhe::graphics::Input_assembly_state::triangle,
+                .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
+                .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
+                .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled
+            }
+        }
+    }
 {
     app_rendering.add(this);
 
@@ -1438,6 +1458,21 @@ void Debug_visualizations::label(
     m_context.text_renderer->print(p3_in_window_z_negated, text_color, label_text);
 }
 
+void Debug_visualizations::shadow_debug(const Render_context& render_context)
+{
+    const std::shared_ptr<Scene_root>& scene_root = render_context.scene_view.get_scene_root();
+    const Scene_layers&                layers     = scene_root->layers();
+    erhe::scene_renderer::Texel_renderer::Render_parameters parameters{
+        .render_encoder    = *render_context.encoder,
+        .pipeline          = m_shadow_texel_pipeline,
+        .camera            = render_context.camera,
+        .light_projections = render_context.scene_view.get_light_projections(),
+        .lights            = layers.light()->lights,
+        .viewport          = render_context.viewport
+    };
+    m_shadow_texel_renderer->render(parameters);
+}
+
 void Debug_visualizations::world_axes_visualization(const Render_context& render_context)
 {
     constexpr glm::vec3 o    {0.0f, 0.0f, 0.0f};
@@ -1457,6 +1492,13 @@ void Debug_visualizations::world_axes_visualization(const Render_context& render
 void Debug_visualizations::render(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION();
+
+    if (context.encoder != nullptr) {
+        if (m_shadow_debug) {
+            shadow_debug(context);
+        }
+        return;
+    }
 
     if (m_world_axes) {
         world_axes_visualization(context);
@@ -1574,6 +1616,8 @@ void Debug_visualizations::imgui()
     p.add_entry("Node Axises", [this](){ make_combo("##", m_node_axis_visualization); });
     p.add_entry("Physics",     [this](){ make_combo("##", m_physics_visualization  ); });
     p.add_entry("Raytrace",    [this](){ make_combo("##", m_raytrace_visualization ); });
+
+    p.add_entry("Shadow Debug", [this](){ ImGui::Checkbox   ("##", &m_shadow_debug); });
 
     p.push_group("Selection",  ImGuiTreeNodeFlags_None); //ImGuiTreeNodeFlags_DefaultOpen);
     p.add_entry("Selection",       [this](){ ImGui::Checkbox   ("##", &m_selection); });

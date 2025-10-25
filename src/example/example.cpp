@@ -245,7 +245,6 @@ public:
                 .passes                 = passes,
                 .primitive_mode         = erhe::primitive::Primitive_mode::polygon_fill,
                 .primitive_settings     = erhe::scene_renderer::Primitive_interface_settings{},
-                .shadow_texture         = nullptr,
                 .viewport               = viewport,
                 .filter                 = erhe::Item_filter{},
                 .override_shader_stages = nullptr,
