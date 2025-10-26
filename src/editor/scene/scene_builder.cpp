@@ -701,7 +701,7 @@ void Scene_builder::add_room()
     {
         std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{content_library.mutex};
 
-#if 0
+#if 1
         floor_material = material_library.make<erhe::primitive::Material>(
             erhe::primitive::Material_create_info{
                 .name = "Floor",
@@ -735,7 +735,7 @@ void Scene_builder::add_room()
         .node_flags      = Item_flags::visible | Item_flags::content | Item_flags::show_in_ui | Item_flags::lock_viewport_selection | Item_flags::lock_viewport_transform | Item_flags::expand,
         .mesh_flags      = Item_flags::visible | Item_flags::content | Item_flags::opaque | Item_flags::id | Item_flags::show_in_ui | Item_flags::lock_viewport_selection | Item_flags::lock_viewport_transform | Item_flags::shadow_cast,
         .scene_root      = m_scene_root.get(),
-        .world_from_node = erhe::math::create_translation<float>(0.0f, -aabb.center().y, 0.0f),
+        .world_from_node = erhe::math::create_translation<float>(0.0f, -aabb.max.y - 0.001f, 0.0f),
         .material        = floor_material,
         .scale           = 1.0f,
         .motion_mode     = erhe::physics::Motion_mode::e_static

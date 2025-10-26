@@ -85,6 +85,7 @@ void Graphics_settings::read_presets()
                 parse<bool       >(table, "shadow_enable"     , graphics_preset.shadow_enable     );
                 parse<int        >(table, "shadow_resolution" , graphics_preset.shadow_resolution );
                 parse<int        >(table, "shadow_light_count", graphics_preset.shadow_light_count);
+                parse<int        >(table, "shadow_depth_bits",  graphics_preset.shadow_depth_bits );
                 graphics_presets.push_back(graphics_preset);
             }
         );
@@ -112,6 +113,7 @@ void Graphics_settings::write_presets()
         preset.insert("shadow_enable"     , graphics_preset.shadow_enable     );
         preset.insert("shadow_resolution" , graphics_preset.shadow_resolution );
         preset.insert("shadow_light_count", graphics_preset.shadow_light_count);
+        preset.insert("shadow_depth_bits",  graphics_preset.shadow_depth_bits );
         presets_table.insert(graphics_preset.name, preset);
     }
     erhe::configuration::write_toml(presets_table, c_graphics_presets_file_path);

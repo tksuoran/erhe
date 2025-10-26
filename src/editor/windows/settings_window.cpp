@@ -180,6 +180,26 @@ void Settings_window::imgui()
                 graphics_preset.shadow_resolution = shadow_resolution_values[m_shadow_resolution_index];
             }
         });
+        add_entry("Shadow Depth Bits", [this, &graphics_preset](){
+            const int   shadow_depth_bits_values[] = {  16, 24, 32 };
+            const char* shadow_depth_bits_items [] = { "16", "24", "32" };
+            m_shadow_depth_bits_index = 0;
+            for (int i = 0, end = IM_ARRAYSIZE(shadow_depth_bits_values); i < end; ++i) {
+                if (shadow_depth_bits_values[i] == graphics_preset.shadow_depth_bits) {
+                    m_shadow_depth_bits_index = i;
+                    break;
+                }
+            }
+            if (ImGui::Combo(
+                "##",
+                &m_shadow_depth_bits_index,
+                shadow_depth_bits_items,
+                IM_ARRAYSIZE(shadow_depth_bits_items),
+                IM_ARRAYSIZE(shadow_depth_bits_items)
+            )) {
+                graphics_preset.shadow_depth_bits = shadow_depth_bits_values[m_shadow_depth_bits_index];
+            }
+        });
 
         //ImGui::SliderInt  ("Shadow Resolution",  &graphics_preset.shadow_resolution,  1, graphics.max_shadow_resolution);
         add_entry("Shadow Light Count", [&graphics, &graphics_preset](){

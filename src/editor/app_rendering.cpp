@@ -310,7 +310,8 @@ auto App_rendering::create_shadow_node_for_scene_view(
         m_context,
         scene_view,
         resolution,
-        light_count
+        light_count,
+        preset.shadow_depth_bits
     );
     m_all_shadow_render_nodes.push_back(shadow_render_node);
     return shadow_render_node;
@@ -344,7 +345,7 @@ void App_rendering::handle_graphics_settings_changed(Graphics_preset* graphics_p
     //}
 
     for (const auto& node : m_all_shadow_render_nodes) {
-        node->reconfigure(*m_context.graphics_device, resolution, light_count);
+        node->reconfigure(*m_context.graphics_device, resolution, light_count, graphics_preset->shadow_depth_bits);
     }
 }
 

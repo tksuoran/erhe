@@ -31,14 +31,14 @@ void main()
     uint  light_index = 0;
     Light light       = light_block.lights[light_index];
 
-    vec2 shadowmap_resolution = textureSize(s_shadow_no_compare, 0).xy;;
-    uint resolution_x        = uint(shadowmap_resolution.x);
-    uint instance_id         = gl_VertexID / 6;
-    uint texel_corner_index  = gl_VertexID % 6;
-    uint cell_x              = instance_id % resolution_x;
-    uint cell_y              = instance_id / resolution_x;
-    vec2 center_texel_offset = vec2(0.5, 0.5);
-    vec2 corner_texel_offset = corner_texel_offsets[texel_corner_index];
+    vec2 shadowmap_resolution = textureSize(s_shadow_no_compare, 0).xy;
+    uint resolution_x         = uint(shadowmap_resolution.x);
+    uint instance_id          = gl_VertexID / 6;
+    uint texel_corner_index   = gl_VertexID % 6;
+    uint cell_x               = instance_id % resolution_x;
+    uint cell_y               = instance_id / resolution_x;
+    vec2 center_texel_offset  = vec2(0.5, 0.5);
+    vec2 corner_texel_offset  = corner_texel_offsets[texel_corner_index];
     vec2 center_position_in_light_texture = vec2(
         float(cell_x + center_texel_offset.x) / shadowmap_resolution.x,
         float(cell_y + center_texel_offset.y) / shadowmap_resolution.y
