@@ -137,15 +137,15 @@ CPMAddPackage(
 
 CPMAddPackage(
     NAME              fmt
-    GIT_TAG           11.2.0
-    VERSION           11.2.0
+    GIT_TAG           12.0.0
+    VERSION           12.0.0
     GIT_SHALLOW       TRUE
     GITHUB_REPOSITORY fmtlib/fmt
 )
 
 CPMAddPackage(
     NAME              spdlog
-    VERSION           1.15.3
+    VERSION           1.16.0
     GIT_SHALLOW       TRUE
     GITHUB_REPOSITORY gabime/spdlog
     OPTIONS "SPDLOG_FMT_EXTERNAL ON"
@@ -167,16 +167,16 @@ CPMAddPackage(
 
 CPMAddPackage(
     NAME              etl
-    VERSION           20.42.1
-    GIT_TAG           20.42.1
+    VERSION           20.44.1
+    GIT_TAG           20.44.1
     GIT_SHALLOW       TRUE
     GITHUB_REPOSITORY ETLCPP/etl
 )
 
 CPMAddPackage(
     NAME              glm
-    VERSION           1.0.1
-    GIT_TAG           1.0.1
+    VERSION           1.0.2
+    GIT_TAG           1.0.2
     GIT_SHALLOW       TRUE
     GITHUB_REPOSITORY g-truc/glm
 )
@@ -186,8 +186,8 @@ add_definitions(-DGLM_ENABLE_EXPERIMENTAL)
 if (ERHE_SPIRV)
     CPMAddPackage(
         NAME              glslang
-        VERSION           15.4.0
-        GIT_TAG           15.4.0
+        VERSION           16.0.0
+        GIT_TAG           16.0.0
         GIT_SHALLOW       TRUE
         GITHUB_REPOSITORY KhronosGroup/glslang
         OPTIONS
@@ -219,8 +219,8 @@ vscode_support()
 if (${ERHE_WINDOW_LIBRARY} STREQUAL "sdl")
     CPMAddPackage(
         NAME              sdl
-        VERSION           release-3.2.18
-        GIT_TAG           release-3.2.18
+        VERSION           release-3.2.24
+        GIT_TAG           release-3.2.24
         GIT_SHALLOW       TRUE
         GITHUB_REPOSITORY libsdl-org/sdl
         OPTIONS
@@ -258,7 +258,7 @@ endif ()
 
 CPMAddPackage(
     NAME              simdjson
-    VERSION           3.13.0
+    VERSION           4.0.7
     GIT_SHALLOW       TRUE
     GITHUB_REPOSITORY simdjson/simdjson
 )
@@ -345,7 +345,7 @@ endif ()
 if (${ERHE_PROFILE_LIBRARY} STREQUAL "nvtx")
     CPMAddPackage(
         NAME              nvtx
-        VERSION           3.2.1
+        VERSION           3.3.0
         GIT_SHALLOW       TRUE
         GITHUB_REPOSITORY NVIDIA/NVTX
     )
@@ -383,8 +383,8 @@ endif ()
 if (${ERHE_FONT_RASTERIZATION_LIBRARY} STREQUAL "freetype")
     CPMAddPackage(
         NAME              freetype
-        VERSION           2.13.3
-        GIT_TAG           VER-2-13-3
+        VERSION           2.14.1
+        GIT_TAG           VER-2-14-1
         GIT_SHALLOW       TRUE
         GITHUB_REPOSITORY freetype/freetype
     )
@@ -398,7 +398,7 @@ endif ()
 if (${ERHE_TEXT_LAYOUT_LIBRARY} STREQUAL "harfbuzz")
     CPMAddPackage(
         NAME              harfbuzz
-        GIT_TAG           11.2.1
+        GIT_TAG           12.1.0
         GIT_SHALLOW       TRUE
         GITHUB_REPOSITORY harfbuzz/harfbuzz
     )
@@ -432,7 +432,7 @@ endif ()
 if (${ERHE_PHYSICS_LIBRARY} STREQUAL "jolt")
     CPMAddPackage(
         NAME              JoltPhysics
-        GIT_TAG           8b5b4a489b01b697681a5857b8f6a7a8af02dd7c
+        GIT_TAG           v5.4.0
         GITHUB_REPOSITORY jrouwe/JoltPhysics
         DOWNLOAD_ONLY     YES
     )
@@ -457,8 +457,8 @@ endif ()
 if (${ERHE_XR_LIBRARY} STREQUAL "openxr")
     CPMAddPackage(
         NAME              OpenXR-SDK
-        VERSION           1.1.49
-        GIT_TAG           release-1.1.49
+        VERSION           1.1.53
+        GIT_TAG           release-1.1.53
         GIT_SHALLOW       TRUE
         GITHUB_REPOSITORY KhronosGroup/OpenXR-SDK
     )
