@@ -3,6 +3,7 @@
 #include "renderable.hpp"
 #include "windows/property_editor.hpp"
 
+#include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_imgui/imgui_window.hpp"
 #include "erhe_math/math_util.hpp"
 
@@ -17,12 +18,17 @@ namespace erhe::scene {
     class Mesh;
     class Skin;
 }
+namespace erhe::scene_renderer {
+    class Program_interface;
+    class Texel_renderer;
+}
 
 namespace editor {
 
 class App_context;
 class App_message_bus;
 class App_rendering;
+class Programs;
 class Scene_root;
 class Scene_view;
 
@@ -46,11 +52,14 @@ class Debug_visualizations
 {
 public:
     Debug_visualizations(
-        erhe::imgui::Imgui_renderer& imgui_renderer,
-        erhe::imgui::Imgui_windows&  imgui_windows,
-        App_context&                 context,
-        App_message_bus&             app_message_bus,
-        App_rendering&               app_rendering
+        erhe::graphics::Device&                  graphics_device,
+        erhe::imgui::Imgui_renderer&             imgui_renderer,
+        erhe::imgui::Imgui_windows&              imgui_windows,
+        erhe::scene_renderer::Program_interface& program_interface,
+        App_context&                             context,
+        App_message_bus&                         app_message_bus,
+        App_rendering&                           app_rendering,
+        Programs&                                programs
     );
 
     // Implements Renderable
@@ -72,6 +81,7 @@ private:
         glm::vec4                            half_light_color{0};
     };
 
+    void shadow_debug            (const Render_context& render_context);
     void world_axes_visualization(const Render_context& render_context);
 
     void mesh_visualization(const Render_context& render_context, erhe::scene::Mesh* mesh);
@@ -125,6 +135,7 @@ private:
     float     m_gap                              {0.003f};
     bool      m_tool_hide                        {false};
     bool      m_world_axes                       {true};
+    bool      m_shadow_debug                     {false};
     bool      m_selection                        {true};
     bool      m_selection_bounding_points_visible{false};
     bool      m_selection_box                    {false};
@@ -171,6 +182,10 @@ private:
     glm::vec4 m_corner_label_line_color          {0.0f, 0.5f, 0.5f, 1.0f};
     float     m_corner_label_line_length         {0.05f};
     float     m_corner_label_line_width          {1.0f};
+
+    erhe::graphics::Vertex_input_state                    m_empty_vertex_input;
+    std::unique_ptr<erhe::scene_renderer::Texel_renderer> m_shadow_texel_renderer;
+    erhe::graphics::Render_pipeline_state                 m_shadow_texel_pipeline;
 };
 
 }

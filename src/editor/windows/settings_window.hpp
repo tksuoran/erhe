@@ -35,6 +35,7 @@ private:
     std::vector<const char*> m_graphics_preset_names;
     int                      m_graphics_preset_index{0};
     int                      m_shadow_resolution_index{0};
+    int                      m_shadow_depth_bits_index{0};
 };
 
 }

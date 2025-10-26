@@ -1,5 +1,5 @@
 [graphics]
-preset = 'Medium'
+preset = 'Low'
 
 [icons]
 hotbar_icon_size = 80

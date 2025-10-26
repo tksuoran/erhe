@@ -53,7 +53,7 @@ void Graphics_settings::get_limits(const erhe::graphics::Device& instance, erhe:
         format_properties.texture_2d_array_max_width,
         format_properties.texture_2d_array_max_height
     );
-    max_depth_layers = std::min(20, format_properties.texture_2d_array_max_layers);
+    max_depth_layers = std::min(32, format_properties.texture_2d_array_max_layers);
 }
 
 template <typename T>
@@ -85,6 +85,7 @@ void Graphics_settings::read_presets()
                 parse<bool       >(table, "shadow_enable"     , graphics_preset.shadow_enable     );
                 parse<int        >(table, "shadow_resolution" , graphics_preset.shadow_resolution );
                 parse<int        >(table, "shadow_light_count", graphics_preset.shadow_light_count);
+                parse<int        >(table, "shadow_depth_bits",  graphics_preset.shadow_depth_bits );
                 graphics_presets.push_back(graphics_preset);
             }
         );
@@ -112,6 +113,7 @@ void Graphics_settings::write_presets()
         preset.insert("shadow_enable"     , graphics_preset.shadow_enable     );
         preset.insert("shadow_resolution" , graphics_preset.shadow_resolution );
         preset.insert("shadow_light_count", graphics_preset.shadow_light_count);
+        preset.insert("shadow_depth_bits",  graphics_preset.shadow_depth_bits );
         presets_table.insert(graphics_preset.name, preset);
     }
     erhe::configuration::write_toml(presets_table, c_graphics_presets_file_path);
@@ -123,7 +125,7 @@ void Graphics_settings::apply_limits(Graphics_preset& graphics_preset)
     graphics_preset.shadow_light_count = std::min(graphics_preset.shadow_light_count, max_depth_layers);
 
     graphics_preset.shadow_resolution  = std::min(graphics_preset.shadow_resolution,  8192);
-    graphics_preset.shadow_light_count = std::min(graphics_preset.shadow_light_count, 128);
+    graphics_preset.shadow_light_count = std::min(graphics_preset.shadow_light_count, 32);
 }
 
 void Graphics_settings::select_active_graphics_preset(App_message_bus& app_message_bus)

@@ -44,6 +44,7 @@ enum class Shader_stages_variant : int {
     debug_roughness,
     debug_occlusion,
     debug_emissive,
+    debug_shadowmap_texels,
     debug_misc
 };
 
@@ -82,6 +83,7 @@ static constexpr const char* c_shader_stages_variant_strings[] =
     "Roughness",
     "Occlusion",
     "Emissive",
+    "Shadowmap Texels",
     "Debug Miscellaneous"
 };
 
@@ -149,6 +151,8 @@ public:
     erhe::graphics::Reloadable_shader_stages debug_roughness;
     erhe::graphics::Reloadable_shader_stages debug_occlusion;
     erhe::graphics::Reloadable_shader_stages debug_emissive;
+    erhe::graphics::Reloadable_shader_stages debug_shadowmap_texels;
+    erhe::graphics::Reloadable_shader_stages debug_shadow;
     erhe::graphics::Reloadable_shader_stages debug_misc;
 
     class Shader_stages_builder

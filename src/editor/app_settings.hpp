@@ -38,6 +38,7 @@ public:
     bool        shadow_enable     {true};
     int         shadow_resolution {1024};
     int         shadow_light_count{4};
+    int         shadow_depth_bits {16};
 };
 
 static const char* const c_settings_file_path         = "settings.toml";

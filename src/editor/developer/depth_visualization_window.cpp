@@ -136,9 +136,6 @@ void Depth_to_color_rendergraph_node::execute_rendergraph_node()
 
     const auto& light_projection_transforms = light_projections.light_projection_transforms.at(m_light_index);
     const auto& layers = scene_root->layers();
-    auto texture = shadow_render_node->get_texture();
-
-    log_render->trace("Depth to color from texture '{}'", texture->get_debug_label());
 
     m_forward_renderer.draw_primitives(
         erhe::scene_renderer::Forward_renderer::Render_parameters{
@@ -153,7 +150,6 @@ void Depth_to_color_rendergraph_node::execute_rendergraph_node()
             .mesh_spans            = {},
             .non_mesh_vertex_count = 3, // Full-screen triangle
             .passes                = { &m_pipeline_pass },
-            .shadow_texture        = texture.get(),
             .viewport              = viewport,
             .debug_label           = "Depth_to_color_rendergraph_node::execute_rendergraph_node()"
         },
@@ -271,10 +267,6 @@ void Depth_visualization_window::imgui()
 
     erhe::scene_renderer::Light_projections& light_projections = shadow_render_node->get_light_projections();
     const auto& light_projection_transforms = light_projections.light_projection_transforms;
-
-    ImGui::SliderFloat("Shadow Bias Scale", &erhe::scene_renderer::Light_projections::s_shadow_bias_scale, 0.0f, 1.0f, "%.5f", ImGuiSliderFlags_Logarithmic);
-    ImGui::SliderFloat("Shadow Min Bias", &erhe::scene_renderer::Light_projections::s_shadow_min_bias,     0.0f, 1.0f, "%.5f", ImGuiSliderFlags_Logarithmic);
-    ImGui::SliderFloat("Shadow Max Bias", &erhe::scene_renderer::Light_projections::s_shadow_max_bias,     0.0f, 1.0f, "%.5f", ImGuiSliderFlags_Logarithmic);
 
     const int count = static_cast<int>(light_projection_transforms.size());
     int& light_index = m_depth_to_color_node->get_light_index();

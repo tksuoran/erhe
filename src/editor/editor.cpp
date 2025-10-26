@@ -891,11 +891,14 @@ public:
                     *m_programs.get()
                 );
                 m_debug_visualizations = std::make_unique<Debug_visualizations>(
+                    *m_graphics_device.get(),
                     *m_imgui_renderer.get(),
                     *m_imgui_windows.get(),
+                    *m_program_interface.get(),
                     m_app_context,
                     *m_app_message_bus.get(),
-                    *m_app_rendering.get()
+                    *m_app_rendering.get(),
+                    *m_programs.get()
                 );
             }
             ERHE_TASK_FOOTER(

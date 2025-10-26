@@ -7,6 +7,7 @@
 #include "scene/scene_root.hpp"
 #include "scene/scene_view.hpp"
 
+#include "erhe_dataformat/dataformat.hpp"
 #include "erhe_rendergraph/rendergraph.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/render_pass.hpp"
@@ -29,7 +30,8 @@ Shadow_render_node::Shadow_render_node(
     App_context&                    context,
     Scene_view&                     scene_view,
     const int                       resolution,
-    const int                       light_count
+    const int                       light_count,
+    const int                       depth_bits
 )
     // TODO fmt::format("Shadow render {}", viewport_scene_view->name())
     : erhe::rendergraph::Rendergraph_node{rendergraph, "shadow_maps"} 
@@ -38,22 +40,32 @@ Shadow_render_node::Shadow_render_node(
 {
     register_output("shadow_maps", erhe::rendergraph::Rendergraph_node_key::shadow_maps);
 
-    reconfigure(graphics_device, resolution, light_count);
+    reconfigure(graphics_device, resolution, light_count, depth_bits);
 }
 
 Shadow_render_node::~Shadow_render_node()
 {
 }
 
-void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, const int resolution, const int light_count)
+void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, const int resolution, const int light_count, const int depth_bits)
 {
+    erhe::dataformat::Format depth_format =
+        (depth_bits == 32) ? erhe::dataformat::Format::format_d32_sfloat :
+        (depth_bits == 24) ? erhe::dataformat::Format::format_d24_unorm_s8_uint :
+        (depth_bits == 16) ? erhe::dataformat::Format::format_d16_unorm :
+                             erhe::dataformat::Format::format_d16_unorm;
+
     if (
         m_texture &&
         (m_texture->get_width() == resolution) &&
         (m_texture->get_height() == resolution) &&
-        (m_texture->get_array_layer_count() == std::max(1, light_count))
+        (m_texture->get_array_layer_count() == std::max(1, light_count)) &&
+        (m_texture->get_pixelformat() == depth_format)
     ) {
-        log_render->debug("Reconfigure shadow resolution = {}, light count = {} - match old settings, skip", resolution, light_count);
+        log_render->debug(
+            "Reconfigure shadow resolution = {}, light count = {}, format = {} - match old settings, skip",
+            resolution, light_count, erhe::dataformat::c_str(depth_format)
+        );
         return;
     }
     log_render->debug("Reconfigure shadow resolution = {}, light count = {}", resolution, light_count);
@@ -69,7 +81,7 @@ void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, co
             erhe::graphics::Texture_create_info {
                 .device            = graphics_device,
                 .type              = erhe::graphics::Texture_type::texture_2d,
-                .pixelformat       = erhe::dataformat::Format::format_d32_sfloat,
+                .pixelformat       = depth_format,
                 .width             = std::max(1, resolution),
                 .height            = std::max(1, resolution),
                 .depth             = 1,

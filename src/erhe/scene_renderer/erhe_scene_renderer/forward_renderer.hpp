@@ -65,7 +65,6 @@ public:
         const std::vector<erhe::renderer::Pipeline_pass*>                  passes;
         erhe::primitive::Primitive_mode                                    primitive_mode{erhe::primitive::Primitive_mode::polygon_fill};
         Primitive_interface_settings                                       primitive_settings{};
-        const erhe::graphics::Texture*                                     shadow_texture{nullptr};
         const erhe::math::Viewport&                                        viewport;
         const erhe::Item_filter                                            filter{};
         const erhe::graphics::Shader_stages*                               override_shader_stages{nullptr};

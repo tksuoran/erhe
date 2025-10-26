@@ -35,10 +35,6 @@ Light_interface::Light_interface(erhe::graphics::Device& graphics_device)
     , offsets{
         .shadow_texture_compare    = light_block.add_uvec2("shadow_texture_compare"   )->get_offset_in_parent(),
         .shadow_texture_no_compare = light_block.add_uvec2("shadow_texture_no_compare")->get_offset_in_parent(),
-        .shadow_bias_scale         = light_block.add_float("shadow_bias_scale"        )->get_offset_in_parent(),
-        .shadow_min_bias           = light_block.add_float("shadow_min_bias"          )->get_offset_in_parent(),
-        .shadow_max_bias           = light_block.add_float("shadow_max_bias"          )->get_offset_in_parent(),
-        .reserved_0                = light_block.add_float("reserved_0"               )->get_offset_in_parent(),
         .directional_light_count   = light_block.add_uint ("directional_light_count"  )->get_offset_in_parent(),
         .spot_light_count          = light_block.add_uint ("spot_light_count"         )->get_offset_in_parent(),
         .point_light_count         = light_block.add_uint ("point_light_count"        )->get_offset_in_parent(),
@@ -51,6 +47,7 @@ Light_interface::Light_interface(erhe::graphics::Device& graphics_device)
         .light = {
             .clip_from_world              = light_struct.add_mat4("clip_from_world"             )->get_offset_in_parent(),
             .texture_from_world           = light_struct.add_mat4("texture_from_world"          )->get_offset_in_parent(),
+            .world_from_texture           = light_struct.add_mat4("world_from_texture"          )->get_offset_in_parent(),
             .position_and_inner_spot_cos  = light_struct.add_vec4("position_and_inner_spot_cos" )->get_offset_in_parent(),
             .direction_and_outer_spot_cos = light_struct.add_vec4("direction_and_outer_spot_cos")->get_offset_in_parent(),
             .radiance_and_range           = light_struct.add_vec4("radiance_and_range"          )->get_offset_in_parent(),
@@ -63,8 +60,8 @@ Light_interface::Light_interface(erhe::graphics::Device& graphics_device)
     , shadow_sampler_compare{
         graphics_device,
         erhe::graphics::Sampler_create_info{
-            .min_filter        = erhe::graphics::Filter::linear,
-            .mag_filter        = erhe::graphics::Filter::linear,
+            .min_filter        = erhe::graphics::Filter::nearest,
+            .mag_filter        = erhe::graphics::Filter::nearest,
             .mipmap_mode       = erhe::graphics::Sampler_mipmap_mode::not_mipmapped,
             .compare_enable    = true,
             .compare_operation = erhe::graphics::Compare_operation::greater_or_equal,
@@ -77,7 +74,7 @@ Light_interface::Light_interface(erhe::graphics::Device& graphics_device)
     , shadow_sampler_no_compare{
         graphics_device,
         erhe::graphics::Sampler_create_info{
-            .min_filter     = erhe::graphics::Filter::linear,
+            .min_filter     = erhe::graphics::Filter::nearest,
             .mag_filter     = erhe::graphics::Filter::nearest,
             .mipmap_mode    = erhe::graphics::Sampler_mipmap_mode::not_mipmapped,
             .compare_enable = false,
@@ -111,10 +108,6 @@ Light_buffer::Light_buffer(erhe::graphics::Device& graphics_device, Light_interf
     }
 {
 }
-
-float Light_projections::s_shadow_bias_scale = 0.00025f;
-float Light_projections::s_shadow_min_bias   = 0.00006f;
-float Light_projections::s_shadow_max_bias   = 0.00237f;
 
 Light_projections::Light_projections()
 {
@@ -197,7 +190,6 @@ auto Light_buffer::update(
     uint32_t       spot_light_count       {0u};
     uint32_t       point_light_count      {0u};
     const uint32_t uint_zero              {0u};
-    const float    float_zero             {0.0f};
     const uint32_t uvec4_zero[4]          {0u, 0u, 0u, 0u};
 
     const erhe::graphics::Sampler* compare_sampler    = m_light_interface.get_sampler(true);
@@ -244,6 +236,7 @@ auto Light_buffer::update(
         }
 
         const mat4 texture_from_world   = light_projection_transforms->texture_from_world.get_matrix();
+        const mat4 world_from_texture   = light_projection_transforms->texture_from_world.get_inverse_matrix();
         const vec3 direction            = vec3{node->world_from_node() * vec4{0.0f, 0.0f, 1.0f, 0.0f}};
         const vec3 position             = vec3{light_projection_transforms->world_from_light_camera.get_matrix() * vec4{0.0f, 0.0f, 0.0f, 1.0f}};
         const vec4 radiance             = vec4{light->intensity * light->color, light->range};
@@ -262,6 +255,7 @@ auto Light_buffer::update(
         max_light_index = std::max(max_light_index, light_index);
         write(light_gpu_data, light_offset + offsets.light.clip_from_world,              as_span(light_projection_transforms->clip_from_world.get_matrix()));
         write(light_gpu_data, light_offset + offsets.light.texture_from_world,           as_span(texture_from_world));
+        write(light_gpu_data, light_offset + offsets.light.world_from_texture,           as_span(world_from_texture));
         write(light_gpu_data, light_offset + offsets.light.position_and_inner_spot_cos,  as_span(position_inner_spot));
         write(light_gpu_data, light_offset + offsets.light.direction_and_outer_spot_cos, as_span(direction_outer_spot));
         write(light_gpu_data, light_offset + offsets.light.radiance_and_range,           as_span(radiance));
@@ -278,18 +272,10 @@ auto Light_buffer::update(
 
     const glm::vec2 brdf_phi_incident_phi = (light_projections != nullptr) ? glm::vec2{light_projections->brdf_phi, light_projections->brdf_incident_phi} : glm::vec2{0.0f, 0.0f};
     const uint32_t  brdf_material         = (light_projections != nullptr) ? (light_projections->brdf_material ? light_projections->brdf_material->material_buffer_index : 0) : 0;
-    const float     shadow_bias_scale     = Light_projections::s_shadow_bias_scale;
-    const float     shadow_min_bias       = Light_projections::s_shadow_min_bias;
-    const float     shadow_max_bias       = Light_projections::s_shadow_max_bias;
 
     // Late write to begin of buffer to full in light counts
     write(light_gpu_data, common_offset + offsets.shadow_texture_compare,    as_span(shadow_map_texture_handle_compare));
     write(light_gpu_data, common_offset + offsets.shadow_texture_no_compare, as_span(shadow_map_texture_handle_no_compare));
-
-    write(light_gpu_data, common_offset + offsets.shadow_bias_scale,         as_span(shadow_bias_scale)      );
-    write(light_gpu_data, common_offset + offsets.shadow_min_bias,           as_span(shadow_min_bias)        );
-    write(light_gpu_data, common_offset + offsets.shadow_max_bias,           as_span(shadow_max_bias)        );
-    write(light_gpu_data, common_offset + offsets.reserved_0,                as_span(float_zero)             );
 
     write(light_gpu_data, common_offset + offsets.directional_light_count,   as_span(directional_light_count));
     write(light_gpu_data, common_offset + offsets.spot_light_count,          as_span(spot_light_count)       );

@@ -1,20 +1,23 @@
 [High]
 msaa_sample_count = 8
 name = 'High'
+shadow_depth_bits = 32
 shadow_enable = true
-shadow_light_count = 8
-shadow_resolution = 8192
+shadow_light_count = 32
+shadow_resolution = 4096
 
 [Low]
 msaa_sample_count = 2
 name = 'Low'
+shadow_depth_bits = 16
 shadow_enable = true
-shadow_light_count = 6
-shadow_resolution = 4096
+shadow_light_count = 8
+shadow_resolution = 2048
 
 [Medium]
 msaa_sample_count = 4
 name = 'Medium'
+shadow_depth_bits = 16
 shadow_enable = true
-shadow_light_count = 6
-shadow_resolution = 4096
+shadow_light_count = 16
+shadow_resolution = 2048

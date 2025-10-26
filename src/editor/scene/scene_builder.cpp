@@ -164,7 +164,7 @@ void Scene_builder::setup_cameras(
         vec3{0.0f, camera_elevation, camera_distance},
         vec3{0.0f, 0.25f, 0.0f}
     );
-    camera_a->projection()->z_far = 20.0f;
+    camera_a->projection()->z_far = 128.0f;
     //// camera_a->set_wireframe_color(glm::vec4{1.0f, 0.6f, 0.3f, 1.0f});
 
 #if defined(ERHE_ENABLE_SECOND_CAMERA)
@@ -580,13 +580,15 @@ void Scene_builder::make_brushes(App_settings& app_settings, Mesh_memory& mesh_m
     ERHE_PROFILE_FUNCTION();
 
     const auto& ini = erhe::configuration::get_ini_file_section(erhe::c_erhe_config_file_path, "scene");
-    float floor_size                  {40.0f};
+    float floor_size                  {1.0f};
+    float floor_height                {0.001f}; // NOTE: Jolt min height is 0.05
     bool  floor                       {true};
     bool  make_johnson_solid_brushes  {true};
     bool  make_platonic_solid_brushes_{true};
     bool  make_curved_brushes         {true};
-    ini.get("floor_size", floor_size);
-    ini.get("floor",      floor);
+    ini.get("floor_size",   floor_size);
+    ini.get("floor_height", floor_height);
+    ini.get("floor",        floor);
     ini.get("load_johnson_solids", floor);
     ini.get("make_johnson_solid_brushes",  make_johnson_solid_brushes);
     ini.get("make_platonic_solid_brushes", make_platonic_solid_brushes_);
@@ -595,7 +597,7 @@ void Scene_builder::make_brushes(App_settings& app_settings, Mesh_memory& mesh_m
     // Floor
     if (floor) {
         auto floor_box_shape = erhe::physics::ICollision_shape::create_box_shape_shared(
-            0.5f * vec3{floor_size, 1.0f, floor_size}
+            0.5f * vec3{floor_size, std::max(floor_height, 0.10f), floor_size}
         );
 
         // Otherwise it will be destructed when leave add_floor() scope
@@ -607,8 +609,7 @@ void Scene_builder::make_brushes(App_settings& app_settings, Mesh_memory& mesh_m
             ERHE_PROFILE_SCOPE("Floor brush");
 
             std::shared_ptr<erhe::geometry::Geometry> floor_geometry = std::make_shared<erhe::geometry::Geometry>("floor");
-
-            erhe::geometry::shapes::make_box(floor_geometry->get_mesh(), floor_size, 1.0f, floor_size);
+            erhe::geometry::shapes::make_box(floor_geometry->get_mesh(), floor_size, floor_height, floor_size);
 
             const uint64_t flags =
                 erhe::geometry::Geometry::process_flag_connect |
@@ -700,6 +701,7 @@ void Scene_builder::add_room()
     {
         std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{content_library.mutex};
 
+#if 1
         floor_material = material_library.make<erhe::primitive::Material>(
             erhe::primitive::Material_create_info{
                 .name = "Floor",
@@ -710,16 +712,30 @@ void Scene_builder::add_room()
                 }
             }
         );
+#else
+        floor_material = material_library.make<erhe::primitive::Material>(
+            erhe::primitive::Material_create_info{
+                .name = "Floor",
+                .data = {
+                    .base_color = glm::vec3{1.0f, 1.0f, 1.0f},
+                    .roughness  = glm::vec2{1.0f, 1.0f},
+                    .metallic   = 0.0f
+                }
+            }
+        );
+#endif
     }
 
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{m_scene_root->item_host_mutex};
 
     // Notably shadow cast is not enabled for floor
+    erhe::math::Aabb aabb = m_floor_brush->get_bounding_box();
+
     Instance_create_info floor_brush_instance_create_info{
         .node_flags      = Item_flags::visible | Item_flags::content | Item_flags::show_in_ui | Item_flags::lock_viewport_selection | Item_flags::lock_viewport_transform | Item_flags::expand,
-        .mesh_flags      = Item_flags::visible | Item_flags::content | Item_flags::opaque | Item_flags::id | Item_flags::show_in_ui | Item_flags::lock_viewport_selection | Item_flags::lock_viewport_transform,
+        .mesh_flags      = Item_flags::visible | Item_flags::content | Item_flags::opaque | Item_flags::id | Item_flags::show_in_ui | Item_flags::lock_viewport_selection | Item_flags::lock_viewport_transform | Item_flags::shadow_cast,
         .scene_root      = m_scene_root.get(),
-        .world_from_node = erhe::math::create_translation<float>(0.0f, -0.51f, 0.0f),
+        .world_from_node = erhe::math::create_translation<float>(0.0f, -aabb.max.y - 0.001f, 0.0f),
         .material        = floor_material,
         .scale           = 1.0f,
         .motion_mode     = erhe::physics::Motion_mode::e_static
@@ -1097,26 +1113,24 @@ void Scene_builder::setup_lights()
     const auto& layers = m_scene_root->layers();
     layers.light()->ambient_light = glm::vec4{0.04f, 0.04f, 0.04f, 0.0f};
 
-#if 0
-    make_directional_light(
-        "X",
-        vec3{1.0f, 0.0f, 0.0f},
-        vec3{1.0f, 0.0f, 0.0f},
-        2.0f
-    );
-    make_directional_light(
-        "Y",
-        vec3{0.0f, 1.0f, 0.0f},
-        vec3{0.0f, 1.0f, 0.0f},
-        2.0f
-    );
-    make_directional_light(
-        "Z",
-        vec3{0.0f, 0.0f, 1.0f},
-        vec3{0.0f, 0.0f, 1.0f},
-        2.0f
-    );
-#endif
+    //make_directional_light(
+    //    "X",
+    //    vec3{1.0f, 0.0f, 0.0f},
+    //    vec3{1.0f, 0.0f, 0.0f},
+    //    2.0f
+    //);
+    //make_directional_light(
+    //    "Y",
+    //    vec3{0.0f, 1.0f, 0.0f},
+    //    vec3{0.0f, 1.0f, 0.0f},
+    //    2.0f
+    //);
+    //make_directional_light(
+    //    "Z",
+    //    vec3{0.0f, 0.0f, 1.0f},
+    //    vec3{0.0f, 0.0f, 1.0f},
+    //    2.0f
+    //);
     //make_spot_light(
     //    "Spot",
     //    vec3{0.0f, 1.0f, 0.0f}, // position
@@ -1146,24 +1160,32 @@ void Scene_builder::setup_lights()
     ini.get("spot_light_radius",           spot_light_radius);
     ini.get("spot_light_height",           spot_light_height);
     ini.get("spot_light_count",            spot_light_count);
+    if (directional_light_count == 1) {
+        make_directional_light(
+            "X",
+            vec3{1.0f, 1.0f, 0.0f}, // pos
+            vec3{1.0f, 1.0f, 1.0f}, // color
+            2.0f // intensity
+        );
+    } else {
+        for (int i = 0; i < directional_light_count; ++i) {
+            const float rel = static_cast<float>(i) / static_cast<float>(directional_light_count);
+            const float R   = directional_light_radius;
+            const float h   = rel * 360.0f;
+            const float s   = (directional_light_count > 1) ? 0.5f : 0.0f;
+            const float v   = 1.0f;
+            float r, g, b;
 
-    for (int i = 0; i < directional_light_count; ++i) {
-        const float rel = static_cast<float>(i) / static_cast<float>(directional_light_count);
-        const float R   = directional_light_radius;
-        const float h   = rel * 360.0f;
-        const float s   = (directional_light_count > 1) ? 0.5f : 0.0f;
-        const float v   = 1.0f;
-        float r, g, b;
+            erhe::math::hsv_to_rgb(h, s, v, r, g, b);
 
-        erhe::math::hsv_to_rgb(h, s, v, r, g, b);
-
-        const vec3        color     = vec3{r, g, b};
-        const float       intensity = directional_light_intensity / static_cast<float>(directional_light_count);
-        const std::string name      = fmt::format("Directional light {}", i);
-        const float       x_pos     = R * std::sin(rel * glm::two_pi<float>() + 1.0f / 7.0f);
-        const float       z_pos     = R * std::cos(rel * glm::two_pi<float>() + 1.0f / 7.0f);
-        const vec3        position  = vec3{x_pos, directional_light_height, z_pos};
-        make_directional_light(name, position, color, intensity);
+            const vec3        color     = vec3{r, g, b};
+            const float       intensity = directional_light_intensity / static_cast<float>(directional_light_count);
+            const std::string name      = fmt::format("Directional light {}", i);
+            const float       x_pos     = R * std::sin(rel * glm::two_pi<float>() + 1.0f / 7.0f);
+            const float       z_pos     = R * std::cos(rel * glm::two_pi<float>() + 1.0f / 7.0f);
+            const vec3        position  = vec3{x_pos, directional_light_height, z_pos};
+            make_directional_light(name, position, color, intensity);
+        }
     }
 
     for (int i = 0; i < spot_light_count; ++i) {

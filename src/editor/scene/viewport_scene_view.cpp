@@ -165,6 +165,7 @@ void Viewport_scene_view::execute_rendergraph_node()
     );
 
     m_context.app_rendering ->render_viewport_main(context);
+    m_context.app_rendering ->render_viewport_renderables(context); // This time with render encoder set
     m_context.debug_renderer->render(encoder, context.viewport);
     m_context.debug_renderer->end_frame();
     m_context.text_renderer ->render(encoder, context.viewport);

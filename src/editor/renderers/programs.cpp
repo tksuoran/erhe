@@ -129,6 +129,8 @@ Programs::Programs(erhe::graphics::Device& graphics_device)
     , debug_roughness         {graphics_device, "debug_roughness-not_loaded"}
     , debug_occlusion         {graphics_device, "debug_occlusion-not_loaded"}
     , debug_emissive          {graphics_device, "debug_emissive-not_loaded"}
+    , debug_shadowmap_texels  {graphics_device, "debug_shadowmap_texels-not_loaded"}
+    , debug_shadow            {graphics_device, "debug_shadow"}
     , debug_misc              {graphics_device, "debug_misc-not_loaded"}
 {
 }
@@ -200,6 +202,8 @@ void Programs::load_programs(
     add_shader(debug_roughness         , CI{ .name = "standard_debug", .defines = {{"ERHE_DEBUG_ROUGHNESS",          "1"}}, .default_uniform_block = &default_uniform_block } );
     add_shader(debug_occlusion         , CI{ .name = "standard_debug", .defines = {{"ERHE_DEBUG_OCCLUSION",          "1"}}, .default_uniform_block = &default_uniform_block } );
     add_shader(debug_emissive          , CI{ .name = "standard_debug", .defines = {{"ERHE_DEBUG_EMISSIVE",           "1"}}, .default_uniform_block = &default_uniform_block } );
+    add_shader(debug_shadowmap_texels  , CI{ .name = "standard_debug", .defines = {{"ERHE_DEBUG_SHADOWMAP_TEXELS",   "1"}}, .default_uniform_block = &default_uniform_block } );
+    add_shader(debug_shadow            , CI{ .name = "shadow_debug",   .default_uniform_block = &default_uniform_block } );
     add_shader(debug_misc              , CI{ .name = "standard_debug", .defines = {{"ERHE_DEBUG_MISC",               "1"}}, .default_uniform_block = &default_uniform_block } );
 
     // Compile shaders
@@ -271,6 +275,7 @@ auto Programs::get_variant_shader_stages(Shader_stages_variant variant) const ->
         case Shader_stages_variant::debug_roughness:          return &debug_roughness.shader_stages;
         case Shader_stages_variant::debug_occlusion:          return &debug_occlusion.shader_stages;
         case Shader_stages_variant::debug_emissive:           return &debug_emissive.shader_stages;
+        case Shader_stages_variant::debug_shadowmap_texels:   return &debug_shadowmap_texels.shader_stages;
         case Shader_stages_variant::debug_misc:               return &debug_misc.shader_stages;
         default:                                              return &error.shader_stages;
     }

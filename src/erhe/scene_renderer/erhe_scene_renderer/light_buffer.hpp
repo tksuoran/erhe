@@ -27,6 +27,7 @@ class Light_struct
 public:
     std::size_t clip_from_world;                // mat4
     std::size_t texture_from_world;             // mat4
+    std::size_t world_from_texture;             // mat4
     std::size_t position_and_inner_spot_cos;    // vec4 (vec3, float)
     std::size_t direction_and_outer_spot_cos;   // vec4 (vec3, float)
     std::size_t radiance_and_range;             // vec4 (float, float, padding, padding )
@@ -37,11 +38,6 @@ class Light_block
 public:
     std::size_t  shadow_texture_compare;    // uvec2
     std::size_t  shadow_texture_no_compare; // uvec2
-
-    std::size_t  shadow_bias_scale;         // float
-    std::size_t  shadow_min_bias;           // float
-    std::size_t  shadow_max_bias;           // float
-    std::size_t  reserved_0;                // float
 
     std::size_t  directional_light_count;   // uint
     std::size_t  spot_light_count;          // uint
@@ -106,10 +102,6 @@ public:
     float                                                 brdf_phi         {0.0f};
     float                                                 brdf_incident_phi{0.0f};
     std::shared_ptr<erhe::primitive::Material>            brdf_material    {};
-
-    static float                                          s_shadow_bias_scale;
-    static float                                          s_shadow_min_bias;
-    static float                                          s_shadow_max_bias;
 };
 
 class Light_buffer
