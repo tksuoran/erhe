@@ -2,7 +2,7 @@
 #define ERHE_LIGHT_GLSL
 
 #include "erhe_texture.glsl"
-#extension GL_ARB_derivative_control : enable
+//#extension GL_ARB_derivative_control : enable
 
 float get_range_attenuation(float range, float distance) {
     if (range <= 0.0) {
