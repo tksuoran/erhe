@@ -94,6 +94,7 @@ public:
     void render_id                  (const Render_context& context);
     void begin_frame                ();
     void end_frame                  ();
+    void set_grid_visibility        (bool visible);
 
     void add   (Renderable* renderable);
     void remove(Renderable* renderable);
@@ -126,8 +127,9 @@ private:
     // Commands
     Capture_frame_command     m_capture_frame_command;
 
-    Pipeline_renderpasses     m_pipeline_passes;
-    Composer                  m_composer;
+    Pipeline_renderpasses             m_pipeline_passes;
+    Composer                          m_composer;
+    std::shared_ptr<Composition_pass> m_grid_composition_pass;
 
     erhe::graphics::Gpu_timer m_content_timer;
     erhe::graphics::Gpu_timer m_selection_timer;

@@ -1617,6 +1617,7 @@ void Debug_visualizations::imgui()
     p.add_entry("Physics",     [this](){ make_combo("##", m_physics_visualization  ); });
     p.add_entry("Raytrace",    [this](){ make_combo("##", m_raytrace_visualization ); });
 
+    p.add_entry("World Axes",   [this](){ ImGui::Checkbox   ("##", &m_world_axes); });
     p.add_entry("Shadow Debug", [this](){ ImGui::Checkbox   ("##", &m_shadow_debug); });
 
     p.push_group("Selection",  ImGuiTreeNodeFlags_None); //ImGuiTreeNodeFlags_DefaultOpen);

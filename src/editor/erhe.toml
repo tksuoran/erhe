@@ -122,7 +122,7 @@ show_rotate    = false
 [grid]
 snap_enabled = true
 # visible      = true
-visible      = false # TODO this needs separate value for Desktop vs OpenXR
+visible      = true # TODO this needs separate value for Desktop vs OpenXR
 major_color  = [ 0.0, 0.0, 0.0 ]
 minor_color  = [ 0.0, 0.0, 0.0 ]
 major_width  = 4.0

@@ -1,6 +1,7 @@
 #include "grid/grid.hpp"
 
 #include "app_context.hpp"
+#include "app_rendering.hpp"
 #include "items.hpp"
 #include "renderers/render_context.hpp"
 #include "tools/selection_tool.hpp"
@@ -100,6 +101,11 @@ auto Grid::grid_from_world() const -> glm::mat4
 
 void Grid::render(const Render_context& context)
 {
+    // TODO Handling visibility here may add latency, but I guess that is okay.
+    //      If Gr\id overrided handle_flag_bits_update(), it could handle visibility
+    //      changes more directly, but it would then need access to App_rendering.
+    context.app_context.app_rendering->set_grid_visibility(is_visible());
+
     if (!is_visible()) {
         return;
     }

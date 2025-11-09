@@ -134,7 +134,7 @@ private:
 
     float     m_gap                              {0.003f};
     bool      m_tool_hide                        {false};
-    bool      m_world_axes                       {true};
+    bool      m_world_axes                       {false};
     bool      m_shadow_debug                     {false};
     bool      m_selection                        {true};
     bool      m_selection_bounding_points_visible{false};

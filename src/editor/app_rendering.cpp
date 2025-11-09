@@ -212,17 +212,17 @@ App_rendering::App_rendering(
     sky->allow_shader_stages_override = false;
 
     // Infinite plane with 4 triangles / 12 indices - https://stackoverflow.com/questions/12965161/rendering-infinitely-large-plane
-    auto grid = make_composition_pass("Grid");
-    grid->mesh_layers           = {};
-    grid->non_mesh_vertex_count = 12;
-    grid->passes                = { &m_pipeline_passes.grid };
-    grid->primitive_mode        = erhe::primitive::Primitive_mode::polygon_fill;
-    grid->filter = erhe::Item_filter{
+    m_grid_composition_pass = make_composition_pass("Grid");
+    m_grid_composition_pass->mesh_layers           = {};
+    m_grid_composition_pass->non_mesh_vertex_count = 12;
+    m_grid_composition_pass->passes                = { &m_pipeline_passes.grid };
+    m_grid_composition_pass->primitive_mode        = erhe::primitive::Primitive_mode::polygon_fill;
+    m_grid_composition_pass->filter = erhe::Item_filter{
         .require_all_bits_set         = 0,
         .require_at_least_one_bit_set = 0,
         .require_all_bits_clear       = 0
     };
-    grid->allow_shader_stages_override = false;
+    m_grid_composition_pass->allow_shader_stages_override = false;
 
     // Translucent
     auto translucent_fill = make_composition_pass("Content fill translucent");
@@ -798,6 +798,12 @@ void App_rendering::request_renderdoc_capture()
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     m_context.headset_view->request_renderdoc_capture();
 #endif
+}
+
+void App_rendering::set_grid_visibility(bool visible)
+{
+    // TODO Consider using Item visibility flag and removing enabled
+    m_grid_composition_pass->enabled = visible;
 }
 
 void App_rendering::end_frame()
