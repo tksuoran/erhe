@@ -83,19 +83,19 @@ void Material_preview::make_preview_scene(Mesh_memory& mesh_memory)
     }
 
     using Item_flags = erhe::Item_flags;
-    m_mesh->layer_id = m_scene_root->layers().content()->id;
+    m_mesh->layer_id = m_scene_root_shared->layers().content()->id;
     m_mesh->enable_flag_bits(Item_flags::content | Item_flags::visible | Item_flags::opaque);
     m_node->attach(m_mesh);
     m_node->enable_flag_bits(Item_flags::content | Item_flags::visible);
 
-    const auto paremt = m_scene_root->get_hosted_scene()->get_root_node();
+    const auto paremt = m_scene_root_shared->get_hosted_scene()->get_root_node();
     m_node->set_parent(paremt);
 
     m_key_light_node = std::make_shared<erhe::scene::Node>("Key Light Node");
     m_key_light      = std::make_shared<erhe::scene::Light>("Key Light");
     m_key_light_node->enable_flag_bits(erhe::Item_flags::content);
     m_key_light->enable_flag_bits(erhe::Item_flags::content);
-    m_key_light->layer_id = m_scene_root->layers().light()->id;
+    m_key_light->layer_id = m_scene_root_shared->layers().light()->id;
     m_key_light_node->attach(m_key_light);
     m_key_light_node->set_parent(paremt);
     m_key_light_node->set_parent_from_node(
@@ -154,7 +154,7 @@ void Material_preview::render_preview(const std::shared_ptr<erhe::primitive::Mat
 
     const erhe::math::Viewport viewport{0, 0, m_width, m_height};
 
-    const auto& layers = m_scene_root->layers();
+    const auto& layers = m_scene_root_shared->layers();
 
     m_light_projections = erhe::scene_renderer::Light_projections{
         layers.light()->lights,

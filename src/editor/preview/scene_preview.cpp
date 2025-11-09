@@ -46,7 +46,7 @@ Scene_preview::Scene_preview(
 
     m_content_library = std::make_shared<Content_library>();
 
-    m_scene_root = std::make_shared<Scene_root>(
+    m_scene_root_shared = std::make_shared<Scene_root>(
         nullptr, // No Imgui_renderer
         nullptr, // No Imgui_windows
         scene_message_bus,
@@ -57,7 +57,12 @@ Scene_preview::Scene_preview(
         "Material preview scene"
     );
 
-    m_scene_root->get_scene().disable_flag_bits(erhe::Item_flags::show_in_ui);
+    // I know, this is a bit dirty:
+    // - Scene_view has std::weak_ptr<Scene_root> m_scene_root
+    // - Scene_preview (derived from Scene_view) has std::shared_ptr<Scene_root> m_scene_root_shared
+    set_scene_root(m_scene_root_shared);
+
+    m_scene_root_shared->get_scene().disable_flag_bits(erhe::Item_flags::show_in_ui);
 
     // For now, shadow texture is dummy 1 by 1 pixel only cleared
     m_shadow_texture = std::make_shared<erhe::graphics::Texture>(
