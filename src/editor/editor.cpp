@@ -80,9 +80,11 @@
 #endif
 #include "erhe_file/file_log.hpp"
 #include "erhe_geometry/geometry_log.hpp"
-#include "erhe_gl/gl_helpers.hpp"
-#include "erhe_gl/gl_log.hpp"
-#include "erhe_gl/wrapper_functions.hpp"
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+# include "erhe_gl/gl_helpers.hpp"
+# include "erhe_gl/gl_log.hpp"
+# include "erhe_gl/wrapper_functions.hpp"
+#endif
 #include "erhe_gltf/gltf_log.hpp"
 #include "erhe_graph/graph_log.hpp"
 #include "erhe_graphics/buffer_transfer_queue.hpp"
@@ -1498,8 +1500,10 @@ void run_editor()
 
     {
         ERHE_PROFILE_SCOPE("initialize logging");
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
         gl::initialize_logging();
         gl_helpers::initialize_logging();
+#endif
         erhe::commands::initialize_logging();
         erhe::dataformat::initialize_logging();
         erhe::file::initialize_logging();

@@ -32,12 +32,15 @@ endif()
 
 target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
+if (${ERHE_GRAPHICS_LIBRARY} STREQUAL "opengl")
+    target_link_libraries(${_target} PRIVATE erhe::gl)
+endif ()
+
 target_link_libraries(
     ${_target}
     PUBLIC
         erhe::time
     PRIVATE
-        erhe::gl
         erhe::log
         erhe::profile
         erhe::verify

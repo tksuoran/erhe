@@ -85,6 +85,11 @@ erhe_target_sources_grouped(
     res/shaders/tile.vert
     res/shaders/tile.frag
 )
+
+if (${ERHE_GRAPHICS_LIBRARY} STREQUAL "opengl")
+    target_link_libraries(${_target} PRIVATE erhe::gl)
+endif ()
+
 target_link_libraries(
     ${_target}
     PRIVATE
@@ -92,7 +97,6 @@ target_link_libraries(
     erhe::commands
     erhe::file
     erhe::geometry
-    erhe::gl
     erhe::graphics
     erhe::imgui
     erhe::log

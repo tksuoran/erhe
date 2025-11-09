@@ -42,7 +42,8 @@ set_option(ERHE_AUDIO_LIBRARY              "Audio library. Either miniaudio or n
 set_option(ERHE_FONT_RASTERIZATION_LIBRARY "Font rasterization library. Either freetype or none"                        "freetype" "freetype;none")
 set_option(ERHE_GLTF_LIBRARY               "GLTF library. Either fastgltf or none"                                      "fastgltf" "fastgltf;none")
 set_option(ERHE_GUI_LIBRARY                "GUI library. Either imgui or none"                                          "imgui"    "imgui;none")
-set_option(ERHE_PHYSICS_LIBRARY            "Physics library to use with erhe. Either  or none"                          "jolt"     "jolt;none")
+set_option(ERHE_GRAPHICS_LIBRARY           "Graphics library to use with erhe. Either opengl or vulkan"                 "opengl"   "opengl;vulkan")
+set_option(ERHE_PHYSICS_LIBRARY            "Physics library to use with erhe. Either jolt or none"                      "jolt"     "jolt;none")
 set_option(ERHE_PROFILE_LIBRARY            "Profile library to use with erhe. Either nvtx, superluminal, tracy or none" "none"     "nvtx;superluminal;tracy;none")
 set_option(ERHE_RAYTRACE_LIBRARY           "Raytrace library to use with erhe. Either embree, bvh or none"              "bvh"      "embree;bvh;none")
 set_option(ERHE_SVG_LIBRARY                "SVG loading library. Either plutosvg or none"                               "plutosvg" "plutosvg;none")
@@ -204,6 +205,14 @@ if (ERHE_SPIRV)
                          "ENABLE_PCH ${ERHE_USE_PRECOMPILED_HEADERS}"
     )
     add_definitions(-DERHE_SPIRV)
+endif ()
+
+if (${ERHE_GRAPHICS_LIBRARY} STREQUAL "opengl")
+    message(STATUS "Erhe configured to use OpenGL as graphics API.")
+    add_definitions(-DERHE_GRAPHICS_LIBRARY_OPENGL)
+elseif (${ERHE_GRAPHICS_LIBRARY} STREQUAL "vulkan")
+    message(STATUS "Erhe configured to use vulkan as graphics API.")
+    add_definitions(-DERHE_GRAPHICS_LIBRARY_VULKAN)
 endif ()
 
 CPMAddPackage(

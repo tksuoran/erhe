@@ -6,7 +6,9 @@
 #include "programs.hpp"
 
 #include "erhe_dataformat/dataformat_log.hpp"
-#include "erhe_gl/gl_log.hpp"
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+# include "erhe_gl/gl_log.hpp"
+#endif
 #include "erhe_gltf/gltf.hpp"
 #include "erhe_gltf/gltf_log.hpp"
 #include "erhe_gltf/image_transfer.hpp"
@@ -391,7 +393,9 @@ void run_example()
     erhe::log::initialize_log_sinks();
 
     example::initialize_logging();
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
     gl::initialize_logging();
+#endif
     erhe::dataformat::initialize_logging();
     erhe::gltf::initialize_logging();
     erhe::graphics::initialize_logging();

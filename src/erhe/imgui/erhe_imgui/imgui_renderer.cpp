@@ -5,8 +5,10 @@
 #include "erhe_imgui/imgui_host.hpp"
 
 // For user clip enable/disable
-#include "erhe_gl/wrapper_enums.hpp"
-#include "erhe_gl/wrapper_functions.hpp"
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+# include "erhe_gl/wrapper_enums.hpp"
+# include "erhe_gl/wrapper_functions.hpp"
+#endif
 
 #include "erhe_graphics/blit_command_encoder.hpp"
 #include "erhe_graphics/buffer.hpp"

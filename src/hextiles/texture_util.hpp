@@ -1,7 +1,6 @@
 #pragma once
 
 #include "erhe_graphics/image_loader.hpp"
-#include "erhe_gl/wrapper_enums.hpp"
 
 #include <glm/glm.hpp>
 

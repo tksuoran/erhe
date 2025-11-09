@@ -371,6 +371,10 @@ else ()
     )
 endif ()
 
+if (${ERHE_GRAPHICS_LIBRARY} STREQUAL "opengl")
+    target_link_libraries(${_target} PRIVATE erhe::gl)
+endif ()
+
 target_link_libraries(
     ${_target}
     PRIVATE
@@ -382,7 +386,6 @@ target_link_libraries(
     erhe::file
     erhe::geometry
     erhe::geometry_renderer
-    erhe::gl
     erhe::gltf
     erhe::graph
     erhe::graphics

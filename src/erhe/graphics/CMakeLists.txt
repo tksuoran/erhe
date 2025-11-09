@@ -120,6 +120,91 @@ erhe_target_sources_grouped(
     erhe_graphics/gl/gl_vertex_input_state.hpp
 )
 
+if (${ERHE_GRAPHICS_LIBRARY} STREQUAL "opengl")
+    erhe_target_sources_grouped(
+        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+        erhe_graphics/gl/gl_blit_command_encoder.cpp
+        erhe_graphics/gl/gl_blit_command_encoder.hpp
+        erhe_graphics/gl/gl_buffer.cpp
+        erhe_graphics/gl/gl_buffer.hpp
+        erhe_graphics/gl/gl_command_encoder.cpp
+        erhe_graphics/gl/gl_command_encoder.hpp
+        erhe_graphics/gl/gl_compute_command_encoder.cpp
+        erhe_graphics/gl/gl_compute_command_encoder.hpp
+        erhe_graphics/gl/gl_context_provider.cpp
+        erhe_graphics/gl/gl_context_provider.hpp
+        erhe_graphics/gl/gl_debug.cpp
+        erhe_graphics/gl/gl_debug.hpp
+        erhe_graphics/gl/gl_device.cpp
+        erhe_graphics/gl/gl_device.hpp
+        erhe_graphics/gl/gl_helpers.cpp
+        erhe_graphics/gl/gl_helpers.hpp
+        erhe_graphics/gl/gl_objects.cpp
+        erhe_graphics/gl/gl_objects.hpp
+        erhe_graphics/gl/gl_gpu_timer.cpp
+        erhe_graphics/gl/gl_gpu_timer.hpp
+        erhe_graphics/gl/gl_state_tracker.cpp
+        erhe_graphics/gl/gl_state_tracker.hpp
+        erhe_graphics/gl/gl_render_command_encoder.cpp
+        erhe_graphics/gl/gl_render_command_encoder.hpp
+        erhe_graphics/gl/gl_render_pass.cpp
+        erhe_graphics/gl/gl_render_pass.hpp
+        #erhe_graphics/gl/gl_renderbuffer.cpp
+        #erhe_graphics/gl/gl_renderbuffer.hpp
+        erhe_graphics/gl/gl_ring_buffer.cpp
+        erhe_graphics/gl/gl_ring_buffer.hpp
+        erhe_graphics/gl/gl_sampler.cpp
+        erhe_graphics/gl/gl_sampler.hpp
+        erhe_graphics/gl/gl_shader_stages.cpp
+        erhe_graphics/gl/gl_shader_stages.hpp
+        erhe_graphics/gl/gl_shader_stages_prototype.cpp
+        erhe_graphics/gl/gl_texture.cpp
+        erhe_graphics/gl/gl_texture.hpp
+        erhe_graphics/gl/gl_texture_heap.cpp
+        erhe_graphics/gl/gl_texture_heap.hpp
+        erhe_graphics/gl/gl_vertex_input_state.cpp
+        erhe_graphics/gl/gl_vertex_input_state.hpp
+    )
+    target_link_libraries(${_target} PRIVATE erhe::gl)
+
+endif ()
+if (${ERHE_GRAPHICS_LIBRARY} STREQUAL "vulkan")
+    erhe_target_sources_grouped(
+        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+        erhe_graphics/vulkan/vulkan_blit_command_encoder.cpp
+        erhe_graphics/vulkan/vulkan_blit_command_encoder.hpp
+        erhe_graphics/vulkan/vulkan_buffer.cpp
+        erhe_graphics/vulkan/vulkan_buffer.hpp
+        erhe_graphics/vulkan/vulkan_command_encoder.cpp
+        erhe_graphics/vulkan/vulkan_command_encoder.hpp
+        erhe_graphics/vulkan/vulkan_compute_command_encoder.cpp
+        erhe_graphics/vulkan/vulkan_compute_command_encoder.hpp
+        erhe_graphics/vulkan/vulkan_debug.cpp
+        erhe_graphics/vulkan/vulkan_debug.hpp
+        erhe_graphics/vulkan/vulkan_device.cpp
+        erhe_graphics/vulkan/vulkan_device.hpp
+        erhe_graphics/vulkan/vulkan_helpers.cpp
+        erhe_graphics/vulkan/vulkan_helpers.hpp
+        erhe_graphics/vulkan/vulkan_gpu_timer.cpp
+        erhe_graphics/vulkan/vulkan_gpu_timer.hpp
+        erhe_graphics/vulkan/vulkan_render_command_encoder.cpp
+        erhe_graphics/vulkan/vulkan_render_command_encoder.hpp
+        erhe_graphics/vulkan/vulkan_render_pass.cpp
+        erhe_graphics/vulkan/vulkan_render_pass.hpp
+        erhe_graphics/vulkan/vulkan_ring_buffer.cpp
+        erhe_graphics/vulkan/vulkan_ring_buffer.hpp
+        erhe_graphics/vulkan/vulkan_sampler.cpp
+        erhe_graphics/vulkan/vulkan_sampler.hpp
+        erhe_graphics/vulkan/vulkan_shader_stages.cpp
+        erhe_graphics/vulkan/vulkan_shader_stages.hpp
+        erhe_graphics/vulkan/vulkan_shader_stages_prototype.cpp
+        erhe_graphics/vulkan/vulkan_texture.cpp
+        erhe_graphics/vulkan/vulkan_texture.hpp
+        erhe_graphics/vulkan/vulkan_texture_heap.cpp
+        erhe_graphics/vulkan/vulkan_texture_heap.hpp
+    )
+endif ()
+
 if (ERHE_SPIRV)
     erhe_target_sources_grouped(
         ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
@@ -148,7 +233,6 @@ target_link_libraries(${_target}
     PRIVATE
         erhe::defer
         erhe::file
-        erhe::gl
         erhe::log
         erhe::profile
         erhe::utility

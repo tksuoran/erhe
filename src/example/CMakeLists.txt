@@ -21,6 +21,10 @@ erhe_target_sources_grouped(
     erhe.toml
     logging.toml
 )
+if (${ERHE_GRAPHICS_LIBRARY} STREQUAL "opengl")
+    target_link_libraries(${_target} PRIVATE erhe::gl)
+endif ()
+
 target_link_libraries(
     ${_target}
     PRIVATE
@@ -28,7 +32,6 @@ target_link_libraries(
     erhe::utility
     erhe::dataformat
     erhe::file
-    erhe::gl
     erhe::gltf
     erhe::graphics
     erhe::graphics_buffer_sink

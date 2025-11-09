@@ -52,6 +52,11 @@ erhe_target_sources_grouped(
 
 target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
+# TODO Get rid of this dependency - for user clip enable/disable
+if (${ERHE_GRAPHICS_LIBRARY} STREQUAL "opengl")
+    target_link_libraries(${_target} PRIVATE erhe::gl)
+endif ()
+
 target_link_libraries(${_target}
     PUBLIC
         fmt::fmt
