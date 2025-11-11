@@ -1,7 +1,6 @@
 #pragma once
 
 #include "erhe_graphics/texture.hpp"
-#include "erhe_graphics/gl/gl_objects.hpp"
 #include "erhe_verify/verify.hpp"
 
 namespace erhe::graphics {
@@ -59,6 +58,7 @@ class Texture_impl_hash
 public:
     auto operator()(const Texture_impl& texture) const noexcept -> size_t
     {
+        static_cast<void>(texture);
         return 0;
     }
 };

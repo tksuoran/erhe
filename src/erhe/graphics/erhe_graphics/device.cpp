@@ -5,7 +5,14 @@
 #include "erhe_graphics/blit_command_encoder.hpp"
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/compute_command_encoder.hpp"
-#include "erhe_graphics/gl/gl_device.hpp"
+
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+# include "erhe_graphics/gl/gl_device.hpp"
+#endif
+#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+# include "erhe_graphics/vulkan/vulkan_device.hpp"
+#endif
+
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/render_pass.hpp"

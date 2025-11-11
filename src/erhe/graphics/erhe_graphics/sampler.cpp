@@ -1,5 +1,12 @@
 #include "erhe_graphics/sampler.hpp"
-#include "erhe_graphics/gl/gl_sampler.hpp"
+
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+# include "erhe_graphics/gl/gl_sampler.hpp"
+#endif
+#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+# include "erhe_graphics/vulkan/vulkan_sampler.hpp"
+#endif
+
 #include "erhe_graphics/device.hpp"
 
 namespace erhe::graphics {

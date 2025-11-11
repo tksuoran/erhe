@@ -1,5 +1,11 @@
 #include "erhe_graphics/gpu_timer.hpp"
-#include "erhe_graphics/gl/gl_gpu_timer.hpp"
+
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+# include "erhe_graphics/gl/gl_gpu_timer.hpp"
+#endif
+#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+# include "erhe_graphics/vulkan/vulkan_gpu_timer.hpp"
+#endif
 
 namespace erhe::graphics {
 

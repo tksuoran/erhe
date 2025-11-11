@@ -150,7 +150,9 @@ public:
 
             tick();
             m_graphics_device.end_of_frame();
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
             m_window.swap_buffers();
+#endif // TODO
         }
     }
 

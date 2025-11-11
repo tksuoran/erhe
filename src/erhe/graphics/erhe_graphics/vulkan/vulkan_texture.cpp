@@ -49,6 +49,7 @@ Texture_impl::Texture_impl(Device& device, const Create_info& create_info)
     , m_buffer                {create_info.buffer}
     , m_debug_label           {create_info.debug_label}
 {
+    static_cast<void>(device);
 }
 
 auto Texture_impl::is_sparse() const -> bool
@@ -125,6 +126,8 @@ auto Texture_impl::get_sample_count() const -> int
 
 auto operator==(const Texture_impl& lhs, const Texture_impl& rhs) noexcept -> bool
 {
+    static_cast<void>(rhs);
+    static_cast<void>(lhs);
     return false;
 }
 

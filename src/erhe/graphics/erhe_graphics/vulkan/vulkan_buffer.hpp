@@ -56,7 +56,6 @@ public:
     friend class Texture;
 
 private:
-    std::string m_debug_label        {};
     //VkBuffer  m_vulkan_buffer;
 };
 

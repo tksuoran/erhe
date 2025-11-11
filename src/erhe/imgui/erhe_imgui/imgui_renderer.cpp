@@ -904,10 +904,12 @@ void Imgui_renderer::render_draw_data(erhe::graphics::Render_command_encoder& re
     using erhe::graphics::write;
     constexpr erhe::graphics::Ring_buffer_usage usage{erhe::graphics::Ring_buffer_usage::CPU_write};
 
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
     gl::enable(gl::Enable_cap::clip_distance0);
     gl::enable(gl::Enable_cap::clip_distance1);
     gl::enable(gl::Enable_cap::clip_distance2);
     gl::enable(gl::Enable_cap::clip_distance3);
+#endif // TODO
 
     // This binds vertex input states (VAO) and shader stages (shader program)
     // and most other state
@@ -1157,10 +1159,12 @@ void Imgui_renderer::render_draw_data(erhe::graphics::Render_command_encoder& re
         } // outer loop going throught batches of commands
     } // for all cmd lists
 
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
     gl::disable(gl::Enable_cap::clip_distance0);
     gl::disable(gl::Enable_cap::clip_distance1);
     gl::disable(gl::Enable_cap::clip_distance2);
     gl::disable(gl::Enable_cap::clip_distance3);
+#endif // TODO
 
     texture_heap.unbind();
 

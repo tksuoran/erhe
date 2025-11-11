@@ -1,7 +1,11 @@
 #include "erhe_graphics/fragment_outputs.hpp"
-#include "erhe_gl/command_info.hpp"
-#include "erhe_gl/enum_string_functions.hpp"
-#include "erhe_gl/wrapper_enums.hpp"
+
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+# include "erhe_gl/command_info.hpp"
+# include "erhe_gl/enum_string_functions.hpp"
+# include "erhe_gl/wrapper_enums.hpp"
+#endif
+
 #include "erhe_graphics/glsl_file_loader.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/device.hpp"
@@ -169,6 +173,7 @@ auto Shader_stages_create_info::final_source(
 
     sb << "#define ERHE_GLSL_VERSION " << graphics_device.get_info().glsl_version << "\n";
 
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
     if (graphics_device.get_info().gl_version < 430) {
         ERHE_VERIFY(gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shader_storage_buffer_object));
         sb << "#extension GL_ARB_shader_storage_buffer_object : enable\n";
@@ -192,6 +197,7 @@ auto Shader_stages_create_info::final_source(
         }
     }
     sb << "\n";
+#endif
 
     if (shader.type == Shader_type::vertex_shader) {
         sb << attributes_source();

@@ -313,6 +313,7 @@ public:
 
         m_imgui_renderer->next_frame();
         m_app_rendering->end_frame();
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
         if (!m_app_context.OpenXR) {
             gl::bind_framebuffer(gl::Framebuffer_target::framebuffer, 0);
             if (m_app_context.use_sleep) {
@@ -333,6 +334,7 @@ public:
                 m_context_window->swap_buffers();
             }
         }
+#endif // TODO
         m_frame_log_window->on_frame_end();
     }
 
@@ -1020,11 +1022,15 @@ public:
             log_startup->error("exception: {}", e.what());
         }
 
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
         m_context_window->make_current();
+#endif
         m_graphics_device->on_thread_enter();
 
         ERHE_PROFILE_FUNCTION();
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
         ERHE_PROFILE_GPU_CONTEXT
+#endif
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
         if (m_app_context.OpenXR) {
@@ -1076,8 +1082,10 @@ public:
         // Notify ImGui renderer about current font settings
         m_imgui_renderer->on_font_config_changed(m_app_settings->imgui);
 
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
         gl::clip_control(gl::Clip_control_origin::lower_left, gl::Clip_control_depth::zero_to_one);
         gl::enable      (gl::Enable_cap::framebuffer_srgb);
+#endif
 
         const std::shared_ptr<erhe::imgui::Window_imgui_host>& window_imgui_host = m_imgui_windows->get_window_imgui_host();
         if (!m_app_context.OpenXR) {
@@ -1326,7 +1334,9 @@ public:
             }
             tick();
 
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
             ERHE_PROFILE_FRAME_END
+#endif // TODO
         }
         m_run_stopped = true;
     }

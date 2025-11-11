@@ -19,7 +19,14 @@
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/texture.hpp"
-#include "erhe_graphics/gl/gl_texture.hpp"
+
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+# include "erhe_graphics/gl/gl_texture.hpp"
+#endif
+#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+# include "erhe_graphics/vulkan/vulkan_texture.hpp"
+#endif
+
 #include "erhe_profile/profile.hpp"
 #include "erhe_renderer/primitive_renderer.hpp"
 #include "erhe_rendergraph/rendergraph.hpp"
@@ -288,9 +295,16 @@ auto Headset_view::get_headset_view_resources(erhe::xr::Render_view& render_view
 {
     ERHE_PROFILE_FUNCTION();
 
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
     auto match_color_texture = [&render_view](const auto& i) {
         return i->get_color_texture()->get_impl().gl_name() == render_view.color_texture;
     };
+#endif
+#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+    auto match_color_texture = [&render_view](const auto&) {
+        return true; // TODO
+    };
+#endif
 
     const auto i = std::find_if(m_view_resources.begin(), m_view_resources.end(), match_color_texture);
     if (i == m_view_resources.end()) {
@@ -558,7 +572,9 @@ auto Headset_view::render_headset() -> bool
                 ///     dst_x0, dst_y0, dst_x1, dst_y1,
                 ///     gl::Clear_buffer_mask::color_buffer_bit, gl::Blit_framebuffer_filter::nearest
                 /// );
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
                 m_context_window.swap_buffers();
+#endif // TODO
             }
             first_view = false;
 

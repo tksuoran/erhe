@@ -34,6 +34,7 @@ namespace erhe::graphics {
 Device_impl::Device_impl(Device& device, erhe::window::Context_window& context_window)
     : m_context_window{context_window}
     , m_device        {device}
+    , m_shader_monitor{device}
 {
 }
 

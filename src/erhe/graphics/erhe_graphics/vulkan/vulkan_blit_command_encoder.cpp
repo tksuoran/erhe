@@ -24,11 +24,11 @@ void Blit_command_encoder::blit_framebuffer(
     glm::ivec2         destination_origin
 )
 {
-    static_cast<void>source_renderpass();
-    static_cast<void>source_origin();
-    static_cast<void>source_size();
-    static_cast<void>destination_renderpass();
-    static_cast<void>destination_origin();
+    static_cast<void>(source_renderpass);
+    static_cast<void>(source_origin);
+    static_cast<void>(source_size);
+    static_cast<void>(destination_renderpass);
+    static_cast<void>(destination_origin);
 }
 
 // Texture to texture copy, single level, single array slice
@@ -44,6 +44,15 @@ void Blit_command_encoder::copy_from_texture(
     glm::ivec3     destination_origin
 )
 {
+    static_cast<void>(source_texture);
+    static_cast<void>(source_slice);
+    static_cast<void>(source_level);
+    static_cast<void>(source_origin);
+    static_cast<void>(source_size);
+    static_cast<void>(destination_texture);
+    static_cast<void>(destination_slice);
+    static_cast<void>(destination_level);
+    static_cast<void>(destination_origin);
 }
 
 // Buffer to texture copy

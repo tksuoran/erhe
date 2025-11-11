@@ -1,6 +1,12 @@
 #include "erhe_graphics/shader_monitor.hpp"
 
-#include "erhe_graphics/gl/gl_device.hpp"
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+# include "erhe_graphics/gl/gl_device.hpp"
+#endif
+#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+# include "erhe_graphics/vulkan/vulkan_device.hpp"
+#endif
+
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/glsl_file_loader.hpp"
 #include "erhe_configuration/configuration.hpp"

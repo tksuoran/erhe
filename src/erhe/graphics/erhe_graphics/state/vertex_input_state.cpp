@@ -1,5 +1,12 @@
 #include "erhe_graphics/state/vertex_input_state.hpp"
-#include "erhe_graphics/gl/gl_vertex_input_state.hpp"
+
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+# include "erhe_graphics/gl/gl_vertex_input_state.hpp"
+#endif
+#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+# include "erhe_graphics/vulkan/vulkan_vertex_input_state.hpp"
+#endif
+
 #include "erhe_dataformat/vertex_format.hpp"
 #include "erhe_verify/verify.hpp"
 

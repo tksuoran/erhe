@@ -1,6 +1,9 @@
 #include "erhe_window/sdl_window.hpp"
-#include "erhe_gl/dynamic_load.hpp"
-#include "erhe_gl/wrapper_functions.hpp"
+
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+# include "erhe_gl/dynamic_load.hpp"
+# include "erhe_gl/wrapper_functions.hpp"
+#endif
 #include "erhe_window/window_log.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_time/sleep.hpp"
@@ -13,8 +16,10 @@
 #include <SDL3/SDL_mouse.h>
 #include <SDL3/SDL_video.h>
 
-#if defined(_WIN32)
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+# if defined(_WIN32)
 #   include <GL/wglext.h>
+# endif
 #endif
 
 #include <cstdlib>
@@ -307,7 +312,13 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
         };
     };
 
-    SDL_WindowFlags window_flags = SDL_WINDOW_OPENGL | SDL_WINDOW_HIGH_PIXEL_DENSITY | SDL_WINDOW_RESIZABLE;
+    SDL_WindowFlags window_flags = SDL_WINDOW_HIGH_PIXEL_DENSITY | SDL_WINDOW_RESIZABLE;
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+    window_flags |= SDL_WINDOW_OPENGL;
+#endif
+#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+    window_flags |= SDL_WINDOW_VULKAN;
+#endif
     if (configuration.fullscreen) { 
         window_flags |= SDL_WINDOW_FULLSCREEN;
     }
@@ -335,6 +346,7 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
         return false;
     }
 
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
     SDL_GL_SetAttribute(SDL_GL_RED_SIZE,       8);
     SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE,     8);
     SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE,      8);
@@ -403,6 +415,7 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
 
         SDL_ShowWindow(sdl_window);
     }
+#endif
 
     s_window_count++;
     m_is_mouse_relative_hold_enabled = false;
@@ -925,15 +938,16 @@ auto Context_window::get_input_events() -> std::vector<Input_event>&
     return m_input_events[1 - m_input_event_queue_write];
 }
 
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
 void Context_window::get_extensions()
 {
     ERHE_PROFILE_FUNCTION();
     gl::dynamic_load_init(SDL_GL_GetProcAddress);
 
-#if defined(_WIN32)
+# if defined(_WIN32)
     m_NV_delay_before_swap = SDL_GL_GetProcAddress("wglDelayBeforeSwapNV");
-#else // TODO
-#endif
+# else // TODO
+# endif
 }
 
 void Context_window::make_current() const
@@ -985,13 +999,20 @@ void Context_window::swap_buffers() const
         SDL_GL_SwapWindow(window);
     }
 }
+#endif
 
 auto Context_window::get_device_pointer() const -> void*
 {
-#if defined(_WIN32)
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+# if defined(_WIN32)
     return wglGetCurrentContext();
-#else
+# else
     ERHE_FATAL("TODO");
+    return nullptr; // TODO
+# endif
+#endif
+
+#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
     return nullptr; // TODO
 #endif
 }
@@ -1026,10 +1047,12 @@ auto Context_window::get_hwnd() const -> HWND
         return nullptr;
     }
 }
+# if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
 auto Context_window::get_hglrc() const -> HGLRC
 {
     return wglGetCurrentContext();
 }
+# endif
 #endif
 
 auto Context_window::get_scale_factor() const -> float

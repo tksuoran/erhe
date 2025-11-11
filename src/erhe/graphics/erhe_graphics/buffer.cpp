@@ -1,5 +1,12 @@
 #include "erhe_graphics/buffer.hpp"
-#include "erhe_graphics/gl/gl_buffer.hpp"
+
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+# include "erhe_graphics/gl/gl_buffer.hpp"
+#endif
+#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+# include "erhe_graphics/vulkan/vulkan_buffer.hpp"
+#endif
+
 #include "erhe_utility/bit_helpers.hpp"
 
 #include <fmt/format.h>

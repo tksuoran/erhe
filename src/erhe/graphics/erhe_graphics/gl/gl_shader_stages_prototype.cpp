@@ -423,6 +423,9 @@ Shader_stages_prototype_impl::Shader_stages_prototype_impl(Device& device, Shade
     : m_device               {device}
     , m_create_info          {create_info}
     , m_default_uniform_block{device}
+#if defined(ERHE_SPIRV)
+    , m_glslang_shader_stages{*this}
+#endif
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -435,6 +438,9 @@ Shader_stages_prototype_impl::Shader_stages_prototype_impl(Device& device, const
     : m_device               {device}
     , m_create_info          {create_info}
     , m_default_uniform_block{device}
+#if defined(ERHE_SPIRV)
+    , m_glslang_shader_stages{*this}
+#endif
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -453,7 +459,7 @@ void Shader_stages_prototype_impl::compile_shaders()
         m_prelink_shaders.emplace_back(compile(shader));
 
 #if defined(ERHE_SPIRV)
-        m_glslang_shaders.push_back(compile_glslang(shader));
+        m_glslang_shader_stages.compile_shader(m_device, shader);
 #endif
         if (m_state == state_fail) {
             break;
@@ -497,7 +503,7 @@ auto Shader_stages_prototype_impl::link_program() -> bool
     m_state = state_program_link_started;
 
 #if defined(ERHE_SPIRV)
-    link_glslang_program();
+    m_glslang_shader_stages.link_program();
 #endif
     return true;
 }

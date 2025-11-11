@@ -11,7 +11,9 @@
 #include "erhe_commands/commands.hpp"
 #include "erhe_commands/commands_log.hpp"
 #include "erhe_configuration/configuration.hpp"
-#include "erhe_gl/gl_log.hpp"
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+# include "erhe_gl/gl_log.hpp"
+#endif
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_imgui/imgui_log.hpp"
@@ -247,7 +249,9 @@ public:
         m_imgui_renderer.next_frame();
         m_graphics_device.end_of_frame();
 
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
         m_context_window.swap_buffers();
+#endif // TODO
     }
 
     auto on_window_close_event(const erhe::window::Input_event&) -> bool override
@@ -328,7 +332,9 @@ void run_hextiles()
     }
 
     erhe::log::initialize_log_sinks();
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
     gl::initialize_logging();
+#endif
     erhe::commands::initialize_logging();
     erhe::graphics::initialize_logging();
     erhe::imgui::initialize_logging();

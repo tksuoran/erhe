@@ -96,7 +96,9 @@ public:
 
 #if defined(ERHE_OS_WINDOWS)
     [[nodiscard]] auto get_hwnd() const -> HWND;
+# if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
     [[nodiscard]] auto get_hglrc() const -> HGLRC;
+# endif
 #endif
 
 private:

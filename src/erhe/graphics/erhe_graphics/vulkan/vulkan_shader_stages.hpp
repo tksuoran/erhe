@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_graphics/shader_stages.hpp"
+#include "erhe_graphics/glsl_to_spirv.hpp"
 
 #include "glslang/Public/ShaderLang.h"
 namespace glslang {
@@ -35,17 +36,10 @@ public:
 
     void compile_shaders();
     auto link_program   () -> bool;
-    void dump_reflection() const;
 
-    auto get_final_source(
-        const Shader_stage&         shader,
-        std::optional<unsigned int> gl_name
-    ) -> std::string;
+    auto get_final_source(const Shader_stage& shader, std::optional<unsigned int> gl_name) -> std::string;
 
 private:
-    auto compile_glslang     (const Shader_stage& shader) -> std::shared_ptr<glslang::TShader>;
-    auto link_glslang_program() -> bool;
-
     static constexpr int state_init                       = 0;
     static constexpr int state_shader_compilation_started = 1;
     static constexpr int state_program_link_started       = 2;
@@ -63,9 +57,7 @@ private:
     std::map<unsigned int, std::string>                 m_final_sources;
     std::vector<std::filesystem::path>                  m_paths;
 
-    std::vector<std::shared_ptr<glslang::TShader>>               m_glslang_shaders;
-    std::unordered_map<::EShLanguage, std::vector<unsigned int>> m_spirv_shaders;
-    std::shared_ptr<glslang::TProgram>                           m_glslang_program;
+    Glslang_shader_stages                               m_glslang_shader_stages;
 };
 
 class Shader_stages_impl
@@ -93,7 +85,8 @@ class Shader_stages_impl_hash
 public:
     [[nodiscard]] auto operator()(const Shader_stages_impl& shader_stages) const noexcept -> std::size_t
     {
-        return static_cast<std::size_t>(shader_stages.gl_name());
+        static_cast<void>(shader_stages);
+        return 0;
     }
 };
 

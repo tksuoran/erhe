@@ -1,6 +1,5 @@
-#include "erhe_graphics/gl/gl_sampler.hpp"
+#include "erhe_graphics/vulkan/vulkan_sampler.hpp"
 #include "erhe_graphics/graphics_log.hpp"
-#include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <fmt/format.h>
@@ -19,6 +18,7 @@ Sampler_impl::Sampler_impl(Device& device, const Sampler_create_info& create_inf
     , m_min_lod          {create_info.min_lod          }
     , m_max_anisotropy   {create_info.max_anisotropy   }
 {
+    static_cast<void>(device);
 }
 
 auto Sampler_impl::get_debug_label() const -> const std::string&
@@ -38,6 +38,8 @@ auto Sampler_impl::uses_mipmaps() const -> bool
 
 auto operator==(const Sampler_impl& lhs, const Sampler_impl& rhs) noexcept -> bool
 {
+    static_cast<void>(rhs);
+    static_cast<void>(lhs);
     return false;
 }
 

@@ -1,8 +1,6 @@
 #include "erhe_graphics/vulkan/vulkan_shader_stages.hpp"
 #include "erhe_graphics/vulkan/vulkan_device.hpp"
 
-#include "erhe_gl/enum_string_functions.hpp"
-#include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -27,6 +25,8 @@ Shader_stages_impl::Shader_stages_impl(Shader_stages_impl&& from)
 
 Shader_stages_impl& Shader_stages_impl::operator=(Shader_stages_impl&& from)
 {
+    static_cast<void>(from);
+    return *this;
 }
 
 Shader_stages_impl::Shader_stages_impl(Device& device, Shader_stages_prototype&& prototype)
@@ -56,6 +56,8 @@ void Shader_stages_impl::reload(Shader_stages_prototype&& prototype)
 
 auto operator==(const Shader_stages_impl& lhs, const Shader_stages_impl& rhs) noexcept -> bool
 {
+    static_cast<void>(lhs);
+    static_cast<void>(rhs);
     return false;
 }
 

@@ -1,14 +1,9 @@
 #include "erhe_graphics/gl/gl_shader_stages.hpp"
-#include "erhe_graphics/gl/gl_device.hpp"
-
-#include "erhe_gl/enum_string_functions.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <fmt/format.h>
-
-#include <sstream>
 
 namespace erhe::graphics {
 

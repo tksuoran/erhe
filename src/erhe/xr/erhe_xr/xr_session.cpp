@@ -3,10 +3,12 @@
 #include "erhe_verify/verify.hpp"
 #include "erhe_window/window.hpp"
 
-#include "erhe_gl/wrapper_functions.hpp"
-#include "erhe_gl/wrapper_enums.hpp"
-#include "erhe_gl/gl_helpers.hpp"
-#include "erhe_gl/enum_string_functions.hpp"
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+# include "erhe_gl/wrapper_functions.hpp"
+# include "erhe_gl/wrapper_enums.hpp"
+# include "erhe_gl/gl_helpers.hpp"
+# include "erhe_gl/enum_string_functions.hpp"
+#endif
 
 #include "erhe_xr/xr.hpp"
 #include "erhe_xr/xr_instance.hpp"
@@ -28,8 +30,12 @@
 #   define XR_USE_PLATFORM_LINUX      1
 #endif
 
-//#define XR_USE_GRAPHICS_API_VULKAN 1
-#define XR_USE_GRAPHICS_API_OPENGL 1
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+# define XR_USE_GRAPHICS_API_OPENGL 1
+#endif
+#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+# define XR_USE_GRAPHICS_API_VULKAN 1
+#endif
 #include <openxr/openxr.h>
 #include <openxr/openxr_platform.h>
 
@@ -130,6 +136,7 @@ auto Xr_session::create_session() -> bool
     log_xr->info("OpenGL maxApiVersionSupported = {}.{}", max_major, max_minor);
 
 #ifdef _WIN32
+# if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
     HWND  hwnd  = m_context_window.get_hwnd();
     HDC   hdc   = GetDC(hwnd);
     HGLRC hglrc = m_context_window.get_hglrc();
@@ -150,6 +157,7 @@ auto Xr_session::create_session() -> bool
 
     check_gl_context_in_current_in_this_thread();
     ERHE_XR_CHECK(xrCreateSession(xr_instance, &session_create_info, &m_xr_session));
+# endif
 #endif
 
 #ifdef linux
@@ -324,6 +332,7 @@ auto Xr_session::enumerate_swapchain_formats() -> bool
     );
 
     log_xr->info("Swapchain formats:");
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
     int best_color_format_score{0};
     int best_depth_stencil_score{0};
     for (const auto swapchain_format : swapchain_formats) {
@@ -342,6 +351,7 @@ auto Xr_session::enumerate_swapchain_formats() -> bool
             m_swapchain_depth_stencil_format = pixelformat;
         }
     }
+#endif
     log_xr->info("Selected swapchain color format {}{}", erhe::dataformat::c_str(m_swapchain_color_format), m_mirror_mode ? " (mirror mode enabled)" : "");
     log_xr->info("Selected swapchain depth stencil format {}", erhe::dataformat::c_str(m_swapchain_depth_stencil_format));
 
@@ -377,8 +387,9 @@ auto Xr_session::create_swapchains() -> bool
         return false;
     }
 
-    const auto& views = m_instance.get_xr_view_configuration_views();
     m_view_swapchains.clear();
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+    const auto& views = m_instance.get_xr_view_configuration_views();
     for (const auto& view : views) {
         std::optional<gl::Internal_format> color_internal_format = gl_helpers::convert_to_gl(m_swapchain_color_format);
         std::optional<gl::Internal_format> depth_stencil_format  = gl_helpers::convert_to_gl(m_swapchain_depth_stencil_format);
@@ -433,6 +444,7 @@ auto Xr_session::create_swapchains() -> bool
 
         m_view_swapchains.emplace_back(color_swapchain, depth_stencil_swapchain);
     }
+#endif
 
     if (m_instance.extensions.FB_passthrough) {
         XrPassthroughCreateInfoFB passthrough_create_info{

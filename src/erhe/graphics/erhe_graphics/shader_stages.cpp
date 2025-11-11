@@ -1,5 +1,11 @@
 #include "erhe_graphics/shader_stages.hpp"
-#include "erhe_graphics/gl/gl_shader_stages.hpp"
+
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+# include "erhe_graphics/gl/gl_shader_stages.hpp"
+#endif
+#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+# include "erhe_graphics/vulkan/vulkan_shader_stages.hpp"
+#endif
 
 #include "erhe_graphics/device.hpp"
 #include "erhe_profile/profile.hpp"
@@ -153,10 +159,6 @@ void Shader_stages_prototype::compile_shaders()
 auto Shader_stages_prototype::link_program() -> bool
 {
     return m_impl->link_program();
-}
-void Shader_stages_prototype::dump_reflection() const
-{
-    m_impl->dump_reflection();
 }
 auto Shader_stages_prototype::name() const -> const std::string&
 {

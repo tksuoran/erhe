@@ -1,5 +1,12 @@
 #include "erhe_graphics/render_pass.hpp"
-#include "erhe_graphics/gl/gl_render_pass.hpp"
+
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+# include "erhe_graphics/gl/gl_render_pass.hpp"
+#endif
+#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+# include "erhe_graphics/vulkan/vulkan_render_pass.hpp"
+#endif
+
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/texture.hpp"
 

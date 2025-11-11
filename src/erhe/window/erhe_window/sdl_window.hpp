@@ -61,10 +61,13 @@ public:
     [[nodiscard]] auto get_input_events        () -> std::vector<Input_event>&;
 
     auto open                             (const Window_configuration& configuration) -> bool;
+
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
     void make_current                     () const;
     void clear_current                    () const;
     auto delay_before_swap                (float seconds) const -> bool;
     void swap_buffers                     () const;
+#endif
     void poll_events                      (float wait_time = 0.0f);
     void get_cursor_position              (float& xpos, float& ypos);
     void get_cursor_relative_hold_position(float& xpos, float& ypos);
@@ -101,7 +104,9 @@ public:
 #endif
 
 private:
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
     void get_extensions();
+#endif
 
     struct Joystick_info
     {

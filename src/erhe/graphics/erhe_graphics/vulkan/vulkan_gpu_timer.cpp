@@ -21,6 +21,8 @@ void Gpu_timer_impl::on_thread_exit()
 
 Gpu_timer_impl::Gpu_timer_impl(Device& device, const char* label)
 {
+    static_cast<void>(device);
+    static_cast<void>(label);
 }
 
 Gpu_timer_impl::~Gpu_timer_impl() noexcept

@@ -1,8 +1,4 @@
-#include "erhe_graphics/gl/gl_render_pass.hpp"
-#include "erhe_graphics/gl/gl_device.hpp"
-#include "erhe_graphics/gl/gl_texture.hpp"
-#include "erhe_gl/enum_string_functions.hpp"
-#include "erhe_gl/wrapper_functions.hpp"
+#include "erhe_graphics/vulkan/vulkan_render_pass.hpp"
 #include "erhe_graphics/state/color_blend_state.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_profile/profile.hpp"
@@ -47,10 +43,12 @@ void Render_pass_impl::create()
 
 auto Render_pass_impl::get_sample_count() const -> unsigned int
 {
+    return 0;
 }
 
 auto Render_pass_impl::check_status() const -> bool
 {
+    return false;
 }
 
 auto Render_pass_impl::get_render_target_width() const -> int

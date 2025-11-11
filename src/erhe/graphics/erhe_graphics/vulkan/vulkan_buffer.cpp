@@ -17,54 +17,30 @@
 
 namespace erhe::graphics {
 
-void Buffer_impl::allocate_storage(const void* init_data)
-{
-    static_cast<void>(init_data);
-}
-
 Buffer_impl::Buffer_impl(Device& device, const Buffer_create_info& create_info) noexcept
-    : m_device             {device}
-    , m_capacity_byte_count{create_info.capacity_byte_count}
-    , m_usage              {create_info.usage     }
-    , m_direction          {create_info.direction }
-    , m_cache_mode         {create_info.cache_mode}
-    , m_mapping            {create_info.mapping   }
-    , m_coherency          {create_info.coherency }
-    , m_debug_label        {create_info.debug_label}
 {
-    constexpr const std::size_t sanity_threshold{2'000'000'000};
-    ERHE_VERIFY(m_capacity_byte_count < sanity_threshold); // sanity check, can raise limit when needed
-    log_buffer->debug(
-        "Buffer_impl::Buffer_impl() capacity_byte_count = {}, usage = {}, direction = {}, cache_mode = {}, mapping = {}, coherency = {}) name = {} debug_label = {}",
-        m_capacity_byte_count,
-        to_string(create_info.usage),
-        c_str(create_info.direction),
-        c_str(create_info.cache_mode),
-        c_str(create_info.mapping),
-        c_str(create_info.coherency),
-        gl_name(),
-        m_debug_label
-    );
+    static_cast<void>(device);
+    static_cast<void>(create_info);
 }
 
 Buffer_impl::Buffer_impl(Device& device)
-    : m_device{device}
 {
+    static_cast<void>(device);
 }
 
 Buffer_impl::~Buffer_impl() noexcept
 {
-    if (m_allocated) {
-        ERHE_PROFILE_MEM_FREE_NS(this, s_pool_name);
-    }
 }
 
 Buffer_impl::Buffer_impl(Buffer_impl&& other) noexcept
 {
+    static_cast<void>(other);
 }
 
 auto Buffer_impl::operator=(Buffer_impl&& other) noexcept -> Buffer_impl&
 {
+    static_cast<void>(other);
+    return *this;
 }
 
 auto Buffer_impl::get_map() const -> std::span<std::byte>
@@ -74,7 +50,8 @@ auto Buffer_impl::get_map() const -> std::span<std::byte>
 
 auto Buffer_impl::get_debug_label() const noexcept -> const std::string&
 {
-    return m_debug_label;
+    static std::string dummy;
+    return dummy;
 }
 
 void Buffer_impl::clear() noexcept
@@ -152,6 +129,8 @@ auto Buffer_impl::get_capacity_byte_count() const noexcept -> std::size_t
 
 auto operator==(const Buffer_impl& lhs, const Buffer_impl& rhs) noexcept -> bool
 {
+    static_cast<void>(lhs);
+    static_cast<void>(rhs);
     return false;
 }
 

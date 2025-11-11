@@ -4,7 +4,6 @@
 #include "erhe_graphics/vulkan/vulkan_device.hpp"
 #include "erhe_graphics/vulkan/vulkan_sampler.hpp"
 #include "erhe_graphics/vulkan/vulkan_texture.hpp"
-#include "erhe_gl/wrapper_functions.hpp"
 
 namespace erhe::graphics {
 
@@ -18,6 +17,7 @@ Texture_heap_impl::Texture_heap_impl(
     , m_fallback_texture   {fallback_texture}
     , m_fallback_sampler   {fallback_sampler}
 {
+    static_cast<void>(reserved_slot_count);
 }
 
 Texture_heap_impl::~Texture_heap_impl()
@@ -40,12 +40,14 @@ auto Texture_heap_impl::assign(std::size_t slot, const Texture* texture, const S
     static_cast<void>(slot);
     static_cast<void>(texture);
     static_cast<void>(sampler);
+    return 0;
 }
 
 auto Texture_heap_impl::allocate(const Texture* texture, const Sampler* sampler) -> uint64_t
 {
     static_cast<void>(texture);
     static_cast<void>(sampler);
+    return 0;
 }
 
 void Texture_heap_impl::unbind()

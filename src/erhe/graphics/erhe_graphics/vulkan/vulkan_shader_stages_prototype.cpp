@@ -1,15 +1,10 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
-#include "erhe_graphics/gl/gl_shader_stages.hpp"
+#include "erhe_graphics/vulkan/vulkan_shader_stages.hpp"
 #include "erhe_graphics/glsl_format_source.hpp"
 #include "erhe_graphics/device.hpp"
-#include "erhe_graphics/gl/gl_debug.hpp"
-#include "erhe_graphics/gl/gl_helpers.hpp"
-#include "erhe_gl/enum_string_functions.hpp"
-#include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/shader_resource.hpp"
-#include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <algorithm>
@@ -20,26 +15,16 @@ Shader_stages_prototype_impl::Shader_stages_prototype_impl(Device& device, Shade
     : m_device               {device}
     , m_create_info          {create_info}
     , m_default_uniform_block{device}
+    , m_glslang_shader_stages{*this}
 {
-    ERHE_PROFILE_FUNCTION();
-
-    ERHE_VERIFY(m_handle.gl_name() != 0);
-    if (create_info.build) {
-        post_link();
-    }
 }
 
 Shader_stages_prototype_impl::Shader_stages_prototype_impl(Device& device, const Shader_stages_create_info& create_info)
     : m_device               {device}
     , m_create_info          {create_info}
     , m_default_uniform_block{device}
+    , m_glslang_shader_stages{*this}
 {
-    ERHE_PROFILE_FUNCTION();
-
-    ERHE_VERIFY(m_handle.gl_name() != 0);
-    if (create_info.build) {
-        post_link();
-    }
 }
 
 void Shader_stages_prototype_impl::compile_shaders()
@@ -48,8 +33,8 @@ void Shader_stages_prototype_impl::compile_shaders()
 
     ERHE_VERIFY(m_state == state_init);
     for (const auto& shader : m_create_info.shaders) {
-        m_glslang_shaders.push_back(compile_glslang(shader));
-        if (m_state == state_fail) {
+        if (!m_glslang_shader_stages.compile_shader(m_device, shader)) {
+            m_state = state_fail;
             break;
         }
     }
@@ -73,19 +58,24 @@ auto Shader_stages_prototype_impl::link_program() -> bool
 
     ERHE_VERIFY(m_state == state_shader_compilation_started);
 
-    link_glslang_program();
+    if (!m_glslang_shader_stages.link_program()) {
+        m_state = state_fail;
+        return false;
+    }
+
     return true;
 }
 
-void Shader_stages_prototype_impl::post_link()
+auto Shader_stages_prototype_impl::get_final_source(
+    const Shader_stage&         shader,
+    std::optional<unsigned int> gl_name
+) -> std::string
 {
+    return m_create_info.final_source(m_device, shader, &m_paths, gl_name);
 }
 
 auto Shader_stages_prototype_impl::is_valid() -> bool
 {
-    if ((m_state != state_ready) && (m_state != state_fail)) {
-        post_link();
-    }
     if (m_state == state_ready) {
         return true;
     }

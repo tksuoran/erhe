@@ -7,6 +7,7 @@
 #include <map>
 #include <string>
 
+namespace glslang { class TShader; }
 namespace erhe::dataformat { class Vertex_format; }
 
 namespace erhe::graphics {
@@ -89,7 +90,11 @@ public:
 
     void compile_shaders();
     auto link_program   () -> bool;
-    void dump_reflection() const;
+
+#if defined(ERHE_SPIRV)
+    auto compile_glslang     (Device& device, const Shader_stage& shader) -> std::shared_ptr<glslang::TShader>;
+    auto link_glslang_program() -> bool;
+#endif
 
     [[nodiscard]] auto name            () const -> const std::string&;
     [[nodiscard]] auto create_info     () const -> const Shader_stages_create_info&;
