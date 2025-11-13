@@ -467,17 +467,18 @@ auto Headset_view::render_headset() -> bool
             };
 
             Render_context render_context {
-                .encoder         = nullptr, // filled in later once we start render pass
-                .app_context     = m_context,
-                .scene_view      = *this,
-                .viewport_config = m_viewport_config,
-                .camera          = view_resources->get_camera(),
-                .viewport        = viewport
+                .encoder                = nullptr, // filled in later once we start render pass
+                .app_context            = m_context,
+                .scene_view             = *this,
+                .viewport_config        = m_viewport_config,
+                .camera                 = view_resources->get_camera(),
+                .viewport_scene_view    = nullptr,
+                .viewport               = viewport,
+                .override_shader_stages = nullptr
             };
+            m_context.debug_renderer->begin_frame(render_context.viewport, *render_context.camera);
             m_context.tools         ->render_viewport_tools(render_context);
             m_context.app_rendering ->render_viewport_renderables(render_context);
-
-            m_context.debug_renderer->begin_frame(render_context.viewport, *render_context.camera);
 
             {
                 erhe::graphics::Compute_command_encoder compute_encoder = graphics_device.make_compute_command_encoder();
@@ -511,8 +512,8 @@ auto Headset_view::render_headset() -> bool
                     m_context.app_rendering ->render_composer(render_context);
                     m_context.debug_renderer->render(encoder, render_context.viewport);
                 }
-                m_context.debug_renderer->end_frame();
             } // end of render encoder scope - end of render pass
+            m_context.debug_renderer->end_frame();
 
             if (m_context.OpenXR_mirror && first_view) {
                 // Copy from OpenXR to default framebuffer (window)

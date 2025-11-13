@@ -120,13 +120,13 @@ auto Debug_renderer_bucket::update_view_buffer(const View& view) -> erhe::graphi
     const Debug_renderer_program_interface& program_interface = m_debug_renderer.get_program_interface();
     const erhe::graphics::Shader_resource&  view_block        = *program_interface.view_block.get();
     erhe::graphics::Ring_buffer_range       view_buffer_range = m_view_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, view_block.get_size_bytes());
-    const auto                        view_gpu_data     = view_buffer_range.get_span();
-    size_t                            view_write_offset = 0;
-    std::byte* const                  start             = view_gpu_data.data();
-    const std::size_t                 byte_count        = view_gpu_data.size_bytes();
-    const std::size_t                 word_count        = byte_count / sizeof(float);
-    const std::span<float>            gpu_float_data {reinterpret_cast<float*   >(start), word_count};
-    const std::span<uint32_t>         gpu_uint32_data{reinterpret_cast<uint32_t*>(start), word_count};
+    const auto                view_gpu_data     = view_buffer_range.get_span();
+    size_t                    view_write_offset = 0;
+    std::byte* const          start             = view_gpu_data.data();
+    const std::size_t         byte_count        = view_gpu_data.size_bytes();
+    const std::size_t         word_count        = byte_count / sizeof(float);
+    const std::span<float>    gpu_float_data {reinterpret_cast<float*   >(start), word_count};
+    const std::span<uint32_t> gpu_uint32_data{reinterpret_cast<uint32_t*>(start), word_count};
 
     using erhe::graphics::write;
     using erhe::graphics::as_span;
