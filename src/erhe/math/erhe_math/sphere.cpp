@@ -2,6 +2,7 @@
 #include "erhe_math/math_util.hpp"
 
 #include <glm/gtx/norm.hpp>
+#include <glm/gtc/epsilon.hpp>
 
 #include <algorithm>
 

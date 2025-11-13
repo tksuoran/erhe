@@ -29,6 +29,7 @@ SOFTWARE.
 #include "imgui/imgui.h"
 
 #include <glm/glm.hpp>
+#include <glm/gtx/quaternion.hpp>
 
 #include <algorithm>
 #include <vector>

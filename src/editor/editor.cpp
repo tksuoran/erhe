@@ -118,6 +118,7 @@
 #include "erhe_scene_renderer/forward_renderer.hpp"
 #include "erhe_scene_renderer/program_interface.hpp"
 #include "erhe_scene_renderer/scene_renderer_log.hpp"
+#include "erhe_scene_renderer/texel_renderer.hpp"
 #include "erhe_time/sleep.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_window/renderdoc_capture.hpp"
