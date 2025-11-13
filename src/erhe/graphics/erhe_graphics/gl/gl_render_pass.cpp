@@ -466,6 +466,18 @@ void Render_pass_impl::start_render_pass()
             }
         }
     );
+    // To be able to clear depth/stencil the depth write masks / stencil must write_mask be enabled (part of depth stencil state)
+    m_device.get_impl().m_gl_state_tracker.depth_stencil.execute(
+        Depth_stencil_state{
+            .depth_write_enable = true,
+            .stencil_front = {
+                .write_mask = 0xffu
+            },
+            .stencil_back = {
+                .write_mask = 0xffu
+            }
+        }
+    );
 
 #if !defined(NDEBUG)
     if (!m_uses_default_framebuffer) {
