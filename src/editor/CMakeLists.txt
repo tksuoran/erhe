@@ -249,6 +249,8 @@ erhe_target_sources_grouped(
     res/shaders/points.frag
     res/shaders/points.vert
     res/shaders/post_processing.vert
+    res/shaders/shadow_debug.frag
+    res/shaders/shadow_debug.vert
     res/shaders/sky.frag
     res/shaders/sky.vert
     res/shaders/standard.frag
