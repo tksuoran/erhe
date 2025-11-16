@@ -34,6 +34,8 @@ class Xr_configuration
 {
 public:
     bool debug            {false};
+    bool api_dump         {false};
+    bool validation       {false};
     bool quad_view        {false};
     bool depth            {false};
     bool visibility_mask  {false};
@@ -159,6 +161,7 @@ private:
         return reinterpret_cast<T>(get_proc_addr(function));
     }
 
+    [[nodiscard]] auto has_layer    (const char* layer_name) const -> bool;
     [[nodiscard]] auto has_extension(const char* extension_name) const -> bool;
 
     auto enumerate_layers               () -> bool;
@@ -192,10 +195,10 @@ private:
     etl::vector<Xr_action_float,    max_action_count> m_float_actions;
     etl::vector<Xr_action_vector2f, max_action_count> m_vector2f_actions;
     etl::vector<Xr_action_pose,     max_action_count> m_pose_actions;
-    std::vector<XrActionSuggestedBinding> m_khr_simple_bindings;
-    std::vector<XrActionSuggestedBinding> m_oculus_touch_bindings;
-    std::vector<XrActionSuggestedBinding> m_valve_index_bindings;
-    std::vector<XrActionSuggestedBinding> m_htc_vive_bindings;
+    std::vector<XrActionSuggestedBinding>             m_khr_simple_bindings;
+    std::vector<XrActionSuggestedBinding>             m_oculus_touch_bindings;
+    std::vector<XrActionSuggestedBinding>             m_valve_index_bindings;
+    std::vector<XrActionSuggestedBinding>             m_htc_vive_bindings;
 
     //PFN_xrSetEnvironmentDepthEstimationVARJO m_xrSetEnvironmentDepthEstimationVARJO{nullptr};
 };

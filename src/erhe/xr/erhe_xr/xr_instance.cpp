@@ -19,6 +19,7 @@
 #include <openxr/openxr.h>
 #include <openxr/openxr_platform.h>
 
+#include <cstdlib>
 #include <thread>
 
 namespace erhe::xr {
@@ -27,6 +28,14 @@ Xr_instance::Xr_instance(const Xr_configuration& configuration)
     : m_configuration(configuration)
 {
     ERHE_PROFILE_FUNCTION();
+
+    if (configuration.validation) {
+        static const char* set_validation_layer = "XR_API_LAYER_PATH=" XR_API_LAYER_PATH;
+        const int ret = _putenv(set_validation_layer);
+        if (ret != 0) {
+            log_xr->warn("putenv(XR_API_LAYER_PATH) failed with error code {}.", ret);
+        }
+    }
 
     if (!enumerate_layers()) {
         return;
@@ -178,73 +187,111 @@ auto Xr_instance::create_instance() -> bool
 
     log_xr->trace("{}", __func__);
 
-    std::vector<const char*> required_extensions;
-    required_extensions.push_back(XR_KHR_OPENGL_ENABLE_EXTENSION_NAME);
+    std::vector<const char*> enabled_extensions;
+    enabled_extensions.push_back(XR_KHR_OPENGL_ENABLE_EXTENSION_NAME);
 
     if (m_configuration.debug && has_extension(XR_EXT_DEBUG_UTILS_EXTENSION_NAME)) {
         extensions.EXT_debug_utils = true;
-        required_extensions.push_back(XR_EXT_DEBUG_UTILS_EXTENSION_NAME);
+        enabled_extensions.push_back(XR_EXT_DEBUG_UTILS_EXTENSION_NAME);
     }
 
     if (m_configuration.quad_view && has_extension(XR_VARJO_QUAD_VIEWS_EXTENSION_NAME)) {
         extensions.VARJO_quad_views = true;
-        required_extensions.push_back(XR_VARJO_QUAD_VIEWS_EXTENSION_NAME);
+        enabled_extensions.push_back(XR_VARJO_QUAD_VIEWS_EXTENSION_NAME);
     }
     if (m_configuration.depth) {
         if (has_extension(XR_KHR_COMPOSITION_LAYER_DEPTH_EXTENSION_NAME)) {
             extensions.KHR_composition_layer_depth = true;
-            required_extensions.push_back(XR_KHR_COMPOSITION_LAYER_DEPTH_EXTENSION_NAME);
+            enabled_extensions.push_back(XR_KHR_COMPOSITION_LAYER_DEPTH_EXTENSION_NAME);
         }
         if (has_extension(XR_VARJO_ENVIRONMENT_DEPTH_ESTIMATION_EXTENSION_NAME)) {
             extensions.VARJO_environment_depth_estimation = true;
-            required_extensions.push_back(XR_VARJO_ENVIRONMENT_DEPTH_ESTIMATION_EXTENSION_NAME);
+            enabled_extensions.push_back(XR_VARJO_ENVIRONMENT_DEPTH_ESTIMATION_EXTENSION_NAME);
         }
         //XR_VARJO_COMPOSITION_LAYER_DEPTH_TEST_EXTENSION_NAME,
     }
     if (m_configuration.visibility_mask && has_extension(XR_KHR_VISIBILITY_MASK_EXTENSION_NAME)) {
         extensions.KHR_visibility_mask = true;
-        required_extensions.push_back(XR_KHR_VISIBILITY_MASK_EXTENSION_NAME);
+        enabled_extensions.push_back(XR_KHR_VISIBILITY_MASK_EXTENSION_NAME);
     }
     if (m_configuration.hand_tracking && has_extension(XR_EXT_HAND_TRACKING_EXTENSION_NAME)) {
         extensions.EXT_hand_tracking = true;
-        required_extensions.push_back(XR_EXT_HAND_TRACKING_EXTENSION_NAME);
+        enabled_extensions.push_back(XR_EXT_HAND_TRACKING_EXTENSION_NAME);
     }
     if (m_configuration.passthrough_fb && has_extension(XR_FB_PASSTHROUGH_EXTENSION_NAME)) {
         extensions.FB_passthrough = true;
-        required_extensions.push_back(XR_FB_PASSTHROUGH_EXTENSION_NAME);
+        enabled_extensions.push_back(XR_FB_PASSTHROUGH_EXTENSION_NAME);
     }
     // XR_OCULUS_recenter_event
     if (has_extension(XR_FB_COLOR_SPACE_EXTENSION_NAME)) {
         extensions.FB_color_space = true;
-        required_extensions.push_back(XR_FB_COLOR_SPACE_EXTENSION_NAME);
+        enabled_extensions.push_back(XR_FB_COLOR_SPACE_EXTENSION_NAME);
     }
     if (has_extension(XR_FB_DISPLAY_REFRESH_RATE_EXTENSION_NAME)) {
         extensions.FB_display_refresh_rate = true;
-        required_extensions.push_back(XR_FB_DISPLAY_REFRESH_RATE_EXTENSION_NAME);
+        enabled_extensions.push_back(XR_FB_DISPLAY_REFRESH_RATE_EXTENSION_NAME);
     }
 
     // XR_META_passthrough_layer_resumed_event
     // XR_META_passthrough_color_lut
     // XR_META_passthrough_preferences
 
-    const XrInstanceCreateInfo create_info {
-        .type                   = XR_TYPE_INSTANCE_CREATE_INFO,
-        .next                   = nullptr,
-        .createFlags            = 0,
-        .applicationInfo = {
-            .applicationName    = { 'e', 'r', 'h', 'e', '\0' },
-            .applicationVersion = 1,
-            .engineName         = { 'e', 'r', 'h', 'e', '\0' },
-            .engineVersion      = 1,
-            .apiVersion         = XR_API_VERSION_1_1
-        },
-        .enabledApiLayerCount   = 0,
-        .enabledApiLayerNames   = nullptr,
-        .enabledExtensionCount  = static_cast<uint32_t>(required_extensions.size()),
-        .enabledExtensionNames  = required_extensions.data(),
-    };
+    std::vector<const char*> enabled_layers;
+    constexpr const char* const api_dump_layer_name                  = "XR_APILAYER_LUNARG_api_dump";
+    constexpr const char* const core_validation_layer_name           = "XR_APILAYER_LUNARG_core_validation";
+    constexpr const char* const best_practices_validation_layer_name = "XR_APILAYER_KHRONOS_best_practices_validation";
+    if (m_configuration.api_dump && has_layer(api_dump_layer_name)) {
+        enabled_layers.push_back(api_dump_layer_name);
+    }
+    if (m_configuration.validation && has_layer(core_validation_layer_name)) {
+        enabled_layers.push_back(core_validation_layer_name);
+    }
+    if (m_configuration.validation && has_layer(best_practices_validation_layer_name)) {
+        enabled_layers.push_back(best_practices_validation_layer_name);
+    }
 
-    ERHE_XR_CHECK(xrCreateInstance(&create_info, &m_xr_instance));
+    uint32_t       dropped_layer_count     = 0;
+    uint32_t       dropped_extension_count = 0;
+    const uint32_t total_layer_count       = static_cast<uint32_t>(enabled_layers.size());
+    const uint32_t total_extension_count   = static_cast<uint32_t>(enabled_extensions.size());
+    for (;;) {
+        const XrInstanceCreateInfo create_info {
+            .type                   = XR_TYPE_INSTANCE_CREATE_INFO,
+            .next                   = nullptr,
+            .createFlags            = 0,
+            .applicationInfo = {
+                .applicationName    = { 'e', 'r', 'h', 'e', '\0' },
+                .applicationVersion = 1,
+                .engineName         = { 'e', 'r', 'h', 'e', '\0' },
+                .engineVersion      = 1,
+                .apiVersion         = XR_API_VERSION_1_1
+            },
+            .enabledApiLayerCount   = total_layer_count - dropped_layer_count,
+            .enabledApiLayerNames   = enabled_layers.data(),
+            .enabledExtensionCount  = total_extension_count - dropped_extension_count,
+            .enabledExtensionNames  = enabled_extensions.data(),
+        };
+
+        XrResult result = xrCreateInstance(&create_info, &m_xr_instance);
+        if (result == XR_SUCCESS) {
+            break;
+        }
+        if (result == XR_ERROR_EXTENSION_NOT_PRESENT) {
+            if (dropped_extension_count == total_extension_count) {
+                break;
+            }
+            ++dropped_extension_count;
+            continue;
+        }
+        if (result == XR_ERROR_API_LAYER_NOT_PRESENT) {
+            if (dropped_layer_count == total_layer_count) {
+                break;
+            }
+            ++dropped_layer_count;
+            continue;
+        }
+        break;
+    }
 
     // m_xrSetEnvironmentDepthEstimationVARJO = nullptr;
     // if (!check("xrGetInstanceProcAddr",
@@ -451,6 +498,16 @@ auto Xr_instance::enumerate_extensions() -> bool
     }
 
     return true;
+}
+
+auto Xr_instance::has_layer(const char* layer_name) const -> bool
+{
+    for (const XrApiLayerProperties& layer : m_xr_api_layer_properties) {
+        if (strcmp(layer.layerName, layer_name) == 0) {
+            return true;
+        }
+    }
+    return false;
 }
 
 auto Xr_instance::has_extension(const char* extension_name) const -> bool

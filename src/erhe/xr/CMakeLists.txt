@@ -33,6 +33,8 @@ if (${ERHE_GRAPHICS_LIBRARY} STREQUAL "opengl")
     target_link_libraries(${_target} PRIVATE erhe::gl)
 endif ()
 
+target_compile_definitions(${_target} PRIVATE XR_API_LAYER_PATH="${OPENXR_BINARY_DIR}/src/api_layers")
+
 target_link_libraries(${_target}
     PUBLIC
         erhe::dataformat

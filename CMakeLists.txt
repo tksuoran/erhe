@@ -469,7 +469,11 @@ if (${ERHE_XR_LIBRARY} STREQUAL "openxr")
         VERSION           1.1.53
         GIT_TAG           release-1.1.53
         GIT_SHALLOW       TRUE
-        GITHUB_REPOSITORY KhronosGroup/OpenXR-SDK
+        GITHUB_REPOSITORY KhronosGroup/OpenXR-SDK-Source
+        OPTIONS
+            "BUILD_API_LAYERS ON"
+                 "BUILD_TESTS OFF"
+
     )
     message(STATUS "Erhe configured to use OpenXR for XR.")
     add_definitions(-DERHE_XR_LIBRARY_OPENXR)

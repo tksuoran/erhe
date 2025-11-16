@@ -191,12 +191,14 @@ font_size = 14 # TODO This needs separate value when using Desktop vs OpenXR
 enabled = true
 
 # OpenXR has been tested with Oculus Quest. In the distant past, also with Oculus Rift S and Varjo XR3 were tested.
-# [headset]
-# openxr          = true
-# openxr_mirror   = false
-# quad_view       = false
-# debug           = true
-# depth           = false
-# visibility_mask = false
-# hand_tracking   = false
-# passthrough_fb  = false # Useful with mirror mode, for example
+[headset]
+openxr          = false
+openxr_mirror   = false
+quad_view       = false
+debug           = false
+validation      = false
+api_dump        = false
+depth           = false
+visibility_mask = false
+hand_tracking   = false
+passthrough_fb  = false # Useful with mirror mode, for example

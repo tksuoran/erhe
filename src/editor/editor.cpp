@@ -481,6 +481,8 @@ public:
                 const auto& ini = erhe::configuration::get_ini_file_section(erhe::c_erhe_config_file_path, "headset");
                 ini.get("quad_view",         configuration.quad_view);
                 ini.get("debug",             configuration.debug);
+                ini.get("validation",        configuration.validation);
+                ini.get("api_dump",          configuration.api_dump);
                 ini.get("depth",             configuration.depth);
                 ini.get("visibility_mask",   configuration.visibility_mask);
                 ini.get("hand_tracking",     configuration.hand_tracking);
