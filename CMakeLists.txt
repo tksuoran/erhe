@@ -267,7 +267,7 @@ endif ()
 
 CPMAddPackage(
     NAME              simdjson
-    VERSION           4.0.7
+    VERSION           4.2.2
     GIT_SHALLOW       TRUE
     GITHUB_REPOSITORY simdjson/simdjson
 )
@@ -364,7 +364,7 @@ if (${ERHE_PROFILE_LIBRARY} STREQUAL "nvtx")
 elseif (${ERHE_PROFILE_LIBRARY} STREQUAL "tracy")
     CPMAddPackage(
         NAME              tracy
-        VERSION           0.12.2
+        VERSION           0.13.0
         GIT_SHALLOW       TRUE
         GITHUB_REPOSITORY wolfpld/tracy
         OPTIONS 
@@ -407,7 +407,7 @@ endif ()
 if (${ERHE_TEXT_LAYOUT_LIBRARY} STREQUAL "harfbuzz")
     CPMAddPackage(
         NAME              harfbuzz
-        GIT_TAG           12.1.0
+        GIT_TAG           12.2.0
         GIT_SHALLOW       TRUE
         GITHUB_REPOSITORY harfbuzz/harfbuzz
     )
