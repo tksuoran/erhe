@@ -78,7 +78,7 @@ erhe_target_sources_grouped(
     erhe_graphics/texture_heap.hpp
 )
 
-if (${ERHE_GRAPHICS_LIBRARY} STREQUAL "opengl")
+if (ERHE_GRAPHICS_API_OPENGL)
     erhe_target_sources_grouped(
         ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
         erhe_graphics/gl/gl_blit_command_encoder.cpp
@@ -124,7 +124,7 @@ if (${ERHE_GRAPHICS_LIBRARY} STREQUAL "opengl")
     target_link_libraries(${_target} PRIVATE erhe::gl)
 
 endif ()
-if (${ERHE_GRAPHICS_LIBRARY} STREQUAL "vulkan")
+if (ERHE_GRAPHIS_API_VULKAN)
     erhe_target_sources_grouped(
         ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
         erhe_graphics/vulkan/vulkan_blit_command_encoder.cpp

@@ -373,7 +373,7 @@ else ()
     )
 endif ()
 
-if (${ERHE_GRAPHICS_LIBRARY} STREQUAL "opengl")
+if (ERHE_GRAPHICS_API_OPENGL)
     target_link_libraries(${_target} PRIVATE erhe::gl)
 endif ()
 

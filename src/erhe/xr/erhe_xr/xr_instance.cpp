@@ -5,17 +5,10 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
-#ifdef _WIN32
+#if defined(ERHE_OS_WINDOWS)
 #   include <unknwn.h>
-#   define XR_USE_PLATFORM_WIN32      1
 #endif
 
-#ifdef linux
-#   define XR_USE_PLATFORM_LINUX      1
-#endif
-
-//#define XR_USE_GRAPHICS_API_VULKAN 1
-#define XR_USE_GRAPHICS_API_OPENGL 1
 #include <openxr/openxr.h>
 #include <openxr/openxr_platform.h>
 
@@ -30,10 +23,15 @@ Xr_instance::Xr_instance(const Xr_configuration& configuration)
     ERHE_PROFILE_FUNCTION();
 
     if (configuration.validation) {
-        static const char* set_validation_layer = "XR_API_LAYER_PATH=" XR_API_LAYER_PATH;
-        const int ret = _putenv(set_validation_layer);
+#if defined(ERHE_OS_WINDOWS)
+        const int ret = _putenv("XR_API_LAYER_PATH=" XR_API_LAYER_PATH);
+#elif defined(ERHE_OS_LINUX)
+        const int ret = setenv("XR_API_LAYER_PATH", XR_API_LAYER_PATH, 1);
+#else
+        const int ret = -1;
+#endif
         if (ret != 0) {
-            log_xr->warn("putenv(XR_API_LAYER_PATH) failed with error code {}.", ret);
+            log_xr->warn("Setting XR_API_LAYER_PATH environment variable failed with error code {}.", ret);
         }
     }
 
@@ -188,7 +186,16 @@ auto Xr_instance::create_instance() -> bool
     log_xr->trace("{}", __func__);
 
     std::vector<const char*> enabled_extensions;
+
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
     enabled_extensions.push_back(XR_KHR_OPENGL_ENABLE_EXTENSION_NAME);
+# if defined(ERHE_OS_LINUX)
+    enabled_extensions.push_back(XR_KHR_OPENGL_WAYLAND_EXTENSION_NAME);
+# endif
+#endif
+#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+    enabled_extensions.push_back(XR_KHR_VULKAN_ENABLE2_EXTENSION_NAME);
+#endif
 
     if (m_configuration.debug && has_extension(XR_EXT_DEBUG_UTILS_EXTENSION_NAME)) {
         extensions.EXT_debug_utils = true;

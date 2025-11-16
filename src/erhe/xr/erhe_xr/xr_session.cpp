@@ -15,10 +15,8 @@
 #include "erhe_xr/xr_log.hpp"
 #include "erhe_xr/xr_swapchain_image.hpp"
 
-
-#ifdef _WIN32
+#if defined(ERHE_OS_WINDOWS)
 #   include <unknwn.h>
-#   define XR_USE_PLATFORM_WIN32      1
 #endif
 
 //#if defined(_MSC_VER) && !defined(__clang__)
@@ -26,18 +24,12 @@
 //#   pragma warning(disable : 26812) // The enum type is unscoped. Prefer ‘enum class’ over ‘enum’ (Enum.3).
 //#endif
 
-#ifdef linux
-#   define XR_USE_PLATFORM_LINUX      1
-#endif
-
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
-# define XR_USE_GRAPHICS_API_OPENGL 1
-#endif
-#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
-# define XR_USE_GRAPHICS_API_VULKAN 1
-#endif
 #include <openxr/openxr.h>
 #include <openxr/openxr_platform.h>
+
+#if defined(ERHE_OS_LINUX)
+# include <wayland-client.h>
+#endif
 
 //#if defined(_MSC_VER) && !defined(__clang__)
 //#   pragma warning(pop)
@@ -135,8 +127,8 @@ auto Xr_session::create_session() -> bool
     log_xr->info("OpenGL minApiVersionSupported = {}.{}", min_major, min_minor);
     log_xr->info("OpenGL maxApiVersionSupported = {}.{}", max_major, max_minor);
 
-#ifdef _WIN32
-# if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(XR_USE_PLATFORM_WIN32)
+# if defined(XR_USE_GRAPHICS_API_OPENGL)
     HWND  hwnd  = m_context_window.get_hwnd();
     HDC   hdc   = GetDC(hwnd);
     HGLRC hglrc = m_context_window.get_hglrc();
@@ -158,9 +150,26 @@ auto Xr_session::create_session() -> bool
     check_gl_context_in_current_in_this_thread();
     ERHE_XR_CHECK(xrCreateSession(xr_instance, &session_create_info, &m_xr_session));
 # endif
-#endif
+#elif defined(XR_USE_PLATFORM_LINUX)
+# if defined(XR_USE_GRAPHICS_API_OPENGL)
+    struct wl_display* wayland_display = m_context_window.get_wl_display();
+    const XrGraphicsBindingOpenGLWaylandKHR graphics_binding_opengl_wayland{
+        .type    = XR_TYPE_GRAPHICS_BINDING_OPENGL_WAYLAND_KHR,
+        .next    = nullptr,
+        .display = wayland_display
+    };
 
-#ifdef linux
+    const XrSessionCreateInfo session_create_info{
+        .type        = XR_TYPE_SESSION_CREATE_INFO,
+        .next        = reinterpret_cast<const XrBaseInStructure*>(&graphics_binding_opengl_wayland),
+        .createFlags = 0,
+        .systemId    = m_instance.get_xr_system_id()
+    };
+
+    check_gl_context_in_current_in_this_thread();
+    ERHE_XR_CHECK(xrCreateSession(xr_instance, &session_create_info, &m_xr_session));
+# endif
+#else
     // TODO
     abort();
 #endif

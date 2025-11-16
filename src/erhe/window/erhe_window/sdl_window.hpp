@@ -28,6 +28,10 @@
 #   include <windows.h>
 #endif
 
+#if defined(ERHE_OS_LINUX)
+struct wl_display;
+#endif
+
 namespace erhe::window {
 
 using Mouse_cursor = signed int;
@@ -101,6 +105,9 @@ public:
 #if defined(ERHE_OS_WINDOWS)
     [[nodiscard]] auto get_hwnd() const -> HWND;
     [[nodiscard]] auto get_hglrc() const -> HGLRC;
+#endif
+#if defined(ERHE_OS_LINUX)
+    [[nodiscard]] auto get_wl_display() const -> struct wl_display*;
 #endif
 
 private:

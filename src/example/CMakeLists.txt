@@ -21,7 +21,7 @@ erhe_target_sources_grouped(
     erhe.toml
     logging.toml
 )
-if (${ERHE_GRAPHICS_LIBRARY} STREQUAL "opengl")
+if (ERHE_GRAPHICS_API_OPENGL)
     target_link_libraries(${_target} PRIVATE erhe::gl)
 endif ()
 

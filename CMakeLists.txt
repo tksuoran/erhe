@@ -209,9 +209,11 @@ endif ()
 
 if (${ERHE_GRAPHICS_LIBRARY} STREQUAL "opengl")
     message(STATUS "Erhe configured to use OpenGL as graphics API.")
+    set(ERHE_GRAPHICS_API_OPENGL TRUE)
     add_definitions(-DERHE_GRAPHICS_LIBRARY_OPENGL)
 elseif (${ERHE_GRAPHICS_LIBRARY} STREQUAL "vulkan")
     message(STATUS "Erhe configured to use vulkan as graphics API.")
+    set(ERHE_GRAPHICS_API_VULKAN TRUE)
     add_definitions(-DERHE_GRAPHICS_LIBRARY_VULKAN)
 endif ()
 

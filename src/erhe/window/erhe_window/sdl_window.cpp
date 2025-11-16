@@ -15,9 +15,12 @@
 #include <SDL3/SDL_keyboard.h>
 #include <SDL3/SDL_mouse.h>
 #include <SDL3/SDL_video.h>
+#if defined(ERHE_OS_LINUX)
+# include <wayland-client.h>
+#endif
 
 #if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
-# if defined(_WIN32)
+# if defined(ERHE_OS_WINDOWS)
 #   include <GL/wglext.h>
 # endif
 #endif
@@ -944,7 +947,7 @@ void Context_window::get_extensions()
     ERHE_PROFILE_FUNCTION();
     gl::dynamic_load_init(SDL_GL_GetProcAddress);
 
-# if defined(_WIN32)
+# if defined(ERHE_OS_WINDOWS)
     m_NV_delay_before_swap = SDL_GL_GetProcAddress("wglDelayBeforeSwapNV");
 # else // TODO
 # endif
@@ -969,7 +972,7 @@ void Context_window::clear_current() const
 
 auto Context_window::delay_before_swap(float seconds) const -> bool
 {
-#if defined(_WIN32)
+#if defined(ERHE_OS_WINDOWS)
     if (m_NV_delay_before_swap != nullptr) {
         auto* window = static_cast<SDL_Window*>(m_sdl_window);
         if (window != nullptr) {
@@ -1004,7 +1007,7 @@ void Context_window::swap_buffers() const
 auto Context_window::get_device_pointer() const -> void*
 {
 #if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
-# if defined(_WIN32)
+# if defined(ERHE_OS_WINDOWS)
     return wglGetCurrentContext();
 # else
     ERHE_FATAL("TODO");
@@ -1019,7 +1022,7 @@ auto Context_window::get_device_pointer() const -> void*
 
 auto Context_window::get_window_handle() const -> void*
 {
-#if defined(_WIN32)
+#if defined(ERHE_OS_WINDOWS)
     auto* window = static_cast<SDL_Window*>(m_sdl_window);
     if (window != nullptr) {
         SDL_PropertiesID properties = SDL_GetWindowProperties(window);
@@ -1034,7 +1037,7 @@ auto Context_window::get_window_handle() const -> void*
 #endif
 }
 
-#if defined(_WIN32)
+#if defined(ERHE_OS_WINDOWS)
 auto Context_window::get_hwnd() const -> HWND
 {
     auto* window = static_cast<SDL_Window*>(m_sdl_window);
@@ -1054,6 +1057,22 @@ auto Context_window::get_hglrc() const -> HGLRC
 }
 # endif
 #endif
+
+#if defined(ERHE_OS_LINUX)
+auto Context_window::get_wl_display() const -> struct wl_display*
+{
+    auto* window = static_cast<SDL_Window*>(m_sdl_window);
+    if (window != nullptr) {
+        SDL_PropertiesID properties = SDL_GetWindowProperties(window);
+        void* untyped_wayland_display = SDL_GetPointerProperty(properties, SDL_PROP_WINDOW_WAYLAND_DISPLAY_POINTER, nullptr);
+        struct wl_display* wayland_display = static_cast<struct wl_display*>(untyped_wayland_display);
+        return wayland_display;
+    } else {
+        return nullptr;
+    }
+}
+#endif
+
 
 auto Context_window::get_scale_factor() const -> float
 {

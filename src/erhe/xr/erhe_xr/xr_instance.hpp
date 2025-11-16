@@ -2,16 +2,10 @@
 
 #include "erhe_xr/xr_action.hpp"
 
-#ifdef _WIN32
+#if defined(ERHE_OS_WINDOWS)
 #   include <unknwn.h>
-#   define XR_USE_PLATFORM_WIN32      1
 #endif
 
-#ifdef linux
-#   define XR_USE_PLATFORM_LINUX      1
-#endif
-
-#define XR_USE_GRAPHICS_API_OPENGL 1
 #include <openxr/openxr.h>
 #include <openxr/openxr_platform.h>
 
