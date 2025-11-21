@@ -443,7 +443,8 @@ endif ()
 if (${ERHE_PHYSICS_LIBRARY} STREQUAL "jolt")
     CPMAddPackage(
         NAME              JoltPhysics
-        GIT_TAG           v5.4.0
+        #GIT_TAG           v5.4.0
+        GIT_TAG           793b3a0dbd978552cc6bf68db1c473b32e8ba1ef
         GITHUB_REPOSITORY jrouwe/JoltPhysics
         DOWNLOAD_ONLY     YES
     )
