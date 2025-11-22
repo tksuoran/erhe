@@ -35,6 +35,9 @@ target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 if (ERHE_GRAPHICS_API_OPENGL)
     target_link_libraries(${_target} PRIVATE erhe::gl)
 endif ()
+if (ERHE_GRAPHICS_API_VULKAN)
+    target_link_libraries(${_target} PRIVATE volk::volk)
+endif ()
 
 target_link_libraries(
     ${_target}

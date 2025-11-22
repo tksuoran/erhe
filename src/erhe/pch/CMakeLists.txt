@@ -60,6 +60,10 @@ target_link_libraries(${_target}
         fmt::fmt
 )
 
+#if (ERHE_GRAPHICS_API_VULKAN)
+#    target_link_libraries(${_target} PRIVATE volk::volk)
+#endif ()
+
 erhe_target_settings(${_target} "erhe")
 
 

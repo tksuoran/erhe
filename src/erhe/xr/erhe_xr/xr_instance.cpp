@@ -5,6 +5,12 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
+#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+# include "volk.h"
+# include <vulkan/vk_platform.h>
+# include <vulkan/vulkan_core.h>
+#endif
+
 #if defined(ERHE_OS_WINDOWS)
 #   include <unknwn.h>
 #endif

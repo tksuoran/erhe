@@ -124,7 +124,7 @@ if (ERHE_GRAPHICS_API_OPENGL)
     target_link_libraries(${_target} PRIVATE erhe::gl)
 
 endif ()
-if (ERHE_GRAPHIS_API_VULKAN)
+if (ERHE_GRAPHICS_API_VULKAN)
     erhe_target_sources_grouped(
         ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
         erhe_graphics/vulkan/vulkan_blit_command_encoder.cpp
@@ -158,6 +158,12 @@ if (ERHE_GRAPHIS_API_VULKAN)
         erhe_graphics/vulkan/vulkan_texture_heap.hpp
         erhe_graphics/vulkan/vulkan_vertex_input_state.cpp
         erhe_graphics/vulkan/vulkan_vertex_input_state.hpp
+    )
+    target_link_libraries(
+        ${_target}
+        PRIVATE
+            volk::volk
+            GPUOpen::VulkanMemoryAllocator
     )
 endif ()
 

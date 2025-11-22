@@ -25,6 +25,11 @@
 # endif
 #endif
 
+#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+# include <SDL3/SDL_vulkan.h>
+# include "volk.h"
+#endif
+
 #include <cstdlib>
 #include <ctime>
 #include <stdexcept>
@@ -270,6 +275,14 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
         }
     }
 
+#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+    bool vulkan_load_library_status = SDL_Vulkan_LoadLibrary(nullptr);
+    if (!vulkan_load_library_status) {
+        fputs("SDL_Vulkan_LoadLibrary() failed", stderr);
+        return false;
+    }
+#endif
+
     const bool primary = (configuration.share == nullptr);
 
     // Scanning joysticks can be slow, so do it in worker thread
@@ -365,13 +378,13 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
     }
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, configuration.gl_major);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, configuration.gl_minor);
-#if !defined(NDEBUG)
+# if !defined(NDEBUG)
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS,         SDL_GL_CONTEXT_DEBUG_FLAG | SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK,  SDL_GL_CONTEXT_PROFILE_CORE);
-#else
+# else
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS,         0);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK,  SDL_GL_CONTEXT_PROFILE_CORE);
-#endif
+# endif
 
     if (configuration.share != nullptr) {
         configuration.share->make_current();
@@ -415,10 +428,21 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
         // const bool is_linear = color_encoding == GL_LINEAR;
         // const bool is_srgb   = color_encoding == GL_SRGB;
         // ERHE_VERIFY(is_linear != is_srgb);
-
-        SDL_ShowWindow(sdl_window);
     }
 #endif
+
+#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+    Uint32 vulkan_instance_extension_count = 0;
+    char const* const* vulkan_instance_extensions = SDL_Vulkan_GetInstanceExtensions(&vulkan_instance_extension_count);
+    m_required_instance_extensions.clear();
+    for (Uint32 i = 0; i < vulkan_instance_extension_count; ++i) {
+        m_required_instance_extensions.emplace_back(vulkan_instance_extensions[i]);
+    }
+#endif
+
+    if (primary) {
+        SDL_ShowWindow(sdl_window);
+    }
 
     s_window_count++;
     m_is_mouse_relative_hold_enabled = false;
@@ -429,6 +453,10 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
 
 Context_window::~Context_window() noexcept
 {
+#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+    SDL_Vulkan_UnloadLibrary();
+#endif
+
     if (m_joystick_scan_task.joinable()) {
         m_joystick_scan_task.join();
     }
@@ -442,6 +470,30 @@ Context_window::~Context_window() noexcept
         }
     }
 }
+
+#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+auto Context_window::get_required_vulkan_instance_extensions() -> const std::vector<std::string>&
+{
+    return m_required_instance_extensions;
+}
+
+auto Context_window::create_vulkan_surface(void* vulkan_instance) -> void*
+{
+    SDL_Window* const window = reinterpret_cast<SDL_Window*>(m_sdl_window);
+    if (window == nullptr) {
+        return nullptr;
+    }
+
+    VkSurfaceKHR vulkan_surface{nullptr};
+    VkInstance instance = static_cast<VkInstance>(vulkan_instance);
+    bool result = SDL_Vulkan_CreateSurface(window, instance, nullptr, &vulkan_surface);
+    if (result == false) {
+        log_window->error("SDL_Vulkan_CreateSurface() failed");
+        return nullptr;
+    }
+    return static_cast<void*>(vulkan_surface);
+}
+#endif
 
 void Context_window::poll_events(float wait_time)
 {

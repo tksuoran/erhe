@@ -4,6 +4,8 @@
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/shader_monitor.hpp"
 
+#include "volk.h"
+
 #include <array>
 #include <memory>
 #include <unordered_map>
@@ -60,6 +62,13 @@ private:
     std::vector<std::unique_ptr<Ring_buffer>> m_ring_buffers;
     uint64_t                                  m_frame_number{1};
     std::vector<Completion_handler>           m_completion_handlers;
+
+    VkInstance       m_vk_instance       {VK_NULL_HANDLE};
+    VkPhysicalDevice m_vk_physical_device{VK_NULL_HANDLE};
+    VkDevice         m_vk_device         {VK_NULL_HANDLE};
+    VkSurfaceKHR     m_vk_surface        {VK_NULL_HANDLE};
+    VkQueue          m_vk_graphics_queue {VK_NULL_HANDLE};
+    VkQueue          m_vk_present_queue  {VK_NULL_HANDLE};
 };
 
 

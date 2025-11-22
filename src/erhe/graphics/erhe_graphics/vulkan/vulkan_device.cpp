@@ -22,6 +22,9 @@
 #include "erhe_utility/align.hpp"
 #include "erhe_window/window.hpp"
 
+#include "volk.h"
+#include "vk_mem_alloc.h"
+
 #if !defined(WIN32)
 #   include <csignal>
 #endif
@@ -36,6 +39,134 @@ Device_impl::Device_impl(Device& device, erhe::window::Context_window& context_w
     , m_device        {device}
     , m_shader_monitor{device}
 {
+    const VkResult volk_init = volkInitialize();
+    if (volk_init != VK_SUCCESS) {
+        abort(); // TODO handle errors
+    }
+
+    const std::vector<std::string>& required_extensions = context_window.get_required_vulkan_instance_extensions();
+    std::vector<const char*> required_extensions_c_str;
+    for (const std::string& extension_name : required_extensions) {
+        required_extensions_c_str.push_back(extension_name.c_str());
+    }
+
+    const VkApplicationInfo application_info{
+        .sType              = VK_STRUCTURE_TYPE_APPLICATION_INFO,
+        .pNext              = nullptr,                        // const void*
+        .pApplicationName   = "ERHE",                         // const char*
+        .applicationVersion = 0,                              // uint32_t
+        .pEngineName        = "ERHE",                         // const char*
+        .engineVersion      = 202501,                         // uint32_t
+        .apiVersion         = VK_MAKE_API_VERSION(0, 1, 1, 0) // uint32_t
+    };
+    const VkInstanceCreateInfo instance_create_info = {
+        .sType                   = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,                  // 
+        .pNext                   = nullptr,                                                 // 
+        .flags                   = 0,                                                       // 
+        .pApplicationInfo        = &application_info,                                       // 
+        .enabledLayerCount       = 0,                                                       // 
+        .ppEnabledLayerNames     = nullptr,                                                 // 
+        .enabledExtensionCount   = static_cast<uint32_t>(required_extensions_c_str.size()), // 
+        .ppEnabledExtensionNames = required_extensions_c_str.data()
+    };
+    VkResult result = vkCreateInstance(&instance_create_info, nullptr, &m_vk_instance);
+    if (result != VK_SUCCESS) {
+        abort(); // TODO handle error
+    }
+
+    volkLoadInstance(m_vk_instance);
+
+    void* const surface = context_window.create_vulkan_surface(m_vk_instance);
+    if (surface == nullptr) {
+        abort(); // TODO handle error
+    }
+    m_vk_surface = static_cast<VkSurfaceKHR>(surface);
+
+    uint32_t physical_device_count{0};
+    vkEnumeratePhysicalDevices(m_vk_instance, &physical_device_count, nullptr);
+    std::vector<VkPhysicalDevice> physical_devices(physical_device_count);
+    if (physical_device_count == 0) {
+        abort(); // TODO handle error
+    }
+    vkEnumeratePhysicalDevices(m_vk_instance, &physical_device_count, physical_devices.data());
+    m_vk_physical_device = physical_devices[0];
+
+    uint32_t queue_family_count{0};
+    vkGetPhysicalDeviceQueueFamilyProperties(m_vk_physical_device, &queue_family_count, nullptr);
+    if (queue_family_count == 0) {
+        abort(); // TODO handle error
+    }
+
+    std::vector<VkQueueFamilyProperties> queue_families(queue_family_count);
+    vkGetPhysicalDeviceQueueFamilyProperties(m_vk_physical_device, &queue_family_count, queue_families.data());
+
+    uint32_t graphics_queue_index = UINT32_MAX;
+    uint32_t present_queue_index = UINT32_MAX;
+    for (uint32_t i = 0, end = static_cast<uint32_t>(queue_families.size()); i < end; ++i) {
+        const VkQueueFamilyProperties& queue_family = queue_families[i];
+        const bool support_graphics = (queue_family.queueCount > 0) && (queue_family.queueFlags & VK_QUEUE_GRAPHICS_BIT);
+        const bool support_present = [&]() -> bool
+        {
+            VkBool32 support{VK_FALSE};
+            VkResult support_result = vkGetPhysicalDeviceSurfaceSupportKHR(m_vk_physical_device, i, m_vk_surface, &support);
+            return (support_result == VK_SUCCESS) && (support == VK_TRUE);
+        }();
+        if (support_graphics && support_present) {
+            graphics_queue_index = i;
+            present_queue_index = i;
+            break;
+        }
+        if ((graphics_queue_index == UINT32_MAX) && support_graphics) {
+            graphics_queue_index = i;
+        }
+        if ((present_queue_index == UINT32_MAX) && support_present) {
+            present_queue_index = i;
+        }
+    }
+    if (graphics_queue_index != present_queue_index) {
+        abort(); // TODO handle
+    }
+
+    const float queue_priority = 1.0f;
+    const VkDeviceQueueCreateInfo queue_create_info = {
+        .sType            = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO, // sType
+        .pNext            = nullptr,                                    // pNext
+        .flags            = 0,                                          // flags
+        .queueFamilyIndex = graphics_queue_index,                       // graphicsQueueIndex
+        .queueCount       = 1,                                          // queueCount
+        .pQueuePriorities = &queue_priority,                            // pQueuePriorities
+    };
+    
+    VkPhysicalDeviceFeatures device_features = {};
+
+    std::vector<const char*> device_extensions;
+    device_extensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+
+    VkPhysicalDeviceFeatures2 device_features2{
+        .sType    = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+        .pNext    = nullptr,
+        .features = {}
+    };
+    vkGetPhysicalDeviceFeatures2(m_vk_physical_device, &device_features2);
+    // samplerAnisotropy
+    // shaderCullDistance
+
+    const VkDeviceCreateInfo device_create_info = {
+        .sType                   = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,            // sType
+        .pNext                   = nullptr,                                         // pNext
+        .flags                   = 0,                                               // flags
+        .queueCreateInfoCount    = 1,                                               // queueCreateInfoCount
+        .pQueueCreateInfos       = &queue_create_info,                              // pQueueCreateInfos
+        .enabledLayerCount       = 0,                                               // enabledLayerCount - DEPRECATED
+        .ppEnabledLayerNames     = nullptr,                                         // ppEnabledLayerNames - DEPRECATED
+        .enabledExtensionCount   = static_cast<uint32_t>(device_extensions.size()), // enabledExtensionCount
+        .ppEnabledExtensionNames = device_extensions.data(),                        // ppEnabledExtensionNames
+        .pEnabledFeatures        = nullptr
+    };
+    vkCreateDevice(m_vk_physical_device, &device_create_info, nullptr, &m_vk_device);
+
+    vkGetDeviceQueue(m_vk_device, graphics_queue_index, 0, &m_vk_graphics_queue);
+    vkGetDeviceQueue(m_vk_device, present_queue_index, 0, &m_vk_present_queue);
 }
 
 auto Device_impl::get_handle(const Texture& texture, const Sampler& sampler) const -> uint64_t
@@ -128,7 +259,10 @@ auto Device_impl::get_buffer_alignment(Buffer_target target) -> std::size_t
     }
 }
 
-Device_impl::~Device_impl() = default;
+Device_impl::~Device_impl()
+{
+    //volkFinalize();
+}
 
 void Device_impl::upload_to_buffer(Buffer& buffer, size_t offset, const void* data, size_t length)
 {

@@ -67,13 +67,16 @@ if (WIN32)
     message("Detected Windows platform")
     set(ERHE_TARGET_OS_WINDOWS TRUE)
     add_definitions(-DERHE_OS_WINDOWS)
+    set(VOLK_STATIC_DEFINES VK_USE_PLATFORM_WIN32_KHR)
 elseif (UNIX AND ${CMAKE_SYSTEM_NAME} MATCHES "Linux")
     message("Detected Linux platform")
     set(ERHE_TARGET_OS_LINUX TRUE)
     add_definitions(-DERHE_OS_LINUX)
+    set(VOLK_STATIC_DEFINES VK_USE_PLATFORM_WAYLAND_KHR)
 elseif (${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
     message("Detected Apple OSX")
     set(ERHE_TARGET_OS_OSX TRUE)
+    set(VOLK_STATIC_DEFINES VK_USE_PLATFORM_MACOS_MVK)
     add_definitions(-DERHE_OS_OSX)
 else ()
     message(FATAL_ERROR "OS not supported ${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}")
@@ -215,6 +218,34 @@ elseif (${ERHE_GRAPHICS_LIBRARY} STREQUAL "vulkan")
     message(STATUS "Erhe configured to use vulkan as graphics API.")
     set(ERHE_GRAPHICS_API_VULKAN TRUE)
     add_definitions(-DERHE_GRAPHICS_LIBRARY_VULKAN)
+    CPMAddPackage(
+        NAME              Vulkan-Headers
+        GIT_TAG           vulkan-sdk-1.4.328.1
+        GIT_SHALLOW       TRUE
+        GITHUB_REPOSITORY KhronosGroup/Vulkan-Headers
+    )
+    CPMAddPackage(
+        NAME              VulkanMemoryAllocator
+        VERSION           3.3.0
+        GIT_SHALLOW       TRUE
+        GITHUB_REPOSITORY GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator
+    )
+    set(VOLK_PULL_IN_VULKAN ON CACHE BOOL "" FORCE)
+    set(VOLK_STATIC_DEFINES "${VOLK_STATIC_DEFINES}" CACHE STRING "" FORCE)
+    set(VULKAN_HEADERS_INSTALL_DIR "${Vulkan-Headers_SOURCE_DIR}" CACHE PATH "" FORCE)
+    message("erhe: VOLK_PULL_IN_VULKAN = ${VOLK_PULL_IN_VULKAN}")
+    message("erhe: VOLK_STATIC_DEFINES = ${VOLK_STATIC_DEFINES}")
+    message("erhe: VULKAN_HEADERS_INSTALL_DIR = ${VULKAN_HEADERS_INSTALL_DIR}")
+    CPMAddPackage(
+        NAME              volk
+        VERSION           vulkan-sdk-1.4.328.1
+        GIT_TAG           vulkan-sdk-1.4.328.1
+        GIT_SHALLOW       TRUE
+        GITHUB_REPOSITORY zeux/volk
+    )
+    #   OPTIONS
+    #       "VOLK_PULL_IN_VULKAN ON"
+    #       "VOLK_STATIC_DEFINES ${VOLK_STATIC_DEFINES}"
 endif ()
 
 CPMAddPackage(
@@ -243,7 +274,7 @@ if (${ERHE_WINDOW_LIBRARY} STREQUAL "sdl")
                      "SDL_AUDIO OFF"
                     "SDL_RENDER OFF"
     )
-    message(STATUS "Erhe configured to use SDL for OpenGL context window.")
+    message(STATUS "Erhe configured to use SDL for window system integration.")
     add_definitions(-DERHE_WINDOW_LIBRARY_SDL)
 elseif (${ERHE_WINDOW_LIBRARY} STREQUAL "glfw")
     CPMAddPackage(
@@ -260,10 +291,10 @@ elseif (${ERHE_WINDOW_LIBRARY} STREQUAL "glfw")
                    "GLFW_INSTALL OFF"
              "GLFW_VULKAN_STATIC OFF"
     )
-    message(STATUS "Erhe configured to use glfw for OpenGL context window.")
+    message(STATUS "Erhe configured to use glfw for window system integration.")
     add_definitions(-DERHE_WINDOW_LIBRARY_GLFW)
 else ()
-    message(STATUS "Erhe configured to disable OpenGL Context window.")
+    message(STATUS "Erhe configured to disable window system integration.")
     add_definitions(-DERHE_WINDOW_LIBRARY_NONE)
 endif ()
 

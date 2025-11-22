@@ -55,6 +55,12 @@ if (ERHE_GRAPHICS_API_OPENGL)
 endif ()
 
 if (ERHE_GRAPHICS_API_VULKAN)
+    target_link_libraries(
+        ${_target}
+        PRIVATE
+            volk::volk
+            GPUOpen::VulkanMemoryAllocator
+    )
     target_compile_definitions(${_target} PUBLIC XR_USE_GRAPHICS_API_VULKAN=1)
 endif ()
 

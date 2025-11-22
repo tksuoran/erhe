@@ -109,6 +109,11 @@ public:
 #if defined(ERHE_OS_LINUX)
     [[nodiscard]] auto get_wl_display() const -> struct wl_display*;
 #endif
+#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+    [[nodiscard]] auto get_required_vulkan_instance_extensions() -> const std::vector<std::string>&;
+    [[nodiscard]] auto create_vulkan_surface(void* vulkan_instance) -> void*;
+
+#endif
 
 private:
 #if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
@@ -143,7 +148,12 @@ private:
     std::thread                m_joystick_scan_task;
     std::function<void(Context_window& context_window)> m_input_event_synthesizer_callback;
 
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
     SDL_FunctionPointer m_NV_delay_before_swap{nullptr};
+#endif
+#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+    std::vector<std::string> m_required_instance_extensions;
+#endif
 
     static int s_window_count;
 };
