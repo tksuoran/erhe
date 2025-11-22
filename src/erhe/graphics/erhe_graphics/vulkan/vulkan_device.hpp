@@ -48,6 +48,10 @@ public:
 
 private:
     void frame_completed(uint64_t frame);
+    [[nodiscard]] auto get_surface_format_score(VkSurfaceFormatKHR surface_format) -> float;
+    [[nodiscard]] auto get_present_mode_score(VkPresentModeKHR present_mode) -> float;
+    [[nodiscard]] auto choose_surface_format(const std::vector<VkSurfaceFormatKHR>& surface_formats) -> VkSurfaceFormatKHR;
+    [[nodiscard]] auto choose_present_mode(const std::vector<VkPresentModeKHR>& present_modes) -> VkPresentModeKHR;
 
     erhe::window::Context_window& m_context_window;
     Device&                       m_device;
@@ -63,12 +67,16 @@ private:
     uint64_t                                  m_frame_number{1};
     std::vector<Completion_handler>           m_completion_handlers;
 
-    VkInstance       m_vk_instance       {VK_NULL_HANDLE};
-    VkPhysicalDevice m_vk_physical_device{VK_NULL_HANDLE};
-    VkDevice         m_vk_device         {VK_NULL_HANDLE};
-    VkSurfaceKHR     m_vk_surface        {VK_NULL_HANDLE};
-    VkQueue          m_vk_graphics_queue {VK_NULL_HANDLE};
-    VkQueue          m_vk_present_queue  {VK_NULL_HANDLE};
+    VkInstance         m_vk_instance       {VK_NULL_HANDLE};
+    VkPhysicalDevice   m_vk_physical_device{VK_NULL_HANDLE};
+    VkDevice           m_vk_device         {VK_NULL_HANDLE};
+    VkSurfaceKHR       m_vk_surface        {VK_NULL_HANDLE};
+    VkQueue            m_vk_graphics_queue {VK_NULL_HANDLE};
+    VkQueue            m_vk_present_queue  {VK_NULL_HANDLE};
+
+    VkSurfaceCapabilitiesKHR m_surface_capabilities{};
+    VkSurfaceFormatKHR       m_surface_format{};
+    VkPresentModeKHR         m_present_mode{VK_PRESENT_MODE_FIFO_KHR};
 };
 
 
