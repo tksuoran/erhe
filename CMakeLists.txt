@@ -230,22 +230,14 @@ elseif (${ERHE_GRAPHICS_LIBRARY} STREQUAL "vulkan")
         GIT_SHALLOW       TRUE
         GITHUB_REPOSITORY GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator
     )
-    set(VOLK_PULL_IN_VULKAN ON CACHE BOOL "" FORCE)
-    set(VOLK_STATIC_DEFINES "${VOLK_STATIC_DEFINES}" CACHE STRING "" FORCE)
-    set(VULKAN_HEADERS_INSTALL_DIR "${Vulkan-Headers_SOURCE_DIR}" CACHE PATH "" FORCE)
-    message("erhe: VOLK_PULL_IN_VULKAN = ${VOLK_PULL_IN_VULKAN}")
-    message("erhe: VOLK_STATIC_DEFINES = ${VOLK_STATIC_DEFINES}")
-    message("erhe: VULKAN_HEADERS_INSTALL_DIR = ${VULKAN_HEADERS_INSTALL_DIR}")
     CPMAddPackage(
         NAME              volk
-        VERSION           vulkan-sdk-1.4.328.1
-        GIT_TAG           vulkan-sdk-1.4.328.1
+        #VERSION           vulkan-sdk-1.4.328.1
+        #GIT_TAG           vulkan-sdk-1.4.328.1
+        GIT_TAG           vh-include
         GIT_SHALLOW       TRUE
         GITHUB_REPOSITORY zeux/volk
     )
-    #   OPTIONS
-    #       "VOLK_PULL_IN_VULKAN ON"
-    #       "VOLK_STATIC_DEFINES ${VOLK_STATIC_DEFINES}"
 endif ()
 
 CPMAddPackage(
