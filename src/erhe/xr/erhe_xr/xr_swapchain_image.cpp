@@ -109,7 +109,7 @@ void Swapchain::operator=(Swapchain&& other) noexcept
     m_xr_swapchain = other.m_xr_swapchain;
 #if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
     m_gl_textures = std::move(other.m_gl_textures);
-#endif`
+#endif
 #if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
     m_vk_images = std::move(other.m_vk_images);
 #endif

@@ -1,3 +1,4 @@
+message(STATUS "Configuring executable 'example'.")
 set(_target "example")
 add_executable(${_target})
 erhe_target_sources_grouped(

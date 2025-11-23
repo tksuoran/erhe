@@ -195,9 +195,9 @@ auto Xr_instance::create_instance() -> bool
 
 #if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
     enabled_extensions.push_back(XR_KHR_OPENGL_ENABLE_EXTENSION_NAME);
-# if defined(ERHE_OS_LINUX)
-    enabled_extensions.push_back(XR_KHR_OPENGL_WAYLAND_EXTENSION_NAME);
-# endif
+//# if defined(ERHE_OS_LINUX)
+//    enabled_extensions.push_back(XR_KHR_OPENGL_WAYLAND_EXTENSION_NAME);
+//# endif
 #endif
 #if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
     enabled_extensions.push_back(XR_KHR_VULKAN_ENABLE2_EXTENSION_NAME);
@@ -358,7 +358,9 @@ auto Xr_instance::create_instance() -> bool
         }
     }
 
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
     xrGetOpenGLGraphicsRequirementsKHR = get_proc_addr<PFN_xrGetOpenGLGraphicsRequirementsKHR>("xrGetOpenGLGraphicsRequirementsKHR");
+#endif
 
     XrInstanceProperties instance_properties {
         .type = XR_TYPE_INSTANCE_PROPERTIES,

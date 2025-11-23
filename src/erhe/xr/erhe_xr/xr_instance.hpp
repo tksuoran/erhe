@@ -6,6 +6,10 @@
 #   include <unknwn.h>
 #endif
 
+#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+# include "volk.h"
+#endif
+
 #include <openxr/openxr.h>
 #include <openxr/openxr_platform.h>
 
@@ -118,7 +122,9 @@ public:
 
     PFN_xrCreateDebugUtilsMessengerEXT     xrCreateDebugUtilsMessengerEXT    {nullptr};
     PFN_xrGetVisibilityMaskKHR             xrGetVisibilityMaskKHR            {nullptr};
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
     PFN_xrGetOpenGLGraphicsRequirementsKHR xrGetOpenGLGraphicsRequirementsKHR{nullptr};
+#endif
 
     PFN_xrCreateHandTrackerEXT             xrCreateHandTrackerEXT            {nullptr};
     PFN_xrDestroyHandTrackerEXT            xrDestroyHandTrackerEXT           {nullptr};

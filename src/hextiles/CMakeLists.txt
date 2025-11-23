@@ -1,3 +1,4 @@
+message(STATUS "Configuring executable 'hextiles'.")
 set(_target "hextiles")
 add_executable(${_target})
 erhe_target_sources_grouped(

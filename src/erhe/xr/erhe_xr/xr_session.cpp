@@ -111,6 +111,7 @@ auto Xr_session::create_session() -> bool
     const auto xr_instance = m_instance.get_xr_instance();
     ERHE_VERIFY(xr_instance != XR_NULL_HANDLE);
 
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
     XrGraphicsRequirementsOpenGLKHR xr_graphics_requirements_opengl{
         .type                   = XR_TYPE_GRAPHICS_REQUIREMENTS_OPENGL_KHR,
         .next                   = nullptr,
@@ -126,6 +127,7 @@ auto Xr_session::create_session() -> bool
 
     log_xr->info("OpenGL minApiVersionSupported = {}.{}", min_major, min_minor);
     log_xr->info("OpenGL maxApiVersionSupported = {}.{}", max_major, max_minor);
+#endif
 
 #if defined(XR_USE_PLATFORM_WIN32)
 # if defined(XR_USE_GRAPHICS_API_OPENGL)
@@ -980,12 +982,14 @@ auto Xr_session::render_frame(std::function<bool(Render_view&)> render_view_call
         const auto& acquired_color_swapchain_image         = acquired_color_swapchain_image_opt.value();
         const auto& acquired_depth_stencil_swapchain_image = acquired_depth_stencil_swapchain_image_opt.value();
 
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
         const uint32_t color_texture         = acquired_color_swapchain_image.get_gl_texture();
         const uint32_t depth_stencil_texture = acquired_depth_stencil_swapchain_image.get_gl_texture();
         if ((color_texture == 0) || (depth_stencil_texture == 0)) {
             log_xr->warn("invalid color / depth image for view {}", i);
             return false;
         }
+#endif
  
         Render_view render_view{
             .slot      = i,
@@ -997,8 +1001,10 @@ auto Xr_session::render_frame(std::function<bool(Render_view&)> render_view_call
             .fov_right             = m_xr_views[i].fov.angleRight,
             .fov_up                = m_xr_views[i].fov.angleUp,
             .fov_down              = m_xr_views[i].fov.angleDown,
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
             .color_texture         = color_texture,
             .depth_stencil_texture = depth_stencil_texture,
+#endif
             .color_format          = m_swapchain_color_format,
             .depth_stencil_format  = m_swapchain_depth_stencil_format,
             .width                 = view_configuration_views[i].recommendedImageRectWidth,

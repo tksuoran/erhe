@@ -7,15 +7,19 @@ set(CMAKE_CXX_EXTENSIONS        NO)
 #add_subdirectory(hidapi)
 
 if (${ERHE_PROFILE_LIBRARY} STREQUAL "superluminal")
+    message(STATUS "Adding subdirectory 'superluminal'.")
     add_subdirectory(superluminal)
 endif ()
 
 if (${ERHE_GUI_LIBRARY} STREQUAL "imgui")
+    message(STATUS "Adding subdirectory 'imgui'.")
     add_subdirectory(imgui)
+    message(STATUS "Adding subdirectory 'imgui_gradient'.")
     add_subdirectory(imgui_gradient)
 endif ()
 
 if (${ERHE_AUDIO_LIBRARY} STREQUAL "miniaudio")
+    message(STATUS "Adding subdirectory 'miniaudio'.")
     add_subdirectory(miniaudio)
 endif ()
 
@@ -30,11 +34,13 @@ add_subdirectory(quickhull)
 add_subdirectory(erhe)
 
 if (${ERHE_GUI_LIBRARY} STREQUAL "imgui")
+    message(STATUS "Adding subdirectory 'editor'.")
     add_subdirectory(editor)
-endif ()    
+endif ()
 
 add_subdirectory(example)
 
 if (${ERHE_GUI_LIBRARY} STREQUAL "imgui")
+    message(STATUS "Adding subdirectory 'hextiles'.")
     add_subdirectory(hextiles)
 endif ()

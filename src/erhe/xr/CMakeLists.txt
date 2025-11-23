@@ -54,11 +54,13 @@ if (ERHE_GRAPHICS_API_OPENGL)
     target_compile_definitions(${_target} PUBLIC XR_USE_GRAPHICS_API_OPENGL=1)
 endif ()
 
+# TODO Try to move volk into PRIVATE by using pimpl
 if (ERHE_GRAPHICS_API_VULKAN)
     target_link_libraries(
         ${_target}
-        PRIVATE
+        PUBLIC
             volk::volk
+        PRIVATE
             GPUOpen::VulkanMemoryAllocator
     )
     target_compile_definitions(${_target} PUBLIC XR_USE_GRAPHICS_API_VULKAN=1)

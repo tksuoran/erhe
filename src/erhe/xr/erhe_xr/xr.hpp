@@ -30,8 +30,10 @@ public:
     float                    fov_right;
     float                    fov_up;
     float                    fov_down;
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
     uint32_t                 color_texture;
     uint32_t                 depth_stencil_texture;
+#endif
     erhe::dataformat::Format color_format;
     erhe::dataformat::Format depth_stencil_format;
     uint32_t                 width;

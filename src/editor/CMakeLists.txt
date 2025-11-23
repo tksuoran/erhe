@@ -1,3 +1,5 @@
+message(STATUS "Configuring executable 'editor'.")
+
 set(_target "editor")
 add_executable(${_target})
 erhe_target_sources_grouped(

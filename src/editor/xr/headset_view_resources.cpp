@@ -45,7 +45,9 @@ Headset_view_resources::Headset_view_resources(
             .type              = erhe::graphics::Texture_type::texture_2d,
             .width             = m_width,
             .height            = m_height,
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
             .wrap_texture_name = render_view.color_texture,
+#endif
             .debug_label       = fmt::format("XR color {}", slot)
         }
     );
@@ -57,7 +59,9 @@ Headset_view_resources::Headset_view_resources(
             .type              = erhe::graphics::Texture_type::texture_2d,
             .width             = m_width,
             .height            = m_height,
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
             .wrap_texture_name = render_view.depth_stencil_texture,
+#endif
             .debug_label       = fmt::format("XR depth stencil {}", slot)
         }
     );
