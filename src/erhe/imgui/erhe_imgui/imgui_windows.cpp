@@ -18,8 +18,9 @@ namespace erhe::imgui {
 Imgui_windows::Imgui_windows(
     Imgui_renderer&                 imgui_renderer,
     erhe::graphics::Device&         graphics_device,
-    erhe::window::Context_window*   context_window,
+    erhe::graphics::Swapchain&      swapchain,
     erhe::rendergraph::Rendergraph& rendergraph,
+    erhe::window::Context_window*   context_window,
     std::string_view                windows_ini_path
 )
     : m_imgui_renderer  {imgui_renderer}
@@ -32,8 +33,9 @@ Imgui_windows::Imgui_windows(
         m_window_imgui_host = std::make_shared<erhe::imgui::Window_imgui_host>(
             imgui_renderer,
             graphics_device,
-            *context_window,
+            swapchain,
             rendergraph,
+            *context_window,
             "window_imgui_host"
         );
     }

@@ -81,6 +81,7 @@ void Headset_view_node::execute_rendergraph_node()
 Headset_view::Headset_view(
     erhe::commands::Commands&       commands,
     erhe::graphics::Device&         graphics_device,
+    erhe::graphics::Swapchain&      swapchain,
     erhe::imgui::Imgui_renderer&    imgui_renderer,
     erhe::imgui::Imgui_windows&     imgui_windows,
     erhe::rendergraph::Rendergraph& rendergraph,
@@ -102,6 +103,7 @@ Headset_view::Headset_view(
     , m_offset_z_command       {commands, m_translate_z, 'z'}
     , m_app_context            {app_context}
     , m_context_window         {context_window}
+    , m_swapchain              {swapchain}
     , m_headset                {headset}
 {
     ERHE_PROFILE_FUNCTION();
@@ -130,12 +132,10 @@ Headset_view::Headset_view(
 
     if (m_context.OpenXR_mirror) {
         erhe::graphics::Render_pass_descriptor render_pass_descriptor;
-        render_pass_descriptor.color_attachments[0].use_default_framebuffer = true;
-        render_pass_descriptor.color_attachments[0].load_action             = erhe::graphics::Load_action::Clear;
-        render_pass_descriptor.depth_attachment    .use_default_framebuffer = true;
-        render_pass_descriptor.depth_attachment    .load_action             = erhe::graphics::Load_action::Clear;
-        render_pass_descriptor.stencil_attachment  .use_default_framebuffer = true;
-        render_pass_descriptor.stencil_attachment  .load_action             = erhe::graphics::Load_action::Clear;
+        render_pass_descriptor.swapchain = &m_swapchain;
+        render_pass_descriptor.color_attachments[0].load_action = erhe::graphics::Load_action::Clear;
+        render_pass_descriptor.depth_attachment    .load_action = erhe::graphics::Load_action::Clear;
+        render_pass_descriptor.stencil_attachment  .load_action = erhe::graphics::Load_action::Clear;
         render_pass_descriptor.render_target_width  = context_window.get_width();
         render_pass_descriptor.render_target_height = context_window.get_height();
         render_pass_descriptor.debug_label          = "OpenXR mirror window Render_pass";

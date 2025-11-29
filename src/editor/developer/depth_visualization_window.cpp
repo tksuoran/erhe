@@ -300,7 +300,7 @@ void Depth_visualization_window::imgui()
     if (area_size <= 0) {
         return; // Not visible
     }
-    m_depth_to_color_node->update_render_pass(area_size, area_size, false);
+    m_depth_to_color_node->update_render_pass(area_size, area_size, nullptr);
 
     if (!texture) {
         log_render->warn("Depth_visualization_window has no input render graph node");

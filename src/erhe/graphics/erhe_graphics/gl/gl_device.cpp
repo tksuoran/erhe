@@ -101,13 +101,16 @@ auto get_string(gl::String_name string_name) -> std::string
 
 //
 
-Device_impl::Device_impl(Device& device, erhe::window::Context_window& context_window)
-    : m_context_window     {context_window}
-    , m_device             {device}
+Device_impl::Device_impl(Device& device, const Surface_create_info& surface_create_info)
+    : m_device             {device}
     , m_shader_monitor     {device}
     , m_gl_context_provider{device, m_gl_state_tracker}
 {
     ERHE_PROFILE_FUNCTION();
+
+    if (surface_create_info.context_window != nullptr) {
+        m_surface = std::make_unique<Surface>(m_device, surface_create_info);
+    }
 
     std::vector<std::string> extensions;
     const auto gl_vendor      = (get_string)(gl::String_name::vendor);
@@ -461,11 +464,13 @@ Device_impl::Device_impl(Device& device, erhe::window::Context_window& context_w
         }
     }
 
-    if (initial_clear) {
-        gl::clear_color(0.2f, 0.2f, 0.2f, 0.2f);
-        for (int i = 0; i < 3; ++i) {
-            gl::clear(gl::Clear_buffer_mask::color_buffer_bit);
-            context_window.swap_buffers();
+    if (surface_create_info.context_window != nullptr) {
+        if (initial_clear) {
+            gl::clear_color(0.2f, 0.2f, 0.2f, 0.2f);
+            for (int i = 0; i < 3; ++i) {
+                gl::clear(gl::Clear_buffer_mask::color_buffer_bit);
+                surface_create_info.context_window->swap_buffers();
+            }
         }
     }
 
@@ -630,6 +635,11 @@ Device_impl::Device_impl(Device& device, erhe::window::Context_window& context_w
             .result       = gl::Sync_status::timeout_expired
         }
     );
+}
+
+auto Device_impl::get_surface() -> Surface*
+{
+    return m_surface.get();
 }
 
 auto Device_impl::get_handle(const Texture& texture, const Sampler& sampler) const -> uint64_t

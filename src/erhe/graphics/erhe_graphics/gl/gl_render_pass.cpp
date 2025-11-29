@@ -120,14 +120,15 @@ Render_pass_impl*              Render_pass_impl::s_active_render_pass = nullptr;
 
 
 Render_pass_impl::Render_pass_impl(Device& device, const Render_pass_descriptor& descriptor)
-    : m_device              {device}
-    , m_color_attachments   {descriptor.color_attachments}
-    , m_depth_attachment    {descriptor.depth_attachment}
-    , m_stencil_attachment  {descriptor.stencil_attachment}
-    , m_render_target_width {descriptor.render_target_width}
-    , m_render_target_height{descriptor.render_target_height}
-    , m_debug_label         {descriptor.debug_label}
-    , m_debug_group_name    {fmt::format("Render pass: {}", descriptor.debug_label)}
+    : m_device                  {device}
+    , m_swapchain               {descriptor.swapchain}
+    , m_color_attachments       {descriptor.color_attachments}
+    , m_depth_attachment        {descriptor.depth_attachment}
+    , m_stencil_attachment      {descriptor.stencil_attachment}
+    , m_render_target_width     {descriptor.render_target_width}
+    , m_render_target_height    {descriptor.render_target_height}
+    , m_debug_label             {descriptor.debug_label}
+    , m_debug_group_name        {fmt::format("Render pass: {}", descriptor.debug_label)}
 {
     auto check_multisample_resolve = [this](const Render_pass_attachment_descriptor& attachment)
     {
@@ -139,11 +140,6 @@ Render_pass_impl::Render_pass_impl(Device& device, const Render_pass_descriptor&
             (attachment.store_action == Store_action::Store_and_multisample_resolve)
         ) {
             m_uses_multisample_resolve = true;
-        }
-        if (attachment.use_default_framebuffer) {
-            m_uses_default_framebuffer = true;
-        } else {
-            ERHE_VERIFY(!m_uses_default_framebuffer);
         }
     };
     for (const Render_pass_attachment_descriptor& color_attachment : m_color_attachments) {
@@ -215,7 +211,7 @@ void Render_pass_impl::create()
     ERHE_PROFILE_FUNCTION();
 
     m_draw_buffers.clear();
-    if (m_uses_default_framebuffer) {
+    if (m_swapchain != nullptr) {
         m_draw_buffers.push_back(gl::Color_buffer::back);
         return;
     }
@@ -407,6 +403,11 @@ auto Render_pass_impl::get_render_target_height() const -> int
     return m_render_target_height;
 }
 
+auto Render_pass_impl::get_swapchain() const -> Swapchain*
+{
+    return m_swapchain;
+}
+
 auto Render_pass_impl::get_debug_label() const -> const std::string&
 {
     return m_debug_label;
@@ -480,7 +481,7 @@ void Render_pass_impl::start_render_pass()
     );
 
 #if !defined(NDEBUG)
-    if (!m_uses_default_framebuffer) {
+    if (m_swapchain == nullptr) {
         const auto status = gl::check_named_framebuffer_status(gl_name(), gl::Framebuffer_target::draw_framebuffer);
         ERHE_VERIFY(status == gl::Framebuffer_status::framebuffer_complete);
     }
@@ -489,12 +490,15 @@ void Render_pass_impl::start_render_pass()
     const GLint name = gl_name();
     for (size_t color_index = 0; color_index < m_color_attachments.size(); ++color_index) {
         const Render_pass_attachment_descriptor& attachment = m_color_attachments[color_index];
+        if ((m_swapchain != nullptr) && (color_index > 0)) {
+            continue;
+        }
         if (!attachment.is_defined()) {
             continue;
         }
         if (attachment.load_action == Load_action::Clear) {
             const erhe::dataformat::Format      pixelformat = attachment.get_pixelformat();
-            const erhe::dataformat::Format_kind format_kind = attachment.use_default_framebuffer
+            const erhe::dataformat::Format_kind format_kind = (m_swapchain != nullptr)
                 ? erhe::dataformat::Format_kind::format_kind_float // default framebuffer is always unorm
                 : erhe::dataformat::get_format_kind(pixelformat);
             switch (format_kind) {
@@ -661,6 +665,9 @@ void Render_pass_impl::end_render_pass()
         int blit_width = 0;
         int blit_height = 0;
         for (size_t color_index = 0; color_index < m_color_attachments.size(); ++color_index) {
+            if ((m_swapchain != nullptr) && (color_index > 0)) {
+                continue;
+            }
             const Render_pass_attachment_descriptor& attachment = m_color_attachments[color_index];
             if (check_multisample_resolve(attachment, blit_width, blit_height)) {
                 const gl::Color_buffer color_buffer = static_cast<gl::Color_buffer>(static_cast<unsigned int>(gl::Color_buffer::color_attachment0) + color_index);
@@ -733,6 +740,9 @@ void Render_pass_impl::end_render_pass()
     };
 
     for (size_t color_index = 0; color_index < m_color_attachments.size(); ++color_index) {
+        if ((m_swapchain != nullptr) && (color_index > 0)) {
+            continue;
+        }
         check_invalidate_attachment(m_color_attachments[color_index], color_attachment_points[color_index]);
     }
     check_invalidate_attachment(m_depth_attachment,   gl::Framebuffer_attachment::depth_attachment);

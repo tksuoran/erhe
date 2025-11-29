@@ -17,6 +17,7 @@
 
 namespace erhe::graphics {
     class Device;
+    class Swapchain;
 }
 namespace erhe::imgui {
     class Imgui_windows;
@@ -94,6 +95,7 @@ public:
     Headset_view(
         erhe::commands::Commands&       commands,
         erhe::graphics::Device&         graphics_device,
+        erhe::graphics::Swapchain&      swapchain,
         erhe::imgui::Imgui_renderer&    imgui_renderer,
         erhe::imgui::Imgui_windows&     imgui_windows,
         erhe::rendergraph::Rendergraph& rendergraph,
@@ -155,6 +157,7 @@ private:
 
     App_context&                                         m_app_context;
     erhe::window::Context_window&                        m_context_window;
+    erhe::graphics::Swapchain&                           m_swapchain;
     std::shared_ptr<Headset_view_node>                   m_rendergraph_node;
     std::shared_ptr<Shadow_render_node>                  m_shadow_render_node;
 #if defined(ERHE_XR_LIBRARY_OPENXR)

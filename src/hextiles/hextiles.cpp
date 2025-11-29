@@ -14,8 +14,9 @@
 #if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
 # include "erhe_gl/gl_log.hpp"
 #endif
-#include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/device.hpp"
+#include "erhe_graphics/graphics_log.hpp"
+#include "erhe_graphics/swapchain.hpp"
 #include "erhe_imgui/imgui_log.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
@@ -56,11 +57,26 @@ public:
         }
         , m_settings            {m_context_window}
         , m_commands            {}
-        , m_graphics_device     {m_context_window}
+
+        , m_graphics_device{
+            erhe::graphics::Surface_create_info{
+                .context_window            = &m_context_window,
+                .prefer_low_bandwidth      = false,
+                .prefer_high_dynamic_range = false
+            }
+        }
+
+        , m_swapchain{
+            m_graphics_device,
+            erhe::graphics::Swapchain_create_info{
+                .surface = *m_graphics_device.get_surface()
+            }
+        }
+
         , m_text_renderer       {m_graphics_device}
         , m_rendergraph         {m_graphics_device}
         , m_imgui_renderer      {m_graphics_device, m_settings.imgui}
-        , m_imgui_windows       {m_imgui_renderer, m_graphics_device, &m_context_window, m_rendergraph, "windows.ini"}
+        , m_imgui_windows       {m_imgui_renderer, m_graphics_device, m_swapchain, m_rendergraph, &m_context_window, "windows.ini"}
         , m_logs                {m_commands, m_imgui_renderer}
         , m_log_settings_window {m_imgui_renderer, m_imgui_windows, m_logs}
         , m_tail_log_window     {m_imgui_renderer, m_imgui_windows, m_logs}
@@ -264,6 +280,7 @@ public:
     Hextiles_settings                m_settings;
     erhe::commands::Commands         m_commands;
     erhe::graphics::Device           m_graphics_device;
+    erhe::graphics::Swapchain        m_swapchain;
     erhe::renderer::Text_renderer    m_text_renderer;
     erhe::rendergraph::Rendergraph   m_rendergraph;
     erhe::imgui::Imgui_renderer      m_imgui_renderer;

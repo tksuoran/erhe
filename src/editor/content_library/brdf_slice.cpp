@@ -121,7 +121,7 @@ void Brdf_slice_rendergraph_node::execute_rendergraph_node()
 void Brdf_slice_rendergraph_node::set_area_size(const int size)
 {
     m_area_size = size;
-    update_render_pass(size, size, false);
+    update_render_pass(size, size, nullptr);
 }
 
 Brdf_slice::Brdf_slice(

@@ -88,8 +88,9 @@
 #include "erhe_gltf/gltf_log.hpp"
 #include "erhe_graph/graph_log.hpp"
 #include "erhe_graphics/buffer_transfer_queue.hpp"
-#include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/device.hpp"
+#include "erhe_graphics/graphics_log.hpp"
+#include "erhe_graphics/swapchain.hpp"
 #include "erhe_imgui/imgui_log.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
@@ -460,7 +461,21 @@ public:
             m_context_window = create_window();
 
             // Graphics context state init after window - in main thread
-            m_graphics_device = std::make_unique<erhe::graphics::Device>(*m_context_window.get());
+            m_graphics_device = std::make_unique<erhe::graphics::Device>(
+                erhe::graphics::Surface_create_info{
+                    .context_window            = m_context_window.get(),
+                    .prefer_low_bandwidth      = false,
+                    .prefer_high_dynamic_range = false
+                }
+
+            );
+
+            m_swapchain = std::make_unique<erhe::graphics::Swapchain>(
+                *m_graphics_device.get(),
+                erhe::graphics::Swapchain_create_info{
+                    .surface = *m_graphics_device->get_surface()
+                }
+            );
 
             m_app_settings->apply_limits(*m_graphics_device.get(), app_message_bus);
 
@@ -620,8 +635,9 @@ public:
                 m_imgui_windows = std::make_unique<erhe::imgui::Imgui_windows>(
                     *m_imgui_renderer.get(),
                     *m_graphics_device.get(),
-                    conditionally_enable_window_imgui_host(m_context_window.get()),
+                    *m_swapchain.get(),
                     *m_rendergraph.get(),
+                    conditionally_enable_window_imgui_host(m_context_window.get()),
                     get_windows_ini_path()
                 );
             }
@@ -789,6 +805,7 @@ public:
                 m_headset_view = std::make_unique<Headset_view>(
                     *m_commands.get(),
                     *m_graphics_device.get(),
+                    *m_swapchain.get(),
                     *m_imgui_renderer.get(),
                     *m_imgui_windows.get(),
                     *m_rendergraph.get(),
@@ -1237,6 +1254,7 @@ public:
 
         m_app_context.commands               = m_commands              .get();
         m_app_context.graphics_device        = m_graphics_device       .get();
+        m_app_context.swapchain              = m_swapchain             .get();
         m_app_context.imgui_renderer         = m_imgui_renderer        .get();
         m_app_context.imgui_windows          = m_imgui_windows         .get();
 #if defined(ERHE_PHYSICS_LIBRARY_JOLT) && defined(JPH_DEBUG_RENDERER)
@@ -1367,6 +1385,7 @@ public:
     std::unique_ptr<erhe::window::Context_window           > m_context_window;
     std::unique_ptr<App_settings                           > m_app_settings;
     std::unique_ptr<erhe::graphics::Device                 > m_graphics_device;
+    std::unique_ptr<erhe::graphics::Swapchain              > m_swapchain;
     std::unique_ptr<erhe::imgui::Imgui_renderer            > m_imgui_renderer;
     std::unique_ptr<erhe::renderer::Debug_renderer         > m_debug_renderer;
     std::unique_ptr<erhe::scene_renderer::Program_interface> m_program_interface;

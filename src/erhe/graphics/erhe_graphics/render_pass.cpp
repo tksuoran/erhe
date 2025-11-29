@@ -24,9 +24,6 @@ auto Render_pass_attachment_descriptor::is_defined() const -> bool
     if (texture != nullptr) {
         return true;
     }
-    if (use_default_framebuffer) {
-        return true;
-    }
     return false;
 }
 
@@ -62,6 +59,10 @@ auto Render_pass::get_render_target_width() const -> int
 auto Render_pass::get_render_target_height() const -> int
 {
     return m_impl->get_render_target_height();
+}
+auto Render_pass::get_swapchain() const -> Swapchain*
+{
+    return m_impl->get_swapchain();
 }
 auto Render_pass::get_debug_label() const -> const std::string&
 {

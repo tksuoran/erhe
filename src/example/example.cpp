@@ -18,6 +18,7 @@
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/render_pipeline_state.hpp"
+#include "erhe_graphics/swapchain.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_item/item_log.hpp"
 #include "erhe_log/log.hpp"
@@ -51,23 +52,75 @@ namespace example {
 class Example : public erhe::window::Input_event_handler
 {
 public:
-    Example(
-        erhe::window::Context_window&           window,
-        erhe::scene::Scene&                     scene,
-        erhe::graphics::Device&                 graphics_device,
-        erhe::scene_renderer::Forward_renderer& forward_renderer,
-        erhe::gltf::Gltf_data&                  gltf_data,
-        Mesh_memory&                            mesh_memory,
-        Programs&                               programs
-    )
-        : m_window          {window}
-        , m_scene           {scene}
-        , m_graphics_device {graphics_device}
-        , m_forward_renderer{forward_renderer}
-        , m_gltf_data       {gltf_data}
-        , m_mesh_memory     {mesh_memory}
-        , m_programs        {programs}
+    Example()
+        : m_window{
+            erhe::window::Window_configuration{
+                .use_depth         = true,
+                .gl_major          = 4,
+                .gl_minor          = 6,
+                .size              = glm::ivec2{1920, 1080},
+                .msaa_sample_count = 0,
+                .swap_interval     = 0,
+                .title             = "erhe example"
+            }
+        }
+        , m_scene_message_bus{}
+        , m_scene            {m_scene_message_bus, "example scene", nullptr}
+        , m_graphics_device{
+            erhe::graphics::Surface_create_info{
+                .context_window            = &m_window,
+                .prefer_low_bandwidth      = false,
+                .prefer_high_dynamic_range = false
+            }
+        }
+        , m_swapchain{
+            m_graphics_device,
+            erhe::graphics::Swapchain_create_info{
+                .surface = *m_graphics_device.get_surface()
+            }
+        }
+        , m_image_transfer   {m_graphics_device}
+        , m_mesh_memory      {m_graphics_device}
+        , m_program_interface{m_graphics_device, m_mesh_memory.vertex_format}
+        , m_forward_renderer {m_graphics_device, m_program_interface}
+        , m_programs         {m_graphics_device, m_program_interface}
     {
+        const unsigned int thread_count = std::thread::hardware_concurrency();
+        tf::Executor executor{thread_count};
+
+        m_gltf_data = erhe::gltf::parse_gltf(
+            erhe::gltf::Gltf_parse_arguments{
+                .graphics_device = m_graphics_device,
+                .executor        = executor,
+                .image_transfer  = m_image_transfer,
+                .root_node       = m_scene.get_root_node(),
+                //.path          = "res/models/Box.gltf"
+                .path            = "res/models/SM_Deccer_Cubes_Textured.glb"
+            }
+        );
+
+        // Convert triangle soup vertex and index data to GL buffers
+        erhe::primitive::Buffer_info buffer_info{
+            .index_type    = erhe::dataformat::Format::format_32_scalar_uint,
+            .vertex_format = m_mesh_memory.vertex_format,
+            .buffer_sink   = m_mesh_memory.graphics_buffer_sink
+        };
+
+        for (const auto& node : m_gltf_data.nodes) {
+            auto mesh = erhe::scene::get_mesh(node.get());
+            if (mesh) {
+                std::vector<erhe::scene::Mesh_primitive>& mesh_primitives = mesh->get_mutable_primitives();
+                for (erhe::scene::Mesh_primitive& mesh_primitive : mesh_primitives) {
+                    erhe::primitive::Primitive& primitive = *mesh_primitive.primitive.get();
+                    if (!primitive.has_renderable_triangles()) {
+                        ERHE_VERIFY(primitive.make_renderable_mesh(buffer_info));
+                    }
+                }
+            }
+        }
+
+        m_mesh_memory.buffer_transfer_queue.flush();
+
         m_camera = make_camera("Camera", glm::vec3{0.0f, 0.0f, 10.0f}, glm::vec3{0.0f, 0.0f, -1.0f});
         m_light = make_point_light("Light",
             glm::vec3{0.0f, 0.0f, 4.0f}, // position
@@ -271,16 +324,14 @@ private:
 
         m_render_pass.reset();
         erhe::graphics::Render_pass_descriptor render_pass_descriptor;
-        render_pass_descriptor.color_attachments[0].use_default_framebuffer = true;
-        render_pass_descriptor.color_attachments[0].load_action             = erhe::graphics::Load_action::Clear;
-        render_pass_descriptor.color_attachments[0].clear_value[0]          = 0.02;
-        render_pass_descriptor.color_attachments[0].clear_value[1]          = 0.02;
-        render_pass_descriptor.color_attachments[0].clear_value[2]          = 0.02;
-        render_pass_descriptor.color_attachments[0].clear_value[3]          = 1.0;
-        render_pass_descriptor.depth_attachment    .use_default_framebuffer = true;
-        render_pass_descriptor.depth_attachment    .load_action             = erhe::graphics::Load_action::Clear;
-        render_pass_descriptor.stencil_attachment  .use_default_framebuffer = true;
-        render_pass_descriptor.stencil_attachment  .load_action             = erhe::graphics::Load_action::Clear;
+        render_pass_descriptor.swapchain = &m_swapchain;
+        render_pass_descriptor.color_attachments[0].load_action    = erhe::graphics::Load_action::Clear;
+        render_pass_descriptor.color_attachments[0].clear_value[0] = 0.02;
+        render_pass_descriptor.color_attachments[0].clear_value[1] = 0.02;
+        render_pass_descriptor.color_attachments[0].clear_value[2] = 0.02;
+        render_pass_descriptor.color_attachments[0].clear_value[3] = 1.0;
+        render_pass_descriptor.depth_attachment    .load_action    = erhe::graphics::Load_action::Clear;
+        render_pass_descriptor.stencil_attachment  .load_action    = erhe::graphics::Load_action::Clear;
         render_pass_descriptor.render_target_width  = width;
         render_pass_descriptor.render_target_height = height;
         render_pass_descriptor.debug_label          = "Example Render_pass";
@@ -370,15 +421,19 @@ private:
         return light;
     }
 
-    erhe::window::Context_window&                m_window;
-    erhe::scene::Scene&                          m_scene;
-    erhe::graphics::Device&                      m_graphics_device;
-    erhe::scene_renderer::Forward_renderer&      m_forward_renderer;
-    erhe::gltf::Gltf_data&                       m_gltf_data;
+    erhe::window::Context_window                 m_window;
+    erhe::scene::Scene_message_bus               m_scene_message_bus;
+    erhe::scene::Scene                           m_scene;
+    erhe::graphics::Device                       m_graphics_device;
+    erhe::graphics::Swapchain                    m_swapchain;
+    erhe::gltf::Image_transfer                   m_image_transfer;
+    Mesh_memory                                  m_mesh_memory;
+    erhe::scene_renderer::Program_interface      m_program_interface;
+    erhe::scene_renderer::Forward_renderer       m_forward_renderer;
     std::unique_ptr<erhe::graphics::Render_pass> m_render_pass;
-    Mesh_memory&                                 m_mesh_memory;
-    Programs&                                    m_programs;
+    Programs                                     m_programs;
 
+    erhe::gltf::Gltf_data                   m_gltf_data;
     bool                                    m_close_requested{false};
     std::shared_ptr<erhe::scene::Camera>    m_camera;
     std::shared_ptr<erhe::scene::Light>     m_light;
@@ -413,64 +468,7 @@ void run_example()
 
     erhe::window::initialize_frame_capture();
 
-    erhe::window::Context_window window{
-        erhe::window::Window_configuration{
-            .use_depth         = true,
-            .gl_major          = 4,
-            .gl_minor          = 6,
-            .size              = glm::ivec2{1920, 1080},
-            .msaa_sample_count = 0,
-            .swap_interval     = 0,
-            .title             = "erhe example"
-        }
-    };
-
-    erhe::scene::Scene_message_bus          scene_message_bus{};
-    erhe::scene::Scene                      scene            {scene_message_bus, "example scene", nullptr};
-    erhe::graphics::Device                  graphics_device  {window};
-    erhe::gltf::Image_transfer              image_transfer   {graphics_device};
-    Mesh_memory                             mesh_memory      {graphics_device};
-    erhe::scene_renderer::Program_interface program_interface{graphics_device, mesh_memory.vertex_format};
-    erhe::scene_renderer::Forward_renderer  forward_renderer {graphics_device, program_interface};
-    Programs                                programs         {graphics_device, program_interface};
-
-    const unsigned int thread_count = std::thread::hardware_concurrency();
-    tf::Executor executor{thread_count};
-
-    erhe::gltf::Gltf_data gltf_data = erhe::gltf::parse_gltf(
-        erhe::gltf::Gltf_parse_arguments{
-            .graphics_device = graphics_device,
-            .executor        = executor,
-            .image_transfer  = image_transfer,
-            .root_node       = scene.get_root_node(),
-            //.path          = "res/models/Box.gltf"
-            .path            = "res/models/SM_Deccer_Cubes_Textured.glb"
-        }
-    );
-
-    // Convert triangle soup vertex and index data to GL buffers
-    erhe::primitive::Buffer_info buffer_info{
-        .index_type    = erhe::dataformat::Format::format_32_scalar_uint,
-        .vertex_format = mesh_memory.vertex_format,
-        .buffer_sink   = mesh_memory.graphics_buffer_sink
-    };
-
-    for (const auto& node : gltf_data.nodes) {
-        auto mesh = erhe::scene::get_mesh(node.get());
-        if (mesh) {
-            std::vector<erhe::scene::Mesh_primitive>& mesh_primitives = mesh->get_mutable_primitives();
-            for (erhe::scene::Mesh_primitive& mesh_primitive : mesh_primitives) {
-                erhe::primitive::Primitive& primitive = *mesh_primitive.primitive.get();
-                if (!primitive.has_renderable_triangles()) {
-                    ERHE_VERIFY(primitive.make_renderable_mesh(buffer_info));
-                }
-            }
-        }
-    }
-
-    mesh_memory.buffer_transfer_queue.flush();
-
-    Example example{window, scene, graphics_device, forward_renderer, gltf_data, mesh_memory, programs};
+    Example example{};
     example.run();
 }
 

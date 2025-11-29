@@ -3,6 +3,7 @@
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/ring_buffer_range.hpp"
 #include "erhe_graphics/shader_monitor.hpp"
+#include "erhe_graphics/surface.hpp"
 
 #include <array>
 #include <functional>
@@ -14,12 +15,6 @@
 namespace erhe::window { class Context_window; }
 
 namespace erhe::graphics {
-
-class Blit_command_encoder;
-class Compute_command_encoder;
-class Render_pass;
-class Render_command_encoder;
-class Command_encoder;
 
 class Format_properties
 {
@@ -52,11 +47,16 @@ public:
     std::vector<int64_t> sparse_tile_z_sizes;
 };
 
-class Texture;
-class Sampler;
-class Ring_buffer;
-
+class Blit_command_encoder;
+class Command_encoder;
+class Compute_command_encoder;
 class Device;
+class Render_command_encoder;
+class Render_pass;
+class Ring_buffer;
+class Sampler;
+class Surface;
+class Texture;
 
 static constexpr unsigned int format_flag_require_depth     = 0x01u;
 static constexpr unsigned int format_flag_require_stencil   = 0x02u;
@@ -138,7 +138,7 @@ class Device_impl;
 class Device final
 {
 public:
-    explicit Device(erhe::window::Context_window& context_window);
+    explicit Device(const Surface_create_info& surface_create_info);
     Device         (const Device&) = delete;
     void operator= (const Device&) = delete;
     Device         (Device&&)      = delete;
@@ -153,6 +153,7 @@ public:
     void add_completion_handler(std::function<void()> callback);
     void on_thread_enter       ();
 
+    [[nodiscard]] auto get_surface                 () -> Surface*;
     [[nodiscard]] auto get_handle                  (const Texture& texture, const Sampler& sampler) const -> uint64_t;
     [[nodiscard]] auto create_dummy_texture        () -> std::shared_ptr<Texture>;
     [[nodiscard]] auto get_buffer_alignment        (Buffer_target target) -> std::size_t;

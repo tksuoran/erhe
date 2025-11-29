@@ -12,6 +12,7 @@ class Device;
 class Render_command_encoder;
 class Renderbuffer;
 class Texture;
+class Swapchain;
 
 enum class Load_action : unsigned int {
     Dont_care = 0,
@@ -44,7 +45,6 @@ public:
     Texture*              resolve_texture{nullptr};
     unsigned int          resolve_level  {0};
     unsigned int          resolve_layer  {0};
-    bool                  use_default_framebuffer{false};
 };
 
 class Render_pass_descriptor
@@ -53,6 +53,7 @@ public:
     Render_pass_descriptor();
     ~Render_pass_descriptor();
 
+    Swapchain*                                       swapchain           {nullptr};
     std::array<Render_pass_attachment_descriptor, 4> color_attachments   {};
     Render_pass_attachment_descriptor                depth_attachment    {};
     Render_pass_attachment_descriptor                stencil_attachment  {};
@@ -75,6 +76,7 @@ public:
     [[nodiscard]] auto get_sample_count        () const -> unsigned int;
     [[nodiscard]] auto get_render_target_width () const -> int;
     [[nodiscard]] auto get_render_target_height() const -> int;
+    [[nodiscard]] auto get_swapchain           () const -> Swapchain*;
     [[nodiscard]] auto get_debug_label         () const -> const std::string&;
     [[nodiscard]] auto get_impl                () -> Render_pass_impl&;
     [[nodiscard]] auto get_impl                () const -> const Render_pass_impl&;

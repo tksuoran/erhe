@@ -46,19 +46,17 @@ void Texture_rendergraph_node::reconfigure(int sample_count)
     m_render_pass.reset();
 }
 
-void Texture_rendergraph_node::update_render_pass(int width, int height, bool use_default_framebuffer)
+void Texture_rendergraph_node::update_render_pass(int width, int height, erhe::graphics::Swapchain* swapchain)
 {
     erhe::graphics::Device& graphics_device = m_rendergraph.get_graphics_device();
 
     using erhe::graphics::Render_pass;
 
-    if (use_default_framebuffer) {
+    if (swapchain != nullptr) {
         erhe::graphics::Render_pass_descriptor render_pass_descriptor{};
+        render_pass_descriptor.swapchain            = swapchain;
         render_pass_descriptor.render_target_width  = width;
         render_pass_descriptor.render_target_height = height;
-        render_pass_descriptor.color_attachments[0].use_default_framebuffer = true;
-        render_pass_descriptor.depth_attachment    .use_default_framebuffer = true;
-        render_pass_descriptor.stencil_attachment  .use_default_framebuffer = true;
         render_pass_descriptor.debug_label          = fmt::format("{} Texture_rendergraph_node renderpass (default framebuffer)", get_name());
         m_render_pass = std::make_unique<Render_pass>(graphics_device, render_pass_descriptor);
     }

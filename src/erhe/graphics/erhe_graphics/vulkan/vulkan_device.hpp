@@ -5,6 +5,8 @@
 #include "erhe_graphics/shader_monitor.hpp"
 
 #include "volk.h"
+// vma forward declaration
+VK_DEFINE_HANDLE(VmaAllocator)
 
 #include <array>
 #include <memory>
@@ -13,12 +15,13 @@
 
 namespace erhe::graphics {
 
+class Surface_impl;
 
 class Device;
 class Device_impl final
 {
 public:
-    Device_impl   (Device& device, erhe::window::Context_window& context_window);
+    Device_impl   (Device& device, const Surface_create_info& surface_create_info);
     Device_impl   (const Device_impl&) = delete;
     void operator=(const Device_impl&) = delete;
     Device_impl   (Device_impl&&)      = delete;
@@ -46,14 +49,18 @@ public:
     [[nodiscard]] auto get_shader_monitor          () -> Shader_monitor&;
     [[nodiscard]] auto get_info                    () const -> const Device_info&;
 
+    [[nodiscard]] auto create_render_pass(const VkRenderPassCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkRenderPass* pRenderPass) -> VkResult;
+
+    [[nodiscard]] auto get_surface                    () -> Surface*;
+    [[nodiscard]] auto get_vulkan_instance            () -> VkInstance;
+    [[nodiscard]] auto get_vulkan_device              () -> VkDevice;
+    [[nodiscard]] auto get_graphics_queue_family_index() -> uint32_t const;
+    [[nodiscard]] auto get_present_queue_family_index () -> uint32_t const;
+
 private:
     void frame_completed(uint64_t frame);
-    [[nodiscard]] auto get_surface_format_score(VkSurfaceFormatKHR surface_format) -> float;
-    [[nodiscard]] auto get_present_mode_score(VkPresentModeKHR present_mode) -> float;
-    [[nodiscard]] auto choose_surface_format(const std::vector<VkSurfaceFormatKHR>& surface_formats) -> VkSurfaceFormatKHR;
-    [[nodiscard]] auto choose_present_mode(const std::vector<VkPresentModeKHR>& present_modes) -> VkPresentModeKHR;
 
-    erhe::window::Context_window& m_context_window;
+    erhe::window::Context_window* m_context_window{nullptr};
     Device&                       m_device;
     Shader_monitor                m_shader_monitor;
     Device_info                   m_info;
@@ -67,17 +74,45 @@ private:
     uint64_t                                  m_frame_number{1};
     std::vector<Completion_handler>           m_completion_handlers;
 
-    VkInstance         m_vk_instance       {VK_NULL_HANDLE};
-    VkPhysicalDevice   m_vk_physical_device{VK_NULL_HANDLE};
-    VkDevice           m_vk_device         {VK_NULL_HANDLE};
-    VkSurfaceKHR       m_vk_surface        {VK_NULL_HANDLE};
-    VkQueue            m_vk_graphics_queue {VK_NULL_HANDLE};
-    VkQueue            m_vk_present_queue  {VK_NULL_HANDLE};
-
-    VkSurfaceCapabilitiesKHR m_surface_capabilities{};
-    VkSurfaceFormatKHR       m_surface_format{};
-    VkPresentModeKHR         m_present_mode{VK_PRESENT_MODE_FIFO_KHR};
+    VkInstance                    m_vulkan_instance       {VK_NULL_HANDLE};
+    VkPhysicalDevice              m_vulkan_physical_device{VK_NULL_HANDLE};
+    VkDevice                      m_vulkan_device         {VK_NULL_HANDLE};
+    VmaAllocator                  m_vma_allocator         {VK_NULL_HANDLE};
+    std::unique_ptr<Surface_impl> m_surface               {};
+    VkQueue                       m_vulkan_graphics_queue {VK_NULL_HANDLE};
+    VkQueue                       m_vulkan_present_queue  {VK_NULL_HANDLE};
+    uint32_t                      m_graphics_queue_family_index{0};
+    uint32_t                      m_present_queue_family_index {0};
 };
 
-
 } // namespace erhe::graphics
+
+
+// VK_EXT_descriptor_indexing
+// VK_EXT_device_memory_report
+// VK_EXT_extended_dynamic_state
+// VK_EXT_extended_dynamic_state2
+// VK_EXT_filter_cubic
+// VK_EXT_image_view_min_lod
+// VK_EXT_index_type_uint8
+// VK_EXT_inline_uniform_block
+// VK_EXT_load_store_op_none
+// VK_EXT_multi_draw
+// VK_EXT_pipeline_creation_cache_control
+// VK_EXT_pipeline_creation_feedback
+// VK_EXT_pipeline_protected_access
+// VK_EXT_pipeline_robustness
+// VK_EXT_sampler_filter_minmax
+// VK_EXT_scalar_block_layout
+// VK_EXT_separate_stencil_usage
+// VK_EXT_shader_atomic_float
+// VK_EXT_swapchain_maintenance1
+// VK_EXT_tooling_info
+// VK_GOOGLE_display_timing
+// VK_KHR_16bit_storage
+// VK_KHR_8bit_storage
+// VK_KHR_bind_memory2
+// VK_KHR_buffer_device_address
+// VK_KHR_copy_commands2
+// VK_KHR_create_renderpass2
+// VK_KHR_dedicated_allocation

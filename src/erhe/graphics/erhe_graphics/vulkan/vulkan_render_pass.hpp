@@ -3,7 +3,8 @@
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_profile/profile.hpp"
 
-#include <mutex>
+#include "volk.h"
+
 #include <optional>
 #include <thread>
 #include <vector>
@@ -20,18 +21,15 @@ public:
     Render_pass_impl (Render_pass_impl&&)      = delete;
     void operator=   (Render_pass_impl&&)      = delete;
 
-    static void on_thread_enter();
-    static void on_thread_exit ();
-
-    [[nodiscard]] auto get_sample_count           () const -> unsigned int;
-
     void create      ();
     void reset       ();
     auto check_status() const -> bool;
 
-    [[nodiscard]] auto get_render_target_width() const -> int;
+    [[nodiscard]] auto get_render_target_width () const -> int;
     [[nodiscard]] auto get_render_target_height() const -> int;
-    [[nodiscard]] auto get_debug_label() const -> const std::string&;
+    [[nodiscard]] auto get_sample_count        () const -> unsigned int;
+    [[nodiscard]] auto get_swapchain           () const -> Swapchain*;
+    [[nodiscard]] auto get_debug_label         () const -> const std::string&;
 
 private:
     friend class Render_command_encoder;
@@ -40,6 +38,7 @@ private:
 
 private:
     Device&                                          m_device;
+    Swapchain*                                       m_swapchain{nullptr};
     std::array<Render_pass_attachment_descriptor, 4> m_color_attachments;
     Render_pass_attachment_descriptor                m_depth_attachment;
     Render_pass_attachment_descriptor                m_stencil_attachment;
@@ -49,6 +48,14 @@ private:
     std::string                                      m_debug_group_name;
     bool                                             m_uses_multisample_resolve{false};
     bool                                             m_is_active{false};
+
+    class Render_pass_entry
+    {
+    public:
+        VkFramebuffer framebuffer{VK_NULL_HANDLE};
+    };
+    std::vector<Render_pass_entry> m_entries;
+
 };
 
 } // namespace erhe::graphics

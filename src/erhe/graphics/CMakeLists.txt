@@ -72,6 +72,10 @@ erhe_target_sources_grouped(
     erhe_graphics/state/vertex_input_state.hpp
     erhe_graphics/state/viewport_state.cpp
     erhe_graphics/state/viewport_state.hpp
+    erhe_graphics/surface.cpp
+    erhe_graphics/surface.hpp
+    erhe_graphics/swapchain.cpp
+    erhe_graphics/swapchain.hpp
     erhe_graphics/texture.cpp
     erhe_graphics/texture.hpp
     erhe_graphics/texture_heap.cpp
@@ -114,6 +118,10 @@ if (ERHE_GRAPHICS_API_OPENGL)
         erhe_graphics/gl/gl_shader_stages.cpp
         erhe_graphics/gl/gl_shader_stages.hpp
         erhe_graphics/gl/gl_shader_stages_prototype.cpp
+        erhe_graphics/gl/gl_surface.cpp
+        erhe_graphics/gl/gl_surface.hpp
+        erhe_graphics/gl/gl_swapchain.cpp
+        erhe_graphics/gl/gl_swapchain.hpp
         erhe_graphics/gl/gl_texture.cpp
         erhe_graphics/gl/gl_texture.hpp
         erhe_graphics/gl/gl_texture_heap.cpp
@@ -152,6 +160,10 @@ if (ERHE_GRAPHICS_API_VULKAN)
         erhe_graphics/vulkan/vulkan_shader_stages.cpp
         erhe_graphics/vulkan/vulkan_shader_stages.hpp
         erhe_graphics/vulkan/vulkan_shader_stages_prototype.cpp
+        erhe_graphics/vulkan/vulkan_surface.cpp
+        erhe_graphics/vulkan/vulkan_surface.hpp
+        erhe_graphics/vulkan/vulkan_swapchain.cpp
+        erhe_graphics/vulkan/vulkan_swapchain.hpp
         erhe_graphics/vulkan/vulkan_texture.cpp
         erhe_graphics/vulkan/vulkan_texture.hpp
         erhe_graphics/vulkan/vulkan_texture_heap.cpp

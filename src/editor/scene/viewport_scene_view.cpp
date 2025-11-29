@@ -138,7 +138,7 @@ void Viewport_scene_view::execute_rendergraph_node()
         m_context.debug_renderer->compute(compute_encoder);
     }
 
-    update_render_pass(m_projection_viewport.width, m_projection_viewport.height);
+    update_render_pass(m_projection_viewport.width, m_projection_viewport.height, nullptr);
     // TODO If we ever have non-ImGui viewport, this might be an option:
     // update_render_pass(m_projection_viewport.width, m_projection_viewport.height, true);
 

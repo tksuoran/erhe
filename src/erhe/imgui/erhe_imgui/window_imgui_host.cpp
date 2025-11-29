@@ -20,13 +20,15 @@ using erhe::graphics::Texture;
 Window_imgui_host::Window_imgui_host(
     Imgui_renderer&                 imgui_renderer,
     erhe::graphics::Device&         graphics_device,
-    erhe::window::Context_window&   context_window,
+    erhe::graphics::Swapchain&      swapchain,
     erhe::rendergraph::Rendergraph& rendergraph,
+    erhe::window::Context_window&   context_window,
     const std::string_view          name
 )
     : Imgui_host       {rendergraph, imgui_renderer, name, true, imgui_renderer.get_font_atlas()}
     , m_context_window {context_window}
     , m_graphics_device{graphics_device}
+    , m_swapchain      {swapchain}
 {
     imgui_renderer.use_as_backend_renderer_on_context(m_imgui_context);
 
@@ -68,16 +70,14 @@ void Window_imgui_host::update_render_pass(int width, int height)
 
     m_render_pass.reset();
     erhe::graphics::Render_pass_descriptor render_pass_descriptor;
-    render_pass_descriptor.color_attachments[0].use_default_framebuffer = true;
-    render_pass_descriptor.color_attachments[0].load_action             = erhe::graphics::Load_action::Clear;
-    render_pass_descriptor.color_attachments[0].clear_value[0]          = 0.05; // TODO expose API to set clear color
-    render_pass_descriptor.color_attachments[0].clear_value[1]          = 0.05;
-    render_pass_descriptor.color_attachments[0].clear_value[2]          = 0.05;
-    render_pass_descriptor.color_attachments[0].clear_value[3]          = 1.00;
-    render_pass_descriptor.depth_attachment    .use_default_framebuffer = true;
-    render_pass_descriptor.depth_attachment    .load_action             = erhe::graphics::Load_action::Dont_care;
-    render_pass_descriptor.stencil_attachment  .use_default_framebuffer = true;
-    render_pass_descriptor.stencil_attachment  .load_action             = erhe::graphics::Load_action::Dont_care;
+    render_pass_descriptor.swapchain = &m_swapchain;
+    render_pass_descriptor.color_attachments[0].load_action    = erhe::graphics::Load_action::Clear;
+    render_pass_descriptor.color_attachments[0].clear_value[0] = 0.05; // TODO expose API to set clear color
+    render_pass_descriptor.color_attachments[0].clear_value[1] = 0.05;
+    render_pass_descriptor.color_attachments[0].clear_value[2] = 0.05;
+    render_pass_descriptor.color_attachments[0].clear_value[3] = 1.00;
+    render_pass_descriptor.depth_attachment    .load_action    = erhe::graphics::Load_action::Dont_care;
+    render_pass_descriptor.stencil_attachment  .load_action    = erhe::graphics::Load_action::Dont_care;
     render_pass_descriptor.render_target_width  = width;
     render_pass_descriptor.render_target_height = height;
     render_pass_descriptor.debug_label          = "Window_imgui_host Render_pass";

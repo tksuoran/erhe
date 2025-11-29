@@ -10,6 +10,7 @@ namespace erhe::graphics {
     class Render_pass;
     class Device;
     class Renderbuffer;
+    class Swapchain;
     class Texture;
 }
 
@@ -41,7 +42,7 @@ public:
     auto get_type_name              () const -> std::string_view override { return c_type_name; }
     auto get_producer_output_texture(int key, int depth = 0) const -> std::shared_ptr<erhe::graphics::Texture> override;
 
-    void update_render_pass(int width, int height, bool use_default_framebuffer = false);
+    void update_render_pass(int width, int height, erhe::graphics::Swapchain* swapchain);
     void reconfigure       (int sample_count);
 
 protected:

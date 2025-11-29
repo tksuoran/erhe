@@ -21,12 +21,13 @@ public:
     gl::Sync_status result      {gl::Sync_status::timeout_expired};
 };
 
+class Surface;
 
 class Device;
 class Device_impl final
 {
 public:
-    Device_impl   (Device& device, erhe::window::Context_window& context_window);
+    Device_impl   (Device& device, const Surface_create_info& surface_create_info);
     Device_impl   (const Device_impl&) = delete;
     void operator=(const Device_impl&) = delete;
     Device_impl   (Device_impl&&)      = delete;
@@ -41,6 +42,7 @@ public:
     void add_completion_handler(std::function<void()> callback);
     void on_thread_enter       ();
 
+    [[nodiscard]] auto get_surface                 () -> Surface*;
     [[nodiscard]] auto get_handle                  (const Texture& texture, const Sampler& sampler) const -> uint64_t;
     [[nodiscard]] auto create_dummy_texture        () -> std::shared_ptr<Texture>;
     [[nodiscard]] auto get_buffer_alignment        (Buffer_target target) -> std::size_t;
@@ -60,14 +62,13 @@ private:
     using PFN_generic          = void (*) ();
     using PFN_get_proc_address = PFN_generic (*) (const char*);
 
-    erhe::window::Context_window& m_context_window;
-
     friend class Blit_command_encoder;
     friend class Compute_command_encoder;
     friend class Render_command_encoder;
     friend class Render_pass_impl;
 
     Device&                       m_device;
+    std::unique_ptr<Surface>      m_surface{};
     Shader_monitor                m_shader_monitor;
     OpenGL_state_tracker          m_gl_state_tracker;
     Gl_context_provider           m_gl_context_provider;

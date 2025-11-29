@@ -32,9 +32,10 @@ public:
     void reset       ();
     auto check_status() const -> bool;
 
-    [[nodiscard]] auto get_render_target_width() const -> int;
+    [[nodiscard]] auto get_render_target_width () const -> int;
     [[nodiscard]] auto get_render_target_height() const -> int;
-    [[nodiscard]] auto get_debug_label() const -> const std::string&;
+    [[nodiscard]] auto get_swapchain           () const -> Swapchain*;
+    [[nodiscard]] auto get_debug_label         () const -> const std::string&;
 
 private:
     friend class Render_command_encoder;
@@ -43,6 +44,7 @@ private:
 
 private:
     Device&                                          m_device;
+    Swapchain*                                       m_swapchain{nullptr};
     std::optional<Gl_framebuffer>                    m_gl_framebuffer;
     std::optional<Gl_framebuffer>                    m_gl_multisample_resolve_framebuffer;
     std::array<Render_pass_attachment_descriptor, 4> m_color_attachments;
@@ -54,7 +56,6 @@ private:
     std::string                                      m_debug_label;
     std::string                                      m_debug_group_name;
     bool                                             m_uses_multisample_resolve{false};
-    bool                                             m_uses_default_framebuffer{false};
     std::thread::id                                  m_owner_thread;
     bool                                             m_is_active{false};
 
