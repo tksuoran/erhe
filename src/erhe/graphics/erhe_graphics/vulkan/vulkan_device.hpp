@@ -47,6 +47,15 @@ public:
     bool m_VK_EXT_present_mode_fifo_latest_ready {false};
     bool m_VK_EXT_device_address_binding_report  {false};
 };
+class Device_extensions
+{
+public:
+    bool m_VK_KHR_swapchain             {false};
+    bool m_VK_EXT_swapchain_maintenance1{false};
+    bool m_VK_KHR_swapchain_maintenance1{false};
+    bool m_VK_EXT_load_store_op_none    {false};
+    bool m_VK_KHR_push_descriptor       {false};
+};
 
 class Surface_impl;
 
@@ -93,6 +102,7 @@ public:
     [[nodiscard]] auto get_present_queue_family_index () const -> uint32_t;
     [[nodiscard]] auto get_instance_layers            () const -> const Instance_layers&;
     [[nodiscard]] auto get_instance_extensions        () const -> const Instance_extensions&;
+    [[nodiscard]] auto get_device_extensions          () const -> const Device_extensions&;
 
     [[nodiscard]] auto debug_report_callback(
         VkDebugReportFlagsEXT      flags,
@@ -139,38 +149,9 @@ private:
     uint32_t                 m_graphics_queue_family_index{0};
     uint32_t                 m_present_queue_family_index {0};
 
-    Instance_layers          m_instance_layers;
-    Instance_extensions      m_instance_extensions;
+    Instance_layers          m_instance_layers    {};
+    Instance_extensions      m_instance_extensions{};
+    Device_extensions        m_device_extensions  {};
 };
 
 } // namespace erhe::graphics
-
-
-// VK_EXT_descriptor_indexing
-// VK_EXT_device_memory_report
-// VK_EXT_extended_dynamic_state
-// VK_EXT_extended_dynamic_state2
-// VK_EXT_filter_cubic
-// VK_EXT_image_view_min_lod
-// VK_EXT_index_type_uint8
-// VK_EXT_inline_uniform_block
-// VK_EXT_load_store_op_none
-// VK_EXT_multi_draw
-// VK_EXT_pipeline_creation_cache_control
-// VK_EXT_pipeline_creation_feedback
-// VK_EXT_pipeline_protected_access
-// VK_EXT_pipeline_robustness
-// VK_EXT_sampler_filter_minmax
-// VK_EXT_scalar_block_layout
-// VK_EXT_separate_stencil_usage
-// VK_EXT_shader_atomic_float
-// VK_EXT_swapchain_maintenance1
-// VK_EXT_tooling_info
-// VK_GOOGLE_display_timing
-// VK_KHR_16bit_storage
-// VK_KHR_8bit_storage
-// VK_KHR_bind_memory2
-// VK_KHR_buffer_device_address
-// VK_KHR_copy_commands2
-// VK_KHR_create_renderpass2
-// VK_KHR_dedicated_allocation

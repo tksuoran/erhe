@@ -214,6 +214,7 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         if (strcmp(layer.layerName, name) == 0) {
             required_layers_c_str.push_back(name);
             enable = true;
+            log_debug->info("  Enabling {}", layer.layerName);
         }
     };
     std::vector<VkLayerProperties> instance_layers(instance_layer_count);
@@ -230,15 +231,7 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
             layer.implementationVersion,
             layer.description
         );
-        //check_layer(layer, "VK_LAYER_AMD_switchable_graphics",  m_instance_layers.m_VK_LAYER_AMD_switchable_graphics);
-        //check_layer(layer, "VK_LAYER_OBS_HOOK",                 m_instance_layers.m_VK_LAYER_OBS_HOOK);
-        //check_layer(layer, "VK_LAYER_LUNARG_api_dump",          m_instance_layers.m_VK_LAYER_LUNARG_api_dump);
-        //check_layer(layer, "VK_LAYER_LUNARG_gfxreconstruct",    m_instance_layers.m_VK_LAYER_LUNARG_gfxreconstruct);
-        //check_layer(layer, "VK_LAYER_KHRONOS_synchronization2", m_instance_layers.m_VK_LAYER_KHRONOS_synchronization2);
-        //check_layer(layer, "VK_LAYER_LUNARG_monitor",           m_instance_layers.m_VK_LAYER_LUNARG_monitor);
-        //check_layer(layer, "VK_LAYER_LUNARG_screenshot",        m_instance_layers.m_VK_LAYER_LUNARG_screenshot);
-        //check_layer(layer, "VK_LAYER_KHRONOS_profiles",         m_instance_layers.m_VK_LAYER_KHRONOS_profiles);
-        //check_layer(layer, "VK_LAYER_KHRONOS_shader_object",    m_instance_layers.m_VK_LAYER_KHRONOS_shader_object);
+        // TODO Add config to erhe.toml
         check_layer(layer, "VK_LAYER_KHRONOS_validation",      m_instance_layers.m_VK_LAYER_KHRONOS_validation);
         check_layer(layer, "VK_LAYER_LUNARG_crash_diagnostic", m_instance_layers.m_VK_LAYER_LUNARG_crash_diagnostic);
     }
@@ -247,13 +240,13 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
     result = vkEnumerateInstanceExtensionProperties(nullptr, &instance_extension_count, nullptr);
     if (result != VK_SUCCESS) {
         log_context->critical("vkEnumerateInstanceExtensionProperties() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
-        abort(); // TODO handle error
+        abort();
     }
     std::vector<VkExtensionProperties> instance_extensions(instance_extension_count);
     result = vkEnumerateInstanceExtensionProperties(nullptr, &instance_extension_count, instance_extensions.data());
     if (result != VK_SUCCESS) {
         log_context->critical("vkEnumerateInstanceExtensionProperties() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
-        abort(); // TODO handle error
+        abort();
     }
 
     std::vector<const char*> required_extensions_c_str;
@@ -264,11 +257,12 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         }
     }
 
-    auto check_extension = [&required_extensions_c_str](const VkExtensionProperties& extension, const char* name, bool& enable)
+    auto check_instance_extension = [&required_extensions_c_str](const VkExtensionProperties& extension, const char* name, bool& enable)
     {
         if (strcmp(extension.extensionName, name) == 0) {
             required_extensions_c_str.push_back(name);
             enable = true;
+            log_debug->info("  Enabling {}", extension.extensionName);
         }
     };
 
@@ -278,19 +272,18 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
             extension.extensionName,
             extension.specVersion
         );
-        check_extension(extension, VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME, m_instance_extensions.m_VK_KHR_get_physical_device_properties2);
-        check_extension(extension, VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME      , m_instance_extensions.m_VK_KHR_get_surface_capabilities2      );
-        check_extension(extension, VK_KHR_SURFACE_EXTENSION_NAME                         , m_instance_extensions.m_VK_KHR_surface                        );
-        check_extension(extension, VK_KHR_SURFACE_MAINTENANCE_1_EXTENSION_NAME           , m_instance_extensions.m_VK_KHR_surface_maintenance1           );
-        check_extension(extension, VK_KHR_WIN32_SURFACE_EXTENSION_NAME                   , m_instance_extensions.m_VK_KHR_win32_surface                  );
-        check_extension(extension, VK_EXT_DEBUG_REPORT_EXTENSION_NAME                    , m_instance_extensions.m_VK_EXT_debug_report                   );
-        check_extension(extension, VK_EXT_DEBUG_UTILS_EXTENSION_NAME                     , m_instance_extensions.m_VK_EXT_debug_utils                    );
-        check_extension(extension, VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME           , m_instance_extensions.m_VK_EXT_swapchain_colorspace           );
-        check_extension(extension, VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME         , m_instance_extensions.m_VK_KHR_portability_enumeration        );
-        check_extension(extension, VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME         , m_instance_extensions.m_VK_KHR_portability_enumeration        );
-        check_extension(extension, VK_KHR_PRESENT_MODE_FIFO_LATEST_READY_EXTENSION_NAME  , m_instance_extensions.m_VK_KHR_present_mode_fifo_latest_ready );
-        check_extension(extension, VK_EXT_PRESENT_MODE_FIFO_LATEST_READY_EXTENSION_NAME  , m_instance_extensions.m_VK_EXT_present_mode_fifo_latest_ready );
-        check_extension(extension, VK_EXT_DEVICE_ADDRESS_BINDING_REPORT_EXTENSION_NAME   , m_instance_extensions.m_VK_EXT_device_address_binding_report  );
+        check_instance_extension(extension, VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME, m_instance_extensions.m_VK_KHR_get_physical_device_properties2);
+        check_instance_extension(extension, VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME      , m_instance_extensions.m_VK_KHR_get_surface_capabilities2      );
+        check_instance_extension(extension, VK_KHR_SURFACE_EXTENSION_NAME                         , m_instance_extensions.m_VK_KHR_surface                        );
+        check_instance_extension(extension, VK_KHR_SURFACE_MAINTENANCE_1_EXTENSION_NAME           , m_instance_extensions.m_VK_KHR_surface_maintenance1           );
+        check_instance_extension(extension, VK_KHR_WIN32_SURFACE_EXTENSION_NAME                   , m_instance_extensions.m_VK_KHR_win32_surface                  );
+        check_instance_extension(extension, VK_EXT_DEBUG_REPORT_EXTENSION_NAME                    , m_instance_extensions.m_VK_EXT_debug_report                   );
+        check_instance_extension(extension, VK_EXT_DEBUG_UTILS_EXTENSION_NAME                     , m_instance_extensions.m_VK_EXT_debug_utils                    );
+        check_instance_extension(extension, VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME           , m_instance_extensions.m_VK_EXT_swapchain_colorspace           );
+        check_instance_extension(extension, VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME         , m_instance_extensions.m_VK_KHR_portability_enumeration        );
+        check_instance_extension(extension, VK_KHR_PRESENT_MODE_FIFO_LATEST_READY_EXTENSION_NAME  , m_instance_extensions.m_VK_KHR_present_mode_fifo_latest_ready );
+        check_instance_extension(extension, VK_EXT_PRESENT_MODE_FIFO_LATEST_READY_EXTENSION_NAME  , m_instance_extensions.m_VK_EXT_present_mode_fifo_latest_ready );
+        check_instance_extension(extension, VK_EXT_DEVICE_ADDRESS_BINDING_REPORT_EXTENSION_NAME   , m_instance_extensions.m_VK_EXT_device_address_binding_report  );
     }
 
     const VkApplicationInfo application_info{
@@ -395,7 +388,7 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
     std::vector<VkPhysicalDevice> physical_devices(physical_device_count);
     if (physical_device_count == 0) {
         log_context->critical("vkEnumeratePhysicalDevices() returned 0 physical devices");
-        abort(); // TODO handle error
+        abort();
     }
     result = vkEnumeratePhysicalDevices(m_vulkan_instance, &physical_device_count, physical_devices.data());
     if (result != VK_SUCCESS) {
@@ -485,18 +478,48 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         .queueCount       = 1,
         .pQueuePriorities = &queue_priority,
     };
-    
-    VkPhysicalDeviceFeatures device_features = {};
 
-    std::vector<const char*> device_extensions;
-    device_extensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+    std::vector<const char*> device_extensions_c_str;
+    auto check_device_extension = [&device_extensions_c_str](const VkExtensionProperties& extension, const char* name, bool& enable)
+    {
+        if (strcmp(extension.extensionName, name) == 0) {
+            device_extensions_c_str.push_back(name);
+            enable = true;
+            log_debug->info("  Enabling {}", extension.extensionName);
+        }
+    };
+    uint32_t device_extension_count{0};
+    result = vkEnumerateDeviceExtensionProperties(m_vulkan_physical_device, nullptr, &device_extension_count, nullptr);
+    if (result != VK_SUCCESS) {
+        log_context->critical("vkEnumerateDeviceExtensionProperties() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        abort();
+    }
+    std::vector<VkExtensionProperties> device_extensions(device_extension_count);
+    result = vkEnumerateDeviceExtensionProperties(m_vulkan_physical_device, nullptr, &device_extension_count, device_extensions.data());
+    if (result != VK_SUCCESS) {
+        log_context->critical("vkEnumerateDeviceExtensionProperties() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        abort();
+    }
 
-    VkPhysicalDeviceFeatures2 device_features2{
+    for (const VkExtensionProperties& extension: device_extensions) {
+        log_debug->info(
+            "Vulkan Device Extension: {} spec_version {:08x}",
+            extension.extensionName,
+            extension.specVersion
+        );
+        check_device_extension(extension, VK_KHR_SWAPCHAIN_EXTENSION_NAME,               m_device_extensions.m_VK_KHR_swapchain             );
+        check_device_extension(extension, VK_EXT_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME, m_device_extensions.m_VK_EXT_swapchain_maintenance1);
+        check_device_extension(extension, VK_KHR_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME, m_device_extensions.m_VK_KHR_swapchain_maintenance1);
+        check_device_extension(extension, VK_EXT_LOAD_STORE_OP_NONE_EXTENSION_NAME,      m_device_extensions.m_VK_EXT_load_store_op_none    );
+        check_device_extension(extension, VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME,         m_device_extensions.m_VK_KHR_push_descriptor       );
+    }
+
+    VkPhysicalDeviceFeatures2 available_device_features{
         .sType    = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
         .pNext    = nullptr,
         .features = {}
     };
-    vkGetPhysicalDeviceFeatures2(m_vulkan_physical_device, &device_features2);
+    vkGetPhysicalDeviceFeatures2(m_vulkan_physical_device, &available_device_features);
 
     const VkDeviceCreateInfo device_create_info = {
         .sType                   = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
@@ -506,8 +529,8 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         .pQueueCreateInfos       = &queue_create_info,
         .enabledLayerCount       = 0,
         .ppEnabledLayerNames     = nullptr,
-        .enabledExtensionCount   = static_cast<uint32_t>(device_extensions.size()),
-        .ppEnabledExtensionNames = device_extensions.data(),
+        .enabledExtensionCount   = static_cast<uint32_t>(device_extensions_c_str.size()),
+        .ppEnabledExtensionNames = device_extensions_c_str.data(),
         .pEnabledFeatures        = nullptr
     };
     result = vkCreateDevice(m_vulkan_physical_device, &device_create_info, nullptr, &m_vulkan_device);
@@ -516,9 +539,6 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         abort();
     }
 
-    // TODO
-    //   VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT
-    //   VMA_ALLOCATOR_CREATE_KHR_MAINTENANCE4_BIT
     VmaAllocatorCreateInfo vma_create_info{
         .flags                          = 0,                        // VmaAllocatorCreateFlags flags;
         .physicalDevice                 = m_vulkan_physical_device, // VkPhysicalDevice VMA_NOT_NULL physicalDevice;
@@ -531,7 +551,7 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         .vulkanApiVersion               = application_info.apiVersion,
 #if VMA_EXTERNAL_MEMORY
         .pTypeExternalMemoryHandleTypes = nullptr
-#endif // #if VMA_EXTERNAL_MEMORY
+#endif
     };
 
     VmaVulkanFunctions vma_vulkan_functions{};
@@ -569,7 +589,6 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
     vkGetPhysicalDeviceProperties(m_vulkan_physical_device, &physical_device_properties);
 
     m_info.max_per_stage_descriptor_samplers = physical_device_properties.limits.maxPerStageDescriptorSamplers;
-    //max_texture_image_units
 }
 
 Device_impl::~Device_impl()
@@ -616,6 +635,11 @@ auto Device_impl::get_instance_layers() const -> const Instance_layers&
 auto Device_impl::get_instance_extensions() const -> const Instance_extensions&
 {
     return m_instance_extensions;
+}
+
+auto Device_impl::get_device_extensions() const -> const Device_extensions&
+{
+    return m_device_extensions;
 }
 
 auto Device_impl::get_handle(const Texture& texture, const Sampler& sampler) const -> uint64_t
@@ -840,3 +864,104 @@ void Device_impl::set_debug_label(VkObjectType object_type, uint64_t object_hand
 }
 
 } // namespace erhe::graphics
+
+
+// VK_KHR_16bit_storage
+// VK_KHR_8bit_storage
+// VK_KHR_bind_memory2
+// VK_KHR_buffer_device_address
+// VK_KHR_copy_commands2
+// VK_KHR_create_renderpass2
+// VK_KHR_dedicated_allocation
+// VK_KHR_deferred_host_operations
+// VK_KHR_depth_stencil_resolve
+// VK_KHR_descriptor_update_template
+// VK_KHR_device_group
+// VK_KHR_draw_indirect_count
+// VK_KHR_driver_properties
+// VK_KHR_dynamic_rendering
+// VK_KHR_fragment_shading_rate
+// VK_KHR_get_memory_requirements2
+// VK_KHR_global_priority
+// VK_KHR_imageless_framebuffer
+// VK_KHR_image_format_list
+// VK_KHR_maintenance1
+// VK_KHR_maintenance2
+// VK_KHR_maintenance3
+// VK_KHR_maintenance4
+// VK_KHR_multiview
+// VK_KHR_pipeline_executable_properties
+// VK_KHR_push_descriptor
+// VK_KHR_ray_query
+// VK_KHR_relaxed_block_layout
+// VK_KHR_sampler_mirror_clamp_to_edge
+// VK_KHR_sampler_ycbcr_conversion
+// VK_KHR_separate_depth_stencil_layouts
+// VK_KHR_shader_atomic_int64
+// VK_KHR_shader_clock
+// VK_KHR_shader_draw_parameters
+// VK_KHR_shader_float16_int8
+// VK_KHR_shader_float_controls
+// VK_KHR_shader_integer_dot_product
+// VK_KHR_shader_non_semantic_info
+// VK_KHR_shader_subgroup_extended_types
+// VK_KHR_shader_subgroup_uniform_control_flow
+// VK_KHR_shader_terminate_invocation
+// VK_KHR_spirv_1_4
+// VK_KHR_storage_buffer_storage_class
+// VK_KHR_swapchain
+// VK_KHR_synchronization2
+// VK_KHR_timeline_semaphore
+// VK_KHR_uniform_buffer_standard_layout
+// VK_KHR_variable_pointers
+// VK_KHR_vulkan_memory_model
+
+// VK_EXT_4444_formats
+// VK_EXT_border_color_swizzle
+// VK_EXT_color_write_enable
+// VK_EXT_conservative_rasterization
+// VK_EXT_custom_border_color
+// VK_EXT_depth_clamp_zero_one
+// VK_EXT_depth_clip_control
+// VK_EXT_depth_clip_enable
+// VK_EXT_descriptor_indexing
+// VK_EXT_device_address_binding_report
+// VK_EXT_device_fault
+// VK_EXT_extended_dynamic_state
+// VK_EXT_extended_dynamic_state2
+// VK_EXT_global_priority
+// VK_EXT_global_priority_query
+// VK_EXT_host_query_reset
+// VK_EXT_image_2d_view_of_3d
+// VK_EXT_image_robustness
+// VK_EXT_image_view_min_lod
+// VK_EXT_index_type_uint8
+// VK_EXT_inline_uniform_block
+// VK_EXT_line_rasterization
+// VK_EXT_load_store_op_none
+// VK_EXT_pipeline_creation_cache_control
+// VK_EXT_pipeline_creation_feedback
+// VK_EXT_primitive_topology_list_restart
+// VK_EXT_private_data
+// VK_EXT_provoking_vertex
+// VK_EXT_queue_family_foreign
+// VK_EXT_robustness2
+// VK_EXT_sampler_filter_minmax
+// VK_EXT_sample_locations
+// VK_EXT_scalar_block_layout
+// VK_EXT_separate_stencil_usage
+// VK_EXT_shader_atomic_float
+// VK_EXT_shader_demote_to_helper_invocation
+// VK_EXT_shader_stencil_export
+// VK_EXT_shader_subgroup_ballot
+// VK_EXT_shader_subgroup_vote
+// VK_EXT_shader_viewport_index_layer
+// VK_EXT_subgroup_size_control
+
+// VK_EXT_texel_buffer_alignment
+// VK_EXT_tooling_info
+// VK_EXT_transform_feedback
+// VK_EXT_vertex_attribute_divisor
+// VK_EXT_vertex_input_dynamic_state
+
+// VK_EXT_swapchain_maintenance1 / VK_KHR_swapchain_maintenance1
