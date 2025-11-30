@@ -139,7 +139,7 @@ void Surface_impl::fail()
     m_image_count = 0;
 }
 
-auto Surface_impl::get_surface_format_score(const VkSurfaceFormatKHR surface_format) -> float
+auto Surface_impl::get_surface_format_score(const VkSurfaceFormatKHR surface_format) const -> float
 {
     float format_score = 1.0f;
     switch (surface_format.format) {
@@ -177,7 +177,7 @@ auto Surface_impl::get_surface_format_score(const VkSurfaceFormatKHR surface_for
     return format_score * color_space_score;
 }
 
-auto Surface_impl::get_present_mode_score(const VkPresentModeKHR present_mode) -> float
+auto Surface_impl::get_present_mode_score(const VkPresentModeKHR present_mode) const -> float
 {
     // https://registry.khronos.org/vulkan/specs/latest/html/vkspec.html#VkSurfacePresentModeKHR
 
@@ -247,6 +247,10 @@ auto Surface_impl::get_present_mode_score(const VkPresentModeKHR present_mode) -
     //   this does not guarantee the timing of when it will be updated.
     //   This mode may result in visible tearing if rendering to the image is not timed correctly.
 
+    const bool latest_ready =
+        m_device_impl.get_instance_extensions().m_VK_KHR_present_mode_fifo_latest_ready ||
+        m_device_impl.get_instance_extensions().m_VK_EXT_present_mode_fifo_latest_ready;
+
     switch (present_mode) {
         case VK_PRESENT_MODE_IMMEDIATE_KHR:                 return 0.0f; // fastest - tears
         case VK_PRESENT_MODE_MAILBOX_KHR:                   return 3.0f; // latest complete shown - no tears
@@ -254,7 +258,7 @@ auto Surface_impl::get_present_mode_score(const VkPresentModeKHR present_mode) -
         case VK_PRESENT_MODE_FIFO_RELAXED_KHR:              return 2.0f; // late frames presented immediately - some tears
         case VK_PRESENT_MODE_SHARED_DEMAND_REFRESH_KHR:     return 0.0f;
         case VK_PRESENT_MODE_SHARED_CONTINUOUS_REFRESH_KHR: return 0.0f;
-        case VK_PRESENT_MODE_FIFO_LATEST_READY_KHR:         return 4.0f; // latest complete shown - no tears
+        case VK_PRESENT_MODE_FIFO_LATEST_READY_KHR:         return latest_ready ? 4.0f : 0.0f; // latest complete shown - no tears
         default:                                            return 0.0f;
     }
 }

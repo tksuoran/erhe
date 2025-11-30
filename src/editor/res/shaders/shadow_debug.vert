@@ -1,4 +1,4 @@
-out float v_color;
+layout(location = 0) out float v_color;
 
 void main()
 {

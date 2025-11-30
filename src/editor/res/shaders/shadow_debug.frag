@@ -1,4 +1,4 @@
-in float v_color;
+layout(location = 0) in float v_color;
 
 void main() {
     out_color.r = fma(v_color, 0.5, 0.5);

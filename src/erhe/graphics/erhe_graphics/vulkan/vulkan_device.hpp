@@ -1,6 +1,5 @@
 #pragma once
 
-#include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/shader_monitor.hpp"
 
@@ -14,6 +13,40 @@ VK_DEFINE_HANDLE(VmaAllocator)
 #include <vector>
 
 namespace erhe::graphics {
+
+
+class Instance_layers
+{
+public:
+    bool m_VK_LAYER_AMD_switchable_graphics {false};
+    bool m_VK_LAYER_OBS_HOOK                {false};
+    bool m_VK_LAYER_RENDERDOC_Capture       {false};
+    bool m_VK_LAYER_LUNARG_api_dump         {false};
+    bool m_VK_LAYER_LUNARG_gfxreconstruct   {false};
+    bool m_VK_LAYER_KHRONOS_synchronization2{false};
+    bool m_VK_LAYER_KHRONOS_validation      {false};
+    bool m_VK_LAYER_LUNARG_monitor          {false};
+    bool m_VK_LAYER_LUNARG_screenshot       {false};
+    bool m_VK_LAYER_KHRONOS_profiles        {false};
+    bool m_VK_LAYER_KHRONOS_shader_object   {false};
+    bool m_VK_LAYER_LUNARG_crash_diagnostic {false};
+};
+class Instance_extensions
+{
+public:
+    bool m_VK_KHR_get_physical_device_properties2{false};
+    bool m_VK_KHR_get_surface_capabilities2      {false};
+    bool m_VK_KHR_surface                        {false};
+    bool m_VK_KHR_surface_maintenance1           {false};
+    bool m_VK_KHR_win32_surface                  {false};
+    bool m_VK_EXT_debug_report                   {false};
+    bool m_VK_EXT_debug_utils                    {false};
+    bool m_VK_EXT_swapchain_colorspace           {false};
+    bool m_VK_KHR_portability_enumeration        {false};
+    bool m_VK_KHR_present_mode_fifo_latest_ready {false};
+    bool m_VK_EXT_present_mode_fifo_latest_ready {false};
+    bool m_VK_EXT_device_address_binding_report  {false};
+};
 
 class Surface_impl;
 
@@ -56,8 +89,10 @@ public:
     [[nodiscard]] auto get_surface                    () -> Surface*;
     [[nodiscard]] auto get_vulkan_instance            () -> VkInstance;
     [[nodiscard]] auto get_vulkan_device              () -> VkDevice;
-    [[nodiscard]] auto get_graphics_queue_family_index() -> uint32_t const;
-    [[nodiscard]] auto get_present_queue_family_index () -> uint32_t const;
+    [[nodiscard]] auto get_graphics_queue_family_index() const -> uint32_t;
+    [[nodiscard]] auto get_present_queue_family_index () const -> uint32_t;
+    [[nodiscard]] auto get_instance_layers            () const -> const Instance_layers&;
+    [[nodiscard]] auto get_instance_extensions        () const -> const Instance_extensions&;
 
     [[nodiscard]] auto debug_report_callback(
         VkDebugReportFlagsEXT      flags,
@@ -104,16 +139,8 @@ private:
     uint32_t                 m_graphics_queue_family_index{0};
     uint32_t                 m_present_queue_family_index {0};
 
-    bool m_VK_KHR_get_physical_device_properties2{false};
-    bool m_VK_KHR_get_surface_capabilities2      {false};
-    bool m_VK_KHR_surface                        {false};
-    bool m_VK_KHR_surface_maintenance1           {false};
-    bool m_VK_KHR_win32_surface                  {false};
-    bool m_VK_EXT_debug_report                   {false};
-    bool m_VK_EXT_debug_utils                    {false};
-    bool m_VK_EXT_swapchain_colorspace           {false};
-    bool m_VK_KHR_portability_enumeration        {false};
-
+    Instance_layers          m_instance_layers;
+    Instance_extensions      m_instance_extensions;
 };
 
 } // namespace erhe::graphics

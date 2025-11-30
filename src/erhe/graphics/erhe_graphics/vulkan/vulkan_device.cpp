@@ -125,7 +125,10 @@ auto Device_impl::debug_utils_messenger_callback(
     std::stringstream ss;
     bool show_objects = true;
     if (callback_data->messageIdNumber == 0) {
-        if (strcmp(callback_data->pMessageIdName, "Loader Message") == 0) {
+        if (
+            (callback_data->pMessageIdName != nullptr) &&
+            strcmp(callback_data->pMessageIdName, "Loader Message") == 0
+        ) {
             show_objects = false;
         }
     }
@@ -134,29 +137,33 @@ auto Device_impl::debug_utils_messenger_callback(
         to_string(message_types),
         to_string(message_severity),
         callback_data->messageIdNumber,
-        callback_data->pMessageIdName,
-        callback_data->pMessage
+        (callback_data->pMessageIdName != nullptr) ? callback_data->pMessageIdName : "",
+        (callback_data->pMessage != nullptr) ? callback_data->pMessage : "<no message>"
     );
     if (callback_data->queueLabelCount > 0) {
         ss << "\n  queues: ";
         bool empty = true;
         for (uint32_t i = 0; i < callback_data->queueLabelCount; ++i) {
-            if (!empty) {
-                ss << ", ";
+            if (callback_data->pQueueLabels[i].pLabelName != nullptr) {
+                if (!empty) {
+                    ss << ", ";
+                }
+                ss << callback_data->pQueueLabels[i].pLabelName;
+                empty = false;
             }
-            ss << callback_data->pQueueLabels[i].pLabelName;
-            empty = false;
         }
     }
     if (callback_data->cmdBufLabelCount > 0) {
         ss << "\n  command buffers: ";
         bool empty = true;
         for (uint32_t i = 0; i < callback_data->cmdBufLabelCount; ++i) {
-            if (!empty) {
-                ss << ", ";
+            if (callback_data->pCmdBufLabels[i].pLabelName != nullptr) {
+                if (!empty) {
+                    ss << ", ";
+                }
+                ss << callback_data->pCmdBufLabels[i].pLabelName;
+                empty = false;
             }
-            ss << callback_data->pCmdBufLabels[i].pLabelName;
-            empty = false;
         }
     }
     if (show_objects && (callback_data->objectCount > 0)) {
@@ -191,29 +198,49 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
     result = volkInitialize();
     if (result != VK_SUCCESS) {
         log_context->critical("volkInitialize() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
-        abort(); // TODO handle errors
+        abort();
     }
 
     uint32_t instance_layer_count{0};
     result = vkEnumerateInstanceLayerProperties(&instance_layer_count, nullptr);
     if (result != VK_SUCCESS) {
         log_context->critical("vkEnumerateInstanceLayerProperties() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
-        abort(); // TODO handle error
+        abort();
     }
+
+    std::vector<const char*> required_layers_c_str;
+    auto check_layer = [&required_layers_c_str](const VkLayerProperties& layer, const char* name, bool& enable)
+    {
+        if (strcmp(layer.layerName, name) == 0) {
+            required_layers_c_str.push_back(name);
+            enable = true;
+        }
+    };
     std::vector<VkLayerProperties> instance_layers(instance_layer_count);
     result = vkEnumerateInstanceLayerProperties(&instance_layer_count, instance_layers.data());
     if (result != VK_SUCCESS) {
         log_context->critical("vkEnumerateInstanceLayerProperties() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
-        abort(); // TODO handle error
+        abort();
     }
-    for (const VkLayerProperties& layer_properties : instance_layers) {
+    for (const VkLayerProperties& layer : instance_layers) {
         log_debug->info(
             "Vulkan Instance Layer: {} spec_version {:08x} implementation_version {:08x} {}",
-            layer_properties.layerName,
-            layer_properties.specVersion,
-            layer_properties.implementationVersion,
-            layer_properties.description
+            layer.layerName,
+            layer.specVersion,
+            layer.implementationVersion,
+            layer.description
         );
+        //check_layer(layer, "VK_LAYER_AMD_switchable_graphics",  m_instance_layers.m_VK_LAYER_AMD_switchable_graphics);
+        //check_layer(layer, "VK_LAYER_OBS_HOOK",                 m_instance_layers.m_VK_LAYER_OBS_HOOK);
+        //check_layer(layer, "VK_LAYER_LUNARG_api_dump",          m_instance_layers.m_VK_LAYER_LUNARG_api_dump);
+        //check_layer(layer, "VK_LAYER_LUNARG_gfxreconstruct",    m_instance_layers.m_VK_LAYER_LUNARG_gfxreconstruct);
+        //check_layer(layer, "VK_LAYER_KHRONOS_synchronization2", m_instance_layers.m_VK_LAYER_KHRONOS_synchronization2);
+        //check_layer(layer, "VK_LAYER_LUNARG_monitor",           m_instance_layers.m_VK_LAYER_LUNARG_monitor);
+        //check_layer(layer, "VK_LAYER_LUNARG_screenshot",        m_instance_layers.m_VK_LAYER_LUNARG_screenshot);
+        //check_layer(layer, "VK_LAYER_KHRONOS_profiles",         m_instance_layers.m_VK_LAYER_KHRONOS_profiles);
+        //check_layer(layer, "VK_LAYER_KHRONOS_shader_object",    m_instance_layers.m_VK_LAYER_KHRONOS_shader_object);
+        check_layer(layer, "VK_LAYER_KHRONOS_validation",      m_instance_layers.m_VK_LAYER_KHRONOS_validation);
+        check_layer(layer, "VK_LAYER_LUNARG_crash_diagnostic", m_instance_layers.m_VK_LAYER_LUNARG_crash_diagnostic);
     }
 
     uint32_t instance_extension_count{0};
@@ -251,47 +278,58 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
             extension.extensionName,
             extension.specVersion
         );
-        check_extension(extension, VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME, m_VK_KHR_get_physical_device_properties2);
-        check_extension(extension, VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME      , m_VK_KHR_get_surface_capabilities2      );
-        check_extension(extension, VK_KHR_SURFACE_EXTENSION_NAME                         , m_VK_KHR_surface                        );
-        check_extension(extension, VK_KHR_SURFACE_MAINTENANCE_1_EXTENSION_NAME           , m_VK_KHR_surface_maintenance1           );
-        check_extension(extension, VK_KHR_WIN32_SURFACE_EXTENSION_NAME                   , m_VK_KHR_win32_surface                  );
-        check_extension(extension, VK_EXT_DEBUG_REPORT_EXTENSION_NAME                    , m_VK_EXT_debug_report                   );
-        check_extension(extension, VK_EXT_DEBUG_UTILS_EXTENSION_NAME                     , m_VK_EXT_debug_utils                    );
-        check_extension(extension, VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME           , m_VK_EXT_swapchain_colorspace           );
-        check_extension(extension, VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME         , m_VK_KHR_portability_enumeration        );
+        check_extension(extension, VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME, m_instance_extensions.m_VK_KHR_get_physical_device_properties2);
+        check_extension(extension, VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME      , m_instance_extensions.m_VK_KHR_get_surface_capabilities2      );
+        check_extension(extension, VK_KHR_SURFACE_EXTENSION_NAME                         , m_instance_extensions.m_VK_KHR_surface                        );
+        check_extension(extension, VK_KHR_SURFACE_MAINTENANCE_1_EXTENSION_NAME           , m_instance_extensions.m_VK_KHR_surface_maintenance1           );
+        check_extension(extension, VK_KHR_WIN32_SURFACE_EXTENSION_NAME                   , m_instance_extensions.m_VK_KHR_win32_surface                  );
+        check_extension(extension, VK_EXT_DEBUG_REPORT_EXTENSION_NAME                    , m_instance_extensions.m_VK_EXT_debug_report                   );
+        check_extension(extension, VK_EXT_DEBUG_UTILS_EXTENSION_NAME                     , m_instance_extensions.m_VK_EXT_debug_utils                    );
+        check_extension(extension, VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME           , m_instance_extensions.m_VK_EXT_swapchain_colorspace           );
+        check_extension(extension, VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME         , m_instance_extensions.m_VK_KHR_portability_enumeration        );
+        check_extension(extension, VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME         , m_instance_extensions.m_VK_KHR_portability_enumeration        );
+        check_extension(extension, VK_KHR_PRESENT_MODE_FIFO_LATEST_READY_EXTENSION_NAME  , m_instance_extensions.m_VK_KHR_present_mode_fifo_latest_ready );
+        check_extension(extension, VK_EXT_PRESENT_MODE_FIFO_LATEST_READY_EXTENSION_NAME  , m_instance_extensions.m_VK_EXT_present_mode_fifo_latest_ready );
+        check_extension(extension, VK_EXT_DEVICE_ADDRESS_BINDING_REPORT_EXTENSION_NAME   , m_instance_extensions.m_VK_EXT_device_address_binding_report  );
     }
 
     const VkApplicationInfo application_info{
         .sType              = VK_STRUCTURE_TYPE_APPLICATION_INFO,
-        .pNext              = nullptr,           // const void*
-        .pApplicationName   = "ERHE",            // const char*
-        .applicationVersion = 0,                 // uint32_t
-        .pEngineName        = "ERHE",            // const char*
-        .engineVersion      = 202501,            // uint32_t
-        .apiVersion         = VK_API_VERSION_1_3 // VK_MAKE_API_VERSION(0, 1, 1, 0) // uint32_t
+        .pNext              = nullptr,
+        .pApplicationName   = "ERHE",
+        .applicationVersion = 0,
+        .pEngineName        = "ERHE",
+        .engineVersion      = 202501,
+        .apiVersion         = VK_API_VERSION_1_3
     };
 
     const VkInstanceCreateInfo instance_create_info = {
-        .sType                   = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,                  // 
-        .pNext                   = nullptr,                                                 // 
-        .flags                   = 0,                                                       // 
-        .pApplicationInfo        = &application_info,                                       // 
-        .enabledLayerCount       = 0,                                                       // 
-        .ppEnabledLayerNames     = nullptr,                                                 // 
-        .enabledExtensionCount   = static_cast<uint32_t>(required_extensions_c_str.size()), // 
+        .sType                   = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
+        .pNext                   = nullptr,
+        .flags                   = 0,
+        .pApplicationInfo        = &application_info,
+        .enabledLayerCount       = static_cast<uint32_t>(required_layers_c_str.size()),
+        .ppEnabledLayerNames     = required_layers_c_str.data(),
+        .enabledExtensionCount   = static_cast<uint32_t>(required_extensions_c_str.size()),
         .ppEnabledExtensionNames = required_extensions_c_str.data()
     };
     result = vkCreateInstance(&instance_create_info, nullptr, &m_vulkan_instance);
     if (result != VK_SUCCESS) {
         log_context->critical("vkCreateInstance() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
-        abort(); // TODO handle error
+        abort();
     }
 
     volkLoadInstance(m_vulkan_instance);
 
     bool debug_callback_registered = false;
-    if (m_VK_EXT_debug_utils) {
+    if (m_instance_extensions.m_VK_EXT_debug_utils) {
+        VkDebugUtilsMessageTypeFlagsEXT message_types =
+            VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT    |
+            VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+            VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+        if (m_instance_extensions.m_VK_EXT_device_address_binding_report) {
+            message_types = message_types | VK_DEBUG_UTILS_MESSAGE_TYPE_DEVICE_ADDRESS_BINDING_BIT_EXT;
+        }
         const VkDebugUtilsMessengerCreateInfoEXT debug_utils_messenger_create_info{
             .sType           = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
             .pNext           = nullptr,
@@ -301,11 +339,7 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
                 VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT    |
                 VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
                 VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
-            .messageType     =
-                VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT                |
-                VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT             |
-                VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT            |
-                VK_DEBUG_UTILS_MESSAGE_TYPE_DEVICE_ADDRESS_BINDING_BIT_EXT,
+            .messageType     = message_types,
             .pfnUserCallback = Device_impl_debug_utils_messenger_callback,
             .pUserData       = static_cast<void*>(this)
         };
@@ -321,7 +355,7 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
             log_context->warn("vkCreateDebugUtilsMessengerEXT() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
         }
     }
-    if (m_VK_EXT_debug_report && !debug_callback_registered) {
+    if (m_instance_extensions.m_VK_EXT_debug_report && !debug_callback_registered) {
         const VkDebugReportCallbackCreateInfoEXT debug_report_callback_create_info{
             .sType       = VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT,
             .pNext       = nullptr,
@@ -437,19 +471,19 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         )
     ) {
         log_context->critical("No suitable vulkan device found");
-        abort(); // TODO handle error
+        abort();
     }
 
     m_surface = std::make_unique<Surface>(std::move(surface_impl));
 
     const float queue_priority = 1.0f;
     const VkDeviceQueueCreateInfo queue_create_info = {
-        .sType            = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO, // sType
-        .pNext            = nullptr,                                    // pNext
-        .flags            = 0,                                          // flags
-        .queueFamilyIndex = graphics_queue_family_index,                // graphicsQueueIndex
-        .queueCount       = 1,                                          // queueCount
-        .pQueuePriorities = &queue_priority,                            // pQueuePriorities
+        .sType            = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+        .pNext            = nullptr,
+        .flags            = 0,
+        .queueFamilyIndex = graphics_queue_family_index,
+        .queueCount       = 1,
+        .pQueuePriorities = &queue_priority,
     };
     
     VkPhysicalDeviceFeatures device_features = {};
@@ -463,19 +497,17 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         .features = {}
     };
     vkGetPhysicalDeviceFeatures2(m_vulkan_physical_device, &device_features2);
-    // samplerAnisotropy
-    // shaderCullDistance
 
     const VkDeviceCreateInfo device_create_info = {
-        .sType                   = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,            // sType
-        .pNext                   = nullptr,                                         // pNext
-        .flags                   = 0,                                               // flags
-        .queueCreateInfoCount    = 1,                                               // queueCreateInfoCount
-        .pQueueCreateInfos       = &queue_create_info,                              // pQueueCreateInfos
-        .enabledLayerCount       = 0,                                               // enabledLayerCount - DEPRECATED
-        .ppEnabledLayerNames     = nullptr,                                         // ppEnabledLayerNames - DEPRECATED
-        .enabledExtensionCount   = static_cast<uint32_t>(device_extensions.size()), // enabledExtensionCount
-        .ppEnabledExtensionNames = device_extensions.data(),                        // ppEnabledExtensionNames
+        .sType                   = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+        .pNext                   = nullptr,
+        .flags                   = 0,
+        .queueCreateInfoCount    = 1,
+        .pQueueCreateInfos       = &queue_create_info,
+        .enabledLayerCount       = 0,
+        .ppEnabledLayerNames     = nullptr,
+        .enabledExtensionCount   = static_cast<uint32_t>(device_extensions.size()),
+        .ppEnabledExtensionNames = device_extensions.data(),
         .pEnabledFeatures        = nullptr
     };
     result = vkCreateDevice(m_vulkan_physical_device, &device_create_info, nullptr, &m_vulkan_device);
@@ -566,14 +598,24 @@ auto Device_impl::get_vulkan_device() -> VkDevice
     return m_vulkan_device;
 }
 
-auto Device_impl::get_graphics_queue_family_index() -> uint32_t const
+auto Device_impl::get_graphics_queue_family_index() const -> uint32_t
 {
     return m_graphics_queue_family_index;
 }
 
-auto Device_impl::get_present_queue_family_index () -> uint32_t const
+auto Device_impl::get_present_queue_family_index () const -> uint32_t
 {
     return m_present_queue_family_index;
+}
+
+auto Device_impl::get_instance_layers() const -> const Instance_layers&
+{
+    return m_instance_layers;
+}
+
+auto Device_impl::get_instance_extensions() const -> const Instance_extensions&
+{
+    return m_instance_extensions;
 }
 
 auto Device_impl::get_handle(const Texture& texture, const Sampler& sampler) const -> uint64_t
@@ -772,7 +814,7 @@ auto Device_impl::create_render_pass(
 
 void Device_impl::set_debug_label(VkObjectType object_type, uint64_t object_handle, const char* label)
 {
-    if (!m_VK_EXT_debug_utils) {
+    if (!m_instance_extensions.m_VK_EXT_debug_utils) {
         return;
     }
     const VkDebugUtilsObjectNameInfoEXT name_info{

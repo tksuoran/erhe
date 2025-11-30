@@ -30,8 +30,8 @@ private:
     void fail();
     void choose_surface_format();
     void choose_present_mode  ();
-    [[nodiscard]] static auto get_surface_format_score(VkSurfaceFormatKHR surface_format) -> float;
-    [[nodiscard]] static auto get_present_mode_score  (VkPresentModeKHR present_mode) -> float;
+    [[nodiscard]] auto get_surface_format_score(VkSurfaceFormatKHR surface_format) const -> float;
+    [[nodiscard]] auto get_present_mode_score  (VkPresentModeKHR present_mode) const -> float;
 
     Device_impl&                    m_device_impl;
     Surface_create_info             m_surface_create_info;
