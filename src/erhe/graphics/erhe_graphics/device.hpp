@@ -68,13 +68,17 @@ class Device_info
 public:
     Vendor vendor{Vendor::Unknown};
 
-    int  gl_version             {0};
     int  glsl_version           {0};
-    int  shader_model_version   {0};
 
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+    int  gl_version             {0};
     bool core_profile           {false};
     bool compatibility_profile  {false};
     bool forward_compatible     {false};
+#endif
+#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+    uint32_t vulkan_api_version {0};
+#endif
 
     bool use_binary_shaders     {false};
     bool use_integer_polygon_ids{false};
@@ -104,7 +108,7 @@ public:
     int max_array_texture_layers                 {0};
     int max_sparse_texture_size                  {0};
 
-    int max_texture_image_units                  {0};  // in fragment shaders
+    uint32_t max_per_stage_descriptor_samplers   {0};
     int max_combined_texture_image_units         {0};  // combined across all shader stages
     int max_uniform_block_size                   {0};
     int max_shader_storage_buffer_bindings       {0};

@@ -50,6 +50,8 @@ public:
     [[nodiscard]] auto get_info                    () const -> const Device_info&;
 
     [[nodiscard]] auto create_render_pass(const VkRenderPassCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkRenderPass* pRenderPass) -> VkResult;
+    void set_debug_label(VkObjectType object_type, uint64_t object_handle, const char* label);
+    void set_debug_label(VkObjectType object_type, uint64_t object_handle, const std::string& label);
 
     [[nodiscard]] auto get_surface                    () -> Surface*;
     [[nodiscard]] auto get_vulkan_instance            () -> VkInstance;

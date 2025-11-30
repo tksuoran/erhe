@@ -36,11 +36,11 @@ Texture_heap_impl::Texture_heap_impl(
         std::fill(m_gl_bindless_texture_resident.begin(), m_gl_bindless_texture_resident.end(), false);
         m_used_slot_count = 0;
     } else {
-        m_textures.resize(device.get_info().max_texture_image_units);
-        m_samplers.resize(device.get_info().max_texture_image_units);
-        m_gl_textures.resize(device.get_info().max_texture_image_units);
-        m_gl_samplers.resize(device.get_info().max_texture_image_units);
-        m_zero_vector.resize(device.get_info().max_texture_image_units);
+        m_textures.resize(device.get_info().max_per_stage_descriptor_samplers);
+        m_samplers.resize(device.get_info().max_per_stage_descriptor_samplers);
+        m_gl_textures.resize(device.get_info().max_per_stage_descriptor_samplers);
+        m_gl_samplers.resize(device.get_info().max_per_stage_descriptor_samplers);
+        m_zero_vector.resize(device.get_info().max_per_stage_descriptor_samplers);
         reset();
     }
 }
@@ -189,8 +189,8 @@ void Texture_heap_impl::unbind()
             }
         }
     } else {
-        gl::bind_textures(0, m_device.get_info().max_texture_image_units, m_zero_vector.data());
-        gl::bind_samplers(0, m_device.get_info().max_texture_image_units, m_zero_vector.data());
+        gl::bind_textures(0, m_device.get_info().max_per_stage_descriptor_samplers, m_zero_vector.data());
+        gl::bind_samplers(0, m_device.get_info().max_per_stage_descriptor_samplers, m_zero_vector.data());
     }
 }
 
@@ -220,8 +220,8 @@ auto Texture_heap_impl::bind() -> std::size_t
 
     } else {
 
-        gl::bind_textures(0, m_device.get_info().max_texture_image_units, m_gl_textures.data());
-        gl::bind_samplers(0, m_device.get_info().max_texture_image_units, m_gl_samplers.data());
+        gl::bind_textures(0, m_device.get_info().max_per_stage_descriptor_samplers, m_gl_textures.data());
+        gl::bind_samplers(0, m_device.get_info().max_per_stage_descriptor_samplers, m_gl_samplers.data());
         return m_used_slot_count;
     }
 }

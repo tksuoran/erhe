@@ -54,9 +54,9 @@ public:
     std::size_t  light_struct;
 };
 
-static constexpr int c_texture_heap_slot_shadow_compare   {0};
-static constexpr int c_texture_heap_slot_shadow_no_compare{1};
-static constexpr int c_texture_heap_slot_count_reserved   {2};
+static constexpr uint32_t c_texture_heap_slot_shadow_compare   {0};
+static constexpr uint32_t c_texture_heap_slot_shadow_no_compare{1};
+static constexpr uint32_t c_texture_heap_slot_count_reserved   {2};
 
 class Light_interface
 {

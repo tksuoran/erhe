@@ -157,7 +157,7 @@ public:
     auto add_sampler(
         const std::string_view           name,
         Glsl_type                        sampler_type,
-        const std::optional<int>         dedicated_texture_unit = {},
+        const std::optional<uint32_t>    dedicated_texture_unit = {},
         const std::optional<std::size_t> array_size = {}
     ) -> Shader_resource*;
 

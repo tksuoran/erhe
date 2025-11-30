@@ -1,5 +1,6 @@
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_graphics/device.hpp"
+#include "erhe_graphics/graphics_log.hpp"
 #include "erhe_dataformat/vertex_format.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -707,7 +708,11 @@ auto Shader_resource::get_source(const int indent_level /* = 0 */) const -> std:
         ss << " " << get_name();
         if (get_array_size().has_value()) {
             ss << "[";
-            if (get_array_size() != 0) {
+            const std::size_t array_size = get_array_size().value();
+            if (array_size != 0) {
+                if (array_size > 10000) {
+                    log_glsl->error("Bad index {} in {}", array_size, m_name);
+                }
                 ss << get_array_size().value();
             }
             ss << "]";
@@ -746,11 +751,12 @@ auto Shader_resource::add_struct(
 auto Shader_resource::add_sampler(
     const std::string_view           name,
     const Glsl_type                  sampler_type,
-    const std::optional<int>         dedicated_texture_unit, /* = {} */
+    const std::optional<uint32_t>    dedicated_texture_unit, /* = {} */
     const std::optional<std::size_t> array_size /* = {} */
 ) -> Shader_resource*
 {
     ERHE_VERIFY(m_type == Type::samplers);
+    ERHE_VERIFY(!array_size.has_value() || (array_size.value() < 10000));
     sanitize(array_size);
 
     auto* const new_member = m_members.emplace_back(

@@ -163,7 +163,12 @@ Imgui_program_interface::Imgui_program_interface(erhe::graphics::Device& graphic
             }
         }
     }
-    , default_uniform_block{get_shader_default_uniform_block(graphics_device, graphics_device.get_info().max_texture_image_units)}
+    , default_uniform_block{
+        get_shader_default_uniform_block(
+            graphics_device,
+            graphics_device.get_info().max_per_stage_descriptor_samplers
+        )
+    }
 {
 }
 

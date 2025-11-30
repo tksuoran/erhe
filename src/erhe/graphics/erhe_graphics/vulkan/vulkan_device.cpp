@@ -123,6 +123,12 @@ auto Device_impl::debug_utils_messenger_callback(
     if (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) level = spdlog::level::warn;
     if (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT  ) level = spdlog::level::err;
     std::stringstream ss;
+    bool show_objects = true;
+    if (callback_data->messageIdNumber == 0) {
+        if (strcmp(callback_data->pMessageIdName, "Loader Message") == 0) {
+            show_objects = false;
+        }
+    }
     ss << fmt::format(
         "{} {} [{} {}] {}",
         to_string(message_types),
@@ -153,7 +159,7 @@ auto Device_impl::debug_utils_messenger_callback(
             empty = false;
         }
     }
-    if (callback_data->objectCount > 0) {
+    if (show_objects && (callback_data->objectCount > 0)) {
         ss << "\n  objects: ";
         bool empty = true;
         for (uint32_t i = 0; i < callback_data->objectCount; ++i) {
@@ -161,7 +167,7 @@ auto Device_impl::debug_utils_messenger_callback(
                 ss << ", ";
             }
             ss << fmt::format(
-                "{} {} {}",
+                "{} {:08x} {}",
                 c_str(callback_data->pObjects[i].objectType),
                 callback_data->pObjects[i].objectHandle, 
                 (callback_data->pObjects[i].pObjectName != nullptr)
@@ -265,6 +271,7 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         .engineVersion      = 202501,            // uint32_t
         .apiVersion         = VK_API_VERSION_1_3 // VK_MAKE_API_VERSION(0, 1, 1, 0) // uint32_t
     };
+
     const VkInstanceCreateInfo instance_create_info = {
         .sType                   = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,                  // 
         .pNext                   = nullptr,                                                 // 
@@ -338,11 +345,11 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         }
     }
 
-    std::unique_ptr<Surface> surface{};
+    std::unique_ptr<Surface_impl> surface_impl{};
     VkSurfaceKHR vulkan_surface{VK_NULL_HANDLE};
     if (m_context_window != nullptr) {
-        surface = std::make_unique<Surface>(*this, surface_create_info);
-        vulkan_surface = surface->get_vulkan_surface();
+        surface_impl = std::make_unique<Surface_impl>(*this, surface_create_info);
+        vulkan_surface = surface_impl->get_vulkan_surface();
     }
 
     uint32_t physical_device_count{0};
@@ -369,7 +376,7 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         VkPhysicalDeviceProperties device_properties{};
         vkGetPhysicalDeviceProperties(physical_device, &device_properties);
 
-        if (surface && !surface->use_physical_device(physical_device)) {
+        if (surface_impl && !surface_impl->use_physical_device(physical_device)) {
             continue;
         }
 
@@ -411,7 +418,7 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         if (graphics_queue_family_index == UINT32_MAX) {
             continue;
         }
-        if (surface && (graphics_queue_family_index != present_queue_family_index)) {
+        if (surface_impl && (graphics_queue_family_index != present_queue_family_index)) {
             continue;
         }
 
@@ -421,12 +428,11 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         break;
     }
 
-
     if (
         (m_vulkan_physical_device    == VK_NULL_HANDLE) ||
         (graphics_queue_family_index == UINT32_MAX) ||
         (
-            surface &&
+            surface_impl &&
             (present_queue_family_index == UINT32_MAX)
         )
     ) {
@@ -434,7 +440,7 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         abort(); // TODO handle error
     }
 
-    m_surface = std::move(surface);
+    m_surface = std::make_unique<Surface>(std::move(surface_impl));
 
     const float queue_priority = 1.0f;
     const VkDeviceQueueCreateInfo queue_create_info = {
@@ -523,6 +529,15 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
             abort();
         }
     }
+
+    m_info.glsl_version       = 460;
+    m_info.vulkan_api_version = application_info.apiVersion;
+
+    VkPhysicalDeviceProperties physical_device_properties;
+    vkGetPhysicalDeviceProperties(m_vulkan_physical_device, &physical_device_properties);
+
+    m_info.max_per_stage_descriptor_samplers = physical_device_properties.limits.maxPerStageDescriptorSamplers;
+    //max_texture_image_units
 }
 
 Device_impl::~Device_impl()
@@ -753,6 +768,33 @@ auto Device_impl::create_render_pass(
 ) -> VkResult
 {
     return vkCreateRenderPass(m_vulkan_device, pCreateInfo, pAllocator, pRenderPass);
+}
+
+void Device_impl::set_debug_label(VkObjectType object_type, uint64_t object_handle, const char* label)
+{
+    if (!m_VK_EXT_debug_utils) {
+        return;
+    }
+    const VkDebugUtilsObjectNameInfoEXT name_info{
+        .sType        = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+        .pNext        = nullptr,
+        .objectType   = object_type,
+        .objectHandle = object_handle,
+        .pObjectName  = label
+    };
+    VkResult result = vkSetDebugUtilsObjectNameEXT(m_vulkan_device, &name_info);
+    if (result != VK_SUCCESS) {
+        log_debug->warn(
+            "vkSetDebugUtilsObjectNameEXT() failed with {} {}",
+            static_cast<uint32_t>(result),
+            c_str(result)
+        );
+    }
+}
+
+void Device_impl::set_debug_label(VkObjectType object_type, uint64_t object_handle, const std::string& label)
+{
+    set_debug_label(object_type, object_handle, label.c_str());
 }
 
 } // namespace erhe::graphics

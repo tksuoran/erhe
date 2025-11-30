@@ -33,7 +33,11 @@ Programs::Programs(erhe::graphics::Device& graphics_device, erhe::scene_renderer
                 "s_texture",
                 erhe::graphics::Glsl_type::sampler_2d,
                 erhe::scene_renderer::c_texture_heap_slot_count_reserved,
-                graphics_device.get_info().max_texture_image_units - erhe::scene_renderer::c_texture_heap_slot_count_reserved
+                // TODO
+                std::min(
+                    graphics_device.get_info().max_per_stage_descriptor_samplers - erhe::scene_renderer::c_texture_heap_slot_count_reserved,
+                    uint32_t{64}
+                )
             )
     }
 

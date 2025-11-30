@@ -13,11 +13,11 @@ namespace erhe::graphics {
 class Device_impl;
 class Surface_create_info;
 
-class Surface final
+class Surface_impl final
 {
 public:
-    Surface(Device_impl& device, const Surface_create_info& create_info);
-    ~Surface() noexcept;
+    Surface_impl(Device_impl& device, const Surface_create_info& create_info);
+    ~Surface_impl() noexcept;
 
     [[nodiscard]] auto use_physical_device(VkPhysicalDevice physical_device) -> bool;
     [[nodiscard]] auto get_surface_format () -> VkSurfaceFormatKHR const;

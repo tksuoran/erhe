@@ -2,8 +2,9 @@
 
 #include "erhe_graphics/gl/gl_device.hpp"
 #include "erhe_graphics/gl/gl_buffer.hpp"
-#include "erhe_graphics/gl/gl_texture.hpp"
 #include "erhe_graphics/gl/gl_sampler.hpp"
+#include "erhe_graphics/gl/gl_surface.hpp"
+#include "erhe_graphics/gl/gl_texture.hpp"
 
 #include "erhe_utility/bit_helpers.hpp"
 #include "erhe_configuration/configuration.hpp"
@@ -110,7 +111,9 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
     ERHE_PROFILE_FUNCTION();
 
     if (surface_create_info.context_window != nullptr) {
-        m_surface = std::make_unique<Surface>(*this, surface_create_info);
+        m_surface = std::make_unique<Surface>(
+            std::make_unique<Surface_impl>(*this, surface_create_info)
+        );
     }
 
     std::vector<std::string> extensions;
@@ -218,7 +221,9 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         log_startup->info("max cube map texture size: {}", m_info.max_cube_map_texture_size);
         log_startup->info("max array texture layers:  {}", m_info.max_array_texture_layers);
 
-        gl::get_integer_v(gl::Get_p_name::max_texture_image_units,          &m_info.max_texture_image_units);
+        int max_texture_image_units{0};
+        gl::get_integer_v(gl::Get_p_name::max_texture_image_units,          &max_texture_image_units);
+        m_info.max_per_stage_descriptor_samplers = static_cast<uint32_t>(max_texture_image_units);
         gl::get_integer_v(gl::Get_p_name::max_combined_texture_image_units, &m_info.max_combined_texture_image_units);
 
         // GL 3.0 introduced context flags
