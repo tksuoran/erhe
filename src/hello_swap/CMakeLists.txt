@@ -1,24 +1,13 @@
-message(STATUS "Configuring executable 'example'.")
-set(_target "example")
+message(STATUS "Configuring executable 'hello_swap'.")
+set(_target "hello_swap")
 add_executable(${_target})
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
-    example.cpp
-    example.hpp
-    example_log.cpp
-    example_log.hpp
-    frame_controller.cpp
-    frame_controller.hpp
+    hello_swap.cpp
+    hello_swap.hpp
+    hello_swap_log.cpp
+    hello_swap_log.hpp
     main.cpp
-    mesh_memory.cpp
-    mesh_memory.hpp
-    programs.cpp
-    programs.hpp
-    res/models/Box.gltf
-    res/shaders/depth.vert
-    res/shaders/depth.frag
-    res/shaders/standard.vert
-    res/shaders/standard.frag
     erhe.toml
     logging.toml
 )
@@ -31,22 +20,10 @@ endif ()
 target_link_libraries(
     ${_target}
     PRIVATE
-    Taskflow
     erhe::utility
-    erhe::dataformat
-    erhe::file
-    erhe::gltf
     erhe::graphics
-    erhe::graphics_buffer_sink
-    erhe::log
     erhe::math
-    erhe::primitive
-    erhe::profile
-    erhe::raytrace # TODO Make it optional - glTF loader currently uses it and log needs to be initialized..
-    erhe::renderer
-    erhe::scene
-    erhe::scene_renderer
-    erhe::ui
+    erhe::log
     erhe::verify
     erhe::window
 )

@@ -39,6 +39,7 @@ if (${ERHE_GUI_LIBRARY} STREQUAL "imgui")
 endif ()
 
 add_subdirectory(example)
+add_subdirectory(hello_swap)
 
 if (${ERHE_GUI_LIBRARY} STREQUAL "imgui")
     message(STATUS "Adding subdirectory 'hextiles'.")
