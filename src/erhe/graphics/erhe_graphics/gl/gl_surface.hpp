@@ -1,24 +1,17 @@
 #pragma once
 
-#include "erhe_graphics/surface.hpp"
-
-#include <vector>
-
-namespace erhe::window { class Context_window; }
-
 namespace erhe::graphics {
 
 class Device_impl;
-class Surface_create_info;
 
-class Surface_impl final
+class Surface final
 {
 public:
-    Surface_impl(Device& device, const Surface_create_info& create_info);
-    ~Surface_impl() noexcept;
+    Surface(Device_impl& device_impl, const Surface_create_info& create_info);
+    ~Surface() noexcept;
 
 private:
-    Device&             m_device;
+    Device_impl&        m_device_impl;
     Surface_create_info m_surface_create_info;
 };
 

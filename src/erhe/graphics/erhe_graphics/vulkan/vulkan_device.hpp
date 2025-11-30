@@ -57,6 +57,22 @@ public:
     [[nodiscard]] auto get_graphics_queue_family_index() -> uint32_t const;
     [[nodiscard]] auto get_present_queue_family_index () -> uint32_t const;
 
+    [[nodiscard]] auto debug_report_callback(
+        VkDebugReportFlagsEXT      flags,
+        VkDebugReportObjectTypeEXT object_type,
+        uint64_t                   object,
+        size_t                     location,
+        int32_t                    message_code,
+        const char*                layer_prefix,
+        const char*                message
+    ) -> VkBool32;
+
+    [[nodiscard]] auto debug_utils_messenger_callback(
+        VkDebugUtilsMessageSeverityFlagBitsEXT      message_severity,
+        VkDebugUtilsMessageTypeFlagsEXT             message_types,
+        const VkDebugUtilsMessengerCallbackDataEXT* callback_data
+    ) -> VkBool32;
+
 private:
     void frame_completed(uint64_t frame);
 
@@ -74,15 +90,28 @@ private:
     uint64_t                                  m_frame_number{1};
     std::vector<Completion_handler>           m_completion_handlers;
 
-    VkInstance                    m_vulkan_instance       {VK_NULL_HANDLE};
-    VkPhysicalDevice              m_vulkan_physical_device{VK_NULL_HANDLE};
-    VkDevice                      m_vulkan_device         {VK_NULL_HANDLE};
-    VmaAllocator                  m_vma_allocator         {VK_NULL_HANDLE};
-    std::unique_ptr<Surface_impl> m_surface               {};
-    VkQueue                       m_vulkan_graphics_queue {VK_NULL_HANDLE};
-    VkQueue                       m_vulkan_present_queue  {VK_NULL_HANDLE};
-    uint32_t                      m_graphics_queue_family_index{0};
-    uint32_t                      m_present_queue_family_index {0};
+    VkInstance               m_vulkan_instance       {VK_NULL_HANDLE};
+    VkPhysicalDevice         m_vulkan_physical_device{VK_NULL_HANDLE};
+    VkDevice                 m_vulkan_device         {VK_NULL_HANDLE};
+    VmaAllocator             m_vma_allocator         {VK_NULL_HANDLE};
+    VkDebugReportCallbackEXT m_debug_report_callback {VK_NULL_HANDLE};
+    VkDebugUtilsMessengerEXT m_debug_utils_messenger {VK_NULL_HANDLE};
+    std::unique_ptr<Surface> m_surface               {};
+    VkQueue                  m_vulkan_graphics_queue {VK_NULL_HANDLE};
+    VkQueue                  m_vulkan_present_queue  {VK_NULL_HANDLE};
+    uint32_t                 m_graphics_queue_family_index{0};
+    uint32_t                 m_present_queue_family_index {0};
+
+    bool m_VK_KHR_get_physical_device_properties2{false};
+    bool m_VK_KHR_get_surface_capabilities2      {false};
+    bool m_VK_KHR_surface                        {false};
+    bool m_VK_KHR_surface_maintenance1           {false};
+    bool m_VK_KHR_win32_surface                  {false};
+    bool m_VK_EXT_debug_report                   {false};
+    bool m_VK_EXT_debug_utils                    {false};
+    bool m_VK_EXT_swapchain_colorspace           {false};
+    bool m_VK_KHR_portability_enumeration        {false};
+
 };
 
 } // namespace erhe::graphics

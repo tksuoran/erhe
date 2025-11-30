@@ -16,8 +16,8 @@ namespace erhe::graphics {
 // https://gist.github.com/nanokatze/bb03a486571e13a7b6a8709368bd87cf#handling-window-resize
 // https://github.com/KhronosGroup/Vulkan-Samples/tree/main/samples/api/swapchain_recreation
 
-Surface_impl::Surface_impl(Device& device, const Surface_create_info& create_info)
-    : m_device             {device}
+Surface::Surface(Device_impl& device_impl, const Surface_create_info& create_info)
+    : m_device_impl        {device_impl}
     , m_surface_create_info{create_info}
     , m_surface_format{
         .format     = VK_FORMAT_UNDEFINED,
@@ -26,12 +26,12 @@ Surface_impl::Surface_impl(Device& device, const Surface_create_info& create_inf
     , m_present_mode      {VK_PRESENT_MODE_FIFO_KHR}
 {
     ERHE_VERIFY(create_info.context_window != nullptr);
-    const VkInstance vulkan_instance = device.get_impl().get_vulkan_instance();
+    const VkInstance vulkan_instance = device_impl.get_vulkan_instance();
     void* surface = create_info.context_window->create_vulkan_surface(static_cast<void*>(vulkan_instance));
     m_surface = static_cast<VkSurfaceKHR>(surface);
 }
 
-auto Surface_impl::use_physical_device(VkPhysicalDevice physical_device) -> bool
+auto Surface::use_physical_device(VkPhysicalDevice physical_device) -> bool
 {
     if (m_surface == VK_NULL_HANDLE) {
         fail();
@@ -126,7 +126,7 @@ auto Surface_impl::use_physical_device(VkPhysicalDevice physical_device) -> bool
     return true;
 }
 
-void Surface_impl::fail()
+void Surface::fail()
 {
     m_physical_device = VK_NULL_HANDLE;
     m_surface_formats.clear();
@@ -139,7 +139,7 @@ void Surface_impl::fail()
     m_image_count = 0;
 }
 
-auto Surface_impl::get_surface_format_score(const VkSurfaceFormatKHR surface_format) -> float
+auto Surface::get_surface_format_score(const VkSurfaceFormatKHR surface_format) -> float
 {
     float format_score = 1.0f;
     switch (surface_format.format) {
@@ -177,7 +177,7 @@ auto Surface_impl::get_surface_format_score(const VkSurfaceFormatKHR surface_for
     return format_score * color_space_score;
 }
 
-auto Surface_impl::get_present_mode_score(const VkPresentModeKHR present_mode) -> float
+auto Surface::get_present_mode_score(const VkPresentModeKHR present_mode) -> float
 {
     // https://registry.khronos.org/vulkan/specs/latest/html/vkspec.html#VkSurfacePresentModeKHR
 
@@ -259,27 +259,27 @@ auto Surface_impl::get_present_mode_score(const VkPresentModeKHR present_mode) -
     }
 }
 
-auto Surface_impl::get_surface_format() -> VkSurfaceFormatKHR const
+auto Surface::get_surface_format() -> VkSurfaceFormatKHR const
 {
     return m_surface_format;
 }
 
-auto Surface_impl::get_present_mode() -> VkPresentModeKHR const
+auto Surface::get_present_mode() -> VkPresentModeKHR const
 {
     return m_present_mode;
 }
 
-auto Surface_impl::get_image_count() -> uint32_t const
+auto Surface::get_image_count() -> uint32_t const
 {
     return m_image_count;
 }
 
-auto Surface_impl::get_vulkan_surface() -> VkSurfaceKHR const
+auto Surface::get_vulkan_surface() -> VkSurfaceKHR const
 {
     return m_surface;
 }
 
-void Surface_impl::choose_surface_format()
+void Surface::choose_surface_format()
 {
     float best_score = std::numeric_limits<float>::lowest();
     VkSurfaceFormatKHR selected_format{
@@ -296,7 +296,7 @@ void Surface_impl::choose_surface_format()
     m_surface_format = selected_format;
 }
 
-void Surface_impl::choose_present_mode()
+void Surface::choose_present_mode()
 {
     float best_score = std::numeric_limits<float>::lowest();
     VkPresentModeKHR selected_present_mode = VK_PRESENT_MODE_FIFO_KHR;
@@ -310,13 +310,12 @@ void Surface_impl::choose_present_mode()
     m_present_mode = selected_present_mode;
 }
 
-Surface_impl::~Surface_impl() noexcept
+Surface::~Surface() noexcept
 {
-    Device_impl& device_impl = m_device.get_impl();
-    VkInstance instance = device_impl.get_vulkan_instance();
+    VkInstance instance = m_device_impl.get_vulkan_instance();
     VkSurfaceKHR surface = m_surface;
     if (surface != VK_NULL_HANDLE) {
-        device_impl.add_completion_handler(
+        m_device_impl.add_completion_handler(
             [instance, surface]() {
                 vkDestroySurfaceKHR(instance, surface, nullptr);
             }
@@ -324,16 +323,15 @@ Surface_impl::~Surface_impl() noexcept
     }
 }
 
-auto Surface_impl::create_swapchain() -> VkSwapchainKHR const
+auto Surface::create_swapchain() -> VkSwapchainKHR const
 {
     VkSurfaceCapabilitiesKHR surface_capabilities{};
     VkResult result = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_physical_device, m_surface, &surface_capabilities);
     if (result != VK_SUCCESS) {
         return VK_NULL_HANDLE;
     }
-    Device_impl& device_impl                 = m_device.get_impl();
-    VkDevice     vulkan_device               = device_impl.get_vulkan_device();
-    uint32_t     graphics_queue_family_index = device_impl.get_graphics_queue_family_index();
+    VkDevice vulkan_device               = m_device_impl.get_vulkan_device();
+    uint32_t graphics_queue_family_index = m_device_impl.get_graphics_queue_family_index();
     const VkSwapchainCreateInfoKHR swapchain_create_info{
         .sType                 = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,// VkStructureType
         .pNext                 = nullptr,                               // const void*

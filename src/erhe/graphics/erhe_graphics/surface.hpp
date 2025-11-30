@@ -14,20 +14,11 @@ public:
     bool prefer_high_dynamic_range{false};
 };
 
-class Device;
-
-class Surface_impl;
-class Surface final
-{
-public:
-    Surface(Device& device, const Surface_create_info& create_info);
-    ~Surface() noexcept;
-
-    [[nodiscard]] auto get_impl() -> Surface_impl&;
-    [[nodiscard]] auto get_impl() const -> const Surface_impl&;
-
-private:
-    std::unique_ptr<Surface_impl> m_impl;
-};
-
 } // namespace erhe::graphics
+
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+# include "erhe_graphics/gl/gl_surface.hpp"
+#endif
+#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+# include "erhe_graphics/vulkan/vulkan_surface.hpp"
+#endif

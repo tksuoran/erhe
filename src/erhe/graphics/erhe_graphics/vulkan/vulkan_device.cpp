@@ -1,10 +1,9 @@
-// #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
-
 #include "erhe_graphics/vulkan/vulkan_device.hpp"
 #include "erhe_graphics/vulkan/vulkan_buffer.hpp"
-#include "erhe_graphics/vulkan/vulkan_texture.hpp"
+#include "erhe_graphics/vulkan/vulkan_helpers.hpp"
 #include "erhe_graphics/vulkan/vulkan_sampler.hpp"
 #include "erhe_graphics/vulkan/vulkan_surface.hpp"
+#include "erhe_graphics/vulkan/vulkan_texture.hpp"
 
 #include "erhe_utility/bit_helpers.hpp"
 #include "erhe_configuration/configuration.hpp"
@@ -37,14 +36,191 @@
 
 namespace erhe::graphics {
 
+auto Device_impl_debug_report_callback(
+    VkDebugReportFlagsEXT      flags,
+    VkDebugReportObjectTypeEXT object_type,
+    uint64_t                   object,
+    size_t                     location,
+    int32_t                    message_code,
+    const char*                layer_prefix,
+    const char*                message,
+    void*                      user_data
+) -> VkBool32
+{
+    Device_impl* device_impl = static_cast<Device_impl*>(user_data);
+    if (device_impl == nullptr) {
+        return VK_FALSE;
+    }
+    return device_impl->debug_report_callback(
+        flags,
+        object_type,
+        object,
+        location,
+        message_code,
+        layer_prefix,
+        message
+    );
+}
+
+[[nodiscard]] auto Device_impl_debug_utils_messenger_callback(
+    VkDebugUtilsMessageSeverityFlagBitsEXT      message_severity,
+    VkDebugUtilsMessageTypeFlagsEXT             message_types,
+    const VkDebugUtilsMessengerCallbackDataEXT* callback_data,
+    void*                                       user_data
+) -> VkBool32
+{
+    Device_impl* device_impl = static_cast<Device_impl*>(user_data);
+    if (device_impl == nullptr) {
+        return VK_FALSE;
+    }
+    return device_impl->debug_utils_messenger_callback(message_severity, message_types, callback_data);
+}
+
+auto Device_impl::debug_report_callback(
+    VkDebugReportFlagsEXT      flags,
+    VkDebugReportObjectTypeEXT object_type,
+    uint64_t                   object,
+    size_t                     location,
+    int32_t                    message_code,
+    const char*                layer_prefix,
+    const char*                message
+) -> VkBool32
+{
+    spdlog::level::level_enum level = spdlog::level::info;
+    if (flags & VK_DEBUG_REPORT_DEBUG_BIT_EXT              ) level = spdlog::level::trace;
+    if (flags & VK_DEBUG_REPORT_INFORMATION_BIT_EXT        ) level = spdlog::level::info;
+    if (flags & VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT) level = spdlog::level::info;
+    if (flags & VK_DEBUG_REPORT_WARNING_BIT_EXT            ) level = spdlog::level::warn;
+    if (flags & VK_DEBUG_REPORT_ERROR_BIT_EXT              ) level = spdlog::level::err;
+    std::stringstream ss;
+    if (layer_prefix != nullptr) {
+        ss << "[" << layer_prefix << "] ";
+    }
+    ss << fmt::format(
+        "[{:<24}] Object {:16} (type {}) Location {:08x} Code {:04} :",
+        to_string(flags),
+        object,
+        c_str(object_type),
+        location,
+        message_code
+    );
+    if (message != nullptr) {
+        ss << " " << message;
+    }  
+    log_debug->log(level, ss.str());
+    return VK_TRUE;
+}
+
+auto Device_impl::debug_utils_messenger_callback(
+    VkDebugUtilsMessageSeverityFlagBitsEXT      message_severity,
+    VkDebugUtilsMessageTypeFlagsEXT             message_types,
+    const VkDebugUtilsMessengerCallbackDataEXT* callback_data
+) -> VkBool32
+{
+    spdlog::level::level_enum level = spdlog::level::info;
+    if (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT) level = spdlog::level::trace;
+    if (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT   ) level = spdlog::level::info;
+    if (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) level = spdlog::level::warn;
+    if (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT  ) level = spdlog::level::err;
+    std::stringstream ss;
+    ss << fmt::format(
+        "{} {} [{} {}] {}",
+        to_string(message_types),
+        to_string(message_severity),
+        callback_data->messageIdNumber,
+        callback_data->pMessageIdName,
+        callback_data->pMessage
+    );
+    if (callback_data->queueLabelCount > 0) {
+        ss << "\n  queues: ";
+        bool empty = true;
+        for (uint32_t i = 0; i < callback_data->queueLabelCount; ++i) {
+            if (!empty) {
+                ss << ", ";
+            }
+            ss << callback_data->pQueueLabels[i].pLabelName;
+            empty = false;
+        }
+    }
+    if (callback_data->cmdBufLabelCount > 0) {
+        ss << "\n  command buffers: ";
+        bool empty = true;
+        for (uint32_t i = 0; i < callback_data->cmdBufLabelCount; ++i) {
+            if (!empty) {
+                ss << ", ";
+            }
+            ss << callback_data->pCmdBufLabels[i].pLabelName;
+            empty = false;
+        }
+    }
+    if (callback_data->objectCount > 0) {
+        ss << "\n  objects: ";
+        bool empty = true;
+        for (uint32_t i = 0; i < callback_data->objectCount; ++i) {
+            if (!empty) {
+                ss << ", ";
+            }
+            ss << fmt::format(
+                "{} {} {}",
+                c_str(callback_data->pObjects[i].objectType),
+                callback_data->pObjects[i].objectHandle, 
+                (callback_data->pObjects[i].pObjectName != nullptr)
+                    ? callback_data->pObjects[i].pObjectName
+                    : ""
+            );
+            empty = false;
+        }
+    }
+    log_debug->log(level, ss.str());
+    return VK_TRUE;
+}
+
 Device_impl::Device_impl(Device& device, const Surface_create_info& surface_create_info)
     : m_context_window{surface_create_info.context_window}
     , m_device        {device}
     , m_shader_monitor{device}
 {
-    const VkResult volk_init = volkInitialize();
-    if (volk_init != VK_SUCCESS) {
+    VkResult result{VK_SUCCESS};
+
+    result = volkInitialize();
+    if (result != VK_SUCCESS) {
+        log_context->critical("volkInitialize() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
         abort(); // TODO handle errors
+    }
+
+    uint32_t instance_layer_count{0};
+    result = vkEnumerateInstanceLayerProperties(&instance_layer_count, nullptr);
+    if (result != VK_SUCCESS) {
+        log_context->critical("vkEnumerateInstanceLayerProperties() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        abort(); // TODO handle error
+    }
+    std::vector<VkLayerProperties> instance_layers(instance_layer_count);
+    result = vkEnumerateInstanceLayerProperties(&instance_layer_count, instance_layers.data());
+    if (result != VK_SUCCESS) {
+        log_context->critical("vkEnumerateInstanceLayerProperties() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        abort(); // TODO handle error
+    }
+    for (const VkLayerProperties& layer_properties : instance_layers) {
+        log_debug->info(
+            "Vulkan Instance Layer: {} spec_version {:08x} implementation_version {:08x} {}",
+            layer_properties.layerName,
+            layer_properties.specVersion,
+            layer_properties.implementationVersion,
+            layer_properties.description
+        );
+    }
+
+    uint32_t instance_extension_count{0};
+    result = vkEnumerateInstanceExtensionProperties(nullptr, &instance_extension_count, nullptr);
+    if (result != VK_SUCCESS) {
+        log_context->critical("vkEnumerateInstanceExtensionProperties() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        abort(); // TODO handle error
+    }
+    std::vector<VkExtensionProperties> instance_extensions(instance_extension_count);
+    result = vkEnumerateInstanceExtensionProperties(nullptr, &instance_extension_count, instance_extensions.data());
+    if (result != VK_SUCCESS) {
+        log_context->critical("vkEnumerateInstanceExtensionProperties() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        abort(); // TODO handle error
     }
 
     std::vector<const char*> required_extensions_c_str;
@@ -53,6 +229,31 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         for (const std::string& extension_name : required_extensions) {
             required_extensions_c_str.push_back(extension_name.c_str());
         }
+    }
+
+    auto check_extension = [&required_extensions_c_str](const VkExtensionProperties& extension, const char* name, bool& enable)
+    {
+        if (strcmp(extension.extensionName, name) == 0) {
+            required_extensions_c_str.push_back(name);
+            enable = true;
+        }
+    };
+
+    for (const VkExtensionProperties& extension: instance_extensions) {
+        log_debug->info(
+            "Vulkan Instance Extension: {} spec_version {:08x}",
+            extension.extensionName,
+            extension.specVersion
+        );
+        check_extension(extension, VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME, m_VK_KHR_get_physical_device_properties2);
+        check_extension(extension, VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME      , m_VK_KHR_get_surface_capabilities2      );
+        check_extension(extension, VK_KHR_SURFACE_EXTENSION_NAME                         , m_VK_KHR_surface                        );
+        check_extension(extension, VK_KHR_SURFACE_MAINTENANCE_1_EXTENSION_NAME           , m_VK_KHR_surface_maintenance1           );
+        check_extension(extension, VK_KHR_WIN32_SURFACE_EXTENSION_NAME                   , m_VK_KHR_win32_surface                  );
+        check_extension(extension, VK_EXT_DEBUG_REPORT_EXTENSION_NAME                    , m_VK_EXT_debug_report                   );
+        check_extension(extension, VK_EXT_DEBUG_UTILS_EXTENSION_NAME                     , m_VK_EXT_debug_utils                    );
+        check_extension(extension, VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME           , m_VK_EXT_swapchain_colorspace           );
+        check_extension(extension, VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME         , m_VK_KHR_portability_enumeration        );
     }
 
     const VkApplicationInfo application_info{
@@ -74,28 +275,92 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         .enabledExtensionCount   = static_cast<uint32_t>(required_extensions_c_str.size()), // 
         .ppEnabledExtensionNames = required_extensions_c_str.data()
     };
-    VkResult result{VK_SUCCESS};
     result = vkCreateInstance(&instance_create_info, nullptr, &m_vulkan_instance);
     if (result != VK_SUCCESS) {
+        log_context->critical("vkCreateInstance() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
         abort(); // TODO handle error
     }
 
     volkLoadInstance(m_vulkan_instance);
 
-    std::unique_ptr<Surface_impl> surface{};
+    bool debug_callback_registered = false;
+    if (m_VK_EXT_debug_utils) {
+        const VkDebugUtilsMessengerCreateInfoEXT debug_utils_messenger_create_info{
+            .sType           = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
+            .pNext           = nullptr,
+            .flags           = 0,
+            .messageSeverity =
+                VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
+                VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT    |
+                VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+                VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
+            .messageType     =
+                VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT                |
+                VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT             |
+                VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT            |
+                VK_DEBUG_UTILS_MESSAGE_TYPE_DEVICE_ADDRESS_BINDING_BIT_EXT,
+            .pfnUserCallback = Device_impl_debug_utils_messenger_callback,
+            .pUserData       = static_cast<void*>(this)
+        };
+        result = vkCreateDebugUtilsMessengerEXT(
+            m_vulkan_instance,
+            &debug_utils_messenger_create_info,
+            nullptr,
+            &m_debug_utils_messenger
+        );
+        if (result == VK_SUCCESS) {
+            debug_callback_registered = true;
+        } else {
+            log_context->warn("vkCreateDebugUtilsMessengerEXT() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        }
+    }
+    if (m_VK_EXT_debug_report && !debug_callback_registered) {
+        const VkDebugReportCallbackCreateInfoEXT debug_report_callback_create_info{
+            .sType       = VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT,
+            .pNext       = nullptr,
+            .flags       =
+                VK_DEBUG_REPORT_INFORMATION_BIT_EXT         |
+                VK_DEBUG_REPORT_WARNING_BIT_EXT             |
+                VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT |
+                VK_DEBUG_REPORT_ERROR_BIT_EXT               |
+                VK_DEBUG_REPORT_DEBUG_BIT_EXT,
+            .pfnCallback = Device_impl_debug_report_callback,
+            .pUserData   = static_cast<void*>(this),
+        };
+        result = vkCreateDebugReportCallbackEXT(
+            m_vulkan_instance,
+            &debug_report_callback_create_info,
+            nullptr,
+            &m_debug_report_callback
+        );
+        if (result != VK_SUCCESS) {
+            log_context->warn("vkCreateDebugReportCallbackEXT() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        }
+    }
+
+    std::unique_ptr<Surface> surface{};
     VkSurfaceKHR vulkan_surface{VK_NULL_HANDLE};
     if (m_context_window != nullptr) {
-        surface = std::make_unique<Surface_impl>(m_device, surface_create_info);
+        surface = std::make_unique<Surface>(*this, surface_create_info);
         vulkan_surface = surface->get_vulkan_surface();
     }
 
     uint32_t physical_device_count{0};
-    vkEnumeratePhysicalDevices(m_vulkan_instance, &physical_device_count, nullptr);
+    result = vkEnumeratePhysicalDevices(m_vulkan_instance, &physical_device_count, nullptr);
+    if (result != VK_SUCCESS) {
+        log_context->critical("vkEnumeratePhysicalDevices() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        abort();
+    }
     std::vector<VkPhysicalDevice> physical_devices(physical_device_count);
     if (physical_device_count == 0) {
+        log_context->critical("vkEnumeratePhysicalDevices() returned 0 physical devices");
         abort(); // TODO handle error
     }
-    vkEnumeratePhysicalDevices(m_vulkan_instance, &physical_device_count, physical_devices.data());
+    result = vkEnumeratePhysicalDevices(m_vulkan_instance, &physical_device_count, physical_devices.data());
+    if (result != VK_SUCCESS) {
+        log_context->critical("vkEnumeratePhysicalDevices() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        abort();
+    }
 
     uint32_t graphics_queue_family_index = UINT32_MAX;
     uint32_t present_queue_family_index = UINT32_MAX;
@@ -126,6 +391,9 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
             {
                 VkBool32 support{VK_FALSE};
                 result = vkGetPhysicalDeviceSurfaceSupportKHR(physical_device, queue_family_index, vulkan_surface, &support);
+                if (result != VK_SUCCESS) {
+                    log_context->warn("vkGetPhysicalDeviceSurfaceSupportKHR() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+                }
                 return (result == VK_SUCCESS) && (support == VK_TRUE);
             }();
             if (support_graphics && support_present) {
@@ -162,6 +430,7 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
             (present_queue_family_index == UINT32_MAX)
         )
     ) {
+        log_context->critical("No suitable vulkan device found");
         abort(); // TODO handle error
     }
 
@@ -203,7 +472,11 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         .ppEnabledExtensionNames = device_extensions.data(),                        // ppEnabledExtensionNames
         .pEnabledFeatures        = nullptr
     };
-    vkCreateDevice(m_vulkan_physical_device, &device_create_info, nullptr, &m_vulkan_device);
+    result = vkCreateDevice(m_vulkan_physical_device, &device_create_info, nullptr, &m_vulkan_device);
+    if (result != VK_SUCCESS) {
+        log_context->critical("vkCreateDevice() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        abort();
+    }
 
     // TODO
     //   VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT
@@ -226,19 +499,29 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
     VmaVulkanFunctions vma_vulkan_functions{};
     result = vmaImportVulkanFunctionsFromVolk(&vma_create_info, &vma_vulkan_functions);
     if (result != VK_SUCCESS) {
-        abort(); // TODO handle error
+        log_context->critical("vmaImportVulkanFunctionsFromVolk() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        abort();
     }
     vma_create_info.pVulkanFunctions = &vma_vulkan_functions;
 
     result = vmaCreateAllocator(&vma_create_info, &m_vma_allocator);
     if (result != VK_SUCCESS) {
-        abort(); // TODO handle error
+        log_context->critical("vmaCreateAllocator() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        abort();
     }
 
     vkGetDeviceQueue(m_vulkan_device, graphics_queue_family_index, 0, &m_vulkan_graphics_queue);
+    if (m_vulkan_graphics_queue == VK_NULL_HANDLE) {
+        log_context->critical("vkGetDeviceQueue() returned VK_NULL_HANDLE for graphics queue");
+        abort();
+    }
 
     if (m_surface) {
         vkGetDeviceQueue(m_vulkan_device, present_queue_family_index, 0, &m_vulkan_present_queue);
+        if (m_vulkan_present_queue == VK_NULL_HANDLE) {
+            log_context->critical("vkGetDeviceQueue() returned VK_NULL_HANDLE for present queue");
+            abort();
+        }
     }
 }
 
@@ -251,6 +534,11 @@ Device_impl::~Device_impl()
     m_surface.reset();
     vkDestroyInstance(m_vulkan_instance, nullptr);
     volkFinalize();
+}
+
+auto Device_impl::get_surface() -> Surface*
+{
+    return m_surface.get();
 }
 
 auto Device_impl::get_vulkan_instance() -> VkInstance
@@ -441,7 +729,6 @@ void Device_impl::clear_texture(Texture& texture, std::array<double, 4> value)
 {
     static_cast<void>(texture);
     static_cast<void>(value);
-    
 }
 
 auto Device_impl::make_blit_command_encoder() -> Blit_command_encoder

@@ -170,7 +170,21 @@ if (ERHE_GRAPHICS_API_VULKAN)
         erhe_graphics/vulkan/vulkan_texture_heap.hpp
         erhe_graphics/vulkan/vulkan_vertex_input_state.cpp
         erhe_graphics/vulkan/vulkan_vertex_input_state.hpp
+        erhe_graphics/vulkan/vma_usage.cpp
     )
+
+    # get_target_property(ERHE_VMA_INCLUDES GPUOpen::VulkanMemoryAllocator INTERFACE_INCLUDE_DIRECTORIES)
+    # get_target_property(ERHE_VMA_LIBS     GPUOpen::VulkanMemoryAllocator INTERFACE_LINK_LIBRARIES)
+    # message(STATUS "GPUOpen::VulkanMemoryAllocator INTERFACE_INCLUDE_DIRECTORIES         = ${ERHE_VMA_INCLUDES}")
+    # message(STATUS "GPUOpen::VulkanMemoryAllocator INTERFACE_LINK_LIBRARIES linked libs  = ${ERHE_VMA_LIBS}")
+
+    target_compile_definitions(
+        ${_target}
+        PRIVATE
+            VMA_STATIC_VULKAN_FUNCTIONS
+            VMA_DYNAMIC_VULKAN_FUNCTIONS=0
+	)
+
     target_link_libraries(
         ${_target}
         PRIVATE

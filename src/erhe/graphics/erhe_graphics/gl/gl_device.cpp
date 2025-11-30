@@ -23,6 +23,7 @@
 #include "erhe_graphics/ring_buffer.hpp"
 #include "erhe_graphics/ring_buffer_client.hpp"
 #include "erhe_graphics/ring_buffer_range.hpp"
+#include "erhe_graphics/surface.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_utility/align.hpp"
 #include "erhe_window/window.hpp"
@@ -109,7 +110,7 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
     ERHE_PROFILE_FUNCTION();
 
     if (surface_create_info.context_window != nullptr) {
-        m_surface = std::make_unique<Surface>(m_device, surface_create_info);
+        m_surface = std::make_unique<Surface>(*this, surface_create_info);
     }
 
     std::vector<std::string> extensions;

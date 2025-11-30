@@ -5,10 +5,14 @@ namespace editor {
 Headset_view::Headset_view(
     erhe::commands::Commands&       commands,
     erhe::graphics::Device&         graphics_device,
+    erhe::graphics::Swapchain&      swapchain,
     erhe::imgui::Imgui_renderer&    imgui_renderer,
     erhe::imgui::Imgui_windows&     imgui_windows,
     erhe::rendergraph::Rendergraph& rendergraph,
     erhe::window::Context_window&   context_window,
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+    erhe::xr::Headset*              headset,
+#endif
     App_context&                    app_context,
     App_rendering&                  app_rendering,
     App_settings&                   app_settings
@@ -18,6 +22,7 @@ Headset_view::Headset_view(
 {
     static_cast<void>(commands);
     static_cast<void>(graphics_device);
+    static_cast<void>(swapchain);
     static_cast<void>(rendergraph);
     static_cast<void>(context_window);
     static_cast<void>(app_rendering);

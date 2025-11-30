@@ -13,11 +13,11 @@ namespace erhe::graphics {
 class Device_impl;
 class Surface_create_info;
 
-class Surface_impl final
+class Surface final
 {
 public:
-    Surface_impl(Device& device, const Surface_create_info& create_info);
-    ~Surface_impl() noexcept;
+    Surface(Device_impl& device, const Surface_create_info& create_info);
+    ~Surface() noexcept;
 
     [[nodiscard]] auto use_physical_device(VkPhysicalDevice physical_device) -> bool;
     [[nodiscard]] auto get_surface_format () -> VkSurfaceFormatKHR const;
@@ -33,7 +33,7 @@ private:
     [[nodiscard]] static auto get_surface_format_score(VkSurfaceFormatKHR surface_format) -> float;
     [[nodiscard]] static auto get_present_mode_score  (VkPresentModeKHR present_mode) -> float;
 
-    Device&                         m_device;
+    Device_impl&                    m_device_impl;
     Surface_create_info             m_surface_create_info;
     VkPhysicalDevice                m_physical_device{VK_NULL_HANDLE};
     VkSurfaceKHR                    m_surface        {VK_NULL_HANDLE};

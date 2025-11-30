@@ -97,6 +97,11 @@ Render_pass_impl::~Render_pass_impl() noexcept
 {
 }
 
+auto Render_pass_impl::get_swapchain() const -> Swapchain*
+{
+    return m_swapchain;
+}
+
 void Render_pass_impl::reset()
 {
 }

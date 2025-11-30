@@ -1,28 +1,30 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "erhe_graphics/vulkan/vulkan_swapchain.hpp"
+#include "erhe_graphics/vulkan/vulkan_helpers.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/surface.hpp"
 #include "erhe_graphics/vulkan/vulkan_device.hpp"
 #include "erhe_graphics/vulkan/vulkan_surface.hpp"
+#include "erhe_graphics/graphics_log.hpp"
 
 namespace erhe::graphics {
 
 Swapchain_impl::Swapchain_impl(Swapchain_impl&& old) noexcept
-    : m_device               { old.m_device }
-    , m_vk_swapchain         { std::exchange(old.m_vk_swapchain, VK_NULL_HANDLE) }
-    , m_surface              { old.m_surface }
-    , m_swapchain_images     { std::move(old.m_swapchain_images) }
-    , m_swapchain_image_views{ std::move(old.m_swapchain_image_views) }
+    : m_device          { old.m_device }
+    , m_vulkan_swapchain{ std::exchange(old.m_vulkan_swapchain, VK_NULL_HANDLE) }
+    , m_surface         { old.m_surface }
+    , m_frames_in_flight{ std::move(old.m_frames_in_flight) }
+    , m_image_entries   { std::move(old.m_image_entries) }
 {
 }
 
 Swapchain_impl::~Swapchain_impl() noexcept
 {
-    if (m_vk_swapchain == VK_NULL_HANDLE) {
+    if (m_vulkan_swapchain == VK_NULL_HANDLE) {
         return;
     }
-    VkSwapchainKHR vulkan_swapchain = m_vk_swapchain;
+    VkSwapchainKHR vulkan_swapchain = m_vulkan_swapchain;
     VkDevice       vulkan_device    = m_device.get_impl().get_vulkan_device();
     m_device.add_completion_handler(
         [vulkan_device, vulkan_swapchain]() {
@@ -32,14 +34,13 @@ Swapchain_impl::~Swapchain_impl() noexcept
 }
 
 Swapchain_impl::Swapchain_impl(Device& device, const Swapchain_create_info& create_info)
-    : m_device      {device}
-    , m_surface     {create_info.surface}
-    , m_vk_swapchain{create_info.surface.get_impl().create_swapchain()}
+    : m_device          {device}
+    , m_surface         {create_info.surface}
+    , m_vulkan_swapchain{create_info.surface.create_swapchain()}
 {
     Device_impl&       device_impl    = device.get_impl();
     VkDevice           vulkan_device  = device_impl.get_vulkan_device();
-    Surface_impl&      surface_impl   = m_surface.get_impl();
-    VkSurfaceFormatKHR surface_format = surface_impl.get_surface_format();
+    VkSurfaceFormatKHR surface_format = m_surface.get_surface_format();
 
     const VkFenceCreateInfo fence_create_info{
         .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO, // VkStructureType
@@ -53,29 +54,41 @@ Swapchain_impl::Swapchain_impl(Device& device, const Swapchain_create_info& crea
     };
 
     VkResult result = VK_SUCCESS;
-    for (size_t i = 0; i < s_number_of_frames_in_flight; ++i) {
-        result = vkCreateFence    (vulkan_device, &fence_create_info,     nullptr, &m_frame_fences[i]);
+    m_frames_in_flight.resize(s_number_of_frames_in_flight);
+    for (Swapchain_frame_in_flight& frame_in_flight : m_frames_in_flight) {
+        result = vkCreateFence(vulkan_device, &fence_create_info, nullptr, &frame_in_flight.m_fence);
         if (result != VK_SUCCESS) {
-            abort(); // TODO handle error
+            log_context->critical("vkCreateFence() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+            abort();
         }
-        result = vkCreateSemaphore(vulkan_device, &semaphore_create_info, nullptr, &m_acquire_semaphores[i]);
+        result = vkCreateSemaphore(vulkan_device, &semaphore_create_info, nullptr, &frame_in_flight.m_acquire_semaphore);
         if (result != VK_SUCCESS) {
-            abort(); // TODO handle error
+            log_context->critical("vkCreateSemaphore() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+            abort();
         }
     }
 
     uint32_t image_count = 0;
-    vkGetSwapchainImagesKHR(vulkan_device, m_vk_swapchain, &image_count, nullptr);
-    m_swapchain_images.resize(image_count);
-    m_swapchain_image_views.resize(image_count);
-    vkGetSwapchainImagesKHR(vulkan_device, m_vk_swapchain, &image_count, m_swapchain_images.data());
+    result = vkGetSwapchainImagesKHR(vulkan_device, m_vulkan_swapchain, &image_count, nullptr);
+    if (result != VK_SUCCESS) {
+        log_context->critical("vkGetSwapchainImagesKHR() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        abort();
+    }
+    std::vector<VkImage> images(image_count);
+    result = vkGetSwapchainImagesKHR(vulkan_device, m_vulkan_swapchain, &image_count, images.data());
+    if (result != VK_SUCCESS) {
+        log_context->critical("vkGetSwapchainImagesKHR() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        abort();
+    }
 
     for (uint32_t image_index = 0; image_index < image_count; ++image_index) {
+        Swapchain_image_entry& image_entry = m_image_entries[image_index];
+        image_entry.m_image = images[image_index];
         VkImageViewCreateInfo image_view_create_info{
             .sType      = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO, // VkStructureType
             .pNext      = nullptr,                                  // const void*
             .flags      = 0,                                        // VkImageViewCreateFlags
-            .image      = m_swapchain_images[image_index],          // VkImage
+            .image      = images[image_index],                      // VkImage
             .viewType   = VK_IMAGE_VIEW_TYPE_2D,                    // VkImageViewType
             .format     = surface_format.format,                    // VkFormat
             .components = {                                         // VkComponentMapping
@@ -92,34 +105,35 @@ Swapchain_impl::Swapchain_impl(Device& device, const Swapchain_create_info& crea
                 .layerCount     = 1                                 // uint32_t
             }
         };
-        result = vkCreateImageView(vulkan_device, &image_view_create_info, nullptr, &m_swapchain_image_views[image_index]);
+        result = vkCreateImageView(vulkan_device, &image_view_create_info, nullptr, &image_entry.m_image_view);
         if (result != VK_SUCCESS) {
-            abort(); // TODO handle error
+            log_context->critical("vkCreateImageView() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+            abort();
         }
 
-        result = vkCreateSemaphore(vulkan_device, &semaphore_create_info, nullptr, &m_swapchain_image_submit_semaphores[image_index]);
+        result = vkCreateSemaphore(vulkan_device, &semaphore_create_info, nullptr, &image_entry.m_submit_semaphore);
         if (result != VK_SUCCESS) {
-            abort(); // TODO handle error
+            log_context->critical("vkCreateSemaphore() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+            abort();
         }
     }
 }
 
 auto Swapchain_impl::get_image_count() const -> size_t
 {
-    ERHE_VERIFY(m_swapchain_images.size() == m_swapchain_image_views.size());
-    return m_swapchain_images.size();
+    return m_image_entries.size();
 }
 
-auto Swapchain_impl::get_image(size_t image_index) const -> VkImage
+auto Swapchain_impl::get_image_entry(size_t image_index) -> Swapchain_image_entry&
 {
-    ERHE_VERIFY(image_index < m_swapchain_images.size());
-    return m_swapchain_images[image_index];
+    ERHE_VERIFY(image_index < m_image_entries.size());
+    return m_image_entries[image_index];
 }
 
-auto Swapchain_impl::get_image_view(size_t image_index) const -> VkImageView
+auto Swapchain_impl::get_image_entry(size_t image_index) const -> const Swapchain_image_entry&
 {
-    ERHE_VERIFY(image_index < m_swapchain_image_views.size());
-    return m_swapchain_image_views[image_index];
+    ERHE_VERIFY(image_index < m_image_entries.size());
+    return m_image_entries[image_index];
 }
 
 } // namespace erhe::graphics
