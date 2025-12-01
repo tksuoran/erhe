@@ -19,12 +19,13 @@ public:
     Surface_impl(Device_impl& device, const Surface_create_info& create_info);
     ~Surface_impl() noexcept;
 
-    [[nodiscard]] auto use_physical_device(VkPhysicalDevice physical_device) -> bool;
-    [[nodiscard]] auto get_surface_format () -> VkSurfaceFormatKHR const;
-    [[nodiscard]] auto get_present_mode   () -> VkPresentModeKHR const;
-    [[nodiscard]] auto get_image_count    () -> uint32_t const;
-    [[nodiscard]] auto get_vulkan_surface () -> VkSurfaceKHR const;
-    [[nodiscard]] auto create_swapchain   () -> VkSwapchainKHR const;
+    [[nodiscard]] auto can_use_physical_device(VkPhysicalDevice physical_device) -> bool;
+    [[nodiscard]] auto use_physical_device    (VkPhysicalDevice physical_device) -> bool;
+    [[nodiscard]] auto get_surface_format     () -> VkSurfaceFormatKHR const;
+    [[nodiscard]] auto get_present_mode       () -> VkPresentModeKHR const;
+    [[nodiscard]] auto get_image_count        () -> uint32_t const;
+    [[nodiscard]] auto get_vulkan_surface     () -> VkSurfaceKHR const;
+    [[nodiscard]] auto create_swapchain       () -> VkSwapchainKHR const;
 
 private:
     void fail();

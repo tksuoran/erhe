@@ -208,6 +208,7 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         abort();
     }
 
+    // Setup vulkan instance layers
     std::vector<const char*> required_layers_c_str;
     auto check_layer = [&required_layers_c_str](const VkLayerProperties& layer, const char* name, bool& enable)
     {
@@ -249,18 +250,19 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         abort();
     }
 
-    std::vector<const char*> required_extensions_c_str;
+    // Setup vulkan instance extensions
+    std::vector<const char*> enabled_instance_extensions_c_str;
     if (m_context_window != nullptr) {
         const std::vector<std::string>& required_extensions = m_context_window->get_required_vulkan_instance_extensions();
         for (const std::string& extension_name : required_extensions) {
-            required_extensions_c_str.push_back(extension_name.c_str());
+            enabled_instance_extensions_c_str.push_back(extension_name.c_str());
         }
     }
 
-    auto check_instance_extension = [&required_extensions_c_str](const VkExtensionProperties& extension, const char* name, bool& enable)
+    auto check_instance_extension = [&enabled_instance_extensions_c_str](const VkExtensionProperties& extension, const char* name, bool& enable)
     {
         if (strcmp(extension.extensionName, name) == 0) {
-            required_extensions_c_str.push_back(name);
+            enabled_instance_extensions_c_str.push_back(name);
             enable = true;
             log_debug->info("  Enabling {}", extension.extensionName);
         }
@@ -281,11 +283,9 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         check_instance_extension(extension, VK_EXT_DEBUG_UTILS_EXTENSION_NAME                     , m_instance_extensions.m_VK_EXT_debug_utils                    );
         check_instance_extension(extension, VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME           , m_instance_extensions.m_VK_EXT_swapchain_colorspace           );
         check_instance_extension(extension, VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME         , m_instance_extensions.m_VK_KHR_portability_enumeration        );
-        check_instance_extension(extension, VK_KHR_PRESENT_MODE_FIFO_LATEST_READY_EXTENSION_NAME  , m_instance_extensions.m_VK_KHR_present_mode_fifo_latest_ready );
-        check_instance_extension(extension, VK_EXT_PRESENT_MODE_FIFO_LATEST_READY_EXTENSION_NAME  , m_instance_extensions.m_VK_EXT_present_mode_fifo_latest_ready );
-        check_instance_extension(extension, VK_EXT_DEVICE_ADDRESS_BINDING_REPORT_EXTENSION_NAME   , m_instance_extensions.m_VK_EXT_device_address_binding_report  );
     }
 
+    // Create vulkan instance
     const VkApplicationInfo application_info{
         .sType              = VK_STRUCTURE_TYPE_APPLICATION_INFO,
         .pNext              = nullptr,
@@ -303,8 +303,8 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         .pApplicationInfo        = &application_info,
         .enabledLayerCount       = static_cast<uint32_t>(required_layers_c_str.size()),
         .ppEnabledLayerNames     = required_layers_c_str.data(),
-        .enabledExtensionCount   = static_cast<uint32_t>(required_extensions_c_str.size()),
-        .ppEnabledExtensionNames = required_extensions_c_str.data()
+        .enabledExtensionCount   = static_cast<uint32_t>(enabled_instance_extensions_c_str.size()),
+        .ppEnabledExtensionNames = enabled_instance_extensions_c_str.data()
     };
     result = vkCreateInstance(&instance_create_info, nullptr, &m_vulkan_instance);
     if (result != VK_SUCCESS) {
@@ -314,15 +314,38 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
 
     volkLoadInstance(m_vulkan_instance);
 
+    // Create vulkan surface
+    std::unique_ptr<Surface_impl> surface_impl{};
+    VkSurfaceKHR vulkan_surface{VK_NULL_HANDLE};
+    if (m_context_window != nullptr) {
+        surface_impl = std::make_unique<Surface_impl>(*this, surface_create_info);
+        vulkan_surface = surface_impl->get_vulkan_surface();
+    }
+
+    std::vector<const char*> device_extensions_c_str{};
+    const bool physical_device_ok = choose_physical_device(surface_impl.get(), device_extensions_c_str);
+    if (!physical_device_ok) {
+        log_context->critical("vkCreateInstance() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        abort();
+    }
+
+    VkPhysicalDeviceFeatures2 available_device_features{
+        .sType    = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+        .pNext    = nullptr,
+        .features = {}
+    };
+    vkGetPhysicalDeviceFeatures2(m_vulkan_physical_device, &available_device_features);
+
     bool debug_callback_registered = false;
     if (m_instance_extensions.m_VK_EXT_debug_utils) {
         VkDebugUtilsMessageTypeFlagsEXT message_types =
             VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT    |
             VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
             VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-        if (m_instance_extensions.m_VK_EXT_device_address_binding_report) {
-            message_types = message_types | VK_DEBUG_UTILS_MESSAGE_TYPE_DEVICE_ADDRESS_BINDING_BIT_EXT;
-        }
+        // TODO
+        // if (m_device_extensions.m_VK_EXT_device_address_binding_report) {
+        //     message_types = message_types | VK_DEBUG_UTILS_MESSAGE_TYPE_DEVICE_ADDRESS_BINDING_BIT_EXT;
+        //}
         const VkDebugUtilsMessengerCreateInfoEXT debug_utils_messenger_create_info{
             .sType           = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
             .pNext           = nullptr,
@@ -372,154 +395,15 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         }
     }
 
-    std::unique_ptr<Surface_impl> surface_impl{};
-    VkSurfaceKHR vulkan_surface{VK_NULL_HANDLE};
-    if (m_context_window != nullptr) {
-        surface_impl = std::make_unique<Surface_impl>(*this, surface_create_info);
-        vulkan_surface = surface_impl->get_vulkan_surface();
-    }
-
-    uint32_t physical_device_count{0};
-    result = vkEnumeratePhysicalDevices(m_vulkan_instance, &physical_device_count, nullptr);
-    if (result != VK_SUCCESS) {
-        log_context->critical("vkEnumeratePhysicalDevices() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
-        abort();
-    }
-    std::vector<VkPhysicalDevice> physical_devices(physical_device_count);
-    if (physical_device_count == 0) {
-        log_context->critical("vkEnumeratePhysicalDevices() returned 0 physical devices");
-        abort();
-    }
-    result = vkEnumeratePhysicalDevices(m_vulkan_instance, &physical_device_count, physical_devices.data());
-    if (result != VK_SUCCESS) {
-        log_context->critical("vkEnumeratePhysicalDevices() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
-        abort();
-    }
-
-    uint32_t graphics_queue_family_index = UINT32_MAX;
-    uint32_t present_queue_family_index = UINT32_MAX;
-    for (uint32_t physical_device_index = 0; physical_device_index < physical_device_count; ++physical_device_index) {
-        VkPhysicalDevice physical_device = physical_devices[physical_device_index];
-        VkPhysicalDeviceProperties device_properties{};
-        vkGetPhysicalDeviceProperties(physical_device, &device_properties);
-
-        if (surface_impl && !surface_impl->use_physical_device(physical_device)) {
-            continue;
-        }
-
-        uint32_t queue_family_count{0};
-        vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &queue_family_count, nullptr);
-        if (queue_family_count == 0) {
-            continue;
-        }
-
-        std::vector<VkQueueFamilyProperties> queue_families(queue_family_count);
-        vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &queue_family_count, queue_families.data());
-
-        graphics_queue_family_index = UINT32_MAX;
-        present_queue_family_index = UINT32_MAX;
-        for (uint32_t queue_family_index = 0, end = static_cast<uint32_t>(queue_families.size()); queue_family_index < end; ++queue_family_index) {
-            const VkQueueFamilyProperties& queue_family = queue_families[queue_family_index];
-            const bool support_graphics = (queue_family.queueCount > 0) && (queue_family.queueFlags & VK_QUEUE_GRAPHICS_BIT);
-            const bool support_present = [&]() -> bool
-            {
-                VkBool32 support{VK_FALSE};
-                result = vkGetPhysicalDeviceSurfaceSupportKHR(physical_device, queue_family_index, vulkan_surface, &support);
-                if (result != VK_SUCCESS) {
-                    log_context->warn("vkGetPhysicalDeviceSurfaceSupportKHR() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
-                }
-                return (result == VK_SUCCESS) && (support == VK_TRUE);
-            }();
-            if (support_graphics && support_present) {
-                graphics_queue_family_index = queue_family_index;
-                present_queue_family_index = queue_family_index;
-                break;
-            }
-            if ((graphics_queue_family_index == UINT32_MAX) && support_graphics) {
-                graphics_queue_family_index = queue_family_index;
-            }
-            if ((present_queue_family_index == UINT32_MAX) && support_present) {
-                present_queue_family_index = queue_family_index;
-            }
-        }
-        if (graphics_queue_family_index == UINT32_MAX) {
-            continue;
-        }
-        if (surface_impl && (graphics_queue_family_index != present_queue_family_index)) {
-            continue;
-        }
-
-        m_vulkan_physical_device      = physical_device;
-        m_graphics_queue_family_index = graphics_queue_family_index;
-        m_present_queue_family_index  = present_queue_family_index;
-        break;
-    }
-
-    if (
-        (m_vulkan_physical_device    == VK_NULL_HANDLE) ||
-        (graphics_queue_family_index == UINT32_MAX) ||
-        (
-            surface_impl &&
-            (present_queue_family_index == UINT32_MAX)
-        )
-    ) {
-        log_context->critical("No suitable vulkan device found");
-        abort();
-    }
-
-    m_surface = std::make_unique<Surface>(std::move(surface_impl));
-
     const float queue_priority = 1.0f;
     const VkDeviceQueueCreateInfo queue_create_info = {
         .sType            = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
         .pNext            = nullptr,
         .flags            = 0,
-        .queueFamilyIndex = graphics_queue_family_index,
+        .queueFamilyIndex = m_graphics_queue_family_index,
         .queueCount       = 1,
         .pQueuePriorities = &queue_priority,
     };
-
-    std::vector<const char*> device_extensions_c_str;
-    auto check_device_extension = [&device_extensions_c_str](const VkExtensionProperties& extension, const char* name, bool& enable)
-    {
-        if (strcmp(extension.extensionName, name) == 0) {
-            device_extensions_c_str.push_back(name);
-            enable = true;
-            log_debug->info("  Enabling {}", extension.extensionName);
-        }
-    };
-    uint32_t device_extension_count{0};
-    result = vkEnumerateDeviceExtensionProperties(m_vulkan_physical_device, nullptr, &device_extension_count, nullptr);
-    if (result != VK_SUCCESS) {
-        log_context->critical("vkEnumerateDeviceExtensionProperties() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
-        abort();
-    }
-    std::vector<VkExtensionProperties> device_extensions(device_extension_count);
-    result = vkEnumerateDeviceExtensionProperties(m_vulkan_physical_device, nullptr, &device_extension_count, device_extensions.data());
-    if (result != VK_SUCCESS) {
-        log_context->critical("vkEnumerateDeviceExtensionProperties() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
-        abort();
-    }
-
-    for (const VkExtensionProperties& extension: device_extensions) {
-        log_debug->info(
-            "Vulkan Device Extension: {} spec_version {:08x}",
-            extension.extensionName,
-            extension.specVersion
-        );
-        check_device_extension(extension, VK_KHR_SWAPCHAIN_EXTENSION_NAME,               m_device_extensions.m_VK_KHR_swapchain             );
-        check_device_extension(extension, VK_EXT_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME, m_device_extensions.m_VK_EXT_swapchain_maintenance1);
-        check_device_extension(extension, VK_KHR_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME, m_device_extensions.m_VK_KHR_swapchain_maintenance1);
-        check_device_extension(extension, VK_EXT_LOAD_STORE_OP_NONE_EXTENSION_NAME,      m_device_extensions.m_VK_EXT_load_store_op_none    );
-        check_device_extension(extension, VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME,         m_device_extensions.m_VK_KHR_push_descriptor       );
-    }
-
-    VkPhysicalDeviceFeatures2 available_device_features{
-        .sType    = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
-        .pNext    = nullptr,
-        .features = {}
-    };
-    vkGetPhysicalDeviceFeatures2(m_vulkan_physical_device, &available_device_features);
 
     const VkDeviceCreateInfo device_create_info = {
         .sType                   = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
@@ -538,6 +422,12 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         log_context->critical("vkCreateDevice() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
         abort();
     }
+
+    if (surface_impl && !surface_impl->use_physical_device(m_vulkan_physical_device)) {
+        log_context->critical("Vulkan surface is not suitable");
+        abort();
+    }
+    m_surface = std::make_unique<Surface>(std::move(surface_impl));
 
     VmaAllocatorCreateInfo vma_create_info{
         .flags                          = 0,                        // VmaAllocatorCreateFlags flags;
@@ -568,14 +458,14 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         abort();
     }
 
-    vkGetDeviceQueue(m_vulkan_device, graphics_queue_family_index, 0, &m_vulkan_graphics_queue);
+    vkGetDeviceQueue(m_vulkan_device, m_graphics_queue_family_index, 0, &m_vulkan_graphics_queue);
     if (m_vulkan_graphics_queue == VK_NULL_HANDLE) {
         log_context->critical("vkGetDeviceQueue() returned VK_NULL_HANDLE for graphics queue");
         abort();
     }
 
     if (m_surface) {
-        vkGetDeviceQueue(m_vulkan_device, present_queue_family_index, 0, &m_vulkan_present_queue);
+        vkGetDeviceQueue(m_vulkan_device, m_present_queue_family_index, 0, &m_vulkan_present_queue);
         if (m_vulkan_present_queue == VK_NULL_HANDLE) {
             log_context->critical("vkGetDeviceQueue() returned VK_NULL_HANDLE for present queue");
             abort();
@@ -600,6 +490,205 @@ Device_impl::~Device_impl()
     m_surface.reset();
     vkDestroyInstance(m_vulkan_instance, nullptr);
     volkFinalize();
+}
+
+auto Device_impl::choose_physical_device(
+    Surface_impl*             surface_impl,
+    std::vector<const char*>& device_extensions_c_str
+) -> bool
+{
+    uint32_t physical_device_count{0};
+    VkResult result{VK_SUCCESS};
+    result = vkEnumeratePhysicalDevices(m_vulkan_instance, &physical_device_count, nullptr);
+    if (result != VK_SUCCESS) {
+        log_context->critical("vkEnumeratePhysicalDevices() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        return false;
+    }
+    std::vector<VkPhysicalDevice> physical_devices(physical_device_count);
+    if (physical_device_count == 0) {
+        log_context->critical("vkEnumeratePhysicalDevices() returned 0 physical devices");
+        return false;
+    }
+    result = vkEnumeratePhysicalDevices(m_vulkan_instance, &physical_device_count, physical_devices.data());
+    if (result != VK_SUCCESS) {
+        log_context->critical("vkEnumeratePhysicalDevices() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        return false;
+    }
+
+    float best_score = std::numeric_limits<float>::lowest();
+    VkPhysicalDevice selected_device{VK_NULL_HANDLE};
+    for (uint32_t physical_device_index = 0; physical_device_index < physical_device_count; ++physical_device_index) {
+        const VkPhysicalDevice physical_device = physical_devices[physical_device_index];
+
+        const float score = get_physical_device_score(physical_device, surface_impl);
+        if (score > best_score) {
+            best_score      = score;
+            selected_device = physical_device;
+        }
+    }
+
+    if (selected_device == VK_NULL_HANDLE) {
+        return false;
+    }
+
+    m_vulkan_physical_device = selected_device;
+    const bool queues_ok = query_device_queue_family_indices(
+        m_vulkan_physical_device, surface_impl, &m_graphics_queue_family_index, &m_present_queue_family_index
+    );
+    if (!queues_ok) {
+        return false;
+    }
+
+    query_device_extensions(m_vulkan_physical_device, m_device_extensions, &device_extensions_c_str);
+    return true;
+}
+
+auto Device_impl::get_physical_device_score(VkPhysicalDevice vulkan_physical_device, Surface_impl* surface_impl) -> float
+{
+    VkPhysicalDeviceProperties device_properties{};
+    vkGetPhysicalDeviceProperties(vulkan_physical_device, &device_properties);
+
+    const bool queues_ok = query_device_queue_family_indices(vulkan_physical_device, surface_impl, nullptr, nullptr);
+    if (!queues_ok) {
+        return 0.0f;
+    }
+
+    Device_extensions device_extensions{};
+    const float extension_score = query_device_extensions(vulkan_physical_device, device_extensions, nullptr);
+    return extension_score;
+}
+
+// Check if device meets queue requirements, optionally returns queue family indices
+auto Device_impl::query_device_queue_family_indices(
+    VkPhysicalDevice vulkan_physical_device,
+    Surface_impl*    surface_impl,
+    uint32_t*        graphics_queue_family_index_out,
+    uint32_t*        present_queue_family_index_out
+) -> bool
+{
+    VkSurfaceKHR vulkan_surface{VK_NULL_HANDLE};
+    if (surface_impl != nullptr) {
+        if (!surface_impl->can_use_physical_device(vulkan_physical_device)) {
+            return false;
+        }
+        vulkan_surface = surface_impl->get_vulkan_surface();
+    }
+
+    uint32_t queue_family_count{0};
+    vkGetPhysicalDeviceQueueFamilyProperties(vulkan_physical_device, &queue_family_count, nullptr);
+    if (queue_family_count == 0) {
+        return false;
+    }
+
+    std::vector<VkQueueFamilyProperties> queue_families(queue_family_count);
+    vkGetPhysicalDeviceQueueFamilyProperties(vulkan_physical_device, &queue_family_count, queue_families.data());
+
+    // Require graphics
+    // Require present if surface is used
+    uint32_t graphics_queue_family_index = UINT32_MAX;
+    uint32_t present_queue_family_index  = UINT32_MAX;
+    VkResult result{VK_SUCCESS};
+    for (uint32_t queue_family_index = 0, end = static_cast<uint32_t>(queue_families.size()); queue_family_index < end; ++queue_family_index) {
+        const VkQueueFamilyProperties& queue_family = queue_families[queue_family_index];
+        const bool support_graphics = (queue_family.queueCount > 0) && (queue_family.queueFlags & VK_QUEUE_GRAPHICS_BIT);
+        const bool support_present = [&]() -> bool
+        {
+            if (vulkan_surface == VK_NULL_HANDLE) {
+                return false;
+            }
+            VkBool32 support{VK_FALSE};
+            result = vkGetPhysicalDeviceSurfaceSupportKHR(vulkan_physical_device, queue_family_index, vulkan_surface, &support);
+            if (result != VK_SUCCESS) {
+                log_context->warn("vkGetPhysicalDeviceSurfaceSupportKHR() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+            }
+            return (result == VK_SUCCESS) && (support == VK_TRUE);
+        }();
+        if (support_graphics && support_present) {
+            graphics_queue_family_index = queue_family_index;
+            present_queue_family_index = queue_family_index;
+            break;
+        }
+        if ((graphics_queue_family_index == UINT32_MAX) && support_graphics) {
+            graphics_queue_family_index = queue_family_index;
+        }
+        if ((present_queue_family_index == UINT32_MAX) && support_present) {
+            present_queue_family_index = queue_family_index;
+        }
+    }
+
+    if (graphics_queue_family_index == UINT32_MAX) {
+        return false;
+    }
+
+    if (
+        (surface_impl != nullptr) &&
+        (graphics_queue_family_index != present_queue_family_index)
+    ) {
+        return false;
+    }
+
+    if (graphics_queue_family_index_out != nullptr) {
+        *graphics_queue_family_index_out = graphics_queue_family_index;
+    }
+    if (present_queue_family_index_out != nullptr) {
+        *present_queue_family_index_out = present_queue_family_index;
+    }
+    return true;
+}
+
+// Gathers available recognized extensions and computes score
+auto Device_impl::query_device_extensions(
+    VkPhysicalDevice          vulkan_physical_device,
+    Device_extensions&        device_extensions_out,
+    std::vector<const char*>* device_extensions_c_str
+) -> float
+{
+    float total_score = 0.0f;
+
+    // Check device extensions
+    auto check_device_extension =
+        [&device_extensions_c_str, &total_score]
+        (const VkExtensionProperties& extension, const char* name, bool& enable, const float extension_score)
+    {
+        if (strcmp(extension.extensionName, name) == 0) {
+            if (device_extensions_c_str != nullptr) {
+                device_extensions_c_str->push_back(name);
+                log_debug->info("  Enabling {}", extension.extensionName);
+            }
+            enable = true;
+            total_score += extension_score;
+        }
+    };
+    uint32_t device_extension_count{0};
+    VkResult result{VK_SUCCESS};
+    result = vkEnumerateDeviceExtensionProperties(vulkan_physical_device, nullptr, &device_extension_count, nullptr);
+    if (result != VK_SUCCESS) {
+        log_context->critical("vkEnumerateDeviceExtensionProperties() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        return 0.0f;
+    }
+    std::vector<VkExtensionProperties> device_extensions(device_extension_count);
+    result = vkEnumerateDeviceExtensionProperties(vulkan_physical_device, nullptr, &device_extension_count, device_extensions.data());
+    if (result != VK_SUCCESS) {
+        log_context->critical("vkEnumerateDeviceExtensionProperties() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        return 0.0f;
+    }
+
+    for (const VkExtensionProperties& extension : device_extensions) {
+        log_debug->info(
+            "Vulkan Device Extension: {} spec_version {:08x}",
+            extension.extensionName,
+            extension.specVersion
+        );
+        check_device_extension(extension, VK_KHR_SWAPCHAIN_EXTENSION_NAME,                      device_extensions_out.m_VK_KHR_swapchain                     , 1.0f);
+        check_device_extension(extension, VK_EXT_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME,        device_extensions_out.m_VK_EXT_swapchain_maintenance1        , 2.0f);
+        check_device_extension(extension, VK_KHR_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME,        device_extensions_out.m_VK_KHR_swapchain_maintenance1        , 2.0f);
+        check_device_extension(extension, VK_EXT_LOAD_STORE_OP_NONE_EXTENSION_NAME,             device_extensions_out.m_VK_EXT_load_store_op_none            , 2.0f);
+        check_device_extension(extension, VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME,                device_extensions_out.m_VK_KHR_push_descriptor               , 1.0f);
+        check_device_extension(extension, VK_KHR_PRESENT_MODE_FIFO_LATEST_READY_EXTENSION_NAME, device_extensions_out.m_VK_KHR_present_mode_fifo_latest_ready, 3.0f);
+        check_device_extension(extension, VK_EXT_PRESENT_MODE_FIFO_LATEST_READY_EXTENSION_NAME, device_extensions_out.m_VK_EXT_present_mode_fifo_latest_ready, 3.0f);
+        check_device_extension(extension, VK_EXT_DEVICE_ADDRESS_BINDING_REPORT_EXTENSION_NAME,  device_extensions_out.m_VK_EXT_device_address_binding_report , 1.0f);
+    }
+    return total_score;
 }
 
 auto Device_impl::get_surface() -> Surface*

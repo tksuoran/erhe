@@ -31,6 +31,58 @@ Surface_impl::Surface_impl(Device_impl& device_impl, const Surface_create_info& 
     m_surface = static_cast<VkSurfaceKHR>(surface);
 }
 
+auto Surface_impl::can_use_physical_device(VkPhysicalDevice physical_device) -> bool
+{
+    if (m_surface == VK_NULL_HANDLE) {
+        fail();
+        return false;
+    }
+
+    VkSurfaceCapabilitiesKHR surface_capabilities{};
+    VkResult result = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical_device, m_surface, &surface_capabilities);
+    if (result != VK_SUCCESS) {
+        fail();
+        return false;
+    }
+
+    uint32_t format_count{0};
+    result = vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, m_surface, &format_count, nullptr);
+    if (result != VK_SUCCESS) {
+        fail();
+        return false;
+    }
+    if (format_count == 0) {
+        fail();
+        return false;
+    }
+    m_surface_formats.resize(format_count);
+    result = vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, m_surface, &format_count, m_surface_formats.data());
+    if (result != VK_SUCCESS) {
+        fail();
+        return false;
+    }
+
+    uint32_t present_mode_count;
+    result = vkGetPhysicalDeviceSurfacePresentModesKHR(physical_device, m_surface, &present_mode_count, nullptr);
+    if (result != VK_SUCCESS) {
+        fail();
+        return false;
+    }
+    if (present_mode_count == 0) {
+        fail();
+        return false;
+    }
+
+    m_present_modes.resize(present_mode_count);
+    result = vkGetPhysicalDeviceSurfacePresentModesKHR(physical_device, m_surface, &present_mode_count, m_present_modes.data());
+    if (result != VK_SUCCESS) {
+        fail();
+        return false;
+    }
+
+    return true;
+}
+
 auto Surface_impl::use_physical_device(VkPhysicalDevice physical_device) -> bool
 {
     if (m_surface == VK_NULL_HANDLE) {
@@ -248,8 +300,8 @@ auto Surface_impl::get_present_mode_score(const VkPresentModeKHR present_mode) c
     //   This mode may result in visible tearing if rendering to the image is not timed correctly.
 
     const bool latest_ready =
-        m_device_impl.get_instance_extensions().m_VK_KHR_present_mode_fifo_latest_ready ||
-        m_device_impl.get_instance_extensions().m_VK_EXT_present_mode_fifo_latest_ready;
+        m_device_impl.get_device_extensions().m_VK_KHR_present_mode_fifo_latest_ready ||
+        m_device_impl.get_device_extensions().m_VK_EXT_present_mode_fifo_latest_ready;
 
     switch (present_mode) {
         case VK_PRESENT_MODE_IMMEDIATE_KHR:                 return 0.0f; // fastest - tears

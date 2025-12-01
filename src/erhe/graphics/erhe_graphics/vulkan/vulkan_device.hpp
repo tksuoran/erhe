@@ -43,18 +43,18 @@ public:
     bool m_VK_EXT_debug_utils                    {false};
     bool m_VK_EXT_swapchain_colorspace           {false};
     bool m_VK_KHR_portability_enumeration        {false};
-    bool m_VK_KHR_present_mode_fifo_latest_ready {false};
-    bool m_VK_EXT_present_mode_fifo_latest_ready {false};
-    bool m_VK_EXT_device_address_binding_report  {false};
 };
 class Device_extensions
 {
 public:
-    bool m_VK_KHR_swapchain             {false};
-    bool m_VK_EXT_swapchain_maintenance1{false};
-    bool m_VK_KHR_swapchain_maintenance1{false};
-    bool m_VK_EXT_load_store_op_none    {false};
-    bool m_VK_KHR_push_descriptor       {false};
+    bool m_VK_KHR_swapchain                     {false};
+    bool m_VK_EXT_swapchain_maintenance1        {false};
+    bool m_VK_KHR_swapchain_maintenance1        {false};
+    bool m_VK_KHR_present_mode_fifo_latest_ready{false};
+    bool m_VK_EXT_present_mode_fifo_latest_ready{false};
+    bool m_VK_EXT_device_address_binding_report {false};
+    bool m_VK_EXT_load_store_op_none            {false};
+    bool m_VK_KHR_push_descriptor               {false};
 };
 
 class Surface_impl;
@@ -121,6 +121,20 @@ public:
     ) -> VkBool32;
 
 private:
+    [[nodiscard]] static auto get_physical_device_score(VkPhysicalDevice vulkan_physical_device, Surface_impl* surface_impl) -> float;
+    [[nodiscard]] static auto query_device_queue_family_indices(
+        VkPhysicalDevice vulkan_physical_device,
+        Surface_impl*    surface_impl,
+        uint32_t*        graphics_queue_family_index,
+        uint32_t*        present_queue_family_index
+    ) -> bool;
+    static auto query_device_extensions(
+        VkPhysicalDevice          vulkan_physical_device,
+        Device_extensions&        device_extensions_out,
+        std::vector<const char*>* device_extensions_c_str
+    ) -> float;
+    [[nodiscard]] auto choose_physical_device   (Surface_impl* surface_impl, std::vector<const char*>& device_extensions_c_str) -> bool;
+
     void frame_completed(uint64_t frame);
 
     erhe::window::Context_window* m_context_window{nullptr};
