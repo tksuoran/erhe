@@ -36,6 +36,10 @@ auto Device::get_surface() -> Surface*
 {
     return m_impl->get_surface();
 }
+auto Device::get_swapchain() -> Swapchain*
+{
+    return m_impl->get_swapchain();
+}
 auto Device::get_handle(const Texture& texture, const Sampler& sampler) const -> uint64_t
 {
     return m_impl->get_handle(texture, sampler);
@@ -59,6 +63,10 @@ void Device::on_thread_enter()
 auto Device::get_buffer_alignment(Buffer_target target) -> std::size_t
 {
     return m_impl->get_buffer_alignment(target);
+}
+void Device::create_swapchain()
+{
+    m_impl->create_swapchain();
 }
 void Device::start_of_frame()
 {

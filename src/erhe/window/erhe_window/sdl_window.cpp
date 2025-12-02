@@ -255,6 +255,26 @@ Context_window::Context_window(Context_window* share)
     ERHE_VERIFY(ok);
 }
 
+auto Context_window_SDL_EventFilter(void* userdata, SDL_Event* event) -> bool
+{
+    return static_cast<Context_window*>(userdata)->sdl_event_filter(event);
+}
+
+auto Context_window::sdl_event_filter(void* event_) -> bool
+{
+    SDL_Event* event = static_cast<SDL_Event*>(event_);
+    if (event->type == SDL_EVENT_WINDOW_EXPOSED) {
+        if (m_redraw_callback) {
+            m_redraw_callback();
+        }
+    }
+    return true; // allow event to be added
+}
+
+void Context_window::register_redraw_callback(std::function<void()> callback)
+{
+    m_redraw_callback = callback;
+}
 
 // Currently this is not thread safe.
 // For now, only call this from main thread.
@@ -448,6 +468,15 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
     m_is_mouse_relative_hold_enabled = false;
     m_configuration = configuration;
     SDL_GetMouseState(&m_last_mouse_x, &m_last_mouse_y);
+
+    const bool event_watch_ok = SDL_AddEventWatch(Context_window_SDL_EventFilter, static_cast<void*>(this));
+    if (!event_watch_ok) {
+        log_window->warn("SDL_AddEventWatch() failed");
+        const char* const sdl_error = SDL_GetError();
+        if (sdl_error != nullptr) {
+            log_window->warn("  SDL error: {}", sdl_error);
+        }
+    }
     return true;
 }
 

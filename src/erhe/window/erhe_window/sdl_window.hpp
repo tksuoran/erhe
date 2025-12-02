@@ -64,6 +64,8 @@ public:
     [[nodiscard]] auto get_sdl_window          () const -> void* { return m_sdl_window; }
     [[nodiscard]] auto get_input_events        () -> std::vector<Input_event>&;
 
+    void register_redraw_callback(std::function<void()> callback);
+
     auto open                             (const Window_configuration& configuration) -> bool;
 
 #if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
@@ -112,8 +114,9 @@ public:
 #if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
     [[nodiscard]] auto get_required_vulkan_instance_extensions() -> const std::vector<std::string>&;
     [[nodiscard]] auto create_vulkan_surface(void* vulkan_instance) -> void*;
-
 #endif
+
+    [[nodiscard]] auto sdl_event_filter(void* event) -> bool;
 
 private:
 #if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
@@ -147,6 +150,7 @@ private:
     std::vector<Input_event>   m_input_events[2];
     std::thread                m_joystick_scan_task;
     std::function<void(Context_window& context_window)> m_input_event_synthesizer_callback;
+    std::function<void()>      m_redraw_callback;
 
 #if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
     SDL_FunctionPointer m_NV_delay_before_swap{nullptr};

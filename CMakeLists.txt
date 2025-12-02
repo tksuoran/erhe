@@ -234,7 +234,7 @@ elseif (${ERHE_GRAPHICS_LIBRARY} STREQUAL "vulkan")
         NAME              volk
         #VERSION           vulkan-sdk-1.4.328.1
         #GIT_TAG           vulkan-sdk-1.4.328.1
-        GIT_TAG           vh-include
+        GIT_TAG           4f3bcee79618a9abe79f4c717c50379197c77512
         GIT_SHALLOW       TRUE
         GITHUB_REPOSITORY zeux/volk
     )

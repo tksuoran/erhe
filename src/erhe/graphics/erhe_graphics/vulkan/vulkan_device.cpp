@@ -3,7 +3,9 @@
 #include "erhe_graphics/vulkan/vulkan_helpers.hpp"
 #include "erhe_graphics/vulkan/vulkan_sampler.hpp"
 #include "erhe_graphics/vulkan/vulkan_surface.hpp"
+#include "erhe_graphics/vulkan/vulkan_swapchain.hpp"
 #include "erhe_graphics/vulkan/vulkan_texture.hpp"
+#include "erhe_graphics/swapchain.hpp"
 
 #include "erhe_utility/bit_helpers.hpp"
 #include "erhe_configuration/configuration.hpp"
@@ -29,6 +31,7 @@
 #   include <csignal>
 #endif
 
+#include <cstdlib>
 #include <sstream>
 #include <vector>
 
@@ -117,11 +120,16 @@ auto Device_impl::debug_utils_messenger_callback(
     const VkDebugUtilsMessengerCallbackDataEXT* callback_data
 ) -> VkBool32
 {
+    if (callback_data->messageIdNumber == 0x675dc32e) {
+        // Validation Warning: [ BestPractices-specialuse-extension ] | MessageID = 0x675dc32e
+        // vkCreateInstance(): Attempting to enable extension VK_EXT_debug_utils, but this extension is intended to support use by applications when debugging and it is strongly recommended that it be otherwise avoided.
+    }
+
     spdlog::level::level_enum level = spdlog::level::info;
-    if (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT) level = spdlog::level::trace;
-    if (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT   ) level = spdlog::level::info;
-    if (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) level = spdlog::level::warn;
-    if (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT  ) level = spdlog::level::err;
+    if ((message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT) != 0) level = spdlog::level::trace;
+    if ((message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT   ) != 0) level = spdlog::level::info;
+    if ((message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) != 0) level = spdlog::level::warn;
+    if ((message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT  ) != 0) level = spdlog::level::err;
     std::stringstream ss;
     bool show_objects = true;
     if (callback_data->messageIdNumber == 0) {
@@ -185,7 +193,37 @@ auto Device_impl::debug_utils_messenger_callback(
         }
     }
     log_debug->log(level, ss.str());
+
+    const bool is_validation = (message_types & VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT) != 0;
+    if (is_validation) {
+        const bool is_warning = (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) != 0;
+        const bool is_error   = (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT  ) != 0;
+        if (is_error) {
+            static int counter = 0;
+            ++counter;
+        }
+        return (is_warning || is_error) ? VK_TRUE : VK_FALSE;
+    }
+
     return VK_TRUE;
+}
+
+void set_env(const char* key, const char* value)
+{
+    int ret = -1;
+#if defined(ERHE_OS_WINDOWS)
+    {
+        std::string assignment = fmt::format("{}={}", key, value);
+        ret = _putenv(assignment.c_str());
+    }
+#elif defined(ERHE_OS_LINUX)
+    {
+        int ret = setenv(key, value, 1);
+    }
+#endif
+    if (ret != 0) {
+        log_context->warn("Setting {}={} environment variable failed with error code {}.", key, value, ret);
+    }
 }
 
 Device_impl::Device_impl(Device& device, const Surface_create_info& surface_create_info)
@@ -193,6 +231,13 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
     , m_device        {device}
     , m_shader_monitor{device}
 {
+    if (true) {
+        // For now, avoid extra layers as they might cause validation or other issues
+        set_env("VK_LOADER_LAYERS_DISABLE", "ALL");
+        set_env("DISABLE_LAYER_NV_OPTIMUS_1", "1");
+        set_env("DISABLE_LAYER_NV_GR2608_1", "1");
+    }
+
     VkResult result{VK_SUCCESS};
 
     result = volkInitialize();
@@ -209,15 +254,6 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
     }
 
     // Setup vulkan instance layers
-    std::vector<const char*> required_layers_c_str;
-    auto check_layer = [&required_layers_c_str](const VkLayerProperties& layer, const char* name, bool& enable)
-    {
-        if (strcmp(layer.layerName, name) == 0) {
-            required_layers_c_str.push_back(name);
-            enable = true;
-            log_debug->info("  Enabling {}", layer.layerName);
-        }
-    };
     std::vector<VkLayerProperties> instance_layers(instance_layer_count);
     result = vkEnumerateInstanceLayerProperties(&instance_layer_count, instance_layers.data());
     if (result != VK_SUCCESS) {
@@ -232,10 +268,24 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
             layer.implementationVersion,
             layer.description
         );
-        // TODO Add config to erhe.toml
-        check_layer(layer, "VK_LAYER_KHRONOS_validation",      m_instance_layers.m_VK_LAYER_KHRONOS_validation);
-        check_layer(layer, "VK_LAYER_LUNARG_crash_diagnostic", m_instance_layers.m_VK_LAYER_LUNARG_crash_diagnostic);
     }
+
+    std::vector<const char*> enabled_instance_layers_c_str;
+    auto check_layer = [&](const char* name, bool& enable)
+    {
+        for (const VkLayerProperties& layer : instance_layers) {
+            if (strcmp(layer.layerName, name) == 0) {
+                enabled_instance_layers_c_str.push_back(name);
+                enable = true;
+                log_debug->info("  Enabling {}", layer.layerName);
+                return;
+            }
+        }
+    };
+
+    // TODO Add config to erhe.toml
+    check_layer("VK_LAYER_KHRONOS_validation",      m_instance_layers.m_VK_LAYER_KHRONOS_validation);
+    check_layer("VK_LAYER_LUNARG_crash_diagnostic", m_instance_layers.m_VK_LAYER_LUNARG_crash_diagnostic);
 
     uint32_t instance_extension_count{0};
     result = vkEnumerateInstanceExtensionProperties(nullptr, &instance_extension_count, nullptr);
@@ -250,41 +300,6 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         abort();
     }
 
-    // Setup vulkan instance extensions
-    std::vector<const char*> enabled_instance_extensions_c_str;
-    if (m_context_window != nullptr) {
-        const std::vector<std::string>& required_extensions = m_context_window->get_required_vulkan_instance_extensions();
-        for (const std::string& extension_name : required_extensions) {
-            enabled_instance_extensions_c_str.push_back(extension_name.c_str());
-        }
-    }
-
-    auto check_instance_extension = [&enabled_instance_extensions_c_str](const VkExtensionProperties& extension, const char* name, bool& enable)
-    {
-        if (strcmp(extension.extensionName, name) == 0) {
-            enabled_instance_extensions_c_str.push_back(name);
-            enable = true;
-            log_debug->info("  Enabling {}", extension.extensionName);
-        }
-    };
-
-    for (const VkExtensionProperties& extension: instance_extensions) {
-        log_debug->info(
-            "Vulkan Instance Extension: {} spec_version {:08x}",
-            extension.extensionName,
-            extension.specVersion
-        );
-        check_instance_extension(extension, VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME, m_instance_extensions.m_VK_KHR_get_physical_device_properties2);
-        check_instance_extension(extension, VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME      , m_instance_extensions.m_VK_KHR_get_surface_capabilities2      );
-        check_instance_extension(extension, VK_KHR_SURFACE_EXTENSION_NAME                         , m_instance_extensions.m_VK_KHR_surface                        );
-        check_instance_extension(extension, VK_KHR_SURFACE_MAINTENANCE_1_EXTENSION_NAME           , m_instance_extensions.m_VK_KHR_surface_maintenance1           );
-        check_instance_extension(extension, VK_KHR_WIN32_SURFACE_EXTENSION_NAME                   , m_instance_extensions.m_VK_KHR_win32_surface                  );
-        check_instance_extension(extension, VK_EXT_DEBUG_REPORT_EXTENSION_NAME                    , m_instance_extensions.m_VK_EXT_debug_report                   );
-        check_instance_extension(extension, VK_EXT_DEBUG_UTILS_EXTENSION_NAME                     , m_instance_extensions.m_VK_EXT_debug_utils                    );
-        check_instance_extension(extension, VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME           , m_instance_extensions.m_VK_EXT_swapchain_colorspace           );
-        check_instance_extension(extension, VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME         , m_instance_extensions.m_VK_KHR_portability_enumeration        );
-    }
-
     // Create vulkan instance
     const VkApplicationInfo application_info{
         .sType              = VK_STRUCTURE_TYPE_APPLICATION_INFO,
@@ -292,17 +307,123 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         .pApplicationName   = "ERHE",
         .applicationVersion = 0,
         .pEngineName        = "ERHE",
-        .engineVersion      = 202501,
+        .engineVersion      = 2025012,
         .apiVersion         = VK_API_VERSION_1_3
+    };
+
+    // Setup vulkan instance extensions
+
+    // SDL_Vulkan_GetInstanceExtensions() will request KHR_SURFACE and platform specific required instance extensions
+    std::vector<const char*> enabled_instance_extensions_c_str{};
+    if (m_context_window != nullptr) {
+        const std::vector<std::string>& required_extensions = m_context_window->get_required_vulkan_instance_extensions();
+        for (const std::string& extension_name : required_extensions) {
+            enabled_instance_extensions_c_str.push_back(extension_name.c_str());
+            log_debug->info("  SDL_Vulkan_GetInstanceExtensions(): {}", extension_name);
+        }
+    }
+
+    auto check_instance_extension = [&](const char* name, bool& enable)
+    {
+        for (const VkExtensionProperties& extension : instance_extensions) {
+            if (strcmp(extension.extensionName, name) == 0) {
+                enabled_instance_extensions_c_str.push_back(name);
+                enable = true;
+                log_debug->info("  Enabling {}", extension.extensionName);
+                return;
+            }
+        }
+    };
+
+    for (const VkExtensionProperties& extension : instance_extensions) {
+        log_debug->info(
+            "Vulkan Instance Extension: {} spec_version {:08x}",
+            extension.extensionName,
+            extension.specVersion
+        );
+    }
+
+    // First check extensions that have not been deprecated / promoted to cor
+    check_instance_extension(VK_KHR_SURFACE_MAINTENANCE_1_EXTENSION_NAME, m_instance_extensions.m_VK_KHR_surface_maintenance1  );
+    check_instance_extension(VK_EXT_DEBUG_UTILS_EXTENSION_NAME          , m_instance_extensions.m_VK_EXT_debug_utils           );
+    check_instance_extension(VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME, m_instance_extensions.m_VK_EXT_swapchain_colorspace  );
+
+    // Check extensions which are promoted to core or deprecated
+    if (application_info.apiVersion < VK_API_VERSION_1_1) {
+        check_instance_extension(VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME,       m_instance_extensions.m_VK_KHR_get_surface_capabilities2);
+        check_instance_extension(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME, m_instance_extensions.m_VK_KHR_get_physical_device_properties2);
+    } else {
+        m_instance_extensions.m_VK_KHR_get_surface_capabilities2       = true;
+        m_instance_extensions.m_VK_KHR_get_physical_device_properties2 = true;
+    }
+
+    if (!m_instance_extensions.m_VK_KHR_surface_maintenance1) {
+        check_instance_extension(VK_EXT_SURFACE_MAINTENANCE_1_EXTENSION_NAME, m_instance_extensions.m_VK_EXT_surface_maintenance1);
+    }
+
+    if (!m_instance_extensions.m_VK_EXT_debug_utils) {
+        check_instance_extension(VK_EXT_DEBUG_REPORT_EXTENSION_NAME, m_instance_extensions.m_VK_EXT_debug_report);
+    }
+
+    // https://vulkan.lunarg.com/doc/sdk/1.4.328.1/windows/khronos_validation_layer.html
+    // https://vulkan.lunarg.com/doc/view/1.4.328.1/windows/layer_configuration.html
+    // https://github.com/KhronosGroup/Vulkan-LoaderAndValidationLayers/blob/master/layers/vk_layer_settings.txt
+    std::vector<std::unique_ptr<VkBool32>> bool_values;
+    std::vector<VkLayerSettingEXT> layer_settings;
+    auto set_validation_setting_bool = [&](const char* key, const bool value)
+    {
+        bool_values.push_back(std::make_unique<VkBool32>(value ? VK_TRUE : VK_FALSE));
+        layer_settings.emplace_back(
+            std::move(
+                VkLayerSettingEXT{
+                    .pLayerName   = "VK_LAYER_KHRONOS_validation",
+                    .pSettingName = key,
+                    .type         = VK_LAYER_SETTING_TYPE_BOOL32_EXT,
+                    .valueCount   = 1,
+                    .pValues      = bool_values.back().get()
+                }
+            )
+        );
+    };
+    auto set_validation_setting_c_str = [&](const char* key, const char* value)
+    {
+        layer_settings.emplace_back(
+            std::move(
+                VkLayerSettingEXT{
+                    .pLayerName   = "VK_LAYER_KHRONOS_validation",
+                    .pSettingName = key,
+                    .type         = VK_LAYER_SETTING_TYPE_BOOL32_EXT,
+                    .valueCount   = 1,
+                    .pValues      = value
+                }
+            )
+        );
+    };
+    set_validation_setting_c_str("debug_action", "VK_DBG_LAYER_ACTION_CALLBACK");
+    set_validation_setting_bool("validate_sync",                     true);
+    set_validation_setting_bool("syncval_shader_accesses_heuristic", true);
+
+    // https://github.com/KhronosGroup/Vulkan-ValidationLayers/issues/11207
+    // set_validation_setting_bool("validate_best_practices",     true);
+    set_validation_setting_bool("validate_best_practices_amd",    true);
+    set_validation_setting_bool("validate_best_practices_arm",    true);
+    set_validation_setting_bool("validate_best_practices_img",    true);
+    set_validation_setting_bool("validate_best_practices_nvidia", true);
+
+    const VkLayerSettingsCreateInfoEXT layer_settings_create_info{
+        .sType        = VK_STRUCTURE_TYPE_LAYER_SETTINGS_CREATE_INFO_EXT,
+        .pNext        = nullptr,
+        .settingCount = static_cast<uint32_t>(layer_settings.size()),
+        .pSettings    = layer_settings.data()
     };
 
     const VkInstanceCreateInfo instance_create_info = {
         .sType                   = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
-        .pNext                   = nullptr,
+        .pNext                   = &layer_settings_create_info,
         .flags                   = 0,
         .pApplicationInfo        = &application_info,
-        .enabledLayerCount       = static_cast<uint32_t>(required_layers_c_str.size()),
-        .ppEnabledLayerNames     = required_layers_c_str.data(),
+        .enabledLayerCount       = static_cast<uint32_t>(enabled_instance_layers_c_str.size()),
+        .ppEnabledLayerNames     = enabled_instance_layers_c_str.data(),
         .enabledExtensionCount   = static_cast<uint32_t>(enabled_instance_extensions_c_str.size()),
         .ppEnabledExtensionNames = enabled_instance_extensions_c_str.data()
     };
@@ -329,12 +450,65 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         abort();
     }
 
-    VkPhysicalDeviceFeatures2 available_device_features{
+    VkPhysicalDeviceDriverProperties driver_properties{
+        .sType              = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES,
+        .pNext              = nullptr,
+        .driverID           = VK_DRIVER_ID_MAX_ENUM,
+        .driverName         = {},
+        .driverInfo         = {},
+        .conformanceVersion = {},
+    };
+    VkPhysicalDeviceProperties2 physical_device_properties2 {
+        .sType      = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
+        .pNext      = &driver_properties,
+        .properties = {}
+    };
+    vkGetPhysicalDeviceProperties2(m_vulkan_physical_device, &physical_device_properties2);
+    VkPhysicalDeviceProperties& properties = physical_device_properties2.properties;
+    const uint32_t api_version_variant = VK_API_VERSION_VARIANT(properties.apiVersion);
+    const uint32_t api_version_major   = VK_API_VERSION_MAJOR  (properties.apiVersion);
+    const uint32_t api_version_minor   = VK_API_VERSION_MINOR  (properties.apiVersion);
+    const uint32_t api_version_patch   = VK_API_VERSION_PATCH  (properties.apiVersion);
+    const VkConformanceVersion& conformance = driver_properties.conformanceVersion;
+    log_context->info("Vulkan physical device properties:");
+    log_context->info("  API version         = {}.{}.{}.{}", api_version_major, api_version_minor, api_version_patch, api_version_variant);
+    log_context->info("  Driver ID           = {}",          c_str(driver_properties.driverID));
+    log_context->info("  Driver name         = {}",          driver_properties.driverName);
+    log_context->info("  Driver info         = {}",          driver_properties.driverInfo);
+    log_context->info("  Driver conformance  = {}",          conformance.major, conformance.minor, conformance.subminor, conformance.patch);
+    log_context->info("  Vendor ID           = {:08x}",      properties.vendorID);
+    log_context->info("  Device ID           = {:08x}",      properties.deviceID);
+    log_context->info("  Device type         = {}",          c_str(properties.deviceType));
+    log_context->info("  Device name         = {}",          properties.deviceName);
+
+    VkPhysicalDeviceFeatures2 query_device_features{
         .sType    = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
         .pNext    = nullptr,
-        .features = {}
+        .features = VkPhysicalDeviceFeatures{}
     };
-    vkGetPhysicalDeviceFeatures2(m_vulkan_physical_device, &available_device_features);
+    VkBaseOutStructure* query_features_chain_last = reinterpret_cast<VkBaseOutStructure*>(&query_device_features);
+    VkPhysicalDevicePresentModeFifoLatestReadyFeaturesKHR query_present_mode_fifo_latest_ready_features{
+        .sType                      = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_MODE_FIFO_LATEST_READY_FEATURES_KHR,
+        .pNext                      = nullptr,
+        .presentModeFifoLatestReady = VK_FALSE
+    };
+    const bool supports_present_mode_fifo_latest_ready = m_device_extensions.m_VK_KHR_present_mode_fifo_latest_ready || m_device_extensions.m_VK_EXT_present_mode_fifo_latest_ready;
+    if (supports_present_mode_fifo_latest_ready) {
+        query_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&query_present_mode_fifo_latest_ready_features);
+        query_features_chain_last = query_features_chain_last->pNext;
+    }
+    VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT query_swapchain_maintenance_features{
+        .sType                 = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_EXT,
+        .pNext                 = nullptr,
+        .swapchainMaintenance1 = VK_FALSE,
+    };
+    const bool supports_swapchain_maintenance1 = m_device_extensions.m_VK_KHR_swapchain_maintenance1 || m_device_extensions.m_VK_EXT_swapchain_maintenance1;
+    if (supports_swapchain_maintenance1) {
+        query_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&query_swapchain_maintenance_features);
+        query_features_chain_last = query_features_chain_last->pNext;
+    }
+
+    vkGetPhysicalDeviceFeatures2(m_vulkan_physical_device, &query_device_features);
 
     bool debug_callback_registered = false;
     if (m_instance_extensions.m_VK_EXT_debug_utils) {
@@ -342,10 +516,6 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
             VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT    |
             VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
             VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-        // TODO
-        // if (m_device_extensions.m_VK_EXT_device_address_binding_report) {
-        //     message_types = message_types | VK_DEBUG_UTILS_MESSAGE_TYPE_DEVICE_ADDRESS_BINDING_BIT_EXT;
-        //}
         const VkDebugUtilsMessengerCreateInfoEXT debug_utils_messenger_create_info{
             .sType           = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
             .pNext           = nullptr,
@@ -405,9 +575,39 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         .pQueuePriorities = &queue_priority,
     };
 
+    VkPhysicalDeviceFeatures2 set_device_features{
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+        .pNext = nullptr
+    };
+    VkBaseOutStructure* set_features_chain_last = reinterpret_cast<VkBaseOutStructure*>(&set_device_features);
+    VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT set_swapchain_maintenance_features{
+        .sType                 = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_EXT,
+        .pNext                 = nullptr,
+        .swapchainMaintenance1 = query_swapchain_maintenance_features.swapchainMaintenance1
+    };
+    if (supports_swapchain_maintenance1) {
+        set_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&set_swapchain_maintenance_features);
+        set_features_chain_last = set_features_chain_last->pNext;
+        if (set_swapchain_maintenance_features.swapchainMaintenance1 == VK_TRUE) {
+            log_debug->debug("Enabled feature swapchain maintenance1");
+        }
+    }
+    VkPhysicalDevicePresentModeFifoLatestReadyFeaturesKHR set_present_mode_fifo_latest_ready_features{
+        .sType                      = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_MODE_FIFO_LATEST_READY_FEATURES_KHR,
+        .pNext                      = nullptr,
+        .presentModeFifoLatestReady = query_present_mode_fifo_latest_ready_features.presentModeFifoLatestReady
+    };
+    if (supports_present_mode_fifo_latest_ready) {
+        set_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&set_present_mode_fifo_latest_ready_features);
+        set_features_chain_last = set_features_chain_last->pNext;
+        if (query_present_mode_fifo_latest_ready_features.presentModeFifoLatestReady == VK_TRUE) {
+            log_debug->debug("Enabled feature present mode fifo latest ready");
+        }
+    }
+
     const VkDeviceCreateInfo device_create_info = {
         .sType                   = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-        .pNext                   = nullptr,
+        .pNext                   = &set_device_features,
         .flags                   = 0,
         .queueCreateInfoCount    = 1,
         .pQueueCreateInfos       = &queue_create_info,
@@ -472,22 +672,83 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         }
     }
 
+    const VkCommandPoolCreateInfo command_pool_create_info{
+        .sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+        .pNext            = nullptr,
+        .flags            = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+        .queueFamilyIndex = m_graphics_queue_family_index
+    };
+    result = vkCreateCommandPool(m_vulkan_device, &command_pool_create_info, nullptr, &m_vulkan_command_pool);
+    if (result != VK_SUCCESS) {
+        log_context->critical("vkCreateCommandPool() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        abort();
+    }
+
     m_info.glsl_version       = 460;
     m_info.vulkan_api_version = application_info.apiVersion;
 
-    VkPhysicalDeviceProperties physical_device_properties;
-    vkGetPhysicalDeviceProperties(m_vulkan_physical_device, &physical_device_properties);
+    m_info.max_per_stage_descriptor_samplers = properties.limits.maxPerStageDescriptorSamplers;
+}
 
-    m_info.max_per_stage_descriptor_samplers = physical_device_properties.limits.maxPerStageDescriptorSamplers;
+auto Device_impl::allocate_command_buffer() -> VkCommandBuffer
+{
+    const VkCommandBufferAllocateInfo allocate_info{
+        .sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        .pNext              = nullptr,
+        .commandPool        = m_vulkan_command_pool,
+        .level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+        .commandBufferCount = 1
+    };
+
+    VkCommandBuffer vulkan_command_buffer{VK_NULL_HANDLE};
+    VkResult result = vkAllocateCommandBuffers(m_vulkan_device, &allocate_info, &vulkan_command_buffer);
+    if (result != VK_SUCCESS) {
+        log_context->critical("vkAllocateCommandBuffers() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        abort();
+    }
+    return vulkan_command_buffer;
+}
+
+void Device_impl::create_swapchain()
+{
+    if (!m_swapchain) {
+        m_swapchain = std::make_unique<Swapchain>(
+            m_device,
+            erhe::graphics::Swapchain_create_info{
+                .surface = *m_surface.get()
+            }
+        );
+    }
+}
+
+auto Device_impl::get_swapchain() -> Swapchain*
+{
+    return m_swapchain.get();
 }
 
 Device_impl::~Device_impl()
 {
+    vkDeviceWaitIdle(m_vulkan_device);
+
+    if (m_vulkan_command_pool != VK_NULL_HANDLE) {
+        vkDestroyCommandPool(m_vulkan_device, m_vulkan_command_pool, nullptr);
+    }
+    // NOTE: This adds completion handlers for destroying related vulkan objects
+    m_surface.reset();
+
+    vkDeviceWaitIdle(m_vulkan_device);
+
+    for (const Completion_handler& entry : m_completion_handlers) {
+        entry.callback();
+    }
+
     vmaDestroyAllocator(m_vma_allocator);
     if (m_vulkan_device != VK_NULL_HANDLE) {
         vkDestroyDevice(m_vulkan_device, nullptr);
     }
-    m_surface.reset();
+    if (m_debug_utils_messenger != VK_NULL_HANDLE) {
+        vkDestroyDebugUtilsMessengerEXT(m_vulkan_instance, m_debug_utils_messenger, nullptr);
+    }
     vkDestroyInstance(m_vulkan_instance, nullptr);
     volkFinalize();
 }
@@ -547,15 +808,28 @@ auto Device_impl::get_physical_device_score(VkPhysicalDevice vulkan_physical_dev
 {
     VkPhysicalDeviceProperties device_properties{};
     vkGetPhysicalDeviceProperties(vulkan_physical_device, &device_properties);
+    const float device_type_score = 0.0f;
+    switch (device_properties.deviceType) {
+        case VK_PHYSICAL_DEVICE_TYPE_OTHER:          return 101.0f;
+        case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU: return 102.0f;
+        case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU:   return 104.0f;
+        case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU:    return 103.0f;
+        case VK_PHYSICAL_DEVICE_TYPE_CPU:            return   0.0f;
+        default: {
+            log_context->warn("Vulkan device type {:4x} not recognized", static_cast<uint32_t>(device_properties.deviceType));
+            return 0.0f; // reject device
+        }
+    }
 
     const bool queues_ok = query_device_queue_family_indices(vulkan_physical_device, surface_impl, nullptr, nullptr);
     if (!queues_ok) {
-        return 0.0f;
+        return 0.0f; // reject device
     }
 
     Device_extensions device_extensions{};
     const float extension_score = query_device_extensions(vulkan_physical_device, device_extensions, nullptr);
-    return extension_score;
+
+    return device_type_score + extension_score;
 }
 
 // Check if device meets queue requirements, optionally returns queue family indices
@@ -645,20 +919,6 @@ auto Device_impl::query_device_extensions(
 {
     float total_score = 0.0f;
 
-    // Check device extensions
-    auto check_device_extension =
-        [&device_extensions_c_str, &total_score]
-        (const VkExtensionProperties& extension, const char* name, bool& enable, const float extension_score)
-    {
-        if (strcmp(extension.extensionName, name) == 0) {
-            if (device_extensions_c_str != nullptr) {
-                device_extensions_c_str->push_back(name);
-                log_debug->info("  Enabling {}", extension.extensionName);
-            }
-            enable = true;
-            total_score += extension_score;
-        }
-    };
     uint32_t device_extension_count{0};
     VkResult result{VK_SUCCESS};
     result = vkEnumerateDeviceExtensionProperties(vulkan_physical_device, nullptr, &device_extension_count, nullptr);
@@ -674,19 +934,39 @@ auto Device_impl::query_device_extensions(
     }
 
     for (const VkExtensionProperties& extension : device_extensions) {
-        log_debug->info(
-            "Vulkan Device Extension: {} spec_version {:08x}",
-            extension.extensionName,
-            extension.specVersion
-        );
-        check_device_extension(extension, VK_KHR_SWAPCHAIN_EXTENSION_NAME,                      device_extensions_out.m_VK_KHR_swapchain                     , 1.0f);
-        check_device_extension(extension, VK_EXT_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME,        device_extensions_out.m_VK_EXT_swapchain_maintenance1        , 2.0f);
-        check_device_extension(extension, VK_KHR_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME,        device_extensions_out.m_VK_KHR_swapchain_maintenance1        , 2.0f);
-        check_device_extension(extension, VK_EXT_LOAD_STORE_OP_NONE_EXTENSION_NAME,             device_extensions_out.m_VK_EXT_load_store_op_none            , 2.0f);
-        check_device_extension(extension, VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME,                device_extensions_out.m_VK_KHR_push_descriptor               , 1.0f);
-        check_device_extension(extension, VK_KHR_PRESENT_MODE_FIFO_LATEST_READY_EXTENSION_NAME, device_extensions_out.m_VK_KHR_present_mode_fifo_latest_ready, 3.0f);
-        check_device_extension(extension, VK_EXT_PRESENT_MODE_FIFO_LATEST_READY_EXTENSION_NAME, device_extensions_out.m_VK_EXT_present_mode_fifo_latest_ready, 3.0f);
-        check_device_extension(extension, VK_EXT_DEVICE_ADDRESS_BINDING_REPORT_EXTENSION_NAME,  device_extensions_out.m_VK_EXT_device_address_binding_report , 1.0f);
+        log_debug->info("Vulkan Device Extension: {} spec_version {:08x}", extension.extensionName, extension.specVersion);
+    }
+
+    // Check device extensions
+    auto check_device_extension = [&](const char* name, bool& enable, const float extension_score)
+    {
+        for (const VkExtensionProperties& extension : device_extensions) {
+            if (strcmp(extension.extensionName, name) == 0) {
+                if (device_extensions_c_str != nullptr) {
+                    device_extensions_c_str->push_back(name);
+                    log_debug->info("  Enabling {}", extension.extensionName);
+                    enable = true;
+                    total_score += extension_score;
+                }
+                return;
+            }
+        }
+    };
+
+    check_device_extension(VK_KHR_SWAPCHAIN_EXTENSION_NAME,                      device_extensions_out.m_VK_KHR_swapchain                     , 1.0f);
+    check_device_extension(VK_KHR_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME,        device_extensions_out.m_VK_KHR_swapchain_maintenance1        , 2.0f);
+    check_device_extension(VK_KHR_LOAD_STORE_OP_NONE_EXTENSION_NAME,             device_extensions_out.m_VK_KHR_load_store_op_none            , 2.0f);
+    check_device_extension(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME,                device_extensions_out.m_VK_KHR_push_descriptor               , 1.0f);
+    check_device_extension(VK_KHR_PRESENT_MODE_FIFO_LATEST_READY_EXTENSION_NAME, device_extensions_out.m_VK_KHR_present_mode_fifo_latest_ready, 3.0f);
+
+    if (!device_extensions_out.m_VK_KHR_load_store_op_none) {
+        check_device_extension(VK_EXT_LOAD_STORE_OP_NONE_EXTENSION_NAME,             device_extensions_out.m_VK_EXT_load_store_op_none            , 2.0f);
+    }
+    if (!device_extensions_out.m_VK_KHR_swapchain_maintenance1) {
+        check_device_extension(VK_EXT_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME,        device_extensions_out.m_VK_EXT_swapchain_maintenance1        , 2.0f);
+    }
+    if (!device_extensions_out.m_VK_KHR_present_mode_fifo_latest_ready) {
+        check_device_extension(VK_EXT_PRESENT_MODE_FIFO_LATEST_READY_EXTENSION_NAME, device_extensions_out.m_VK_EXT_present_mode_fifo_latest_ready, 3.0f);
     }
     return total_score;
 }
@@ -714,6 +994,15 @@ auto Device_impl::get_graphics_queue_family_index() const -> uint32_t
 auto Device_impl::get_present_queue_family_index () const -> uint32_t
 {
     return m_present_queue_family_index;
+}
+
+auto Device_impl::get_graphics_queue() const -> VkQueue
+{
+    return m_vulkan_graphics_queue;
+}
+auto Device_impl::get_present_queue() const -> VkQueue
+{
+    return m_vulkan_present_queue;
 }
 
 auto Device_impl::get_instance_layers() const -> const Instance_layers&
@@ -861,10 +1150,16 @@ void Device_impl::frame_completed(const uint64_t completed_frame)
 void Device_impl::start_of_frame()
 {
     ++m_frame_number;
+    if (m_swapchain) {
+        m_swapchain->get_impl().start_of_frame();
+    }
 }
 
 void Device_impl::end_of_frame()
 {
+    if (m_swapchain) {
+        m_swapchain->get_impl().end_of_frame();
+    }
 }
 
 auto Device_impl::get_frame_number() const -> uint64_t
@@ -916,15 +1211,6 @@ auto Device_impl::make_render_command_encoder(Render_pass& render_pass) -> Rende
     return Render_command_encoder(m_device, render_pass);
 }
 
-auto Device_impl::create_render_pass(
-    const VkRenderPassCreateInfo* pCreateInfo,
-    const VkAllocationCallbacks*  pAllocator,
-    VkRenderPass*                 pRenderPass
-) -> VkResult
-{
-    return vkCreateRenderPass(m_vulkan_device, pCreateInfo, pAllocator, pRenderPass);
-}
-
 void Device_impl::set_debug_label(VkObjectType object_type, uint64_t object_handle, const char* label)
 {
     if (!m_instance_extensions.m_VK_EXT_debug_utils) {
@@ -953,104 +1239,3 @@ void Device_impl::set_debug_label(VkObjectType object_type, uint64_t object_hand
 }
 
 } // namespace erhe::graphics
-
-
-// VK_KHR_16bit_storage
-// VK_KHR_8bit_storage
-// VK_KHR_bind_memory2
-// VK_KHR_buffer_device_address
-// VK_KHR_copy_commands2
-// VK_KHR_create_renderpass2
-// VK_KHR_dedicated_allocation
-// VK_KHR_deferred_host_operations
-// VK_KHR_depth_stencil_resolve
-// VK_KHR_descriptor_update_template
-// VK_KHR_device_group
-// VK_KHR_draw_indirect_count
-// VK_KHR_driver_properties
-// VK_KHR_dynamic_rendering
-// VK_KHR_fragment_shading_rate
-// VK_KHR_get_memory_requirements2
-// VK_KHR_global_priority
-// VK_KHR_imageless_framebuffer
-// VK_KHR_image_format_list
-// VK_KHR_maintenance1
-// VK_KHR_maintenance2
-// VK_KHR_maintenance3
-// VK_KHR_maintenance4
-// VK_KHR_multiview
-// VK_KHR_pipeline_executable_properties
-// VK_KHR_push_descriptor
-// VK_KHR_ray_query
-// VK_KHR_relaxed_block_layout
-// VK_KHR_sampler_mirror_clamp_to_edge
-// VK_KHR_sampler_ycbcr_conversion
-// VK_KHR_separate_depth_stencil_layouts
-// VK_KHR_shader_atomic_int64
-// VK_KHR_shader_clock
-// VK_KHR_shader_draw_parameters
-// VK_KHR_shader_float16_int8
-// VK_KHR_shader_float_controls
-// VK_KHR_shader_integer_dot_product
-// VK_KHR_shader_non_semantic_info
-// VK_KHR_shader_subgroup_extended_types
-// VK_KHR_shader_subgroup_uniform_control_flow
-// VK_KHR_shader_terminate_invocation
-// VK_KHR_spirv_1_4
-// VK_KHR_storage_buffer_storage_class
-// VK_KHR_swapchain
-// VK_KHR_synchronization2
-// VK_KHR_timeline_semaphore
-// VK_KHR_uniform_buffer_standard_layout
-// VK_KHR_variable_pointers
-// VK_KHR_vulkan_memory_model
-
-// VK_EXT_4444_formats
-// VK_EXT_border_color_swizzle
-// VK_EXT_color_write_enable
-// VK_EXT_conservative_rasterization
-// VK_EXT_custom_border_color
-// VK_EXT_depth_clamp_zero_one
-// VK_EXT_depth_clip_control
-// VK_EXT_depth_clip_enable
-// VK_EXT_descriptor_indexing
-// VK_EXT_device_address_binding_report
-// VK_EXT_device_fault
-// VK_EXT_extended_dynamic_state
-// VK_EXT_extended_dynamic_state2
-// VK_EXT_global_priority
-// VK_EXT_global_priority_query
-// VK_EXT_host_query_reset
-// VK_EXT_image_2d_view_of_3d
-// VK_EXT_image_robustness
-// VK_EXT_image_view_min_lod
-// VK_EXT_index_type_uint8
-// VK_EXT_inline_uniform_block
-// VK_EXT_line_rasterization
-// VK_EXT_load_store_op_none
-// VK_EXT_pipeline_creation_cache_control
-// VK_EXT_pipeline_creation_feedback
-// VK_EXT_primitive_topology_list_restart
-// VK_EXT_private_data
-// VK_EXT_provoking_vertex
-// VK_EXT_queue_family_foreign
-// VK_EXT_robustness2
-// VK_EXT_sampler_filter_minmax
-// VK_EXT_sample_locations
-// VK_EXT_scalar_block_layout
-// VK_EXT_separate_stencil_usage
-// VK_EXT_shader_atomic_float
-// VK_EXT_shader_demote_to_helper_invocation
-// VK_EXT_shader_stencil_export
-// VK_EXT_shader_subgroup_ballot
-// VK_EXT_shader_subgroup_vote
-// VK_EXT_shader_viewport_index_layer
-// VK_EXT_subgroup_size_control
-
-// VK_EXT_texel_buffer_alignment
-// VK_EXT_tooling_info
-// VK_EXT_transform_feedback
-// VK_EXT_vertex_attribute_divisor
-// VK_EXT_vertex_input_dynamic_state
-
-// VK_EXT_swapchain_maintenance1 / VK_KHR_swapchain_maintenance1

@@ -979,10 +979,9 @@ auto Xr_session::render_frame(std::function<bool(Render_view&)> render_view_call
             return false;
         }
 
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
         const auto& acquired_color_swapchain_image         = acquired_color_swapchain_image_opt.value();
         const auto& acquired_depth_stencil_swapchain_image = acquired_depth_stencil_swapchain_image_opt.value();
-
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
         const uint32_t color_texture         = acquired_color_swapchain_image.get_gl_texture();
         const uint32_t depth_stencil_texture = acquired_depth_stencil_swapchain_image.get_gl_texture();
         if ((color_texture == 0) || (depth_stencil_texture == 0)) {

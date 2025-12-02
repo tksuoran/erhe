@@ -2,6 +2,8 @@
 
 #include "erhe_graphics/vulkan/vulkan_surface.hpp"
 #include "erhe_graphics/vulkan/vulkan_device.hpp"
+#include "erhe_graphics/vulkan/vulkan_helpers.hpp"
+#include "erhe_graphics/graphics_log.hpp"
 #include "erhe_window/window.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -204,7 +206,7 @@ auto Surface_impl::get_surface_format_score(const VkSurfaceFormatKHR surface_for
             break;
     }
 
-    float color_space_score =10.0f;
+    float color_space_score = 10.0f;
     switch (surface_format.colorSpace) {
         case VK_COLOR_SPACE_SRGB_NONLINEAR_KHR:       color_space_score = 2.0f; break;
         case VK_COLOR_SPACE_DISPLAY_P3_NONLINEAR_EXT:
@@ -342,52 +344,83 @@ void Surface_impl::choose_surface_format()
         .format     = VK_FORMAT_UNDEFINED,
         .colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR
     };
+    log_context->debug("Surface formats:");
     for (const VkSurfaceFormatKHR& surface_format : m_surface_formats) {
         const float score = get_surface_format_score(surface_format);
+        log_context->debug("  format {} colorspace {} score {}", c_str(surface_format.format), c_str(surface_format.colorSpace), score);
+
         if (score > best_score) {
             best_score      = score;
             selected_format = surface_format;
         }
     }
     m_surface_format = selected_format;
+    log_context->debug("Selected surface format {} color space {}", c_str(m_surface_format.format), c_str(m_surface_format.colorSpace));
 }
 
 void Surface_impl::choose_present_mode()
 {
     float best_score = std::numeric_limits<float>::lowest();
     VkPresentModeKHR selected_present_mode = VK_PRESENT_MODE_FIFO_KHR;
+    log_context->debug("Surface present modes:");
     for (const VkPresentModeKHR present_mode : m_present_modes) {
         const float score = get_present_mode_score(present_mode);
+        log_context->debug("  present mode {} score {}", c_str(present_mode), score);
         if (score > best_score) {
             best_score            = score;
             selected_present_mode = present_mode;
         }
     }
     m_present_mode = selected_present_mode;
+    log_context->debug("Selected present mode {}", c_str(m_present_mode));
 }
 
 Surface_impl::~Surface_impl() noexcept
 {
+    log_context->debug("Surface_impl::~Surface_impl()");
     VkInstance instance = m_device_impl.get_vulkan_instance();
     VkSurfaceKHR surface = m_surface;
     if (surface != VK_NULL_HANDLE) {
         m_device_impl.add_completion_handler(
             [instance, surface]() {
+                log_context->debug("Surface_impl::~Surface_impl() completion handler");
                 vkDestroySurfaceKHR(instance, surface, nullptr);
             }
         );
     }
 }
 
-auto Surface_impl::create_swapchain() -> VkSwapchainKHR const
+auto Surface_impl::update_swapchain(VkExtent2D& extent) -> VkSwapchainKHR const
 {
+    log_context->debug("Surface_impl::update_swapchain(extent: width = {}, height {})", extent.width, extent.height);
+
     VkSurfaceCapabilitiesKHR surface_capabilities{};
     VkResult result = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_physical_device, m_surface, &surface_capabilities);
     if (result != VK_SUCCESS) {
+        log_debug->warn("vkGetPhysicalDeviceSurfaceCapabilitiesKHR() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        return VK_NULL_HANDLE;
+    }
+
+    // TODO handle cases where currentExtent is not the right thing
+    if (
+        (m_current_swapchain_extent.width  == surface_capabilities.currentExtent.width) &&
+        (m_current_swapchain_extent.height == surface_capabilities.currentExtent.height)
+    ) {
+        extent = m_current_swapchain_extent;
+        return m_current_swapchain;
+    }
+
+    if (
+        (surface_capabilities.currentExtent.width  == 0) ||
+        (surface_capabilities.currentExtent.height == 0)
+    ){
+        extent = m_current_swapchain_extent;
         return VK_NULL_HANDLE;
     }
     VkDevice vulkan_device               = m_device_impl.get_vulkan_device();
     uint32_t graphics_queue_family_index = m_device_impl.get_graphics_queue_family_index();
+    VkSwapchainKHR old_swapchain = m_current_swapchain;
+    log_debug->debug("Calling vkCreateSwapchainKHR()");
     const VkSwapchainCreateInfoKHR swapchain_create_info{
         .sType                 = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,// VkStructureType
         .pNext                 = nullptr,                               // const void*
@@ -406,15 +439,31 @@ auto Surface_impl::create_swapchain() -> VkSwapchainKHR const
         .compositeAlpha        = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,     // VkCompositeAlphaFlagBitsKHR
         .presentMode           = m_present_mode,                        // VkPresentModeKHR
         .clipped               = VK_TRUE,                               // VkBool32
-        .oldSwapchain          = nullptr                                // VkSwapchainKHR
+        .oldSwapchain          = old_swapchain                          // VkSwapchainKHR
     };
 
     VkSwapchainKHR vulkan_swapchain{VK_NULL_HANDLE};
     result = vkCreateSwapchainKHR(vulkan_device, &swapchain_create_info, nullptr, &vulkan_swapchain);
+    if (result != VK_SUCCESS) {
+        log_debug->warn("vkCreateSwapchainKHR() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+    }
+
     if ((result != VK_SUCCESS) && (vulkan_swapchain != VK_NULL_HANDLE)) {
         vkDestroySwapchainKHR(vulkan_device, vulkan_swapchain, nullptr);
         return VK_NULL_HANDLE;
     }
+
+    if (old_swapchain != VK_NULL_HANDLE) {
+        m_device_impl.add_completion_handler(
+            [vulkan_device, old_swapchain]() {
+                vkDestroySwapchainKHR(vulkan_device, old_swapchain, nullptr);
+            }
+        );
+    }
+
+    m_current_swapchain        = vulkan_swapchain;
+    m_current_swapchain_extent = swapchain_create_info.imageExtent;
+    extent = m_current_swapchain_extent;
     return vulkan_swapchain;
 }
 

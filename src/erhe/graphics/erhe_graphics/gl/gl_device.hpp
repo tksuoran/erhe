@@ -22,6 +22,7 @@ public:
 };
 
 class Surface;
+class Swapchain;
 
 class Device;
 class Device_impl final
@@ -34,6 +35,7 @@ public:
     void operator=(Device_impl&&)      = delete;
     ~Device_impl  ();
 
+    void create_swapchain      ();
     void start_of_frame        ();
     void end_of_frame          ();
     void memory_barrier        (Memory_barrier_mask barriers);
@@ -43,6 +45,7 @@ public:
     void on_thread_enter       ();
 
     [[nodiscard]] auto get_surface                 () -> Surface*;
+    [[nodiscard]] auto get_swapchain               () -> Swapchain*;
     [[nodiscard]] auto get_handle                  (const Texture& texture, const Sampler& sampler) const -> uint64_t;
     [[nodiscard]] auto create_dummy_texture        () -> std::shared_ptr<Texture>;
     [[nodiscard]] auto get_buffer_alignment        (Buffer_target target) -> std::size_t;
@@ -73,6 +76,8 @@ private:
     OpenGL_state_tracker          m_gl_state_tracker;
     Gl_context_provider           m_gl_context_provider;
     Device_info                   m_info;
+
+    std::unique_ptr<Swapchain>  m_swapchain;
 
     std::unordered_map<gl::Internal_format, Format_properties> format_properties;
 

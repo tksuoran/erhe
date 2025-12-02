@@ -4,6 +4,7 @@
 #include "erhe_graphics/gl/gl_buffer.hpp"
 #include "erhe_graphics/gl/gl_sampler.hpp"
 #include "erhe_graphics/gl/gl_surface.hpp"
+#include "erhe_graphics/gl/gl_swapchain.hpp"
 #include "erhe_graphics/gl/gl_texture.hpp"
 
 #include "erhe_utility/bit_helpers.hpp"
@@ -646,6 +647,23 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
 auto Device_impl::get_surface() -> Surface*
 {
     return m_surface.get();
+}
+
+auto Device_impl::get_swapchain() -> Swapchain*
+{
+    return m_swapchain.get();
+}
+
+void Device_impl::create_swapchain()
+{
+    if (!m_swapchain) {
+        m_swapchain = std::make_unique<Swapchain>(
+            m_device,
+            erhe::graphics::Swapchain_create_info{
+                .surface = *m_surface.get()
+            }
+        );
+    }
 }
 
 auto Device_impl::get_handle(const Texture& texture, const Sampler& sampler) const -> uint64_t

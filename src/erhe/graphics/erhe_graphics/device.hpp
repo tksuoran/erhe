@@ -56,6 +56,7 @@ class Render_pass;
 class Ring_buffer;
 class Sampler;
 class Surface;
+class Swapchain;
 class Texture;
 
 static constexpr unsigned int format_flag_require_depth     = 0x01u;
@@ -149,6 +150,7 @@ public:
     void operator= (Device&&)      = delete;
     ~Device();
 
+    void create_swapchain      ();
     void start_of_frame        ();
     void end_of_frame          ();
     void memory_barrier        (Memory_barrier_mask barriers);
@@ -158,6 +160,7 @@ public:
     void on_thread_enter       ();
 
     [[nodiscard]] auto get_surface                 () -> Surface*;
+    [[nodiscard]] auto get_swapchain               () -> Swapchain*;
     [[nodiscard]] auto get_handle                  (const Texture& texture, const Sampler& sampler) const -> uint64_t;
     [[nodiscard]] auto create_dummy_texture        () -> std::shared_ptr<Texture>;
     [[nodiscard]] auto get_buffer_alignment        (Buffer_target target) -> std::size_t;

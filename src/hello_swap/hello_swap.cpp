@@ -43,13 +43,23 @@ public:
                 .prefer_high_dynamic_range = false
             }
         }
-        , m_swapchain{
-            m_graphics_device,
-            erhe::graphics::Swapchain_create_info{
-                .surface = *m_graphics_device.get_surface()
-            }
-        }
     {
+        m_graphics_device.create_swapchain();
+        //const int width  = m_window.get_width();
+        //const int height = m_window.get_height();
+        //update_render_pass(
+        //m_window.register_redraw_callback(
+        //    [this](){
+        //        tick();
+        //    }
+        //);
+    }
+
+    std::optional<erhe::window::Input_event> m_window_resize_event{};
+    auto on_window_resize_event(const erhe::window::Input_event& input_event) -> bool override
+    {
+        m_window_resize_event = input_event;
+        return true;
     }
 
     auto on_window_close_event(const erhe::window::Input_event&) -> bool override
@@ -58,11 +68,11 @@ public:
         return true;
     }
 
+    std::mutex m_mutex;
     void run()
     {
         m_current_time = std::chrono::steady_clock::now();
         while (!m_close_requested) {
-            m_graphics_device.start_of_frame();
             // m_graphics_device.wait_for_idle()
             // m_window.delay_before_swap(1.0f / 120.0f); // sleep half the frame
 
@@ -71,17 +81,18 @@ public:
             for (erhe::window::Input_event& input_event : input_events) {
                 static_cast<void>(this->dispatch_input_event(input_event));
             }
+            if (m_window_resize_event.has_value()) {
+                m_window_resize_event.reset();
+            }
 
             tick();
-            m_graphics_device.end_of_frame();
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
-            m_window.swap_buffers();
-#endif // TODO
         }
     }
 
     void tick()
     {
+        std::lock_guard<std::mutex> lock{m_mutex};
+
         const auto tick_end_time = std::chrono::steady_clock::now();
 
         // Update fixed steps
@@ -110,7 +121,17 @@ public:
             .height = m_window.get_height()
         };
 
+        update_render_pass(viewport.width, viewport.height);
+
+        m_graphics_device.start_of_frame();
+
         //erhe::graphics::Render_command_encoder render_encoder = m_graphics_device.make_render_command_encoder(*m_render_pass.get());
+
+        m_graphics_device.end_of_frame();
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+        m_window.swap_buffers();
+#endif // TODO
+
     }
 
 private:
@@ -125,9 +146,11 @@ private:
             return;
         }
 
+        //// m_graphics_device.resize_swapchain(width, height);
+
         m_render_pass.reset();
         erhe::graphics::Render_pass_descriptor render_pass_descriptor;
-        render_pass_descriptor.swapchain = &m_swapchain;
+        render_pass_descriptor.swapchain             = m_graphics_device.get_swapchain();
         render_pass_descriptor.color_attachments[0].load_action    = erhe::graphics::Load_action::Clear;
         render_pass_descriptor.color_attachments[0].clear_value[0] = 0.02;
         render_pass_descriptor.color_attachments[0].clear_value[1] = 0.02;
@@ -143,7 +166,6 @@ private:
 
     erhe::window::Context_window                 m_window;
     erhe::graphics::Device                       m_graphics_device;
-    erhe::graphics::Swapchain                    m_swapchain;
     std::unique_ptr<erhe::graphics::Render_pass> m_render_pass;
 
     bool                                    m_close_requested{false};
@@ -165,7 +187,8 @@ void run()
     erhe::graphics::initialize_logging();
     erhe::math::initialize_logging();
     erhe::window::initialize_logging();
-    erhe::window::initialize_frame_capture();
+    // TODO: RenderDoc vulkan support
+    // erhe::window::initialize_frame_capture();
 
     Hello_swap hello_swap{};
     hello_swap.run();

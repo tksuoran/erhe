@@ -25,7 +25,7 @@ public:
     [[nodiscard]] auto get_present_mode       () -> VkPresentModeKHR const;
     [[nodiscard]] auto get_image_count        () -> uint32_t const;
     [[nodiscard]] auto get_vulkan_surface     () -> VkSurfaceKHR const;
-    [[nodiscard]] auto create_swapchain       () -> VkSwapchainKHR const;
+    [[nodiscard]] auto update_swapchain       (VkExtent2D& extent) -> VkSwapchainKHR const;
 
 private:
     void fail();
@@ -36,13 +36,15 @@ private:
 
     Device_impl&                    m_device_impl;
     Surface_create_info             m_surface_create_info;
-    VkPhysicalDevice                m_physical_device{VK_NULL_HANDLE};
-    VkSurfaceKHR                    m_surface        {VK_NULL_HANDLE};
+    VkPhysicalDevice                m_physical_device         {VK_NULL_HANDLE};
+    VkSurfaceKHR                    m_surface                 {VK_NULL_HANDLE};
     std::vector<VkSurfaceFormatKHR> m_surface_formats;
     std::vector<VkPresentModeKHR>   m_present_modes;
-    VkSurfaceFormatKHR              m_surface_format{};
-    VkPresentModeKHR                m_present_mode  {VK_PRESENT_MODE_FIFO_KHR};
-    uint32_t                        m_image_count   {0};
+    VkSurfaceFormatKHR              m_surface_format          {};
+    VkPresentModeKHR                m_present_mode            {VK_PRESENT_MODE_FIFO_KHR};
+    uint32_t                        m_image_count             {0};
+    VkExtent2D                      m_current_swapchain_extent{0, 0};
+    VkSwapchainKHR                  m_current_swapchain       {VK_NULL_HANDLE};
 };
 
 } // namespace erhe::graphics

@@ -28,7 +28,8 @@ cmake ^
  -DERHE_TEXT_LAYOUT_LIBRARY=harfbuzz ^
  -DERHE_WINDOW_LIBRARY=sdl ^
  -DERHE_XR_LIBRARY=openxr ^
- -DERHE_USE_ASAN:BOOL=OFF
+ -DERHE_USE_ASAN:BOOL=OFF ^
+ -DERHE_SPIRV=OFF
 
 for /f "delims=" %%a in ('powershell -nologo -command "Get-Date -Format o"') do set "end=%%a"
 
