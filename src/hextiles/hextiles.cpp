@@ -16,7 +16,6 @@
 #endif
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/graphics_log.hpp"
-#include "erhe_graphics/swapchain.hpp"
 #include "erhe_imgui/imgui_log.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
@@ -66,17 +65,10 @@ public:
             }
         }
 
-        , m_swapchain{
-            m_graphics_device,
-            erhe::graphics::Swapchain_create_info{
-                .surface = *m_graphics_device.get_surface()
-            }
-        }
-
         , m_text_renderer       {m_graphics_device}
         , m_rendergraph         {m_graphics_device}
         , m_imgui_renderer      {m_graphics_device, m_settings.imgui}
-        , m_imgui_windows       {m_imgui_renderer, m_graphics_device, m_swapchain, m_rendergraph, &m_context_window, "windows.ini"}
+        , m_imgui_windows       {m_imgui_renderer, m_graphics_device, m_rendergraph, &m_context_window, "windows.ini"}
         , m_logs                {m_commands, m_imgui_renderer}
         , m_log_settings_window {m_imgui_renderer, m_imgui_windows, m_logs}
         , m_tail_log_window     {m_imgui_renderer, m_imgui_windows, m_logs}
@@ -90,13 +82,49 @@ public:
         //// auto& root_event_handler = m_context_window.get_root_window_event_handler();
         //// root_event_handler.attach(&m_imgui_windows, 2);
         //// root_event_handler.attach(&m_commands, 1);
+
+        m_context_window.register_redraw_callback(
+            [this](){
+                if (
+                    (m_swapchain_width != m_context_window.get_width()) ||
+                    (m_swapchain_height != m_context_window.get_height())
+                ) {
+                    m_graphics_device.resize_swapchain_to_window();
+                    m_swapchain_width = m_context_window.get_width();
+                    m_swapchain_height = m_context_window.get_height();
+                }
+                int64_t new_timestamp_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+                tick(0.0f, new_timestamp_ns);
+            }
+        );
     }
 
+    std::optional<erhe::window::Input_event> m_window_resize_event{};
+    int m_swapchain_width{0};
+    int m_swapchain_height{0};
+    auto on_window_resize_event(const erhe::window::Input_event& input_event) -> bool override
+    {
+        m_window_resize_event = input_event;
+        return true;
+    }
+
+    std::mutex m_mutex;
     void run()
     {
         int64_t timestamp_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
         while (!m_close_requested) {
             m_context_window.poll_events();
+            auto& input_events = m_context_window.get_input_events();
+            for (erhe::window::Input_event& input_event : input_events) {
+                static_cast<void>(this->dispatch_input_event(input_event));
+            }
+            if (m_window_resize_event.has_value()) {
+                m_graphics_device.resize_swapchain_to_window();
+                m_window_resize_event.reset();
+                m_swapchain_width = m_context_window.get_width();
+                m_swapchain_height = m_context_window.get_height();
+            }
+
             int64_t new_timestamp_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
             int64_t delta_time = new_timestamp_ns - timestamp_ns;
             double dt_s = static_cast<double>(delta_time) / 1'000'000'000.0f;
@@ -245,6 +273,8 @@ public:
 
     void tick(float dt_s, int64_t timestamp_ns)
     {
+        std::lock_guard<std::mutex> lock{m_mutex};
+
         std::vector<erhe::window::Input_event>& input_events = m_context_window.get_input_events();
 
         m_imgui_windows .process_events(dt_s, timestamp_ns);
@@ -264,10 +294,6 @@ public:
         m_rendergraph   .execute();
         m_imgui_renderer.next_frame();
         m_graphics_device.end_of_frame();
-
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
-        m_context_window.swap_buffers();
-#endif // TODO
     }
 
     auto on_window_close_event(const erhe::window::Input_event&) -> bool override
@@ -280,7 +306,6 @@ public:
     Hextiles_settings                m_settings;
     erhe::commands::Commands         m_commands;
     erhe::graphics::Device           m_graphics_device;
-    erhe::graphics::Swapchain        m_swapchain;
     erhe::renderer::Text_renderer    m_text_renderer;
     erhe::rendergraph::Rendergraph   m_rendergraph;
     erhe::imgui::Imgui_renderer      m_imgui_renderer;

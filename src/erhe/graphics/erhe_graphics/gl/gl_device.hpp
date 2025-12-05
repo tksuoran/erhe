@@ -35,7 +35,6 @@ public:
     void operator=(Device_impl&&)      = delete;
     ~Device_impl  ();
 
-    void create_swapchain          ();
     void resize_swapchain_to_window();
     void start_of_frame            ();
     void end_of_frame              ();
@@ -61,7 +60,8 @@ public:
     [[nodiscard]] auto get_info                    () const -> const Device_info&;
 
 private:
-    void frame_completed(uint64_t frame);
+    void create_swapchain();
+    void frame_completed (uint64_t frame);
 
     using PFN_generic          = void (*) ();
     using PFN_get_proc_address = PFN_generic (*) (const char*);

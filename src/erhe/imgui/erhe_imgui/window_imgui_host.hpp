@@ -24,7 +24,6 @@ public:
     Window_imgui_host(
         Imgui_renderer&                 imgui_renderer,
         erhe::graphics::Device&         graphics_device,
-        erhe::graphics::Swapchain&      swapchain,
         erhe::rendergraph::Rendergraph& rendergraph,
         erhe::window::Context_window&   context_window,
         const std::string_view          name
@@ -51,7 +50,6 @@ private:
 
     erhe::window::Context_window&                m_context_window;
     erhe::graphics::Device&                      m_graphics_device;
-    erhe::graphics::Swapchain&                   m_swapchain;
     std::unique_ptr<erhe::graphics::Render_pass> m_render_pass;
     bool                                         m_is_visible         {false};
     float                                        m_this_frame_dt_s    {0.0f};

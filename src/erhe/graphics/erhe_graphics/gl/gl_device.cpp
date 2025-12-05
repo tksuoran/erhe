@@ -642,6 +642,10 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
             .result       = gl::Sync_status::timeout_expired
         }
     );
+
+    if (m_surface) {
+        create_swapchain();
+    }
 }
 
 auto Device_impl::get_surface() -> Surface*

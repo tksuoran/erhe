@@ -20,7 +20,6 @@ using erhe::graphics::Texture;
 Window_imgui_host::Window_imgui_host(
     Imgui_renderer&                 imgui_renderer,
     erhe::graphics::Device&         graphics_device,
-    erhe::graphics::Swapchain&      swapchain,
     erhe::rendergraph::Rendergraph& rendergraph,
     erhe::window::Context_window&   context_window,
     const std::string_view          name
@@ -28,7 +27,6 @@ Window_imgui_host::Window_imgui_host(
     : Imgui_host       {rendergraph, imgui_renderer, name, true, imgui_renderer.get_font_atlas()}
     , m_context_window {context_window}
     , m_graphics_device{graphics_device}
-    , m_swapchain      {swapchain}
 {
     imgui_renderer.use_as_backend_renderer_on_context(m_imgui_context);
 
@@ -70,7 +68,7 @@ void Window_imgui_host::update_render_pass(int width, int height)
 
     m_render_pass.reset();
     erhe::graphics::Render_pass_descriptor render_pass_descriptor;
-    render_pass_descriptor.swapchain = &m_swapchain;
+    render_pass_descriptor.swapchain = m_graphics_device.get_swapchain();
     render_pass_descriptor.color_attachments[0].load_action    = erhe::graphics::Load_action::Clear;
     render_pass_descriptor.color_attachments[0].clear_value[0] = 0.05; // TODO expose API to set clear color
     render_pass_descriptor.color_attachments[0].clear_value[1] = 0.05;

@@ -205,8 +205,11 @@ thread_local std::vector<Tracy_observer::Entry> Tracy_observer::st_entries;
 class Editor : public erhe::window::Input_event_handler
 {
 public:
+    std::mutex m_mutex;
     void tick()
     {
+        std::lock_guard<std::mutex> lock{m_mutex};
+
         ERHE_PROFILE_FUNCTION();
         m_frame_log_window->on_frame_begin();
         // log_input_frame->trace("----------------------- Editor::tick() -----------------------");
@@ -314,28 +317,29 @@ public:
         m_rendergraph->execute();
 
         m_imgui_renderer->next_frame();
-        m_app_rendering->end_frame();
+        m_app_rendering->end_frame();  // NOTE: Calls m_graphics_device->end_of_frame();
 #if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
-        if (!m_app_context.OpenXR) {
-            gl::bind_framebuffer(gl::Framebuffer_target::framebuffer, 0);
-            if (m_app_context.use_sleep) {
-                std::chrono::steady_clock::time_point start_time = std::chrono::steady_clock::now();
-                {
-                    ERHE_PROFILE_SCOPE("swap_buffers");
-                    m_context_window->swap_buffers();
-                }
-                std::chrono::steady_clock::time_point end_time = std::chrono::steady_clock::now();
-                const std::chrono::duration<float> swap_duration = start_time - end_time;
-                const std::chrono::duration<float> sleep_margin{m_app_context.sleep_margin};
-                if (swap_duration > sleep_margin) {
-                    ERHE_PROFILE_SCOPE("sleep");
-                    erhe::time::sleep_for(swap_duration - sleep_margin);
-                }
-            } else {
-                ERHE_PROFILE_SCOPE("swap_buffers");
-                m_context_window->swap_buffers();
-            }
-        }
+        //if (!m_app_context.OpenXR) {
+        //    gl::bind_framebuffer(gl::Framebuffer_target::framebuffer, 0);
+        //    if (m_app_context.use_sleep) {
+        //        std::chrono::steady_clock::time_point start_time = std::chrono::steady_clock::now();
+        //        {
+        //            ERHE_PROFILE_SCOPE("swap_buffers");
+        //            m_context_window->swap_buffers();
+        //        }
+        //        std::chrono::steady_clock::time_point end_time = std::chrono::steady_clock::now();
+        //        const std::chrono::duration<float> swap_duration = start_time - end_time;
+        //        const std::chrono::duration<float> sleep_margin{m_app_context.sleep_margin};
+        //        if (swap_duration > sleep_margin) {
+        //            ERHE_PROFILE_SCOPE("sleep");
+        //            erhe::time::sleep_for(swap_duration - sleep_margin);
+        //        }
+        //    } else {
+        //        ERHE_PROFILE_SCOPE("swap_buffers");
+        //        m_context_window->swap_buffers();
+        //    }
+        //}
+        // TODO move this logic to m_graphics_device->end_of_frame();
 #endif // TODO
         m_frame_log_window->on_frame_end();
     }
@@ -468,13 +472,6 @@ public:
                     .prefer_high_dynamic_range = false
                 }
 
-            );
-
-            m_swapchain = std::make_unique<erhe::graphics::Swapchain>(
-                *m_graphics_device.get(),
-                erhe::graphics::Swapchain_create_info{
-                    .surface = *m_graphics_device->get_surface()
-                }
             );
 
             m_app_settings->apply_limits(*m_graphics_device.get(), app_message_bus);
@@ -635,7 +632,6 @@ public:
                 m_imgui_windows = std::make_unique<erhe::imgui::Imgui_windows>(
                     *m_imgui_renderer.get(),
                     *m_graphics_device.get(),
-                    *m_swapchain.get(),
                     *m_rendergraph.get(),
                     conditionally_enable_window_imgui_host(m_context_window.get()),
                     get_windows_ini_path()
@@ -805,7 +801,6 @@ public:
                 m_headset_view = std::make_unique<Headset_view>(
                     *m_commands.get(),
                     *m_graphics_device.get(),
-                    *m_swapchain.get(),
                     *m_imgui_renderer.get(),
                     *m_imgui_windows.get(),
                     *m_rendergraph.get(),
@@ -1239,6 +1234,26 @@ public:
         }
 #endif
         m_tools->set_priority_tool(m_physics_tool.get());
+
+        m_swapchain_width = m_context_window->get_width();
+        m_swapchain_height = m_context_window->get_height();
+
+        m_context_window->register_redraw_callback(
+            [this](){
+                if (!m_run_started) {
+                    return;
+                }
+                if (
+                    (m_swapchain_width != m_context_window->get_width()) ||
+                    (m_swapchain_height != m_context_window->get_height())
+                ) {
+                    m_graphics_device->resize_swapchain_to_window();
+                    m_swapchain_width = m_context_window->get_width();
+                    m_swapchain_height = m_context_window->get_height();
+                }
+                tick();
+            }
+        );
     }
 
     ~Editor()
@@ -1254,7 +1269,6 @@ public:
 
         m_app_context.commands               = m_commands              .get();
         m_app_context.graphics_device        = m_graphics_device       .get();
-        m_app_context.swapchain              = m_swapchain             .get();
         m_app_context.imgui_renderer         = m_imgui_renderer        .get();
         m_app_context.imgui_windows          = m_imgui_windows         .get();
 #if defined(ERHE_PHYSICS_LIBRARY_JOLT) && defined(JPH_DEBUG_RENDERER)
@@ -1322,6 +1336,16 @@ public:
         m_input_state->alt     = erhe::utility::test_bit_set(input_event.u.key_event.modifier_mask, erhe::window::Key_modifier_bit_menu);
         return false;
     }
+
+    std::optional<erhe::window::Input_event> m_window_resize_event{};
+    int m_swapchain_width{0};
+    int m_swapchain_height{0};
+    auto on_window_resize_event(const erhe::window::Input_event& input_event) -> bool override
+    {
+        m_window_resize_event = input_event;
+        return true;
+    }
+
     auto on_window_close_event(const erhe::window::Input_event&) -> bool override
     {
         m_close_requested = true;
@@ -1352,6 +1376,11 @@ public:
                 for (erhe::window::Input_event& input_event : input_events) {
                     dispatch_input_event(input_event);
                 }
+                if (m_window_resize_event.has_value()) {
+                    m_graphics_device->resize_swapchain_to_window();
+                    m_window_resize_event.reset();
+                }
+
             }
             tick();
 
@@ -1385,7 +1414,6 @@ public:
     std::unique_ptr<erhe::window::Context_window           > m_context_window;
     std::unique_ptr<App_settings                           > m_app_settings;
     std::unique_ptr<erhe::graphics::Device                 > m_graphics_device;
-    std::unique_ptr<erhe::graphics::Swapchain              > m_swapchain;
     std::unique_ptr<erhe::imgui::Imgui_renderer            > m_imgui_renderer;
     std::unique_ptr<erhe::renderer::Debug_renderer         > m_debug_renderer;
     std::unique_ptr<erhe::scene_renderer::Program_interface> m_program_interface;

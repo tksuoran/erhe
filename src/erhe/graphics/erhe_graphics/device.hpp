@@ -150,7 +150,6 @@ public:
     void operator= (Device&&)      = delete;
     ~Device();
 
-    void create_swapchain          ();
     void resize_swapchain_to_window();
     void start_of_frame            ();
     void end_of_frame              ();

@@ -44,7 +44,6 @@ public:
             }
         }
     {
-        m_graphics_device.create_swapchain();
         m_swapchain_width = m_window.get_width();
         m_swapchain_height = m_window.get_height();
 
@@ -91,6 +90,8 @@ public:
             if (m_window_resize_event.has_value()) {
                 m_graphics_device.resize_swapchain_to_window();
                 m_window_resize_event.reset();
+                m_swapchain_width = m_window.get_width();
+                m_swapchain_height = m_window.get_height();
             }
 
             tick();

@@ -35,7 +35,6 @@ public:
     Imgui_windows(
         Imgui_renderer&                 imgui_renderer,
         erhe::graphics::Device&         graphics_device,
-        erhe::graphics::Swapchain&      swapchain,
         erhe::rendergraph::Rendergraph& rendergraph,
         erhe::window::Context_window*   context_window,
         std::string_view                windows_ini_path

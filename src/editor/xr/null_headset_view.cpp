@@ -5,7 +5,6 @@ namespace editor {
 Headset_view::Headset_view(
     erhe::commands::Commands&       commands,
     erhe::graphics::Device&         graphics_device,
-    erhe::graphics::Swapchain&      swapchain,
     erhe::imgui::Imgui_renderer&    imgui_renderer,
     erhe::imgui::Imgui_windows&     imgui_windows,
     erhe::rendergraph::Rendergraph& rendergraph,

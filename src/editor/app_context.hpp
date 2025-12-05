@@ -107,7 +107,6 @@ public:
 
     erhe::commands::Commands*               commands              {nullptr};
     erhe::graphics::Device*                 graphics_device       {nullptr};
-    erhe::graphics::Swapchain*              swapchain             {nullptr};
     erhe::imgui::Imgui_renderer*            imgui_renderer        {nullptr};
     erhe::imgui::Imgui_windows*             imgui_windows         {nullptr};
 #if defined(ERHE_PHYSICS_LIBRARY_JOLT)

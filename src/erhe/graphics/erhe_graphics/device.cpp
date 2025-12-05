@@ -64,10 +64,6 @@ auto Device::get_buffer_alignment(Buffer_target target) -> std::size_t
 {
     return m_impl->get_buffer_alignment(target);
 }
-void Device::create_swapchain()
-{
-    m_impl->create_swapchain();
-}
 void Device::resize_swapchain_to_window()
 {
     m_impl->resize_swapchain_to_window();
