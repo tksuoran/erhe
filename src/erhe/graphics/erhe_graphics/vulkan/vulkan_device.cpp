@@ -721,6 +721,15 @@ void Device_impl::create_swapchain()
     }
 }
 
+void Device_impl::resize_swapchain_to_window()
+{
+    if (!m_swapchain) {
+        create_swapchain();
+    } else {
+        m_swapchain->resize_to_window();
+    }
+}
+
 auto Device_impl::get_swapchain() -> Swapchain*
 {
     return m_swapchain.get();
@@ -1158,7 +1167,7 @@ void Device_impl::start_of_frame()
 void Device_impl::end_of_frame()
 {
     if (m_swapchain) {
-        m_swapchain->get_impl().end_of_frame();
+        m_swapchain->get_impl().present();
     }
 }
 

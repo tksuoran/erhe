@@ -35,14 +35,15 @@ public:
     void operator=(Device_impl&&)      = delete;
     ~Device_impl  ();
 
-    void create_swapchain      ();
-    void start_of_frame        ();
-    void end_of_frame          ();
-    void memory_barrier        (Memory_barrier_mask barriers);
-    void clear_texture         (Texture& texture, std::array<double, 4> clear_value);
-    void upload_to_buffer      (Buffer& buffer, size_t offset, const void* data, size_t length);
-    void add_completion_handler(std::function<void()> callback);
-    void on_thread_enter       ();
+    void create_swapchain          ();
+    void resize_swapchain_to_window();
+    void start_of_frame            ();
+    void end_of_frame              ();
+    void memory_barrier            (Memory_barrier_mask barriers);
+    void clear_texture             (Texture& texture, std::array<double, 4> clear_value);
+    void upload_to_buffer          (Buffer& buffer, size_t offset, const void* data, size_t length);
+    void add_completion_handler    (std::function<void()> callback);
+    void on_thread_enter           ();
 
     [[nodiscard]] auto get_surface                 () -> Surface*;
     [[nodiscard]] auto get_swapchain               () -> Swapchain*;

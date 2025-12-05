@@ -493,7 +493,7 @@ void Render_pass_impl::start_render_pass()
         if ((m_swapchain != nullptr) && (color_index > 0)) {
             continue;
         }
-        if (!attachment.is_defined()) {
+        if ((m_swapchain == nullptr) && !attachment.is_defined()) {
             continue;
         }
         if (attachment.load_action == Load_action::Clear) {

@@ -666,6 +666,11 @@ void Device_impl::create_swapchain()
     }
 }
 
+void Device_impl::resize_swapchain_to_window()
+{
+    // NOP for GL backend
+}
+
 auto Device_impl::get_handle(const Texture& texture, const Sampler& sampler) const -> uint64_t
 {
     if (m_info.use_bindless_texture) {
@@ -899,6 +904,9 @@ void Device_impl::start_of_frame()
 
 void Device_impl::end_of_frame()
 {
+    if (m_swapchain) {
+        m_swapchain->present();
+    }
     // Check previous frame fences for completion
     m_completed_frames.clear();
     for (Frame_sync& frame_sync : m_frame_syncs) {

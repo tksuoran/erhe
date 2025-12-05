@@ -1,10 +1,8 @@
 #pragma once
 
 #include "erhe_graphics/swapchain.hpp"
-#include "erhe_verify/verify.hpp"
 
-#include <array>
-#include <vector>
+namespace erhe::window { class Context_window; }
 
 namespace erhe::graphics {
 
@@ -21,9 +19,13 @@ public:
 
     Swapchain_impl(Device& device, const Swapchain_create_info& create_info);
 
+    void resize_to_window();
+    void present         ();
+
 private:
-    Device&  m_device;
-    Surface& m_surface;
+    Device&                       m_device;
+    Surface&                      m_surface;
+    erhe::window::Context_window* m_context_window{nullptr};
 };
 
 } // namespace erhe::graphics

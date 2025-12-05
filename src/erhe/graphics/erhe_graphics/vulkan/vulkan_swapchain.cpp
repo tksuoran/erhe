@@ -27,26 +27,56 @@ Swapchain_impl::~Swapchain_impl() noexcept
         return;
     }
 
-    VkSwapchainKHR vulkan_swapchain = m_vulkan_swapchain;
-    VkDevice       vulkan_device    = m_device.get_impl().get_vulkan_device();
+    VkSwapchainKHR vulkan_swapchain  = m_vulkan_swapchain;
+    VkRenderPass   vulkan_renderpass = m_vulkan_renderpass;
+    VkDevice       vulkan_device     = m_device.get_impl().get_vulkan_device();
     std::vector<Swapchain_frame_in_flight> frames_in_flight = std::move(m_frames_in_flight);
     std::vector<Swapchain_image_entry>     image_entries    = std::move(m_image_entries);
 
     m_device.add_completion_handler(
-        [vulkan_device, vulkan_swapchain, image_entries, frames_in_flight]() {
+        [vulkan_device, vulkan_swapchain, vulkan_renderpass, image_entries, frames_in_flight]() {
             log_context->debug("Swapchain destructor completion handler");
             for (const Swapchain_image_entry& entry : image_entries) {
                 vkDestroySemaphore  (vulkan_device, entry.m_submit_semaphore, nullptr);
                 vkDestroyImageView  (vulkan_device, entry.m_image_view,       nullptr);
-                vkDestroyFramebuffer(vulkan_device, entry.m_framebuffer,      nullptr);
+                vkDestroyFramebuffer(vulkan_device, entry.m_framebuffer,      nullptr); // placeholder
             }
             for (const Swapchain_frame_in_flight& frame_in_flight : frames_in_flight) {
                 vkDestroyFence    (vulkan_device, frame_in_flight.m_fence,             nullptr);
                 vkDestroySemaphore(vulkan_device, frame_in_flight.m_acquire_semaphore, nullptr);
             }
-            vkDestroySwapchainKHR(vulkan_device, vulkan_swapchain, nullptr);
+            vkDestroySwapchainKHR(vulkan_device, vulkan_swapchain,  nullptr);
+            vkDestroyRenderPass  (vulkan_device, vulkan_renderpass, nullptr); // placeholder
         }
     );
+}
+
+void Swapchain_impl::destroy_placeholder_resources()
+{
+    log_context->debug("Swapchain_impl::destroy_placeholder_resources()");
+
+    log_context->debug("Swapchain_impl::~Swapchain_impl()");
+    if (m_vulkan_swapchain == VK_NULL_HANDLE) {
+        return;
+    }
+
+    VkRenderPass vulkan_renderpass = m_vulkan_renderpass;
+    VkDevice     vulkan_device     = m_device.get_impl().get_vulkan_device();
+    std::vector<Swapchain_image_entry> image_entries = std::move(m_image_entries);
+
+    m_device.add_completion_handler(
+        [vulkan_device, vulkan_renderpass, image_entries]() {
+            log_context->debug("Swapchain destructor completion handler");
+            for (const Swapchain_image_entry& entry : image_entries) {
+                vkDestroySemaphore  (vulkan_device, entry.m_submit_semaphore, nullptr);
+                vkDestroyImageView  (vulkan_device, entry.m_image_view,       nullptr);
+                vkDestroyFramebuffer(vulkan_device, entry.m_framebuffer,      nullptr); // placeholder
+            }
+            vkDestroyRenderPass(vulkan_device, vulkan_renderpass, nullptr);
+        }
+    );
+    image_entries.clear();
+    vulkan_renderpass = VK_NULL_HANDLE;
 }
 
 Swapchain_impl::Swapchain_impl(Device& device, const Swapchain_create_info& create_info)
@@ -54,8 +84,16 @@ Swapchain_impl::Swapchain_impl(Device& device, const Swapchain_create_info& crea
     , m_surface         {create_info.surface}
     , m_vulkan_swapchain{create_info.surface.get_impl().update_swapchain(m_extent)}
 {
-    Device_impl&  device_impl   = device.get_impl();
-    Surface_impl& surface_impl  = m_surface.get_impl();
+    create_frames_in_flight_resources();
+    create_image_entry_resources();
+
+    // TODO Once we have renderpass implemented properly, this may go away
+    create_placeholder_renderpass_and_framebuffers();
+}
+
+void Swapchain_impl::create_frames_in_flight_resources()
+{
+    Device_impl&  device_impl   = m_device.get_impl();
     VkDevice      vulkan_device = device_impl.get_vulkan_device();
     VkResult      result        = VK_SUCCESS;
 
@@ -73,6 +111,7 @@ Swapchain_impl::Swapchain_impl(Device& device, const Swapchain_create_info& crea
         .flags = 0                                        // VkSemaphoreCreateFlags
     };
 
+    ERHE_VERIFY(m_frames_in_flight.empty());
     m_frames_in_flight.resize(s_number_of_frames_in_flight);
     for (size_t i = 0; i < s_number_of_frames_in_flight; ++i) {
         Swapchain_frame_in_flight& frame_in_flight = m_frames_in_flight[i];
@@ -107,6 +146,14 @@ Swapchain_impl::Swapchain_impl(Device& device, const Swapchain_create_info& crea
             fmt::format("Swapchain frame in flight command buffer {}", i).c_str()
         );
     }
+}
+
+void Swapchain_impl::create_image_entry_resources()
+{
+    Device_impl&  device_impl   = m_device.get_impl();
+    Surface_impl& surface_impl  = m_surface.get_impl();
+    VkDevice      vulkan_device = device_impl.get_vulkan_device();
+    VkResult      result        = VK_SUCCESS;
 
     uint32_t image_count = 0;
     result = vkGetSwapchainImagesKHR(vulkan_device, m_vulkan_swapchain, &image_count, nullptr);
@@ -121,6 +168,12 @@ Swapchain_impl::Swapchain_impl(Device& device, const Swapchain_create_info& crea
         abort();
     }
     log_context->debug("Got {} swaphain images", image_count);
+
+    const VkSemaphoreCreateInfo semaphore_create_info{
+        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO, // VkStructureType
+        .pNext = nullptr,                                 // const void*
+        .flags = 0                                        // VkSemaphoreCreateFlags
+    };
 
     m_image_entries.resize(image_count);
     const VkSurfaceFormatKHR surface_format = surface_impl.get_surface_format();
@@ -175,6 +228,13 @@ Swapchain_impl::Swapchain_impl(Device& device, const Swapchain_create_info& crea
             fmt::format("Swapchain image submit semaphore {}", image_index).c_str()
         );
     }
+}
+
+void Swapchain_impl::create_placeholder_renderpass_and_framebuffers()
+{
+    Device_impl& device_impl   = m_device.get_impl();
+    VkDevice     vulkan_device = device_impl.get_vulkan_device();
+    VkResult     result        = VK_SUCCESS;
 
     // temp stuff
     const VkAttachmentDescription color_attachment_description{
@@ -198,13 +258,13 @@ Swapchain_impl::Swapchain_impl(Device& device, const Swapchain_create_info& crea
         .flags                   = 0,                               // VkSubpassDescriptionFlag
         .pipelineBindPoint       = VK_PIPELINE_BIND_POINT_GRAPHICS, // VkPipelineBindPoint
         .inputAttachmentCount    = 0,                               // uint32_t
-        .pInputAttachments       = 0,                               // const VkAttachmentReference*
+        .pInputAttachments       = nullptr,                         // const VkAttachmentReference*
         .colorAttachmentCount    = 1,                               // uint32_t
         .pColorAttachments       = &color_attachment_reference,     // const VkAttachmentReference*
-        .pResolveAttachments     = 0,                               // const VkAttachmentReference*
-        .pDepthStencilAttachment = 0,                               // const VkAttachmentReference*
+        .pResolveAttachments     = nullptr,                         // const VkAttachmentReference*
+        .pDepthStencilAttachment = nullptr,                         // const VkAttachmentReference*
         .preserveAttachmentCount = 0,                               // uint32_t
-        .pPreserveAttachments    = 0                                // const uint32_t*
+        .pPreserveAttachments    = nullptr                          // const uint32_t*
     };
     // Make the render pass wait for the VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT stage
     // - wait for the implicit subpass before or after the render pass
@@ -233,21 +293,30 @@ Swapchain_impl::Swapchain_impl(Device& device, const Swapchain_create_info& crea
     };
 
     log_context->debug("Creating renderpass");
-    result = vkCreateRenderPass(vulkan_device, &render_pass_create_info, nullptr, &m_renderpass);
+    result = vkCreateRenderPass(vulkan_device, &render_pass_create_info, nullptr, &m_vulkan_renderpass);
     if (result != VK_SUCCESS) {
         log_context->critical("vkCreateRenderPass() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
         abort();
     }
+    m_device.get_impl().set_debug_label(
+        VK_OBJECT_TYPE_RENDER_PASS,
+        reinterpret_cast<uint64_t>(m_vulkan_renderpass),
+        "Swapchain renderpass"
+    );
 
     log_context->debug("Creating image entry framebuffers");
-    for (uint32_t image_index = 0; image_index < image_count; ++image_index) {
+    for (
+        uint32_t image_index = 0, image_count = static_cast<uint32_t>(m_image_entries.size());
+        image_index < image_count;
+        ++image_index
+    ) {
         Swapchain_image_entry& image_entry = m_image_entries[image_index];
 
         VkFramebufferCreateInfo framebuffer_create_info{
             .sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
             .pNext           = nullptr,
-            .flags           = 0, // VkFramebufferCreateFlags    flags;
-            .renderPass      = m_renderpass,
+            .flags           = 0,
+            .renderPass      = m_vulkan_renderpass,
             .attachmentCount = 1,
             .pAttachments    = &image_entry.m_image_view,
             .width           = m_extent.width,
@@ -260,42 +329,38 @@ Swapchain_impl::Swapchain_impl(Device& device, const Swapchain_create_info& crea
             log_context->critical("vkCreateFramebuffer() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
             abort();
         }
+        m_device.get_impl().set_debug_label(
+            VK_OBJECT_TYPE_FRAMEBUFFER,
+            reinterpret_cast<uint64_t>(image_entry.m_framebuffer),
+            fmt::format("Swapchain framebuffer {}", image_index)
+        );
     }
 }
 
-void Swapchain_impl::start_of_frame()
+void Swapchain_impl::resize_to_window()
 {
-    size_t fif_index = m_frame_index % m_frames_in_flight.size();
-    log_context->debug("Swapchain_impl::start_of_frame() fif_index = {} frame_index = {}", fif_index, m_frame_index);
+    if (m_vulkan_swapchain != VK_NULL_HANDLE) {
+        destroy_placeholder_resources();
+    }
 
-    Device_impl&               device_impl     = m_device.get_impl();
-    VkDevice                   vulkan_device   = device_impl.get_vulkan_device();
-    Swapchain_frame_in_flight& frame_in_flight = m_frames_in_flight.at(fif_index);
+    m_vulkan_swapchain = m_surface.get_impl().update_swapchain(m_extent);
+    create_image_entry_resources();
 
-    log_context->debug("vkWaitForFences()");
-    vkWaitForFences      (vulkan_device, 1, &frame_in_flight.m_fence, VK_TRUE, UINT64_MAX);
-
-    log_context->debug("vkResetFences()");
-    vkResetFences        (vulkan_device, 1, &frame_in_flight.m_fence);
-
-    log_context->debug("vkAcquireNextImageKHR()");
-    vkAcquireNextImageKHR(vulkan_device, m_vulkan_swapchain, UINT64_MAX, frame_in_flight.m_acquire_semaphore, VK_NULL_HANDLE, &frame_in_flight.m_image_index);
-
-    log_context->debug("Received image index = {}", frame_in_flight.m_image_index);
+    // TODO Once we have renderpass implemented properly, this may go away
+    create_placeholder_renderpass_and_framebuffers();
 }
 
-void Swapchain_impl::end_of_frame()
+void Swapchain_impl::submit_placeholder_renderpass()
 {
     size_t fif_index = m_frame_index % m_frames_in_flight.size();
 
     Device_impl&               device_impl           = m_device.get_impl();
-    //VkDevice                   vulkan_device         = device_impl.get_vulkan_device();
     VkQueue                    vulkan_graphics_queue = device_impl.get_graphics_queue();
-    VkQueue                    vulkan_present_queue  = device_impl.get_present_queue();
     Swapchain_frame_in_flight& frame_in_flight       = m_frames_in_flight.at(fif_index);
     Swapchain_image_entry&     image_entry           = m_image_entries.at(frame_in_flight.m_image_index);
+    VkResult                   result                = VK_SUCCESS;
 
-    log_context->debug("Swapchain_impl::end_of_frame() fif_index = {} image_index = {} frame_index = {}", fif_index, frame_in_flight.m_image_index, m_frame_index);
+    log_context->debug("submit_placeholder_renderpass() fif_index = {} image_index = {} frame_index = {}", fif_index, frame_in_flight.m_image_index, m_frame_index);
 
     const VkCommandBufferBeginInfo begin_info{
         .sType            = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
@@ -303,8 +368,6 @@ void Swapchain_impl::end_of_frame()
         .flags            = 0,
         .pInheritanceInfo = nullptr
     };
-
-    VkResult result = VK_SUCCESS;
 
     log_context->debug("vkResetCommandBuffer()");
     result = vkResetCommandBuffer(frame_in_flight.m_command_buffer, 0);
@@ -320,22 +383,31 @@ void Swapchain_impl::end_of_frame()
         abort();
     }
 
-    const VkClearValue clear_values[2] = {
-        {.color = { .float32 = { 0.1f, 0.2f, 0.3f, 1.0f }}},
-        {.color = { .float32 = { 0.1f, 0.3f, 0.2f, 1.0f }}}
+    const VkClearValue clear_values[3] = {
+        {.color = { .float32 = { 0.01f, 0.0f, 0.0f, 1.0f }}},
+        {.color = { .float32 = { 0.0f, 0.01f, 0.0f, 1.0f }}},
+        {.color = { .float32 = { 0.0f, 0.0f, 0.01f, 1.0f }}}
     };
 
+    const uint64_t clear_color_index = m_frame_index % 3;
     const VkRenderPassBeginInfo render_pass_begin_info{
         .sType           = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO, // VkStructureType
         .pNext           = nullptr,                                  // const void*
-        .renderPass      = m_renderpass,                             // VkRenderPass
+        .renderPass      = m_vulkan_renderpass,                      // VkRenderPass
         .framebuffer     = image_entry.m_framebuffer,                // VkFramebuffer
         .renderArea      = VkRect2D{{0,0}, m_extent},                // VkRect2D
         .clearValueCount = 1,                                        // uint32_t
-        .pClearValues    = &clear_values[m_frame_index & 1]          // const VkClearValue*
+        .pClearValues    = &clear_values[clear_color_index]          // const VkClearValue*
     };
 
-    log_context->debug("vkCmdBeginRenderPass()");
+    log_context->debug(
+        "vkCmdBeginRenderPass( clear color = {}: {}, {}, {}, {})",
+        clear_color_index,
+        render_pass_begin_info.pClearValues->color.float32[0],
+        render_pass_begin_info.pClearValues->color.float32[1],
+        render_pass_begin_info.pClearValues->color.float32[2],
+        render_pass_begin_info.pClearValues->color.float32[3]
+    );
     vkCmdBeginRenderPass(frame_in_flight.m_command_buffer, &render_pass_begin_info, VK_SUBPASS_CONTENTS_INLINE);
 
     log_context->debug("vkCmdEndRenderPass()");
@@ -366,6 +438,43 @@ void Swapchain_impl::end_of_frame()
         log_context->critical("vkQueueSubmit() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
         abort();
     }
+}
+
+void Swapchain_impl::start_of_frame()
+{
+    size_t fif_index = m_frame_index % m_frames_in_flight.size();
+    log_context->debug("Swapchain_impl::start_of_frame() fif_index = {} frame_index = {}", fif_index, m_frame_index);
+
+    Device_impl&               device_impl     = m_device.get_impl();
+    VkDevice                   vulkan_device   = device_impl.get_vulkan_device();
+    Swapchain_frame_in_flight& frame_in_flight = m_frames_in_flight.at(fif_index);
+
+    log_context->debug("vkWaitForFences()");
+    vkWaitForFences      (vulkan_device, 1, &frame_in_flight.m_fence, VK_TRUE, UINT64_MAX);
+
+    log_context->debug("vkResetFences()");
+    vkResetFences        (vulkan_device, 1, &frame_in_flight.m_fence);
+
+    log_context->debug("vkAcquireNextImageKHR()");
+    vkAcquireNextImageKHR(vulkan_device, m_vulkan_swapchain, UINT64_MAX, frame_in_flight.m_acquire_semaphore, VK_NULL_HANDLE, &frame_in_flight.m_image_index);
+
+    log_context->debug("Received image index = {}", frame_in_flight.m_image_index);
+}
+
+void Swapchain_impl::present()
+{
+    size_t fif_index = m_frame_index % m_frames_in_flight.size();
+
+    Device_impl&               device_impl           = m_device.get_impl();
+    VkQueue                    vulkan_present_queue  = device_impl.get_present_queue();
+    Swapchain_frame_in_flight& frame_in_flight       = m_frames_in_flight.at(fif_index);
+    Swapchain_image_entry&     image_entry           = m_image_entries.at(frame_in_flight.m_image_index);
+    VkResult                   result                = VK_SUCCESS;
+
+    log_context->debug("Swapchain_impl::end_of_frame() fif_index = {} image_index = {} frame_index = {}", fif_index, frame_in_flight.m_image_index, m_frame_index);
+
+    // TODO Once we have renderpass implemented properly, this may go away
+    submit_placeholder_renderpass();
 
     const VkPresentInfoKHR present_info{
         .sType              = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR, // VkStructureType

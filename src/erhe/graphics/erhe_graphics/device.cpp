@@ -68,6 +68,10 @@ void Device::create_swapchain()
 {
     m_impl->create_swapchain();
 }
+void Device::resize_swapchain_to_window()
+{
+    m_impl->resize_swapchain_to_window();
+}
 void Device::start_of_frame()
 {
     m_impl->start_of_frame();

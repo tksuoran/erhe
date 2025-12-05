@@ -25,6 +25,9 @@ public:
 
     Swapchain(Device& device, const Swapchain_create_info& create_info);
 
+    void resize_to_window();
+    void present         ();
+
     [[nodiscard]] auto get_impl() -> Swapchain_impl&;
     [[nodiscard]] auto get_impl() const -> const Swapchain_impl&;
 

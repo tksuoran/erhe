@@ -45,17 +45,27 @@ public:
         }
     {
         m_graphics_device.create_swapchain();
-        //const int width  = m_window.get_width();
-        //const int height = m_window.get_height();
-        //update_render_pass(
-        //m_window.register_redraw_callback(
-        //    [this](){
-        //        tick();
-        //    }
-        //);
+        m_swapchain_width = m_window.get_width();
+        m_swapchain_height = m_window.get_height();
+
+        m_window.register_redraw_callback(
+            [this](){
+                if (
+                    (m_swapchain_width != m_window.get_width()) ||
+                    (m_swapchain_height != m_window.get_height())
+                ) {
+                    m_graphics_device.resize_swapchain_to_window();
+                    m_swapchain_width = m_window.get_width();
+                    m_swapchain_height = m_window.get_height();
+                }
+                tick();
+            }
+        );
     }
 
     std::optional<erhe::window::Input_event> m_window_resize_event{};
+    int m_swapchain_width{0};
+    int m_swapchain_height{0};
     auto on_window_resize_event(const erhe::window::Input_event& input_event) -> bool override
     {
         m_window_resize_event = input_event;
@@ -73,15 +83,13 @@ public:
     {
         m_current_time = std::chrono::steady_clock::now();
         while (!m_close_requested) {
-            // m_graphics_device.wait_for_idle()
-            // m_window.delay_before_swap(1.0f / 120.0f); // sleep half the frame
-
             m_window.poll_events();
             auto& input_events = m_window.get_input_events();
             for (erhe::window::Input_event& input_event : input_events) {
                 static_cast<void>(this->dispatch_input_event(input_event));
             }
             if (m_window_resize_event.has_value()) {
+                m_graphics_device.resize_swapchain_to_window();
                 m_window_resize_event.reset();
             }
 
@@ -125,13 +133,9 @@ public:
 
         m_graphics_device.start_of_frame();
 
-        //erhe::graphics::Render_command_encoder render_encoder = m_graphics_device.make_render_command_encoder(*m_render_pass.get());
+        erhe::graphics::Render_command_encoder render_encoder = m_graphics_device.make_render_command_encoder(*m_render_pass.get());
 
         m_graphics_device.end_of_frame();
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
-        m_window.swap_buffers();
-#endif // TODO
-
     }
 
 private:
@@ -146,15 +150,13 @@ private:
             return;
         }
 
-        //// m_graphics_device.resize_swapchain(width, height);
-
         m_render_pass.reset();
         erhe::graphics::Render_pass_descriptor render_pass_descriptor;
         render_pass_descriptor.swapchain             = m_graphics_device.get_swapchain();
         render_pass_descriptor.color_attachments[0].load_action    = erhe::graphics::Load_action::Clear;
         render_pass_descriptor.color_attachments[0].clear_value[0] = 0.02;
         render_pass_descriptor.color_attachments[0].clear_value[1] = 0.02;
-        render_pass_descriptor.color_attachments[0].clear_value[2] = 0.02;
+        render_pass_descriptor.color_attachments[0].clear_value[2] = 0.1;
         render_pass_descriptor.color_attachments[0].clear_value[3] = 1.0;
         render_pass_descriptor.depth_attachment    .load_action    = erhe::graphics::Load_action::Clear;
         render_pass_descriptor.stencil_attachment  .load_action    = erhe::graphics::Load_action::Clear;

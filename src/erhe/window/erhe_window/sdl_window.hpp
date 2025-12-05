@@ -130,14 +130,13 @@ private:
     };
 
     void*                      m_sdl_window                    {nullptr};
-    void*                      m_sdl_gl_context                {nullptr}; // SDL_GLContext 
+    void*                      m_sdl_gl_context                {nullptr};
     Mouse_cursor               m_current_mouse_cursor          {Mouse_cursor_Arrow};
     bool                       m_is_mouse_relative_hold_enabled{false};
     bool                       m_is_window_visible             {false};
     bool                       m_use_raw_mouse                 {false};
-    //GLFWcursor*              m_mouse_cursor        [Mouse_cursor_COUNT];
     Window_configuration       m_configuration;
-    float                      m_last_mouse_x            {0.0f};
+    float                      m_last_mouse_x              {0.0f};
     float                      m_last_mouse_y            {0.0f};
     float                      m_mouse_relative_hold_xpos{0.0f};
     float                      m_mouse_relative_hold_ypos{0.0f};

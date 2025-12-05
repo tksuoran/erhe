@@ -27,6 +27,16 @@ Swapchain::~Swapchain() noexcept
 {
 }
 
+void Swapchain::resize_to_window()
+{
+    m_impl->resize_to_window();
+}
+
+void Swapchain::present()
+{
+    m_impl->present();
+}
+
 auto Swapchain::get_impl() -> Swapchain_impl&
 {
     return *m_impl.get();

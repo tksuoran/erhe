@@ -25,7 +25,7 @@ public:
     [[nodiscard]] auto get_present_mode       () -> VkPresentModeKHR const;
     [[nodiscard]] auto get_image_count        () -> uint32_t const;
     [[nodiscard]] auto get_vulkan_surface     () -> VkSurfaceKHR const;
-    [[nodiscard]] auto update_swapchain       (VkExtent2D& extent) -> VkSwapchainKHR const;
+    [[nodiscard]] auto update_swapchain       (VkExtent2D& extent_out) -> VkSwapchainKHR const;
 
 private:
     void fail();

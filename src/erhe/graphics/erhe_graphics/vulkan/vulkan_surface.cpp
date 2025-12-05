@@ -301,9 +301,11 @@ auto Surface_impl::get_present_mode_score(const VkPresentModeKHR present_mode) c
     //   this does not guarantee the timing of when it will be updated.
     //   This mode may result in visible tearing if rendering to the image is not timed correctly.
 
-    const bool latest_ready =
-        m_device_impl.get_device_extensions().m_VK_KHR_present_mode_fifo_latest_ready ||
-        m_device_impl.get_device_extensions().m_VK_EXT_present_mode_fifo_latest_ready;
+    // TODO Disabled for now, because it drops frames and that makes initial
+    //      swapchain bringup a bit more unintuitive.
+    //const bool latest_ready =
+    //    m_device_impl.get_device_extensions().m_VK_KHR_present_mode_fifo_latest_ready ||
+    //    m_device_impl.get_device_extensions().m_VK_EXT_present_mode_fifo_latest_ready;
 
     switch (present_mode) {
         case VK_PRESENT_MODE_IMMEDIATE_KHR:                 return 0.0f; // fastest - tears
@@ -312,7 +314,8 @@ auto Surface_impl::get_present_mode_score(const VkPresentModeKHR present_mode) c
         case VK_PRESENT_MODE_FIFO_RELAXED_KHR:              return 2.0f; // late frames presented immediately - some tears
         case VK_PRESENT_MODE_SHARED_DEMAND_REFRESH_KHR:     return 0.0f;
         case VK_PRESENT_MODE_SHARED_CONTINUOUS_REFRESH_KHR: return 0.0f;
-        case VK_PRESENT_MODE_FIFO_LATEST_READY_KHR:         return latest_ready ? 4.0f : 0.0f; // latest complete shown - no tears
+        // TODO Need config to allow/disallow dropping frames
+        //case VK_PRESENT_MODE_FIFO_LATEST_READY_KHR:         return latest_ready ? 4.0f : 0.0f; // latest complete shown - no tears
         default:                                            return 0.0f;
     }
 }
@@ -390,9 +393,9 @@ Surface_impl::~Surface_impl() noexcept
     }
 }
 
-auto Surface_impl::update_swapchain(VkExtent2D& extent) -> VkSwapchainKHR const
+auto Surface_impl::update_swapchain(VkExtent2D& extent_out) -> VkSwapchainKHR const
 {
-    log_context->debug("Surface_impl::update_swapchain(extent: width = {}, height {})", extent.width, extent.height);
+    log_context->debug("Surface_impl::update_swapchain()");
 
     VkSurfaceCapabilitiesKHR surface_capabilities{};
     VkResult result = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_physical_device, m_surface, &surface_capabilities);
@@ -401,12 +404,35 @@ auto Surface_impl::update_swapchain(VkExtent2D& extent) -> VkSwapchainKHR const
         return VK_NULL_HANDLE;
     }
 
+    if (
+        (surface_capabilities.currentExtent.width  == std::numeric_limits<uint32_t>::max()) ||
+        (surface_capabilities.currentExtent.height == std::numeric_limits<uint32_t>::max())
+    ) {
+        extent_out.width  = m_surface_create_info.context_window->get_width();
+        extent_out.height = m_surface_create_info.context_window->get_height();
+        log_debug->debug("  Surface current extent not set, using window size {} x {}", extent_out.width, extent_out.height);
+    } else {
+        extent_out.width  = surface_capabilities.currentExtent.width;
+        extent_out.height = surface_capabilities.currentExtent.height;
+        log_debug->debug("  Surface current extent : {} x {}", extent_out.width, extent_out.height);
+    }
+    log_debug->debug("  Surface min extent : {} x {}", surface_capabilities.minImageExtent.width, surface_capabilities.minImageExtent.height);
+    log_debug->debug("  Surface max extent : {} x {}", surface_capabilities.maxImageExtent.width, surface_capabilities.maxImageExtent.height);
+
+    // Clamp swapchain size
+    extent_out.width  = extent_out.width;
+    extent_out.height = extent_out.height;
+    extent_out.width  = std::min(extent_out.width,  surface_capabilities.maxImageExtent.width);
+    extent_out.height = std::min(extent_out.height, surface_capabilities.maxImageExtent.height);
+    extent_out.width  = std::max(extent_out.width,  surface_capabilities.minImageExtent.width);
+    extent_out.height = std::max(extent_out.height, surface_capabilities.minImageExtent.height);
+
     // TODO handle cases where currentExtent is not the right thing
     if (
-        (m_current_swapchain_extent.width  == surface_capabilities.currentExtent.width) &&
-        (m_current_swapchain_extent.height == surface_capabilities.currentExtent.height)
+        (m_current_swapchain_extent.width  == extent_out.width) &&
+        (m_current_swapchain_extent.height == extent_out.height)
     ) {
-        extent = m_current_swapchain_extent;
+        extent_out = m_current_swapchain_extent;
         return m_current_swapchain;
     }
 
@@ -414,13 +440,21 @@ auto Surface_impl::update_swapchain(VkExtent2D& extent) -> VkSwapchainKHR const
         (surface_capabilities.currentExtent.width  == 0) ||
         (surface_capabilities.currentExtent.height == 0)
     ){
-        extent = m_current_swapchain_extent;
+        extent_out = m_current_swapchain_extent;
         return VK_NULL_HANDLE;
     }
-    VkDevice vulkan_device               = m_device_impl.get_vulkan_device();
-    uint32_t graphics_queue_family_index = m_device_impl.get_graphics_queue_family_index();
-    VkSwapchainKHR old_swapchain = m_current_swapchain;
-    log_debug->debug("Calling vkCreateSwapchainKHR()");
+    VkDevice       vulkan_device               = m_device_impl.get_vulkan_device();
+    uint32_t       graphics_queue_family_index = m_device_impl.get_graphics_queue_family_index();
+    VkSwapchainKHR old_swapchain               = m_current_swapchain;
+    log_debug->debug(
+        "Calling vkCreateSwapchainKHR(format = {}, colorSpace = {}, extent = {} x {}, presentMode {}, oldSwapchain = {})",
+        c_str(m_surface_format.format),
+        c_str(m_surface_format.colorSpace),
+        extent_out.width,
+        extent_out.height,
+        c_str(m_present_mode),
+        fmt::ptr(old_swapchain)
+    );
     const VkSwapchainCreateInfoKHR swapchain_create_info{
         .sType                 = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,// VkStructureType
         .pNext                 = nullptr,                               // const void*
@@ -429,7 +463,7 @@ auto Surface_impl::update_swapchain(VkExtent2D& extent) -> VkSwapchainKHR const
         .minImageCount         = m_image_count,                         // uint32_t
         .imageFormat           = m_surface_format.format,               // VkFormat
         .imageColorSpace       = m_surface_format.colorSpace,           // VkColorSpaceKHR
-        .imageExtent           = surface_capabilities.currentExtent,    // VkExtent2D
+        .imageExtent           = extent_out,                            // VkExtent2D
         .imageArrayLayers      = 1,                                     // uint32_t
         .imageUsage            = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,   // VkImageUsageFlags
         .imageSharingMode      = VK_SHARING_MODE_EXCLUSIVE,             // VkSharingMode
@@ -463,7 +497,6 @@ auto Surface_impl::update_swapchain(VkExtent2D& extent) -> VkSwapchainKHR const
 
     m_current_swapchain        = vulkan_swapchain;
     m_current_swapchain_extent = swapchain_create_info.imageExtent;
-    extent = m_current_swapchain_extent;
     return vulkan_swapchain;
 }
 
