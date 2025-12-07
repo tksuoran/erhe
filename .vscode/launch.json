@@ -32,6 +32,13 @@
             "program": "${command:cmake.launchTargetPath}",
         },
         {
+            "name":    "erhe hello_swap LLDB",
+            "type":    "lldb",
+            "request": "launch",
+            "cwd":     "${workspaceFolder}/src/hello_swap",
+            "program": "${command:cmake.launchTargetPath}",
+        },
+        {
             "name":    "erhe editor LLDB software GL",
             "type":    "lldb",
             "request": "launch",

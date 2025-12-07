@@ -2,6 +2,8 @@
 
 #include "volk.h"
 
+#include <sstream>
+
 namespace erhe::graphics {
 
 auto c_str(const VkResult result) -> const char*

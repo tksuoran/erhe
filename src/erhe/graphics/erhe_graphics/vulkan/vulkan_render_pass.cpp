@@ -3,6 +3,8 @@
 #include "erhe_graphics/vulkan/vulkan_swapchain.hpp"
 #include "erhe_verify/verify.hpp"
 
+#include <fmt/format.h>
+
 #include <thread>
 
 namespace erhe::graphics {
