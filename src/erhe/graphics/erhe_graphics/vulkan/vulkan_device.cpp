@@ -453,7 +453,7 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         abort();
     }
 
-    VkPhysicalDeviceDriverProperties driver_properties{
+    m_driver_properties = VkPhysicalDeviceDriverProperties{
         .sType              = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES,
         .pNext              = nullptr,
         .driverID           = VK_DRIVER_ID_MAX_ENUM,
@@ -461,9 +461,17 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         .driverInfo         = {},
         .conformanceVersion = {},
     };
+    //VkPhysicalDeviceVulkan12Properties vulkan_12_properties{
+    //    .sType              = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_PROPERTIES,
+    //    .pNext              = nullptr,
+    //    .driverID           = 0,
+    //    .driverName         = {},
+    //    .driverInfo         = {},
+    //    .conformanceVersion = {},
+    //};
     VkPhysicalDeviceProperties2 physical_device_properties2 {
         .sType      = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
-        .pNext      = &driver_properties,
+        .pNext      = &m_driver_properties,
         .properties = {}
     };
     vkGetPhysicalDeviceProperties2(m_vulkan_physical_device, &physical_device_properties2);
@@ -472,12 +480,13 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
     const uint32_t api_version_major   = VK_API_VERSION_MAJOR  (properties.apiVersion);
     const uint32_t api_version_minor   = VK_API_VERSION_MINOR  (properties.apiVersion);
     const uint32_t api_version_patch   = VK_API_VERSION_PATCH  (properties.apiVersion);
-    const VkConformanceVersion& conformance = driver_properties.conformanceVersion;
+    const VkConformanceVersion& conformance = m_driver_properties.conformanceVersion;
     log_context->info("Vulkan physical device properties:");
     log_context->info("  API version         = {}.{}.{}.{}", api_version_major, api_version_minor, api_version_patch, api_version_variant);
-    log_context->info("  Driver ID           = {}",          c_str(driver_properties.driverID));
-    log_context->info("  Driver name         = {}",          driver_properties.driverName);
-    log_context->info("  Driver info         = {}",          driver_properties.driverInfo);
+    log_context->info("  Driver ID           = {}",          c_str(m_driver_properties.driverID));
+    log_context->info("  Driver name         = {}",          m_driver_properties.driverName);
+    log_context->info("  Driver info         = {}",          m_driver_properties.driverInfo);
+    log_context->info("  Driver version      = {:08x}",      properties.driverVersion);
     log_context->info("  Driver conformance  = {}",          conformance.major, conformance.minor, conformance.subminor, conformance.patch);
     log_context->info("  Vendor ID           = {:08x}",      properties.vendorID);
     log_context->info("  Device ID           = {:08x}",      properties.deviceID);
@@ -1053,6 +1062,11 @@ auto Device_impl::get_present_queue() const -> VkQueue
 auto Device_impl::get_capabilities() const -> const Capabilities&
 {
     return m_capabilities;
+}
+
+auto Device_impl::get_driver_properties() const -> const VkPhysicalDeviceDriverProperties&
+{
+    return m_driver_properties;
 }
 
 auto Device_impl::get_handle(const Texture& texture, const Sampler& sampler) const -> uint64_t

@@ -610,7 +610,14 @@ auto Surface_impl::update_swapchain() -> bool
     VkDevice       vulkan_device               = m_device_impl.get_vulkan_device();
     uint32_t       graphics_queue_family_index = m_device_impl.get_graphics_queue_family_index();
     VkSwapchainKHR old_swapchain               = m_vulkan_swapchain;
-    const bool     use_scaling                 = m_device_impl.get_capabilities().m_surface_maintenance1;
+    bool           use_scaling                 = m_device_impl.get_capabilities().m_surface_maintenance1;
+
+//#if defined(ERHE_OS_WINDOWS)
+//    if (use_scaling && (m_device_impl.get_driver_properties().driverID == VK_DRIVER_ID_AMD_PROPRIETARY)) {
+//        log_context->warn("Detected AMD proprietary driver on Windows - disabling use of VkSwapchainPresentScalingCreateInfoKHR");
+//        use_scaling = false;
+//    }
+//#endif
 
     log_context->debug(
         "Calling vkCreateSwapchainKHR(format = {}, colorSpace = {}, extent = {} x {}, presentMode {}, oldSwapchain = {})",
@@ -646,13 +653,24 @@ auto Surface_impl::update_swapchain() -> bool
         const bool y_max                = (m_scaling_capabilities.supportedPresentGravityY & VK_PRESENT_GRAVITY_MAX_BIT_KHR     ) != 0;
         const bool y_centered           = (m_scaling_capabilities.supportedPresentGravityY & VK_PRESENT_GRAVITY_CENTERED_BIT_KHR) != 0;
 
+#if 0
+        // TODO VK_PRESENT_SCALING_ASPECT_RATIO_STRETCH_BIT_KHR does not work on AMD / Windows
         if (aspect_ratio_stretch) {
             scaling_behavior = VK_PRESENT_SCALING_ASPECT_RATIO_STRETCH_BIT_KHR;
         } else if (stretch) {
-            scaling_behavior = VK_PRESENT_SCALING_STRETCH_BIT_KHR; 
+            scaling_behavior = VK_PRESENT_SCALING_STRETCH_BIT_KHR;
         } else if (one_to_one) {
             scaling_behavior = VK_PRESENT_SCALING_ONE_TO_ONE_BIT_KHR;
         }
+#else
+        if (stretch) {
+            scaling_behavior = VK_PRESENT_SCALING_STRETCH_BIT_KHR;
+        } else if (aspect_ratio_stretch) {
+            scaling_behavior = VK_PRESENT_SCALING_ASPECT_RATIO_STRETCH_BIT_KHR;
+        } else if (one_to_one) {
+            scaling_behavior = VK_PRESENT_SCALING_ONE_TO_ONE_BIT_KHR;
+        }
+#endif
 
         if (x_centered) {
             gravity_x = VK_PRESENT_GRAVITY_CENTERED_BIT_KHR;
@@ -669,6 +687,9 @@ auto Surface_impl::update_swapchain() -> bool
         } else if (y_max) {
             gravity_y = VK_PRESENT_GRAVITY_MAX_BIT_KHR;
         }
+        log_context->debug("  scaling behavior = {}", to_string_VkPresentScalingFlagsKHR(scaling_behavior));
+        log_context->debug("  gravity x        = {}", to_string_VkPresentGravityFlagsKHR(gravity_x));
+        log_context->debug("  gravity y        = {}", to_string_VkPresentGravityFlagsKHR(gravity_y));
     }
 
     const VkSwapchainPresentScalingCreateInfoKHR swapchain_present_scaling_create_info{
@@ -678,6 +699,7 @@ auto Surface_impl::update_swapchain() -> bool
         .presentGravityX = gravity_x,                                                   // VkPresentGravityFlagsKHR
         .presentGravityY = gravity_y                                                    // VkPresentGravityFlagsKHR
     };
+
     const VkSwapchainCreateInfoKHR swapchain_create_info{
         .sType                 = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,   // VkStructureType
         .pNext                 = use_scaling                                    // const void*

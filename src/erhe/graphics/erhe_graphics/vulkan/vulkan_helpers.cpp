@@ -566,6 +566,9 @@ auto to_string_VkDebugReportFlagsEXT(VkDebugReportFlagsEXT flags) -> std::string
         ss << "DEBUG";
         empty = false;
     }
+    if (empty) {
+        ss << "0";
+    }
     return ss.str();
 }
 auto to_string_VkDebugUtilsMessageSeverityFlagsEXT(VkDebugUtilsMessageSeverityFlagsEXT severity) -> std::string
@@ -596,6 +599,9 @@ auto to_string_VkDebugUtilsMessageSeverityFlagsEXT(VkDebugUtilsMessageSeverityFl
         }
         ss << "ERROR";
         empty = false;
+    }
+    if (empty) {
+        ss << "0";
     }
     return ss.str();
 }
@@ -628,6 +634,9 @@ auto to_string_VkDebugUtilsMessageTypeFlagsEXT(VkDebugUtilsMessageTypeFlagsEXT m
         ss << "DEVICE_ADDRESS_BINDING";
         empty = false;
     }
+    if (empty) {
+        ss << "0";
+    }
     return ss.str();
 }
 auto to_string_VkPresentScalingFlagsKHR(VkPresentScalingFlagsKHR present_scaling) -> std::string
@@ -652,6 +661,9 @@ auto to_string_VkPresentScalingFlagsKHR(VkPresentScalingFlagsKHR present_scaling
         ss << "VK_PRESENT_SCALING_STRETCH_BIT_KHR";
         empty = false;
     }
+    if (empty) {
+        ss << "0";
+    }
     return ss.str();
 }
 auto to_string_VkPresentGravityFlagsKHR(VkPresentGravityFlagsKHR present_gravity) -> std::string
@@ -675,6 +687,9 @@ auto to_string_VkPresentGravityFlagsKHR(VkPresentGravityFlagsKHR present_gravity
         }
         ss << "VK_PRESENT_GRAVITY_CENTERED_BIT_KHR";
         empty = false;
+    }
+    if (empty) {
+        ss << "0";
     }
     return ss.str();
 }

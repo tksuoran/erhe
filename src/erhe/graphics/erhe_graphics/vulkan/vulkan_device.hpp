@@ -113,6 +113,7 @@ public:
     [[nodiscard]] auto get_graphics_queue             () const -> VkQueue;
     [[nodiscard]] auto get_present_queue              () const -> VkQueue;
     [[nodiscard]] auto get_capabilities               () const -> const Capabilities&;
+    [[nodiscard]] auto get_driver_properties          () const -> const VkPhysicalDeviceDriverProperties&;
 
     [[nodiscard]] auto debug_report_callback(
         VkDebugReportFlagsEXT      flags,
@@ -198,6 +199,8 @@ private:
     Instance_extensions      m_instance_extensions{};
     Device_extensions        m_device_extensions  {};
     Capabilities             m_capabilities       {};
+
+    VkPhysicalDeviceDriverProperties m_driver_properties{};
 };
 
 } // namespace erhe::graphics
