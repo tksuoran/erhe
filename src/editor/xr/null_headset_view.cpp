@@ -21,7 +21,6 @@ Headset_view::Headset_view(
 {
     static_cast<void>(commands);
     static_cast<void>(graphics_device);
-    static_cast<void>(swapchain);
     static_cast<void>(rendergraph);
     static_cast<void>(context_window);
     static_cast<void>(app_rendering);

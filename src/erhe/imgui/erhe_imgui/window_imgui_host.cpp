@@ -68,7 +68,7 @@ void Window_imgui_host::update_render_pass(int width, int height)
 
     m_render_pass.reset();
     erhe::graphics::Render_pass_descriptor render_pass_descriptor;
-    render_pass_descriptor.swapchain = m_graphics_device.get_swapchain();
+    render_pass_descriptor.swapchain = m_graphics_device.get_surface()->get_swapchain();
     render_pass_descriptor.color_attachments[0].load_action    = erhe::graphics::Load_action::Clear;
     render_pass_descriptor.color_attachments[0].clear_value[0] = 0.05; // TODO expose API to set clear color
     render_pass_descriptor.color_attachments[0].clear_value[1] = 0.05;

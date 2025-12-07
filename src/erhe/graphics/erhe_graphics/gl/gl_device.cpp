@@ -644,30 +644,15 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
     );
 
     if (m_surface) {
-        create_swapchain();
+        uint32_t width {0};
+        uint32_t height{0};
+        m_surface->resize_swapchain_to_surface(width, height);
     }
 }
 
 auto Device_impl::get_surface() -> Surface*
 {
     return m_surface.get();
-}
-
-auto Device_impl::get_swapchain() -> Swapchain*
-{
-    return m_swapchain.get();
-}
-
-void Device_impl::create_swapchain()
-{
-    if (!m_swapchain) {
-        m_swapchain = std::make_unique<Swapchain>(
-            m_device,
-            erhe::graphics::Swapchain_create_info{
-                .surface = *m_surface.get()
-            }
-        );
-    }
 }
 
 void Device_impl::resize_swapchain_to_window()
@@ -873,7 +858,7 @@ void Device_impl::upload_to_buffer(Buffer& buffer, size_t offset, const void* da
 
 void Device_impl::add_completion_handler(std::function<void()> callback)
 {
-    m_completion_handlers.emplace_back(m_frame_number, callback);
+    m_completion_handlers.emplace_back(m_frame_index, callback);
 }
 
 void Device_impl::on_thread_enter()
@@ -903,14 +888,17 @@ void Device_impl::frame_completed(const uint64_t completed_frame)
 
 void Device_impl::start_of_frame()
 {
-    ++m_frame_number;
 }
 
 void Device_impl::end_of_frame()
 {
-    if (m_swapchain) {
-        m_swapchain->present();
+    if (m_surface) {
+        Swapchain* swapchain = m_surface->get_swapchain();
+        if (swapchain != nullptr) {
+            swapchain->present();
+        }
     }
+
     // Check previous frame fences for completion
     m_completed_frames.clear();
     for (Frame_sync& frame_sync : m_frame_syncs) {
@@ -954,21 +942,23 @@ void Device_impl::end_of_frame()
     if (m_need_sync) {
         for (Frame_sync& frame_sync : m_frame_syncs) {
             if (frame_sync.fence_sync == nullptr) {
-                frame_sync.frame_number = m_frame_number,
+                frame_sync.frame_number = m_frame_index,
                 frame_sync.fence_sync   = gl::fence_sync(gl::Sync_condition::sync_gpu_commands_complete, 0),
                 frame_sync.result       = gl::Sync_status::timeout_expired;
-                m_pending_frames.push_back(m_frame_number);
+                m_pending_frames.push_back(m_frame_index);
                 m_need_sync = false;
-                return;
+                break;
             }
         }
         log_context->warn("Out of frame sync slots");
     }
+
+    ++m_frame_index;
 }
 
-auto Device_impl::get_frame_number() const -> uint64_t
+auto Device_impl::get_frame_index() const -> uint64_t
 {
-    return m_frame_number;
+    return m_frame_index;
 }
 
 auto Device_impl::allocate_ring_buffer_entry(

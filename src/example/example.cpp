@@ -125,18 +125,18 @@ public:
         m_camera_controller = std::make_shared<Frame_controller>();
         m_camera_controller->set_node(m_camera->get_node());
 
-        m_swapchain_width = m_window.get_width();
-        m_swapchain_height = m_window.get_height();
+        m_last_window_width  = m_window.get_width();
+        m_last_window_height = m_window.get_height();
 
         m_window.register_redraw_callback(
             [this](){
                 if (
-                    (m_swapchain_width != m_window.get_width()) ||
-                    (m_swapchain_height != m_window.get_height())
+                    (m_last_window_width  != m_window.get_width ()) ||
+                    (m_last_window_height != m_window.get_height())
                 ) {
-                    m_graphics_device.resize_swapchain_to_window();
-                    m_swapchain_width = m_window.get_width();
-                    m_swapchain_height = m_window.get_height();
+                    m_graphics_device.get_surface()->resize_swapchain_to_surface(m_swapchain_width, m_swapchain_height);
+                    m_last_window_width  = m_window.get_width();
+                    m_last_window_height = m_window.get_height();
                 }
                 tick();
             }
@@ -144,8 +144,10 @@ public:
     }
 
     std::optional<erhe::window::Input_event> m_window_resize_event{};
-    int m_swapchain_width{0};
-    int m_swapchain_height{0};
+    int      m_last_window_width {0};
+    int      m_last_window_height{0};
+    uint32_t m_swapchain_width   {0};
+    uint32_t m_swapchain_height  {0};
     auto on_window_resize_event(const erhe::window::Input_event& input_event) -> bool override
     {
         m_window_resize_event = input_event;
@@ -221,10 +223,10 @@ public:
                 static_cast<void>(this->dispatch_input_event(input_event));
             }
             if (m_window_resize_event.has_value()) {
-                m_graphics_device.resize_swapchain_to_window();
+                m_graphics_device.get_surface()->resize_swapchain_to_surface(m_swapchain_width, m_swapchain_height);
                 m_window_resize_event.reset();
-                m_swapchain_width = m_window.get_width();
-                m_swapchain_height = m_window.get_height();
+                m_last_window_width  = m_window.get_width();
+                m_last_window_height = m_window.get_height();
             }
 
             tick();
@@ -347,7 +349,7 @@ private:
 
         m_render_pass.reset();
         erhe::graphics::Render_pass_descriptor render_pass_descriptor;
-        render_pass_descriptor.swapchain = m_graphics_device.get_swapchain();
+        render_pass_descriptor.swapchain = m_graphics_device.get_surface()->get_swapchain();
         render_pass_descriptor.color_attachments[0].load_action    = erhe::graphics::Load_action::Clear;
         render_pass_descriptor.color_attachments[0].clear_value[0] = 0.02;
         render_pass_descriptor.color_attachments[0].clear_value[1] = 0.02;

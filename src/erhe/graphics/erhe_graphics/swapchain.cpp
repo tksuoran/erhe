@@ -13,13 +13,8 @@
 
 namespace erhe::graphics {
     
-
-Swapchain::Swapchain(Device& device, const Swapchain_create_info& create_info)
-    : m_impl{std::make_unique<Swapchain_impl>(device, create_info)}
-{
-}
-
-Swapchain::Swapchain(Swapchain&&) noexcept
+Swapchain::Swapchain(std::unique_ptr<Swapchain_impl>&& swapchain_impl)
+    : m_impl{std::move(swapchain_impl)}
 {
 }
 
@@ -27,9 +22,9 @@ Swapchain::~Swapchain() noexcept
 {
 }
 
-void Swapchain::resize_to_window()
+void Swapchain::start_of_frame()
 {
-    m_impl->resize_to_window();
+    m_impl->start_of_frame();
 }
 
 void Swapchain::present()

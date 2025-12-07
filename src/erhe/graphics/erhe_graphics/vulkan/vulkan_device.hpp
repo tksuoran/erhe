@@ -57,6 +57,14 @@ public:
     bool m_VK_EXT_load_store_op_none            {false};
     bool m_VK_KHR_push_descriptor               {false};
 };
+class Capabilities
+{
+public:
+    bool m_present_mode_fifo_latest_ready{false};
+    bool m_surface_capabilities2         {false};
+    bool m_surface_maintenance1          {false};
+    bool m_swapchain_maintenance1        {false};
+};
 
 class Surface_impl;
 class Swapchain;
@@ -72,21 +80,17 @@ public:
     void operator=(Device_impl&&)      = delete;
     ~Device_impl  ();
 
-    void create_swapchain          ();
-    void resize_swapchain_to_window();
-    void start_of_frame            ();
-    void end_of_frame              ();
-    void memory_barrier            (Memory_barrier_mask barriers);
-    void clear_texture             (Texture& texture, std::array<double, 4> clear_value);
-    void upload_to_buffer          (Buffer& buffer, size_t offset, const void* data, size_t length);
-    void add_completion_handler    (std::function<void()> callback);
-    void on_thread_enter           ();
+    void start_of_frame        ();
+    void end_of_frame          ();
+    void memory_barrier        (Memory_barrier_mask barriers);
+    void clear_texture         (Texture& texture, std::array<double, 4> clear_value);
+    void upload_to_buffer      (Buffer& buffer, size_t offset, const void* data, size_t length);
+    void add_completion_handler(std::function<void()> callback);
+    void on_thread_enter       ();
 
-    [[nodiscard]] auto get_swapchain               () -> Swapchain*;
     [[nodiscard]] auto get_handle                  (const Texture& texture, const Sampler& sampler) const -> uint64_t;
     [[nodiscard]] auto create_dummy_texture        () -> std::shared_ptr<Texture>;
     [[nodiscard]] auto get_buffer_alignment        (Buffer_target target) -> std::size_t;
-    [[nodiscard]] auto get_frame_number            () const -> uint64_t;
     [[nodiscard]] auto allocate_ring_buffer_entry  (Buffer_target buffer_target, Ring_buffer_usage usage, std::size_t byte_count) -> Ring_buffer_range;
     [[nodiscard]] auto make_blit_command_encoder   () -> Blit_command_encoder;
     [[nodiscard]] auto make_compute_command_encoder() -> Compute_command_encoder;
@@ -108,9 +112,7 @@ public:
     [[nodiscard]] auto get_present_queue_family_index () const -> uint32_t;
     [[nodiscard]] auto get_graphics_queue             () const -> VkQueue;
     [[nodiscard]] auto get_present_queue              () const -> VkQueue;
-    [[nodiscard]] auto get_instance_layers            () const -> const Instance_layers&;
-    [[nodiscard]] auto get_instance_extensions        () const -> const Instance_extensions&;
-    [[nodiscard]] auto get_device_extensions          () const -> const Device_extensions&;
+    [[nodiscard]] auto get_capabilities               () const -> const Capabilities&;
 
     [[nodiscard]] auto debug_report_callback(
         VkDebugReportFlagsEXT      flags,
@@ -128,7 +130,25 @@ public:
         const VkDebugUtilsMessengerCallbackDataEXT* callback_data
     ) -> VkBool32;
 
+    [[nodiscard]] auto get_number_of_frames_in_flight() const -> size_t;
+    [[nodiscard]] auto get_frame_index               () const -> uint64_t;
+    [[nodiscard]] auto get_frame_in_flight_index     () const -> uint64_t;
+
 private:
+    static constexpr size_t s_number_of_frames_in_flight = 2;
+
+    void create_frames_in_flight_resources();
+
+    //class Device_frame_in_flight
+    //{
+    //public:
+    //    //uint64_t frame_number   {0};
+    //    //VkFence  frame_end_fence{VK_NULL_HANDLE};
+    //    VkCommandBuffer m_end_of_frame_command_buffer{VK_NULL_HANDLE};
+    //};
+    //std::vector<Device_frame_in_flight> m_frames_in_flight;
+
+
     [[nodiscard]] static auto get_physical_device_score(VkPhysicalDevice vulkan_physical_device, Surface_impl* surface_impl) -> float;
     [[nodiscard]] static auto query_device_queue_family_indices(
         VkPhysicalDevice vulkan_physical_device,
@@ -141,7 +161,7 @@ private:
         Device_extensions&        device_extensions_out,
         std::vector<const char*>* device_extensions_c_str
     ) -> float;
-    [[nodiscard]] auto choose_physical_device   (Surface_impl* surface_impl, std::vector<const char*>& device_extensions_c_str) -> bool;
+    [[nodiscard]] auto choose_physical_device(Surface_impl* surface_impl, std::vector<const char*>& device_extensions_c_str) -> bool;
 
     void frame_completed(uint64_t frame);
 
@@ -156,27 +176,28 @@ private:
         std::function<void()> callback;
     };
     std::vector<std::unique_ptr<Ring_buffer>> m_ring_buffers;
-    uint64_t                                  m_frame_number{1};
     std::vector<Completion_handler>           m_completion_handlers;
 
-    VkInstance               m_vulkan_instance       {VK_NULL_HANDLE};
-    VkPhysicalDevice         m_vulkan_physical_device{VK_NULL_HANDLE};
-    VkDevice                 m_vulkan_device         {VK_NULL_HANDLE};
-    VmaAllocator             m_vma_allocator         {VK_NULL_HANDLE};
-    VkDebugReportCallbackEXT m_debug_report_callback {VK_NULL_HANDLE};
-    VkDebugUtilsMessengerEXT m_debug_utils_messenger {VK_NULL_HANDLE};
-    std::unique_ptr<Surface> m_surface               {};
-    VkQueue                  m_vulkan_graphics_queue {VK_NULL_HANDLE};
-    VkQueue                  m_vulkan_present_queue  {VK_NULL_HANDLE};
+    VkInstance               m_vulkan_instance            {VK_NULL_HANDLE};
+    VkPhysicalDevice         m_vulkan_physical_device     {VK_NULL_HANDLE};
+    VkDevice                 m_vulkan_device              {VK_NULL_HANDLE};
+    VmaAllocator             m_vma_allocator              {VK_NULL_HANDLE};
+    VkDebugReportCallbackEXT m_debug_report_callback      {VK_NULL_HANDLE};
+    VkDebugUtilsMessengerEXT m_debug_utils_messenger      {VK_NULL_HANDLE};
+    std::unique_ptr<Surface> m_surface                    {};
+    VkQueue                  m_vulkan_graphics_queue      {VK_NULL_HANDLE};
+    VkQueue                  m_vulkan_present_queue       {VK_NULL_HANDLE};
     uint32_t                 m_graphics_queue_family_index{0};
     uint32_t                 m_present_queue_family_index {0};
-    VkCommandPool            m_vulkan_command_pool   {VK_NULL_HANDLE};
+    VkCommandPool            m_vulkan_command_pool        {VK_NULL_HANDLE};
+    VkSemaphore              m_vulkan_frame_end_semaphore {VK_NULL_HANDLE};
+    uint64_t                 m_latest_completed_frame     {0}; // GPU
+    uint64_t                 m_frame_index                {1}; // CPU
 
     Instance_layers          m_instance_layers    {};
     Instance_extensions      m_instance_extensions{};
     Device_extensions        m_device_extensions  {};
-
-    std::unique_ptr<Swapchain>  m_swapchain;
+    Capabilities             m_capabilities       {};
 };
 
 } // namespace erhe::graphics

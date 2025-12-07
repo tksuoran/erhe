@@ -12,15 +12,21 @@ public:
     erhe::window::Context_window* context_window           {nullptr};
     bool                          prefer_low_bandwidth     {false};
     bool                          prefer_high_dynamic_range{false};
+    bool                          allow_tearing            {false};
+    bool                          allow_dropping_frames    {false};
 };
 
 class Surface_impl;
+class Swapchain;
 
 class Surface final
 {
 public:
     Surface(std::unique_ptr<Surface_impl>&& surface_impl);
-    ~Surface();
+    ~Surface() noexcept;
+
+    [[nodiscard]] auto get_swapchain() -> Swapchain*;
+    void resize_swapchain_to_surface(uint32_t& width, uint32_t& height);
 
     [[nodiscard]] auto get_impl() -> Surface_impl&;
     [[nodiscard]] auto get_impl() const -> const Surface_impl&;

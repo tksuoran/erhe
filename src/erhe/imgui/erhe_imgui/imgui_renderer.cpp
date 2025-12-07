@@ -425,7 +425,7 @@ auto Imgui_renderer::icon_font() const -> ImFont*
 
 void Imgui_renderer::begin_frame()
 {
-    ImFontAtlasUpdateNewFrame(&m_font_atlas, static_cast<int>(m_graphics_device.get_frame_number()), true);
+    ImFontAtlasUpdateNewFrame(&m_font_atlas, static_cast<int>(m_graphics_device.get_frame_index()), true);
 }
 
 void Imgui_renderer::at_end_of_frame(std::function<void()>&& func)

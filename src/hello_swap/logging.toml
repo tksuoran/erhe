@@ -1,3 +1,7 @@
+[hello_swap]
+startup = "debug"
+swap = "debug"
+
 ["erhe.commands"]
 input_event_consumed = "info"
 command_state_transition = "info"

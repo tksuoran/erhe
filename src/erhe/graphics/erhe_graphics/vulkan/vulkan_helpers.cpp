@@ -528,7 +528,7 @@ auto c_str(const VkPresentModeKHR present_mode) -> const char*
     }
 }
 
-auto to_string(const VkDebugReportFlagsEXT flags) -> std::string
+auto to_string_VkDebugReportFlagsEXT(VkDebugReportFlagsEXT flags) -> std::string
 {
     std::stringstream ss;
     bool empty = true;
@@ -566,7 +566,7 @@ auto to_string(const VkDebugReportFlagsEXT flags) -> std::string
     }
     return ss.str();
 }
-auto to_string(const VkDebugUtilsMessageSeverityFlagBitsEXT severity) -> std::string
+auto to_string_VkDebugUtilsMessageSeverityFlagsEXT(VkDebugUtilsMessageSeverityFlagsEXT severity) -> std::string
 {
     std::stringstream ss;
     bool empty = true;
@@ -597,7 +597,7 @@ auto to_string(const VkDebugUtilsMessageSeverityFlagBitsEXT severity) -> std::st
     }
     return ss.str();
 }
-auto to_string(const VkDebugUtilsMessageTypeFlagBitsEXT message_type) -> std::string
+auto to_string_VkDebugUtilsMessageTypeFlagsEXT(VkDebugUtilsMessageTypeFlagsEXT message_type) -> std::string
 {
     std::stringstream ss;
     bool empty = true;
@@ -624,6 +624,54 @@ auto to_string(const VkDebugUtilsMessageTypeFlagBitsEXT message_type) -> std::st
             ss << "|";
         }
         ss << "DEVICE_ADDRESS_BINDING";
+        empty = false;
+    }
+    return ss.str();
+}
+auto to_string_VkPresentScalingFlagsKHR(VkPresentScalingFlagsKHR present_scaling) -> std::string
+{
+    std::stringstream ss;
+    bool empty = true;
+    if ((present_scaling & VK_PRESENT_SCALING_ONE_TO_ONE_BIT_KHR) != 0) {
+        ss << "VK_PRESENT_SCALING_ONE_TO_ONE_BIT_KHR";
+        empty = false;
+    }
+    if ((present_scaling & VK_PRESENT_SCALING_ASPECT_RATIO_STRETCH_BIT_KHR) != 0) {
+        if (!empty) {
+            ss << "|";
+        }
+        ss << "VK_PRESENT_SCALING_ASPECT_RATIO_STRETCH_BIT_KHR";
+        empty = false;
+    }
+    if ((present_scaling & VK_PRESENT_SCALING_STRETCH_BIT_KHR) != 0) {
+        if (!empty) {
+            ss << "|";
+        }
+        ss << "VK_PRESENT_SCALING_STRETCH_BIT_KHR";
+        empty = false;
+    }
+    return ss.str();
+}
+auto to_string_VkPresentGravityFlagsKHR(VkPresentGravityFlagsKHR present_gravity) -> std::string
+{
+    std::stringstream ss;
+    bool empty = true;
+    if ((present_gravity & VK_PRESENT_GRAVITY_MIN_BIT_KHR) != 0) {
+        ss << "VK_PRESENT_GRAVITY_MIN_BIT_KHR";
+        empty = false;
+    }
+    if ((present_gravity & VK_PRESENT_GRAVITY_MAX_BIT_KHR) != 0) {
+        if (!empty) {
+            ss << "|";
+        }
+        ss << "VK_PRESENT_GRAVITY_MAX_BIT_KHR";
+        empty = false;
+    }
+    if ((present_gravity & VK_PRESENT_GRAVITY_CENTERED_BIT_KHR) != 0) {
+        if (!empty) {
+            ss << "|";
+        }
+        ss << "VK_PRESENT_GRAVITY_CENTERED_BIT_KHR";
         empty = false;
     }
     return ss.str();

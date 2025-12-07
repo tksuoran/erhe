@@ -44,18 +44,25 @@ public:
             }
         }
     {
-        m_swapchain_width = m_window.get_width();
-        m_swapchain_height = m_window.get_height();
+        m_last_window_width  = m_window.get_width();
+        m_last_window_height = m_window.get_height();
 
         m_window.register_redraw_callback(
             [this](){
+                if (!m_first_frame_rendered) {
+                    return;
+                }
                 if (
-                    (m_swapchain_width != m_window.get_width()) ||
-                    (m_swapchain_height != m_window.get_height())
+                    (m_last_window_width  != m_window.get_width ()) ||
+                    (m_last_window_height != m_window.get_height())
                 ) {
-                    m_graphics_device.resize_swapchain_to_window();
-                    m_swapchain_width = m_window.get_width();
-                    m_swapchain_height = m_window.get_height();
+                    log_swap->info("resize - changed, calling resize_swapchain_to_surface()");
+                    m_graphics_device.get_surface()->resize_swapchain_to_surface(m_swapchain_width, m_swapchain_height);
+                    log_swap->info("swapchain = {} x {}", m_swapchain_width, m_swapchain_height);
+                    m_last_window_width  = m_window.get_width();
+                    m_last_window_height = m_window.get_height();
+                } else {
+                    log_swap->info("resize - unchanged");
                 }
                 tick();
             }
@@ -63,21 +70,32 @@ public:
     }
 
     std::optional<erhe::window::Input_event> m_window_resize_event{};
-    int m_swapchain_width{0};
-    int m_swapchain_height{0};
+    int      m_last_window_width {0};
+    int      m_last_window_height{0};
+    uint32_t m_swapchain_width   {0};
+    uint32_t m_swapchain_height  {0};
     auto on_window_resize_event(const erhe::window::Input_event& input_event) -> bool override
     {
+        log_swap->info("on_window_resize_event()");
         m_window_resize_event = input_event;
         return true;
     }
 
     auto on_window_close_event(const erhe::window::Input_event&) -> bool override
     {
+        log_swap->info("on_window_close_event()");
         m_close_requested = true;
         return true;
     }
 
+    auto on_window_refresh_event(const erhe::window::Input_event&) -> bool override
+    {
+        log_swap->info("on_window_refresh_event()");
+        return true;
+    }
+
     std::mutex m_mutex;
+    bool m_first_frame_rendered{false};
     void run()
     {
         m_current_time = std::chrono::steady_clock::now();
@@ -88,13 +106,16 @@ public:
                 static_cast<void>(this->dispatch_input_event(input_event));
             }
             if (m_window_resize_event.has_value()) {
-                m_graphics_device.resize_swapchain_to_window();
+                log_swap->info("calling resize_swapchain_to_surface()");
+                m_graphics_device.get_surface()->resize_swapchain_to_surface(m_swapchain_width, m_swapchain_height);
                 m_window_resize_event.reset();
-                m_swapchain_width = m_window.get_width();
-                m_swapchain_height = m_window.get_height();
+                m_last_window_width  = m_window.get_width();
+                m_last_window_height = m_window.get_height();
             }
 
             tick();
+
+            m_first_frame_rendered = true;
         }
     }
 
@@ -146,14 +167,13 @@ private:
             m_render_pass &&
             (m_render_pass->get_render_target_width () == width) &&
             (m_render_pass->get_render_target_height() == height)
-        )
-        {
+        ) {
             return;
         }
 
         m_render_pass.reset();
         erhe::graphics::Render_pass_descriptor render_pass_descriptor;
-        render_pass_descriptor.swapchain             = m_graphics_device.get_swapchain();
+        render_pass_descriptor.swapchain             = m_graphics_device.get_surface()->get_swapchain();
         render_pass_descriptor.color_attachments[0].load_action    = erhe::graphics::Load_action::Clear;
         render_pass_descriptor.color_attachments[0].clear_value[0] = 0.02;
         render_pass_descriptor.color_attachments[0].clear_value[1] = 0.02;
@@ -171,12 +191,12 @@ private:
     erhe::graphics::Device                       m_graphics_device;
     std::unique_ptr<erhe::graphics::Render_pass> m_render_pass;
 
-    bool                                    m_close_requested{false};
-    std::chrono::steady_clock::time_point   m_current_time;
-    double                                  m_time_accumulator{0.0};
-    double                                  m_time            {0.0};
-    uint64_t                                m_frame_number    {0};
-    bool                                    m_mouse_pressed   {false};
+    bool                                  m_close_requested{false};
+    std::chrono::steady_clock::time_point m_current_time;
+    double                                m_time_accumulator{0.0};
+    double                                m_time            {0.0};
+    uint64_t                              m_frame_number    {0};
+    bool                                  m_mouse_pressed   {false};
 };
 
 void run()

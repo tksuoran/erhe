@@ -7,24 +7,24 @@ namespace erhe::window { class Context_window; }
 namespace erhe::graphics {
 
 class Device_impl;
+class Surface_impl;
 
 class Swapchain_impl final
 {
 public:
-    Swapchain_impl           (const Swapchain_impl&) = delete;
-    Swapchain_impl& operator=(const Swapchain_impl&) = delete;
-    Swapchain_impl(Swapchain_impl&&) noexcept;
-    Swapchain_impl& operator=(Swapchain_impl&&) = delete;
+    Swapchain_impl(
+        Device_impl&                  device_impl,
+        Surface_impl&                 surface_impl,
+        erhe::window::Context_window* context_window
+    );
     ~Swapchain_impl() noexcept;
 
-    Swapchain_impl(Device& device, const Swapchain_create_info& create_info);
-
-    void resize_to_window();
-    void present         ();
+    void start_of_frame();
+    void present       ();
 
 private:
-    Device&                       m_device;
-    Surface&                      m_surface;
+    Device_impl&                  m_device_impl;
+    Surface_impl&                 m_surface_impl;
     erhe::window::Context_window* m_context_window{nullptr};
 };
 

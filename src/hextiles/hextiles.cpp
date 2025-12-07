@@ -45,7 +45,7 @@ class Hextiles : public erhe::window::Input_event_handler
 {
 public:
     Hextiles()
-        : m_context_window{
+        : m_window{
             erhe::window::Window_configuration{
                 .gl_major          = 4,
                 .gl_minor          = 6,
@@ -54,12 +54,12 @@ public:
                 .title             = "erhe HexTiles by Timo Suoranta"
             }
         }
-        , m_settings            {m_context_window}
+        , m_settings            {m_window}
         , m_commands            {}
 
         , m_graphics_device{
             erhe::graphics::Surface_create_info{
-                .context_window            = &m_context_window,
+                .context_window            = &m_window,
                 .prefer_low_bandwidth      = false,
                 .prefer_high_dynamic_range = false
             }
@@ -68,7 +68,7 @@ public:
         , m_text_renderer       {m_graphics_device}
         , m_rendergraph         {m_graphics_device}
         , m_imgui_renderer      {m_graphics_device, m_settings.imgui}
-        , m_imgui_windows       {m_imgui_renderer, m_graphics_device, m_rendergraph, &m_context_window, "windows.ini"}
+        , m_imgui_windows       {m_imgui_renderer, m_graphics_device, m_rendergraph, &m_window, "windows.ini"}
         , m_logs                {m_commands, m_imgui_renderer}
         , m_log_settings_window {m_imgui_renderer, m_imgui_windows, m_logs}
         , m_tail_log_window     {m_imgui_renderer, m_imgui_windows, m_logs}
@@ -79,29 +79,33 @@ public:
         , m_map_window          {m_commands, m_graphics_device, m_imgui_renderer, m_imgui_windows, m_text_renderer, m_tile_renderer}
         , m_menu_window         {m_commands, m_imgui_renderer, m_imgui_windows, *this, m_map_window, m_tiles, m_tile_renderer}
     {
-        //// auto& root_event_handler = m_context_window.get_root_window_event_handler();
+        //// auto& root_event_handler = m_window.get_root_window_event_handler();
         //// root_event_handler.attach(&m_imgui_windows, 2);
         //// root_event_handler.attach(&m_commands, 1);
+        m_last_window_width  = m_window.get_width();
+        m_last_window_height = m_window.get_height();
 
-        m_context_window.register_redraw_callback(
+        m_window.register_redraw_callback(
             [this](){
                 if (
-                    (m_swapchain_width != m_context_window.get_width()) ||
-                    (m_swapchain_height != m_context_window.get_height())
+                    (m_last_window_width  != m_window.get_width()) ||
+                    (m_last_window_height != m_window.get_height())
                 ) {
-                    m_graphics_device.resize_swapchain_to_window();
-                    m_swapchain_width = m_context_window.get_width();
-                    m_swapchain_height = m_context_window.get_height();
+                    m_graphics_device.get_surface()->resize_swapchain_to_surface(m_swapchain_width, m_swapchain_height);
+                    m_last_window_width  = m_window.get_width();
+                    m_last_window_height = m_window.get_height();
                 }
                 int64_t new_timestamp_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
-                tick(0.0f, new_timestamp_ns);
+                tick(0.01f, new_timestamp_ns);
             }
         );
     }
 
     std::optional<erhe::window::Input_event> m_window_resize_event{};
-    int m_swapchain_width{0};
-    int m_swapchain_height{0};
+    int      m_last_window_width {0};
+    int      m_last_window_height{0};
+    uint32_t m_swapchain_width   {0};
+    uint32_t m_swapchain_height  {0};
     auto on_window_resize_event(const erhe::window::Input_event& input_event) -> bool override
     {
         m_window_resize_event = input_event;
@@ -113,16 +117,16 @@ public:
     {
         int64_t timestamp_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
         while (!m_close_requested) {
-            m_context_window.poll_events();
-            auto& input_events = m_context_window.get_input_events();
+            m_window.poll_events();
+            auto& input_events = m_window.get_input_events();
             for (erhe::window::Input_event& input_event : input_events) {
                 static_cast<void>(this->dispatch_input_event(input_event));
             }
             if (m_window_resize_event.has_value()) {
-                m_graphics_device.resize_swapchain_to_window();
+                m_graphics_device.get_surface()->resize_swapchain_to_surface(m_swapchain_width, m_swapchain_height);
                 m_window_resize_event.reset();
-                m_swapchain_width = m_context_window.get_width();
-                m_swapchain_height = m_context_window.get_height();
+                m_last_window_width  = m_window.get_width();
+                m_last_window_height = m_window.get_height();
             }
 
             int64_t new_timestamp_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
@@ -150,7 +154,7 @@ public:
             if (ImGui::BeginMenu("File")) {
                 if (ImGui::MenuItem("Exit")) {
                     int64_t timestamp_ns = 0; // TODO
-                    m_context_window.handle_window_close_event(timestamp_ns);
+                    m_window.handle_window_close_event(timestamp_ns);
                 }
                 ImGui::EndMenu();
             }
@@ -275,7 +279,7 @@ public:
     {
         std::lock_guard<std::mutex> lock{m_mutex};
 
-        std::vector<erhe::window::Input_event>& input_events = m_context_window.get_input_events();
+        std::vector<erhe::window::Input_event>& input_events = m_window.get_input_events();
 
         m_imgui_windows .process_events(dt_s, timestamp_ns);
         m_commands.tick(timestamp_ns, input_events);
@@ -302,7 +306,7 @@ public:
         return true;
     }
 
-    erhe::window::Context_window     m_context_window;
+    erhe::window::Context_window     m_window;
     Hextiles_settings                m_settings;
     erhe::commands::Commands         m_commands;
     erhe::graphics::Device           m_graphics_device;

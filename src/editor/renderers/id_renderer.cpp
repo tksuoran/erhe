@@ -341,7 +341,7 @@ void Id_renderer::render(const Render_parameters& parameters)
         );
 
         entry.state        = Transfer_entry::State::Waiting_for_read;
-        entry.frame_number = m_graphics_device.get_frame_number();
+        entry.frame_number = m_graphics_device.get_frame_index();
         entry.slot         = m_current_transfer_entry_slot;
         // log_id_render->debug("id submit draw & read slot = {}, frame = {}", entry.slot, entry.frame_number);
         m_graphics_device.add_completion_handler(

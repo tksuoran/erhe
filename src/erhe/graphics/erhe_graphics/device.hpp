@@ -150,21 +150,19 @@ public:
     void operator= (Device&&)      = delete;
     ~Device();
 
-    void resize_swapchain_to_window();
-    void start_of_frame            ();
-    void end_of_frame              ();
-    void memory_barrier            (Memory_barrier_mask barriers);
-    void clear_texture             (Texture& texture, std::array<double, 4> clear_value);
-    void upload_to_buffer          (Buffer& buffer, size_t offset, const void* data, size_t length);
-    void add_completion_handler    (std::function<void()> callback);
-    void on_thread_enter           ();
+    void start_of_frame        ();
+    void end_of_frame          ();
+    void memory_barrier        (Memory_barrier_mask barriers);
+    void clear_texture         (Texture& texture, std::array<double, 4> clear_value);
+    void upload_to_buffer      (Buffer& buffer, size_t offset, const void* data, size_t length);
+    void add_completion_handler(std::function<void()> callback);
+    void on_thread_enter       ();
 
     [[nodiscard]] auto get_surface                 () -> Surface*;
-    [[nodiscard]] auto get_swapchain               () -> Swapchain*;
     [[nodiscard]] auto get_handle                  (const Texture& texture, const Sampler& sampler) const -> uint64_t;
     [[nodiscard]] auto create_dummy_texture        () -> std::shared_ptr<Texture>;
     [[nodiscard]] auto get_buffer_alignment        (Buffer_target target) -> std::size_t;
-    [[nodiscard]] auto get_frame_number            () const -> uint64_t;
+    [[nodiscard]] auto get_frame_index             () const -> uint64_t;
     [[nodiscard]] auto allocate_ring_buffer_entry  (Buffer_target buffer_target, Ring_buffer_usage usage, std::size_t byte_count) -> Ring_buffer_range;
     [[nodiscard]] auto make_blit_command_encoder   () -> Blit_command_encoder;
     [[nodiscard]] auto make_compute_command_encoder() -> Compute_command_encoder;

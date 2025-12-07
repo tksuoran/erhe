@@ -17,16 +17,11 @@ class Swapchain_impl;
 class Swapchain
 {
 public:
-    Swapchain           (const Swapchain&) = delete;
-    Swapchain& operator=(const Swapchain&) = delete;
-    Swapchain(Swapchain&&) noexcept;
-    Swapchain& operator=(Swapchain&&) = delete;
+    Swapchain(std::unique_ptr<Swapchain_impl>&& swapchain_impl);
     ~Swapchain() noexcept;
 
-    Swapchain(Device& device, const Swapchain_create_info& create_info);
-
-    void resize_to_window();
-    void present         ();
+    void start_of_frame();
+    void present       ();
 
     [[nodiscard]] auto get_impl() -> Swapchain_impl&;
     [[nodiscard]] auto get_impl() const -> const Swapchain_impl&;

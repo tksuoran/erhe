@@ -36,10 +36,6 @@ auto Device::get_surface() -> Surface*
 {
     return m_impl->get_surface();
 }
-auto Device::get_swapchain() -> Swapchain*
-{
-    return m_impl->get_swapchain();
-}
 auto Device::get_handle(const Texture& texture, const Sampler& sampler) const -> uint64_t
 {
     return m_impl->get_handle(texture, sampler);
@@ -64,10 +60,6 @@ auto Device::get_buffer_alignment(Buffer_target target) -> std::size_t
 {
     return m_impl->get_buffer_alignment(target);
 }
-void Device::resize_swapchain_to_window()
-{
-    m_impl->resize_swapchain_to_window();
-}
 void Device::start_of_frame()
 {
     m_impl->start_of_frame();
@@ -76,9 +68,9 @@ void Device::end_of_frame()
 {
     m_impl->end_of_frame();
 }
-auto Device::get_frame_number() const -> uint64_t
+auto Device::get_frame_index() const -> uint64_t
 {
-    return m_impl->get_frame_number();
+    return m_impl->get_frame_index();
 }
 auto Device::allocate_ring_buffer_entry(Buffer_target buffer_target, Ring_buffer_usage usage, std::size_t byte_count) -> Ring_buffer_range
 {

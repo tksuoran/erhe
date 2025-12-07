@@ -214,7 +214,7 @@ public:
         m_frame_log_window->on_frame_begin();
         // log_input_frame->trace("----------------------- Editor::tick() -----------------------");
 
-        std::vector<erhe::window::Input_event>& input_events = m_context_window->get_input_events();
+        std::vector<erhe::window::Input_event>& input_events = m_window->get_input_events();
 
         m_time->prepare_update();
         m_time->update_transform_animations(*m_app_message_bus.get());
@@ -325,7 +325,7 @@ public:
         //        std::chrono::steady_clock::time_point start_time = std::chrono::steady_clock::now();
         //        {
         //            ERHE_PROFILE_SCOPE("swap_buffers");
-        //            m_context_window->swap_buffers();
+        //            m_window->swap_buffers();
         //        }
         //        std::chrono::steady_clock::time_point end_time = std::chrono::steady_clock::now();
         //        const std::chrono::duration<float> swap_duration = start_time - end_time;
@@ -336,7 +336,7 @@ public:
         //        }
         //    } else {
         //        ERHE_PROFILE_SCOPE("swap_buffers");
-        //        m_context_window->swap_buffers();
+        //        m_window->swap_buffers();
         //    }
         //}
         // TODO move this logic to m_graphics_device->end_of_frame();
@@ -462,12 +462,12 @@ public:
 #endif
 
             // Window and graphics context creation - in main thread
-            m_context_window = create_window();
+            m_window = create_window();
 
             // Graphics context state init after window - in main thread
             m_graphics_device = std::make_unique<erhe::graphics::Device>(
                 erhe::graphics::Surface_create_info{
-                    .context_window            = m_context_window.get(),
+                    .context_window            = m_window.get(),
                     .prefer_low_bandwidth      = false,
                     .prefer_high_dynamic_range = false
                 }
@@ -501,7 +501,7 @@ public:
                 ini.get("composition_alpha", configuration.composition_alpha);
                 ini.get("passthrough_fb",    configuration.passthrough_fb);
                 configuration.mirror_mode = m_app_context.OpenXR_mirror;
-                m_headset = std::make_unique<erhe::xr::Headset>(*m_context_window.get(), configuration);
+                m_headset = std::make_unique<erhe::xr::Headset>(*m_window.get(), configuration);
                 if (!m_headset->is_valid()) {
                     log_headset->info("Headset initialization failed. Disabling OpenXR.");
                     m_app_context.OpenXR = false;
@@ -514,7 +514,7 @@ public:
             // executor run and wait.
 #if defined(ERHE_PARALLEL_INIT)
             m_graphics_device->context_provider.provide_worker_contexts(
-                m_context_window.get(),
+                m_window.get(),
                 8u,
                 []() -> bool { return true; }
             );
@@ -633,7 +633,7 @@ public:
                     *m_imgui_renderer.get(),
                     *m_graphics_device.get(),
                     *m_rendergraph.get(),
-                    conditionally_enable_window_imgui_host(m_context_window.get()),
+                    conditionally_enable_window_imgui_host(m_window.get()),
                     get_windows_ini_path()
                 );
             }
@@ -804,7 +804,7 @@ public:
                     *m_imgui_renderer.get(),
                     *m_imgui_windows.get(),
                     *m_rendergraph.get(),
-                    *m_context_window.get(),
+                    *m_window.get(),
 #if defined(ERHE_XR_LIBRARY_OPENXR)
                     m_headset.get(),
 #endif
@@ -1038,7 +1038,7 @@ public:
         }
 
 #if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
-        m_context_window->make_current();
+        m_window->make_current();
 #endif
         m_graphics_device->on_thread_enter();
 
@@ -1235,21 +1235,21 @@ public:
 #endif
         m_tools->set_priority_tool(m_physics_tool.get());
 
-        m_swapchain_width = m_context_window->get_width();
-        m_swapchain_height = m_context_window->get_height();
+        m_last_window_width  = m_window->get_width();
+        m_last_window_height = m_window->get_height();
 
-        m_context_window->register_redraw_callback(
+        m_window->register_redraw_callback(
             [this](){
                 if (!m_run_started) {
                     return;
                 }
                 if (
-                    (m_swapchain_width != m_context_window->get_width()) ||
-                    (m_swapchain_height != m_context_window->get_height())
+                    (m_last_window_width  != m_window->get_width ()) ||
+                    (m_last_window_height != m_window->get_height())
                 ) {
-                    m_graphics_device->resize_swapchain_to_window();
-                    m_swapchain_width = m_context_window->get_width();
-                    m_swapchain_height = m_context_window->get_height();
+                    m_graphics_device->get_surface()->resize_swapchain_to_surface(m_swapchain_width, m_swapchain_height);
+                    m_last_window_width  = m_window->get_width();
+                    m_last_window_height = m_window->get_height();
                 }
                 tick();
             }
@@ -1280,7 +1280,7 @@ public:
         m_app_context.scene_message_bus      = m_scene_message_bus     .get();
         m_app_context.forward_renderer       = m_forward_renderer      .get();
         m_app_context.shadow_renderer        = m_shadow_renderer       .get();
-        m_app_context.context_window         = m_context_window        .get();
+        m_app_context.context_window         = m_window                .get();
         m_app_context.brdf_slice             = m_brdf_slice            .get();
         m_app_context.brush_tool             = m_brush_tool            .get();
         m_app_context.clipboard              = m_clipboard             .get();
@@ -1338,8 +1338,10 @@ public:
     }
 
     std::optional<erhe::window::Input_event> m_window_resize_event{};
-    int m_swapchain_width{0};
-    int m_swapchain_height{0};
+    int      m_last_window_width {0};
+    int      m_last_window_height{0};
+    uint32_t m_swapchain_width   {0};
+    uint32_t m_swapchain_height  {0};
     auto on_window_resize_event(const erhe::window::Input_event& input_event) -> bool override
     {
         m_window_resize_event = input_event;
@@ -1369,18 +1371,19 @@ public:
         //  - Count number of swapbuffers
         //  - Wait to avoid presenting frames faster than display refreshrate
         while (!m_close_requested) {
-            m_context_window->poll_events(wait_time);
+            m_window->poll_events(wait_time);
             {
                 ERHE_PROFILE_SCOPE("dispatch events");
-                auto& input_events = m_context_window->get_input_events();
+                auto& input_events = m_window->get_input_events();
                 for (erhe::window::Input_event& input_event : input_events) {
                     dispatch_input_event(input_event);
                 }
                 if (m_window_resize_event.has_value()) {
-                    m_graphics_device->resize_swapchain_to_window();
+                    m_graphics_device->get_surface()->resize_swapchain_to_surface(m_swapchain_width, m_swapchain_height);
                     m_window_resize_event.reset();
+                    m_last_window_width  = m_window->get_width();
+                    m_last_window_height = m_window->get_height();
                 }
-
             }
             tick();
 
@@ -1411,7 +1414,7 @@ public:
     std::unique_ptr<Time                          > m_time;
 
     std::unique_ptr<Clipboard                              > m_clipboard;
-    std::unique_ptr<erhe::window::Context_window           > m_context_window;
+    std::unique_ptr<erhe::window::Context_window           > m_window;
     std::unique_ptr<App_settings                           > m_app_settings;
     std::unique_ptr<erhe::graphics::Device                 > m_graphics_device;
     std::unique_ptr<erhe::imgui::Imgui_renderer            > m_imgui_renderer;

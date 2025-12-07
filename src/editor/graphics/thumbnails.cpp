@@ -85,7 +85,7 @@ auto Thumbnails::draw(
             (thumbnail.item_id == item_id) &&
             !thumbnail.callback.has_value()
         ) {
-            thumbnail.last_use_frame_number = m_context.graphics_device->get_frame_number();
+            thumbnail.last_use_frame_number = m_context.graphics_device->get_frame_index();
             const float height = ImGui::GetTextLineHeightWithSpacing();
             m_context.imgui_renderer->image(
                 thumbnail.texture_view.get(),
@@ -126,7 +126,7 @@ auto Thumbnails::draw(
         }
     }
 
-    oldest_thumbnail->last_use_frame_number = m_context.graphics_device->get_frame_number();
+    oldest_thumbnail->last_use_frame_number = m_context.graphics_device->get_frame_index();
     oldest_thumbnail->item_id = item_id;
     oldest_thumbnail->callback = callback;
     return false;

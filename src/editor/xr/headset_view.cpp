@@ -130,7 +130,7 @@ Headset_view::Headset_view(
 
     if (m_context.OpenXR_mirror) {
         erhe::graphics::Render_pass_descriptor render_pass_descriptor;
-        render_pass_descriptor.swapchain = graphics_device.get_swapchain();
+        render_pass_descriptor.swapchain = graphics_device.get_surface()->get_swapchain();
         render_pass_descriptor.color_attachments[0].load_action = erhe::graphics::Load_action::Clear;
         render_pass_descriptor.depth_attachment    .load_action = erhe::graphics::Load_action::Clear;
         render_pass_descriptor.stencil_attachment  .load_action = erhe::graphics::Load_action::Clear;

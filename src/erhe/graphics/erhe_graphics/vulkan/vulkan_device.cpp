@@ -101,7 +101,7 @@ auto Device_impl::debug_report_callback(
     }
     ss << fmt::format(
         "[{:<24}] Object {:16} (type {}) Location {:08x} Code {:04} :",
-        to_string(flags),
+        to_string_VkDebugReportFlagsEXT(flags),
         object,
         c_str(object_type),
         location,
@@ -142,8 +142,8 @@ auto Device_impl::debug_utils_messenger_callback(
     }
     ss << fmt::format(
         "{} {} [{} {}] {}",
-        to_string(message_types),
-        to_string(message_severity),
+        to_string_VkDebugUtilsMessageTypeFlagsEXT(message_types),
+        to_string_VkDebugUtilsMessageSeverityFlagsEXT(message_severity),
         callback_data->messageIdNumber,
         (callback_data->pMessageIdName != nullptr) ? callback_data->pMessageIdName : "",
         (callback_data->pMessage != nullptr) ? callback_data->pMessage : "<no message>"
@@ -236,6 +236,7 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         set_env("VK_LOADER_LAYERS_DISABLE", "ALL");
         set_env("DISABLE_LAYER_NV_OPTIMUS_1", "1");
         set_env("DISABLE_LAYER_NV_GR2608_1", "1");
+        set_env("DISABLE_VULKAN_OBS_CAPTURE", "1");
     }
 
     VkResult result{VK_SUCCESS};
@@ -285,7 +286,7 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
 
     // TODO Add config to erhe.toml
     check_layer("VK_LAYER_KHRONOS_validation",      m_instance_layers.m_VK_LAYER_KHRONOS_validation);
-    check_layer("VK_LAYER_LUNARG_crash_diagnostic", m_instance_layers.m_VK_LAYER_LUNARG_crash_diagnostic);
+    //check_layer("VK_LAYER_LUNARG_crash_diagnostic", m_instance_layers.m_VK_LAYER_LUNARG_crash_diagnostic);
 
     uint32_t instance_extension_count{0};
     result = vkEnumerateInstanceExtensionProperties(nullptr, &instance_extension_count, nullptr);
@@ -344,18 +345,20 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
     }
 
     // First check extensions that have not been deprecated / promoted to cor
-    check_instance_extension(VK_KHR_SURFACE_MAINTENANCE_1_EXTENSION_NAME, m_instance_extensions.m_VK_KHR_surface_maintenance1  );
-    check_instance_extension(VK_EXT_DEBUG_UTILS_EXTENSION_NAME          , m_instance_extensions.m_VK_EXT_debug_utils           );
-    check_instance_extension(VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME, m_instance_extensions.m_VK_EXT_swapchain_colorspace  );
+    check_instance_extension(VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME, m_instance_extensions.m_VK_KHR_get_surface_capabilities2);
+    check_instance_extension(VK_KHR_SURFACE_MAINTENANCE_1_EXTENSION_NAME     , m_instance_extensions.m_VK_KHR_surface_maintenance1     );
+    check_instance_extension(VK_EXT_DEBUG_UTILS_EXTENSION_NAME               , m_instance_extensions.m_VK_EXT_debug_utils              );
+    check_instance_extension(VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME     , m_instance_extensions.m_VK_EXT_swapchain_colorspace     );
 
     // Check extensions which are promoted to core or deprecated
     if (application_info.apiVersion < VK_API_VERSION_1_1) {
-        check_instance_extension(VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME,       m_instance_extensions.m_VK_KHR_get_surface_capabilities2);
         check_instance_extension(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME, m_instance_extensions.m_VK_KHR_get_physical_device_properties2);
     } else {
         m_instance_extensions.m_VK_KHR_get_surface_capabilities2       = true;
         m_instance_extensions.m_VK_KHR_get_physical_device_properties2 = true;
     }
+
+    m_capabilities.m_surface_capabilities2 = m_instance_extensions.m_VK_KHR_get_surface_capabilities2;
 
     if (!m_instance_extensions.m_VK_KHR_surface_maintenance1) {
         check_instance_extension(VK_EXT_SURFACE_MAINTENANCE_1_EXTENSION_NAME, m_instance_extensions.m_VK_EXT_surface_maintenance1);
@@ -439,7 +442,7 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
     std::unique_ptr<Surface_impl> surface_impl{};
     VkSurfaceKHR vulkan_surface{VK_NULL_HANDLE};
     if (m_context_window != nullptr) {
-        surface_impl = std::make_unique<Surface_impl>(*this, surface_create_info);
+        surface_impl   = std::make_unique<Surface_impl>(*this, surface_create_info);
         vulkan_surface = surface_impl->get_vulkan_surface();
     }
 
@@ -487,25 +490,45 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         .features = VkPhysicalDeviceFeatures{}
     };
     VkBaseOutStructure* query_features_chain_last = reinterpret_cast<VkBaseOutStructure*>(&query_device_features);
+
+    VkPhysicalDeviceTimelineSemaphoreFeatures query_timeline_semaphore_features = {
+        .sType             = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES,
+        .pNext             = nullptr,
+        .timelineSemaphore = VK_FALSE
+    };
+    {
+        query_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&query_timeline_semaphore_features);
+        query_features_chain_last        = query_features_chain_last->pNext;
+    }
+
     VkPhysicalDevicePresentModeFifoLatestReadyFeaturesKHR query_present_mode_fifo_latest_ready_features{
         .sType                      = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_MODE_FIFO_LATEST_READY_FEATURES_KHR,
         .pNext                      = nullptr,
         .presentModeFifoLatestReady = VK_FALSE
     };
-    const bool supports_present_mode_fifo_latest_ready = m_device_extensions.m_VK_KHR_present_mode_fifo_latest_ready || m_device_extensions.m_VK_EXT_present_mode_fifo_latest_ready;
-    if (supports_present_mode_fifo_latest_ready) {
+    m_capabilities.m_present_mode_fifo_latest_ready =
+        m_device_extensions.m_VK_KHR_present_mode_fifo_latest_ready ||
+        m_device_extensions.m_VK_EXT_present_mode_fifo_latest_ready;
+    if (m_capabilities.m_present_mode_fifo_latest_ready) {
         query_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&query_present_mode_fifo_latest_ready_features);
-        query_features_chain_last = query_features_chain_last->pNext;
+        query_features_chain_last        = query_features_chain_last->pNext;
     }
+
+    m_capabilities.m_surface_maintenance1 =
+        m_instance_extensions.m_VK_KHR_surface_maintenance1 ||
+        m_instance_extensions.m_VK_EXT_surface_maintenance1;
+
     VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT query_swapchain_maintenance_features{
         .sType                 = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_EXT,
         .pNext                 = nullptr,
         .swapchainMaintenance1 = VK_FALSE,
     };
-    const bool supports_swapchain_maintenance1 = m_device_extensions.m_VK_KHR_swapchain_maintenance1 || m_device_extensions.m_VK_EXT_swapchain_maintenance1;
-    if (supports_swapchain_maintenance1) {
+    m_capabilities.m_swapchain_maintenance1 =
+        m_device_extensions.m_VK_KHR_swapchain_maintenance1 ||
+        m_device_extensions.m_VK_EXT_swapchain_maintenance1;
+    if (m_capabilities.m_swapchain_maintenance1) {
         query_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&query_swapchain_maintenance_features);
-        query_features_chain_last = query_features_chain_last->pNext;
+        query_features_chain_last        = query_features_chain_last->pNext;
     }
 
     vkGetPhysicalDeviceFeatures2(m_vulkan_physical_device, &query_device_features);
@@ -580,14 +603,25 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         .pNext = nullptr
     };
     VkBaseOutStructure* set_features_chain_last = reinterpret_cast<VkBaseOutStructure*>(&set_device_features);
+
+    VkPhysicalDeviceTimelineSemaphoreFeatures set_timeline_semaphore_features = {
+        .sType             = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES,
+        .pNext             = nullptr,
+        .timelineSemaphore = query_timeline_semaphore_features.timelineSemaphore
+    };
+    {
+        set_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&set_timeline_semaphore_features);
+        set_features_chain_last        = set_features_chain_last->pNext;
+    }
+
     VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT set_swapchain_maintenance_features{
         .sType                 = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_EXT,
         .pNext                 = nullptr,
         .swapchainMaintenance1 = query_swapchain_maintenance_features.swapchainMaintenance1
     };
-    if (supports_swapchain_maintenance1) {
+    if (m_capabilities.m_swapchain_maintenance1) {
         set_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&set_swapchain_maintenance_features);
-        set_features_chain_last = set_features_chain_last->pNext;
+        set_features_chain_last        = set_features_chain_last->pNext;
         if (set_swapchain_maintenance_features.swapchainMaintenance1 == VK_TRUE) {
             log_debug->debug("Enabled feature swapchain maintenance1");
         }
@@ -597,7 +631,7 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         .pNext                      = nullptr,
         .presentModeFifoLatestReady = query_present_mode_fifo_latest_ready_features.presentModeFifoLatestReady
     };
-    if (supports_present_mode_fifo_latest_ready) {
+    if (m_capabilities.m_present_mode_fifo_latest_ready) {
         set_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&set_present_mode_fifo_latest_ready_features);
         set_features_chain_last = set_features_chain_last->pNext;
         if (query_present_mode_fifo_latest_ready_features.presentModeFifoLatestReady == VK_TRUE) {
@@ -684,10 +718,37 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         abort();
     }
 
+    const VkSemaphoreTypeCreateInfo semaphore_type_create_info{
+        .sType         = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
+        .pNext         = nullptr,
+        .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
+        .initialValue  = 0
+    };
+
+    const VkSemaphoreCreateInfo semaphore_create_info{
+        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+        .pNext = &semaphore_type_create_info,
+        .flags = 0
+    };
+
+    result = vkCreateSemaphore(m_vulkan_device, &semaphore_create_info, nullptr, &m_vulkan_frame_end_semaphore);
+    if (result != VK_SUCCESS) {
+        log_context->critical("vkCreateSemaphore() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        abort();
+    }
+
+    create_frames_in_flight_resources();
+
     m_info.glsl_version       = 460;
     m_info.vulkan_api_version = application_info.apiVersion;
 
     m_info.max_per_stage_descriptor_samplers = properties.limits.maxPerStageDescriptorSamplers;
+
+    if (m_surface) {
+        uint32_t width {0};
+        uint32_t height{0};
+        m_surface->resize_swapchain_to_surface(width, height);
+    }
 }
 
 auto Device_impl::allocate_command_buffer() -> VkCommandBuffer
@@ -707,32 +768,6 @@ auto Device_impl::allocate_command_buffer() -> VkCommandBuffer
         abort();
     }
     return vulkan_command_buffer;
-}
-
-void Device_impl::create_swapchain()
-{
-    if (!m_swapchain) {
-        m_swapchain = std::make_unique<Swapchain>(
-            m_device,
-            erhe::graphics::Swapchain_create_info{
-                .surface = *m_surface.get()
-            }
-        );
-    }
-}
-
-void Device_impl::resize_swapchain_to_window()
-{
-    if (!m_swapchain) {
-        create_swapchain();
-    } else {
-        m_swapchain->resize_to_window();
-    }
-}
-
-auto Device_impl::get_swapchain() -> Swapchain*
-{
-    return m_swapchain.get();
 }
 
 Device_impl::~Device_impl()
@@ -1009,24 +1044,15 @@ auto Device_impl::get_graphics_queue() const -> VkQueue
 {
     return m_vulkan_graphics_queue;
 }
+
 auto Device_impl::get_present_queue() const -> VkQueue
 {
     return m_vulkan_present_queue;
 }
 
-auto Device_impl::get_instance_layers() const -> const Instance_layers&
+auto Device_impl::get_capabilities() const -> const Capabilities&
 {
-    return m_instance_layers;
-}
-
-auto Device_impl::get_instance_extensions() const -> const Instance_extensions&
-{
-    return m_instance_extensions;
-}
-
-auto Device_impl::get_device_extensions() const -> const Device_extensions&
-{
-    return m_device_extensions;
+    return m_capabilities;
 }
 
 auto Device_impl::get_handle(const Texture& texture, const Sampler& sampler) const -> uint64_t
@@ -1129,7 +1155,7 @@ void Device_impl::upload_to_buffer(Buffer& buffer, size_t offset, const void* da
 
 void Device_impl::add_completion_handler(std::function<void()> callback)
 {
-    m_completion_handlers.emplace_back(m_frame_number, callback);
+    m_completion_handlers.emplace_back(m_frame_index, callback);
 }
 
 void Device_impl::on_thread_enter()
@@ -1158,22 +1184,95 @@ void Device_impl::frame_completed(const uint64_t completed_frame)
 
 void Device_impl::start_of_frame()
 {
-    ++m_frame_number;
-    if (m_swapchain) {
-        m_swapchain->get_impl().start_of_frame();
+    if (m_surface) {
+        Swapchain* swapchain = m_surface->get_swapchain();
+        if (swapchain != nullptr) {
+            swapchain->start_of_frame();
+        }
     }
 }
 
 void Device_impl::end_of_frame()
 {
-    if (m_swapchain) {
-        m_swapchain->get_impl().present();
+    if (m_surface) {
+        Swapchain* swapchain = m_surface->get_swapchain();
+        if (swapchain != nullptr) {
+            swapchain->present();
+        }
     }
-}
 
-auto Device_impl::get_frame_number() const -> uint64_t
-{
-    return m_frame_number;
+    VkResult result = VK_SUCCESS;
+
+    //const uint64_t          fif_index       = get_frame_in_flight_index();
+    //Device_frame_in_flight& frame_in_flight = m_frames_in_flight.at(fif_index);
+
+    //// log_context->debug("vkResetCommandBuffer()");
+    //// result = vkResetCommandBuffer(frame_in_flight.m_end_of_frame_command_buffer, 0);
+    //// if (result != VK_SUCCESS) {
+    ////     log_context->critical("vkResetCommandBuffer() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+    ////     abort();
+    //// }
+    //// 
+    //// const VkCommandBufferBeginInfo begin_info{
+    ////     .sType            = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+    ////     .pNext            = nullptr,
+    ////     .flags            = 0,
+    ////     .pInheritanceInfo = nullptr
+    //// };
+    //// 
+    //// log_context->debug("vkBeginCommandBuffer()");
+    //// result = vkBeginCommandBuffer(frame_in_flight.m_end_of_frame_command_buffer, &begin_info);
+    //// if (result != VK_SUCCESS) {
+    ////     log_context->critical("vkBeginCommandBuffer() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+    ////     abort();
+    //// }
+    //// 
+    //// log_context->debug("vkEndCommandBuffer()");
+    //// result = vkEndCommandBuffer(frame_in_flight.m_end_of_frame_command_buffer);
+    //// if (result != VK_SUCCESS) {
+    ////     log_context->critical("vkEndCommandBuffer() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+    ////     abort();
+    //// }
+
+    const VkTimelineSemaphoreSubmitInfo semaphore_submit_info = {
+        .sType                     = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO,
+        .pNext                     = nullptr,
+        .waitSemaphoreValueCount   = 0, 
+        .pWaitSemaphoreValues      = nullptr,
+        .signalSemaphoreValueCount = 1,
+        .pSignalSemaphoreValues    = &m_frame_index,
+    };
+
+    const VkSubmitInfo submit_info{
+        .sType                = VK_STRUCTURE_TYPE_SUBMIT_INFO,  // VkStructureType
+        .pNext                = &semaphore_submit_info,         // const void*
+        .waitSemaphoreCount   = 0,                              // uint32_t
+        .pWaitSemaphores      = nullptr,                        // const VkSemaphore*
+        .pWaitDstStageMask    = nullptr,                        // const VkPipelineStageFlags*
+        .commandBufferCount   = 0,                              // uint32_t
+        .pCommandBuffers      = nullptr,                        // const VkCommandBuffer*
+        .signalSemaphoreCount = 1,                              // uint32_t
+        .pSignalSemaphores    = &m_vulkan_frame_end_semaphore,  // const VkSemaphore*
+    };
+    log_context->debug("vkQueueSubmit() end of frame timeline semaphore @ frame index = {}", m_frame_index);
+    result = vkQueueSubmit(m_vulkan_graphics_queue, 1, &submit_info, VK_NULL_HANDLE);
+    if (result != VK_SUCCESS) {
+        log_context->critical("vkQueueSubmit() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        abort();
+    }
+
+    ++m_frame_index;
+
+    uint64_t latest_completed_frame{0};
+    result = vkGetSemaphoreCounterValue(m_vulkan_device, m_vulkan_frame_end_semaphore, &latest_completed_frame);
+    if (result != VK_SUCCESS) {
+        log_context->error("vkGetSemaphoreCounterValue() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+    } else {
+        for (; m_latest_completed_frame <= latest_completed_frame; ++m_latest_completed_frame) {
+            log_context->info("GPU has completed frame index = {}", m_latest_completed_frame);
+            frame_completed(m_latest_completed_frame);
+        }
+    }
 }
 
 auto Device_impl::allocate_ring_buffer_entry(
@@ -1245,6 +1344,57 @@ void Device_impl::set_debug_label(VkObjectType object_type, uint64_t object_hand
 void Device_impl::set_debug_label(VkObjectType object_type, uint64_t object_handle, const std::string& label)
 {
     set_debug_label(object_type, object_handle, label.c_str());
+}
+
+auto Device_impl::get_number_of_frames_in_flight() const -> size_t
+{
+    return s_number_of_frames_in_flight;
+}
+
+auto Device_impl::get_frame_index() const -> uint64_t
+{
+    return m_frame_index;
+}
+
+auto Device_impl::get_frame_in_flight_index() const -> uint64_t
+{
+    return m_frame_index % get_number_of_frames_in_flight();
+}
+
+void Device_impl::create_frames_in_flight_resources()
+{
+    //const VkFenceCreateInfo fence_create_info{
+    //    .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+    //    .pNext = nullptr,
+    //    .flags = VK_FENCE_CREATE_SIGNALED_BIT
+    //};
+    //VkResult result = VK_SUCCESS;
+
+    //m_frames_in_flight.resize(get_number_of_frames_in_flight());
+    //for (size_t i = 0, end = get_number_of_frames_in_flight(); i < end; ++i) {
+    //    Device_frame_in_flight& frame_in_flight = m_frames_in_flight[i];
+    //    //result = vkCreateFence(m_vulkan_device, &fence_create_info, nullptr, &frame_in_flight.frame_end_fence);
+    //    //if (result != VK_SUCCESS) {
+    //    //    log_context->critical("vkCreateFence() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+    //    //    abort();
+    //    //}
+    //    //set_debug_label(
+    //    //    VK_OBJECT_TYPE_FENCE,
+    //    //    reinterpret_cast<uint64_t>(frame_in_flight.frame_end_fence),
+    //    //    fmt::format("Device frame in flight end of frame fence {}", i).c_str()
+    //    //);
+    //    frame_in_flight.m_end_of_frame_command_buffer = allocate_command_buffer();
+    //    if (frame_in_flight.m_end_of_frame_command_buffer == VK_NULL_HANDLE) {
+    //        log_context->critical("Allocating end of frrame command buffer failed");
+    //        abort();
+    //    }
+    //    set_debug_label(
+    //        VK_OBJECT_TYPE_COMMAND_BUFFER,
+    //        reinterpret_cast<uint64_t>(frame_in_flight.m_end_of_frame_command_buffer),
+    //        fmt::format("Device end of frame command buffer {}", i)
+    //    );
+    //
+    //}
 }
 
 } // namespace erhe::graphics

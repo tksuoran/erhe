@@ -233,7 +233,7 @@ void Ring_buffer::make_sync_entry(std::size_t wrap_count, std::size_t byte_offse
     // Merge to existing sync
     for (Ring_buffer_sync_entry& entry : m_sync_entries) {
         if (
-            (entry.waiting_for_frame == m_device.get_frame_number()) &&
+            (entry.waiting_for_frame == m_device.get_frame_index()) &&
             (entry.wrap_count == wrap_count)
         ) {
             if (byte_offset + byte_count > entry.byte_offset + entry.byte_count) {
@@ -247,7 +247,7 @@ void Ring_buffer::make_sync_entry(std::size_t wrap_count, std::size_t byte_offse
     // Make new sync entry
     m_sync_entries.push_back(
         Ring_buffer_sync_entry{
-            .waiting_for_frame = m_device.get_frame_number(),
+            .waiting_for_frame = m_device.get_frame_index(),
             .wrap_count        = wrap_count,
             .byte_offset       = byte_offset,
             .byte_count        = byte_count

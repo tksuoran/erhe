@@ -45,11 +45,10 @@ public:
     void on_thread_enter           ();
 
     [[nodiscard]] auto get_surface                 () -> Surface*;
-    [[nodiscard]] auto get_swapchain               () -> Swapchain*;
     [[nodiscard]] auto get_handle                  (const Texture& texture, const Sampler& sampler) const -> uint64_t;
     [[nodiscard]] auto create_dummy_texture        () -> std::shared_ptr<Texture>;
     [[nodiscard]] auto get_buffer_alignment        (Buffer_target target) -> std::size_t;
-    [[nodiscard]] auto get_frame_number            () const -> uint64_t;
+    [[nodiscard]] auto get_frame_index             () const -> uint64_t;
     [[nodiscard]] auto allocate_ring_buffer_entry  (Buffer_target buffer_target, Ring_buffer_usage usage, std::size_t byte_count) -> Ring_buffer_range;
     [[nodiscard]] auto make_blit_command_encoder   () -> Blit_command_encoder;
     [[nodiscard]] auto make_compute_command_encoder() -> Compute_command_encoder;
@@ -60,7 +59,6 @@ public:
     [[nodiscard]] auto get_info                    () const -> const Device_info&;
 
 private:
-    void create_swapchain();
     void frame_completed (uint64_t frame);
 
     using PFN_generic          = void (*) ();
@@ -78,15 +76,13 @@ private:
     Gl_context_provider           m_gl_context_provider;
     Device_info                   m_info;
 
-    std::unique_ptr<Swapchain>  m_swapchain;
-
     std::unordered_map<gl::Internal_format, Format_properties> format_properties;
 
     std::vector<std::unique_ptr<Ring_buffer>> m_ring_buffers;
     std::size_t                               m_min_buffer_size = 2 * 1024 * 1024; // TODO
 
     std::array<Frame_sync, 16> m_frame_syncs;
-    uint64_t                   m_frame_number{1};
+    uint64_t                   m_frame_index{1};
 
     std::vector<uint64_t>      m_pending_frames;
     std::vector<uint64_t>      m_completed_frames;
