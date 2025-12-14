@@ -9,6 +9,7 @@ function (erhe_target_settings_toolchain target)
     target_compile_definitions(${target} PUBLIC $<$<COMPILE_LANGUAGE:CXX>:NOMINMAX>)
     target_compile_definitions(${target} PUBLIC $<$<COMPILE_LANGUAGE:CXX>:_CRT_SECURE_NO_WARNINGS>)
     target_compile_definitions(${target} PUBLIC $<$<COMPILE_LANGUAGE:CXX>:_SILENCE_CXX20_U8PATH_DEPRECATION_WARNING>)
+    target_compile_definitions(${target} PUBLIC $<$<COMPILE_LANGUAGE:CXX>:_SILENCE_CXX20_IS_POD_DEPRECATION_WARNING>)
 
     # Enable Just My Code - which cmake does not seem to set even though
     # Visual Studio has documented it to be enabled by default
