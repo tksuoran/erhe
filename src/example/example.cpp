@@ -45,6 +45,7 @@
 
 #include <taskflow/taskflow.hpp>
 
+#include <atomic>
 #include <thread>
 
 namespace example {
@@ -134,7 +135,7 @@ public:
                     (m_last_window_width  != m_window.get_width ()) ||
                     (m_last_window_height != m_window.get_height())
                 ) {
-                    m_graphics_device.get_surface()->resize_swapchain_to_surface(m_swapchain_width, m_swapchain_height);
+                    m_request_resize_pending.store(true);
                     m_last_window_width  = m_window.get_width();
                     m_last_window_height = m_window.get_height();
                 }
@@ -144,10 +145,12 @@ public:
     }
 
     std::optional<erhe::window::Input_event> m_window_resize_event{};
-    int      m_last_window_width {0};
-    int      m_last_window_height{0};
-    uint32_t m_swapchain_width   {0};
-    uint32_t m_swapchain_height  {0};
+    int               m_last_window_width     {0};
+    int               m_last_window_height    {0};
+    uint32_t          m_swapchain_width       {0};
+    uint32_t          m_swapchain_height      {0};
+    std::atomic<bool> m_request_resize_pending{false};
+
     auto on_window_resize_event(const erhe::window::Input_event& input_event) -> bool override
     {
         m_window_resize_event = input_event;
@@ -213,7 +216,9 @@ public:
     {
         m_current_time = std::chrono::steady_clock::now();
         while (!m_close_requested) {
-            m_graphics_device.start_of_frame();
+            erhe::graphics::Frame_state frame_state{};
+            m_graphics_device.wait_frame(frame_state);
+
             // m_graphics_device.wait_for_idle()
             // m_window.delay_before_swap(1.0f / 120.0f); // sleep half the frame
 
@@ -222,15 +227,29 @@ public:
             for (erhe::window::Input_event& input_event : input_events) {
                 static_cast<void>(this->dispatch_input_event(input_event));
             }
+
             if (m_window_resize_event.has_value()) {
-                m_graphics_device.get_surface()->resize_swapchain_to_surface(m_swapchain_width, m_swapchain_height);
+                m_request_resize_pending.store(true);
                 m_window_resize_event.reset();
                 m_last_window_width  = m_window.get_width();
                 m_last_window_height = m_window.get_height();
             }
 
+            const erhe::graphics::Frame_begin_info frame_begin_info{
+                .resize_width   = static_cast<uint32_t>(m_last_window_width),
+                .resize_height  = static_cast<uint32_t>(m_last_window_height),
+                .request_resize = m_request_resize_pending.load()
+            };
+            m_request_resize_pending.store(false);
+
+            m_graphics_device.begin_frame(frame_begin_info);
+
             tick();
-            m_graphics_device.end_of_frame();
+
+            const erhe::graphics::Frame_end_info frame_end_info{
+                .requested_display_time = 0 // TODO
+            };
+            m_graphics_device.end_frame(frame_end_info);
         }
     }
 

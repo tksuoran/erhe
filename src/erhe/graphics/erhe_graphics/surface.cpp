@@ -23,11 +23,6 @@ auto Surface::get_swapchain() -> Swapchain*
     return m_impl->get_swapchain();
 }
 
-void Surface::resize_swapchain_to_surface(uint32_t& width, uint32_t& height)
-{
-    m_impl->resize_swapchain_to_surface(width, height);
-}
-
 auto Surface::get_impl() -> Surface_impl&
 {
     return *m_impl;

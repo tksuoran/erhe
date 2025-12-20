@@ -60,13 +60,17 @@ auto Device::get_buffer_alignment(Buffer_target target) -> std::size_t
 {
     return m_impl->get_buffer_alignment(target);
 }
-void Device::start_of_frame()
+void Device::wait_frame(Frame_state& out_frame_state)
 {
-    m_impl->start_of_frame();
+    m_impl->wait_frame(out_frame_state);
 }
-void Device::end_of_frame()
+void Device::begin_frame(const Frame_begin_info& frame_begin_info)
 {
-    m_impl->end_of_frame();
+    m_impl->begin_frame(frame_begin_info);
+}
+void Device::end_frame(const Frame_end_info& frame_end_info)
+{
+    m_impl->end_frame(frame_end_info);
 }
 auto Device::get_frame_index() const -> uint64_t
 {

@@ -233,7 +233,7 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
 {
     if (true) {
         // For now, avoid extra layers as they might cause validation or other issues
-        set_env("VK_LOADER_LAYERS_DISABLE", "ALL");
+        set_env("VK_LOADER_LAYERS_DISABLE", "~implicit~");
         set_env("DISABLE_LAYER_NV_OPTIMUS_1", "1");
         set_env("DISABLE_LAYER_NV_GR2608_1", "1");
         set_env("DISABLE_VULKAN_OBS_CAPTURE", "1");
@@ -752,12 +752,6 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
     m_info.vulkan_api_version = application_info.apiVersion;
 
     m_info.max_per_stage_descriptor_samplers = properties.limits.maxPerStageDescriptorSamplers;
-
-    if (m_surface) {
-        uint32_t width {0};
-        uint32_t height{0};
-        m_surface->resize_swapchain_to_surface(width, height);
-    }
 }
 
 auto Device_impl::allocate_command_buffer() -> VkCommandBuffer
@@ -1196,57 +1190,45 @@ void Device_impl::frame_completed(const uint64_t completed_frame)
     }
 }
 
-void Device_impl::start_of_frame()
+void Device_impl::wait_frame(Frame_state& out_frame_state)
 {
     if (m_surface) {
         Swapchain* swapchain = m_surface->get_swapchain();
         if (swapchain != nullptr) {
-            swapchain->start_of_frame();
+            swapchain->wait_frame(out_frame_state);
+        }
+    } else {
+        out_frame_state.predicted_display_time   = 0;
+        out_frame_state.predicted_display_period = 0;
+        out_frame_state.should_render            = false;
+    }
+}
+
+void Device_impl::begin_frame(const Frame_begin_info& frame_begin_info)
+{
+    if (m_surface) {
+        Swapchain* swapchain = m_surface->get_swapchain();
+        if (swapchain != nullptr) {
+            swapchain->begin_frame(frame_begin_info);
         }
     }
 }
 
-void Device_impl::end_of_frame()
+void Device_impl::end_frame(const Frame_end_info& frame_end_info)
 {
     if (m_surface) {
         Swapchain* swapchain = m_surface->get_swapchain();
         if (swapchain != nullptr) {
-            swapchain->present();
+            swapchain->end_frame(frame_end_info);
         }
     }
 
+    update_frame_completion();
+}
+
+void Device_impl::update_frame_completion()
+{
     VkResult result = VK_SUCCESS;
-
-    //const uint64_t          fif_index       = get_frame_in_flight_index();
-    //Device_frame_in_flight& frame_in_flight = m_frames_in_flight.at(fif_index);
-
-    //// log_context->debug("vkResetCommandBuffer()");
-    //// result = vkResetCommandBuffer(frame_in_flight.m_end_of_frame_command_buffer, 0);
-    //// if (result != VK_SUCCESS) {
-    ////     log_context->critical("vkResetCommandBuffer() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
-    ////     abort();
-    //// }
-    //// 
-    //// const VkCommandBufferBeginInfo begin_info{
-    ////     .sType            = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-    ////     .pNext            = nullptr,
-    ////     .flags            = 0,
-    ////     .pInheritanceInfo = nullptr
-    //// };
-    //// 
-    //// log_context->debug("vkBeginCommandBuffer()");
-    //// result = vkBeginCommandBuffer(frame_in_flight.m_end_of_frame_command_buffer, &begin_info);
-    //// if (result != VK_SUCCESS) {
-    ////     log_context->critical("vkBeginCommandBuffer() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
-    ////     abort();
-    //// }
-    //// 
-    //// log_context->debug("vkEndCommandBuffer()");
-    //// result = vkEndCommandBuffer(frame_in_flight.m_end_of_frame_command_buffer);
-    //// if (result != VK_SUCCESS) {
-    ////     log_context->critical("vkEndCommandBuffer() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
-    ////     abort();
-    //// }
 
     const VkTimelineSemaphoreSubmitInfo semaphore_submit_info = {
         .sType                     = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO,

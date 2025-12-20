@@ -886,16 +886,36 @@ void Device_impl::frame_completed(const uint64_t completed_frame)
     }
 }
 
-void Device_impl::start_of_frame()
-{
-}
-
-void Device_impl::end_of_frame()
+void Device_impl::wait_frame(Frame_state& out_frame_state)
 {
     if (m_surface) {
         Swapchain* swapchain = m_surface->get_swapchain();
         if (swapchain != nullptr) {
-            swapchain->present();
+            swapchain->wait_frame(out_frame_state);
+        }
+    } else {
+        out_frame_state.predicted_display_time   = 0;
+        out_frame_state.predicted_display_period = 0;
+        out_frame_state.should_render            = false;
+    }
+}
+
+void Device_impl::begin_frame(const Frame_begin_info& frame_begin_info)
+{
+    if (m_surface) {
+        Swapchain* swapchain = m_surface->get_swapchain();
+        if (swapchain != nullptr) {
+            swapchain->begin_frame(frame_begin_info);
+        }
+    }
+}
+
+void Device_impl::end_frame(const Frame_end_info& frame_end_info)
+{
+    if (m_surface) {
+        Swapchain* swapchain = m_surface->get_swapchain();
+        if (swapchain != nullptr) {
+            swapchain->end_frame(frame_end_info);
         }
     }
 

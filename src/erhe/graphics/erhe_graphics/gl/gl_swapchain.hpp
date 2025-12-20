@@ -19,8 +19,9 @@ public:
     );
     ~Swapchain_impl() noexcept;
 
-    void start_of_frame();
-    void present       ();
+    void wait_frame (Frame_state& out_frame_state);
+    void begin_frame(const Frame_begin_info& frame_begin_info);
+    void end_frame  (const Frame_end_info& frame_end_info);
 
 private:
     Device_impl&                  m_device_impl;

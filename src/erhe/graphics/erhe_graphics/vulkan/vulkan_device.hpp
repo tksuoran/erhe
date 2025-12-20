@@ -66,6 +66,8 @@ public:
     bool m_swapchain_maintenance1        {false};
 };
 
+class Frame_begin_info;
+class Frame_end_info;
 class Surface_impl;
 class Swapchain;
 
@@ -80,8 +82,10 @@ public:
     void operator=(Device_impl&&)      = delete;
     ~Device_impl  ();
 
-    void start_of_frame        ();
-    void end_of_frame          ();
+    void wait_frame            (Frame_state& out_frame_state);
+    void begin_frame           (const Frame_begin_info& frame_begin_info);
+    void end_frame             (const Frame_end_info& frame_end_info);
+
     void memory_barrier        (Memory_barrier_mask barriers);
     void clear_texture         (Texture& texture, std::array<double, 4> clear_value);
     void upload_to_buffer      (Buffer& buffer, size_t offset, const void* data, size_t length);
@@ -137,6 +141,8 @@ public:
 
 private:
     static constexpr size_t s_number_of_frames_in_flight = 2;
+
+    void update_frame_completion();
 
     void create_frames_in_flight_resources();
 
