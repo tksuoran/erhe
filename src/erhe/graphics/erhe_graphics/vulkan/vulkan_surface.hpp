@@ -28,7 +28,13 @@ public:
     [[nodiscard]] auto get_image_count        () -> uint32_t const;
     [[nodiscard]] auto get_vulkan_surface     () -> VkSurfaceKHR const;
 
-    void resize_swapchain_to_surface(uint32_t& width, uint32_t& height);
+    void resize_swapchain_to_surface(uint32_t& out_width, uint32_t& out_height);
+
+    void update_swapchain(
+        bool&                     error,
+        bool&                     create,
+        VkSwapchainCreateInfoKHR& create_info
+    )l;
 
 private:
     [[nodiscard]] auto update_swapchain() -> bool;
@@ -57,6 +63,8 @@ private:
 
     VkSurfaceCapabilities2KHR              m_surface_capabilities2;
     VkSurfacePresentScalingCapabilitiesKHR m_scaling_capabilities;
+
+    uint32_t m_swapchain_creation_count{0};
 };
 
 } // namespace erhe::graphics

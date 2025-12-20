@@ -39,37 +39,33 @@ auto Surface_impl::get_swapchain() -> Swapchain*
     return m_swapchain.get();
 }
 
-void Surface_impl::resize_swapchain_to_surface(uint32_t& width, uint32_t& height)
+void Surface_impl::resize_swapchain_to_surface(uint32_t& out_width, uint32_t& out_height)
 {
     //if (!m_swapchain) {
     //    VkExtent2D     extent{.width = 0, .height = 0};
     //        VkSwapchainKHR vulkan_swapchain = 
-    bool update_ok = update_swapchain();
-    if (!update_ok) {
-        width = 0;
-        height = 0;
-        return;
-    }
-    if (
-        (m_vulkan_swapchain == VK_NULL_HANDLE) ||
-        (m_swapchain_extent.width == 0) ||
-        (m_swapchain_extent.height == 0)
-    ) {
-        m_swapchain.reset();
-        width = 0;
-        height = 0;
+    bool error = false;
+    bool create = false;
+    VkSwapchainCreateInfoKHR swapchain_create_info{};
+    update_swapchain(error, create, swapchain_create_info);
+    if (error) {
+        out_width = 0;
+        out_height = 0;
         return;
     }
     width = m_swapchain_extent.width;
     height = m_swapchain_extent.height;
+    if (!create) {
+        return;
+    }
     if (m_swapchain) {
-        m_swapchain->get_impl().update_vulkan_swapchain(m_vulkan_swapchain, m_swapchain_extent);
+        m_swapchain->get_impl().update_vulkan_swapchain(swapchain_create_info);
     } else {
         m_swapchain = std::make_unique<Swapchain>(
             std::make_unique<Swapchain_impl>(
                 m_device_impl,
                 *this,
-                m_vulkan_swapchain, m_swapchain_extent
+                swapchain_create_info
             )
         );
     }
@@ -557,14 +553,20 @@ Surface_impl::~Surface_impl() noexcept
     }
 }
 
-auto Surface_impl::update_swapchain() -> bool
+void Surface_impl::update_swapchain(
+    bool&                     error,
+    bool&                     create,
+    VkSwapchainCreateInfoKHR& swapchain_create_info
+)
 {
-    log_context->debug("Surface_impl::update_swapchain()");
+    log_context->debug("Surface_impl::configure_swapchain()");
 
     VkSurfaceCapabilitiesKHR surface_capabilities{};
     VkResult result = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_physical_device, m_surface, &surface_capabilities);
     if (result != VK_SUCCESS) {
         log_context->warn("vkGetPhysicalDeviceSurfaceCapabilitiesKHR() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        error = true;
+        recreate = false;
         return false;
     }
 
@@ -596,6 +598,8 @@ auto Surface_impl::update_swapchain() -> bool
         (extent.width  == m_swapchain_extent.width) &&
         (extent.height == m_swapchain_extent.height)
     ) {
+        error = false;
+        create = false;
         return true;
     }
 
@@ -700,7 +704,7 @@ auto Surface_impl::update_swapchain() -> bool
         .presentGravityY = gravity_y                                                    // VkPresentGravityFlagsKHR
     };
 
-    const VkSwapchainCreateInfoKHR swapchain_create_info{
+    swapchain_create_info = VkSwapchainCreateInfoKHR{
         .sType                 = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,   // VkStructureType
         .pNext                 = use_scaling                                    // const void*
                                     ? &swapchain_present_scaling_create_info
@@ -720,32 +724,10 @@ auto Surface_impl::update_swapchain() -> bool
         .compositeAlpha        = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,             // VkCompositeAlphaFlagBitsKHR
         .presentMode           = m_present_mode,                                // VkPresentModeKHR
         .clipped               = VK_TRUE,                                       // VkBool32
-        .oldSwapchain          = old_swapchain                                  // VkSwapchainKHR
+        .oldSwapchain          = nullptr //old_swapchain                                  // VkSwapchainKHR
     };
-
-    VkSwapchainKHR vulkan_swapchain{VK_NULL_HANDLE};
-    result = vkCreateSwapchainKHR(vulkan_device, &swapchain_create_info, nullptr, &vulkan_swapchain);
-    if (result != VK_SUCCESS) {
-        log_context->critical("vkCreateSwapchainKHR() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
-        abort();
-    }
-
-    if ((result != VK_SUCCESS) && (vulkan_swapchain != VK_NULL_HANDLE)) {
-        vkDestroySwapchainKHR(vulkan_device, vulkan_swapchain, nullptr);
-        return false;
-    }
-
-    if (old_swapchain != VK_NULL_HANDLE) {
-        m_device_impl.add_completion_handler(
-            [vulkan_device, old_swapchain]() {
-                vkDestroySwapchainKHR(vulkan_device, old_swapchain, nullptr);
-            }
-        );
-    }
-
-    m_vulkan_swapchain = vulkan_swapchain;
-    m_swapchain_extent = swapchain_create_info.imageExtent;
-    return true;
+    error = false;
+    create = true;
 }
 
 } // namespace erhe::graphics
