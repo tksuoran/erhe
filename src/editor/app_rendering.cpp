@@ -22,6 +22,7 @@
 #include "erhe_commands/command.hpp"
 #include "erhe_commands/commands.hpp"
 #include "erhe_graphics/gpu_timer.hpp"
+#include "erhe_graphics/swapchain.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_renderer/pipeline_renderpass.hpp"
 #include "erhe_rendergraph/rendergraph.hpp"
@@ -786,7 +787,7 @@ void App_rendering::begin_frame()
 {
     ERHE_PROFILE_FUNCTION();
 
-    m_context.graphics_device->start_of_frame();
+    m_context.graphics_device->begin_frame();
 
     if (m_trigger_capture) {
         erhe::window::start_frame_capture(*m_context.context_window);
@@ -821,7 +822,10 @@ void App_rendering::end_frame()
         m_trigger_capture = false;
     }
 
-    m_context.graphics_device->end_of_frame();
+    const erhe::graphics::Frame_end_info frame_end_info{
+        .requested_display_time = 0
+    };
+    m_context.graphics_device->end_frame(frame_end_info);
 }
 
 void App_rendering::add(Renderable* renderable)

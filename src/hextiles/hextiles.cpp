@@ -16,6 +16,7 @@
 #endif
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/graphics_log.hpp"
+#include "erhe_graphics/swapchain.hpp"
 #include "erhe_imgui/imgui_log.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
@@ -279,6 +280,9 @@ public:
     {
         std::lock_guard<std::mutex> lock{m_mutex};
 
+        erhe::graphics::Frame_state frame_state{};
+        m_graphics_device.wait_frame(frame_state);
+
         std::vector<erhe::window::Input_event>& input_events = m_window.get_input_events();
 
         m_imgui_windows .process_events(dt_s, timestamp_ns);
@@ -290,14 +294,19 @@ public:
         m_imgui_windows .end_frame();
 
         // editor does this via m_app_rendering->begin_frame()
-        m_graphics_device.start_of_frame();
+        m_graphics_device.begin_frame();
 
         if (m_map_window.is_window_visible()) {
             m_map_window.render();
         }
         m_rendergraph   .execute();
         m_imgui_renderer.next_frame();
-        m_graphics_device.end_of_frame();
+
+        const erhe::graphics::Frame_end_info frame_end_info{
+            .requested_display_time = 0 // TODO
+        };
+
+        m_graphics_device.end_frame(frame_end_info);
     }
 
     auto on_window_close_event(const erhe::window::Input_event&) -> bool override

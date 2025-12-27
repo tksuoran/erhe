@@ -20,6 +20,8 @@ public:
     Surface_impl(Device_impl& device, const Surface_create_info& create_info);
     ~Surface_impl() noexcept;
 
+    [[nodiscard]] auto is_empty() -> bool;
+    [[nodiscard]] auto is_valid() -> bool;
     [[nodiscard]] auto get_swapchain          () -> Swapchain*;
     [[nodiscard]] auto can_use_physical_device(VkPhysicalDevice physical_device) -> bool;
     [[nodiscard]] auto use_physical_device    (VkPhysicalDevice physical_device) -> bool;
@@ -30,15 +32,10 @@ public:
 
     void resize_swapchain_to_surface(uint32_t& out_width, uint32_t& out_height);
 
-    void update_swapchain(
-        bool&                     error,
-        bool&                     create,
-        VkSwapchainCreateInfoKHR& create_info
-    )l;
+    // Returns true if swapchain needs to be (re)created
+    [[nodiscard]] auto update_swapchain(VkSwapchainCreateInfoKHR& out_swapchain_create_info) -> bool;
 
 private:
-    [[nodiscard]] auto update_swapchain() -> bool;
-
     void fail();
     void choose_surface_format();
     void choose_present_mode  ();
@@ -60,6 +57,8 @@ private:
     VkExtent2D                      m_swapchain_extent{0, 0};
     VkSwapchainKHR                  m_vulkan_swapchain{VK_NULL_HANDLE};
     std::unique_ptr<Swapchain>      m_swapchain;
+    bool                            m_is_empty{true};
+    bool                            m_is_valid{false};
 
     VkSurfaceCapabilities2KHR              m_surface_capabilities2;
     VkSurfacePresentScalingCapabilitiesKHR m_scaling_capabilities;

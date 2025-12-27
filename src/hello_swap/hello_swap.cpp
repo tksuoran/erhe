@@ -123,6 +123,10 @@ public:
     {
         std::lock_guard<std::mutex> lock{m_mutex};
 
+        erhe::graphics::Frame_state frame_state{};
+        m_graphics_device.wait_frame(frame_state);
+
+        // TODO use predicted display time
         const auto tick_end_time = std::chrono::steady_clock::now();
 
         // Update fixed steps
@@ -153,11 +157,15 @@ public:
 
         update_render_pass(viewport.width, viewport.height);
 
-        m_graphics_device.start_of_frame();
+        m_graphics_device.begin_frame();
 
         erhe::graphics::Render_command_encoder render_encoder = m_graphics_device.make_render_command_encoder(*m_render_pass.get());
 
-        m_graphics_device.end_of_frame();
+        const erhe::graphics::Frame_end_info frame_end_info{
+            .requested_display_time = 0 // TODO
+        };
+
+        m_graphics_device.end_frame(frame_end_info);
     }
 
 private:

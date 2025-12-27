@@ -41,13 +41,16 @@ auto Surface_impl::get_swapchain() -> Swapchain*
 
 void Surface_impl::resize_swapchain_to_surface(uint32_t& out_width, uint32_t& out_height)
 {
+    static_cast<void>(out_width);
+    static_cast<void>(out_height);
+#if 0
     //if (!m_swapchain) {
     //    VkExtent2D     extent{.width = 0, .height = 0};
     //        VkSwapchainKHR vulkan_swapchain = 
     bool error = false;
     bool create = false;
     VkSwapchainCreateInfoKHR swapchain_create_info{};
-    update_swapchain(error, create, swapchain_create_info);
+    init_swapchain(error, create, swapchain_create_info);
     if (error) {
         out_width = 0;
         out_height = 0;
@@ -69,6 +72,7 @@ void Surface_impl::resize_swapchain_to_surface(uint32_t& out_width, uint32_t& ou
             )
         );
     }
+#endif
 }
 
 auto Surface_impl::can_use_physical_device(VkPhysicalDevice physical_device) -> bool
@@ -553,20 +557,25 @@ Surface_impl::~Surface_impl() noexcept
     }
 }
 
-void Surface_impl::update_swapchain(
-    bool&                     error,
-    bool&                     create,
-    VkSwapchainCreateInfoKHR& swapchain_create_info
-)
+auto Surface_impl::is_empty() -> bool
+{
+    return m_is_empty;
+}
+
+auto Surface_impl::is_valid() -> bool
+{
+    return m_is_valid;
+}
+
+auto Surface_impl::update_swapchain(VkSwapchainCreateInfoKHR& out_swapchain_create_info) -> bool
 {
     log_context->debug("Surface_impl::configure_swapchain()");
 
     VkSurfaceCapabilitiesKHR surface_capabilities{};
     VkResult result = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_physical_device, m_surface, &surface_capabilities);
+    m_is_valid = result == VK_SUCCESS;
     if (result != VK_SUCCESS) {
         log_context->warn("vkGetPhysicalDeviceSurfaceCapabilitiesKHR() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
-        error = true;
-        recreate = false;
         return false;
     }
 
@@ -586,7 +595,7 @@ void Surface_impl::update_swapchain(
     log_context->debug("  Surface min extent : {} x {}", surface_capabilities.minImageExtent.width, surface_capabilities.minImageExtent.height);
     log_context->debug("  Surface max extent : {} x {}", surface_capabilities.maxImageExtent.width, surface_capabilities.maxImageExtent.height);
 
-    // Clawapchain size
+    // Clamp swapchain size
     extent.width  = extent.width;
     extent.height = extent.height;
     extent.width  = std::min(extent.width,  surface_capabilities.maxImageExtent.width);
@@ -594,34 +603,25 @@ void Surface_impl::update_swapchain(
     extent.width  = std::max(extent.width,  surface_capabilities.minImageExtent.width);
     extent.height = std::max(extent.height, surface_capabilities.minImageExtent.height);
 
-    if (
-        (extent.width  == m_swapchain_extent.width) &&
-        (extent.height == m_swapchain_extent.height)
-    ) {
-        error = false;
-        create = false;
-        return true;
-    }
-
-    if (
+    m_is_empty = 
         (surface_capabilities.currentExtent.width  == 0) ||
-        (surface_capabilities.currentExtent.height == 0)
-    ) {
+        (surface_capabilities.currentExtent.height == 0);
+
+    if (m_is_empty) {
         extent = VkExtent2D{.width = 0, .height = 0};
         return false;
     }
 
-    VkDevice       vulkan_device               = m_device_impl.get_vulkan_device();
+    if (
+        (extent.width  == m_swapchain_extent.width) &&
+        (extent.height == m_swapchain_extent.height)
+    ) {
+        return false;
+    }
+
     uint32_t       graphics_queue_family_index = m_device_impl.get_graphics_queue_family_index();
     VkSwapchainKHR old_swapchain               = m_vulkan_swapchain;
     bool           use_scaling                 = m_device_impl.get_capabilities().m_surface_maintenance1;
-
-//#if defined(ERHE_OS_WINDOWS)
-//    if (use_scaling && (m_device_impl.get_driver_properties().driverID == VK_DRIVER_ID_AMD_PROPRIETARY)) {
-//        log_context->warn("Detected AMD proprietary driver on Windows - disabling use of VkSwapchainPresentScalingCreateInfoKHR");
-//        use_scaling = false;
-//    }
-//#endif
 
     log_context->debug(
         "Calling vkCreateSwapchainKHR(format = {}, colorSpace = {}, extent = {} x {}, presentMode {}, oldSwapchain = {})",
@@ -704,7 +704,7 @@ void Surface_impl::update_swapchain(
         .presentGravityY = gravity_y                                                    // VkPresentGravityFlagsKHR
     };
 
-    swapchain_create_info = VkSwapchainCreateInfoKHR{
+    out_swapchain_create_info = VkSwapchainCreateInfoKHR{
         .sType                 = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,   // VkStructureType
         .pNext                 = use_scaling                                    // const void*
                                     ? &swapchain_present_scaling_create_info
@@ -726,8 +726,7 @@ void Surface_impl::update_swapchain(
         .clipped               = VK_TRUE,                                       // VkBool32
         .oldSwapchain          = nullptr //old_swapchain                                  // VkSwapchainKHR
     };
-    error = false;
-    create = true;
+    return true;
 }
 
 } // namespace erhe::graphics

@@ -213,7 +213,9 @@ public:
     {
         m_current_time = std::chrono::steady_clock::now();
         while (!m_close_requested) {
-            m_graphics_device.start_of_frame();
+            erhe::graphics::Frame_state frame_state{};
+            m_graphics_device.wait_frame(frame_state);
+
             // m_graphics_device.wait_for_idle()
             // m_window.delay_before_swap(1.0f / 120.0f); // sleep half the frame
 
@@ -229,8 +231,14 @@ public:
                 m_last_window_height = m_window.get_height();
             }
 
+            m_graphics_device.begin_frame();
+
             tick();
-            m_graphics_device.end_of_frame();
+
+            const erhe::graphics::Frame_end_info frame_end_info{
+                .requested_display_time = 0 // TODO
+            };
+            m_graphics_device.end_frame(frame_end_info);
         }
     }
 

@@ -139,6 +139,9 @@ public:
     unsigned int uniform_buffer_offset_alignment       {256};
 };
 
+class Frame_state;
+class Frame_end_info;
+
 class Device_impl;
 class Device final
 {
@@ -150,8 +153,10 @@ public:
     void operator= (Device&&)      = delete;
     ~Device();
 
-    void start_of_frame        ();
-    void end_of_frame          ();
+    void wait_frame            (Frame_state& out_frame_state);
+    void begin_frame           ();
+    void end_frame             (const Frame_end_info& frame_end_info);
+
     void memory_barrier        (Memory_barrier_mask barriers);
     void clear_texture         (Texture& texture, std::array<double, 4> clear_value);
     void upload_to_buffer      (Buffer& buffer, size_t offset, const void* data, size_t length);

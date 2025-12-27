@@ -212,6 +212,10 @@ public:
 
         ERHE_PROFILE_FUNCTION();
         m_frame_log_window->on_frame_begin();
+
+        erhe::graphics::Frame_state frame_state{};
+        m_graphics_device->wait_frame(frame_state);
+
         // log_input_frame->trace("----------------------- Editor::tick() -----------------------");
 
         std::vector<erhe::window::Input_event>& input_events = m_window->get_input_events();

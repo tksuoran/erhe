@@ -14,7 +14,7 @@ namespace erhe::graphics {
 class Device_impl;
 class Surface_impl;
 
-class Swapchain_objects 
+class Swapchain_objects
 {
 public:
     std::vector<VkImage>       images;
@@ -73,75 +73,63 @@ class Swapchain_impl final
 {
 public:
     Swapchain_impl(
-        Device_impl&              device_impl,
-        Surface_impl&             surface_impl,
-        VkSwapchainCreateInfoKHR& vulkan_swapchain_create_info
+        Device_impl&                    device_impl,
+        Surface_impl&                   surface_impl,
+        const VkSwapchainCreateInfoKHR& vulkan_swapchain_create_info
     );
     ~Swapchain_impl() noexcept;
 
-    void start_of_frame  ();
-    void present         ();
-
-    void update_vulkan_swapchain(VkSwapchainCreateInfoKHR& swapchain_create_info);
-
-    [[nodiscard]] auto get_image_count() const -> size_t;
-    [[nodiscard]] auto get_image_entry(size_t image_index) -> Swapchain_image_entry&;
-    [[nodiscard]] auto get_image_entry(size_t image_index) const -> const Swapchain_image_entry&;
+    void wait_frame (Frame_state& out_frame_state);
+    void begin_frame();
+    void end_frame  (const Frame_end_info& frame_end_info);
 
     [[nodiscard]] auto get_command_buffer() -> VkCommandBuffer;
 
 private:
     static constexpr uint32_t INVALID_IMAGE_INDEX = std::numeric_limits<uint32_t>::max();
 
-	[[nodiscard]] auto get_semaphore() -> VkSemaphore;
-	[[nodiscard]] auto get_fence    () -> VkFence;
-	void recycle_semaphore(VkSemaphore semaphore);
-	void recycle_fence    (VkFence fence);
+    void create_placeholder_renderpass_and_framebuffers();
+    void submit_placeholder_renderpass                 ();
+
+    void setup_frame();
+    [[nodiscard]] auto acquire_next_image(uint32_t* index) -> VkResult;
+    [[nodiscard]] auto present_image     (uint32_t index) -> VkResult;
+
+    [[nodiscard]] auto has_maintenance1() const -> bool;
+    [[nodiscard]] auto is_valid        () const -> bool;
+    [[nodiscard]] auto get_semaphore   () -> VkSemaphore;
+    [[nodiscard]] auto get_fence       () -> VkFence;
+    void recycle_semaphore(VkSemaphore semaphore);
+    void recycle_fence    (VkFence fence);
 
     void cleanup_swapchain_objects(Swapchain_objects& garbage);
     void cleanup_present_history  ();
     void cleanup_present_info     (Present_history_entry& entry);
     void cleanup_old_swapchain    (Swapchain_cleanup_data& old_swapchain);
 
+    void init_swapchain      (VkSwapchainCreateInfoKHR& swapchain_create_info);
     void init_swapchain_image(uint32_t index);
 
-    void add_present_to_history(uint32_t index, VkFence present_fence);
-    void associate_fence_with_present_history(uint32_t index, VkFence acquire_fence);
+    void add_present_to_history                (uint32_t index, VkFence present_fence);
+    void associate_fence_with_present_history  (uint32_t index, VkFence acquire_fence);
     void schedule_old_swapchain_for_destruction(VkSwapchainKHR old_swapchain);
 
+    Device_impl&             m_device_impl;
+    Surface_impl&            m_surface_impl;
+    VkSwapchainCreateInfoKHR m_swapchain_create_info;
+    bool                     m_is_valid            {false};
+    uint32_t                 m_acquired_image_index{0};
+    VkSwapchainKHR           m_vulkan_swapchain    {VK_NULL_HANDLE};
+    VkRenderPass             m_vulkan_render_pass  {VK_NULL_HANDLE};
+    Swapchain_objects        m_swapchain_objects;
 
-    //void create_frames_in_flight_resources();
-    //void create_image_entry_resources();
-
-    // placeholder
-    void create_placeholder_renderpass_and_framebuffers();
-    void submit_placeholder_renderpass();
-
-    Device_impl&       m_device_impl;
-    Surface_impl&      m_surface_impl;
-    VkSwapchainKHR     m_vulkan_swapchain{VK_NULL_HANDLE};
-    VkExtent2D         m_extent;
-    //// std::vector<Swapchain_frame_in_flight> m_frames_in_flight;
-    //// std::vector<Swapchain_image_entry>     m_image_entries;
-    //// VkRenderPass                           m_vulkan_renderpass{VK_NULL_HANDLE}; // placeholder
-    //// bool                                   m_is_valid         {true};
-
-    /// The swapchain.
-    VkSwapchainKHR    m_vulkan_swapchain{VK_NULL_HANDLE};
-
-    /// Swapchain data.
-    VkPresentModeKHR  m_current_present_mode{VK_PRESENT_MODE_FIFO_KHR};
-    VkPresentModeKHR  m_desired_present_mode{VK_PRESENT_MODE_FIFO_KHR};
-    Swapchain_objects m_swapchain_objects;
-
-    /// The render pass used for rendering.
-    VkRenderPass      m_render_pass{VK_NULL_HANDLE};
+    // TODO Move to Render_pass_impl
 
     /// The submission history. This is a fixed-size queue, implemented as a circular buffer.
     std::array<Swapchain_frame_in_flight, 2> m_submit_history      {};
     size_t                                   m_submit_history_index{0};
 
-    /// The present operation history.  This is used to clean up present semaphores and old swapchains.
+    /// The present operation history. This is used to clean up present semaphores and old swapchains.
     std::deque<Present_history_entry>        m_present_history;
 
      // The previous swapchain which needs to be scheduled for destruction when
@@ -154,14 +142,11 @@ private:
     std::vector<Swapchain_cleanup_data>      m_old_swapchains;
 
     /// Resource pools.
-    std::vector<VkSemaphore> m_semaphore_pool;
-    std::vector<VkFence>     m_fence_pool;
-
-    // Other statistics
-
-    // User toggles.
-    bool m_recreate_swapchain_on_present_mode_change = false;
-
+    std::vector<VkSemaphore>                 m_semaphore_pool;
+    std::vector<VkFence>                     m_fence_pool;
+    size_t                                   m_semaphore_serial{0};
+    size_t                                   m_fence_serial    {0};
+    size_t                                   m_swapchain_serial{0};
 };
 
 } // namespace erhe::graphics
