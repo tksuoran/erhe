@@ -21,7 +21,7 @@ class Ring_buffer
 {
 public:
     Ring_buffer(Device& device, const Ring_buffer_create_info& create_info);
-    ~Ring_buffer();
+    ~Ring_buffer() noexcept;
 
     void get_size_available_for_write(
         std::size_t  required_alignment,

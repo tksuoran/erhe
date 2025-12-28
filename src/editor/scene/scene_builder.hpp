@@ -94,7 +94,7 @@ public:
         Tools&                          tools,
         Scene_views&                    scene_views
     );
-    ~Scene_builder();
+    ~Scene_builder() noexcept;
 
     // Public API
     [[nodiscard]] auto get_scene_root() const -> std::shared_ptr<Scene_root>;

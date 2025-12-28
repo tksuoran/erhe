@@ -28,7 +28,7 @@ public:
         erhe::window::Context_window&   context_window,
         const std::string_view          name
     );
-    ~Window_imgui_host() override;
+    ~Window_imgui_host() noexcept override;
 
     // Implements Rendergraph_node
     void execute_rendergraph_node() override;

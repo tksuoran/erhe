@@ -36,7 +36,7 @@ public:
     void operator=(const Device_impl&) = delete;
     Device_impl   (Device_impl&&)      = delete;
     void operator=(Device_impl&&)      = delete;
-    ~Device_impl  ();
+    ~Device_impl  () noexcept;
 
     void wait_frame            (Frame_state& out_frame_state);
     void begin_frame           (const Frame_begin_info& frame_begin_info);

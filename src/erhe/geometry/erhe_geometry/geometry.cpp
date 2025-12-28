@@ -235,7 +235,7 @@ void Mesh_attributes::bind()
     corner_aniso_control     .bind(m_mesh.facet_corners.attributes());
 }
 
-Mesh_attributes::~Mesh_attributes()
+Mesh_attributes::~Mesh_attributes() noexcept
 {
     static int counter = 0;
     ++counter;

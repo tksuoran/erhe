@@ -7,7 +7,7 @@ Compute_command_encoder::Compute_command_encoder(Device& device)
 {
 }
 
-Compute_command_encoder::~Compute_command_encoder()
+Compute_command_encoder::~Compute_command_encoder() noexcept
 {
 }
 

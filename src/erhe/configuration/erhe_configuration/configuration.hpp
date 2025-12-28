@@ -18,7 +18,7 @@ auto to_lower(std::string data) -> std::string;
 class Ini_section
 {
 public:
-    virtual ~Ini_section(){}
+    virtual ~Ini_section() noexcept {}
 
     virtual void get(const std::string& key, std::size_t& destination) const = 0;
     virtual void get(const std::string& key, bool&        destination) const = 0;
@@ -34,7 +34,7 @@ public:
 class Ini_file
 {
 public:
-    virtual ~Ini_file(){}
+    virtual ~Ini_file() noexcept {}
 
     virtual auto get_section(const std::string& name) -> const Ini_section& = 0;
 };
@@ -42,7 +42,7 @@ public:
 class Ini_cache
 {
 public:
-    virtual ~Ini_cache() {}
+    virtual ~Ini_cache() noexcept {}
 
     static auto get_instance() -> Ini_cache&;
 

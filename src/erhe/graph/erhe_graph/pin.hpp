@@ -19,7 +19,7 @@ private:
     Pin(Node* owner_node, std::size_t slot, bool is_source, std::size_t key, std::string_view name);
 
 public:
-    virtual ~Pin();
+    virtual ~Pin() noexcept;
 
     [[nodiscard]] auto is_sink       () const -> bool;
     [[nodiscard]] auto is_source     () const -> bool;

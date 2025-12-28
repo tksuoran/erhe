@@ -23,7 +23,7 @@ class Glslang_shader_stages
 {
 public:
     Glslang_shader_stages(Shader_stages_prototype_impl& shader_stages_prototype);
-    ~Glslang_shader_stages();
+    ~Glslang_shader_stages() noexcept;
 
     auto link_program    () -> bool;
     auto compile_shader  (Device& device, const Shader_stage& shader) -> bool;

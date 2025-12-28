@@ -73,7 +73,7 @@ public:
     Ini_section_impl(Ini_section_impl&&) = default;
     Ini_section_impl& operator=(const Ini_section_impl&) = delete;
     Ini_section_impl& operator=(Ini_section_impl&&) = default;
-    ~Ini_section_impl() override {}
+    ~Ini_section_impl() noexcept override {}
 
     auto get_name() const -> const std::string& { return m_name; }
 
@@ -235,7 +235,7 @@ public:
     Ini_file_impl& operator=(const Ini_file_impl&) = delete;
     Ini_file_impl(Ini_file_impl&&) = delete;
     Ini_file_impl& operator=(Ini_file_impl&&) = delete;
-    ~Ini_file_impl() override {}
+    ~Ini_file_impl() noexcept override {}
 
     auto get_name() const -> const std::string& { return m_name; }
 
@@ -261,7 +261,7 @@ private:
 class Ini_cache_impl : public Ini_cache
 {
 public:
-    ~Ini_cache_impl() override {}
+    ~Ini_cache_impl() noexcept override {}
 
     void flush() override
     {

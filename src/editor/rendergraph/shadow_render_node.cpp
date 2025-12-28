@@ -43,7 +43,7 @@ Shadow_render_node::Shadow_render_node(
     reconfigure(graphics_device, resolution, light_count, depth_bits);
 }
 
-Shadow_render_node::~Shadow_render_node()
+Shadow_render_node::~Shadow_render_node() noexcept
 {
 }
 

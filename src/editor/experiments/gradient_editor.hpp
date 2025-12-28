@@ -18,7 +18,7 @@ public:
         erhe::imgui::Imgui_renderer& imgui_renderer,
         erhe::imgui::Imgui_windows&  imgui_windows
     );
-    ~Gradient_editor();
+    ~Gradient_editor() noexcept;
 
     // Implements Imgui_window
     void imgui() override;

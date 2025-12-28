@@ -40,7 +40,7 @@ public:
         const std::string_view                                      ini_label,
         const std::shared_ptr<Viewport_scene_view>&                 viewport_scene_view
     );
-    ~Viewport_window();
+    ~Viewport_window() noexcept;
 
     // Implements Imgui_window
     void imgui               () override;

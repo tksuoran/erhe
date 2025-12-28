@@ -47,7 +47,7 @@ EditorContext::EditorContext(const Config* config)
 {
 }
 
-EditorContext::~EditorContext()
+EditorContext::~EditorContext() noexcept
 {
 }
 

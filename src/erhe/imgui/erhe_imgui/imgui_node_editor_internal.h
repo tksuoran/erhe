@@ -121,7 +121,7 @@ struct FringeScaleScope
         ImFringeScaleRef(ImGui::GetWindowDrawList()) = scale;
     }
 
-    ~FringeScaleScope()
+    ~FringeScaleScope() noexcept
     {
         ImFringeScaleRef(ImGui::GetWindowDrawList()) = m_LastFringeScale;
     }
@@ -230,7 +230,7 @@ struct Object
     {
     }
 
-    virtual ~Object() = default;
+    virtual ~Object() noexcept = default;
 
     virtual ObjectId ID() = 0;
 
@@ -666,7 +666,7 @@ struct Animation
     float           m_Duration;
 
     Animation(EditorContext* editor);
-    virtual ~Animation();
+    virtual ~Animation() noexcept;
 
     void Play(float duration);
     void Stop();
@@ -747,7 +747,7 @@ struct AnimationController
     {
     }
 
-    virtual ~AnimationController()
+    virtual ~AnimationController() noexcept
     {
     }
 
@@ -762,7 +762,7 @@ struct Style;
 struct FlowAnimationController final : AnimationController
 {
     FlowAnimationController(EditorContext* editor);
-    virtual ~FlowAnimationController();
+    virtual ~FlowAnimationController() noexcept;
 
     void Flow(const Style& editorStyle, Link* link, FlowDirection direction = FlowDirection::Forward);
 
@@ -786,7 +786,7 @@ struct EditorAction
     {
     }
 
-    virtual ~EditorAction() {}
+    virtual ~EditorAction() noexcept {}
 
     virtual const char* GetName() const = 0;
 
@@ -1195,7 +1195,7 @@ struct NodeBuilder
     ImDrawListSplitter m_PinSplitter;
 
     NodeBuilder(EditorContext* editor);
-    ~NodeBuilder();
+    ~NodeBuilder() noexcept;
 
     void Begin(NodeId nodeId);
     void End();
@@ -1295,7 +1295,7 @@ class EditorContext
 {
 public:
     EditorContext(const ax::NodeEditor::Config* config = nullptr);
-    ~EditorContext();
+    ~EditorContext() noexcept;
 
     const Config& GetConfig() const { return m_Config; }
 

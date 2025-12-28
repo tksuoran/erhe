@@ -13,7 +13,7 @@ Jolt_debug_renderer::Jolt_debug_renderer(Debug_renderer& debug_renderer)
     JPH::DebugRenderer::Initialize();
 }
 
-Jolt_debug_renderer::~Jolt_debug_renderer()
+Jolt_debug_renderer::~Jolt_debug_renderer() noexcept
 {
 }
 

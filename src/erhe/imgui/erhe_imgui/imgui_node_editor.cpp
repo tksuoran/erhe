@@ -1075,7 +1075,7 @@ ed::EditorContext::EditorContext(const ax::NodeEditor::Config* config)
 {
 }
 
-ed::EditorContext::~EditorContext()
+ed::EditorContext::~EditorContext() noexcept
 {
     if (m_IsInitialized)
         SaveSettings();
@@ -2911,7 +2911,7 @@ ed::Animation::Animation(EditorContext* editor):
 {
 }
 
-ed::Animation::~Animation()
+ed::Animation::~Animation() noexcept
 {
     Stop();
 }
@@ -3183,7 +3183,7 @@ ed::FlowAnimationController::FlowAnimationController(EditorContext* editor):
 {
 }
 
-ed::FlowAnimationController::~FlowAnimationController()
+ed::FlowAnimationController::~FlowAnimationController() noexcept
 {
     for (auto animation : m_Animations)
         delete animation;
@@ -5157,7 +5157,7 @@ ed::NodeBuilder::NodeBuilder(EditorContext* editor):
 {
 }
 
-ed::NodeBuilder::~NodeBuilder()
+ed::NodeBuilder::~NodeBuilder() noexcept
 {
     m_Splitter.ClearFreeMemory();
     m_PinSplitter.ClearFreeMemory();

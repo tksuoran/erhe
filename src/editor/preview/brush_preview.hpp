@@ -16,7 +16,7 @@ public:
         Mesh_memory&                    mesh_memory,
         Programs&                       programs
     );
-    ~Brush_preview();
+    ~Brush_preview() noexcept;
 
     void render_preview(
         const std::shared_ptr<erhe::graphics::Texture>& texture,

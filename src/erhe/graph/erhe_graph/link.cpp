@@ -20,7 +20,7 @@ Link::Link(Pin* source, Pin* sink)
 {
 }
 
-Link::~Link()
+Link::~Link() noexcept
 {
 }
 

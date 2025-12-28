@@ -164,7 +164,7 @@ Imgui_host::Imgui_host(
     imgui_renderer.register_imgui_host(this);
 }
 
-Imgui_host::~Imgui_host()
+Imgui_host::~Imgui_host() noexcept
 {
     m_imgui_renderer.unregister_imgui_host(this);
 

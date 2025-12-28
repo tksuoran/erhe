@@ -544,7 +544,7 @@ Scoped_selection_change::Scoped_selection_change(Selection& selection)
     selection.begin_selection_change();
 }
 
-Scoped_selection_change::~Scoped_selection_change()
+Scoped_selection_change::~Scoped_selection_change() noexcept
 {
     selection.end_selection_change();
 }

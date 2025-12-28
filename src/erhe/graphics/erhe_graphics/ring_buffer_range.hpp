@@ -22,7 +22,7 @@ public:
     Ring_buffer_range(Ring_buffer_range&& old) noexcept;
     Ring_buffer_range& operator=(Ring_buffer_range&) = delete;
     Ring_buffer_range& operator=(Ring_buffer_range&& old) noexcept;
-    ~Ring_buffer_range();
+    ~Ring_buffer_range() noexcept;
 
     void bytes_gpu_used                 (std::size_t byte_count);
     void bytes_written                  (std::size_t byte_count);

@@ -66,7 +66,7 @@ Post_processing_node::Post_processing_node(
     register_output("texture", erhe::rendergraph::Rendergraph_node_key::viewport_texture);
 }
 
-Post_processing_node::~Post_processing_node()
+Post_processing_node::~Post_processing_node() noexcept
 {
 }
 

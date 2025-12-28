@@ -19,8 +19,6 @@ public:
     Surface_impl(Device_impl& device_impl, const Surface_create_info& create_info);
     ~Surface_impl() noexcept;
 
-    void resize_swapchain_to_surface(uint32_t& width, uint32_t& height);
-
     [[nodiscard]] auto get_swapchain() -> Swapchain*;
 
 private:

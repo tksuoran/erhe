@@ -152,7 +152,7 @@ public:
     void operator= (const Device&) = delete;
     Device         (Device&&)      = delete;
     void operator= (Device&&)      = delete;
-    ~Device();
+    ~Device() noexcept;
 
     void wait_frame            (Frame_state& out_frame_state);
     void begin_frame           (const Frame_begin_info& frame_begin_info);

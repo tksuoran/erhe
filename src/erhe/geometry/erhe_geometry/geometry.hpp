@@ -242,7 +242,7 @@ class Mesh_attributes
 {
 public:
     explicit Mesh_attributes(const GEO::Mesh& mesh);
-    ~Mesh_attributes();
+    ~Mesh_attributes() noexcept;
 
     void unbind();
     void bind();

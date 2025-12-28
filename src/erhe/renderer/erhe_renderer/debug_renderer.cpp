@@ -153,7 +153,7 @@ Debug_renderer::Debug_renderer(erhe::graphics::Device& graphics_device)
 {
 }
 
-Debug_renderer::~Debug_renderer()
+Debug_renderer::~Debug_renderer() noexcept
 {
 }
 

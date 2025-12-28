@@ -33,7 +33,7 @@ public:
         Post_processing&                post_processing,
         const std::string_view          name
     );
-    ~Post_processing_node() override;
+    ~Post_processing_node() noexcept override;
 
     // Implements Rendergraph_node
     auto get_type_name() const -> std::string_view override { return "Post_processing_node"; }

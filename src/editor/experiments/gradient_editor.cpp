@@ -18,7 +18,7 @@ Gradient_editor::Gradient_editor(
     //m_gradient_widget->gradient().interpolation_mode
 }
 
-Gradient_editor::~Gradient_editor()
+Gradient_editor::~Gradient_editor() noexcept
 {
 }
 

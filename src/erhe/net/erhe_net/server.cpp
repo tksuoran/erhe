@@ -10,7 +10,7 @@ namespace erhe::net {
 
 Server::Server() = default;
 
-Server::~Server()
+Server::~Server() noexcept
 {
     log_server->trace("Server destructor");
 }

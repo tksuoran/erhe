@@ -81,7 +81,7 @@ Glslang_shader_stages::Glslang_shader_stages(Shader_stages_prototype_impl& shade
 {
 }
 
-Glslang_shader_stages::~Glslang_shader_stages() = default;
+Glslang_shader_stages::~Glslang_shader_stages() noexcept = default;
 
 auto Glslang_shader_stages::compile_shader(Device& device, const Shader_stage& shader) -> bool
 {

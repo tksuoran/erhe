@@ -291,7 +291,7 @@ class EditorContext
 {
 public:
     EditorContext(const Config* config);
-    ~EditorContext();
+    ~EditorContext() noexcept;
 
     Style& GetStyle();
     const char* GetStyleColorName(StyleColor colorIndex);

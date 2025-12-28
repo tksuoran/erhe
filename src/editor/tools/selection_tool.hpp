@@ -137,7 +137,7 @@ class Scoped_selection_change
 {
 public:
     explicit Scoped_selection_change(Selection& selection);
-    ~Scoped_selection_change();
+    ~Scoped_selection_change() noexcept;
 
 private:
     Selection& selection;

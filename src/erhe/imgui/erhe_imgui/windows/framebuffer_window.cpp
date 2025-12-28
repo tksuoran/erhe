@@ -30,7 +30,7 @@ Framebuffer_window::Framebuffer_window(
 {
 }
 
-Framebuffer_window::~Framebuffer_window()
+Framebuffer_window::~Framebuffer_window() noexcept
 {
 }
 

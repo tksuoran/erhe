@@ -10,7 +10,7 @@ Command_encoder::Command_encoder(Device& device)
 {
 }
 
-Command_encoder::~Command_encoder()
+Command_encoder::~Command_encoder() noexcept
 {
 }
 

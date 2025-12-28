@@ -14,7 +14,7 @@ Rendergraph::Rendergraph(erhe::graphics::Device& graphics_device)
 {
 }
 
-Rendergraph::~Rendergraph()
+Rendergraph::~Rendergraph() noexcept
 {
 }
 

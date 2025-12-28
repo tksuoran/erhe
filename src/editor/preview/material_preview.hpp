@@ -14,7 +14,7 @@ public:
         Mesh_memory&                    mesh_memory,
         Programs&                       programs
     );
-    ~Material_preview();
+    ~Material_preview() noexcept;
 
     void render_preview(const std::shared_ptr<erhe::primitive::Material>& material);
     void show_preview  ();

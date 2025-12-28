@@ -549,7 +549,7 @@ Primitive::Primitive(Primitive&&) = default;
 Primitive& Primitive::operator=(const Primitive&) = default;
 Primitive& Primitive::operator=(Primitive&&) = default;
 
-Primitive::~Primitive()
+Primitive::~Primitive() noexcept
 {
 }
 

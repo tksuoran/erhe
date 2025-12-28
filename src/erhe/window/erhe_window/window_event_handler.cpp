@@ -146,7 +146,7 @@ auto c_str(const Mouse_button button) -> const char*
     };
 }
 
-Input_event_handler::~Input_event_handler()
+Input_event_handler::~Input_event_handler() noexcept
 {
 }
 

@@ -83,7 +83,7 @@ Scene_preview::Scene_preview(
     graphics_device.clear_texture(*m_shadow_texture.get(), { depth_clear_value, 0.0, 0.0, 0.0 });
 }
 
-Scene_preview::~Scene_preview()
+Scene_preview::~Scene_preview() noexcept
 {
 }
 

@@ -74,7 +74,7 @@ Ring_buffer_range& Ring_buffer_range::operator=(Ring_buffer_range&& old) noexcep
     return *this;
 }
 
-Ring_buffer_range::~Ring_buffer_range()
+Ring_buffer_range::~Ring_buffer_range() noexcept
 {
     ERHE_VERIFY((m_ring_buffer == nullptr) || m_is_released || m_is_cancelled);
 }

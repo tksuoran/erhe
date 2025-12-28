@@ -16,7 +16,7 @@ Pin::Pin(Node* owner_node, std::size_t slot, bool is_source, std::size_t key, st
 {
 }
 
-Pin::~Pin() = default;
+Pin::~Pin() noexcept = default;
 
 
 auto Pin::is_sink() const -> bool

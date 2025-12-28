@@ -42,7 +42,7 @@ Brush_preview::Brush_preview(
     make_preview_scene();
 }
 
-Brush_preview::~Brush_preview()
+Brush_preview::~Brush_preview() noexcept
 {
 }
 

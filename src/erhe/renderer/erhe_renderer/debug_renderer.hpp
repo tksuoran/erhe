@@ -57,7 +57,7 @@ class Debug_renderer
 {
 public:
     explicit Debug_renderer(erhe::graphics::Device& graphics_device);
-    ~Debug_renderer();
+    ~Debug_renderer() noexcept;
 
     // Public API
     auto get        (const Debug_renderer_config& config) -> Primitive_renderer;

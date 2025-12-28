@@ -60,7 +60,7 @@ public:
         Mesh_memory&                             mesh_memory,
         Programs&                                programs
     );
-    ~Id_renderer();
+    ~Id_renderer() noexcept;
 
     // Public API
     class Render_parameters

@@ -25,7 +25,7 @@ class Mesh_memory final
 {
 public:
     Mesh_memory(erhe::graphics::Device& graphics_device, erhe::dataformat::Vertex_format& vertex_format);
-    ~Mesh_memory();
+    ~Mesh_memory() noexcept;
 
     // TODO
     static constexpr std::size_t s_vertex_binding_position     = 0;

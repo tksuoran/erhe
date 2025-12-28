@@ -22,7 +22,7 @@ public:
         m_callback = func;
     }
 
-    ~Defer()
+    ~Defer() noexcept
     {
         m_callback();
     }

@@ -357,7 +357,7 @@ public:
 class Input_event_handler
 {
 public:
-    virtual ~Input_event_handler();
+    virtual ~Input_event_handler() noexcept;
     
     virtual auto dispatch_input_event      (Input_event& input_event) -> bool;
     virtual auto on_key_event              (const Input_event&) -> bool { return false; }

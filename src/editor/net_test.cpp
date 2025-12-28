@@ -22,7 +22,7 @@
 class Peer
 {
 public:
-    virtual ~Peer() = default;
+    virtual ~Peer() noexcept = default;
     virtual auto get_status() -> std::string = 0;
     virtual void send      (const std::string& message) = 0;
 };
@@ -35,7 +35,7 @@ public:
         : m_server{server}
     {
     }
-    ~Server_peer() override = default;
+    ~Server_peer() noexcept override = default;
 
     auto get_status() -> std::string override
     {
@@ -62,7 +62,7 @@ public:
         : m_client{client}
     {
     }
-    ~Client_peer() override = default;
+    ~Client_peer() noexcept override = default;
 
     auto get_status() -> std::string override
     {

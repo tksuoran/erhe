@@ -30,7 +30,7 @@ public:
         const std::string_view  title,
         const char*             ini_label
     );
-    ~Framebuffer_window();
+    ~Framebuffer_window() noexcept;
 
     // Implements Imgui_window
     void imgui() override;

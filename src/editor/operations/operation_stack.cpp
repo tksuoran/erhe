@@ -75,7 +75,7 @@ Operation_stack::Operation_stack(
     m_redo_command.set_host(this);
 }
 
-Operation_stack::~Operation_stack() = default;
+Operation_stack::~Operation_stack() noexcept = default;
 
 auto Operation_stack::get_executor() -> tf::Executor&
 {

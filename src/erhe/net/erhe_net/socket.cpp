@@ -68,7 +68,7 @@ Socket::Socket(const SOCKET& socket, const sockaddr_in& address_in)
     log_socket->info("socket address: {}", m_address);
 }
 
-Socket::~Socket()
+Socket::~Socket() noexcept
 {
     log_socket->trace("Socket destructor");
     close();

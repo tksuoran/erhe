@@ -773,7 +773,7 @@ auto Device_impl::allocate_command_buffer() -> VkCommandBuffer
     return vulkan_command_buffer;
 }
 
-Device_impl::~Device_impl()
+Device_impl::~Device_impl() noexcept
 {
     vkDeviceWaitIdle(m_vulkan_device);
 

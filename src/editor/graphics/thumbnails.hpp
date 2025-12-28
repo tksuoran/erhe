@@ -26,7 +26,7 @@ class Thumbnail
 {
 public:
     Thumbnail();
-    ~Thumbnail();
+    ~Thumbnail() noexcept;
     Thumbnail(const Thumbnail&) = delete;
     Thumbnail(Thumbnail&&);
     auto operator=(const Thumbnail&) -> Thumbnail& = delete;
@@ -45,7 +45,7 @@ class Thumbnails
 {
 public:
     Thumbnails(erhe::graphics::Device& graphics_device, App_context& context);
-    ~Thumbnails();
+    ~Thumbnails() noexcept;
 
     // This should be called once per frame, outside command encoder
     void update();

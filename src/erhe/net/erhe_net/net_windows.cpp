@@ -10,7 +10,7 @@ namespace erhe::net {
 class Scoped_socket_context
 {
     Scoped_socket_context();
-    ~Scoped_socket_context();
+    ~Scoped_socket_context() noexcept;
 
     bool ok{false};
 };
@@ -32,7 +32,7 @@ Scoped_socket_context::Scoped_socket_context()
     ok = true;
 }
 
-Scoped_socket_context::~Scoped_socket_context()
+Scoped_socket_context::~Scoped_socket_context() noexcept
 {
     log_net->trace("Stopping Winsock");
     WSACleanup();

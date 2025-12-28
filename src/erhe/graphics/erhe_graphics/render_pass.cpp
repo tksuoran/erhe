@@ -17,7 +17,7 @@ Render_pass_attachment_descriptor::Render_pass_attachment_descriptor()
 {
 }
 
-Render_pass_attachment_descriptor::~Render_pass_attachment_descriptor() = default;
+Render_pass_attachment_descriptor::~Render_pass_attachment_descriptor() noexcept = default;
 
 auto Render_pass_attachment_descriptor::is_defined() const -> bool
 {
@@ -38,7 +38,7 @@ auto Render_pass_attachment_descriptor::get_pixelformat() const -> erhe::datafor
 Render_pass_descriptor::Render_pass_descriptor()
 {
 }
-Render_pass_descriptor::~Render_pass_descriptor()
+Render_pass_descriptor::~Render_pass_descriptor() noexcept
 {
 }
 Render_pass::Render_pass(Device& device, const Render_pass_descriptor& descriptor)

@@ -82,7 +82,7 @@ void Window_imgui_host::update_render_pass(int width, int height)
     m_render_pass = std::make_unique<erhe::graphics::Render_pass>(m_graphics_device, render_pass_descriptor);
 }
 
-Window_imgui_host::~Window_imgui_host()
+Window_imgui_host::~Window_imgui_host() noexcept
 {
 }
 

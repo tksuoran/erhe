@@ -30,7 +30,7 @@ public:
         int                             light_count,
         int                             depth_bits
     );
-    ~Shadow_render_node() override;
+    ~Shadow_render_node() noexcept override;
 
     // Implements Rendergraph_node
     auto get_type_name() const -> std::string_view override { return "Shadow_render_node"; }

@@ -1278,7 +1278,7 @@ public:
         );
     }
 
-    ~Editor()
+    ~Editor() noexcept
     {
         m_default_scene_browser.reset();
         m_default_scene.reset();

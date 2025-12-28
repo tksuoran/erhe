@@ -20,7 +20,7 @@ Texture_heap_impl::Texture_heap_impl(
     static_cast<void>(reserved_slot_count);
 }
 
-Texture_heap_impl::~Texture_heap_impl()
+Texture_heap_impl::~Texture_heap_impl() noexcept
 {
 }
 

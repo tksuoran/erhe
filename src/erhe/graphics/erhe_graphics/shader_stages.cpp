@@ -90,7 +90,7 @@ Shader_stages::Shader_stages(Device& device, const std::string& failed_name)
 {
 }
 
-Shader_stages::~Shader_stages() = default;
+Shader_stages::~Shader_stages() noexcept = default;
 Shader_stages::Shader_stages(Shader_stages&&) = default;
 Shader_stages& Shader_stages::operator=(Shader_stages&&) = default;
 //Shader_stages& Shader_stages::operator=(Shader_stages&& from)

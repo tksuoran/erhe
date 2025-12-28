@@ -53,7 +53,7 @@ public:
         erhe::imgui::Imgui_windows&  imgui_windows,
         App_context&                 context
     );
-    ~Operation_stack();
+    ~Operation_stack() noexcept;
 
     [[nodiscard]] auto can_undo() const -> bool;
     [[nodiscard]] auto can_redo() const -> bool;

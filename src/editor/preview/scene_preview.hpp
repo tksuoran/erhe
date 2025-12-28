@@ -47,7 +47,7 @@ public:
         Mesh_memory&                    mesh_memory,
         Programs&                       programs
     );
-    ~Scene_preview();
+    ~Scene_preview() noexcept;
 
     // Implements Scene_view
     auto get_camera           () const -> std::shared_ptr<erhe::scene::Camera>           override;

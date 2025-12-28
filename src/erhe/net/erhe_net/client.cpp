@@ -7,7 +7,7 @@ namespace erhe::net {
 
 Client::Client() = default;
 
-Client::~Client()
+Client::~Client() noexcept
 {
     log_client->trace("Client destructor");
 }

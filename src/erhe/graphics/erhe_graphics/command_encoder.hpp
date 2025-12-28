@@ -17,7 +17,7 @@ public:
     Command_encoder& operator=(const Command_encoder&) = delete;
     Command_encoder(Command_encoder&&) = delete;
     Command_encoder& operator=(Command_encoder&&) = delete;
-    virtual ~Command_encoder();
+    virtual ~Command_encoder() noexcept;
 
     void set_buffer(Buffer_target buffer_target, const Buffer* buffer, std::uintptr_t offset, std::uintptr_t length, std::uintptr_t index);
     void set_buffer(Buffer_target buffer_target, const Buffer* buffer);

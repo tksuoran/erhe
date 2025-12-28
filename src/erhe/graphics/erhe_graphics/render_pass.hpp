@@ -31,7 +31,7 @@ class Render_pass_attachment_descriptor final
 {
 public:
     Render_pass_attachment_descriptor();
-    ~Render_pass_attachment_descriptor();
+    ~Render_pass_attachment_descriptor() noexcept;
 
     [[nodiscard]] auto is_defined     () const -> bool;
     [[nodiscard]] auto get_pixelformat() const -> erhe::dataformat::Format;
@@ -51,7 +51,7 @@ class Render_pass_descriptor
 {
 public:
     Render_pass_descriptor();
-    ~Render_pass_descriptor();
+    ~Render_pass_descriptor() noexcept;
 
     Swapchain*                                       swapchain           {nullptr};
     std::array<Render_pass_attachment_descriptor, 4> color_attachments   {};

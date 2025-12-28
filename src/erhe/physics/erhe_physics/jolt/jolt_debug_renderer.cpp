@@ -16,7 +16,7 @@ void Jolt_debug_renderer::set_debug_draw(IDebug_draw* debug_draw)
 }
 
 #if 0
-Jolt_debug_renderer::~Jolt_debug_renderer()
+Jolt_debug_renderer::~Jolt_debug_renderer() noexcept
 {
 }
 

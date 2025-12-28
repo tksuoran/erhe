@@ -642,12 +642,6 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
             .result       = gl::Sync_status::timeout_expired
         }
     );
-
-    if (m_surface) {
-        uint32_t width {0};
-        uint32_t height{0};
-        m_surface->resize_swapchain_to_surface(width, height);
-    }
 }
 
 auto Device_impl::get_surface() -> Surface*

@@ -36,7 +36,7 @@ Debug_draw::Debug_draw(App_context& context)
         IDebug_draw::c_Draw_frames;
 }
 
-Debug_draw::~Debug_draw()
+Debug_draw::~Debug_draw() noexcept
 {
 }
 

@@ -21,7 +21,7 @@ public:
     Blit_command_encoder& operator=(const Blit_command_encoder&) = delete;
     Blit_command_encoder(Blit_command_encoder&&) = delete;
     Blit_command_encoder& operator=(Blit_command_encoder&&) = delete;
-    ~Blit_command_encoder() override;
+    ~Blit_command_encoder() noexcept override;
 
     void blit_framebuffer(const Render_pass& source_renderpass, glm::ivec2 source_origin, glm::ivec2 source_size, const Render_pass& destination_renderpass, glm::ivec2 destination_origin);
 

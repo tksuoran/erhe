@@ -17,7 +17,7 @@ class Rendergraph final
 {
 public:
     explicit Rendergraph(erhe::graphics::Device& graphics_device);
-    ~Rendergraph();
+    ~Rendergraph() noexcept;
 
     // Public API
     [[nodiscard]] auto get_nodes() const -> const std::vector<Rendergraph_node*>&;

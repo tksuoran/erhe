@@ -112,7 +112,7 @@ public:
 
 private:
     Executor_resources() : m_thread_pool{}, m_executor{m_thread_pool} {}
-    ~Executor_resources(){};
+    ~Executor_resources() noexcept {};
 
     bvh::v2::ThreadPool       m_thread_pool;
     bvh::v2::ParallelExecutor m_executor;

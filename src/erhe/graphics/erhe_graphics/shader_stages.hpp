@@ -113,7 +113,7 @@ class Shader_stages final
 public:
     Shader_stages(Device& device, Shader_stages_prototype&& prototype);
     Shader_stages(Device& device, const std::string& non_functional_name);
-    ~Shader_stages();
+    ~Shader_stages() noexcept;
     Shader_stages(Shader_stages&&);
     Shader_stages& operator=(Shader_stages&&);
 

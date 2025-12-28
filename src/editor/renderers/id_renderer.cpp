@@ -82,7 +82,7 @@ Id_renderer::Id_renderer(
     ini.get("enabled", enabled);
 }
 
-Id_renderer::~Id_renderer()
+Id_renderer::~Id_renderer() noexcept
 {
 }
 

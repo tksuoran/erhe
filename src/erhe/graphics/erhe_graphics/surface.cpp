@@ -14,7 +14,7 @@ Surface::Surface(std::unique_ptr<Surface_impl>&& surface_impl)
 {
 }
 
-Surface::~Surface()
+Surface::~Surface() noexcept
 {
 }
 

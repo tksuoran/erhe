@@ -15,7 +15,7 @@ Texture_heap::Texture_heap(
 {
 }
 
-Texture_heap::~Texture_heap() = default;
+Texture_heap::~Texture_heap() noexcept = default;
 
 void Texture_heap::reset()
 {

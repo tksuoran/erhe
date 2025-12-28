@@ -60,7 +60,7 @@ Viewport_window::Viewport_window(
     );
 }
 
-Viewport_window::~Viewport_window() = default;
+Viewport_window::~Viewport_window() noexcept = default;
 
 void Viewport_window::on_message(App_message& message)
 {

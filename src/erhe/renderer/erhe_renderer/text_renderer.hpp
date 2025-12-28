@@ -43,7 +43,7 @@ public:
     Config config;
 
     explicit Text_renderer(erhe::graphics::Device& graphics_device);
-    ~Text_renderer();
+    ~Text_renderer() noexcept;
 
     Text_renderer (const Text_renderer&) = delete;
     void operator=(const Text_renderer&) = delete;

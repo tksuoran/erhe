@@ -14,7 +14,7 @@ public:
     Link& operator=(Link&& old);
     Link& operator=(const Link& other) = delete;
     Link(Pin* source, Pin* sink);
-    virtual ~Link();
+    virtual ~Link() noexcept;
 
     [[nodiscard]] auto get_id      () const -> int;
     [[nodiscard]] auto get_source  () const -> Pin*;

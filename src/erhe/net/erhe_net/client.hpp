@@ -8,7 +8,7 @@ class Client
 {
 public:
     Client();
-    ~Client();
+    ~Client() noexcept;
     Client(Client&) = delete;
     auto operator=(const Client&) = delete;
     Client(Client&& other) noexcept;

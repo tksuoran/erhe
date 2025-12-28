@@ -15,7 +15,7 @@ Render_command_encoder::Render_command_encoder(Device& device, Render_pass& rend
     start_render_pass();
 }
 
-Render_command_encoder::~Render_command_encoder()
+Render_command_encoder::~Render_command_encoder() noexcept
 {
     end_render_pass();
 }

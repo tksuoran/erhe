@@ -22,7 +22,7 @@ public:
     Render_command_encoder& operator=(const Render_command_encoder&) = delete;
     Render_command_encoder(Render_command_encoder&&) = delete;
     Render_command_encoder& operator=(Render_command_encoder&&) = delete;
-    ~Render_command_encoder() override;
+    ~Render_command_encoder() noexcept override;
 
     void set_render_pipeline_state(const Render_pipeline_state& pipeline);
     void set_render_pipeline_state(const Render_pipeline_state& pipeline, const Shader_stages* override_shader_stages);

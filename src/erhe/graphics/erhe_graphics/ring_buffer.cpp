@@ -55,7 +55,7 @@ Ring_buffer::Ring_buffer(
     // GPU only buffers are not mappable
 }
 
-Ring_buffer::~Ring_buffer()
+Ring_buffer::~Ring_buffer() noexcept
 {
     ERHE_PROFILE_FUNCTION();
 

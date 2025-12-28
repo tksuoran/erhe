@@ -111,7 +111,7 @@ public:
     Primitive(Primitive&&);
     Primitive& operator=(const Primitive&);
     Primitive& operator=(Primitive&&);
-    ~Primitive();
+    ~Primitive() noexcept;
     explicit Primitive(const std::shared_ptr<Triangle_soup>& triangle_soup);
     explicit Primitive(const Buffer_mesh& renderable_mesh);
     explicit Primitive(const std::shared_ptr<erhe::geometry::Geometry>& geometry);

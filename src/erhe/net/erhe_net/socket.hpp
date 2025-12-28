@@ -27,7 +27,7 @@ public:
 
     Socket();
     Socket(const SOCKET& socket, const sockaddr_in& address_in);
-    ~Socket();
+    ~Socket() noexcept;
     Socket(const Socket&) = delete;
     void operator=(const Socket&) = delete;
     Socket(Socket&& other) noexcept;

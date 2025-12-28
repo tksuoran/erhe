@@ -18,7 +18,7 @@ public:
     Compute_command_encoder& operator=(const Compute_command_encoder&) = delete;
     Compute_command_encoder(Compute_command_encoder&&) = delete;
     Compute_command_encoder& operator=(Compute_command_encoder&&) = delete;
-    ~Compute_command_encoder() override;
+    ~Compute_command_encoder() noexcept override;
 
     void set_compute_pipeline_state(const Compute_pipeline_state& pipeline);
 

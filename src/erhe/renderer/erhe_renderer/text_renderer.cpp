@@ -126,7 +126,7 @@ Text_renderer::Text_renderer(erhe::graphics::Device& graphics_device)
     );
 }
 
-Text_renderer::~Text_renderer()
+Text_renderer::~Text_renderer() noexcept
 {
 }
 

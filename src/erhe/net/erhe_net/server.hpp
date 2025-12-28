@@ -9,7 +9,7 @@ class Server
 {
 public:
     Server();
-    ~Server();
+    ~Server() noexcept;
     Server(Server&) = delete;
     auto operator=(const Server&) = delete;
     Server(Server&& other) noexcept;

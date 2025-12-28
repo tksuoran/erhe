@@ -24,7 +24,9 @@ std::shared_ptr<spdlog::logger> log_weld             ;
 
 class Geogram_logger_client : public GEO::LoggerClient {
 public:
-    ~Geogram_logger_client() override {}
+    ~Geogram_logger_client() noexcept override
+    {
+    }
     void div(const std::string& title) override {
         log_geogram->info(title);
     }

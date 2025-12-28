@@ -27,7 +27,7 @@ Device::Device(const Surface_create_info& surface_create_info)
     : m_impl{std::make_unique<Device_impl>(*this, surface_create_info)}
 {
 }
-Device::~Device() = default;
+Device::~Device() noexcept = default;
 auto Device::choose_depth_stencil_format(const unsigned int flags, int sample_count) const -> erhe::dataformat::Format
 {
     return m_impl->choose_depth_stencil_format(flags, sample_count);

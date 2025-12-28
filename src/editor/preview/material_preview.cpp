@@ -44,7 +44,7 @@ Material_preview::Material_preview(
     update_rendertarget(graphics_device);
 }
 
-Material_preview::~Material_preview()
+Material_preview::~Material_preview() noexcept
 {
 }
 
