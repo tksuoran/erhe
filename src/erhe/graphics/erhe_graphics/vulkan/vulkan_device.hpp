@@ -144,18 +144,6 @@ private:
 
     void update_frame_completion();
 
-    void create_frames_in_flight_resources();
-
-    //class Device_frame_in_flight
-    //{
-    //public:
-    //    //uint64_t frame_number   {0};
-    //    //VkFence  frame_end_fence{VK_NULL_HANDLE};
-    //    VkCommandBuffer m_end_of_frame_command_buffer{VK_NULL_HANDLE};
-    //};
-    //std::vector<Device_frame_in_flight> m_frames_in_flight;
-
-
     [[nodiscard]] static auto get_physical_device_score(VkPhysicalDevice vulkan_physical_device, Surface_impl* surface_impl) -> float;
     [[nodiscard]] static auto query_device_queue_family_indices(
         VkPhysicalDevice vulkan_physical_device,

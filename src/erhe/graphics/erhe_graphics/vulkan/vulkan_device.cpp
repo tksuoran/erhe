@@ -39,6 +39,14 @@
 
 namespace erhe::graphics {
 
+[[nodiscard]] auto get_vendor(const uint32_t vendor_id) -> Vendor
+{
+    switch (vendor_id) {
+        case 0x00001002u: return Vendor::Amd;
+        default: return Vendor::Unknown;
+    }
+}
+
 auto Device_impl_debug_report_callback(
     VkDebugReportFlagsEXT      flags,
     VkDebugReportObjectTypeEXT object_type,
@@ -461,14 +469,6 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         .driverInfo         = {},
         .conformanceVersion = {},
     };
-    //VkPhysicalDeviceVulkan12Properties vulkan_12_properties{
-    //    .sType              = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_PROPERTIES,
-    //    .pNext              = nullptr,
-    //    .driverID           = 0,
-    //    .driverName         = {},
-    //    .driverInfo         = {},
-    //    .conformanceVersion = {},
-    //};
     VkPhysicalDeviceProperties2 physical_device_properties2 {
         .sType      = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
         .pNext      = &m_driver_properties,
@@ -746,10 +746,9 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         abort();
     }
 
-    create_frames_in_flight_resources();
-
     m_info.glsl_version       = 460;
     m_info.vulkan_api_version = application_info.apiVersion;
+    m_info.vendor             = get_vendor(properties.vendorID);
 
     m_info.max_per_stage_descriptor_samplers = properties.limits.maxPerStageDescriptorSamplers;
 }
@@ -1355,42 +1354,6 @@ auto Device_impl::get_frame_index() const -> uint64_t
 auto Device_impl::get_frame_in_flight_index() const -> uint64_t
 {
     return m_frame_index % get_number_of_frames_in_flight();
-}
-
-void Device_impl::create_frames_in_flight_resources()
-{
-    //const VkFenceCreateInfo fence_create_info{
-    //    .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
-    //    .pNext = nullptr,
-    //    .flags = VK_FENCE_CREATE_SIGNALED_BIT
-    //};
-    //VkResult result = VK_SUCCESS;
-
-    //m_frames_in_flight.resize(get_number_of_frames_in_flight());
-    //for (size_t i = 0, end = get_number_of_frames_in_flight(); i < end; ++i) {
-    //    Device_frame_in_flight& frame_in_flight = m_frames_in_flight[i];
-    //    //result = vkCreateFence(m_vulkan_device, &fence_create_info, nullptr, &frame_in_flight.frame_end_fence);
-    //    //if (result != VK_SUCCESS) {
-    //    //    log_context->critical("vkCreateFence() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
-    //    //    abort();
-    //    //}
-    //    //set_debug_label(
-    //    //    VK_OBJECT_TYPE_FENCE,
-    //    //    reinterpret_cast<uint64_t>(frame_in_flight.frame_end_fence),
-    //    //    fmt::format("Device frame in flight end of frame fence {}", i).c_str()
-    //    //);
-    //    frame_in_flight.m_end_of_frame_command_buffer = allocate_command_buffer();
-    //    if (frame_in_flight.m_end_of_frame_command_buffer == VK_NULL_HANDLE) {
-    //        log_context->critical("Allocating end of frrame command buffer failed");
-    //        abort();
-    //    }
-    //    set_debug_label(
-    //        VK_OBJECT_TYPE_COMMAND_BUFFER,
-    //        reinterpret_cast<uint64_t>(frame_in_flight.m_end_of_frame_command_buffer),
-    //        fmt::format("Device end of frame command buffer {}", i)
-    //    );
-    //
-    //}
 }
 
 } // namespace erhe::graphics
