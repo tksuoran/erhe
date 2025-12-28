@@ -900,12 +900,12 @@ void Device_impl::wait_frame(Frame_state& out_frame_state)
     }
 }
 
-void Device_impl::begin_frame()
+void Device_impl::begin_frame(const Frame_begin_info& frame_begin_info)
 {
     if (m_surface) {
         Swapchain* swapchain = m_surface->get_swapchain();
         if (swapchain != nullptr) {
-            swapchain->begin_frame();
+            swapchain->begin_frame(frame_begin_info);
         }
     }
 }

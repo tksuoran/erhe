@@ -140,6 +140,7 @@ public:
 };
 
 class Frame_state;
+class Frame_begin_info;
 class Frame_end_info;
 
 class Device_impl;
@@ -154,7 +155,7 @@ public:
     ~Device();
 
     void wait_frame            (Frame_state& out_frame_state);
-    void begin_frame           ();
+    void begin_frame           (const Frame_begin_info& frame_begin_info);
     void end_frame             (const Frame_end_info& frame_end_info);
 
     void memory_barrier        (Memory_barrier_mask barriers);

@@ -26,7 +26,6 @@ public:
     ~Surface() noexcept;
 
     [[nodiscard]] auto get_swapchain() -> Swapchain*;
-    void resize_swapchain_to_surface(uint32_t& width, uint32_t& height);
 
     [[nodiscard]] auto get_impl() -> Surface_impl&;
     [[nodiscard]] auto get_impl() const -> const Surface_impl&;

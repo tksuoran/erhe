@@ -143,6 +143,7 @@
 #include <geogram/basic/command_line_args.h>
 #include <geogram/basic/logger.h>
 
+#include <atomic>
 #include <cstdlib>
 #include <filesystem>
 #include <stdexcept>
@@ -276,6 +277,7 @@ public:
         //   This may consume some input events, so that they will not get processed by m_commands.tick() below
         // - Call all ImGui code (Imgui_window)
         m_hover_tool->reset_item_tree_hover();
+
         m_imgui_windows->begin_frame();
         m_imgui_windows->draw_imgui_windows();
         m_imgui_windows->end_frame();
@@ -306,6 +308,15 @@ public:
         m_graphics_device->get_shader_monitor().update_once_per_frame();
         m_mesh_memory->buffer_transfer_queue.flush();
 
+        const erhe::graphics::Frame_begin_info frame_begin_info{
+            .resize_width   = static_cast<uint32_t>(m_last_window_width),
+            .resize_height  = static_cast<uint32_t>(m_last_window_height),
+            .request_resize = m_request_resize_pending.load()
+        };
+        m_request_resize_pending.store(false);
+
+        m_graphics_device->begin_frame(frame_begin_info);
+
         m_app_rendering->begin_frame(); // tests renderdoc capture start
 
         m_thumbnails->update();
@@ -321,7 +332,13 @@ public:
         m_rendergraph->execute();
 
         m_imgui_renderer->next_frame();
-        m_app_rendering->end_frame();  // NOTE: Calls m_graphics_device->end_of_frame();
+        m_app_rendering->end_frame();
+
+        const erhe::graphics::Frame_end_info frame_end_info{
+            .requested_display_time = 0
+        };
+        m_graphics_device->end_frame(frame_end_info);
+
 #if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
         //if (!m_app_context.OpenXR) {
         //    gl::bind_framebuffer(gl::Framebuffer_target::framebuffer, 0);
@@ -1251,10 +1268,11 @@ public:
                     (m_last_window_width  != m_window->get_width ()) ||
                     (m_last_window_height != m_window->get_height())
                 ) {
-                    m_graphics_device->get_surface()->resize_swapchain_to_surface(m_swapchain_width, m_swapchain_height);
+                    m_request_resize_pending.store(true);
                     m_last_window_width  = m_window->get_width();
                     m_last_window_height = m_window->get_height();
                 }
+                // TODO throttle redraws - if last redraw was less than live resize redraw threshold limit ago, don't redraw
                 tick();
             }
         );
@@ -1342,10 +1360,12 @@ public:
     }
 
     std::optional<erhe::window::Input_event> m_window_resize_event{};
-    int      m_last_window_width {0};
-    int      m_last_window_height{0};
-    uint32_t m_swapchain_width   {0};
-    uint32_t m_swapchain_height  {0};
+    int               m_last_window_width     {0};
+    int               m_last_window_height    {0};
+    uint32_t          m_swapchain_width       {0};
+    uint32_t          m_swapchain_height      {0};
+    std::atomic<bool> m_request_resize_pending{false};
+
     auto on_window_resize_event(const erhe::window::Input_event& input_event) -> bool override
     {
         m_window_resize_event = input_event;
@@ -1383,7 +1403,7 @@ public:
                     dispatch_input_event(input_event);
                 }
                 if (m_window_resize_event.has_value()) {
-                    m_graphics_device->get_surface()->resize_swapchain_to_surface(m_swapchain_width, m_swapchain_height);
+                    m_request_resize_pending.store(true);
                     m_window_resize_event.reset();
                     m_last_window_width  = m_window->get_width();
                     m_last_window_height = m_window->get_height();

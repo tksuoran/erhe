@@ -69,18 +69,16 @@ public:
     uint32_t                            image_index{std::numeric_limits<uint32_t>::max()};
 };
 
+class Vulkan_swapchain_create_info;
+
 class Swapchain_impl final
 {
 public:
-    Swapchain_impl(
-        Device_impl&                    device_impl,
-        Surface_impl&                   surface_impl,
-        const VkSwapchainCreateInfoKHR& vulkan_swapchain_create_info
-    );
+    Swapchain_impl(Device_impl& device_impl, Surface_impl& surface_impl);
     ~Swapchain_impl() noexcept;
 
     void wait_frame (Frame_state& out_frame_state);
-    void begin_frame();
+    void begin_frame(const Frame_begin_info& frame_begin_info);
     void end_frame  (const Frame_end_info& frame_end_info);
 
     [[nodiscard]] auto get_command_buffer() -> VkCommandBuffer;
@@ -88,8 +86,8 @@ public:
 private:
     static constexpr uint32_t INVALID_IMAGE_INDEX = std::numeric_limits<uint32_t>::max();
 
-    void create_placeholder_renderpass_and_framebuffers();
-    void submit_placeholder_renderpass                 ();
+    void create_placeholder_renderpass();
+    void submit_placeholder_renderpass();
 
     void setup_frame();
     [[nodiscard]] auto acquire_next_image(uint32_t* index) -> VkResult;
@@ -107,21 +105,23 @@ private:
     void cleanup_present_info     (Present_history_entry& entry);
     void cleanup_old_swapchain    (Swapchain_cleanup_data& old_swapchain);
 
-    void init_swapchain      (VkSwapchainCreateInfoKHR& swapchain_create_info);
+    void init_swapchain      ();
+    void init_swapchain      (Vulkan_swapchain_create_info& swapchain_create_info);
     void init_swapchain_image(uint32_t index);
 
     void add_present_to_history                (uint32_t index, VkFence present_fence);
     void associate_fence_with_present_history  (uint32_t index, VkFence acquire_fence);
     void schedule_old_swapchain_for_destruction(VkSwapchainKHR old_swapchain);
 
-    Device_impl&             m_device_impl;
-    Surface_impl&            m_surface_impl;
-    VkSwapchainCreateInfoKHR m_swapchain_create_info;
-    bool                     m_is_valid            {false};
-    uint32_t                 m_acquired_image_index{0};
-    VkSwapchainKHR           m_vulkan_swapchain    {VK_NULL_HANDLE};
-    VkRenderPass             m_vulkan_render_pass  {VK_NULL_HANDLE};
-    Swapchain_objects        m_swapchain_objects;
+    Device_impl&                 m_device_impl;
+    Surface_impl&                m_surface_impl;
+    VkExtent2D                   m_swapchain_extent    {0, 0};
+    VkFormat                     m_swapchain_format    {VK_FORMAT_UNDEFINED};
+    bool                         m_is_valid            {false};
+    uint32_t                     m_acquired_image_index{0};
+    VkSwapchainKHR               m_vulkan_swapchain    {VK_NULL_HANDLE};
+    VkRenderPass                 m_vulkan_render_pass  {VK_NULL_HANDLE};
+    Swapchain_objects            m_swapchain_objects;
 
     // TODO Move to Render_pass_impl
 

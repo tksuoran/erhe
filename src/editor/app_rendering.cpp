@@ -787,8 +787,6 @@ void App_rendering::begin_frame()
 {
     ERHE_PROFILE_FUNCTION();
 
-    m_context.graphics_device->begin_frame();
-
     if (m_trigger_capture) {
         erhe::window::start_frame_capture(*m_context.context_window);
     }
@@ -821,11 +819,6 @@ void App_rendering::end_frame()
         erhe::window::end_frame_capture(*m_context.context_window);
         m_trigger_capture = false;
     }
-
-    const erhe::graphics::Frame_end_info frame_end_info{
-        .requested_display_time = 0
-    };
-    m_context.graphics_device->end_frame(frame_end_info);
 }
 
 void App_rendering::add(Renderable* renderable)

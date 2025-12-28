@@ -32,47 +32,15 @@ Surface_impl::Surface_impl(Device_impl& device_impl, const Surface_create_info& 
     const VkInstance vulkan_instance = device_impl.get_vulkan_instance();
     void* surface = create_info.context_window->create_vulkan_surface(static_cast<void*>(vulkan_instance));
     m_surface = static_cast<VkSurfaceKHR>(surface);
+
+    m_swapchain = std::make_unique<Swapchain>(
+        std::make_unique<Swapchain_impl>(m_device_impl, *this)
+    );
 }
 
 auto Surface_impl::get_swapchain() -> Swapchain*
 {
     return m_swapchain.get();
-}
-
-void Surface_impl::resize_swapchain_to_surface(uint32_t& out_width, uint32_t& out_height)
-{
-    static_cast<void>(out_width);
-    static_cast<void>(out_height);
-#if 0
-    //if (!m_swapchain) {
-    //    VkExtent2D     extent{.width = 0, .height = 0};
-    //        VkSwapchainKHR vulkan_swapchain = 
-    bool error = false;
-    bool create = false;
-    VkSwapchainCreateInfoKHR swapchain_create_info{};
-    init_swapchain(error, create, swapchain_create_info);
-    if (error) {
-        out_width = 0;
-        out_height = 0;
-        return;
-    }
-    width = m_swapchain_extent.width;
-    height = m_swapchain_extent.height;
-    if (!create) {
-        return;
-    }
-    if (m_swapchain) {
-        m_swapchain->get_impl().update_vulkan_swapchain(swapchain_create_info);
-    } else {
-        m_swapchain = std::make_unique<Swapchain>(
-            std::make_unique<Swapchain_impl>(
-                m_device_impl,
-                *this,
-                swapchain_create_info
-            )
-        );
-    }
-#endif
 }
 
 auto Surface_impl::can_use_physical_device(VkPhysicalDevice physical_device) -> bool
@@ -139,7 +107,7 @@ auto Surface_impl::use_physical_device(VkPhysicalDevice physical_device) -> bool
     //const bool use_surface_maintenance1  = capabilities.m_surface_maintenance1;
     VkResult result = VK_SUCCESS;
 
-    m_surface_capabilities2 = VkSurfaceCapabilities2KHR{
+    VkSurfaceCapabilities2KHR surface_capabilities2{
         .sType               = VK_STRUCTURE_TYPE_SURFACE_CAPABILITIES_2_KHR,
         .pNext               = nullptr,
         .surfaceCapabilities = {}
@@ -175,7 +143,7 @@ auto Surface_impl::use_physical_device(VkPhysicalDevice physical_device) -> bool
             .surface = m_surface
         };
 
-        result = vkGetPhysicalDeviceSurfaceCapabilities2KHR(physical_device, &surface_info, &m_surface_capabilities2);
+        result = vkGetPhysicalDeviceSurfaceCapabilities2KHR(physical_device, &surface_info, &surface_capabilities2);
         if (result != VK_SUCCESS) {
             fail();
             return false;
@@ -187,7 +155,7 @@ auto Surface_impl::use_physical_device(VkPhysicalDevice physical_device) -> bool
 
     } else {
 
-        result = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical_device, m_surface, &m_surface_capabilities2.surfaceCapabilities);
+        result = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical_device, m_surface, &surface_capabilities2.surfaceCapabilities);
         if (result != VK_SUCCESS) {
             fail();
             return false;
@@ -264,11 +232,11 @@ auto Surface_impl::use_physical_device(VkPhysicalDevice physical_device) -> bool
             break;
         }
     }
-    m_image_count = std::max(m_image_count, m_surface_capabilities2.surfaceCapabilities.minImageCount);
-    if (m_surface_capabilities2.surfaceCapabilities.maxImageCount != 0) {
+    m_image_count = std::max(m_image_count, surface_capabilities2.surfaceCapabilities.minImageCount);
+    if (surface_capabilities2.surfaceCapabilities.maxImageCount != 0) {
         m_image_count = std::min(
             m_image_count,
-            m_surface_capabilities2.surfaceCapabilities.maxImageCount
+            surface_capabilities2.surfaceCapabilities.maxImageCount
         );
     }
 
@@ -326,10 +294,47 @@ auto Surface_impl::get_surface_format_score(const VkSurfaceFormatKHR surface_for
     return format_score * color_space_score;
 }
 
-auto Surface_impl::get_present_mode_score(
-    const VkPresentModeKHR                  present_mode,
-    VkSurfacePresentScalingCapabilitiesKHR& out_scaling_capabilities
-) const -> float
+auto Surface_impl::get_present_scaling_capabilities() const -> VkSurfacePresentScalingCapabilitiesKHR
+{
+    const Capabilities& capabilities = m_device_impl.get_capabilities();
+    const bool use_surface_capabilities2 = capabilities.m_surface_capabilities2;
+    const bool use_surface_maintenance1  = capabilities.m_surface_maintenance1;
+    VkResult result = VK_SUCCESS;
+
+    VkSurfacePresentScalingCapabilitiesKHR scaling_capabilities{
+        .sType                    = VK_STRUCTURE_TYPE_SURFACE_PRESENT_SCALING_CAPABILITIES_KHR,
+        .pNext                    = nullptr,
+        .supportedPresentScaling  = 0,
+        .supportedPresentGravityX = 0,
+        .supportedPresentGravityY = 0,
+        .minScaledImageExtent     = {0, 0},
+        .maxScaledImageExtent     = {0, 0}
+    };
+    if (use_surface_capabilities2 && use_surface_maintenance1) {
+        VkSurfaceCapabilities2KHR surface_capabilities2{
+            .sType               = VK_STRUCTURE_TYPE_SURFACE_CAPABILITIES_2_KHR,
+            .pNext               = &scaling_capabilities,
+            .surfaceCapabilities = {}
+        };
+        VkSurfacePresentModeKHR surface_present_mode{
+            .sType       = VK_STRUCTURE_TYPE_SURFACE_PRESENT_MODE_KHR,
+            .pNext       = nullptr,
+            .presentMode = m_present_mode
+        };
+        const VkPhysicalDeviceSurfaceInfo2KHR surface_info{
+            .sType   = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SURFACE_INFO_2_KHR,
+            .pNext   = &surface_present_mode,
+            .surface = m_surface
+        };
+        result = vkGetPhysicalDeviceSurfaceCapabilities2KHR(m_physical_device, &surface_info, &surface_capabilities2);
+        //if (result == VK_SUCCESS) {
+        //    return scaling_capabilities;
+        //}
+    }
+    return scaling_capabilities;
+}
+
+auto Surface_impl::get_present_mode_score(const VkPresentModeKHR present_mode) const -> float
 {
     // https://registry.khronos.org/vulkan/specs/latest/html/vkspec.html#VkSurfacePresentModeKHR
     // https://docs.vulkan.org/refpages/latest/refpages/source/VK_KHR_surface_maintenance1.html
@@ -368,20 +373,20 @@ auto Surface_impl::get_present_mode_score(
         };
         result = vkGetPhysicalDeviceSurfaceCapabilities2KHR(m_physical_device, &surface_info, &surface_capabilities2);
         if (result == VK_SUCCESS) {
-            log_context->debug("  scaling   = {}", to_string_VkPresentScalingFlagsKHR(m_scaling_capabilities.supportedPresentScaling));
-            log_context->debug("  gravity X = {}", to_string_VkPresentGravityFlagsKHR(m_scaling_capabilities.supportedPresentGravityX));
-            log_context->debug("  gravity Y = {}", to_string_VkPresentGravityFlagsKHR(m_scaling_capabilities.supportedPresentGravityY));
-            const bool one_to_one           = (m_scaling_capabilities.supportedPresentScaling & VK_PRESENT_SCALING_ONE_TO_ONE_BIT_KHR          ) != 0;
-            const bool aspect_ratio_stretch = (m_scaling_capabilities.supportedPresentScaling & VK_PRESENT_SCALING_ASPECT_RATIO_STRETCH_BIT_KHR) != 0;
-            const bool stretch              = (m_scaling_capabilities.supportedPresentScaling & VK_PRESENT_SCALING_STRETCH_BIT_KHR             ) != 0;
+            log_context->debug("  scaling   = {}", to_string_VkPresentScalingFlagsKHR(scaling_capabilities.supportedPresentScaling));
+            log_context->debug("  gravity X = {}", to_string_VkPresentGravityFlagsKHR(scaling_capabilities.supportedPresentGravityX));
+            log_context->debug("  gravity Y = {}", to_string_VkPresentGravityFlagsKHR(scaling_capabilities.supportedPresentGravityY));
+            const bool one_to_one           = (scaling_capabilities.supportedPresentScaling & VK_PRESENT_SCALING_ONE_TO_ONE_BIT_KHR          ) != 0;
+            const bool aspect_ratio_stretch = (scaling_capabilities.supportedPresentScaling & VK_PRESENT_SCALING_ASPECT_RATIO_STRETCH_BIT_KHR) != 0;
+            const bool stretch              = (scaling_capabilities.supportedPresentScaling & VK_PRESENT_SCALING_STRETCH_BIT_KHR             ) != 0;
 
-            const bool x_min                = (m_scaling_capabilities.supportedPresentGravityX & VK_PRESENT_GRAVITY_MIN_BIT_KHR     ) != 0;
-            const bool x_max                = (m_scaling_capabilities.supportedPresentGravityX & VK_PRESENT_GRAVITY_MAX_BIT_KHR     ) != 0;
-            const bool x_centered           = (m_scaling_capabilities.supportedPresentGravityX & VK_PRESENT_GRAVITY_CENTERED_BIT_KHR) != 0;
+            const bool x_min                = (scaling_capabilities.supportedPresentGravityX & VK_PRESENT_GRAVITY_MIN_BIT_KHR     ) != 0;
+            const bool x_max                = (scaling_capabilities.supportedPresentGravityX & VK_PRESENT_GRAVITY_MAX_BIT_KHR     ) != 0;
+            const bool x_centered           = (scaling_capabilities.supportedPresentGravityX & VK_PRESENT_GRAVITY_CENTERED_BIT_KHR) != 0;
 
-            const bool y_min                = (m_scaling_capabilities.supportedPresentGravityY & VK_PRESENT_GRAVITY_MIN_BIT_KHR     ) != 0;
-            const bool y_max                = (m_scaling_capabilities.supportedPresentGravityY & VK_PRESENT_GRAVITY_MAX_BIT_KHR     ) != 0;
-            const bool y_centered           = (m_scaling_capabilities.supportedPresentGravityY & VK_PRESENT_GRAVITY_CENTERED_BIT_KHR) != 0;
+            const bool y_min                = (scaling_capabilities.supportedPresentGravityY & VK_PRESENT_GRAVITY_MIN_BIT_KHR     ) != 0;
+            const bool y_max                = (scaling_capabilities.supportedPresentGravityY & VK_PRESENT_GRAVITY_MAX_BIT_KHR     ) != 0;
+            const bool y_centered           = (scaling_capabilities.supportedPresentGravityY & VK_PRESENT_GRAVITY_CENTERED_BIT_KHR) != 0;
 
             // TODO Better scoring scheme?
             if (one_to_one          ) scaling_score += 1.0f;
@@ -395,7 +400,6 @@ auto Surface_impl::get_present_mode_score(
             if (y_centered          ) scaling_score += 1.0f;
         }
     }
-    out_scaling_capabilities = scaling_capabilities;
 
     // VK_PRESENT_MODE_IMMEDIATE_KHR specifies that
     //   the presentation engine does not wait for a vertical blanking period to update the current image,
@@ -526,20 +530,20 @@ void Surface_impl::choose_present_mode()
     VkPresentModeKHR selected_present_mode = VK_PRESENT_MODE_FIFO_KHR;
     log_context->debug("Surface present modes:");
     for (const VkPresentModeKHR present_mode : m_present_modes) {
-        VkSurfacePresentScalingCapabilitiesKHR scaling_capabilities;
-        const float score = get_present_mode_score(present_mode, scaling_capabilities);
+        const float score = get_present_mode_score(present_mode);
         log_context->debug("  present mode {} score {}", c_str(present_mode), score);
         if (score > best_score) {
-            best_score             = score;
-            selected_present_mode  = present_mode;
-            m_scaling_capabilities = scaling_capabilities;
+            best_score            = score;
+            selected_present_mode = present_mode;
         }
     }
     m_present_mode = selected_present_mode;
     log_context->debug("Selected present mode {}", c_str(m_present_mode));
-    log_context->debug("  scaling   = {}", to_string_VkPresentScalingFlagsKHR(m_scaling_capabilities.supportedPresentScaling));
-    log_context->debug("  gravity X = {}", to_string_VkPresentGravityFlagsKHR(m_scaling_capabilities.supportedPresentGravityX));
-    log_context->debug("  gravity Y = {}", to_string_VkPresentGravityFlagsKHR(m_scaling_capabilities.supportedPresentGravityY));
+
+    const VkSurfacePresentScalingCapabilitiesKHR scaling_capabilities = get_present_scaling_capabilities();
+    log_context->debug("  scaling   = {}", to_string_VkPresentScalingFlagsKHR(scaling_capabilities.supportedPresentScaling));
+    log_context->debug("  gravity X = {}", to_string_VkPresentGravityFlagsKHR(scaling_capabilities.supportedPresentGravityX));
+    log_context->debug("  gravity Y = {}", to_string_VkPresentGravityFlagsKHR(scaling_capabilities.supportedPresentGravityY));
 }
 
 Surface_impl::~Surface_impl() noexcept
@@ -567,7 +571,7 @@ auto Surface_impl::is_valid() -> bool
     return m_is_valid;
 }
 
-auto Surface_impl::update_swapchain(VkSwapchainCreateInfoKHR& out_swapchain_create_info) -> bool
+auto Surface_impl::update_swapchain(Vulkan_swapchain_create_info& out_swapchain_create_info) -> bool
 {
     log_context->debug("Surface_impl::configure_swapchain()");
 
@@ -645,58 +649,72 @@ auto Surface_impl::update_swapchain(VkSwapchainCreateInfoKHR& out_swapchain_crea
     VkPresentGravityFlagsEXT gravity_x        = 0;
     VkPresentGravityFlagsEXT gravity_y        = 0;
     if (use_scaling) {
-        const bool one_to_one           = (m_scaling_capabilities.supportedPresentScaling & VK_PRESENT_SCALING_ONE_TO_ONE_BIT_KHR          ) != 0;
-        const bool aspect_ratio_stretch = (m_scaling_capabilities.supportedPresentScaling & VK_PRESENT_SCALING_ASPECT_RATIO_STRETCH_BIT_KHR) != 0;
-        const bool stretch              = (m_scaling_capabilities.supportedPresentScaling & VK_PRESENT_SCALING_STRETCH_BIT_KHR             ) != 0;
+        const VkSurfacePresentScalingCapabilitiesKHR scaling_capabilities = get_present_scaling_capabilities();
 
-        const bool x_min                = (m_scaling_capabilities.supportedPresentGravityX & VK_PRESENT_GRAVITY_MIN_BIT_KHR     ) != 0;
-        const bool x_max                = (m_scaling_capabilities.supportedPresentGravityX & VK_PRESENT_GRAVITY_MAX_BIT_KHR     ) != 0;
-        const bool x_centered           = (m_scaling_capabilities.supportedPresentGravityX & VK_PRESENT_GRAVITY_CENTERED_BIT_KHR) != 0;
+        if (
+            ((scaling_capabilities.minScaledImageExtent.width  != 0xffffffffu) && (extent.width  < scaling_capabilities.minScaledImageExtent.width )) ||
+            ((scaling_capabilities.minScaledImageExtent.height != 0xffffffffu) && (extent.height < scaling_capabilities.minScaledImageExtent.height)) ||
+            ((scaling_capabilities.maxScaledImageExtent.width  != 0xffffffffu) && (extent.width  > scaling_capabilities.maxScaledImageExtent.width )) ||
+            ((scaling_capabilities.maxScaledImageExtent.height != 0xffffffffu) && (extent.height > scaling_capabilities.maxScaledImageExtent.height))
+        ) {
+            log_context->debug(
+                "  swapchain extent {} x {} outside min {} x {}, max {} x {}",
+                extent.width, extent.height,
+                scaling_capabilities.minScaledImageExtent.width, scaling_capabilities.minScaledImageExtent.height,
+                scaling_capabilities.maxScaledImageExtent.width, scaling_capabilities.maxScaledImageExtent.height
+            );
+            use_scaling = false;
+        } else {
+            const bool one_to_one           = (scaling_capabilities.supportedPresentScaling & VK_PRESENT_SCALING_ONE_TO_ONE_BIT_KHR          ) != 0;
+            const bool aspect_ratio_stretch = (scaling_capabilities.supportedPresentScaling & VK_PRESENT_SCALING_ASPECT_RATIO_STRETCH_BIT_KHR) != 0;
+            const bool stretch              = (scaling_capabilities.supportedPresentScaling & VK_PRESENT_SCALING_STRETCH_BIT_KHR             ) != 0;
 
-        const bool y_min                = (m_scaling_capabilities.supportedPresentGravityY & VK_PRESENT_GRAVITY_MIN_BIT_KHR     ) != 0;
-        const bool y_max                = (m_scaling_capabilities.supportedPresentGravityY & VK_PRESENT_GRAVITY_MAX_BIT_KHR     ) != 0;
-        const bool y_centered           = (m_scaling_capabilities.supportedPresentGravityY & VK_PRESENT_GRAVITY_CENTERED_BIT_KHR) != 0;
+            const bool x_min                = (scaling_capabilities.supportedPresentGravityX & VK_PRESENT_GRAVITY_MIN_BIT_KHR     ) != 0;
+            const bool x_max                = (scaling_capabilities.supportedPresentGravityX & VK_PRESENT_GRAVITY_MAX_BIT_KHR     ) != 0;
+            const bool x_centered           = (scaling_capabilities.supportedPresentGravityX & VK_PRESENT_GRAVITY_CENTERED_BIT_KHR) != 0;
 
-#if 0
-        // TODO VK_PRESENT_SCALING_ASPECT_RATIO_STRETCH_BIT_KHR does not work on AMD / Windows
-        if (aspect_ratio_stretch) {
-            scaling_behavior = VK_PRESENT_SCALING_ASPECT_RATIO_STRETCH_BIT_KHR;
-        } else if (stretch) {
-            scaling_behavior = VK_PRESENT_SCALING_STRETCH_BIT_KHR;
-        } else if (one_to_one) {
-            scaling_behavior = VK_PRESENT_SCALING_ONE_TO_ONE_BIT_KHR;
+            const bool y_min                = (scaling_capabilities.supportedPresentGravityY & VK_PRESENT_GRAVITY_MIN_BIT_KHR     ) != 0;
+            const bool y_max                = (scaling_capabilities.supportedPresentGravityY & VK_PRESENT_GRAVITY_MAX_BIT_KHR     ) != 0;
+            const bool y_centered           = (scaling_capabilities.supportedPresentGravityY & VK_PRESENT_GRAVITY_CENTERED_BIT_KHR) != 0;
+
+            // TODO VK_PRESENT_SCALING_ASPECT_RATIO_STRETCH_BIT_KHR does not work on AMD / Windows
+            if (aspect_ratio_stretch) {
+                scaling_behavior = VK_PRESENT_SCALING_ASPECT_RATIO_STRETCH_BIT_KHR;
+            } else if (stretch) {
+                scaling_behavior = VK_PRESENT_SCALING_STRETCH_BIT_KHR;
+            } else if (one_to_one) {
+                scaling_behavior = VK_PRESENT_SCALING_ONE_TO_ONE_BIT_KHR;
+            }
+            //if (stretch) {
+            //    scaling_behavior = VK_PRESENT_SCALING_STRETCH_BIT_KHR;
+            //} else if (aspect_ratio_stretch) {
+            //    scaling_behavior = VK_PRESENT_SCALING_ASPECT_RATIO_STRETCH_BIT_KHR;
+            //} else if (one_to_one) {
+            //    scaling_behavior = VK_PRESENT_SCALING_ONE_TO_ONE_BIT_KHR;
+            //}
+
+            if (x_centered) {
+                gravity_x = VK_PRESENT_GRAVITY_CENTERED_BIT_KHR;
+            } else if (x_min) {
+                gravity_x = VK_PRESENT_GRAVITY_MIN_BIT_KHR;
+            } else if (x_max) {
+                gravity_x = VK_PRESENT_GRAVITY_MAX_BIT_KHR;
+            }
+
+            if (y_centered) {
+                gravity_y = VK_PRESENT_GRAVITY_CENTERED_BIT_KHR;
+            } else if (y_min) {
+                gravity_y = VK_PRESENT_GRAVITY_MIN_BIT_KHR;
+            } else if (y_max) {
+                gravity_y = VK_PRESENT_GRAVITY_MAX_BIT_KHR;
+            }
+            log_context->debug("  scaling behavior = {}", to_string_VkPresentScalingFlagsKHR(scaling_behavior));
+            log_context->debug("  gravity x        = {}", to_string_VkPresentGravityFlagsKHR(gravity_x));
+            log_context->debug("  gravity y        = {}", to_string_VkPresentGravityFlagsKHR(gravity_y));
         }
-#else
-        if (stretch) {
-            scaling_behavior = VK_PRESENT_SCALING_STRETCH_BIT_KHR;
-        } else if (aspect_ratio_stretch) {
-            scaling_behavior = VK_PRESENT_SCALING_ASPECT_RATIO_STRETCH_BIT_KHR;
-        } else if (one_to_one) {
-            scaling_behavior = VK_PRESENT_SCALING_ONE_TO_ONE_BIT_KHR;
-        }
-#endif
-
-        if (x_centered) {
-            gravity_x = VK_PRESENT_GRAVITY_CENTERED_BIT_KHR;
-        } else if (x_min) {
-            gravity_x = VK_PRESENT_GRAVITY_MIN_BIT_KHR;
-        } else if (x_max) {
-            gravity_x = VK_PRESENT_GRAVITY_MAX_BIT_KHR;
-        } 
-
-        if (y_centered) {
-            gravity_y = VK_PRESENT_GRAVITY_CENTERED_BIT_KHR;
-        } else if (y_min) {
-            gravity_y = VK_PRESENT_GRAVITY_MIN_BIT_KHR;
-        } else if (y_max) {
-            gravity_y = VK_PRESENT_GRAVITY_MAX_BIT_KHR;
-        }
-        log_context->debug("  scaling behavior = {}", to_string_VkPresentScalingFlagsKHR(scaling_behavior));
-        log_context->debug("  gravity x        = {}", to_string_VkPresentGravityFlagsKHR(gravity_x));
-        log_context->debug("  gravity y        = {}", to_string_VkPresentGravityFlagsKHR(gravity_y));
     }
 
-    const VkSwapchainPresentScalingCreateInfoKHR swapchain_present_scaling_create_info{
+    out_swapchain_create_info.swapchain_present_scaling_create_info = VkSwapchainPresentScalingCreateInfoKHR{
         .sType           = VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_SCALING_CREATE_INFO_KHR, // VkStructureType
         .pNext           = nullptr,                                                     // const void*
         .scalingBehavior = scaling_behavior,                                            // VkPresentScalingFlagsKHR
@@ -704,10 +722,10 @@ auto Surface_impl::update_swapchain(VkSwapchainCreateInfoKHR& out_swapchain_crea
         .presentGravityY = gravity_y                                                    // VkPresentGravityFlagsKHR
     };
 
-    out_swapchain_create_info = VkSwapchainCreateInfoKHR{
+    out_swapchain_create_info.swapchain_create_info = VkSwapchainCreateInfoKHR{
         .sType                 = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,   // VkStructureType
         .pNext                 = use_scaling                                    // const void*
-                                    ? &swapchain_present_scaling_create_info
+                                    ? &out_swapchain_create_info.swapchain_present_scaling_create_info
                                     : nullptr,        
         .flags                 = 0,                                             // VkSwapchainCreateFlagsKHR
         .surface               = m_surface,                                     // VkSurfaceKHR

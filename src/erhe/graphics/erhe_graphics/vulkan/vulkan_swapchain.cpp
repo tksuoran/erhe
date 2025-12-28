@@ -8,32 +8,273 @@
 
 namespace erhe::graphics {
 
+Swapchain_impl::Swapchain_impl(
+    Device_impl&  device_impl,
+    Surface_impl& surface_impl
+)
+    : m_device_impl {device_impl}
+    , m_surface_impl{surface_impl}
+{
+}
+
+Swapchain_impl::~Swapchain_impl() noexcept
+{
+    log_swapchain->debug("Swapchain_impl::~Swapchain_impl()");
+    if (m_vulkan_swapchain == VK_NULL_HANDLE) {
+        return;
+    }
+
+    const VkDevice vulkan_device = m_device_impl.get_vulkan_device();
+    VkResult result = VK_SUCCESS;
+
+	result = vkDeviceWaitIdle(vulkan_device);
+    if (result != VK_SUCCESS) {
+        log_swapchain->critical("vkDeviceWaitIdle() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        abort();
+    }
+
+    for (Swapchain_frame_in_flight& frame : m_submit_history) {
+        recycle_fence    (frame.submit_fence);
+        recycle_semaphore(frame.acquire_semaphore);
+        vkDestroyCommandPool(vulkan_device, frame.command_pool, nullptr);
+        for (Swapchain_objects& garbage : frame.swapchain_garbage) {
+            cleanup_swapchain_objects(garbage);
+        }
+        frame.swapchain_garbage.clear();
+        ERHE_VERIFY(frame.present_semaphore == VK_NULL_HANDLE);
+    }
+
+    for (Present_history_entry& present_history_entry : m_present_history) {
+        if (present_history_entry.cleanup_fence != VK_NULL_HANDLE) {
+            result = vkWaitForFences(vulkan_device, 1, &present_history_entry.cleanup_fence, true, UINT64_MAX);
+            if (result != VK_SUCCESS) {
+                log_swapchain->critical("vkWaitForFences() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+                abort();
+            }
+        }
+        cleanup_present_info(present_history_entry);
+    }
+
+    //log_swapchain->trace("During the lifetime, {} swapchains were created", m_swapchain_creation_count);
+    log_swapchain->debug("Old swapchain count at destruction: {}", m_old_swapchains.size());
+
+    for (Swapchain_cleanup_data& old_swapchain : m_old_swapchains) {
+        cleanup_old_swapchain(old_swapchain);
+    }
+
+    log_swapchain->debug("Semaphore pool size at destruction: {}", m_semaphore_pool.size());
+    log_swapchain->debug("Fence pool size at destruction: {}", m_fence_pool.size());
+
+    for (VkSemaphore semaphore : m_semaphore_pool) {
+        vkDestroySemaphore(vulkan_device, semaphore, nullptr);
+    }
+
+    for (VkFence fence : m_fence_pool) {
+        vkDestroyFence(vulkan_device, fence, nullptr);
+    }
+
+    cleanup_swapchain_objects(m_swapchain_objects);
+    if (m_vulkan_swapchain != VK_NULL_HANDLE) {
+        vkDestroySwapchainKHR(vulkan_device, m_vulkan_swapchain, nullptr);
+    }
+
+    // This is temporary, placeholder renderpass related
+    if (m_vulkan_render_pass != VK_NULL_HANDLE) {
+        vkDestroyRenderPass(vulkan_device, m_vulkan_render_pass, nullptr);
+    }
+}
+
+void Swapchain_impl::create_placeholder_renderpass()
+{
+    VkDevice vulkan_device = m_device_impl.get_vulkan_device();
+    VkResult result        = VK_SUCCESS;
+
+    // temp stuff
+    const VkAttachmentDescription color_attachment_description{
+        .flags          = 0,                                            // VkAttachmentDescriptionFlags
+        .format         = m_surface_impl.get_surface_format().format,   // VkFormat
+        .samples        = VK_SAMPLE_COUNT_1_BIT,                        // VkSampleCountFlagBits
+        .loadOp         = VK_ATTACHMENT_LOAD_OP_CLEAR,                  // VkAttachmentLoadOp
+        .storeOp        = VK_ATTACHMENT_STORE_OP_STORE,                 // VkAttachmentStoreOp
+        .stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE,              // VkAttachmentLoadOp
+        .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,             // VkAttachmentStoreOp
+        .initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED,                    // VkImageLayout
+        .finalLayout    = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR               // VkImageLayout
+    };
+
+    const VkAttachmentReference color_attachment_reference{
+        .attachment = 0,                                       // uint32_t
+        .layout     = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL // VkImageLayout
+    };
+
+    const VkSubpassDescription subpass_description{
+        .flags                   = 0,                               // VkSubpassDescriptionFlag
+        .pipelineBindPoint       = VK_PIPELINE_BIND_POINT_GRAPHICS, // VkPipelineBindPoint
+        .inputAttachmentCount    = 0,                               // uint32_t
+        .pInputAttachments       = nullptr,                         // const VkAttachmentReference*
+        .colorAttachmentCount    = 1,                               // uint32_t
+        .pColorAttachments       = &color_attachment_reference,     // const VkAttachmentReference*
+        .pResolveAttachments     = nullptr,                         // const VkAttachmentReference*
+        .pDepthStencilAttachment = nullptr,                         // const VkAttachmentReference*
+        .preserveAttachmentCount = 0,                               // uint32_t
+        .pPreserveAttachments    = nullptr                          // const uint32_t*
+    };
+
+    // Make the render pass wait for the VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT stage
+    // - wait for the implicit subpass before or after the render pass
+    // - wait for the swap chain to finish reading from the image
+    // - wait before doing writes to color attachment
+    const VkSubpassDependency subpass_dependency{
+        .srcSubpass      = VK_SUBPASS_EXTERNAL,                           // uint32_t
+        .dstSubpass      = 0,                                             // uint32_t
+        .srcStageMask    = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, // VkPipelineStageFlags
+        .dstStageMask    = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, // VkPipelineStageFlags
+        .srcAccessMask   = 0,                                             // VkAccessFlags
+        .dstAccessMask   = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,          // VkAccessFlags
+        .dependencyFlags = 0,                                             // VkDependencyFlags
+    };
+
+    const VkRenderPassCreateInfo render_pass_create_info{
+        .sType           = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO, // VkStructureType
+        .pNext           = nullptr,                                   // const void*
+        .flags           = 0,                                         // VkRenderPassCreateFlags
+        .attachmentCount = 1,                                         // uint32_t
+        .pAttachments    = &color_attachment_description,             // const VkAttachmentDescription*
+        .subpassCount    = 1,                                         // uint32_t
+        .pSubpasses      = &subpass_description,                      // const VkSubpassDescription*
+        .dependencyCount = 1,                                         // uint32_t
+        .pDependencies   = &subpass_dependency,                       // const VkSubpassDependency*
+    };
+
+    log_swapchain->debug("Creating renderpass");
+    result = vkCreateRenderPass(vulkan_device, &render_pass_create_info, nullptr, &m_vulkan_render_pass);
+    if (result != VK_SUCCESS) {
+        log_swapchain->critical("vkCreateRenderPass() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        abort();
+    }
+    m_device_impl.set_debug_label(
+        VK_OBJECT_TYPE_RENDER_PASS,
+        reinterpret_cast<uint64_t>(m_vulkan_render_pass),
+        "Swapchain renderpass"
+    );
+}
+
+void Swapchain_impl::submit_placeholder_renderpass()
+{
+    if (!is_valid()) {
+        return;
+    }
+
+    const Swapchain_frame_in_flight& frame = m_submit_history[m_submit_history_index];
+    VkQueue  vulkan_graphics_queue = m_device_impl.get_graphics_queue();
+    VkResult result                = VK_SUCCESS;
+    uint64_t frame_index           = m_device_impl.get_frame_index();
+
+    log_swapchain->debug(
+        "submit_placeholder_renderpass() m_submit_history_index = {} m_acquired_image_index = {} frame_index = {}",
+        m_submit_history_index, m_acquired_image_index, frame_index
+    );
+
+    const VkCommandBuffer vulkan_command_buffer = get_command_buffer();
+    if (vulkan_command_buffer == VK_NULL_HANDLE) {
+        return;
+    }
+
+    const VkCommandBufferBeginInfo begin_info{
+        .sType            = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .pNext            = nullptr,
+        .flags            = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+        .pInheritanceInfo = nullptr
+    };
+
+    log_swapchain->debug("vkBeginCommandBuffer()");
+    result = vkBeginCommandBuffer(vulkan_command_buffer, &begin_info);
+    if (result != VK_SUCCESS) {
+        log_swapchain->critical("vkBeginCommandBuffer() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        abort();
+    }
+
+    const VkClearValue clear_values[3] = {
+        {.color = { .float32 = { 0.01f, 0.0f, 0.0f, 1.0f }}},
+        {.color = { .float32 = { 0.0f, 0.01f, 0.0f, 1.0f }}},
+        {.color = { .float32 = { 0.0f, 0.0f, 0.01f, 1.0f }}}
+    };
+
+    const uint64_t clear_color_index = frame_index % 3;
+    const VkRenderPassBeginInfo render_pass_begin_info{
+        .sType           = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,                  // VkStructureType
+        .pNext           = nullptr,                                                   // const void*
+        .renderPass      = m_vulkan_render_pass,                                      // VkRenderPass
+        .framebuffer     = m_swapchain_objects.framebuffers[m_acquired_image_index],  // VkFramebuffer
+        .renderArea      = VkRect2D{{0,0}, m_swapchain_extent},                       // VkRect2D
+        .clearValueCount = 1,                                                         // uint32_t
+        .pClearValues    = &clear_values[clear_color_index]                           // const VkClearValue*
+    };
+
+    log_swapchain->debug(
+        "vkCmdBeginRenderPass( clear color = {}: {}, {}, {}, {})",
+        clear_color_index,
+        render_pass_begin_info.pClearValues->color.float32[0],
+        render_pass_begin_info.pClearValues->color.float32[1],
+        render_pass_begin_info.pClearValues->color.float32[2],
+        render_pass_begin_info.pClearValues->color.float32[3]
+    );
+    vkCmdBeginRenderPass(vulkan_command_buffer, &render_pass_begin_info, VK_SUBPASS_CONTENTS_INLINE);
+
+    log_swapchain->debug("vkCmdEndRenderPass()");
+    vkCmdEndRenderPass(vulkan_command_buffer);
+
+    log_swapchain->debug("vkEndCommandBuffer()");
+    result = vkEndCommandBuffer(vulkan_command_buffer);
+    if (result != VK_SUCCESS) {
+        log_swapchain->critical("vkEndCommandBuffer() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        abort();
+    }
+
+    // Make a submission. Wait on the acquire semaphore and signal the present semaphore.
+    const VkPipelineStageFlags wait_stages = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    const VkSubmitInfo submit_info{
+        .sType                = VK_STRUCTURE_TYPE_SUBMIT_INFO,  // VkStructureType
+        .pNext                = nullptr,                        // const void*
+        .waitSemaphoreCount   = 1,                              // uint32_t
+        .pWaitSemaphores      = &frame.acquire_semaphore,       // const VkSemaphore*
+        .pWaitDstStageMask    = &wait_stages,                   // const VkPipelineStageFlags*
+        .commandBufferCount   = 1,                              // uint32_t
+        .pCommandBuffers      = &frame.command_buffer,          // const VkCommandBuffer*
+        .signalSemaphoreCount = 1,                              // uint32_t
+        .pSignalSemaphores    = &frame.present_semaphore        // const VkSemaphore*
+    };
+    log_swapchain->debug("vkQueueSubmit()");
+    result = vkQueueSubmit(vulkan_graphics_queue, 1, &submit_info, frame.submit_fence);
+    if (result != VK_SUCCESS) {
+        log_swapchain->critical("vkQueueSubmit() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        abort();
+    }
+}
+
 void Swapchain_impl::wait_frame(Frame_state& out_frame_state)
 {
+    if (m_vulkan_swapchain == VK_NULL_HANDLE) {
+        init_swapchain();
+    }
+
     out_frame_state = Frame_state{};
     setup_frame();
 }
 
-void Swapchain_impl::begin_frame()
+void Swapchain_impl::begin_frame(const Frame_begin_info& frame_begin_info)
 {
-    VkResult result = acquire_next_image(&m_acquired_image_index);
-    if ((result == VK_SUBOPTIMAL_KHR) || (result == VK_ERROR_OUT_OF_DATE_KHR)) {
-        bool recreate_swapchain = m_surface_impl.update_swapchain(m_swapchain_create_info);
-        bool surface_is_valid   = m_surface_impl.is_valid();
-        bool surface_is_empty   = m_surface_impl.is_empty();
-        if (!surface_is_valid) {
-            log_context->debug("Surface is not ready to be used for rendering, skipping frame");
-        }
-        if (surface_is_empty) {
-            log_context->debug("Surface is too small to have any visible pixels, skipping frame");
-        }
-        m_is_valid = surface_is_valid && !surface_is_empty;
+    VkResult result = VK_SUCCESS;
+
+    if (!frame_begin_info.request_resize) {
+        result = acquire_next_image(&m_acquired_image_index);
+    }
+
+    if (frame_begin_info.request_resize || (result == VK_SUBOPTIMAL_KHR) || (result == VK_ERROR_OUT_OF_DATE_KHR)) {
+        init_swapchain();
         if (!m_is_valid) {
             m_acquired_image_index = 0xffu;
             return;
-        }
-        if (recreate_swapchain) {
-            init_swapchain(m_swapchain_create_info);
         }
         result = acquire_next_image(&m_acquired_image_index);
     }
@@ -47,11 +288,16 @@ void Swapchain_impl::end_frame(const Frame_end_info& frame_end_info)
 {
     static_cast<void>(frame_end_info);
 
+    submit_placeholder_renderpass();
+
     VkResult result = present_image(m_acquired_image_index);
 
     // Handle Outdated error in present.
     if ((result == VK_SUBOPTIMAL_KHR) || (result == VK_ERROR_OUT_OF_DATE_KHR)) {
-        init_swapchain(m_swapchain_create_info);
+        init_swapchain();
+        if (!m_is_valid) {
+            return;
+        }
     } else if (result != VK_SUCCESS) {
         log_context->critical("presenting frame failed with {} {}", static_cast<uint32_t>(result), c_str(result));
         abort();
@@ -373,164 +619,6 @@ void Swapchain_impl::schedule_old_swapchain_for_destruction(const VkSwapchainKHR
 
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////////
-
-Swapchain_impl::Swapchain_impl(
-    Device_impl&                    device_impl,
-    Surface_impl&                   surface_impl,
-    const VkSwapchainCreateInfoKHR& swapchain_create_info
-)
-    : m_device_impl          {device_impl}
-    , m_surface_impl         {surface_impl}
-    , m_swapchain_create_info{swapchain_create_info}
-{
-}
-
-Swapchain_impl::~Swapchain_impl() noexcept
-{
-    log_swapchain->debug("Swapchain_impl::~Swapchain_impl()");
-    if (m_vulkan_swapchain == VK_NULL_HANDLE) {
-        return;
-    }
-
-    const VkDevice vulkan_device = m_device_impl.get_vulkan_device();
-    VkResult result = VK_SUCCESS;
-
-	result = vkDeviceWaitIdle(vulkan_device);
-    if (result != VK_SUCCESS) {
-        log_swapchain->critical("vkDeviceWaitIdle() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
-        abort();
-    }
-
-    for (Swapchain_frame_in_flight& frame : m_submit_history) {
-        recycle_fence    (frame.submit_fence);
-        recycle_semaphore(frame.acquire_semaphore);
-        vkDestroyCommandPool(vulkan_device, frame.command_pool, nullptr);
-        for (Swapchain_objects& garbage : frame.swapchain_garbage) {
-            cleanup_swapchain_objects(garbage);
-        }
-        frame.swapchain_garbage.clear();
-        ERHE_VERIFY(frame.present_semaphore == VK_NULL_HANDLE);
-    }
-
-    for (Present_history_entry& present_history_entry : m_present_history) {
-        if (present_history_entry.cleanup_fence != VK_NULL_HANDLE) {
-            result = vkWaitForFences(vulkan_device, 1, &present_history_entry.cleanup_fence, true, UINT64_MAX);
-            if (result != VK_SUCCESS) {
-                log_swapchain->critical("vkWaitForFences() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
-                abort();
-            }
-        }
-        cleanup_present_info(present_history_entry);
-    }
-
-    //log_swapchain->trace("During the lifetime, {} swapchains were created", m_swapchain_creation_count);
-    log_swapchain->debug("Old swapchain count at destruction: {}", m_old_swapchains.size());
-
-    for (Swapchain_cleanup_data& old_swapchain : m_old_swapchains) {
-        cleanup_old_swapchain(old_swapchain);
-    }
-
-    log_swapchain->debug("Semaphore pool size at destruction: {}", m_semaphore_pool.size());
-    log_swapchain->debug("Fence pool size at destruction: {}", m_fence_pool.size());
-
-    for (VkSemaphore semaphore : m_semaphore_pool) {
-        vkDestroySemaphore(vulkan_device, semaphore, nullptr);
-    }
-
-    for (VkFence fence : m_fence_pool) {
-        vkDestroyFence(vulkan_device, fence, nullptr);
-    }
-
-    cleanup_swapchain_objects(m_swapchain_objects);
-    if (m_vulkan_swapchain != VK_NULL_HANDLE) {
-        vkDestroySwapchainKHR(vulkan_device, m_vulkan_swapchain, nullptr);
-    }
-
-    if (m_vulkan_render_pass != VK_NULL_HANDLE) {
-        vkDestroyRenderPass(vulkan_device, m_vulkan_render_pass, nullptr);
-    }
-}
-
-void Swapchain_impl::create_placeholder_renderpass_and_framebuffers()
-{
-    if (!is_valid()) {
-        return;
-    }
-
-    VkDevice vulkan_device = m_device_impl.get_vulkan_device();
-    VkResult result        = VK_SUCCESS;
-
-    // temp stuff
-    const VkAttachmentDescription color_attachment_description{
-        .flags          = 0,                                            // VkAttachmentDescriptionFlags
-        .format         = m_surface_impl.get_surface_format().format,   // VkFormat
-        .samples        = VK_SAMPLE_COUNT_1_BIT,                        // VkSampleCountFlagBits
-        .loadOp         = VK_ATTACHMENT_LOAD_OP_CLEAR,                  // VkAttachmentLoadOp
-        .storeOp        = VK_ATTACHMENT_STORE_OP_STORE,                 // VkAttachmentStoreOp
-        .stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE,              // VkAttachmentLoadOp
-        .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,             // VkAttachmentStoreOp
-        .initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED,                    // VkImageLayout
-        .finalLayout    = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR               // VkImageLayout
-    };
-
-    const VkAttachmentReference color_attachment_reference{
-        .attachment = 0,                                       // uint32_t
-        .layout     = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL // VkImageLayout
-    };
-
-    const VkSubpassDescription subpass_description{
-        .flags                   = 0,                               // VkSubpassDescriptionFlag
-        .pipelineBindPoint       = VK_PIPELINE_BIND_POINT_GRAPHICS, // VkPipelineBindPoint
-        .inputAttachmentCount    = 0,                               // uint32_t
-        .pInputAttachments       = nullptr,                         // const VkAttachmentReference*
-        .colorAttachmentCount    = 1,                               // uint32_t
-        .pColorAttachments       = &color_attachment_reference,     // const VkAttachmentReference*
-        .pResolveAttachments     = nullptr,                         // const VkAttachmentReference*
-        .pDepthStencilAttachment = nullptr,                         // const VkAttachmentReference*
-        .preserveAttachmentCount = 0,                               // uint32_t
-        .pPreserveAttachments    = nullptr                          // const uint32_t*
-    };
-
-    // Make the render pass wait for the VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT stage
-    // - wait for the implicit subpass before or after the render pass
-    // - wait for the swap chain to finish reading from the image
-    // - wait before doing writes to color attachment
-    const VkSubpassDependency subpass_dependency{
-        .srcSubpass      = VK_SUBPASS_EXTERNAL,                           // uint32_t
-        .dstSubpass      = 0,                                             // uint32_t
-        .srcStageMask    = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, // VkPipelineStageFlags
-        .dstStageMask    = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, // VkPipelineStageFlags
-        .srcAccessMask   = 0,                                             // VkAccessFlags
-        .dstAccessMask   = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,          // VkAccessFlags
-        .dependencyFlags = 0,                                             // VkDependencyFlags
-    };
-
-    const VkRenderPassCreateInfo render_pass_create_info{
-        .sType           = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO, // VkStructureType
-        .pNext           = nullptr,                                   // const void*
-        .flags           = 0,                                         // VkRenderPassCreateFlags
-        .attachmentCount = 1,                                         // uint32_t
-        .pAttachments    = &color_attachment_description,             // const VkAttachmentDescription*
-        .subpassCount    = 1,                                         // uint32_t
-        .pSubpasses      = &subpass_description,                      // const VkSubpassDescription*
-        .dependencyCount = 1,                                         // uint32_t
-        .pDependencies   = &subpass_dependency,                       // const VkSubpassDependency*
-    };
-
-    log_swapchain->debug("Creating renderpass");
-    result = vkCreateRenderPass(vulkan_device, &render_pass_create_info, nullptr, &m_vulkan_render_pass);
-    if (result != VK_SUCCESS) {
-        log_swapchain->critical("vkCreateRenderPass() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
-        abort();
-    }
-    m_device_impl.set_debug_label(
-        VK_OBJECT_TYPE_RENDER_PASS,
-        reinterpret_cast<uint64_t>(m_vulkan_render_pass),
-        "Swapchain renderpass"
-    );
-}
-
 void Swapchain_impl::init_swapchain_image(const uint32_t index)
 {
     const VkDevice vulkan_device = m_device_impl.get_vulkan_device();
@@ -550,7 +638,7 @@ void Swapchain_impl::init_swapchain_image(const uint32_t index)
         .flags              = 0,
         .image              = m_swapchain_objects.images[index],
         .viewType           = VK_IMAGE_VIEW_TYPE_2D,
-        .format             = m_swapchain_create_info.imageFormat,
+        .format             = m_swapchain_format,
         .components = {
             .r              = VK_COMPONENT_SWIZZLE_R,
             .g              = VK_COMPONENT_SWIZZLE_G,
@@ -578,6 +666,10 @@ void Swapchain_impl::init_swapchain_image(const uint32_t index)
         fmt::format("Swapchain image view {}", index).c_str()
     );
 
+    if (m_vulkan_render_pass == VK_NULL_HANDLE) {
+        create_placeholder_renderpass();
+    }
+
     const VkFramebufferCreateInfo framebuffer_create_info{
         .sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
         .pNext           = 0,
@@ -585,8 +677,8 @@ void Swapchain_impl::init_swapchain_image(const uint32_t index)
         .renderPass      = m_vulkan_render_pass,
         .attachmentCount = 1,
         .pAttachments    = &m_swapchain_objects.views[index],
-        .width           = m_swapchain_create_info.imageExtent.width,
-        .height          = m_swapchain_create_info.imageExtent.height,
+        .width           = m_swapchain_extent.width,
+        .height          = m_swapchain_extent.height,
         .layers          = 1
     };
 
@@ -602,14 +694,32 @@ void Swapchain_impl::init_swapchain_image(const uint32_t index)
     );
 }
 
-void Swapchain_impl::init_swapchain(VkSwapchainCreateInfoKHR& swapchain_create_info)
+void Swapchain_impl::init_swapchain()
+{
+    Vulkan_swapchain_create_info swapchain_create_info{};
+    bool recreate_swapchain = m_surface_impl.update_swapchain(swapchain_create_info);
+    bool surface_is_valid   = m_surface_impl.is_valid();
+    bool surface_is_empty   = m_surface_impl.is_empty();
+    if (!surface_is_valid) {
+        log_context->debug("Surface is not ready to be used for rendering");
+    }
+    if (surface_is_empty) {
+        log_context->debug("Surface is too small to have any visible pixels");
+    }
+    m_is_valid = surface_is_valid && !surface_is_empty;
+    if (m_is_valid && recreate_swapchain) {
+        init_swapchain(swapchain_create_info);
+    }
+}
+
+void Swapchain_impl::init_swapchain(Vulkan_swapchain_create_info& swapchain_create_info)
 {
     const VkDevice vulkan_device = m_device_impl.get_vulkan_device();
     VkResult       result        = VK_SUCCESS;
     VkSwapchainKHR old_swapchain = m_vulkan_swapchain;
 
-    swapchain_create_info.oldSwapchain = old_swapchain;
-    result = vkCreateSwapchainKHR(vulkan_device, &swapchain_create_info, nullptr, &m_vulkan_swapchain);
+    swapchain_create_info.swapchain_create_info.oldSwapchain = old_swapchain;
+    result = vkCreateSwapchainKHR(vulkan_device, &swapchain_create_info.swapchain_create_info, nullptr, &m_vulkan_swapchain);
     ++m_swapchain_serial;
     if (result != VK_SUCCESS) {
         log_context->critical("vkCreateSwapchainKHR() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
@@ -654,6 +764,9 @@ void Swapchain_impl::init_swapchain(VkSwapchainCreateInfoKHR& swapchain_create_i
             init_swapchain_image(index);
         }
     }
+
+    m_swapchain_extent = swapchain_create_info.swapchain_create_info.imageExtent;
+    m_swapchain_format = swapchain_create_info.swapchain_create_info.imageFormat;
 }
 
 auto Swapchain_impl::get_command_buffer() -> VkCommandBuffer
@@ -665,95 +778,6 @@ auto Swapchain_impl::get_command_buffer() -> VkCommandBuffer
     const Swapchain_frame_in_flight& frame = m_submit_history[m_submit_history_index];
 
     return frame.command_buffer;
-}
-
-void Swapchain_impl::submit_placeholder_renderpass()
-{
-    if (!is_valid()) {
-        return;
-    }
-
-    const Swapchain_frame_in_flight& frame = m_submit_history[m_submit_history_index];
-    VkQueue  vulkan_graphics_queue = m_device_impl.get_graphics_queue();
-    VkResult result                = VK_SUCCESS;
-    uint64_t frame_index           = m_device_impl.get_frame_index();
-
-    log_swapchain->debug(
-        "submit_placeholder_renderpass() m_submit_history_index = {} m_acquired_image_index = {} frame_index = {}",
-        m_submit_history_index, m_acquired_image_index, frame_index
-    );
-
-    const VkCommandBuffer vulkan_command_buffer = get_command_buffer();
-    const VkCommandBufferBeginInfo begin_info{
-        .sType            = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-        .pNext            = nullptr,
-        .flags            = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
-        .pInheritanceInfo = nullptr
-    };
-
-    log_swapchain->debug("vkBeginCommandBuffer()");
-    result = vkBeginCommandBuffer(vulkan_command_buffer, &begin_info);
-    if (result != VK_SUCCESS) {
-        log_swapchain->critical("vkBeginCommandBuffer() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
-        abort();
-    }
-
-    const VkClearValue clear_values[3] = {
-        {.color = { .float32 = { 0.01f, 0.0f, 0.0f, 1.0f }}},
-        {.color = { .float32 = { 0.0f, 0.01f, 0.0f, 1.0f }}},
-        {.color = { .float32 = { 0.0f, 0.0f, 0.01f, 1.0f }}}
-    };
-
-    const uint64_t clear_color_index = frame_index % 3;
-    const VkRenderPassBeginInfo render_pass_begin_info{
-        .sType           = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,                  // VkStructureType
-        .pNext           = nullptr,                                                   // const void*
-        .renderPass      = m_vulkan_render_pass,                                      // VkRenderPass
-        .framebuffer     = m_swapchain_objects.framebuffers[m_acquired_image_index],  // VkFramebuffer
-        .renderArea      = VkRect2D{{0,0}, m_swapchain_create_info.imageExtent},      // VkRect2D
-        .clearValueCount = 1,                                                         // uint32_t
-        .pClearValues    = &clear_values[clear_color_index]                           // const VkClearValue*
-    };
-
-    log_swapchain->debug(
-        "vkCmdBeginRenderPass( clear color = {}: {}, {}, {}, {})",
-        clear_color_index,
-        render_pass_begin_info.pClearValues->color.float32[0],
-        render_pass_begin_info.pClearValues->color.float32[1],
-        render_pass_begin_info.pClearValues->color.float32[2],
-        render_pass_begin_info.pClearValues->color.float32[3]
-    );
-    vkCmdBeginRenderPass(vulkan_command_buffer, &render_pass_begin_info, VK_SUBPASS_CONTENTS_INLINE);
-
-    log_swapchain->debug("vkCmdEndRenderPass()");
-    vkCmdEndRenderPass(vulkan_command_buffer);
-
-    log_swapchain->debug("vkEndCommandBuffer()");
-    result = vkEndCommandBuffer(vulkan_command_buffer);
-    if (result != VK_SUCCESS) {
-        log_swapchain->critical("vkEndCommandBuffer() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
-        abort();
-    }
-
-    // Make a submission. Wait on the acquire semaphore and signal the present semaphore.
-    const VkPipelineStageFlags wait_stages = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    const VkSubmitInfo submit_info{
-        .sType                = VK_STRUCTURE_TYPE_SUBMIT_INFO,  // VkStructureType
-        .pNext                = nullptr,                        // const void*
-        .waitSemaphoreCount   = 1,                              // uint32_t
-        .pWaitSemaphores      = &frame.acquire_semaphore,       // const VkSemaphore*
-        .pWaitDstStageMask    = &wait_stages,                   // const VkPipelineStageFlags*
-        .commandBufferCount   = 1,                              // uint32_t
-        .pCommandBuffers      = &frame.command_buffer,          // const VkCommandBuffer*
-        .signalSemaphoreCount = 1,                              // uint32_t
-        .pSignalSemaphores    = &frame.present_semaphore        // const VkSemaphore*
-    };
-    log_swapchain->debug("vkQueueSubmit()");
-    result = vkQueueSubmit(vulkan_graphics_queue, 1, &submit_info, frame.submit_fence);
-    if (result != VK_SUCCESS) {
-        log_swapchain->critical("vkQueueSubmit() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
-        abort();
-    }
 }
 
 void Swapchain_impl::setup_frame()

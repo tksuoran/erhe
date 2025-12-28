@@ -16,6 +16,14 @@ public:
     bool     should_render           {false};
 };
 
+class Frame_begin_info
+{
+public:
+    uint32_t resize_width  {0};
+    uint32_t resize_height {0};
+    bool     request_resize{false};
+};
+
 class Frame_end_info
 {
 public:
@@ -36,7 +44,7 @@ public:
     ~Swapchain() noexcept;
 
     void wait_frame (Frame_state& out_frame_state);
-    void begin_frame();
+    void begin_frame(const Frame_begin_info& frame_begin_info);
     void end_frame  (const Frame_end_info& frame_end_info);
 
     [[nodiscard]] auto get_impl() -> Swapchain_impl&;

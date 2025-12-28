@@ -25,8 +25,9 @@ void Swapchain_impl::wait_frame(Frame_state& out_frame_state)
     out_frame_state.should_render            = true;
 }
 
-void Swapchain_impl::begin_frame()
+void Swapchain_impl::begin_frame(const Frame_begin_info& frame_begin_info)
 {
+    static_cast<void>(frame_begin_info);
 }
 
 void Swapchain_impl::end_frame(const Frame_end_info& frame_end_info)

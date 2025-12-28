@@ -13,6 +13,14 @@ namespace erhe::graphics {
 class Device_impl;
 class Surface_create_info;
 class Swapchain;
+class Vulkan_swapchain_create_info;
+
+class Vulkan_swapchain_create_info
+{
+public:
+    VkSwapchainCreateInfoKHR               swapchain_create_info;
+    VkSwapchainPresentScalingCreateInfoKHR swapchain_present_scaling_create_info;
+};
 
 class Surface_impl final
 {
@@ -30,20 +38,16 @@ public:
     [[nodiscard]] auto get_image_count        () -> uint32_t const;
     [[nodiscard]] auto get_vulkan_surface     () -> VkSurfaceKHR const;
 
-    void resize_swapchain_to_surface(uint32_t& out_width, uint32_t& out_height);
-
     // Returns true if swapchain needs to be (re)created
-    [[nodiscard]] auto update_swapchain(VkSwapchainCreateInfoKHR& out_swapchain_create_info) -> bool;
+    [[nodiscard]] auto update_swapchain(Vulkan_swapchain_create_info& out_swapchain_create_info) -> bool;
 
 private:
     void fail();
     void choose_surface_format();
     void choose_present_mode  ();
-    [[nodiscard]] auto get_surface_format_score(VkSurfaceFormatKHR surface_format) const -> float;
-    [[nodiscard]] auto get_present_mode_score(
-        VkPresentModeKHR                        present_mode,
-        VkSurfacePresentScalingCapabilitiesKHR& out_scaling_capabilities
-    ) const -> float;
+    [[nodiscard]] auto get_surface_format_score        (VkSurfaceFormatKHR surface_format) const -> float;
+    [[nodiscard]] auto get_present_mode_score          (VkPresentModeKHR present_mode) const -> float;
+    [[nodiscard]] auto get_present_scaling_capabilities() const -> VkSurfacePresentScalingCapabilitiesKHR;
 
     Device_impl&                    m_device_impl;
     Surface_create_info             m_surface_create_info;
@@ -59,11 +63,6 @@ private:
     std::unique_ptr<Swapchain>      m_swapchain;
     bool                            m_is_empty{true};
     bool                            m_is_valid{false};
-
-    VkSurfaceCapabilities2KHR              m_surface_capabilities2;
-    VkSurfacePresentScalingCapabilitiesKHR m_scaling_capabilities;
-
-    uint32_t m_swapchain_creation_count{0};
 };
 
 } // namespace erhe::graphics

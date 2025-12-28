@@ -752,12 +752,6 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
     m_info.vulkan_api_version = application_info.apiVersion;
 
     m_info.max_per_stage_descriptor_samplers = properties.limits.maxPerStageDescriptorSamplers;
-
-    if (m_surface) {
-        uint32_t width {0};
-        uint32_t height{0};
-        m_surface->resize_swapchain_to_surface(width, height);
-    }
 }
 
 auto Device_impl::allocate_command_buffer() -> VkCommandBuffer
@@ -1210,12 +1204,12 @@ void Device_impl::wait_frame(Frame_state& out_frame_state)
     }
 }
 
-void Device_impl::begin_frame()
+void Device_impl::begin_frame(const Frame_begin_info& frame_begin_info)
 {
     if (m_surface) {
         Swapchain* swapchain = m_surface->get_swapchain();
         if (swapchain != nullptr) {
-            swapchain->begin_frame();
+            swapchain->begin_frame(frame_begin_info);
         }
     }
 }
@@ -1229,6 +1223,11 @@ void Device_impl::end_frame(const Frame_end_info& frame_end_info)
         }
     }
 
+    update_frame_completion();
+}
+
+void Device_impl::update_frame_completion()
+{
     VkResult result = VK_SUCCESS;
 
     const VkTimelineSemaphoreSubmitInfo semaphore_submit_info = {

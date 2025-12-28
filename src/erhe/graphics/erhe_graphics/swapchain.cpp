@@ -27,9 +27,9 @@ void Swapchain::wait_frame(Frame_state& out_frame_state)
     m_impl->wait_frame(out_frame_state);
 }
 
-void Swapchain::begin_frame()
+void Swapchain::begin_frame(const Frame_begin_info& frame_begin_info)
 {
-    m_impl->begin_frame();
+    m_impl->begin_frame(frame_begin_info);
 }
 
 void Swapchain::end_frame(const Frame_end_info& frame_end_info)

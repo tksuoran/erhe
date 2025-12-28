@@ -64,9 +64,9 @@ void Device::wait_frame(Frame_state& out_frame_state)
 {
     m_impl->wait_frame(out_frame_state);
 }
-void Device::begin_frame()
+void Device::begin_frame(const Frame_begin_info& frame_begin_info)
 {
-    m_impl->begin_frame();
+    m_impl->begin_frame(frame_begin_info);
 }
 void Device::end_frame(const Frame_end_info& frame_end_info)
 {
