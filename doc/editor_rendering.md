@@ -1,2 +1,0 @@
-## Stencil usage
-

@@ -1,7 +1,6 @@
 #pragma once
 
 #include "erhe_graphics/device.hpp"
-#include "erhe_graphics/shader_monitor.hpp"
 
 #include "volk.h"
 // vma forward declaration
@@ -87,22 +86,12 @@ public:
     void end_frame             (const Frame_end_info& frame_end_info);
 
     void memory_barrier        (Memory_barrier_mask barriers);
-    void clear_texture         (Texture& texture, std::array<double, 4> clear_value);
-    void upload_to_buffer      (Buffer& buffer, size_t offset, const void* data, size_t length);
     void add_completion_handler(std::function<void()> callback);
     void on_thread_enter       ();
 
-    [[nodiscard]] auto get_handle                  (const Texture& texture, const Sampler& sampler) const -> uint64_t;
-    [[nodiscard]] auto create_dummy_texture        () -> std::shared_ptr<Texture>;
-    [[nodiscard]] auto get_buffer_alignment        (Buffer_target target) -> std::size_t;
-    [[nodiscard]] auto allocate_ring_buffer_entry  (Buffer_target buffer_target, Ring_buffer_usage usage, std::size_t byte_count) -> Ring_buffer_range;
-    [[nodiscard]] auto make_blit_command_encoder   () -> Blit_command_encoder;
-    [[nodiscard]] auto make_compute_command_encoder() -> Compute_command_encoder;
-    [[nodiscard]] auto make_render_command_encoder (Render_pass& render_pass) -> Render_command_encoder;
-    [[nodiscard]] auto get_format_properties       (erhe::dataformat::Format format) const -> Format_properties;
-    [[nodiscard]] auto choose_depth_stencil_format (unsigned int flags, int sample_count) const -> erhe::dataformat::Format;
-    [[nodiscard]] auto get_shader_monitor          () -> Shader_monitor&;
-    [[nodiscard]] auto get_info                    () const -> const Device_info&;
+    [[nodiscard]] auto make_render_command_encoder(Render_pass& render_pass) -> Render_command_encoder;
+    [[nodiscard]] auto get_format_properties      (erhe::dataformat::Format format) const -> Format_properties;
+    [[nodiscard]] auto get_info                   () const -> const Device_info&;
 
     [[nodiscard]] auto allocate_command_buffer() -> VkCommandBuffer;
 
@@ -144,18 +133,6 @@ private:
 
     void update_frame_completion();
 
-    void create_frames_in_flight_resources();
-
-    //class Device_frame_in_flight
-    //{
-    //public:
-    //    //uint64_t frame_number   {0};
-    //    //VkFence  frame_end_fence{VK_NULL_HANDLE};
-    //    VkCommandBuffer m_end_of_frame_command_buffer{VK_NULL_HANDLE};
-    //};
-    //std::vector<Device_frame_in_flight> m_frames_in_flight;
-
-
     [[nodiscard]] static auto get_physical_device_score(VkPhysicalDevice vulkan_physical_device, Surface_impl* surface_impl) -> float;
     [[nodiscard]] static auto query_device_queue_family_indices(
         VkPhysicalDevice vulkan_physical_device,
@@ -174,7 +151,6 @@ private:
 
     erhe::window::Context_window* m_context_window{nullptr};
     Device&                       m_device;
-    Shader_monitor                m_shader_monitor;
     Device_info                   m_info;
     class Completion_handler
     {
@@ -182,8 +158,7 @@ private:
         uint64_t              frame_number;
         std::function<void()> callback;
     };
-    std::vector<std::unique_ptr<Ring_buffer>> m_ring_buffers;
-    std::vector<Completion_handler>           m_completion_handlers;
+    std::vector<Completion_handler> m_completion_handlers;
 
     VkInstance               m_vulkan_instance            {VK_NULL_HANDLE};
     VkPhysicalDevice         m_vulkan_physical_device     {VK_NULL_HANDLE};

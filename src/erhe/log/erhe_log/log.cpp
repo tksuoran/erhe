@@ -1,5 +1,4 @@
 #include "erhe_log/log.hpp"
-#include "erhe_configuration/configuration.hpp"
 #include "erhe_log/timestamp.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -106,31 +105,11 @@ public:
     auto get_log_to_console  () const -> bool { return m_log_to_console; }
     void set_log_to_console  (bool value) { m_log_to_console = value; }
 
-    auto make_logger(const std::string& name, const bool tail) -> std::shared_ptr<spdlog::logger>
+    auto make_logger(const std::string& name, const bool tail, spdlog::level::level_enum level) -> std::shared_ptr<spdlog::logger>
     {
         ERHE_VERIFY(!name.empty());
         const std::string groupname = get_groupname(name);
         const std::string basename  = get_basename(name);
-        const erhe::configuration::Ini_section& ini = erhe::configuration::get_ini_file_section(c_logging_configuration_file_path, groupname);
-
-        std::string levelname;
-        ini.get(basename.c_str(), levelname);
-
-        // Forked from spdlog::level::from_str(levelname) because it defaults to off if parse fails,
-        // while we want to set the default to err.
-        auto from_str = [](const std::string &name) -> spdlog::level::level_enum {
-            auto it = std::find(std::begin(spdlog::level::level_string_views), std::end(spdlog::level::level_string_views), name);
-            if (it != std::end(spdlog::level::level_string_views))
-                return static_cast<spdlog::level::level_enum>(std::distance(std::begin(spdlog::level::level_string_views), it));
-            if (name == "warn") {
-                return spdlog::level::warn;
-            }
-            if (name == "err") {
-                return spdlog::level::err;
-            }
-            return spdlog::level::err;
-        };
-        const spdlog::level::level_enum level_parsed = from_str(levelname);
 
         std::shared_ptr<spdlog::logger> logger = std::make_shared<spdlog::logger>(
             name,
@@ -149,7 +128,7 @@ public:
         }
         std::shared_ptr<spdlog::logger> logger_copy = logger;
         spdlog::register_logger(logger_copy);
-        logger->set_level(level_parsed);
+        logger->set_level(level);
         logger->flush_on(spdlog::level::trace);
         return logger;
     }
@@ -234,14 +213,14 @@ auto get_levelname(spdlog::level::level_enum level) -> std::string
     return std::string{sv.begin(), sv.begin() + sv.size()};
 }
 
-auto make_frame_logger(const std::string& name) -> std::shared_ptr<spdlog::logger>
+auto make_frame_logger(const std::string& name, spdlog::level::level_enum level) -> std::shared_ptr<spdlog::logger>
 {
-    return make_logger(name, false);
+    return make_logger(name, level, false);
 }
 
-auto make_logger(const std::string& name, const bool tail) -> std::shared_ptr<spdlog::logger>
+auto make_logger(const std::string& name, const spdlog::level::level_enum level, const bool tail) -> std::shared_ptr<spdlog::logger>
 {
-    return Log_sinks::get_instance().make_logger(name, tail);
+    return Log_sinks::get_instance().make_logger(name, tail, level);
 }
 
 } // namespace erhe::log

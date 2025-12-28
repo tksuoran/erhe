@@ -1,8 +1,5 @@
 set(ERHE_ADDITIONAL_GL_INCLUDES "${PROJECT_SOURCE_DIR}/src/khronos/khronos")
 
-# Globally use fastlink
-# or maybe not add_link_options($<$<COMPILE_LANGUAGE:CXX>:/DEBUG:FASTLINK>)
-
 add_compile_options($<$<COMPILE_LANGUAGE:CXX>:/MP>)
 
 function (erhe_target_settings_toolchain target)
@@ -31,35 +28,4 @@ function (erhe_target_settings_toolchain target)
 
     # Allow glm constexpr by disabling SIMD
     target_compile_definitions(${target} PUBLIC $<$<COMPILE_LANGUAGE:CXX>:GLM_FORCE_PURE>)
-
-    # Testing for https://github.com/google/wuffs/issues/151
-    #if ("${CMAKE_VS_PLATFORM_NAME}" STREQUAL "x86" OR "${CMAKE_VS_PLATFORM_NAME}" STREQUAL "x64")
-    #    #target_compile_options(${target} PUBLIC /arch:AVX512)
-    #    message("Enabling /arch:AVX2 for ${target}")
-    #    target_compile_options(${target} PUBLIC /arch:AVX2)
-    #    #target_compile_options(${target} PUBLIC /arch:AVX)
-    #endif()
-
 endfunction()
-
-function (erhe_disable_incremental_linking)
-    #set(CMAKE_STATIC_LINKER_FLAGS_RELEASE        "/debug /incremental:no" PARENT_SCOPE)
-    #set(CMAKE_STATIC_LINKER_FLAGS_RELWITHDEBINFO "/debug /incremental:no" PARENT_SCOPE)
-    #set(CMAKE_SHARED_LINKER_FLAGS_RELEASE        "/debug /incremental:no" PARENT_SCOPE)
-    #set(CMAKE_SHARED_LINKER_FLAGS_RELWITHDEBINFO "/debug /incremental:no" PARENT_SCOPE)
-    set(CMAKE_EXE_LINKER_FLAGS_DEBUG             "/DEBUG /INCREMENTAL:NO" PARENT_SCOPE)
-    set(CMAKE_EXE_LINKER_FLAGS_MINSIZEREL        "/DEBUG /INCREMENTAL:NO" PARENT_SCOPE)
-    set(CMAKE_EXE_LINKER_FLAGS_RELEASE           "/DEBUG /INCREMENTAL:NO" PARENT_SCOPE)
-    set(CMAKE_EXE_LINKER_FLAGS_RELWITHDEBINFO    "/DEBUG /INCREMENTAL:NO" PARENT_SCOPE)
-endfunction (erhe_disable_incremental_linking)
-
-if (ERHE_USE_ASAN)
-    erhe_disable_incremental_linking()
-    add_compile_options(-fsanitize=address)
-endif()
-
-#add_definitions(-DUNICODE -D_UNICODE)
-
-# For geogram
-add_definitions(-D_SILENCE_CXX20_ATOMIC_INIT_DEPRECATION_WARNING)
-

@@ -41,11 +41,8 @@ endif ()
 
 target_link_libraries(
     ${_target}
-    PUBLIC
-        erhe::time
     PRIVATE
         erhe::log
-        erhe::profile
         erhe::verify
         fmt::fmt
         glm::glm-header-only

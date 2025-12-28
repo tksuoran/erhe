@@ -1,5 +1,4 @@
 #include "erhe_graphics/render_command_encoder.hpp"
-#include "erhe_graphics/vulkan/vulkan_buffer.hpp"
 #include "erhe_graphics/vulkan/vulkan_device.hpp"
 #include "erhe_graphics/vulkan/vulkan_render_pass.hpp"
 #include "erhe_graphics/state/viewport_state.hpp"

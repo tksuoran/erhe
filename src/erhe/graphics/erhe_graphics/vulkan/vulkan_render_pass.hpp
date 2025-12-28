@@ -1,7 +1,6 @@
 #pragma once
 
 #include "erhe_graphics/render_pass.hpp"
-#include "erhe_profile/profile.hpp"
 
 #include "volk.h"
 

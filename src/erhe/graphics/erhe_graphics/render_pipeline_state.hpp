@@ -7,7 +7,6 @@
 #include "erhe_graphics/state/viewport_state.hpp"
 #include "erhe_graphics/state/scissor_state.hpp"
 #include "erhe_graphics/state/rasterization_state.hpp"
-#include "erhe_profile/profile.hpp"
 
 #include <mutex>
 #include <vector>
@@ -50,8 +49,8 @@ public:
 
     static auto get_pipelines() -> std::vector<Render_pipeline_state*>;
 
-    static ERHE_PROFILE_MUTEX_DECLARATION(std::mutex, s_mutex);
-    static std::vector<Render_pipeline_state*>        s_pipelines;
+    static std::mutex                          s_mutex;
+    static std::vector<Render_pipeline_state*> s_pipelines;
 };
 
 } // namespace erhe::graphics

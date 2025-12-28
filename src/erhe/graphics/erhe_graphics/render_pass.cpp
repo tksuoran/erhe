@@ -1,14 +1,10 @@
 #include "erhe_graphics/render_pass.hpp"
 
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
-# include "erhe_graphics/gl/gl_render_pass.hpp"
-#endif
 #if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
 # include "erhe_graphics/vulkan/vulkan_render_pass.hpp"
 #endif
 
 #include "erhe_graphics/device.hpp"
-#include "erhe_graphics/texture.hpp"
 
 namespace erhe::graphics {
 
@@ -25,14 +21,6 @@ auto Render_pass_attachment_descriptor::is_defined() const -> bool
         return true;
     }
     return false;
-}
-
-auto Render_pass_attachment_descriptor::get_pixelformat() const -> erhe::dataformat::Format
-{
-    if (texture != nullptr) {
-        return texture->get_pixelformat();
-    }
-    return {};
 }
 
 Render_pass_descriptor::Render_pass_descriptor()

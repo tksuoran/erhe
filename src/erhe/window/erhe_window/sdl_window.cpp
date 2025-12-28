@@ -1,12 +1,6 @@
 #include "erhe_window/sdl_window.hpp"
 
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
-# include "erhe_gl/dynamic_load.hpp"
-# include "erhe_gl/wrapper_functions.hpp"
-#endif
 #include "erhe_window/window_log.hpp"
-#include "erhe_profile/profile.hpp"
-#include "erhe_time/sleep.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <fmt/printf.h>
@@ -15,15 +9,6 @@
 #include <SDL3/SDL_keyboard.h>
 #include <SDL3/SDL_mouse.h>
 #include <SDL3/SDL_video.h>
-#if defined(ERHE_OS_LINUX)
-# include <wayland-client.h>
-#endif
-
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
-# if defined(ERHE_OS_WINDOWS)
-#   include <GL/wglext.h>
-# endif
-#endif
 
 #if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
 # include <SDL3/SDL_vulkan.h>
@@ -230,16 +215,12 @@ int Context_window::s_window_count{0};
 
 Context_window::Context_window(const Window_configuration& configuration)
 {
-    ERHE_PROFILE_FUNCTION();
-
     const bool ok = open(configuration);
     ERHE_VERIFY(ok);
 }
 
 Context_window::Context_window(Context_window* share)
 {
-    ERHE_PROFILE_FUNCTION();
-
     ERHE_VERIFY(share != nullptr);
 
     const bool ok = open(
@@ -280,8 +261,6 @@ void Context_window::register_redraw_callback(std::function<void()> callback)
 // For now, only call this from main thread.
 auto Context_window::open(const Window_configuration& configuration) -> bool
 {
-    ERHE_PROFILE_FUNCTION();
-
     if (s_window_count == 0) {
         SDL_InitFlags init_flags = SDL_INIT_VIDEO | SDL_INIT_EVENTS;
         if (configuration.enable_joystick) {
@@ -309,12 +288,10 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
     if (primary && configuration.enable_joystick) {
         m_joystick_scan_task = std::thread{
             [this]() {
-                ERHE_PROFILE_SCOPE("Scan joysticks");
                 int joystick_count{0};
                 SDL_JoystickID* joysticks = SDL_GetJoysticks(&joystick_count);
                 if ((joystick_count > 0) && (joysticks != nullptr)) {
                     for (int i = 0; i < joystick_count; ++i) {
-                        ERHE_PROFILE_SCOPE("Joystick");
                         SDL_JoystickID id = joysticks[i];
                         if (id == 0) {
                             break;
@@ -349,9 +326,6 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
     };
 
     SDL_WindowFlags window_flags = SDL_WINDOW_HIGH_PIXEL_DENSITY | SDL_WINDOW_RESIZABLE;
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
-    window_flags |= SDL_WINDOW_OPENGL;
-#endif
 #if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
     window_flags |= SDL_WINDOW_VULKAN;
 #endif
@@ -381,75 +355,6 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
         }
         return false;
     }
-
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
-    SDL_GL_SetAttribute(SDL_GL_RED_SIZE,       8);
-    SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE,     8);
-    SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE,      8);
-    SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE,     8);
-    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE,     configuration.use_depth   ? 24 : 0);
-    SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE,   configuration.use_stencil ?  8 : 0);
-    //SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 0);
-
-    SDL_GL_SetAttribute(SDL_GL_FRAMEBUFFER_SRGB_CAPABLE, 1);
-    if (configuration.msaa_sample_count > 0) {
-        SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
-        SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, configuration.msaa_sample_count);
-    }
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, configuration.gl_major);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, configuration.gl_minor);
-# if !defined(NDEBUG)
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS,         SDL_GL_CONTEXT_DEBUG_FLAG | SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK,  SDL_GL_CONTEXT_PROFILE_CORE);
-# else
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS,         0);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK,  SDL_GL_CONTEXT_PROFILE_CORE);
-# endif
-
-    if (configuration.share != nullptr) {
-        configuration.share->make_current();
-        SDL_GL_SetAttribute(SDL_GL_SHARE_WITH_CURRENT_CONTEXT, 1);
-    } else {
-        SDL_GL_SetAttribute(SDL_GL_SHARE_WITH_CURRENT_CONTEXT, 0);
-    }
-
-    SDL_GLContext sdl_context = SDL_GL_CreateContext(sdl_window);
-    if (sdl_context == nullptr) {
-        log_window->error("Failed to open GL context for GL {}.{}.", configuration.gl_major, configuration.gl_minor);
-        const char* const sdl_error = SDL_GetError();
-        if (sdl_error != nullptr) {
-            log_window->error("SDL error: {}", sdl_error);
-        }
-
-        if (s_window_count == 0) {
-            SDL_Quit();
-        }
-        return false;
-    }
-
-    m_sdl_gl_context = sdl_context;
-    if (primary) {
-        SDL_GL_MakeCurrent(sdl_window, sdl_context);
-        get_extensions();
-        // TODO Is is a bug in RenderDoc? The query should be valid according to Table 9.1,
-        //      but returns invalid operation.
-        //
-        // gl::Error_code error_code_before = gl::get_error();
-        // ERHE_VERIFY(error_code_before == gl::Error_code::no_error);
-        // GLint color_encoding = 0;
-        // gl::get_named_framebuffer_attachment_parameter_iv(
-        //     0,
-        //     gl::Framebuffer_attachment::back_left,
-        //     gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_color_encoding,
-        //     &color_encoding
-        // );
-        // gl::Error_code error_code_after = gl::get_error();
-        // ERHE_VERIFY(error_code_after == gl::Error_code::no_error);
-        // const bool is_linear = color_encoding == GL_LINEAR;
-        // const bool is_srgb   = color_encoding == GL_SRGB;
-        // ERHE_VERIFY(is_linear != is_srgb);
-    }
-#endif
 
 #if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
     Uint32 vulkan_instance_extension_count = 0;
@@ -526,8 +431,6 @@ auto Context_window::create_vulkan_surface(void* vulkan_instance) -> void*
 
 void Context_window::poll_events(float wait_time)
 {
-    ERHE_PROFILE_FUNCTION();
-
     auto* const window = reinterpret_cast<SDL_Window*>(m_sdl_window);
     if (window == nullptr) {
         return;
@@ -1022,80 +925,9 @@ auto Context_window::get_input_events() -> std::vector<Input_event>&
     return m_input_events[1 - m_input_event_queue_write];
 }
 
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
-void Context_window::get_extensions()
-{
-    ERHE_PROFILE_FUNCTION();
-    gl::dynamic_load_init(SDL_GL_GetProcAddress);
-
-# if defined(ERHE_OS_WINDOWS)
-    m_NV_delay_before_swap = SDL_GL_GetProcAddress("wglDelayBeforeSwapNV");
-# else // TODO
-# endif
-}
-
-void Context_window::make_current() const
-{
-    auto* window = static_cast<SDL_Window*>(m_sdl_window);
-    if (window != nullptr) {
-        SDL_GLContext sdl_context = static_cast<SDL_GLContext>(m_sdl_gl_context);
-        SDL_GL_MakeCurrent(window, sdl_context);
-    }
-}
-
-void Context_window::clear_current() const
-{
-    auto* window = static_cast<SDL_Window*>(m_sdl_window);
-    if (window != nullptr) {
-        SDL_GL_MakeCurrent(window, nullptr);
-    }
-}
-
-auto Context_window::delay_before_swap(float seconds) const -> bool
-{
-#if defined(ERHE_OS_WINDOWS)
-    if (m_NV_delay_before_swap != nullptr) {
-        auto* window = static_cast<SDL_Window*>(m_sdl_window);
-        if (window != nullptr) {
-            SDL_PropertiesID properties = SDL_GetWindowProperties(window);
-            void* untyped_hdc = SDL_GetPointerProperty(properties, SDL_PROP_WINDOW_WIN32_HDC_POINTER, nullptr);
-            HDC dc = static_cast<HDC>(untyped_hdc);
-            PFNWGLDELAYBEFORESWAPNVPROC p_WGL_NV_delay_before_swap = (PFNWGLDELAYBEFORESWAPNVPROC)(m_NV_delay_before_swap);
-            BOOL return_value = p_WGL_NV_delay_before_swap(dc, seconds);
-            return return_value == TRUE;
-        }
-        return false;
-    } else {
-        return false;
-    }
-#else
-    // TODO
-    static_cast<void>(seconds);
-    return false;
-#endif
-}
-
-void Context_window::swap_buffers() const
-{
-    ERHE_PROFILE_FUNCTION();
-    auto* window = static_cast<SDL_Window*>(m_sdl_window);
-    if (window != nullptr) {
-        SDL_GL_SwapWindow(window);
-    }
-}
-#endif
 
 auto Context_window::get_device_pointer() const -> void*
 {
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
-# if defined(ERHE_OS_WINDOWS)
-    return wglGetCurrentContext();
-# else
-    ERHE_FATAL("TODO");
-    return nullptr; // TODO
-# endif
-#endif
-
 #if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
     return nullptr; // TODO
 #endif
@@ -1131,29 +963,7 @@ auto Context_window::get_hwnd() const -> HWND
         return nullptr;
     }
 }
-# if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
-auto Context_window::get_hglrc() const -> HGLRC
-{
-    return wglGetCurrentContext();
-}
-# endif
 #endif
-
-#if defined(ERHE_OS_LINUX)
-auto Context_window::get_wl_display() const -> struct wl_display*
-{
-    auto* window = static_cast<SDL_Window*>(m_sdl_window);
-    if (window != nullptr) {
-        SDL_PropertiesID properties = SDL_GetWindowProperties(window);
-        void* untyped_wayland_display = SDL_GetPointerProperty(properties, SDL_PROP_WINDOW_WAYLAND_DISPLAY_POINTER, nullptr);
-        struct wl_display* wayland_display = static_cast<struct wl_display*>(untyped_wayland_display);
-        return wayland_display;
-    } else {
-        return nullptr;
-    }
-}
-#endif
-
 
 auto Context_window::get_scale_factor() const -> float
 {

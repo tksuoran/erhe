@@ -2,9 +2,6 @@
 
 #include "erhe_graphics/swapchain.hpp"
 
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
-# include "erhe_graphics/gl/gl_swapchain.hpp"
-#endif
 #if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
 # include "erhe_graphics/vulkan/vulkan_swapchain.hpp"
 #endif

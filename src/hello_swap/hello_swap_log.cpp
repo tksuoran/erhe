@@ -9,8 +9,8 @@ std::shared_ptr<spdlog::logger> log_swap;
 void initialize_logging()
 {
     using namespace erhe::log;
-    log_startup = make_logger("hello_swap.startup");
-    log_swap    = make_logger("hello_swap.swap");
+    log_startup = make_logger("hello_swap.startup", spdlog::level::trace);
+    log_swap    = make_logger("hello_swap.swap"   , spdlog::level::trace);
 }
 
 }

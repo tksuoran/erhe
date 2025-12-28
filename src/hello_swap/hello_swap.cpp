@@ -2,16 +2,11 @@
 
 #include "hello_swap_log.hpp"
 
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
-#   include "erhe_gl/gl_log.hpp"
-#endif
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/swapchain.hpp"
-#include "erhe_math/viewport.hpp"
-#include "erhe_math/math_log.hpp"
 #include "erhe_log/log.hpp"
 #include "erhe_verify/verify.hpp"
 #include "erhe_window/renderdoc_capture.hpp"
@@ -156,12 +151,8 @@ public:
             }
         }
 
-        erhe::math::Viewport viewport{
-            .x      = 0,
-            .y      = 0,
-            .width  = m_window.get_width(),
-            .height = m_window.get_height()
-        };
+        int width  = m_window.get_width();
+        int height = m_window.get_height();
 
         const erhe::graphics::Frame_begin_info frame_begin_info{
             .resize_width   = static_cast<uint32_t>(m_last_window_width),
@@ -172,7 +163,7 @@ public:
 
         m_graphics_device.begin_frame(frame_begin_info);
 
-        update_render_pass(viewport.width, viewport.height);
+        update_render_pass(width, height);
 
         erhe::graphics::Render_command_encoder render_encoder = m_graphics_device.make_render_command_encoder(*m_render_pass.get());
 
@@ -229,11 +220,7 @@ void run()
     erhe::log::initialize_log_sinks();
 
     hello_swap::initialize_logging();
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
-    gl::initialize_logging();
-#endif
     erhe::graphics::initialize_logging();
-    erhe::math::initialize_logging();
     erhe::window::initialize_logging();
     // TODO: RenderDoc vulkan support
     // erhe::window::initialize_frame_capture();

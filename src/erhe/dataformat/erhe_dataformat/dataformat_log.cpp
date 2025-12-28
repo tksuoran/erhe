@@ -8,7 +8,7 @@ std::shared_ptr<spdlog::logger> log_dataformat;
 void initialize_logging()
 {
     using namespace erhe::log;
-    log_dataformat = make_logger("erhe.dataformat");
+    log_dataformat = make_logger("erhe.dataformat", spdlog::level::info);
 }
 
 } // namespace erhe::dataformat

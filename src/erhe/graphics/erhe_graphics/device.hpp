@@ -1,8 +1,7 @@
 #pragma once
 
-#include "erhe_graphics/buffer.hpp"
-#include "erhe_graphics/ring_buffer_range.hpp"
-#include "erhe_graphics/shader_monitor.hpp"
+#include "erhe_dataformat/dataformat.hpp"
+#include "erhe_graphics/enums.hpp"
 #include "erhe_graphics/surface.hpp"
 
 #include <array>
@@ -47,17 +46,13 @@ public:
     std::vector<int64_t> sparse_tile_z_sizes;
 };
 
-class Blit_command_encoder;
 class Command_encoder;
 class Compute_command_encoder;
 class Device;
 class Render_command_encoder;
 class Render_pass;
-class Ring_buffer;
-class Sampler;
 class Surface;
 class Swapchain;
-class Texture;
 
 static constexpr unsigned int format_flag_require_depth     = 0x01u;
 static constexpr unsigned int format_flag_require_stencil   = 0x02u;
@@ -67,16 +62,8 @@ static constexpr unsigned int format_flag_prefer_filterable = 0x08u;
 class Device_info
 {
 public:
-    Vendor vendor{Vendor::Unknown};
-
     int  glsl_version           {0};
 
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
-    int  gl_version             {0};
-    bool core_profile           {false};
-    bool compatibility_profile  {false};
-    bool forward_compatible     {false};
-#endif
 #if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
     uint32_t vulkan_api_version {0};
 #endif
@@ -158,27 +145,16 @@ public:
     void begin_frame           (const Frame_begin_info& frame_begin_info);
     void end_frame             (const Frame_end_info& frame_end_info);
 
-    void memory_barrier        (Memory_barrier_mask barriers);
-    void clear_texture         (Texture& texture, std::array<double, 4> clear_value);
-    void upload_to_buffer      (Buffer& buffer, size_t offset, const void* data, size_t length);
     void add_completion_handler(std::function<void()> callback);
     void on_thread_enter       ();
 
-    [[nodiscard]] auto get_surface                 () -> Surface*;
-    [[nodiscard]] auto get_handle                  (const Texture& texture, const Sampler& sampler) const -> uint64_t;
-    [[nodiscard]] auto create_dummy_texture        () -> std::shared_ptr<Texture>;
-    [[nodiscard]] auto get_buffer_alignment        (Buffer_target target) -> std::size_t;
-    [[nodiscard]] auto get_frame_index             () const -> uint64_t;
-    [[nodiscard]] auto allocate_ring_buffer_entry  (Buffer_target buffer_target, Ring_buffer_usage usage, std::size_t byte_count) -> Ring_buffer_range;
-    [[nodiscard]] auto make_blit_command_encoder   () -> Blit_command_encoder;
-    [[nodiscard]] auto make_compute_command_encoder() -> Compute_command_encoder;
-    [[nodiscard]] auto make_render_command_encoder (Render_pass& render_pass) -> Render_command_encoder;
-    [[nodiscard]] auto get_format_properties       (erhe::dataformat::Format format) const -> Format_properties;
-    [[nodiscard]] auto choose_depth_stencil_format (unsigned int flags, int sample_count) const -> erhe::dataformat::Format;
-    [[nodiscard]] auto get_shader_monitor          () -> Shader_monitor&;
-    [[nodiscard]] auto get_info                    () const -> const Device_info&;
-    [[nodiscard]] auto get_impl                    () -> Device_impl&;
-    [[nodiscard]] auto get_impl                    () const -> const Device_impl&;
+    [[nodiscard]] auto get_surface                () -> Surface*;
+    [[nodiscard]] auto get_frame_index            () const -> uint64_t;
+    [[nodiscard]] auto make_render_command_encoder(Render_pass& render_pass) -> Render_command_encoder;
+    [[nodiscard]] auto get_format_properties      (erhe::dataformat::Format format) const -> Format_properties;
+    [[nodiscard]] auto get_info                   () const -> const Device_info&;
+    [[nodiscard]] auto get_impl                   () -> Device_impl&;
+    [[nodiscard]] auto get_impl                   () const -> const Device_impl&;
 
 private:
     std::unique_ptr<Device_impl> m_impl;

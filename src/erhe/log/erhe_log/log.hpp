@@ -18,8 +18,8 @@ void initialize_log_sinks();
 void log_to_console();
 
 // creates and configures logger
-auto make_logger(const std::string& name, bool tail = true) -> std::shared_ptr<spdlog::logger>;
-auto make_frame_logger(const std::string& name) -> std::shared_ptr<spdlog::logger>;
+auto make_logger(const std::string& name, spdlog::level::level_enum level, bool tail = true) -> std::shared_ptr<spdlog::logger>;
+auto make_frame_logger(const std::string& name, spdlog::level::level_enum level) -> std::shared_ptr<spdlog::logger>;
 
 class Entry
 {

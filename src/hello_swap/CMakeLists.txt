@@ -22,7 +22,6 @@ target_link_libraries(
     PRIVATE
     erhe::utility
     erhe::graphics
-    erhe::math
     erhe::log
     erhe::verify
     erhe::window

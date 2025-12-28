@@ -1,5 +1,4 @@
 #include "erhe_graphics/command_encoder.hpp"
-#include "erhe_graphics/vulkan/vulkan_buffer.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_verify/verify.hpp"
 

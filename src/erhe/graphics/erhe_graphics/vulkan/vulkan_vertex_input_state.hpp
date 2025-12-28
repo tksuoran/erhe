@@ -2,7 +2,6 @@
 
 #include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_dataformat/vertex_format.hpp"
-#include "erhe_profile/profile.hpp"
 
 #include <mutex>
 #include <optional>

@@ -68,12 +68,6 @@ public:
 
     auto open                             (const Window_configuration& configuration) -> bool;
 
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
-    void make_current                     () const;
-    void clear_current                    () const;
-    auto delay_before_swap                (float seconds) const -> bool;
-    void swap_buffers                     () const;
-#endif
     void poll_events                      (float wait_time = 0.0f);
     void get_cursor_position              (float& xpos, float& ypos);
     void get_cursor_relative_hold_position(float& xpos, float& ypos);
@@ -119,10 +113,6 @@ public:
     [[nodiscard]] auto sdl_event_filter(void* event) -> bool;
 
 private:
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
-    void get_extensions();
-#endif
-
     struct Joystick_info
     {
         std::vector<float>     axis_values;
@@ -151,9 +141,6 @@ private:
     std::function<void(Context_window& context_window)> m_input_event_synthesizer_callback;
     std::function<void()>      m_redraw_callback;
 
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
-    SDL_FunctionPointer m_NV_delay_before_swap{nullptr};
-#endif
 #if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
     std::vector<std::string> m_required_instance_extensions;
 #endif

@@ -11,7 +11,6 @@ namespace erhe::graphics {
 class Device;
 class Render_command_encoder;
 class Renderbuffer;
-class Texture;
 class Swapchain;
 
 enum class Load_action : unsigned int {
@@ -38,11 +37,11 @@ public:
 
     unsigned int          texture_level  {0};
     unsigned int          texture_layer  {0};
-    Texture*              texture        {nullptr};
+    void*                 texture        {nullptr};
     std::array<double, 4> clear_value;
     Load_action           load_action    {Load_action::Clear};
     Store_action          store_action   {Store_action::Store};
-    Texture*              resolve_texture{nullptr};
+    void*                 resolve_texture{nullptr};
     unsigned int          resolve_level  {0};
     unsigned int          resolve_layer  {0};
 };
