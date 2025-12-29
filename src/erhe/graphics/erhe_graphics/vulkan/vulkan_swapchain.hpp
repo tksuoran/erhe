@@ -7,6 +7,7 @@
 
 #include <array>
 #include <deque>
+#include <limits>
 #include <vector>
 
 namespace erhe::graphics {

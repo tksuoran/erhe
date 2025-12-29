@@ -121,7 +121,7 @@ CPMAddPackage(
     GIT_TAG           pull_requests
     GIT_SHALLOW       TRUE
     GITHUB_REPOSITORY tksuoran/geogram
-    #VERSION            1.9.5
+    #VERSION            1.9.8
     #GITHUB_REPOSITORY  BrunoLevy/geogram
     OPTIONS
                   "VORPALINE_PLATFORM ${VORPALINE_PLATFORM}"

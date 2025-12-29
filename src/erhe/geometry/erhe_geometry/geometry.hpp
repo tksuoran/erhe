@@ -537,25 +537,25 @@ template <>           struct attribute_transform_traits<GEO::vec2i> { static con
 template <>           struct attribute_transform_traits<GEO::vec3i> { static const bool is_transformable = false; };
 template <>           struct attribute_transform_traits<GEO::vec4i> { static const bool is_transformable = false; };
 
-static inline auto apply_transform(const GEO::mat4f transform, const float value, const float w) -> float
+static inline auto apply_transform(const GEO::mat4f& transform, const float value, const float w) -> float
 {
     const GEO::vec4f result4 = transform * GEO::vec4f{value, 0.0f, 0.0f, w};
     return result4.x;
 }
 
-static inline auto apply_transform(const GEO::mat4f transform, const GEO::vec2f value, const float w) -> GEO::vec2f
+static inline auto apply_transform(const GEO::mat4f& transform, const GEO::vec2f value, const float w) -> GEO::vec2f
 {
     const GEO::vec4f result4 = transform * GEO::vec4f{value.x, value.y, 0.0f, w};
     return GEO::vec2f{result4.x, result4.y};
 }
 
-static inline auto apply_transform(const GEO::mat4f transform, const GEO::vec3f value, const float w) -> GEO::vec3f
+static inline auto apply_transform(const GEO::mat4f& transform, const GEO::vec3f value, const float w) -> GEO::vec3f
 {
     const GEO::vec4f result4 = transform * GEO::vec4f{value.x, value.y, value.z, w};
     return GEO::vec3f{result4.x, result4.y, result4.z};
 }
 
-static inline auto apply_transform(const GEO::mat4f transform, const GEO::vec4f value, float) -> GEO::vec4f
+static inline auto apply_transform(const GEO::mat4f& transform, const GEO::vec4f value, float) -> GEO::vec4f
 {
     return transform * value;
 }
