@@ -1249,7 +1249,7 @@ void Device_impl::update_frame_completion()
         .signalSemaphoreCount = 1,                              // uint32_t
         .pSignalSemaphores    = &m_vulkan_frame_end_semaphore,  // const VkSemaphore*
     };
-    log_context->debug("vkQueueSubmit() end of frame timeline semaphore @ frame index = {}", m_frame_index);
+    log_context->trace("vkQueueSubmit() end of frame timeline semaphore @ frame index = {}", m_frame_index);
     result = vkQueueSubmit(m_vulkan_graphics_queue, 1, &submit_info, VK_NULL_HANDLE);
     if (result != VK_SUCCESS) {
         log_context->critical("vkQueueSubmit() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
@@ -1264,7 +1264,7 @@ void Device_impl::update_frame_completion()
         log_context->error("vkGetSemaphoreCounterValue() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
     } else {
         for (; m_latest_completed_frame <= latest_completed_frame; ++m_latest_completed_frame) {
-            log_context->info("GPU has completed frame index = {}", m_latest_completed_frame);
+            log_context->trace("GPU has completed frame index = {}", m_latest_completed_frame);
             frame_completed(m_latest_completed_frame);
         }
     }

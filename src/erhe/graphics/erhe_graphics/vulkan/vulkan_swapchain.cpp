@@ -718,6 +718,16 @@ void Swapchain_impl::init_swapchain(Vulkan_swapchain_create_info& swapchain_crea
     VkResult       result        = VK_SUCCESS;
     VkSwapchainKHR old_swapchain = m_vulkan_swapchain;
 
+    log_context->debug(
+        "Calling vkCreateSwapchainKHR(format = {}, colorSpace = {}, extent = {} x {}, presentMode {}, oldSwapchain = {})",
+        c_str(swapchain_create_info.swapchain_create_info.imageFormat),
+        c_str(swapchain_create_info.swapchain_create_info.imageColorSpace),
+        swapchain_create_info.swapchain_create_info.imageExtent.width,
+        swapchain_create_info.swapchain_create_info.imageExtent.height,
+        c_str(swapchain_create_info.swapchain_create_info.presentMode),
+        fmt::ptr(old_swapchain)
+    );
+
     swapchain_create_info.swapchain_create_info.oldSwapchain = old_swapchain;
     result = vkCreateSwapchainKHR(vulkan_device, &swapchain_create_info.swapchain_create_info, nullptr, &m_vulkan_swapchain);
     ++m_swapchain_serial;

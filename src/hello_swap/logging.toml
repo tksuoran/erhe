@@ -71,6 +71,7 @@ texture_frame = "info"
 vertex_attribute = "info"
 render_pass = "info"
 startup = "info"
+swapchain = "trace"
 
 ["erhe.gltf"]
 log = "info"

@@ -61,14 +61,13 @@ public:
                     (m_last_window_height != m_window.get_height())
                 ) {
                     m_request_resize_pending.store(true);
-                    log_swap->info("resize - changed, calling resize_swapchain_to_surface()");
-                    log_swap->info("swapchain = {} x {}", m_swapchain_width, m_swapchain_height);
                     m_last_window_width  = m_window.get_width();
                     m_last_window_height = m_window.get_height();
+                    log_swap->info("resize - changed, setting m_request_resize_pending");
+                    tick();
                 } else {
                     log_swap->info("resize - unchanged");
                 }
-                tick();
             }
         );
     }
@@ -76,8 +75,6 @@ public:
     std::optional<erhe::window::Input_event> m_window_resize_event{};
     int               m_last_window_width     {0};
     int               m_last_window_height    {0};
-    uint32_t          m_swapchain_width       {0};
-    uint32_t          m_swapchain_height      {0};
     std::atomic<bool> m_request_resize_pending{false};
 
     auto on_window_resize_event(const erhe::window::Input_event& input_event) -> bool override
@@ -156,12 +153,8 @@ public:
             }
         }
 
-        erhe::math::Viewport viewport{
-            .x      = 0,
-            .y      = 0,
-            .width  = m_window.get_width(),
-            .height = m_window.get_height()
-        };
+        const int width  = m_window.get_width();
+        const int height = m_window.get_height();
 
         const erhe::graphics::Frame_begin_info frame_begin_info{
             .resize_width   = static_cast<uint32_t>(m_last_window_width),
@@ -172,7 +165,7 @@ public:
 
         m_graphics_device.begin_frame(frame_begin_info);
 
-        update_render_pass(viewport.width, viewport.height);
+        update_render_pass(width, height);
 
         erhe::graphics::Render_command_encoder render_encoder = m_graphics_device.make_render_command_encoder(*m_render_pass.get());
 

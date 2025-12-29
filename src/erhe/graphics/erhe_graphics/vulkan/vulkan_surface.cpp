@@ -590,19 +590,8 @@ auto Surface_impl::update_swapchain(Vulkan_swapchain_create_info& out_swapchain_
         return false;
     }
 
-    uint32_t       graphics_queue_family_index = m_device_impl.get_graphics_queue_family_index();
-    VkSwapchainKHR old_swapchain               = m_vulkan_swapchain;
-    bool           use_scaling                 = m_device_impl.get_capabilities().m_surface_maintenance1;
-
-    log_context->debug(
-        "Calling vkCreateSwapchainKHR(format = {}, colorSpace = {}, extent = {} x {}, presentMode {}, oldSwapchain = {})",
-        c_str(m_surface_format.format),
-        c_str(m_surface_format.colorSpace),
-        extent.width,
-        extent.height,
-        c_str(m_present_mode),
-        fmt::ptr(old_swapchain)
-    );
+    uint32_t graphics_queue_family_index = m_device_impl.get_graphics_queue_family_index();
+    bool     use_scaling                 = m_device_impl.get_capabilities().m_surface_maintenance1;
 
     // Scaling behavior options:
     //  - VK_PRESENT_SCALING_ONE_TO_ONE_BIT_KHR
@@ -644,8 +633,13 @@ auto Surface_impl::update_swapchain(Vulkan_swapchain_create_info& out_swapchain_
             const bool y_max                = (scaling_capabilities.supportedPresentGravityY & VK_PRESENT_GRAVITY_MAX_BIT_KHR     ) != 0;
             const bool y_centered           = (scaling_capabilities.supportedPresentGravityY & VK_PRESENT_GRAVITY_CENTERED_BIT_KHR) != 0;
 
-            // TODO VK_PRESENT_SCALING_ASPECT_RATIO_STRETCH_BIT_KHR does not work on AMD / Windows
-            const bool need_workaround_for_aspect_ratio_stretch = m_device_impl.get_info().vendor == Vendor::Amd;
+            // VK_PRESENT_SCALING_ASPECT_RATIO_STRETCH_BIT_KHR does not work on AMD / Windows
+            const bool need_workaround_for_aspect_ratio_stretch =
+#if defined(ERHE_OS_WINDOWS)
+                m_device_impl.get_info().vendor == Vendor::Amd;
+#else
+                false;
+#endif
             if (aspect_ratio_stretch && !need_workaround_for_aspect_ratio_stretch) {
                 scaling_behavior = VK_PRESENT_SCALING_ASPECT_RATIO_STRETCH_BIT_KHR;
             } else if (stretch) {
@@ -703,16 +697,9 @@ auto Surface_impl::update_swapchain(Vulkan_swapchain_create_info& out_swapchain_
         .compositeAlpha        = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,             // VkCompositeAlphaFlagBitsKHR
         .presentMode           = m_present_mode,                                // VkPresentModeKHR
         .clipped               = VK_TRUE,                                       // VkBool32
-        .oldSwapchain          = nullptr //old_swapchain                                  // VkSwapchainKHR
+        .oldSwapchain          = nullptr                                        // VkSwapchainKHR
     };
     return true;
 }
 
 } // namespace erhe::graphics
-
-//VkSurfacePresentModeCompatibilityKHR present_mode_compatibility{
-//    .sType            = VK_STRUCTURE_TYPE_SURFACE_PRESENT_MODE_COMPATIBILITY_KHR, // VkStructureType
-//    .pNext            = nullptr,
-//    .presentModeCount = 0,
-//    .pPresentModes    = nullptr
-//};
