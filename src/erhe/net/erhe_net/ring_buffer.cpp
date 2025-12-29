@@ -1,5 +1,6 @@
 #include "erhe_net/ring_buffer.hpp"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstring>
 
