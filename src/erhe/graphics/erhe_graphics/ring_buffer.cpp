@@ -15,6 +15,8 @@
 //# include "erhe_graphics/vulkan/vulkan_ring_buffer.hpp"
 //#endif
 
+#include <algorithm>
+
 namespace erhe::graphics {
 
 [[nodiscard]] auto get_direction(const Ring_buffer_usage ring_buffer_usage) -> Buffer_direction
