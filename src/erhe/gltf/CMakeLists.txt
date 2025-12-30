@@ -18,7 +18,7 @@ if (${ERHE_GLTF_LIBRARY} STREQUAL "fastgltf")
         erhe_gltf/gltf_fastgltf.hpp
     )
     target_link_libraries(${_target} PRIVATE fastgltf)
-elseif ()
+else ()
     erhe_target_sources_grouped(
         ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
         erhe_gltf/gltf_none.cpp
