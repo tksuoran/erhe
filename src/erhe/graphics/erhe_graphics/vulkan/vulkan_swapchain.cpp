@@ -195,9 +195,9 @@ void Swapchain_impl::submit_placeholder_renderpass()
     }
 
     const VkClearValue clear_values[3] = {
-        {.color = { .float32 = { 0.01f, 0.0f, 0.0f, 1.0f }}},
-        {.color = { .float32 = { 0.0f, 0.01f, 0.0f, 1.0f }}},
-        {.color = { .float32 = { 0.0f, 0.0f, 0.01f, 1.0f }}}
+        {.color = { .float32 = { 0.1f, 0.0f, 0.0f, 1.0f }}},
+        {.color = { .float32 = { 0.0f, 0.1f, 0.0f, 1.0f }}},
+        {.color = { .float32 = { 0.0f, 0.0f, 0.1f, 1.0f }}}
     };
 
     const uint64_t clear_color_index = frame_index % 3;

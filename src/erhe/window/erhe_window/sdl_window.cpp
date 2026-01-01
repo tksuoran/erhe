@@ -283,6 +283,11 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
     ERHE_PROFILE_FUNCTION();
 
     if (s_window_count == 0) {
+#if defined(ERHE_OS_LINUX)
+        SDL_SetHint(SDL_HINT_VIDEO_WAYLAND_ALLOW_LIBDECOR, "1");
+        SDL_SetHint(SDL_HINT_VIDEO_WAYLAND_PREFER_LIBDECOR, "1");
+#endif
+
         SDL_InitFlags init_flags = SDL_INIT_VIDEO | SDL_INIT_EVENTS;
         if (configuration.enable_joystick) {
             init_flags |= SDL_INIT_JOYSTICK | SDL_INIT_GAMEPAD;
