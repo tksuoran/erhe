@@ -141,8 +141,8 @@ CPMAddPackage(
 
 CPMAddPackage(
     NAME              fmt
-    GIT_TAG           12.0.0
-    VERSION           12.0.0
+    GIT_TAG           12.1.0
+    VERSION           12.1.0
     GIT_SHALLOW       TRUE
     GITHUB_REPOSITORY fmtlib/fmt
 )
@@ -157,7 +157,8 @@ CPMAddPackage(
 
 CPMAddPackage(
     NAME              concurrentqueue 
-    GIT_TAG           master
+    #GIT_TAG           master
+    GIT_TAG           c68072129c8a5b4025122ca5a0c82ab14b30cb03
     GIT_SHALLOW       TRUE
     GITHUB_REPOSITORY cameron314/concurrentqueue
 )
@@ -171,16 +172,16 @@ CPMAddPackage(
 
 CPMAddPackage(
     NAME              etl
-    VERSION           20.44.1
-    GIT_TAG           20.44.1
+    VERSION           20.44.2
+    GIT_TAG           20.44.2
     GIT_SHALLOW       TRUE
     GITHUB_REPOSITORY ETLCPP/etl
 )
 
 CPMAddPackage(
     NAME              glm
-    VERSION           1.0.2
-    GIT_TAG           1.0.2
+    VERSION           1.0.3
+    GIT_TAG           1.0.3
     GIT_SHALLOW       TRUE
     GITHUB_REPOSITORY g-truc/glm
 )
@@ -190,8 +191,8 @@ add_definitions(-DGLM_ENABLE_EXPERIMENTAL)
 if (ERHE_SPIRV)
     CPMAddPackage(
         NAME              glslang
-        VERSION           16.0.0
-        GIT_TAG           16.0.0
+        VERSION           16.1.0
+        GIT_TAG           16.1.0
         GIT_SHALLOW       TRUE
         GITHUB_REPOSITORY KhronosGroup/glslang
         OPTIONS
@@ -253,8 +254,8 @@ vscode_support()
 if (${ERHE_WINDOW_LIBRARY} STREQUAL "sdl")
     CPMAddPackage(
         NAME              sdl
-        VERSION           release-3.2.24
-        GIT_TAG           release-3.2.24
+        VERSION           release-3.4.0
+        GIT_TAG           release-3.4.0
         GIT_SHALLOW       TRUE
         GITHUB_REPOSITORY libsdl-org/sdl
         OPTIONS
@@ -292,7 +293,7 @@ endif ()
 
 CPMAddPackage(
     NAME              simdjson
-    VERSION           4.2.2
+    VERSION           4.2.4
     GIT_SHALLOW       TRUE
     GITHUB_REPOSITORY simdjson/simdjson
 )
@@ -313,7 +314,7 @@ CPMAddPackage(
 
 CPMAddPackage(
     NAME              taskflow
-    VERSION           3.10.0
+    VERSION           3.11.0
     GIT_SHALLOW       TRUE
     GITHUB_REPOSITORY taskflow/taskflow
     OPTIONS
@@ -379,7 +380,7 @@ endif ()
 if (${ERHE_PROFILE_LIBRARY} STREQUAL "nvtx")
     CPMAddPackage(
         NAME              nvtx
-        VERSION           3.3.0
+        VERSION           3.4.0
         GIT_SHALLOW       TRUE
         GITHUB_REPOSITORY NVIDIA/NVTX
     )
@@ -389,7 +390,7 @@ if (${ERHE_PROFILE_LIBRARY} STREQUAL "nvtx")
 elseif (${ERHE_PROFILE_LIBRARY} STREQUAL "tracy")
     CPMAddPackage(
         NAME              tracy
-        VERSION           0.13.0
+        VERSION           0.13.1
         GIT_SHALLOW       TRUE
         GITHUB_REPOSITORY wolfpld/tracy
         OPTIONS 
@@ -432,7 +433,7 @@ endif ()
 if (${ERHE_TEXT_LAYOUT_LIBRARY} STREQUAL "harfbuzz")
     CPMAddPackage(
         NAME              harfbuzz
-        GIT_TAG           12.2.0
+        GIT_TAG           12.3.0
         GIT_SHALLOW       TRUE
         GITHUB_REPOSITORY harfbuzz/harfbuzz
     )
@@ -451,7 +452,7 @@ if (${ERHE_RAYTRACE_LIBRARY} STREQUAL "embree")
 elseif (${ERHE_RAYTRACE_LIBRARY} STREQUAL "bvh")
     CPMAddPackage(
         NAME              bvh
-        GIT_TAG           fbdc59615112d471409515cd2ab826fcc3100fd7
+        GIT_TAG           ac41ab88a32d0c247009d8ed456fd2795c1ee023
         #GIT_TAG           master
         GITHUB_REPOSITORY madmann91/bvh
     )
@@ -466,8 +467,7 @@ endif ()
 if (${ERHE_PHYSICS_LIBRARY} STREQUAL "jolt")
     CPMAddPackage(
         NAME              JoltPhysics
-        #GIT_TAG           v5.4.0
-        GIT_TAG           793b3a0dbd978552cc6bf68db1c473b32e8ba1ef
+        GIT_TAG           v5.5.0
         GITHUB_REPOSITORY jrouwe/JoltPhysics
         DOWNLOAD_ONLY     YES
     )
@@ -492,8 +492,8 @@ endif ()
 if (${ERHE_XR_LIBRARY} STREQUAL "openxr")
     CPMAddPackage(
         NAME              OpenXR-SDK
-        VERSION           1.1.53
-        GIT_TAG           release-1.1.53
+        VERSION           1.1.54
+        GIT_TAG           release-1.1.54
         GIT_SHALLOW       TRUE
         GITHUB_REPOSITORY KhronosGroup/OpenXR-SDK-Source
         OPTIONS

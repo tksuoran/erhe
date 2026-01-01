@@ -35,7 +35,6 @@
             "name":    "erhe hello_swap LLDB",
             "type":    "lldb",
             "request": "launch",
-            "cwd":     "${workspaceFolder}/src/hello_swap",
             "program": "${command:cmake.launchTargetPath}",
         },
         {
