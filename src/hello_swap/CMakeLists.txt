@@ -20,10 +20,11 @@ endif ()
 target_link_libraries(
     ${_target}
     PRIVATE
-    erhe::utility
+    erhe::configuration
     erhe::graphics
-    erhe::math
     erhe::log
+    erhe::math
+    erhe::utility
     erhe::verify
     erhe::window
 )

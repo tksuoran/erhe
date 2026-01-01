@@ -2,6 +2,7 @@
 
 #include "hello_swap_log.hpp"
 
+#include "erhe_configuration/configuration.hpp"
 #if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
 #   include "erhe_gl/gl_log.hpp"
 #endif
@@ -219,6 +220,48 @@ private:
 
 void run()
 {
+    // Workaround for
+    // https://intellij-support.jetbrains.com/hc/en-us/community/posts/27792220824466-CMake-C-git-project-How-to-share-working-directory-in-git
+    {
+        std::error_code error_code{};
+        bool found = std::filesystem::exists(erhe::c_erhe_config_file_path, error_code);
+        if (!found) {
+            std::string path_string{};
+            std::filesystem::path path = std::filesystem::current_path();
+            path_string = path.string();
+            fprintf(stdout, "erhe.toml not found.\nCurrent working directory is %s\n", path_string.c_str());
+#if defined(ERHE_OS_LINUX)
+            char self_path[PATH_MAX];
+            ssize_t length = readlink("/proc/self/exe", self_path, PATH_MAX - 1);
+            if (length > 0) {
+                self_path[length] = '\0';
+                fprintf(stdout, "Executable is %s\n", self_path);
+            }
+#endif
+            for (int i = 0; i < 4; ++i) {
+                std::filesystem::current_path(path, error_code);
+                path = std::filesystem::current_path();
+                path_string = path.string();
+                fprintf(stdout, "Current working directory is %s\n", path_string.c_str());
+                const std::filesystem::path try_path = path / std::filesystem::path("src/hello_swap");
+                bool exists_directory = std::filesystem::exists(try_path, error_code);
+                if (exists_directory) {
+                    const std::filesystem::path erhe_ini_path = try_path / std::filesystem::path(erhe::c_erhe_config_file_path);
+                    const bool exists_erhe_ini = std::filesystem::exists(erhe_ini_path, error_code);
+                    if (exists_erhe_ini) {
+                        std::filesystem::current_path(try_path, error_code);
+                        path = std::filesystem::current_path();
+                        path_string = path.string();
+                        fprintf(stdout, "Current working directory is %s\n", path_string.c_str());
+                        break;
+                    }
+                } else {
+                    path = path.parent_path();
+                }
+            }
+        }
+    }
+
     erhe::log::initialize_log_sinks();
 
     hello_swap::initialize_logging();
