@@ -254,8 +254,10 @@ vscode_support()
 if (${ERHE_WINDOW_LIBRARY} STREQUAL "sdl")
     CPMAddPackage(
         NAME              sdl
-        VERSION           release-3.4.0
-        GIT_TAG           release-3.4.0
+        VERSION           release-3.2.28
+        GIT_TAG           release-3.2.28
+        #VERSION           release-3.4.0
+        #GIT_TAG           release-3.4.0
         GIT_SHALLOW       TRUE
         GITHUB_REPOSITORY libsdl-org/sdl
         OPTIONS
