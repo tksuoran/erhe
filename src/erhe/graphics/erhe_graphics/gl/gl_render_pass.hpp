@@ -38,7 +38,7 @@ public:
     [[nodiscard]] auto get_debug_label         () const -> const std::string&;
 
 private:
-    friend class Render_command_encoder;
+    friend class Render_command_encoder_impl;
     void start_render_pass();
     void end_render_pass  ();
 

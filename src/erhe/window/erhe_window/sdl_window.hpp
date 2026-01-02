@@ -55,9 +55,12 @@ class Context_window
 public:
     explicit Context_window(const Window_configuration& configuration);
 
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
     explicit Context_window(Context_window* share);
+#endif
     virtual ~Context_window() noexcept;
 
+    [[nodiscard]] auto get_window_configuration() const -> const Window_configuration&;
     [[nodiscard]] auto get_width               () const -> int;
     [[nodiscard]] auto get_height              () const -> int;
     [[nodiscard]] auto get_cursor_relative_hold() const -> bool;

@@ -41,6 +41,8 @@ public:
     // Returns true if swapchain needs to be (re)created
     [[nodiscard]] auto update_swapchain(Vulkan_swapchain_create_info& out_swapchain_create_info) -> bool;
 
+    [[nodiscard]] auto get_surface_create_info() const -> const Surface_create_info&;
+
 private:
     void fail();
     void choose_surface_format();

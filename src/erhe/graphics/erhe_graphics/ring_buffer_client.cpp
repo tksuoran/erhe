@@ -1,7 +1,7 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
-#include "erhe_graphics/device.hpp"
 #include "erhe_graphics/command_encoder.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_graphics/ring_buffer.hpp"
 #include "erhe_graphics/ring_buffer_client.hpp"
 #include "erhe_graphics/ring_buffer_range.hpp"

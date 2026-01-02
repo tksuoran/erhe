@@ -236,6 +236,7 @@ Context_window::Context_window(const Window_configuration& configuration)
     ERHE_VERIFY(ok);
 }
 
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
 Context_window::Context_window(Context_window* share)
 {
     ERHE_PROFILE_FUNCTION();
@@ -244,16 +245,16 @@ Context_window::Context_window(Context_window* share)
 
     const bool ok = open(
         {
-            .fullscreen        = false,
-            .size              = glm::ivec2{64, 64},
-            .msaa_sample_count = 0,
-            .title             = "erhe share context",
-            .share             = share
+            .fullscreen = false,
+            .share      = share,
+            .size       = glm::ivec2{64, 64},
+            .title      = "erhe share context"
         }
     );
 
     ERHE_VERIFY(ok);
 }
+#endif
 
 auto Context_window_SDL_EventFilter(void* userdata, SDL_Event* event) -> bool
 {
@@ -282,7 +283,8 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
 {
     ERHE_PROFILE_FUNCTION();
 
-    if (s_window_count == 0) {
+    const bool primary = s_window_count == 0;
+    if (primary) {
 #if defined(ERHE_OS_LINUX)
         SDL_SetHint(SDL_HINT_VIDEO_WAYLAND_ALLOW_LIBDECOR, "1");
         SDL_SetHint(SDL_HINT_VIDEO_WAYLAND_PREFER_LIBDECOR, "1");
@@ -307,8 +309,6 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
         return false;
     }
 #endif
-
-    const bool primary = (configuration.share == nullptr);
 
     // Scanning joysticks can be slow, so do it in worker thread
     if (primary && configuration.enable_joystick) {
@@ -1000,6 +1000,11 @@ void Context_window::handle_controller_button_event(int64_t timestamp, int devic
 auto Context_window::get_cursor_relative_hold() const -> bool
 {
     return m_is_mouse_relative_hold_enabled;
+}
+
+auto Context_window::get_window_configuration() const -> const Window_configuration&
+{
+    return m_configuration;
 }
 
 auto Context_window::get_width() const -> int

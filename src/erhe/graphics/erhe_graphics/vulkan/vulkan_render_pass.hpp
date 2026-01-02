@@ -10,7 +10,9 @@
 #include <vector>
 
 namespace erhe::graphics {
-    
+
+class Device_impl;
+
 class Render_pass_impl final
 {
 public:
@@ -31,9 +33,8 @@ public:
     [[nodiscard]] auto get_swapchain           () const -> Swapchain*;
     [[nodiscard]] auto get_debug_label         () const -> const std::string&;
 
-private:
-    friend class Render_command_encoder;
-    void start_render_pass();
+    // For Render_command_encoder;
+    [[nodiscard]] auto start_render_pass() -> VkCommandBuffer;
     void end_render_pass  ();
 
 private:
@@ -49,13 +50,10 @@ private:
     bool                                             m_uses_multisample_resolve{false};
     bool                                             m_is_active{false};
 
-    class Render_pass_entry
-    {
-    public:
-        VkFramebuffer framebuffer{VK_NULL_HANDLE};
-    };
-    std::vector<Render_pass_entry> m_entries;
-
+    Device_impl&              m_device_impl;
+    VkRenderPass              m_render_pass   {VK_NULL_HANDLE};
+    VkRenderPassBeginInfo     m_begin_info{};
+    std::vector<VkClearValue> m_clear_values;
 };
 
 } // namespace erhe::graphics

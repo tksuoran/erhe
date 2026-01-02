@@ -5,6 +5,7 @@
 #include "erhe_graphics/enums.hpp"
 
 #include <cstdint>
+#include <memory>
 
 namespace erhe::graphics {
 
@@ -13,6 +14,7 @@ class Device;
 class Render_pass;
 class Render_pipeline_state;
 class Shader_stages;
+class Render_command_encoder_impl;
 
 class Render_command_encoder final : public Command_encoder
 {
@@ -22,8 +24,10 @@ public:
     Render_command_encoder& operator=(const Render_command_encoder&) = delete;
     Render_command_encoder(Render_command_encoder&&) = delete;
     Render_command_encoder& operator=(Render_command_encoder&&) = delete;
-    ~Render_command_encoder() noexcept override;
+    ~Render_command_encoder() noexcept;
 
+    void set_buffer               (Buffer_target buffer_target, const Buffer* buffer, std::uintptr_t offset, std::uintptr_t length, std::uintptr_t index) override;
+    void set_buffer               (Buffer_target buffer_target, const Buffer* buffer) override;
     void set_render_pipeline_state(const Render_pipeline_state& pipeline);
     void set_render_pipeline_state(const Render_pipeline_state& pipeline, const Shader_stages* override_shader_stages);
     void set_viewport_rect        (int x, int y, int width, int height);
@@ -45,10 +49,7 @@ public:
     );
 
 private:
-    void start_render_pass();
-    void end_render_pass();
-
-    Render_pass& m_render_pass;
+    std::unique_ptr<Render_command_encoder_impl> m_impl;
 };
 
 } // namespace erhe::graphics

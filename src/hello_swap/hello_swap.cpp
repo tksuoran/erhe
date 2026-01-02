@@ -30,13 +30,9 @@ public:
     Hello_swap()
         : m_window{
             erhe::window::Window_configuration{
-                .use_depth         = true,
-                .gl_major          = 4,
-                .gl_minor          = 6,
-                .size              = glm::ivec2{1920, 1080},
-                .msaa_sample_count = 0,
-                .swap_interval     = 0,
-                .title             = "erhe hello_swap"
+                .use_depth = false,
+                .size      = glm::ivec2{1920, 1080},
+                .title     = "erhe hello_swap"
             }
         }
         , m_graphics_device{
@@ -130,7 +126,8 @@ public:
         std::lock_guard<std::mutex> lock{m_mutex};
 
         erhe::graphics::Frame_state frame_state{};
-        m_graphics_device.wait_frame(frame_state);
+        const bool wait_ok = m_graphics_device.wait_frame(frame_state);
+        ERHE_VERIFY(wait_ok);
 
         // TODO use predicted display time
         const auto tick_end_time = std::chrono::steady_clock::now();
@@ -164,17 +161,21 @@ public:
         };
         m_request_resize_pending.store(false);
 
-        m_graphics_device.begin_frame(frame_begin_info);
+        const bool begin_frame_ok = m_graphics_device.begin_frame(frame_begin_info);
+        ERHE_VERIFY(begin_frame_ok);
 
         update_render_pass(width, height);
 
-        erhe::graphics::Render_command_encoder render_encoder = m_graphics_device.make_render_command_encoder(*m_render_pass.get());
+        {
+            erhe::graphics::Render_command_encoder render_encoder = m_graphics_device.make_render_command_encoder(*m_render_pass.get());
+        }
 
         const erhe::graphics::Frame_end_info frame_end_info{
             .requested_display_time = 0 // TODO
         };
 
-        m_graphics_device.end_frame(frame_end_info);
+        const bool end_frame_ok = m_graphics_device.end_frame(frame_end_info);
+        ERHE_VERIFY(end_frame_ok);
 
         m_in_tick.store(false);
     }

@@ -13,6 +13,7 @@ class Device;
 class Render_pass;
 class Texture;
 
+class Blit_command_encoder_impl;
 class Blit_command_encoder final : public Command_encoder
 {
 public:
@@ -21,10 +22,11 @@ public:
     Blit_command_encoder& operator=(const Blit_command_encoder&) = delete;
     Blit_command_encoder(Blit_command_encoder&&) = delete;
     Blit_command_encoder& operator=(Blit_command_encoder&&) = delete;
-    ~Blit_command_encoder() noexcept override;
+    ~Blit_command_encoder() noexcept;
 
-    void blit_framebuffer(const Render_pass& source_renderpass, glm::ivec2 source_origin, glm::ivec2 source_size, const Render_pass& destination_renderpass, glm::ivec2 destination_origin);
-
+    void set_buffer       (Buffer_target buffer_target, const Buffer* buffer, std::uintptr_t offset, std::uintptr_t length, std::uintptr_t index) override;
+    void set_buffer       (Buffer_target buffer_target, const Buffer* buffer) override;
+    void blit_framebuffer (const Render_pass& source_renderpass, glm::ivec2 source_origin, glm::ivec2 source_size, const Render_pass& destination_renderpass, glm::ivec2 destination_origin);
     void copy_from_texture(const Texture* source_texture, std::uintptr_t source_slice,  std::uintptr_t source_level,         glm::ivec3     source_origin,          glm::ivec3 source_size, const Texture* destination_texture, std::uintptr_t destination_slice,  std::uintptr_t destination_level,         glm::ivec3     destination_origin);
     void copy_from_buffer (const Buffer*  source_buffer,  std::uintptr_t source_offset, std::uintptr_t source_bytes_per_row, std::uintptr_t source_bytes_per_image, glm::ivec3 source_size, const Texture* destination_texture, std::uintptr_t destination_slice,  std::uintptr_t destination_level,         glm::ivec3     destination_origin);
     void copy_from_texture(const Texture* source_texture, std::uintptr_t source_slice,  std::uintptr_t source_level,         glm::ivec3     source_origin,          glm::ivec3 source_size, const Buffer* destination_buffer,   std::uintptr_t destination_offset, std::uintptr_t destination_bytes_per_row, std::uintptr_t destination_bytes_per_image);
@@ -50,6 +52,9 @@ public:
     // void optimize_indirect_command_buffer(const IndirectCommandBuffer* indirectCommandBuffer, NS::Range range);
     // void sample_counters_in_buffer       (const CounterSampleBuffer* sampleBuffer, std::uintptr_t sampleIndex, bool barrier);
     // void resolve_counters                (const CounterSampleBuffer* sampleBuffer, NS::Range range, const class Buffer* destination_buffer, std::uintptr_t destination_offset);
+
+private:
+    std::unique_ptr<Blit_command_encoder_impl> m_impl;
 };
 
 } // namespace erhe::graphics

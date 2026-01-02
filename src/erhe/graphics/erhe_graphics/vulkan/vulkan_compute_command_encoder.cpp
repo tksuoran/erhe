@@ -1,22 +1,37 @@
-#include "erhe_graphics/compute_command_encoder.hpp"
+#include "erhe_graphics/vulkan/vulkan_compute_command_encoder.hpp"
 
 namespace erhe::graphics {
 
-Compute_command_encoder::Compute_command_encoder(Device& device)
-    : Command_encoder{device}
+Compute_command_encoder_impl::Compute_command_encoder_impl(Device& device)
+    : m_device{device}
 {
 }
 
-Compute_command_encoder::~Compute_command_encoder() noexcept
+Compute_command_encoder_impl::~Compute_command_encoder_impl() noexcept
 {
 }
 
-void Compute_command_encoder::set_compute_pipeline_state(const Compute_pipeline_state& pipeline)
+void Compute_command_encoder_impl::set_buffer(Buffer_target buffer_target, const Buffer* buffer, std::uintptr_t offset, std::uintptr_t length, std::uintptr_t index)
+{
+    static_cast<void>(buffer_target);
+    static_cast<void>(buffer);
+    static_cast<void>(offset);
+    static_cast<void>(length);
+    static_cast<void>(index);
+}
+
+void Compute_command_encoder_impl::set_buffer(Buffer_target buffer_target, const Buffer* buffer)
+{
+    static_cast<void>(buffer_target);
+    static_cast<void>(buffer);
+}
+
+void Compute_command_encoder_impl::set_compute_pipeline_state(const Compute_pipeline_state& pipeline)
 {
     static_cast<void>(pipeline);
 }
 
-void Compute_command_encoder::dispatch_compute(
+void Compute_command_encoder_impl::dispatch_compute(
     const std::uintptr_t x_size,
     const std::uintptr_t y_size,
     const std::uintptr_t z_size

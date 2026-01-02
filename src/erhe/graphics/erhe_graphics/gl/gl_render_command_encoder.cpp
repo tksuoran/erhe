@@ -1,4 +1,4 @@
-#include "erhe_graphics/render_command_encoder.hpp"
+#include "erhe_graphics/gl/gl_render_command_encoder.hpp"
 #include "erhe_graphics/gl/gl_buffer.hpp"
 #include "erhe_graphics/gl/gl_device.hpp"
 #include "erhe_graphics/gl/gl_render_pass.hpp"
@@ -12,30 +12,30 @@
 
 namespace erhe::graphics {
 
-Render_command_encoder::Render_command_encoder(Device& device, Render_pass& render_pass)
-    : Command_encoder{device}
-    , m_render_pass  {render_pass}
+Render_command_encoder_impl::Render_command_encoder_impl(Device& device, Render_pass& render_pass)
+    : Command_encoder_impl{device}
+    , m_render_pass       {render_pass}
 {
     start_render_pass();
 }
 
-Render_command_encoder::~Render_command_encoder()
+Render_command_encoder_impl::~Render_command_encoder_impl()
 {
     end_render_pass();
 }
 
-void Render_command_encoder::set_render_pipeline_state(const Render_pipeline_state& pipeline)
+void Render_command_encoder_impl::set_render_pipeline_state(const Render_pipeline_state& pipeline)
 {
     m_device.get_impl().m_gl_state_tracker.execute_(pipeline, false);
 }
 
-void Render_command_encoder::set_render_pipeline_state(const Render_pipeline_state& pipeline, const Shader_stages* override_shader_stages)
+void Render_command_encoder_impl::set_render_pipeline_state(const Render_pipeline_state& pipeline, const Shader_stages* override_shader_stages)
 {
     m_device.get_impl().m_gl_state_tracker.execute_(pipeline, true);
     m_device.get_impl().m_gl_state_tracker.shader_stages.execute(override_shader_stages);
 }
 
-void Render_command_encoder::set_viewport_rect(int x, int y, int width, int height)
+void Render_command_encoder_impl::set_viewport_rect(int x, int y, int width, int height)
 {
     m_device.get_impl().m_gl_state_tracker.viewport_rect.execute(
         Viewport_rect_state{
@@ -47,7 +47,7 @@ void Render_command_encoder::set_viewport_rect(int x, int y, int width, int heig
     );
 }
 
-void Render_command_encoder::set_viewport_depth_range(const float min_depth, const float max_depth)
+void Render_command_encoder_impl::set_viewport_depth_range(const float min_depth, const float max_depth)
 {
     m_device.get_impl().m_gl_state_tracker.viewport_depth_range.execute(
         Viewport_depth_range_state{
@@ -57,7 +57,7 @@ void Render_command_encoder::set_viewport_depth_range(const float min_depth, con
     );
 }
 
-void Render_command_encoder::set_scissor_rect(int x, int y, int width, int height)
+void Render_command_encoder_impl::set_scissor_rect(int x, int y, int width, int height)
 {
     m_device.get_impl().m_gl_state_tracker.scissor.execute(
         Scissor_state{
@@ -69,22 +69,22 @@ void Render_command_encoder::set_scissor_rect(int x, int y, int width, int heigh
     );
 }
 
-void Render_command_encoder::start_render_pass()
+void Render_command_encoder_impl::start_render_pass()
 {
     m_render_pass.get_impl().start_render_pass();
 }
 
-void Render_command_encoder::end_render_pass()
+void Render_command_encoder_impl::end_render_pass()
 {
     m_render_pass.get_impl().end_render_pass();
 }
 
-void Render_command_encoder::set_index_buffer(const Buffer* buffer)
+void Render_command_encoder_impl::set_index_buffer(const Buffer* buffer)
 {
     m_device.get_impl().m_gl_state_tracker.vertex_input.set_index_buffer(buffer);
 }
 
-void Render_command_encoder::set_vertex_buffer(const Buffer* buffer, std::uintptr_t offset, std::uintptr_t index)
+void Render_command_encoder_impl::set_vertex_buffer(const Buffer* buffer, std::uintptr_t offset, std::uintptr_t index)
 {
     m_device.get_impl().m_gl_state_tracker.vertex_input.set_vertex_buffer(index, buffer, offset);
 }
@@ -104,7 +104,7 @@ void Render_command_encoder::set_vertex_buffer(const Buffer* buffer, std::uintpt
     }
 }
 
-void Render_command_encoder::draw_primitives(
+void Render_command_encoder_impl::draw_primitives(
     Primitive_type primitive_type,
     std::uintptr_t vertex_start,
     std::uintptr_t vertex_count,
@@ -120,7 +120,7 @@ void Render_command_encoder::draw_primitives(
     );
 }
 
-void Render_command_encoder::draw_primitives(
+void Render_command_encoder_impl::draw_primitives(
     Primitive_type primitive_type,
     std::uintptr_t vertex_start,
     std::uintptr_t vertex_count
@@ -134,7 +134,7 @@ void Render_command_encoder::draw_primitives(
     );
 }
 
-void Render_command_encoder::draw_indexed_primitives(
+void Render_command_encoder_impl::draw_indexed_primitives(
     Primitive_type           primitive_type,
     std::uintptr_t           index_count,
     erhe::dataformat::Format index_type,
@@ -152,7 +152,7 @@ void Render_command_encoder::draw_indexed_primitives(
     );
 }
 
-void Render_command_encoder::draw_indexed_primitives(
+void Render_command_encoder_impl::draw_indexed_primitives(
     Primitive_type           primitive_type,
     std::uintptr_t           index_count,
     erhe::dataformat::Format index_type,
@@ -169,7 +169,7 @@ void Render_command_encoder::draw_indexed_primitives(
     );
 }
 
-void Render_command_encoder::multi_draw_indexed_primitives_indirect(
+void Render_command_encoder_impl::multi_draw_indexed_primitives_indirect(
     Primitive_type           primitive_type,
     erhe::dataformat::Format index_type,
     std::uintptr_t           indirect_offset,

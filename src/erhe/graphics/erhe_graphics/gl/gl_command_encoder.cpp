@@ -1,4 +1,4 @@
-#include "erhe_graphics/command_encoder.hpp"
+#include "erhe_graphics/gl/gl_command_encoder.hpp"
 #include "erhe_graphics/gl/gl_buffer.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_gl/wrapper_enums.hpp"
@@ -7,12 +7,12 @@
 
 namespace erhe::graphics {
 
-Command_encoder::Command_encoder(Device& device)
+Command_encoder_impl::Command_encoder_impl(Device& device)
     : m_device{device}
 {
 }
 
-Command_encoder::~Command_encoder()
+Command_encoder_impl::~Command_encoder_impl()
 {
 }
 
@@ -30,7 +30,7 @@ Command_encoder::~Command_encoder()
     }
 }
 
-void Command_encoder::set_buffer(const Buffer_target buffer_target, const Buffer* buffer, std::uintptr_t offset, std::uintptr_t length, std::uintptr_t index)
+void Command_encoder_impl::set_buffer(const Buffer_target buffer_target, const Buffer* buffer, std::uintptr_t offset, std::uintptr_t length, std::uintptr_t index)
 {
     gl::Buffer_target gl_buffer_target = convert_to_gl(buffer_target);
     gl::bind_buffer_range(
@@ -42,7 +42,7 @@ void Command_encoder::set_buffer(const Buffer_target buffer_target, const Buffer
     );
 }
 
-void Command_encoder::set_buffer(Buffer_target buffer_target, const Buffer* buffer)
+void Command_encoder_impl::set_buffer(Buffer_target buffer_target, const Buffer* buffer)
 {
     gl::Buffer_target gl_buffer_target = convert_to_gl(buffer_target);
     gl::bind_buffer(

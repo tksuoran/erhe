@@ -38,9 +38,9 @@ public:
     void operator=(Device_impl&&)      = delete;
     ~Device_impl  () noexcept;
 
-    void wait_frame            (Frame_state& out_frame_state);
-    void begin_frame           (const Frame_begin_info& frame_begin_info);
-    void end_frame             (const Frame_end_info& frame_end_info);
+    [[nodiscard]] auto wait_frame (Frame_state& out_frame_state) -> bool;
+    [[nodiscard]] auto begin_frame(const Frame_begin_info& frame_begin_info) -> bool;
+    [[nodiscard]] auto end_frame  (const Frame_end_info& frame_end_info) -> bool;
 
     void resize_swapchain_to_window();
     void memory_barrier            (Memory_barrier_mask barriers);
@@ -69,9 +69,9 @@ private:
     using PFN_generic          = void (*) ();
     using PFN_get_proc_address = PFN_generic (*) (const char*);
 
-    friend class Blit_command_encoder;
-    friend class Compute_command_encoder;
-    friend class Render_command_encoder;
+    friend class Blit_command_encoder_impl;
+    friend class Compute_command_encoder_impl;
+    friend class Render_command_encoder_impl;
     friend class Render_pass_impl;
 
     Device&                       m_device;

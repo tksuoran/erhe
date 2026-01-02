@@ -18,24 +18,27 @@ Swapchain_impl::Swapchain_impl(
 {
 }
 
-void Swapchain_impl::wait_frame(Frame_state& out_frame_state)
+auto Swapchain_impl::wait_frame(Frame_state& out_frame_state) -> bool
 {
     out_frame_state.predicted_display_time   = 0;
     out_frame_state.predicted_display_period = 0;
     out_frame_state.should_render            = true;
+    return true;
 }
 
-void Swapchain_impl::begin_frame(const Frame_begin_info& frame_begin_info)
+auto Swapchain_impl::begin_frame(const Frame_begin_info& frame_begin_info) -> bool
 {
     static_cast<void>(frame_begin_info);
+    return true;
 }
 
-void Swapchain_impl::end_frame(const Frame_end_info& frame_end_info)
+auto Swapchain_impl::end_frame(const Frame_end_info& frame_end_info) -> bool
 {
     static_cast<void>(frame_end_info);
     if (m_context_window) {
         m_context_window->swap_buffers();
     }
+    return true;
 }
 
 } // namespace erhe::graphics

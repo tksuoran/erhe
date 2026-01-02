@@ -38,6 +38,11 @@ Surface_impl::Surface_impl(Device_impl& device_impl, const Surface_create_info& 
     );
 }
 
+auto Surface_impl::get_surface_create_info() const -> const Surface_create_info&
+{
+    return m_surface_create_info;
+}
+
 auto Surface_impl::get_swapchain() -> Swapchain*
 {
     return m_swapchain.get();

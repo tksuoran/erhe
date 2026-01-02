@@ -50,15 +50,12 @@ public:
     Hextiles()
         : m_window{
             erhe::window::Window_configuration{
-                .gl_major          = 4,
-                .gl_minor          = 6,
-                .size              = glm::ivec2{1920, 1080},
-                .msaa_sample_count = 0,
-                .title             = "erhe HexTiles by Timo Suoranta"
+                .size   = glm::ivec2{1920, 1080},
+                .title  = "erhe HexTiles by Timo Suoranta"
             }
         }
-        , m_settings            {m_window}
-        , m_commands            {}
+        , m_settings{m_window}
+        , m_commands{}
 
         , m_graphics_device{
             erhe::graphics::Surface_create_info{
@@ -285,7 +282,8 @@ public:
         std::lock_guard<std::mutex> lock{m_mutex};
 
         erhe::graphics::Frame_state frame_state{};
-        m_graphics_device.wait_frame(frame_state);
+        const bool wait_ok = m_graphics_device.wait_frame(frame_state);
+        ERHE_VERIFY(wait_ok);
 
         std::vector<erhe::window::Input_event>& input_events = m_window.get_input_events();
 
@@ -305,7 +303,8 @@ public:
         };
         m_request_resize_pending.store(false);
 
-        m_graphics_device.begin_frame(frame_begin_info);
+        const bool begin_frame_ok = m_graphics_device.begin_frame(frame_begin_info);
+        ERHE_VERIFY(begin_frame_ok);
 
         if (m_map_window.is_window_visible()) {
             m_map_window.render();
@@ -317,7 +316,8 @@ public:
             .requested_display_time = 0 // TODO
         };
 
-        m_graphics_device.end_frame(frame_end_info);
+        const bool end_frame_ok = m_graphics_device.end_frame(frame_end_info);
+        ERHE_VERIFY(end_frame_ok);
     }
 
     auto on_window_close_event(const erhe::window::Input_event&) -> bool override

@@ -43,9 +43,9 @@ public:
     Swapchain(std::unique_ptr<Swapchain_impl>&& swapchain_impl);
     ~Swapchain() noexcept;
 
-    void wait_frame (Frame_state& out_frame_state);
-    void begin_frame(const Frame_begin_info& frame_begin_info);
-    void end_frame  (const Frame_end_info& frame_end_info);
+    [[nodiscard]] auto wait_frame (Frame_state& out_frame_state) -> bool;
+    [[nodiscard]] auto begin_frame(const Frame_begin_info& frame_begin_info) -> bool;
+    [[nodiscard]] auto end_frame  (const Frame_end_info& frame_end_info) -> bool;
 
     [[nodiscard]] auto get_impl() -> Swapchain_impl&;
     [[nodiscard]] auto get_impl() const -> const Swapchain_impl&;

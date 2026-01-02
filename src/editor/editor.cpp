@@ -215,7 +215,8 @@ public:
         m_frame_log_window->on_frame_begin();
 
         erhe::graphics::Frame_state frame_state{};
-        m_graphics_device->wait_frame(frame_state);
+        const bool wait_ok = m_graphics_device->wait_frame(frame_state);
+        ERHE_VERIFY(wait_ok);
 
         // log_input_frame->trace("----------------------- Editor::tick() -----------------------");
 
@@ -315,7 +316,8 @@ public:
         };
         m_request_resize_pending.store(false);
 
-        m_graphics_device->begin_frame(frame_begin_info);
+        const bool begin_frame_ok = m_graphics_device->begin_frame(frame_begin_info);
+        ERHE_VERIFY(begin_frame_ok);
 
         m_app_rendering->begin_frame(); // tests renderdoc capture start
 
@@ -337,7 +339,8 @@ public:
         const erhe::graphics::Frame_end_info frame_end_info{
             .requested_display_time = 0
         };
-        m_graphics_device->end_frame(frame_end_info);
+        const bool end_frame_ok = m_graphics_device->end_frame(frame_end_info);
+        ERHE_VERIFY(end_frame_ok);
 
 #if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
         //if (!m_app_context.OpenXR) {
@@ -409,18 +412,18 @@ public:
         erhe::window::Window_configuration configuration{
             .use_depth         = m_app_context.OpenXR_mirror,
             .use_stencil       = m_app_context.OpenXR_mirror,
-            .gl_major          = 4,
-            .gl_minor          = 6,
-            .size              = glm::ivec2{1920, 1080},
             .msaa_sample_count = m_app_context.OpenXR_mirror ? 0 : 0,
+            .size              = glm::ivec2{1920, 1080},
             .title             = erhe::window::format_window_title("erhe editor by Timo Suoranta")
         };
 
         window_section.get("show",             configuration.show);
         window_section.get("fullscreen",       configuration.fullscreen);
         window_section.get("use_transparency", configuration.framebuffer_transparency);
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
         window_section.get("gl_major",         configuration.gl_major);
         window_section.get("gl_minor",         configuration.gl_minor);
+#endif
         window_section.get("size",             configuration.size);
         window_section.get("swap_interval",    configuration.swap_interval);
         window_section.get("enable_joystick",  configuration.enable_joystick);

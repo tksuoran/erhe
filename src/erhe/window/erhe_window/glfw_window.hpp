@@ -49,9 +49,12 @@ constexpr Mouse_cursor Mouse_cursor_COUNT      = 10;
 class Context_window
 {
 public:
+    Context_window();
     explicit Context_window(const Window_configuration& configuration);
 
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
     explicit Context_window(Context_window* share);
+#endif
     virtual ~Context_window() noexcept;
 
     [[nodiscard]] auto get_width               () const -> int;

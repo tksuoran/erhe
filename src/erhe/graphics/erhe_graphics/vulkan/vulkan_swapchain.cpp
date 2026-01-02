@@ -3,8 +3,10 @@
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/surface.hpp"
 #include "erhe_graphics/vulkan/vulkan_device.hpp"
+#include "erhe_graphics/vulkan/vulkan_render_pass.hpp"
 #include "erhe_graphics/vulkan/vulkan_surface.hpp"
 #include "erhe_graphics/graphics_log.hpp"
+#include "erhe_verify/verify.hpp"
 
 namespace erhe::graphics {
 
@@ -27,6 +29,7 @@ Swapchain_impl::~Swapchain_impl() noexcept
     const VkDevice vulkan_device = m_device_impl.get_vulkan_device();
     VkResult result = VK_SUCCESS;
 
+    // TODO Queue thread safety
 	result = vkDeviceWaitIdle(vulkan_device);
     if (result != VK_SUCCESS) {
         log_swapchain->critical("vkDeviceWaitIdle() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
@@ -77,159 +80,19 @@ Swapchain_impl::~Swapchain_impl() noexcept
     if (m_vulkan_swapchain != VK_NULL_HANDLE) {
         vkDestroySwapchainKHR(vulkan_device, m_vulkan_swapchain, nullptr);
     }
-
-    // This is temporary, placeholder renderpass related
-    if (m_vulkan_render_pass != VK_NULL_HANDLE) {
-        vkDestroyRenderPass(vulkan_device, m_vulkan_render_pass, nullptr);
-    }
 }
 
-void Swapchain_impl::create_placeholder_renderpass()
-{
-    VkDevice vulkan_device = m_device_impl.get_vulkan_device();
-    VkResult result        = VK_SUCCESS;
-
-    // temp stuff
-    const VkAttachmentDescription color_attachment_description{
-        .flags          = 0,                                            // VkAttachmentDescriptionFlags
-        .format         = m_surface_impl.get_surface_format().format,   // VkFormat
-        .samples        = VK_SAMPLE_COUNT_1_BIT,                        // VkSampleCountFlagBits
-        .loadOp         = VK_ATTACHMENT_LOAD_OP_CLEAR,                  // VkAttachmentLoadOp
-        .storeOp        = VK_ATTACHMENT_STORE_OP_STORE,                 // VkAttachmentStoreOp
-        .stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE,              // VkAttachmentLoadOp
-        .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,             // VkAttachmentStoreOp
-        .initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED,                    // VkImageLayout
-        .finalLayout    = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR               // VkImageLayout
-    };
-
-    const VkAttachmentReference color_attachment_reference{
-        .attachment = 0,                                       // uint32_t
-        .layout     = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL // VkImageLayout
-    };
-
-    const VkSubpassDescription subpass_description{
-        .flags                   = 0,                               // VkSubpassDescriptionFlag
-        .pipelineBindPoint       = VK_PIPELINE_BIND_POINT_GRAPHICS, // VkPipelineBindPoint
-        .inputAttachmentCount    = 0,                               // uint32_t
-        .pInputAttachments       = nullptr,                         // const VkAttachmentReference*
-        .colorAttachmentCount    = 1,                               // uint32_t
-        .pColorAttachments       = &color_attachment_reference,     // const VkAttachmentReference*
-        .pResolveAttachments     = nullptr,                         // const VkAttachmentReference*
-        .pDepthStencilAttachment = nullptr,                         // const VkAttachmentReference*
-        .preserveAttachmentCount = 0,                               // uint32_t
-        .pPreserveAttachments    = nullptr                          // const uint32_t*
-    };
-
-    // Make the render pass wait for the VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT stage
-    // - wait for the implicit subpass before or after the render pass
-    // - wait for the swap chain to finish reading from the image
-    // - wait before doing writes to color attachment
-    const VkSubpassDependency subpass_dependency{
-        .srcSubpass      = VK_SUBPASS_EXTERNAL,                           // uint32_t
-        .dstSubpass      = 0,                                             // uint32_t
-        .srcStageMask    = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, // VkPipelineStageFlags
-        .dstStageMask    = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, // VkPipelineStageFlags
-        .srcAccessMask   = 0,                                             // VkAccessFlags
-        .dstAccessMask   = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,          // VkAccessFlags
-        .dependencyFlags = 0,                                             // VkDependencyFlags
-    };
-
-    const VkRenderPassCreateInfo render_pass_create_info{
-        .sType           = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO, // VkStructureType
-        .pNext           = nullptr,                                   // const void*
-        .flags           = 0,                                         // VkRenderPassCreateFlags
-        .attachmentCount = 1,                                         // uint32_t
-        .pAttachments    = &color_attachment_description,             // const VkAttachmentDescription*
-        .subpassCount    = 1,                                         // uint32_t
-        .pSubpasses      = &subpass_description,                      // const VkSubpassDescription*
-        .dependencyCount = 1,                                         // uint32_t
-        .pDependencies   = &subpass_dependency,                       // const VkSubpassDependency*
-    };
-
-    log_swapchain->debug("Creating renderpass");
-    result = vkCreateRenderPass(vulkan_device, &render_pass_create_info, nullptr, &m_vulkan_render_pass);
-    if (result != VK_SUCCESS) {
-        log_swapchain->critical("vkCreateRenderPass() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
-        abort();
-    }
-    m_device_impl.set_debug_label(
-        VK_OBJECT_TYPE_RENDER_PASS,
-        reinterpret_cast<uint64_t>(m_vulkan_render_pass),
-        "Swapchain renderpass"
-    );
-}
-
-void Swapchain_impl::submit_placeholder_renderpass()
+auto Swapchain_impl::submit_command_buffer() -> bool
 {
     if (!is_valid()) {
-        return;
+        return false;
     }
+
+    ERHE_VERIFY(m_state == Swapchain_frame_state::render_pass_end);
 
     const Swapchain_frame_in_flight& frame = m_submit_history[m_submit_history_index];
     VkQueue  vulkan_graphics_queue = m_device_impl.get_graphics_queue();
     VkResult result                = VK_SUCCESS;
-    uint64_t frame_index           = m_device_impl.get_frame_index();
-
-    log_swapchain->debug(
-        "submit_placeholder_renderpass() m_submit_history_index = {} m_acquired_image_index = {} frame_index = {}",
-        m_submit_history_index, m_acquired_image_index, frame_index
-    );
-
-    const VkCommandBuffer vulkan_command_buffer = get_command_buffer();
-    if (vulkan_command_buffer == VK_NULL_HANDLE) {
-        return;
-    }
-
-    const VkCommandBufferBeginInfo begin_info{
-        .sType            = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-        .pNext            = nullptr,
-        .flags            = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
-        .pInheritanceInfo = nullptr
-    };
-
-    log_swapchain->debug("vkBeginCommandBuffer()");
-    result = vkBeginCommandBuffer(vulkan_command_buffer, &begin_info);
-    if (result != VK_SUCCESS) {
-        log_swapchain->critical("vkBeginCommandBuffer() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
-        abort();
-    }
-
-    const VkClearValue clear_values[3] = {
-        {.color = { .float32 = { 0.1f, 0.0f, 0.0f, 1.0f }}},
-        {.color = { .float32 = { 0.0f, 0.1f, 0.0f, 1.0f }}},
-        {.color = { .float32 = { 0.0f, 0.0f, 0.1f, 1.0f }}}
-    };
-
-    const uint64_t clear_color_index = frame_index % 3;
-    const VkRenderPassBeginInfo render_pass_begin_info{
-        .sType           = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,                  // VkStructureType
-        .pNext           = nullptr,                                                   // const void*
-        .renderPass      = m_vulkan_render_pass,                                      // VkRenderPass
-        .framebuffer     = m_swapchain_objects.framebuffers[m_acquired_image_index],  // VkFramebuffer
-        .renderArea      = VkRect2D{{0,0}, m_swapchain_extent},                       // VkRect2D
-        .clearValueCount = 1,                                                         // uint32_t
-        .pClearValues    = &clear_values[clear_color_index]                           // const VkClearValue*
-    };
-
-    log_swapchain->debug(
-        "vkCmdBeginRenderPass( clear color = {}: {}, {}, {}, {})",
-        clear_color_index,
-        render_pass_begin_info.pClearValues->color.float32[0],
-        render_pass_begin_info.pClearValues->color.float32[1],
-        render_pass_begin_info.pClearValues->color.float32[2],
-        render_pass_begin_info.pClearValues->color.float32[3]
-    );
-    vkCmdBeginRenderPass(vulkan_command_buffer, &render_pass_begin_info, VK_SUBPASS_CONTENTS_INLINE);
-
-    log_swapchain->debug("vkCmdEndRenderPass()");
-    vkCmdEndRenderPass(vulkan_command_buffer);
-
-    log_swapchain->debug("vkEndCommandBuffer()");
-    result = vkEndCommandBuffer(vulkan_command_buffer);
-    if (result != VK_SUCCESS) {
-        log_swapchain->critical("vkEndCommandBuffer() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
-        abort();
-    }
 
     // Make a submission. Wait on the acquire semaphore and signal the present semaphore.
     const VkPipelineStageFlags wait_stages = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
@@ -244,64 +107,184 @@ void Swapchain_impl::submit_placeholder_renderpass()
         .signalSemaphoreCount = 1,                              // uint32_t
         .pSignalSemaphores    = &frame.present_semaphore        // const VkSemaphore*
     };
-    log_swapchain->debug("vkQueueSubmit()");
+    log_swapchain->trace("vkQueueSubmit()");
     result = vkQueueSubmit(vulkan_graphics_queue, 1, &submit_info, frame.submit_fence);
     if (result != VK_SUCCESS) {
         log_swapchain->critical("vkQueueSubmit() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
         abort();
     }
+
+    m_state = Swapchain_frame_state::command_buffer_submit;
+    return true;
 }
 
-void Swapchain_impl::wait_frame(Frame_state& out_frame_state)
+auto Swapchain_impl::wait_frame(Frame_state& out_frame_state) -> bool
 {
+    ERHE_VERIFY(
+        (m_state == Swapchain_frame_state::idle) ||
+        (m_state == Swapchain_frame_state::image_present)
+    );
+
     if (m_vulkan_swapchain == VK_NULL_HANDLE) {
         init_swapchain();
     }
 
     out_frame_state = Frame_state{};
     setup_frame();
+
+    m_state = Swapchain_frame_state::command_buffer_ready;
+
+    return is_valid();
 }
 
-void Swapchain_impl::begin_frame(const Frame_begin_info& frame_begin_info)
+auto Swapchain_impl::begin_frame(const Frame_begin_info& frame_begin_info) -> bool
 {
+    ERHE_VERIFY(m_state == Swapchain_frame_state::command_buffer_ready);
+
     VkResult result = VK_SUCCESS;
 
     if (!frame_begin_info.request_resize) {
         result = acquire_next_image(&m_acquired_image_index);
     }
 
-    if (frame_begin_info.request_resize || (result == VK_SUBOPTIMAL_KHR) || (result == VK_ERROR_OUT_OF_DATE_KHR)) {
+    if (
+        frame_begin_info.request_resize ||
+        (result == VK_SUBOPTIMAL_KHR) ||
+        (result == VK_ERROR_OUT_OF_DATE_KHR)
+    ) {
         init_swapchain();
         if (!m_is_valid) {
             m_acquired_image_index = 0xffu;
-            return;
+            m_state                = Swapchain_frame_state::idle;
+            return false;
         }
         result = acquire_next_image(&m_acquired_image_index);
     }
     if ((result != VK_SUCCESS) && (result != VK_SUBOPTIMAL_KHR)) {
         log_context->warn("Could not obtain swapchain image, skipping frame");
         m_acquired_image_index = 0xffu;
+        m_state                = Swapchain_frame_state::idle;
+        return false;
     }
+    m_state = Swapchain_frame_state::image_ackquired;
+    return true;
 }
 
-void Swapchain_impl::end_frame(const Frame_end_info& frame_end_info)
+// Called by Render_pass_impl::start_render_pass()
+auto Swapchain_impl::begin_render_pass(VkRenderPassBeginInfo& render_pass_begin_info) -> VkCommandBuffer
 {
-    static_cast<void>(frame_end_info);
+    if (!is_valid()) {
+        return VK_NULL_HANDLE;
+    }
 
-    submit_placeholder_renderpass();
+    ERHE_VERIFY(
+        (m_state == Swapchain_frame_state::image_ackquired) ||
+        (m_state == Swapchain_frame_state::render_pass_end)
+    );
+
+    //const Swapchain_frame_in_flight& frame = m_submit_history[m_submit_history_index];
+    //VkQueue  vulkan_graphics_queue = m_device_impl.get_graphics_queue();
+    VkResult result                = VK_SUCCESS;
+    uint64_t frame_index           = m_device_impl.get_frame_index();
+
+    log_swapchain->trace(
+        "Swapchain_impl::begin_render_pass() m_submit_history_index = {} m_acquired_image_index = {} frame_index = {}",
+        m_submit_history_index, m_acquired_image_index, frame_index
+    );
+
+    const VkCommandBuffer vulkan_command_buffer = get_command_buffer();
+    if (vulkan_command_buffer == VK_NULL_HANDLE) {
+        return VK_NULL_HANDLE;
+    }
+
+    const VkCommandBufferBeginInfo command_buffer_begin_info{
+        .sType            = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .pNext            = nullptr,
+        .flags            = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+        .pInheritanceInfo = nullptr
+    };
+
+    log_swapchain->trace("vkBeginCommandBuffer()");
+    result = vkBeginCommandBuffer(vulkan_command_buffer, &command_buffer_begin_info);
+    if (result != VK_SUCCESS) {
+        log_swapchain->critical("vkBeginCommandBuffer() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        abort();
+    }
+
+    if (
+        (m_swapchain_objects.framebuffers[m_acquired_image_index] == VK_NULL_HANDLE) ||
+        (m_swapchain_objects.render_pass [m_acquired_image_index] != render_pass_begin_info.renderPass)
+    ) {
+        init_swapchain_framebuffer(m_acquired_image_index, render_pass_begin_info.renderPass);
+    }
+
+    render_pass_begin_info.framebuffer = m_swapchain_objects.framebuffers[m_acquired_image_index];
+    render_pass_begin_info.renderArea  = VkRect2D{{0,0}, m_swapchain_extent};
+
+    log_swapchain->trace("vkCmdBeginRenderPass()");
+    vkCmdBeginRenderPass(vulkan_command_buffer, &render_pass_begin_info, VK_SUBPASS_CONTENTS_INLINE);
+
+    m_state = Swapchain_frame_state::render_pass_begin;
+    return vulkan_command_buffer;
+}
+
+auto Swapchain_impl::end_render_pass() -> bool
+{
+    if (!is_valid()) {
+        return false;
+    }
+
+    ERHE_VERIFY(m_state == Swapchain_frame_state::render_pass_begin);
+
+    VkResult result = VK_SUCCESS;
+
+    const VkCommandBuffer vulkan_command_buffer = get_command_buffer();
+    if (vulkan_command_buffer == VK_NULL_HANDLE) {
+        return false;
+    }
+
+    log_swapchain->trace("vkCmdEndRenderPass()");
+    vkCmdEndRenderPass(vulkan_command_buffer);
+
+    log_swapchain->trace("vkEndCommandBuffer()");
+    result = vkEndCommandBuffer(vulkan_command_buffer);
+    if (result != VK_SUCCESS) {
+        log_swapchain->critical("vkEndCommandBuffer() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        abort();
+    }
+
+    m_state = Swapchain_frame_state::render_pass_end;
+    return true;
+}
+
+auto Swapchain_impl::end_frame(const Frame_end_info& frame_end_info) -> bool
+{
+    if (m_state == Swapchain_frame_state::render_pass_end) {
+        const bool submit_ok = submit_command_buffer();
+        if (!submit_ok) {
+            return false;
+        }
+    }
+    ERHE_VERIFY(m_state == Swapchain_frame_state::command_buffer_submit);
+
+    static_cast<void>(frame_end_info);
 
     VkResult result = present_image(m_acquired_image_index);
 
     // Handle Outdated error in present.
     if ((result == VK_SUBOPTIMAL_KHR) || (result == VK_ERROR_OUT_OF_DATE_KHR)) {
         init_swapchain();
-        if (!m_is_valid) {
-            return;
-        }
+        //if (!m_is_valid) {
+        //    m_state = Swapchain_frame_state::image_present;
+        //    return;
+        //}
     } else if (result != VK_SUCCESS) {
         log_context->critical("presenting frame failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        m_state = Swapchain_frame_state::idle; // Should we try to continue?
         abort();
     }
+    m_state = Swapchain_frame_state::image_present;
+    return is_valid();
 }
 
 auto Swapchain_impl::has_maintenance1() const -> bool
@@ -665,22 +648,37 @@ void Swapchain_impl::init_swapchain_image(const uint32_t index)
         reinterpret_cast<uint64_t>(m_swapchain_objects.views[index]),
         fmt::format("Swapchain image view {}", index).c_str()
     );
+}
 
-    if (m_vulkan_render_pass == VK_NULL_HANDLE) {
-        create_placeholder_renderpass();
+void Swapchain_impl::init_swapchain_framebuffer(const uint32_t index, VkRenderPass render_pass)
+{
+    ERHE_VERIFY(render_pass != VK_NULL_HANDLE);
+
+    // Schedule old framebuffer for destruction if render pass has changed.
+    if (
+        (m_swapchain_objects.framebuffers[index] != VK_NULL_HANDLE) &&
+        (m_swapchain_objects.render_pass[index] != render_pass)
+    ) {
+        Swapchain_objects need_cleanup{};
+        need_cleanup.framebuffers.push_back(m_swapchain_objects.framebuffers[index]);
+        m_submit_history[m_submit_history_index].swapchain_garbage.push_back(std::move(need_cleanup));
+        m_swapchain_objects.framebuffers[index] = VK_NULL_HANDLE;
     }
 
     const VkFramebufferCreateInfo framebuffer_create_info{
         .sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
         .pNext           = 0,
         .flags           = 0,
-        .renderPass      = m_vulkan_render_pass,
+        .renderPass      = render_pass,
         .attachmentCount = 1,
         .pAttachments    = &m_swapchain_objects.views[index],
         .width           = m_swapchain_extent.width,
         .height          = m_swapchain_extent.height,
         .layers          = 1
     };
+
+    const VkDevice vulkan_device = m_device_impl.get_vulkan_device();
+    VkResult       result        = VK_SUCCESS;
 
     result = vkCreateFramebuffer(vulkan_device, &framebuffer_create_info, nullptr, &m_swapchain_objects.framebuffers[index]);
     if (result != VK_SUCCESS) {
@@ -690,7 +688,7 @@ void Swapchain_impl::init_swapchain_image(const uint32_t index)
     m_device_impl.set_debug_label(
         VK_OBJECT_TYPE_FRAMEBUFFER,
         reinterpret_cast<uint64_t>(m_swapchain_objects.framebuffers[index]),
-        fmt::format("Swapchain image view {}", index).c_str()
+        fmt::format("Swapchain framebuffer {}", index).c_str()
     );
 }
 
@@ -760,6 +758,7 @@ void Swapchain_impl::init_swapchain(Vulkan_swapchain_create_info& swapchain_crea
 
     m_swapchain_objects.images      .resize(image_count, VK_NULL_HANDLE);
     m_swapchain_objects.views       .resize(image_count, VK_NULL_HANDLE);
+    m_swapchain_objects.render_pass .resize(image_count, VK_NULL_HANDLE);
     m_swapchain_objects.framebuffers.resize(image_count, VK_NULL_HANDLE);
     result = vkGetSwapchainImagesKHR(vulkan_device, m_vulkan_swapchain, &image_count, m_swapchain_objects.images.data());
     if (result != VK_SUCCESS) {
@@ -777,6 +776,11 @@ void Swapchain_impl::init_swapchain(Vulkan_swapchain_create_info& swapchain_crea
 
     m_swapchain_extent = swapchain_create_info.swapchain_create_info.imageExtent;
     m_swapchain_format = swapchain_create_info.swapchain_create_info.imageFormat;
+}
+
+auto Swapchain_impl::get_surface_impl() -> Surface_impl&
+{
+    return m_surface_impl;
 }
 
 auto Swapchain_impl::get_command_buffer() -> VkCommandBuffer
@@ -868,6 +872,8 @@ void Swapchain_impl::setup_frame()
             fmt::format("Swapchain frame in flight command buffer {}", m_submit_history_index).c_str()
         );
     }
+
+    m_state = Swapchain_frame_state::command_buffer_ready;
 }
 
 auto Swapchain_impl::acquire_next_image(uint32_t* index) -> VkResult

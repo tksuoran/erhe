@@ -57,11 +57,9 @@ public:
         : m_window{
             erhe::window::Window_configuration{
                 .use_depth         = true,
-                .gl_major          = 4,
-                .gl_minor          = 6,
-                .size              = glm::ivec2{1920, 1080},
                 .msaa_sample_count = 0,
                 .swap_interval     = 0,
+                .size              = glm::ivec2{1920, 1080},
                 .title             = "erhe example"
             }
         }
@@ -217,7 +215,8 @@ public:
         m_current_time = std::chrono::steady_clock::now();
         while (!m_close_requested) {
             erhe::graphics::Frame_state frame_state{};
-            m_graphics_device.wait_frame(frame_state);
+            const bool wait_ok = m_graphics_device.wait_frame(frame_state);
+            ERHE_VERIFY(wait_ok);
 
             // m_graphics_device.wait_for_idle()
             // m_window.delay_before_swap(1.0f / 120.0f); // sleep half the frame
@@ -242,14 +241,16 @@ public:
             };
             m_request_resize_pending.store(false);
 
-            m_graphics_device.begin_frame(frame_begin_info);
+            const bool begin_frame_ok = m_graphics_device.begin_frame(frame_begin_info);
+            ERHE_VERIFY(begin_frame_ok);
 
             tick();
 
             const erhe::graphics::Frame_end_info frame_end_info{
                 .requested_display_time = 0 // TODO
             };
-            m_graphics_device.end_frame(frame_end_info);
+            const bool end_frame_ok = m_graphics_device.end_frame(frame_end_info);
+            ERHE_VERIFY(end_frame_ok);
         }
     }
 

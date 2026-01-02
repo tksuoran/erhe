@@ -1,4 +1,4 @@
-#include "erhe_graphics/blit_command_encoder.hpp"
+#include "erhe_graphics/vulkan/vulkan_blit_command_encoder.hpp"
 #include "erhe_graphics/vulkan/vulkan_buffer.hpp"
 #include "erhe_graphics/vulkan/vulkan_render_pass.hpp"
 #include "erhe_graphics/vulkan/vulkan_texture.hpp"
@@ -6,17 +6,32 @@
 
 namespace erhe::graphics {
 
-Blit_command_encoder::Blit_command_encoder(Device& device)
-    : Command_encoder{device}
+Blit_command_encoder_impl::Blit_command_encoder_impl(Device& device)
+    : m_device{device}
 {
 }
 
-Blit_command_encoder::~Blit_command_encoder() noexcept
+Blit_command_encoder_impl::~Blit_command_encoder_impl() noexcept
 {
+}
+
+void Blit_command_encoder_impl::set_buffer(Buffer_target buffer_target, const Buffer* buffer, std::uintptr_t offset, std::uintptr_t length, std::uintptr_t index)
+{
+    static_cast<void>(buffer_target);
+    static_cast<void>(buffer);
+    static_cast<void>(offset);
+    static_cast<void>(length);
+    static_cast<void>(index);
+}
+
+void Blit_command_encoder_impl::set_buffer(Buffer_target buffer_target, const Buffer* buffer)
+{
+    static_cast<void>(buffer_target);
+    static_cast<void>(buffer);
 }
 
 // This is the only way to copy to/from the default framebuffer. Only color buffer is supported
-void Blit_command_encoder::blit_framebuffer(
+void Blit_command_encoder_impl::blit_framebuffer(
     const Render_pass& source_renderpass,
     glm::ivec2         source_origin,
     glm::ivec2         source_size,
@@ -32,7 +47,7 @@ void Blit_command_encoder::blit_framebuffer(
 }
 
 // Texture to texture copy, single level, single array slice
-void Blit_command_encoder::copy_from_texture(
+void Blit_command_encoder_impl::copy_from_texture(
     const Texture* source_texture,
     std::uintptr_t source_slice,
     std::uintptr_t source_level,
@@ -56,7 +71,7 @@ void Blit_command_encoder::copy_from_texture(
 }
 
 // Buffer to texture copy
-void Blit_command_encoder::copy_from_buffer(
+void Blit_command_encoder_impl::copy_from_buffer(
     const Buffer*  source_buffer,
     std::uintptr_t source_offset,
     std::uintptr_t source_bytes_per_row,
@@ -80,7 +95,7 @@ void Blit_command_encoder::copy_from_buffer(
 }
 
 // Copy from texture to buffer
-void Blit_command_encoder::copy_from_texture(
+void Blit_command_encoder_impl::copy_from_texture(
     const Texture* source_texture,
     std::uintptr_t source_slice,
     std::uintptr_t source_level,
@@ -103,12 +118,12 @@ void Blit_command_encoder::copy_from_texture(
     static_cast<void>(destination_bytes_per_image);
 }
 
-void Blit_command_encoder::generate_mipmaps(const Texture* texture)
+void Blit_command_encoder_impl::generate_mipmaps(const Texture* texture)
 {
     static_cast<void>(texture);
 }
 
-void Blit_command_encoder::fill_buffer(
+void Blit_command_encoder_impl::fill_buffer(
     const Buffer*  buffer,
     std::uintptr_t offset,
     std::uintptr_t length,
@@ -122,7 +137,7 @@ void Blit_command_encoder::fill_buffer(
 }
 
 // Texture to texture copy, multiple array slices and/or mipmap levels
-void Blit_command_encoder::copy_from_texture(
+void Blit_command_encoder_impl::copy_from_texture(
     const Texture* source_texture,
     std::uintptr_t source_slice,
     std::uintptr_t source_level,
@@ -143,7 +158,7 @@ void Blit_command_encoder::copy_from_texture(
     static_cast<void>(level_count);
 }
 
-void Blit_command_encoder::copy_from_texture(
+void Blit_command_encoder_impl::copy_from_texture(
     const Texture* source_texture,
     const Texture* destination_texture
 )
@@ -152,7 +167,7 @@ void Blit_command_encoder::copy_from_texture(
     static_cast<void>(destination_texture);
 }
 
-void Blit_command_encoder::copy_from_buffer(
+void Blit_command_encoder_impl::copy_from_buffer(
     const Buffer*  source_buffer,
     std::uintptr_t source_offset,
     const Buffer*  destination_buffer,

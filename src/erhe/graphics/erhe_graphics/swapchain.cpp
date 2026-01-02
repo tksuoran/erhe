@@ -22,19 +22,19 @@ Swapchain::~Swapchain() noexcept
 {
 }
 
-void Swapchain::wait_frame(Frame_state& out_frame_state)
+auto Swapchain::wait_frame(Frame_state& out_frame_state) -> bool
 {
-    m_impl->wait_frame(out_frame_state);
+    return m_impl->wait_frame(out_frame_state);
 }
 
-void Swapchain::begin_frame(const Frame_begin_info& frame_begin_info)
+auto Swapchain::begin_frame(const Frame_begin_info& frame_begin_info) -> bool
 {
-    m_impl->begin_frame(frame_begin_info);
+    return m_impl->begin_frame(frame_begin_info);
 }
 
-void Swapchain::end_frame(const Frame_end_info& frame_end_info)
+auto Swapchain::end_frame(const Frame_end_info& frame_end_info) -> bool
 {
-    m_impl->end_frame(frame_end_info);
+    return m_impl->end_frame(frame_end_info);
 }
 
 auto Swapchain::get_impl() -> Swapchain_impl&
