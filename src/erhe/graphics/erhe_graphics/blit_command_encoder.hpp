@@ -5,6 +5,7 @@
 #include <glm/glm.hpp>
 
 #include <cstdint>
+#include <memory>
 
 namespace erhe::graphics {
 

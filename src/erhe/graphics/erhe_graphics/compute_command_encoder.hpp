@@ -3,6 +3,7 @@
 #include "erhe_graphics/command_encoder.hpp"
 
 #include <cstdint>
+#include <memory>
 
 namespace erhe::graphics {
 
