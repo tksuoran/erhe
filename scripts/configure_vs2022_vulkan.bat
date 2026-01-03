@@ -9,7 +9,6 @@ setlocal
 for /f "delims=" %%a in ('powershell -nologo -command "Get-Date -Format o"') do set "start=%%a"
 
 cmake ^
- -DCMAKE_POLICY_VERSION_MINIMUM=3.5 ^
  -G "Visual Studio 17 2022" ^
  -A x64 ^
  -B build ^

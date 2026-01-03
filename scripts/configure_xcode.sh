@@ -6,7 +6,6 @@
 
 mkdir -p build/ninja
 cmake \
-    -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
     -G "Xcode" \
     -B build/xcode \
     -S . \
