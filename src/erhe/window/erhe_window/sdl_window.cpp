@@ -371,22 +371,6 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
         window_flags |= SDL_WINDOW_NOT_FOCUSABLE;
     }
 
-    SDL_Window* sdl_window = SDL_CreateWindow(configuration.title.c_str(), configuration.size.x, configuration.size.y, window_flags);
-    m_sdl_window = sdl_window;
-
-    if (sdl_window == nullptr) {
-        log_window->error("Failed to open SDL window");
-        const char* const sdl_error = SDL_GetError();
-        if (sdl_error != nullptr) {
-            log_window->error("SDL error: {}", sdl_error);
-        }
-
-        if (s_window_count == 0) {
-            SDL_Quit();
-        }
-        return false;
-    }
-
 #if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
     SDL_GL_SetAttribute(SDL_GL_RED_SIZE,       8);
     SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE,     8);
@@ -417,7 +401,25 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
     } else {
         SDL_GL_SetAttribute(SDL_GL_SHARE_WITH_CURRENT_CONTEXT, 0);
     }
+#endif
 
+    SDL_Window* sdl_window = SDL_CreateWindow(configuration.title.c_str(), configuration.size.x, configuration.size.y, window_flags);
+    m_sdl_window = sdl_window;
+
+    if (sdl_window == nullptr) {
+        log_window->error("Failed to open SDL window");
+        const char* const sdl_error = SDL_GetError();
+        if (sdl_error != nullptr) {
+            log_window->error("SDL error: {}", sdl_error);
+        }
+
+        if (s_window_count == 0) {
+            SDL_Quit();
+        }
+        return false;
+    }
+
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
     SDL_GLContext sdl_context = SDL_GL_CreateContext(sdl_window);
     if (sdl_context == nullptr) {
         log_window->error("Failed to open GL context for GL {}.{}.", configuration.gl_major, configuration.gl_minor);
