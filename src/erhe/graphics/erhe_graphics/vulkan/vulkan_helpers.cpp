@@ -694,4 +694,193 @@ auto to_string_VkPresentGravityFlagsKHR(VkPresentGravityFlagsKHR present_gravity
     return ss.str();
 }
 
+auto to_vulkan(erhe::dataformat::Format format) -> VkFormat
+{
+    switch (format) {
+        case erhe::dataformat::Format::format_undefined               : return VK_FORMAT_UNDEFINED;
+
+        case erhe::dataformat::Format::format_8_scalar_srgb           : return VK_FORMAT_R8_SRGB;
+        case erhe::dataformat::Format::format_8_scalar_unorm          : return VK_FORMAT_R8_UNORM;
+        case erhe::dataformat::Format::format_8_scalar_snorm          : return VK_FORMAT_R8_SNORM;
+        case erhe::dataformat::Format::format_8_scalar_uscaled        : return VK_FORMAT_R8_USCALED;
+        case erhe::dataformat::Format::format_8_scalar_sscaled        : return VK_FORMAT_R8_SSCALED;
+        case erhe::dataformat::Format::format_8_scalar_uint           : return VK_FORMAT_R8_UINT;
+        case erhe::dataformat::Format::format_8_scalar_sint           : return VK_FORMAT_R8_SINT;
+
+        case erhe::dataformat::Format::format_8_vec2_srgb             : return VK_FORMAT_R8G8_SRGB;
+        case erhe::dataformat::Format::format_8_vec2_unorm            : return VK_FORMAT_R8G8_UNORM;
+        case erhe::dataformat::Format::format_8_vec2_snorm            : return VK_FORMAT_R8G8_SNORM;
+        case erhe::dataformat::Format::format_8_vec2_uscaled          : return VK_FORMAT_R8G8_USCALED;
+        case erhe::dataformat::Format::format_8_vec2_sscaled          : return VK_FORMAT_R8G8_SSCALED;
+        case erhe::dataformat::Format::format_8_vec2_uint             : return VK_FORMAT_R8G8_UINT;
+        case erhe::dataformat::Format::format_8_vec2_sint             : return VK_FORMAT_R8G8_SINT;
+
+        case erhe::dataformat::Format::format_8_vec3_srgb             : return VK_FORMAT_R8G8B8_SRGB;
+        case erhe::dataformat::Format::format_8_vec3_unorm            : return VK_FORMAT_R8G8B8_UNORM;
+        case erhe::dataformat::Format::format_8_vec3_snorm            : return VK_FORMAT_R8G8B8_SNORM;
+        case erhe::dataformat::Format::format_8_vec3_uscaled          : return VK_FORMAT_R8G8B8_USCALED;
+        case erhe::dataformat::Format::format_8_vec3_sscaled          : return VK_FORMAT_R8G8B8_SSCALED;
+        case erhe::dataformat::Format::format_8_vec3_uint             : return VK_FORMAT_R8G8B8_UINT;
+        case erhe::dataformat::Format::format_8_vec3_sint             : return VK_FORMAT_R8G8B8_SINT;
+
+        case erhe::dataformat::Format::format_8_vec4_srgb             : return VK_FORMAT_R8G8B8A8_SRGB;
+        case erhe::dataformat::Format::format_8_vec4_unorm            : return VK_FORMAT_R8G8B8A8_UNORM;
+        case erhe::dataformat::Format::format_8_vec4_snorm            : return VK_FORMAT_R8G8B8A8_SNORM;
+        case erhe::dataformat::Format::format_8_vec4_uscaled          : return VK_FORMAT_R8G8B8A8_USCALED;
+        case erhe::dataformat::Format::format_8_vec4_sscaled          : return VK_FORMAT_R8G8B8A8_SSCALED;
+        case erhe::dataformat::Format::format_8_vec4_uint             : return VK_FORMAT_R8G8B8A8_UINT;
+        case erhe::dataformat::Format::format_8_vec4_sint             : return VK_FORMAT_R8G8B8A8_SINT;
+
+        case erhe::dataformat::Format::format_16_scalar_unorm         : return VK_FORMAT_R16_UNORM;
+        case erhe::dataformat::Format::format_16_scalar_snorm         : return VK_FORMAT_R16_SNORM;
+        case erhe::dataformat::Format::format_16_scalar_uscaled       : return VK_FORMAT_R16_USCALED;
+        case erhe::dataformat::Format::format_16_scalar_sscaled       : return VK_FORMAT_R16_SSCALED;
+        case erhe::dataformat::Format::format_16_scalar_uint          : return VK_FORMAT_R16_UINT;
+        case erhe::dataformat::Format::format_16_scalar_sint          : return VK_FORMAT_R16_SINT;
+        case erhe::dataformat::Format::format_16_scalar_float         : return VK_FORMAT_R16_SFLOAT;
+
+        case erhe::dataformat::Format::format_16_vec2_unorm           : return VK_FORMAT_R16G16_UNORM;
+        case erhe::dataformat::Format::format_16_vec2_snorm           : return VK_FORMAT_R16G16_SNORM;
+        case erhe::dataformat::Format::format_16_vec2_uscaled         : return VK_FORMAT_R16G16_USCALED;
+        case erhe::dataformat::Format::format_16_vec2_sscaled         : return VK_FORMAT_R16G16_SSCALED;
+        case erhe::dataformat::Format::format_16_vec2_uint            : return VK_FORMAT_R16G16_UINT;
+        case erhe::dataformat::Format::format_16_vec2_sint            : return VK_FORMAT_R16G16_SINT;
+        case erhe::dataformat::Format::format_16_vec2_float           : return VK_FORMAT_R16G16_SFLOAT;
+
+        case erhe::dataformat::Format::format_16_vec3_unorm           : return VK_FORMAT_R16G16B16_UNORM;
+        case erhe::dataformat::Format::format_16_vec3_snorm           : return VK_FORMAT_R16G16B16_SNORM;
+        case erhe::dataformat::Format::format_16_vec3_uscaled         : return VK_FORMAT_R16G16B16_USCALED;
+        case erhe::dataformat::Format::format_16_vec3_sscaled         : return VK_FORMAT_R16G16B16_SSCALED;
+        case erhe::dataformat::Format::format_16_vec3_uint            : return VK_FORMAT_R16G16B16_UINT;
+        case erhe::dataformat::Format::format_16_vec3_sint            : return VK_FORMAT_R16G16B16_SINT;
+        case erhe::dataformat::Format::format_16_vec3_float           : return VK_FORMAT_R16G16B16_SFLOAT;
+
+        case erhe::dataformat::Format::format_16_vec4_unorm           : return VK_FORMAT_R16G16B16A16_UNORM;
+        case erhe::dataformat::Format::format_16_vec4_snorm           : return VK_FORMAT_R16G16B16A16_SNORM;
+        case erhe::dataformat::Format::format_16_vec4_uscaled         : return VK_FORMAT_R16G16B16A16_USCALED;
+        case erhe::dataformat::Format::format_16_vec4_sscaled         : return VK_FORMAT_R16G16B16A16_SSCALED;
+        case erhe::dataformat::Format::format_16_vec4_uint            : return VK_FORMAT_R16G16B16A16_UINT;
+        case erhe::dataformat::Format::format_16_vec4_sint            : return VK_FORMAT_R16G16B16A16_SINT;
+        case erhe::dataformat::Format::format_16_vec4_float           : return VK_FORMAT_R16G16B16A16_SFLOAT;
+
+        case erhe::dataformat::Format::format_32_scalar_uint          : return VK_FORMAT_R32_UINT;
+        case erhe::dataformat::Format::format_32_scalar_sint          : return VK_FORMAT_R32_SINT;
+        case erhe::dataformat::Format::format_32_scalar_float         : return VK_FORMAT_R32_SFLOAT;
+
+        case erhe::dataformat::Format::format_32_vec2_uint            : return VK_FORMAT_R32G32_UINT;
+        case erhe::dataformat::Format::format_32_vec2_sint            : return VK_FORMAT_R32G32_SINT;
+        case erhe::dataformat::Format::format_32_vec2_float           : return VK_FORMAT_R32G32_SFLOAT;
+
+        case erhe::dataformat::Format::format_32_vec3_uint            : return VK_FORMAT_R32G32B32_UINT;
+        case erhe::dataformat::Format::format_32_vec3_sint            : return VK_FORMAT_R32G32B32_SINT;
+        case erhe::dataformat::Format::format_32_vec3_float           : return VK_FORMAT_R32G32B32_SFLOAT;
+
+        case erhe::dataformat::Format::format_32_vec4_uint            : return VK_FORMAT_R32G32B32A32_UINT;
+        case erhe::dataformat::Format::format_32_vec4_sint            : return VK_FORMAT_R32G32B32A32_SINT;
+        case erhe::dataformat::Format::format_32_vec4_float           : return VK_FORMAT_R32G32B32A32_SFLOAT;
+
+        case erhe::dataformat::Format::format_packed1010102_vec4_unorm: return VK_FORMAT_A2R10G10B10_UNORM_PACK32;
+        case erhe::dataformat::Format::format_packed1010102_vec4_snorm: return VK_FORMAT_A2R10G10B10_SNORM_PACK32;
+        case erhe::dataformat::Format::format_packed1010102_vec4_uint : return VK_FORMAT_A2R10G10B10_UINT_PACK32;
+        case erhe::dataformat::Format::format_packed1010102_vec4_sint : return VK_FORMAT_A2R10G10B10_SINT_PACK32;
+        case erhe::dataformat::Format::format_packed111110_vec3_unorm : return VK_FORMAT_B10G11R11_UFLOAT_PACK32;
+
+        case erhe::dataformat::Format::format_d16_unorm               : return VK_FORMAT_D16_UNORM;           // a one-component, 16-bit unsigned normalized format that has a single 16-bit depth component.
+        case erhe::dataformat::Format::format_x8_d24_unorm_pack32     : return VK_FORMAT_X8_D24_UNORM_PACK32; // a two-component, 32-bit format that has 24 unsigned normalized bits in the depth component and, optionally, 8 bits that are unused.
+        case erhe::dataformat::Format::format_d32_sfloat              : return VK_FORMAT_D32_SFLOAT;          // a one-component, 32-bit signed floating-point format that has 32 bits in the depth component
+        case erhe::dataformat::Format::format_s8_uint                 : return VK_FORMAT_S8_UINT;             // a one-component, 8-bit unsigned integer format that has 8 bits in the stencil component
+        case erhe::dataformat::Format::format_d24_unorm_s8_uint       : return VK_FORMAT_D24_UNORM_S8_UINT;   // a two-component, 32-bit packed format that has 8 unsigned integer bits in the stencil component, and 24 unsigned normalized bits in the depth component
+        case erhe::dataformat::Format::format_d32_sfloat_s8_uint      : return VK_FORMAT_D32_SFLOAT_S8_UINT;  // a two-component format that has 32 signed float bits in the depth component and 8 unsigned integer bits in the stencil component.
+
+        default: return VK_FORMAT_UNDEFINED;
+    }
+}
+
+[[nodiscard]] auto to_erhe(VkFormat format) -> erhe::dataformat::Format
+{
+    switch (format) {
+        case VK_FORMAT_UNDEFINED               : return erhe::dataformat::Format::format_undefined               ;
+        case VK_FORMAT_R8_SRGB                 : return erhe::dataformat::Format::format_8_scalar_srgb           ;
+        case VK_FORMAT_R8_UNORM                : return erhe::dataformat::Format::format_8_scalar_unorm          ;
+        case VK_FORMAT_R8_SNORM                : return erhe::dataformat::Format::format_8_scalar_snorm          ;
+        case VK_FORMAT_R8_USCALED              : return erhe::dataformat::Format::format_8_scalar_uscaled        ;
+        case VK_FORMAT_R8_SSCALED              : return erhe::dataformat::Format::format_8_scalar_sscaled        ;
+        case VK_FORMAT_R8_UINT                 : return erhe::dataformat::Format::format_8_scalar_uint           ;
+        case VK_FORMAT_R8_SINT                 : return erhe::dataformat::Format::format_8_scalar_sint           ;
+        case VK_FORMAT_R8G8_SRGB               : return erhe::dataformat::Format::format_8_vec2_srgb             ;
+        case VK_FORMAT_R8G8_UNORM              : return erhe::dataformat::Format::format_8_vec2_unorm            ;
+        case VK_FORMAT_R8G8_SNORM              : return erhe::dataformat::Format::format_8_vec2_snorm            ;
+        case VK_FORMAT_R8G8_USCALED            : return erhe::dataformat::Format::format_8_vec2_uscaled          ;
+        case VK_FORMAT_R8G8_SSCALED            : return erhe::dataformat::Format::format_8_vec2_sscaled          ;
+        case VK_FORMAT_R8G8_UINT               : return erhe::dataformat::Format::format_8_vec2_uint             ;
+        case VK_FORMAT_R8G8_SINT               : return erhe::dataformat::Format::format_8_vec2_sint             ;
+        case VK_FORMAT_R8G8B8_SRGB             : return erhe::dataformat::Format::format_8_vec3_srgb             ;
+        case VK_FORMAT_R8G8B8_UNORM            : return erhe::dataformat::Format::format_8_vec3_unorm            ;
+        case VK_FORMAT_R8G8B8_SNORM            : return erhe::dataformat::Format::format_8_vec3_snorm            ;
+        case VK_FORMAT_R8G8B8_USCALED          : return erhe::dataformat::Format::format_8_vec3_uscaled          ;
+        case VK_FORMAT_R8G8B8_SSCALED          : return erhe::dataformat::Format::format_8_vec3_sscaled          ;
+        case VK_FORMAT_R8G8B8_UINT             : return erhe::dataformat::Format::format_8_vec3_uint             ;
+        case VK_FORMAT_R8G8B8_SINT             : return erhe::dataformat::Format::format_8_vec3_sint             ;
+        case VK_FORMAT_R8G8B8A8_SRGB           : return erhe::dataformat::Format::format_8_vec4_srgb             ;
+        case VK_FORMAT_R8G8B8A8_UNORM          : return erhe::dataformat::Format::format_8_vec4_unorm            ;
+        case VK_FORMAT_R8G8B8A8_SNORM          : return erhe::dataformat::Format::format_8_vec4_snorm            ;
+        case VK_FORMAT_R8G8B8A8_USCALED        : return erhe::dataformat::Format::format_8_vec4_uscaled          ;
+        case VK_FORMAT_R8G8B8A8_SSCALED        : return erhe::dataformat::Format::format_8_vec4_sscaled          ;
+        case VK_FORMAT_R8G8B8A8_UINT           : return erhe::dataformat::Format::format_8_vec4_uint             ;
+        case VK_FORMAT_R8G8B8A8_SINT           : return erhe::dataformat::Format::format_8_vec4_sint             ;
+        case VK_FORMAT_R16_UNORM               : return erhe::dataformat::Format::format_16_scalar_unorm         ;
+        case VK_FORMAT_R16_SNORM               : return erhe::dataformat::Format::format_16_scalar_snorm         ;
+        case VK_FORMAT_R16_USCALED             : return erhe::dataformat::Format::format_16_scalar_uscaled       ;
+        case VK_FORMAT_R16_SSCALED             : return erhe::dataformat::Format::format_16_scalar_sscaled       ;
+        case VK_FORMAT_R16_UINT                : return erhe::dataformat::Format::format_16_scalar_uint          ;
+        case VK_FORMAT_R16_SINT                : return erhe::dataformat::Format::format_16_scalar_sint          ;
+        case VK_FORMAT_R16_SFLOAT              : return erhe::dataformat::Format::format_16_scalar_float         ;
+        case VK_FORMAT_R16G16_UNORM            : return erhe::dataformat::Format::format_16_vec2_unorm           ;
+        case VK_FORMAT_R16G16_SNORM            : return erhe::dataformat::Format::format_16_vec2_snorm           ;
+        case VK_FORMAT_R16G16_USCALED          : return erhe::dataformat::Format::format_16_vec2_uscaled         ;
+        case VK_FORMAT_R16G16_SSCALED          : return erhe::dataformat::Format::format_16_vec2_sscaled         ;
+        case VK_FORMAT_R16G16_UINT             : return erhe::dataformat::Format::format_16_vec2_uint            ;
+        case VK_FORMAT_R16G16_SINT             : return erhe::dataformat::Format::format_16_vec2_sint            ;
+        case VK_FORMAT_R16G16_SFLOAT           : return erhe::dataformat::Format::format_16_vec2_float           ;
+        case VK_FORMAT_R16G16B16_UNORM         : return erhe::dataformat::Format::format_16_vec3_unorm           ;
+        case VK_FORMAT_R16G16B16_SNORM         : return erhe::dataformat::Format::format_16_vec3_snorm           ;
+        case VK_FORMAT_R16G16B16_USCALED       : return erhe::dataformat::Format::format_16_vec3_uscaled         ;
+        case VK_FORMAT_R16G16B16_SSCALED       : return erhe::dataformat::Format::format_16_vec3_sscaled         ;
+        case VK_FORMAT_R16G16B16_UINT          : return erhe::dataformat::Format::format_16_vec3_uint            ;
+        case VK_FORMAT_R16G16B16_SINT          : return erhe::dataformat::Format::format_16_vec3_sint            ;
+        case VK_FORMAT_R16G16B16_SFLOAT        : return erhe::dataformat::Format::format_16_vec3_float           ;
+        case VK_FORMAT_R16G16B16A16_UNORM      : return erhe::dataformat::Format::format_16_vec4_unorm           ;
+        case VK_FORMAT_R16G16B16A16_SNORM      : return erhe::dataformat::Format::format_16_vec4_snorm           ;
+        case VK_FORMAT_R16G16B16A16_USCALED    : return erhe::dataformat::Format::format_16_vec4_uscaled         ;
+        case VK_FORMAT_R16G16B16A16_SSCALED    : return erhe::dataformat::Format::format_16_vec4_sscaled         ;
+        case VK_FORMAT_R16G16B16A16_UINT       : return erhe::dataformat::Format::format_16_vec4_uint            ;
+        case VK_FORMAT_R16G16B16A16_SINT       : return erhe::dataformat::Format::format_16_vec4_sint            ;
+        case VK_FORMAT_R16G16B16A16_SFLOAT     : return erhe::dataformat::Format::format_16_vec4_float           ;
+        case VK_FORMAT_R32_UINT                : return erhe::dataformat::Format::format_32_scalar_uint          ;
+        case VK_FORMAT_R32_SINT                : return erhe::dataformat::Format::format_32_scalar_sint          ;
+        case VK_FORMAT_R32_SFLOAT              : return erhe::dataformat::Format::format_32_scalar_float         ;
+        case VK_FORMAT_R32G32_UINT             : return erhe::dataformat::Format::format_32_vec2_uint            ;
+        case VK_FORMAT_R32G32_SINT             : return erhe::dataformat::Format::format_32_vec2_sint            ;
+        case VK_FORMAT_R32G32_SFLOAT           : return erhe::dataformat::Format::format_32_vec2_float           ;
+        case VK_FORMAT_R32G32B32_UINT          : return erhe::dataformat::Format::format_32_vec3_uint            ;
+        case VK_FORMAT_R32G32B32_SINT          : return erhe::dataformat::Format::format_32_vec3_sint            ;
+        case VK_FORMAT_R32G32B32_SFLOAT        : return erhe::dataformat::Format::format_32_vec3_float           ;
+        case VK_FORMAT_R32G32B32A32_UINT       : return erhe::dataformat::Format::format_32_vec4_uint            ;
+        case VK_FORMAT_R32G32B32A32_SINT       : return erhe::dataformat::Format::format_32_vec4_sint            ;
+        case VK_FORMAT_R32G32B32A32_SFLOAT     : return erhe::dataformat::Format::format_32_vec4_float           ;
+        case VK_FORMAT_A2R10G10B10_UNORM_PACK32: return erhe::dataformat::Format::format_packed1010102_vec4_unorm;
+        case VK_FORMAT_A2R10G10B10_SNORM_PACK32: return erhe::dataformat::Format::format_packed1010102_vec4_snorm;
+        case VK_FORMAT_A2R10G10B10_UINT_PACK32 : return erhe::dataformat::Format::format_packed1010102_vec4_uint ;
+        case VK_FORMAT_A2R10G10B10_SINT_PACK32 : return erhe::dataformat::Format::format_packed1010102_vec4_sint ;
+        case VK_FORMAT_B10G11R11_UFLOAT_PACK32 : return erhe::dataformat::Format::format_packed111110_vec3_unorm ;
+        case VK_FORMAT_D16_UNORM               : return erhe::dataformat::Format::format_d16_unorm               ;
+        case VK_FORMAT_X8_D24_UNORM_PACK32     : return erhe::dataformat::Format::format_x8_d24_unorm_pack32     ;
+        case VK_FORMAT_D32_SFLOAT              : return erhe::dataformat::Format::format_d32_sfloat              ;
+        case VK_FORMAT_S8_UINT                 : return erhe::dataformat::Format::format_s8_uint                 ;
+        case VK_FORMAT_D24_UNORM_S8_UINT       : return erhe::dataformat::Format::format_d24_unorm_s8_uint       ;
+        case VK_FORMAT_D32_SFLOAT_S8_UINT      : return erhe::dataformat::Format::format_d32_sfloat_s8_uint      ;
+        default: return erhe::dataformat::Format::format_undefined;
+    }
+}
+
 } // namespace erhe::graphics

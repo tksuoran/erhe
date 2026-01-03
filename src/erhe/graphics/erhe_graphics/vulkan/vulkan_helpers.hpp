@@ -1,5 +1,7 @@
 #pragma once
 
+#include "erhe_dataformat/dataformat.hpp"
+
 #include "volk.h"
 
 #include <string>
@@ -19,5 +21,8 @@ namespace erhe::graphics {
 [[nodiscard]] auto to_string_VkDebugUtilsMessageTypeFlagsEXT(const VkDebugUtilsMessageTypeFlagsEXT message_type) -> std::string;
 [[nodiscard]] auto to_string_VkPresentScalingFlagsKHR(const VkPresentScalingFlagsKHR present_scaling) -> std::string;
 [[nodiscard]] auto to_string_VkPresentGravityFlagsKHR(const VkPresentGravityFlagsKHR present_gravity) -> std::string;
+
+[[nodiscard]] auto to_vulkan(erhe::dataformat::Format format) -> VkFormat;
+[[nodiscard]] auto to_erhe  (VkFormat format) -> erhe::dataformat::Format;
 
 } // namespace erhe::graphics
