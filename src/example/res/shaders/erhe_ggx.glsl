@@ -4,8 +4,9 @@
 #include "erhe_math.glsl" // m_pi
 
 float ggx_isotropic_ndf(float N_dot_H, float alpha) {
-    float a = N_dot_H * alpha;
-    float k = alpha / (1.0 - N_dot_H * N_dot_H + a * a);
+    float  a     = N_dot_H * alpha;
+    float  denom = max(1.0 - N_dot_H * N_dot_H + a * a, 1e-7);
+    float  k     = alpha / denom;
     return k * k * m_i_pi;
 }
 
@@ -15,7 +16,7 @@ float ggx_anisotropic_ndf(float alpha_t, float alpha_b, float T_dot_H, float B_d
         alpha_t * B_dot_H,
         alpha_t * alpha_b * N_dot_H
     );
-    float v2 = dot(v, v);
+    float v2 = max(dot(v, v), 1e-7);
     float a2 = alpha_t * alpha_b;
     float w2 = 0.0;
     //if (v2 != 0.0)
@@ -26,26 +27,19 @@ float ggx_anisotropic_ndf(float alpha_t, float alpha_b, float T_dot_H, float B_d
 }
 
 float ggx_isotropic_visibility(float N_dot_V, float N_dot_L, float alpha) {
-    float a2 = alpha * alpha;
-    float GV = N_dot_L * sqrt(N_dot_V * N_dot_V * (1.0 - a2) + a2);
-    float GL = N_dot_V * sqrt(N_dot_L * N_dot_L * (1.0 - a2) + a2);
-    return 0.5 / (GV + GL);
+    float a2    = alpha * alpha;
+    float GV    = N_dot_L * sqrt(N_dot_V * N_dot_V * (1.0 - a2) + a2);
+    float GL    = N_dot_V * sqrt(N_dot_L * N_dot_L * (1.0 - a2) + a2);
+    float denom = max(GV + GL, 1e-8);
+    float v     = 0.5 / denom;
+    return max(v, 0.0);
 }
 
-float ggx_anisotropic_visibility(
-    float alpha_t,
-    float alpha_b,
-    float T_dot_V,
-    float B_dot_V,
-    float N_dot_V,
-    float T_dot_L,
-    float B_dot_L,
-    float N_dot_L
-) {
+float ggx_anisotropic_visibility(float alpha_t, float alpha_b, float T_dot_V, float B_dot_V, float N_dot_V, float T_dot_L, float B_dot_L, float N_dot_L) {
     float lambda_V = N_dot_L * length(vec3(alpha_t * T_dot_V, alpha_b * B_dot_V, N_dot_V));
     float lambda_L = N_dot_V * length(vec3(alpha_t * T_dot_L, alpha_b * B_dot_L, N_dot_L));
-    float v = 0.5 / (lambda_V + lambda_L);
-    return clamp(v, 0.0, 1.0);
+    float v        = 0.5 / (lambda_V + lambda_L);
+    return clamp(v, 0.0f, 1.0f);
 }
 
 

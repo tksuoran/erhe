@@ -554,8 +554,8 @@ void Render_pass_impl::start_render_pass()
             }
         }
     }
-    bool clear_depth   = m_depth_attachment  .is_defined() && (m_depth_attachment.load_action == Load_action::Clear);
-    bool clear_stencil = m_stencil_attachment.is_defined() && (m_stencil_attachment.load_action == Load_action::Clear);
+    bool clear_depth   = (m_swapchain != nullptr) || (m_depth_attachment  .is_defined() && (m_depth_attachment  .load_action == Load_action::Clear));
+    bool clear_stencil = (m_swapchain != nullptr) || (m_stencil_attachment.is_defined() && (m_stencil_attachment.load_action == Load_action::Clear));
     if (clear_depth && clear_stencil) {
         gl::clear_named_framebufferf_i(
             name,

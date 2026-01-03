@@ -21,6 +21,7 @@ target_link_libraries(
     ${_target}
     PRIVATE
     erhe::configuration
+    erhe::file
     erhe::graphics
     erhe::log
     erhe::math

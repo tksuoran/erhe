@@ -65,7 +65,7 @@ vec3 isotropic_brdf(
     vec3 specular_microfacet = D * Vis * F;
     vec3 diffuse_lambert     = m_i_pi * (1.0 - metalness) * base_color;
     vec3 diffuse_factor      = vec3(1.0) - F; 
-            
+
     // Final color
     return max(N_dot_L, 0.0) * (diffuse_factor * diffuse_lambert + specular_microfacet);
 }
@@ -91,7 +91,6 @@ vec3 anisotropic_brdf(
 
     float alpha_x = roughness_x * roughness_x;
     float alpha_y = roughness_y * roughness_y;
-    //specular_anti_aliasing(wh, alpha_x, alpha_y);
 
     vec3  H       = normalize(L + V);
     float N_dot_H = dot(N, H);
@@ -150,12 +149,13 @@ vec3 slope_brdf(
     float lambda_wo = lambda_ggx_anisotropic(wo, alpha_x, alpha_y);
     float lambda_wi = lambda_ggx_anisotropic(wi, alpha_x, alpha_y);
     float D         = slope_ndf_ggx_anisotropic(wh, alpha_x, alpha_y);
-    //float lambda_wo = lambda_ggx_isotropic(wo, alpha_x);
-    //float lambda_wi = lambda_ggx_isotropic(wi, alpha_x);
-    //float D         = slope_ndf_ggx_isotropic(wh, alpha_x);
-    float G         = 1.0 / (1.0 + lambda_wo + lambda_wi);
+    //float G         = 1.0 / (1.0 + lambda_wo + lambda_wi);
+    float G_denom   = max(1.0 + lambda_wo + lambda_wi, 1e-7);
+    float G         = 1.0 / G_denom;
     vec3  F         = fresnel_schlick(wi_dot_wh, F0);
-    vec3  specular_microfacet = (D * F * G) / (4.0 * cos_theta(wi) * cos_theta(wo));
+    //vec3  specular_microfacet = (D * F * G) / (4.0 * cos_theta(wi) * cos_theta(wo));
+    float specular_denom      = max(4.0 * cos_theta(wi) * cos_theta(wo), 1e-2);
+    vec3  specular_microfacet = (D * F * G) / specular_denom;
     vec3  diffuse_lambert     = m_i_pi * (1.0 - metallic) * base_color;
     vec3  diffuse_factor      = vec3(1.0) - F;
 

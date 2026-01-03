@@ -642,6 +642,8 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
             .result       = gl::Sync_status::timeout_expired
         }
     );
+
+    m_last_ok_frame_timestamp = std::chrono::steady_clock::now();
 }
 
 auto Device_impl::get_surface() -> Surface*
@@ -967,7 +969,16 @@ auto Device_impl::end_frame(const Frame_end_info& frame_end_info) -> bool
                 break;
             }
         }
-        log_context->warn("Out of frame sync slots");
+        if (m_need_sync) {
+            log_context->warn("Out of frame sync slots");
+            const std::chrono::high_resolution_clock::duration duration = std::chrono::high_resolution_clock::now() - m_last_ok_frame_timestamp;
+            if (duration > std::chrono::seconds{5}) {
+                log_context->critical("No frame sync slots available for over 5 seconds.");
+                abort();
+            }
+        } else {
+            m_last_ok_frame_timestamp = std::chrono::high_resolution_clock::now();
+        }
     }
 
     ++m_frame_index;

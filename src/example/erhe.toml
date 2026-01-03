@@ -1,71 +1,63 @@
-#
-# erhe configuration file for example
-#
-
-[headset]
-openxr = false
-
-[camera_controls]
-invert_x           = true
-invert_y           = true
-velocity_damp      = 0.92
-velocity_max_delta = 0.004
+# erhe configuration file
 
 [imgui]
-window_viewport = false
+window_viewport = true
+padding         = 2.0
+rounding        = 3.0
 
 [window]
 show             = true
 fullscreen       = false
 use_transparency = false
-gl_major         = 4
-gl_minor         = 6
-width            = 512
-height           = 512
-use_finish       = false
-use_sleep        = false
-swap_interval    = 1 # try 0
-
-[graphics]
-post_processing             = false
-initial_clear               = true
-force_no_bindless           = false
-force_no_persistent_buffers = false
-
-# NOTE: Primitive is as GLTF primitive (NOT triangle etc)
-[renderer]
-max_material_count  = 20
-max_light_count     = 8
-max_camera_count    = 8
-max_primitive_count = 20
-max_draw_count      = 200
-
-#  D e v e l o p e r   S e c t i o n  
-#                                     
-#       ..                            
-#      .::':::. .::::.   .:''.  .     
-#    .::'   '::::::' .:::'    ''      
-#     `     ..:'    ..:'              
-#                                     
-#    H e r e   b e   d r a g o n s    
+size             = [ 1920, 1080 ]
 
 # Buffer sizes use megabytes as unit
 [mesh_memory]
-vertex_buffer_size = 20
-index_buffer_size  =  8
+vertex_buffer_size = 1280
+index_buffer_size  =  512
 
-[threading]
-parallel_init = false
+# NOTE: Primitive is as GLTF primitive (NOT triangle etc)
+[renderer]
+max_material_count  = 1000
+max_light_count     = 32
+max_camera_count    = 256
+max_joint_count     = 400
+max_primitive_count = 400
+max_draw_count      = 400
+
+[camera_controls]
+invert_x           = false
+invert_y           = false
+sensitivity        = 1.0
+velocity_damp      = 0.92
+velocity_max_delta = 0.004
+move_power         = 1000.0
+move_speed         = 2.0
+turn_speed         = 1.0
+
+#  D e v e l o p e r   S e c t i o n  #
+#                                     #
+#       ..                            #
+#      .::':::. .::::.   .:''.  .     #
+#    .::'   '::::::' .:::'    ''      #
+#     `     ..:'    ..:'              #
+#                                     #
+#    H e r e   b e   d r a g o n s    #
+[developer]
+enable = true
+
+[graphics]
+initial_clear                = true
+#force_bindless_textures_off  = true
+#force_no_persistent_buffers  = true
+#force_no_direct_state_access = true
+#force_no_multi_draw_indirect = true
+#force_gl_version             = 450
+#force_glsl_version           = 450
 
 [renderdoc]
-capture_support = false
-
-[id_renderer]
-enabled = false
-
-[text_renderer]
-enabled   = true
-font_size = 14
+capture_support = true
 
 [shader_monitor]
 enabled = true
+

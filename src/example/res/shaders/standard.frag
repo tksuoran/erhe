@@ -4,145 +4,136 @@
 
 layout(location = 0) in vec4      v_position;
 layout(location = 1) in vec2      v_texcoord;
+
 layout(location = 6) in vec3      v_N;
 layout(location = 7) in flat uint v_material_index;
 
-void main() {
-    vec3 view_position_in_world = vec3(
-        camera.cameras[0].world_from_node[3][0],
-        camera.cameras[0].world_from_node[3][1],
-        camera.cameras[0].world_from_node[3][2]
-    ); 
-
-    vec3  V       = normalize(view_position_in_world - v_position.xyz);
-    vec3  N       = normalize(v_N);
-
-    float N_dot_V = clamped_dot(N, V);
-
-    Material material = material.materials[v_material_index];
-
-    uvec2 base_color_texture         = material.base_color_texture;
-    uvec2 metallic_roughness_texture = material.metallic_roughness_texture;
-    vec3  base_color                 = v_color.rgb * material.base_color.rgb * sample_texture(
+void main()
+{
+    Material material           = material.materials[v_material_index];
+    uvec2    base_color_texture = material.base_color_texture;
+    vec3     base_color         = material.base_color.rgb * sample_texture(
         base_color_texture,
         v_texcoord,
         material.base_color_rotation_scale,
         material.base_color_offset
     ).rgb;
+    vec3 color;
+    if (material.unlit == 1) {
+        color = base_color;
+    } else {
+        vec3 view_position_in_world = vec3(
+            camera.cameras[0].world_from_node[3][0],
+            camera.cameras[0].world_from_node[3][1],
+            camera.cameras[0].world_from_node[3][2]
+        ); 
 
-    float metallic;
-    float roughness;
-    if (metallic_roughness_texture.x != max_u32) {
+        vec3 V = normalize(view_position_in_world - v_position.xyz);
+        vec3 N = normalize(v_N);
+
+        uvec2 metallic_roughness_texture = material.metallic_roughness_texture;
+        uvec2 occlusion_texture          = material.occlusion_texture;
+        uvec2 emissive_texture           = material.emissive_texture;
+
         vec4 metallic_roughness = sample_texture(
             metallic_roughness_texture,
             v_texcoord,
             material.metallic_roughness_rotation_scale,
             material.metallic_roughness_offset
         );
-        metallic  = metallic_roughness.b;
-        roughness = metallic_roughness.g;
-    } else {
-        metallic  = material.metallic;
-        roughness = material.roughness.x;
-    }
+        float metallic  = material.metallic * metallic_roughness.b;
+        float roughness = max(material.roughness.x * metallic_roughness.g, 1e-4);
 
-    if (normal_texture.x != max_u32) {
-        vec3 ntex = sample_texture(
-            normal_texture,
-            v_texcoord,
-            material.normal_rotation_scale,
-            material.normal_offset
-        ).xyz * 2.0 - vec3(1.0);
-        ntex.xy   = ntex.xy * material.normal_texture_scale;
-        ntex      = normalize(ntex);
-        N         = normalize(mat3(T0, B0, N) * ntex);
-    }
-
-    vec3 emissive;
-    if (emissive_texture.x != max_u32) {
-        emissive = material.emissive.rgb * sample_texture(
+        vec3 emissive = material.emissive.rgb * material.emissive.rgb * sample_texture(
             emissive_texture,
             v_texcoord,
             material.emissive_rotation_scale,
             material.emissive_offset
         ).rgb;
-    } else {
-        emissive = material.emissive.rgb;
-    }
 
-    uint directional_light_count  = light_block.directional_light_count;
-    uint spot_light_count         = light_block.spot_light_count;
-    uint point_light_count        = light_block.point_light_count;
-    uint directional_light_offset = 0;
-    uint spot_light_offset        = directional_light_count;
-    uint point_light_offset       = spot_light_offset + spot_light_count;
+        float occlusion = sample_texture(
+            occlusion_texture,
+            v_texcoord,
+            material.occlusion_rotation_scale,
+            material.occlusion_offset
+        ).r;
 
-    //color = (0.5 + 0.5 * N.y) * light_block.ambient_light.rgb * base_color;
-    color = light_block.ambient_light.rgb * base_color;
-    color += emissive;
+        float N_dot_V = clamped_dot(N, V);
 
-    for (uint i = 0; i < directional_light_count; ++i) {
-        uint  light_index    = directional_light_offset + i;
-        Light light          = light_block.lights[light_index];
-        vec3  point_to_light = light.direction_and_outer_spot_cos.xyz;
-        vec3  L              = normalize(point_to_light);   // Direction from surface point to light
-        float N_dot_L        = clamped_dot(N, L);
-        if (N_dot_L > 0.0 || N_dot_V > 0.0) {
-            vec3 intensity = light.radiance_and_range.rgb;
-            color += intensity * isotropic_brdf(
-                base_color,
-                roughness,
-                metallic,
-                material.reflectance,
-                L,
-                V,
-                N
-            );
+        uint directional_light_count  = light_block.directional_light_count;
+        uint spot_light_count         = light_block.spot_light_count;
+        uint point_light_count        = light_block.point_light_count;
+        uint directional_light_offset = 0;
+        uint spot_light_offset        = directional_light_count;
+        uint point_light_offset       = spot_light_offset + spot_light_count;
+
+        //color += (0.5 + 0.5 * N.y) * light_block.ambient_light.rgb * base_color;
+        color  = light_block.ambient_light.rgb * occlusion * base_color;
+        color += emissive;
+
+        for (uint i = 0; i < directional_light_count; ++i) {
+            uint  light_index    = directional_light_offset + i;
+            Light light          = light_block.lights[light_index];
+            vec3  point_to_light = light.direction_and_outer_spot_cos.xyz;
+            vec3  L              = normalize(point_to_light);   // Direction from surface point to light
+            float N_dot_L        = dot(N, L);
+            if (N_dot_L > 0.0) { // || N_dot_V > 0.0
+                vec3 intensity = light.radiance_and_range.rgb * sample_light_visibility(v_position, light_index, N_dot_L);
+                color += intensity * isotropic_brdf(
+                    base_color,
+                    roughness,
+                    metallic,
+                    material.reflectance,
+                    L,
+                    V,
+                    N
+                );
+            }
         }
-    }
 
-    for (uint i = 0; i < spot_light_count; ++i) {
-        uint  light_index    = spot_light_offset + i;
-        Light light          = light_block.lights[light_index];
-        vec3  point_to_light = light.position_and_inner_spot_cos.xyz - v_position.xyz;
-        vec3  L              = normalize(point_to_light);
-        float N_dot_L        = clamped_dot(N, L);
-        if (N_dot_L > 0.0 || N_dot_V > 0.0) {
-            float range_attenuation = get_range_attenuation(light.radiance_and_range.w, length(point_to_light));
-            float spot_attenuation  = get_spot_attenuation(-point_to_light, light.direction_and_outer_spot_cos.xyz, light.direction_and_outer_spot_cos.w, light.position_and_inner_spot_cos.w);
-            float light_visibility  = 1.0;
-            vec3  intensity         = range_attenuation * spot_attenuation * light.radiance_and_range.rgb * light_visibility;
-            color += intensity * isotropic_brdf(
-                base_color,
-                roughness,
-                metallic,
-                material.reflectance,
-                L,
-                V,
-                N
-            );
+        for (uint i = 0; i < spot_light_count; ++i) {
+            uint  light_index    = spot_light_offset + i;
+            Light light          = light_block.lights[light_index];
+            vec3  point_to_light = light.position_and_inner_spot_cos.xyz - v_position.xyz;
+            vec3  L              = normalize(point_to_light);
+            float N_dot_L        = dot(N, L);
+            if (N_dot_L > 0.0) { // || N_dot_V > 0.0
+                float range_attenuation = get_range_attenuation(light.radiance_and_range.w, length(point_to_light));
+                float spot_attenuation  = get_spot_attenuation(-point_to_light, light.direction_and_outer_spot_cos.xyz, light.direction_and_outer_spot_cos.w, light.position_and_inner_spot_cos.w);
+                float light_visibility  = 1.0;
+                vec3  intensity         = range_attenuation * spot_attenuation * light.radiance_and_range.rgb * light_visibility;
+                color += intensity * isotropic_brdf(
+                    base_color,
+                    roughness,
+                    metallic,
+                    material.reflectance,
+                    L,
+                    V,
+                    N
+                );
+            }
         }
-    }
 
-    for (uint i = 0; i < point_light_count; ++i) {
-        uint  light_index    = point_light_offset + i;
-        Light light          = light_block.lights[light_index];
-        vec3  point_to_light = light.position_and_inner_spot_cos.xyz - v_position.xyz;
-        vec3  L              = normalize(point_to_light);
-        float N_dot_L        = clamped_dot(N, L);
-        if (N_dot_L > 0.0 || N_dot_V > 0.0) {
-            float range_attenuation = get_range_attenuation(light.radiance_and_range.w, length(point_to_light));
-            float light_visibility  = 1.0;
-            vec3  intensity         = range_attenuation * light.radiance_and_range.rgb * light_visibility;
-            color += intensity * isotropic_brdf(
-                base_color,
-                roughness,
-                metallic,
-                material.reflectance,
-                L,
-                V,
-                N
-            );
+        for (uint i = 0; i < point_light_count; ++i) {
+            uint  light_index    = point_light_offset + i;
+            Light light          = light_block.lights[light_index];
+            vec3  point_to_light = light.position_and_inner_spot_cos.xyz - v_position.xyz;
+            vec3  L              = normalize(point_to_light);
+            float N_dot_L        = dot(N, L);
+            if (N_dot_L > 0.0) { // || N_dot_V > 0.0
+                float range_attenuation = get_range_attenuation(light.radiance_and_range.w, length(point_to_light));
+                float light_visibility  = 1.0; // TODO sample_light_visibility(v_position, light_index, N_dot_L);
+                vec3  intensity         = range_attenuation * light.radiance_and_range.rgb * light_visibility;
+                color += intensity * isotropic_brdf(
+                    base_color,
+                    roughness,
+                    metallic,
+                    material.reflectance,
+                    L,
+                    V,
+                    N
+                );
+            }
         }
     }
 

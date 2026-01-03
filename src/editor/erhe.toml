@@ -9,7 +9,7 @@ rounding        = 3.0
 show             = true
 fullscreen       = false
 use_transparency = false
-# Ddefaul is 4.6
+# Default is 4.6
 #gl_major         = 4
 #gl_minor         = 5 # llvm pipe requires 4.5 - but needs also ERHE_SERIAL_INIT defined - see top of editor.cpp
 

@@ -6,6 +6,8 @@
 #include "programs.hpp"
 
 #include "erhe_dataformat/dataformat_log.hpp"
+#include "erhe_configuration/configuration.hpp"
+#include "erhe_file/file.hpp"
 #if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
 # include "erhe_gl/gl_log.hpp"
 #endif
@@ -56,11 +58,9 @@ public:
     Example()
         : m_window{
             erhe::window::Window_configuration{
-                .use_depth         = true,
-                .msaa_sample_count = 0,
-                .swap_interval     = 0,
-                .size              = glm::ivec2{1920, 1080},
-                .title             = "erhe example"
+                .use_depth = true,
+                .size      = glm::ivec2{1920, 1080},
+                .title     = "erhe example"
             }
         }
         , m_scene_message_bus{}
@@ -491,6 +491,10 @@ private:
 
 void run_example()
 {
+    // Workaround for
+    // https://intellij-support.jetbrains.com/hc/en-us/community/posts/27792220824466-CMake-C-git-project-How-to-share-working-directory-in-git
+    erhe::file::ensure_working_directory_contains(erhe::c_erhe_config_file_path);
+
     erhe::log::initialize_log_sinks();
 
     example::initialize_logging();

@@ -7,6 +7,7 @@
 #include "erhe_graphics/shader_monitor.hpp"
 
 #include <array>
+#include <chrono>
 #include <memory>
 #include <unordered_map>
 #include <vector>
@@ -86,8 +87,9 @@ private:
     std::vector<std::unique_ptr<Ring_buffer>> m_ring_buffers;
     std::size_t                               m_min_buffer_size = 2 * 1024 * 1024; // TODO
 
-    std::array<Frame_sync, 16> m_frame_syncs;
-    uint64_t                   m_frame_index{1};
+    std::array<Frame_sync, 16>            m_frame_syncs;
+    uint64_t                              m_frame_index{1};
+    std::chrono::steady_clock::time_point m_last_ok_frame_timestamp;
 
     std::vector<uint64_t>      m_pending_frames;
     std::vector<uint64_t>      m_completed_frames;
