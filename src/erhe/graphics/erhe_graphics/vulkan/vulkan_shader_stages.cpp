@@ -15,16 +15,19 @@ using std::string;
 Shader_stages_impl::Shader_stages_impl(Device& device, const std::string& failed_name)
     : m_device{device}
 {
+    ERHE_FATAL("Not implemented");
     static_cast<void>(failed_name);
 }
 
 Shader_stages_impl::Shader_stages_impl(Shader_stages_impl&& from)
     : m_device{from.m_device}
 {
+    ERHE_FATAL("Not implemented");
 }
 
 Shader_stages_impl& Shader_stages_impl::operator=(Shader_stages_impl&& from)
 {
+    ERHE_FATAL("Not implemented");
     static_cast<void>(from);
     return *this;
 }

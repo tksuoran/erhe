@@ -26,7 +26,10 @@ auto Texture_impl::get_mipmap_dimensions(const Texture_type type) -> int
     }
 }
 
-Texture_impl::Texture_impl(Texture_impl&&) noexcept = default;
+Texture_impl::Texture_impl(Texture_impl&&) noexcept
+{
+    ERHE_FATAL("Not implemented");
+}
 
 Texture_impl::~Texture_impl() noexcept
 {
@@ -49,6 +52,7 @@ Texture_impl::Texture_impl(Device& device, const Create_info& create_info)
     , m_buffer                {create_info.buffer}
     , m_debug_label           {create_info.debug_label}
 {
+    ERHE_FATAL("Not implemented");
     static_cast<void>(device);
 }
 

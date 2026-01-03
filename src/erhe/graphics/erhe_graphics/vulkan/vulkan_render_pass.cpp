@@ -182,11 +182,13 @@ void Render_pass_impl::create()
 
 auto Render_pass_impl::get_sample_count() const -> unsigned int
 {
+    ERHE_FATAL("Not implemented");
     return 0;
 }
 
 auto Render_pass_impl::check_status() const -> bool
 {
+    ERHE_FATAL("Not implemented");
     return false;
 }
 

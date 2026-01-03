@@ -17,6 +17,7 @@ Texture_heap_impl::Texture_heap_impl(
     , m_fallback_texture   {fallback_texture}
     , m_fallback_sampler   {fallback_sampler}
 {
+    ERHE_FATAL("Not implemented");
     static_cast<void>(reserved_slot_count);
 }
 
