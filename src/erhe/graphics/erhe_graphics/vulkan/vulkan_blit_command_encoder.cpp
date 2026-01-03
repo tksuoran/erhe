@@ -17,6 +17,7 @@ Blit_command_encoder_impl::~Blit_command_encoder_impl() noexcept
 
 void Blit_command_encoder_impl::set_buffer(Buffer_target buffer_target, const Buffer* buffer, std::uintptr_t offset, std::uintptr_t length, std::uintptr_t index)
 {
+    ERHE_FATAL("Not implemented");
     static_cast<void>(buffer_target);
     static_cast<void>(buffer);
     static_cast<void>(offset);
@@ -26,6 +27,7 @@ void Blit_command_encoder_impl::set_buffer(Buffer_target buffer_target, const Bu
 
 void Blit_command_encoder_impl::set_buffer(Buffer_target buffer_target, const Buffer* buffer)
 {
+    ERHE_FATAL("Not implemented");
     static_cast<void>(buffer_target);
     static_cast<void>(buffer);
 }
@@ -39,6 +41,7 @@ void Blit_command_encoder_impl::blit_framebuffer(
     glm::ivec2         destination_origin
 )
 {
+    ERHE_FATAL("Not implemented");
     static_cast<void>(source_renderpass);
     static_cast<void>(source_origin);
     static_cast<void>(source_size);
@@ -59,6 +62,7 @@ void Blit_command_encoder_impl::copy_from_texture(
     glm::ivec3     destination_origin
 )
 {
+    ERHE_FATAL("Not implemented");
     static_cast<void>(source_texture);
     static_cast<void>(source_slice);
     static_cast<void>(source_level);
@@ -83,6 +87,7 @@ void Blit_command_encoder_impl::copy_from_buffer(
     glm::ivec3     destination_origin
 )
 {
+    ERHE_FATAL("Not implemented");
     static_cast<void>(source_buffer);
     static_cast<void>(source_offset);
     static_cast<void>(source_bytes_per_row);
@@ -107,6 +112,7 @@ void Blit_command_encoder_impl::copy_from_texture(
     std::uintptr_t destination_bytes_per_image
 )
 {
+    ERHE_FATAL("Not implemented");
     static_cast<void>(source_texture);
     static_cast<void>(source_slice);
     static_cast<void>(source_level);
@@ -120,6 +126,7 @@ void Blit_command_encoder_impl::copy_from_texture(
 
 void Blit_command_encoder_impl::generate_mipmaps(const Texture* texture)
 {
+    ERHE_FATAL("Not implemented");
     static_cast<void>(texture);
 }
 
@@ -130,6 +137,7 @@ void Blit_command_encoder_impl::fill_buffer(
     uint8_t        value
 )
 {
+    ERHE_FATAL("Not implemented");
     static_cast<void>(buffer);
     static_cast<void>(offset);
     static_cast<void>(length);
@@ -148,6 +156,7 @@ void Blit_command_encoder_impl::copy_from_texture(
     std::uintptr_t level_count
 )
 {
+    ERHE_FATAL("Not implemented");
     static_cast<void>(source_texture);
     static_cast<void>(source_slice);
     static_cast<void>(source_level);
@@ -163,6 +172,7 @@ void Blit_command_encoder_impl::copy_from_texture(
     const Texture* destination_texture
 )
 {
+    ERHE_FATAL("Not implemented");
     static_cast<void>(source_texture);
     static_cast<void>(destination_texture);
 }
@@ -175,6 +185,7 @@ void Blit_command_encoder_impl::copy_from_buffer(
     std::uintptr_t size
 )
 {
+    ERHE_FATAL("Not implemented");
     static_cast<void>(source_buffer);
     static_cast<void>(source_offset);
     static_cast<void>(destination_buffer);

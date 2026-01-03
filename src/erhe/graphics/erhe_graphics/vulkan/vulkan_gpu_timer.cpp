@@ -21,6 +21,7 @@ void Gpu_timer_impl::on_thread_exit()
 
 Gpu_timer_impl::Gpu_timer_impl(Device& device, const char* label)
 {
+    ERHE_FATAL("Not implemented");
     static_cast<void>(device);
     static_cast<void>(label);
 }

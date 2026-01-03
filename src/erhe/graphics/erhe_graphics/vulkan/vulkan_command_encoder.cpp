@@ -16,6 +16,7 @@ Command_encoder_impl::~Command_encoder_impl()
 
 void Command_encoder_impl::set_buffer(const Buffer_target buffer_target, const Buffer* buffer, std::uintptr_t offset, std::uintptr_t length, std::uintptr_t index)
 {
+    ERHE_FATAL("Not implemented");
     static_cast<void>(buffer_target);
     static_cast<void>(buffer);
     static_cast<void>(offset);
@@ -25,6 +26,7 @@ void Command_encoder_impl::set_buffer(const Buffer_target buffer_target, const B
 
 void Command_encoder_impl::set_buffer(Buffer_target buffer_target, const Buffer* buffer)
 {
+    ERHE_FATAL("Not implemented");
     static_cast<void>(buffer_target);
     static_cast<void>(buffer);
 }

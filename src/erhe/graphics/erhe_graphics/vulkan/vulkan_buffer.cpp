@@ -19,12 +19,14 @@ namespace erhe::graphics {
 
 Buffer_impl::Buffer_impl(Device& device, const Buffer_create_info& create_info) noexcept
 {
+    ERHE_FATAL("Not implemented");
     static_cast<void>(device);
     static_cast<void>(create_info);
 }
 
 Buffer_impl::Buffer_impl(Device& device)
 {
+    ERHE_FATAL("Not implemented");
     static_cast<void>(device);
 }
 
@@ -34,6 +36,7 @@ Buffer_impl::~Buffer_impl() noexcept
 
 Buffer_impl::Buffer_impl(Buffer_impl&& other) noexcept
 {
+    ERHE_FATAL("Not implemented");
     static_cast<void>(other);
 }
 

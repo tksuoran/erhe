@@ -1064,6 +1064,7 @@ auto Device_impl::get_driver_properties() const -> const VkPhysicalDeviceDriverP
 
 auto Device_impl::get_handle(const Texture& texture, const Sampler& sampler) const -> uint64_t
 {
+    ERHE_FATAL("Not implemented");
     static_cast<void>(texture);
     static_cast<void>(sampler);
     return 0;
@@ -1071,6 +1072,7 @@ auto Device_impl::get_handle(const Texture& texture, const Sampler& sampler) con
 
 auto Device_impl::choose_depth_stencil_format(const unsigned int flags, int sample_count) const -> erhe::dataformat::Format
 {
+    ERHE_FATAL("Not implemented");
     static_cast<void>(flags);
     static_cast<void>(sample_count);
     return erhe::dataformat::Format::format_undefined;
@@ -1154,6 +1156,7 @@ auto Device_impl::get_buffer_alignment(Buffer_target target) -> std::size_t
 
 void Device_impl::upload_to_buffer(Buffer& buffer, size_t offset, const void* data, size_t length)
 {
+    ERHE_FATAL("Not implemented");
     static_cast<void>(buffer);
     static_cast<void>(offset);
     static_cast<void>(data);
@@ -1280,6 +1283,7 @@ auto Device_impl::allocate_ring_buffer_entry(
     std::size_t       byte_count
 ) -> Ring_buffer_range
 {
+    ERHE_FATAL("Not implemented");
     static_cast<void>(buffer_target);
     static_cast<void>(ring_buffer_usage);
     static_cast<void>(byte_count);
@@ -1288,17 +1292,20 @@ auto Device_impl::allocate_ring_buffer_entry(
 
 void Device_impl::memory_barrier(Memory_barrier_mask barriers)
 {
+    ERHE_FATAL("Not implemented");
     static_cast<void>(barriers);
 }
 
 auto Device_impl::get_format_properties(erhe::dataformat::Format format) const -> Format_properties
 {
+    ERHE_FATAL("Not implemented");
     static_cast<void>(format);
     return {};
 }
 
 void Device_impl::clear_texture(Texture& texture, std::array<double, 4> value)
 {
+    ERHE_FATAL("Not implemented");
     static_cast<void>(texture);
     static_cast<void>(value);
 }
