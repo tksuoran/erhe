@@ -1299,8 +1299,49 @@ void Device_impl::memory_barrier(Memory_barrier_mask barriers)
 auto Device_impl::get_format_properties(erhe::dataformat::Format format) const -> Format_properties
 {
     ERHE_FATAL("Not implemented");
-    static_cast<void>(format);
-    return {};
+    const VkFormat vulkan_format = to_vulkan(format);
+    VkFormatProperties2 vulkan_properties{
+        .sType            = VK_STRUCTURE_TYPE_FORMAT_PROPERTIES_2,
+        .pNext            = nullptr,
+        .formatProperties = {}
+    };
+    vkGetPhysicalDeviceFormatProperties2(m_vulkan_physical_device, vulkan_format, &vulkan_properties);
+    //const VkFormatFeatureFlags supported =
+    //    VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT |
+    using namespace erhe::utility;
+    return Format_properties{
+        .supported = erhe::utility::test_bit_set(
+            static_cast<uint32_t>(vulkan_properties.formatProperties.optimalTilingFeatures),
+            static_cast<uint32_t>(VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT)
+        ),
+        .color_renderable = erhe::utility::test_bit_set(
+            static_cast<uint32_t>(vulkan_properties.formatProperties.optimalTilingFeatures),
+            static_cast<uint32_t>(VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT)
+        ),
+        .depth_renderable = erhe::utility::test_bit_set(
+            static_cast<uint32_t>(vulkan_properties.formatProperties.optimalTilingFeatures),
+            static_cast<uint32_t>(VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT)
+        ) && (erhe::dataformat::get_depth_size(format) > 0),
+        .stencil_renderable = erhe::utility::test_bit_set(
+            static_cast<uint32_t>(vulkan_properties.formatProperties.optimalTilingFeatures),
+            static_cast<uint32_t>(VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT)
+        ) && (erhe::dataformat::get_stencil_size(format) > 0),
+        .filter = erhe::utility::test_bit_set(
+            static_cast<uint32_t>(vulkan_properties.formatProperties.optimalTilingFeatures),
+            static_cast<uint32_t>(VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT)
+        ),
+        .framebuffer_blend = erhe::utility::test_bit_set(
+            static_cast<uint32_t>(vulkan_properties.formatProperties.optimalTilingFeatures),
+            static_cast<uint32_t>(VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BLEND_BIT)
+        ),
+        .red_size     = static_cast<int>(erhe::dataformat::get_red_size    (format)),
+        .green_size   = static_cast<int>(erhe::dataformat::get_green_size  (format)),
+        .blue_size    = static_cast<int>(erhe::dataformat::get_blue_size   (format)),
+        .alpha_size   = static_cast<int>(erhe::dataformat::get_alpha_size  (format)),
+        .depth_size   = static_cast<int>(erhe::dataformat::get_depth_size  (format)),
+        .stencil_size = static_cast<int>(erhe::dataformat::get_stencil_size(format))
+    };
+    // TODO Sample counts and max size
 }
 
 void Device_impl::clear_texture(Texture& texture, std::array<double, 4> value)

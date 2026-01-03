@@ -722,6 +722,150 @@ auto get_format_size(Format format) -> std::size_t
     }
 }
 
+auto get_rgba_size(Format format) -> std::size_t
+{
+    switch (format) {
+        case Format::format_8_scalar_srgb:
+        case Format::format_8_scalar_unorm:
+        case Format::format_8_scalar_snorm:
+        case Format::format_8_scalar_uscaled:
+        case Format::format_8_scalar_sscaled:
+        case Format::format_8_scalar_uint:
+        case Format::format_8_scalar_sint:
+        case Format::format_8_vec2_srgb:
+        case Format::format_8_vec2_unorm:
+        case Format::format_8_vec2_snorm:
+        case Format::format_8_vec2_uscaled:
+        case Format::format_8_vec2_sscaled:
+        case Format::format_8_vec2_uint:
+        case Format::format_8_vec2_sint:
+        case Format::format_8_vec3_srgb:
+        case Format::format_8_vec3_unorm:
+        case Format::format_8_vec3_snorm:
+        case Format::format_8_vec3_uscaled:
+        case Format::format_8_vec3_sscaled:
+        case Format::format_8_vec3_uint:
+        case Format::format_8_vec3_sint:
+        case Format::format_8_vec4_srgb:
+        case Format::format_8_vec4_unorm:
+        case Format::format_8_vec4_snorm:
+        case Format::format_8_vec4_uscaled:
+        case Format::format_8_vec4_sscaled:
+        case Format::format_8_vec4_uint:
+        case Format::format_8_vec4_sint:
+            return 8;
+
+        case Format::format_16_scalar_unorm:
+        case Format::format_16_scalar_snorm:
+        case Format::format_16_scalar_uscaled:
+        case Format::format_16_scalar_sscaled:
+        case Format::format_16_scalar_uint:
+        case Format::format_16_scalar_sint:
+        case Format::format_16_scalar_float:
+        case Format::format_16_vec2_unorm:
+        case Format::format_16_vec2_snorm:
+        case Format::format_16_vec2_uscaled:
+        case Format::format_16_vec2_sscaled:
+        case Format::format_16_vec2_uint:
+        case Format::format_16_vec2_sint:
+        case Format::format_16_vec2_float:
+        case Format::format_16_vec3_unorm:
+        case Format::format_16_vec3_snorm:
+        case Format::format_16_vec3_uscaled:
+        case Format::format_16_vec3_sscaled:
+        case Format::format_16_vec3_uint:
+        case Format::format_16_vec3_sint:
+        case Format::format_16_vec3_float:
+        case Format::format_16_vec4_unorm:
+        case Format::format_16_vec4_snorm:
+        case Format::format_16_vec4_uscaled:
+        case Format::format_16_vec4_sscaled:
+        case Format::format_16_vec4_uint:
+        case Format::format_16_vec4_sint:
+        case Format::format_16_vec4_float:
+            return 16;
+
+        case Format::format_32_scalar_uint:
+        case Format::format_32_scalar_sint:
+        case Format::format_32_scalar_float:
+        case Format::format_32_vec2_uint:
+        case Format::format_32_vec2_sint:
+        case Format::format_32_vec2_float:
+        case Format::format_32_vec3_uint:
+        case Format::format_32_vec3_sint:
+        case Format::format_32_vec3_float:
+        case Format::format_32_vec4_uint:
+        case Format::format_32_vec4_sint:
+        case Format::format_32_vec4_float:
+            return 32;
+
+        case Format::format_packed1010102_vec4_unorm:
+        case Format::format_packed1010102_vec4_snorm:
+        case Format::format_packed1010102_vec4_uint:
+        case Format::format_packed1010102_vec4_sint:
+        case Format::format_packed111110_vec3_unorm:
+            ERHE_FATAL("not common RGBA format");
+            return 0;
+
+        default:
+            return 0;
+   }
+}
+auto get_rgb_size(Format format) -> std::size_t
+{
+    switch (format) {
+        case Format::format_packed1010102_vec4_unorm:
+        case Format::format_packed1010102_vec4_snorm:
+        case Format::format_packed1010102_vec4_uint:
+        case Format::format_packed1010102_vec4_sint:
+            return 10;
+
+        case Format::format_packed111110_vec3_unorm:
+            ERHE_FATAL("not common RGB format");
+
+        default:
+            return get_rgba_size(format);
+    }
+}
+
+auto get_red_size(Format format) -> std::size_t
+{
+    switch (format) {
+        case Format::format_packed111110_vec3_unorm: return 11;
+        default: return get_rgb_size(format);
+    }
+}
+auto get_green_size(Format format) -> std::size_t
+{
+    switch (format) {
+        case Format::format_packed111110_vec3_unorm: return 11;
+        default: return get_rgb_size(format);
+    }
+}
+auto get_blue_size(Format format) -> std::size_t
+{
+    switch (format) {
+        case Format::format_packed111110_vec3_unorm: return 10;
+        default: return get_rgb_size(format);
+    }
+}
+auto get_alpha_size(Format format) -> std::size_t
+{
+    switch (format) {
+        case Format::format_packed1010102_vec4_unorm:
+        case Format::format_packed1010102_vec4_snorm:
+        case Format::format_packed1010102_vec4_uint:
+        case Format::format_packed1010102_vec4_sint:
+            return 2;
+
+        case Format::format_packed111110_vec3_unorm:
+            return 0;
+
+        default:
+            return get_rgba_size(format);
+    }
+}
+
 auto get_depth_size(Format format) -> std::size_t
 {
     switch (format) {

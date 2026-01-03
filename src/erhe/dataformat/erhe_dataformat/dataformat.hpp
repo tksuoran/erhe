@@ -126,6 +126,10 @@ enum class Format_kind {
 [[nodiscard]] auto get_component_byte_size(Format format) -> std::size_t;
 [[nodiscard]] auto has_color              (Format format) -> bool;
 [[nodiscard]] auto get_format_size        (Format format) -> std::size_t;
+[[nodiscard]] auto get_red_size           (Format format) -> std::size_t;
+[[nodiscard]] auto get_green_size         (Format format) -> std::size_t;
+[[nodiscard]] auto get_blue_size          (Format format) -> std::size_t;
+[[nodiscard]] auto get_alpha_size         (Format format) -> std::size_t;
 [[nodiscard]] auto get_depth_size         (Format format) -> std::size_t;
 [[nodiscard]] auto get_stencil_size       (Format format) -> std::size_t;
 void convert(const void* src, Format src_format, void* dst, Format dst_format, float scale);
