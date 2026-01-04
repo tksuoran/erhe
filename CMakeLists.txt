@@ -221,7 +221,7 @@ elseif (${ERHE_GRAPHICS_LIBRARY} STREQUAL "vulkan")
     add_definitions(-DERHE_GRAPHICS_LIBRARY_VULKAN)
     CPMAddPackage(
         NAME              Vulkan-Headers
-        GIT_TAG           vulkan-sdk-1.4.328.1
+        GIT_TAG           vulkan-sdk-1.4.335.0
         GIT_SHALLOW       TRUE
         GITHUB_REPOSITORY KhronosGroup/Vulkan-Headers
     )
@@ -233,9 +233,7 @@ elseif (${ERHE_GRAPHICS_LIBRARY} STREQUAL "vulkan")
     )
     CPMAddPackage(
         NAME              volk
-        #VERSION           vulkan-sdk-1.4.328.1
-        #GIT_TAG           vulkan-sdk-1.4.328.1
-        GIT_TAG           4f3bcee79618a9abe79f4c717c50379197c77512
+        GIT_TAG           vulkan-sdk-1.4.335.0
         GIT_SHALLOW       TRUE
         GITHUB_REPOSITORY zeux/volk
     )
