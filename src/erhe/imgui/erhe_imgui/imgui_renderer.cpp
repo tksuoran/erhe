@@ -733,6 +733,9 @@ void Imgui_renderer::update_texture(ImTextureData* tex)
         /// Create texture
         const erhe::graphics::Texture_create_info create_info{
             .device      = m_graphics_device,
+            .usage_mask  =
+                erhe::graphics::Image_usage_flag_bit_mask::sampled_bit_mask |
+                erhe::graphics::Image_usage_flag_bit_mask::transfer_dst_bit_mask,
             .pixelformat = (tex->Format == ImTextureFormat_RGBA32) ? erhe::dataformat::Format::format_8_vec4_unorm : erhe::dataformat::Format::format_8_scalar_unorm,
             .use_mipmaps = false,
             .width       = tex->Width,

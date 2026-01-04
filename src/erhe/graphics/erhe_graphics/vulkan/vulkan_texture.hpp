@@ -23,7 +23,6 @@ public:
 
     [[nodiscard]] static auto get_mipmap_dimensions (Texture_type type) -> int;
 
-
     [[nodiscard]] auto get_debug_label           () const -> const std::string&;
     [[nodiscard]] auto get_pixelformat           () const -> erhe::dataformat::Format;
     [[nodiscard]] auto get_width                 (unsigned int level = 0) const -> int;

@@ -586,7 +586,7 @@ auto convert_to_gl_texture_target(Texture_type type, bool multisample, bool arra
 }
 
 
-Texture_impl::Texture_impl(Device& device, const Create_info& create_info)
+Texture_impl::Texture_impl(Device& device, const Texture_create_info& create_info)
     : m_handle{
         convert_to_gl_texture_target(create_info.type, create_info.sample_count != 0, create_info.array_layer_count != 0),
         static_cast<GLuint>(create_info.wrap_texture_name),

@@ -93,8 +93,13 @@ void Texture_rendergraph_node::update_render_pass(int width, int height, erhe::g
         if (m_sample_count > 0) {
             m_multisampled_color_texture = std::make_shared<Texture>(
                 graphics_device,
-                Texture::Create_info{
+                erhe::graphics::Texture_create_info{
                     .device       = graphics_device,
+                    .usage_mask   =
+                        erhe::graphics::Image_usage_flag_bit_mask::color_attachment_bit_mask |
+                        erhe::graphics::Image_usage_flag_bit_mask::sampled_bit_mask          |
+                        erhe::graphics::Image_usage_flag_bit_mask::transfer_src_bit_mask     |
+                        erhe::graphics::Image_usage_flag_bit_mask::transfer_dst_bit_mask,
                     .type         = erhe::graphics::Texture_type::texture_2d,
                     .pixelformat  = m_color_format,
                     .sample_count = m_sample_count,
@@ -107,8 +112,13 @@ void Texture_rendergraph_node::update_render_pass(int width, int height, erhe::g
 
         m_color_texture = std::make_shared<Texture>(
             graphics_device,
-            Texture::Create_info{
+            erhe::graphics::Texture_create_info{
                 .device       = graphics_device,
+                .usage_mask   =
+                    erhe::graphics::Image_usage_flag_bit_mask::color_attachment_bit_mask |
+                    erhe::graphics::Image_usage_flag_bit_mask::sampled_bit_mask          |
+                    erhe::graphics::Image_usage_flag_bit_mask::transfer_src_bit_mask     |
+                    erhe::graphics::Image_usage_flag_bit_mask::transfer_dst_bit_mask,
                 .type         = erhe::graphics::Texture_type::texture_2d,
                 .pixelformat  = m_color_format,
                 .sample_count = 0,
@@ -125,8 +135,11 @@ void Texture_rendergraph_node::update_render_pass(int width, int height, erhe::g
         } else {
             m_depth_stencil_texture = std::make_unique<erhe::graphics::Texture>(
                 graphics_device,
-                Texture::Create_info{
+                erhe::graphics::Texture_create_info{
                     .device       = graphics_device,
+                    .usage_mask   =
+                        erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment_bit_mask |
+                        erhe::graphics::Image_usage_flag_bit_mask::sampled_bit_mask,
                     .type         = erhe::graphics::Texture_type::texture_2d,
                     .pixelformat  = m_depth_stencil_format,
                     .sample_count = m_sample_count,

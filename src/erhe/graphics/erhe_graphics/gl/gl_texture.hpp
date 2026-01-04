@@ -17,8 +17,6 @@ public:
 
     Texture_impl(Device& device, const Texture_create_info& create_info);
 
-    using Create_info = Texture_create_info;
-
     [[nodiscard]] static auto is_array_target       (gl::Texture_target target) -> bool;
     [[nodiscard]] static auto get_storage_dimensions(gl::Texture_target target) -> int;
     [[nodiscard]] static auto get_mipmap_dimensions (gl::Texture_target target) -> int;

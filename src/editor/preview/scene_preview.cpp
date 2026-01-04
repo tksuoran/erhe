@@ -69,6 +69,9 @@ Scene_preview::Scene_preview(
         graphics_device,
         erhe::graphics::Texture_create_info {
             .device            = graphics_device,
+            .usage_mask        =
+                erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment_bit_mask |
+                erhe::graphics::Image_usage_flag_bit_mask::sampled_bit_mask,
             .type              = erhe::graphics::Texture_type::texture_2d,
             .pixelformat       = erhe::dataformat::Format::format_d32_sfloat,
             .width             = 1,
@@ -126,6 +129,9 @@ void Scene_preview::update_rendertarget(erhe::graphics::Device& graphics_device)
             graphics_device,
             erhe::graphics::Texture_create_info{
                 .device      = graphics_device,
+                .usage_mask   =
+                    erhe::graphics::Image_usage_flag_bit_mask::color_attachment_bit_mask |
+                    erhe::graphics::Image_usage_flag_bit_mask::sampled_bit_mask,
                 .type        = erhe::graphics::Texture_type::texture_2d,
                 .pixelformat = m_color_format,
                 .width       = m_width,
@@ -149,6 +155,9 @@ void Scene_preview::update_rendertarget(erhe::graphics::Device& graphics_device)
             graphics_device,
             erhe::graphics::Texture_create_info{
                 .device      = graphics_device,
+                .usage_mask  =
+                    erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment_bit_mask |
+                    erhe::graphics::Image_usage_flag_bit_mask::sampled_bit_mask,
                 .type        = erhe::graphics::Texture_type::texture_2d,
                 .pixelformat = m_depth_format,
                 .width       = m_width,

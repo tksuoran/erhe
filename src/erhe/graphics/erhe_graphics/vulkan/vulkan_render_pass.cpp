@@ -13,30 +13,6 @@
 
 namespace erhe::graphics {
 
-auto get_vulkan_sample_count(int msaa_sample_count) -> VkSampleCountFlagBits
-{
-    if (msaa_sample_count <= 1) {
-        return VK_SAMPLE_COUNT_1_BIT;
-    }
-    else if (msaa_sample_count <= 2) {
-        return VK_SAMPLE_COUNT_2_BIT;
-    }
-    else if (msaa_sample_count <= 4) {
-        return VK_SAMPLE_COUNT_4_BIT;
-    }
-    else if (msaa_sample_count <= 8) {
-        return VK_SAMPLE_COUNT_8_BIT;
-    }
-    else if (msaa_sample_count <= 16) {
-        return VK_SAMPLE_COUNT_16_BIT;
-    }
-    else if (msaa_sample_count <= 32) {
-        return VK_SAMPLE_COUNT_32_BIT;
-    } else {
-        return VK_SAMPLE_COUNT_64_BIT;
-    }
-}
-
 Render_pass_impl::Render_pass_impl(Device& device, const Render_pass_descriptor& descriptor)
     : m_device              {device}
     , m_device_impl         {device.get_impl()}

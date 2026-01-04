@@ -1133,6 +1133,11 @@ auto Device_impl::get_info() const -> const Device_info&
     return m_info;
 }
 
+auto Device_impl::get_allocator() -> VmaAllocator&
+{
+    return m_vma_allocator;
+}
+
 auto Device_impl::get_buffer_alignment(Buffer_target target) -> std::size_t
 {
     switch (target) {

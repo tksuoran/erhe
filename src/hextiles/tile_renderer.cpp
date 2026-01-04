@@ -308,6 +308,9 @@ void Tile_renderer::compose_tileset_texture()
     // Texture will be created with additional per-player colored unit tiles
     erhe::graphics::Texture_create_info texture_create_info{
         .device      = m_graphics_device,
+        .usage_mask  =
+            erhe::graphics::Image_usage_flag_bit_mask::sampled_bit_mask |
+            erhe::graphics::Image_usage_flag_bit_mask::transfer_dst_bit_mask,
         .type        = erhe::graphics::Texture_type::texture_2d,
         .pixelformat = m_tileset_image.info.format,
         .use_mipmaps = false,

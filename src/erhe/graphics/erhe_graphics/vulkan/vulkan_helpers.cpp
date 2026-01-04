@@ -1,4 +1,6 @@
 #include "erhe_graphics/vulkan/vulkan_helpers.hpp"
+#include "erhe_graphics/enums.hpp"
+#include "erhe_utility/bit_helpers.hpp"
 
 #include "volk.h"
 
@@ -221,7 +223,7 @@ auto c_str(const VkDriverId driver_id) -> const char*
     }
 }
 
-auto c_str(VkFormat format) -> const char*
+auto c_str(const VkFormat format) -> const char*
 {
     switch (format) {
         case VK_FORMAT_UNDEFINED:                                     return "VK_FORMAT_UNDEFINED";
@@ -493,7 +495,7 @@ auto c_str(VkFormat format) -> const char*
     }
 }
 
-auto c_str(VkColorSpaceKHR color_space) -> const char*
+auto c_str(const VkColorSpaceKHR color_space) -> const char*
 {
     switch (color_space) {
         case VK_COLOR_SPACE_SRGB_NONLINEAR_KHR:          return "VK_COLOR_SPACE_SRGB_NONLINEAR_KHR";
@@ -530,7 +532,7 @@ auto c_str(const VkPresentModeKHR present_mode) -> const char*
     }
 }
 
-auto to_string_VkDebugReportFlagsEXT(VkDebugReportFlagsEXT flags) -> std::string
+auto to_string_VkDebugReportFlagsEXT(const VkDebugReportFlagsEXT flags) -> std::string
 {
     std::stringstream ss;
     bool empty = true;
@@ -571,7 +573,7 @@ auto to_string_VkDebugReportFlagsEXT(VkDebugReportFlagsEXT flags) -> std::string
     }
     return ss.str();
 }
-auto to_string_VkDebugUtilsMessageSeverityFlagsEXT(VkDebugUtilsMessageSeverityFlagsEXT severity) -> std::string
+auto to_string_VkDebugUtilsMessageSeverityFlagsEXT(const VkDebugUtilsMessageSeverityFlagsEXT severity) -> std::string
 {
     std::stringstream ss;
     bool empty = true;
@@ -605,7 +607,7 @@ auto to_string_VkDebugUtilsMessageSeverityFlagsEXT(VkDebugUtilsMessageSeverityFl
     }
     return ss.str();
 }
-auto to_string_VkDebugUtilsMessageTypeFlagsEXT(VkDebugUtilsMessageTypeFlagsEXT message_type) -> std::string
+auto to_string_VkDebugUtilsMessageTypeFlagsEXT(const VkDebugUtilsMessageTypeFlagsEXT message_type) -> std::string
 {
     std::stringstream ss;
     bool empty = true;
@@ -639,7 +641,7 @@ auto to_string_VkDebugUtilsMessageTypeFlagsEXT(VkDebugUtilsMessageTypeFlagsEXT m
     }
     return ss.str();
 }
-auto to_string_VkPresentScalingFlagsKHR(VkPresentScalingFlagsKHR present_scaling) -> std::string
+auto to_string_VkPresentScalingFlagsKHR(const VkPresentScalingFlagsKHR present_scaling) -> std::string
 {
     std::stringstream ss;
     bool empty = true;
@@ -666,7 +668,7 @@ auto to_string_VkPresentScalingFlagsKHR(VkPresentScalingFlagsKHR present_scaling
     }
     return ss.str();
 }
-auto to_string_VkPresentGravityFlagsKHR(VkPresentGravityFlagsKHR present_gravity) -> std::string
+auto to_string_VkPresentGravityFlagsKHR(const VkPresentGravityFlagsKHR present_gravity) -> std::string
 {
     std::stringstream ss;
     bool empty = true;
@@ -694,7 +696,7 @@ auto to_string_VkPresentGravityFlagsKHR(VkPresentGravityFlagsKHR present_gravity
     return ss.str();
 }
 
-auto to_vulkan(erhe::dataformat::Format format) -> VkFormat
+auto to_vulkan(const erhe::dataformat::Format format) -> VkFormat
 {
     switch (format) {
         case erhe::dataformat::Format::format_undefined               : return VK_FORMAT_UNDEFINED;
@@ -796,7 +798,7 @@ auto to_vulkan(erhe::dataformat::Format format) -> VkFormat
     }
 }
 
-[[nodiscard]] auto to_erhe(VkFormat format) -> erhe::dataformat::Format
+auto to_erhe(const VkFormat format) -> erhe::dataformat::Format
 {
     switch (format) {
         case VK_FORMAT_UNDEFINED               : return erhe::dataformat::Format::format_undefined               ;
@@ -880,6 +882,64 @@ auto to_vulkan(erhe::dataformat::Format format) -> VkFormat
         case VK_FORMAT_D24_UNORM_S8_UINT       : return erhe::dataformat::Format::format_d24_unorm_s8_uint       ;
         case VK_FORMAT_D32_SFLOAT_S8_UINT      : return erhe::dataformat::Format::format_d32_sfloat_s8_uint      ;
         default: return erhe::dataformat::Format::format_undefined;
+    }
+}
+
+auto get_vulkan_sample_count(const int msaa_sample_count) -> VkSampleCountFlagBits
+{
+    if (msaa_sample_count <= 1) {
+        return VK_SAMPLE_COUNT_1_BIT;
+    }
+    else if (msaa_sample_count <= 2) {
+        return VK_SAMPLE_COUNT_2_BIT;
+    }
+    else if (msaa_sample_count <= 4) {
+        return VK_SAMPLE_COUNT_4_BIT;
+    }
+    else if (msaa_sample_count <= 8) {
+        return VK_SAMPLE_COUNT_8_BIT;
+    }
+    else if (msaa_sample_count <= 16) {
+        return VK_SAMPLE_COUNT_16_BIT;
+    }
+    else if (msaa_sample_count <= 32) {
+        return VK_SAMPLE_COUNT_32_BIT;
+    } else {
+        return VK_SAMPLE_COUNT_64_BIT;
+    }
+}
+
+auto get_vulkan_image_usage_flags(const uint64_t usage_mask) -> VkImageUsageFlags
+{
+    using namespace erhe::utility;
+
+    VkImageUsageFlags flags = 0;
+    if (test_bit_set(usage_mask, Image_usage_flag_bit_mask::transfer_src_bit_mask)) {
+        flags |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    }
+    if (test_bit_set(usage_mask, Image_usage_flag_bit_mask::transfer_dst_bit_mask)) {
+        flags |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    }
+    if (test_bit_set(usage_mask, Image_usage_flag_bit_mask::sampled_bit_mask)) {
+        flags |= VK_IMAGE_USAGE_SAMPLED_BIT;
+    }
+    if (test_bit_set(usage_mask, Image_usage_flag_bit_mask::storage_bit_mask)) {
+        flags |= VK_IMAGE_USAGE_STORAGE_BIT;
+    }
+    if (test_bit_set(usage_mask, Image_usage_flag_bit_mask::color_attachment_bit_mask)) {
+        flags |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    }
+    if (test_bit_set(usage_mask, Image_usage_flag_bit_mask::depth_stencil_attachment_bit_mask)) {
+        flags |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+    }
+    if (test_bit_set(usage_mask, Image_usage_flag_bit_mask::transient_attachment_bit_mask)) {
+        flags |= VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT;
+    }
+    if (test_bit_set(usage_mask, Image_usage_flag_bit_mask::input_attachment_bit_mask)) {
+        flags |= VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
+    }
+    if (test_bit_set(usage_mask, Image_usage_flag_bit_mask::host_transfer_bit_mask)) {
+        flags |= VK_IMAGE_USAGE_HOST_TRANSFER_BIT;
     }
 }
 

@@ -128,10 +128,11 @@ auto Texture_create_info::make_view(Device& device, const std::shared_ptr<Textur
 }
 
 
-Texture::Texture(Device& device, const Create_info& create_info)
+Texture::Texture(Device& device, const Texture_create_info& create_info)
     : Item{create_info.debug_label}
     , m_impl{std::make_unique<Texture_impl>(device, create_info)}
 {
+    ERHE_VERIFY(create_info.usage_mask != 0);
     enable_flag_bits(erhe::Item_flags::show_in_ui);
 }
 auto Texture::get_debug_label() const -> const std::string&

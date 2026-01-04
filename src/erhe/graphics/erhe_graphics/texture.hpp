@@ -21,6 +21,7 @@ public:
     static auto make_view(Device& device, const std::shared_ptr<Texture>& view_source) -> Texture_create_info;
 
     Device&                  device;
+    uint64_t                 usage_mask            {0};
     Texture_type             type                  {Texture_type::texture_2d};
     erhe::dataformat::Format pixelformat           {erhe::dataformat::Format::format_8_vec4_srgb};
     bool                     use_mipmaps           {false};
@@ -72,10 +73,8 @@ public:
     // Implements Texture_reference
     auto get_referenced_texture() const -> const Texture* override;
 
-    using Create_info = Texture_create_info;
-
-    [[nodiscard]] static auto get_mipmap_dimensions (Texture_type type) -> int;
-    [[nodiscard]] static auto get_size_level_count  (int size) -> int;
+    [[nodiscard]] static auto get_mipmap_dimensions(Texture_type type) -> int;
+    [[nodiscard]] static auto get_size_level_count (int size) -> int;
 
     [[nodiscard]] auto get_debug_label           () const -> const std::string&;
     [[nodiscard]] auto get_pixelformat           () const -> erhe::dataformat::Format;
@@ -102,7 +101,6 @@ private:
 [[nodiscard]] auto format_texture_handle(uint64_t handle) -> std::string;
 
 constexpr uint64_t invalid_texture_handle = 0xffffffffu;
-
 
 [[nodiscard]] auto get_texture_level_count(int width, int height = 0, int depth = 0) -> int;
 

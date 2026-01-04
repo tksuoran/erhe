@@ -726,8 +726,9 @@ auto Device_impl::choose_depth_stencil_format(const unsigned int flags, int samp
 
 auto Device_impl::create_dummy_texture() -> std::shared_ptr<Texture>
 {
-    const Texture::Create_info create_info{
+    const Texture_create_info create_info{
         .device      = m_device,
+        .usage_mask  = Image_usage_flag_bit_mask::sampled_bit_mask, // TODO What is needed here?
         .width       = 2,
         .height      = 2,
         .debug_label = "dummy"

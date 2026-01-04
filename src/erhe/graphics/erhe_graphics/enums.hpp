@@ -333,4 +333,33 @@ template<> struct Enable_bit_mask_operators<Memory_barrier_mask> { static const 
 [[nodiscard]] auto c_str          (const Compare_operation    compare_operation) -> const char*;
 [[nodiscard]] auto c_str          (const Shader_type          shader_type) -> const char*;
 
+class Image_usage_flag_bit
+{
+public:
+    static constexpr uint64_t transfer_src_bit             = 0;
+    static constexpr uint64_t transfer_dst_bit             = 1;
+    static constexpr uint64_t sampled_bit                  = 2;
+    static constexpr uint64_t storage_bit                  = 3;
+    static constexpr uint64_t color_attachment_bit         = 4;
+    static constexpr uint64_t depth_stencil_attachment_bit = 5;
+    static constexpr uint64_t transient_attachment_bit     = 6;
+    static constexpr uint64_t input_attachment_bit         = 7;
+    static constexpr uint64_t host_transfer_bit            = 8;
+};
+
+class Image_usage_flag_bit_mask
+{
+public:
+    static constexpr uint64_t none                              = uint64_t{0};
+    static constexpr uint64_t transfer_src_bit_mask             = uint64_t{1} << Image_usage_flag_bit::transfer_src_bit            ;
+    static constexpr uint64_t transfer_dst_bit_mask             = uint64_t{1} << Image_usage_flag_bit::transfer_dst_bit            ;
+    static constexpr uint64_t sampled_bit_mask                  = uint64_t{1} << Image_usage_flag_bit::sampled_bit                 ;
+    static constexpr uint64_t storage_bit_mask                  = uint64_t{1} << Image_usage_flag_bit::storage_bit                 ;
+    static constexpr uint64_t color_attachment_bit_mask         = uint64_t{1} << Image_usage_flag_bit::color_attachment_bit        ;
+    static constexpr uint64_t depth_stencil_attachment_bit_mask = uint64_t{1} << Image_usage_flag_bit::depth_stencil_attachment_bit;
+    static constexpr uint64_t transient_attachment_bit_mask     = uint64_t{1} << Image_usage_flag_bit::transient_attachment_bit    ;
+    static constexpr uint64_t input_attachment_bit_mask         = uint64_t{1} << Image_usage_flag_bit::input_attachment_bit        ;
+    static constexpr uint64_t host_transfer_bit_mask            = uint64_t{1} << Image_usage_flag_bit::host_transfer_bit           ;
+};
+
 } // namespace erhe::graphics

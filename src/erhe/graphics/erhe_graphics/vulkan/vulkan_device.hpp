@@ -103,6 +103,7 @@ public:
     [[nodiscard]] auto choose_depth_stencil_format (unsigned int flags, int sample_count) const -> erhe::dataformat::Format;
     [[nodiscard]] auto get_shader_monitor          () -> Shader_monitor&;
     [[nodiscard]] auto get_info                    () const -> const Device_info&;
+    [[nodiscard]] auto get_allocator               () -> VmaAllocator&;
 
     [[nodiscard]] auto allocate_command_buffer() -> VkCommandBuffer;
 

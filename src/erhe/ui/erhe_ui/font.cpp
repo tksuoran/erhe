@@ -449,8 +449,11 @@ void Font::post_process()
     };
     m_bitmap->post_process(bm, m_gamma);
 
-    const Texture::Create_info create_info{
+    const erhe::graphics::Texture_create_info create_info{
         .device      = m_graphics_device,
+        .usage_mask  =
+            erhe::graphics::Image_usage_flag_bit_mask::sampled_bit_mask |
+            erhe::graphics::Image_usage_flag_bit_mask::transfer_dst_bit_mask,
         .type        = erhe::graphics::Texture_type::texture_2d,
         .pixelformat = erhe::dataformat::Format::format_8_vec2_unorm,
         .use_mipmaps = false,

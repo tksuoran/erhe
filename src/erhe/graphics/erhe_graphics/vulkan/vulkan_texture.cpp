@@ -2,6 +2,7 @@
 
 #include "erhe_graphics/vulkan/vulkan_texture.hpp"
 #include "erhe_graphics/vulkan/vulkan_buffer.hpp"
+#include "erhe_graphics/vulkan/vulkan_helpers.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_profile/profile.hpp"
@@ -35,7 +36,7 @@ Texture_impl::~Texture_impl() noexcept
 {
 }
 
-Texture_impl::Texture_impl(Device& device, const Create_info& create_info)
+Texture_impl::Texture_impl(Device& device, const Texture_create_info& create_info)
     : m_type                  {create_info.type}
     , m_pixelformat           {create_info.pixelformat}
     , m_fixed_sample_locations{create_info.fixed_sample_locations}
@@ -52,6 +53,27 @@ Texture_impl::Texture_impl(Device& device, const Create_info& create_info)
     , m_buffer                {create_info.buffer}
     , m_debug_label           {create_info.debug_label}
 {
+    const VkImageCreateInfo image_create_info{
+        .sType                 = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        .pNext                 = nullptr,
+        .flags                 = 0,
+        .imageType             = VK_IMAGE_TYPE_2D,
+        .format                = to_vulkan(create_info.pixelformat),
+        .extent                = {
+            .width  = create_info.width,
+            .height = create_info.height,
+            .depth  = create_info.depth
+        },
+        .mipLevels             = create_info.level_count,
+        .arrayLayers           = create_info.array_layer_count,
+        .samples               = get_vulkan_sample_count(create_info.sample_count),
+        .tiling                = VK_IMAGE_TILING_OPTIMAL,
+        .usage                 = get_vulkan_image_usage_flags(create_info.usage_mask),
+        .sharingMode           = VK_SHARING_MODE_EXCLUSIVE,
+        .queueFamilyIndexCount = 0,
+        .pQueueFamilyIndices   = nullptr,
+        .initialLayout         = VK_IMAGE_LAYOUT_UNDEFINED
+    };
     ERHE_FATAL("Not implemented");
     static_cast<void>(device);
 }

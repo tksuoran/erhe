@@ -9,6 +9,7 @@
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/draw_indirect.hpp"
+#include "erhe_graphics/enums.hpp"
 #include "erhe_graphics/gpu_timer.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/render_pass.hpp"
@@ -118,8 +119,11 @@ void Id_renderer::update_framebuffer(const erhe::math::Viewport viewport)
         m_render_pass.reset();
         m_color_texture = std::make_unique<Texture>(
             m_graphics_device,
-            Texture::Create_info{
+            erhe::graphics::Texture_create_info{
                 .device      = m_graphics_device,
+                .usage_mask  =
+                    erhe::graphics::Image_usage_flag_bit_mask::color_attachment_bit_mask |
+                    erhe::graphics::Image_usage_flag_bit_mask::transfer_src_bit_mask,
                 .type        = erhe::graphics::Texture_type::texture_2d,
                 .pixelformat = erhe::dataformat::Format::format_8_vec4_unorm,
                 .use_mipmaps = false,
@@ -130,8 +134,11 @@ void Id_renderer::update_framebuffer(const erhe::math::Viewport viewport)
         );
         m_depth_texture = std::make_unique<Texture>(
             m_graphics_device,
-            Texture::Create_info{
+            erhe::graphics::Texture_create_info{
                 .device      = m_graphics_device,
+                .usage_mask  =
+                    erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment_bit_mask |
+                    erhe::graphics::Image_usage_flag_bit_mask::transfer_src_bit_mask,
                 .type        = erhe::graphics::Texture_type::texture_2d,
                 .pixelformat = erhe::dataformat::Format::format_d32_sfloat,
                 .use_mipmaps = false,

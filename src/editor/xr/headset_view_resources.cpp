@@ -40,8 +40,11 @@ Headset_view_resources::Headset_view_resources(
 
     m_color_texture = std::make_shared<Texture>(
         graphics_device,
-        Texture::Create_info{
+        erhe::graphics::Texture_create_info{
             .device            = graphics_device,
+            .usage_mask        =
+                erhe::graphics::Image_usage_flag_bit_mask::color_attachment_bit_mask |
+                erhe::graphics::Image_usage_flag_bit_mask::sampled_bit_mask,
             .type              = erhe::graphics::Texture_type::texture_2d,
             .width             = m_width,
             .height            = m_height,
@@ -54,8 +57,11 @@ Headset_view_resources::Headset_view_resources(
 
     m_depth_stencil_texture = std::make_shared<Texture>(
         graphics_device,
-        Texture::Create_info{
+        erhe::graphics::Texture_create_info{
             .device            = graphics_device,
+            .usage_mask        =
+                erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment_bit_mask |
+                erhe::graphics::Image_usage_flag_bit_mask::sampled_bit_mask,
             .type              = erhe::graphics::Texture_type::texture_2d,
             .width             = m_width,
             .height            = m_height,
