@@ -31,35 +31,36 @@ void Shader_stages_prototype_impl::compile_shaders()
 {
     ERHE_PROFILE_FUNCTION();
 
-    ERHE_VERIFY(m_state == state_init);
+    ERHE_VERIFY(m_state == Shader_build_state::init);
     for (const auto& shader : m_create_info.shaders) {
         if (!m_glslang_shader_stages.compile_shader(m_device, shader)) {
-            m_state = state_fail;
+            m_state = Shader_build_state::fail;
             break;
         }
     }
+    m_state = Shader_build_state::shader_compilation_started;
 }
 
 auto Shader_stages_prototype_impl::link_program() -> bool
 {
     ERHE_PROFILE_FUNCTION();
 
-    if (m_state == state_fail) {
+    if (m_state == Shader_build_state::fail) {
         return false;
     }
 
-    if (m_state == state_init) {
+    if (m_state == Shader_build_state::init) {
         compile_shaders();
     }
 
-    if (m_state == state_fail) {
+    if (m_state == Shader_build_state::fail) {
         return false;
     }
 
-    ERHE_VERIFY(m_state == state_shader_compilation_started);
+    ERHE_VERIFY(m_state == Shader_build_state::shader_compilation_started);
 
     if (!m_glslang_shader_stages.link_program()) {
-        m_state = state_fail;
+        m_state = Shader_build_state::fail;
         return false;
     }
 
@@ -76,10 +77,10 @@ auto Shader_stages_prototype_impl::get_final_source(
 
 auto Shader_stages_prototype_impl::is_valid() -> bool
 {
-    if (m_state == state_ready) {
+    if (m_state == Shader_build_state::ready) {
         return true;
     }
-    //if (m_state == state_fail)
+    //if (m_state == Shader_build_state::fail)
     {
         return false;
     }

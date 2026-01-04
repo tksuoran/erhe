@@ -750,7 +750,7 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
     m_info.vulkan_api_version = application_info.apiVersion;
     m_info.vendor             = get_vendor(properties.vendorID);
 
-    m_info.max_per_stage_descriptor_samplers = properties.limits.maxPerStageDescriptorSamplers;
+    m_info.max_per_stage_descriptor_samplers = 32; // TODO properties.limits.maxPerStageDescriptorSamplers;
 }
 
 auto Device_impl::allocate_command_buffer() -> VkCommandBuffer
@@ -1298,7 +1298,7 @@ void Device_impl::memory_barrier(Memory_barrier_mask barriers)
 
 auto Device_impl::get_format_properties(erhe::dataformat::Format format) const -> Format_properties
 {
-    ERHE_FATAL("Not implemented");
+    //ERHE_FATAL("Not implemented");
     const VkFormat vulkan_format = to_vulkan(format);
     VkFormatProperties2 vulkan_properties{
         .sType            = VK_STRUCTURE_TYPE_FORMAT_PROPERTIES_2,

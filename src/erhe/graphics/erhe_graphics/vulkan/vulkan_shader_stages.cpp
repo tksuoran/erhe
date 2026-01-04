@@ -15,8 +15,8 @@ using std::string;
 Shader_stages_impl::Shader_stages_impl(Device& device, const std::string& failed_name)
     : m_device{device}
 {
-    ERHE_FATAL("Not implemented");
-    static_cast<void>(failed_name);
+    m_name = fmt::format("{} - compilation failed", failed_name);
+    ERHE_VERIFY(!failed_name.empty());
 }
 
 Shader_stages_impl::Shader_stages_impl(Shader_stages_impl&& from)

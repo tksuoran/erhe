@@ -19,6 +19,14 @@ namespace erhe::graphics {
 class Device;
 class Gl_shader;
 
+enum class Shader_build_state : int {
+    init                       = 0,
+    shader_compilation_started = 1,
+    program_link_started       = 2,
+    ready                      = 3,
+    fail                       = 4
+};
+
 // NOTE: There is no Shader_stages_prototype (non-impl)
 class Shader_stages_prototype_impl final
 {
@@ -40,18 +48,12 @@ public:
     auto get_final_source(const Shader_stage& shader, std::optional<unsigned int> gl_name) -> std::string;
 
 private:
-    static constexpr int state_init                       = 0;
-    static constexpr int state_shader_compilation_started = 1;
-    static constexpr int state_program_link_started       = 2;
-    static constexpr int state_ready                      = 3;
-    static constexpr int state_fail                       = 4;
-
     friend class Shader_stages_impl;
     friend class Reloadable_shader_stages;
 
     Device&                                             m_device;
     Shader_stages_create_info                           m_create_info;
-    int                                                 m_state{state_init};
+    Shader_build_state                                  m_state{Shader_build_state::init};
     Shader_resource                                     m_default_uniform_block;
     std::map<std::string, Shader_resource, std::less<>> m_resources;
     std::map<unsigned int, std::string>                 m_final_sources;

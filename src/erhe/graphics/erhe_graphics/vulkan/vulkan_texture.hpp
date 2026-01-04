@@ -3,6 +3,9 @@
 #include "erhe_graphics/texture.hpp"
 #include "erhe_verify/verify.hpp"
 
+#include "volk.h"
+#include "vk_mem_alloc.h"
+
 namespace erhe::graphics {
 
 class Texture_impl final
@@ -36,8 +39,11 @@ public:
     [[nodiscard]] auto is_sparse                 () const -> bool;
 
 private:
-    //VkImage                  m_vulkan_image;
-    //VkImageView              m_vulkan_image_view;
+    VmaAllocation m_vma_allocation{VK_NULL_HANDLE};
+    VkImage       m_vk_image      {VK_NULL_HANDLE};	
+    VkImageView   m_vk_image_view {VK_NULL_HANDLE};
+    VkSampler     m_vk_sampler    {VK_NULL_HANDLE};
+
     Texture_type             m_type                  {Texture_type::texture_2d};
     erhe::dataformat::Format m_pixelformat           {erhe::dataformat::Format::format_8_vec4_srgb};
     bool                     m_fixed_sample_locations{true};
