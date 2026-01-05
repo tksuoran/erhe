@@ -21,9 +21,10 @@ auto get_buffer_usage(Buffer_target target) -> Buffer_usage
         case Buffer_target::uniform      : return Buffer_usage::uniform;
         case Buffer_target::storage      : return Buffer_usage::storage;
         case Buffer_target::draw_indirect: return Buffer_usage::indirect;
-        case Buffer_target::texture      : return Buffer_usage::texture;
-        case Buffer_target::pixel        : return Buffer_usage::pixel;
-        case Buffer_target::transfer     : return Buffer_usage::transfer;
+        case Buffer_target::uniform_texel: return Buffer_usage::uniform_texel;
+        case Buffer_target::storage_texel: return Buffer_usage::storage_texel;
+        case Buffer_target::transfer_src : return Buffer_usage::transfer_src;
+        case Buffer_target::transfer_dst : return Buffer_usage::transfer_dst;
         default: ERHE_FATAL("get_buffer_usage(): Bad Buffer_target %u", static_cast<unsigned int>(target)); return Buffer_usage::none;
     }
 }

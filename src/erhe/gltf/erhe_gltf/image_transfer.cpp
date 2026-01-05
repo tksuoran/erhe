@@ -13,7 +13,7 @@ Image_transfer::Image_transfer(erhe::graphics::Device& graphics_device)
     : m_graphics_device{graphics_device}
     , m_texture_upload_buffer{
         graphics_device,
-        erhe::graphics::Buffer_target::pixel,
+        erhe::graphics::Buffer_target::transfer_src,
         "Image_transfer::m_texture_upload_buffer"
     }
 {

@@ -3,6 +3,9 @@
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_profile/profile.hpp"
 
+#include "volk.h"
+#include "vk_mem_alloc.h"
+
 #include <mutex>
 
 namespace erhe::graphics {
@@ -56,7 +59,8 @@ public:
     friend class Texture;
 
 private:
-    //VkBuffer  m_vulkan_buffer;
+    VmaAllocation m_vma_allocation{VK_NULL_HANDLE};
+    VkBuffer      m_vk_buffer     {VK_NULL_HANDLE};	
 };
 
 class Buffer_impl_hash

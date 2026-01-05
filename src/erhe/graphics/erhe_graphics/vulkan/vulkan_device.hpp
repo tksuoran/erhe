@@ -14,7 +14,6 @@ VK_DEFINE_HANDLE(VmaAllocator)
 
 namespace erhe::graphics {
 
-
 class Instance_layers
 {
 public:
@@ -68,6 +67,7 @@ public:
 
 class Frame_begin_info;
 class Frame_end_info;
+class Ring_buffer;
 class Surface_impl;
 class Swapchain;
 
@@ -171,8 +171,7 @@ private:
         uint64_t              frame_number;
         std::function<void()> callback;
     };
-    std::vector<std::unique_ptr<Ring_buffer>> m_ring_buffers;
-    std::vector<Completion_handler>           m_completion_handlers;
+    std::vector<Completion_handler> m_completion_handlers;
 
     VkInstance               m_vulkan_instance            {VK_NULL_HANDLE};
     VkPhysicalDevice         m_vulkan_physical_device     {VK_NULL_HANDLE};
@@ -196,6 +195,12 @@ private:
     Capabilities             m_capabilities       {};
 
     VkPhysicalDeviceDriverProperties m_driver_properties{};
+
+    // For ring buffer:
+    bool                                      m_need_sync{false};
+    std::vector<std::unique_ptr<Ring_buffer>> m_ring_buffers;
+    std::size_t                               m_min_buffer_size = 2 * 1024 * 1024; // TODO
+
 };
 
 } // namespace erhe::graphics

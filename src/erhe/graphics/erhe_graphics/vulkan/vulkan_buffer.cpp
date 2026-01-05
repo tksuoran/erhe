@@ -1,4 +1,6 @@
 #include "erhe_graphics/vulkan/vulkan_buffer.hpp"
+#include "erhe_graphics/vulkan/vulkan_device.hpp"
+#include "erhe_graphics/vulkan/vulkan_helpers.hpp"
 #include "erhe_utility/bit_helpers.hpp"
 #include "erhe_utility/align.hpp"
 #include "erhe_graphics/graphics_log.hpp"
@@ -19,6 +21,33 @@ namespace erhe::graphics {
 
 Buffer_impl::Buffer_impl(Device& device, const Buffer_create_info& create_info) noexcept
 {
+    // const VkBufferCreateInfo buffer_create_info{
+    //     .sType                 = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+    //     .pNext                 = nullptr,
+    //     .flags                 = 0,
+    //     .size                  = create_info.capacity_byte_count,
+    //     .usage                 = to_vulkan_buffer_usage(create_info.usage),
+    //     .sharingMode           = VK_SHARING_MODE_EXCLUSIVE,
+    //     .queueFamilyIndexCount = 0,
+    //     .pQueueFamilyIndices   = nullptr
+    // };
+
+    // Device_impl&  device_impl   = device.get_impl();
+    // VkDevice      vulkan_device = device_impl.get_vulkan_device();
+    // VmaAllocator& allocator     = device.get_impl().get_allocator();
+    // VkResult      result        = VK_SUCCESS;
+
+    //    const VmaAllocationCreateInfo allocation_create_info{
+    //        .flags          = 0,
+    //        .usage          = 0,
+    //        .requiredFlags  = 0,
+    //        .preferredFlags = 0,
+    //        .memoryTypeBits = 0,
+    //        .pool           = VK_NULL_HANDLE,
+    //        .pUserData      = nullptr,
+    //        .priority       = 0.0f
+    //    };
+
     ERHE_FATAL("Not implemented");
     static_cast<void>(device);
     static_cast<void>(create_info);

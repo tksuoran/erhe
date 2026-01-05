@@ -756,7 +756,7 @@ void Imgui_renderer::update_texture(ImTextureData* tex)
         };
 
         std::size_t                        byte_count = src_span.size_bytes();
-        erhe::graphics::Ring_buffer_client texture_upload_buffer{m_graphics_device, erhe::graphics::Buffer_target::pixel, "font upload"};
+        erhe::graphics::Ring_buffer_client texture_upload_buffer{m_graphics_device, erhe::graphics::Buffer_target::transfer_src, "font upload"};
         erhe::graphics::Ring_buffer_range  buffer_range = texture_upload_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, byte_count);
         std::span<std::byte>               dst_span     = buffer_range.get_span();
         memcpy(dst_span.data(), src_span.data(), byte_count);
@@ -813,7 +813,7 @@ void Imgui_renderer::update_texture(ImTextureData* tex)
 
             // TODO We don't necessarily always need full texture size buffer range, just for the rectangle
             const std::size_t                  byte_count   = src_span.size_bytes();
-            erhe::graphics::Ring_buffer_client texture_upload_buffer{m_graphics_device, erhe::graphics::Buffer_target::pixel, "ImGui Draw Texture Update"};
+            erhe::graphics::Ring_buffer_client texture_upload_buffer{m_graphics_device, erhe::graphics::Buffer_target::transfer_src, "ImGui Draw Texture Update"};
             erhe::graphics::Ring_buffer_range  buffer_range = texture_upload_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, byte_count);
             std::span<std::byte>               dst_span     = buffer_range.get_span();
             memcpy(dst_span.data(), src_span.data(), byte_count);

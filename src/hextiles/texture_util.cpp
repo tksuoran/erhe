@@ -109,7 +109,7 @@ auto load_texture(erhe::graphics::Device& graphics_device, const std::filesystem
     std::size_t                        byte_count = src_span.size_bytes();
     erhe::graphics::Ring_buffer_client texture_upload_buffer{
         graphics_device,
-        erhe::graphics::Buffer_target::pixel,
+        erhe::graphics::Buffer_target::transfer_src,
         "hextiles load_texture() texture upload"
     };
     erhe::graphics::Ring_buffer_range  buffer_range = texture_upload_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, byte_count);

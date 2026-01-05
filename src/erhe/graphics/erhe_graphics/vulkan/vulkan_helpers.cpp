@@ -963,4 +963,39 @@ auto get_vulkan_image_aspect_flags(erhe::dataformat::Format format) -> VkImageAs
     return vk_aspect_flags;
 }
 
+auto to_vulkan_buffer_usage(Buffer_usage buffer_usage) -> VkBufferUsageFlags
+{
+    using namespace erhe::utility;
+
+    VkBufferUsageFlags vk_flags{0};
+    if (test_bit_set(buffer_usage, Buffer_usage::vertex)) {
+        vk_flags |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+    }
+    if (test_bit_set(buffer_usage, Buffer_usage::index)) {
+        vk_flags |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+    }
+    if (test_bit_set(buffer_usage, Buffer_usage::uniform)) {
+        vk_flags |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+    }
+    if (test_bit_set(buffer_usage, Buffer_usage::storage)) {
+        vk_flags |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+    }
+    if (test_bit_set(buffer_usage, Buffer_usage::indirect)) {
+        vk_flags |= VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
+    }
+    if (test_bit_set(buffer_usage, Buffer_usage::uniform_texel)) {
+        vk_flags |= VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT;
+    }
+    if (test_bit_set(buffer_usage, Buffer_usage::storage_texel)) {
+        vk_flags |= VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT;
+    }
+    if (test_bit_set(buffer_usage, Buffer_usage::transfer_src)) {
+        vk_flags |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    }
+    if (test_bit_set(buffer_usage, Buffer_usage::transfer_dst)) {
+        vk_flags |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    }
+    return vk_flags;
+};
+
 } // namespace erhe::graphics

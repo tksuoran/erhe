@@ -74,7 +74,7 @@ Id_renderer::Id_renderer(
     }}
     , m_texture_read_buffer{
         graphics_device,
-        erhe::graphics::Buffer_target::pixel,
+        erhe::graphics::Buffer_target::transfer_dst,
         "Id_renderer::m_texture_read_buffer"
     }
     , m_gpu_timer{graphics_device, "Id_renderer"}

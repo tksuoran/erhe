@@ -46,25 +46,32 @@ auto to_string(Buffer_usage usage) -> std::string
         ss << "indirect";
         is_empty = false;
     }
-    if (test_bit_set(usage, Buffer_usage::texture)) {
+    if (test_bit_set(usage, Buffer_usage::uniform_texel)) {
         if (!is_empty) {
             ss << " | ";
         }
-        ss << "texture";
+        ss << "uniform_texel";
         is_empty = false;
     }
-    if (test_bit_set(usage, Buffer_usage::pixel)) {
+    if (test_bit_set(usage, Buffer_usage::storage_texel)) {
         if (!is_empty) {
             ss << " | ";
         }
-        ss << "pixel";
+        ss << "storage_texel";
         is_empty = false;
     }
-    if (test_bit_set(usage, Buffer_usage::transfer)) {
+    if (test_bit_set(usage, Buffer_usage::transfer_src)) {
         if (!is_empty) {
             ss << " | ";
         }
-        ss << "transfer";
+        ss << "transfer_src";
+        is_empty = false;
+    }
+    if (test_bit_set(usage, Buffer_usage::transfer_dst)) {
+        if (!is_empty) {
+            ss << " | ";
+        }
+        ss << "transfer_dst";
         is_empty = false;
     }
     return ss.str();

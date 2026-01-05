@@ -1,5 +1,6 @@
 #pragma once
 
+#include "erhe_graphics/enums.hpp"
 #include "erhe_dataformat/dataformat.hpp"
 
 #include "volk.h"
@@ -28,5 +29,7 @@ namespace erhe::graphics {
 [[nodiscard]] auto get_vulkan_sample_count      (int msaa_sample_count) -> VkSampleCountFlagBits;
 [[nodiscard]] auto get_vulkan_image_usage_flags (uint64_t usage_mask) -> VkImageUsageFlags;
 [[nodiscard]] auto get_vulkan_image_aspect_flags(erhe::dataformat::Format format) -> VkImageAspectFlags;
+
+[[nodiscard]] auto to_vulkan_buffer_usage(Buffer_usage buffer_usage) -> VkBufferUsageFlags;
 
 } // namespace erhe::graphics

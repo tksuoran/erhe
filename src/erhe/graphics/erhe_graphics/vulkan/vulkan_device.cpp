@@ -1097,7 +1097,7 @@ auto Device_impl::create_dummy_texture() -> std::shared_ptr<Texture>
 
     std::span<const std::uint8_t> src_span{dummy_pixel.data(), dummy_pixel.size()};
     std::size_t                   byte_count   = src_span.size_bytes();
-    Ring_buffer_client            texture_upload_buffer{m_device, erhe::graphics::Buffer_target::pixel, "dummy texture upload"};
+    Ring_buffer_client            texture_upload_buffer{m_device, erhe::graphics::Buffer_target::transfer_src, "dummy texture upload"};
     Ring_buffer_range             buffer_range = texture_upload_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, byte_count);
     std::span<std::byte>          dst_span     = buffer_range.get_span();
     memcpy(dst_span.data(), src_span.data(), byte_count);
@@ -1289,11 +1289,52 @@ auto Device_impl::allocate_ring_buffer_entry(
     std::size_t       byte_count
 ) -> Ring_buffer_range
 {
-    ERHE_FATAL("Not implemented");
-    static_cast<void>(buffer_target);
-    static_cast<void>(ring_buffer_usage);
-    static_cast<void>(byte_count);
-    return {};
+    m_need_sync = true;
+    const std::size_t required_alignment = erhe::utility::next_power_of_two_16bit(get_buffer_alignment(buffer_target));
+    std::size_t alignment_byte_count_without_wrap{0};
+    std::size_t available_byte_count_without_wrap{0};
+    std::size_t available_byte_count_with_wrap{0};
+
+    // Pass 1: Do we have buffer that can be used without a wrap?
+    for (const std::unique_ptr<Ring_buffer>& ring_buffer : m_ring_buffers) {
+        if (!ring_buffer->match(ring_buffer_usage)) {
+            continue;
+        }
+        ring_buffer->get_size_available_for_write(
+            required_alignment,
+            alignment_byte_count_without_wrap,
+            available_byte_count_without_wrap,
+            available_byte_count_with_wrap
+        );
+        if (available_byte_count_without_wrap >= byte_count) {
+            return ring_buffer->acquire(required_alignment, ring_buffer_usage, byte_count);
+        }
+    }
+
+    // Pass 2: Do we have buffer that can be used with a wrap?
+    for (const std::unique_ptr<Ring_buffer>& ring_buffer : m_ring_buffers) {
+        if (!ring_buffer->match(ring_buffer_usage)) {
+            continue;
+        }
+        ring_buffer->get_size_available_for_write(
+            required_alignment,
+            alignment_byte_count_without_wrap,
+            available_byte_count_without_wrap,
+            available_byte_count_with_wrap
+        );
+        if (available_byte_count_with_wrap >= byte_count) {
+            return ring_buffer->acquire(required_alignment, ring_buffer_usage, byte_count);
+        }
+    }
+
+    // No existing usable buffer found, create new buffer
+    Ring_buffer_create_info create_info{
+        .size              = std::max(m_min_buffer_size, 4 * byte_count),
+        .ring_buffer_usage = ring_buffer_usage,
+        .debug_label       = "Ring_buffer"
+    };
+    m_ring_buffers.push_back(std::make_unique<Ring_buffer>(m_device, create_info));
+    return m_ring_buffers.back()->acquire(required_alignment, ring_buffer_usage, byte_count);
 }
 
 void Device_impl::memory_barrier(Memory_barrier_mask barriers)

@@ -329,7 +329,7 @@ void Tile_renderer::compose_tileset_texture()
     erhe::graphics::Blit_command_encoder encoder{m_graphics_device};
     erhe::graphics::Ring_buffer_client texture_upload_buffer{
         m_graphics_device,
-        erhe::graphics::Buffer_target::pixel,
+        erhe::graphics::Buffer_target::transfer_src,
         "Tile_renderer::m_tileset_texture upload"
     };
     {

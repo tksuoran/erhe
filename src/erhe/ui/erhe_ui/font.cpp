@@ -466,7 +466,7 @@ void Font::post_process()
 
     std::span<std::uint8_t>            src_span   = bm.as_span();
     std::size_t                        byte_count = src_span.size_bytes();
-    erhe::graphics::Ring_buffer_client texture_upload_buffer{m_graphics_device, erhe::graphics::Buffer_target::pixel, "font upload"};
+    erhe::graphics::Ring_buffer_client texture_upload_buffer{m_graphics_device, erhe::graphics::Buffer_target::transfer_src, "font upload"};
     erhe::graphics::Ring_buffer_range  buffer_range = texture_upload_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, byte_count);
     std::span<std::byte>               dst_span     = buffer_range.get_span();
     memcpy(dst_span.data(), src_span.data(), byte_count);

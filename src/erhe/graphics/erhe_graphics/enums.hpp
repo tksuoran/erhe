@@ -89,9 +89,10 @@ enum class Buffer_target : unsigned int
     uniform       = 2,
     storage       = 3,
     draw_indirect = 4,
-    texture       = 5,
-    pixel         = 7,
-    transfer      = 8
+    uniform_texel = 5,
+    storage_texel = 6,
+    transfer_src  = 7,
+    transfer_dst  = 8
 };
 
 enum class Texture_type : unsigned int
@@ -217,15 +218,17 @@ enum class Stencil_op : unsigned int
 };
 
 enum class Buffer_usage : unsigned int {
-    none     = 0x00,
-    vertex   = 0x01,
-    index    = 0x02,
-    uniform  = 0x04,
-    storage  = 0x08,
-    indirect = 0x10,
-    texture  = 0x20,
-    pixel    = 0x40, // pixel pack / unpack based on direction
-    transfer = 0x80
+    none          = 0x0000u,
+    vertex        = 0x0001u,
+    index         = 0x0002u,
+    uniform       = 0x0004u,
+    storage       = 0x0008u,
+    indirect      = 0x0010u,
+    uniform_texel = 0x0020u,
+    storage_texel = 0x0040u,
+    transfer_src  = 0x0100u,
+    transfer_dst  = 0x0200u,
+    transfer      = 0x0300u
 };
 
 enum class Memory_usage : unsigned int {

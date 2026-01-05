@@ -743,7 +743,7 @@ auto Device_impl::create_dummy_texture() -> std::shared_ptr<Texture>
 
     std::span<const std::uint8_t> src_span{dummy_pixel.data(), dummy_pixel.size()};
     std::size_t                   byte_count   = src_span.size_bytes();
-    Ring_buffer_client            texture_upload_buffer{m_device, erhe::graphics::Buffer_target::pixel, "dummy texture upload"};
+    Ring_buffer_client            texture_upload_buffer{m_device, erhe::graphics::Buffer_target::transfer_src, "dummy texture upload"};
     Ring_buffer_range             buffer_range = texture_upload_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, byte_count);
     std::span<std::byte>          dst_span     = buffer_range.get_span();
     memcpy(dst_span.data(), src_span.data(), byte_count);
@@ -838,16 +838,17 @@ inline auto access_mask(Device& device) -> gl::Map_buffer_access_mask
 
 void Device_impl::upload_to_buffer(Buffer& buffer, size_t offset, const void* data, size_t length)
 {
-    // TODO Use persistent staging buffer, maybe Ring_buffer_impl?
+    // TODO Use persistent buffer instead of re-creating staging buffer each time.
+    // TODO Use GL directly, avoid Buffer_usage::transfer. Or maybe use Ring_buffer_impl?
     Buffer_create_info create_info{
         .capacity_byte_count                = length,
-        .usage                              = Buffer_usage     ::transfer,
+        .usage                              = Buffer_usage::transfer,
         .required_memory_property_bit_mask  =
             Memory_property_flag_bit_mask::host_write |   // CPU to GPU
             Memory_property_flag_bit_mask::host_coherent, // immediately usable by GPU without synchronization
         .preferred_memory_property_bit_mask =
             Memory_property_flag_bit_mask::device_local,
-        .mapping                            = Buffer_mapping   ::not_mappable,
+        .mapping                            = Buffer_mapping::not_mappable,
         .init_data                          = data,
         .debug_label                        = "Staging buffer"
     };
