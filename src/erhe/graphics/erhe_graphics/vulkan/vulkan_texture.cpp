@@ -65,8 +65,8 @@ Texture_impl::Texture_impl(Device& device, const Texture_create_info& create_inf
             .height = static_cast<uint32_t>(create_info.height),
             .depth  = static_cast<uint32_t>(create_info.depth)
         },
-        .mipLevels             = static_cast<uint32_t>(create_info.level_count),
-        .arrayLayers           = static_cast<uint32_t>(create_info.array_layer_count),
+        .mipLevels             = static_cast<uint32_t>(m_level_count),
+        .arrayLayers           = std::max(uint32_t{1}, static_cast<uint32_t>(m_array_layer_count)),
         .samples               = get_vulkan_sample_count(create_info.sample_count),
         .tiling                = VK_IMAGE_TILING_OPTIMAL,
         .usage                 = get_vulkan_image_usage_flags(create_info.usage_mask),
@@ -96,7 +96,7 @@ Texture_impl::Texture_impl(Device& device, const Texture_create_info& create_inf
 
     result = vmaCreateImage(allocator, &image_create_info, &allocation_create_info, &m_vk_image, &m_vma_allocation, nullptr);
     if (result != VK_SUCCESS) {
-        log_swapchain->critical("vkDeviceWaitIdle() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        log_swapchain->critical("vmaCreateImage() failed with {} {}", static_cast<int32_t>(result), c_str(result));
         abort();
     }
 
@@ -115,13 +115,13 @@ Texture_impl::Texture_impl(Device& device, const Texture_create_info& create_inf
         },
         .subresourceRange = {
             .aspectMask = get_vulkan_image_aspect_flags(create_info.pixelformat),
-            .levelCount = static_cast<uint32_t>(create_info.level_count),
-            .layerCount = static_cast<uint32_t>(create_info.array_layer_count)
+            .levelCount = static_cast<uint32_t>(m_level_count),
+            .layerCount = std::max(uint32_t{1}, static_cast<uint32_t>(m_array_layer_count))
         }
     };
     result = vkCreateImageView(vulkan_device, &image_view_create_info, nullptr, &m_vk_image_view);
     if (result != VK_SUCCESS) {
-        log_swapchain->critical("vkDeviceWaitIdle() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        log_swapchain->critical("vkCreateImageView() failed with {} {}", static_cast<int32_t>(result), c_str(result));
         abort();
     }
 }
@@ -200,9 +200,11 @@ auto Texture_impl::get_sample_count() const -> int
 
 auto operator==(const Texture_impl& lhs, const Texture_impl& rhs) noexcept -> bool
 {
-    static_cast<void>(rhs);
-    static_cast<void>(lhs);
-    return false;
+    return
+        (lhs.m_vma_allocation == rhs.m_vma_allocation) &&
+        (lhs.m_vk_image       == rhs.m_vk_image      ) &&
+        (lhs.m_vk_image_view  == rhs.m_vk_image_view ) &&
+        (lhs.m_vk_sampler     == rhs.m_vk_sampler    );
 }
 
 auto operator!=(const Texture_impl& lhs, const Texture_impl& rhs) noexcept -> bool

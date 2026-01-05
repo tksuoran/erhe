@@ -38,6 +38,9 @@ public:
     [[nodiscard]] auto is_sparse                 () const -> bool;
 
 private:
+    friend bool operator==(const Texture_impl& lhs, const Texture_impl& rhs) noexcept;
+    friend bool operator!=(const Texture_impl& lhs, const Texture_impl& rhs) noexcept;
+
     VmaAllocation m_vma_allocation{VK_NULL_HANDLE};
     VkImage       m_vk_image      {VK_NULL_HANDLE};	
     VkImageView   m_vk_image_view {VK_NULL_HANDLE};

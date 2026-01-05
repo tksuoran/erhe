@@ -551,7 +551,7 @@ auto Surface_impl::update_swapchain(Vulkan_swapchain_create_info& out_swapchain_
     VkResult result = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_physical_device, m_surface, &surface_capabilities);
     m_is_valid = result == VK_SUCCESS;
     if (result != VK_SUCCESS) {
-        log_context->warn("vkGetPhysicalDeviceSurfaceCapabilitiesKHR() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        log_context->warn("vkGetPhysicalDeviceSurfaceCapabilitiesKHR() failed with {} {}", static_cast<int32_t>(result), c_str(result));
         return false;
     }
 

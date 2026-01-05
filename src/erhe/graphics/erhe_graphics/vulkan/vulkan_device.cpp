@@ -251,14 +251,14 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
 
     result = volkInitialize();
     if (result != VK_SUCCESS) {
-        log_context->critical("volkInitialize() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        log_context->critical("volkInitialize() failed with {} {}", static_cast<int32_t>(result), c_str(result));
         abort();
     }
 
     uint32_t instance_layer_count{0};
     result = vkEnumerateInstanceLayerProperties(&instance_layer_count, nullptr);
     if (result != VK_SUCCESS) {
-        log_context->critical("vkEnumerateInstanceLayerProperties() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        log_context->critical("vkEnumerateInstanceLayerProperties() failed with {} {}", static_cast<int32_t>(result), c_str(result));
         abort();
     }
 
@@ -266,7 +266,7 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
     std::vector<VkLayerProperties> instance_layers(instance_layer_count);
     result = vkEnumerateInstanceLayerProperties(&instance_layer_count, instance_layers.data());
     if (result != VK_SUCCESS) {
-        log_context->critical("vkEnumerateInstanceLayerProperties() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        log_context->critical("vkEnumerateInstanceLayerProperties() failed with {} {}", static_cast<int32_t>(result), c_str(result));
         abort();
     }
     for (const VkLayerProperties& layer : instance_layers) {
@@ -299,13 +299,13 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
     uint32_t instance_extension_count{0};
     result = vkEnumerateInstanceExtensionProperties(nullptr, &instance_extension_count, nullptr);
     if (result != VK_SUCCESS) {
-        log_context->critical("vkEnumerateInstanceExtensionProperties() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        log_context->critical("vkEnumerateInstanceExtensionProperties() failed with {} {}", static_cast<int32_t>(result), c_str(result));
         abort();
     }
     std::vector<VkExtensionProperties> instance_extensions(instance_extension_count);
     result = vkEnumerateInstanceExtensionProperties(nullptr, &instance_extension_count, instance_extensions.data());
     if (result != VK_SUCCESS) {
-        log_context->critical("vkEnumerateInstanceExtensionProperties() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        log_context->critical("vkEnumerateInstanceExtensionProperties() failed with {} {}", static_cast<int32_t>(result), c_str(result));
         abort();
     }
 
@@ -440,7 +440,7 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
     };
     result = vkCreateInstance(&instance_create_info, nullptr, &m_vulkan_instance);
     if (result != VK_SUCCESS) {
-        log_context->critical("vkCreateInstance() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        log_context->critical("vkCreateInstance() failed with {} {}", static_cast<int32_t>(result), c_str(result));
         abort();
     }
 
@@ -457,7 +457,7 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
     std::vector<const char*> device_extensions_c_str{};
     const bool physical_device_ok = choose_physical_device(surface_impl.get(), device_extensions_c_str);
     if (!physical_device_ok) {
-        log_context->critical("vkCreateInstance() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        log_context->critical("vkCreateInstance() failed with {} {}", static_cast<int32_t>(result), c_str(result));
         abort();
     }
 
@@ -570,7 +570,7 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         if (result == VK_SUCCESS) {
             debug_callback_registered = true;
         } else {
-            log_context->warn("vkCreateDebugUtilsMessengerEXT() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+            log_context->warn("vkCreateDebugUtilsMessengerEXT() failed with {} {}", static_cast<int32_t>(result), c_str(result));
         }
     }
     if (m_instance_extensions.m_VK_EXT_debug_report && !debug_callback_registered) {
@@ -593,7 +593,7 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
             &m_debug_report_callback
         );
         if (result != VK_SUCCESS) {
-            log_context->warn("vkCreateDebugReportCallbackEXT() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+            log_context->warn("vkCreateDebugReportCallbackEXT() failed with {} {}", static_cast<int32_t>(result), c_str(result));
         }
     }
 
@@ -662,7 +662,7 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
     };
     result = vkCreateDevice(m_vulkan_physical_device, &device_create_info, nullptr, &m_vulkan_device);
     if (result != VK_SUCCESS) {
-        log_context->critical("vkCreateDevice() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        log_context->critical("vkCreateDevice() failed with {} {}", static_cast<int32_t>(result), c_str(result));
         abort();
     }
 
@@ -690,14 +690,14 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
     VmaVulkanFunctions vma_vulkan_functions{};
     result = vmaImportVulkanFunctionsFromVolk(&vma_create_info, &vma_vulkan_functions);
     if (result != VK_SUCCESS) {
-        log_context->critical("vmaImportVulkanFunctionsFromVolk() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        log_context->critical("vmaImportVulkanFunctionsFromVolk() failed with {} {}", static_cast<int32_t>(result), c_str(result));
         abort();
     }
     vma_create_info.pVulkanFunctions = &vma_vulkan_functions;
 
     result = vmaCreateAllocator(&vma_create_info, &m_vma_allocator);
     if (result != VK_SUCCESS) {
-        log_context->critical("vmaCreateAllocator() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        log_context->critical("vmaCreateAllocator() failed with {} {}", static_cast<int32_t>(result), c_str(result));
         abort();
     }
 
@@ -723,7 +723,7 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
     };
     result = vkCreateCommandPool(m_vulkan_device, &command_pool_create_info, nullptr, &m_vulkan_command_pool);
     if (result != VK_SUCCESS) {
-        log_context->critical("vkCreateCommandPool() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        log_context->critical("vkCreateCommandPool() failed with {} {}", static_cast<int32_t>(result), c_str(result));
         abort();
     }
 
@@ -742,7 +742,7 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
 
     result = vkCreateSemaphore(m_vulkan_device, &semaphore_create_info, nullptr, &m_vulkan_frame_end_semaphore);
     if (result != VK_SUCCESS) {
-        log_context->critical("vkCreateSemaphore() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        log_context->critical("vkCreateSemaphore() failed with {} {}", static_cast<int32_t>(result), c_str(result));
         abort();
     }
 
@@ -766,7 +766,7 @@ auto Device_impl::allocate_command_buffer() -> VkCommandBuffer
     VkCommandBuffer vulkan_command_buffer{VK_NULL_HANDLE};
     VkResult result = vkAllocateCommandBuffers(m_vulkan_device, &allocate_info, &vulkan_command_buffer);
     if (result != VK_SUCCESS) {
-        log_context->critical("vkAllocateCommandBuffers() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        log_context->critical("vkAllocateCommandBuffers() failed with {} {}", static_cast<int32_t>(result), c_str(result));
         abort();
     }
     return vulkan_command_buffer;
@@ -808,7 +808,7 @@ auto Device_impl::choose_physical_device(
     VkResult result{VK_SUCCESS};
     result = vkEnumeratePhysicalDevices(m_vulkan_instance, &physical_device_count, nullptr);
     if (result != VK_SUCCESS) {
-        log_context->critical("vkEnumeratePhysicalDevices() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        log_context->critical("vkEnumeratePhysicalDevices() failed with {} {}", static_cast<int32_t>(result), c_str(result));
         return false;
     }
     std::vector<VkPhysicalDevice> physical_devices(physical_device_count);
@@ -818,7 +818,7 @@ auto Device_impl::choose_physical_device(
     }
     result = vkEnumeratePhysicalDevices(m_vulkan_instance, &physical_device_count, physical_devices.data());
     if (result != VK_SUCCESS) {
-        log_context->critical("vkEnumeratePhysicalDevices() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        log_context->critical("vkEnumeratePhysicalDevices() failed with {} {}", static_cast<int32_t>(result), c_str(result));
         return false;
     }
 
@@ -919,7 +919,7 @@ auto Device_impl::query_device_queue_family_indices(
             VkBool32 support{VK_FALSE};
             result = vkGetPhysicalDeviceSurfaceSupportKHR(vulkan_physical_device, queue_family_index, vulkan_surface, &support);
             if (result != VK_SUCCESS) {
-                log_context->warn("vkGetPhysicalDeviceSurfaceSupportKHR() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+                log_context->warn("vkGetPhysicalDeviceSurfaceSupportKHR() failed with {} {}", static_cast<int32_t>(result), c_str(result));
             }
             return (result == VK_SUCCESS) && (support == VK_TRUE);
         }();
@@ -969,13 +969,13 @@ auto Device_impl::query_device_extensions(
     VkResult result{VK_SUCCESS};
     result = vkEnumerateDeviceExtensionProperties(vulkan_physical_device, nullptr, &device_extension_count, nullptr);
     if (result != VK_SUCCESS) {
-        log_context->critical("vkEnumerateDeviceExtensionProperties() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        log_context->critical("vkEnumerateDeviceExtensionProperties() failed with {} {}", static_cast<int32_t>(result), c_str(result));
         return 0.0f;
     }
     std::vector<VkExtensionProperties> device_extensions(device_extension_count);
     result = vkEnumerateDeviceExtensionProperties(vulkan_physical_device, nullptr, &device_extension_count, device_extensions.data());
     if (result != VK_SUCCESS) {
-        log_context->critical("vkEnumerateDeviceExtensionProperties() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        log_context->critical("vkEnumerateDeviceExtensionProperties() failed with {} {}", static_cast<int32_t>(result), c_str(result));
         return 0.0f;
     }
 
@@ -1082,6 +1082,7 @@ auto Device_impl::create_dummy_texture() -> std::shared_ptr<Texture>
 {
     const Texture_create_info create_info{
         .device      = m_device,
+        .usage_mask  = Image_usage_flag_bit_mask::sampled, // TODO Is sampled all that is needed here?
         .width       = 2,
         .height      = 2,
         .debug_label = "dummy"
@@ -1264,7 +1265,7 @@ void Device_impl::update_frame_completion()
     log_context->trace("vkQueueSubmit() end of frame timeline semaphore @ frame index = {}", m_frame_index);
     result = vkQueueSubmit(m_vulkan_graphics_queue, 1, &submit_info, VK_NULL_HANDLE);
     if (result != VK_SUCCESS) {
-        log_context->critical("vkQueueSubmit() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        log_context->critical("vkQueueSubmit() failed with {} {}", static_cast<int32_t>(result), c_str(result));
         abort();
     }
 
@@ -1273,7 +1274,7 @@ void Device_impl::update_frame_completion()
     uint64_t latest_completed_frame{0};
     result = vkGetSemaphoreCounterValue(m_vulkan_device, m_vulkan_frame_end_semaphore, &latest_completed_frame);
     if (result != VK_SUCCESS) {
-        log_context->error("vkGetSemaphoreCounterValue() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        log_context->error("vkGetSemaphoreCounterValue() failed with {} {}", static_cast<int32_t>(result), c_str(result));
     } else {
         for (; m_latest_completed_frame <= latest_completed_frame; ++m_latest_completed_frame) {
             log_context->trace("GPU has completed frame index = {}", m_latest_completed_frame);
@@ -1387,7 +1388,7 @@ void Device_impl::set_debug_label(VkObjectType object_type, uint64_t object_hand
     if (result != VK_SUCCESS) {
         log_debug->warn(
             "vkSetDebugUtilsObjectNameEXT() failed with {} {}",
-            static_cast<uint32_t>(result),
+            static_cast<int32_t>(result),
             c_str(result)
         );
     }

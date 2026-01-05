@@ -32,7 +32,7 @@ Swapchain_impl::~Swapchain_impl() noexcept
     // TODO Queue thread safety
 	result = vkDeviceWaitIdle(vulkan_device);
     if (result != VK_SUCCESS) {
-        log_swapchain->critical("vkDeviceWaitIdle() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        log_swapchain->critical("vkDeviceWaitIdle() failed with {} {}", static_cast<int32_t>(result), c_str(result));
         abort();
     }
 
@@ -51,7 +51,7 @@ Swapchain_impl::~Swapchain_impl() noexcept
         if (present_history_entry.cleanup_fence != VK_NULL_HANDLE) {
             result = vkWaitForFences(vulkan_device, 1, &present_history_entry.cleanup_fence, true, UINT64_MAX);
             if (result != VK_SUCCESS) {
-                log_swapchain->critical("vkWaitForFences() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+                log_swapchain->critical("vkWaitForFences() failed with {} {}", static_cast<int32_t>(result), c_str(result));
                 abort();
             }
         }
@@ -110,7 +110,7 @@ auto Swapchain_impl::submit_command_buffer() -> bool
     log_swapchain->trace("vkQueueSubmit()");
     result = vkQueueSubmit(vulkan_graphics_queue, 1, &submit_info, frame.submit_fence);
     if (result != VK_SUCCESS) {
-        log_swapchain->critical("vkQueueSubmit() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        log_swapchain->critical("vkQueueSubmit() failed with {} {}", static_cast<int32_t>(result), c_str(result));
         abort();
     }
 
@@ -207,7 +207,7 @@ auto Swapchain_impl::begin_render_pass(VkRenderPassBeginInfo& render_pass_begin_
     log_swapchain->trace("vkBeginCommandBuffer()");
     result = vkBeginCommandBuffer(vulkan_command_buffer, &command_buffer_begin_info);
     if (result != VK_SUCCESS) {
-        log_swapchain->critical("vkBeginCommandBuffer() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        log_swapchain->critical("vkBeginCommandBuffer() failed with {} {}", static_cast<int32_t>(result), c_str(result));
         abort();
     }
 
@@ -249,7 +249,7 @@ auto Swapchain_impl::end_render_pass() -> bool
     log_swapchain->trace("vkEndCommandBuffer()");
     result = vkEndCommandBuffer(vulkan_command_buffer);
     if (result != VK_SUCCESS) {
-        log_swapchain->critical("vkEndCommandBuffer() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        log_swapchain->critical("vkEndCommandBuffer() failed with {} {}", static_cast<int32_t>(result), c_str(result));
         abort();
     }
 
@@ -279,7 +279,7 @@ auto Swapchain_impl::end_frame(const Frame_end_info& frame_end_info) -> bool
         //    return;
         //}
     } else if (result != VK_SUCCESS) {
-        log_context->critical("presenting frame failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        log_context->critical("presenting frame failed with {} {}", static_cast<int32_t>(result), c_str(result));
         m_state = Swapchain_frame_state::idle; // Should we try to continue?
         abort();
     }
@@ -317,7 +317,7 @@ auto Swapchain_impl::get_semaphore() -> VkSemaphore
     const VkDevice vulkan_device = m_device_impl.get_vulkan_device();
     const VkResult result = vkCreateSemaphore(vulkan_device, &create_info, nullptr, &vulkan_semaphore);
     if (result != VK_SUCCESS) {
-        log_swapchain->critical("vkCreateSemaphore() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        log_swapchain->critical("vkCreateSemaphore() failed with {} {}", static_cast<int32_t>(result), c_str(result));
         abort();
     }
     m_device_impl.set_debug_label(
@@ -348,7 +348,7 @@ auto Swapchain_impl::get_fence() -> VkFence
     const VkDevice vulkan_device = m_device_impl.get_vulkan_device();
     const VkResult result = vkCreateFence(vulkan_device, &create_info, nullptr, &vulkan_fence);
     if (result != VK_SUCCESS) {
-        log_swapchain->critical("vkCreateFence() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        log_swapchain->critical("vkCreateFence() failed with {} {}", static_cast<int32_t>(result), c_str(result));
         abort();
     }
     m_device_impl.set_debug_label(
@@ -374,7 +374,7 @@ void Swapchain_impl::recycle_fence(const VkFence fence)
     const VkDevice vulkan_device = m_device_impl.get_vulkan_device();
     const VkResult result = vkResetFences(vulkan_device, 1, &fence);
     if (result != VK_SUCCESS) {
-        log_swapchain->critical("vkResetFences() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        log_swapchain->critical("vkResetFences() failed with {} {}", static_cast<int32_t>(result), c_str(result));
         abort();
     }
 }
@@ -437,7 +437,7 @@ void Swapchain_impl::cleanup_present_history()
             // Not yet
             break;
         } else if (result != VK_SUCCESS) {
-            log_swapchain->critical("vkGetFenceStatus() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+            log_swapchain->critical("vkGetFenceStatus() failed with {} {}", static_cast<int32_t>(result), c_str(result));
             abort();
         }
 
@@ -639,7 +639,7 @@ void Swapchain_impl::init_swapchain_image(const uint32_t index)
 
     result = vkCreateImageView(vulkan_device, &view_create_info, nullptr, &m_swapchain_objects.views[index]);
     if (result != VK_SUCCESS) {
-        log_context->critical("vkCreateImageView() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        log_context->critical("vkCreateImageView() failed with {} {}", static_cast<int32_t>(result), c_str(result));
         abort();
     }
 
@@ -682,7 +682,7 @@ void Swapchain_impl::init_swapchain_framebuffer(const uint32_t index, VkRenderPa
 
     result = vkCreateFramebuffer(vulkan_device, &framebuffer_create_info, nullptr, &m_swapchain_objects.framebuffers[index]);
     if (result != VK_SUCCESS) {
-        log_context->critical("vkCreateFramebuffer() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        log_context->critical("vkCreateFramebuffer() failed with {} {}", static_cast<int32_t>(result), c_str(result));
         abort();
     }    
     m_device_impl.set_debug_label(
@@ -730,7 +730,7 @@ void Swapchain_impl::init_swapchain(Vulkan_swapchain_create_info& swapchain_crea
     result = vkCreateSwapchainKHR(vulkan_device, &swapchain_create_info.swapchain_create_info, nullptr, &m_vulkan_swapchain);
     ++m_swapchain_serial;
     if (result != VK_SUCCESS) {
-        log_context->critical("vkCreateSwapchainKHR() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        log_context->critical("vkCreateSwapchainKHR() failed with {} {}", static_cast<int32_t>(result), c_str(result));
         abort();
     }
 
@@ -752,7 +752,7 @@ void Swapchain_impl::init_swapchain(Vulkan_swapchain_create_info& swapchain_crea
     uint32_t image_count{0};
     result = vkGetSwapchainImagesKHR(vulkan_device, m_vulkan_swapchain, &image_count, nullptr);
     if (result != VK_SUCCESS) {
-        log_context->critical("vkGetSwapchainImagesKHR() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        log_context->critical("vkGetSwapchainImagesKHR() failed with {} {}", static_cast<int32_t>(result), c_str(result));
         abort();
     }    
 
@@ -762,7 +762,7 @@ void Swapchain_impl::init_swapchain(Vulkan_swapchain_create_info& swapchain_crea
     m_swapchain_objects.framebuffers.resize(image_count, VK_NULL_HANDLE);
     result = vkGetSwapchainImagesKHR(vulkan_device, m_vulkan_swapchain, &image_count, m_swapchain_objects.images.data());
     if (result != VK_SUCCESS) {
-        log_context->critical("vkGetSwapchainImagesKHR() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        log_context->critical("vkGetSwapchainImagesKHR() failed with {} {}", static_cast<int32_t>(result), c_str(result));
         abort();
     }    
 
@@ -810,7 +810,7 @@ void Swapchain_impl::setup_frame()
     if (frame.submit_fence != VK_NULL_HANDLE) {
         result = vkWaitForFences(vulkan_device, 1, &frame.submit_fence, true, UINT64_MAX);
         if (result != VK_SUCCESS) {
-            log_swapchain->critical("vkWaitForFences() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+            log_swapchain->critical("vkWaitForFences() failed with {} {}", static_cast<int32_t>(result), c_str(result));
             abort();
         }
 
@@ -849,7 +849,7 @@ void Swapchain_impl::setup_frame()
         };
         result = vkCreateCommandPool(vulkan_device, &command_pool_create_info, nullptr, &frame.command_pool);
         if (result != VK_SUCCESS) {
-            log_swapchain->critical("vkCreateCommandPool() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+            log_swapchain->critical("vkCreateCommandPool() failed with {} {}", static_cast<int32_t>(result), c_str(result));
             abort();
         }
 
@@ -862,7 +862,7 @@ void Swapchain_impl::setup_frame()
         };
         result = vkAllocateCommandBuffers(vulkan_device, &command_buffer_allocate_info, &frame.command_buffer);
         if (result != VK_SUCCESS) {
-            log_swapchain->critical("vkAllocateCommandBuffer() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+            log_swapchain->critical("vkAllocateCommandBuffer() failed with {} {}", static_cast<int32_t>(result), c_str(result));
             abort();
         }
 
@@ -971,7 +971,7 @@ auto Swapchain_impl::present_image(uint32_t index) -> VkResult
 
     VkResult result = vkQueuePresentKHR(vulkan_present_queue, &present_info);
     if ((result != VK_SUCCESS) && (result != VK_ERROR_OUT_OF_DATE_KHR) && (result != VK_SUBOPTIMAL_KHR)) {
-        log_swapchain->critical("vkQueuePresentKHR() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        log_swapchain->critical("vkQueuePresentKHR() failed with {} {}", static_cast<int32_t>(result), c_str(result));
         abort();
     }
 

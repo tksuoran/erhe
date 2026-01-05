@@ -114,7 +114,7 @@ Render_pass_impl::Render_pass_impl(Device& device, const Render_pass_descriptor&
         log_render_pass->trace("Creating renderpass");
         result = vkCreateRenderPass(vulkan_device, &render_pass_create_info, nullptr, &m_render_pass);
         if (result != VK_SUCCESS) {
-            log_swapchain->critical("vkCreateRenderPass() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+            log_swapchain->critical("vkCreateRenderPass() failed with {} {}", static_cast<int32_t>(result), c_str(result));
             abort();
         }
         m_device_impl.set_debug_label(
@@ -135,7 +135,7 @@ Render_pass_impl::~Render_pass_impl() noexcept
         // TODO Queue thread safety
 	    result = vkDeviceWaitIdle(vulkan_device);
         if (result != VK_SUCCESS) {
-            log_swapchain->critical("vkDeviceWaitIdle() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+            log_swapchain->critical("vkDeviceWaitIdle() failed with {} {}", static_cast<int32_t>(result), c_str(result));
             abort();
         }
 
