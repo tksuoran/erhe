@@ -122,8 +122,8 @@ void Id_renderer::update_framebuffer(const erhe::math::Viewport viewport)
             erhe::graphics::Texture_create_info{
                 .device      = m_graphics_device,
                 .usage_mask  =
-                    erhe::graphics::Image_usage_flag_bit_mask::color_attachment_bit_mask |
-                    erhe::graphics::Image_usage_flag_bit_mask::transfer_src_bit_mask,
+                    erhe::graphics::Image_usage_flag_bit_mask::color_attachment |
+                    erhe::graphics::Image_usage_flag_bit_mask::transfer_src,
                 .type        = erhe::graphics::Texture_type::texture_2d,
                 .pixelformat = erhe::dataformat::Format::format_8_vec4_unorm,
                 .use_mipmaps = false,
@@ -137,8 +137,8 @@ void Id_renderer::update_framebuffer(const erhe::math::Viewport viewport)
             erhe::graphics::Texture_create_info{
                 .device      = m_graphics_device,
                 .usage_mask  =
-                    erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment_bit_mask |
-                    erhe::graphics::Image_usage_flag_bit_mask::transfer_src_bit_mask,
+                    erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment |
+                    erhe::graphics::Image_usage_flag_bit_mask::transfer_src,
                 .type        = erhe::graphics::Texture_type::texture_2d,
                 .pixelformat = erhe::dataformat::Format::format_d32_sfloat,
                 .use_mipmaps = false,

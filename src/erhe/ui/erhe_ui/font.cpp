@@ -452,8 +452,8 @@ void Font::post_process()
     const erhe::graphics::Texture_create_info create_info{
         .device      = m_graphics_device,
         .usage_mask  =
-            erhe::graphics::Image_usage_flag_bit_mask::sampled_bit_mask |
-            erhe::graphics::Image_usage_flag_bit_mask::transfer_dst_bit_mask,
+            erhe::graphics::Image_usage_flag_bit_mask::sampled |
+            erhe::graphics::Image_usage_flag_bit_mask::transfer_dst,
         .type        = erhe::graphics::Texture_type::texture_2d,
         .pixelformat = erhe::dataformat::Format::format_8_vec2_unorm,
         .use_mipmaps = false,

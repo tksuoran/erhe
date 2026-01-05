@@ -41,37 +41,34 @@ Mesh_memory::Mesh_memory(erhe::graphics::Device& graphics_device, erhe::dataform
     , position_vertex_buffer{
         graphics_device,
         erhe::graphics::Buffer_create_info{
-            .capacity_byte_count = get_vertex_buffer_size(s_vertex_binding_position),
-            .usage               = erhe::graphics::Buffer_usage::vertex,
-            .direction           = erhe::graphics::Buffer_direction::gpu_only,
-            .cache_mode          = erhe::graphics::Buffer_cache_mode::default_,
-            .mapping             = erhe::graphics::Buffer_mapping::not_mappable,
-            .coherency           = erhe::graphics::Buffer_coherency::off,
-            .debug_label         = "Mesh_memory position vertex buffer"
+            .capacity_byte_count                = get_vertex_buffer_size(s_vertex_binding_position),
+            .usage                              = erhe::graphics::Buffer_usage::vertex,
+            .required_memory_property_bit_mask  = erhe::graphics::Memory_property_flag_bit_mask::device_local, // GPU only
+            .preferred_memory_property_bit_mask = erhe::graphics::Memory_property_flag_bit_mask::none, // uploads via staging buffer
+            .mapping                            = erhe::graphics::Buffer_mapping::not_mappable,
+            .debug_label                        = "Mesh_memory position vertex buffer"
         }
     }
     , non_position_vertex_buffer{
         graphics_device,
         erhe::graphics::Buffer_create_info{
-            .capacity_byte_count = get_vertex_buffer_size(s_vertex_binding_non_position),
-            .usage               = erhe::graphics::Buffer_usage::vertex,
-            .direction           = erhe::graphics::Buffer_direction::gpu_only,
-            .cache_mode          = erhe::graphics::Buffer_cache_mode::default_,
-            .mapping             = erhe::graphics::Buffer_mapping::not_mappable,
-            .coherency           = erhe::graphics::Buffer_coherency::off,
-            .debug_label         = "Mesh_memory non-position vertex buffer"
+            .capacity_byte_count                = get_vertex_buffer_size(s_vertex_binding_non_position),
+            .usage                              = erhe::graphics::Buffer_usage::vertex,
+            .required_memory_property_bit_mask  = erhe::graphics::Memory_property_flag_bit_mask::device_local, // GPU only
+            .preferred_memory_property_bit_mask = erhe::graphics::Memory_property_flag_bit_mask::none, // uploads via staging buffer
+            .mapping                            = erhe::graphics::Buffer_mapping::not_mappable,
+            .debug_label                        = "Mesh_memory non-position vertex buffer"
         }
     }
     , index_buffer{
         graphics_device,
         erhe::graphics::Buffer_create_info{
-            .capacity_byte_count = get_index_buffer_size(),
-            .usage               = erhe::graphics::Buffer_usage::index,
-            .direction           = erhe::graphics::Buffer_direction::gpu_only,
-            .cache_mode          = erhe::graphics::Buffer_cache_mode::default_,
-            .mapping             = erhe::graphics::Buffer_mapping::not_mappable,
-            .coherency           = erhe::graphics::Buffer_coherency::off,
-            .debug_label         = "Mesh_memory index buffer"
+            .capacity_byte_count                = get_index_buffer_size(),
+            .usage                              = erhe::graphics::Buffer_usage::index,
+            .required_memory_property_bit_mask  = erhe::graphics::Memory_property_flag_bit_mask::device_local, // GPU only
+            .preferred_memory_property_bit_mask = erhe::graphics::Memory_property_flag_bit_mask::none, // uploads via staging buffer
+            .mapping                            = erhe::graphics::Buffer_mapping::not_mappable,
+            .debug_label                        = "Mesh_memory index buffer"
         }
     }
     , graphics_buffer_sink{buffer_transfer_queue, {&position_vertex_buffer, &non_position_vertex_buffer}, index_buffer}

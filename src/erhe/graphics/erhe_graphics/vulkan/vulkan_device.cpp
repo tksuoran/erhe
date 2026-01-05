@@ -1080,7 +1080,7 @@ auto Device_impl::choose_depth_stencil_format(const unsigned int flags, int samp
 
 auto Device_impl::create_dummy_texture() -> std::shared_ptr<Texture>
 {
-    const Texture::Create_info create_info{
+    const Texture_create_info create_info{
         .device      = m_device,
         .width       = 2,
         .height      = 2,

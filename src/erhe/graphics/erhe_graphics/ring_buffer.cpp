@@ -19,14 +19,36 @@
 
 namespace erhe::graphics {
 
-[[nodiscard]] auto get_direction(const Ring_buffer_usage ring_buffer_usage) -> Buffer_direction
+[[nodiscard]] auto get_memory_usage(const Ring_buffer_usage ring_buffer_usage) -> Memory_usage
 {
     switch (ring_buffer_usage) {
         default:
-        case Ring_buffer_usage::None      : ERHE_FATAL("Device_impl::allocate_ring_buffer_entry() - bad usage"); return Buffer_direction::cpu_to_gpu;
-        case Ring_buffer_usage::CPU_write : return Buffer_direction::cpu_to_gpu;
-        case Ring_buffer_usage::CPU_read  : return Buffer_direction::gpu_to_cpu;
-        case Ring_buffer_usage::GPU_access: return Buffer_direction::gpu_only;
+        case Ring_buffer_usage::None      : ERHE_FATAL("Device_impl::allocate_ring_buffer_entry() - bad usage"); return Memory_usage::cpu_to_gpu;
+        case Ring_buffer_usage::CPU_write : return Memory_usage::cpu_to_gpu;
+        case Ring_buffer_usage::CPU_read  : return Memory_usage::gpu_to_cpu;
+        case Ring_buffer_usage::GPU_access: return Memory_usage::gpu_only;
+    }
+}
+
+[[nodiscard]] auto get_required_memory_property_bit_mask(const Ring_buffer_usage ring_buffer_usage) -> uint64_t
+{
+    switch (ring_buffer_usage) {
+        default:
+        case Ring_buffer_usage::None      : ERHE_FATAL("Device_impl::allocate_ring_buffer_entry() - bad usage"); return Memory_property_flag_bit_mask::none;
+        case Ring_buffer_usage::CPU_write : return Memory_property_flag_bit_mask::host_write;
+        case Ring_buffer_usage::CPU_read  : return Memory_property_flag_bit_mask::host_read;
+        case Ring_buffer_usage::GPU_access: return Memory_property_flag_bit_mask::device_local;
+    }
+}
+
+[[nodiscard]] auto get_preferred_memory_property_bit_mask(const Ring_buffer_usage ring_buffer_usage) -> uint64_t
+{
+    switch (ring_buffer_usage) {
+        default:
+        case Ring_buffer_usage::None      : ERHE_FATAL("Device_impl::allocate_ring_buffer_entry() - bad usage"); return Memory_property_flag_bit_mask::none;
+        case Ring_buffer_usage::CPU_write : return Memory_property_flag_bit_mask::device_local;
+        case Ring_buffer_usage::CPU_read  : return Memory_property_flag_bit_mask::host_cached;
+        case Ring_buffer_usage::GPU_access: return Memory_property_flag_bit_mask::none;
     }
 }
 
@@ -40,13 +62,12 @@ Ring_buffer::Ring_buffer(
         std::make_unique<Buffer>(
             m_device,
             Buffer_create_info{
-                .capacity_byte_count = create_info.size,
-                .usage               = create_info.buffer_usage,
-                .direction           = get_direction(create_info.ring_buffer_usage),
-                .cache_mode          = Buffer_cache_mode::default_,
-                .mapping             = (create_info.ring_buffer_usage != Ring_buffer_usage::GPU_access) ? Buffer_mapping::persistent : Buffer_mapping::not_mappable,
-                .coherency           = (create_info.ring_buffer_usage != Ring_buffer_usage::GPU_access) ? Buffer_coherency::on       : Buffer_coherency::off,
-                .debug_label         = create_info.debug_label
+                .capacity_byte_count                = create_info.size,
+                .usage                              = create_info.buffer_usage,
+                .required_memory_property_bit_mask  = get_required_memory_property_bit_mask(create_info.ring_buffer_usage),
+                .preferred_memory_property_bit_mask = get_preferred_memory_property_bit_mask(create_info.ring_buffer_usage),
+                .mapping                            = (create_info.ring_buffer_usage != Ring_buffer_usage::GPU_access) ? Buffer_mapping::persistent : Buffer_mapping::not_mappable,
+                .debug_label                        = create_info.debug_label
             }
         )
     }

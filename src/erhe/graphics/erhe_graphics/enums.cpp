@@ -69,22 +69,63 @@ auto to_string(Buffer_usage usage) -> std::string
     }
     return ss.str();
 }
-auto c_str(Buffer_direction direction) -> const char*
+auto c_str(Memory_usage memory_usage) -> const char*
 {
-    switch (direction) {
-        case Buffer_direction::cpu_to_gpu: return "cpu_to_gpu";
-        case Buffer_direction::gpu_only  : return "gpu_only";
-        case Buffer_direction::gpu_to_cpu: return "gpu_to_cpu";
+    switch (memory_usage) {
+        case Memory_usage::cpu_to_gpu: return "cpu_to_gpu";
+        case Memory_usage::gpu_only  : return "gpu_only";
+        case Memory_usage::gpu_to_cpu: return "gpu_to_cpu";
         default: return "?";
     }
 }
-auto c_str(Buffer_cache_mode cache_mode) -> const char*
+auto to_string_memory_property_flag_bit_mask(uint64_t mask) -> std::string
 {
-    switch (cache_mode) {
-        case Buffer_cache_mode::write_combined: return "write_combined";
-        case Buffer_cache_mode::default_:       return "defaul";
-        default: return "?";
+    using namespace erhe::utility;
+    std::stringstream ss;
+    bool is_empty = true;
+    if (test_bit_set(mask, Memory_property_flag_bit_mask::device_local)) {
+        if (!is_empty) {
+            ss << " | ";
+        }
+        ss << "device_local";
+        is_empty = false;
     }
+    if (test_bit_set(mask, Memory_property_flag_bit_mask::host_read)) {
+        if (!is_empty) {
+            ss << " | ";
+        }
+        ss << "host_read";
+        is_empty = false;
+    }
+    if (test_bit_set(mask, Memory_property_flag_bit_mask::host_write)) {
+        if (!is_empty) {
+            ss << " | ";
+        }
+        ss << "host_write";
+        is_empty = false;
+    }
+    if (test_bit_set(mask, Memory_property_flag_bit_mask::host_coherent)) {
+        if (!is_empty) {
+            ss << " | ";
+        }
+        ss << "host_coherent";
+        is_empty = false;
+    }
+    if (test_bit_set(mask, Memory_property_flag_bit_mask::host_cached)) {
+        if (!is_empty) {
+            ss << " | ";
+        }
+        ss << "host_cached";
+        is_empty = false;
+    }
+    if (test_bit_set(mask, Memory_property_flag_bit_mask::lazily_allocated)) {
+        if (!is_empty) {
+            ss << " | ";
+        }
+        ss << "lazily_allocated";
+        is_empty = false;
+    }
+    return ss.str();
 }
 auto c_str(Buffer_mapping mapping) -> const char*
 {
@@ -92,14 +133,6 @@ auto c_str(Buffer_mapping mapping) -> const char*
         case Buffer_mapping::not_mappable: return "not_mappable";
         case Buffer_mapping::persistent:   return "persistent";
         case Buffer_mapping::transient:    return "transient";
-        default: return "?";
-    }
-}
-auto c_str(Buffer_coherency coherency) -> const char*
-{
-    switch (coherency) {
-        case Buffer_coherency::on:  return "on";
-        case Buffer_coherency::off: return "off";
         default: return "?";
     }
 }
@@ -441,6 +474,27 @@ auto to_glsl_attribute_type(const erhe::dataformat::Format format) -> Glsl_type
             ERHE_FATAL("Bad format");
             return static_cast<Glsl_type>(0);
         }
+    }
+}
+
+auto get_memory_usage_from_memory_properties(const uint64_t memory_property_bit_mask) -> Memory_usage
+{
+    using namespace erhe::utility;
+    const bool host_read  = test_bit_set(memory_property_bit_mask, Memory_property_flag_bit_mask::host_read       );
+    const bool host_write = test_bit_set(memory_property_bit_mask, Memory_property_flag_bit_mask::host_write      );
+
+    ERHE_VERIFY(
+        ( host_write && !host_read) ||
+        (!host_write &&  host_read) ||
+        (!host_write && !host_read)
+    );
+
+    if (host_read) {
+        return Memory_usage::gpu_to_cpu;
+    } else if (host_write) {
+        return Memory_usage::cpu_to_gpu;
+    } else {
+        return Memory_usage::gpu_only;
     }
 }
 

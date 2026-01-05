@@ -228,26 +228,39 @@ enum class Buffer_usage : unsigned int {
     transfer = 0x80
 };
 
-enum class Buffer_direction : unsigned int {
+enum class Memory_usage : unsigned int {
     cpu_to_gpu = 0,
     gpu_only   = 1,
     gpu_to_cpu = 2
 };
 
-enum class Buffer_cache_mode : unsigned int {
-    write_combined = 1,
-    default_       = 2
+class Memory_property_flag_bit {
+public:
+    static constexpr uint64_t host_read         = 0u;
+    static constexpr uint64_t host_write        = 1u;
+    static constexpr uint64_t host_coherent     = 2u;
+    static constexpr uint64_t host_cached       = 3u;
+    static constexpr uint64_t device_local      = 4u;
+    static constexpr uint64_t lazily_allocated  = 5u;
 };
+
+class Memory_property_flag_bit_mask {
+public:
+    static constexpr uint64_t none             = uint64_t{0};
+    static constexpr uint64_t host_read        = uint64_t{1} << Memory_property_flag_bit::host_read       ;
+    static constexpr uint64_t host_write       = uint64_t{1} << Memory_property_flag_bit::host_write      ;
+    static constexpr uint64_t host_coherent    = uint64_t{1} << Memory_property_flag_bit::host_coherent   ;
+    static constexpr uint64_t host_cached      = uint64_t{1} << Memory_property_flag_bit::host_cached     ;
+    static constexpr uint64_t device_local     = uint64_t{1} << Memory_property_flag_bit::device_local    ;
+    static constexpr uint64_t lazily_allocated = uint64_t{1} << Memory_property_flag_bit::lazily_allocated;
+};
+
+[[nodiscard]] auto get_memory_usage_from_memory_properties(uint64_t memory_property_bit_mask) -> Memory_usage;
 
 enum class Buffer_mapping : unsigned int {
     not_mappable = 0,
     persistent   = 1,
     transient    = 2
-};
-
-enum class Buffer_coherency : unsigned int {
-    off = 0,  // Need explicit flushes
-    on  = 1
 };
 
 enum class Buffer_map_flags : unsigned int {
@@ -312,11 +325,10 @@ template<> struct Enable_bit_mask_operators<Buffer_usage       > { static const 
 template<> struct Enable_bit_mask_operators<Buffer_map_flags   > { static const bool enable = true; };
 template<> struct Enable_bit_mask_operators<Memory_barrier_mask> { static const bool enable = true; };
 
-[[nodiscard]] auto to_string       (Buffer_usage      usage     ) -> std::string;
-[[nodiscard]] auto c_str           (Buffer_direction  direction ) -> const char*;
-[[nodiscard]] auto c_str           (Buffer_cache_mode cache_mode) -> const char*;
+[[nodiscard]] auto to_string       (Buffer_usage      usage      ) -> std::string;
+[[nodiscard]] auto c_str           (Memory_usage      memory_sage) -> const char*;
+[[nodiscard]] auto to_string_memory_property_flag_bit_mask(uint64_t mask) -> std::string;
 [[nodiscard]] auto c_str           (Buffer_mapping    mapping   ) -> const char*;
-[[nodiscard]] auto c_str           (Buffer_coherency  coherency ) -> const char*;
 [[nodiscard]] auto to_string       (Buffer_map_flags  flags     ) -> std::string;
 [[nodiscard]] auto get_buffer_usage(Buffer_target     target    ) -> Buffer_usage;
 
@@ -336,30 +348,30 @@ template<> struct Enable_bit_mask_operators<Memory_barrier_mask> { static const 
 class Image_usage_flag_bit
 {
 public:
-    static constexpr uint64_t transfer_src_bit             = 0;
-    static constexpr uint64_t transfer_dst_bit             = 1;
-    static constexpr uint64_t sampled_bit                  = 2;
-    static constexpr uint64_t storage_bit                  = 3;
-    static constexpr uint64_t color_attachment_bit         = 4;
-    static constexpr uint64_t depth_stencil_attachment_bit = 5;
-    static constexpr uint64_t transient_attachment_bit     = 6;
-    static constexpr uint64_t input_attachment_bit         = 7;
-    static constexpr uint64_t host_transfer_bit            = 8;
+    static constexpr uint64_t transfer_src             = 0;
+    static constexpr uint64_t transfer_dst             = 1;
+    static constexpr uint64_t sampled                  = 2;
+    static constexpr uint64_t storage                  = 3;
+    static constexpr uint64_t color_attachment         = 4;
+    static constexpr uint64_t depth_stencil_attachment = 5;
+    static constexpr uint64_t transient_attachment     = 6;
+    static constexpr uint64_t input_attachment         = 7;
+    static constexpr uint64_t host_transfer            = 8;
 };
 
 class Image_usage_flag_bit_mask
 {
 public:
-    static constexpr uint64_t none                              = uint64_t{0};
-    static constexpr uint64_t transfer_src_bit_mask             = uint64_t{1} << Image_usage_flag_bit::transfer_src_bit            ;
-    static constexpr uint64_t transfer_dst_bit_mask             = uint64_t{1} << Image_usage_flag_bit::transfer_dst_bit            ;
-    static constexpr uint64_t sampled_bit_mask                  = uint64_t{1} << Image_usage_flag_bit::sampled_bit                 ;
-    static constexpr uint64_t storage_bit_mask                  = uint64_t{1} << Image_usage_flag_bit::storage_bit                 ;
-    static constexpr uint64_t color_attachment_bit_mask         = uint64_t{1} << Image_usage_flag_bit::color_attachment_bit        ;
-    static constexpr uint64_t depth_stencil_attachment_bit_mask = uint64_t{1} << Image_usage_flag_bit::depth_stencil_attachment_bit;
-    static constexpr uint64_t transient_attachment_bit_mask     = uint64_t{1} << Image_usage_flag_bit::transient_attachment_bit    ;
-    static constexpr uint64_t input_attachment_bit_mask         = uint64_t{1} << Image_usage_flag_bit::input_attachment_bit        ;
-    static constexpr uint64_t host_transfer_bit_mask            = uint64_t{1} << Image_usage_flag_bit::host_transfer_bit           ;
+    static constexpr uint64_t none                     = uint64_t{0};
+    static constexpr uint64_t transfer_src             = uint64_t{1} << Image_usage_flag_bit::transfer_src            ;
+    static constexpr uint64_t transfer_dst             = uint64_t{1} << Image_usage_flag_bit::transfer_dst            ;
+    static constexpr uint64_t sampled                  = uint64_t{1} << Image_usage_flag_bit::sampled                 ;
+    static constexpr uint64_t storage                  = uint64_t{1} << Image_usage_flag_bit::storage                 ;
+    static constexpr uint64_t color_attachment         = uint64_t{1} << Image_usage_flag_bit::color_attachment        ;
+    static constexpr uint64_t depth_stencil_attachment = uint64_t{1} << Image_usage_flag_bit::depth_stencil_attachment;
+    static constexpr uint64_t transient_attachment     = uint64_t{1} << Image_usage_flag_bit::transient_attachment    ;
+    static constexpr uint64_t input_attachment         = uint64_t{1} << Image_usage_flag_bit::input_attachment        ;
+    static constexpr uint64_t host_transfer            = uint64_t{1} << Image_usage_flag_bit::host_transfer           ;
 };
 
 } // namespace erhe::graphics

@@ -88,8 +88,8 @@ auto load_texture(erhe::graphics::Device& graphics_device, const std::filesystem
     erhe::graphics::Texture_create_info texture_create_info{
         .device      = graphics_device,
         .usage_mask  =
-            erhe::graphics::Image_usage_flag_bit_mask::sampled_bit_mask |
-            erhe::graphics::Image_usage_flag_bit_mask::transfer_dst_bit_mask,
+            erhe::graphics::Image_usage_flag_bit_mask::sampled |
+            erhe::graphics::Image_usage_flag_bit_mask::transfer_dst,
         .pixelformat = image.info.format,
         .use_mipmaps = (image.info.level_count > 1),
         .width       = image.info.width,

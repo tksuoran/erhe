@@ -947,8 +947,8 @@ private:
         erhe::graphics::Texture_create_info texture_create_info{
             .device      = m_arguments.graphics_device,
             .usage_mask  =
-                erhe::graphics::Image_usage_flag_bit_mask::sampled_bit_mask |
-                erhe::graphics::Image_usage_flag_bit_mask::transfer_dst_bit_mask,
+                erhe::graphics::Image_usage_flag_bit_mask::sampled |
+                erhe::graphics::Image_usage_flag_bit_mask::transfer_dst,
             .pixelformat = image_info.format,
             .use_mipmaps = true, //(image_info.level_count > 1),
             .width       = image_info.width,
@@ -961,7 +961,7 @@ private:
         const int  mipmap_count    = texture_create_info.get_texture_level_count();
         const bool generate_mipmap = mipmap_count != image_info.level_count;
         if (generate_mipmap) {
-            texture_create_info.usage_mask |= erhe::graphics::Image_usage_flag_bit_mask::transfer_src_bit_mask;
+            texture_create_info.usage_mask |= erhe::graphics::Image_usage_flag_bit_mask::transfer_src;
             texture_create_info.level_count = mipmap_count;
         }
 
@@ -1014,8 +1014,8 @@ private:
         erhe::graphics::Texture_create_info texture_create_info{
             .device      = m_arguments.graphics_device,
             .usage_mask  =
-                erhe::graphics::Image_usage_flag_bit_mask::sampled_bit_mask |
-                erhe::graphics::Image_usage_flag_bit_mask::transfer_dst_bit_mask,
+                erhe::graphics::Image_usage_flag_bit_mask::sampled |
+                erhe::graphics::Image_usage_flag_bit_mask::transfer_dst,
             .debug_label = name
         };
         int  mipmap_count    = 0;
@@ -1052,7 +1052,7 @@ private:
                     generate_mipmap = mipmap_count != image_info.level_count;
                     if (generate_mipmap) {
                         texture_create_info.level_count = mipmap_count;
-                        texture_create_info.usage_mask |= erhe::graphics::Image_usage_flag_bit_mask::transfer_src_bit_mask;
+                        texture_create_info.usage_mask |= erhe::graphics::Image_usage_flag_bit_mask::transfer_src;
                     }
 
                     texture = std::make_shared<erhe::graphics::Texture>(m_arguments.graphics_device, texture_create_info);

@@ -67,14 +67,13 @@ private:
     ERHE_PROFILE_MUTEX(std::mutex, m_allocate_mutex);
     Device&                        m_device;
     Gl_buffer                      m_handle;
-    std::size_t                    m_capacity_byte_count{0};
-    std::size_t                    m_next_free_byte     {0};
-    Buffer_usage                   m_usage              {0};
-    Buffer_direction               m_direction          {0};
-    Buffer_cache_mode              m_cache_mode         {0};
-    Buffer_mapping                 m_mapping            {0};
-    Buffer_coherency               m_coherency          {0};
-    std::string                    m_debug_label        {};
+    std::size_t                    m_capacity_byte_count               {0};
+    std::size_t                    m_next_free_byte                    {0};
+    Buffer_usage                   m_usage                             {0};
+    uint64_t                       m_required_memory_property_bit_mask {0};
+    uint64_t                       m_preferred_memory_property_bit_mask{0};
+    Buffer_mapping                 m_mapping                           {0};
+    std::string                    m_debug_label                       {};
 
     static constexpr const char* s_pool_name = "glBuffer";
 

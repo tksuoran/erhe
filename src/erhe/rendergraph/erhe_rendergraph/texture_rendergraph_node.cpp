@@ -96,10 +96,10 @@ void Texture_rendergraph_node::update_render_pass(int width, int height, erhe::g
                 erhe::graphics::Texture_create_info{
                     .device       = graphics_device,
                     .usage_mask   =
-                        erhe::graphics::Image_usage_flag_bit_mask::color_attachment_bit_mask |
-                        erhe::graphics::Image_usage_flag_bit_mask::sampled_bit_mask          |
-                        erhe::graphics::Image_usage_flag_bit_mask::transfer_src_bit_mask     |
-                        erhe::graphics::Image_usage_flag_bit_mask::transfer_dst_bit_mask,
+                        erhe::graphics::Image_usage_flag_bit_mask::color_attachment |
+                        erhe::graphics::Image_usage_flag_bit_mask::sampled          |
+                        erhe::graphics::Image_usage_flag_bit_mask::transfer_src     |
+                        erhe::graphics::Image_usage_flag_bit_mask::transfer_dst,
                     .type         = erhe::graphics::Texture_type::texture_2d,
                     .pixelformat  = m_color_format,
                     .sample_count = m_sample_count,
@@ -115,10 +115,10 @@ void Texture_rendergraph_node::update_render_pass(int width, int height, erhe::g
             erhe::graphics::Texture_create_info{
                 .device       = graphics_device,
                 .usage_mask   =
-                    erhe::graphics::Image_usage_flag_bit_mask::color_attachment_bit_mask |
-                    erhe::graphics::Image_usage_flag_bit_mask::sampled_bit_mask          |
-                    erhe::graphics::Image_usage_flag_bit_mask::transfer_src_bit_mask     |
-                    erhe::graphics::Image_usage_flag_bit_mask::transfer_dst_bit_mask,
+                    erhe::graphics::Image_usage_flag_bit_mask::color_attachment |
+                    erhe::graphics::Image_usage_flag_bit_mask::sampled          |
+                    erhe::graphics::Image_usage_flag_bit_mask::transfer_src     |
+                    erhe::graphics::Image_usage_flag_bit_mask::transfer_dst,
                 .type         = erhe::graphics::Texture_type::texture_2d,
                 .pixelformat  = m_color_format,
                 .sample_count = 0,
@@ -138,8 +138,8 @@ void Texture_rendergraph_node::update_render_pass(int width, int height, erhe::g
                 erhe::graphics::Texture_create_info{
                     .device       = graphics_device,
                     .usage_mask   =
-                        erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment_bit_mask |
-                        erhe::graphics::Image_usage_flag_bit_mask::sampled_bit_mask,
+                        erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment |
+                        erhe::graphics::Image_usage_flag_bit_mask::sampled,
                     .type         = erhe::graphics::Texture_type::texture_2d,
                     .pixelformat  = m_depth_stencil_format,
                     .sample_count = m_sample_count,

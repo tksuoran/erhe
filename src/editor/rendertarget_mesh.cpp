@@ -66,10 +66,10 @@ void Rendertarget_mesh::resize_rendertarget(erhe::graphics::Device& graphics_dev
         erhe::graphics::Texture_create_info{
             .device       = graphics_device,
             .usage_mask   =
-                erhe::graphics::Image_usage_flag_bit_mask::color_attachment_bit_mask |
-                erhe::graphics::Image_usage_flag_bit_mask::sampled_bit_mask          |
-                erhe::graphics::Image_usage_flag_bit_mask::transfer_src_bit_mask     |
-                erhe::graphics::Image_usage_flag_bit_mask::transfer_dst_bit_mask,
+                erhe::graphics::Image_usage_flag_bit_mask::color_attachment |
+                erhe::graphics::Image_usage_flag_bit_mask::sampled          |
+                erhe::graphics::Image_usage_flag_bit_mask::transfer_src     |
+                erhe::graphics::Image_usage_flag_bit_mask::transfer_dst,
             .type         = erhe::graphics::Texture_type::texture_2d,
             .pixelformat  = erhe::dataformat::Format::format_8_vec4_srgb,
             .use_mipmaps  = true,

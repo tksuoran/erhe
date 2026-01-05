@@ -44,8 +44,8 @@ Thumbnails::Thumbnails(erhe::graphics::Device& graphics_device, App_context& con
         erhe::graphics::Texture_create_info{
             .device            = graphics_device,
             .usage_mask        =
-                erhe::graphics::Image_usage_flag_bit_mask::color_attachment_bit_mask |
-                erhe::graphics::Image_usage_flag_bit_mask::sampled_bit_mask,
+                erhe::graphics::Image_usage_flag_bit_mask::color_attachment |
+                erhe::graphics::Image_usage_flag_bit_mask::sampled,
             .type              = erhe::graphics::Texture_type::texture_2d,
             .pixelformat       = erhe::dataformat::Format::format_8_vec4_unorm, // TODO sRGB?
             .use_mipmaps       = true,
@@ -61,8 +61,8 @@ Thumbnails::Thumbnails(erhe::graphics::Device& graphics_device, App_context& con
 
         erhe::graphics::Texture_create_info texture_create_info = erhe::graphics::Texture_create_info::make_view(m_graphics_device, m_color_texture);
         texture_create_info.usage_mask            =
-            erhe::graphics::Image_usage_flag_bit_mask::color_attachment_bit_mask |
-            erhe::graphics::Image_usage_flag_bit_mask::sampled_bit_mask,
+            erhe::graphics::Image_usage_flag_bit_mask::color_attachment |
+            erhe::graphics::Image_usage_flag_bit_mask::sampled,
         texture_create_info.view_base_level       = 0;
         texture_create_info.array_layer_count     = 0;
         texture_create_info.use_mipmaps           = true;

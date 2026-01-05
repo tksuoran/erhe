@@ -25,7 +25,8 @@ namespace erhe::graphics {
 [[nodiscard]] auto to_vulkan(erhe::dataformat::Format format) -> VkFormat;
 [[nodiscard]] auto to_erhe  (VkFormat format) -> erhe::dataformat::Format;
 
-[[nodiscard]] auto get_vulkan_sample_count     (int msaa_sample_count) -> VkSampleCountFlagBits;
-[[nodiscard]] auto get_vulkan_image_usage_flags(uint64_t usage_mask) -> VkImageUsageFlags;
+[[nodiscard]] auto get_vulkan_sample_count      (int msaa_sample_count) -> VkSampleCountFlagBits;
+[[nodiscard]] auto get_vulkan_image_usage_flags (uint64_t usage_mask) -> VkImageUsageFlags;
+[[nodiscard]] auto get_vulkan_image_aspect_flags(erhe::dataformat::Format format) -> VkImageAspectFlags;
 
 } // namespace erhe::graphics

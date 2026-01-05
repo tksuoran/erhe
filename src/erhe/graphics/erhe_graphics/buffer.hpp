@@ -14,14 +14,13 @@ class Device;
 class Buffer_create_info
 {
 public:
-    std::size_t       capacity_byte_count {0};
-    Buffer_usage      usage               {0};
-    Buffer_direction  direction           {0};
-    Buffer_cache_mode cache_mode          {0};
-    Buffer_mapping    mapping             {0};
-    Buffer_coherency  coherency           {0};
-    const void*       init_data           {nullptr};
-    std::string       debug_label         {};
+    std::size_t    capacity_byte_count               {0};
+    Buffer_usage   usage                             {0};
+    uint64_t       required_memory_property_bit_mask {0};
+    uint64_t       preferred_memory_property_bit_mask{0};
+    Buffer_mapping mapping                           {0};
+    const void*    init_data                         {nullptr};
+    std::string    debug_label                       {};
 };
 
 class Buffer_impl;

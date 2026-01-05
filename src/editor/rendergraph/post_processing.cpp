@@ -51,12 +51,11 @@ Post_processing_node::Post_processing_node(
                     post_processing.get_parameter_block().get_size_bytes(),
                     graphics_device.get_buffer_alignment(post_processing.get_parameter_block().get_binding_target())
                 ) * Post_processing::s_max_mipmap_levels,
-            .usage               = get_buffer_usage(post_processing.get_parameter_block().get_binding_target()),
-            .direction           = erhe::graphics::Buffer_direction::gpu_only,
-            .cache_mode          = erhe::graphics::Buffer_cache_mode::default_,
-            .mapping             = erhe::graphics::Buffer_mapping::not_mappable,
-            .coherency           = erhe::graphics::Buffer_coherency::off,
-            .debug_label         = "post processing"
+            .usage                              = get_buffer_usage(post_processing.get_parameter_block().get_binding_target()),
+            .required_memory_property_bit_mask  = erhe::graphics::Memory_property_flag_bit_mask::device_local, // GPU only
+            .preferred_memory_property_bit_mask = erhe::graphics::Memory_property_flag_bit_mask::none, // uploads via staging buffer
+            .mapping                            = erhe::graphics::Buffer_mapping::not_mappable,
+            .debug_label                        = "post processing"
         }
     }
     , m_graphics_device{graphics_device}
@@ -104,8 +103,8 @@ auto Post_processing_node::update_size() -> bool
         erhe::graphics::Texture_create_info{
             .device       = m_graphics_device,
             .usage_mask   =
-                erhe::graphics::Image_usage_flag_bit_mask::color_attachment_bit_mask |
-                erhe::graphics::Image_usage_flag_bit_mask::sampled_bit_mask,
+                erhe::graphics::Image_usage_flag_bit_mask::color_attachment |
+                erhe::graphics::Image_usage_flag_bit_mask::sampled,
             .type         = erhe::graphics::Texture_type::texture_2d,
             .pixelformat  = erhe::dataformat::Format::format_16_vec4_float, // TODO other formats
             .use_mipmaps  = true,
@@ -120,8 +119,8 @@ auto Post_processing_node::update_size() -> bool
         erhe::graphics::Texture_create_info{
             .device       = m_graphics_device,
             .usage_mask   =
-                erhe::graphics::Image_usage_flag_bit_mask::color_attachment_bit_mask |
-                erhe::graphics::Image_usage_flag_bit_mask::sampled_bit_mask,
+                erhe::graphics::Image_usage_flag_bit_mask::color_attachment |
+                erhe::graphics::Image_usage_flag_bit_mask::sampled,
             .type         = erhe::graphics::Texture_type::texture_2d,
             .pixelformat  = erhe::dataformat::Format::format_16_vec4_float, // TODO other formats
             .use_mipmaps  = true,
@@ -164,8 +163,8 @@ auto Post_processing_node::update_size() -> bool
 
             erhe::graphics::Texture_create_info texture_create_info = erhe::graphics::Texture_create_info::make_view(m_graphics_device, downsample_texture);
             texture_create_info.usage_mask            =
-                erhe::graphics::Image_usage_flag_bit_mask::color_attachment_bit_mask |
-                erhe::graphics::Image_usage_flag_bit_mask::sampled_bit_mask,
+                erhe::graphics::Image_usage_flag_bit_mask::color_attachment |
+                erhe::graphics::Image_usage_flag_bit_mask::sampled,
             texture_create_info.view_base_level       = level;
             texture_create_info.level_count           = 1;
             texture_create_info.view_base_array_layer = 0;
@@ -194,8 +193,8 @@ auto Post_processing_node::update_size() -> bool
 
             erhe::graphics::Texture_create_info texture_create_info = erhe::graphics::Texture_create_info::make_view(m_graphics_device, upsample_texture);
             texture_create_info.usage_mask            =
-                erhe::graphics::Image_usage_flag_bit_mask::color_attachment_bit_mask |
-                erhe::graphics::Image_usage_flag_bit_mask::sampled_bit_mask,
+                erhe::graphics::Image_usage_flag_bit_mask::color_attachment |
+                erhe::graphics::Image_usage_flag_bit_mask::sampled,
             texture_create_info.view_base_level       = level;
             texture_create_info.level_count           = 1;
             texture_create_info.view_base_array_layer = 0;

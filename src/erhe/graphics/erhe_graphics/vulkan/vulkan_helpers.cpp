@@ -914,33 +914,53 @@ auto get_vulkan_image_usage_flags(const uint64_t usage_mask) -> VkImageUsageFlag
     using namespace erhe::utility;
 
     VkImageUsageFlags flags = 0;
-    if (test_bit_set(usage_mask, Image_usage_flag_bit_mask::transfer_src_bit_mask)) {
+    if (test_bit_set(usage_mask, Image_usage_flag_bit_mask::transfer_src)) {
         flags |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
     }
-    if (test_bit_set(usage_mask, Image_usage_flag_bit_mask::transfer_dst_bit_mask)) {
+    if (test_bit_set(usage_mask, Image_usage_flag_bit_mask::transfer_dst)) {
         flags |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     }
-    if (test_bit_set(usage_mask, Image_usage_flag_bit_mask::sampled_bit_mask)) {
+    if (test_bit_set(usage_mask, Image_usage_flag_bit_mask::sampled)) {
         flags |= VK_IMAGE_USAGE_SAMPLED_BIT;
     }
-    if (test_bit_set(usage_mask, Image_usage_flag_bit_mask::storage_bit_mask)) {
+    if (test_bit_set(usage_mask, Image_usage_flag_bit_mask::storage)) {
         flags |= VK_IMAGE_USAGE_STORAGE_BIT;
     }
-    if (test_bit_set(usage_mask, Image_usage_flag_bit_mask::color_attachment_bit_mask)) {
+    if (test_bit_set(usage_mask, Image_usage_flag_bit_mask::color_attachment)) {
         flags |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
     }
-    if (test_bit_set(usage_mask, Image_usage_flag_bit_mask::depth_stencil_attachment_bit_mask)) {
+    if (test_bit_set(usage_mask, Image_usage_flag_bit_mask::depth_stencil_attachment)) {
         flags |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
     }
-    if (test_bit_set(usage_mask, Image_usage_flag_bit_mask::transient_attachment_bit_mask)) {
+    if (test_bit_set(usage_mask, Image_usage_flag_bit_mask::transient_attachment)) {
         flags |= VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT;
     }
-    if (test_bit_set(usage_mask, Image_usage_flag_bit_mask::input_attachment_bit_mask)) {
+    if (test_bit_set(usage_mask, Image_usage_flag_bit_mask::input_attachment)) {
         flags |= VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
     }
-    if (test_bit_set(usage_mask, Image_usage_flag_bit_mask::host_transfer_bit_mask)) {
+    if (test_bit_set(usage_mask, Image_usage_flag_bit_mask::host_transfer)) {
         flags |= VK_IMAGE_USAGE_HOST_TRANSFER_BIT;
     }
+    return flags;
+}
+
+auto get_vulkan_image_aspect_flags(erhe::dataformat::Format format) -> VkImageAspectFlags
+{
+    const bool color   = erhe::dataformat::has_color       (format);
+    const bool depth   = erhe::dataformat::get_depth_size  (format) > 0;
+    const bool stencil = erhe::dataformat::get_stencil_size(format) > 0;
+
+    VkImageAspectFlags vk_aspect_flags = 0;
+    if (color) {
+        vk_aspect_flags |= VK_IMAGE_ASPECT_COLOR_BIT;
+    }
+    if (depth) {
+        vk_aspect_flags |= VK_IMAGE_ASPECT_DEPTH_BIT;
+    }
+    if (stencil) {
+        vk_aspect_flags |= VK_IMAGE_ASPECT_STENCIL_BIT;
+    }
+    return vk_aspect_flags;
 }
 
 } // namespace erhe::graphics

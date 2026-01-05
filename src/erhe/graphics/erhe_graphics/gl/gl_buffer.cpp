@@ -74,15 +74,22 @@ namespace erhe::graphics {
     //      buffer.
     gl::Buffer_storage_mask storage{0};
     if (m_mapping != Buffer_mapping::not_mappable) {
-        if (m_direction == Buffer_direction::cpu_to_gpu) {
+        const Memory_usage memory_usage = get_memory_usage_from_memory_properties(m_required_memory_property_bit_mask | m_preferred_memory_property_bit_mask);
+        if (memory_usage == Memory_usage::cpu_to_gpu) {
             storage = storage | gl::Buffer_storage_mask::map_write_bit;
-        } else if (m_direction == Buffer_direction::gpu_to_cpu) {
+        } else if (memory_usage == Memory_usage::gpu_to_cpu) {
             storage = storage | gl::Buffer_storage_mask::map_read_bit;
         }
         if (m_mapping == Buffer_mapping::persistent) {
             storage = storage | gl::Buffer_storage_mask::map_persistent_bit;
         }
-        if (m_coherency == Buffer_coherency::on) {
+
+        const bool coherent = erhe::utility::test_bit_set(
+            m_required_memory_property_bit_mask | m_preferred_memory_property_bit_mask,
+            Memory_property_flag_bit_mask::host_coherent
+        );
+
+        if (coherent) {
             storage = storage | gl::Buffer_storage_mask::map_coherent_bit;
         }
     }
@@ -148,15 +155,22 @@ auto Buffer_impl::get_gl_access_mask(Buffer_map_flags flags) const -> gl::Map_bu
     ERHE_VERIFY(m_mapping != Buffer_mapping::not_mappable);
 
     gl::Map_buffer_access_mask access_mask{0};
-    if (m_direction == Buffer_direction::cpu_to_gpu) {
+    const Memory_usage memory_usage = get_memory_usage_from_memory_properties(m_required_memory_property_bit_mask | m_preferred_memory_property_bit_mask);
+    if (memory_usage == Memory_usage::cpu_to_gpu) {
         access_mask = access_mask | gl::Map_buffer_access_mask::map_write_bit;
-    } else if (m_direction == Buffer_direction::gpu_to_cpu) {
+    } else if (memory_usage == Memory_usage::gpu_to_cpu) {
         access_mask = access_mask | gl::Map_buffer_access_mask::map_read_bit;
     }
     if (m_mapping == Buffer_mapping::persistent) {
         access_mask = access_mask | gl::Map_buffer_access_mask::map_persistent_bit;
     }
-    if (m_coherency == Buffer_coherency::on) {
+
+    const bool coherent = erhe::utility::test_bit_set(
+        m_required_memory_property_bit_mask | m_preferred_memory_property_bit_mask,
+        Memory_property_flag_bit_mask::host_coherent
+    );
+
+    if (coherent) {
         access_mask = access_mask | gl::Map_buffer_access_mask::map_coherent_bit;
     }
     using namespace erhe::utility;
@@ -240,25 +254,23 @@ void Buffer_impl::allocate_storage(const void* init_data)
 }
 
 Buffer_impl::Buffer_impl(Device& device, const Buffer_create_info& create_info) noexcept
-    : m_device             {device}
-    , m_capacity_byte_count{create_info.capacity_byte_count}
-    , m_usage              {create_info.usage     }
-    , m_direction          {create_info.direction }
-    , m_cache_mode         {create_info.cache_mode}
-    , m_mapping            {create_info.mapping   }
-    , m_coherency          {create_info.coherency }
-    , m_debug_label        {create_info.debug_label}
+    : m_device                            {device}
+    , m_capacity_byte_count               {create_info.capacity_byte_count}
+    , m_usage                             {create_info.usage}
+    , m_required_memory_property_bit_mask {create_info.required_memory_property_bit_mask}
+    , m_preferred_memory_property_bit_mask{create_info.preferred_memory_property_bit_mask}
+    , m_mapping                           {create_info.mapping}
+    , m_debug_label                       {create_info.debug_label}
 {
     constexpr const std::size_t sanity_threshold{2'000'000'000};
     ERHE_VERIFY(m_capacity_byte_count < sanity_threshold); // sanity check, can raise limit when needed
     log_buffer->debug(
-        "Buffer_impl::Buffer_impl() capacity_byte_count = {}, usage = {}, direction = {}, cache_mode = {}, mapping = {}, coherency = {}) name = {} debug_label = {}",
+        "Buffer_impl::Buffer_impl() capacity_byte_count = {}, usage = {}, required = {}, preferred = {}, mapping = {}) name = {} debug_label = {}",
         m_capacity_byte_count,
-        to_string(create_info.usage),
-        c_str(create_info.direction),
-        c_str(create_info.cache_mode),
-        c_str(create_info.mapping),
-        c_str(create_info.coherency),
+        to_string(m_usage),
+        to_string_memory_property_flag_bit_mask(m_required_memory_property_bit_mask),
+        to_string_memory_property_flag_bit_mask(m_preferred_memory_property_bit_mask),
+        c_str(m_mapping),
         gl_name(),
         m_debug_label
     );
@@ -281,39 +293,37 @@ Buffer_impl::~Buffer_impl() noexcept
 }
 
 Buffer_impl::Buffer_impl(Buffer_impl&& other) noexcept
-    : m_device             {other.m_device}
-    , m_handle             {std::move(other.m_handle)}
-    , m_capacity_byte_count{other.m_capacity_byte_count}
-    , m_next_free_byte     {other.m_next_free_byte}
-    , m_usage              {other.m_usage     }
-    , m_direction          {other.m_direction }
-    , m_cache_mode         {other.m_cache_mode}
-    , m_mapping            {other.m_mapping   }
-    , m_coherency          {other.m_coherency }
-    , m_debug_label        {other.m_debug_label}
-    , m_map                {other.m_map}
-    , m_map_byte_offset    {other.m_map_byte_offset}
-    , m_map_flags          {other.m_map_flags}
-    , m_allocated          {std::exchange(other.m_allocated, false)}
+    : m_device                            {other.m_device}
+    , m_handle                            {std::move(other.m_handle)}
+    , m_capacity_byte_count               {other.m_capacity_byte_count}
+    , m_next_free_byte                    {other.m_next_free_byte}
+    , m_usage                             {other.m_usage     }
+    , m_required_memory_property_bit_mask {other.m_required_memory_property_bit_mask}
+    , m_preferred_memory_property_bit_mask{other.m_preferred_memory_property_bit_mask}
+    , m_mapping                           {other.m_mapping   }
+    , m_debug_label                       {other.m_debug_label}
+    , m_map                               {other.m_map}
+    , m_map_byte_offset                   {other.m_map_byte_offset}
+    , m_map_flags                         {other.m_map_flags}
+    , m_allocated                         {std::exchange(other.m_allocated, false)}
 {
 }
 
 auto Buffer_impl::operator=(Buffer_impl&& other) noexcept -> Buffer_impl&
 {
     ERHE_VERIFY(&m_device == &other.m_device);
-    m_handle              = std::move(other.m_handle);
-    m_debug_label         = other.m_debug_label;
-    m_capacity_byte_count = other.m_capacity_byte_count;
-    m_next_free_byte      = other.m_next_free_byte;
-    m_usage               = other.m_usage     ;
-    m_direction           = other.m_direction ;
-    m_cache_mode          = other.m_cache_mode;
-    m_mapping             = other.m_mapping   ;
-    m_coherency           = other.m_coherency ;
-    m_map                 = other.m_map;
-    m_map_byte_offset     = other.m_map_byte_offset;
-    m_map_flags           = other.m_map_flags;
-    m_allocated           = std::exchange(other.m_allocated, false);
+    m_handle                             = std::move(other.m_handle);
+    m_debug_label                        = other.m_debug_label;
+    m_capacity_byte_count                = other.m_capacity_byte_count;
+    m_next_free_byte                     = other.m_next_free_byte;
+    m_usage                              = other.m_usage;
+    m_required_memory_property_bit_mask  = other.m_required_memory_property_bit_mask;
+    m_preferred_memory_property_bit_mask = other.m_preferred_memory_property_bit_mask;
+    m_mapping                            = other.m_mapping;
+    m_map                                = other.m_map;
+    m_map_byte_offset                    = other.m_map_byte_offset;
+    m_map_flags                          = other.m_map_flags;
+    m_allocated                          = std::exchange(other.m_allocated, false);
     return *this;
 }
 

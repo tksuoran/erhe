@@ -43,8 +43,8 @@ Headset_view_resources::Headset_view_resources(
         erhe::graphics::Texture_create_info{
             .device            = graphics_device,
             .usage_mask        =
-                erhe::graphics::Image_usage_flag_bit_mask::color_attachment_bit_mask |
-                erhe::graphics::Image_usage_flag_bit_mask::sampled_bit_mask,
+                erhe::graphics::Image_usage_flag_bit_mask::color_attachment |
+                erhe::graphics::Image_usage_flag_bit_mask::sampled,
             .type              = erhe::graphics::Texture_type::texture_2d,
             .width             = m_width,
             .height            = m_height,
@@ -60,8 +60,8 @@ Headset_view_resources::Headset_view_resources(
         erhe::graphics::Texture_create_info{
             .device            = graphics_device,
             .usage_mask        =
-                erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment_bit_mask |
-                erhe::graphics::Image_usage_flag_bit_mask::sampled_bit_mask,
+                erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment |
+                erhe::graphics::Image_usage_flag_bit_mask::sampled,
             .type              = erhe::graphics::Texture_type::texture_2d,
             .width             = m_width,
             .height            = m_height,

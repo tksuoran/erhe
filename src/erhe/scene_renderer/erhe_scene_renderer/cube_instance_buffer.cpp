@@ -40,13 +40,15 @@ Cube_instance_buffer::Cube_instance_buffer(
     , m_buffer{
         graphics_device,
         erhe::graphics::Buffer_create_info{
-            .capacity_byte_count = cube_interface.cube_instance_struct.get_size_bytes() * cubes.size(),
-            .usage               = erhe::graphics::get_buffer_usage(cube_interface.cube_instance_block.get_binding_target()),
-            .direction           = erhe::graphics::Buffer_direction::cpu_to_gpu,
-            .cache_mode          = erhe::graphics::Buffer_cache_mode::default_,
-            .mapping             = erhe::graphics::Buffer_mapping::persistent,
-            .coherency           = erhe::graphics::Buffer_coherency::on, // TODO explicitly flush range?
-            .debug_label         = "Cube_instance_buffer"
+            .capacity_byte_count                = cube_interface.cube_instance_struct.get_size_bytes() * cubes.size(),
+            .usage                              = erhe::graphics::get_buffer_usage(cube_interface.cube_instance_block.get_binding_target()),
+            .required_memory_property_bit_mask  =
+                erhe::graphics::Memory_property_flag_bit_mask::host_write   | // CPU to GPU
+                erhe::graphics::Memory_property_flag_bit_mask::host_coherent, // TODO Use explicitly flush instead?
+            .preferred_memory_property_bit_mask =
+                erhe::graphics::Memory_property_flag_bit_mask::device_local,
+            .mapping                            = erhe::graphics::Buffer_mapping::persistent,
+            .debug_label                        = "Cube_instance_buffer"
         }
     }
     , m_cube_count{cubes.size()}

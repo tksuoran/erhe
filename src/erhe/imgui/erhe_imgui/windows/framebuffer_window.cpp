@@ -98,10 +98,10 @@ void Framebuffer_window::update_render_pass()
         erhe::graphics::Texture_create_info{
             .device       = m_graphics_device,
             .usage_mask   =
-                erhe::graphics::Image_usage_flag_bit_mask::color_attachment_bit_mask |
-                erhe::graphics::Image_usage_flag_bit_mask::sampled_bit_mask          |
-                erhe::graphics::Image_usage_flag_bit_mask::transfer_src_bit_mask     |
-                erhe::graphics::Image_usage_flag_bit_mask::transfer_dst_bit_mask,
+                erhe::graphics::Image_usage_flag_bit_mask::color_attachment |
+                erhe::graphics::Image_usage_flag_bit_mask::sampled          |
+                erhe::graphics::Image_usage_flag_bit_mask::transfer_src     |
+                erhe::graphics::Image_usage_flag_bit_mask::transfer_dst,
             .type         = erhe::graphics::Texture_type::texture_2d,
             .pixelformat  = erhe::dataformat::Format::format_8_vec4_srgb,
             .sample_count = 0,

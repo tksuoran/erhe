@@ -728,7 +728,7 @@ auto Device_impl::create_dummy_texture() -> std::shared_ptr<Texture>
 {
     const Texture_create_info create_info{
         .device      = m_device,
-        .usage_mask  = Image_usage_flag_bit_mask::sampled_bit_mask, // TODO What is needed here?
+        .usage_mask  = Image_usage_flag_bit_mask::sampled, // TODO What is needed here?
         .width       = 2,
         .height      = 2,
         .debug_label = "dummy"
@@ -840,14 +840,16 @@ void Device_impl::upload_to_buffer(Buffer& buffer, size_t offset, const void* da
 {
     // TODO Use persistent staging buffer, maybe Ring_buffer_impl?
     Buffer_create_info create_info{
-        .capacity_byte_count = length,
-        .usage               = Buffer_usage     ::transfer,
-        .direction           = Buffer_direction ::cpu_to_gpu,
-        .cache_mode          = Buffer_cache_mode::default_,
-        .mapping             = Buffer_mapping   ::not_mappable,
-        .coherency           = Buffer_coherency ::on,
-        .init_data           = data,
-        .debug_label         = "Staging buffer"
+        .capacity_byte_count                = length,
+        .usage                              = Buffer_usage     ::transfer,
+        .required_memory_property_bit_mask  =
+            Memory_property_flag_bit_mask::host_write |   // CPU to GPU
+            Memory_property_flag_bit_mask::host_coherent, // immediately usable by GPU without synchronization
+        .preferred_memory_property_bit_mask =
+            Memory_property_flag_bit_mask::device_local,
+        .mapping                            = Buffer_mapping   ::not_mappable,
+        .init_data                          = data,
+        .debug_label                        = "Staging buffer"
     };
     Buffer staging_buffer{m_device, create_info};
     gl::copy_named_buffer_sub_data(staging_buffer.get_impl().gl_name(), buffer.get_impl().gl_name(), 0, offset, length);

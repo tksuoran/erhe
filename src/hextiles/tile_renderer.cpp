@@ -104,16 +104,16 @@ Tile_renderer::Tile_renderer(
             }
         }
     }
+    // TODO Use staging buffer index buffer uploads
     , m_index_buffer{
         graphics_device,
         erhe::graphics::Buffer_create_info{
-            .capacity_byte_count = index_stride * index_count,
-            .usage               = erhe::graphics::Buffer_usage::index,
-            .direction           = erhe::graphics::Buffer_direction::cpu_to_gpu,
-            .cache_mode          = erhe::graphics::Buffer_cache_mode::default_,
-            .mapping             = erhe::graphics::Buffer_mapping::transient,
-            .coherency           = erhe::graphics::Buffer_coherency::off,
-            .debug_label         = "Tile_renderer index buffer"
+            .capacity_byte_count                = index_stride * index_count,
+            .usage                              = erhe::graphics::Buffer_usage::index,
+            .required_memory_property_bit_mask  = erhe::graphics::Memory_property_flag_bit_mask::host_write,  // CPU to GPU
+            .preferred_memory_property_bit_mask = erhe::graphics::Memory_property_flag_bit_mask::device_local,
+            .mapping                            = erhe::graphics::Buffer_mapping::transient,
+            .debug_label                        = "Tile_renderer index buffer"
         }
     }
     , m_nearest_sampler{
@@ -168,6 +168,7 @@ Tile_renderer::Tile_renderer(
         m_index_buffer, 0, index_count, erhe::graphics::Buffer_map_flags::none
     };
 
+    // TODO Use staging buffer index buffer uploads
     const auto& gpu_index_data = index_buffer_map.span();
     size_t      offset      {0};
     uint32_t    vertex_index{0};
@@ -309,8 +310,8 @@ void Tile_renderer::compose_tileset_texture()
     erhe::graphics::Texture_create_info texture_create_info{
         .device      = m_graphics_device,
         .usage_mask  =
-            erhe::graphics::Image_usage_flag_bit_mask::sampled_bit_mask |
-            erhe::graphics::Image_usage_flag_bit_mask::transfer_dst_bit_mask,
+            erhe::graphics::Image_usage_flag_bit_mask::sampled |
+            erhe::graphics::Image_usage_flag_bit_mask::transfer_dst,
         .type        = erhe::graphics::Texture_type::texture_2d,
         .pixelformat = m_tileset_image.info.format,
         .use_mipmaps = false,

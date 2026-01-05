@@ -2,6 +2,7 @@
 
 #include "erhe_graphics/vulkan/vulkan_texture.hpp"
 #include "erhe_graphics/vulkan/vulkan_buffer.hpp"
+#include "erhe_graphics/vulkan/vulkan_device.hpp"
 #include "erhe_graphics/vulkan/vulkan_helpers.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/device.hpp"
@@ -60,12 +61,12 @@ Texture_impl::Texture_impl(Device& device, const Texture_create_info& create_inf
         .imageType             = VK_IMAGE_TYPE_2D,
         .format                = to_vulkan(create_info.pixelformat),
         .extent                = {
-            .width  = create_info.width,
-            .height = create_info.height,
-            .depth  = create_info.depth
+            .width  = static_cast<uint32_t>(create_info.width),
+            .height = static_cast<uint32_t>(create_info.height),
+            .depth  = static_cast<uint32_t>(create_info.depth)
         },
-        .mipLevels             = create_info.level_count,
-        .arrayLayers           = create_info.array_layer_count,
+        .mipLevels             = static_cast<uint32_t>(create_info.level_count),
+        .arrayLayers           = static_cast<uint32_t>(create_info.array_layer_count),
         .samples               = get_vulkan_sample_count(create_info.sample_count),
         .tiling                = VK_IMAGE_TILING_OPTIMAL,
         .usage                 = get_vulkan_image_usage_flags(create_info.usage_mask),
@@ -74,8 +75,55 @@ Texture_impl::Texture_impl(Device& device, const Texture_create_info& create_inf
         .pQueueFamilyIndices   = nullptr,
         .initialLayout         = VK_IMAGE_LAYOUT_UNDEFINED
     };
-    ERHE_FATAL("Not implemented");
-    static_cast<void>(device);
+
+    //const bool transfer_dst = erhe::utility::test_bit_set(create_info.usage_mask, Image_usage_flag_bit_mask::transfer_dst);
+    // TODO .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT,
+    const VmaAllocationCreateInfo allocation_create_info{
+        .flags          = 0,
+        .usage          = VMA_MEMORY_USAGE_AUTO,
+        .requiredFlags  = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        .preferredFlags = 0,
+        .memoryTypeBits = 0,
+        .pool           = VK_NULL_HANDLE,
+        .pUserData      = nullptr,
+        .priority       = 0.0f
+    };
+
+    Device_impl&  device_impl   = device.get_impl();
+    VkDevice      vulkan_device = device_impl.get_vulkan_device();
+    VmaAllocator& allocator     = device.get_impl().get_allocator();
+    VkResult      result        = VK_SUCCESS;
+
+    result = vmaCreateImage(allocator, &image_create_info, &allocation_create_info, &m_vk_image, &m_vma_allocation, nullptr);
+    if (result != VK_SUCCESS) {
+        log_swapchain->critical("vkDeviceWaitIdle() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        abort();
+    }
+
+    const VkImageViewCreateInfo image_view_create_info{
+        .sType            = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        .pNext            = nullptr,
+        .flags            = 0,
+        .image            = m_vk_image,
+        .viewType         = VK_IMAGE_VIEW_TYPE_2D,
+        .format           = image_create_info.format,
+        .components       = {
+            .r = VK_COMPONENT_SWIZZLE_R,
+            .g = VK_COMPONENT_SWIZZLE_G,
+            .b = VK_COMPONENT_SWIZZLE_B,
+            .a = VK_COMPONENT_SWIZZLE_A
+        },
+        .subresourceRange = {
+            .aspectMask = get_vulkan_image_aspect_flags(create_info.pixelformat),
+            .levelCount = static_cast<uint32_t>(create_info.level_count),
+            .layerCount = static_cast<uint32_t>(create_info.array_layer_count)
+        }
+    };
+    result = vkCreateImageView(vulkan_device, &image_view_create_info, nullptr, &m_vk_image_view);
+    if (result != VK_SUCCESS) {
+        log_swapchain->critical("vkDeviceWaitIdle() failed with {} {}", static_cast<uint32_t>(result), c_str(result));
+        abort();
+    }
 }
 
 auto Texture_impl::is_sparse() const -> bool
