@@ -944,7 +944,7 @@ auto get_vulkan_image_usage_flags(const uint64_t usage_mask) -> VkImageUsageFlag
     return flags;
 }
 
-auto get_vulkan_image_aspect_flags(erhe::dataformat::Format format) -> VkImageAspectFlags
+auto get_vulkan_image_aspect_flags(const erhe::dataformat::Format format) -> VkImageAspectFlags
 {
     const bool color   = erhe::dataformat::has_color       (format);
     const bool depth   = erhe::dataformat::get_depth_size  (format) > 0;
@@ -963,7 +963,7 @@ auto get_vulkan_image_aspect_flags(erhe::dataformat::Format format) -> VkImageAs
     return vk_aspect_flags;
 }
 
-auto to_vulkan_buffer_usage(Buffer_usage buffer_usage) -> VkBufferUsageFlags
+auto to_vulkan_buffer_usage(const Buffer_usage buffer_usage) -> VkBufferUsageFlags
 {
     using namespace erhe::utility;
 
@@ -997,5 +997,69 @@ auto to_vulkan_buffer_usage(Buffer_usage buffer_usage) -> VkBufferUsageFlags
     }
     return vk_flags;
 };
+
+auto to_vulkan_memory_allocation_create_flags(const uint64_t flags) -> VmaAllocationCreateFlags
+{
+    using namespace erhe::utility;
+
+    VmaAllocationCreateFlags vk_flags{0};
+    if (test_bit_set(flags, Memory_allocation_create_flag_bit_mask::dedicated_allocation)) {
+        vk_flags |= VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+    }
+    if (test_bit_set(flags, Memory_allocation_create_flag_bit_mask::never_allocate)) {
+        vk_flags |= VMA_ALLOCATION_CREATE_NEVER_ALLOCATE_BIT;
+    }
+    if (test_bit_set(flags, Memory_allocation_create_flag_bit_mask::mapped)) {
+        vk_flags |= VMA_ALLOCATION_CREATE_MAPPED_BIT;
+    }
+    if (test_bit_set(flags, Memory_allocation_create_flag_bit_mask::upper_address)) {
+        vk_flags |= VMA_ALLOCATION_CREATE_UPPER_ADDRESS_BIT;
+    }
+    if (test_bit_set(flags, Memory_allocation_create_flag_bit_mask::dont_bind)) {
+        vk_flags |= VMA_ALLOCATION_CREATE_DONT_BIND_BIT;
+    }
+    if (test_bit_set(flags, Memory_allocation_create_flag_bit_mask::within_budget)) {
+        vk_flags |= VMA_ALLOCATION_CREATE_WITHIN_BUDGET_BIT;
+    }
+    if (test_bit_set(flags, Memory_allocation_create_flag_bit_mask::can_alias)) {
+        vk_flags |= VMA_ALLOCATION_CREATE_CAN_ALIAS_BIT;
+    }
+    if (test_bit_set(flags, Memory_allocation_create_flag_bit_mask::strategy_min_memory)) {
+        vk_flags |= VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
+    }
+    if (test_bit_set(flags, Memory_allocation_create_flag_bit_mask::strategy_min_time)) {
+        vk_flags |= VMA_ALLOCATION_CREATE_STRATEGY_MIN_TIME_BIT;
+    }
+    if (test_bit_set(flags, Memory_allocation_create_flag_bit_mask::strategy_min_offset)) {
+        vk_flags |= VMA_ALLOCATION_CREATE_STRATEGY_MIN_OFFSET_BIT;
+    }
+    return vk_flags;
+}
+
+auto to_vulkan_memory_property_flags(const uint64_t flags) -> VkMemoryPropertyFlags
+{
+    using namespace erhe::utility;
+
+    VkMemoryPropertyFlags vk_flags{0};
+    if (test_bit_set(flags, Memory_property_flag_bit_mask::host_read)) {
+        vk_flags |= VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+    }
+    if (test_bit_set(flags, Memory_property_flag_bit_mask::host_write)) {
+        vk_flags |= VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+    }
+    if (test_bit_set(flags, Memory_property_flag_bit_mask::host_coherent)) {
+        vk_flags |= VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    }
+    if (test_bit_set(flags, Memory_property_flag_bit_mask::host_cached)) {
+        vk_flags |= VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
+    }
+    if (test_bit_set(flags, Memory_property_flag_bit_mask::device_local)) {
+        vk_flags |= VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    }
+    if (test_bit_set(flags, Memory_property_flag_bit_mask::lazily_allocated)) {
+        vk_flags |= VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT;
+    }
+    return vk_flags;
+}
 
 } // namespace erhe::graphics

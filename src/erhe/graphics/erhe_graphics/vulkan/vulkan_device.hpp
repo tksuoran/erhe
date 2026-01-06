@@ -112,6 +112,7 @@ public:
 
     [[nodiscard]] auto get_surface                    () -> Surface*;
     [[nodiscard]] auto get_vulkan_instance            () -> VkInstance;
+    [[nodiscard]] auto get_vulkan_physical_device     () -> VkPhysicalDevice;
     [[nodiscard]] auto get_vulkan_device              () -> VkDevice;
     [[nodiscard]] auto get_graphics_queue_family_index() const -> uint32_t;
     [[nodiscard]] auto get_present_queue_family_index () const -> uint32_t;
@@ -119,6 +120,8 @@ public:
     [[nodiscard]] auto get_present_queue              () const -> VkQueue;
     [[nodiscard]] auto get_capabilities               () const -> const Capabilities&;
     [[nodiscard]] auto get_driver_properties          () const -> const VkPhysicalDeviceDriverProperties&;
+    [[nodiscard]] auto get_memory_type                (uint32_t memory_type_index) const -> const VkMemoryType&;
+    [[nodiscard]] auto get_memory_heap                (uint32_t memory_heap_index) const -> const VkMemoryHeap&;
 
     [[nodiscard]] auto debug_report_callback(
         VkDebugReportFlagsEXT      flags,
@@ -194,7 +197,8 @@ private:
     Device_extensions        m_device_extensions  {};
     Capabilities             m_capabilities       {};
 
-    VkPhysicalDeviceDriverProperties m_driver_properties{};
+    VkPhysicalDeviceDriverProperties  m_driver_properties{};
+    VkPhysicalDeviceMemoryProperties2 m_memory_properties{};
 
     // For ring buffer:
     bool                                      m_need_sync{false};

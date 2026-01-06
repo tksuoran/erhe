@@ -841,16 +841,17 @@ void Device_impl::upload_to_buffer(Buffer& buffer, size_t offset, const void* da
     // TODO Use persistent buffer instead of re-creating staging buffer each time.
     // TODO Use GL directly, avoid Buffer_usage::transfer. Or maybe use Ring_buffer_impl?
     Buffer_create_info create_info{
-        .capacity_byte_count                = length,
-        .usage                              = Buffer_usage::transfer,
-        .required_memory_property_bit_mask  =
+        .capacity_byte_count                    = length,
+        .memory_allocation_create_flag_bit_mask = Memory_allocation_create_flag_bit_mask::strategy_min_time,
+        .usage                                  = Buffer_usage::transfer,
+        .required_memory_property_bit_mask      =
             Memory_property_flag_bit_mask::host_write |   // CPU to GPU
             Memory_property_flag_bit_mask::host_coherent, // immediately usable by GPU without synchronization
-        .preferred_memory_property_bit_mask =
+        .preferred_memory_property_bit_mask    =
             Memory_property_flag_bit_mask::device_local,
-        .mapping                            = Buffer_mapping::not_mappable,
-        .init_data                          = data,
-        .debug_label                        = "Staging buffer"
+        .mapping                              = Buffer_mapping::not_mappable,
+        .init_data                            = data,
+        .debug_label                          = "Staging buffer"
     };
     Buffer staging_buffer{m_device, create_info};
     gl::copy_named_buffer_sub_data(staging_buffer.get_impl().gl_name(), buffer.get_impl().gl_name(), 0, offset, length);

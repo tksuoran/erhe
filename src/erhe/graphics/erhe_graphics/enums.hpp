@@ -237,6 +237,36 @@ enum class Memory_usage : unsigned int {
     gpu_to_cpu = 2
 };
 
+class Memory_allocation_create_flag_bit {
+public:
+    static constexpr uint64_t memoryless           =  0u;
+    static constexpr uint64_t dedicated_allocation =  1u;
+    static constexpr uint64_t never_allocate       =  2u;
+    static constexpr uint64_t mapped               =  3u;
+    static constexpr uint64_t upper_address        =  4u;
+    static constexpr uint64_t dont_bind            =  5u;
+    static constexpr uint64_t within_budget        =  6u;
+    static constexpr uint64_t can_alias            =  7u;
+    static constexpr uint64_t strategy_min_memory  = 10u;
+    static constexpr uint64_t strategy_min_time    = 11u;
+    static constexpr uint64_t strategy_min_offset  = 12u;
+};
+
+class Memory_allocation_create_flag_bit_mask {
+public:
+    static constexpr uint64_t none                 = uint64_t{0};
+    static constexpr uint64_t dedicated_allocation = uint64_t{1} << Memory_allocation_create_flag_bit::dedicated_allocation              ;
+    static constexpr uint64_t never_allocate       = uint64_t{1} << Memory_allocation_create_flag_bit::never_allocate                    ;
+    static constexpr uint64_t mapped               = uint64_t{1} << Memory_allocation_create_flag_bit::mapped                            ;
+    static constexpr uint64_t upper_address        = uint64_t{1} << Memory_allocation_create_flag_bit::upper_address                     ;
+    static constexpr uint64_t dont_bind            = uint64_t{1} << Memory_allocation_create_flag_bit::dont_bind                         ;
+    static constexpr uint64_t within_budget        = uint64_t{1} << Memory_allocation_create_flag_bit::within_budget                     ;
+    static constexpr uint64_t can_alias            = uint64_t{1} << Memory_allocation_create_flag_bit::can_alias                         ;
+    static constexpr uint64_t strategy_min_memory  = uint64_t{1} << Memory_allocation_create_flag_bit::strategy_min_memory               ;
+    static constexpr uint64_t strategy_min_time    = uint64_t{1} << Memory_allocation_create_flag_bit::strategy_min_time                 ;
+    static constexpr uint64_t strategy_min_offset  = uint64_t{1} << Memory_allocation_create_flag_bit::strategy_min_offset               ;
+};
+
 class Memory_property_flag_bit {
 public:
     static constexpr uint64_t host_read         = 0u;

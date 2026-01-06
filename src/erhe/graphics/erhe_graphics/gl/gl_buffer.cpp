@@ -254,13 +254,14 @@ void Buffer_impl::allocate_storage(const void* init_data)
 }
 
 Buffer_impl::Buffer_impl(Device& device, const Buffer_create_info& create_info) noexcept
-    : m_device                            {device}
-    , m_capacity_byte_count               {create_info.capacity_byte_count}
-    , m_usage                             {create_info.usage}
-    , m_required_memory_property_bit_mask {create_info.required_memory_property_bit_mask}
-    , m_preferred_memory_property_bit_mask{create_info.preferred_memory_property_bit_mask}
-    , m_mapping                           {create_info.mapping}
-    , m_debug_label                       {create_info.debug_label}
+    : m_device                                {device}
+    , m_capacity_byte_count                   {create_info.capacity_byte_count}
+    , m_usage                                 {create_info.usage}
+    , m_memory_allocation_create_flag_bit_mask{create_info.memory_allocation_create_flag_bit_mask}
+    , m_required_memory_property_bit_mask     {create_info.required_memory_property_bit_mask}
+    , m_preferred_memory_property_bit_mask    {create_info.preferred_memory_property_bit_mask}
+    , m_mapping                               {create_info.mapping}
+    , m_debug_label                           {create_info.debug_label}
 {
     constexpr const std::size_t sanity_threshold{2'000'000'000};
     ERHE_VERIFY(m_capacity_byte_count < sanity_threshold); // sanity check, can raise limit when needed

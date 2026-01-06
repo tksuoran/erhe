@@ -108,12 +108,13 @@ Tile_renderer::Tile_renderer(
     , m_index_buffer{
         graphics_device,
         erhe::graphics::Buffer_create_info{
-            .capacity_byte_count                = index_stride * index_count,
-            .usage                              = erhe::graphics::Buffer_usage::index,
-            .required_memory_property_bit_mask  = erhe::graphics::Memory_property_flag_bit_mask::host_write,  // CPU to GPU
-            .preferred_memory_property_bit_mask = erhe::graphics::Memory_property_flag_bit_mask::device_local,
-            .mapping                            = erhe::graphics::Buffer_mapping::transient,
-            .debug_label                        = "Tile_renderer index buffer"
+            .capacity_byte_count                    = index_stride * index_count,
+            .memory_allocation_create_flag_bit_mask = 0,
+            .usage                                  = erhe::graphics::Buffer_usage::index,
+            .required_memory_property_bit_mask      = erhe::graphics::Memory_property_flag_bit_mask::host_write,  // CPU to GPU
+            .preferred_memory_property_bit_mask     = erhe::graphics::Memory_property_flag_bit_mask::device_local,
+            .mapping                                = erhe::graphics::Buffer_mapping::transient,
+            .debug_label                            = "Tile_renderer index buffer"
         }
     }
     , m_nearest_sampler{

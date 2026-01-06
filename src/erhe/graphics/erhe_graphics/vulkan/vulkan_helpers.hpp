@@ -4,6 +4,7 @@
 #include "erhe_dataformat/dataformat.hpp"
 
 #include "volk.h"
+#include "vk_mem_alloc.h"
 
 #include <string>
 
@@ -31,5 +32,7 @@ namespace erhe::graphics {
 [[nodiscard]] auto get_vulkan_image_aspect_flags(erhe::dataformat::Format format) -> VkImageAspectFlags;
 
 [[nodiscard]] auto to_vulkan_buffer_usage(Buffer_usage buffer_usage) -> VkBufferUsageFlags;
+[[nodiscard]] auto to_vulkan_memory_allocation_create_flags(uint64_t memory_allocation_create_flags) -> VmaAllocationCreateFlags;
+[[nodiscard]] auto to_vulkan_memory_property_flags(uint64_t memory_property_flags) -> VkMemoryPropertyFlags;
 
 } // namespace erhe::graphics

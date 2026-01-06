@@ -18,8 +18,8 @@ public:
     Buffer_impl         (Device& device, const Buffer_create_info& create_info) noexcept;
     Buffer_impl         (const Buffer_impl&) = delete;
     void operator=      (const Buffer_impl&) = delete;
-    Buffer_impl         (Buffer_impl&& other) noexcept;
-    auto operator=      (Buffer_impl&& other) noexcept -> Buffer_impl&;
+    Buffer_impl         (Buffer_impl&& old) noexcept;
+    auto operator=      (Buffer_impl&& old) noexcept -> Buffer_impl&;
 
     [[nodiscard]] auto get_capacity_byte_count () const noexcept -> std::size_t;
     [[nodiscard]] auto allocate_bytes          (std::size_t byte_count, std::size_t alignment = 64) noexcept -> std::optional<std::size_t>;
@@ -28,7 +28,6 @@ public:
     [[nodiscard]] auto get_available_byte_count(std::size_t alignment = 64) const noexcept -> std::size_t;
 
     [[nodiscard]] auto get_map                 () const -> std::span<std::byte>;
-    [[nodiscard]] auto gl_name                 () const noexcept -> unsigned int;
     void clear                () noexcept;
     void unmap                () noexcept;
     void flush_bytes          (std::size_t byte_offset, std::size_t byte_count) noexcept;
@@ -55,12 +54,19 @@ public:
 
     auto map_bytes(const std::size_t byte_offset, const std::size_t byte_count, Buffer_map_flags flags) noexcept -> std::span<std::byte>;
 
+private:
+    friend bool operator==(const Buffer_impl& lhs, const Buffer_impl& rhs) noexcept;
+    friend class Buffer_impl_hash;
     friend class Vertex_input_state;
     friend class Texture;
 
-private:
-    VmaAllocation m_vma_allocation{VK_NULL_HANDLE};
-    VkBuffer      m_vk_buffer     {VK_NULL_HANDLE};	
+    ERHE_PROFILE_MUTEX(std::mutex, m_allocate_mutex);
+    Device&       m_device;
+    VmaAllocation m_vma_allocation     {VK_NULL_HANDLE};
+    VkBuffer      m_vk_buffer          {VK_NULL_HANDLE};	
+    std::string   m_debug_label        {};
+    std::size_t   m_capacity_byte_count{0};
+    std::size_t   m_next_free_byte     {0};
 };
 
 class Buffer_impl_hash
@@ -68,7 +74,9 @@ class Buffer_impl_hash
 public:
     [[nodiscard]] auto operator()(const Buffer_impl& buffer) const noexcept -> std::size_t
     {
-        return static_cast<std::size_t>(buffer.gl_name());
+        return
+            reinterpret_cast<std::uintptr_t>(buffer.m_vma_allocation) ^
+            reinterpret_cast<std::uintptr_t>(buffer.m_vk_buffer);
     }
 };
 

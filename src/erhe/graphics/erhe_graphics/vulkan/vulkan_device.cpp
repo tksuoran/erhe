@@ -461,6 +461,18 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         abort();
     }
 
+    m_memory_properties = VkPhysicalDeviceMemoryProperties2{
+        .sType            = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PROPERTIES_2,
+        .pNext            = nullptr,
+        .memoryProperties = {
+            .memoryTypeCount = 0,
+            .memoryTypes     = {},
+            .memoryHeapCount = 0,
+            .memoryHeaps     = {}
+        }
+    };
+    vkGetPhysicalDeviceMemoryProperties2(m_vulkan_physical_device, &m_memory_properties);
+
     m_driver_properties = VkPhysicalDeviceDriverProperties{
         .sType              = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES,
         .pNext              = nullptr,
@@ -1027,6 +1039,11 @@ auto Device_impl::get_vulkan_instance() -> VkInstance
     return m_vulkan_instance;
 }
 
+auto Device_impl::get_vulkan_physical_device() -> VkPhysicalDevice
+{
+    return m_vulkan_physical_device;
+}
+
 auto Device_impl::get_vulkan_device() -> VkDevice
 {
     return m_vulkan_device;
@@ -1060,6 +1077,15 @@ auto Device_impl::get_capabilities() const -> const Capabilities&
 auto Device_impl::get_driver_properties() const -> const VkPhysicalDeviceDriverProperties&
 {
     return m_driver_properties;
+}
+
+auto Device_impl::get_memory_type(uint32_t memory_type_index) const -> const VkMemoryType&
+{
+    return m_memory_properties.memoryProperties.memoryTypes[memory_type_index];
+}
+auto Device_impl::get_memory_heap(uint32_t memory_heap_index) const -> const VkMemoryHeap&
+{
+    return m_memory_properties.memoryProperties.memoryHeaps[memory_heap_index];
 }
 
 auto Device_impl::get_handle(const Texture& texture, const Sampler& sampler) const -> uint64_t

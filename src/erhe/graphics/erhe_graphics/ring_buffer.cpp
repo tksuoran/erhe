@@ -62,12 +62,13 @@ Ring_buffer::Ring_buffer(
         std::make_unique<Buffer>(
             m_device,
             Buffer_create_info{
-                .capacity_byte_count                = create_info.size,
-                .usage                              = create_info.buffer_usage,
-                .required_memory_property_bit_mask  = get_required_memory_property_bit_mask(create_info.ring_buffer_usage),
-                .preferred_memory_property_bit_mask = get_preferred_memory_property_bit_mask(create_info.ring_buffer_usage),
-                .mapping                            = (create_info.ring_buffer_usage != Ring_buffer_usage::GPU_access) ? Buffer_mapping::persistent : Buffer_mapping::not_mappable,
-                .debug_label                        = create_info.debug_label
+                .capacity_byte_count                    = create_info.size,
+                .memory_allocation_create_flag_bit_mask = 0,
+                .usage                                  = create_info.buffer_usage,
+                .required_memory_property_bit_mask      = get_required_memory_property_bit_mask(create_info.ring_buffer_usage),
+                .preferred_memory_property_bit_mask     = get_preferred_memory_property_bit_mask(create_info.ring_buffer_usage),
+                .mapping                                = (create_info.ring_buffer_usage != Ring_buffer_usage::GPU_access) ? Buffer_mapping::persistent : Buffer_mapping::not_mappable,
+                .debug_label                            = create_info.debug_label
             }
         )
     }
