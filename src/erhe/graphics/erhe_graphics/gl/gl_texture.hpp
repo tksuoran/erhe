@@ -22,7 +22,6 @@ public:
     [[nodiscard]] static auto get_mipmap_dimensions (gl::Texture_target target) -> int;
     [[nodiscard]] static auto get_mipmap_dimensions (Texture_type type) -> int;
 
-
     [[nodiscard]] auto get_debug_label           () const -> const std::string&;
     [[nodiscard]] auto get_pixelformat           () const -> erhe::dataformat::Format;
     [[nodiscard]] auto get_width                 (unsigned int level = 0) const -> int;
@@ -37,6 +36,8 @@ public:
     [[nodiscard]] auto gl_name                   () const -> GLuint;
     [[nodiscard]] auto get_handle                () const -> uint64_t;
     [[nodiscard]] auto is_sparse                 () const -> bool;
+
+    void clear() const;
 
 private:
     Gl_texture               m_handle;

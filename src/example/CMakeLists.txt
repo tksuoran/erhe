@@ -15,6 +15,13 @@ erhe_target_sources_grouped(
     programs.cpp
     programs.hpp
     res/models/Box.gltf
+    res/shaders/erhe_bxdf.glsl
+    res/shaders/erhe_ggx.glsl
+    res/shaders/erhe_light.glsl
+    res/shaders/erhe_math.glsl
+    res/shaders/erhe_srgb.glsl
+    res/shaders/erhe_texture.glsl
+    res/shaders/erhe_tonemap.glsl
     res/shaders/depth.vert
     res/shaders/depth.frag
     res/shaders/standard.vert

@@ -47,25 +47,50 @@ Shadow_render_node::~Shadow_render_node() noexcept
 {
 }
 
-void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, const int resolution, const int light_count, const int depth_bits)
+void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, const int resolution, const int light_count, const int requested_depth_bits)
 {
-    erhe::dataformat::Format depth_format =
-        (depth_bits == 32) ? erhe::dataformat::Format::format_d32_sfloat :
-        (depth_bits == 24) ? erhe::dataformat::Format::format_d24_unorm_s8_uint :
-        (depth_bits == 16) ? erhe::dataformat::Format::format_d16_unorm :
-                             erhe::dataformat::Format::format_d16_unorm;
+    std::vector<erhe::dataformat::Format> formats = graphics_device.get_supported_depth_stencil_formats();
+    std::stable_sort(
+        formats.begin(),
+        formats.end(),
+        [&](const erhe::dataformat::Format& lhs, const erhe::dataformat::Format& rhs)
+        {
+            int lhs_depth_size = static_cast<int>(erhe::dataformat::get_depth_size(lhs));
+            int rhs_depth_size = static_cast<int>(erhe::dataformat::get_depth_size(rhs));
+            int lhs_depth_diff = lhs_depth_size - requested_depth_bits;
+            int rhs_depth_diff = rhs_depth_size - requested_depth_bits;
+            int lhs_abs_diff   = std::abs(lhs_depth_diff);
+            int rhs_abs_diff   = std::abs(rhs_depth_diff);
+            if ((lhs_depth_diff > 0) && (lhs_depth_diff < 0)) {
+                return true;
+            }
+            if ((lhs_depth_diff < 0) && (rhs_depth_diff > 0)) {
+                return false;
+            }
+            return lhs_abs_diff < rhs_abs_diff;
+        }
+    );
+    const erhe::dataformat::Format depth_format = graphics_device.choose_depth_stencil_format(formats);
+    if (depth_format == erhe::dataformat::Format::format_undefined) {
+        log_render->error(
+            "Reconfigure shadow resolution = {}, light count = {}, no depth format found, skip",
+            resolution, light_count
+        );
+        return;
+    }
 
     if (
         m_texture &&
-        (m_texture->get_width() == resolution) &&
-        (m_texture->get_height() == resolution) &&
+        (m_texture->get_width()             == resolution) &&
+        (m_texture->get_height()            == resolution) &&
         (m_texture->get_array_layer_count() == std::max(1, light_count)) &&
-        (m_texture->get_pixelformat() == depth_format)
+        (m_texture->get_pixelformat()       == depth_format)
     ) {
         log_render->debug(
             "Reconfigure shadow resolution = {}, light count = {}, format = {} - match old settings, skip",
             resolution, light_count, erhe::dataformat::c_str(depth_format)
         );
+        m_texture.reset();
         return;
     }
     log_render->debug("Reconfigure shadow resolution = {}, light count = {}", resolution, light_count);

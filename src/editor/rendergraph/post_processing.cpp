@@ -399,7 +399,7 @@ auto Post_processing::make_program(
 Post_processing::Post_processing(erhe::graphics::Device& d, App_context& app_context)
     : m_context         {app_context}
     , m_fragment_outputs{erhe::graphics::Fragment_output{.name = "out_color", .type = erhe::graphics::Glsl_type::float_vec4, .location = 0}}
-    , m_dummy_texture   {d.create_dummy_texture()}
+    , m_dummy_texture   {d.create_dummy_texture(erhe::dataformat::Format::format_16_vec4_float)}
     , m_sampler_linear{
         d,
         erhe::graphics::Sampler_create_info{

@@ -6,6 +6,7 @@
 #include "erhe_renderer/renderer_config.hpp"
 
 #include "erhe_configuration/configuration.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_graphics/span.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_graphics/texture_heap.hpp"
@@ -106,6 +107,11 @@ Light_buffer::Light_buffer(erhe::graphics::Device& graphics_device, Light_interf
         "Light_buffer::m_control_buffer",
         light_interface.light_control_block.get_binding_point()
     }
+    , m_fallback_shadow_texture{
+        graphics_device.create_dummy_texture(
+            graphics_device.choose_depth_stencil_format(erhe::graphics::format_flag_require_depth, 0)
+        )
+    }
 {
 }
 
@@ -197,9 +203,13 @@ auto Light_buffer::update(
 
     uint64_t shadow_map_texture_handle_compare    = erhe::graphics::invalid_texture_handle;
     uint64_t shadow_map_texture_handle_no_compare = erhe::graphics::invalid_texture_handle;
+    erhe::graphics::Texture* shadow_map_texture = light_projections ? light_projections->shadow_map_texture.get() : nullptr;
+    if (shadow_map_texture == nullptr) {
+        shadow_map_texture = m_fallback_shadow_texture.get();
+    }
     if (light_projections != nullptr) {
-        shadow_map_texture_handle_compare    = texture_heap.assign(c_texture_heap_slot_shadow_compare,    light_projections->shadow_map_texture.get(), compare_sampler);
-        shadow_map_texture_handle_no_compare = texture_heap.assign(c_texture_heap_slot_shadow_no_compare, light_projections->shadow_map_texture.get(), no_compare_sampler);
+        shadow_map_texture_handle_compare    = texture_heap.assign(c_texture_heap_slot_shadow_compare,    shadow_map_texture, compare_sampler);
+        shadow_map_texture_handle_no_compare = texture_heap.assign(c_texture_heap_slot_shadow_no_compare, shadow_map_texture, no_compare_sampler);
     }
 
     using erhe::graphics::as_span;

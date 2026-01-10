@@ -91,6 +91,8 @@ public:
     [[nodiscard]] auto get_impl                  () -> Texture_impl&;
     [[nodiscard]] auto get_impl                  () const -> const Texture_impl&;
 
+    void clear() const;
+
 private:
     std::unique_ptr<Texture_impl> m_impl;
 };

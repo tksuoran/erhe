@@ -19,7 +19,7 @@ auto pack_snorm2x16  (float x, float y) -> uint32_t;
 auto pack_snorm4x8   (float x, float y, float z, float w) -> uint32_t;
 auto pack_int2x16    (int x, int y) -> uint32_t;
 
-enum class Format {
+enum class Format : unsigned int {
     format_undefined = 0,
     format_8_scalar_srgb,
     format_8_scalar_unorm,

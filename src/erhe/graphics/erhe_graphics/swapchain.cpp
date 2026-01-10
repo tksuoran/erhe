@@ -37,6 +37,15 @@ auto Swapchain::end_frame(const Frame_end_info& frame_end_info) -> bool
     return m_impl->end_frame(frame_end_info);
 }
 
+auto Swapchain::has_depth() const -> bool
+{
+    return m_impl->has_depth();
+}
+auto Swapchain::has_stencil() const -> bool
+{
+    return m_impl->has_stencil();
+}
+
 auto Swapchain::get_impl() -> Swapchain_impl&
 {
     return *m_impl.get();

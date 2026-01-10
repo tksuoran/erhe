@@ -191,6 +191,10 @@ auto Texture::get_impl() const -> const Texture_impl&
 {
     return *m_impl.get();
 }
+void Texture::clear() const
+{
+    m_impl->clear();
+}
 
 auto format_texture_handle(uint64_t handle) -> std::string
 {

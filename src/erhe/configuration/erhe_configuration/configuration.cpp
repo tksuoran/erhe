@@ -323,14 +323,18 @@ auto parse_toml(toml::table& table, std::string_view file_name) -> bool
         printf("file = %s\n", e.source().path ? e.source().path->c_str() : "");
         printf("line = %u\n", e.source().begin.line);
         printf("column = %u\n", e.source().begin.column);
+        abort();
     } catch (std::runtime_error& e) {
         char const* what = e.what();
         printf("what = %s\n", what);
+        abort();
     } catch (std::exception e) {
         char const* what = e.what();
         printf("what = %s\n", what);
+        abort();
     } catch (...) {
         printf("?!\n");
+        abort();
     }
     return false;
 }

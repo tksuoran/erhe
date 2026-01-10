@@ -314,12 +314,13 @@ void ensure_working_directory_contains(const char* target)
 {
     // Workaround for
     // https://intellij-support.jetbrains.com/hc/en-us/community/posts/27792220824466-CMake-C-git-project-How-to-share-working-directory-in-git
+    std::string path_string{};
+    std::filesystem::path path{};
     {
         std::error_code error_code{};
         bool found = std::filesystem::exists(target, error_code);
         if (!found) {
-            std::string path_string{};
-            std::filesystem::path path = std::filesystem::current_path();
+            path = std::filesystem::current_path();
             path_string = path.string();
             fprintf(stdout, "%s not found.\nCurrent working directory is %s\n", target, path_string.c_str());
 #if defined(ERHE_OS_LINUX)
@@ -341,10 +342,6 @@ void ensure_working_directory_contains(const char* target)
                     const std::filesystem::path erhe_ini_path = try_path / std::filesystem::path{target};
                     const bool exists_erhe_ini = std::filesystem::exists(erhe_ini_path, error_code);
                     if (exists_erhe_ini) {
-                        std::filesystem::current_path(try_path, error_code);
-                        path = std::filesystem::current_path();
-                        path_string = path.string();
-                        fprintf(stdout, "Current working directory is %s\n", path_string.c_str());
                         break;
                     }
                 } else {
@@ -353,6 +350,10 @@ void ensure_working_directory_contains(const char* target)
             }
         }
     }
+
+    path = std::filesystem::current_path();
+    path_string = path.string();
+    fprintf(stdout, "Current working directory is %s\n", path_string.c_str());
 }
 
 } // namespace erhe::file

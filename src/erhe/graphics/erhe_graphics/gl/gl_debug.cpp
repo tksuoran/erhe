@@ -64,6 +64,8 @@ void erhe_opengl_callback(
     // severity: GL_DEBUG_SEVERITY_LOW
     // Rasterization quality warning: A non-fullscreen clear caused a fallback from CSAA to MSAA.
     if (
+        (id == 0x020052) || // Pixel transfer is synchronized with 3D rendering
+        (id == 0x020072) || // Buffer performance warning: Buffer object Mesh_memory position vertex buffer (bound to GL_VERTEX_ATTRIB_ARRAY_BUFFER_BINDING_ARB (0), usage hint is GL_DYNAMIC_DRAW) is being copied/moved from VIDEO memory to HOST memory.
         (id == 0x020071) ||
         (id == 0x020061) ||
         (id == 0x020092) ||

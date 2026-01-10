@@ -28,10 +28,6 @@ Device::Device(const Surface_create_info& surface_create_info)
 {
 }
 Device::~Device() noexcept = default;
-auto Device::choose_depth_stencil_format(const unsigned int flags, int sample_count) const -> erhe::dataformat::Format
-{
-    return m_impl->choose_depth_stencil_format(flags, sample_count);
-}
 auto Device::get_surface() -> Surface*
 {
     return m_impl->get_surface();
@@ -40,9 +36,9 @@ auto Device::get_handle(const Texture& texture, const Sampler& sampler) const ->
 {
     return m_impl->get_handle(texture, sampler);
 }
-auto Device::create_dummy_texture() -> std::shared_ptr<Texture>
+auto Device::create_dummy_texture(const erhe::dataformat::Format format) -> std::shared_ptr<Texture>
 {
-    return m_impl->create_dummy_texture();
+    return m_impl->create_dummy_texture(format);
 }
 void Device::upload_to_buffer(Buffer& buffer, size_t offset, const void* data, size_t length)
 {
@@ -87,6 +83,22 @@ void Device::memory_barrier(Memory_barrier_mask barriers)
 auto Device::get_format_properties(erhe::dataformat::Format format) const -> Format_properties
 {
     return m_impl->get_format_properties(format);
+}
+auto Device::get_supported_depth_stencil_formats() const -> std::vector<erhe::dataformat::Format>
+{
+    return m_impl->get_supported_depth_stencil_formats();
+}
+void Device::sort_depth_stencil_formats(std::vector<erhe::dataformat::Format>& formats, unsigned int sort_flags, int requested_sample_count) const
+{
+    m_impl->sort_depth_stencil_formats(formats, sort_flags, requested_sample_count);
+}
+auto Device::choose_depth_stencil_format(const std::vector<erhe::dataformat::Format>& formats) const -> erhe::dataformat::Format
+{
+    return m_impl->choose_depth_stencil_format(formats);
+}
+auto Device::choose_depth_stencil_format(const unsigned int sort_flags, const int requested_sample_count) const -> erhe::dataformat::Format
+{
+    return m_impl->choose_depth_stencil_format(sort_flags, requested_sample_count);
 }
 void Device::clear_texture(Texture& texture, std::array<double, 4> value)
 {

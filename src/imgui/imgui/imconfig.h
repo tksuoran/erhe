@@ -179,8 +179,8 @@ namespace erhe::graphics {
 class Erhe_ImTextureID
 {
 public:
-    const erhe::graphics::Texture_reference* texture_reference;
-    const erhe::graphics::Sampler* sampler;
+    const erhe::graphics::Texture_reference* texture_reference{nullptr};
+    const erhe::graphics::Sampler*           sampler{nullptr};
 
     auto operator==(const Erhe_ImTextureID& other) const -> bool { return (texture_reference == other.texture_reference) && (sampler == other.sampler);}
     auto operator!=(const Erhe_ImTextureID& other) const -> bool {
