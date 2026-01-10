@@ -966,7 +966,7 @@ private:
         }
 
         // TODO Handle
-        ERHE_VERIFY(image_info.width * erhe::dataformat::get_format_size(image_info.format) == image_info.row_stride);
+        ERHE_VERIFY(image_info.width * erhe::dataformat::get_format_size_bytes(image_info.format) == image_info.row_stride);
         const int byte_count = image_info.row_stride * image_info.height;
         ERHE_VERIFY(byte_count >= 1);
 
@@ -1059,7 +1059,7 @@ private:
                     texture->set_source_path(m_arguments.path);
 
                     // TODO Handle depth > 1 and mipmaps
-                    ERHE_VERIFY(image_info.width * erhe::dataformat::get_format_size(image_info.format) == image_info.row_stride);
+                    ERHE_VERIFY(image_info.width * erhe::dataformat::get_format_size_bytes(image_info.format) == image_info.row_stride);
                     const int byte_count = image_info.row_stride * image_info.height;
                     ERHE_VERIFY(byte_count >= 1);
 

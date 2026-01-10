@@ -122,9 +122,10 @@ public:
     void bind_control_buffer(erhe::graphics::Command_encoder& encoder, const erhe::graphics::Ring_buffer_range& range);
 
 private:
-    Light_interface&                   m_light_interface;
-    erhe::graphics::Ring_buffer_client m_light_buffer;
-    erhe::graphics::Ring_buffer_client m_control_buffer;
+    Light_interface&                         m_light_interface;
+    erhe::graphics::Ring_buffer_client       m_light_buffer;
+    erhe::graphics::Ring_buffer_client       m_control_buffer;
+    std::shared_ptr<erhe::graphics::Texture> m_fallback_shadow_texture;
 };
 
 } // namespace erhe::scene_renderer

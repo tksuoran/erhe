@@ -342,7 +342,7 @@ void Tile_renderer::compose_tileset_texture()
         buffer_range.bytes_written(byte_count);
         buffer_range.close();
 
-        const std::size_t src_bytes_per_row   = m_tileset_image.info.width  * erhe::dataformat::get_format_size(m_tileset_image.info.format);
+        const std::size_t src_bytes_per_row   = m_tileset_image.info.width  * erhe::dataformat::get_format_size_bytes(m_tileset_image.info.format);
         const std::size_t src_bytes_per_image = m_tileset_image.info.height * src_bytes_per_row;
         encoder.copy_from_buffer(
             buffer_range.get_buffer()->get_buffer(),          // source_buffer

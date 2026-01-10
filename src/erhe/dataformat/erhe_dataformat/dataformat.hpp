@@ -19,7 +19,7 @@ auto pack_snorm2x16  (float x, float y) -> uint32_t;
 auto pack_snorm4x8   (float x, float y, float z, float w) -> uint32_t;
 auto pack_int2x16    (int x, int y) -> uint32_t;
 
-enum class Format {
+enum class Format : unsigned int {
     format_undefined = 0,
     format_8_scalar_srgb,
     format_8_scalar_unorm,
@@ -125,13 +125,13 @@ enum class Format_kind {
 [[nodiscard]] auto get_component_count    (Format format) -> std::size_t;
 [[nodiscard]] auto get_component_byte_size(Format format) -> std::size_t;
 [[nodiscard]] auto has_color              (Format format) -> bool;
-[[nodiscard]] auto get_format_size        (Format format) -> std::size_t;
-[[nodiscard]] auto get_red_size           (Format format) -> std::size_t;
-[[nodiscard]] auto get_green_size         (Format format) -> std::size_t;
-[[nodiscard]] auto get_blue_size          (Format format) -> std::size_t;
-[[nodiscard]] auto get_alpha_size         (Format format) -> std::size_t;
-[[nodiscard]] auto get_depth_size         (Format format) -> std::size_t;
-[[nodiscard]] auto get_stencil_size       (Format format) -> std::size_t;
+[[nodiscard]] auto get_format_size_bytes  (Format format) -> std::size_t;
+[[nodiscard]] auto get_red_size_bits      (Format format) -> std::size_t;
+[[nodiscard]] auto get_green_size_bits    (Format format) -> std::size_t;
+[[nodiscard]] auto get_blue_size_bits     (Format format) -> std::size_t;
+[[nodiscard]] auto get_alpha_size_bits    (Format format) -> std::size_t;
+[[nodiscard]] auto get_depth_size_bits    (Format format) -> std::size_t;
+[[nodiscard]] auto get_stencil_size_bits  (Format format) -> std::size_t;
 void convert(const void* src, Format src_format, void* dst, Format dst_format, float scale);
 
 } // namespace erhe::dataformat

@@ -163,12 +163,12 @@ void Texture_rendergraph_node::update_render_pass(int width, int height, erhe::g
                 render_pass_descriptor.color_attachments[0].store_action    = erhe::graphics::Store_action::Store;
             }
             if (m_depth_stencil_texture) {
-                if (erhe::dataformat::get_depth_size(m_depth_stencil_format) > 0) {
+                if (erhe::dataformat::get_depth_size_bits(m_depth_stencil_format) > 0) {
                     render_pass_descriptor.depth_attachment.texture      = m_depth_stencil_texture.get();
                     render_pass_descriptor.depth_attachment.load_action  = erhe::graphics::Load_action::Clear;
                     render_pass_descriptor.depth_attachment.store_action = erhe::graphics::Store_action::Dont_care;
                 }
-                if (erhe::dataformat::get_stencil_size(m_depth_stencil_format) > 0) {
+                if (erhe::dataformat::get_stencil_size_bits(m_depth_stencil_format) > 0) {
                     render_pass_descriptor.stencil_attachment.texture      = m_depth_stencil_texture.get();
                     render_pass_descriptor.stencil_attachment.load_action  = erhe::graphics::Load_action::Clear;
                     render_pass_descriptor.stencil_attachment.store_action = erhe::graphics::Store_action::Dont_care;

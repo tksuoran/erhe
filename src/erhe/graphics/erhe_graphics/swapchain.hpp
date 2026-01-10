@@ -46,6 +46,8 @@ public:
     [[nodiscard]] auto wait_frame (Frame_state& out_frame_state) -> bool;
     [[nodiscard]] auto begin_frame(const Frame_begin_info& frame_begin_info) -> bool;
     [[nodiscard]] auto end_frame  (const Frame_end_info& frame_end_info) -> bool;
+    [[nodiscard]] auto has_depth  () const -> bool;
+    [[nodiscard]] auto has_stencil() const -> bool;
 
     [[nodiscard]] auto get_impl() -> Swapchain_impl&;
     [[nodiscard]] auto get_impl() const -> const Swapchain_impl&;

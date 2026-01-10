@@ -181,10 +181,24 @@ void Settings_window::imgui()
             }
         });
         add_entry("Shadow Depth Bits", [this, &graphics_preset](){
-            const int   shadow_depth_bits_values[] = {  16, 24, 32 };
-            const char* shadow_depth_bits_items [] = { "16", "24", "32" };
+            std::vector<erhe::dataformat::Format> formats = m_context.graphics_device->get_supported_depth_stencil_formats();
+            std::set<size_t> depth_sizes;
+            for (const erhe::dataformat::Format format : formats) {
+                depth_sizes.insert(erhe::dataformat::get_depth_size_bits(format));
+            }
+            std::vector<int>         shadow_depth_bits_values;
+            std::vector<std::string> shadow_depth_bits_items_string;
+            std::vector<const char*> shadow_depth_bits_items;
+            for (const size_t depth_size : depth_sizes) {
+                shadow_depth_bits_values.push_back(static_cast<int>(depth_size));
+            }
+            std::sort(shadow_depth_bits_values.begin(), shadow_depth_bits_values.end());
+            for (const int depth_size : shadow_depth_bits_values) {
+                shadow_depth_bits_items_string.push_back(fmt::format("{}", depth_size));
+                shadow_depth_bits_items.push_back(shadow_depth_bits_items_string.back().c_str());
+            }
             m_shadow_depth_bits_index = 0;
-            for (int i = 0, end = IM_ARRAYSIZE(shadow_depth_bits_values); i < end; ++i) {
+            for (int i = 0, end = static_cast<int>(shadow_depth_bits_values.size()); i < end; ++i) {
                 if (shadow_depth_bits_values[i] == graphics_preset.shadow_depth_bits) {
                     m_shadow_depth_bits_index = i;
                     break;
@@ -193,9 +207,9 @@ void Settings_window::imgui()
             if (ImGui::Combo(
                 "##",
                 &m_shadow_depth_bits_index,
-                shadow_depth_bits_items,
-                IM_ARRAYSIZE(shadow_depth_bits_items),
-                IM_ARRAYSIZE(shadow_depth_bits_items)
+                shadow_depth_bits_items.data(),
+                static_cast<int>(shadow_depth_bits_items.size()),
+                static_cast<int>(shadow_depth_bits_items.size())
             )) {
                 graphics_preset.shadow_depth_bits = shadow_depth_bits_values[m_shadow_depth_bits_index];
             }

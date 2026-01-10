@@ -28,7 +28,7 @@ Texel_renderer::Texel_renderer(erhe::graphics::Device& graphics_device, Program_
             .debug_label       = "Texel_renderer::m_fallback_sampler"
         }
     }
-    , m_dummy_texture{graphics_device.create_dummy_texture()}
+    , m_dummy_texture{graphics_device.create_dummy_texture(erhe::dataformat::Format::format_8_vec4_snorm)}
 {
 }
 

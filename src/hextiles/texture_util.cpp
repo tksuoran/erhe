@@ -18,7 +18,7 @@ auto get_buffer_size(const erhe::graphics::Image_info& info) -> size_t
     ERHE_VERIFY(info.width >= 1);
     ERHE_VERIFY(info.height >= 1);
 
-    return static_cast<size_t>(info.width) * static_cast<size_t>(info.height) * erhe::dataformat::get_format_size(info.format);
+    return static_cast<size_t>(info.width) * static_cast<size_t>(info.height) * erhe::dataformat::get_format_size_bytes(info.format);
 }
 
 } // anonymous namespce

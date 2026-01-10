@@ -514,7 +514,7 @@ void run_example()
     erhe::window::initialize_logging();
     erhe::ui::initialize_logging();
 
-    erhe::window::initialize_frame_capture();
+    //erhe::window::initialize_frame_capture();
 
     Example example{};
     example.run();

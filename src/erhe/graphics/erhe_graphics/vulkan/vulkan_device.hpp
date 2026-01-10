@@ -101,6 +101,7 @@ public:
     [[nodiscard]] auto make_render_command_encoder (Render_pass& render_pass) -> Render_command_encoder;
     [[nodiscard]] auto get_format_properties       (erhe::dataformat::Format format) const -> Format_properties;
     [[nodiscard]] auto choose_depth_stencil_format (unsigned int flags, int sample_count) const -> erhe::dataformat::Format;
+    [[nodiscard]] auto choose_depth_stencil_format (const std::vector<erhe::dataformat::Format>& formats) const -> erhe::dataformat::Format;
     [[nodiscard]] auto get_shader_monitor          () -> Shader_monitor&;
     [[nodiscard]] auto get_info                    () const -> const Device_info&;
     [[nodiscard]] auto get_allocator               () -> VmaAllocator&;

@@ -21,6 +21,7 @@
       <enum name="GL_MAX_SAMPLES"/>
       <enum name="GL_MAX_TEXTURE_MAX_ANISOTROPY"/>
       <enum name="GL_MAX_COMPUTE_SHARED_MEMORY_SIZE"/>
+      <enum name="GL_TEXTURE_BINDING_CUBE_MAP_ARRAY"/>
     </group>
     <group name="GetMultisamplePNameNV">
       <enum name="GL_SAMPLE_POSITION"/>

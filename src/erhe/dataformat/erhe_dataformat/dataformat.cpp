@@ -36,7 +36,7 @@ auto linear_rgb_to_srgb(const float cl) -> float
     return res;
 }
 
-auto float_to_snorm16(float v) -> int16_t
+auto float_to_snorm16(const float v) -> int16_t
 {
     float a = (v >= 0.0f) ? (v * 32767.0f + 0.5f) : (v * 32767.0f - 0.5f);
     if (a < -32768.0f) {
@@ -48,12 +48,12 @@ auto float_to_snorm16(float v) -> int16_t
     return static_cast<int16_t>(a);
 }
 
-auto snorm16_to_float(int16_t v) -> float
+auto snorm16_to_float(const int16_t v) -> float
 {
     return std::max(static_cast<float>(v) / 32767.0f, -1.0f);
 }
 
-auto float_to_snorm8(float v) -> int8_t
+auto float_to_snorm8(const float v) -> int8_t
 {
     float a = (v >= 0.0f) ? (v * 127.0f + 0.5f) : (v * 127.0f - 0.5f);
     if (a < -128.0f) {
@@ -65,12 +65,12 @@ auto float_to_snorm8(float v) -> int8_t
     return static_cast<int8_t>(a);
 }
 
-auto snorm8_to_float(int8_t v) -> float
+auto snorm8_to_float(const int8_t v) -> float
 {
     return std::max(static_cast<float>(v) / 127.0f, -1.0f);
 }
 
-auto float_to_unorm16(float v) -> uint16_t
+auto float_to_unorm16(const float v) -> uint16_t
 {
     float a = 65535.0f * v + 0.5f;
     if (a < 0.0f) {
@@ -82,12 +82,12 @@ auto float_to_unorm16(float v) -> uint16_t
     return static_cast<uint16_t>(a);
 }
 
-auto unorm16_to_float(uint16_t v) -> float
+auto unorm16_to_float(const uint16_t v) -> float
 {
     return static_cast<float>(v) / 65535.0f;
 }
 
-auto float_to_unorm8(float v) -> uint8_t
+auto float_to_unorm8(const float v) -> uint8_t
 {
     float a = 255.0f * v + 0.5f;
     if (a < 0.0f) {
@@ -99,12 +99,12 @@ auto float_to_unorm8(float v) -> uint8_t
     return static_cast<uint8_t>(a);
 }
 
-auto unorm8_to_float(uint8_t v) -> float
+auto unorm8_to_float(const uint8_t v) -> float
 {
     return static_cast<float>(v) / 255.0f;
 }
 
-auto pack_unorm2x16(float x, float y) -> uint32_t
+auto pack_unorm2x16(const float x, const float y) -> uint32_t
 {
     ERHE_VERIFY(x >= 0.0f);
     ERHE_VERIFY(y >= 0.0f);
@@ -116,7 +116,7 @@ auto pack_unorm2x16(float x, float y) -> uint32_t
     return result;
 }
 
-auto pack_unorm4x8(float x, float y, float z, float w) -> uint32_t
+auto pack_unorm4x8(const float x, const float y, const float z, const float w) -> uint32_t
 {
     ERHE_VERIFY(x >= 0.0f);
     ERHE_VERIFY(y >= 0.0f);
@@ -138,7 +138,7 @@ auto pack_unorm4x8(float x, float y, float z, float w) -> uint32_t
     return result;
 }
 
-auto pack_snorm2x16(float x, float y) -> uint32_t
+auto pack_snorm2x16(const float x, const float y) -> uint32_t
 {
     ERHE_VERIFY(x >= -1.0f);
     ERHE_VERIFY(y >= -1.0f);
@@ -150,7 +150,7 @@ auto pack_snorm2x16(float x, float y) -> uint32_t
     return result;
 }
 
-auto pack_snorm4x8(float x, float y, float z, float w) -> uint32_t
+auto pack_snorm4x8(const float x, const float y, const float z, const float w) -> uint32_t
 {
     ERHE_VERIFY(x >= -1.0f);
     ERHE_VERIFY(y >= -1.0f);
@@ -172,7 +172,7 @@ auto pack_snorm4x8(float x, float y, float z, float w) -> uint32_t
     return result;
 }
 
-auto pack_int2x16(int x, int y) -> uint32_t
+auto pack_int2x16(const int x, const int y) -> uint32_t
 {
     const uint32_t x_ = static_cast<uint32_t>(x) & 0xffffu;
     const uint32_t y_ = static_cast<uint32_t>(y) & 0xffffu;
@@ -182,7 +182,7 @@ auto pack_int2x16(int x, int y) -> uint32_t
     return result;
 }
 
-auto c_str(Format format) -> const char*
+auto c_str(const Format format) -> const char*
 {
     switch (format) {
         case Format::format_8_scalar_srgb:            return "format_8_scalar_srgb";
@@ -269,7 +269,7 @@ auto c_str(Format format) -> const char*
     }
 }
 
-auto get_format_kind(Format format) -> Format_kind
+auto get_format_kind(const Format format) -> Format_kind
 {
     switch (format) {
         case Format::format_8_scalar_srgb:            return Format_kind::format_kind_float;
@@ -358,7 +358,7 @@ auto get_format_kind(Format format) -> Format_kind
     }
 }
 
-auto get_component_count(Format format) -> std::size_t
+auto get_component_count(const Format format) -> std::size_t
 {
     switch (format) {
         case Format::format_8_scalar_srgb:            return 1;
@@ -449,7 +449,7 @@ auto get_component_count(Format format) -> std::size_t
     }
 }
 
-auto get_component_byte_size(Format format) -> std::size_t
+auto get_component_byte_size(const Format format) -> std::size_t
 {
     switch (format) {
         case Format::format_8_scalar_srgb:            return 1;
@@ -540,7 +540,7 @@ auto get_component_byte_size(Format format) -> std::size_t
     }
 }
 
-auto has_color(Format format) -> bool
+auto has_color(const Format format) -> bool
 {
     switch (format) {
         case Format::format_8_scalar_srgb:            return true;
@@ -631,7 +631,7 @@ auto has_color(Format format) -> bool
     }
 }
 
-auto get_format_size(Format format) -> std::size_t
+auto get_format_size_bytes(const Format format) -> std::size_t
 {
     switch (format) {
         case Format::format_8_scalar_srgb:            return 1 * 1;
@@ -722,7 +722,7 @@ auto get_format_size(Format format) -> std::size_t
     }
 }
 
-auto get_rgba_size(Format format) -> std::size_t
+auto get_rgba_size_bytes(const Format format) -> std::size_t
 {
     switch (format) {
         case Format::format_8_scalar_srgb:
@@ -811,7 +811,7 @@ auto get_rgba_size(Format format) -> std::size_t
             return 0;
    }
 }
-auto get_rgb_size(Format format) -> std::size_t
+auto get_rgb_size_bytes(const Format format) -> std::size_t
 {
     switch (format) {
         case Format::format_packed1010102_vec4_unorm:
@@ -824,32 +824,33 @@ auto get_rgb_size(Format format) -> std::size_t
             ERHE_FATAL("not common RGB format");
 
         default:
-            return get_rgba_size(format);
+            return get_rgba_size_bytes(format);
     }
 }
 
-auto get_red_size(Format format) -> std::size_t
+auto get_red_size_bits(const Format format) -> std::size_t
 {
     switch (format) {
         case Format::format_packed111110_vec3_unorm: return 11;
-        default: return get_rgb_size(format);
+        default: return get_rgb_size_bytes(format) * 8;
     }
 }
-auto get_green_size(Format format) -> std::size_t
+auto get_green_size_bits(const Format format) -> std::size_t
 {
     switch (format) {
         case Format::format_packed111110_vec3_unorm: return 11;
-        default: return get_rgb_size(format);
+        default: return get_rgb_size_bytes(format) * 8;
+
     }
 }
-auto get_blue_size(Format format) -> std::size_t
+auto get_blue_size_bits(const Format format) -> std::size_t
 {
     switch (format) {
         case Format::format_packed111110_vec3_unorm: return 10;
-        default: return get_rgb_size(format);
+        default: return get_rgb_size_bytes(format) * 8;
     }
 }
-auto get_alpha_size(Format format) -> std::size_t
+auto get_alpha_size_bits(const Format format) -> std::size_t
 {
     switch (format) {
         case Format::format_packed1010102_vec4_unorm:
@@ -862,39 +863,39 @@ auto get_alpha_size(Format format) -> std::size_t
             return 0;
 
         default:
-            return get_rgba_size(format);
+            return get_rgba_size_bytes(format) * 8;
     }
 }
 
-auto get_depth_size(Format format) -> std::size_t
+auto get_depth_size_bits(const Format format) -> std::size_t
 {
     switch (format) {
-        case Format::format_d16_unorm:           return 2;
-        case Format::format_x8_d24_unorm_pack32: return 4;
-        case Format::format_d32_sfloat:          return 4;
+        case Format::format_d16_unorm:           return 16;
+        case Format::format_x8_d24_unorm_pack32: return 24;
+        case Format::format_d32_sfloat:          return 32;
         case Format::format_s8_uint:             return 0;
-        case Format::format_d24_unorm_s8_uint:   return 3;
-        case Format::format_d32_sfloat_s8_uint:  return 4;
+        case Format::format_d24_unorm_s8_uint:   return 24;
+        case Format::format_d32_sfloat_s8_uint:  return 32;
         default:                                 return 0;
     }
 }
 
-auto get_stencil_size(Format format) -> std::size_t
+auto get_stencil_size_bits(const Format format) -> std::size_t
 {
     switch (format) {
         case Format::format_d16_unorm:           return 0;
         case Format::format_x8_d24_unorm_pack32: return 0;
         case Format::format_d32_sfloat:          return 0;
-        case Format::format_s8_uint:             return 1;
-        case Format::format_d24_unorm_s8_uint:   return 1;
-        case Format::format_d32_sfloat_s8_uint:  return 1;
+        case Format::format_s8_uint:             return 8;
+        case Format::format_d24_unorm_s8_uint:   return 8;
+        case Format::format_d32_sfloat_s8_uint:  return 8;
         default:                                 return 0;
     }
 }
 
-auto get_unsigned_integer_format(Format format) -> Format
+auto get_unsigned_integer_format(const Format format) -> Format
 {
-    std::size_t component_count = get_component_count(format);
+    const std::size_t component_count = get_component_count(format);
     switch (component_count) {
         case 1:  return Format::format_32_scalar_uint;
         case 2:  return Format::format_32_vec2_uint;
@@ -904,9 +905,9 @@ auto get_unsigned_integer_format(Format format) -> Format
     }
 }
 
-auto get_float_format(Format format) -> Format
+auto get_float_format(const Format format) -> Format
 {
-    std::size_t component_count = get_component_count(format);
+    const std::size_t component_count = get_component_count(format);
     switch (component_count) {
         case 1:  return Format::format_32_scalar_float;
         case 2:  return Format::format_32_vec2_float;
@@ -916,25 +917,24 @@ auto get_float_format(Format format) -> Format
     }
 }
 
-void convert(const void* src, Format src_format, void* dst, Format dst_format, float scale)
+void convert(const void* src, const Format src_format, void* dst, const Format dst_format, const float scale)
 {
     if (src == nullptr) {
-        std::size_t size = get_format_size(dst_format);
+        const std::size_t size = get_format_size_bytes(dst_format);
         memset(dst, 0, size);
         return;
     }
-    if ((dst_format == src_format) && (scale == 1.0f))
-    {
-        std::size_t size = get_format_size(dst_format);
+    if ((dst_format == src_format) && (scale == 1.0f)) {
+        const std::size_t size = get_format_size_bytes(dst_format);
         memcpy(dst, src, size);
         return;
     }
 
-    uint32_t    ui_value[4] = { 0, 0, 0, 0 };
-    int32_t     i_value [4] = { 0, 0, 0, 0 };
-    float       f_value [4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-    Format_kind src_kind    = get_format_kind(src_format);
-    Format_kind dst_kind    = get_format_kind(dst_format);
+    uint32_t          ui_value[4] = { 0, 0, 0, 0 };
+    int32_t           i_value [4] = { 0, 0, 0, 0 };
+    float             f_value [4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+    const Format_kind src_kind    = get_format_kind(src_format);
+    const Format_kind dst_kind    = get_format_kind(dst_format);
     switch (src_format) {
         case Format::format_8_scalar_sint: {
             const int8_t* i_src = reinterpret_cast<const int8_t*>(src);
@@ -1461,8 +1461,8 @@ void convert(const void* src, Format src_format, void* dst, Format dst_format, f
             break;
         }
         case Format::format_8_vec2_snorm: {
-            float fx = f_value[0] / scale;
-            float fy = f_value[1] / scale;
+            const float fx = f_value[0] / scale;
+            const float fy = f_value[1] / scale;
             ERHE_VERIFY(fx >= -1.001f);
             ERHE_VERIFY(fy >= -1.001f);
             ERHE_VERIFY(fx <= 1.001f);
@@ -1474,15 +1474,15 @@ void convert(const void* src, Format src_format, void* dst, Format dst_format, f
             break;
         }
         case Format::format_8_vec3_snorm: {
-            float fx = f_value[0] / scale;
-            float fy = f_value[1] / scale;
-            float fz = f_value[2] / scale;
+            const float fx = f_value[0] / scale;
+            const float fy = f_value[1] / scale;
+            const float fz = f_value[2] / scale;
             ERHE_VERIFY(fx >= -1.001f);
             ERHE_VERIFY(fy >= -1.001f);
             ERHE_VERIFY(fz >= -1.001f);
-            ERHE_VERIFY(fx <= 1.001f);
-            ERHE_VERIFY(fy <= 1.001f);
-            ERHE_VERIFY(fz <= 1.001f);
+            ERHE_VERIFY(fx <=  1.001f);
+            ERHE_VERIFY(fy <=  1.001f);
+            ERHE_VERIFY(fz <=  1.001f);
             uint8_t i[3];
             i[0] = float_to_snorm8(fx);
             i[1] = float_to_snorm8(fy);
@@ -1491,18 +1491,18 @@ void convert(const void* src, Format src_format, void* dst, Format dst_format, f
             break;
         }
         case Format::format_8_vec4_snorm: {
-            float fx = f_value[0] / scale;
-            float fy = f_value[1] / scale;
-            float fz = f_value[2] / scale;
-            float fw = f_value[3] / scale;
+            const float fx = f_value[0] / scale;
+            const float fy = f_value[1] / scale;
+            const float fz = f_value[2] / scale;
+            const float fw = f_value[3] / scale;
             ERHE_VERIFY(fx >= -1.001f);
             ERHE_VERIFY(fy >= -1.001f);
             ERHE_VERIFY(fz >= -1.001f);
             ERHE_VERIFY(fw >= -1.001f);
-            ERHE_VERIFY(fx <= 1.001f);
-            ERHE_VERIFY(fy <= 1.001f);
-            ERHE_VERIFY(fz <= 1.001f);
-            ERHE_VERIFY(fw <= 1.001f);
+            ERHE_VERIFY(fx <=  1.001f);
+            ERHE_VERIFY(fy <=  1.001f);
+            ERHE_VERIFY(fz <=  1.001f);
+            ERHE_VERIFY(fw <=  1.001f);
             int8_t i[4];
             i[0] = float_to_snorm8(fx);
             i[1] = float_to_snorm8(fy);
@@ -1513,18 +1513,18 @@ void convert(const void* src, Format src_format, void* dst, Format dst_format, f
         }
 
         case Format::format_8_scalar_srgb: {
-            float fx = f_value[0] / scale;
-            float srgb_x = linear_rgb_to_srgb(fx);
+            const float fx     = f_value[0] / scale;
+            const float srgb_x = linear_rgb_to_srgb(fx);
             uint8_t ui[1];
             ui[0] = float_to_unorm8(srgb_x);
             memcpy(dst, &ui[0], 1 * sizeof(uint8_t));
             break;
         }
         case Format::format_8_vec2_srgb: {
-            float fx = f_value[0] / scale;
-            float fy = f_value[1] / scale;
-            float srgb_x = linear_rgb_to_srgb(fx);
-            float srgb_y = linear_rgb_to_srgb(fy);
+            const float fx     = f_value[0] / scale;
+            const float fy     = f_value[1] / scale;
+            const float srgb_x = linear_rgb_to_srgb(fx);
+            const float srgb_y = linear_rgb_to_srgb(fy);
             uint8_t ui[2];
             ui[0] = float_to_unorm8(srgb_x);
             ui[1] = float_to_unorm8(srgb_y);
@@ -1532,12 +1532,12 @@ void convert(const void* src, Format src_format, void* dst, Format dst_format, f
             break;
         }
         case Format::format_8_vec3_srgb: {
-            float fx = f_value[0] / scale;
-            float fy = f_value[1] / scale;
-            float fz = f_value[2] / scale;
-            float srgb_x = linear_rgb_to_srgb(fx);
-            float srgb_y = linear_rgb_to_srgb(fy);
-            float srgb_z = linear_rgb_to_srgb(fz);
+            const float fx     = f_value[0] / scale;
+            const float fy     = f_value[1] / scale;
+            const float fz     = f_value[2] / scale;
+            const float srgb_x = linear_rgb_to_srgb(fx);
+            const float srgb_y = linear_rgb_to_srgb(fy);
+            const float srgb_z = linear_rgb_to_srgb(fz);
             uint8_t ui[3];
             ui[0] = float_to_unorm8(srgb_x);
             ui[1] = float_to_unorm8(srgb_y);
@@ -1546,13 +1546,13 @@ void convert(const void* src, Format src_format, void* dst, Format dst_format, f
             break;
         }
         case Format::format_8_vec4_srgb: {
-            float fx = f_value[0] / scale;
-            float fy = f_value[1] / scale;
-            float fz = f_value[2] / scale;
-            float fw = f_value[2] / scale;
-            float srgb_x = linear_rgb_to_srgb(fx);
-            float srgb_y = linear_rgb_to_srgb(fy);
-            float srgb_z = linear_rgb_to_srgb(fz);
+            const float fx     = f_value[0] / scale;
+            const float fy     = f_value[1] / scale;
+            const float fz     = f_value[2] / scale;
+            const float fw     = f_value[2] / scale;
+            const float srgb_x = linear_rgb_to_srgb(fx);
+            const float srgb_y = linear_rgb_to_srgb(fy);
+            const float srgb_z = linear_rgb_to_srgb(fz);
             uint8_t ui[4];
             ui[0] = float_to_unorm8(srgb_x);
             ui[1] = float_to_unorm8(srgb_y);
@@ -1563,7 +1563,7 @@ void convert(const void* src, Format src_format, void* dst, Format dst_format, f
         }
 
         case Format::format_8_scalar_unorm: {
-            float fx = f_value[0] / scale;
+            const float fx = f_value[0] / scale;
             ERHE_VERIFY(fx <= 1.001f);
             uint8_t ui[1];
             ui[0] = float_to_unorm8(fx);
@@ -1571,8 +1571,8 @@ void convert(const void* src, Format src_format, void* dst, Format dst_format, f
             break;
         }
         case Format::format_8_vec2_unorm: {
-            float fx = f_value[0] / scale;
-            float fy = f_value[1] / scale;
+            const float fx = f_value[0] / scale;
+            const float fy = f_value[1] / scale;
             ERHE_VERIFY(fx <= 1.001f);
             ERHE_VERIFY(fy <= 1.001f);
             uint8_t ui[2];
@@ -1582,9 +1582,9 @@ void convert(const void* src, Format src_format, void* dst, Format dst_format, f
             break;
         }
         case Format::format_8_vec3_unorm: {
-            float fx = f_value[0] / scale;
-            float fy = f_value[1] / scale;
-            float fz = f_value[2] / scale;
+            const float fx = f_value[0] / scale;
+            const float fy = f_value[1] / scale;
+            const float fz = f_value[2] / scale;
             ERHE_VERIFY(fx <= 1.001f);
             ERHE_VERIFY(fy <= 1.001f);
             ERHE_VERIFY(fz <= 1.001f);
@@ -1596,10 +1596,10 @@ void convert(const void* src, Format src_format, void* dst, Format dst_format, f
             break;
         }
         case Format::format_8_vec4_unorm: {
-            float fx = f_value[0] / scale;
-            float fy = f_value[1] / scale;
-            float fz = f_value[2] / scale;
-            float fw = f_value[3] / scale;
+            const float fx = f_value[0] / scale;
+            const float fy = f_value[1] / scale;
+            const float fz = f_value[2] / scale;
+            const float fw = f_value[3] / scale;
             ERHE_VERIFY(fx <= 1.001f);
             ERHE_VERIFY(fy <= 1.001f);
             ERHE_VERIFY(fz <= 1.001f);
@@ -1715,8 +1715,8 @@ void convert(const void* src, Format src_format, void* dst, Format dst_format, f
             break;
         }
         case Format::format_16_vec2_snorm: {
-            float fx = f_value[0] / scale;
-            float fy = f_value[1] / scale;
+            const float fx = f_value[0] / scale;
+            const float fy = f_value[1] / scale;
             ERHE_VERIFY(fx >= -1.001f);
             ERHE_VERIFY(fy >= -1.001f);
             ERHE_VERIFY(fx <= 1.001f);
@@ -1728,9 +1728,9 @@ void convert(const void* src, Format src_format, void* dst, Format dst_format, f
             break;
         }
         case Format::format_16_vec3_snorm: {
-            float fx = f_value[0] / scale;
-            float fy = f_value[1] / scale;
-            float fz = f_value[2] / scale;
+            const float fx = f_value[0] / scale;
+            const float fy = f_value[1] / scale;
+            const float fz = f_value[2] / scale;
             ERHE_VERIFY(fx >= -1.001f);
             ERHE_VERIFY(fy >= -1.001f);
             ERHE_VERIFY(fz >= -1.001f);
@@ -1745,10 +1745,10 @@ void convert(const void* src, Format src_format, void* dst, Format dst_format, f
             break;
         }
         case Format::format_16_vec4_snorm: {
-            float fx = f_value[0] / scale;
-            float fy = f_value[1] / scale;
-            float fz = f_value[2] / scale;
-            float fw = f_value[3] / scale;
+            const float fx = f_value[0] / scale;
+            const float fy = f_value[1] / scale;
+            const float fz = f_value[2] / scale;
+            const float fw = f_value[3] / scale;
             ERHE_VERIFY(fx >= -1.001f);
             ERHE_VERIFY(fy >= -1.001f);
             ERHE_VERIFY(fz >= -1.001f);
@@ -1767,7 +1767,7 @@ void convert(const void* src, Format src_format, void* dst, Format dst_format, f
         }
 
         case Format::format_16_scalar_unorm: {
-            float fx = f_value[0] / scale;
+            const float fx = f_value[0] / scale;
             ERHE_VERIFY(fx <= 1.001f);
             uint16_t ui[1];
             ui[0] = float_to_unorm16(fx);
@@ -1775,8 +1775,8 @@ void convert(const void* src, Format src_format, void* dst, Format dst_format, f
             break;
         }
         case Format::format_16_vec2_unorm: {
-            float fx = f_value[0] / scale;
-            float fy = f_value[1] / scale;
+            const float fx = f_value[0] / scale;
+            const float fy = f_value[1] / scale;
             ERHE_VERIFY(fx <= 1.001f);
             ERHE_VERIFY(fy <= 1.001f);
             uint16_t ui[2];
@@ -1786,9 +1786,9 @@ void convert(const void* src, Format src_format, void* dst, Format dst_format, f
             break;
         }
         case Format::format_16_vec3_unorm: {
-            float fx = f_value[0] / scale;
-            float fy = f_value[1] / scale;
-            float fz = f_value[2] / scale;
+            const float fx = f_value[0] / scale;
+            const float fy = f_value[1] / scale;
+            const float fz = f_value[2] / scale;
             ERHE_VERIFY(fx <= 1.001f);
             ERHE_VERIFY(fy <= 1.001f);
             ERHE_VERIFY(fz <= 1.001f);
@@ -1800,10 +1800,10 @@ void convert(const void* src, Format src_format, void* dst, Format dst_format, f
             break;
         }
         case Format::format_16_vec4_unorm: {
-            float fx = f_value[0] / scale;
-            float fy = f_value[1] / scale;
-            float fz = f_value[2] / scale;
-            float fw = f_value[3] / scale;
+            const float fx = f_value[0] / scale;
+            const float fy = f_value[1] / scale;
+            const float fz = f_value[2] / scale;
+            const float fw = f_value[3] / scale;
             ERHE_VERIFY(fx <= 1.001f);
             ERHE_VERIFY(fy <= 1.001f);
             ERHE_VERIFY(fz <= 1.001f);
@@ -1818,15 +1818,15 @@ void convert(const void* src, Format src_format, void* dst, Format dst_format, f
         }
 
         case Format::format_16_scalar_float: {
-            float fx = f_value[0] / scale;
+            const float fx = f_value[0] / scale;
             uint16_t ui[1];
             ui[0] = glm::packHalf1x16(fx);
             memcpy(dst, &ui[0], 1 * sizeof(uint16_t));
             break;
         }
         case Format::format_16_vec2_float: {
-            float fx = f_value[0] / scale;
-            float fy = f_value[1] / scale;
+            const float fx = f_value[0] / scale;
+            const float fy = f_value[1] / scale;
             uint16_t ui[2];
             ui[0] = glm::packHalf1x16(fx);
             ui[1] = glm::packHalf1x16(fy);
@@ -1834,9 +1834,9 @@ void convert(const void* src, Format src_format, void* dst, Format dst_format, f
             break;
         }
         case Format::format_16_vec3_float: {
-            float fx = f_value[0] / scale;
-            float fy = f_value[1] / scale;
-            float fz = f_value[2] / scale;
+            const float fx = f_value[0] / scale;
+            const float fy = f_value[1] / scale;
+            const float fz = f_value[2] / scale;
             uint16_t ui[3];
             ui[0] = glm::packHalf1x16(fx);
             ui[1] = glm::packHalf1x16(fy);
@@ -1845,10 +1845,10 @@ void convert(const void* src, Format src_format, void* dst, Format dst_format, f
             break;
         }
         case Format::format_16_vec4_float: {
-            float fx = f_value[0] / scale;
-            float fy = f_value[1] / scale;
-            float fz = f_value[2] / scale;
-            float fw = f_value[3] / scale;
+            const float fx = f_value[0] / scale;
+            const float fy = f_value[1] / scale;
+            const float fz = f_value[2] / scale;
+            const float fw = f_value[3] / scale;
             uint16_t ui[4];
             ui[0] = glm::packHalf1x16(fx);
             ui[1] = glm::packHalf1x16(fy);

@@ -43,7 +43,11 @@ Shadow_renderer::Shadow_renderer(erhe::graphics::Device& graphics_device, Progra
             }
         )
     }
-    , m_dummy_texture{graphics_device.create_dummy_texture()}
+    , m_dummy_texture{
+        graphics_device.create_dummy_texture(
+            graphics_device.choose_depth_stencil_format(erhe::graphics::format_flag_require_depth, 0)
+        )
+    }
     , m_fallback_sampler{
         graphics_device,
         erhe::graphics::Sampler_create_info{

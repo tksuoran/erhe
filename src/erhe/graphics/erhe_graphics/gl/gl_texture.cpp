@@ -459,7 +459,7 @@ Texture_impl::Texture_impl(Texture_impl&&) noexcept = default;
 
 Texture_impl::~Texture_impl() noexcept
 {
-    SPDLOG_LOGGER_TRACE(log_texture, "Deleting texture {} {}", gl_name(), m_debug_label);
+    log_texture->trace("Deleting texture {} {}", gl_name(), m_debug_label);
 }
 
 auto Texture_impl::gl_name() const -> GLuint
@@ -585,6 +585,14 @@ auto convert_to_gl_texture_target(Texture_type type, bool multisample, bool arra
     }
 }
 
+auto Texture_impl::get_gl_texture_target() const -> gl::Texture_target
+{
+    return convert_to_gl_texture_target(
+        m_type,
+        m_sample_count != 0,
+        m_array_layer_count != 0
+    );
+}
 
 Texture_impl::Texture_impl(Device& device, const Texture_create_info& create_info)
     : m_handle{
@@ -616,11 +624,11 @@ Texture_impl::Texture_impl(Device& device, const Texture_create_info& create_inf
         m_array_layer_count != 0
     );
 
-    SPDLOG_LOGGER_TRACE(
-        log_texture, "New texture {} {} {}x{}x{} [{}] {} sample count = {}",
-        c_str(m_type),
-        gl_name(), m_width, m_height, m_depth, m_array_count,
-        erhe::dataformat::c_str(m_pixel_format), m_sample_count
+    log_texture->trace(
+        "New texture {} {} {} {}x{}x{} [{}] {} sample count = {}",
+        c_str(m_type), gl_name(), m_debug_label,
+        m_width, m_height, m_depth, m_array_layer_count,
+        erhe::dataformat::c_str(m_pixelformat), m_sample_count
     );
 
     if (!create_info.view_source) {
@@ -788,16 +796,27 @@ Texture_impl::Texture_impl(Device& device, const Texture_create_info& create_inf
         }
     }
 
-    SPDLOG_LOGGER_TRACE(
-        log_texture,
-        "Created texture {} / {} {}x{} {} sample count = {}",
+    log_texture->trace(
+        "Created texture {} / {} {} {}x{} {} sample count = {}",
         m_debug_label,
         gl_name(),
+        m_debug_label,
         m_width,
         m_height,
         erhe::dataformat::c_str(m_pixelformat),
         m_sample_count
     );
+}
+
+void Texture_impl::clear() const
+{
+    gl::Pixel_format gl_format;
+    gl::Pixel_type   gl_type;
+    const bool ok = get_format_and_type(m_pixelformat, gl_format, gl_type);
+    std::array<uint64_t, 4> zero_data = { 0, 0, 0, 0};
+    if (ok) {
+        gl::clear_tex_image(gl_name(), 0, gl_format, gl_type, zero_data.data());
+    }
 }
 
 auto Texture_impl::is_sparse() const -> bool

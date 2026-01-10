@@ -41,4 +41,20 @@ auto Swapchain_impl::end_frame(const Frame_end_info& frame_end_info) -> bool
     return true;
 }
 
+auto Swapchain_impl::has_depth() const -> bool
+{
+    if (m_context_window) {
+        return m_context_window->get_window_configuration().use_depth;
+    }
+    return false;
+}
+
+auto Swapchain_impl::has_stencil() const -> bool
+{
+    if (m_context_window) {
+        return m_context_window->get_window_configuration().use_stencil;
+    }
+    return false;
+}
+
 } // namespace erhe::graphics

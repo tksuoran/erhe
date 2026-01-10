@@ -16,6 +16,7 @@ std::shared_ptr<spdlog::logger> log_save_png                 ;
 std::shared_ptr<spdlog::logger> log_shader_monitor           ;
 std::shared_ptr<spdlog::logger> log_texture                  ;
 std::shared_ptr<spdlog::logger> log_texture_frame            ;
+std::shared_ptr<spdlog::logger> log_texture_heap             ;
 std::shared_ptr<spdlog::logger> log_threads                  ;
 std::shared_ptr<spdlog::logger> log_vertex_attribute_mappings;
 std::shared_ptr<spdlog::logger> log_vertex_stream            ;
@@ -38,6 +39,7 @@ void initialize_logging()
     log_shader_monitor            = make_logger      ("erhe.graphics.shader_monitor"  );
     log_texture                   = make_logger      ("erhe.graphics.texture"         );
     log_texture_frame             = make_frame_logger("erhe.graphics.texture_frame"   );
+    log_texture_heap              = make_frame_logger("erhe.graphics.texture_heap"    );
     log_threads                   = make_logger      ("erhe.graphics.threads"         );
     log_vertex_attribute_mappings = make_logger      ("erhe.graphics.vertex_attribute");
     log_vertex_stream             = make_logger      ("erhe.graphics.vertex_stream"   );

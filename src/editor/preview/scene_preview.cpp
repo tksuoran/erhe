@@ -73,7 +73,7 @@ Scene_preview::Scene_preview(
                 erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment |
                 erhe::graphics::Image_usage_flag_bit_mask::sampled,
             .type              = erhe::graphics::Texture_type::texture_2d,
-            .pixelformat       = erhe::dataformat::Format::format_d32_sfloat,
+            .pixelformat       = graphics_device.choose_depth_stencil_format(erhe::graphics::format_flag_require_depth, 0),
             .width             = 1,
             .height            = 1,
             .depth             = 1,

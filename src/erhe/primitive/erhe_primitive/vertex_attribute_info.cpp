@@ -16,7 +16,7 @@ Vertex_attribute_info::Vertex_attribute_info(
         format    = info.attribute->format;
         binding   = info.stream->binding;
         offset    = info.attribute->offset;
-        size      = erhe::dataformat::get_format_size(info.attribute->format);
+        size      = erhe::dataformat::get_format_size_bytes(info.attribute->format);
     }
 }
 

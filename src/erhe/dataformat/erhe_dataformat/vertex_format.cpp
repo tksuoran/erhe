@@ -31,7 +31,7 @@ Vertex_stream::Vertex_stream(std::size_t in_binding, std::initializer_list<Verte
     for (auto& in_attribute : in_attributes) {
         attributes.push_back(in_attribute);
         attributes.back().offset = stride;
-        stride += get_format_size(in_attribute.format);
+        stride += get_format_size_bytes(in_attribute.format);
     }
 }
 
@@ -49,7 +49,7 @@ auto Vertex_stream::find_attribute(Vertex_attribute_usage usage_type, std::size_
 auto Vertex_stream::emplace_back(erhe::dataformat::Format format, Vertex_attribute_usage usage_type, std::size_t usage_index) -> Vertex_attribute&
 {
     Vertex_attribute& result = attributes.emplace_back(format, usage_type, usage_index, stride);
-    stride += get_format_size(format);
+    stride += get_format_size_bytes(format);
     return result;
 }
 

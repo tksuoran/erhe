@@ -88,12 +88,12 @@ Headset_view_resources::Headset_view_resources(
     render_pass_descriptor.color_attachments[0].texture      = m_color_texture.get();
     render_pass_descriptor.color_attachments[0].load_action  = erhe::graphics::Load_action::Clear;
     render_pass_descriptor.color_attachments[0].store_action = erhe::graphics::Store_action::Store;
-    if (erhe::dataformat::get_depth_size(render_view.depth_stencil_format) > 0) {
+    if (erhe::dataformat::get_depth_size_bits(render_view.depth_stencil_format) > 0) {
         render_pass_descriptor.depth_attachment.texture      = m_depth_stencil_texture.get();
         render_pass_descriptor.depth_attachment.load_action  = erhe::graphics::Load_action::Clear;
         render_pass_descriptor.depth_attachment.store_action = erhe::graphics::Store_action::Store;
     }
-    if (erhe::dataformat::get_stencil_size(render_view.depth_stencil_format) > 0) {
+    if (erhe::dataformat::get_stencil_size_bits(render_view.depth_stencil_format) > 0) {
         render_pass_descriptor.stencil_attachment.texture      = m_depth_stencil_texture.get();
         render_pass_descriptor.stencil_attachment.load_action  = erhe::graphics::Load_action::Clear;
         render_pass_descriptor.stencil_attachment.store_action = erhe::graphics::Store_action::Dont_care;

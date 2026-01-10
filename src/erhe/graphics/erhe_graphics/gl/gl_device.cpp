@@ -668,13 +668,9 @@ auto Device_impl::get_handle(const Texture& texture, const Sampler& sampler) con
     }
 }
 
-auto Device_impl::choose_depth_stencil_format(const unsigned int flags, int sample_count) const -> erhe::dataformat::Format
+auto Device_impl::get_supported_depth_stencil_formats() const -> std::vector<erhe::dataformat::Format>
 {
-    using namespace erhe::utility;
-    const bool require_depth     = test_bit_set(flags, format_flag_require_depth    );
-    const bool require_stencil   = test_bit_set(flags, format_flag_require_stencil  );
-    const bool prefer_accuracy   = test_bit_set(flags, format_flag_prefer_accuracy  );
-    const bool prefer_filterable = test_bit_set(flags, format_flag_prefer_filterable);
+    std::vector<erhe::dataformat::Format> result;
     erhe::dataformat::Format formats[] = {
         erhe::dataformat::Format::format_d16_unorm,
         erhe::dataformat::Format::format_x8_d24_unorm_pack32,
@@ -683,28 +679,43 @@ auto Device_impl::choose_depth_stencil_format(const unsigned int flags, int samp
         erhe::dataformat::Format::format_d24_unorm_s8_uint,
         erhe::dataformat::Format::format_d32_sfloat_s8_uint
     };
-
-    erhe::dataformat::Format best_format = erhe::dataformat::Format::format_undefined;
-    float best_score = 0.0f;
     for (const erhe::dataformat::Format format : formats) {
         Format_properties properties = get_format_properties(format);
         if (!properties.supported) {
             continue;
         }
+        result.push_back(format);
+    }
+    return result;
+}
+
+void Device_impl::sort_depth_stencil_formats(std::vector<erhe::dataformat::Format>& formats, unsigned int sort_flags, int requested_sample_count) const
+{
+    using namespace erhe::utility;
+    const bool require_depth     = test_bit_set(sort_flags, format_flag_require_depth    );
+    const bool require_stencil   = test_bit_set(sort_flags, format_flag_require_stencil  );
+    const bool prefer_accuracy   = test_bit_set(sort_flags, format_flag_prefer_accuracy  );
+    const bool prefer_filterable = test_bit_set(sort_flags, format_flag_prefer_filterable);
+
+    auto format_score = [&](const erhe::dataformat::Format format) {
+        const Format_properties properties = get_format_properties(format);
+        if (!properties.supported) {
+            return -1.0f;
+        }
         if (require_depth) {
             if ((properties.depth_size == 0) || !properties.depth_renderable) {
-                continue;
+                return -1.0f;
             }
         }
         if (require_stencil) {
             if ((properties.stencil_size == 0) || !properties.stencil_renderable) {
-                continue;
+                return -1.0f;
             }
         }
-        if (sample_count != 0) {
-            auto i = std::find(properties.texture_2d_sample_counts.begin(), properties.texture_2d_sample_counts.end(), sample_count);
+        if (requested_sample_count != 0) {
+            auto i = std::find(properties.texture_2d_sample_counts.begin(), properties.texture_2d_sample_counts.end(), requested_sample_count);
             if (i == properties.texture_2d_sample_counts.end()) {
-                continue;
+                return -1.0f;
             }
         }
         float score = 0.0f;
@@ -716,56 +727,100 @@ auto Device_impl::choose_depth_stencil_format(const unsigned int flags, int samp
         } else {
             score += 1.0f / properties.image_texel_size;
         }
-        if (score > best_score) {
-            best_format = format;
-            best_score = score;
+        return score;
+    };
+    formats.erase(
+        std::remove_if(
+            formats.begin(), formats.end(),
+            [&](const erhe::dataformat::Format& format) -> bool {
+                return format_score(format) < 0.0f;
+            }
+        )
+    );
+    std::stable_sort(
+        formats.begin(),
+        formats.end(),
+        [&](const erhe::dataformat::Format& lhs, const erhe::dataformat::Format& rhs)
+        {
+            const float lhs_score = format_score(lhs);
+            const float rhs_score = format_score(rhs);
+            return lhs_score < rhs_score;
         }
-    }
-    return best_format;
+    );
 }
 
-auto Device_impl::create_dummy_texture() -> std::shared_ptr<Texture>
+auto Device_impl::choose_depth_stencil_format(const std::vector<erhe::dataformat::Format>& formats) const -> erhe::dataformat::Format
+{
+    for (const erhe::dataformat::Format format : formats) {
+        Format_properties properties = get_format_properties(format);
+        if (!properties.supported) {
+            continue;
+        }
+        return format;
+    }
+    return erhe::dataformat::Format::format_undefined;
+}
+
+auto Device_impl::choose_depth_stencil_format(const unsigned int sort_flags, const int requested_sample_count) const -> erhe::dataformat::Format
+{
+    std::vector<erhe::dataformat::Format> formats = get_supported_depth_stencil_formats();
+    sort_depth_stencil_formats(formats, sort_flags, requested_sample_count);
+    return choose_depth_stencil_format(formats);
+}
+
+auto Device_impl::create_dummy_texture(const erhe::dataformat::Format format) -> std::shared_ptr<Texture>
 {
     const Texture_create_info create_info{
-        .device      = m_device,
-        .usage_mask  = Image_usage_flag_bit_mask::sampled, // TODO What is needed here?
-        .width       = 2,
-        .height      = 2,
-        .debug_label = "dummy"
+        .device       = m_device,
+        .usage_mask   = Image_usage_flag_bit_mask::sampled | Image_usage_flag_bit_mask::transfer_dst,
+        .type         = Texture_type::texture_2d,
+        .pixelformat  = format,
+        .use_mipmaps  = false,
+        .sample_count = 0,
+        .width        = 2,
+        .height       = 2,
+        .debug_label  = fmt::format("dummy {} texture", c_str(format))
     };
 
     auto texture = std::make_shared<Texture>(m_device, create_info);
-    const std::array<uint8_t, 16> dummy_pixel{
-        0xee, 0x11, 0xdd, 0xff,  0xcc, 0x11, 0xbb, 0xff,
-        0xcc, 0x11, 0xbb, 0xff,  0xee, 0x11, 0xdd, 0xff,
-    };
-    const std::span<const std::uint8_t> image_data{&dummy_pixel[0], dummy_pixel.size()};
+    if (
+        (format == erhe::dataformat::Format::format_8_vec4_unorm) ||
+        (format == erhe::dataformat::Format::format_8_vec4_srgb)
+    ) {
+        const std::array<uint8_t, 16> dummy_pixel_u8{
+            0xee, 0x11, 0xdd, 0xff,  0xcc, 0x11, 0xbb, 0xff,
+            0xcc, 0x11, 0xbb, 0xff,  0xee, 0x11, 0xdd, 0xff,
+        };
+        const std::span<const std::uint8_t> image_data{&dummy_pixel_u8[0], dummy_pixel_u8.size()};
 
-    std::span<const std::uint8_t> src_span{dummy_pixel.data(), dummy_pixel.size()};
-    std::size_t                   byte_count   = src_span.size_bytes();
-    Ring_buffer_client            texture_upload_buffer{m_device, erhe::graphics::Buffer_target::transfer_src, "dummy texture upload"};
-    Ring_buffer_range             buffer_range = texture_upload_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, byte_count);
-    std::span<std::byte>          dst_span     = buffer_range.get_span();
-    memcpy(dst_span.data(), src_span.data(), byte_count);
-    buffer_range.bytes_written(byte_count);
-    buffer_range.close();
+        std::span<const std::uint8_t> src_span{dummy_pixel_u8.data(), dummy_pixel_u8.size()};
+        std::size_t                   byte_count   = src_span.size_bytes();
+        Ring_buffer_client            texture_upload_buffer{m_device, erhe::graphics::Buffer_target::transfer_src, "dummy texture upload"};
+        Ring_buffer_range             buffer_range = texture_upload_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, byte_count);
+        std::span<std::byte>          dst_span     = buffer_range.get_span();
+        memcpy(dst_span.data(), src_span.data(), byte_count);
+        buffer_range.bytes_written(byte_count);
+        buffer_range.close();
 
-    const int src_bytes_per_row   = 2 * 4;
-    const int src_bytes_per_image = 2 * src_bytes_per_row;
-    Blit_command_encoder encoder{m_device};
-    encoder.copy_from_buffer(
-        buffer_range.get_buffer()->get_buffer(),         // source_buffer
-        buffer_range.get_byte_start_offset_in_buffer(),  // source_offset
-        src_bytes_per_row,                               // source_bytes_per_row
-        src_bytes_per_image,                             // source_bytes_per_image
-        glm::ivec3{2, 2, 1},                             // source_size
-        texture.get(),                                   // destination_texture
-        0,                                               // destination_slice
-        0,                                               // destination_level
-        glm::ivec3{0, 0, 0}                              // destination_origin
-    );
+        const int src_bytes_per_row   = 2 * 4;
+        const int src_bytes_per_image = 2 * src_bytes_per_row;
+        Blit_command_encoder encoder{m_device};
+        encoder.copy_from_buffer(
+            buffer_range.get_buffer()->get_buffer(),         // source_buffer
+            buffer_range.get_byte_start_offset_in_buffer(),  // source_offset
+            src_bytes_per_row,                               // source_bytes_per_row
+            src_bytes_per_image,                             // source_bytes_per_image
+            glm::ivec3{2, 2, 1},                             // source_size
+            texture.get(),                                   // destination_texture
+            0,                                               // destination_slice
+            0,                                               // destination_level
+            glm::ivec3{0, 0, 0}                              // destination_origin
+        );
 
-    buffer_range.release();
+        buffer_range.release();
+    } else {
+        texture->clear();
+    }
 
     return texture;
 }
@@ -1069,10 +1124,10 @@ auto Device_impl::get_format_properties(erhe::dataformat::Format format) const -
 
 void Device_impl::clear_texture(Texture& texture, std::array<double, 4> value)
 {
-    const erhe::dataformat::Format      pixelformat  = texture.get_pixelformat();
-    const erhe::dataformat::Format_kind format_kind  = erhe::dataformat::get_format_kind (pixelformat);
-    const std::size_t                   depth_size   = erhe::dataformat::get_depth_size  (pixelformat);
-    const std::size_t                   stencil_size = erhe::dataformat::get_stencil_size(pixelformat);
+    const erhe::dataformat::Format      pixelformat       = texture.get_pixelformat();
+    const erhe::dataformat::Format_kind format_kind       = erhe::dataformat::get_format_kind      (pixelformat);
+    const std::size_t                   depth_size_bits   = erhe::dataformat::get_depth_size_bits  (pixelformat);
+    const std::size_t                   stencil_size_bits = erhe::dataformat::get_stencil_size_bits(pixelformat);
     if (m_info.use_clear_texture) {
         switch (format_kind) {
             case erhe::dataformat::Format_kind::format_kind_unsigned_integer: {
@@ -1106,7 +1161,7 @@ void Device_impl::clear_texture(Texture& texture, std::array<double, 4> value)
                 return;
             }
             case erhe::dataformat::Format_kind::format_kind_depth_stencil: {
-                if ((depth_size > 0) && (stencil_size == 0)) {
+                if ((depth_size_bits > 0) && (stencil_size_bits == 0)) {
                     const float clear_value[4] = {
                         static_cast<float>(value[0]),
                         static_cast<float>(value[1]),
@@ -1134,12 +1189,12 @@ void Device_impl::clear_texture(Texture& texture, std::array<double, 4> value)
         render_pass_descriptor.color_attachments[0].clear_value[2] = value[2];
         render_pass_descriptor.color_attachments[0].clear_value[3] = value[3];
     } else {
-        if (depth_size > 0) {
+        if (depth_size_bits > 0) {
             render_pass_descriptor.depth_attachment.texture        = &texture;
             render_pass_descriptor.depth_attachment.load_action    = Load_action::Clear;
             render_pass_descriptor.depth_attachment.clear_value[0] = value[0];
         }
-        if (stencil_size > 0) {
+        if (stencil_size_bits > 0) {
             render_pass_descriptor.stencil_attachment.texture        = &texture;
             render_pass_descriptor.stencil_attachment.load_action    = Load_action::Clear;
             render_pass_descriptor.stencil_attachment.clear_value[0] = value[1];

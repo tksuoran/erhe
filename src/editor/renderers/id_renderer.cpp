@@ -160,8 +160,8 @@ void Id_renderer::update_framebuffer(const erhe::math::Viewport viewport)
         m_render_pass = std::make_unique<Render_pass>(m_graphics_device, render_pass_descriptor);
         constexpr float clear_value[4] = {1.0f, 0.0f, 0.0f, 1.0f };
 
-        const std::size_t color_image_size = s_extent * s_extent * erhe::dataformat::get_format_size(m_color_texture->get_pixelformat());
-        const std::size_t depth_image_size = s_extent * s_extent * erhe::dataformat::get_format_size(m_depth_texture->get_pixelformat());
+        const std::size_t color_image_size = s_extent * s_extent * erhe::dataformat::get_format_size_bytes(m_color_texture->get_pixelformat());
+        const std::size_t depth_image_size = s_extent * s_extent * erhe::dataformat::get_format_size_bytes(m_depth_texture->get_pixelformat());
         for (Transfer_entry& entry : m_transfer_entries) {
             entry.data.resize(color_image_size + depth_image_size);
         }
@@ -233,8 +233,8 @@ void Id_renderer::render(const Render_parameters& parameters)
 
     update_framebuffer(viewport);
 
-    const std::size_t color_image_size = s_extent * s_extent * erhe::dataformat::get_format_size(m_color_texture->get_pixelformat());
-    const std::size_t depth_image_size = s_extent * s_extent * erhe::dataformat::get_format_size(m_depth_texture->get_pixelformat());
+    const std::size_t color_image_size_bytes = s_extent * s_extent * erhe::dataformat::get_format_size_bytes(m_color_texture->get_pixelformat());
+    const std::size_t depth_image_size_bytes = s_extent * s_extent * erhe::dataformat::get_format_size_bytes(m_depth_texture->get_pixelformat());
 
     Scoped_debug_group debug_group{"Id_renderer::render()"};
     Scoped_gpu_timer   timer      {m_gpu_timer};
@@ -301,7 +301,7 @@ void Id_renderer::render(const Render_parameters& parameters)
 
     // Transfer pixel data from GPU to CPU
     {
-        entry.buffer_range = m_texture_read_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_read, color_image_size + depth_image_size);
+        entry.buffer_range = m_texture_read_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_read, color_image_size_bytes + depth_image_size_bytes);
         Blit_command_encoder encoder = m_graphics_device.make_blit_command_encoder();
 
         const Texture* source_texture = m_color_texture.get();
@@ -317,7 +317,7 @@ void Id_renderer::render(const Render_parameters& parameters)
         glm::ivec3     source_size                 = source_max - source_min;
         const Buffer*  destination_buffer          = entry.buffer_range.get_buffer()->get_buffer();
         std::uintptr_t destination_offset          = entry.buffer_range.get_byte_start_offset_in_buffer();
-        std::uintptr_t destination_bytes_per_row   = s_extent * erhe::dataformat::get_format_size(m_color_texture->get_pixelformat());
+        std::uintptr_t destination_bytes_per_row   = s_extent * erhe::dataformat::get_format_size_bytes(m_color_texture->get_pixelformat());
         std::uintptr_t destination_bytes_per_image = s_extent * destination_bytes_per_row;
 
         encoder.copy_from_texture(

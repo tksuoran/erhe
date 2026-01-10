@@ -229,7 +229,7 @@ Imgui_renderer::Imgui_renderer(erhe::graphics::Device& graphics_device, Imgui_se
             .color_blend    = erhe::graphics::Color_blend_state::color_blend_alpha
         }
     }
-    , m_dummy_texture{graphics_device.create_dummy_texture()}
+    , m_dummy_texture{graphics_device.create_dummy_texture(erhe::dataformat::Format::format_8_vec4_srgb)}
     , m_nearest_sampler{
         graphics_device,
         {
@@ -648,7 +648,7 @@ auto Imgui_renderer::image(
     SPDLOG_LOGGER_TRACE(
         log_imgui,
         "Imgui_renderer::image(texture {}, width = {}, height = {}, uv0 = {}, uv1 = {}, tint_color = {}, linear = {})",
-        texture_reference != nullptr ? texture_reference->get_texture().gl_name() : 0,
+        (texture_reference != nullptr) ? texture_reference->get_texture().gl_name() : 0,
         width,
         height,
         uv0,
@@ -792,7 +792,7 @@ void Imgui_renderer::update_texture(ImTextureData* tex)
         // Update selected blocks. We only ever write to textures regions which have never been used before!
         Erhe_ImTextureID                         texture_id        = tex->GetTexID();
         const erhe::graphics::Texture_reference* texture_reference = texture_id.texture_reference;
-        const erhe::graphics::Texture*           texture           = texture_reference->get_referenced_texture();
+        const erhe::graphics::Texture*           texture           = (texture_reference != nullptr) ? texture_reference->get_referenced_texture() : nullptr;
         ERHE_VERIFY(texture != nullptr);
         log_imgui->trace("updating texture {}", fmt::ptr(texture));
 
@@ -848,7 +848,7 @@ void Imgui_renderer::update_texture(ImTextureData* tex)
 
         Erhe_ImTextureID                         texture_id        = tex->GetTexID();
         const erhe::graphics::Texture_reference* texture_reference = texture_id.texture_reference;
-        const erhe::graphics::Texture*           texture           = texture_reference->get_referenced_texture();
+        const erhe::graphics::Texture*           texture           = (texture_reference != nullptr) ? texture_reference->get_referenced_texture() : nullptr;
         ERHE_VERIFY(texture != nullptr);
         log_imgui->trace("removing texture {}", fmt::ptr(texture));
         m_imgui_textures.erase(
@@ -963,7 +963,7 @@ void Imgui_renderer::render_draw_data(erhe::graphics::Render_command_encoder& re
                         // Check texture heap
                         const ImTextureID                        texture_id        = pcmd->TexRef.GetTexID();
                         const erhe::graphics::Texture_reference* texture_reference = texture_id.texture_reference;
-                        const erhe::graphics::Texture*           texture           = texture_reference->get_referenced_texture();
+                        const erhe::graphics::Texture*           texture           = (texture_reference != nullptr) ? texture_reference->get_referenced_texture() : nullptr;
                         const erhe::graphics::Sampler*           sampler           = texture_id.sampler;
                         if (texture == nullptr) {
                             texture = m_dummy_texture.get();
@@ -1069,7 +1069,7 @@ void Imgui_renderer::render_draw_data(erhe::graphics::Render_command_encoder& re
                         {
                             const ImTextureID                        texture_id        = pcmd->TexRef.GetTexID();
                             const erhe::graphics::Texture_reference* texture_reference = texture_id.texture_reference;
-                            const erhe::graphics::Texture*           texture           = texture_reference->get_referenced_texture();
+                            const erhe::graphics::Texture*           texture           = (texture_reference != nullptr) ? texture_reference->get_referenced_texture() : nullptr;
                             const erhe::graphics::Sampler*           sampler           = texture_id.sampler;
 
                             if (texture == nullptr) {

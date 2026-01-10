@@ -12,6 +12,10 @@
 #include <unordered_map>
 #include <vector>
 
+namespace erhe::dataformat {
+    enum class Format : unsigned int;
+}
+
 namespace erhe::graphics {
 
 class Frame_sync
@@ -50,19 +54,22 @@ public:
     void add_completion_handler    (std::function<void()> callback);
     void on_thread_enter           ();
 
-    [[nodiscard]] auto get_surface                 () -> Surface*;
-    [[nodiscard]] auto get_handle                  (const Texture& texture, const Sampler& sampler) const -> uint64_t;
-    [[nodiscard]] auto create_dummy_texture        () -> std::shared_ptr<Texture>;
-    [[nodiscard]] auto get_buffer_alignment        (Buffer_target target) -> std::size_t;
-    [[nodiscard]] auto get_frame_index             () const -> uint64_t;
-    [[nodiscard]] auto allocate_ring_buffer_entry  (Buffer_target buffer_target, Ring_buffer_usage usage, std::size_t byte_count) -> Ring_buffer_range;
-    [[nodiscard]] auto make_blit_command_encoder   () -> Blit_command_encoder;
-    [[nodiscard]] auto make_compute_command_encoder() -> Compute_command_encoder;
-    [[nodiscard]] auto make_render_command_encoder (Render_pass& render_pass) -> Render_command_encoder;
-    [[nodiscard]] auto get_format_properties       (erhe::dataformat::Format format) const -> Format_properties;
-    [[nodiscard]] auto choose_depth_stencil_format (unsigned int flags, int sample_count) const -> erhe::dataformat::Format;
-    [[nodiscard]] auto get_shader_monitor          () -> Shader_monitor&;
-    [[nodiscard]] auto get_info                    () const -> const Device_info&;
+    [[nodiscard]] auto get_surface                        () -> Surface*;
+    [[nodiscard]] auto get_handle                         (const Texture& texture, const Sampler& sampler) const -> uint64_t;
+    [[nodiscard]] auto create_dummy_texture               (erhe::dataformat::Format format) -> std::shared_ptr<Texture>;
+    [[nodiscard]] auto get_buffer_alignment               (Buffer_target target) -> std::size_t;
+    [[nodiscard]] auto get_frame_index                    () const -> uint64_t;
+    [[nodiscard]] auto allocate_ring_buffer_entry         (Buffer_target buffer_target, Ring_buffer_usage usage, std::size_t byte_count) -> Ring_buffer_range;
+    [[nodiscard]] auto make_blit_command_encoder          () -> Blit_command_encoder;
+    [[nodiscard]] auto make_compute_command_encoder       () -> Compute_command_encoder;
+    [[nodiscard]] auto make_render_command_encoder        (Render_pass& render_pass) -> Render_command_encoder;
+    [[nodiscard]] auto get_format_properties              (erhe::dataformat::Format format) const -> Format_properties;
+    [[nodiscard]] auto get_supported_depth_stencil_formats() const -> std::vector<erhe::dataformat::Format>;
+                  void sort_depth_stencil_formats         (std::vector<erhe::dataformat::Format>& formats, unsigned int sort_flags, int requested_sample_count) const;
+    [[nodiscard]] auto choose_depth_stencil_format        (const std::vector<erhe::dataformat::Format>& formats) const -> erhe::dataformat::Format;
+    [[nodiscard]] auto choose_depth_stencil_format        (unsigned int sort_flags, int requested_sample_count) const -> erhe::dataformat::Format;
+    [[nodiscard]] auto get_shader_monitor                 () -> Shader_monitor&;
+    [[nodiscard]] auto get_info                           () const -> const Device_info&;
 
 private:
     void frame_completed (uint64_t frame);

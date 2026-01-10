@@ -3,8 +3,9 @@
 #include "erhe_graphics/gl/gl_texture.hpp"
 #include "erhe_gl/enum_string_functions.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
-#include "erhe_graphics/state/color_blend_state.hpp"
 #include "erhe_graphics/graphics_log.hpp"
+#include "erhe_graphics/state/color_blend_state.hpp"
+#include "erhe_graphics/swapchain.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -554,8 +555,8 @@ void Render_pass_impl::start_render_pass()
             }
         }
     }
-    bool clear_depth   = (m_swapchain != nullptr) || (m_depth_attachment  .is_defined() && (m_depth_attachment  .load_action == Load_action::Clear));
-    bool clear_stencil = (m_swapchain != nullptr) || (m_stencil_attachment.is_defined() && (m_stencil_attachment.load_action == Load_action::Clear));
+    bool clear_depth   = ((m_swapchain != nullptr) && m_swapchain->has_depth  ()) || (m_depth_attachment  .is_defined() && (m_depth_attachment  .load_action == Load_action::Clear));
+    bool clear_stencil = ((m_swapchain != nullptr) && m_swapchain->has_stencil()) || (m_stencil_attachment.is_defined() && (m_stencil_attachment.load_action == Load_action::Clear));
     if (clear_depth && clear_stencil) {
         gl::clear_named_framebufferf_i(
             name,

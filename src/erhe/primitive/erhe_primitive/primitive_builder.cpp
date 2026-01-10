@@ -110,11 +110,11 @@ void Build_context_root::allocate_index_buffer()
 {
     ERHE_VERIFY(total_index_count > 0);
 
-    const erhe::dataformat::Format index_type     {build_info.buffer_info.index_type};
-    const std::size_t              index_type_size{erhe::dataformat::get_format_size(index_type)};
+    const erhe::dataformat::Format index_type           {build_info.buffer_info.index_type};
+    const std::size_t              index_type_size_bytes{erhe::dataformat::get_format_size_bytes(index_type)};
 
-    const std::size_t allocation_byte_count = total_index_count * index_type_size;
-    const std::size_t allocation_alignment  = index_type_size;
+    const std::size_t allocation_byte_count = total_index_count * index_type_size_bytes;
+    const std::size_t allocation_alignment  = index_type_size_bytes;
     const std::size_t available_byte_count  = build_info.buffer_info.buffer_sink.get_available_index_byte_count(allocation_alignment);
     if (available_byte_count < allocation_byte_count) {
         build_failed = true;
@@ -125,12 +125,12 @@ void Build_context_root::allocate_index_buffer()
         "allocating index buffer "
         "total_index_count = {}, index type size = {}",
         total_index_count,
-        index_type_size
+        index_type_size_bytes
     );
 
     buffer_mesh.index_buffer_range = build_info.buffer_info.buffer_sink.allocate_index_buffer(
         total_index_count,
-        index_type_size
+        index_type_size_bytes
     );
 }
 
