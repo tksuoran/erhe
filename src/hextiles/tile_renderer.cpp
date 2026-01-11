@@ -113,7 +113,6 @@ Tile_renderer::Tile_renderer(
             .usage                                  = erhe::graphics::Buffer_usage::index,
             .required_memory_property_bit_mask      = erhe::graphics::Memory_property_flag_bit_mask::host_write,  // CPU to GPU
             .preferred_memory_property_bit_mask     = erhe::graphics::Memory_property_flag_bit_mask::device_local,
-            .mapping                                = erhe::graphics::Buffer_mapping::transient,
             .debug_label                            = "Tile_renderer index buffer"
         }
     }

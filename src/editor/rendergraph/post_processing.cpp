@@ -53,9 +53,8 @@ Post_processing_node::Post_processing_node(
                 ) * Post_processing::s_max_mipmap_levels,
             .memory_allocation_create_flag_bit_mask = 0,
             .usage                                  = get_buffer_usage(post_processing.get_parameter_block().get_binding_target()),
-            .required_memory_property_bit_mask      = erhe::graphics::Memory_property_flag_bit_mask::device_local, // GPU only
-            .preferred_memory_property_bit_mask     = erhe::graphics::Memory_property_flag_bit_mask::none, // uploads via staging buffer
-            .mapping                                = erhe::graphics::Buffer_mapping::not_mappable,
+            .required_memory_property_bit_mask      = 0, // GPU only
+            .preferred_memory_property_bit_mask     = erhe::graphics::Memory_property_flag_bit_mask::device_local,
             .debug_label                            = "post processing"
         }
     }

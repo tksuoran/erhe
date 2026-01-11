@@ -72,28 +72,42 @@ namespace erhe::graphics {
     //      may be used by an implementation to determine whether to use storage that is
     //      local to the server or to the client to serve as the backing store for the
     //      buffer.
-    gl::Buffer_storage_mask storage{0};
-    if (m_mapping != Buffer_mapping::not_mappable) {
-        const Memory_usage memory_usage = get_memory_usage_from_memory_properties(m_required_memory_property_bit_mask | m_preferred_memory_property_bit_mask);
-        if (memory_usage == Memory_usage::cpu_to_gpu) {
-            storage = storage | gl::Buffer_storage_mask::map_write_bit;
-        } else if (memory_usage == Memory_usage::gpu_to_cpu) {
-            storage = storage | gl::Buffer_storage_mask::map_read_bit;
-        }
-        if (m_mapping == Buffer_mapping::persistent) {
-            storage = storage | gl::Buffer_storage_mask::map_persistent_bit;
-        }
+    using namespace erhe::utility;
+    const uint64_t memory_properties = m_required_memory_property_bit_mask | m_preferred_memory_property_bit_mask;
+    gl::Buffer_storage_mask gl_storage{0};
+    if (test_bit_set(memory_properties, Memory_property_flag_bit_mask::host_write)) {
+        gl_storage = gl_storage | gl::Buffer_storage_mask::map_write_bit;
+    }
+    if (test_bit_set(memory_properties, Memory_property_flag_bit_mask::host_read)) {
+        gl_storage = gl_storage | gl::Buffer_storage_mask::map_read_bit;
+    }
+    if (!test_bit_set(memory_properties, Memory_property_flag_bit_mask::device_local)) {
+        gl_storage = gl_storage | gl::Buffer_storage_mask::client_storage_bit;
+    }
 
-        const bool coherent = erhe::utility::test_bit_set(
-            m_required_memory_property_bit_mask | m_preferred_memory_property_bit_mask,
-            Memory_property_flag_bit_mask::host_coherent
-        );
-
+    if (m_device.get_info().use_persistent_buffers) {
+        const bool persistent = test_bit_set(memory_properties, Memory_property_flag_bit_mask::host_persistent);
+        const bool coherent   = test_bit_set(memory_properties, Memory_property_flag_bit_mask::host_coherent);
+        if (persistent) {
+            gl_storage = gl_storage | gl::Buffer_storage_mask::map_persistent_bit;
+        }
         if (coherent) {
-            storage = storage | gl::Buffer_storage_mask::map_coherent_bit;
+            ERHE_VERIFY(persistent); // GL requires persistent for coherent buffers
+            gl_storage = gl_storage | gl::Buffer_storage_mask::map_coherent_bit;
+        }
+    } else {
+        const bool persistent = test_bit_set(m_required_memory_property_bit_mask, Memory_property_flag_bit_mask::host_persistent);
+        const bool coherent   = test_bit_set(m_required_memory_property_bit_mask, Memory_property_flag_bit_mask::host_coherent);
+        if (persistent) {
+            log_buffer->critical("persistent buffers required but not supported");
+            abort();
+        }
+        if (coherent) {
+            log_buffer->critical("coherent buffers required but not supported");
+            abort();
         }
     }
-    return storage;
+    return gl_storage;
 }
 
 auto Buffer_impl::get_gl_access_mask(Buffer_map_flags flags) const -> gl::Map_buffer_access_mask
@@ -152,38 +166,51 @@ auto Buffer_impl::get_gl_access_mask(Buffer_map_flags flags) const -> gl::Map_bu
     //      No GL error is generated if pending operations which source or modify the
     //      buffer overlap the mapped region, but the result of such previous and any
     //      subsequent operations is undefined.
-    ERHE_VERIFY(m_mapping != Buffer_mapping::not_mappable);
-
-    gl::Map_buffer_access_mask access_mask{0};
-    const Memory_usage memory_usage = get_memory_usage_from_memory_properties(m_required_memory_property_bit_mask | m_preferred_memory_property_bit_mask);
-    if (memory_usage == Memory_usage::cpu_to_gpu) {
-        access_mask = access_mask | gl::Map_buffer_access_mask::map_write_bit;
-    } else if (memory_usage == Memory_usage::gpu_to_cpu) {
-        access_mask = access_mask | gl::Map_buffer_access_mask::map_read_bit;
-    }
-    if (m_mapping == Buffer_mapping::persistent) {
-        access_mask = access_mask | gl::Map_buffer_access_mask::map_persistent_bit;
-    }
-
-    const bool coherent = erhe::utility::test_bit_set(
-        m_required_memory_property_bit_mask | m_preferred_memory_property_bit_mask,
-        Memory_property_flag_bit_mask::host_coherent
-    );
-
-    if (coherent) {
-        access_mask = access_mask | gl::Map_buffer_access_mask::map_coherent_bit;
-    }
     using namespace erhe::utility;
+    const uint64_t memory_properties = m_required_memory_property_bit_mask | m_preferred_memory_property_bit_mask;
+    gl::Map_buffer_access_mask gl_access_mask{0};
+    if (test_bit_set(memory_properties, Memory_property_flag_bit_mask::host_write)) {
+        gl_access_mask = gl_access_mask | gl::Map_buffer_access_mask::map_write_bit;
+    }
+    if (test_bit_set(memory_properties, Memory_property_flag_bit_mask::host_read)) {
+        gl_access_mask = gl_access_mask | gl::Map_buffer_access_mask::map_read_bit;
+    }
+
+    if (m_device.get_info().use_persistent_buffers) {
+        // Persistent buffers are available - we can support both required and preferred persistent/coherent
+        const bool persistent = test_bit_set(memory_properties, Memory_property_flag_bit_mask::host_persistent);
+        const bool coherent   = test_bit_set(memory_properties, Memory_property_flag_bit_mask::host_coherent);
+        if (persistent) {
+            gl_access_mask = gl_access_mask | gl::Map_buffer_access_mask::map_persistent_bit;
+        }
+        if (coherent) {
+            ERHE_VERIFY(persistent); // GL requires persistent for coherent buffers
+            gl_access_mask = gl_access_mask | gl::Map_buffer_access_mask::map_coherent_bit;
+        }
+    } else {
+        // Persistent buffers are not available - required persistent/coherent cause error
+        const bool persistent = test_bit_set(m_required_memory_property_bit_mask, Memory_property_flag_bit_mask::host_persistent);
+        const bool coherent   = test_bit_set(m_required_memory_property_bit_mask, Memory_property_flag_bit_mask::host_coherent);
+        if (persistent) {
+            log_buffer->critical("persistent buffers required but not supported");
+            abort();
+        }
+        if (coherent) {
+            log_buffer->critical("coherent buffers required but not supported");
+            abort();
+        }
+    }
+
     if (test_bit_set(flags, Buffer_map_flags::explicit_flush)) {
-        access_mask = access_mask | gl::Map_buffer_access_mask::map_flush_explicit_bit;
+        gl_access_mask = gl_access_mask | gl::Map_buffer_access_mask::map_flush_explicit_bit;
     }
     if (test_bit_set(flags, Buffer_map_flags::invalidate_range)) {
-        access_mask = access_mask | gl::Map_buffer_access_mask::map_invalidate_range_bit;
+        gl_access_mask = gl_access_mask | gl::Map_buffer_access_mask::map_invalidate_range_bit;
     }
     if (test_bit_set(flags, Buffer_map_flags::invalidate_range)) {
-        access_mask = access_mask | gl::Map_buffer_access_mask::map_invalidate_buffer_bit;
+        gl_access_mask = gl_access_mask | gl::Map_buffer_access_mask::map_invalidate_buffer_bit;
     }
-    return access_mask;
+    return gl_access_mask;
 }
 
 auto Buffer_impl::gl_name() const noexcept -> unsigned int
@@ -250,6 +277,7 @@ void Buffer_impl::allocate_storage(const void* init_data)
     }
 
     m_allocated = true;
+
     if (erhe::utility::test_bit_set(gl_storage_mask, gl::Buffer_storage_mask::map_persistent_bit)) {
         map_bytes(0, m_capacity_byte_count, Buffer_map_flags::none);
     }
@@ -265,18 +293,17 @@ Buffer_impl::Buffer_impl(Device& device, const Buffer_create_info& create_info) 
     , m_memory_allocation_create_flag_bit_mask{create_info.memory_allocation_create_flag_bit_mask}
     , m_required_memory_property_bit_mask     {create_info.required_memory_property_bit_mask}
     , m_preferred_memory_property_bit_mask    {create_info.preferred_memory_property_bit_mask}
-    , m_mapping                               {create_info.mapping}
     , m_debug_label                           {create_info.debug_label}
 {
     constexpr const std::size_t sanity_threshold{2'000'000'000};
     ERHE_VERIFY(m_capacity_byte_count < sanity_threshold); // sanity check, can raise limit when needed
     log_buffer->debug(
-        "Buffer_impl::Buffer_impl() capacity_byte_count = {}, usage = {}, required = {}, preferred = {}, mapping = {}) name = {} debug_label = {}",
+        "Buffer_impl::Buffer_impl() capacity_byte_count = {}, flags = {}, usage = {}, required = {}, preferred = {}) name = {} debug_label = {}",
         m_capacity_byte_count,
+        to_string_memory_allocation_create_flag_bit_mask(m_memory_allocation_create_flag_bit_mask),
         to_string(m_usage),
         to_string_memory_property_flag_bit_mask(m_required_memory_property_bit_mask),
         to_string_memory_property_flag_bit_mask(m_preferred_memory_property_bit_mask),
-        c_str(m_mapping),
         gl_name(),
         m_debug_label
     );
@@ -306,7 +333,6 @@ Buffer_impl::Buffer_impl(Buffer_impl&& other) noexcept
     , m_usage                             {other.m_usage     }
     , m_required_memory_property_bit_mask {other.m_required_memory_property_bit_mask}
     , m_preferred_memory_property_bit_mask{other.m_preferred_memory_property_bit_mask}
-    , m_mapping                           {other.m_mapping   }
     , m_debug_label                       {other.m_debug_label}
     , m_map                               {other.m_map}
     , m_map_byte_offset                   {other.m_map_byte_offset}
@@ -325,7 +351,6 @@ auto Buffer_impl::operator=(Buffer_impl&& other) noexcept -> Buffer_impl&
     m_usage                              = other.m_usage;
     m_required_memory_property_bit_mask  = other.m_required_memory_property_bit_mask;
     m_preferred_memory_property_bit_mask = other.m_preferred_memory_property_bit_mask;
-    m_mapping                            = other.m_mapping;
     m_map                                = other.m_map;
     m_map_byte_offset                    = other.m_map_byte_offset;
     m_map_flags                          = other.m_map_flags;
@@ -375,7 +400,11 @@ auto Buffer_impl::begin_write(const std::size_t byte_offset, std::size_t byte_co
 {
     ERHE_VERIFY(gl_name() != 0);
 
-    if (!m_device.get_info().use_persistent_buffers || (m_mapping != Buffer_mapping::persistent)) {
+    const bool map_persistent = erhe::utility::test_bit_set(
+        get_gl_storage_mask(),
+        gl::Buffer_storage_mask::map_persistent_bit
+    );
+    if (!m_device.get_info().use_persistent_buffers || !map_persistent) {
         ERHE_VERIFY(m_map.empty());
         if (byte_count == 0) {
             byte_count = m_capacity_byte_count - byte_offset;
@@ -412,7 +441,11 @@ void Buffer_impl::end_write(const std::size_t byte_offset, const std::size_t byt
     ERHE_VERIFY(!m_map.empty());
     ERHE_VERIFY(gl_name() != 0);
 
-    if (!m_device.get_info().use_persistent_buffers || (m_mapping != Buffer_mapping::persistent)) {
+    const bool map_persistent = erhe::utility::test_bit_set(
+        get_gl_storage_mask(),
+        gl::Buffer_storage_mask::map_persistent_bit
+    );
+    if (!m_device.get_info().use_persistent_buffers || !map_persistent) {
         if (byte_count > 0) {
             flush_bytes(byte_offset, byte_count);
         }
@@ -420,7 +453,7 @@ void Buffer_impl::end_write(const std::size_t byte_offset, const std::size_t byt
     }
 }
 
-auto Buffer_impl::map_all_bytes(Buffer_map_flags flags) noexcept -> std::span<std::byte>
+auto Buffer_impl::map_all_bytes(const Buffer_map_flags flags) noexcept -> std::span<std::byte>
 {
     ERHE_VERIFY(m_map.empty());
     ERHE_VERIFY(gl_name() != 0);

@@ -73,7 +73,6 @@ private:
     uint64_t                       m_memory_allocation_create_flag_bit_mask{0};
     uint64_t                       m_required_memory_property_bit_mask     {0};
     uint64_t                       m_preferred_memory_property_bit_mask    {0};
-    Buffer_mapping                 m_mapping                               {0};
     std::string                    m_debug_label                           {};
 
     static constexpr const char* s_pool_name = "glBuffer";

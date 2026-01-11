@@ -46,8 +46,8 @@ namespace erhe::graphics {
     switch (ring_buffer_usage) {
         default:
         case Ring_buffer_usage::None      : ERHE_FATAL("Device_impl::allocate_ring_buffer_entry() - bad usage"); return Memory_property_flag_bit_mask::none;
-        case Ring_buffer_usage::CPU_write : return Memory_property_flag_bit_mask::device_local;
-        case Ring_buffer_usage::CPU_read  : return Memory_property_flag_bit_mask::host_cached;
+        case Ring_buffer_usage::CPU_write : return Memory_property_flag_bit_mask::device_local | Memory_property_flag_bit_mask::host_persistent;
+        case Ring_buffer_usage::CPU_read  : return Memory_property_flag_bit_mask::host_cached  | Memory_property_flag_bit_mask::host_persistent;
         case Ring_buffer_usage::GPU_access: return Memory_property_flag_bit_mask::none;
     }
 }
@@ -62,12 +62,12 @@ Ring_buffer::Ring_buffer(
         std::make_unique<Buffer>(
             m_device,
             Buffer_create_info{
+                // NOTE: The ring buffer should be persistently mapped for CPU access
                 .capacity_byte_count                    = create_info.size,
-                .memory_allocation_create_flag_bit_mask = 0,
+                .memory_allocation_create_flag_bit_mask = Memory_allocation_create_flag_bit_mask::none,
                 .usage                                  = create_info.buffer_usage,
                 .required_memory_property_bit_mask      = get_required_memory_property_bit_mask(create_info.ring_buffer_usage),
                 .preferred_memory_property_bit_mask     = get_preferred_memory_property_bit_mask(create_info.ring_buffer_usage),
-                .mapping                                = (create_info.ring_buffer_usage != Ring_buffer_usage::GPU_access) ? Buffer_mapping::persistent : Buffer_mapping::not_mappable,
                 .debug_label                            = create_info.debug_label
             }
         )

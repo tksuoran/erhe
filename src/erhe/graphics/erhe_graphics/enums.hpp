@@ -247,9 +247,9 @@ public:
     static constexpr uint64_t dont_bind            =  5u;
     static constexpr uint64_t within_budget        =  6u;
     static constexpr uint64_t can_alias            =  7u;
-    static constexpr uint64_t strategy_min_memory  = 10u;
-    static constexpr uint64_t strategy_min_time    = 11u;
-    static constexpr uint64_t strategy_min_offset  = 12u;
+    static constexpr uint64_t strategy_min_memory  =  8u;
+    static constexpr uint64_t strategy_min_time    =  9u;
+    static constexpr uint64_t strategy_min_offset  = 10u;
 };
 
 class Memory_allocation_create_flag_bit_mask {
@@ -272,9 +272,10 @@ public:
     static constexpr uint64_t host_read         = 0u;
     static constexpr uint64_t host_write        = 1u;
     static constexpr uint64_t host_coherent     = 2u;
-    static constexpr uint64_t host_cached       = 3u;
-    static constexpr uint64_t device_local      = 4u;
-    static constexpr uint64_t lazily_allocated  = 5u;
+    static constexpr uint64_t host_persistent   = 3u;
+    static constexpr uint64_t host_cached       = 4u;
+    static constexpr uint64_t device_local      = 5u;
+    static constexpr uint64_t lazily_allocated  = 6u;
 };
 
 class Memory_property_flag_bit_mask {
@@ -283,18 +284,13 @@ public:
     static constexpr uint64_t host_read        = uint64_t{1} << Memory_property_flag_bit::host_read       ;
     static constexpr uint64_t host_write       = uint64_t{1} << Memory_property_flag_bit::host_write      ;
     static constexpr uint64_t host_coherent    = uint64_t{1} << Memory_property_flag_bit::host_coherent   ;
+    static constexpr uint64_t host_persistent  = uint64_t{1} << Memory_property_flag_bit::host_persistent ;
     static constexpr uint64_t host_cached      = uint64_t{1} << Memory_property_flag_bit::host_cached     ;
     static constexpr uint64_t device_local     = uint64_t{1} << Memory_property_flag_bit::device_local    ;
     static constexpr uint64_t lazily_allocated = uint64_t{1} << Memory_property_flag_bit::lazily_allocated;
 };
 
 [[nodiscard]] auto get_memory_usage_from_memory_properties(uint64_t memory_property_bit_mask) -> Memory_usage;
-
-enum class Buffer_mapping : unsigned int {
-    not_mappable = 0,
-    persistent   = 1,
-    transient    = 2
-};
 
 enum class Buffer_map_flags : unsigned int {
     none              = 0x00,
@@ -360,8 +356,8 @@ template<> struct Enable_bit_mask_operators<Memory_barrier_mask> { static const 
 
 [[nodiscard]] auto to_string       (Buffer_usage      usage      ) -> std::string;
 [[nodiscard]] auto c_str           (Memory_usage      memory_sage) -> const char*;
-[[nodiscard]] auto to_string_memory_property_flag_bit_mask(uint64_t mask) -> std::string;
-[[nodiscard]] auto c_str           (Buffer_mapping    mapping   ) -> const char*;
+[[nodiscard]] auto to_string_memory_allocation_create_flag_bit_mask(uint64_t mask) -> std::string;
+[[nodiscard]] auto to_string_memory_property_flag_bit_mask         (uint64_t mask) -> std::string;
 [[nodiscard]] auto to_string       (Buffer_map_flags  flags     ) -> std::string;
 [[nodiscard]] auto get_buffer_usage(Buffer_target     target    ) -> Buffer_usage;
 
