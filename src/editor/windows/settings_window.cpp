@@ -9,6 +9,8 @@
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_utility/bit_helpers.hpp"
 
+#include <fmt/format.h>
+
 #include <imgui/imgui.h>
 #include <imgui/misc/cpp/imgui_stdlib.h>
 

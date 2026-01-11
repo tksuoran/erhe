@@ -1,6 +1,6 @@
 #pragma once
 
-#include "erhe_graphics/Render_command_encoder.hpp"
+#include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/gl/gl_command_encoder.hpp"
 
 namespace erhe::graphics {

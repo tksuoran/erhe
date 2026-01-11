@@ -25,18 +25,10 @@
             "program":     "${command:cmake.launchTargetPath}",
         },
         {
-            "name":    "erhe editor LLDB",
+            "name":    "erhe CMake launchTarget LLDB",
             "type":    "lldb",
             "request": "launch",
             "program": "${command:cmake.launchTargetPath}",
-        },
-        {
-            "name":                   "erhe hello_swap LLDB",
-            "type":                   "lldb",
-            "request":                "launch",
-            "program":                "${command:cmake.launchTargetPath}",
-            "console":                "externalTerminal",
-            "internalConsoleOptions": "neverOpen"
         },
         {
             "name":    "erhe editor LLDB software GL",

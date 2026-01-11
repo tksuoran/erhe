@@ -310,7 +310,7 @@ auto select_file_for_write() -> std::optional<std::filesystem::path>
 }
 #endif
 
-void ensure_working_directory_contains(const char* target)
+void ensure_working_directory_contains(const char* app_name, const char* target)
 {
     // Workaround for
     // https://intellij-support.jetbrains.com/hc/en-us/community/posts/27792220824466-CMake-C-git-project-How-to-share-working-directory-in-git
@@ -336,9 +336,10 @@ void ensure_working_directory_contains(const char* target)
                 path = std::filesystem::current_path();
                 path_string = path.string();
                 fprintf(stdout, "Current working directory is %s\n", path_string.c_str());
-                const std::filesystem::path try_path = path / std::filesystem::path("src/hello_swap");
+                const std::filesystem::path try_path = path / std::filesystem::path("src") / std::filesystem::path(app_name);
                 bool exists_directory = std::filesystem::exists(try_path, error_code);
                 if (exists_directory) {
+                    std::filesystem::current_path(try_path, error_code);
                     const std::filesystem::path erhe_ini_path = try_path / std::filesystem::path{target};
                     const bool exists_erhe_ini = std::filesystem::exists(erhe_ini_path, error_code);
                     if (exists_erhe_ini) {

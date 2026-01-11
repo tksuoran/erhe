@@ -1031,13 +1031,13 @@ auto Device_impl::end_frame(const Frame_end_info& frame_end_info) -> bool
         }
         if (m_need_sync) {
             log_context->warn("Out of frame sync slots");
-            const std::chrono::high_resolution_clock::duration duration = std::chrono::high_resolution_clock::now() - m_last_ok_frame_timestamp;
+            const std::chrono::steady_clock::duration duration = std::chrono::steady_clock::now() - m_last_ok_frame_timestamp;
             if (duration > std::chrono::seconds{5}) {
                 log_context->critical("No frame sync slots available for over 5 seconds.");
                 abort();
             }
         } else {
-            m_last_ok_frame_timestamp = std::chrono::high_resolution_clock::now();
+            m_last_ok_frame_timestamp = std::chrono::steady_clock::now();
         }
     }
 
