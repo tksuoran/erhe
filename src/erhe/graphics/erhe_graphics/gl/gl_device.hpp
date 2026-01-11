@@ -71,6 +71,8 @@ public:
     [[nodiscard]] auto get_shader_monitor                 () -> Shader_monitor&;
     [[nodiscard]] auto get_info                           () const -> const Device_info&;
 
+    void reset_shader_stages_state_tracker();
+
 private:
     void frame_completed (uint64_t frame);
 

@@ -1,6 +1,7 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "erhe_graphics/gl/gl_texture.hpp"
+#include "erhe_gl/enum_string_functions.hpp"
 #include "erhe_gl/gl_helpers.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/gl/gl_buffer.hpp"
@@ -625,8 +626,8 @@ Texture_impl::Texture_impl(Device& device, const Texture_create_info& create_inf
     );
 
     log_texture->trace(
-        "New texture {} {} {} {}x{}x{} [{}] {} sample count = {}",
-        c_str(m_type), gl_name(), m_debug_label,
+        "New GL {} {} {} {} {}x{}x{} [{}] {} sample count = {}",
+        gl::c_str(gl_texture_target), c_str(m_type), gl_name(), m_debug_label,
         m_width, m_height, m_depth, m_array_layer_count,
         erhe::dataformat::c_str(m_pixelformat), m_sample_count
     );
@@ -795,17 +796,6 @@ Texture_impl::Texture_impl(Device& device, const Texture_create_info& create_inf
             }
         }
     }
-
-    log_texture->trace(
-        "Created texture {} / {} {} {}x{} {} sample count = {}",
-        m_debug_label,
-        gl_name(),
-        m_debug_label,
-        m_width,
-        m_height,
-        erhe::dataformat::c_str(m_pixelformat),
-        m_sample_count
-    );
 }
 
 void Texture_impl::clear() const

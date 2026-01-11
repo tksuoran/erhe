@@ -362,8 +362,7 @@ private:
             m_render_pass &&
             (m_render_pass->get_render_target_width () == width) &&
             (m_render_pass->get_render_target_height() == height)
-        )
-        {
+        ) {
             return;
         }
 

@@ -1222,5 +1222,10 @@ auto Device_impl::make_render_command_encoder(Render_pass& render_pass) -> Rende
     return Render_command_encoder(m_device, render_pass);
 }
 
+void Device_impl::reset_shader_stages_state_tracker()
+{
+    m_gl_state_tracker.shader_stages.reset();
+}
+
 
 } // namespace erhe::graphics

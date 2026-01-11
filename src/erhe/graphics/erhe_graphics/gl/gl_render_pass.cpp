@@ -1,4 +1,5 @@
 #include "erhe_graphics/gl/gl_render_pass.hpp"
+#include "erhe_graphics/gl/gl_debug.hpp"
 #include "erhe_graphics/gl/gl_device.hpp"
 #include "erhe_graphics/gl/gl_texture.hpp"
 #include "erhe_gl/enum_string_functions.hpp"
@@ -435,6 +436,11 @@ void Render_pass_impl::start_render_pass()
         static_cast<GLsizei>(begin_debug_group_name.length() + 1),
         begin_debug_group_name.c_str()
     );
+
+    if (m_device.get_info().vendor == Vendor::Nvidia) {
+        // Workaround for https://developer.nvidia.com/bugs/5799090
+        m_device.get_impl().reset_shader_stages_state_tracker();
+    }
 
     gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, gl_name());
 

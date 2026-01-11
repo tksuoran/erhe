@@ -226,6 +226,11 @@ void Buffer_impl::allocate_storage(const void* init_data)
     gl::Buffer_storage_mask gl_storage_mask = get_gl_storage_mask();
     capability_check(gl_storage_mask);
 
+    log_buffer->trace(
+        "Buffer_impl::allocate_storage buffer = {} {}, m_capacity_byte_count = {}, gl_storage_mask = {}",
+        gl_name(), m_debug_label, m_capacity_byte_count, gl::to_string(gl_storage_mask)
+    );
+
     gl::named_buffer_storage(gl_name(), static_cast<GLintptr>(m_capacity_byte_count), init_data, gl_storage_mask);
     {
 #if TRACY_ENABLE
@@ -463,10 +468,11 @@ auto Buffer_impl::map_bytes(const std::size_t byte_offset, const std::size_t byt
     ERHE_VERIFY(gl_name() != 0);
 
     log_buffer->trace(
-        "Buffer_impl::map_bytes(byte_offset = {}, byte_count = {}), name = {}, flags = {}",
+        "Buffer_impl::map_bytes(byte_offset = {}, byte_count = {}), name = {} {}, flags = {}",
         byte_offset,
         byte_count,
         gl_name(),
+        m_debug_label,
         to_string(flags)
     );
     //const log::Indenter indenter;
@@ -476,7 +482,13 @@ auto Buffer_impl::map_bytes(const std::size_t byte_offset, const std::size_t byt
     m_map_byte_offset = static_cast<GLsizeiptr>(byte_offset);
 
     m_map_flags = flags;
+
     const gl::Map_buffer_access_mask gl_access_mask = get_gl_access_mask(m_map_flags);
+
+    log_buffer->trace(
+        "gl::map_named_buffer_range() buffer = {}, offset {}, byte_count = {}, access_mask = {}",
+        gl_name(), m_map_byte_offset, byte_count, gl::to_string(gl_access_mask)
+    );
 
     auto* const map_pointer = static_cast<std::byte*>(
         gl::map_named_buffer_range(

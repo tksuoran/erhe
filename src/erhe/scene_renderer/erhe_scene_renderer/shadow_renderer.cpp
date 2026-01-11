@@ -43,11 +43,7 @@ Shadow_renderer::Shadow_renderer(erhe::graphics::Device& graphics_device, Progra
             }
         )
     }
-    , m_dummy_texture{
-        graphics_device.create_dummy_texture(
-            graphics_device.choose_depth_stencil_format(erhe::graphics::format_flag_require_depth, 0)
-        )
-    }
+    , m_dummy_texture{graphics_device.create_dummy_texture(erhe::dataformat::Format::format_8_vec4_srgb)}
     , m_fallback_sampler{
         graphics_device,
         erhe::graphics::Sampler_create_info{
@@ -141,6 +137,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
     using Ring_buffer_range          = erhe::graphics::Ring_buffer_range;
     using Draw_indirect_buffer_range = erhe::renderer::Draw_indirect_buffer_range;
 
+    // NOTE m_dummy_texture is NOT used for shadow map texture
     erhe::graphics::Texture_heap texture_heap{
         m_graphics_device,
         *m_dummy_texture.get(),

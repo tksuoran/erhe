@@ -251,47 +251,46 @@ auto Texture_heap_impl::bind() -> std::size_t
         gl::bind_textures(0, m_device.get_info().max_per_stage_descriptor_samplers, m_gl_textures.data());
         gl::bind_samplers(0, m_device.get_info().max_per_stage_descriptor_samplers, m_gl_samplers.data());
 
-        // PARANOID SANITY CHECKS
-        //
-        // bool ok = true;
-        // std::stringstream ss;
-        // for (uint32_t i = 0, end = m_device.get_info().max_per_stage_descriptor_samplers; i < end; ++i) {
-        //     if (i != 0) { 
-        //         ss << ", ";
-        //     }
-        //     GLint bound_texture{0};
-        //     const gl::Texture_target gl_target         = m_textures.at(i)->get_impl().get_gl_texture_target();
-        //     const gl::Get_p_name     gl_binding_p_name = get_binding_p_name(gl_target);
-        //     gl::get_integer_iv(gl_binding_p_name, static_cast<int>(i), &bound_texture);
-        //     if (bound_texture != static_cast<GLint>(m_gl_textures.at(i))) {
-        //         ok = false;
-        //     }
-        //     GLint bound_sampler{0};
-        //     gl::get_integer_iv(gl::Get_p_name::sampler_binding, static_cast<int>(i), &bound_sampler);
-        //     if (bound_sampler != static_cast<GLint>(m_gl_samplers.at(i))) {
-        //         ok = false;
-        //     }
-        // 
-        //     ss << fmt::format("[{}] = {}/{}.{}/{}", i, m_gl_textures.at(i), bound_texture, m_gl_samplers.at(i), bound_sampler);
-        // }
-        // log_texture_heap->trace("bind {}", ss.str());
-        //
-        // if (!ok) {
-        //     for (uint32_t i = 0, end = m_device.get_info().max_per_stage_descriptor_samplers; i < end; ++i) {
-        //         gl::bind_texture_unit(i, m_gl_textures.at(i));
-        //         const gl::Texture_target gl_target         = m_textures.at(i)->get_impl().get_gl_texture_target();
-        //         const gl::Get_p_name     gl_binding_p_name = get_binding_p_name(gl_target);
-        //         GLint bound_texture{0};
-        //         gl::get_integer_iv(gl_binding_p_name, static_cast<int>(i), &bound_texture);
-        //         if (bound_texture == static_cast<GLint>(m_gl_textures.at(i))) {
-        //             log_texture_heap->trace("glBindTextureUnit({}, {}) ok", i, m_gl_textures.at(i));
-        //         } else {
-        //             log_texture_heap->trace("glBindTextureUnit({}, {}) failed - texture unit binding is {}", i, m_gl_textures.at(i), bound_texture);
-        //         }
-        //     }
-        // }
-        // ERHE_VERIFY(ok);
+#if 0 // PARANOID SANITY CHECKS
+        bool ok = true;
+        std::stringstream ss;
+        for (uint32_t i = 0, end = m_device.get_info().max_per_stage_descriptor_samplers; i < end; ++i) {
+            if (i != 0) {
+                ss << ", ";
+            }
+            GLint bound_texture{0};
+            const gl::Texture_target gl_target         = m_textures.at(i)->get_impl().get_gl_texture_target();
+            const gl::Get_p_name     gl_binding_p_name = get_binding_p_name(gl_target);
+            gl::get_integer_iv(gl_binding_p_name, static_cast<int>(i), &bound_texture);
+            if (bound_texture != static_cast<GLint>(m_gl_textures.at(i))) {
+                ok = false;
+            }
+            GLint bound_sampler{0};
+            gl::get_integer_iv(gl::Get_p_name::sampler_binding, static_cast<int>(i), &bound_sampler);
+            if (bound_sampler != static_cast<GLint>(m_gl_samplers.at(i))) {
+                ok = false;
+            }
 
+            ss << fmt::format("[{}] = {}/{}.{}/{}", i, m_gl_textures.at(i), bound_texture, m_gl_samplers.at(i), bound_sampler);
+        }
+        log_texture_heap->trace("bind {}", ss.str());
+
+        if (!ok) {
+            for (uint32_t i = 0, end = m_device.get_info().max_per_stage_descriptor_samplers; i < end; ++i) {
+                gl::bind_texture_unit(i, m_gl_textures.at(i));
+                const gl::Texture_target gl_target         = m_textures.at(i)->get_impl().get_gl_texture_target();
+                const gl::Get_p_name     gl_binding_p_name = get_binding_p_name(gl_target);
+                GLint bound_texture{0};
+                gl::get_integer_iv(gl_binding_p_name, static_cast<int>(i), &bound_texture);
+                if (bound_texture == static_cast<GLint>(m_gl_textures.at(i))) {
+                    log_texture_heap->trace("glBindTextureUnit({}, {}) ok", i, m_gl_textures.at(i));
+                } else {
+                    log_texture_heap->trace("glBindTextureUnit({}, {}) failed - texture unit binding is {}", i, m_gl_textures.at(i), bound_texture);
+                }
+            }
+        }
+        ERHE_VERIFY(ok);
+#endif
         return m_used_slot_count;
     }
 }

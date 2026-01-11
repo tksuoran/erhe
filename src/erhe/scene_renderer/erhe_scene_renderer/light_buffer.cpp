@@ -108,8 +108,19 @@ Light_buffer::Light_buffer(erhe::graphics::Device& graphics_device, Light_interf
         light_interface.light_control_block.get_binding_point()
     }
     , m_fallback_shadow_texture{
-        graphics_device.create_dummy_texture(
-            graphics_device.choose_depth_stencil_format(erhe::graphics::format_flag_require_depth, 0)
+        std::make_shared<erhe::graphics::Texture>(
+            graphics_device,
+            erhe::graphics::Texture_create_info {
+                .device            = graphics_device,
+                .usage_mask        = erhe::graphics::Image_usage_flag_bit_mask::sampled,
+                .type              = erhe::graphics::Texture_type::texture_2d,
+                .pixelformat       = graphics_device.choose_depth_stencil_format(erhe::graphics::format_flag_require_depth, 0),
+                .width             = 1,
+                .height            = 1,
+                .depth             = 1,
+                .array_layer_count = 1,
+                .debug_label       = "Light_buffer::m_fallback_shadow_texture"
+            }
         )
     }
 {
@@ -207,7 +218,7 @@ auto Light_buffer::update(
     if (shadow_map_texture == nullptr) {
         shadow_map_texture = m_fallback_shadow_texture.get();
     }
-    if (light_projections != nullptr) {
+    if (shadow_map_texture != nullptr) {
         shadow_map_texture_handle_compare    = texture_heap.assign(c_texture_heap_slot_shadow_compare,    shadow_map_texture, compare_sampler);
         shadow_map_texture_handle_no_compare = texture_heap.assign(c_texture_heap_slot_shadow_no_compare, shadow_map_texture, no_compare_sampler);
     }

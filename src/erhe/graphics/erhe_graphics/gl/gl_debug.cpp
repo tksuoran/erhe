@@ -35,43 +35,10 @@ void erhe_opengl_callback(
     const void*   /*userParam*/
 )
 {
-    // Intel:
-    // source:   GL_DEBUG_SOURCE_API
-    // type:     GL_DEBUG_TYPE_PERFORMANCE
-    // id:       0x000008
-    // severity: GL_DEBUG_SEVERITY_LOW:
-    //
-    // API_ID_REDUNDANT_FBO performance warning has been generated.
-    // Redundant state change in glBindFramebuffer API call, FBO 0, "", already bound.
-    //
-    // GL debug messsage:
-    // source:   GL_DEBUG_SOURCE_API
-    // type:     GL_DEBUG_TYPE_PERFORMANCE
-    // id:       0x000002
-    // severity: GL_DEBUG_SEVERITY_MEDIUM
-    // API_ID_RECOMPILE_FRAGMENT_SHADER performance warning has been generated. Fragment shader recompiled due to state change.
-    //
-    // Nvidia:
-    // source:   GL_DEBUG_SOURCE_API
-    // type:     GL_DEBUG_TYPE_PERFORMANCE
-    // id:       0x020092
-    // severity: GL_DEBUG_SEVERITY_MEDIUM
-    // Program/shader state performance warning: Fragment shader in program 63 is being recompiled based on GL state.
-    //
-    // source:   GL_DEBUG_SOURCE_API
-    // type:     GL_DEBUG_TYPE_OTHER
-    // id:       0x020043
-    // severity: GL_DEBUG_SEVERITY_LOW
-    // Rasterization quality warning: A non-fullscreen clear caused a fallback from CSAA to MSAA.
     if (
         (id == 0x020052) || // Pixel transfer is synchronized with 3D rendering
         (id == 0x020072) || // Buffer performance warning: Buffer object Mesh_memory position vertex buffer (bound to GL_VERTEX_ATTRIB_ARRAY_BUFFER_BINDING_ARB (0), usage hint is GL_DYNAMIC_DRAW) is being copied/moved from VIDEO memory to HOST memory.
-        (id == 0x020071) ||
-        (id == 0x020061) ||
-        (id == 0x020092) ||
-        (id == 0x020043) ||
-        (id == 0x000008) ||
-        (id == 0x000002)
+        (id == 0x020071)    // Buffer detailed info: Buffer object Ring_buffer (bound to NONE, usage hint is GL_DYNAMIC_DRAW) will use SYSTEM HEAP memory as the source for buffer object operations.
     ) {
         return;
     }
