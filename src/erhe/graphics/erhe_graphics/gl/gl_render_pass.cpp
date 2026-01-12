@@ -437,10 +437,10 @@ void Render_pass_impl::start_render_pass()
         begin_debug_group_name.c_str()
     );
 
-    if (m_device.get_info().vendor == Vendor::Nvidia) {
-        // Workaround for https://developer.nvidia.com/bugs/5799090
-        m_device.get_impl().reset_shader_stages_state_tracker();
-    }
+    //// if (m_device.get_info().vendor == Vendor::Nvidia) {
+    ////     // Workaround for https://developer.nvidia.com/bugs/5799090
+    ////     m_device.get_impl().reset_shader_stages_state_tracker();
+    //// }
 
     gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, gl_name());
 
