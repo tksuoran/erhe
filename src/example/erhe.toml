@@ -48,7 +48,7 @@ enable = true
 
 [graphics]
 initial_clear                = true
-#force_bindless_textures_off  = true
+force_bindless_textures_off  = true
 #force_no_persistent_buffers  = true
 #force_no_direct_state_access = true
 #force_no_multi_draw_indirect = true

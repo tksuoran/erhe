@@ -8,8 +8,8 @@ input_events = "info"
 input_frame = "info"
 
 ["erhe.gl"]
-trace = "off"
-debug = "warn"
+trace = "trace"
+debug = "trace"
 
 ["erhe.geometry"]
 triangulate = "info"
