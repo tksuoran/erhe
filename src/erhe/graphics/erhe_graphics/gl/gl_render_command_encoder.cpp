@@ -187,6 +187,32 @@ void Render_command_encoder_impl::multi_draw_indexed_primitives_indirect(
         static_cast<GLsizei>(drawcount),
         static_cast<GLsizei>(stride)
     );
+
+    uint64_t offset = static_cast<uint64_t>(indirect_offset);
+    //const uint32_t IdxSize = static_cast<uint32_t>(erhe::dataformat::get_format_size_bytes(index_type));
+    struct DrawElementsIndirectCommand
+    {
+        uint32_t count;
+        uint32_t instanceCount;
+        uint32_t firstIndex;
+        int32_t baseVertex;
+        uint32_t baseInstance;
+    };
+
+    // From renderdoc
+    GLintptr offs = (GLintptr)offset;
+
+    for(GLsizei i = 0; i < drawcount; i++)
+    {
+        DrawElementsIndirectCommand params = {};
+
+        gl::get_buffer_sub_data(gl::Buffer_target::draw_indirect_buffer, offs, sizeof(params), &params);
+
+        if(stride)
+            offs += stride;
+        else
+            offs += sizeof(params);
+    }
 }
 
 } // namespace erhe::graphics
