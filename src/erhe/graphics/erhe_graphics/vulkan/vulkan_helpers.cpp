@@ -946,9 +946,9 @@ auto get_vulkan_image_usage_flags(const uint64_t usage_mask) -> VkImageUsageFlag
 
 auto get_vulkan_image_aspect_flags(const erhe::dataformat::Format format) -> VkImageAspectFlags
 {
-    const bool color   = erhe::dataformat::has_color       (format);
-    const bool depth   = erhe::dataformat::get_depth_size  (format) > 0;
-    const bool stencil = erhe::dataformat::get_stencil_size(format) > 0;
+    const bool color   = erhe::dataformat::has_color            (format);
+    const bool depth   = erhe::dataformat::get_depth_size_bits  (format) > 0;
+    const bool stencil = erhe::dataformat::get_stencil_size_bits(format) > 0;
 
     VkImageAspectFlags vk_aspect_flags = 0;
     if (color) {

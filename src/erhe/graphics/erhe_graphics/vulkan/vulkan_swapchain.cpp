@@ -981,4 +981,14 @@ auto Swapchain_impl::present_image(uint32_t index) -> VkResult
     return result;
 }
 
+auto Swapchain_impl::has_depth() const -> bool
+{
+    return false; // TODO
+}
+
+auto Swapchain_impl::has_stencil() const -> bool
+{
+    return false; // TODO
+}
+
 } // namespace erhe::graphics

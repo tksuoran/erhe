@@ -23,9 +23,10 @@
 #if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
 # include "erhe_graphics/gl/gl_texture.hpp"
 #endif
-#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
-# include "erhe_graphics/vulkan/vulkan_texture.hpp"
-#endif
+// TODO
+//#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+//# include "erhe_graphics/vulkan/vulkan_texture.hpp"
+//#endif
 
 #include "erhe_profile/profile.hpp"
 #include "erhe_renderer/primitive_renderer.hpp"

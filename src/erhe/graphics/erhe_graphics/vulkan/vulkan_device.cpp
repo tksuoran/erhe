@@ -1096,19 +1096,14 @@ auto Device_impl::get_handle(const Texture& texture, const Sampler& sampler) con
     return 0;
 }
 
-auto Device_impl::choose_depth_stencil_format(const unsigned int flags, int sample_count) const -> erhe::dataformat::Format
+auto Device_impl::create_dummy_texture(const erhe::dataformat::Format format) -> std::shared_ptr<Texture>
 {
-    ERHE_FATAL("Not implemented");
-    static_cast<void>(flags);
-    static_cast<void>(sample_count);
-    return erhe::dataformat::Format::format_undefined;
-}
-
-auto Device_impl::create_dummy_texture() -> std::shared_ptr<Texture>
-{
+    // TODO Move function to Device instead of Device_impl?
     const Texture_create_info create_info{
         .device      = m_device,
         .usage_mask  = Image_usage_flag_bit_mask::sampled, // TODO Is sampled all that is needed here?
+        .type        = Texture_type::texture_2d,
+        .pixelformat = format,
         .width       = 2,
         .height      = 2,
         .debug_label = "dummy"
@@ -1394,11 +1389,11 @@ auto Device_impl::get_format_properties(erhe::dataformat::Format format) const -
         .depth_renderable = erhe::utility::test_bit_set(
             static_cast<uint32_t>(vulkan_properties.formatProperties.optimalTilingFeatures),
             static_cast<uint32_t>(VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT)
-        ) && (erhe::dataformat::get_depth_size(format) > 0),
+        ) && (erhe::dataformat::get_depth_size_bits(format) > 0),
         .stencil_renderable = erhe::utility::test_bit_set(
             static_cast<uint32_t>(vulkan_properties.formatProperties.optimalTilingFeatures),
             static_cast<uint32_t>(VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT)
-        ) && (erhe::dataformat::get_stencil_size(format) > 0),
+        ) && (erhe::dataformat::get_stencil_size_bits(format) > 0),
         .filter = erhe::utility::test_bit_set(
             static_cast<uint32_t>(vulkan_properties.formatProperties.optimalTilingFeatures),
             static_cast<uint32_t>(VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT)
@@ -1407,14 +1402,43 @@ auto Device_impl::get_format_properties(erhe::dataformat::Format format) const -
             static_cast<uint32_t>(vulkan_properties.formatProperties.optimalTilingFeatures),
             static_cast<uint32_t>(VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BLEND_BIT)
         ),
-        .red_size     = static_cast<int>(erhe::dataformat::get_red_size    (format)),
-        .green_size   = static_cast<int>(erhe::dataformat::get_green_size  (format)),
-        .blue_size    = static_cast<int>(erhe::dataformat::get_blue_size   (format)),
-        .alpha_size   = static_cast<int>(erhe::dataformat::get_alpha_size  (format)),
-        .depth_size   = static_cast<int>(erhe::dataformat::get_depth_size  (format)),
-        .stencil_size = static_cast<int>(erhe::dataformat::get_stencil_size(format))
+        .red_size     = static_cast<int>(erhe::dataformat::get_red_size_bits    (format)),
+        .green_size   = static_cast<int>(erhe::dataformat::get_green_size_bits  (format)),
+        .blue_size    = static_cast<int>(erhe::dataformat::get_blue_size_bits   (format)),
+        .alpha_size   = static_cast<int>(erhe::dataformat::get_alpha_size_bits  (format)),
+        .depth_size   = static_cast<int>(erhe::dataformat::get_depth_size_bits  (format)),
+        .stencil_size = static_cast<int>(erhe::dataformat::get_stencil_size_bits(format))
     };
     // TODO Sample counts and max size
+}
+
+auto Device_impl::get_supported_depth_stencil_formats() const -> std::vector<erhe::dataformat::Format>
+{
+    ERHE_FATAL("Not implemented");
+    return {};
+}
+
+void Device_impl::sort_depth_stencil_formats(std::vector<erhe::dataformat::Format>& formats, unsigned int sort_flags, int requested_sample_count) const
+{
+    ERHE_FATAL("Not implemented");
+    static_cast<void>(formats);
+    static_cast<void>(sort_flags);
+    static_cast<void>(requested_sample_count);
+}
+
+auto Device_impl::choose_depth_stencil_format(const std::vector<erhe::dataformat::Format>& formats) const -> erhe::dataformat::Format
+{
+    ERHE_FATAL("Not implemented");
+    static_cast<void>(formats);
+    return erhe::dataformat::Format::format_undefined;
+}
+
+auto Device_impl::choose_depth_stencil_format(unsigned int sort_flags, int requested_sample_count) const -> erhe::dataformat::Format
+{
+    ERHE_FATAL("Not implemented");
+    static_cast<void>(sort_flags);
+    static_cast<void>(requested_sample_count);
+    return erhe::dataformat::Format::format_undefined;
 }
 
 void Device_impl::clear_texture(Texture& texture, std::array<double, 4> value)

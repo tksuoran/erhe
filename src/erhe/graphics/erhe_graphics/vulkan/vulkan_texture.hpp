@@ -37,6 +37,8 @@ public:
     [[nodiscard]] auto get_handle                () const -> uint64_t;
     [[nodiscard]] auto is_sparse                 () const -> bool;
 
+    void clear() const;
+
 private:
     friend bool operator==(const Texture_impl& lhs, const Texture_impl& rhs) noexcept;
 

@@ -98,6 +98,8 @@ public:
     [[nodiscard]] auto end_frame            (const Frame_end_info& frame_end_info) -> bool;
     [[nodiscard]] auto get_surface_impl     () -> Surface_impl&;
     [[nodiscard]] auto get_command_buffer   () -> VkCommandBuffer;
+    [[nodiscard]] auto has_depth            () const -> bool;
+    [[nodiscard]] auto has_stencil          () const -> bool;
 
 private:
     static constexpr uint32_t INVALID_IMAGE_INDEX = std::numeric_limits<uint32_t>::max();

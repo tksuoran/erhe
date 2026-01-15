@@ -198,6 +198,11 @@ auto Texture_impl::get_sample_count() const -> int
     return m_sample_count;
 }
 
+void Texture_impl::clear() const
+{
+    ERHE_FATAL("not implemented");
+}
+
 auto operator==(const Texture_impl& lhs, const Texture_impl& rhs) noexcept -> bool
 {
     return
