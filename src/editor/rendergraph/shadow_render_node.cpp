@@ -66,7 +66,7 @@ void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, co
             bool result;
             if (lhs_depth_size_bits == rhs_depth_size_bits) {
                 return lhs_format_size_bytes < rhs_format_size_bytes;
-            } else if ((lhs_depth_diff > 0) && (lhs_depth_diff < 0)) {
+            } else if ((lhs_depth_diff > 0) && (rhs_depth_diff < 0)) {
                 result = true;
             } else if ((rhs_depth_diff > 0) && (lhs_depth_diff < 0)) {
                 result = false;

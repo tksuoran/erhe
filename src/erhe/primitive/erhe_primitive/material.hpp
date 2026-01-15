@@ -54,14 +54,14 @@ public:
     float                     normal_texture_scale      {1.0f};
     float                     occlusion_texture_strength{1.0f};
     bool                      unlit                     {false};
-    Material_texture_samplers texture_samplers;
+    Material_texture_samplers texture_samplers          {};
 };
 
 class Material_create_info
 {
 public:
-    std::string   name;
-    Material_data data;
+    std::string   name{};
+    Material_data data{};
 };
 
 class Material : public erhe::Item<erhe::Item_base, erhe::Item_base, Material>

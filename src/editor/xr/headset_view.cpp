@@ -744,6 +744,7 @@ auto Headset_view::update_actions() -> bool
             input_events.push_back(
                 erhe::window::Input_event{
                     .type = erhe::window::Input_event_type::xr_boolean_event,
+                    .timestamp_ns = 0, // TODO
                     .u = {
                         .xr_boolean_event = {
                             .action = &action,
@@ -760,6 +761,7 @@ auto Headset_view::update_actions() -> bool
             input_events.push_back(
                 erhe::window::Input_event{
                     .type = erhe::window::Input_event_type::xr_float_event,
+                    .timestamp_ns = 0, // TODO
                     .u = {
                         .xr_float_event = {
                             .action = &action,
@@ -776,6 +778,7 @@ auto Headset_view::update_actions() -> bool
             input_events.push_back(
                 erhe::window::Input_event{
                     .type = erhe::window::Input_event_type::xr_vector2f_event,
+                    .timestamp_ns = 0, // TODO
                     .u = {
                         .xr_vector2f_event = {
                             .action = &action,

@@ -34,9 +34,9 @@ class Mesh_operation_parameters
 public:
     App_context&                context;
     erhe::primitive::Build_info build_info;
-    std::optional<glm::mat4>    transform;
+    std::optional<glm::mat4>    transform{};
 
-    std::vector<std::shared_ptr<erhe::Item_base>> items;
+    std::vector<std::shared_ptr<erhe::Item_base>> items{};
 
     // std::function<
     //     bool(
@@ -49,7 +49,7 @@ public:
             erhe::scene::Node*,
             Mesh_operation_parameters&
         )
-    >                           make_entry_node_callback;
+    >                           make_entry_node_callback{};
 
     // std::function<
     //     void (

@@ -1559,12 +1559,12 @@ private:
                     .normal_data      = vertex_data + normal_attribute_   .attribute->offset,
                     .texcoord_data    = vertex_data + texcoord_attribute_ .attribute->offset,
                     .tangent_data     = vertex_data + tangent_attribute_  .attribute->offset,
-                    //.bitangent_data   = vertex_data + bitangent_attribute_.attribute->offset,
+                    .bitangent_data   = nullptr,
                     .position_format  = position_attribute_ .attribute->format,
                     .normal_format    = normal_attribute_   .attribute->format,
                     .texcoord_format  = texcoord_attribute_ .attribute->format,
                     .tangent_format   = tangent_attribute_  .attribute->format,
-                    //.bitangent_format = bitangent_attribute_.attribute->format
+                    .bitangent_format = erhe::dataformat::Format::format_undefined
                 };
                 SMikkTSpaceInterface mikktspace{
                     .m_getNumFaces = [](const SMikkTSpaceContext* mikk_tspace_context) -> int {
@@ -2391,9 +2391,11 @@ private:
                 },
                 .anisotropy                               = {},
                 .clearcoat                                = {},
+                .diffuseTransmission                      = {},
                 .iridescence                              = {},
                 .sheen                                    = {},
                 .specular                                 = {},
+                .specularGlossiness                       = {},
                 .transmission                             = {},
                 .volume                                   = {},
                 .packedNormalMetallicRoughnessTexture     = {},

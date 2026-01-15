@@ -139,6 +139,7 @@ auto Material_buffer::update(
             const glm::mat2 scale{data.scale.x, 0.0f, 0.0f, data.scale.y};
             const glm::mat2 m = rotation * scale;
             Texture_sampler_data result{
+                .shader_handle  = 0, // This will silence clang warning, value is set set below
                 .rotation_scale = { m[0][0], m[0][1], m[1][0], m[1][1] }, // Packing order: c0r0, c0r1, c1r0, c1r1
                 .offset         = { data.offset.x, data.offset.y }
             };

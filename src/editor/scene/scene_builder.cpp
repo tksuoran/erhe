@@ -101,7 +101,7 @@ Scene_builder::Scene_builder(
     add_room    ();
 }
 
-Scene_builder::~Scene_builder()
+Scene_builder::~Scene_builder() noexcept
 {
 }
 

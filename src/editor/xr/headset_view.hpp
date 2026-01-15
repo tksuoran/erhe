@@ -137,7 +137,7 @@ public:
     [[nodiscard]] auto is_active                            () const -> bool;
     [[nodiscard]] auto get_camera_offset                    () const -> glm::vec3;
 
-    void render(const Render_context&);
+    void render(const Render_context&) override;
 
 private:
     [[nodiscard]] auto get_headset_view_resources(erhe::xr::Render_view& render_view) -> std::shared_ptr<Headset_view_resources>;
