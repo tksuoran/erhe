@@ -46,7 +46,6 @@ Mesh_memory::Mesh_memory(erhe::graphics::Device& graphics_device)
             .usage                                  = erhe::graphics::Buffer_usage::vertex,
             .required_memory_property_bit_mask      = erhe::graphics::Memory_property_flag_bit_mask::device_local, // GPU only
             .preferred_memory_property_bit_mask     = erhe::graphics::Memory_property_flag_bit_mask::none, // uploads via staging buffer
-            .mapping                                = erhe::graphics::Buffer_mapping::not_mappable,
             .debug_label                            = "Mesh_memory position vertex buffer"
         }
     }
@@ -58,7 +57,6 @@ Mesh_memory::Mesh_memory(erhe::graphics::Device& graphics_device)
             .usage                                  = erhe::graphics::Buffer_usage::vertex,
             .required_memory_property_bit_mask      = erhe::graphics::Memory_property_flag_bit_mask::device_local, // GPU only
             .preferred_memory_property_bit_mask     = erhe::graphics::Memory_property_flag_bit_mask::none, // uploads via staging buffer
-            .mapping                                = erhe::graphics::Buffer_mapping::not_mappable,
             .debug_label                            = "Mesh_memory non-position vertex buffer"
         }
     }
@@ -70,7 +68,6 @@ Mesh_memory::Mesh_memory(erhe::graphics::Device& graphics_device)
             .usage                                  = erhe::graphics::Buffer_usage::index,
             .required_memory_property_bit_mask      = erhe::graphics::Memory_property_flag_bit_mask::device_local, // GPU only
             .preferred_memory_property_bit_mask     = erhe::graphics::Memory_property_flag_bit_mask::none, // uploads via staging buffer
-            .mapping                                = erhe::graphics::Buffer_mapping::not_mappable,
             .debug_label                            = "Mesh_memory index buffer"
         }
     }

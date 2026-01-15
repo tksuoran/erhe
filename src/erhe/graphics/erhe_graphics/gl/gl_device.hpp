@@ -100,6 +100,9 @@ private:
     uint64_t                              m_frame_index{1};
     std::chrono::steady_clock::time_point m_last_ok_frame_timestamp;
 
+    unsigned int               m_staging_buffer{0};
+    size_t                     m_staging_buffer_size{0};
+
     std::vector<uint64_t>      m_pending_frames;
     std::vector<uint64_t>      m_completed_frames;
     bool                       m_need_sync{false};

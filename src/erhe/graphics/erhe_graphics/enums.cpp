@@ -11,69 +11,24 @@ auto to_string(Buffer_usage usage) -> std::string
     using namespace erhe::utility;
     std::stringstream ss;
     bool is_empty = true;
-    if (test_bit_set(usage, Buffer_usage::vertex)) {
-        if (!is_empty) {
-            ss << " | ";
+    auto process_flag = [&](const Buffer_usage flag, const char* name) {
+        if (test_bit_set(usage, flag)) {
+            if (!is_empty) {
+                ss << " | ";
+            }
+            ss << name;
+            is_empty = false;
         }
-        ss << "vertex";
-        is_empty = false;
-    }
-    if (test_bit_set(usage, Buffer_usage::index)) {
-        if (!is_empty) {
-            ss << " | ";
-        }
-        ss << "index";
-        is_empty = false;
-    }
-    if (test_bit_set(usage, Buffer_usage::uniform)) {
-        if (!is_empty) {
-            ss << " | ";
-        }
-        ss << "uniform";
-        is_empty = false;
-    }
-    if (test_bit_set(usage, Buffer_usage::storage)) {
-        if (!is_empty) {
-            ss << " | ";
-        }
-        ss << "storage";
-        is_empty = false;
-    }
-    if (test_bit_set(usage, Buffer_usage::indirect)) {
-        if (!is_empty) {
-            ss << " | ";
-        }
-        ss << "indirect";
-        is_empty = false;
-    }
-    if (test_bit_set(usage, Buffer_usage::uniform_texel)) {
-        if (!is_empty) {
-            ss << " | ";
-        }
-        ss << "uniform_texel";
-        is_empty = false;
-    }
-    if (test_bit_set(usage, Buffer_usage::storage_texel)) {
-        if (!is_empty) {
-            ss << " | ";
-        }
-        ss << "storage_texel";
-        is_empty = false;
-    }
-    if (test_bit_set(usage, Buffer_usage::transfer_src)) {
-        if (!is_empty) {
-            ss << " | ";
-        }
-        ss << "transfer_src";
-        is_empty = false;
-    }
-    if (test_bit_set(usage, Buffer_usage::transfer_dst)) {
-        if (!is_empty) {
-            ss << " | ";
-        }
-        ss << "transfer_dst";
-        is_empty = false;
-    }
+    };
+    process_flag(Buffer_usage::vertex,        "vertex");
+    process_flag(Buffer_usage::index,         "index");
+    process_flag(Buffer_usage::uniform,       "uniform");
+    process_flag(Buffer_usage::storage,       "storage");
+    process_flag(Buffer_usage::indirect,      "indirect");
+    process_flag(Buffer_usage::uniform_texel, "uniform_texel");
+    process_flag(Buffer_usage::storage_texel, "storage_texel");
+    process_flag(Buffer_usage::transfer_src,  "transfer_src");
+    process_flag(Buffer_usage::transfer_dst,  "transfer_dst");
     return ss.str();
 }
 auto c_str(Memory_usage memory_usage) -> const char*
@@ -85,90 +40,73 @@ auto c_str(Memory_usage memory_usage) -> const char*
         default: return "?";
     }
 }
-auto to_string_memory_property_flag_bit_mask(uint64_t mask) -> std::string
+auto to_string_memory_allocation_create_flag_bit_mask(const uint64_t mask) -> std::string
 {
     using namespace erhe::utility;
     std::stringstream ss;
     bool is_empty = true;
-    if (test_bit_set(mask, Memory_property_flag_bit_mask::device_local)) {
-        if (!is_empty) {
-            ss << " | ";
+    auto process_flag = [&](const uint64_t flag, const char* name) {
+        if (test_bit_set(mask, flag)) {
+            if (!is_empty) {
+                ss << " | ";
+            }
+            ss << name;
+            is_empty = false;
         }
-        ss << "device_local";
-        is_empty = false;
-    }
-    if (test_bit_set(mask, Memory_property_flag_bit_mask::host_read)) {
-        if (!is_empty) {
-            ss << " | ";
-        }
-        ss << "host_read";
-        is_empty = false;
-    }
-    if (test_bit_set(mask, Memory_property_flag_bit_mask::host_write)) {
-        if (!is_empty) {
-            ss << " | ";
-        }
-        ss << "host_write";
-        is_empty = false;
-    }
-    if (test_bit_set(mask, Memory_property_flag_bit_mask::host_coherent)) {
-        if (!is_empty) {
-            ss << " | ";
-        }
-        ss << "host_coherent";
-        is_empty = false;
-    }
-    if (test_bit_set(mask, Memory_property_flag_bit_mask::host_cached)) {
-        if (!is_empty) {
-            ss << " | ";
-        }
-        ss << "host_cached";
-        is_empty = false;
-    }
-    if (test_bit_set(mask, Memory_property_flag_bit_mask::lazily_allocated)) {
-        if (!is_empty) {
-            ss << " | ";
-        }
-        ss << "lazily_allocated";
-        is_empty = false;
-    }
+    };
+    process_flag(Memory_allocation_create_flag_bit_mask::dedicated_allocation, "dedicated_allocation");
+    process_flag(Memory_allocation_create_flag_bit_mask::never_allocate      , "never_allocate");
+    process_flag(Memory_allocation_create_flag_bit_mask::mapped              , "mapped");
+    process_flag(Memory_allocation_create_flag_bit_mask::upper_address       , "upper_address");
+    process_flag(Memory_allocation_create_flag_bit_mask::dont_bind           , "dont_bind");
+    process_flag(Memory_allocation_create_flag_bit_mask::within_budget       , "within_budget");
+    process_flag(Memory_allocation_create_flag_bit_mask::can_alias           , "can_alias");
+    process_flag(Memory_allocation_create_flag_bit_mask::strategy_min_memory , "strategy_min_memory");
+    process_flag(Memory_allocation_create_flag_bit_mask::strategy_min_time   , "strategy_min_time");
+    process_flag(Memory_allocation_create_flag_bit_mask::strategy_min_offset , "strategy_min_offset");
     return ss.str();
 }
-auto c_str(Buffer_mapping mapping) -> const char*
-{
-    switch (mapping) {
-        case Buffer_mapping::not_mappable: return "not_mappable";
-        case Buffer_mapping::persistent:   return "persistent";
-        case Buffer_mapping::transient:    return "transient";
-        default: return "?";
-    }
-}
-auto to_string(Buffer_map_flags flags) -> std::string
+
+auto to_string_memory_property_flag_bit_mask(const uint64_t mask) -> std::string
 {
     using namespace erhe::utility;
     std::stringstream ss;
     bool is_empty = true;
-    if (test_bit_set(flags, Buffer_map_flags::explicit_flush)) {
-        if (!is_empty) {
-            ss << " | ";
+    auto process_flag = [&](const uint64_t flag, const char* name) {
+        if (test_bit_set(mask, flag)) {
+            if (!is_empty) {
+                ss << " | ";
+            }
+            ss << name;
+            is_empty = false;
         }
-        ss << "explicit_flush";
-        is_empty = false;
-    }
-    if (test_bit_set(flags, Buffer_map_flags::invalidate_range)) {
-        if (!is_empty) {
-            ss << " | ";
+    };
+    process_flag(Memory_property_flag_bit_mask::device_local,     "device_local");
+    process_flag(Memory_property_flag_bit_mask::host_read,        "host_read");
+    process_flag(Memory_property_flag_bit_mask::host_write,       "host_write");
+    process_flag(Memory_property_flag_bit_mask::host_coherent,    "host_coherent");
+    process_flag(Memory_property_flag_bit_mask::host_persistent,  "host_persistent");
+    process_flag(Memory_property_flag_bit_mask::host_cached,      "host_cached");
+    process_flag(Memory_property_flag_bit_mask::lazily_allocated, "lazily_allocated");
+    return ss.str();
+}
+auto to_string(const Buffer_map_flags flags) -> std::string
+{
+    using namespace erhe::utility;
+    std::stringstream ss;
+    bool is_empty = true;
+    auto process_flag = [&](const Buffer_map_flags flag, const char* name) {
+        if (test_bit_set(flags, flag)) {
+            if (!is_empty) {
+                ss << " | ";
+            }
+            ss << name;
+            is_empty = false;
         }
-        ss << "invalidate_range";
-        is_empty = false;
-    }
-    if (test_bit_set(flags, Buffer_map_flags::invalidate_buffer)) {
-        if (!is_empty) {
-            ss << " | ";
-        }
-        ss << "invalidate_buffer";
-        is_empty = false;
-    }
+    };
+    process_flag(Buffer_map_flags::explicit_flush,    "explicit_flush");
+    process_flag(Buffer_map_flags::invalidate_range,  "invalidate_range");
+    process_flag(Buffer_map_flags::invalidate_buffer, "invalidate_buffer");
     return ss.str();
 }
 

@@ -14,14 +14,13 @@ class Device;
 class Buffer_create_info
 {
 public:
-    std::size_t    capacity_byte_count                   {0};
-    uint64_t       memory_allocation_create_flag_bit_mask{0};
-    Buffer_usage   usage                                 {0};
-    uint64_t       required_memory_property_bit_mask     {0};
-    uint64_t       preferred_memory_property_bit_mask    {0};
-    Buffer_mapping mapping                               {0};
-    const void*    init_data                             {nullptr};
-    std::string    debug_label                           {};
+    std::size_t  capacity_byte_count                   {0};
+    uint64_t     memory_allocation_create_flag_bit_mask{0};
+    Buffer_usage usage                                 {0};
+    uint64_t     required_memory_property_bit_mask     {0};
+    uint64_t     preferred_memory_property_bit_mask    {0};
+    const void*  init_data                             {nullptr};
+    std::string  debug_label                           {};
 };
 
 class Buffer_impl;
@@ -69,7 +68,7 @@ public:
 
     auto map_all_bytes(Buffer_map_flags flags) noexcept -> std::span<std::byte>;
 
-    auto map_bytes(const std::size_t byte_offset, const std::size_t byte_count, Buffer_map_flags flags) noexcept -> std::span<std::byte>;
+    auto map_bytes(std::size_t byte_offset, std::size_t byte_count, Buffer_map_flags flags) noexcept -> std::span<std::byte>;
 
     [[nodiscard]] auto get_impl() -> Buffer_impl&;
     [[nodiscard]] auto get_impl() const -> const Buffer_impl&;

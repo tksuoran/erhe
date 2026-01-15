@@ -7,17 +7,11 @@
 #include "erhe_verify/verify.hpp"
 #include "erhe_utility/align.hpp"
 
-//// TODO These are same, no need impl?
-//#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
-//# include "erhe_graphics/gl/gl_ring_buffer.hpp"
-//#endif
-//#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
-//# include "erhe_graphics/vulkan/vulkan_ring_buffer.hpp"
-//#endif
-
 #include <algorithm>
 
 namespace erhe::graphics {
+
+// https://gpuopen-librariesandsdks.github.io/VulkanMemoryAllocator/html/usage_patterns.html#usage_patterns_advanced_data_uploading
 
 [[nodiscard]] auto get_memory_usage(const Ring_buffer_usage ring_buffer_usage) -> Memory_usage
 {
@@ -46,8 +40,8 @@ namespace erhe::graphics {
     switch (ring_buffer_usage) {
         default:
         case Ring_buffer_usage::None      : ERHE_FATAL("Device_impl::allocate_ring_buffer_entry() - bad usage"); return Memory_property_flag_bit_mask::none;
-        case Ring_buffer_usage::CPU_write : return Memory_property_flag_bit_mask::device_local;
-        case Ring_buffer_usage::CPU_read  : return Memory_property_flag_bit_mask::host_cached;
+        case Ring_buffer_usage::CPU_write : return Memory_property_flag_bit_mask::device_local | Memory_property_flag_bit_mask::host_persistent;
+        case Ring_buffer_usage::CPU_read  : return Memory_property_flag_bit_mask::host_cached  | Memory_property_flag_bit_mask::host_persistent;
         case Ring_buffer_usage::GPU_access: return Memory_property_flag_bit_mask::none;
     }
 }
@@ -62,12 +56,12 @@ Ring_buffer::Ring_buffer(
         std::make_unique<Buffer>(
             m_device,
             Buffer_create_info{
+                // NOTE: The ring buffer should be persistently mapped for CPU access
                 .capacity_byte_count                    = create_info.size,
-                .memory_allocation_create_flag_bit_mask = 0,
+                .memory_allocation_create_flag_bit_mask = Memory_allocation_create_flag_bit_mask::none,
                 .usage                                  = create_info.buffer_usage,
                 .required_memory_property_bit_mask      = get_required_memory_property_bit_mask(create_info.ring_buffer_usage),
                 .preferred_memory_property_bit_mask     = get_preferred_memory_property_bit_mask(create_info.ring_buffer_usage),
-                .mapping                                = (create_info.ring_buffer_usage != Ring_buffer_usage::GPU_access) ? Buffer_mapping::persistent : Buffer_mapping::not_mappable,
                 .debug_label                            = create_info.debug_label
             }
         )
@@ -241,11 +235,8 @@ void Ring_buffer::close(std::size_t byte_offset, std::size_t byte_write_count)
     sanity_check();
 
     if (m_ring_buffer_usage == Ring_buffer_usage::CPU_write) {
-        if (!m_device.get_info().use_persistent_buffers) {
-            m_buffer->end_write(byte_offset, byte_write_count); // flush and unmap
-        }
+        m_buffer->end_write(byte_offset, byte_write_count); // flush and unmap
     }
-    //m_map = {};
 }
 
 void Ring_buffer::make_sync_entry(std::size_t wrap_count, std::size_t byte_offset, std::size_t byte_count)

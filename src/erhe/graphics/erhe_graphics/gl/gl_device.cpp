@@ -856,7 +856,12 @@ auto Device_impl::get_buffer_alignment(Buffer_target target) -> std::size_t
     }
 }
 
-Device_impl::~Device_impl() = default;
+Device_impl::~Device_impl()
+{
+    if (m_staging_buffer != 0) {
+        gl::delete_buffers(1, &m_staging_buffer);
+    }
+}
 
 /// Ring buffer
 
@@ -893,23 +898,24 @@ inline auto access_mask(Device& device) -> gl::Map_buffer_access_mask
 
 void Device_impl::upload_to_buffer(Buffer& buffer, size_t offset, const void* data, size_t length)
 {
-    // TODO Use persistent buffer instead of re-creating staging buffer each time.
-    // TODO Use GL directly, avoid Buffer_usage::transfer. Or maybe use Ring_buffer_impl?
-    Buffer_create_info create_info{
-        .capacity_byte_count                    = length,
-        .memory_allocation_create_flag_bit_mask = Memory_allocation_create_flag_bit_mask::strategy_min_time,
-        .usage                                  = Buffer_usage::transfer,
-        .required_memory_property_bit_mask      =
-            Memory_property_flag_bit_mask::host_write |   // CPU to GPU
-            Memory_property_flag_bit_mask::host_coherent, // immediately usable by GPU without synchronization
-        .preferred_memory_property_bit_mask    =
-            Memory_property_flag_bit_mask::device_local,
-        .mapping                              = Buffer_mapping::not_mappable,
-        .init_data                            = data,
-        .debug_label                          = "Staging buffer"
-    };
-    Buffer staging_buffer{m_device, create_info};
-    gl::copy_named_buffer_sub_data(staging_buffer.get_impl().gl_name(), buffer.get_impl().gl_name(), 0, offset, length);
+    if ((m_staging_buffer == 0) || (m_staging_buffer_size < length)) {
+        if (m_staging_buffer != 0) {
+            log_buffer->trace("Deleting old staging buffer {} of size {}", m_staging_buffer, m_staging_buffer_size);
+            gl::delete_buffers(1, &m_staging_buffer);
+        }
+        gl::create_buffers(1, &m_staging_buffer);
+        gl::named_buffer_storage(
+            m_staging_buffer,
+            static_cast<GLsizeiptr>(length),
+            data,
+            gl::Buffer_storage_mask::client_storage_bit | gl::Buffer_storage_mask::dynamic_storage_bit
+        );
+        log_buffer->trace("Created new staging buffer {} of size {}", m_staging_buffer, m_staging_buffer_size);
+        m_staging_buffer_size = length;
+    } else {
+        gl::named_buffer_sub_data(m_staging_buffer, 0, static_cast<GLsizeiptr>(length), data);
+    }
+    gl::copy_named_buffer_sub_data(m_staging_buffer, buffer.get_impl().gl_name(), 0, offset, length);
 }
 
 void Device_impl::add_completion_handler(std::function<void()> callback)

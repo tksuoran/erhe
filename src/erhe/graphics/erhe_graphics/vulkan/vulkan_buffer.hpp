@@ -64,9 +64,19 @@ private:
     Device&       m_device;
     VmaAllocation m_vma_allocation     {VK_NULL_HANDLE};
     VkBuffer      m_vk_buffer          {VK_NULL_HANDLE};	
-    std::string   m_debug_label        {};
-    std::size_t   m_capacity_byte_count{0};
-    std::size_t   m_next_free_byte     {0};
+
+    Buffer_usage  m_usage                                 {0};
+    uint64_t      m_memory_allocation_create_flag_bit_mask{0};
+    uint64_t      m_required_memory_property_bit_mask     {0};
+    uint64_t      m_preferred_memory_property_bit_mask    {0};
+    std::string   m_debug_label                           {};
+    std::size_t   m_capacity_byte_count                   {0};
+    std::size_t   m_next_free_byte                        {0};
+
+    std::span<std::byte> m_map;
+    std::size_t          m_map_byte_offset{0};
+    Buffer_map_flags     m_map_flags      {0};
+    bool                 m_allocated      {false};
 };
 
 class Buffer_impl_hash

@@ -20,8 +20,26 @@
 namespace erhe::graphics {
 
 Buffer_impl::Buffer_impl(Device& device, const Buffer_create_info& create_info) noexcept
-    : m_device{device}
+    : m_device                                {device}
+    , m_capacity_byte_count                   {create_info.capacity_byte_count}
+    , m_usage                                 {create_info.usage}
+    , m_memory_allocation_create_flag_bit_mask{create_info.memory_allocation_create_flag_bit_mask}
+    , m_required_memory_property_bit_mask     {create_info.required_memory_property_bit_mask}
+    , m_preferred_memory_property_bit_mask    {create_info.preferred_memory_property_bit_mask}
+    , m_debug_label                           {create_info.debug_label}
 {
+    constexpr const std::size_t sanity_threshold{2'000'000'000};
+    ERHE_VERIFY(m_capacity_byte_count < sanity_threshold); // sanity check, can raise limit when needed
+    log_buffer->debug(
+        "Buffer_impl::Buffer_impl() capacity_byte_count = {}, flags = {}, usage = {}, required = {}, preferred = {}) debug_label = {}",
+        m_capacity_byte_count,
+        to_string_memory_allocation_create_flag_bit_mask(m_memory_allocation_create_flag_bit_mask),
+        to_string(m_usage),
+        to_string_memory_property_flag_bit_mask(create_info.required_memory_property_bit_mask),
+        to_string_memory_property_flag_bit_mask(create_info.preferred_memory_property_bit_mask),
+        m_debug_label
+    );
+
     const VkBufferCreateInfo buffer_create_info{
         .sType                 = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
         .pNext                 = nullptr,
@@ -53,9 +71,6 @@ Buffer_impl::Buffer_impl(Device& device, const Buffer_create_info& create_info) 
         log_swapchain->critical("vmaCreateBuffer() failed with {} {}", static_cast<int32_t>(result), c_str(result));
         abort();
     }
-
-    m_capacity_byte_count = create_info.capacity_byte_count;
-    m_next_free_byte      = 0;
 
     if (!create_info.debug_label.empty()) {
         m_debug_label = create_info.debug_label;
@@ -104,7 +119,7 @@ Buffer_impl::Buffer_impl(Device& device, const Buffer_create_info& create_info) 
             }
         }
 
-        vmaUnmapMemory(allocator, m_vma_allocation);
+        //vmaUnmapMemory(allocator, m_vma_allocation);
     }
 }
 
@@ -178,6 +193,7 @@ auto Buffer_impl::allocate_bytes(const std::size_t byte_count, const std::size_t
 
 auto Buffer_impl::begin_write(const std::size_t byte_offset, std::size_t byte_count) noexcept -> std::span<std::byte>
 {
+    ERHE_FATAL("not implemented");
     static_cast<void>(byte_offset);
     static_cast<void>(byte_count);
     return {};
@@ -185,18 +201,21 @@ auto Buffer_impl::begin_write(const std::size_t byte_offset, std::size_t byte_co
 
 void Buffer_impl::end_write(const std::size_t byte_offset, const std::size_t byte_count) noexcept
 {
+    ERHE_FATAL("not implemented");
     static_cast<void>(byte_offset);
     static_cast<void>(byte_count);
 }
 
 auto Buffer_impl::map_all_bytes(Buffer_map_flags flags) noexcept -> std::span<std::byte>
 {
+    ERHE_FATAL("not implemented");
     static_cast<void>(flags);
     return {};
 }
 
 auto Buffer_impl::map_bytes(const std::size_t byte_offset, const std::size_t byte_count, Buffer_map_flags flags) noexcept -> std::span<std::byte>
 {
+    ERHE_FATAL("not implemented");
     static_cast<void>(byte_offset);
     static_cast<void>(byte_count);
     static_cast<void>(flags);
@@ -205,36 +224,43 @@ auto Buffer_impl::map_bytes(const std::size_t byte_offset, const std::size_t byt
 
 void Buffer_impl::unmap() noexcept
 {
+    ERHE_FATAL("not implemented");
 }
 
 void Buffer_impl::flush_bytes(const std::size_t byte_offset, const std::size_t byte_count) noexcept
 {
+    ERHE_FATAL("not implemented");
     static_cast<void>(byte_offset);
     static_cast<void>(byte_count);
 }
 
 void Buffer_impl::dump() const noexcept
 {
+    ERHE_FATAL("not implemented");
 }
 
 void Buffer_impl::flush_and_unmap_bytes(const std::size_t byte_count) noexcept
 {
+    ERHE_FATAL("not implemented");
     static_cast<void>(byte_count);
 }
 
 auto Buffer_impl::get_used_byte_count() const -> std::size_t
 {
+    ERHE_FATAL("not implemented");
     return 0;
 }
 
 auto Buffer_impl::get_available_byte_count(std::size_t alignment) const noexcept -> std::size_t
 {
+    ERHE_FATAL("not implemented");
     static_cast<void>(alignment);
     return 0;
 }
 
 auto Buffer_impl::get_capacity_byte_count() const noexcept -> std::size_t
 {
+    ERHE_FATAL("not implemented");
     return 0;
 }
 

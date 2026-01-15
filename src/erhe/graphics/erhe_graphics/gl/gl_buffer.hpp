@@ -39,7 +39,7 @@ public:
 
     template <typename T>
     [[nodiscard]]
-    auto map_elements(const std::size_t element_offset, const std::size_t element_count, Buffer_map_flags flags = Buffer_map_flags::none) noexcept -> std::span<T>
+    auto map_elements(const std::size_t element_offset, const std::size_t element_count, const Buffer_map_flags flags = Buffer_map_flags::none) noexcept -> std::span<T>
     {
         const std::size_t byte_offset = element_offset * sizeof(T);
         const std::size_t byte_count  = element_count * sizeof(T);
@@ -52,7 +52,7 @@ public:
 
     auto map_all_bytes(Buffer_map_flags flags) noexcept -> std::span<std::byte>;
 
-    auto map_bytes(const std::size_t byte_offset, const std::size_t byte_count, Buffer_map_flags flags) noexcept -> std::span<std::byte>;
+    auto map_bytes(std::size_t byte_offset, std::size_t byte_count, Buffer_map_flags flags) noexcept -> std::span<std::byte>;
 
     friend class Vertex_input_state;
     friend class Texture;
@@ -73,7 +73,6 @@ private:
     uint64_t                       m_memory_allocation_create_flag_bit_mask{0};
     uint64_t                       m_required_memory_property_bit_mask     {0};
     uint64_t                       m_preferred_memory_property_bit_mask    {0};
-    Buffer_mapping                 m_mapping                               {0};
     std::string                    m_debug_label                           {};
 
     static constexpr const char* s_pool_name = "glBuffer";
