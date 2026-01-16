@@ -462,8 +462,9 @@ void generate_mesh_facet_texture_coordinates(GEO::Mesh& mesh, GEO::index_t facet
     for (GEO::index_t i = 0; i < corner_count; ++i) {
         const GEO::index_t corner          = mesh_facets.corner(facet, i);
         const GEO::index_t vertex          = mesh_facets.vertex(facet, i);
-        const GEO::vec3f   position        = get_pointf(mesh_vertices, vertex);
-        const GEO::vec3f   planar_position = GEO::transform_point(inverse_transform, position);
+        const GEO::vec3f   p               = get_pointf(mesh_vertices, vertex);
+        const GEO::vec4f   p_              = inverse_transform * GEO::vec4f{p.x, p.y, p.z, 1.0f};
+        const GEO::vec3f   planar_position = GEO::vec3f{p_.x / p_.w, p_.y / p_.w, p_.z / p_.w};
         const GEO::vec2f   uv              = GEO::vec2f{planar_position.x, planar_position.y};
         unscaled_uvs.emplace_back(corner, uv);
         const float distance = GEO::length(uv);
@@ -720,7 +721,8 @@ void transform_mesh(
 
     for (GEO::index_t vertex : source_mesh.vertices) {
         const GEO::vec3f p           = get_pointf(source_mesh.vertices, vertex);
-        const GEO::vec3f transformed = GEO::transform_point(transform, p);
+        const GEO::vec4f p_          = transform * GEO::vec4f{p.x, p.y, p.z, 1.0f};
+        const GEO::vec3f transformed = GEO::vec3f{p_.x / p_.w, p_.y / p_.w, p_.z / p_.w};
         set_pointf(destination_mesh.vertices, vertex, transformed);
     }
 
@@ -814,7 +816,9 @@ void Geometry::merge_with_transform(const Geometry& src, const GEO::mat4f& trans
 
     for (GEO::index_t src_vertex : src_mesh.vertices) {
         const GEO::vec3f   p           = get_pointf(src_mesh.vertices, src_vertex);
-        const GEO::vec3f   transformed = GEO::transform_point(transform, p);
+        const GEO::vec4f   p_          = transform * GEO::vec4f{p.x, p.y, p.z, 1.0f};
+        const GEO::vec3f   transformed = GEO::vec3f{p_.x / p_.w, p_.y / p_.w, p_.z / p_.w};
+
         const GEO::index_t dst_vertex  = dst_base_vertex + src_vertex;
         set_pointf(dst_mesh.vertices, dst_vertex, transformed);
         log_geometry->trace("add transformed src vertex {} dst vertex {} position = {}", src_vertex, dst_vertex, transformed);
