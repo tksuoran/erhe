@@ -77,7 +77,7 @@ Swapchain::Swapchain(XrSwapchain xr_swapchain)
     }
 }
 
-Swapchain::~Swapchain()
+Swapchain::~Swapchain() noexcept
 {
     ERHE_PROFILE_FUNCTION();
 

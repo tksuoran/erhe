@@ -12,7 +12,7 @@ Blit_command_encoder_impl::Blit_command_encoder_impl(Device& device)
 {
 }
 
-Blit_command_encoder_impl::~Blit_command_encoder_impl()
+Blit_command_encoder_impl::~Blit_command_encoder_impl() noexcept
 {
 }
 

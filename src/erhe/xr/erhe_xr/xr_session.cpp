@@ -1008,7 +1008,9 @@ auto Xr_session::render_frame(std::function<bool(Render_view&)> render_view_call
             .depth_stencil_format  = m_swapchain_depth_stencil_format,
             .width                 = view_configuration_views[i].recommendedImageRectWidth,
             .height                = view_configuration_views[i].recommendedImageRectHeight,
-            .composition_alpha     = m_instance.get_configuration().composition_alpha
+            .composition_alpha     = m_instance.get_configuration().composition_alpha,
+            .near_depth            = 0.0f, // TODO
+            .far_depth             = 1.0f // TODO
         };
         {
             const auto result = render_view_callback(render_view);
@@ -1029,7 +1031,8 @@ auto Xr_session::render_frame(std::function<bool(Render_view&)> render_view_call
                         static_cast<int32_t>(view_configuration_views[i].recommendedImageRectWidth),
                         static_cast<int32_t>(view_configuration_views[i].recommendedImageRectHeight)
                     }
-                }
+                },
+                .imageArrayIndex = 0 // TODO
             },
             .minDepth = 0.0f,
             .maxDepth = 1.0f,
@@ -1050,7 +1053,8 @@ auto Xr_session::render_frame(std::function<bool(Render_view&)> render_view_call
                         static_cast<int32_t>(view_configuration_views[i].recommendedImageRectWidth),
                         static_cast<int32_t>(view_configuration_views[i].recommendedImageRectHeight)
                     }
-                }
+                },
+                .imageArrayIndex = 0 // TODO
             }
         };
     }

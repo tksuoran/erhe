@@ -856,7 +856,7 @@ auto Device_impl::get_buffer_alignment(Buffer_target target) -> std::size_t
     }
 }
 
-Device_impl::~Device_impl()
+Device_impl::~Device_impl() noexcept
 {
     if (m_staging_buffer != 0) {
         gl::delete_buffers(1, &m_staging_buffer);

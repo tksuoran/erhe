@@ -46,10 +46,15 @@ auto Headset::get_hand_tracking_joint(const XrHandEXT hand, const XrHandJointEXT
         ? m_xr_session->get_hand_tracking_joint(hand, joint)
         : Hand_tracking_joint{
             .location = {
-                .locationFlags = 0
+                .locationFlags = 0,
+                .pose          = {},
+                .radius        = 0.0f
             },
             .velocity = {
-                .velocityFlags = 0
+                .velocityFlags   = 0,
+                .linearVelocity  = XrVector3f{0.0f, 0.0f, 0.0f},
+                .angularVelocity = XrVector3f{0.0f, 0.0f, 0.0f},
+
             }
         };
 }

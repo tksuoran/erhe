@@ -417,6 +417,8 @@ void Xr_float_click_command::try_ready()
 auto Xr_float_click_command::try_call() -> bool
 {
     Input_arguments input{
+        .modifier_mask = 0, // TODO
+        .timestamp_ns = 0, // TODO
         .variant = {
             .float_value = m_xr_action_for_value->state.currentState
         }
@@ -444,12 +446,15 @@ void Xr_vector2f_click_command::try_ready()
 auto Xr_vector2f_click_command::try_call() -> bool
 {
     Input_arguments input{
+        .modifier_mask = 0, // TODO
+        .timestamp_ns = 0, // TODO
         .variant = {
             .vector2 = {
                 .absolute_value = glm::vec2{
                     m_xr_action_for_value->state.currentState.x,
                     m_xr_action_for_value->state.currentState.y
-                }
+                },
+                .relative_value = glm::vec2{0.0f, 0.0f} // TODO
             }
         }
     };
@@ -476,6 +481,8 @@ void Xr_pose_click_command::try_ready()
 auto Xr_pose_click_command::try_call() -> bool
 {
     Input_arguments input{
+        .modifier_mask = 0, // TODO
+        .timestamp_ns = 0, // TODO
         .variant = {
             .pose = {
                 .orientation = m_xr_action_for_value->orientation,

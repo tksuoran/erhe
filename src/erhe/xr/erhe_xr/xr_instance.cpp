@@ -363,8 +363,10 @@ auto Xr_instance::create_instance() -> bool
 #endif
 
     XrInstanceProperties instance_properties {
-        .type = XR_TYPE_INSTANCE_PROPERTIES,
-        .next = nullptr,
+        .type           = XR_TYPE_INSTANCE_PROPERTIES,
+        .next           = nullptr,
+        .runtimeVersion = {},
+        .runtimeName    = {}
     };
     xrGetInstanceProperties(m_xr_instance, &instance_properties);
     const uint16_t major = (instance_properties.runtimeVersion >> 48) & uint64_t{0x0000ffffu};
@@ -564,14 +566,19 @@ auto Xr_instance::get_system_info() -> bool
     }
 
     XrSystemProperties system_properties{
-        .type = XR_TYPE_SYSTEM_PROPERTIES,
-        .next = nullptr
+        .type               = XR_TYPE_SYSTEM_PROPERTIES,
+        .next               = nullptr,
+        .systemId           = {},
+        .vendorId           = {},
+        .systemName         = {},
+        .graphicsProperties = {},
+        .trackingProperties = {}
     };
 
     XrSystemHandTrackingPropertiesEXT system_hand_tracking_properties {
         .type                 = XR_TYPE_SYSTEM_HAND_TRACKING_PROPERTIES_EXT,
         .next                 = nullptr,
-        .supportsHandTracking = false
+        .supportsHandTracking = {}
     };
     if (extensions.EXT_hand_tracking) {
         system_properties.next = &system_hand_tracking_properties;
@@ -597,12 +604,18 @@ auto Xr_instance::get_system_info() -> bool
 
     if (extensions.FB_color_space) {
         XrSystemColorSpacePropertiesFB color_space_properties{
-            .type = XR_TYPE_SYSTEM_COLOR_SPACE_PROPERTIES_FB,
-            .next = nullptr
+            .type       = XR_TYPE_SYSTEM_COLOR_SPACE_PROPERTIES_FB,
+            .next       = nullptr,
+            .colorSpace = {},
         };
         XrSystemProperties system_properties_{
-            .type = XR_TYPE_SYSTEM_PROPERTIES,
-            .next = &color_space_properties
+            .type               = XR_TYPE_SYSTEM_PROPERTIES,
+            .next               = &color_space_properties,
+            .systemId           = {},
+            .vendorId           = {},
+            .systemName         = {},
+            .graphicsProperties = {},
+            .trackingProperties = {}
         };
         ERHE_XR_CHECK(xrGetSystemProperties(m_xr_instance, m_xr_system_id, &system_properties_));
         log_xr->info("OpenXR Native Color Space: {}", c_str(color_space_properties.colorSpace));
@@ -610,16 +623,23 @@ auto Xr_instance::get_system_info() -> bool
 
     if (extensions.FB_passthrough) {
         XrSystemPassthroughProperties2FB passthrough_properties2{
-            .type = XR_TYPE_SYSTEM_PASSTHROUGH_PROPERTIES2_FB,
-            .next = nullptr,
+            .type         = XR_TYPE_SYSTEM_PASSTHROUGH_PROPERTIES2_FB,
+            .next         = nullptr,
+            .capabilities = {}
         };
         XrSystemPassthroughPropertiesFB passthrough_properties{
-            .type = XR_TYPE_SYSTEM_PASSTHROUGH_PROPERTIES_FB,
-            .next = &passthrough_properties2,
+            .type                = XR_TYPE_SYSTEM_PASSTHROUGH_PROPERTIES_FB,
+            .next                = &passthrough_properties2,
+            .supportsPassthrough = {}
         };
         XrSystemProperties system_properties_{
-            .type = XR_TYPE_SYSTEM_PROPERTIES,
-            .next = &passthrough_properties
+            .type               = XR_TYPE_SYSTEM_PROPERTIES,
+            .next               = &passthrough_properties,
+            .systemId           = {},
+            .vendorId           = {},
+            .systemName         = {},
+            .graphicsProperties = {},
+            .trackingProperties = {}
         };
         ERHE_XR_CHECK(xrGetSystemProperties(m_xr_instance, m_xr_system_id, &system_properties_));
 

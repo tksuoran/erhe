@@ -19,7 +19,7 @@ Render_command_encoder_impl::Render_command_encoder_impl(Device& device, Render_
     start_render_pass();
 }
 
-Render_command_encoder_impl::~Render_command_encoder_impl()
+Render_command_encoder_impl::~Render_command_encoder_impl() noexcept
 {
     end_render_pass();
 }
