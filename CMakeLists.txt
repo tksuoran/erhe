@@ -138,6 +138,17 @@ CPMAddPackage(
               "GEOGRAM_WITH_GARGANTUA OFF"
                     "GEOGRAM_WITH_TBB OFF"
 )
+if (geogram_SOURCE_DIR AND EXISTS "${geogram_SOURCE_DIR}/.git")
+    execute_process(
+        COMMAND git rev-parse HEAD
+        WORKING_DIRECTORY "${geogram_SOURCE_DIR}"
+        OUTPUT_VARIABLE ERHE_GEOGRAM_GIT_COMMIT
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+else()
+    set(ERHE_GEOGRAM_GIT_COMMIT "unknown")
+endif()
+add_definitions(-DERHE_GEOGRAM_GIT_COMMIT="${ERHE_GEOGRAM_GIT_COMMIT}")
 
 CPMAddPackage(
     NAME              fmt
@@ -461,6 +472,17 @@ else ()
     message(STATUS "Erhe configured to disable raytracing.")
     add_definitions(-DERHE_RAYTRACE_LIBRARY_NONE)
 endif ()
+if (bvh_SOURCE_DIR AND EXISTS "${bvh_SOURCE_DIR}/.git")
+    execute_process(
+        COMMAND git rev-parse HEAD
+        WORKING_DIRECTORY "${bvh_SOURCE_DIR}"
+        OUTPUT_VARIABLE ERHE_BVH_GIT_COMMIT
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+else()
+    set(ERHE_BVH_GIT_COMMIT "unknown")
+endif()
+add_definitions(-DERHE_BVH_GIT_COMMIT="${ERHE_BVH_GIT_COMMIT}")
 
 if (${ERHE_PHYSICS_LIBRARY} STREQUAL "jolt")
     CPMAddPackage(

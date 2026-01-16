@@ -31,10 +31,15 @@ namespace erhe::raytrace {
 
 using Bvh = bvh::v2::Bvh<bvh::v2::Node<float, 3>>;
 
+[[nodiscard]] auto get_bvh_cache_path(const uint64_t hash_code) -> std::string
+{
+    return fmt::format("cache/bvh/{}/{}", ERHE_BVH_GIT_COMMIT, hash_code);
+}
+
 // TODO Add versioning
 auto save_bvh(const Bvh& bvh, const uint64_t hash_code) -> bool
 {
-    std::string file_name = fmt::format("cache/bvh/{}", hash_code);
+    const std::string file_name = get_bvh_cache_path(hash_code);
     std::ofstream out{file_name, std::ofstream::binary};
     if (!out) {
         return false;
@@ -52,7 +57,7 @@ auto save_bvh(const Bvh& bvh, const uint64_t hash_code) -> bool
 // TODO Add versioning
 auto load_bvh(Bvh& bvh, const uint64_t hash_code) -> bool
 {
-    std::string file_name = fmt::format("cache/bvh/{}", hash_code);
+    const std::string file_name = get_bvh_cache_path(hash_code);
     std::ifstream in{file_name, std::ofstream::binary};
     if (!in) {
         return false;
