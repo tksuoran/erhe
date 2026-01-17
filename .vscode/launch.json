@@ -2,84 +2,63 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name":    "erhe editor GBD",
+            "name":    "CMake Launch/Debug Target GBD",
             "type":    "cppdbg",
             "request": "launch",
-            "cwd":     "${workspaceFolder}/src/editor",
             "program": "${command:cmake.launchTargetPath}",
+            "cwd":     "${workspaceFolder}"
         },
         {
-            "name":    "erhe editor GBD software GL",
+            "name":    "CMake Launch/Debug Target GBD software GL",
             "type":    "cppdbg",
             "request": "launch",
-            "cwd":     "${workspaceFolder}/src/editor",
             "program": "${command:cmake.launchTargetPath}",
-            "environment": [ {"name": "LIBGL_ALWAYS_SOFTWARE", "value": "1"}],
+            "cwd":     "${workspaceFolder}",
+            "environment": [ {"name": "LIBGL_ALWAYS_SOFTWARE", "value": "1"}]
         },
         {
-            "name":        "erhe editor GBD Remote",
-            "type":        "cppdbg",
-            "request":     "launch",
-            "cwd":         "${workspaceFolder}/src/editor",
-            "environment": [ {"name": "DISPLAY", "value": ":0"}],
-            "program":     "${command:cmake.launchTargetPath}",
-        },
-        {
-            "name":    "erhe CMake launchTarget LLDB",
+            "name":    "CMake Launch/Debug Target LLDB",
             "type":    "lldb",
             "request": "launch",
             "program": "${command:cmake.launchTargetPath}",
+            "cwd":     "${workspaceFolder}"
         },
         {
-            "name":    "erhe editor LLDB software GL",
+            "name":    "CMake Launch/Debug Target LLDB software GL",
             "type":    "lldb",
             "request": "launch",
-            "cwd":     "${workspaceFolder}/src/editor",
+            "program": "${command:cmake.launchTargetPath}",
+            "cwd":     "${workspaceFolder}",
             "env":     {
                 "LIBGL_ALWAYS_SOFTWARE": "1",
                 "MESA_DEBUG": "verbose",
                 "LIBGL_DEBUG": "verbose",
                 "MESA_LOG_FILE": "mesa_log.txt"
-            },
-            "program": "${command:cmake.launchTargetPath}",
+            }
         },
         {
-            "name":    "example LLDB",
-            "type":    "lldb",
-            "request": "launch",
-            "cwd":     "${workspaceFolder}/src/example",
-            "program": "${command:cmake.launchTargetPath}",
-        },
-        {
-            "name":    "hextiles LLDB",
-            "type":    "lldb",
-            "request": "launch",
-            "cwd":     "${workspaceFolder}/src/hextiles",
-            "program": "${command:cmake.launchTargetPath}",
-        },
-        {
-            "name":    "editor VS",
+            "name":    "CMake Launch/Debug Target VisualStudio",
             "windows": {
                 "type": "cppvsdbg",
             },
             "request": "launch",
             "program": "${command:cmake.launchTargetPath}",
-            "cwd":     "${workspaceFolder}/src/editor",
+            "cwd":     "${workspaceFolder}"
         },
         {
-            "name":    "Python: Current File",
+            "name":    "Python: erhe/gl",
             "type":    "python",
             "request": "launch",
             "program": "${file}",
             "args":    ["${workspaceFolder}/build/src/erhe/gl"],
-            "console": "integratedTerminal"
+            "console": "integratedTerminal",
         },
         {
             "name":    "Client GDB",
             "type":    "cppdbg",
             "request": "launch",
-            "cwd":     "${workspaceFolder}/src/editor",
             "program": "${workspaceFolder}/src/editor/net-test",
+            "cwd":     "${workspaceFolder}/src/editor",
             "args": [
                 "--client",
                 "--connect-address", "127.0.0.1",
@@ -90,9 +69,9 @@
             "name":    "Client LLDB",
             "type":    "lldb",
             "request": "launch",
-            "cwd":     "${workspaceFolder}/src/editor",
             "console": "integratedTerminal",
             "program": "${workspaceFolder}/src/editor/net-test",
+            "cwd":     "${workspaceFolder}/src/editor",
             "args": [
                 "--client",
                 "--connect-address", "127.0.0.1",
@@ -103,8 +82,8 @@
             "name":    "Server GDB",
             "type":    "cppdbg",
             "request": "launch",
-            "cwd":     "${workspaceFolder}/src/editor",
             "program": "${workspaceFolder}/src/editor/net-test",
+            "cwd":     "${workspaceFolder}/src/editor",
             "args": [
                 "--server",
                 "--listen-address", "0.0.0.0",
@@ -115,9 +94,9 @@
             "name":    "Server LLDB",
             "type":    "lldb",
             "request": "launch",
-            "cwd":     "${workspaceFolder}/src/editor",
             "console": "integratedTerminal",
             "program": "${workspaceFolder}/src/editor/net-test",
+            "cwd":     "${workspaceFolder}/src/editor",
             "args": [
                 "--server",
                 "--listen-address", "0.0.0.0",
