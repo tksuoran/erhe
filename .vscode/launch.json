@@ -38,9 +38,7 @@
         },
         {
             "name":    "CMake Launch/Debug Target VisualStudio",
-            "windows": {
-                "type": "cppvsdbg",
-            },
+            "type":    "cppvsdbg",
             "request": "launch",
             "program": "${command:cmake.launchTargetPath}",
             "cwd":     "${workspaceFolder}"
