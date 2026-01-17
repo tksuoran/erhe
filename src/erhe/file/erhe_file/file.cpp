@@ -331,7 +331,8 @@ void ensure_working_directory_contains(const char* app_name, const char* target)
                 fprintf(stdout, "Executable is %s\n", self_path);
             }
 #endif
-            for (int i = 0; i < 4; ++i) {
+            static const int max_recursion_depth = 32;
+            for (int i = 0; i < max_recursion_depth; ++i) {
                 std::filesystem::current_path(path, error_code);
                 path = std::filesystem::current_path();
                 path_string = path.string();
@@ -345,9 +346,11 @@ void ensure_working_directory_contains(const char* app_name, const char* target)
                     if (exists_erhe_ini) {
                         break;
                     }
-                } else {
-                    path = path.parent_path();
                 }
+                if (path == path.parent_path()) {
+                    break;
+                }
+                path = path.parent_path();
             }
         }
     }
