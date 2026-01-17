@@ -184,8 +184,8 @@ CPMAddPackage(
 
 CPMAddPackage(
     NAME              etl
-    VERSION           20.44.2
-    GIT_TAG           20.44.2
+    VERSION           20.45.0
+    GIT_TAG           20.45.0
     GIT_SHALLOW       TRUE
     GITHUB_REPOSITORY ETLCPP/etl
 )
@@ -324,7 +324,7 @@ CPMAddPackage(
 
 CPMAddPackage(
     NAME              taskflow
-    VERSION           3.11.0
+    VERSION           4.0.0
     GIT_SHALLOW       TRUE
     GITHUB_REPOSITORY taskflow/taskflow
     OPTIONS
