@@ -464,6 +464,7 @@ set_target_properties(
     CXX_STANDARD_REQUIRED         YES
     CXX_EXTENSIONS                NO
     VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+    DEBUGGER_WORKING_DIRECTORY    "${CMAKE_CURRENT_SOURCE_DIR}"
 )
 
 erhe_target_settings(${_target} "erhe-executables")

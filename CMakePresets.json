@@ -1,9 +1,14 @@
 {
-    "version": 3,
+    "version": 10,
+    "cmakeMinimumRequired": {
+        "major": 3,
+        "minor": 31,
+        "patch": 6
+    },
     "configurePresets": [
         {
-            "hidden": true,
-            "name": "Configure_Base",
+            "hidden":    true,
+            "name":      "Base",
             "generator": "Ninja",
             "binaryDir": "${sourceDir}/build/${presetName}",
             "cacheVariables": {
@@ -23,100 +28,64 @@
             }
         },
         {
-            "name":     "Configure_OpenGL_Debug",
-            "inherits": "Configure_Base",
+            "name":     "OpenGL",
+            "hidden":   true,
+            "inherits": "Base",
             "cacheVariables": {
                 "ERHE_GRAPHICS_LIBRARY": "opengl",
-                "CMAKE_BUILD_TYPE":      "Debug"
+                "ERHE_SPIRV":            "OFF"
             }
         },
         {
-            "name":     "Configure_OpenGL_Release",
-            "inherits": "Configure_Base",
+            "name":     "OpenGL_Debug",
+            "inherits": "OpenGL",
             "cacheVariables": {
-                "ERHE_GRAPHICS_LIBRARY": "opengl",
-                "CMAKE_BUILD_TYPE":      "Release"
+                "CMAKE_BUILD_TYPE": "Debug"
             }
         },
         {
-            "name": "Configure_OpenGL_ASAN_Debug",
-            "inherits": "Configure_Base",
+            "name":     "OpenGL_Release",
+            "inherits": "OpenGL",
             "cacheVariables": {
-                "ERHE_GRAPHICS_LIBRARY": "opengl",
-                "ERHE_USE_ASAN":         "ON",
-                "CMAKE_BUILD_TYPE":      "Debug"
+                "CMAKE_BUILD_TYPE": "Release"
             }
         },
         {
-            "name": "Configure_OpenGL_ASAN_Release",
-            "inherits": "Configure_Base",
+            "name":     "OpenGL_ASAN_Debug",
+            "inherits": "OpenGL_Debug",
             "cacheVariables": {
-                "ERHE_GRAPHICS_LIBRARY": "opengl",
-                "ERHE_USE_ASAN":         "ON",
-                "CMAKE_BUILD_TYPE":      "Release"
+                "ERHE_USE_ASAN":    "ON"
             }
         },
         {
-            "name": "Configure_vulkan_Debug",
-            "inherits": "Configure_Base",
+            "name":     "OpenGL_ASAN_Release",
+            "inherits": "OpenGL_Release",
+            "cacheVariables": {
+                "ERHE_USE_ASAN":    "ON"
+            }
+        },
+        {
+            "name":     "Vulkan",
+            "hidden":   true,
+            "inherits": "Base",
             "cacheVariables": {
                 "ERHE_GRAPHICS_LIBRARY": "vulkan",
-                "ERHE_SPIRV":            "ON",
+                "ERHE_SPIRV":            "ON"
+            }
+        },
+        {
+            "name":     "Vulkan_Debug",
+            "inherits": "Vulkan",
+            "cacheVariables": {
                 "CMAKE_BUILD_TYPE":      "Debug"
             }
         },
         {
-            "name": "Configure_vulkan_Release",
-            "inherits": "Configure_Base",
+            "name": "Vulkan_Release",
+            "inherits": "Vulkan",
             "cacheVariables": {
-                "ERHE_GRAPHICS_LIBRARY": "vulkan",
-                "ERHE_SPIRV":            "ON",
                 "CMAKE_BUILD_TYPE":      "Release"
             }
-        }
-    ],
-    "buildPresets": [
-        {
-            "name":            "Build_Base",
-            "hidden":          true,
-            "verbose":         false,
-            "configurePreset": "Configure_Base"
-        },
-        {
-            "name":            "Build_OpenGL_Debug",
-            "displayName":     "Build_OpenGL_Debug",
-            "configurePreset": "Configure_OpenGL_Debug",
-            "configuration":   "Debug"
-        },
-        {
-            "name":            "Build_OpenGL_Release",
-            "displayName":     "Build_OpenGL_Release",
-            "configurePreset": "Configure_OpenGL_Release",
-            "configuration":   "Release"
-        },
-        {
-            "name":            "Build_OpenGL_ASAN_Debug",
-            "displayName":     "Build_OpenGL_ASAN_Debug",
-            "configurePreset": "Configure_OpenGL_ASAN_Debug",
-            "configuration":   "Debug"
-        },
-        {
-            "name":            "Build_OpenGL_ASAN_Release",
-            "displayName":     "Build_OpenGL_ASAN_Release",
-            "configurePreset": "Configure_OpenGL_ASAN_Release",
-            "configuration":   "Release"
-        },
-        {
-            "name":            "Build_vulkan_Debug",
-            "displayName":     "Build_vulkan_Debug",
-            "configurePreset": "Configure_vulkan_Debug",
-            "configuration":   "Debug"
-        },
-        {
-            "name":            "Build_vulkan_Release",
-            "displayName":     "Build_vulkan_Release",
-            "configurePreset": "Configure_vulkan_Release",
-            "configuration":   "Release"
         }
     ]
 }
