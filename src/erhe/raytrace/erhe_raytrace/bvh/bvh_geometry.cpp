@@ -7,6 +7,7 @@
 #include <fmt/chrono.h>
 
 #include "erhe_buffer/ibuffer.hpp"
+#include "erhe_file/file.hpp"
 #include "erhe_raytrace/bvh/bvh_geometry.hpp"
 #include "erhe_raytrace/bvh/bvh_instance.hpp"
 #include "erhe_raytrace/bvh/glm_conversions.hpp"
@@ -31,15 +32,26 @@ namespace erhe::raytrace {
 
 using Bvh = bvh::v2::Bvh<bvh::v2::Node<float, 3>>;
 
-[[nodiscard]] auto get_bvh_cache_path(const uint64_t hash_code) -> std::string
+[[nodiscard]] auto get_bvh_cache_path(const uint64_t hash_code) -> std::filesystem::path
 {
-    return fmt::format("cache/bvh/{}/{}", ERHE_BVH_GIT_COMMIT, hash_code);
+    const std::filesystem::path bvh_cache_path =
+        std::filesystem::path{"cache"} / std::filesystem::path{"bvh"} / std::filesystem::path{ERHE_BVH_GIT_COMMIT};
+    const bool directory_ok = erhe::file::ensure_directory_exists(bvh_cache_path);
+    if (!directory_ok) {
+        return {};
+    }
+    const std::string hash_string = fmt::format("{}", hash_code);
+    return bvh_cache_path / std::filesystem::path{hash_string};
 }
 
 // TODO Add versioning
 auto save_bvh(const Bvh& bvh, const uint64_t hash_code) -> bool
 {
-    const std::string file_name = get_bvh_cache_path(hash_code);
+    const std::filesystem::path cache_path = get_bvh_cache_path(hash_code);
+    const std::string file_name = cache_path.string();
+    if (file_name.empty()) {
+        return false;
+    }
     std::ofstream out{file_name, std::ofstream::binary};
     if (!out) {
         return false;
@@ -57,7 +69,11 @@ auto save_bvh(const Bvh& bvh, const uint64_t hash_code) -> bool
 // TODO Add versioning
 auto load_bvh(Bvh& bvh, const uint64_t hash_code) -> bool
 {
-    const std::string file_name = get_bvh_cache_path(hash_code);
+    const std::filesystem::path cache_path = get_bvh_cache_path(hash_code);
+    const std::string file_name = cache_path.string();
+    if (file_name.empty()) {
+        return false;
+    }
     std::ifstream in{file_name, std::ofstream::binary};
     if (!in) {
         return false;

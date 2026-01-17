@@ -360,4 +360,42 @@ void ensure_working_directory_contains(const char* app_name, const char* target)
     fprintf(stdout, "Current working directory is %s\n", path_string.c_str());
 }
 
+auto ensure_directory_exists(std::filesystem::path path) -> bool
+{
+    std::error_code error_code{};
+    const bool exists = std::filesystem::exists(path, error_code);
+    if (error_code) {
+        log_file->warn(
+            "std::filesystem::exists('{}') returned error code {}: {}",
+            to_string(path),
+            error_code.value(),
+            error_code.message()
+        );
+        return false;
+    }
+    if (exists) {
+        return std::filesystem::is_directory(path);
+    }
+
+    if (path == path.parent_path()) {
+        return false;
+    } else {
+        if (!ensure_directory_exists(path.parent_path())) {
+            return false;
+        }
+        const bool create_ok = std::filesystem::create_directory(path, error_code);
+        if (error_code) {
+            log_file->warn(
+                "std::filesystem::create_directory('{}') returned error code {}: {}",
+                to_string(path),
+                error_code.value(),
+                error_code.message()
+            );
+            return false;
+        }
+        return create_ok;
+
+    }
+}
+
 } // namespace erhe::file
