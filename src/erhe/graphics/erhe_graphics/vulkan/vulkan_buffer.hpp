@@ -22,14 +22,10 @@ public:
     auto operator=      (Buffer_impl&& old) noexcept -> Buffer_impl&;
 
     [[nodiscard]] auto get_capacity_byte_count () const noexcept -> std::size_t;
-    [[nodiscard]] auto allocate_bytes          (std::size_t byte_count, std::size_t alignment = 64) noexcept -> std::optional<std::size_t>;
     [[nodiscard]] auto get_debug_label         () const noexcept -> const std::string&;
-    [[nodiscard]] auto get_used_byte_count     () const -> std::size_t;
-    [[nodiscard]] auto get_available_byte_count(std::size_t alignment = 64) const noexcept -> std::size_t;
-
     [[nodiscard]] auto get_map                 () const -> std::span<std::byte>;
-    void clear                () noexcept;
     void unmap                () noexcept;
+    void invalidate           (std::size_t byte_offset, std::size_t byte_count) noexcept;
     void flush_bytes          (std::size_t byte_offset, std::size_t byte_count) noexcept;
     void flush_and_unmap_bytes(std::size_t byte_count) noexcept;
     void dump                 () const noexcept;
@@ -37,22 +33,21 @@ public:
     auto begin_write(std::size_t byte_offset, std::size_t byte_count) noexcept -> std::span<std::byte>;
     void end_write  (std::size_t byte_offset, std::size_t byte_count) noexcept;
 
-    template <typename T>
-    [[nodiscard]]
-    auto map_elements(const std::size_t element_offset, const std::size_t element_count, Buffer_map_flags flags = Buffer_map_flags::none) noexcept -> std::span<T>
+    template <typename T> [[nodiscard]]
+    auto map_elements(const std::size_t element_offset, const std::size_t element_count) noexcept -> std::span<T>
     {
         const std::size_t byte_offset = element_offset * sizeof(T);
         const std::size_t byte_count  = element_count * sizeof(T);
-        auto raw_map = map_bytes(byte_offset, byte_count, flags);
+        auto raw_map = map_bytes(byte_offset, byte_count);
         return std::span(
             reinterpret_cast<T*>(raw_map.data()),
             raw_map.size_bytes() / sizeof(T)
         );
     }
 
-    auto map_all_bytes(Buffer_map_flags flags) noexcept -> std::span<std::byte>;
+    auto map_all_bytes() noexcept -> std::span<std::byte>;
 
-    auto map_bytes(const std::size_t byte_offset, const std::size_t byte_count, Buffer_map_flags flags) noexcept -> std::span<std::byte>;
+    auto map_bytes(const std::size_t byte_offset, const std::size_t byte_count) noexcept -> std::span<std::byte>;
 
 private:
     friend bool operator==(const Buffer_impl& lhs, const Buffer_impl& rhs) noexcept;
@@ -64,6 +59,8 @@ private:
     Device&       m_device;
     VmaAllocation m_vma_allocation     {VK_NULL_HANDLE};
     VkBuffer      m_vk_buffer          {VK_NULL_HANDLE};	
+    VkMemoryType  m_vk_memory_type     {};
+    bool          m_persistently_mapped{false};
 
     Buffer_usage  m_usage                                 {0};
     uint64_t      m_memory_allocation_create_flag_bit_mask{0};
@@ -71,12 +68,11 @@ private:
     uint64_t      m_preferred_memory_property_bit_mask    {0};
     std::string   m_debug_label                           {};
     std::size_t   m_capacity_byte_count                   {0};
-    std::size_t   m_next_free_byte                        {0};
 
+    std::span<std::byte> m_map_all;
     std::span<std::byte> m_map;
-    std::size_t          m_map_byte_offset{0};
-    Buffer_map_flags     m_map_flags      {0};
-    bool                 m_allocated      {false};
+    std::size_t          m_map_byte_offset{0}; // m_map offset in m_map_all
+    bool                 m_allocated {false};
 };
 
 class Buffer_impl_hash

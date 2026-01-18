@@ -22,29 +22,27 @@ public:
     [[nodiscard]] auto get_map                 () const -> std::span<std::byte>;
     [[nodiscard]] auto gl_name                 () const noexcept -> unsigned int;
     void unmap                () noexcept;
+    void invalidate           (std::size_t byte_offset, std::size_t byte_count) noexcept;
     void flush_bytes          (std::size_t byte_offset, std::size_t byte_count) noexcept;
     void flush_and_unmap_bytes(std::size_t byte_count) noexcept;
     void dump                 () const noexcept;
-
-    auto begin_write(std::size_t byte_offset, std::size_t byte_count) noexcept -> std::span<std::byte>;
-    void end_write  (std::size_t byte_offset, std::size_t byte_count) noexcept;
+    auto begin_write          (std::size_t byte_offset, std::size_t byte_count) noexcept -> std::span<std::byte>;
+    void end_write            (std::size_t byte_offset, std::size_t byte_count) noexcept;
+    auto map_all_bytes        () noexcept -> std::span<std::byte>;
+    auto map_bytes            (std::size_t byte_offset, std::size_t byte_count) noexcept -> std::span<std::byte>;
 
     template <typename T>
     [[nodiscard]]
-    auto map_elements(const std::size_t element_offset, const std::size_t element_count, const Buffer_map_flags flags = Buffer_map_flags::none) noexcept -> std::span<T>
+    auto map_elements(const std::size_t element_offset, const std::size_t element_count) noexcept -> std::span<T>
     {
         const std::size_t byte_offset = element_offset * sizeof(T);
-        const std::size_t byte_count  = element_count * sizeof(T);
-        auto raw_map = map_bytes(byte_offset, byte_count, flags);
+        const std::size_t byte_count  = element_count  * sizeof(T);
+        auto raw_map = map_bytes(byte_offset, byte_count);
         return std::span(
             reinterpret_cast<T*>(raw_map.data()),
             raw_map.size_bytes() / sizeof(T)
         );
     }
-
-    auto map_all_bytes(Buffer_map_flags flags) noexcept -> std::span<std::byte>;
-
-    auto map_bytes(std::size_t byte_offset, std::size_t byte_count, Buffer_map_flags flags) noexcept -> std::span<std::byte>;
 
     friend class Vertex_input_state;
     friend class Texture;
@@ -53,24 +51,23 @@ private:
     void allocate_storage(const void* init_data = nullptr);
     void capability_check(gl::Buffer_storage_mask storage_mask);
     void capability_check(gl::Map_buffer_access_mask access_mask);
-    [[nodiscard]] auto get_gl_storage_mask() -> gl::Buffer_storage_mask;
-    [[nodiscard]] auto get_gl_access_mask (Buffer_map_flags flags) const -> gl::Map_buffer_access_mask;
-
-    Device&                        m_device;
-    Gl_buffer                      m_handle;
-    std::size_t                    m_capacity_byte_count                   {0};
-    Buffer_usage                   m_usage                                 {0};
-    uint64_t                       m_memory_allocation_create_flag_bit_mask{0};
-    uint64_t                       m_required_memory_property_bit_mask     {0};
-    uint64_t                       m_preferred_memory_property_bit_mask    {0};
-    std::string                    m_debug_label                           {};
+    [[nodiscard]] auto get_gl_storage_mask() const -> gl::Buffer_storage_mask;
+    [[nodiscard]] auto get_gl_access_mask () const -> gl::Map_buffer_access_mask;
 
     static constexpr const char* s_pool_name = "glBuffer";
+
+    Device&              m_device;
+    Gl_buffer            m_handle;
+    std::size_t          m_capacity_byte_count                   {0};
+    Buffer_usage         m_usage                                 {0};
+    uint64_t             m_memory_allocation_create_flag_bit_mask{0};
+    uint64_t             m_required_memory_property_bit_mask     {0};
+    uint64_t             m_preferred_memory_property_bit_mask    {0};
+    std::string          m_debug_label                           {};
 
     // Last MapBuffer
     std::span<std::byte> m_map;
     std::size_t          m_map_byte_offset{0};
-    Buffer_map_flags     m_map_flags      {0};
     bool                 m_allocated      {false};
 };
 

@@ -292,13 +292,6 @@ public:
 
 [[nodiscard]] auto get_memory_usage_from_memory_properties(uint64_t memory_property_bit_mask) -> Memory_usage;
 
-enum class Buffer_map_flags : unsigned int {
-    none              = 0x00,
-    invalidate_range  = 0x01,
-    invalidate_buffer = 0x02,
-    explicit_flush    = 0x04
-};
-
 enum class Memory_barrier_mask : unsigned int {
     all_barrier_bits                 = 0xFFFFFFFFu,
     atomic_counter_barrier_bit       = 0x00001000u,
@@ -351,14 +344,12 @@ operator &(Enum lhs, Enum rhs)
 }
 
 template<> struct Enable_bit_mask_operators<Buffer_usage       > { static const bool enable = true; };
-template<> struct Enable_bit_mask_operators<Buffer_map_flags   > { static const bool enable = true; };
 template<> struct Enable_bit_mask_operators<Memory_barrier_mask> { static const bool enable = true; };
 
 [[nodiscard]] auto to_string       (Buffer_usage      usage      ) -> std::string;
 [[nodiscard]] auto c_str           (Memory_usage      memory_sage) -> const char*;
 [[nodiscard]] auto to_string_memory_allocation_create_flag_bit_mask(uint64_t mask) -> std::string;
 [[nodiscard]] auto to_string_memory_property_flag_bit_mask         (uint64_t mask) -> std::string;
-[[nodiscard]] auto to_string       (Buffer_map_flags  flags     ) -> std::string;
 [[nodiscard]] auto get_buffer_usage(Buffer_target     target    ) -> Buffer_usage;
 
 [[nodiscard]] auto to_glsl_attribute_type(erhe::dataformat::Format format) -> Glsl_type;

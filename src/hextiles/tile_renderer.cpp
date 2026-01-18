@@ -111,7 +111,7 @@ Tile_renderer::Tile_renderer(
             .capacity_byte_count                    = index_stride * index_count,
             .memory_allocation_create_flag_bit_mask = 0,
             .usage                                  = erhe::graphics::Buffer_usage::index,
-            .required_memory_property_bit_mask      = erhe::graphics::Memory_property_flag_bit_mask::host_write,  // CPU to GPU
+            .required_memory_property_bit_mask      = erhe::graphics::Memory_property_flag_bit_mask::none,  // CPU to GPU
             .preferred_memory_property_bit_mask     = erhe::graphics::Memory_property_flag_bit_mask::device_local,
             .debug_label                            = "Tile_renderer index buffer"
         }
@@ -163,24 +163,23 @@ Tile_renderer::Tile_renderer(
         }
     }
 {
-    // Prefill index buffer
-    erhe::graphics::Scoped_buffer_mapping<uint32_t> index_buffer_map{
-        m_index_buffer, 0, index_count, erhe::graphics::Buffer_map_flags::none
-    };
+    {
+        std::vector<uint32_t> index_buffer_data(index_count);
 
-    // TODO Use staging buffer index buffer uploads
-    const auto& gpu_index_data = index_buffer_map.span();
-    size_t      offset      {0};
-    uint32_t    vertex_index{0};
-    for (unsigned int i = 0; i < max_quad_count; ++i) {
-        // This used to be triangle fan but is now triangle strip
-        gpu_index_data[offset + 0] = vertex_index;
-        gpu_index_data[offset + 1] = vertex_index + 1;
-        gpu_index_data[offset + 2] = vertex_index + 3;
-        gpu_index_data[offset + 3] = vertex_index + 2;
-        gpu_index_data[offset + 4] = uint32_primitive_restart;
-        vertex_index += 4;
-        offset += 5;
+        size_t   offset      {0};
+        uint32_t vertex_index{0};
+        for (unsigned int i = 0; i < max_quad_count; ++i) {
+            // This used to be triangle fan but is now triangle strip
+            index_buffer_data[offset + 0] = vertex_index;
+            index_buffer_data[offset + 1] = vertex_index + 1;
+            index_buffer_data[offset + 2] = vertex_index + 3;
+            index_buffer_data[offset + 3] = vertex_index + 2;
+            index_buffer_data[offset + 4] = uint32_primitive_restart;
+            vertex_index += 4;
+            offset += 5;
+        }
+
+        m_graphics_device.upload_to_buffer(m_index_buffer, 0, index_buffer_data.data(), index_count * sizeof(uint32_t));
     }
 
     compose_tileset_texture();

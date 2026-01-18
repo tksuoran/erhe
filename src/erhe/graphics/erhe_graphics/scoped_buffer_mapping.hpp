@@ -11,13 +11,12 @@ class Scoped_buffer_mapping
 {
 public:
     Scoped_buffer_mapping(
-        Buffer&                buffer,
-        const std::size_t      element_offset,
-        const std::size_t      element_count,
-        const Buffer_map_flags map_flags
+        Buffer&           buffer,
+        const std::size_t element_offset,
+        const std::size_t element_count
     )
         : m_buffer{buffer}
-        , m_span  {buffer.map_elements<T>(element_offset, element_count, map_flags)}
+        , m_span  {buffer.map_elements<T>(element_offset, element_count)}
     {
     }
 

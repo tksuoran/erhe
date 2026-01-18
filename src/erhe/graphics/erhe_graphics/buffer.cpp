@@ -68,6 +68,10 @@ void Buffer::unmap() noexcept
 {
     m_impl->unmap();
 }
+void Buffer::invalidate(std::size_t byte_offset, std::size_t byte_count) noexcept
+{
+    m_impl->invalidate(byte_offset, byte_count);
+}
 void Buffer::flush_bytes(std::size_t byte_offset, std::size_t byte_count) noexcept
 {
     m_impl->flush_bytes(byte_offset, byte_count);
@@ -88,13 +92,13 @@ void Buffer::end_write(std::size_t byte_offset, std::size_t byte_count) noexcept
 {
     m_impl->end_write(byte_offset, byte_count);
 }
-auto Buffer::map_all_bytes(Buffer_map_flags flags) noexcept -> std::span<std::byte>
+auto Buffer::map_all_bytes() noexcept -> std::span<std::byte>
 {
-    return m_impl->map_all_bytes(flags);
+    return m_impl->map_all_bytes();
 }
-auto Buffer::map_bytes(const std::size_t byte_offset, const std::size_t byte_count, Buffer_map_flags flags) noexcept -> std::span<std::byte>
+auto Buffer::map_bytes(const std::size_t byte_offset, const std::size_t byte_count) noexcept -> std::span<std::byte>
 {
-    return m_impl->map_bytes(byte_offset, byte_count, flags);
+    return m_impl->map_bytes(byte_offset, byte_count);
 }
 auto Buffer::get_impl() -> Buffer_impl&
 {

@@ -1,5 +1,3 @@
-// #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
-
 #include "erhe_scene_renderer/cube_instance_buffer.hpp"
 #include "erhe_scene_renderer/buffer_binding_points.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
@@ -54,11 +52,7 @@ Cube_instance_buffer::Cube_instance_buffer(
     }
     , m_cube_count{cubes.size()}
 {
-    std::span<uint32_t> gpu_data = m_buffer.map_elements<uint32_t>(
-        0,
-        cubes.size(),
-        erhe::graphics::Buffer_map_flags::none
-    );
+    std::span<uint32_t> gpu_data = m_buffer.map_elements<uint32_t>(0, cubes.size());
     std::copy(cubes.begin(), cubes.end(), gpu_data.begin());
     m_buffer.unmap();
 }

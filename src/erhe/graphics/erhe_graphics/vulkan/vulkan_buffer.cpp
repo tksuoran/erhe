@@ -71,6 +71,8 @@ Buffer_impl::Buffer_impl(Device& device, const Buffer_create_info& create_info) 
         log_swapchain->critical("vmaCreateBuffer() failed with {} {}", static_cast<int32_t>(result), c_str(result));
         abort();
     }
+    ERHE_VERIFY(m_vk_buffer != VK_NULL_HANDLE);
+    ERHE_VERIFY(m_vma_allocation != VK_NULL_HANDLE);
 
     if (!create_info.debug_label.empty()) {
         m_debug_label = create_info.debug_label;
@@ -81,12 +83,28 @@ Buffer_impl::Buffer_impl(Device& device, const Buffer_create_info& create_info) 
         );
     }
 
+    const uint64_t requested_memory_property_flags =
+        create_info.required_memory_property_bit_mask |
+        create_info.preferred_memory_property_bit_mask;
+
+    VmaAllocationInfo allocation_info{};
+    vmaGetAllocationInfo(allocator, m_vma_allocation, &allocation_info);
+    ERHE_VERIFY(allocation_info.size >= create_info.capacity_byte_count);
+    m_vk_memory_type = device_impl.get_memory_type(allocation_info.memoryType);
+    const bool host_visible  = m_vk_memory_type.propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+    const bool host_coherent = m_vk_memory_type.propertyFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+
+    using namespace erhe::utility;
+    m_persistently_mapped = host_visible && test_bit_set(
+        requested_memory_property_flags,
+        Memory_property_flag_bit_mask::host_persistent
+    );
+
+    if (m_persistently_mapped) {
+        map_all_bytes();
+    }
+
     if (create_info.init_data != nullptr) {
-        VmaAllocationInfo allocation_info{};
-        vmaGetAllocationInfo(allocator, m_vma_allocation, &allocation_info);
-        const VkMemoryType& memory_type = device_impl.get_memory_type(allocation_info.memoryType);
-        const bool host_visible  = memory_type.propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
-        const bool host_coherent = memory_type.propertyFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
         if (host_visible == false) {
             // TODO Use staging buffer to upload data to not-host visible memory
             ERHE_FATAL(
@@ -96,13 +114,10 @@ Buffer_impl::Buffer_impl(Device& device, const Buffer_create_info& create_info) 
             abort();
         }
 
-        void* mapped_data = nullptr;
-        result = vmaMapMemory(allocator, m_vma_allocation, &mapped_data);
-        if (result != VK_SUCCESS) {
-            log_swapchain->critical("vmaMapMemory() failed with {} {}", static_cast<int32_t>(result), c_str(result));
-            abort();
+        if (!m_persistently_mapped) {
+            map_all_bytes();
         }
-        std::memcpy(mapped_data, create_info.init_data, create_info.capacity_byte_count);
+        std::memcpy(m_map.data(), create_info.init_data, create_info.capacity_byte_count);
         if (!host_coherent) {
             result = vmaFlushAllocation(allocator, m_vma_allocation, 0, create_info.capacity_byte_count);
             // const VkMappedMemoryRange memory_range{
@@ -119,7 +134,9 @@ Buffer_impl::Buffer_impl(Device& device, const Buffer_create_info& create_info) 
             }
         }
 
-        //vmaUnmapMemory(allocator, m_vma_allocation);
+        if (!m_persistently_mapped) {
+            unmap();
+        }
     }
 }
 
@@ -130,7 +147,22 @@ Buffer_impl::Buffer_impl(Device& device)
 
 Buffer_impl::~Buffer_impl() noexcept
 {
-    // TODO
+    Device_impl& device_impl = m_device.get_impl();
+
+    const bool          persistently_mapped = m_persistently_mapped;
+    const VmaAllocation vma_allocation      = m_vma_allocation;
+    const VkBuffer      vk_buffer           = m_vk_buffer;
+
+    device_impl.add_completion_handler(
+        [&device_impl, persistently_mapped, vma_allocation, vk_buffer]() {
+            VmaAllocator& allocator = device_impl.get_allocator();
+
+            if (persistently_mapped) {
+                vmaUnmapMemory(allocator, vma_allocation);
+            }
+            vmaDestroyBuffer(allocator, vk_buffer, vma_allocation);
+        }
+    );
 }
 
 Buffer_impl::Buffer_impl(Buffer_impl&& old) noexcept
@@ -138,8 +170,9 @@ Buffer_impl::Buffer_impl(Buffer_impl&& old) noexcept
     , m_vma_allocation     {std::exchange(old.m_vma_allocation, VK_NULL_HANDLE)}
     , m_vk_buffer          {std::exchange(old.m_vk_buffer,      VK_NULL_HANDLE)}
     , m_debug_label        {std::move(old.m_debug_label)}
+    , m_map                {std::exchange(old.m_map, {})}
+    , m_map_byte_offset    {std::exchange(old.m_map_byte_offset, 0)}
     , m_capacity_byte_count{std::exchange(old.m_capacity_byte_count, 0)}
-    , m_next_free_byte     {std::exchange(old.m_next_free_byte,      0)}
 {
 }
 
@@ -148,14 +181,15 @@ auto Buffer_impl::operator=(Buffer_impl&& old) noexcept -> Buffer_impl&
     m_vma_allocation      = std::exchange(old.m_vma_allocation, VK_NULL_HANDLE);
     m_vk_buffer           = std::exchange(old.m_vk_buffer,      VK_NULL_HANDLE);
     m_debug_label         = std::move(old.m_debug_label);
+    m_map                 = std::exchange(old.m_map, {});
+    m_map_byte_offset     = std::exchange(old.m_map_byte_offset, 0);
     m_capacity_byte_count = std::exchange(old.m_capacity_byte_count, 0);
-    m_next_free_byte      = std::exchange(old.m_next_free_byte,      0);
     return *this;
 }
 
 auto Buffer_impl::get_map() const -> std::span<std::byte>
 {
-    return {};
+    return m_map;
 }
 
 auto Buffer_impl::get_debug_label() const noexcept -> const std::string&
@@ -163,75 +197,162 @@ auto Buffer_impl::get_debug_label() const noexcept -> const std::string&
     return m_debug_label;
 }
 
-void Buffer_impl::clear() noexcept
+auto Buffer_impl::begin_write(const std::size_t byte_offset, std::size_t byte_count) noexcept -> std::span<std::byte>
 {
-    m_next_free_byte = 0;
-}
+    ERHE_VERIFY(m_vk_buffer != VK_NULL_HANDLE);
+    ERHE_VERIFY(m_vma_allocation != VK_NULL_HANDLE);
 
-auto Buffer_impl::allocate_bytes(const std::size_t byte_count, const std::size_t alignment) noexcept -> std::optional<std::size_t>
-{
-    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_allocate_mutex};
-    const std::size_t offset         = erhe::utility::align_offset_non_power_of_two(m_next_free_byte, alignment);
-    const std::size_t next_free_byte = offset + byte_count;
-    if (next_free_byte > m_capacity_byte_count) {
-        const std::size_t available_byte_count = (offset < m_capacity_byte_count) ? m_capacity_byte_count - offset : 0;
-        log_buffer->error(
-            "erhe::graphics::Buffer_impl::allocate_bytes(): Out of memory requesting {} bytes, currently allocated {}, total size {}, free {} bytes",
-            byte_count,
-            m_next_free_byte,
-            m_capacity_byte_count,
-            available_byte_count
-        );
-        return {};
+    if (!m_persistently_mapped) {
+        ERHE_VERIFY(m_map.empty());
+        map_all_bytes();
+
+        if (byte_count == 0) {
+            byte_count = m_capacity_byte_count - byte_offset;
+        } else {
+            byte_count = std::min(byte_count, m_capacity_byte_count - byte_offset);
+        }
+
     }
 
-    m_next_free_byte = next_free_byte;
-    ERHE_VERIFY(m_next_free_byte <= m_capacity_byte_count);
-    log_buffer->trace("buffer allocated {} bytes at offset {}", byte_count, offset);
-    return offset;
-}
-
-auto Buffer_impl::begin_write(const std::size_t byte_offset, const std::size_t byte_count) noexcept -> std::span<std::byte>
-{
-    ERHE_FATAL("not implemented");
-    static_cast<void>(byte_offset);
-    static_cast<void>(byte_count);
-    return {};
+    m_map = m_map_all.subspan(byte_offset, byte_count);
+    m_map_byte_offset = byte_offset;
+    ERHE_VERIFY(!m_map.empty());
+    return m_map;
 }
 
 void Buffer_impl::end_write(const std::size_t byte_offset, const std::size_t byte_count) noexcept
 {
-    ERHE_FATAL("not implemented");
-    static_cast<void>(byte_offset);
-    static_cast<void>(byte_count);
+    ERHE_VERIFY(!m_map.empty());
+    ERHE_VERIFY(m_vk_buffer != VK_NULL_HANDLE);
+    ERHE_VERIFY(m_vma_allocation != VK_NULL_HANDLE);
+
+    if (byte_count > 0) {
+        const bool host_coherent = m_vk_memory_type.propertyFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+        if (!host_coherent) {
+            flush_bytes(byte_offset, byte_count);
+        }
+    }
+    if (!m_persistently_mapped) {
+        unmap();
+    }
 }
 
-auto Buffer_impl::map_all_bytes(Buffer_map_flags flags) noexcept -> std::span<std::byte>
+auto Buffer_impl::map_all_bytes() noexcept -> std::span<std::byte>
 {
-    ERHE_FATAL("not implemented");
-    static_cast<void>(flags);
-    return {};
+    ERHE_VERIFY(m_vk_buffer != VK_NULL_HANDLE);
+    ERHE_VERIFY(m_vma_allocation != VK_NULL_HANDLE);
+
+    VmaAllocator& allocator = m_device.get_impl().get_allocator();
+    VkResult      result    = VK_SUCCESS;
+
+    void* map_pointer = nullptr;
+    result = vmaMapMemory(allocator, m_vma_allocation, &map_pointer);
+    if (result != VK_SUCCESS) {
+        log_swapchain->critical("vmaMapMemory() failed with {} {}", static_cast<int32_t>(result), c_str(result));
+        abort();
+    }
+    m_map_all = std::span<std::byte>{
+        static_cast<std::byte*>(map_pointer),
+        m_capacity_byte_count
+    };
+    m_map = m_map_all;
+    m_map_byte_offset = 0;
+    return m_map;
 }
 
-auto Buffer_impl::map_bytes(const std::size_t byte_offset, const std::size_t byte_count, Buffer_map_flags flags) noexcept -> std::span<std::byte>
+auto Buffer_impl::map_bytes(const std::size_t byte_offset, std::size_t byte_count) noexcept -> std::span<std::byte>
 {
-    ERHE_FATAL("not implemented");
-    static_cast<void>(byte_offset);
-    static_cast<void>(byte_count);
-    static_cast<void>(flags);
-    return {};
+    ERHE_VERIFY(m_vk_buffer != VK_NULL_HANDLE);
+    ERHE_VERIFY(m_vma_allocation != VK_NULL_HANDLE);
+
+    if (!m_persistently_mapped) {
+        ERHE_VERIFY(m_map.empty());
+        map_all_bytes();
+
+        if (byte_count == 0) {
+            byte_count = m_capacity_byte_count - byte_offset;
+        } else {
+            byte_count = std::min(byte_count, m_capacity_byte_count - byte_offset);
+        }
+    }
+
+    m_map = m_map_all.subspan(byte_offset, byte_count);
+    m_map_byte_offset = byte_offset;
+    ERHE_VERIFY(!m_map.empty());
+    return m_map;
 }
 
 void Buffer_impl::unmap() noexcept
 {
-    ERHE_FATAL("not implemented");
+    ERHE_VERIFY(m_vk_buffer != VK_NULL_HANDLE);
+    ERHE_VERIFY(m_vma_allocation != VK_NULL_HANDLE);
+
+    ERHE_VERIFY(m_map.data() != nullptr);
+    VmaAllocator& allocator = m_device.get_impl().get_allocator();
+    vmaUnmapMemory(allocator, m_vma_allocation);
+    m_map = {};
+    m_map_all = {};
+    m_map_byte_offset = 0;
+
+}
+
+void Buffer_impl::invalidate(const std::size_t byte_offset, const std::size_t byte_count) noexcept
+{
+    ERHE_VERIFY(m_vk_buffer != VK_NULL_HANDLE);
+    ERHE_VERIFY(m_vma_allocation != VK_NULL_HANDLE);
+    ERHE_VERIFY(m_map.data() != nullptr);
+
+    VkDevice      vulkan_device = m_device.get_impl().get_vulkan_device();
+    VmaAllocator& allocator     = m_device.get_impl().get_allocator();
+    VkResult      result        = VK_SUCCESS;
+
+    VmaAllocationInfo allocation_info{};
+    vmaGetAllocationInfo(allocator, m_vma_allocation, &allocation_info);
+
+    const VkMappedMemoryRange memory_range{
+        .sType  = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+        .pNext  = nullptr,
+        .memory = allocation_info.deviceMemory,
+        .offset = allocation_info.offset + byte_offset,
+        .size   = byte_count
+    };
+    result = vkInvalidateMappedMemoryRanges(vulkan_device, 1, &memory_range);
+    if (result != VK_SUCCESS) {
+        log_context->critical("vkInvalidateMappedMemoryRanges() failed with {} {}", static_cast<int32_t>(result), c_str(result));
+        abort();
+    }
 }
 
 void Buffer_impl::flush_bytes(const std::size_t byte_offset, const std::size_t byte_count) noexcept
 {
-    ERHE_FATAL("not implemented");
-    static_cast<void>(byte_offset);
-    static_cast<void>(byte_count);
+    ERHE_VERIFY(m_vk_buffer != VK_NULL_HANDLE);
+    ERHE_VERIFY(m_vma_allocation != VK_NULL_HANDLE);
+    ERHE_VERIFY(m_map.data() != nullptr);
+
+    const bool host_coherent = m_vk_memory_type.propertyFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    if (host_coherent) {
+        return;
+    }
+
+    VkDevice      vulkan_device = m_device.get_impl().get_vulkan_device();
+    VmaAllocator& allocator     = m_device.get_impl().get_allocator();
+    VkResult      result        = VK_SUCCESS;
+
+    VmaAllocationInfo allocation_info{};
+    vmaGetAllocationInfo(allocator, m_vma_allocation, &allocation_info);
+
+    const VkMappedMemoryRange memory_range{
+        .sType  = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+        .pNext  = nullptr,
+        .memory = allocation_info.deviceMemory,
+        .offset = allocation_info.offset + byte_offset,
+        .size   = byte_count
+    };
+    result = vkFlushMappedMemoryRanges(vulkan_device, 1, &memory_range);
+    if (result != VK_SUCCESS) {
+        log_context->critical("vkFlushMappedMemoryRanges() failed with {} {}", static_cast<int32_t>(result), c_str(result));
+        abort();
+    }
 }
 
 void Buffer_impl::dump() const noexcept
@@ -241,22 +362,8 @@ void Buffer_impl::dump() const noexcept
 
 void Buffer_impl::flush_and_unmap_bytes(const std::size_t byte_count) noexcept
 {
-    ERHE_FATAL("not implemented");
-    static_cast<void>(byte_count);
-}
-
-auto Buffer_impl::get_used_byte_count() const -> std::size_t
-{
-    return m_next_free_byte;
-}
-
-auto Buffer_impl::get_available_byte_count(std::size_t alignment) const noexcept -> std::size_t
-{
-    std::size_t aligned_offset = erhe::utility::align_offset_non_power_of_two(m_next_free_byte, alignment);
-    if (aligned_offset >= m_capacity_byte_count) {
-        return 0;
-    }
-    return m_capacity_byte_count - aligned_offset;
+    flush_bytes(0, byte_count);
+    unmap();
 }
 
 auto Buffer_impl::get_capacity_byte_count() const noexcept -> std::size_t

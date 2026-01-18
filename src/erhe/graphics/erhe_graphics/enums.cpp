@@ -90,25 +90,6 @@ auto to_string_memory_property_flag_bit_mask(const uint64_t mask) -> std::string
     process_flag(Memory_property_flag_bit_mask::lazily_allocated, "lazily_allocated");
     return ss.str();
 }
-auto to_string(const Buffer_map_flags flags) -> std::string
-{
-    using namespace erhe::utility;
-    std::stringstream ss;
-    bool is_empty = true;
-    auto process_flag = [&](const Buffer_map_flags flag, const char* name) {
-        if (test_bit_set(flags, flag)) {
-            if (!is_empty) {
-                ss << " | ";
-            }
-            ss << name;
-            is_empty = false;
-        }
-    };
-    process_flag(Buffer_map_flags::explicit_flush,    "explicit_flush");
-    process_flag(Buffer_map_flags::invalidate_range,  "invalidate_range");
-    process_flag(Buffer_map_flags::invalidate_buffer, "invalidate_buffer");
-    return ss.str();
-}
 
 auto glsl_type_c_str(const Glsl_type type) -> const char*
 {

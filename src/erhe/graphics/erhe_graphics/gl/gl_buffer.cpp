@@ -21,7 +21,7 @@
 
 namespace erhe::graphics {
 
-[[nodiscard]] auto Buffer_impl::get_gl_storage_mask() -> gl::Buffer_storage_mask
+[[nodiscard]] auto Buffer_impl::get_gl_storage_mask() const -> gl::Buffer_storage_mask
 {
     // dynamic_storage_bit
     //      The contents of the data store may be updated after creation through calls
@@ -110,7 +110,7 @@ namespace erhe::graphics {
     return gl_storage;
 }
 
-auto Buffer_impl::get_gl_access_mask(Buffer_map_flags flags) const -> gl::Map_buffer_access_mask
+auto Buffer_impl::get_gl_access_mask() const -> gl::Map_buffer_access_mask
 {
     //  MAP_READ_BIT
     //      the returned pointer may be used to read buffer object data.
@@ -186,6 +186,8 @@ auto Buffer_impl::get_gl_access_mask(Buffer_map_flags flags) const -> gl::Map_bu
         if (coherent) {
             ERHE_VERIFY(persistent); // GL requires persistent for coherent buffers
             gl_access_mask = gl_access_mask | gl::Map_buffer_access_mask::map_coherent_bit;
+        } else {
+            gl_access_mask = gl_access_mask | gl::Map_buffer_access_mask::map_flush_explicit_bit;
         }
     } else {
         // Persistent buffers are not available - required persistent/coherent cause error
@@ -201,15 +203,6 @@ auto Buffer_impl::get_gl_access_mask(Buffer_map_flags flags) const -> gl::Map_bu
         }
     }
 
-    if (test_bit_set(flags, Buffer_map_flags::explicit_flush)) {
-        gl_access_mask = gl_access_mask | gl::Map_buffer_access_mask::map_flush_explicit_bit;
-    }
-    if (test_bit_set(flags, Buffer_map_flags::invalidate_range)) {
-        gl_access_mask = gl_access_mask | gl::Map_buffer_access_mask::map_invalidate_range_bit;
-    }
-    if (test_bit_set(flags, Buffer_map_flags::invalidate_range)) {
-        gl_access_mask = gl_access_mask | gl::Map_buffer_access_mask::map_invalidate_buffer_bit;
-    }
     return gl_access_mask;
 }
 
@@ -280,7 +273,7 @@ void Buffer_impl::allocate_storage(const void* init_data)
 
     const bool map_persistent = erhe::utility::test_bit_set(gl_storage_mask, gl::Buffer_storage_mask::map_persistent_bit);
     if (map_persistent) {
-        map_bytes(0, m_capacity_byte_count, Buffer_map_flags::none);
+        map_bytes(0, m_capacity_byte_count);
     }
 
     ERHE_VERIFY(gl_name() != 0);
@@ -326,34 +319,32 @@ Buffer_impl::~Buffer_impl() noexcept
     }
 }
 
-Buffer_impl::Buffer_impl(Buffer_impl&& other) noexcept
-    : m_device                            {other.m_device}
-    , m_handle                            {std::move(other.m_handle)}
-    , m_capacity_byte_count               {other.m_capacity_byte_count}
-    , m_usage                             {other.m_usage     }
-    , m_required_memory_property_bit_mask {other.m_required_memory_property_bit_mask}
-    , m_preferred_memory_property_bit_mask{other.m_preferred_memory_property_bit_mask}
-    , m_debug_label                       {other.m_debug_label}
-    , m_map                               {other.m_map}
-    , m_map_byte_offset                   {other.m_map_byte_offset}
-    , m_map_flags                         {other.m_map_flags}
-    , m_allocated                         {std::exchange(other.m_allocated, false)}
+Buffer_impl::Buffer_impl(Buffer_impl&& old) noexcept
+    : m_device                            {old.m_device}
+    , m_handle                            {std::move(old.m_handle)}
+    , m_capacity_byte_count               {old.m_capacity_byte_count}
+    , m_usage                             {old.m_usage     }
+    , m_required_memory_property_bit_mask {old.m_required_memory_property_bit_mask}
+    , m_preferred_memory_property_bit_mask{old.m_preferred_memory_property_bit_mask}
+    , m_debug_label                       {old.m_debug_label}
+    , m_map                               {old.m_map}
+    , m_map_byte_offset                   {old.m_map_byte_offset}
+    , m_allocated                         {std::exchange(old.m_allocated, false)}
 {
 }
 
-auto Buffer_impl::operator=(Buffer_impl&& other) noexcept -> Buffer_impl&
+auto Buffer_impl::operator=(Buffer_impl&& old) noexcept -> Buffer_impl&
 {
-    ERHE_VERIFY(&m_device == &other.m_device);
-    m_handle                             = std::move(other.m_handle);
-    m_debug_label                        = other.m_debug_label;
-    m_capacity_byte_count                = other.m_capacity_byte_count;
-    m_usage                              = other.m_usage;
-    m_required_memory_property_bit_mask  = other.m_required_memory_property_bit_mask;
-    m_preferred_memory_property_bit_mask = other.m_preferred_memory_property_bit_mask;
-    m_map                                = other.m_map;
-    m_map_byte_offset                    = other.m_map_byte_offset;
-    m_map_flags                          = other.m_map_flags;
-    m_allocated                          = std::exchange(other.m_allocated, false);
+    ERHE_VERIFY(&m_device == &old.m_device);
+    m_handle                             = std::move(old.m_handle);
+    m_debug_label                        = old.m_debug_label;
+    m_capacity_byte_count                = old.m_capacity_byte_count;
+    m_usage                              = old.m_usage;
+    m_required_memory_property_bit_mask  = old.m_required_memory_property_bit_mask;
+    m_preferred_memory_property_bit_mask = old.m_preferred_memory_property_bit_mask;
+    m_map                                = old.m_map;
+    m_map_byte_offset                    = old.m_map_byte_offset;
+    m_allocated                          = std::exchange(old.m_allocated, false);
     return *this;
 }
 
@@ -381,8 +372,7 @@ auto Buffer_impl::begin_write(const std::size_t byte_offset, std::size_t byte_co
             byte_count = std::min(byte_count, m_capacity_byte_count - byte_offset);
         }
         m_map_byte_offset = byte_offset;
-        m_map_flags = Buffer_map_flags::explicit_flush;
-        const gl::Map_buffer_access_mask gl_access_mask = get_gl_access_mask(m_map_flags);
+        const gl::Map_buffer_access_mask gl_access_mask = get_gl_access_mask();
 
         auto* const map_pointer = static_cast<std::byte*>(
             gl::map_named_buffer_range(gl_name(), byte_offset, byte_count, gl_access_mask)
@@ -413,7 +403,8 @@ void Buffer_impl::end_write(const std::size_t byte_offset, const std::size_t byt
     const gl::Buffer_storage_mask gl_storage_mask = get_gl_storage_mask();
     const bool map_persistent = erhe::utility::test_bit_set(gl_storage_mask, gl::Buffer_storage_mask::map_persistent_bit);
     if (byte_count > 0) {
-        const bool explicit_flush = erhe::utility::test_bit_set(m_map_flags, Buffer_map_flags::explicit_flush);
+        const gl::Map_buffer_access_mask gl_access_mask = get_gl_access_mask();
+        const bool explicit_flush = erhe::utility::test_bit_set(gl_access_mask, gl::Map_buffer_access_mask::map_flush_explicit_bit);
         if (explicit_flush) {
             flush_bytes(byte_offset, byte_count);
         }
@@ -423,20 +414,19 @@ void Buffer_impl::end_write(const std::size_t byte_offset, const std::size_t byt
     }
 }
 
-auto Buffer_impl::map_all_bytes(const Buffer_map_flags flags) noexcept -> std::span<std::byte>
+auto Buffer_impl::map_all_bytes() noexcept -> std::span<std::byte>
 {
     ERHE_VERIFY(m_map.empty());
     ERHE_VERIFY(gl_name() != 0);
 
-    log_buffer->trace("Buffer_impl::map_all_bytes(), name = {}, flags = {}", gl_name(), to_string(flags));
+    log_buffer->trace("Buffer_impl::map_all_bytes(), name = {}", gl_name());
     //const log::Indenter indenter;
 
     const std::size_t byte_count = m_capacity_byte_count;
 
     m_map_byte_offset = 0;
 
-    m_map_flags = flags;
-    const gl::Map_buffer_access_mask gl_access_mask = get_gl_access_mask(m_map_flags);
+    const gl::Map_buffer_access_mask gl_access_mask = get_gl_access_mask();
 
     auto* const map_pointer = static_cast<std::byte*>(
         gl::map_named_buffer_range(
@@ -462,7 +452,7 @@ auto Buffer_impl::map_all_bytes(const Buffer_map_flags flags) noexcept -> std::s
     return m_map;
 }
 
-auto Buffer_impl::map_bytes(const std::size_t byte_offset, const std::size_t byte_count, const Buffer_map_flags flags) noexcept -> std::span<std::byte>
+auto Buffer_impl::map_bytes(const std::size_t byte_offset, const std::size_t byte_count) noexcept -> std::span<std::byte>
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -471,28 +461,18 @@ auto Buffer_impl::map_bytes(const std::size_t byte_offset, const std::size_t byt
     ERHE_VERIFY(gl_name() != 0);
 
     log_buffer->trace(
-        "Buffer_impl::map_bytes(byte_offset = {}, byte_count = {}), name = {} {}, flags = {}",
+        "Buffer_impl::map_bytes(byte_offset = {}, byte_count = {}), name = {} {}",
         byte_offset,
         byte_count,
         gl_name(),
-        m_debug_label,
-        to_string(flags)
+        m_debug_label
     );
-    //const log::Indenter indenter;
 
     ERHE_VERIFY(byte_offset + byte_count <= m_capacity_byte_count);
 
     m_map_byte_offset = static_cast<GLsizeiptr>(byte_offset);
 
-    m_map_flags = flags;
-
-    const gl::Buffer_storage_mask gl_storage_mask = get_gl_storage_mask();
-    const bool map_coherent   = erhe::utility::test_bit_set(gl_storage_mask, gl::Buffer_storage_mask::map_coherent_bit);
-    if (!map_coherent) {
-        m_map_flags = m_map_flags | Buffer_map_flags::explicit_flush;
-    }
-
-    const gl::Map_buffer_access_mask gl_access_mask = get_gl_access_mask(m_map_flags);
+    const gl::Map_buffer_access_mask gl_access_mask = get_gl_access_mask();
 
     log_buffer->trace(
         "gl::map_named_buffer_range() buffer = {}, offset {}, byte_count = {}, access_mask = {}",
@@ -590,15 +570,23 @@ void Buffer_impl::unmap() noexcept
     ERHE_VERIFY(m_map.empty());
 }
 
+void Buffer_impl::invalidate(std::size_t byte_offset, std::size_t byte_count) noexcept
+{
+    gl::glInvalidateBufferSubData(gl_name(), byte_offset, byte_count);
+}
+
 void Buffer_impl::flush_bytes(const std::size_t byte_offset, const std::size_t byte_count) noexcept
 {
-    ERHE_VERIFY(erhe::utility::test_bit_set(m_map_flags, Buffer_map_flags::explicit_flush));
     ERHE_VERIFY(gl_name() != 0);
-
-    // unmap will do flush
     ERHE_VERIFY(byte_offset + byte_count <= m_capacity_byte_count);
 
     if (byte_count == 0) {
+        return;
+    }
+
+    const bool flush_explicit = erhe::utility::test_bit_set(get_gl_access_mask(), gl::Map_buffer_access_mask::map_flush_explicit_bit);
+
+    if (!flush_explicit) {
         return;
     }
 
@@ -668,7 +656,7 @@ void Buffer_impl::flush_and_unmap_bytes(const std::size_t byte_count) noexcept
 {
     ERHE_VERIFY(gl_name() != 0);
 
-    const bool flush_explicit = erhe::utility::test_bit_set(m_map_flags, Buffer_map_flags::explicit_flush);
+    const bool flush_explicit = erhe::utility::test_bit_set(get_gl_access_mask(), gl::Map_buffer_access_mask::map_flush_explicit_bit);
 
     log_buffer->trace("flush_and_unmap(byte_count = {}) name = {}", byte_count, gl_name());
 

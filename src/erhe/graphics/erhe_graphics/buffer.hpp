@@ -43,6 +43,7 @@ public:
     [[nodiscard]] auto get_capacity_byte_count() const noexcept -> std::size_t;
 
     void unmap                () noexcept;
+    void invalidate           (std::size_t byte_offset, std::size_t byte_count) noexcept;
     void flush_bytes          (std::size_t byte_offset, std::size_t byte_count) noexcept;
     void flush_and_unmap_bytes(std::size_t byte_count) noexcept;
     void dump                 () const noexcept;
@@ -51,20 +52,20 @@ public:
     void end_write  (std::size_t byte_offset, std::size_t byte_count) noexcept;
 
     template <typename T> [[nodiscard]]
-    auto map_elements(const std::size_t element_offset, const std::size_t element_count, Buffer_map_flags flags = Buffer_map_flags::none) noexcept -> std::span<T>
+    auto map_elements(const std::size_t element_offset, const std::size_t element_count) noexcept -> std::span<T>
     {
         const std::size_t byte_offset = element_offset * sizeof(T);
         const std::size_t byte_count  = element_count * sizeof(T);
-        auto raw_map = map_bytes(byte_offset, byte_count, flags);
+        auto raw_map = map_bytes(byte_offset, byte_count);
         return std::span(
             reinterpret_cast<T*>(raw_map.data()),
             raw_map.size_bytes() / sizeof(T)
         );
     }
 
-    auto map_all_bytes(Buffer_map_flags flags) noexcept -> std::span<std::byte>;
+    auto map_all_bytes() noexcept -> std::span<std::byte>;
 
-    auto map_bytes(std::size_t byte_offset, std::size_t byte_count, Buffer_map_flags flags) noexcept -> std::span<std::byte>;
+    auto map_bytes(std::size_t byte_offset, std::size_t byte_count) noexcept -> std::span<std::byte>;
 
     [[nodiscard]] auto get_impl() -> Buffer_impl&;
     [[nodiscard]] auto get_impl() const -> const Buffer_impl&;
