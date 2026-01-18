@@ -13,8 +13,8 @@ Item_parent_change_operation::Item_parent_change_operation() = default;
 Item_parent_change_operation::Item_parent_change_operation(
     const std::shared_ptr<erhe::Hierarchy>& parent,
     const std::shared_ptr<erhe::Hierarchy>& child,
-    const std::shared_ptr<erhe::Hierarchy>  place_before,
-    const std::shared_ptr<erhe::Hierarchy>  place_after
+    const std::shared_ptr<erhe::Hierarchy>& place_before,
+    const std::shared_ptr<erhe::Hierarchy>& place_after
 )
     : m_child        {child}
     , m_parent_before{child->get_parent()}

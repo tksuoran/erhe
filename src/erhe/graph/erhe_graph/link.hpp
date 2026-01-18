@@ -9,9 +9,9 @@ class Link
 {
 public:
     Link();
-    Link(Link&& old);
+    Link(Link&& old) noexcept;
     Link(const Link& other) = delete;
-    Link& operator=(Link&& old);
+    Link& operator=(Link&& old) noexcept;
     Link& operator=(const Link& other) = delete;
     Link(Pin* source, Pin* sink);
     virtual ~Link() noexcept;

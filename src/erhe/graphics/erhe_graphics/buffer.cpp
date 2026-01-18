@@ -8,6 +8,7 @@
 #endif
 
 #include "erhe_utility/bit_helpers.hpp"
+#include "erhe_verify/verify.hpp"
 
 #include <fmt/format.h>
 

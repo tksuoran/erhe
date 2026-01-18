@@ -4,13 +4,9 @@
 
 #include <glm/glm.hpp>
 
-#include <memory>
+namespace erhe::physics {
 
-namespace erhe::physics
-{
-
-class Null_uniform_scaling_shape
-    : public Null_collision_shape
+class Null_uniform_scaling_shape : public Null_collision_shape
 {
 public:
     Null_uniform_scaling_shape(ICollision_shape* shape, const float scale)

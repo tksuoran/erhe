@@ -16,12 +16,12 @@ public:
     auto operator=(Ring_buffer&& other) noexcept -> Ring_buffer&;
 
     void reset                   ();
-    auto empty                   () const -> bool;
-    auto full                    () const -> bool;
-    auto max_size                () const -> std::size_t;
-    auto size                    () const -> std::size_t;
-    auto size_available_for_write() const -> std::size_t;
-    auto size_available_for_read () const -> std::size_t;
+    [[nodiscard]] auto empty                   () const -> bool;
+    [[nodiscard]] auto full                    () const -> bool;
+    [[nodiscard]] auto max_size                () const -> std::size_t;
+    [[nodiscard]] auto size                    () const -> std::size_t;
+    [[nodiscard]] auto size_available_for_write() const -> std::size_t;
+    [[nodiscard]] auto size_available_for_read () const -> std::size_t;
 
     // For recv - like write()
     auto begin_produce           (

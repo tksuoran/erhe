@@ -36,12 +36,12 @@ protected:
     [[nodiscard]] auto get_shared              () const -> Transform_tool_shared&;
     [[nodiscard]] auto get_basis               () const -> const glm::mat4&;
     [[nodiscard]] auto get_basis               (bool world) const -> const glm::mat4&;
-    [[nodiscard]] auto project_pointer_to_plane(Scene_view* scene_view, const glm::vec3 n, const glm::vec3 p) -> std::optional<glm::vec3>;
-    [[nodiscard]] auto offset_plane_origo      (const glm::vec3 p) const -> glm::vec3;
-    [[nodiscard]] auto project_to_offset_plane (const glm::vec3 p, const glm::vec3 q) const -> glm::vec3;
+    [[nodiscard]] auto project_pointer_to_plane(Scene_view* scene_view, glm::vec3 n, glm::vec3 p) -> std::optional<glm::vec3>;
+    [[nodiscard]] auto offset_plane_origo      (glm::vec3 p) const -> glm::vec3;
+    [[nodiscard]] auto project_to_offset_plane (glm::vec3 p, glm::vec3 q) const -> glm::vec3;
     [[nodiscard]] auto get_axis_direction      () const -> glm::vec3;
-    [[nodiscard]] auto get_plane_normal        (const bool world) const -> glm::vec3;
-    [[nodiscard]] auto get_plane_side          (const bool world) const -> glm::vec3;
+    [[nodiscard]] auto get_plane_normal        (bool world) const -> glm::vec3;
+    [[nodiscard]] auto get_plane_side          (bool world) const -> glm::vec3;
 
     bool         m_active   {false};
     unsigned int m_axis_mask{0u};

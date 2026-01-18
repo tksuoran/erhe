@@ -22,7 +22,7 @@ class Jolt_point_to_point_constraint : public Jolt_constraint
 {
 public:
     explicit Jolt_point_to_point_constraint(const Point_to_point_constraint_settings& settings);
-    ~Jolt_point_to_point_constraint() noexcept;
+    ~Jolt_point_to_point_constraint() noexcept override;
 
     [[nodiscard]] auto get_jolt_constraint() const -> JPH::Constraint* override;
 

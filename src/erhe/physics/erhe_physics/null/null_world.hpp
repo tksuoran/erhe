@@ -9,11 +9,10 @@ namespace erhe::physics {
 
 class ICollision_shape;
 
-class Null_world
-    : public IWorld
+class Null_world : public IWorld
 {
 public:
-    virtual ~Null_world() noexcept override;
+    ~Null_world() noexcept override;
 
     // Implements IWorld
     // Implements IWorld

@@ -25,8 +25,8 @@ public:
 
     Compute_pipeline_state(const Compute_pipeline_state& other);
     auto operator=(const Compute_pipeline_state& other) -> Compute_pipeline_state&;
-    Compute_pipeline_state(Compute_pipeline_state&& old);
-    auto operator=(Compute_pipeline_state&& old) -> Compute_pipeline_state&;
+    Compute_pipeline_state(Compute_pipeline_state&& old) noexcept;
+    auto operator=(Compute_pipeline_state&& old) noexcept -> Compute_pipeline_state&;
 
     void reset();
 

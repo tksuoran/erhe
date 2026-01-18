@@ -15,9 +15,9 @@ using erhe::raytrace::IInstance;
 using erhe::scene::Node_attachment;
 using erhe::Item_flags;
 
-Raytrace_primitive::Raytrace_primitive(Raytrace_primitive&&)            = default;
-Raytrace_primitive& Raytrace_primitive::operator=(Raytrace_primitive&&) = default;
-Raytrace_primitive::~Raytrace_primitive() noexcept                      = default;
+Raytrace_primitive::Raytrace_primitive(Raytrace_primitive&&) noexcept            = default;
+Raytrace_primitive& Raytrace_primitive::operator=(Raytrace_primitive&&) noexcept = default;
+Raytrace_primitive::~Raytrace_primitive() noexcept                               = default;
 
 Raytrace_primitive::Raytrace_primitive(erhe::scene::Mesh* mesh, std::size_t primitive_index, erhe::raytrace::IGeometry* rt_geometry)
     : mesh           {mesh}

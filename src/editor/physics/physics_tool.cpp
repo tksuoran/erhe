@@ -171,12 +171,6 @@ void Physics_tool::on_message(App_message& message)
     }
 }
 
-auto Physics_tool::get_scene_root() const -> Scene_root*
-{
-    Scene_view* scene_view = get_hover_scene_view();
-    return (scene_view != nullptr) ? scene_view->get_scene_root().get() : nullptr;
-}
-
 auto Physics_tool::get_mode() const -> Physics_tool_mode
 {
     return m_mode;

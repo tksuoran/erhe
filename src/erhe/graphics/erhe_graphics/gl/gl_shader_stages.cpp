@@ -18,7 +18,7 @@ Shader_stages_impl::Shader_stages_impl(Device& device, const std::string& failed
     gl::object_label(gl::Object_identifier::program, gl_name(), -1, label.c_str());
 }
 
-Shader_stages_impl::Shader_stages_impl(Shader_stages_impl&& from)
+Shader_stages_impl::Shader_stages_impl(Shader_stages_impl&& from) noexcept
     : m_device          {from.m_device                     }
     , m_handle          {std::move(from.m_handle)          }
     , m_name            {std::move(from.m_name)            }
@@ -27,7 +27,7 @@ Shader_stages_impl::Shader_stages_impl(Shader_stages_impl&& from)
 {
 }
 
-Shader_stages_impl& Shader_stages_impl::operator=(Shader_stages_impl&& from)
+Shader_stages_impl& Shader_stages_impl::operator=(Shader_stages_impl&& from) noexcept
 {
     if (*this != from) {
         m_handle           = std::move(from.m_handle)          ;

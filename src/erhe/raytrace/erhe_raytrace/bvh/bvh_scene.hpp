@@ -22,7 +22,7 @@ class IGeometry;
 class Bvh_scene : public IScene
 {
 public:
-    explicit Bvh_scene(const std::string_view debug_label);
+    explicit Bvh_scene(std::string_view debug_label);
     ~Bvh_scene() noexcept override;
 
     // Implements IScene

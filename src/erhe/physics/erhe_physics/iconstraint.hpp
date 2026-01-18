@@ -22,7 +22,7 @@ public:
 class IConstraint
 {
 public:
-    virtual ~IConstraint() noexcept {};
+    virtual ~IConstraint() noexcept = default; // TODO move to .cpp;
 
     [[nodiscard]] static auto create_point_to_point_constraint(const Point_to_point_constraint_settings& settings) -> IConstraint*;
 

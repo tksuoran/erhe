@@ -143,8 +143,8 @@ public:
         erhe::imgui::Imgui_renderer& imgui_renderer,
         erhe::imgui::Imgui_windows&  imgui_windows,
         App_context&                 context,
-        const std::string_view       window_title,
-        const std::string_view       ini_label
+        std::string_view             window_title,
+        std::string_view             ini_label
     );
 
     // Implements Imgui_window

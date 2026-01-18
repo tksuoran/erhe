@@ -28,7 +28,7 @@ public:
     Camera& operator=(const Camera&) = delete;
     ~Camera() noexcept override;
 
-    explicit Camera(const std::string_view name);
+    explicit Camera(std::string_view name);
     Camera(const Camera&, erhe::for_clone);
 
     // Implements Item_base

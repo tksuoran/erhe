@@ -15,10 +15,10 @@ class Key_binding : public Command_binding
 {
 public:
     Key_binding(
-        Command*                      command,
-        erhe::window::Keycode         code,
-        bool                          pressed,
-        const std::optional<uint32_t> modifier_mask
+        Command*                command,
+        erhe::window::Keycode   code,
+        bool                    pressed,
+        std::optional<uint32_t> modifier_mask
     );
     Key_binding();
     ~Key_binding() noexcept override;
@@ -30,7 +30,7 @@ public:
         uint32_t              modifier_mask
     ) -> bool;
 
-    auto get_type() const -> Type override { return Command_binding::Type::Key; }
+    [[nodiscard]] auto get_type() const -> Type override { return Command_binding::Type::Key; }
 
     [[nodiscard]] auto get_keycode() const -> erhe::window::Keycode;
     [[nodiscard]] auto get_pressed() const -> bool;

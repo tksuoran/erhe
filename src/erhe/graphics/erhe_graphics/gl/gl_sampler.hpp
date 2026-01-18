@@ -30,8 +30,8 @@ public:
 private:
     void apply();
 
-    static auto to_gl(const Compare_operation compare_operation) -> int;
-    static auto to_gl(const Sampler_address_mode address_mode) -> int;
+    static auto to_gl(Compare_operation compare_operation) -> int;
+    static auto to_gl(Sampler_address_mode address_mode) -> int;
     static auto to_gl(Filter filter, Sampler_mipmap_mode mipmap_mode) -> int;
 
     Gl_sampler          m_handle;

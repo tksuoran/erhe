@@ -15,7 +15,7 @@ class Null_instance
     : public IInstance
 {
 public:
-    explicit Null_instance(const std::string_view debug_label);
+    explicit Null_instance(std::string_view debug_label);
     ~Null_instance() noexcept override;
 
     // Implements IInstance
@@ -23,10 +23,10 @@ public:
     void enable       () override;
     void disable      () override;
 
-    void set_transform(const glm::mat4 transform) override;
-    void set_scene    (IScene* scene)             override;
-    void set_mask     (const uint32_t mask)       override;
-    void set_user_data(void* ptr)                 override;
+    void set_transform(glm::mat4 transform) override;
+    void set_scene    (IScene* scene)       override;
+    void set_mask     (uint32_t mask)       override;
+    void set_user_data(void* ptr)           override;
     [[nodiscard]] auto get_transform() const -> glm::mat4        override;
     [[nodiscard]] auto get_scene    () const -> IScene*          override;
     [[nodiscard]] auto get_mask     () const -> uint32_t         override;

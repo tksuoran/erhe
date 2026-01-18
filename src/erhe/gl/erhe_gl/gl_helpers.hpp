@@ -23,7 +23,7 @@ namespace gl_helpers {
 [[nodiscard]] auto convert_to_gl(erhe::dataformat::Format format) -> std::optional<gl::Internal_format>;
 [[nodiscard]] auto convert_from_gl(gl::Internal_format format) -> erhe::dataformat::Format;
 
-void set_error_checking(const bool enable);
+void set_error_checking(bool enable);
 void check_error       ();
 void initialize_logging();
 

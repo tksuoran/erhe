@@ -139,7 +139,7 @@ constexpr Keycode Key_right_super   = 347;
 constexpr Keycode Key_menu          = 348;
 constexpr Keycode Key_last          = Key_menu;
 
-extern auto c_str(const Keycode code) -> const char*;
+extern auto c_str(Keycode code) -> const char*;
 
 using Key_modifier_mask = uint32_t;
 constexpr Key_modifier_mask Key_modifier_bit_ctrl  = 0x0001u;

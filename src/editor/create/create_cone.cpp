@@ -14,6 +14,8 @@
 
 namespace editor {
 
+Create_cone::~Create_cone() noexcept = default;
+
 void Create_cone::render_preview(const Create_preview_settings& preview_settings)
 {
     const Render_context& render_context = preview_settings.render_context;

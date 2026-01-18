@@ -46,7 +46,7 @@ class Update_binding;
 class Commands : public erhe::window::Input_event_handler
 {
 public:
-    ~Commands();
+    ~Commands() noexcept override;
 
     // Public API
     void register_command(Command* command);

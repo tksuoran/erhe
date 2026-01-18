@@ -32,7 +32,7 @@ public:
     Shader_stage(Shader_type type, std::string_view source);
     Shader_stage(Shader_type type, const std::filesystem::path& path);
 
-    auto get_description() const -> std::string;
+    [[nodiscard]] auto get_description() const -> std::string;
 
     Shader_type                        type;
     std::string                        source;
@@ -59,7 +59,7 @@ public:
 
     void add_interface_block(const Shader_resource* uniform_block);
 
-    auto get_description() const -> std::string;
+    [[nodiscard]] auto get_description() const -> std::string;
 
     std::string                                      name;
     std::vector<std::string>                         pragmas              {};
@@ -86,10 +86,10 @@ public:
     ~Shader_stages_prototype() noexcept;
     Shader_stages_prototype (const Shader_stages_prototype&) = delete;
     void operator=          (const Shader_stages_prototype&) = delete;
-    Shader_stages_prototype (Shader_stages_prototype&&);
+    Shader_stages_prototype (Shader_stages_prototype&& old) noexcept;
 
-    void compile_shaders();
-    auto link_program   () -> bool;
+    void compile_shaders() const;
+    auto link_program   () const -> bool;
 
 #if defined(ERHE_SPIRV)
     auto compile_glslang     (Device& device, const Shader_stage& shader) -> std::shared_ptr<glslang::TShader>;
@@ -98,8 +98,8 @@ public:
 
     [[nodiscard]] auto name            () const -> const std::string&;
     [[nodiscard]] auto create_info     () const -> const Shader_stages_create_info&;
-    [[nodiscard]] auto is_valid        () -> bool;
-    [[nodiscard]] auto get_final_source(const Shader_stage& shader, std::optional<unsigned int> gl_name) -> std::string;
+    [[nodiscard]] auto is_valid        () const -> bool;
+    [[nodiscard]] auto get_final_source(const Shader_stage& shader, std::optional<unsigned int> gl_name) const -> std::string;
     [[nodiscard]] auto get_impl        () -> Shader_stages_prototype_impl&;
     [[nodiscard]] auto get_impl        () const -> const Shader_stages_prototype_impl&;
 
@@ -114,12 +114,12 @@ public:
     Shader_stages(Device& device, Shader_stages_prototype&& prototype);
     Shader_stages(Device& device, const std::string& non_functional_name);
     ~Shader_stages() noexcept;
-    Shader_stages(Shader_stages&&);
-    Shader_stages& operator=(Shader_stages&&);
+    Shader_stages(Shader_stages&&) noexcept;
+    Shader_stages& operator=(Shader_stages&&) noexcept;
 
     // Reloads program by consuming prototype
-    void reload    (Shader_stages_prototype&& prototype);
-    void invalidate();
+    void reload    (Shader_stages_prototype&& prototype) const;
+    void invalidate() const;
 
     [[nodiscard]] auto name    () const -> const std::string&;
     [[nodiscard]] auto is_valid() const -> bool;
@@ -136,14 +136,14 @@ public:
     Reloadable_shader_stages(Device& device, const std::string& non_functional_name);
     Reloadable_shader_stages(Device& device, Shader_stages_prototype&& prototype);
     Reloadable_shader_stages(Device& device, const Shader_stages_create_info& create_info);
-    Reloadable_shader_stages(Reloadable_shader_stages&&);
-    Reloadable_shader_stages& operator=(Reloadable_shader_stages&&);
+    Reloadable_shader_stages(Reloadable_shader_stages&& old) noexcept;
+    Reloadable_shader_stages& operator=(Reloadable_shader_stages&& old) noexcept;
 
     Shader_stages_create_info create_info;
     Shader_stages             shader_stages;
 
 private:
-    [[nodiscard]] auto make_prototype(Device& graphics_device) -> Shader_stages_prototype;
+    [[nodiscard]] auto make_prototype(Device& graphics_device) const -> Shader_stages_prototype;
 };
 
 // class Shader_stages_impl_hash

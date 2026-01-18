@@ -33,12 +33,12 @@ public:
     Socket(Socket&& other) noexcept;
     auto operator=(Socket&& other) noexcept -> Socket&;
 
-    auto get_state           () const -> State                 { return m_state; }
+    [[nodiscard]] auto get_state           () const -> State                 { return m_state; }
     void set_receive_handler (Receive_handler receive_handler) { m_receive_handler = receive_handler; }
-    auto get_socket          () const -> SOCKET                { return m_socket; }
-    auto get_sockaddr_in     () const -> const sockaddr_in&    { return m_address_in; }
-    auto get_address_string  () const -> const std::string&    { return m_address; }
-    auto get_send_buffer_size() const -> size_t                { return m_send_buffer ? m_send_buffer->size() : 0; }
+    [[nodiscard]] auto get_socket          () const -> SOCKET                { return m_socket; }
+    [[nodiscard]] auto get_sockaddr_in     () const -> const sockaddr_in&    { return m_address_in; }
+    [[nodiscard]] auto get_address_string  () const -> const std::string&    { return m_address; }
+    [[nodiscard]] auto get_send_buffer_size() const -> size_t                { return m_send_buffer ? m_send_buffer->size() : 0; }
     auto send                (const char* data, int length) -> bool;
     auto send_pending        () -> bool;
     auto recv                () -> bool;

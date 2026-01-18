@@ -60,9 +60,9 @@ public:
     void update(erhe::xr::Headset& headset);
 
     [[nodiscard]] auto get_closest_point_to_line(
-        const glm::mat4 transform,
-        const glm::vec3 p0,
-        const glm::vec3 p1
+        glm::mat4 transform,
+        glm::vec3 p0,
+        glm::vec3 p1
     ) const -> std::optional<Finger_point>;
 
     [[nodiscard]] auto get_joint(XrHandJointEXT joint) const -> std::optional<Joint>;
@@ -75,7 +75,7 @@ public:
 
 private:
     void draw_joint_line_strip(
-        const glm::mat4                     transform,
+        glm::mat4                           transform,
         const std::vector<XrHandJointEXT>&  joint_names,
         erhe::renderer::Primitive_renderer& line_renderer
     ) const;

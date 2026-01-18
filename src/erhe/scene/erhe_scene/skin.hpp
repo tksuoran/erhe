@@ -27,7 +27,7 @@ public:
     Skin& operator=(const Skin&);
     ~Skin() noexcept override;
 
-    explicit Skin(const std::string_view name);
+    explicit Skin(std::string_view name);
 
     // Implements Item_base
     static constexpr std::string_view static_type_name{"Skin"};

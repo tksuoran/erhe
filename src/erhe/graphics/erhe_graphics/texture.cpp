@@ -16,7 +16,9 @@
 #include <fmt/format.h>
 
 namespace erhe::graphics {
-    
+
+Texture_reference::~Texture_reference() = default;
+
 auto Texture::get_mipmap_dimensions(const Texture_type type) -> int
 {
     switch (type) {

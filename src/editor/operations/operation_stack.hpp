@@ -17,7 +17,6 @@ namespace editor {
 class App_context;
 class App_message_bus;
 class Operation;
-class App_context;
 class Operation_stack;
 class Selection_tool;
 
@@ -53,7 +52,7 @@ public:
         erhe::imgui::Imgui_windows&  imgui_windows,
         App_context&                 context
     );
-    ~Operation_stack() noexcept;
+    ~Operation_stack() noexcept override;
 
     [[nodiscard]] auto can_undo() const -> bool;
     [[nodiscard]] auto can_redo() const -> bool;

@@ -41,7 +41,6 @@ public:
 
 private:
     void post_link();
-    void query_bindings();
 
     [[nodiscard]] auto compile     (const Shader_stage& shader) -> Gl_shader;
     [[nodiscard]] auto post_compile(const Shader_stage& shader, Gl_shader& gl_shader) -> bool;
@@ -74,8 +73,8 @@ class Shader_stages_impl
 public:
     Shader_stages_impl(Device& device, Shader_stages_prototype&& prototype);
     Shader_stages_impl(Device& device, const std::string& non_functional_name);
-    Shader_stages_impl(Shader_stages_impl&& old);
-    Shader_stages_impl& operator=(Shader_stages_impl&& old);
+    Shader_stages_impl(Shader_stages_impl&& old) noexcept;
+    Shader_stages_impl& operator=(Shader_stages_impl&& old) noexcept;
 
     // Reloads program by consuming prototype
     void reload    (Shader_stages_prototype&& prototype);

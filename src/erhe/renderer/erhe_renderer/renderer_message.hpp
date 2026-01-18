@@ -2,13 +2,9 @@
 
 #include <memory>
 
-namespace erhe::scene
-{
-    class Node;
-}
+namespace erhe::scene { class Node; }
 
-namespace erhe::renderer
-{
+namespace erhe::renderer {
 
 class Message_flag_bit
 {

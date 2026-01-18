@@ -5,8 +5,7 @@
 #include "erhe_graphics/render_pipeline_state.hpp"
 #include "erhe_scene/viewport.hpp"
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
     class Render_pass;
     class Gpu_timer;
     class OpenGL_state_tracker;
@@ -14,8 +13,7 @@ namespace erhe::graphics
     class Vertex_input_state;
 }
 
-namespace erhe::renderer
-{
+namespace erhe::renderer {
 
 class Configuration;
 class Mesh_memory;

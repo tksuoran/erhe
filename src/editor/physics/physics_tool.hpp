@@ -63,7 +63,7 @@ public:
         Icon_set&                 icon_set,
         Tools&                    tools
     );
-    ~Physics_tool() noexcept;
+    ~Physics_tool() noexcept override;
 
     // Implements Tool
     void handle_priority_update(int old_priority, int new_priority) override;
@@ -81,13 +81,12 @@ public:
     auto on_drag      () -> bool;
 
 private:
+    using Tool::on_message; // Intentionally hide Tool::on_message()
     void on_message(App_message& message);
     void tool_hover(Scene_view* scene_view);
 
     void move_drag_point_instant  (glm::vec3 position);
     void move_drag_point_kinematic(glm::vec3 position);
-
-    [[nodiscard]] auto get_scene_root    () const -> Scene_root*;
 
     // Commands
     Physics_tool_drag_command                 m_drag_command;

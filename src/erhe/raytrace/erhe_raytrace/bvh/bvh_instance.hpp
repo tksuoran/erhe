@@ -13,14 +13,14 @@ class Bvh_scene;
 class Bvh_instance : public IInstance
 {
 public:
-    explicit Bvh_instance(const std::string_view debug_label);
+    explicit Bvh_instance(std::string_view debug_label);
     ~Bvh_instance() noexcept override;
 
     // Implements IInstance
     void commit       ()                           override;
     void enable       ()                           override;
     void disable      ()                           override;
-    void set_transform(const glm::mat4 transform)  override;
+    void set_transform(glm::mat4 transform)        override;
     void set_scene    (IScene* scene)              override;
     void set_mask     (uint32_t mask)              override;
     void set_user_data(void* ptr)                  override;

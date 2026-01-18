@@ -57,7 +57,7 @@ public:
     // Public API
     //void viewport_toolbar(bool& hovered);
 
-    auto update_hover(const glm::vec3 ray_origin, const glm::vec3 ray_direction) const -> Grid_hover_position;
+    auto update_hover(glm::vec3 ray_origin, glm::vec3 ray_direction) const -> Grid_hover_position;
 
 private:
     std::vector<std::shared_ptr<Grid>> m_grids;

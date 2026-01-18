@@ -116,7 +116,7 @@ public:
         glm::vec4                                tint_color       = {1.0f, 1.0f, 1.0f, 1.0f},
         erhe::graphics::Filter                   filter           = erhe::graphics::Filter::nearest,
         erhe::graphics::Sampler_mipmap_mode      mipmap_mode      = erhe::graphics::Sampler_mipmap_mode::not_mipmapped
-    ) -> bool;
+    ) const -> bool;
 
     void render_draw_data(erhe::graphics::Render_command_encoder& encoder);
 
@@ -149,8 +149,6 @@ private:
         erhe::graphics::Filter              filter,
         erhe::graphics::Sampler_mipmap_mode mipmap_mode
     ) const -> const erhe::graphics::Sampler&;
-
-    void apply_font_config_changes(const Imgui_settings& settings);
 
     static constexpr std::size_t s_max_draw_count     =    64'000;
     static constexpr std::size_t s_max_index_count    = 2'400'000;

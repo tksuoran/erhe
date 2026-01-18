@@ -361,18 +361,18 @@ template<> struct Enable_bit_mask_operators<Memory_barrier_mask> { static const 
 [[nodiscard]] auto to_string       (Buffer_map_flags  flags     ) -> std::string;
 [[nodiscard]] auto get_buffer_usage(Buffer_target     target    ) -> Buffer_usage;
 
-[[nodiscard]] auto to_glsl_attribute_type(const erhe::dataformat::Format format) -> Glsl_type;
-[[nodiscard]] auto glsl_type_c_str(const Glsl_type            type) -> const char*;
-[[nodiscard]] auto get_dimension  (const Glsl_type            type) -> std::size_t;
-[[nodiscard]] auto c_str          (const Primitive_type       primitive_type) -> const char*;
-[[nodiscard]] auto c_str          (const Buffer_target        buffer_target) -> const char*;
-[[nodiscard]] auto is_indexed     (const Buffer_target        buffer_target) -> bool;
-[[nodiscard]] auto c_str          (const Texture_type         texture_type) -> const char*;
-[[nodiscard]] auto c_str          (const Filter               filter) -> const char*;
-[[nodiscard]] auto c_str          (const Sampler_mipmap_mode  sampler_mipmap_mode) -> const char*;
-[[nodiscard]] auto c_str          (const Sampler_address_mode sampler_address_mode) -> const char*;
-[[nodiscard]] auto c_str          (const Compare_operation    compare_operation) -> const char*;
-[[nodiscard]] auto c_str          (const Shader_type          shader_type) -> const char*;
+[[nodiscard]] auto to_glsl_attribute_type(erhe::dataformat::Format format) -> Glsl_type;
+[[nodiscard]] auto glsl_type_c_str(Glsl_type            type) -> const char*;
+[[nodiscard]] auto get_dimension  (Glsl_type            type) -> std::size_t;
+[[nodiscard]] auto c_str          (Primitive_type       primitive_type) -> const char*;
+[[nodiscard]] auto c_str          (Buffer_target        buffer_target) -> const char*;
+[[nodiscard]] auto is_indexed     (Buffer_target        buffer_target) -> bool;
+[[nodiscard]] auto c_str          (Texture_type         texture_type) -> const char*;
+[[nodiscard]] auto c_str          (Filter               filter) -> const char*;
+[[nodiscard]] auto c_str          (Sampler_mipmap_mode  sampler_mipmap_mode) -> const char*;
+[[nodiscard]] auto c_str          (Sampler_address_mode sampler_address_mode) -> const char*;
+[[nodiscard]] auto c_str          (Compare_operation    compare_operation) -> const char*;
+[[nodiscard]] auto c_str          (Shader_type          shader_type) -> const char*;
 
 class Image_usage_flag_bit
 {

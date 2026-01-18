@@ -1,7 +1,5 @@
 #pragma once
 
-#include "renderers/viewport_config.hpp"
-
 #include "erhe_rendergraph/rendergraph_node.hpp"
 #include "erhe_commands/command.hpp"
 #include "erhe_profile/profile.hpp"
@@ -67,7 +65,7 @@ public:
         App_settings&                                         app_settings,
         Post_processing&                                      post_processing,
         Tools&                                                tools,
-        const std::string_view                                name,
+        std::string_view                                      name,
         const std::shared_ptr<Scene_root>&                    scene_root,
         const std::shared_ptr<erhe::scene::Camera>&           camera,
         int                                                   msaa_sample_count,

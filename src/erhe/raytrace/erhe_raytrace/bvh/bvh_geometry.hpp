@@ -31,15 +31,15 @@ class Hit;
 class Bvh_geometry : public IGeometry
 {
 public:
-    Bvh_geometry(const std::string_view debug_label, const Geometry_type geometry_type);
+    Bvh_geometry(std::string_view debug_label, Geometry_type geometry_type);
     ~Bvh_geometry() noexcept override;
 
     // Implements IGeometry
     void commit                    () override;
     void enable                    () override;
     void disable                   () override;
-    void set_mask                  (const uint32_t mask) override;
-    void set_vertex_attribute_count(const unsigned int count) override;
+    void set_mask                  (uint32_t mask) override;
+    void set_vertex_attribute_count(unsigned int count) override;
     void set_buffer(
         Buffer_type               type,
         unsigned int              slot,

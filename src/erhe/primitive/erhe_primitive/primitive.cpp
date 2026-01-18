@@ -227,9 +227,9 @@ Primitive_raytrace::Primitive_raytrace(const Primitive_raytrace& other) = defaul
 
 Primitive_raytrace& Primitive_raytrace::operator=(const Primitive_raytrace& other) = default;
 
-Primitive_raytrace::Primitive_raytrace(Primitive_raytrace&& old) = default;
+Primitive_raytrace::Primitive_raytrace(Primitive_raytrace&&) noexcept = default;
 
-Primitive_raytrace& Primitive_raytrace::operator=(Primitive_raytrace&& old) = default;
+Primitive_raytrace& Primitive_raytrace::operator=(Primitive_raytrace&&) noexcept = default;
 
 Primitive_raytrace::~Primitive_raytrace() noexcept = default;
 #pragma endregion Primitive_raytrace
@@ -540,18 +540,14 @@ auto Primitive_shape::get_element_mappings() const -> const Element_mappings&
 /////////////////////////
 
 
-Primitive::Primitive()
-{
-}
+Primitive::Primitive() = default;
 
 Primitive::Primitive(const Primitive&) = default;
-Primitive::Primitive(Primitive&&) = default;
+Primitive::Primitive(Primitive&&) noexcept = default;
 Primitive& Primitive::operator=(const Primitive&) = default;
-Primitive& Primitive::operator=(Primitive&&) = default;
+Primitive& Primitive::operator=(Primitive&&) noexcept = default;
 
-Primitive::~Primitive() noexcept
-{
-}
+Primitive::~Primitive() noexcept = default;
 
 Primitive::Primitive(const std::shared_ptr<Triangle_soup>& triangle_soup)
     : render_shape{std::make_shared<Primitive_render_shape>(triangle_soup)}
@@ -607,7 +603,7 @@ auto Primitive::has_raytrace_triangles() const -> bool
     return false;
 }
 
-auto Primitive::make_geometry() -> bool
+auto Primitive::make_geometry() const -> bool
 {
     if (render_shape) {
         if (render_shape->make_geometry()) {
@@ -622,7 +618,7 @@ auto Primitive::make_geometry() -> bool
     return false;
 }
 
-auto Primitive::make_raytrace() -> bool
+auto Primitive::make_raytrace() const -> bool
 {
     if (collision_shape) {
         if (collision_shape->has_raytrace_triangles()) {
@@ -643,7 +639,7 @@ auto Primitive::make_raytrace() -> bool
     return false;
 }
 
-auto Primitive::make_renderable_mesh(const Build_info& build_info, Normal_style normal_style) -> bool
+auto Primitive::make_renderable_mesh(const Build_info& build_info, Normal_style normal_style) const -> bool
 {
     if (!render_shape) {
         return false;
@@ -654,7 +650,7 @@ auto Primitive::make_renderable_mesh(const Build_info& build_info, Normal_style 
     return render_shape->make_buffer_mesh(build_info, normal_style);
 }
 
-auto Primitive::make_renderable_mesh(const Buffer_info& buffer_info) -> bool
+auto Primitive::make_renderable_mesh(const Buffer_info& buffer_info) const -> bool
 {
     if (!render_shape) {
         return false;

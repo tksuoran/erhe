@@ -159,7 +159,7 @@ public:
         m_max.y = std::max(m_max.y, y);
     }
 
-    void clip_to(const Rectangle reference) noexcept
+    void clip_to(const Rectangle& reference) noexcept
     {
         m_min.x = std::max(m_min.x, reference.min().x);
         m_max.x = std::min(m_max.x, reference.max().x);
@@ -167,9 +167,9 @@ public:
         m_max.y = std::min(m_max.y, reference.max().y);
     }
 
-    [[nodiscard]] auto shrink(const glm::vec2 padding) noexcept -> Rectangle
+    [[nodiscard]] auto shrink(const glm::vec2 padding) const noexcept -> Rectangle
     {
-        return Rectangle(m_min + padding, m_max - padding);
+        return Rectangle{m_min + padding, m_max - padding};
     }
 
     void grow_by(const float padding_x, const float padding_y) noexcept

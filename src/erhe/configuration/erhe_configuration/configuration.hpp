@@ -34,7 +34,7 @@ public:
 class Ini_file
 {
 public:
-    virtual ~Ini_file() noexcept {}
+    virtual ~Ini_file() noexcept;
 
     virtual auto get_section(const std::string& name) -> const Ini_section& = 0;
 };
@@ -42,7 +42,7 @@ public:
 class Ini_cache
 {
 public:
-    virtual ~Ini_cache() noexcept {}
+    virtual ~Ini_cache() noexcept;
 
     static auto get_instance() -> Ini_cache&;
 

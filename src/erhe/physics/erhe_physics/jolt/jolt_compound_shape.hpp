@@ -13,9 +13,9 @@ public:
     explicit Jolt_compound_shape(const Compound_shape_create_info& create_info);
 
     // Implements ICollision_shape
-    auto is_convex         () const -> bool          override;
-    auto get_shape_settings() -> JPH::ShapeSettings& override;
-    auto describe          () const -> std::string   override;
+    [[nodiscard]] auto is_convex         () const -> bool          override;
+    [[nodiscard]] auto get_shape_settings() -> JPH::ShapeSettings& override;
+    [[nodiscard]] auto describe          () const -> std::string   override;
 
 private:
     JPH::Ref<JPH::StaticCompoundShapeSettings> m_shape_settings;

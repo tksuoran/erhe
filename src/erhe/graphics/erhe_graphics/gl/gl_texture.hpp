@@ -77,15 +77,15 @@ public:
 [[nodiscard]] auto operator==(const Texture_impl& lhs, const Texture_impl& rhs) noexcept -> bool;
 [[nodiscard]] auto operator!=(const Texture_impl& lhs, const Texture_impl& rhs) noexcept -> bool;
  
-void convert_texture_dimensions_from_gl(const gl::Texture_target target, int& width, int& height, int& depth, int& array_layer_count);
-void convert_texture_dimensions_to_gl  (const gl::Texture_target target, int& width, int& height, int& depth, int array_layer_count);
-void convert_texture_offset_to_gl      (const gl::Texture_target target, int& x, int& y, int& z, int array_layer);
+void convert_texture_dimensions_from_gl(gl::Texture_target target, int& width, int& height, int& depth, int& array_layer_count);
+void convert_texture_dimensions_to_gl  (gl::Texture_target target, int& width, int& height, int& depth, int array_layer_count);
+void convert_texture_offset_to_gl      (gl::Texture_target target, int& x, int& y, int& z, int array_layer);
 
 
 [[nodiscard]] auto component_count             (gl::Pixel_format pixel_format) -> size_t;
 [[nodiscard]] auto byte_count                  (gl::Pixel_type pixel_type) -> size_t;
-[[nodiscard]] auto get_gl_pixel_byte_count     (const erhe::dataformat::Format pixelformat) -> size_t;
-[[nodiscard]] auto get_format_and_type         (const erhe::dataformat::Format pixelformat, gl::Pixel_format& format, gl::Pixel_type& type) -> bool;
+[[nodiscard]] auto get_gl_pixel_byte_count     (erhe::dataformat::Format pixelformat) -> size_t;
+[[nodiscard]] auto get_format_and_type         (erhe::dataformat::Format pixelformat, gl::Pixel_format& format, gl::Pixel_type& type) -> bool;
 [[nodiscard]] auto convert_to_gl_texture_target(Texture_type type, bool multisample, bool array) -> gl::Texture_target;
 
 

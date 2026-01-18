@@ -18,7 +18,10 @@ class Node_attach_operation : public Operation
 {
 public:
     Node_attach_operation();
-    Node_attach_operation(const std::shared_ptr<erhe::scene::Node_attachment>& attachment, const std::shared_ptr<erhe::scene::Node>& host_node);
+    Node_attach_operation(
+        const std::shared_ptr<erhe::scene::Node_attachment>& attachment,
+        const std::shared_ptr<erhe::scene::Node>&            host_node
+    );
 
     // Implements Operation
     void execute(App_context& context) override;

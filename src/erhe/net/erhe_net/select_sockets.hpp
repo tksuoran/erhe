@@ -13,12 +13,12 @@ public:
     static constexpr int flag_write  = (1u << 1u);
     static constexpr int flag_except = (1u << 2u);
 
-    auto has_read  () const -> bool;
-    auto has_write () const -> bool;
-    auto has_except() const -> bool;
-    auto has_read  (SOCKET socket) const -> bool;
-    auto has_write (SOCKET socket) const -> bool;
-    auto has_except(SOCKET socket) const -> bool;
+    [[nodiscard]] auto has_read  () const -> bool;
+    [[nodiscard]] auto has_write () const -> bool;
+    [[nodiscard]] auto has_except() const -> bool;
+    [[nodiscard]] auto has_read  (SOCKET socket) const -> bool;
+    [[nodiscard]] auto has_write (SOCKET socket) const -> bool;
+    [[nodiscard]] auto has_except(SOCKET socket) const -> bool;
     void set_read  (SOCKET socket);
     void set_write (SOCKET socket);
     void set_except(SOCKET socket);

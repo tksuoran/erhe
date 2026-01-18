@@ -28,7 +28,7 @@ public:
     [[nodiscard]] virtual auto get_priority   () const -> int;
     [[nodiscard]] auto         is_enabled     () const -> bool;
     [[nodiscard]] auto         get_description() const -> const char*;
-    void set_description     (const std::string_view description);
+    void set_description     (std::string_view description);
     void set_enabled         (bool enabled);
     void enable_command_host ();
     void disable_command_host();
@@ -41,7 +41,7 @@ private:
 class Command
 {
 public:
-    Command(Commands& commands, const std::string_view name);
+    Command(Commands& commands, std::string_view name);
     virtual ~Command() noexcept;
 
     Command(const Command&) = delete;
@@ -170,7 +170,7 @@ public:
 class Lambda_command : public erhe::commands::Command
 {
 public:
-    Lambda_command(Commands& commands, const std::string_view name, std::function<bool()> callback);
+    Lambda_command(Commands& commands, std::string_view name, std::function<bool()> callback);
 
     auto try_call() -> bool override;
 

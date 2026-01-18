@@ -14,6 +14,8 @@
 
 namespace editor {
 
+Create_torus::~Create_torus() noexcept = default;
+
 void Create_torus::render_preview(const Create_preview_settings& preview_settings)
 {
     const Render_context& render_context = preview_settings.render_context;

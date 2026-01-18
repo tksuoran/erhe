@@ -39,9 +39,9 @@ class Jolt_box_shape : public Jolt_collision_shape
 public:
     ~Jolt_box_shape() noexcept override = default;
 
-    explicit Jolt_box_shape(const glm::vec3 half_extents);
+    explicit Jolt_box_shape(glm::vec3 half_extents);
     auto get_shape_settings() -> JPH::ShapeSettings& override;
-    auto describe          () const -> std::string override;
+    [[nodiscard]] auto describe() const -> std::string override;
 
 private:
     JPH::Ref<JPH::BoxShapeSettings> m_shape_settings;
@@ -50,11 +50,11 @@ private:
 class Jolt_capsule_shape : public Jolt_collision_shape
 {
 public:
-    Jolt_capsule_shape(const Axis axis, float radius, float length);
+    Jolt_capsule_shape(Axis axis, float radius, float length);
     ~Jolt_capsule_shape() noexcept override;
 
     auto get_shape_settings() -> JPH::ShapeSettings& override;
-    auto describe          () const -> std::string   override;
+    [[nodiscard]] auto describe() const -> std::string   override;
 
 private:
     JPH::Ref<JPH::CapsuleShapeSettings>           m_capsule_shape_settings;
@@ -64,10 +64,10 @@ private:
 class Jolt_cylinder_shape : public Jolt_collision_shape
 {
 public:
-    Jolt_cylinder_shape(const Axis axis, const glm::vec3 half_extents);
+    Jolt_cylinder_shape(Axis axis, glm::vec3 half_extents);
     ~Jolt_cylinder_shape() noexcept override;
     auto get_shape_settings() -> JPH::ShapeSettings& override;
-    auto describe          () const -> std::string   override;
+    [[nodiscard]] auto describe() const -> std::string   override;
 
 private:
     JPH::Ref<JPH::CylinderShapeSettings>          m_cylinder_shape_settings;
@@ -78,11 +78,11 @@ private:
 class Jolt_sphere_shape : public Jolt_collision_shape
 {
 public:
-    explicit Jolt_sphere_shape(const float radius);
+    explicit Jolt_sphere_shape(float radius);
     ~Jolt_sphere_shape() noexcept override;
 
     auto get_shape_settings() -> JPH::ShapeSettings& override;
-    auto describe          () const -> std::string   override;
+    [[nodiscard]] auto describe() const -> std::string   override;
 
 private:
     JPH::Ref<JPH::SphereShapeSettings> m_shape_settings;

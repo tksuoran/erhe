@@ -52,7 +52,7 @@ public:
     void load_terrain_replacement_rule_defs();
     void save_terrain_replacement_rule_defs();
 
-    void make_terrain_type_combo(const char* label, terrain_t& value);
+    //void make_terrain_type_combo(const char* label, terrain_t& value);
 
 private:
     void load_terrain_defs_v4();

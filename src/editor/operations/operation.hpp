@@ -13,8 +13,8 @@ class Operation
 public:
     virtual ~Operation() noexcept;
 
-    virtual void execute (App_context& context) = 0;
-    virtual void undo    (App_context& context) = 0;
+    virtual void execute(App_context& context) = 0;
+    virtual void undo   (App_context& context) = 0;
 
     [[nodiscard]] auto        describe  () const -> const std::string&;
     [[nodiscard]] inline auto get_serial() const -> std::size_t { return m_id.get_id(); }

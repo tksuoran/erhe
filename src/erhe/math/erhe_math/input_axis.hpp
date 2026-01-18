@@ -12,7 +12,7 @@ class Input_axis
 {
 public:
     Input_axis();
-    Input_axis(const bool linear, const bool multiply);
+    Input_axis(bool linear, bool multiply);
 
     [[nodiscard]] auto damp         () const -> float;
     [[nodiscard]] auto max_value    () const -> float;

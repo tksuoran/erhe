@@ -5,7 +5,7 @@
 
 namespace erhe::graphics {
 
-    // Unified API for bindless textures and texture unit cache emulating bindless textures
+// Unified API for bindless textures and texture unit cache emulating bindless textures
 // using sampler arrays. Also candidate for future metal argument buffer / vulkan
 // descriptor indexing based implementations
 class Texture_heap_impl final

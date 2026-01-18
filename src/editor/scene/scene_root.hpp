@@ -112,7 +112,7 @@ public:
         App_message_bus*                        app_message_bus,
         App_scenes*                             app_scenes,
         const std::shared_ptr<Content_library>& content_library,
-        const std::string_view                  name
+        std::string_view                        name
     );
     ~Scene_root() noexcept override;
 

@@ -29,17 +29,8 @@ public:
     [[nodiscard]] static auto create_shared() -> std::shared_ptr<IWorld>;
     [[nodiscard]] static auto create_unique() -> std::unique_ptr<IWorld>;
 
-    [[nodiscard]] virtual auto create_rigid_body       (
-        const IRigid_body_create_info& create_info,
-        glm::vec3                      position    = glm::vec3{0.0f, 0.0f, 0.0f},
-        glm::quat                      orientation = glm::quat{1.0f, 0.0f, 0.0f, 0.0f}
-    ) -> IRigid_body* = 0;
-
-    [[nodiscard]] virtual auto create_rigid_body_shared(
-        const IRigid_body_create_info& create_info,
-        glm::vec3                      position    = glm::vec3{0.0f, 0.0f, 0.0f},
-        glm::quat                      orientation = glm::quat{1.0f, 0.0f, 0.0f, 0.0f}
-    ) -> std::shared_ptr<IRigid_body> = 0;
+    [[nodiscard]] virtual auto create_rigid_body       (const IRigid_body_create_info& create_info) -> IRigid_body* = 0;
+    [[nodiscard]] virtual auto create_rigid_body_shared(const IRigid_body_create_info& create_info) -> std::shared_ptr<IRigid_body> = 0;
 
     [[nodiscard]] virtual auto get_gravity         () const -> glm::vec3                 = 0;
     [[nodiscard]] virtual auto get_rigid_body_count() const -> std::size_t               = 0;

@@ -11,7 +11,7 @@ namespace erhe::graphics {
     class Render_pass;
     class Swapchain;
 }
-namespace erhe::window   { class Context_window; }
+namespace erhe::window { class Context_window; }
 
 namespace erhe::imgui {
 
@@ -26,7 +26,7 @@ public:
         erhe::graphics::Device&         graphics_device,
         erhe::rendergraph::Rendergraph& rendergraph,
         erhe::window::Context_window&   context_window,
-        const std::string_view          name
+        std::string_view                name
     );
     ~Window_imgui_host() noexcept override;
 

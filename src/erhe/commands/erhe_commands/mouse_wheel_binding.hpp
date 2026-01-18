@@ -14,11 +14,11 @@ struct Input_arguments;
 class Mouse_wheel_binding : public Command_binding
 {
 public:
-    explicit Mouse_wheel_binding(Command* command, const std::optional<uint32_t> modifier_mask = {});
+    explicit Mouse_wheel_binding(Command* command, std::optional<uint32_t> modifier_mask = {});
     Mouse_wheel_binding();
     ~Mouse_wheel_binding() noexcept override;
 
-    auto get_type() const -> Type override { return Command_binding::Type::Mouse_wheel; }
+    [[nodiscard]] auto get_type() const -> Type override { return Command_binding::Type::Mouse_wheel; }
 
     virtual auto on_wheel(Input_arguments& input) -> bool;
 

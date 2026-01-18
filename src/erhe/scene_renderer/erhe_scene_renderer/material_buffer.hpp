@@ -5,8 +5,6 @@
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_graphics/shader_resource.hpp"
 
-#include <set>
-
 namespace erhe::graphics {
     class Sampler;
     class Texture_heap;

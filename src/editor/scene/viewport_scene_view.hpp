@@ -4,8 +4,6 @@
 #include "scene/scene_view.hpp"
 
 #include "erhe_rendergraph/texture_rendergraph_node.hpp"
-#include "erhe_commands/command.hpp"
-#include "erhe_imgui/imgui_window.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_math/viewport.hpp"
 
@@ -75,7 +73,7 @@ public:
         App_context&                                context,
         erhe::rendergraph::Rendergraph&             rendergraph,
         Tools&                                      tools,
-        const std::string_view                      name,
+        std::string_view                            name,
         const char*                                 ini_label,
         const std::shared_ptr<Scene_root>&          scene_root,
         const std::shared_ptr<erhe::scene::Camera>& camera,
@@ -90,8 +88,8 @@ public:
     auto get_shadow_render_node    () const -> Shadow_render_node*                                      override;
     auto as_viewport_scene_view    () -> Viewport_scene_view*                                           override;
     auto as_viewport_scene_view    () const -> const Viewport_scene_view*                               override;
-    auto get_closest_point_on_line (const glm::vec3 P0, const glm::vec3 P1) -> std::optional<glm::vec3> override;
-    auto get_closest_point_on_plane(const glm::vec3 N , const glm::vec3 P ) -> std::optional<glm::vec3> override;
+    auto get_closest_point_on_line (glm::vec3 P0, glm::vec3 P1) -> std::optional<glm::vec3> override;
+    auto get_closest_point_on_plane(glm::vec3 N , glm::vec3 P ) -> std::optional<glm::vec3> override;
 
     // Implements Rendergraph_node
     auto get_type_name           () const -> std::string_view override { return "Viewport_scene_view"; }
@@ -108,9 +106,9 @@ public:
     auto get_shader_stages_variant() const -> Shader_stages_variant;
 
     [[nodiscard]] auto get_ini_label                       () const -> const char* { return m_ini_label; }
-    [[nodiscard]] auto get_viewport_from_window            (const glm::vec2 position_in_window) const -> glm::vec2;
-    [[nodiscard]] auto project_to_viewport                 (const glm::vec3 position_in_world ) const -> std::optional<glm::vec3>;
-    [[nodiscard]] auto unproject_to_world                  (const glm::vec3 position_in_window) const -> std::optional<glm::vec3>;
+    [[nodiscard]] auto get_viewport_from_window            (glm::vec2 position_in_window) const -> glm::vec2;
+    [[nodiscard]] auto project_to_viewport                 (glm::vec3 position_in_world ) const -> std::optional<glm::vec3>;
+    [[nodiscard]] auto unproject_to_world                  (glm::vec3 position_in_window) const -> std::optional<glm::vec3>;
     [[nodiscard]] auto is_scene_view_hovered               () const -> bool;
     [[nodiscard]] auto get_window_viewport                 () const -> const erhe::math::Viewport&;
     [[nodiscard]] auto get_projection_viewport             () const -> const erhe::math::Viewport&;

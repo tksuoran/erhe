@@ -2,17 +2,11 @@
 
 #include "erhe_physics/iconstraint.hpp"
 
-#include <glm/glm.hpp>
-
-#include <memory>
-
-namespace erhe::physics
-{
+namespace erhe::physics {
 
 class IRigid_body;
 
-class Null_point_to_point_constraint
-    : public IConstraint
+class Null_point_to_point_constraint : public IConstraint
 {
 public:
     explicit Null_point_to_point_constraint(

@@ -483,22 +483,14 @@ void Jolt_world::sanity_check()
 {
 }
 
-auto Jolt_world::create_rigid_body(
-    const IRigid_body_create_info& create_info,
-    glm::vec3                      position,
-    glm::quat                      orientation
-) -> IRigid_body*
+auto Jolt_world::create_rigid_body(const IRigid_body_create_info& create_info) -> IRigid_body*
 {
-    return new Jolt_rigid_body(*this, create_info, position, orientation);
+    return new Jolt_rigid_body(*this, create_info);
 }
 
-auto Jolt_world::create_rigid_body_shared(
-    const IRigid_body_create_info& create_info,
-    glm::vec3                      position,
-    glm::quat                      orientation
-) -> std::shared_ptr<IRigid_body>
+auto Jolt_world::create_rigid_body_shared(const IRigid_body_create_info& create_info) -> std::shared_ptr<IRigid_body>
 {
-    return std::make_shared<Jolt_rigid_body>(*this, create_info, position, orientation);
+    return std::make_shared<Jolt_rigid_body>(*this, create_info);
 }
 
 } // namespace erhe::physics

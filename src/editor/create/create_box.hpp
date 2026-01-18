@@ -12,11 +12,11 @@ class Brush_data;
 class Create_box : public Create_shape
 {
 public:
-    void render_preview(const Create_preview_settings& preview_settings) override;
+    ~Create_box() noexcept override;
 
-    void imgui() override;
-
-    auto create(Brush_data& brush_create_info) const -> std::shared_ptr<Brush> override;
+    void render_preview(const Create_preview_settings& preview_settings)               override;
+    void imgui         ()                                                              override;
+    auto create        (Brush_data& brush_create_info) const -> std::shared_ptr<Brush> override;
 
 private:
     glm::vec3  m_size {1.0f, 1.0f, 1.0f};

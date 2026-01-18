@@ -20,8 +20,8 @@ public:
     void disconnect         ();
     auto listen             (const char* address, int port) -> bool;
     auto poll               (int timeout_ms) -> bool;
-    auto get_state          () const -> Socket::State;
-    auto get_client_count   () const -> std::size_t;
+    [[nodiscard]] auto get_state          () const -> Socket::State;
+    [[nodiscard]] auto get_client_count   () const -> std::size_t;
 
 private:
     Socket              m_listen_socket;

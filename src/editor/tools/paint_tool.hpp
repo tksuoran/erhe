@@ -14,15 +14,9 @@
 #include <optional>
 #include <vector>
 
-namespace erhe::geometry {
-    class Geometry;
-}
-namespace erhe::imgui {
-    class Imgui_windows;
-}
-namespace erhe::scene {
-    class Mesh;
-}
+namespace erhe::geometry { class Geometry; }
+namespace erhe::imgui    { class Imgui_windows; }
+namespace erhe::scene    { class Mesh; }
 
 namespace editor {
 
@@ -90,21 +84,21 @@ public:
 private:
     static auto vertex_buffer_index_from_scnene_mesh_primitive_corner(
         const erhe::scene::Mesh& scene_mesh,
-        const std::size_t        scene_mesh_primitive_index,
-        const GEO::index_t       geo_mesh_corner
+        std::size_t              scene_mesh_primitive_index,
+        GEO::index_t             geo_mesh_corner
     ) -> std::optional<uint32_t>;
 
     void paint_corner(
         erhe::scene::Mesh& scene_mesh,
         std::size_t        scene_mesh_primitive_index,
         GEO::index_t       corner,
-        const glm::vec4    color
+        glm::vec4          color
     );
     void paint_vertex(
         erhe::scene::Mesh& scene_mesh_mesh,
         std::size_t        scene_mesh_primitive_index,
         GEO::index_t       vertex,
-        const glm::vec4    color
+        glm::vec4          color
     );
 
     Paint_vertex_command                m_paint_vertex_command;

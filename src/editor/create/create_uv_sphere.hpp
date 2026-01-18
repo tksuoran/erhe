@@ -7,11 +7,11 @@ namespace editor {
 class Create_uv_sphere : public Create_shape
 {
 public:
-    void render_preview(const Create_preview_settings& preview_settings) override;
+    ~Create_uv_sphere() noexcept override;
 
-    void imgui() override;
-
-    auto create(Brush_data& brush_create_info) const -> std::shared_ptr<Brush> override;
+    void render_preview(const Create_preview_settings& preview_settings)               override;
+    void imgui         ()                                                              override;
+    auto create        (Brush_data& brush_create_info) const -> std::shared_ptr<Brush> override;
 
 private:
     int   m_slice_count{8};

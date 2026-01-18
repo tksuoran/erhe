@@ -174,7 +174,7 @@ public:
     Attribute_present(GEO::AttributesManager& attributes_manager, const Attribute_descriptor& descriptor)
         : descriptor{descriptor}
         , attribute {attributes_manager, descriptor.name.c_str()}
-        , present   {attributes_manager, descriptor.present_name.c_str()}
+        , present   {attributes_manager, descriptor.present_name}
     {
     }
 
@@ -191,10 +191,10 @@ public:
     void bind(GEO::AttributesManager& attributes_manager)
     {
         if (!attribute.is_bound()) {
-            attribute.bind(attributes_manager, descriptor.name.c_str());
+            attribute.bind(attributes_manager, descriptor.name);
         }
         if (!present.is_bound()) {
-            present.bind(attributes_manager, descriptor.present_name.c_str());
+            present.bind(attributes_manager, descriptor.present_name);
         }
     }
 
@@ -212,7 +212,7 @@ public:
         attribute[key] = value;
         present[key] = true;
     }
-    auto has(GEO::index_t key) const
+    [[nodiscard]] auto has(GEO::index_t key) const
     {
         if ((key >= present.size()) || (key >= attribute.size())) {
             return false;
@@ -220,12 +220,12 @@ public:
         bool result = present[key];
         return result;
     }
-    auto get(GEO::index_t key) const -> T
+    [[nodiscard]] auto get(GEO::index_t key) const -> T
     {
         geo_assert(present[key]);
         return attribute[key];
     }
-    auto try_get(GEO::index_t key) const -> std::optional<T>
+    [[nodiscard]] auto try_get(GEO::index_t key) const -> std::optional<T>
     {
         if ((key >= present.size()) || (key >= attribute.size())) {
             return std::optional<T>{};

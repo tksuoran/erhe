@@ -2,8 +2,6 @@
 
 #include "erhe_imgui/imgui_window.hpp"
 
-#include <imgui/imgui.h>
-
 namespace erhe::imgui { class Imgui_windows; }
 namespace ImGG { class GradientWidget; }
 

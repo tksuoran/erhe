@@ -44,12 +44,12 @@ public:
         shader_storage_block = 6
     };
 
-    [[nodiscard]] static auto is_basic           (const Type type) -> bool;
-    [[nodiscard]] static auto is_aggregate       (const Type type) -> bool;
-    [[nodiscard]] static auto should_emit_layout (const Type type) -> bool;
-    [[nodiscard]] static auto should_emit_members(const Type type) -> bool;
-    [[nodiscard]] static auto is_block           (const Type type) -> bool;
-    [[nodiscard]] static auto uses_binding_points(const Type type) -> bool;
+    [[nodiscard]] static auto is_basic           (Type type) -> bool;
+    [[nodiscard]] static auto is_aggregate       (Type type) -> bool;
+    [[nodiscard]] static auto should_emit_layout (Type type) -> bool;
+    [[nodiscard]] static auto should_emit_members(Type type) -> bool;
+    [[nodiscard]] static auto is_block           (Type type) -> bool;
+    [[nodiscard]] static auto uses_binding_points(Type type) -> bool;
 
     enum class Precision : unsigned int {
         lowp    = 0,
@@ -64,54 +64,54 @@ public:
 
     // Struct definition
     Shader_resource(
-        Device&                device,
-        const std::string_view struct_type_name,
-        Shader_resource*       parent = nullptr
+        Device&          device,
+        std::string_view struct_type_name,
+        Shader_resource* parent = nullptr
     );
 
     // Struct member
     Shader_resource(
-        Device&                          device,
-        const std::string_view           struct_member_name,
-        Shader_resource*                 struct_type,
-        const std::optional<std::size_t> array_size = {},
-        Shader_resource*                 parent = nullptr
+        Device&                    device,
+        std::string_view           struct_member_name,
+        Shader_resource*           struct_type,
+        std::optional<std::size_t> array_size = {},
+        Shader_resource*           parent = nullptr
     );
 
     // Block (uniform block or shader storage block)
     Shader_resource(
-        Device&                          device,
-        const std::string_view           block_name,
-        int                              binding_point,
-        Type                             block_type,
-        const std::optional<std::size_t> array_size = {}
+        Device&                    device,
+        std::string_view           block_name,
+        int                        binding_point,
+        Type                       block_type,
+        std::optional<std::size_t> array_size = {}
     );
 
     // Basic type
     Shader_resource(
-        Device&                          device,
-        std::string_view                 basic_name,
-        Glsl_type                        basic_type,
-        const std::optional<std::size_t> array_size = {},
-        Shader_resource*                 parent = nullptr
+        Device&                    device,
+        std::string_view           basic_name,
+        Glsl_type                  basic_type,
+        std::optional<std::size_t> array_size = {},
+        Shader_resource*           parent = nullptr
     );
 
     // Sampler
     Shader_resource(
-        Device&                          device,
-        const std::string_view           sampler_name,
-        Shader_resource*                 parent,
-        int                              location,
-        Glsl_type                        sampler_type,
-        const std::optional<std::size_t> array_size = {},
-        const std::optional<int>         dedicated_texture_unit = {}
+        Device&                    device,
+        std::string_view           sampler_name,
+        Shader_resource*           parent,
+        int                        location,
+        Glsl_type                  sampler_type,
+        std::optional<std::size_t> array_size = {},
+        std::optional<int>         dedicated_texture_unit = {}
     );
 
     // Constructor for creating  default uniform block
     explicit Shader_resource(Device& device);
     ~Shader_resource() noexcept;
     Shader_resource(const Shader_resource& other) = delete;
-    Shader_resource(Shader_resource&& other);
+    Shader_resource(Shader_resource&& other) noexcept;
 
     [[nodiscard]] auto is_array        () const -> bool;
     [[nodiscard]] auto get_type        () const -> Type;
@@ -126,7 +126,7 @@ public:
     [[nodiscard]] auto get_offset_in_parent() const -> std::size_t;
     [[nodiscard]] auto get_parent          () const -> Shader_resource*;
     [[nodiscard]] auto get_member_count    () const -> std::size_t;
-    [[nodiscard]] auto get_member          (const std::string_view name) const -> Shader_resource*;
+    [[nodiscard]] auto get_member          (std::string_view name) const -> Shader_resource*;
     [[nodiscard]] auto get_binding_point   () const -> unsigned int;
     [[nodiscard]] auto get_binding_target  () const -> Buffer_target;
     [[nodiscard]] auto get_texture_unit    () const -> int;
@@ -149,71 +149,71 @@ public:
     [[nodiscard]] auto get_writeonly() const -> bool;
 
     auto add_struct(
-        const std::string_view           name,
-        Shader_resource*                 struct_type,
-        const std::optional<std::size_t> array_size = {}
+        std::string_view           name,
+        Shader_resource*           struct_type,
+        std::optional<std::size_t> array_size = {}
     ) -> Shader_resource*;
 
     auto add_sampler(
-        const std::string_view           name,
-        Glsl_type                        sampler_type,
-        const std::optional<uint32_t>    dedicated_texture_unit = {},
-        const std::optional<std::size_t> array_size = {}
+        std::string_view           name,
+        Glsl_type                  sampler_type,
+        std::optional<uint32_t>    dedicated_texture_unit = {},
+        std::optional<std::size_t> array_size = {}
     ) -> Shader_resource*;
 
     auto add_float(
-        const std::string_view           name,
-        const std::optional<std::size_t> array_size = {}
+        std::string_view           name,
+        std::optional<std::size_t> array_size = {}
     ) -> Shader_resource*;
 
     auto add_vec2(
-        const std::string_view           name,
-        const std::optional<std::size_t> array_size = {}
+        std::string_view           name,
+        std::optional<std::size_t> array_size = {}
     ) -> Shader_resource*;
 
     auto add_vec3(
-        const std::string_view           name,
-        const std::optional<std::size_t> array_size = {}
+        std::string_view           name,
+        std::optional<std::size_t> array_size = {}
     ) -> Shader_resource*;
 
     auto add_vec4(
-        const std::string_view           name,
-        const std::optional<std::size_t> array_size = {}
+        std::string_view           name,
+        std::optional<std::size_t> array_size = {}
     ) -> Shader_resource*;
 
     auto add_mat4(
-        const std::string_view           name,
-        const std::optional<std::size_t> array_size = {}
+        std::string_view           name,
+        std::optional<std::size_t> array_size = {}
     ) -> Shader_resource*;
 
     auto add_int(
-        const std::string_view           name,
-        const std::optional<std::size_t> array_size = {}
+        std::string_view           name,
+        std::optional<std::size_t> array_size = {}
     ) -> Shader_resource*;
 
     auto add_uint(
-        const std::string_view           name,
-        const std::optional<std::size_t> array_size = {}
+        std::string_view           name,
+        std::optional<std::size_t> array_size = {}
     ) -> Shader_resource*;
 
     auto add_uvec2(
-        const std::string_view           name,
-        const std::optional<std::size_t> array_size = {}
+        std::string_view           name,
+        std::optional<std::size_t> array_size = {}
     ) -> Shader_resource*;
 
     auto add_uvec3(
-        const std::string_view           name,
-        const std::optional<std::size_t> array_size = {}
+        std::string_view           name,
+        std::optional<std::size_t> array_size = {}
     ) -> Shader_resource*;
 
     auto add_uvec4(
-        const std::string_view           name,
-        const std::optional<std::size_t> array_size = {}
+        std::string_view           name,
+        std::optional<std::size_t> array_size = {}
     ) -> Shader_resource*;
 
     auto add_uint64(
-        const std::string_view           name,
-        const std::optional<std::size_t> array_size = {}
+        std::string_view           name,
+        std::optional<std::size_t> array_size = {}
     ) -> Shader_resource*;
 
     auto add_attribute(const erhe::dataformat::Vertex_attribute& attribute) -> Shader_resource*;
@@ -221,9 +221,9 @@ public:
 private:
     void sanitize(const std::optional<std::size_t>& array_size) const;
 
-    void align_offset_to(const unsigned int alignment);
+    void align_offset_to(unsigned int alignment);
 
-    void indent(std::stringstream& ss, const int indent_level) const;
+    void indent(std::stringstream& ss, int indent_level) const;
 
     Device&                    m_device;
 
@@ -262,6 +262,7 @@ private:
     // Only used for uniforms in program
 };
 
-void add_vertex_stream(const erhe::dataformat::Vertex_stream& vertex_stream, Shader_resource& vertex_struct, Shader_resource& vertices_block);
+void add_vertex_stream(const erhe::dataformat::Vertex_stream& vertex_stream, Shader_resource& vertex_struct,
+    Shader_resource& vertices_block);
 
 } // namespace erhe::graphics

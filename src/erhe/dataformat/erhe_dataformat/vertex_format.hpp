@@ -19,7 +19,7 @@ enum class Vertex_attribute_usage : uint32_t {
     custom        = 9
 };
 
-[[nodiscard]] auto c_str(const Vertex_attribute_usage usage) -> const char*;
+[[nodiscard]] auto c_str(Vertex_attribute_usage usage) -> const char*;
 
 class Vertex_attribute
 {

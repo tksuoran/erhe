@@ -29,7 +29,7 @@ public:
     auto update(Scene_view* scene_view) -> bool                         override;
 
 private:
-    void update(const glm::vec3 drag_position);
+    void update(glm::vec3 drag_position);
 };
 
 }

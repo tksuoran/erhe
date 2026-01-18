@@ -1,7 +1,6 @@
 #pragma once
 
-// #include "tools/tool.hpp"
- #include "renderers/render_context.hpp"
+#include "renderers/render_context.hpp"
 
 #include "erhe_scene/node_attachment.hpp"
 

@@ -14,6 +14,8 @@
 
 namespace editor {
 
+Create_uv_sphere::~Create_uv_sphere() noexcept = default;
+
 void Create_uv_sphere::render_preview(const Create_preview_settings& preview_settings)
 {
     const Render_context& render_context = preview_settings.render_context;

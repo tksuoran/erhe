@@ -4,8 +4,6 @@
 
 #include "erhe_commands/command.hpp"
 
-#include <glm/glm.hpp>
-
 #include <memory>
 
 namespace erhe::imgui     { class Imgui_windows; }

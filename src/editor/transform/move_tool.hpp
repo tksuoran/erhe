@@ -29,9 +29,9 @@ public:
     auto update(Scene_view* scene_view) -> bool                         override;
 
 private:
-    void update(const glm::vec3 drag_position);
+    void update(glm::vec3 drag_position);
 
-    [[nodiscard]] auto snap(const glm::vec3 translation) const -> glm::vec3;
+    [[nodiscard]] auto snap(glm::vec3 translation) const -> glm::vec3;
 
     int m_translate_snap_index{2};
 };

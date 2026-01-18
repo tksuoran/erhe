@@ -37,6 +37,7 @@ public:
     void add_line(const std::string& line);
 
 private:
+    using Tool::on_message; // Intentionally hide Tool::on_message()
     void on_message(App_message& message);
     [[nodiscard]] auto get_hover_node() const -> std::shared_ptr<erhe::scene::Node>;
 

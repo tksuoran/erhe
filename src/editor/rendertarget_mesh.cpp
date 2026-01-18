@@ -1,6 +1,4 @@
-﻿// #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
-
-#include "rendertarget_mesh.hpp"
+﻿#include "rendertarget_mesh.hpp"
 
 #include "app_context.hpp"
 #include "editor_log.hpp"
@@ -14,11 +12,12 @@
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_graphics/texture.hpp"
+#include "erhe_math/math_util.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_utility/bit_helpers.hpp"
-#include "erhe_math/math_util.hpp"
+#include "erhe_verify/verify.hpp"
 
 namespace editor {
 

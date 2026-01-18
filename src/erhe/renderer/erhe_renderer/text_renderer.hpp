@@ -51,9 +51,9 @@ public:
     void operator=(Text_renderer&&)      = delete;
 
     // Public API
-    void print(const glm::vec3 text_position, uint32_t text_color, const std::string_view text);
+    void print(glm::vec3 text_position, uint32_t text_color, std::string_view text);
     [[nodiscard]] auto font_size() -> float;
-    [[nodiscard]] auto measure  (const std::string_view text) const -> erhe::ui::Rectangle;
+    [[nodiscard]] auto measure  (std::string_view text) const -> erhe::ui::Rectangle;
 
     void render(erhe::graphics::Render_command_encoder& encoder, erhe::math::Viewport viewport);
 

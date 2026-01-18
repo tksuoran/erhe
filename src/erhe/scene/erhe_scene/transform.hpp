@@ -15,8 +15,8 @@ class Transform
 {
 public:
     Transform() = default;
-    explicit Transform(const glm::mat4 m);
-    Transform(const glm::mat4 matrix, const glm::mat4 inverse_matrix);
+    explicit Transform(glm::mat4 m);
+    Transform(glm::mat4 matrix, glm::mat4 inverse_matrix);
     Transform(const Transform& t);
     auto operator=(const Transform& t) -> Transform&;
 
@@ -25,16 +25,14 @@ public:
 
     [[nodiscard]] static auto inverse(const Transform& transform) -> Transform;
 
-    void set_orthographic          (const Clip_range clip_range, float left,     float right,        float bottom, float top);
-    void set_orthographic_centered (const Clip_range clip_range, float width,    float height);
-    void set_frustum               (const Clip_range clip_range, float left,     float right,        float bottom, float top);
-    void set_frustum_simple        (const Clip_range clip_range, float width,    float height);
-    void set_perspective           (const Clip_range clip_range, float fov_x,    float fov_y);
-    void set_perspective_xr        (const Clip_range clip_range, float fov_left, float fov_right,    float fov_up, float fov_down);
-    void set_perspective_vertical  (const Clip_range clip_range, float fov_y,    float aspect_ratio);
-    void set_perspective_horizontal(const Clip_range clip_range, float fov_x,    float aspect_ratio);
-    void set                       (const glm::mat4& matrix);
-    void set                       (const glm::mat4& matrix, const glm::mat4& inverse_matrix);
+    void set_orthographic          (Clip_range clip_range, float left,     float right,        float bottom, float top);
+    void set_orthographic_centered (Clip_range clip_range, float width,    float height);
+    void set_frustum               (Clip_range clip_range, float left,     float right,        float bottom, float top);
+    void set_frustum_simple        (Clip_range clip_range, float width,    float height);
+    void set_perspective           (Clip_range clip_range, float fov_x,    float fov_y);
+    void set_perspective_xr        (Clip_range clip_range, float fov_left, float fov_right,    float fov_up, float fov_down);
+    void set_perspective_vertical  (Clip_range clip_range, float fov_y,    float aspect_ratio);
+    void set_perspective_horizontal(Clip_range clip_range, float fov_x,    float aspect_ratio);
 
 protected:
     glm::mat4 m_matrix        {1.0f};

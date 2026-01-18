@@ -28,9 +28,9 @@ public:
     Thumbnail();
     ~Thumbnail() noexcept;
     Thumbnail(const Thumbnail&) = delete;
-    Thumbnail(Thumbnail&&);
+    Thumbnail(Thumbnail&&) noexcept;
     auto operator=(const Thumbnail&) -> Thumbnail& = delete;
-    auto operator=(Thumbnail&&) -> Thumbnail&;
+    auto operator=(Thumbnail&&) noexcept -> Thumbnail&;
 
     std::size_t                              item_id{};
     uint64_t                                 last_use_frame_number{0};

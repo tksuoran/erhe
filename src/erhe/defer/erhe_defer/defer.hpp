@@ -13,9 +13,7 @@ public:
         rvalue.m_callback = nullptr;
     }
 
-    Defer() noexcept
-    {
-    }
+    Defer() noexcept = default;
 
     explicit Defer(const std::function<void()>& func) noexcept
     {

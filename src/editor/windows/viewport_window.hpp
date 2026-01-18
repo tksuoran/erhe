@@ -36,11 +36,11 @@ public:
         const std::shared_ptr<erhe::rendergraph::Rendergraph_node>& rendergraph_output_node,
         App_context&                                                app_context,
         App_message_bus&                                            app_message_bus,
-        const std::string_view                                      name,
-        const std::string_view                                      ini_label,
+        std::string_view                                            name,
+        std::string_view                                            ini_label,
         const std::shared_ptr<Viewport_scene_view>&                 viewport_scene_view
     );
-    ~Viewport_window() noexcept;
+    ~Viewport_window() noexcept override;
 
     // Implements Imgui_window
     void imgui               () override;

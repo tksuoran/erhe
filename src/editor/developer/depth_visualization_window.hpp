@@ -1,11 +1,9 @@
 #pragma once
 
 #include "erhe_rendergraph/texture_rendergraph_node.hpp"
-//#include "erhe_rendergraph/rendergraph_node.hpp"
 #include "erhe_imgui/imgui_window.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_renderer/pipeline_renderpass.hpp"
-//#include "erhe_math/viewport.hpp"
 
 namespace erhe::graphics       { class Device; }
 namespace erhe::imgui          { class Imgui_windows; }

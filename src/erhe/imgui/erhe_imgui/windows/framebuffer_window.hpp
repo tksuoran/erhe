@@ -4,7 +4,6 @@
 #include "erhe_imgui/imgui_window.hpp"
 
 #include "erhe_graphics/render_pass.hpp"
-#include "erhe_graphics/render_pipeline_state.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_math/viewport.hpp"
 
@@ -27,18 +26,18 @@ public:
         erhe::graphics::Device& graphics_device,
         Imgui_renderer&         imgui_renderer,
         Imgui_windows&          imgui_windows,
-        const std::string_view  title,
+        std::string_view        title,
         const char*             ini_label
     );
-    ~Framebuffer_window() noexcept;
+    ~Framebuffer_window() noexcept override;
 
     // Implements Imgui_window
     void imgui() override;
 
     // Implements Render_pass window
-    virtual auto get_size(glm::vec2 available_size) const -> glm::vec2;
+    [[nodiscard]] virtual auto get_size(glm::vec2 available_size) const -> glm::vec2;
 
-    [[nodiscard]] auto to_content(const glm::vec2 position_in_root) const -> glm::vec2;
+    [[nodiscard]] auto to_content(glm::vec2 position_in_root) const -> glm::vec2;
 
     // Public API
     virtual void update_render_pass();

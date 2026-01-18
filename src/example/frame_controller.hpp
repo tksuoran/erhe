@@ -39,9 +39,9 @@ public:
     void reset                  ();
     void update_transform       ();
     void update_fixed_step      ();
-    void set_position           (const glm::vec3 position);
-    void set_elevation          (const float value);
-    void set_heading            (const float value);
+    void set_position           (glm::vec3 position);
+    void set_elevation          (float value);
+    void set_heading            (float value);
     void get_transform_from_node(erhe::scene::Node* node);
 
     [[nodiscard]] auto get_position  () const -> glm::vec3;
@@ -50,7 +50,7 @@ public:
     [[nodiscard]] auto get_axis_x    () const -> glm::vec3;
     [[nodiscard]] auto get_axis_y    () const -> glm::vec3;
     [[nodiscard]] auto get_axis_z    () const -> glm::vec3;
-    [[nodiscard]] auto get_controller(const Control control) -> erhe::math::Input_axis&;
+    [[nodiscard]] auto get_controller(Control control) -> erhe::math::Input_axis&;
 
     erhe::math::Input_axis rotate_x;
     erhe::math::Input_axis rotate_y;

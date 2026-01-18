@@ -12,8 +12,8 @@ class Jolt_convex_hull_collision_shape : public Jolt_collision_shape
 public:
     Jolt_convex_hull_collision_shape(const float* points, int point_count, int stride);
 
-    auto get_shape_settings() -> JPH::ShapeSettings& override;
-    auto describe          () const -> std::string   override;
+    [[nodiscard]] auto get_shape_settings() -> JPH::ShapeSettings& override;
+    [[nodiscard]] auto describe() const -> std::string   override;
 
 private:
     JPH::Ref<JPH::ConvexHullShapeSettings> m_shape_settings;

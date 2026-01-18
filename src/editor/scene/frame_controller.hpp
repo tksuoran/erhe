@@ -46,21 +46,21 @@ public:
     void reset                  ();
     void update                 ();
     void update_fixed_step      ();
-    void set_position           (const glm::vec3 position);
+    void set_position           (glm::vec3 position);
     void set_orientation        (const glm::mat4& orientation);
     void get_transform_from_node(erhe::scene::Node* node);
 
     void apply_rotation          (float rx, float ry, float rz);
     void apply_tumble            (glm::vec3 pivot, float rx, float ry, float rz);
-    void set_active_control_value(const Variable variable, float value);
+    void set_active_control_value(Variable variable, float value);
 
     [[nodiscard]] auto get_position            () const -> glm::vec3;
     [[nodiscard]] auto get_orientation         () const -> glm::mat4;
     [[nodiscard]] auto get_axis_x              () const -> glm::vec3;
     [[nodiscard]] auto get_axis_y              () const -> glm::vec3;
     [[nodiscard]] auto get_axis_z              () const -> glm::vec3;
-    [[nodiscard]] auto get_variable            (const Variable variable) -> erhe::math::Input_axis&;
-    [[nodiscard]] auto get_active_control_value(const Variable variable) const -> float;
+    [[nodiscard]] auto get_variable            (Variable variable) -> erhe::math::Input_axis&;
+    [[nodiscard]] auto get_active_control_value(Variable variable) const -> float;
 
     erhe::math::Input_axis rotate_x;
     erhe::math::Input_axis rotate_y;

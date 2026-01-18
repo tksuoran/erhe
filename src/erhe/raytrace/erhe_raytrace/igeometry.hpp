@@ -66,9 +66,9 @@ public:
     [[nodiscard]] virtual auto is_enabled   () const -> bool             = 0;
     [[nodiscard]] virtual auto debug_label  () const -> std::string_view = 0;
 
-    [[nodiscard]] static auto create       (const std::string_view debug_label, const Geometry_type geometry_type) -> IGeometry*;
-    [[nodiscard]] static auto create_shared(const std::string_view debug_label, const Geometry_type geometry_type) -> std::shared_ptr<IGeometry>;
-    [[nodiscard]] static auto create_unique(const std::string_view debug_label, const Geometry_type geometry_type) -> std::unique_ptr<IGeometry>;
+    [[nodiscard]] static auto create       (std::string_view debug_label, Geometry_type geometry_type) -> IGeometry*;
+    [[nodiscard]] static auto create_shared(std::string_view debug_label, Geometry_type geometry_type) -> std::shared_ptr<IGeometry>;
+    [[nodiscard]] static auto create_unique(std::string_view debug_label, Geometry_type geometry_type) -> std::unique_ptr<IGeometry>;
 };
 
 } // namespace erhe::raytrace

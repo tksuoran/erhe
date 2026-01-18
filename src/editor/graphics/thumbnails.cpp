@@ -14,8 +14,8 @@
 namespace editor {
 
 Thumbnail::Thumbnail() = default;
-Thumbnail::Thumbnail(Thumbnail&&) = default;
-auto Thumbnail::operator=(Thumbnail&&) -> Thumbnail& = default;
+Thumbnail::Thumbnail(Thumbnail&&) noexcept = default;
+auto Thumbnail::operator=(Thumbnail&&) noexcept -> Thumbnail& = default;
 Thumbnail::~Thumbnail() noexcept = default;
 
 Thumbnails::Thumbnails(erhe::graphics::Device& graphics_device, App_context& context)

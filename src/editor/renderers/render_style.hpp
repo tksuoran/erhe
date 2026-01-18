@@ -37,7 +37,7 @@ public:
     Render_style();
     ~Render_style() noexcept override;
 
-    explicit Render_style(const std::string_view name);
+    explicit Render_style(std::string_view name);
 
     static constexpr std::string_view static_type_name{"Render_style"};
     [[nodiscard]] static auto get_static_type() -> uint64_t;

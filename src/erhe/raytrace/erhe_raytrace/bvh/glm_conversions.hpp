@@ -3,8 +3,7 @@
 #include <bvh/v2/vec.h>
 #include <glm/glm.hpp>
 
-namespace erhe::raytrace
-{
+namespace erhe::raytrace {
 
 [[nodiscard]] inline auto from_bvh(const bvh::v2::Vec<float, 3> v) -> glm::vec3
 {

@@ -1,7 +1,6 @@
 #pragma once
 
 #include "operations/operation.hpp"
-#include "operations/compound_operation.hpp"
 
 #include "erhe_primitive/build_info.hpp"
 #include "erhe_scene/mesh.hpp"
@@ -88,7 +87,7 @@ public:
     // Public API
     void add_entry   (Entry&& entry);
     void make_entries(
-        const std::function<
+        std::function<
             void(
                 const erhe::geometry::Geometry& before_geometry,
                 erhe::geometry::Geometry&       after_geo_mesh,
@@ -97,14 +96,14 @@ public:
         > geometry_operation
     );
     void make_entries(
-        const std::function<
+        std::function<
             void(
                 const erhe::geometry::Geometry& before_geo_mesh,
                 erhe::geometry::Geometry&       after_geo_mesh
             )
         > geometry_operation
     );
-    void make_entries(const std::function<void(const std::shared_ptr<erhe::scene::Mesh>& mesh)> mesh_operation);
+    void make_entries(std::function<void(const std::shared_ptr<erhe::scene::Mesh>& mesh)> mesh_operation);
 
 protected:
     auto describe_entries() const -> std::string;

@@ -13,9 +13,9 @@
 
 namespace erhe::graphics {
 
-[[nodiscard]] auto get_gl_attribute_type    (erhe::dataformat::Format format) -> gl::Attribute_type;
-[[nodiscard]] auto get_gl_vertex_attrib_type(erhe::dataformat::Format format) -> gl::Vertex_attrib_type;
-[[nodiscard]] auto get_gl_normalized        (erhe::dataformat::Format format) -> bool;
+//[[nodiscard]] auto get_gl_attribute_type    (erhe::dataformat::Format format) -> gl::Attribute_type;
+//[[nodiscard]] auto get_gl_vertex_attrib_type(erhe::dataformat::Format format) -> gl::Vertex_attrib_type;
+//[[nodiscard]] auto get_gl_normalized        (erhe::dataformat::Format format) -> bool;
 
 void Color_blend_state_tracker::reset()
 {

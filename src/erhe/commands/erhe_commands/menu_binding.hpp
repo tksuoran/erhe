@@ -14,12 +14,12 @@ public:
     Menu_binding();
     Menu_binding(Command* command, std::string_view menu_path, std::function<bool()> enabled_callback = {});
 
-    auto get_type() const -> Type override { return Command_binding::Type::Menu; }
-    auto get_menu_path() const -> const std::string&;
-    auto get_enabled() const -> bool;
+    [[nodiscard]] auto get_type() const -> Type override { return Command_binding::Type::Menu; }
+    [[nodiscard]] auto get_menu_path() const -> const std::string&;
+    [[nodiscard]] auto get_enabled() const -> bool;
 
 private:
-    std::string m_menu_path;
+    std::string           m_menu_path;
     std::function<bool()> m_enabled_callback;
 };
 

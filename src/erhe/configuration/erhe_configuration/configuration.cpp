@@ -13,6 +13,10 @@
 
 namespace erhe::configuration {
 
+Ini_file::~Ini_file() noexcept = default;
+
+Ini_cache::~Ini_cache() noexcept = default;
+
 auto str(const bool value) -> const char*
 {
     return value ? "true" : "false";

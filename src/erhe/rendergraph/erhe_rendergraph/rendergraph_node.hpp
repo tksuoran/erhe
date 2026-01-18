@@ -70,7 +70,7 @@ class Rendergraph_node
     , public erhe::graphics::Texture_reference
 {
 public:
-    Rendergraph_node(Rendergraph& rendergraph, const std::string_view name);
+    Rendergraph_node(Rendergraph& rendergraph, std::string_view name);
     virtual ~Rendergraph_node() noexcept;
 
     // Implements Item_base
@@ -100,10 +100,10 @@ public:
 
     void set_depth        (int depth);
     void set_position     (glm::vec2 position);
-    void set_selected     (bool selected);
+    void set_selected     (bool selected); // TODO XXX FIX
     void set_enabled      (bool value);
-    auto register_input   (const std::string_view label, int key) -> bool;
-    auto register_output  (const std::string_view label, int key) -> bool;
+    auto register_input   (std::string_view label, int key) -> bool;
+    auto register_output  (std::string_view label, int key) -> bool;
     auto connect_input    (int key, Rendergraph_node* producer_node) -> bool;
     auto connect_output   (int key, Rendergraph_node* consumer_node) -> bool;
     auto disconnect_input (int key, Rendergraph_node* producer_node) -> bool;

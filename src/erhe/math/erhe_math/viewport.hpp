@@ -9,7 +9,7 @@ namespace erhe::math {
 class Viewport
 {
 public:
-    auto aspect_ratio() const -> float;
+    [[nodiscard]] auto aspect_ratio() const -> float;
 
     [[nodiscard]] auto unproject(
         const glm::mat4& world_from_clip,

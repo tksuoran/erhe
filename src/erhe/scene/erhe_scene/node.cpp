@@ -253,8 +253,8 @@ void Node::handle_parent_update(erhe::Hierarchy* const old_parent_item, erhe::Hi
     ERHE_VERIFY(old_parent_item != new_parent_item);
     ERHE_VERIFY((old_parent_item == nullptr) || is<Node>(old_parent_item));
     ERHE_VERIFY((new_parent_item == nullptr) || is<Node>(new_parent_item));
-    Node* const old_parent = static_cast<Node* const>(old_parent_item);
-    Node* const new_parent = static_cast<Node* const>(new_parent_item);
+    auto* const old_parent = dynamic_cast<Node* const>(old_parent_item);
+    auto* const new_parent = dynamic_cast<Node* const>(new_parent_item);
     erhe::Item_host* const old_item_host = (old_parent != nullptr) ? old_parent->get_item_host() : nullptr;
     erhe::Item_host* const new_item_host = (new_parent != nullptr) ? new_parent->get_item_host() : nullptr;
     if (old_item_host != new_item_host) {
@@ -272,8 +272,8 @@ void Node::handle_item_host_update(erhe::Item_host* const old_item_host, erhe::I
 
     const auto shared_this = shared_node_from_this(); // Keep alive guarantee
 
-    Scene_host* old_scene_host = static_cast<Scene_host*>(old_item_host);
-    Scene_host* new_scene_host = static_cast<Scene_host*>(new_item_host);
+    auto* old_scene_host = dynamic_cast<Scene_host*>(old_item_host);
+    auto* new_scene_host = dynamic_cast<Scene_host*>(new_item_host);
 
     if (old_scene_host != nullptr) {
         old_scene_host->unregister_node(shared_this);
@@ -386,12 +386,12 @@ void Node::update_world_from_node()
 void Node::node_sanity_check(bool destruction_in_progress) const
 {
     for (const auto& child : get_children()) {
-        erhe::Item_host* child_host  = child->get_item_host();
-        erhe::Item_host* self_host   = get_item_host();
-        Scene_host*      child_scene_host = static_cast<Scene_host*>(child_host);
-        Scene_host*      self_scene_host  = static_cast<Scene_host*>(self_host);
-        Scene*           child_scene = (child_host != nullptr) ? child_scene_host->get_hosted_scene() : nullptr;
-        Scene*           self_scene  = (self_host  != nullptr) ? self_scene_host ->get_hosted_scene() : nullptr;
+        erhe::Item_host* child_host       = child->get_item_host();
+        erhe::Item_host* self_host        = get_item_host();
+        auto*            child_scene_host = static_cast<Scene_host*>(child_host);
+        auto*            self_scene_host  = static_cast<Scene_host*>(self_host);
+        Scene*           child_scene      = (child_host != nullptr) ? child_scene_host->get_hosted_scene() : nullptr;
+        Scene*           self_scene       = (self_host  != nullptr) ? self_scene_host ->get_hosted_scene() : nullptr;
 
         if (child_host != self_host) {
             log->error(

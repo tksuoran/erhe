@@ -106,8 +106,8 @@ public:
     // "Pointing"
     void set_world_from_control(glm::vec3 near_position_in_world, glm::vec3 far_position_in_world);
 
-    [[nodiscard]] virtual auto get_closest_point_on_line (const glm::vec3 P0, const glm::vec3 P1) -> std::optional<glm::vec3>;
-    [[nodiscard]] virtual auto get_closest_point_on_plane(const glm::vec3 N,  const glm::vec3 P ) -> std::optional<glm::vec3>;
+    [[nodiscard]] virtual auto get_closest_point_on_line (glm::vec3 P0, glm::vec3 P1) -> std::optional<glm::vec3>;
+    [[nodiscard]] virtual auto get_closest_point_on_plane(glm::vec3 N,  glm::vec3 P ) -> std::optional<glm::vec3>;
 
     void set_world_from_control    (const glm::mat4& world_from_control);
     void reset_control_transform   ();

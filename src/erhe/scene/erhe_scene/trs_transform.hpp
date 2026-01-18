@@ -10,13 +10,13 @@ class Trs_transform : public Transform
 {
 public:
     Trs_transform         () = default;
-    explicit Trs_transform(const glm::mat4 m);
-    Trs_transform         (const glm::mat4 matrix, const glm::mat4 inverse_matrix);
-    explicit Trs_transform(const glm::vec3 translation);
-    explicit Trs_transform(const glm::quat rotation);
-    Trs_transform         (const glm::vec3 translation, glm::quat rotation);
-    Trs_transform         (const glm::vec3 translation, glm::quat rotation, glm::vec3 scale);
-    Trs_transform         (const glm::vec3 translation, glm::quat rotation, glm::vec3 scale, glm::vec3 skew);
+    explicit Trs_transform(glm::mat4 m);
+    Trs_transform         (glm::mat4 matrix, glm::mat4 inverse_matrix);
+    explicit Trs_transform(glm::vec3 translation);
+    explicit Trs_transform(glm::quat rotation);
+    Trs_transform         (glm::vec3 translation, glm::quat rotation);
+    Trs_transform         (glm::vec3 translation, glm::quat rotation, glm::vec3 scale);
+    Trs_transform         (glm::vec3 translation, glm::quat rotation, glm::vec3 scale, glm::vec3 skew);
     Trs_transform         (const Trs_transform& t);
     auto operator=        (const Trs_transform& t) -> Trs_transform&;
 
@@ -52,9 +52,9 @@ private:
     glm::vec3 m_skew       {0.0f};
 };
 
-[[nodiscard]] auto translate  (const Trs_transform& t, const glm::vec3 translation)       -> Trs_transform;
-[[nodiscard]] auto rotate     (const Trs_transform& t, const glm::quat rotation)          -> Trs_transform;
-[[nodiscard]] auto scale      (const Trs_transform& t, const glm::vec3 scale)             -> Trs_transform;
+[[nodiscard]] auto translate  (const Trs_transform& t, glm::vec3 translation)             -> Trs_transform;
+[[nodiscard]] auto rotate     (const Trs_transform& t, glm::quat rotation)                -> Trs_transform;
+[[nodiscard]] auto scale      (const Trs_transform& t, glm::vec3 scale)                   -> Trs_transform;
 [[nodiscard]] auto interpolate(const Trs_transform& t0, const Trs_transform& t1, float t) -> Trs_transform;
 
 auto operator* (const Trs_transform& lhs, const Trs_transform& rhs) -> Trs_transform;

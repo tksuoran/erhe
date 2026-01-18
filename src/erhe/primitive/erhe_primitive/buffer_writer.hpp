@@ -37,24 +37,24 @@ public:
     virtual ~Vertex_buffer_writer() noexcept;
 
 
-    void write(const Vertex_attribute_info& attribute, const GEO::vec3  value);
-    void write(const Vertex_attribute_info& attribute, const GEO::vec2f value);
-    void write(const Vertex_attribute_info& attribute, const GEO::vec3f value);
-    void write(const Vertex_attribute_info& attribute, const GEO::vec4f value);
-    void write(const Vertex_attribute_info& attribute, const GEO::vec2u value);
-    void write(const Vertex_attribute_info& attribute, const GEO::vec3u value);
-    void write(const Vertex_attribute_info& attribute, const GEO::vec4u value);
-    void write(const Vertex_attribute_info& attribute, const GEO::vec2i value);
-    void write(const Vertex_attribute_info& attribute, const GEO::vec3i value);
-    void write(const Vertex_attribute_info& attribute, const GEO::vec4i value);
+    void write(const Vertex_attribute_info& attribute, GEO::vec3  value);
+    void write(const Vertex_attribute_info& attribute, GEO::vec2f value);
+    void write(const Vertex_attribute_info& attribute, GEO::vec3f value);
+    void write(const Vertex_attribute_info& attribute, GEO::vec4f value);
+    void write(const Vertex_attribute_info& attribute, GEO::vec2u value);
+    void write(const Vertex_attribute_info& attribute, GEO::vec3u value);
+    void write(const Vertex_attribute_info& attribute, GEO::vec4u value);
+    void write(const Vertex_attribute_info& attribute, GEO::vec2i value);
+    void write(const Vertex_attribute_info& attribute, GEO::vec3i value);
+    void write(const Vertex_attribute_info& attribute, GEO::vec4i value);
 
-    void write(const Vertex_attribute_info& attribute, const glm::vec2 value);
-    void write(const Vertex_attribute_info& attribute, const glm::vec3 value);
-    void write(const Vertex_attribute_info& attribute, const glm::vec4 value);
-    void write(const Vertex_attribute_info& attribute, const uint32_t value);
-    void write(const Vertex_attribute_info& attribute, const glm::uvec2 value);
-    void write(const Vertex_attribute_info& attribute, const glm::uvec4 value);
-    void move (const std::size_t relative_offset);
+    void write(const Vertex_attribute_info& attribute, glm::vec2 value);
+    void write(const Vertex_attribute_info& attribute, glm::vec3 value);
+    void write(const Vertex_attribute_info& attribute, glm::vec4 value);
+    void write(const Vertex_attribute_info& attribute, uint32_t value);
+    void write(const Vertex_attribute_info& attribute, glm::uvec2 value);
+    void write(const Vertex_attribute_info& attribute, glm::uvec4 value);
+    void move (std::size_t relative_offset);
     void next_vertex();
 
     [[nodiscard]] auto start_offset() -> std::size_t;
@@ -78,11 +78,10 @@ public:
     Index_buffer_writer(Build_context& build_context, Buffer_sink& buffer_sink);
     virtual ~Index_buffer_writer() noexcept;
 
-    void write_corner  (const uint32_t v0);
-    void write_triangle(const uint32_t v0, const uint32_t v1, const uint32_t v2);
-    void write_quad    (const uint32_t v0, const uint32_t v1, const uint32_t v2, const uint32_t v3);
-    void write_edge    (const uint32_t v0, const uint32_t v1);
-    void write_centroid(const uint32_t v0);
+    void write_corner  (uint32_t v0);
+    void write_triangle(uint32_t v0, uint32_t v1, uint32_t v2);
+    void write_edge    (uint32_t v0, uint32_t v1);
+    void write_centroid(uint32_t v0);
 
     [[nodiscard]] auto start_offset() -> std::size_t;
 

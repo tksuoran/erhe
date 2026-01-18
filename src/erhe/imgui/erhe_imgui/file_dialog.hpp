@@ -21,9 +21,6 @@ public:
     // Implements Imgui_window
     void imgui() override;
 
-    void open();
-    auto get_path() -> std::optional<std::filesystem::path>;
-
 private:
     void scan();
 

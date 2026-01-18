@@ -16,10 +16,10 @@ enum class Item_mode : unsigned int {
 
 void begin_button_style       (Item_mode mode);
 void end_button_style         (Item_mode mode);
-auto make_button              (const char* label, Item_mode mode, const ImVec2 size = ImVec2{0.0f, 0.0f}) -> bool;
+auto make_button              (const char* label, Item_mode mode, ImVec2 size = ImVec2{0.0f, 0.0f}) -> bool;
 auto make_small_button        (const char* label, Item_mode mode) -> bool;
 void make_check_box           (const char* label, bool* value, Item_mode mode = Item_mode::normal);
-void make_text_with_background(const char* text, float rounding, const ImVec4 background_color);
+void make_text_with_background(const char* text, float rounding, ImVec4 background_color);
 
 template <typename T>
 void make_combo(

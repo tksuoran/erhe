@@ -56,7 +56,7 @@ private:
     static Depth_stencil_state s_depth_test_enabled_greater_or_equal_stencil_test_disabled_reverse_depth;
 };
 
-auto reverse(const Compare_operation compare_operation) -> Compare_operation;
+auto reverse(Compare_operation compare_operation) -> Compare_operation;
 
 class Depth_stencil_state_hash
 {

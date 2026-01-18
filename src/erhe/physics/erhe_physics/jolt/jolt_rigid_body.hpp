@@ -20,9 +20,7 @@ class Jolt_rigid_body : public IRigid_body
 public:
     Jolt_rigid_body(
         Jolt_world&                    world,
-        const IRigid_body_create_info& create_info,
-        glm::vec3                      position    = glm::vec3{0.0f, 0.0f, 0.0f},
-        glm::quat                      orientation = glm::quat{1.0f, 0.0f, 0.0f, 0.0f}
+        const IRigid_body_create_info& create_info
     );
     ~Jolt_rigid_body() noexcept override;
 

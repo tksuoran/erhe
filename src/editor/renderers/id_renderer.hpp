@@ -76,8 +76,8 @@ public:
     void render(const Render_parameters& parameters);
     void next_frame();
 
-    [[nodiscard]] auto get(const int x, const int y, uint32_t& out_id, float& out_depth, uint64_t& out_frame_number) -> bool;
-    [[nodiscard]] auto get(const int x, const int y) -> Id_query_result;
+    [[nodiscard]] auto get(int x, int y, uint32_t& out_id, float& out_depth, uint64_t& out_frame_number) -> bool;
+    [[nodiscard]] auto get(int x, int y) -> Id_query_result;
 
 
 private:
@@ -105,7 +105,7 @@ private:
 
     [[nodiscard]] auto get_current_transfer_entry() -> Transfer_entry&;
 
-    void update_framebuffer(const erhe::math::Viewport viewport);
+    void update_framebuffer(erhe::math::Viewport viewport);
 
     bool                                         m_enabled{true};
     erhe::math::Viewport                         m_viewport{0, 0, 0, 0};

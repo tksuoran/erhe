@@ -193,7 +193,7 @@ private:
 class Scoped_debug_group final
 {
 public:
-    explicit Scoped_debug_group(const std::string_view debug_label);
+    explicit Scoped_debug_group(std::string_view debug_label);
     ~Scoped_debug_group() noexcept;
 
 private:

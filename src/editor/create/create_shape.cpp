@@ -8,6 +8,8 @@
 
 namespace editor {
 
+Create_shape::~Create_shape() noexcept = default;
+
 auto Create_shape::get_line_renderer(const Create_preview_settings& preview_settings) -> erhe::renderer::Primitive_renderer
 {
     erhe::renderer::Debug_renderer_config config {

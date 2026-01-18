@@ -12,8 +12,8 @@ Item_reposition_in_parent_operation::Item_reposition_in_parent_operation() = def
 
 Item_reposition_in_parent_operation::Item_reposition_in_parent_operation(
     const std::shared_ptr<erhe::Hierarchy>& child_node,
-    const std::shared_ptr<erhe::Hierarchy>  place_before,
-    const std::shared_ptr<erhe::Hierarchy>  place_after
+    const std::shared_ptr<erhe::Hierarchy>& place_before,
+    const std::shared_ptr<erhe::Hierarchy>& place_after
 )
     : m_child       {child_node  }
     , m_place_before{place_before}

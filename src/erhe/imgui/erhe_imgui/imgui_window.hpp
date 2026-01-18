@@ -2,7 +2,6 @@
 
 #include "erhe_imgui/imgui_renderer.hpp"
 
-#include <memory>
 #include <string>
 #include <string_view>
 
@@ -23,10 +22,10 @@ class Imgui_window
 {
 public:
     Imgui_window(
-        Imgui_renderer&        imgui_renderer,
-        Imgui_windows&         imgui_windows,
-        const std::string_view title,
-        const std::string_view ini_label
+        Imgui_renderer&  imgui_renderer,
+        Imgui_windows&   imgui_windows,
+        std::string_view title,
+        std::string_view ini_label
     );
     virtual ~Imgui_window() noexcept;
 
@@ -53,7 +52,7 @@ public:
         erhe::graphics::Sampler_mipmap_mode      mipmap_mode = erhe::graphics::Sampler_mipmap_mode::not_mipmapped
     );
 
-    auto get_imgui_host() const -> Imgui_host*;
+    [[nodiscard]] auto get_imgui_host() const -> Imgui_host*;
     virtual void set_imgui_host(Imgui_host* imgui_host);
 
     virtual void imgui               () = 0;
@@ -61,10 +60,10 @@ public:
     virtual void on_begin            ();
     virtual void on_end              ();
     virtual auto flags               () -> ImGuiWindowFlags;
-    virtual auto has_toolbar         () const -> bool;
     virtual void toolbar             (bool& hovered);
-    virtual auto want_keyboard_events() const -> bool;
-    virtual auto want_mouse_events   () const -> bool;
+    [[nodiscard]] virtual auto has_toolbar         () const -> bool;
+    [[nodiscard]] virtual auto want_keyboard_events() const -> bool;
+    [[nodiscard]] virtual auto want_mouse_events   () const -> bool;
 
 protected:
     void set_is_window_hovered(bool hovered);

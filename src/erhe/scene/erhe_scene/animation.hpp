@@ -29,7 +29,7 @@ enum class Animation_interpolation_mode : int {
 
 [[nodiscard]] auto c_str(Animation_interpolation_mode interpolation_mode) -> const char*;
 
-[[nodiscard]] auto get_component_count(const Animation_path path) -> std::size_t;
+[[nodiscard]] auto get_component_count(Animation_path path) -> std::size_t;
 
 class Animation_channel;
 
@@ -69,7 +69,7 @@ public:
     Animation& operator=(const Animation& src);
     ~Animation() noexcept override;
 
-    explicit Animation(const std::string_view name);
+    explicit Animation(std::string_view name);
 
     // Implements Item_base
     static constexpr std::string_view static_type_name{"Animation"};

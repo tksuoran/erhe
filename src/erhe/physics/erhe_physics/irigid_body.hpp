@@ -53,6 +53,8 @@ public:
     std::string                       debug_label      {};
     bool                              enable_collisions{true};
     erhe::physics::Motion_mode        motion_mode      {Motion_mode::e_dynamic};
+    glm::vec3                         position         {0.0f, 0.0f, 0.0f};
+    glm::quat                         orientation      {1.0f, 0.0f, 0.0f, 0.0f};
 };
 
 class IRigid_body
@@ -90,7 +92,7 @@ public:
     virtual void set_world_transform (const Transform& transform)                   = 0;
     virtual void set_allow_sleeping  (bool value)                                   = 0;
     virtual void set_owner           (void* owner)                                  = 0;
-    virtual auto get_owner           () const -> void*                              = 0;
+    [[nodiscard]] virtual auto get_owner() const -> void*                           = 0;
 };
 
 } // namespace erhe::physics

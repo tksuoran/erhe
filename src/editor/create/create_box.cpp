@@ -16,6 +16,8 @@
 
 namespace editor {
 
+Create_box::~Create_box() noexcept = default;
+
 void Create_box::render_preview(const Create_preview_settings& preview_settings)
 {
     const Render_context& render_context = preview_settings.render_context;

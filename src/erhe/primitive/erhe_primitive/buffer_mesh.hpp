@@ -16,7 +16,7 @@ class Buffer_mesh
 public:
     [[nodiscard]] auto base_vertex(std::size_t stream = 0) const -> uint32_t;
     [[nodiscard]] auto base_index () const -> uint32_t;
-    [[nodiscard]] auto index_range(const Primitive_mode primitive_mode) const -> Index_range;
+    [[nodiscard]] auto index_range(Primitive_mode primitive_mode) const -> Index_range;
 
     erhe::math::Aabb   bounding_box;
     erhe::math::Sphere bounding_sphere;

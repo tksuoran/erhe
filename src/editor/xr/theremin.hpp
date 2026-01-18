@@ -42,13 +42,13 @@ public:
     //// );
 
     void generate(
-        float*         output,
-        const uint32_t sample_count,
-        const float    waveform_length_in_samples,
-        const float    phase
+        float*   output,
+        uint32_t sample_count,
+        float    waveform_length_in_samples,
+        float    phase
     );
 
-    void set_antenna_distance(const float distance);
+    void set_antenna_distance(float distance);
 
 private:
     auto normalized_finger_distance() const -> float;

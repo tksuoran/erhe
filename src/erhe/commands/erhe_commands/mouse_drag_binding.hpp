@@ -9,16 +9,16 @@ class Mouse_drag_binding : public Mouse_binding
 {
 public:
     Mouse_drag_binding(
-        Command*                      command,
-        erhe::window::Mouse_button    button,
-        bool                          call_on_button_down_without_motion,
-        const std::optional<uint32_t> modifier_mask = {}
+        Command*                   command,
+        erhe::window::Mouse_button button,
+        bool                       call_on_button_down_without_motion,
+        std::optional<uint32_t>    modifier_mask = {}
     );
     Mouse_drag_binding();
     ~Mouse_drag_binding() noexcept override;
 
-    auto get_type  () const -> Type override { return Command_binding::Type::Mouse_drag; }
-    auto get_button() const -> erhe::window::Mouse_button override;
+    [[nodiscard]] auto get_type  () const -> Type override { return Command_binding::Type::Mouse_drag; }
+    [[nodiscard]] auto get_button() const -> erhe::window::Mouse_button override;
     auto on_button (Input_arguments& input) -> bool override;
     auto on_motion (Input_arguments& input) -> bool override;
 

@@ -16,7 +16,7 @@ public:
     Update_binding();
     ~Update_binding() noexcept override;
 
-    auto get_type() const -> Type override { return Command_binding::Type::Update; }
+    [[nodiscard]] auto get_type() const -> Type override { return Command_binding::Type::Update; }
 
     virtual auto on_update() -> bool;
 };

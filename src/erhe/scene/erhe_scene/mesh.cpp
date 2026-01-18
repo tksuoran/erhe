@@ -65,9 +65,9 @@ auto Mesh::get_primitives() const -> const std::vector<Mesh_primitive>&
     return m_primitives;
 }
 
-Mesh::Mesh()                  = default;
-Mesh::Mesh(Mesh&&)            = default;
-Mesh& Mesh::operator=(Mesh&&) = default;
+Mesh::Mesh()                           = default;
+Mesh::Mesh(Mesh&&) noexcept            = default;
+Mesh& Mesh::operator=(Mesh&&) noexcept = default;
 
 Mesh::Mesh(const std::string_view name)
     : Item{name}

@@ -19,7 +19,7 @@ public:
 
     explicit Hierarchy(const Hierarchy& src);
     Hierarchy& operator=(const Hierarchy& src);
-    explicit Hierarchy(const std::string_view name);
+    explicit Hierarchy(std::string_view name);
 
     Hierarchy(const Hierarchy& src, for_clone);
 

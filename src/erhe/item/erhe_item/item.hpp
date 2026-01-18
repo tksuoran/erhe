@@ -220,6 +220,7 @@ template <typename T>
 class Clonable_base
 {
 public:
+    virtual ~Clonable_base() = default;
     [[nodiscard]] virtual auto clone() const -> std::shared_ptr<T> {
         return std::make_shared<T>(static_cast<const T&>(*this));
     }
@@ -248,10 +249,10 @@ class Item_base
 public:
     Item_base();
 
-    explicit Item_base(const std::string_view name);
+    explicit Item_base(std::string_view name);
     explicit Item_base(const Item_base& other);
     Item_base& operator=(const Item_base& other);
-    virtual ~Item_base() noexcept;
+    ~Item_base() noexcept override;
 
     [[nodiscard]] virtual auto get_type     () const -> uint64_t         { return 0; };
     [[nodiscard]] virtual auto get_type_name() const -> std::string_view { return "Item_base"; };
@@ -281,7 +282,7 @@ public:
     void set_flag_bits    (uint64_t mask, bool value);
     void enable_flag_bits (uint64_t mask);
     void disable_flag_bits(uint64_t mask);
-    void set_name         (const std::string_view name);
+    void set_name         (std::string_view name);
     void set_selected     (bool value);
     void set_visible      (bool value);
     void show             ();

@@ -63,7 +63,7 @@ public:
     explicit Node(const Node&);
     Node& operator=(const Node&);
 
-    explicit Node(const std::string_view name);
+    explicit Node(std::string_view name);
     Node(const Node& src, for_clone);
     ~Node() noexcept override;
 
@@ -107,24 +107,24 @@ public:
     [[nodiscard]] auto parent_from_world                      () const -> glm::mat4;
     [[nodiscard]] auto position_in_world                      () const -> glm::vec4;
     [[nodiscard]] auto direction_in_world                     () const -> glm::vec4;
-    [[nodiscard]] auto look_at                                (const glm::vec3 target_position) const -> glm::mat4;
+    [[nodiscard]] auto look_at                                (glm::vec3 target_position) const -> glm::mat4;
     [[nodiscard]] auto look_at                                (const Node& target) const -> glm::mat4;
-    [[nodiscard]] auto transform_point_from_world_to_local    (const glm::vec3 p) const -> glm::vec3;
-    [[nodiscard]] auto transform_direction_from_world_to_local(const glm::vec3 p) const -> glm::vec3;
-    [[nodiscard]] auto transform_point_from_local_to_world    (const glm::vec3 p) const -> glm::vec3;
-    [[nodiscard]] auto transform_direction_from_local_to_world(const glm::vec3 p) const -> glm::vec3;
+    [[nodiscard]] auto transform_point_from_world_to_local    (glm::vec3 p) const -> glm::vec3;
+    [[nodiscard]] auto transform_direction_from_world_to_local(glm::vec3 p) const -> glm::vec3;
+    [[nodiscard]] auto transform_point_from_local_to_world    (glm::vec3 p) const -> glm::vec3;
+    [[nodiscard]] auto transform_direction_from_local_to_world(glm::vec3 p) const -> glm::vec3;
     [[nodiscard]] auto get_scene                              () const -> Scene*;
 
     void node_sanity_check     (bool destruction_in_progress = false) const;
     void update_world_from_node();
     void update_transform      (uint64_t serial);
-    void set_parent_from_node  (const glm::mat4 parent_from_node);
+    void set_parent_from_node  (glm::mat4 parent_from_node);
     void set_parent_from_node  (const Transform& parent_from_node);
-    void set_node_from_parent  (const glm::mat4 node_from_parent);
+    void set_node_from_parent  (glm::mat4 node_from_parent);
     void set_node_from_parent  (const Transform& node_from_parent);
-    void set_world_from_node   (const glm::mat4 world_from_node);
+    void set_world_from_node   (glm::mat4 world_from_node);
     void set_world_from_node   (const Transform& world_from_node);
-    void set_node_from_world   (const glm::mat4 node_from_world);
+    void set_node_from_world   (glm::mat4 node_from_world);
     void set_node_from_world   (const Transform& node_from_world);
 
     Node_data node_data;

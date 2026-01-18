@@ -33,16 +33,16 @@ class Mesh : public erhe::Item<Item_base, Node_attachment, Mesh, erhe::Item_kind
 {
 public:
     Mesh(); // default
-    explicit Mesh(Mesh&&);
-    Mesh& operator=(Mesh&&);
+    explicit Mesh(Mesh&&) noexcept;
+    Mesh& operator=(Mesh&&) noexcept;
     ~Mesh() noexcept override;
 
     explicit Mesh(const Mesh&) = delete;
     Mesh& operator=(const Mesh&) = delete;
 
-    explicit Mesh(const std::string_view name);
+    explicit Mesh(std::string_view name);
     Mesh(
-        const std::string_view                             name,
+        std::string_view                                   name,
         const std::shared_ptr<erhe::primitive::Primitive>& primitive
     );
     Mesh(const Mesh&, erhe::for_clone);

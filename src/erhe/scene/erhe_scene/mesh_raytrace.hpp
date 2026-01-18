@@ -15,8 +15,8 @@ class Mesh;
 class Raytrace_primitive
 {
 public:
-    Raytrace_primitive(Raytrace_primitive&&);
-    Raytrace_primitive& operator=(Raytrace_primitive&&);
+    Raytrace_primitive(Raytrace_primitive&&) noexcept;
+    Raytrace_primitive& operator=(Raytrace_primitive&&) noexcept;
     ~Raytrace_primitive() noexcept;
 
     Raytrace_primitive(erhe::scene::Mesh* mesh, std::size_t primitive_index, erhe::raytrace::IGeometry* rt_geometry);

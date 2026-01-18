@@ -7,8 +7,7 @@
 
 namespace erhe::physics {
 
-class Null_rigid_body
-    : public IRigid_body
+class Null_rigid_body : public IRigid_body
 {
 public:
     Null_rigid_body(

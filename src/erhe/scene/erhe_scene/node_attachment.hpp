@@ -20,8 +20,8 @@ public:
 
     Node_attachment& operator=(const Node_attachment&);
     Node_attachment(const Node_attachment& src, for_clone);
-    explicit Node_attachment(const std::string_view name);
-    virtual ~Node_attachment() noexcept;
+    explicit Node_attachment(std::string_view name);
+    ~Node_attachment() noexcept override;
 
     // Implements Item_base
     static constexpr std::string_view static_type_name{"Node_attachment"};

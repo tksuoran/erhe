@@ -49,7 +49,7 @@ public:
     void calculate_bounding_volume();
     void allocate_vertex_buffers  ();
     void allocate_index_buffer    ();
-    void allocate_index_range     (const Primitive_type primitive_type, const std::size_t index_count, Index_range& out_range);
+    void allocate_index_range     (Primitive_type primitive_type, std::size_t index_count, Index_range& out_range);
 
     Buffer_mesh&                           buffer_mesh;
     const GEO::Mesh&                       mesh;
@@ -68,11 +68,11 @@ class Build_context
 {
 public:
     Build_context(
-        Buffer_mesh&       buffer_mesh,
-        const GEO::Mesh&   mesh,
-        const Build_info&  build_info,
-        Element_mappings&  element_mappings,
-        const Normal_style normal_style
+        Buffer_mesh&      buffer_mesh,
+        const GEO::Mesh&  mesh,
+        const Build_info& build_info,
+        Element_mappings& element_mappings,
+        Normal_style      normal_style
     );
     ~Build_context() noexcept;
 

@@ -25,7 +25,7 @@ public:
     Composition_pass& operator=(const Composition_pass&);
     ~Composition_pass() noexcept override;
 
-    explicit Composition_pass(const std::string_view name);
+    explicit Composition_pass(std::string_view name);
 
     virtual void render(const Render_context& context) const;
     void imgui();

@@ -389,11 +389,9 @@ Shader_resource::Shader_resource(Device& device)
 {
 }
 
-Shader_resource::~Shader_resource() noexcept
-{
-}
+Shader_resource::~Shader_resource() noexcept = default;
 
-Shader_resource::Shader_resource(Shader_resource&& other) = default;
+Shader_resource::Shader_resource(Shader_resource&&) noexcept = default;
 
 auto Shader_resource::is_array() const -> bool
 {

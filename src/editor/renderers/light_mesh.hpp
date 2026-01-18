@@ -17,7 +17,7 @@ public:
 
     // Public API
     [[nodiscard]] auto get_light_transform(const erhe::scene::Light& light) -> glm::mat4;
-    [[nodiscard]] auto point_in_light     (const glm::vec3 point_in_world, const erhe::scene::Light& light) -> bool;
+    [[nodiscard]] auto point_in_light     (glm::vec3 point_in_world, const erhe::scene::Light& light) -> bool;
     [[nodiscard]] auto get_light_mesh     (const erhe::scene::Light& light) -> erhe::primitive::Buffer_mesh*;
 
 private:

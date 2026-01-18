@@ -52,7 +52,7 @@ public:
     Light& operator=(const Light&);
     ~Light() noexcept override;
 
-    explicit Light(const std::string_view name);
+    explicit Light(std::string_view name);
 
     // Implements Item_base
     static constexpr std::string_view static_type_name{"Light"};

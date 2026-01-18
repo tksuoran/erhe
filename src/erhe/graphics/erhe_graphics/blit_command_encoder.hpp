@@ -23,7 +23,7 @@ public:
     Blit_command_encoder& operator=(const Blit_command_encoder&) = delete;
     Blit_command_encoder(Blit_command_encoder&&) = delete;
     Blit_command_encoder& operator=(Blit_command_encoder&&) = delete;
-    ~Blit_command_encoder() noexcept;
+    ~Blit_command_encoder() noexcept override;
 
     void set_buffer       (Buffer_target buffer_target, const Buffer* buffer, std::uintptr_t offset, std::uintptr_t length, std::uintptr_t index) override;
     void set_buffer       (Buffer_target buffer_target, const Buffer* buffer) override;

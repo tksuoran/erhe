@@ -6,9 +6,9 @@ class Command;
 
 enum class Button_trigger : unsigned int
 {
-    Button_pressed = 0,
+    Button_pressed  = 0,
     Button_released = 1,
-    Any = 2
+    Any             = 2
 };
 
 auto c_str(const Button_trigger value) -> const char*;

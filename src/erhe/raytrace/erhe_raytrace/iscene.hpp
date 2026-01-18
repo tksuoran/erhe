@@ -23,9 +23,9 @@ public:
     virtual auto intersect(Ray& ray, Hit& hit) -> bool = 0;
     [[nodiscard]] virtual auto debug_label() const -> std::string_view = 0;
 
-    [[nodiscard]] static auto create       (const std::string_view debug_label) -> IScene*;
-    [[nodiscard]] static auto create_shared(const std::string_view debug_label) -> std::shared_ptr<IScene>;
-    [[nodiscard]] static auto create_unique(const std::string_view debug_label) -> std::unique_ptr<IScene>;
+    [[nodiscard]] static auto create       (std::string_view debug_label) -> IScene*;
+    [[nodiscard]] static auto create_shared(std::string_view debug_label) -> std::shared_ptr<IScene>;
+    [[nodiscard]] static auto create_unique(std::string_view debug_label) -> std::unique_ptr<IScene>;
 };
 
 } // namespace erhe::raytrace

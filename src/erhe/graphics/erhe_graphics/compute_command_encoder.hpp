@@ -20,7 +20,7 @@ public:
     Compute_command_encoder& operator=(const Compute_command_encoder&) = delete;
     Compute_command_encoder(Compute_command_encoder&&) = delete;
     Compute_command_encoder& operator=(Compute_command_encoder&&) = delete;
-    ~Compute_command_encoder() noexcept;
+    ~Compute_command_encoder() noexcept override;
 
     void set_buffer                (Buffer_target buffer_target, const Buffer* buffer, std::uintptr_t offset, std::uintptr_t length, std::uintptr_t index) override;
     void set_buffer                (Buffer_target buffer_target, const Buffer* buffer) override;

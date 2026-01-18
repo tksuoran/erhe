@@ -62,7 +62,7 @@ public:
     void start_view      (const View& view);
 
 private:
-    [[nodiscard]] auto make_pipeline     (bool visible, const bool reverse_depth = true) -> erhe::graphics::Render_pipeline_state;
+    [[nodiscard]] auto make_pipeline     (bool visible, bool reverse_depth = true) -> erhe::graphics::Render_pipeline_state;
     [[nodiscard]] auto update_view_buffer(const View& view) -> erhe::graphics::Ring_buffer_range;
 
     erhe::graphics::Device&               m_graphics_device;

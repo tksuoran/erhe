@@ -2,16 +2,9 @@
 
 #include "erhe_physics/null/null_collision_shape.hpp"
 
-#include <glm/glm.hpp>
+namespace erhe::physics {
 
-#include <memory>
-#include <vector>
-
-namespace erhe::physics
-{
-
-class Null_compound_shape
-    : public Null_collision_shape
+class Null_compound_shape : public Null_collision_shape
 {
 public:
     explicit Null_compound_shape(const Compound_shape_create_info& create_info)

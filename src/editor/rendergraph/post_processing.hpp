@@ -124,7 +124,7 @@ private:
         erhe::graphics::Device& graphics_device,
         const char*             name,
         const std::string&      fs_path,
-        const unsigned int      flags
+        unsigned int            flags
     ) -> erhe::graphics::Shader_stages_create_info;
 
     struct Shader_stages {

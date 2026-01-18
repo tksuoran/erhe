@@ -20,10 +20,10 @@ class Device;
 
 //// static constexpr int MAX_ATTRIBUTE_COUNT { 16 }; // TODO(tksuoran@gmail.com): Get rid of this kind of constant?
 
-[[nodiscard]] auto get_vertex_divisor(erhe::dataformat::Vertex_step step) -> GLuint;
-[[nodiscard]] auto get_gl_attribute_type(erhe::dataformat::Format format) -> gl::Attribute_type;
+[[nodiscard]] auto get_vertex_divisor       (erhe::dataformat::Vertex_step step) -> GLuint;
+[[nodiscard]] auto get_gl_attribute_type    (erhe::dataformat::Format format) -> gl::Attribute_type;
 [[nodiscard]] auto get_gl_vertex_attrib_type(erhe::dataformat::Format format) -> gl::Vertex_attrib_type;
-[[nodiscard]] auto get_gl_normalized(erhe::dataformat::Format format) -> bool;
+[[nodiscard]] auto get_gl_normalized        (erhe::dataformat::Format format) -> bool;
 
 class Vertex_input_state_impl
 {
@@ -33,11 +33,11 @@ public:
     ~Vertex_input_state_impl() noexcept;
 
     void set    (const Vertex_input_state_data& data);
-    auto gl_name() const -> unsigned int;
     void create ();
     void reset  ();
     void update ();
 
+    [[nodiscard]] auto gl_name () const -> unsigned int;
     [[nodiscard]] auto get_data() const -> const Vertex_input_state_data&;
 
     static void on_thread_enter();

@@ -101,9 +101,9 @@ public:
 
     // Can discard return value
     auto make_camera(
-        const std::string_view name,
-        const glm::vec3        position,
-        const glm::vec3        look_at = glm::vec3{0.0f, 0.0f, 0.0f}
+        std::string_view name,
+        glm::vec3        position,
+        glm::vec3        look_at = glm::vec3{0.0f, 0.0f, 0.0f}
     ) -> std::shared_ptr<erhe::scene::Camera>;
 
     void add_platonic_solids(const Make_mesh_config& config);
@@ -114,19 +114,19 @@ public:
 
 private:
     auto make_directional_light(
-        const std::string_view name,
-        const glm::vec3        position,
-        const glm::vec3        color,
-        const float            intensity
+        std::string_view name,
+        glm::vec3        position,
+        glm::vec3        color,
+        float            intensity
     ) -> std::shared_ptr<erhe::scene::Light>;
 
     auto make_spot_light(
-        const std::string_view name,
-        const glm::vec3        position,
-        const glm::vec3        direction,
-        const glm::vec3        color,
-        const float            intensity,
-        const glm::vec2        spot_cone_angle
+        std::string_view name,
+        glm::vec3        position,
+        glm::vec3        direction,
+        glm::vec3        color,
+        float            intensity,
+        glm::vec2        spot_cone_angle
     ) -> std::shared_ptr<erhe::scene::Light>;
 
     auto make_brush(Content_library_node& folder, Brush_data&& brush_create_info) -> std::shared_ptr<Brush>;

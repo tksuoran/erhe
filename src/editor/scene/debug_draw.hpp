@@ -13,20 +13,20 @@ public:
     virtual ~Debug_draw() noexcept; // TODO override - make virtual ~IDebug_draw()
 
     // Implemnents IDebug_draw
-    auto get_colors          () const -> Colors                                                override;
-    void set_colors          (const Colors& colors)                                            override;
-    void draw_line           (const glm::vec3 from, const glm::vec3 to, const glm::vec3 color) override;
-    void draw_3d_text        (const glm::vec3 location, const char* text)                      override;
-    void set_debug_mode      (int debug_mode)                                                  override;
-    auto get_debug_mode      () const -> int                                                   override;
+    auto get_colors          () const -> Colors                              override;
+    void set_colors          (const Colors& colors)                          override;
+    void draw_line           (glm::vec3 from, glm::vec3 to, glm::vec3 color) override;
+    void draw_3d_text        (glm::vec3 location, const char* text)          override;
+    void set_debug_mode      (int debug_mode)                                override;
+    auto get_debug_mode      () const -> int                                 override;
     void draw_contact_point(
-        const glm::vec3 point,
-        const glm::vec3 normal,
-        float           distance,
-        int             life_time,
-        const glm::vec3 color
-    )                                                                                          override;
-    void report_error_warning(const char* warning)                                             override;
+        glm::vec3 point,
+        glm::vec3 normal,
+        float     distance,
+        int       life_time,
+        glm::vec3 color
+    )                                                                        override;
+    void report_error_warning(const char* warning)                           override;
 
     float line_width{4.0f};
 

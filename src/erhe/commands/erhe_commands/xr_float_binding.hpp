@@ -15,7 +15,7 @@ public:
     Xr_float_binding();
     ~Xr_float_binding() noexcept override;
 
-    auto get_type() const -> Type override;
+    [[nodiscard]] auto get_type() const -> Type override;
 
     auto on_value_changed(Input_arguments& input) -> bool;
 

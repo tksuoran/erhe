@@ -17,7 +17,7 @@ Compute_pipeline_state::Compute_pipeline_state()
 }
 
 Compute_pipeline_state::Compute_pipeline_state(Compute_pipeline_data&& create_info)
-    : data{std::move(create_info)}
+    : data{create_info}
 {
     const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{s_mutex};
 
@@ -32,13 +32,9 @@ Compute_pipeline_state::Compute_pipeline_state(const Compute_pipeline_state& oth
     data = other.data;
 }
 
-auto Compute_pipeline_state::operator=(const Compute_pipeline_state& other) -> Compute_pipeline_state&
-{
-    data = other.data;
-    return *this;
-}
+auto Compute_pipeline_state::operator=(const Compute_pipeline_state& other) -> Compute_pipeline_state& = default;
 
-Compute_pipeline_state::Compute_pipeline_state(Compute_pipeline_state&& old)
+Compute_pipeline_state::Compute_pipeline_state(Compute_pipeline_state&& old) noexcept
 {
     const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{s_mutex};
 
@@ -46,7 +42,7 @@ Compute_pipeline_state::Compute_pipeline_state(Compute_pipeline_state&& old)
     data = old.data;
 }
 
-auto Compute_pipeline_state::operator=(Compute_pipeline_state&& old) -> Compute_pipeline_state&
+auto Compute_pipeline_state::operator=(Compute_pipeline_state&& old) noexcept -> Compute_pipeline_state&
 {
     data = old.data;
     return *this;
@@ -64,8 +60,8 @@ Compute_pipeline_state::~Compute_pipeline_state() noexcept
 
 void Compute_pipeline_state::reset()
 {
-    data.name           = nullptr;
-    data.shader_stages  = nullptr;
+    data.name          = nullptr;
+    data.shader_stages = nullptr;
 }
 
 auto Compute_pipeline_state::get_pipelines() -> std::vector<Compute_pipeline_state*>

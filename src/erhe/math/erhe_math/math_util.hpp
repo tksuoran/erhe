@@ -709,9 +709,10 @@ void gram_schmidt(
 class Bounding_volume_source
 {
 public:
-    virtual auto get_element_count      () const -> std::size_t = 0;
-    virtual auto get_element_point_count(std::size_t element_index) const -> std::size_t = 0;
-    virtual auto get_point              (std::size_t element_index, std::size_t point_index) const -> std::optional<glm::vec3> = 0;
+    virtual ~Bounding_volume_source();
+    [[nodiscard]] virtual auto get_element_count      () const -> std::size_t = 0;
+    [[nodiscard]] virtual auto get_element_point_count(std::size_t element_index) const -> std::size_t = 0;
+    [[nodiscard]] virtual auto get_point              (std::size_t element_index, std::size_t point_index) const -> std::optional<glm::vec3> = 0;
 };
 
 class Point_vector_bounding_volume_source : public Bounding_volume_source
@@ -720,11 +721,11 @@ public:
     Point_vector_bounding_volume_source();
     explicit Point_vector_bounding_volume_source(std::size_t capacity);
 
-    void add                    (float x, float y, float z);
-    void add                    (glm::vec3 point);
-    auto get_element_count      () const -> std::size_t override;
-    auto get_element_point_count(std::size_t element_index) const -> std::size_t override;
-    auto get_point              (std::size_t element_index, std::size_t point_index) const -> std::optional<glm::vec3> override;
+    void add(float x, float y, float z);
+    void add(glm::vec3 point);
+    [[nodiscard]] auto get_element_count      () const -> std::size_t override;
+    [[nodiscard]] auto get_element_point_count(std::size_t element_index) const -> std::size_t override;
+    [[nodiscard]] auto get_point              (std::size_t element_index, std::size_t point_index) const -> std::optional<glm::vec3> override;
 
 private:
     std::vector<glm::vec3> m_points;
@@ -896,6 +897,7 @@ private:
 
 [[nodiscard]] static inline auto float_to_int8_saturate(float value) -> uint32_t
 {
+    // TODO XXX lround?
     return static_cast<uint32_t>(saturate(value) * 255.0f + 0.5f);
 }
 
@@ -939,7 +941,7 @@ private:
     glm::vec3 skew
 ) -> glm::mat4;
 
-[[nodiscard]] auto torus_volume(const float major_radius, const float minor_radius) -> float;
+[[nodiscard]] auto torus_volume(float major_radius, float minor_radius) -> float;
 
 static constexpr size_t plane_left   = 0;
 static constexpr size_t plane_right  = 1;

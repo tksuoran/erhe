@@ -57,17 +57,17 @@ public:
     [[nodiscard]] auto get_single_unit_tile (int player, unit_t unit) const -> unit_tile_t;
     [[nodiscard]] auto get_special_unit_tile(int special_unit_tile_index) const -> unit_tile_t;
 
-    [[nodiscard]] auto get_terrain_shape (const terrain_tile_t terrain) const -> Pixel_coordinate;
-    [[nodiscard]] auto get_unit_shape    (const unit_tile_t unit) const -> Pixel_coordinate;
+    [[nodiscard]] auto get_terrain_shape (terrain_tile_t terrain) const -> Pixel_coordinate;
+    [[nodiscard]] auto get_unit_shape    (unit_tile_t unit) const -> Pixel_coordinate;
     [[nodiscard]] auto get_terrain_shapes() const -> const std::vector<Pixel_coordinate>&;
     [[nodiscard]] auto get_unit_shapes   () const -> const std::vector<Pixel_coordinate>&;
     [[nodiscard]] auto get_extra_shape   (int extra) const -> Pixel_coordinate;
 
-    auto terrain_image(const terrain_tile_t terrain_tile, const int scale) -> bool;
-    auto unit_image   (const unit_tile_t    unit_tile,    const int scale) -> bool;
+    auto terrain_image(terrain_tile_t terrain_tile, int scale) -> bool;
+    auto unit_image   (unit_tile_t    unit_tile,    int scale) -> bool;
     void show_texture ();
     void make_terrain_type_combo(const char* label, terrain_t& value);
-    void make_unit_type_combo   (const char* label, unit_t& value, const int player = 0);
+    void make_unit_type_combo   (const char* label, unit_t& value, int player = 0);
 
     void blit(
         int      src_x,

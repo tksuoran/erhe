@@ -38,9 +38,7 @@ auto Jolt_rigid_body::get_body_interface() const -> JPH::BodyInterface&
 
 Jolt_rigid_body::Jolt_rigid_body(
     Jolt_world&                    world,
-    const IRigid_body_create_info& create_info,
-    glm::vec3                      position,
-    glm::quat                      orientation
+    const IRigid_body_create_info& create_info
 )
     : m_world          {world}
     , m_collision_shape{std::static_pointer_cast<Jolt_collision_shape>(create_info.collision_shape)}
@@ -61,8 +59,8 @@ Jolt_rigid_body::Jolt_rigid_body(
 
     JPH::BodyCreationSettings creation_settings{
         jolt_shape,
-        to_jolt(position),
-        to_jolt(orientation),
+        to_jolt(create_info.position),
+        to_jolt(create_info.orientation),
         to_jolt(m_motion_mode),
         create_info.enable_collisions
             ? Layers::get_layer(m_motion_mode)

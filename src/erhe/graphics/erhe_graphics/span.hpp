@@ -7,22 +7,22 @@ namespace erhe::graphics {
 
 [[nodiscard]] inline auto as_span(const glm::mat4& m) -> std::span<const float>
 {
-    return std::span<const float>(reinterpret_cast<const float*>(glm::value_ptr(m)), 16);
+    return {reinterpret_cast<const float*>(glm::value_ptr(m)), 16};
 }
 
 [[nodiscard]] inline auto as_span(const glm::vec4& v) -> std::span<const float>
 {
-    return std::span<const float>(reinterpret_cast<const float*>(glm::value_ptr(v)), 4);
+    return {reinterpret_cast<const float*>(glm::value_ptr(v)), 4};
 }
 
 [[nodiscard]] inline auto as_span(const glm::vec3& v) -> std::span<const float>
 {
-    return std::span<const float>(reinterpret_cast<const float*>(glm::value_ptr(v)), 3);
+    return {reinterpret_cast<const float*>(glm::value_ptr(v)), 3};
 }
 
 [[nodiscard]] inline auto as_span(const glm::vec2& v) -> std::span<const float>
 {
-    return std::span<const float>(reinterpret_cast<const float*>(glm::value_ptr(v)), 2);
+    return {reinterpret_cast<const float*>(glm::value_ptr(v)), 2};
 }
 
 template <typename T>

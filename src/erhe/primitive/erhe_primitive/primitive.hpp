@@ -29,11 +29,11 @@ public:
     explicit Primitive_raytrace(erhe::primitive::Triangle_soup& triangle_soup);
     Primitive_raytrace(const Primitive_raytrace& other);
     Primitive_raytrace& operator=(const Primitive_raytrace& other);
-    Primitive_raytrace(Primitive_raytrace&& old);
-    Primitive_raytrace& operator=(Primitive_raytrace&& old);
+    Primitive_raytrace(Primitive_raytrace&&) noexcept;
+    Primitive_raytrace& operator=(Primitive_raytrace&&) noexcept;
     ~Primitive_raytrace() noexcept;
 
-    auto has_raytrace_triangles() const -> bool;
+    [[nodiscard]] auto has_raytrace_triangles() const -> bool;
     void make_raytrace_geometry();
 
     [[nodiscard]] auto get_raytrace_mesh    () const -> const Buffer_mesh&;
@@ -108,9 +108,9 @@ class Primitive
 public:
     Primitive();
     Primitive(const Primitive&);
-    Primitive(Primitive&&);
+    Primitive(Primitive&&) noexcept;
     Primitive& operator=(const Primitive&);
-    Primitive& operator=(Primitive&&);
+    Primitive& operator=(Primitive&&) noexcept;
     ~Primitive() noexcept;
     explicit Primitive(const std::shared_ptr<Triangle_soup>& triangle_soup);
     explicit Primitive(const Buffer_mesh& renderable_mesh);
@@ -127,10 +127,10 @@ public:
 
     [[nodiscard]] auto has_renderable_triangles() const -> bool;
     [[nodiscard]] auto has_raytrace_triangles  () const -> bool;
-    [[nodiscard]] auto make_geometry           () -> bool;
-    [[nodiscard]] auto make_renderable_mesh    (const Build_info& build_info, Normal_style normal_style) -> bool;
-    [[nodiscard]] auto make_renderable_mesh    (const erhe::primitive::Buffer_info& buffer_info) -> bool;
-    [[nodiscard]] auto make_raytrace           () -> bool;
+    [[nodiscard]] auto make_geometry           () const -> bool;
+    [[nodiscard]] auto make_renderable_mesh    (const Build_info& build_info, Normal_style normal_style) const -> bool;
+    [[nodiscard]] auto make_renderable_mesh    (const erhe::primitive::Buffer_info& buffer_info) const -> bool;
+    [[nodiscard]] auto make_raytrace           () const -> bool;
     [[nodiscard]] auto get_renderable_mesh     () const -> const Buffer_mesh*;
     [[nodiscard]] auto get_name                () const -> std::string_view;
     [[nodiscard]] auto get_bounding_box        () const -> erhe::math::Aabb;

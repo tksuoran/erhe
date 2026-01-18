@@ -40,13 +40,13 @@ public:
         std::span<uint32_t> uint_data,
         std::string_view    text,
         glm::vec3           text_position,
-        const uint32_t      text_color,
+        uint32_t            text_color,
         Rectangle&          out_bounds
     ) const -> size_t;
 
-    auto get_glyph_count(const std::string_view text) const -> size_t;
+    [[nodiscard]] auto get_glyph_count(std::string_view text) const -> size_t;
 
-    auto measure(const std::string_view text) const -> Rectangle;
+    [[nodiscard]] auto measure(std::string_view text) const -> Rectangle;
 
     [[nodiscard]] auto texture() const -> erhe::graphics::Texture*
     {

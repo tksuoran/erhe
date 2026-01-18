@@ -26,10 +26,10 @@ using Layer_id = uint64_t;
 class Mesh_layer
 {
 public:
-    Mesh_layer(const std::string_view name, uint64_t flags, Layer_id id);
+    Mesh_layer(std::string_view name, uint64_t flags, Layer_id id);
 
     // Public API
-    [[nodiscard]] auto get_mesh_by_id(const erhe::Unique_id<Node>::id_type mesh_id) const -> std::shared_ptr<Mesh>;
+    [[nodiscard]] auto get_mesh_by_id(erhe::Unique_id<Node>::id_type mesh_id) const -> std::shared_ptr<Mesh>;
     [[nodiscard]] auto get_name() const -> const std::string&;
 
     void add   (const std::shared_ptr<Mesh>& mesh);
@@ -44,7 +44,7 @@ public:
 class Light_layer
 {
 public:
-    Light_layer(const std::string_view name, Layer_id id);
+    Light_layer(std::string_view name, Layer_id id);
 
     [[nodiscard]] auto get_light_by_id(std::size_t id) const -> std::shared_ptr<Light>;
     [[nodiscard]] auto get_name       ()               const -> const std::string&;
@@ -61,7 +61,7 @@ public:
 class Scene : public erhe::Item<erhe::Item_base, erhe::Item_base, Scene>
 {
 public:
-    Scene(erhe::scene::Scene_message_bus& scene_message_bus, const std::string_view name, Scene_host* host = nullptr);
+    Scene(erhe::scene::Scene_message_bus& scene_message_bus, std::string_view name, Scene_host* host = nullptr);
     explicit Scene(const Scene& src);
     Scene& operator=(const Scene& src);
     ~Scene() noexcept override;

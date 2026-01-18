@@ -4,9 +4,10 @@
 
 namespace erhe::buffer {
 
+IBuffer::~IBuffer() noexcept = default;
+
 Cpu_buffer::Cpu_buffer(const std::string_view debug_label, const std::size_t capacity_bytes_count)
     : m_capacity_byte_count{capacity_bytes_count}
-    , m_next_free_byte     {0}
     , m_debug_label        {debug_label}
 {
     ERHE_VERIFY(capacity_bytes_count > 0);

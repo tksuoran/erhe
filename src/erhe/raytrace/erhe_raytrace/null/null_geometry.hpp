@@ -15,7 +15,7 @@ class Null_geometry
     : public IGeometry
 {
 public:
-    Null_geometry(const std::string_view debug_label, const Geometry_type geometry_type);
+    Null_geometry(std::string_view debug_label, Geometry_type geometry_type);
     ~Null_geometry() noexcept override;
 
     // Implements IGeometry

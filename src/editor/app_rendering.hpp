@@ -99,7 +99,7 @@ public:
     void add   (Renderable* renderable);
     void remove(Renderable* renderable);
 
-    auto make_composition_pass(const std::string_view name) -> std::shared_ptr<Composition_pass>;
+    auto make_composition_pass(std::string_view name) -> std::shared_ptr<Composition_pass>;
 
     void imgui();
     void request_renderdoc_capture();

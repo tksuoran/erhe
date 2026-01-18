@@ -61,9 +61,9 @@ public:
 
     // Public API
     auto get        (const Debug_renderer_config& config) -> Primitive_renderer;
-    void begin_frame(const erhe::math::Viewport viewport, const erhe::scene::Camera& camera);
+    void begin_frame(erhe::math::Viewport viewport, const erhe::scene::Camera& camera);
     void compute    (erhe::graphics::Compute_command_encoder& command_encoder);
-    void render     (erhe::graphics::Render_command_encoder& encoder, const erhe::math::Viewport camera_viewport);
+    void render     (erhe::graphics::Render_command_encoder& encoder, erhe::math::Viewport camera_viewport);
     void end_frame  ();
 
     inline void push_view(const View& view) {

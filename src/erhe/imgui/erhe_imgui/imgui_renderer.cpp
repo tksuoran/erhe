@@ -450,7 +450,7 @@ static void ImGui_Impl_erhe_PlatformSetImeData(ImGuiContext* context, ImGuiViewp
 {
     static_cast<void>(context);
     void* backend_user_data = ImGui::GetCurrentContext() ? ImGui::GetIO().BackendPlatformUserData : nullptr;
-    Imgui_host* imgui_host = static_cast<Imgui_host*>(backend_user_data);
+    auto* imgui_host = static_cast<Imgui_host*>(backend_user_data);
     if (imgui_host == nullptr) {
         return;
     }
@@ -460,7 +460,7 @@ static void ImGui_Impl_erhe_PlatformSetImeData(ImGuiContext* context, ImGuiViewp
 
 void Imgui_renderer::set_ime_data(ImGuiViewport* viewport, ImGuiPlatformImeData* data)
 {
-    Imgui_host* imgui_host = static_cast<Imgui_host*>(viewport->PlatformHandle);
+    auto* imgui_host = static_cast<Imgui_host*>(viewport->PlatformHandle);
     if ((!data->WantVisible || (m_ime_host != imgui_host)) && (m_ime_host != nullptr)) {
         imgui_host->stop_text_input();
         m_ime_host = nullptr;
@@ -601,8 +601,8 @@ auto Imgui_renderer::get_font_atlas() -> ImFontAtlas*
 }
 
 auto Imgui_renderer::get_sampler(
-    const erhe::graphics::Filter        filter,
-    erhe::graphics::Sampler_mipmap_mode mipmap_mode
+    const erhe::graphics::Filter              filter,
+    const erhe::graphics::Sampler_mipmap_mode mipmap_mode
 ) const -> const erhe::graphics::Sampler&
 {
     switch (mipmap_mode) {
@@ -692,7 +692,7 @@ auto Imgui_renderer::image_button(
     const glm::vec4                           tint_color,
     const erhe::graphics::Filter              filter,
     const erhe::graphics::Sampler_mipmap_mode mipmap_mode
-) -> bool
+) const -> bool
 {
     if (texture_reference == nullptr) {
         if ((width == 0) || (height == 0)) {

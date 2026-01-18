@@ -21,12 +21,12 @@ Composer& Composer::operator=(const Composer& other)
     return *this;
 }
 
-Composer::Composer(Composer&& old)
+Composer::Composer(Composer&& old) noexcept
     : composition_passes{std::move(old.composition_passes)}
 {
 }
 
-Composer& Composer::operator=(Composer&& old)
+Composer& Composer::operator=(Composer&& old) noexcept
 {
     if (this != &old) {
         composition_passes = std::move(old.composition_passes);

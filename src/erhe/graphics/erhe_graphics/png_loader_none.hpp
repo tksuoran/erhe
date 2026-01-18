@@ -4,7 +4,7 @@
 #include "erhe_graphics/texture.hpp"
 
 #include <filesystem>
-#include <memory>
+#include <span>
 
 namespace erhe::graphics {
 

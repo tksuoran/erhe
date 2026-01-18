@@ -12,11 +12,11 @@ struct Input_arguments;
 class Controller_axis_binding : public Command_binding
 {
 public:
-    Controller_axis_binding(Command* command, int axis, const std::optional<uint32_t> modifier_mask = {});
+    Controller_axis_binding(Command* command, int axis, std::optional<uint32_t> modifier_mask = {});
     Controller_axis_binding();
     ~Controller_axis_binding() noexcept override;
 
-    auto get_type() const -> Type override;
+    [[nodiscard]] auto get_type() const -> Type override;
 
     auto on_value_changed(Input_arguments& input) -> bool;
 

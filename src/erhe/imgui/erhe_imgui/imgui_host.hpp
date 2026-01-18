@@ -40,7 +40,7 @@ public:
     Imgui_host(
         erhe::rendergraph::Rendergraph& rendergraph,
         Imgui_renderer&                 imgui_renderer,
-        const std::string_view          name,
+        std::string_view                name,
         bool                            imgui_ini,
         ImFontAtlas*                    font_atlas
     );
@@ -55,7 +55,7 @@ public:
 
     void set_begin_callback(const std::function<void(Imgui_host& viewport)>& callback);
 
-    [[nodiscard]] virtual auto is_visible     () const -> bool = 0;
+    [[nodiscard]] virtual auto is_visible     () const -> bool = 0; // TODO XXX FIX
     [[nodiscard]] virtual auto get_scale_value() const -> float;
 
     [[nodiscard]] auto name                 () const -> const std::string&;

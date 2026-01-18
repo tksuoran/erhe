@@ -87,7 +87,7 @@ private:
 
     [[nodiscard]] auto make_mesh(
         Tools&                                            tools,
-        const std::string_view                            name,
+        std::string_view                                  name,
         const std::shared_ptr<erhe::primitive::Material>& material,
         const Part&                                       part
     ) -> std::shared_ptr<erhe::scene::Mesh>;

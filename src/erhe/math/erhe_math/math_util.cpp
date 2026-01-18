@@ -16,6 +16,8 @@
 
 namespace erhe::math {
 
+Bounding_volume_source::~Bounding_volume_source() = default;
+
 using glm::mat4;
 using glm::vec2;
 using glm::vec3;
@@ -449,7 +451,7 @@ void rgb_to_hsv(const float r, const float g, const float b, float& h, float& s,
             h = b_dist - g_dist;
         } else if (g == max) {
             h = 2.0f + r_dist - b_dist;
-        } else if (b == max) {
+        } else if (b == max) { // TODO CLion claims condition is always true
             h = 4.0f + g_dist - r_dist;
         }
         h = h * 60.0f;

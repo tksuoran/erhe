@@ -2,7 +2,6 @@
 
 #include "erhe_rendergraph/texture_rendergraph_node.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
-#include "erhe_graphics/texture.hpp"
 #include "erhe_renderer/pipeline_renderpass.hpp"
 
 #include <memory>

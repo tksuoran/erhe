@@ -89,7 +89,7 @@ protected:
 
     //// [[nodiscard]] auto get_dst_vertex_from_src_edge(GEO::index_t src_edge) -> GEO::index_t;
 
-    void make_edge_midpoints(const std::initializer_list<float> relative_positions);
+    void make_edge_midpoints(std::initializer_list<float> relative_positions);
 
     [[nodiscard]] auto get_src_edge_new_vertex(GEO::index_t src_vertex_a, GEO::index_t src_vertex_b, GEO::index_t vertex_split_position) const -> GEO::index_t;
 

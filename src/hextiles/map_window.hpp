@@ -102,46 +102,46 @@ public:
     );
 
     // Implements Framebuffer_window
-    auto get_size(glm::vec2 available_size) const -> glm::vec2 override;
+    [[nodiscard]] auto get_size(glm::vec2 available_size) const -> glm::vec2 override;
 
     // Implements Imgui_window
     void imgui               ()                     override; // overrides Framebuffer_window
     auto flags               () -> ImGuiWindowFlags override;
     void on_begin            ()                     override;
     void on_end              ()                     override;
-    auto want_keyboard_events() const -> bool       override;
-    auto want_mouse_events   () const -> bool       override;
+    [[nodiscard]] auto want_keyboard_events() const -> bool       override;
+    [[nodiscard]] auto want_mouse_events   () const -> bool       override;
 
     // Public API
     void set_map(Map* map);
 
     // Commands
-    auto mouse_scroll_try_ready() const -> bool;
+    [[nodiscard]] auto mouse_scroll_try_ready() const -> bool;
     void scroll                (glm::vec2 delta);
     void scroll_tiles          (glm::vec2 delta);
     void grid_cycle            ();
 
-    void scroll_to    (const Tile_coordinate center_tile);
+    void scroll_to    (Tile_coordinate center_tile);
     void hover        (glm::vec2 window_position);
     void render       ();
-    void blit         (const Pixel_coordinate shape, const Tile_coordinate tile_location, const uint32_t color = 0xffffffff) const;
-    void print        (const std::string_view text, const Tile_coordinate tile_location, uint32_t color = 0xffffffff) const;
+    void blit         (Pixel_coordinate shape, Tile_coordinate tile_location, uint32_t color = 0xffffffff) const;
+    void print        (std::string_view text, Tile_coordinate tile_location, uint32_t color = 0xffffffff) const;
 
-    auto wrap         (Tile_coordinate in) const -> Tile_coordinate;
-    auto wrap_center  (Tile_coordinate in) const -> Tile_coordinate;
-    bool hit_tile     (Tile_coordinate tile_coordinate) const;
-    auto pixel_to_tile(Pixel_coordinate pixel_coordinate) const -> Tile_coordinate;
+    [[nodiscard]] auto wrap         (Tile_coordinate in) const -> Tile_coordinate;
+    [[nodiscard]] auto wrap_center  (Tile_coordinate in) const -> Tile_coordinate;
+    [[nodiscard]] bool hit_tile     (Tile_coordinate tile_coordinate) const;
+    [[nodiscard]] auto pixel_to_tile(Pixel_coordinate pixel_coordinate) const -> Tile_coordinate;
     void scale_zoom   (float scale);
     void set_zoom     (float scale);
 
-    auto tile_image   (terrain_tile_t terrain, const int scale = 1) -> bool;
-    auto tile_position(const Tile_coordinate coordinate) const -> glm::vec2;
+    auto tile_image   (terrain_tile_t terrain, int scale = 1) -> bool;
+    [[nodiscard]] auto tile_position(Tile_coordinate coordinate) const -> glm::vec2;
 
-    auto get_hover_window_position() const -> std::optional<glm::vec2>       { return m_hover_window_position; }
-    auto get_hover_tile_position  () const -> std::optional<Tile_coordinate> { return m_hover_tile_position; }
+    [[nodiscard]] auto get_hover_window_position() const -> std::optional<glm::vec2>       { return m_hover_window_position; }
+    [[nodiscard]] auto get_hover_tile_position  () const -> std::optional<Tile_coordinate> { return m_hover_tile_position; }
 
 private:
-    auto normalize(Pixel_coordinate pixel_coordinate) const -> Pixel_coordinate;
+    [[nodiscard]] auto normalize(Pixel_coordinate pixel_coordinate) const -> Pixel_coordinate;
 
     // Commands
     erhe::renderer::Text_renderer& m_text_renderer;

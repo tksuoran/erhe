@@ -9,9 +9,9 @@ Link::Link()
 {
 }
 
-Link::Link(Link&& old) = default;
+Link::Link(Link&& old) noexcept = default;
 
-Link& Link::operator=(Link&& old) = default;
+Link& Link::operator=(Link&& old) noexcept = default;
 
 Link::Link(Pin* source, Pin* sink)
     : m_id    {make_graph_id()}
@@ -20,9 +20,7 @@ Link::Link(Pin* source, Pin* sink)
 {
 }
 
-Link::~Link() noexcept
-{
-}
+Link::~Link() noexcept = default;
 
 auto Link::get_id() const -> int
 {

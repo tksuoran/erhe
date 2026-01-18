@@ -23,7 +23,7 @@ public:
     Xr_boolean_binding();
     ~Xr_boolean_binding() noexcept override;
 
-    auto get_type() const -> Type override;
+    [[nodiscard]] auto get_type() const -> Type override;
 
     auto on_value_changed(Input_arguments& input) -> bool;
     auto test_trigger    (Input_arguments& input) const -> bool;

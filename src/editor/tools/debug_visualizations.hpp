@@ -107,8 +107,8 @@ private:
         const glm::mat4&       clip_from_world,
         const glm::mat4&       world_from_node,
         const glm::vec3&       position_in_world,
-        const uint32_t         text_color,
-        const std::string_view label_text
+        uint32_t               text_color,
+        std::string_view       label_text
     );
 
     void make_combo(const char* label, Visualization_mode& visualization);

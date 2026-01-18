@@ -41,8 +41,8 @@ public:
 
     Render_pipeline_state(const Render_pipeline_state& other);
     auto operator=(const Render_pipeline_state& other) -> Render_pipeline_state&;
-    Render_pipeline_state(Render_pipeline_state&& old);
-    auto operator=(Render_pipeline_state&& old) -> Render_pipeline_state&;
+    Render_pipeline_state(Render_pipeline_state&& old) noexcept;
+    auto operator=(Render_pipeline_state&& old) noexcept -> Render_pipeline_state&;
 
     void reset();
 

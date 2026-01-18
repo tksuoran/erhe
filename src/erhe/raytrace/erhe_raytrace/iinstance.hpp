@@ -19,7 +19,7 @@ public:
     virtual void commit       () = 0;
     virtual void enable       () = 0;
     virtual void disable      () = 0;
-    virtual void set_transform(const glm::mat4 transform) = 0;
+    virtual void set_transform(glm::mat4 transform) = 0;
     virtual void set_scene    (IScene* scene) = 0;
     virtual void set_mask     (uint32_t mask) = 0;
     virtual void set_user_data(void* ptr) = 0;
@@ -30,9 +30,9 @@ public:
     [[nodiscard]] virtual auto is_enabled   () const -> bool             = 0;
     [[nodiscard]] virtual auto debug_label  () const -> std::string_view = 0;
 
-    [[nodiscard]] static auto create       (const std::string_view debug_label) -> IInstance*;
-    [[nodiscard]] static auto create_shared(const std::string_view debug_label) -> std::shared_ptr<IInstance>;
-    [[nodiscard]] static auto create_unique(const std::string_view debug_label) -> std::unique_ptr<IInstance>;
+    [[nodiscard]] static auto create       (std::string_view debug_label) -> IInstance*;
+    [[nodiscard]] static auto create_shared(std::string_view debug_label) -> std::shared_ptr<IInstance>;
+    [[nodiscard]] static auto create_unique(std::string_view debug_label) -> std::unique_ptr<IInstance>;
 };
 
 } // namespace erhe::raytrace

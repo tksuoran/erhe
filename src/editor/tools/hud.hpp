@@ -88,6 +88,7 @@ public:
     [[nodiscard]] auto intersect_ray  (const glm::vec3& ray_origin_in_world, const glm::vec3& ray_direction_in_world) -> std::optional<glm::vec3>;
 
 private:
+    using Tool::on_message; // Intentionally hide Tool::on_message()
     void on_message           (App_message& message);
     void update_node_transform(const glm::mat4& world_from_hud);
 

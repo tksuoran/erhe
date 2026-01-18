@@ -1,7 +1,5 @@
 #pragma once
 
-#include "erhe_verify/verify.hpp"
-
 namespace erhe::utility {
 
 template <typename T>

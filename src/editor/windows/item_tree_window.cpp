@@ -13,6 +13,7 @@
 #include "operations/compound_operation.hpp"
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/item_parent_change_operation.hpp"
+#include "operations/item_reposition_in_parent_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "preview/brush_preview.hpp"
 #include "scene/scene_commands.hpp"

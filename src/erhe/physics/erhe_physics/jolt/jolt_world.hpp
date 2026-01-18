@@ -33,7 +33,7 @@ static constexpr uint8_t MOVING        = 1u;
 static constexpr uint8_t NON_COLLIDING = 2u;
 static constexpr uint8_t NUM_LAYERS    = 3u;
 
-[[nodiscard]] auto get_layer(const Motion_mode motion_mode) -> uint8_t;
+[[nodiscard]] auto get_layer(Motion_mode motion_mode) -> uint8_t;
 
 }
 
@@ -42,10 +42,10 @@ class Jolt_collision_filter
     , public JPH::ObjectLayerPairFilter
 {
     // Implements JPH::ObjectVsBroadPhaseLayerFilter
-    auto ShouldCollide(JPH::ObjectLayer inLayer1, JPH::BroadPhaseLayer inLayer2) const -> bool override;
+    [[nodiscard]] auto ShouldCollide(JPH::ObjectLayer inLayer1, JPH::BroadPhaseLayer inLayer2) const -> bool override;
 
     // Implements JPH::ObjectLayerPairFilter
-    auto ShouldCollide(JPH::ObjectLayer inLayer1, JPH::ObjectLayer inLayer2) const -> bool override;
+    [[nodiscard]] auto ShouldCollide(JPH::ObjectLayer inLayer1, JPH::ObjectLayer inLayer2) const -> bool override;
 };
 
 class Jolt_world
@@ -55,19 +55,11 @@ class Jolt_world
 {
 public:
     Jolt_world();
-    virtual ~Jolt_world() noexcept override;
+    ~Jolt_world() noexcept override;
 
     // Implements IWorld
-    auto create_rigid_body(
-        const IRigid_body_create_info& create_info,
-        glm::vec3                      position    = glm::vec3{0.0f, 0.0f, 0.0f},
-        glm::quat                      orientation = glm::quat{1.0f, 0.0f, 0.0f, 0.0f}
-    ) -> IRigid_body*                 override;
-    auto create_rigid_body_shared(
-        const IRigid_body_create_info& create_info,
-        glm::vec3                      position    = glm::vec3{0.0f, 0.0f, 0.0f},
-        glm::quat                      orientation = glm::quat{1.0f, 0.0f, 0.0f, 0.0f}
-    ) -> std::shared_ptr<IRigid_body> override;
+    auto create_rigid_body       (const IRigid_body_create_info& create_info) -> IRigid_body*                 override;
+    auto create_rigid_body_shared(const IRigid_body_create_info& create_info) -> std::shared_ptr<IRigid_body> override;
 
     auto get_gravity         () const -> glm::vec3                override;
     auto get_rigid_body_count() const -> std::size_t              override;

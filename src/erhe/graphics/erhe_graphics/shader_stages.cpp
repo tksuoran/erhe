@@ -19,7 +19,7 @@ namespace erhe::graphics {
 
 using std::string;
 
-auto Reloadable_shader_stages::make_prototype(Device& device) -> Shader_stages_prototype
+auto Reloadable_shader_stages::make_prototype(Device& device) const -> Shader_stages_prototype
 {
     ERHE_PROFILE_FUNCTION();
     Shader_stages_prototype prototype{device, create_info};
@@ -44,16 +44,16 @@ Reloadable_shader_stages::Reloadable_shader_stages(Device& device, Shader_stages
 {
 }
 
-Reloadable_shader_stages::Reloadable_shader_stages(Reloadable_shader_stages&& other)
-    : create_info  {std::move(other.create_info)}
-    , shader_stages{std::move(other.shader_stages)}
+Reloadable_shader_stages::Reloadable_shader_stages(Reloadable_shader_stages&& old) noexcept
+    : create_info  {std::move(old.create_info)}
+    , shader_stages{std::move(old.shader_stages)}
 {
 }
 
-Reloadable_shader_stages& Reloadable_shader_stages::operator=(Reloadable_shader_stages&& other)
+Reloadable_shader_stages& Reloadable_shader_stages::operator=(Reloadable_shader_stages&& old) noexcept
 {
-    create_info   = std::move(other.create_info);
-    shader_stages = std::move(other.shader_stages);
+    create_info   = std::move(old.create_info);
+    shader_stages = std::move(old.shader_stages);
     return *this;
 }
 
@@ -91,8 +91,8 @@ Shader_stages::Shader_stages(Device& device, const std::string& failed_name)
 }
 
 Shader_stages::~Shader_stages() noexcept = default;
-Shader_stages::Shader_stages(Shader_stages&&) = default;
-Shader_stages& Shader_stages::operator=(Shader_stages&&) = default;
+Shader_stages::Shader_stages(Shader_stages&&) noexcept = default;
+Shader_stages& Shader_stages::operator=(Shader_stages&&) noexcept = default;
 //Shader_stages& Shader_stages::operator=(Shader_stages&& from)
 //{
 //    if (*this != from) {
@@ -112,7 +112,7 @@ auto Shader_stages::is_valid() const -> bool
 {
     return m_impl->is_valid();
 }
-void Shader_stages::invalidate()
+void Shader_stages::invalidate() const
 {
     m_impl->invalidate();
 }
@@ -124,7 +124,7 @@ auto Shader_stages::get_impl() const -> const Shader_stages_impl&
 {
     return *m_impl.get();
 }
-void Shader_stages::reload(Shader_stages_prototype&& prototype)
+void Shader_stages::reload(Shader_stages_prototype&& prototype) const
 {
     m_impl->reload(std::move(prototype));
 }
@@ -150,13 +150,13 @@ Shader_stages_prototype::Shader_stages_prototype(Device& device, const Shader_st
 {
 }
 Shader_stages_prototype::~Shader_stages_prototype() noexcept = default;
-Shader_stages_prototype::Shader_stages_prototype(Shader_stages_prototype&&) = default;
+Shader_stages_prototype::Shader_stages_prototype(Shader_stages_prototype&&) noexcept = default;
 
-void Shader_stages_prototype::compile_shaders()
+void Shader_stages_prototype::compile_shaders() const
 {
     m_impl->compile_shaders();
 }
-auto Shader_stages_prototype::link_program() -> bool
+auto Shader_stages_prototype::link_program() const -> bool
 {
     return m_impl->link_program();
 }
@@ -168,11 +168,11 @@ auto Shader_stages_prototype::create_info() const -> const Shader_stages_create_
 {
     return m_impl->create_info();
 }
-auto Shader_stages_prototype::is_valid() -> bool
+auto Shader_stages_prototype::is_valid() const -> bool
 {
     return m_impl->is_valid();
 }
-auto Shader_stages_prototype::get_final_source(const Shader_stage& shader, std::optional<unsigned int> gl_name) -> std::string
+auto Shader_stages_prototype::get_final_source(const Shader_stage& shader, std::optional<unsigned int> gl_name) const -> std::string
 {
     return m_impl->get_final_source(shader, gl_name);
 }

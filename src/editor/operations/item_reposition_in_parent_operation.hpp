@@ -14,8 +14,8 @@ public:
     Item_reposition_in_parent_operation();
     Item_reposition_in_parent_operation(
         const std::shared_ptr<erhe::Hierarchy>& child,
-        const std::shared_ptr<erhe::Hierarchy>  place_before,
-        const std::shared_ptr<erhe::Hierarchy>  palce_after
+        const std::shared_ptr<erhe::Hierarchy>& place_before,
+        const std::shared_ptr<erhe::Hierarchy>& palce_after
     );
 
     // Implements Operation

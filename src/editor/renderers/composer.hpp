@@ -18,11 +18,11 @@ class Composer : public erhe::Item<erhe::Item_base, erhe::Item_base, Composer>
 public:
     Composer(const Composer&);
     Composer& operator=(const Composer&);
-    Composer(Composer&& old);
-    Composer& operator=(Composer&& old);
+    Composer(Composer&& old) noexcept;
+    Composer& operator=(Composer&& old) noexcept;
     ~Composer() noexcept override;
 
-    explicit Composer(const std::string_view name);
+    explicit Composer(std::string_view name);
 
     // Implements Item_base
     static constexpr std::string_view static_type_name{"Composer"};

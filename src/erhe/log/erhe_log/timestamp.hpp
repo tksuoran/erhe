@@ -2,8 +2,7 @@
 
 #include <string>
 
-namespace erhe::log
-{
+namespace erhe::log {
 
 auto timestamp      () -> std::string;
 auto timestamp_short() -> std::string;
