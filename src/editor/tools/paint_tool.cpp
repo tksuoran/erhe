@@ -360,7 +360,7 @@ void Paint_tool::paint_vertex(
         ptr[2] = color.z;
         ptr[3] = color.w;
         mesh_memory.buffer_transfer_queue.enqueue(
-            *mesh_memory.get_vertex_buffer(stream_index),
+            mesh_memory.get_vertex_buffer(stream_index),
             range_byte_offset + vertex_offset,
             std::move(buffer)
         );
@@ -372,7 +372,7 @@ void Paint_tool::paint_vertex(
         ptr[2] = erhe::dataformat::float_to_unorm8(color.z);
         ptr[3] = erhe::dataformat::float_to_unorm8(color.w);
         mesh_memory.buffer_transfer_queue.enqueue(
-            *mesh_memory.get_vertex_buffer(stream_index),
+            mesh_memory.get_vertex_buffer(stream_index),
             range_byte_offset + vertex_offset,
             std::move(buffer)
         );

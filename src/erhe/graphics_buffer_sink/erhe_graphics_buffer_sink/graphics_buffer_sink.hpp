@@ -1,5 +1,6 @@
 #pragma once
 
+#include "erhe_graphics/buffer.hpp"
 #include "erhe_primitive/buffer_sink.hpp"
 
 namespace erhe::graphics {
@@ -15,7 +16,7 @@ public:
     Graphics_buffer_sink(
         erhe::graphics::Buffer_transfer_queue&         buffer_transfer_queue,
         std::initializer_list<erhe::graphics::Buffer*> vertex_buffers,
-        erhe::graphics::Buffer&                        index_buffer
+        erhe::graphics::Buffer*                        index_buffer
     );
 
     [[nodiscard]] auto allocate_vertex_buffer(std::size_t stream, std::size_t vertex_count, std::size_t vertex_element_size) -> erhe::primitive::Buffer_range override;
@@ -31,10 +32,10 @@ public:
     auto get_available_index_byte_count (std::size_t alignment) const -> std::size_t                                override;
 
 private:
-    mutable ERHE_PROFILE_MUTEX(std::mutex, m_mutex);
-    erhe::graphics::Buffer_transfer_queue& m_buffer_transfer_queue;
-    std::vector<erhe::graphics::Buffer*>   m_vertex_buffers;
-    erhe::graphics::Buffer&                m_index_buffer;
+    mutable ERHE_PROFILE_MUTEX(std::mutex,        m_mutex);
+    erhe::graphics::Buffer_transfer_queue&        m_buffer_transfer_queue;
+    erhe::graphics::Buffer_allocator              m_index_buffer_allocator;
+    std::vector<erhe::graphics::Buffer_allocator> m_vertex_buffer_allocators;
 };
 
 } // namespace erhe::graphics_buffer_sink

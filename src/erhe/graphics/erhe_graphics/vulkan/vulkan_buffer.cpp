@@ -191,7 +191,7 @@ auto Buffer_impl::allocate_bytes(const std::size_t byte_count, const std::size_t
     return offset;
 }
 
-auto Buffer_impl::begin_write(const std::size_t byte_offset, std::size_t byte_count) noexcept -> std::span<std::byte>
+auto Buffer_impl::begin_write(const std::size_t byte_offset, const std::size_t byte_count) noexcept -> std::span<std::byte>
 {
     ERHE_FATAL("not implemented");
     static_cast<void>(byte_offset);
@@ -247,21 +247,21 @@ void Buffer_impl::flush_and_unmap_bytes(const std::size_t byte_count) noexcept
 
 auto Buffer_impl::get_used_byte_count() const -> std::size_t
 {
-    ERHE_FATAL("not implemented");
-    return 0;
+    return m_next_free_byte;
 }
 
 auto Buffer_impl::get_available_byte_count(std::size_t alignment) const noexcept -> std::size_t
 {
-    ERHE_FATAL("not implemented");
-    static_cast<void>(alignment);
-    return 0;
+    std::size_t aligned_offset = erhe::utility::align_offset_non_power_of_two(m_next_free_byte, alignment);
+    if (aligned_offset >= m_capacity_byte_count) {
+        return 0;
+    }
+    return m_capacity_byte_count - aligned_offset;
 }
 
 auto Buffer_impl::get_capacity_byte_count() const noexcept -> std::size_t
 {
-    ERHE_FATAL("not implemented");
-    return 0;
+    return m_capacity_byte_count;
 }
 
 auto operator==(const Buffer_impl& lhs, const Buffer_impl& rhs) noexcept -> bool

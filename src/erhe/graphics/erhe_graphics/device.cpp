@@ -40,7 +40,7 @@ auto Device::create_dummy_texture(const erhe::dataformat::Format format) -> std:
 {
     return m_impl->create_dummy_texture(format);
 }
-void Device::upload_to_buffer(Buffer& buffer, size_t offset, const void* data, size_t length)
+void Device::upload_to_buffer(const Buffer& buffer, size_t offset, const void* data, size_t length)
 {
     m_impl->upload_to_buffer(buffer, offset, data, length);
 }
@@ -100,7 +100,7 @@ auto Device::choose_depth_stencil_format(const unsigned int sort_flags, const in
 {
     return m_impl->choose_depth_stencil_format(sort_flags, requested_sample_count);
 }
-void Device::clear_texture(Texture& texture, std::array<double, 4> value)
+void Device::clear_texture(const Texture& texture, std::array<double, 4> value)
 {
     m_impl->clear_texture(texture, value);
 }

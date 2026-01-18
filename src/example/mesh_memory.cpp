@@ -74,8 +74,8 @@ Mesh_memory::Mesh_memory(erhe::graphics::Device& graphics_device)
     , buffer_transfer_queue{graphics_device}
     , graphics_buffer_sink{
         buffer_transfer_queue,
-        {&position_vertex_buffer,&non_position_vertex_buffer},
-        index_buffer
+        { &position_vertex_buffer, &non_position_vertex_buffer },
+        &index_buffer
     }
     , buffer_info{
         .index_type    = erhe::dataformat::Format::format_32_scalar_uint,

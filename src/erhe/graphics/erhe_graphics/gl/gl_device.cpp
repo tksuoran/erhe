@@ -896,7 +896,7 @@ inline auto access_mask(Device& device) -> gl::Map_buffer_access_mask
         : access_mask_not_persistent;
 }
 
-void Device_impl::upload_to_buffer(Buffer& buffer, size_t offset, const void* data, size_t length)
+void Device_impl::upload_to_buffer(const Buffer& buffer, size_t offset, const void* data, size_t length)
 {
     if ((m_staging_buffer == 0) || (m_staging_buffer_size < length)) {
         if (m_staging_buffer != 0) {
@@ -1128,7 +1128,7 @@ auto Device_impl::get_format_properties(erhe::dataformat::Format format) const -
     return i->second;
 }
 
-void Device_impl::clear_texture(Texture& texture, std::array<double, 4> value)
+void Device_impl::clear_texture(const Texture& texture, std::array<double, 4> value)
 {
     const erhe::dataformat::Format      pixelformat       = texture.get_pixelformat();
     const erhe::dataformat::Format_kind format_kind       = erhe::dataformat::get_format_kind      (pixelformat);

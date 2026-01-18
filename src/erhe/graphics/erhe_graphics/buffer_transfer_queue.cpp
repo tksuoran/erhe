@@ -20,7 +20,7 @@ Buffer_transfer_queue::~Buffer_transfer_queue() noexcept
     // flush(); TODO causes GL errors in shutdown, investigate
 }
 
-void Buffer_transfer_queue::enqueue(Buffer& buffer, const std::size_t offset, std::vector<uint8_t>&& data)
+void Buffer_transfer_queue::enqueue(const Buffer* buffer, const std::size_t offset, std::vector<uint8_t>&& data)
 {
     const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
 
@@ -45,11 +45,11 @@ void Buffer_transfer_queue::flush()
             log_buffer,
             "buffer upload {} {} transfer offset = {} size = {}",
             gl::c_str(entry.target.target()),
-            entry.target.gl_name(),
+            entry.target->gl_name(),
             entry.target_offset,
             entry.data.size()
         );
-        m_device.upload_to_buffer(entry.target, entry.target_offset, entry.data.data(), entry.data.size());
+        m_device.upload_to_buffer(*entry.target, entry.target_offset, entry.data.data(), entry.data.size());
     }
     m_queued.clear();
 }

@@ -2,10 +2,7 @@
 
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/gl/gl_objects.hpp"
-#include "erhe_profile/profile.hpp"
 #include "erhe_gl/wrapper_enums.hpp"
-
-#include <mutex>
 
 namespace erhe::graphics {
 
@@ -21,14 +18,9 @@ public:
     auto operator=      (Buffer_impl&& other) noexcept -> Buffer_impl&;
 
     [[nodiscard]] auto get_capacity_byte_count () const noexcept -> std::size_t;
-    [[nodiscard]] auto allocate_bytes          (std::size_t byte_count, std::size_t alignment = 64) noexcept -> std::optional<std::size_t>;
     [[nodiscard]] auto get_debug_label         () const noexcept -> const std::string&;
-    [[nodiscard]] auto get_used_byte_count     () const -> std::size_t;
-    [[nodiscard]] auto get_available_byte_count(std::size_t alignment = 64) const noexcept -> std::size_t;
-
     [[nodiscard]] auto get_map                 () const -> std::span<std::byte>;
     [[nodiscard]] auto gl_name                 () const noexcept -> unsigned int;
-    void clear                () noexcept;
     void unmap                () noexcept;
     void flush_bytes          (std::size_t byte_offset, std::size_t byte_count) noexcept;
     void flush_and_unmap_bytes(std::size_t byte_count) noexcept;
@@ -64,11 +56,9 @@ private:
     [[nodiscard]] auto get_gl_storage_mask() -> gl::Buffer_storage_mask;
     [[nodiscard]] auto get_gl_access_mask (Buffer_map_flags flags) const -> gl::Map_buffer_access_mask;
 
-    ERHE_PROFILE_MUTEX(std::mutex, m_allocate_mutex);
     Device&                        m_device;
     Gl_buffer                      m_handle;
     std::size_t                    m_capacity_byte_count                   {0};
-    std::size_t                    m_next_free_byte                        {0};
     Buffer_usage                   m_usage                                 {0};
     uint64_t                       m_memory_allocation_create_flag_bit_mask{0};
     uint64_t                       m_required_memory_property_bit_mask     {0};

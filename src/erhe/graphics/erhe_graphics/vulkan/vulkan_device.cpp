@@ -1160,7 +1160,7 @@ auto Device_impl::get_allocator() -> VmaAllocator&
     return m_vma_allocator;
 }
 
-auto Device_impl::get_buffer_alignment(Buffer_target target) -> std::size_t
+auto Device_impl::get_buffer_alignment(const Buffer_target target) -> std::size_t
 {
     switch (target) {
         case Buffer_target::storage: {
@@ -1181,7 +1181,7 @@ auto Device_impl::get_buffer_alignment(Buffer_target target) -> std::size_t
     }
 }
 
-void Device_impl::upload_to_buffer(Buffer& buffer, size_t offset, const void* data, size_t length)
+void Device_impl::upload_to_buffer(const Buffer& buffer, const size_t offset, const void* data, const size_t length)
 {
     ERHE_FATAL("Not implemented");
     static_cast<void>(buffer);
@@ -1441,7 +1441,7 @@ auto Device_impl::choose_depth_stencil_format(unsigned int sort_flags, int reque
     return erhe::dataformat::Format::format_undefined;
 }
 
-void Device_impl::clear_texture(Texture& texture, std::array<double, 4> value)
+void Device_impl::clear_texture(const Texture& texture, std::array<double, 4> value)
 {
     ERHE_FATAL("Not implemented");
     static_cast<void>(texture);

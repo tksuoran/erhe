@@ -38,7 +38,7 @@ public:
 
     unsigned int          texture_level  {0};
     unsigned int          texture_layer  {0};
-    Texture*              texture        {nullptr};
+    const Texture*        texture        {nullptr};
     std::array<double, 4> clear_value;
     Load_action           load_action    {Load_action::Clear};
     Store_action          store_action   {Store_action::Store};

@@ -21,7 +21,7 @@ public:
     class Transfer_entry
     {
     public:
-        Transfer_entry(Buffer& target, const std::size_t target_offset, std::vector<uint8_t>&& data)
+        Transfer_entry(const Buffer* target, const std::size_t target_offset, std::vector<uint8_t>&& data)
             : target       {target}
             , target_offset{target_offset}
             , data         {data}
@@ -40,14 +40,14 @@ public:
 
         auto operator=(Transfer_entry&& other) = delete;
 
-        Buffer&              target;
+        const Buffer*        target       {nullptr};
         std::size_t          target_offset{0};
         std::vector<uint8_t> data;
     };
 
     void flush();
 
-    void enqueue(Buffer& buffer, std::size_t offset, std::vector<uint8_t>&& data);
+    void enqueue(const Buffer* buffer, std::size_t offset, std::vector<uint8_t>&& data);
 
 private:
     ERHE_PROFILE_MUTEX(std::mutex, m_mutex);

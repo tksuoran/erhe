@@ -330,7 +330,6 @@ Buffer_impl::Buffer_impl(Buffer_impl&& other) noexcept
     : m_device                            {other.m_device}
     , m_handle                            {std::move(other.m_handle)}
     , m_capacity_byte_count               {other.m_capacity_byte_count}
-    , m_next_free_byte                    {other.m_next_free_byte}
     , m_usage                             {other.m_usage     }
     , m_required_memory_property_bit_mask {other.m_required_memory_property_bit_mask}
     , m_preferred_memory_property_bit_mask{other.m_preferred_memory_property_bit_mask}
@@ -348,7 +347,6 @@ auto Buffer_impl::operator=(Buffer_impl&& other) noexcept -> Buffer_impl&
     m_handle                             = std::move(other.m_handle);
     m_debug_label                        = other.m_debug_label;
     m_capacity_byte_count                = other.m_capacity_byte_count;
-    m_next_free_byte                     = other.m_next_free_byte;
     m_usage                              = other.m_usage;
     m_required_memory_property_bit_mask  = other.m_required_memory_property_bit_mask;
     m_preferred_memory_property_bit_mask = other.m_preferred_memory_property_bit_mask;
@@ -367,34 +365,6 @@ auto Buffer_impl::get_map() const -> std::span<std::byte>
 auto Buffer_impl::get_debug_label() const noexcept -> const std::string&
 {
     return m_debug_label;
-}
-
-void Buffer_impl::clear() noexcept
-{
-    m_next_free_byte = 0;
-}
-
-auto Buffer_impl::allocate_bytes(const std::size_t byte_count, const std::size_t alignment) noexcept -> std::optional<std::size_t>
-{
-    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_allocate_mutex};
-    const std::size_t offset         = erhe::utility::align_offset_non_power_of_two(m_next_free_byte, alignment);
-    const std::size_t next_free_byte = offset + byte_count;
-    if (next_free_byte > m_capacity_byte_count) {
-        const std::size_t available_byte_count = (offset < m_capacity_byte_count) ? m_capacity_byte_count - offset : 0;
-        log_buffer->error(
-            "erhe::graphics::Buffer_impl::allocate_bytes(): Out of memory requesting {} bytes, currently allocated {}, total size {}, free {} bytes",
-            byte_count,
-            m_next_free_byte,
-            m_capacity_byte_count,
-            available_byte_count
-        );
-        return {};
-    }
-
-    m_next_free_byte = next_free_byte;
-    ERHE_VERIFY(m_next_free_byte <= m_capacity_byte_count);
-    log_buffer->trace("buffer {}: allocated {} bytes at offset {}", gl_name(), byte_count, offset);
-    return offset;
 }
 
 auto Buffer_impl::begin_write(const std::size_t byte_offset, std::size_t byte_count) noexcept -> std::span<std::byte>
@@ -709,20 +679,6 @@ void Buffer_impl::flush_and_unmap_bytes(const std::size_t byte_count) noexcept
     }
 
     unmap();
-}
-
-auto Buffer_impl::get_used_byte_count() const -> std::size_t
-{
-    return m_next_free_byte;
-}
-
-auto Buffer_impl::get_available_byte_count(std::size_t alignment) const noexcept -> std::size_t
-{
-    std::size_t aligned_offset = erhe::utility::align_offset_non_power_of_two(m_next_free_byte, alignment);
-    if (aligned_offset >= m_capacity_byte_count) {
-        return 0;
-    }
-    return m_capacity_byte_count - aligned_offset;
 }
 
 auto Buffer_impl::get_capacity_byte_count() const noexcept -> std::size_t
