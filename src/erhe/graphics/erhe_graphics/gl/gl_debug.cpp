@@ -37,8 +37,9 @@ void erhe_opengl_callback(
 {
     if (
         (id == 0x020052) || // Pixel transfer is synchronized with 3D rendering
-        (id == 0x020072) || // Buffer performance warning: Buffer object Mesh_memory position vertex buffer (bound to GL_VERTEX_ATTRIB_ARRAY_BUFFER_BINDING_ARB (0), usage hint is GL_DYNAMIC_DRAW) is being copied/moved from VIDEO memory to HOST memory.
-        (id == 0x020071)    // Buffer detailed info: Buffer object Ring_buffer (bound to NONE, usage hint is GL_DYNAMIC_DRAW) will use SYSTEM HEAP memory as the source for buffer object operations.
+        //(id == 0x020072) || // Buffer performance warning: Buffer object Mesh_memory position vertex buffer (bound to GL_VERTEX_ATTRIB_ARRAY_BUFFER_BINDING_ARB (0), usage hint is GL_DYNAMIC_DRAW) is being copied/moved from VIDEO memory to HOST memory.
+        (id == 0x020071) || // Buffer detailed info: Buffer object Ring_buffer (bound to NONE, usage hint is GL_DYNAMIC_DRAW) will use SYSTEM HEAP memory as the source for buffer object operations.
+        (id == 0x020084)    // The texture object (0) bound to texture image unit 0 does not have a defined base level and cannot be used for texture mapping.
     ) {
         return;
     }

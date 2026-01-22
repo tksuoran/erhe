@@ -366,25 +366,25 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         m_info.max_fragment_shader_storage_blocks
     );
 
-    bool force_bindless_textures_off {false};
-    bool force_no_persistent_buffers {false};
-    bool force_no_direct_state_access{false};
-    bool force_no_multi_draw_indirect{false};
-    int  force_gl_version            {false};
-    int  force_glsl_version          {false};
-    bool capture_support             {false};
-    bool initial_clear               {false};
+    bool force_bindless_textures_off      {false};
+    bool force_no_persistent_buffers      {false};
+    bool force_no_direct_state_access     {false};
+    bool force_emulate_multi_draw_indirect{false};
+    int  force_gl_version                 {false};
+    int  force_glsl_version               {false};
+    bool capture_support                  {false};
+    bool initial_clear                    {false};
     {
         const auto& ini = erhe::configuration::get_ini_file_section(c_erhe_config_file_path, "graphics");
         //// ini.get("post_processing",              configuration.post_processing);
         //// ini.get("use_time_query",               configuration.use_time_query );
-        ini.get("force_bindless_textures_off",  force_bindless_textures_off);
-        ini.get("force_no_persistent_buffers",  force_no_persistent_buffers);
-        ini.get("force_no_direct_state_access", force_no_direct_state_access);
-        ini.get("force_no_multi_draw_indirect", force_no_multi_draw_indirect);
-        ini.get("force_gl_version",             force_gl_version);
-        ini.get("force_glsl_version",           force_glsl_version);
-        ini.get("initial_clear",                initial_clear);
+        ini.get("force_bindless_textures_off",       force_bindless_textures_off);
+        ini.get("force_no_persistent_buffers",       force_no_persistent_buffers);
+        ini.get("force_no_direct_state_access",      force_no_direct_state_access);
+        ini.get("force_emulate_multi_draw_indirect", force_emulate_multi_draw_indirect);
+        ini.get("force_gl_version",                  force_gl_version);
+        ini.get("force_glsl_version",                force_glsl_version);
+        ini.get("initial_clear",                     initial_clear);
     }
 
     if (gl::is_extension_supported(gl::Extension::Extension_GL_ARB_bindless_texture)) {
@@ -402,12 +402,12 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
 #else
         if (force_bindless_textures_off) {
             m_info.use_bindless_texture = false;
-            log_startup->warn("Force disabled GL_ARB_bindless_texture due to erhe.ini setting force_bindless_textures_off");
+            log_startup->warn("Force disabled GL_ARB_bindless_texture due to erhe.toml setting force_bindless_textures_off");
         }
         else
         if (capture_support) {
             m_info.use_bindless_texture = false;
-            log_startup->warn("Force disabled GL_ARB_bindless_texture due to erhe.ini enabling RenderDoc capture");
+            log_startup->warn("Force disabled GL_ARB_bindless_texture due to erhe.toml enabling RenderDoc capture");
         }
 #endif
     }
@@ -444,30 +444,41 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
     log_startup->info("GL_ARB_sparse_texture supported : {}", m_info.use_sparse_texture);
 
     m_info.use_persistent_buffers = gl::is_extension_supported(gl::Extension::Extension_GL_ARB_buffer_storage);
-    m_info.use_multi_draw_indirect = (m_info.gl_version >= 430) || gl::is_extension_supported(gl::Extension::Extension_GL_ARB_multi_draw_indirect);
-    log_startup->info("Persistent Buffers supported:  {}", m_info.use_sparse_texture);
-    log_startup->info("Multi Draw Indirect supported: {}", m_info.use_multi_draw_indirect);
+    if (m_info.gl_version >= 430) {
+        m_info.use_multi_draw_indirect_core = true;
+        m_info.use_multi_draw_indirect_arb = false;
+        m_info.emulate_multi_draw_indirect = false;
+        log_startup->info("Multi Draw Indirect: GF core 4.3+");
+    } else if (gl::is_extension_supported(gl::Extension::Extension_GL_ARB_multi_draw_indirect)) {
+        m_info.use_multi_draw_indirect_core = false;
+        m_info.use_multi_draw_indirect_arb = true;
+        m_info.emulate_multi_draw_indirect = false;
+        log_startup->info("Multi Draw Indirect: GL_ARB_multi_draw_indirect");
+    } else {
+        m_info.emulate_multi_draw_indirect = false;
+        log_startup->info("Multi Draw Indirect: emulation");
+    }
+    log_startup->info("Persistent Buffers supported:  {}", m_info.use_persistent_buffers);
+    if (force_emulate_multi_draw_indirect) {
+        m_info.use_multi_draw_indirect_core = false;
+        m_info.use_multi_draw_indirect_arb = false;
+        m_info.emulate_multi_draw_indirect = true;
+        log_startup->warn("Forced emulation fori Draw Indirect due to erhe.toml setting");
+    }
 
     if (force_gl_version > 0) {
         m_info.gl_version = force_gl_version;
-        log_startup->warn("Forced GL version to be {} due to erhe.ini setting", force_gl_version);
+        log_startup->warn("Forced GL version to be {} due to erhe.toml setting", force_gl_version);
     }
     if (force_glsl_version > 0) {
         m_info.glsl_version = force_glsl_version;
-        log_startup->warn("Forced GLSL version to be {} due to erhe.ini setting", force_glsl_version);
-    }
-
-    if (m_info.use_multi_draw_indirect) { 
-        if (force_no_multi_draw_indirect) {
-            m_info.use_multi_draw_indirect = false;
-            log_startup->warn("Force disabled multi draw indirect due to erhe.ini setting");
-        }
+        log_startup->warn("Forced GLSL version to be {} due to erhe.toml setting", force_glsl_version);
     }
 
     if (force_no_persistent_buffers) {
         if (m_info.use_persistent_buffers) {
             m_info.use_persistent_buffers = false;
-            log_startup->warn("Force disabled persistently mapped buffers due to erhe.ini setting");
+            log_startup->warn("Force disabled persistently mapped buffers due to erhe.toml setting");
         }
     }
 
@@ -1231,6 +1242,11 @@ auto Device_impl::make_render_command_encoder(Render_pass& render_pass) -> Rende
 void Device_impl::reset_shader_stages_state_tracker()
 {
     m_gl_state_tracker.shader_stages.reset();
+}
+
+auto Device_impl::get_draw_id_uniform_location() const -> GLint
+{
+    return m_gl_state_tracker.shader_stages.get_draw_id_uniform_location();
 }
 
 

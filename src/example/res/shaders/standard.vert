@@ -10,8 +10,8 @@ void main()
     mat4 world_from_node_normal;
 
     {
-        world_from_node        = primitive.primitives[gl_DrawID].world_from_node;
-        world_from_node_normal = primitive.primitives[gl_DrawID].world_from_node_normal;
+        world_from_node        = primitive.primitives[ERHE_DRAW_ID].world_from_node;
+        world_from_node_normal = primitive.primitives[ERHE_DRAW_ID].world_from_node_normal;
     }
 
     mat4 clip_from_world = camera.cameras[0].clip_from_world;
@@ -21,7 +21,7 @@ void main()
     v_N              = normal;
     v_position       = position;
     gl_Position      = clip_from_world * position;
-    v_material_index = primitive.primitives[gl_DrawID].material_index;
+    v_material_index = primitive.primitives[ERHE_DRAW_ID].material_index;
     v_texcoord       = a_texcoord_0;
 
 }

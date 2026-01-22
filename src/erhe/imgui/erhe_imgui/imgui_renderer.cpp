@@ -80,7 +80,7 @@ void main()
 {
     vec2 scale         = draw.scale.xy;
     vec2 translate     = draw.translate.xy;
-    vec4 clip_rect     = draw.draw_parameters[gl_DrawID].clip_rect;
+    vec4 clip_rect     = draw.draw_parameters[ERHE_DRAW_ID].clip_rect;
     gl_Position        = vec4(a_position * scale + translate, 0, 1);
     gl_Position.y      = -gl_Position.y;
     gl_ClipDistance[0] = a_position.x - clip_rect[0];
@@ -89,9 +89,9 @@ void main()
     gl_ClipDistance[3] = clip_rect[3] - a_position.y;
     v_texcoord         = a_texcoord_0;
 #if defined(ERHE_HAS_ARB_BINDLESS_TEXTURE)
-    v_texture          = draw.draw_parameters[gl_DrawID].texture;
+    v_texture          = draw.draw_parameters[ERHE_DRAW_ID].texture;
 #else
-    v_texture_id       = draw.draw_parameters[gl_DrawID].texture.x;
+    v_texture_id       = draw.draw_parameters[ERHE_DRAW_ID].texture.x;
 #endif
     v_color            = vec4(srgb_to_linear(a_color_0.rgb), a_color_0.a);
 }

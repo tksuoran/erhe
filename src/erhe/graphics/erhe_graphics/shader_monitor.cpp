@@ -26,7 +26,7 @@ void Shader_monitor::begin()
     ini.get("enabled", m_run);
 
     if (!m_run) {
-        log_shader_monitor->info("Shader monitor disabled due to erhe.ini setting");
+        log_shader_monitor->info("Shader monitor disabled due to erhe.toml setting");
         return;
     }
 

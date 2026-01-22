@@ -13,14 +13,14 @@ vec3 vec3_from_uint(uint i)
 
 void main()
 {
-    mat4 world_from_node   = primitive.primitives[gl_DrawID].world_from_node;
+    mat4 world_from_node   = primitive.primitives[ERHE_DRAW_ID].world_from_node;
     mat4 clip_from_world   = camera.cameras[0].clip_from_world;
     vec4 position_in_world = world_from_node * vec4(a_position, 1.0);
     gl_Position            = clip_from_world * position_in_world;
-    v_draw_id              = gl_DrawID;
+    v_draw_id              = ERHE_DRAW_ID;
 
 #if 0
-    v_id                   = a_id.rgb + primitive.primitives[gl_DrawID].color.xyz;
+    v_id                   = a_id.rgb + primitive.primitives[ERHE_DRAW_ID].color.xyz;
 #endif
 }
 

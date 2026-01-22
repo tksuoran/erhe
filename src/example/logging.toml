@@ -8,7 +8,7 @@ input_events = "info"
 input_frame = "info"
 
 ["erhe.gl"]
-trace = "off"
+trace = "trace"
 debug = "warn"
 
 ["erhe.geometry"]
@@ -54,7 +54,7 @@ threads = "info"
 fragment_outputs = "info"
 program = "info"
 save_png = "info"
-buffer = "info"
+buffer = "trace"
 context = "info"
 debug = "info"
 framebuffer = "info"
