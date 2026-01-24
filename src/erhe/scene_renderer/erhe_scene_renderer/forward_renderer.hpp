@@ -50,6 +50,7 @@ public:
         erhe::graphics::Buffer*                                            index_buffer     {nullptr};
         erhe::graphics::Buffer*                                            vertex_buffer0   {nullptr};
         erhe::graphics::Buffer*                                            vertex_buffer1   {nullptr};
+        erhe::graphics::Buffer*                                            vertex_buffer2   {nullptr};
 
         const glm::vec3                                                    ambient_light    {0.0f};
         const erhe::scene::Camera*                                         camera           {nullptr};

@@ -7,6 +7,7 @@
 #include "erhe_graphics/gl/gl_device.hpp"
 #include "erhe_graphics/gl/gl_render_pass.hpp"
 #include "erhe_graphics/gl/gl_state_tracker.hpp"
+#include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/render_pipeline_state.hpp"
 #include "erhe_graphics/state/viewport_state.hpp"
 #include "erhe_verify/verify.hpp"
@@ -180,6 +181,29 @@ void Render_command_encoder_impl::multi_draw_indexed_primitives_indirect(
 {
     const gl::Primitive_type     gl_primitive_type = to_gl(primitive_type);
     const gl::Draw_elements_type gl_index_type     = gl_helpers::convert_to_gl_index_type(index_type).value();
+
+    int gl_vao = 0;
+    int gl_vao_index_buffer_binding = 0;
+    std::array<int, 3> gl_vao_vertex_buffer_bindings = { 0, 0, 0};
+    gl::get_integer_v(gl::Get_p_name::vertex_array_binding, &gl_vao);
+    gl::get_vertex_array_iv(
+        gl_vao,
+        static_cast<gl::Vertex_array_p_name>(GL_ELEMENT_ARRAY_BUFFER_BINDING),
+        &gl_vao_index_buffer_binding
+    );
+    for (unsigned int i = 0; i < 3; ++i) {
+        gl::get_vertex_array_indexed_iv(
+            gl_vao,
+            i,
+            static_cast<gl::Vertex_array_p_name>(GL_VERTEX_ATTRIB_ARRAY_BUFFER_BINDING_ARB),
+            &gl_vao_vertex_buffer_bindings[i]
+        );
+    }
+    log_vertex_stream->trace(
+        "VAO = {} - index buffer binding = {}, vertex buffer binding 0 = {}, vertex buffer binding 1 = {}, vertex buffer binding 2 = {}",
+        gl_vao, gl_vao_index_buffer_binding,
+        gl_vao_vertex_buffer_bindings[0], gl_vao_vertex_buffer_bindings[1], gl_vao_vertex_buffer_bindings[2]
+    );
 
     const Device_info& info = m_device.get_info();
     if (info.use_multi_draw_indirect_core || info.use_multi_draw_indirect_arb) {

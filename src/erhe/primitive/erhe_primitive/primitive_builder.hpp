@@ -24,7 +24,7 @@ public:
     Vertex_attribute_info              tangent           ;
     Vertex_attribute_info              bitangent         ;
     Vertex_attribute_info              aniso_control     ;
-    Vertex_attribute_info              id_vec3           ;
+    Vertex_attribute_info              id_vec4           ;
     Vertex_attribute_info              valency_edge_count;
     std::vector<Vertex_attribute_info> color             ;
     std::vector<Vertex_attribute_info> texcoord          ;

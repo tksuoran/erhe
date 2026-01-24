@@ -106,7 +106,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
 
     ERHE_VERIFY(parameters.vertex_input_state != nullptr);
     ERHE_VERIFY(parameters.index_buffer != nullptr);
-    ERHE_VERIFY(parameters.vertex_buffer != nullptr);
+    ERHE_VERIFY(parameters.vertex_buffer0 != nullptr);
     ERHE_VERIFY(parameters.view_camera != nullptr);
     ERHE_VERIFY(parameters.texture);
 
@@ -173,7 +173,9 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
         // TODO Multiple vertex buffer bindings
         encoder.set_render_pipeline_state(pipeline);
         encoder.set_index_buffer(parameters.index_buffer);
-        encoder.set_vertex_buffer(parameters.vertex_buffer, parameters.vertex_buffer_offset, 0);
+        encoder.set_vertex_buffer(parameters.vertex_buffer0, 0, 0);
+        encoder.set_vertex_buffer(parameters.vertex_buffer1, 0, 1);
+        encoder.set_vertex_buffer(parameters.vertex_buffer2, 0, 2);
         m_material_buffer.bind(encoder, material_range);
         m_joint_buffer.bind(encoder, joint_range);
         m_light_buffer.bind_light_buffer(encoder, light_range);
