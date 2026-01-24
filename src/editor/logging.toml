@@ -110,7 +110,7 @@ texture_frame = "info"
 texture_heap = "info"
 threads = "info"
 vertex_attribute = "info"
-vertex_stream = "info"
+vertex_stream = "trace"
 
 ["erhe.gltf"]
 log = "info"
