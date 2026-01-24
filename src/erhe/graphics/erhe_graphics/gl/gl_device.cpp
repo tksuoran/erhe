@@ -1249,5 +1249,4 @@ auto Device_impl::get_draw_id_uniform_location() const -> GLint
     return m_gl_state_tracker.shader_stages.get_draw_id_uniform_location();
 }
 
-
 } // namespace erhe::graphics

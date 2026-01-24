@@ -191,20 +191,22 @@ void Shadow_render_node::execute_rendergraph_node()
 
     m_context.shadow_renderer->render(
         erhe::scene_renderer::Shadow_renderer::Render_parameters{
-            .vertex_input_state    = &m_context.mesh_memory->vertex_input,
-            .index_type            = m_context.mesh_memory->buffer_info.index_type,
-            .index_buffer          = &m_context.mesh_memory->index_buffer,
-            .vertex_buffer         = &m_context.mesh_memory->position_vertex_buffer,
-            .view_camera           = camera.get(),
-            .view_camera_viewport  = {},
-            .light_camera_viewport = m_viewport,
-            .texture               = m_texture,
-            .render_passes         = m_render_passes,
-            .mesh_spans            = { layers.content()->meshes },
-            .lights                = layers.light()->lights,
-            .skins                 = scene_root->get_scene().get_skins(),
-            .materials             = materials,
-            .light_projections     = m_light_projections
+            .vertex_input_state           = &m_context.mesh_memory->vertex_input,
+            .index_type                   = m_context.mesh_memory->buffer_info.index_type,
+            .index_buffer                 = &m_context.mesh_memory->index_buffer,
+            .vertex_buffer0               = &m_context.mesh_memory->vertex_buffer_position,
+            .vertex_buffer1               = &m_context.mesh_memory->vertex_buffer_non_position,
+            .vertex_buffer2               = &m_context.mesh_memory->vertex_buffer_custom,
+            .view_camera                  = camera.get(),
+            .view_camera_viewport         = {},
+            .light_camera_viewport        = m_viewport,
+            .texture                      = m_texture,
+            .render_passes                = m_render_passes,
+            .mesh_spans                   = { layers.content()->meshes },
+            .lights                       = layers.light()->lights,
+            .skins                        = scene_root->get_scene().get_skins(),
+            .materials                    = materials,
+            .light_projections            = m_light_projections
         }
     );
 }

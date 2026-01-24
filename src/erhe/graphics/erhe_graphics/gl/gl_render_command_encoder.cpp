@@ -7,6 +7,7 @@
 #include "erhe_graphics/gl/gl_device.hpp"
 #include "erhe_graphics/gl/gl_render_pass.hpp"
 #include "erhe_graphics/gl/gl_state_tracker.hpp"
+#include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/render_pipeline_state.hpp"
 #include "erhe_graphics/state/viewport_state.hpp"
 #include "erhe_verify/verify.hpp"

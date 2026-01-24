@@ -48,19 +48,20 @@ public:
     class Render_parameters
     {
     public:
-        const erhe::graphics::Vertex_input_state*                  vertex_input_state  {nullptr};
-        erhe::dataformat::Format                                   index_type          {erhe::dataformat::Format::format_undefined};
-        erhe::graphics::Buffer*                                    index_buffer        {nullptr};
-        erhe::graphics::Buffer*                                    vertex_buffer       {nullptr};
-        std::size_t                                                vertex_buffer_offset{0};
+        const erhe::graphics::Vertex_input_state*        vertex_input_state    {nullptr};
+        erhe::dataformat::Format                         index_type            {erhe::dataformat::Format::format_undefined};
+        erhe::graphics::Buffer*                          index_buffer          {nullptr};
+        erhe::graphics::Buffer*                          vertex_buffer0        {nullptr};
+        erhe::graphics::Buffer*                          vertex_buffer1        {nullptr};
+        erhe::graphics::Buffer*                          vertex_buffer2        {nullptr};
 
-        const erhe::scene::Camera*                                 view_camera;
-        const erhe::math::Viewport                                 view_camera_viewport;
-        const erhe::math::Viewport                                 light_camera_viewport;
-        std::shared_ptr<erhe::graphics::Texture>                   texture;
+        const erhe::scene::Camera*                       view_camera          {nullptr};
+        const erhe::math::Viewport                       view_camera_viewport;
+        const erhe::math::Viewport                       light_camera_viewport;
+        std::shared_ptr<erhe::graphics::Texture>         texture{};
         const std::vector<
             std::unique_ptr<erhe::graphics::Render_pass>
-        >&                                                         render_passes;
+        >&                                               render_passes;
         const std::initializer_list<
             const std::span<
                 const std::shared_ptr<erhe::scene::Mesh>

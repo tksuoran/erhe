@@ -90,6 +90,11 @@
       <enum name="GL_DOUBLE_MAT4X2"/>
       <enum name="GL_DOUBLE_MAT4X3"/>
     </group>
+    <group name="VertexArrayPName">
+      <enum name="GL_VERTEX_ATTRIB_BINDING"/>
+      <enum name="GL_VERTEX_BINDING_BUFFER"/>
+      <enum name="GL_VERTEX_ATTRIB_ARRAY_BUFFER_BINDING"/>
+    </group>
     <group name="VertexAttribPointerPropertyARB">
       <enum name="GL_VERTEX_ATTRIB_ARRAY_POINTER"/>
     </group>

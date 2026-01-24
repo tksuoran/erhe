@@ -77,7 +77,7 @@ void Build_context_root::get_vertex_attributes()
     vertex_attributes.normal_smooth         = Vertex_attribute_info{vertex_format, Vertex_attribute_usage::normal,        1}; // smooth normals
     vertex_attributes.tangent               = Vertex_attribute_info{vertex_format, Vertex_attribute_usage::tangent,       0};
     vertex_attributes.bitangent             = Vertex_attribute_info{vertex_format, Vertex_attribute_usage::bitangent,     0};
-    vertex_attributes.id_vec3               = Vertex_attribute_info{vertex_format, Vertex_attribute_usage::custom,        custom_attribute_id};
+    vertex_attributes.id_vec4               = Vertex_attribute_info{vertex_format, Vertex_attribute_usage::custom,        custom_attribute_id};
     vertex_attributes.aniso_control         = Vertex_attribute_info{vertex_format, Vertex_attribute_usage::custom,        custom_attribute_aniso_control};
     vertex_attributes.valency_edge_count    = Vertex_attribute_info{vertex_format, Vertex_attribute_usage::custom,        custom_attribute_valency_edge_count};
     vertex_attributes.color        .push_back(Vertex_attribute_info{vertex_format, Vertex_attribute_usage::color,         0});
@@ -276,8 +276,8 @@ void Build_context::build_polygon_id()
         return;
     }
 
-    const glm::vec3 id_vec3 = erhe::math::vec3_from_uint(static_cast<uint32_t>(mesh_facet));
-    attribute_writers.id->write(root.vertex_attributes.id_vec3, id_vec3);
+    const glm::vec4 id_vec4 = erhe::math::vec4_from_uint(static_cast<uint32_t>(mesh_facet));
+    attribute_writers.id->write(root.vertex_attributes.id_vec4, id_vec4);
 }
 
 void Build_context::build_vertex_position()
@@ -607,7 +607,7 @@ void Build_context::build_polygon_fill()
     root.element_mappings.mesh_corner_to_vertex_buffer_index.resize(root.mesh.facet_corners.nb());
     root.element_mappings.mesh_vertex_to_vertex_buffer_index.resize(root.mesh.vertices.nb());
 
-    const bool do_polygon_id           = root.vertex_attributes.id_vec3           .is_valid();
+    const bool do_polygon_id           = root.vertex_attributes.id_vec4           .is_valid();
     const bool do_vertex_position      = root.vertex_attributes.position          .is_valid();
     const bool do_vertex_normal        = root.vertex_attributes.normal            .is_valid();
     const bool do_vertex_normal_smooth = root.vertex_attributes.normal_smooth     .is_valid();

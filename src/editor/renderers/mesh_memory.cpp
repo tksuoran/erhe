@@ -5,7 +5,7 @@
 
 namespace editor {
 
-auto Mesh_memory::get_vertex_buffer_size(std::size_t stream_index) const -> std::size_t
+auto Mesh_memory::get_vertex_buffer_size(const std::size_t stream_index) const -> std::size_t
 {
     int vertex_buffer_size{stream_index == 0 ? 8 : 32}; // in megabytes
     const auto& ini = erhe::configuration::get_ini_file_section(erhe::c_erhe_config_file_path, "mesh_memory");
@@ -25,11 +25,12 @@ auto Mesh_memory::get_index_buffer_size() const -> std::size_t
     return static_cast<std::size_t>(index_buffer_size) * mega;
 }
 
-[[nodiscard]] auto Mesh_memory::get_vertex_buffer(std::size_t stream_index) -> erhe::graphics::Buffer*
+[[nodiscard]] auto Mesh_memory::get_vertex_buffer(const std::size_t stream_index) -> erhe::graphics::Buffer*
 {
     switch (stream_index) {
-        case s_vertex_binding_position:     return &position_vertex_buffer;
-        case s_vertex_binding_non_position: return &non_position_vertex_buffer;
+        case s_vertex_binding_position:     return &vertex_buffer_position;
+        case s_vertex_binding_non_position: return &vertex_buffer_non_position;
+        case s_vertex_binding_custom:       return &vertex_buffer_custom;
         default: return nullptr;
     }
 }
@@ -38,7 +39,7 @@ Mesh_memory::Mesh_memory(erhe::graphics::Device& graphics_device, erhe::dataform
     : graphics_device       {graphics_device}
     , buffer_transfer_queue {graphics_device}
     , vertex_format         {vertex_format}
-    , position_vertex_buffer{
+    , vertex_buffer_position{
         graphics_device,
         erhe::graphics::Buffer_create_info{
             .capacity_byte_count                    = get_vertex_buffer_size(s_vertex_binding_position),
@@ -49,7 +50,7 @@ Mesh_memory::Mesh_memory(erhe::graphics::Device& graphics_device, erhe::dataform
             .debug_label                            = "Mesh_memory position vertex buffer"
         }
     }
-    , non_position_vertex_buffer{
+    , vertex_buffer_non_position{
         graphics_device,
         erhe::graphics::Buffer_create_info{
             .capacity_byte_count                    = get_vertex_buffer_size(s_vertex_binding_non_position),
@@ -58,6 +59,17 @@ Mesh_memory::Mesh_memory(erhe::graphics::Device& graphics_device, erhe::dataform
             .required_memory_property_bit_mask      = erhe::graphics::Memory_property_flag_bit_mask::device_local, // GPU only
             .preferred_memory_property_bit_mask     = erhe::graphics::Memory_property_flag_bit_mask::none, // uploads via staging buffer
             .debug_label                            = "Mesh_memory non-position vertex buffer"
+        }
+    }
+    , vertex_buffer_custom{
+        graphics_device,
+        erhe::graphics::Buffer_create_info{
+            .capacity_byte_count                    = get_vertex_buffer_size(s_vertex_binding_non_position),
+            .memory_allocation_create_flag_bit_mask = 0,
+            .usage                                  = erhe::graphics::Buffer_usage::vertex,
+            .required_memory_property_bit_mask      = erhe::graphics::Memory_property_flag_bit_mask::device_local, // GPU only
+            .preferred_memory_property_bit_mask     = erhe::graphics::Memory_property_flag_bit_mask::none, // uploads via staging buffer
+            .debug_label                            = "Mesh_memory custom vertex buffer"
         }
     }
     , index_buffer{
@@ -71,7 +83,15 @@ Mesh_memory::Mesh_memory(erhe::graphics::Device& graphics_device, erhe::dataform
             .debug_label                            = "Mesh_memory index buffer"
         }
     }
-    , graphics_buffer_sink{buffer_transfer_queue, {&position_vertex_buffer, &non_position_vertex_buffer}, &index_buffer}
+    , graphics_buffer_sink{
+        buffer_transfer_queue,
+        {
+            &vertex_buffer_position,
+            &vertex_buffer_non_position,
+            &vertex_buffer_custom
+        },
+        &index_buffer
+    }
     , buffer_info{
         .index_type    = erhe::dataformat::Format::format_32_scalar_uint,
         .vertex_format = vertex_format,
