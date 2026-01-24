@@ -37,6 +37,9 @@ public:
     [[nodiscard]] auto get_handle                () const -> uint64_t;
     [[nodiscard]] auto is_sparse                 () const -> bool;
 
+    [[nodiscard]] auto get_vma_allocation() const -> VmaAllocation;
+    [[nodiscard]] auto get_vk_image      () const -> VkImage;
+
     void clear() const;
 
 private:

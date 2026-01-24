@@ -371,6 +371,16 @@ auto Buffer_impl::get_capacity_byte_count() const noexcept -> std::size_t
     return m_capacity_byte_count;
 }
 
+auto Buffer_impl::get_vma_allocation() const -> VmaAllocation
+{
+    return m_vma_allocation;
+}
+
+auto Buffer_impl::get_vk_buffer() const -> VkBuffer
+{
+    return m_vk_buffer;
+}
+
 auto operator==(const Buffer_impl& lhs, const Buffer_impl& rhs) noexcept -> bool
 {
     return

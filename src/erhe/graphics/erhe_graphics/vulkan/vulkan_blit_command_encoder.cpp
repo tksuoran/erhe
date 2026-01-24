@@ -1,8 +1,12 @@
 #include "erhe_graphics/vulkan/vulkan_blit_command_encoder.hpp"
 #include "erhe_graphics/vulkan/vulkan_buffer.hpp"
+#include "erhe_graphics/vulkan/vulkan_helpers.hpp"
 #include "erhe_graphics/vulkan/vulkan_render_pass.hpp"
 #include "erhe_graphics/vulkan/vulkan_texture.hpp"
 #include "erhe_verify/verify.hpp"
+
+#include "volk.h"
+#include "vk_mem_alloc.h"
 
 namespace erhe::graphics {
 
@@ -87,6 +91,46 @@ void Blit_command_encoder_impl::copy_from_buffer(
     glm::ivec3     destination_origin
 )
 {
+    const VkBuffer vk_source_buffer     = source_buffer->get_impl().get_vk_buffer();
+    const VkImage  vk_destination_image = destination_texture->get_impl().get_vk_image();
+    //const erhe::dataformat::Format texture_format       = destination_texture->get_pixelformat();
+    //const VkFormat                 vk_format            = to_vulkan(texture_format);
+
+    // layout transition?
+    //vkCmdPipelineBarrier();
+
+    const VkBufferImageCopy region{
+        .bufferOffset      = source_offset,
+        .bufferRowLength   = static_cast<uint32_t>(source_bytes_per_row),   // in texels; if bytes, divide by pixel size
+        .bufferImageHeight = static_cast<uint32_t>(source_bytes_per_image), // in rows; adjust for Vulkan semantics
+        .imageSubresource  = {
+            .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT, // adjust for depth/stencil if required
+            .mipLevel       = static_cast<uint32_t>(destination_level),
+            .baseArrayLayer = static_cast<uint32_t>(destination_slice),
+            .layerCount     = 1
+        },
+        .imageOffset = {
+            .x      = destination_origin.x,
+            .y      = destination_origin.y,
+            .z      = destination_origin.z
+        },
+        .imageExtent = {
+            .width  = static_cast<uint32_t>(source_size.x),
+            .height = static_cast<uint32_t>(source_size.y),
+            .depth  = static_cast<uint32_t>(source_size.z)
+        }
+    };
+
+    vkCmdCopyBufferToImage(
+        VK_NULL_HANDLE, // TODO
+        vk_source_buffer,
+        vk_destination_image,
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        1,
+        &region
+    );
+
+    // layout transition?
     ERHE_FATAL("Not implemented");
     static_cast<void>(source_buffer);
     static_cast<void>(source_offset);

@@ -203,6 +203,16 @@ void Texture_impl::clear() const
     ERHE_FATAL("not implemented");
 }
 
+auto Texture_impl::get_vma_allocation() const -> VmaAllocation
+{
+    return m_vma_allocation;
+}
+
+auto Texture_impl::get_vk_image() const -> VkImage
+{
+    return m_vk_image;
+}
+
 auto operator==(const Texture_impl& lhs, const Texture_impl& rhs) noexcept -> bool
 {
     return

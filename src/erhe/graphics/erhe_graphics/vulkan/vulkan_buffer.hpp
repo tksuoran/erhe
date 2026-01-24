@@ -49,6 +49,9 @@ public:
 
     auto map_bytes(const std::size_t byte_offset, const std::size_t byte_count) noexcept -> std::span<std::byte>;
 
+    [[nodiscard]] auto get_vma_allocation() const -> VmaAllocation;
+    [[nodiscard]] auto get_vk_buffer     () const -> VkBuffer;
+
 private:
     friend bool operator==(const Buffer_impl& lhs, const Buffer_impl& rhs) noexcept;
     friend class Buffer_impl_hash;
