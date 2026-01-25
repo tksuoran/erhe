@@ -179,7 +179,7 @@ private:
     erhe::graphics::Sampler                  m_linear_mipmap_nearest_sampler;
     erhe::graphics::Sampler                  m_nearest_mipmap_linear_sampler;
     erhe::graphics::Sampler                  m_linear_mipmap_linear_sampler;
-    erhe::graphics::Gpu_timer                m_gpu_timer;
+    //erhe::graphics::Gpu_timer                m_gpu_timer;
 
     std::recursive_mutex                     m_mutex;
     std::vector<Imgui_host*>                 m_imgui_hosts;

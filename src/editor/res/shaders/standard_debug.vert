@@ -46,7 +46,7 @@ void main() {
     //vec3 normal    = normalize(vec3(world_from_node_normal * vec4(a_normal, 0.0)));
     //vec3 tangent   = vec3(world_from_node * vec4(a_tangent.xyz, 0.0));
     //vec3 bitangent = cross(normal, tangent) * a_tangent.w;
-    //vec4 position  = world_from_node * vec4(a_position, 1.0);
+    vec4 position  = world_from_node * vec4(a_position, 1.0);
 
     //v_tangent_scale  = a_tangent.w;
     //v_position       = position;
@@ -72,5 +72,5 @@ void main() {
     v_color          = vec4(1.0, 1.0, 1.0, 1.0);
     v_aniso_control  = vec2(0.0, 0.0);
     v_line_width     = primitive.primitives[ERHE_DRAW_ID].size;
-    v_valency_edge_count = 3;
+    v_valency_edge_count = uvec2(0, 0);
 }

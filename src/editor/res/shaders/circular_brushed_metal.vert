@@ -44,11 +44,10 @@ void main()
     //v_color          = a_color_0;
     //v_aniso_control  = a_custom_1; //aniso_control;
 
-    v_TBN            = mat3(vec3(1.0, 0.0, 0.0), vec3(0.0, 1.0, 0.0), vec3(0.0, 0.0, 1.0));
-    v_position       = position;
-    gl_Position      = clip_from_world * position;
-    v_material_index = primitive.primitives[ERHE_DRAW_ID].material_index;
-    v_texcoord       = vec2(0.0, 0.0);
-    v_color          = vec4(1.0, 1.0, 1.0, 1.0);
-    v_aniso_control  = vec2(0.0, 0.0);
+    v_TBN           = mat3(vec3(1.0, 0.0, 0.0), vec3(0.0, 1.0, 0.0), vec3(0.0, 0.0, 1.0));
+    v_position      = position;
+    gl_Position     = clip_from_world * position;
+    v_texcoord      = vec2(0.0, 0.0);
+    v_color         = vec4(1.0, 1.0, 1.0, 1.0);
+    v_aniso_control = vec2(0.0, 0.0);
 }

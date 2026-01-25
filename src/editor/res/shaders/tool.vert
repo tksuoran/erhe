@@ -10,7 +10,7 @@ void main()
     vec4 position               = world_from_node * vec4(a_position, 1.0);
 
     v_position       = position.xyz;
-    v_normal         = normalize(vec3(world_from_node_normal * vec4(a_normal, 0.0)));
+    v_normal         = vec3(0.0, 0.0, 1.0);
     gl_Position      = clip_from_world * position;
     v_material_index = primitive.primitives[ERHE_DRAW_ID].material_index;
 }

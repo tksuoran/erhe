@@ -11,16 +11,16 @@ void main()
     mat4 world_from_node_normal = primitive.primitives[ERHE_DRAW_ID].world_from_node_normal;
     mat4 clip_from_world        = camera.cameras[0].clip_from_world;
 
-    vec3 normal      = normalize(vec3(world_from_node_normal * vec4(a_normal,      0.0)));
-    vec3 tangent     = normalize(vec3(world_from_node        * vec4(a_tangent.xyz, 0.0)));
-    vec3 bitangent   = normalize(cross(normal, tangent)) * a_tangent.w;
+    //vec3 normal      = normalize(vec3(world_from_node_normal * vec4(a_normal,      0.0)));
+    //vec3 tangent     = normalize(vec3(world_from_node        * vec4(a_tangent.xyz, 0.0)));
+    //vec3 bitangent   = normalize(cross(normal, tangent)) * a_tangent.w;
     vec4 position    = world_from_node * vec4(a_position, 1.0);
 
-    v_tangent_scale  = a_tangent.w;
+    v_tangent_scale  = 1.0;
     v_position       = position;
-    v_TBN            = mat3(tangent, bitangent, normal);
+    v_TBN            = mat3(vec3(1.0, 0.0, 0.0), vec3(0.0, 1.0, 0.0), vec3(0.0, 0.0, 1.0));
     gl_Position      = clip_from_world * position;
     v_material_index = primitive.primitives[ERHE_DRAW_ID].material_index;
-    v_texcoord       = a_texcoord_0;
-    v_color          = a_color_0;
+    v_texcoord       = vec2(0.0, 0.0);
+    v_color          = vec4(1.0, 1.0, 1.0, 1.0);
 }

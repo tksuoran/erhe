@@ -166,7 +166,7 @@ private:
     std::filesystem::path                              m_shader_path;
     Shader_stages                                      m_shader_stages;
     Pipelines                                          m_pipelines;
-    erhe::graphics::Gpu_timer                          m_gpu_timer;
+    //erhe::graphics::Gpu_timer                          m_gpu_timer;
 };
 
 }

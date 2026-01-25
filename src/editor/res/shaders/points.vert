@@ -14,7 +14,7 @@ void main()
     mat4 clip_from_world        = camera.cameras[0].clip_from_world;
 
     vec4 position        = world_from_node * vec4(a_position, 1.0);
-    vec3 normal          = normalize(vec3(world_from_node_normal * vec4(a_normal, 0.0)));
+    //vec3 normal          = normalize(vec3(world_from_node_normal * vec4(a_normal, 0.0)));
 
     vec3 view_position_in_world = vec3(
         camera.cameras[0].world_from_node[3][0],
@@ -23,14 +23,14 @@ void main()
     );
 
     vec3  v        = normalize(view_position_in_world - position.xyz);
-    float NdotV    = dot(normal, v);
+    //float NdotV    = dot(normal, v);
     float d        = distance(view_position_in_world, position.xyz);
     //float max_size = (NdotV > 0.0) ? primitive.primitives[ERHE_DRAW_ID].size : 0.0; // cull back facing points
     float max_size = primitive.primitives[ERHE_DRAW_ID].size;
-    float bias     = camera.cameras[0].clip_depth_direction * 0.0005 * abs(NdotV);
-    v_normal       = normal;
+    //float bias     = camera.cameras[0].clip_depth_direction * 0.0005 * abs(NdotV);
+    v_normal       = vec3(0.0, 0.0, 1.0);
     v_color        = primitive.primitives[ERHE_DRAW_ID].color;
     gl_Position    = clip_from_world * position;
-    gl_Position.z -= bias;
+    //gl_Position.z -= bias;
     gl_PointSize   = max(max_size / d, 2.0);
 }

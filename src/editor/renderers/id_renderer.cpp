@@ -77,7 +77,7 @@ Id_renderer::Id_renderer(
         erhe::graphics::Buffer_target::transfer_dst,
         "Id_renderer::m_texture_read_buffer"
     }
-    , m_gpu_timer{graphics_device, "Id_renderer"}
+    //, m_gpu_timer{graphics_device, "Id_renderer"}
 {
     const auto& ini = erhe::configuration::get_ini_file_section(erhe::c_erhe_config_file_path, "id_renderer");
     ini.get("enabled", enabled);
@@ -237,7 +237,7 @@ void Id_renderer::render(const Render_parameters& parameters)
     const std::size_t depth_image_size_bytes = s_extent * s_extent * erhe::dataformat::get_format_size_bytes(m_depth_texture->get_pixelformat());
 
     Scoped_debug_group debug_group{"Id_renderer::render()"};
-    Scoped_gpu_timer   timer      {m_gpu_timer};
+    //Scoped_gpu_timer   timer      {m_gpu_timer};
 
     const auto projection_transforms = camera.projection_transforms(viewport);
     const mat4 clip_from_world       = projection_transforms.clip_from_world.get_matrix();

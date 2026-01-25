@@ -118,11 +118,11 @@ private:
     Composer                          m_composer;
     std::shared_ptr<Composition_pass> m_grid_composition_pass;
 
-    erhe::graphics::Gpu_timer m_content_timer;
-    erhe::graphics::Gpu_timer m_selection_timer;
-    erhe::graphics::Gpu_timer m_gui_timer;
-    erhe::graphics::Gpu_timer m_brush_timer;
-    erhe::graphics::Gpu_timer m_tools_timer;
+    //erhe::graphics::Gpu_timer m_content_timer;
+    //erhe::graphics::Gpu_timer m_selection_timer;
+    //erhe::graphics::Gpu_timer m_gui_timer;
+    //erhe::graphics::Gpu_timer m_brush_timer;
+    //erhe::graphics::Gpu_timer m_tools_timer;
 
     bool                      m_trigger_capture{false};
     std::vector<std::shared_ptr<Shadow_render_node>> m_all_shadow_render_nodes;

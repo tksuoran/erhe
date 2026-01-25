@@ -598,14 +598,14 @@ public:
             ERHE_TASK_HEADER(debug_renderer_task)
             {
                 ERHE_GET_GL_CONTEXT
-                m_debug_renderer = std::make_unique<erhe::renderer::Debug_renderer>(*m_graphics_device.get());
+                //m_debug_renderer = std::make_unique<erhe::renderer::Debug_renderer>(*m_graphics_device.get());
             }
             ERHE_TASK_FOOTER( .name("Debug_renderer") );
 
             ERHE_TASK_HEADER(thumbnails_task)
             {
                 ERHE_GET_GL_CONTEXT
-                m_thumbnails = std::make_unique<Thumbnails>(*m_graphics_device.get(), m_app_context);
+                //m_thumbnails = std::make_unique<Thumbnails>(*m_graphics_device.get(), m_app_context);
             }
             ERHE_TASK_FOOTER( .name("Thumbnails") );
 
@@ -620,7 +620,7 @@ public:
             ERHE_TASK_HEADER(jolt_debug_renderer_task)
             {
                 ERHE_GET_GL_CONTEXT
-                m_jolt_debug_renderer = std::make_unique<erhe::renderer::Jolt_debug_renderer>(*m_debug_renderer.get());
+                //m_jolt_debug_renderer = std::make_unique<erhe::renderer::Jolt_debug_renderer>(*m_debug_renderer.get());
             }
             ERHE_TASK_FOOTER( .name("Jolt_debug_renderer").succeed(debug_renderer_task) );
 #endif
@@ -628,7 +628,7 @@ public:
             ERHE_TASK_HEADER(text_renderer_task)
             {
                 ERHE_GET_GL_CONTEXT
-                m_text_renderer = std::make_unique<erhe::renderer::Text_renderer>(*m_graphics_device.get());
+                //m_text_renderer = std::make_unique<erhe::renderer::Text_renderer>(*m_graphics_device.get());
             }
             ERHE_TASK_FOOTER( .name("Text_renderer") );
 
@@ -675,14 +675,14 @@ public:
             ERHE_TASK_HEADER(post_processing_task)
             {
                 ERHE_GET_GL_CONTEXT
-                m_post_processing = std::make_unique<Post_processing>(*m_graphics_device.get(), m_app_context);
+                //m_post_processing = std::make_unique<Post_processing>(*m_graphics_device.get(), m_app_context);
             }
             ERHE_TASK_FOOTER( .name("Post_processing") );
 
             ERHE_TASK_HEADER(id_renderer_task)
             {
                 ERHE_GET_GL_CONTEXT
-                m_id_renderer = std::make_unique<Id_renderer>(*m_graphics_device.get(), *m_program_interface.get(), *m_mesh_memory.get(), *m_programs.get());
+                //m_id_renderer = std::make_unique<Id_renderer>(*m_graphics_device.get(), *m_program_interface.get(), *m_mesh_memory.get(), *m_programs.get());
             }
             ERHE_TASK_FOOTER(
                 .name("Id_renderer")

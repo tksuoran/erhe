@@ -127,7 +127,7 @@ private:
 
     std::array<Transfer_entry, s_transfer_entry_count> m_transfer_entries;
     int                                                m_current_transfer_entry_slot{0};
-    erhe::graphics::Gpu_timer                          m_gpu_timer;
+    //erhe::graphics::Gpu_timer                          m_gpu_timer;
 
     class Range
     {

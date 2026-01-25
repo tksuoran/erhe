@@ -62,7 +62,7 @@ Shadow_renderer::Shadow_renderer(erhe::graphics::Device& graphics_device, Progra
     , m_light_buffer        {graphics_device, program_interface.light_interface}
     , m_primitive_buffer    {graphics_device, program_interface.primitive_interface}
     , m_material_buffer     {graphics_device, program_interface.material_interface}
-    , m_gpu_timer           {graphics_device, "Shadow_renderer"}
+    //, m_gpu_timer           {graphics_device, "Shadow_renderer"}
 {
     m_pipeline_cache_entries.resize(8);
 }
@@ -120,7 +120,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
     };
 
     erhe::graphics::Scoped_debug_group debug_group{"Shadow_renderer::render()"};
-    erhe::graphics::Scoped_gpu_timer   timer      {m_gpu_timer};
+    //erhe::graphics::Scoped_gpu_timer   timer      {m_gpu_timer};
 
     const auto& mesh_spans = parameters.mesh_spans;
     const auto& lights     = parameters.lights;

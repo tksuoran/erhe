@@ -98,7 +98,7 @@ Scene_builder::Scene_builder(
     );
     setup_lights();
     make_brushes(app_settings, mesh_memory, executor);
-    //add_room    ();
+    add_room    ();
     mesh_memory.buffer_transfer_queue.flush();
 }
 

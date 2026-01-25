@@ -514,7 +514,7 @@ Post_processing::Post_processing(erhe::graphics::Device& d, App_context& app_con
             }
         }
     }
-    , m_gpu_timer{d, "Post_processing"}
+    //, m_gpu_timer{d, "Post_processing"}
 {
     d.get_shader_monitor().add(m_shader_stages.downsample_with_lowpass_input);
     d.get_shader_monitor().add(m_shader_stages.downsample_with_lowpass      );

@@ -160,7 +160,7 @@ downstream_port    = 34567
 
 [graphics]
 initial_clear                = false
-post_processing              = true # Note: This is ignored (and set to false) for OpenXR
+post_processing              = false # Note: This is ignored (and set to false) for OpenXR
 force_bindless_textures_off  = true
 #force_no_persistent_buffers  = true
 #force_no_direct_state_access = true

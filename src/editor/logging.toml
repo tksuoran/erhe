@@ -92,7 +92,7 @@ tree_frame = "info"
 graph_editor = "info"
 
 ["erhe.graphics"]
-buffer = "info"
+buffer = "trace"
 context = "info"
 debug = "info"
 fragment_outputs = "info"
@@ -109,7 +109,7 @@ texture = "info"
 texture_frame = "info"
 texture_heap = "info"
 threads = "info"
-vertex_attribute = "info"
+vertex_attribute = "trace"
 vertex_stream = "trace"
 
 ["erhe.gltf"]

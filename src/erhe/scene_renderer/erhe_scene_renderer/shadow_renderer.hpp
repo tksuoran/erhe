@@ -98,7 +98,7 @@ private:
     Light_buffer                             m_light_buffer;
     Primitive_buffer                         m_primitive_buffer;
     Material_buffer                          m_material_buffer;
-    erhe::graphics::Gpu_timer                m_gpu_timer;
+    //erhe::graphics::Gpu_timer                m_gpu_timer;
 };
 
 
