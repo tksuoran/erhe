@@ -184,7 +184,9 @@ void Render_command_encoder_impl::multi_draw_indexed_primitives_indirect(
 
     int gl_vao = 0;
     int gl_vao_index_buffer_binding = 0;
-    std::array<int, 3> gl_vao_vertex_buffer_bindings = { 0, 0, 0};
+    std::array<int, 3> gl_vertex_attrib_bindings = { 0, 0, 0};
+    std::array<int, 3> gl_vertex_binding_buffer = { 0, 0, 0};
+    std::array<int, 3> gl_vertex_attrib_array_buffer_bindings = { 0, 0, 0};
     gl::get_integer_v(gl::Get_p_name::vertex_array_binding, &gl_vao);
     gl::get_vertex_array_iv(
         gl_vao,
@@ -195,14 +197,43 @@ void Render_command_encoder_impl::multi_draw_indexed_primitives_indirect(
         gl::get_vertex_array_indexed_iv(
             gl_vao,
             i,
-            static_cast<gl::Vertex_array_p_name>(GL_VERTEX_ATTRIB_ARRAY_BUFFER_BINDING_ARB),
-            &gl_vao_vertex_buffer_bindings[i]
+            gl::Vertex_array_p_name::vertex_attrib_binding,
+            &gl_vertex_attrib_bindings[i]
+        );
+        gl::get_vertex_array_indexed_iv(
+            gl_vao,
+            i,
+            gl::Vertex_array_p_name::vertex_binding_buffer,
+            &gl_vertex_binding_buffer[i]
+        );
+        gl::get_vertex_array_indexed_iv(
+            gl_vao,
+            i,
+            gl::Vertex_array_p_name::vertex_attrib_array_buffer_binding,
+            &gl_vertex_attrib_array_buffer_bindings[i]
         );
     }
     log_vertex_stream->trace(
-        "VAO = {} - index buffer binding = {}, vertex buffer binding 0 = {}, vertex buffer binding 1 = {}, vertex buffer binding 2 = {}",
+        "VAO = {} - index buffer binding = {}\n"
+        "  attribute 0 binding = {}\n"
+        "  attribute 1 binding = {}\n"
+        "  attribute 2 binding = {}\n"
+        "  binding 0 buffer = {}\n"
+        "  binding 1 buffer = {}\n"
+        "  binding 2 buffer = {}\n"
+        "  attribute 0 buffer = {}\n"
+        "  attribute 1 buffer = {}\n"
+        "  attribute 2 buffer = {}\n",
         gl_vao, gl_vao_index_buffer_binding,
-        gl_vao_vertex_buffer_bindings[0], gl_vao_vertex_buffer_bindings[1], gl_vao_vertex_buffer_bindings[2]
+        gl_vertex_attrib_bindings[0],
+        gl_vertex_attrib_bindings[1],
+        gl_vertex_attrib_bindings[2],
+        gl_vertex_binding_buffer[0],
+        gl_vertex_binding_buffer[1],
+        gl_vertex_binding_buffer[2],
+        gl_vertex_attrib_array_buffer_bindings[0],
+        gl_vertex_attrib_array_buffer_bindings[1],
+        gl_vertex_attrib_array_buffer_bindings[2]
     );
 
     const Device_info& info = m_device.get_info();
