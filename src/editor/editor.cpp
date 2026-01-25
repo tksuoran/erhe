@@ -319,7 +319,7 @@ public:
 
         m_app_rendering->begin_frame(); // tests renderdoc capture start
 
-        m_thumbnails->update();
+        //// m_thumbnails->update();
 
         // Update scene transforms
         m_tools->update_transforms();
