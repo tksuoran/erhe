@@ -463,7 +463,7 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         m_info.use_multi_draw_indirect_core = false;
         m_info.use_multi_draw_indirect_arb = false;
         m_info.emulate_multi_draw_indirect = true;
-        log_startup->warn("Forced emulation fori Draw Indirect due to erhe.toml setting");
+        log_startup->warn("Forced emulation for Draw Indirect due to erhe.toml setting");
     }
 
     if (force_gl_version > 0) {
