@@ -467,6 +467,7 @@ void Vertex_input_state_tracker::reset()
 
 void Vertex_input_state_tracker::execute(const Vertex_input_state* const state)
 {
+    m_last_vertex_input_state = state;
     const unsigned int name = (state != nullptr) ? state->get_impl().gl_name() : 0;
     if (m_last == name) {
         return;
@@ -506,9 +507,27 @@ void Vertex_input_state_tracker::set_vertex_buffer(const std::uintptr_t binding_
                 static_cast<GLintptr>(offset),
                 static_cast<GLsizei>(binding.stride)
             );
+            m_bindings_buffers.at(binding_index) = (buffer != nullptr) ? buffer->get_impl().gl_name() : 0;
             break;
         }
     }
+}
+
+auto Vertex_input_state_tracker::get_vertex_attribute_binding(const GLuint index) const -> int
+{
+    if (m_last_vertex_input_state == nullptr) {
+        return -1;
+    }
+    const std::vector<Vertex_input_attribute>& attributes = m_last_vertex_input_state->get_impl().get_data().attributes;
+    if (index >= attributes.size()) {
+        return -1;
+    }
+    return static_cast<int>(attributes.at(index).binding);
+}
+
+auto Vertex_input_state_tracker::get_binding_buffer(const GLuint index) const -> GLuint
+{
+    return m_bindings_buffers.at(index);
 }
 
 void Viewport_rect_state_tracker::reset()

@@ -1249,5 +1249,15 @@ auto Device_impl::get_draw_id_uniform_location() const -> GLint
     return m_gl_state_tracker.shader_stages.get_draw_id_uniform_location();
 }
 
+auto Device_impl::get_vertex_attribute_binding(const GLuint index) const -> GLuint
+{
+    return m_gl_state_tracker.vertex_input.get_vertex_attribute_binding(index);
+}
+
+auto Device_impl::get_binding_buffer(const GLuint index) const -> GLuint
+{
+    return m_gl_state_tracker.vertex_input.get_binding_buffer(index);
+}
+
 
 } // namespace erhe::graphics

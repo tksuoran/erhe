@@ -73,6 +73,8 @@ public:
 
     void reset_shader_stages_state_tracker();
     [[nodiscard]] auto get_draw_id_uniform_location() const -> GLint;
+    [[nodiscard]] auto get_vertex_attribute_binding(GLuint index) const -> GLuint;
+    [[nodiscard]] auto get_binding_buffer(GLuint index) const -> GLuint;
 
 private:
     void frame_completed (uint64_t frame);

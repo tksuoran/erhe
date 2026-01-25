@@ -95,9 +95,14 @@ public:
     void set_index_buffer (const Buffer* buffer) const;
     void set_vertex_buffer(std::uintptr_t binding, const Buffer* buffer, std::uintptr_t offset);
 
+    [[nodiscard]] auto get_vertex_attribute_binding(GLuint index) const -> int;
+    [[nodiscard]] auto get_binding_buffer(GLuint index) const -> GLuint;
+
 private:
     std::vector<Vertex_input_binding> m_bindings;
+    const Vertex_input_state* m_last_vertex_input_state{nullptr};
     unsigned int m_last{0};
+    std::array<GLuint, 32> m_bindings_buffers;
 };
 
 class Viewport_rect_state_tracker
