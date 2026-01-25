@@ -49,19 +49,6 @@ public:
     erhe::graphics::Vertex_input_state m_empty_vertex_input;
     erhe::renderer::Pipeline_pass      polygon_fill_standard_opaque_positive_determinant;
     erhe::renderer::Pipeline_pass      polygon_fill_standard_opaque_negative_determinant;
-    erhe::renderer::Pipeline_pass      polygon_fill_standard_opaque_selected_positive_determinant;
-    erhe::renderer::Pipeline_pass      polygon_fill_standard_opaque_selected_negative_determinant;
-    erhe::renderer::Pipeline_pass      polygon_fill_standard_translucent;
-    erhe::renderer::Pipeline_pass      line_hidden_blend;
-    erhe::renderer::Pipeline_pass      brush_back;
-    erhe::renderer::Pipeline_pass      brush_front;
-    erhe::renderer::Pipeline_pass      edge_lines;
-    erhe::renderer::Pipeline_pass      outline;
-    erhe::renderer::Pipeline_pass      corner_points;
-    erhe::renderer::Pipeline_pass      polygon_centroids;
-    erhe::renderer::Pipeline_pass      rendertarget_meshes;
-    erhe::renderer::Pipeline_pass      sky;
-    erhe::renderer::Pipeline_pass      grid;
 };
 
 class App_rendering

@@ -63,6 +63,10 @@ auto Shader_stages_create_info::attributes_source() const -> std::string
             sb << attribute.name,
             sb << ";\n";
         }
+        for (const auto& attribute : vertex_input.attributes) {
+            sb << "#define ERHE_ATTRIBUTE_" << attribute.name << " 1\n";
+            sb << ";\n";
+        }
         sb << "\n";
     }
 

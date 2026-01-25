@@ -125,11 +125,12 @@ Transform_tool::Transform_tool(
     ini.get("show_translate", settings.show_translate);
     ini.get("show_rotate",    settings.show_rotate);
 
+    static_cast<void>(mesh_memory);
+    static_cast<void>(executor);
     //executor.silent_async(
     //    [this, &editor_context, &mesh_memory, &tools](){
     // TODO
-    static_cast<void>(executor);
-    shared.visualizations = std::make_unique<Handle_visualizations>(app_context, mesh_memory, tools);
+    //// shared.visualizations = std::make_unique<Handle_visualizations>(app_context, mesh_memory, tools);
     shared.visualizations_ready.store(true);
     //    }
     //);

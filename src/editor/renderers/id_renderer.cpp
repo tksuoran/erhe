@@ -46,7 +46,7 @@ Id_renderer::Id_renderer(
     erhe::graphics::Device&                  graphics_device,
     erhe::scene_renderer::Program_interface& program_interface,
     Mesh_memory&                             mesh_memory,
-    Programs&                                programs
+    Programs&                                
 )
     : m_graphics_device      {graphics_device}
     , m_mesh_memory          {mesh_memory}
@@ -55,7 +55,7 @@ Id_renderer::Id_renderer(
     , m_primitive_buffers    {graphics_device, program_interface.primitive_interface}
     , m_pipeline{erhe::graphics::Render_pipeline_data{
         .name           = "ID Renderer",
-        .shader_stages  = &programs.id.shader_stages,
+        .shader_stages  = nullptr,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangle,
         .rasterization  = Rasterization_state::cull_mode_back_ccw,
@@ -65,7 +65,7 @@ Id_renderer::Id_renderer(
 
     , m_selective_depth_clear_pipeline{erhe::graphics::Render_pipeline_data{
         .name           = "ID Renderer selective depth clear",
-        .shader_stages  = &programs.id.shader_stages,
+        .shader_stages  = nullptr,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangle,
         .rasterization  = Rasterization_state::cull_mode_back_ccw,

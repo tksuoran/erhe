@@ -427,7 +427,7 @@ void Hotbar::get_all_tools()
             m_slots.push_back(tool);
         }
     }
-    init_hotbar();
+    //// init_hotbar();
 }
 
 void Hotbar::on_message(App_message& message)

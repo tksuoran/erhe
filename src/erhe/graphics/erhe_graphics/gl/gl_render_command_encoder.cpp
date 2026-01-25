@@ -182,14 +182,14 @@ void Render_command_encoder_impl::multi_draw_indexed_primitives_indirect(
     const gl::Primitive_type     gl_primitive_type = to_gl(primitive_type);
     const gl::Draw_elements_type gl_index_type     = gl_helpers::convert_to_gl_index_type(index_type).value();
 
-    for (unsigned int i = 0; i < 16; ++i) {
-        int binding = m_device.get_impl().get_vertex_attribute_binding(i);
-        log_vertex_stream->trace("  attribute {} binding = {}", i, binding);
-    }
-    for (unsigned int i = 0; i < 16; ++i) {
-        int buffer = m_device.get_impl().get_binding_buffer(i);
-        log_vertex_stream->trace("  binding {} buffer = {}", i, buffer);
-    }
+    //for (unsigned int i = 0; i < 16; ++i) {
+    //    int binding = m_device.get_impl().get_vertex_attribute_binding(i);
+    //    log_vertex_stream->trace("  attribute {} binding = {}", i, binding);
+    //}
+    //for (unsigned int i = 0; i < 16; ++i) {
+    //    int buffer = m_device.get_impl().get_binding_buffer(i);
+    //    log_vertex_stream->trace("  binding {} buffer = {}", i, buffer);
+    //}
 
     const Device_info& info = m_device.get_info();
     if (info.use_multi_draw_indirect_core || info.use_multi_draw_indirect_arb) {

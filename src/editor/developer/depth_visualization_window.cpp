@@ -31,7 +31,7 @@ Depth_to_color_rendergraph_node::Depth_to_color_rendergraph_node(
     erhe::rendergraph::Rendergraph&         rendergraph,
     erhe::scene_renderer::Forward_renderer& forward_renderer,
     Mesh_memory&                            mesh_memory,
-    Programs&                               programs
+    Programs&                               
 )
     : erhe::rendergraph::Texture_rendergraph_node{
         erhe::rendergraph::Texture_rendergraph_node_create_info{
@@ -50,7 +50,7 @@ Depth_to_color_rendergraph_node::Depth_to_color_rendergraph_node(
         erhe::graphics::Render_pipeline_state{
             erhe::graphics::Render_pipeline_data{
                 .name           = "Debug_view",
-                .shader_stages  = &programs.debug_depth.shader_stages,
+                .shader_stages  = nullptr,
                 .vertex_input   = &m_empty_vertex_input,
                 .input_assembly = erhe::graphics::Input_assembly_state::triangle,
                 .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,

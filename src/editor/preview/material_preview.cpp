@@ -38,10 +38,9 @@ Material_preview::Material_preview(
 )
     : Scene_preview{graphics_device, scene_message_bus, app_context, mesh_memory, programs}
 {
-    make_preview_scene(mesh_memory);
-
-    resize(256, 256);
-    update_rendertarget(graphics_device);
+    /// make_preview_scene(mesh_memory);
+    /// resize(256, 256);
+    /// update_rendertarget(graphics_device);
 }
 
 Material_preview::~Material_preview() noexcept
@@ -142,6 +141,8 @@ void Material_preview::make_preview_scene(Mesh_memory& mesh_memory)
 
 void Material_preview::render_preview(const std::shared_ptr<erhe::primitive::Material>& material)
 {
+    static_cast<void>(material);
+#if 0
     ERHE_PROFILE_FUNCTION();
 
     erhe::graphics::Scoped_debug_group outer_debug_scope{"Scene_preview::render_preview()"};
@@ -181,6 +182,7 @@ void Material_preview::render_preview(const std::shared_ptr<erhe::primitive::Mat
         .override_shader_stages = nullptr
     };
     m_composer.render(context);
+#endif
 }
 
 ////void Material_preview::generate_torus_geometry()
@@ -197,17 +199,17 @@ void Material_preview::render_preview(const std::shared_ptr<erhe::primitive::Mat
 
 void Material_preview::show_preview()
 {
-    m_context.imgui_renderer->image(
-        m_color_texture.get(),
-        m_width,
-        m_height,
-        glm::vec2{0.0f, 1.0f},
-        glm::vec2{1.0f, 0.0f},
-        glm::vec4{0.0f, 0.0f, 0.0f, 0.0f},
-        glm::vec4{1.0f, 1.0f, 1.0f, 1.0f},
-        erhe::graphics::Filter::nearest,
-        erhe::graphics::Sampler_mipmap_mode::not_mipmapped
-    );
+    //m_context.imgui_renderer->image(
+    //    m_color_texture.get(),
+    //    m_width,
+    //    m_height,
+    //    glm::vec2{0.0f, 1.0f},
+    //    glm::vec2{1.0f, 0.0f},
+    //    glm::vec4{0.0f, 0.0f, 0.0f, 0.0f},
+    //    glm::vec4{1.0f, 1.0f, 1.0f, 1.0f},
+    //    erhe::graphics::Filter::nearest,
+    //    erhe::graphics::Sampler_mipmap_mode::not_mipmapped
+    //);
 }
 
 

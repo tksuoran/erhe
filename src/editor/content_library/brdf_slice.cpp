@@ -22,7 +22,7 @@ Brdf_slice_rendergraph_node::Brdf_slice_rendergraph_node(
     erhe::rendergraph::Rendergraph&         rendergraph,
     erhe::scene_renderer::Forward_renderer& forward_renderer,
     Brdf_slice&                             brdf_slice,
-    Programs&                               programs
+    Programs&                               
 )
     : erhe::rendergraph::Texture_rendergraph_node{
         erhe::rendergraph::Texture_rendergraph_node_create_info{
@@ -40,7 +40,7 @@ Brdf_slice_rendergraph_node::Brdf_slice_rendergraph_node(
         erhe::graphics::Render_pipeline_state{
             erhe::graphics::Render_pipeline_data{
                 .name           = "Brdf_slice",
-                .shader_stages  = &programs.brdf_slice.shader_stages,
+                .shader_stages  = nullptr,
                 .vertex_input   = &m_empty_vertex_input,
                 .input_assembly = erhe::graphics::Input_assembly_state::triangle,
                 .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
