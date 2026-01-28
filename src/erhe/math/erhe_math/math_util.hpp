@@ -55,6 +55,21 @@ template <typename T>
     };
 }
 
+[[nodiscard]] inline auto vec4_from_uint(const uint32_t i) -> glm::vec4
+{
+    const uint32_t r = (i >> 24u) & 0xffu;
+    const uint32_t g = (i >> 16u) & 0xffu;
+    const uint32_t b = (i >>  8u) & 0xffu;
+    const uint32_t a = (i >>  0u) & 0xffu;
+
+    return glm::vec4{
+        r / 255.0f,
+        g / 255.0f,
+        b / 255.0f,
+        a / 255.0f
+    };
+}
+
 template <typename T> struct vector_types { };
 template <> struct vector_types<float>
 {

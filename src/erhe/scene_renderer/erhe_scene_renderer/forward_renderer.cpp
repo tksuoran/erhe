@@ -171,6 +171,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
         parameters.render_encoder.set_index_buffer(parameters.index_buffer);
         parameters.render_encoder.set_vertex_buffer(parameters.vertex_buffer0, 0, 0);
         parameters.render_encoder.set_vertex_buffer(parameters.vertex_buffer1, 0, 1);
+        parameters.render_encoder.set_vertex_buffer(parameters.vertex_buffer2, 0, 2);
 
         for (const auto& meshes : mesh_spans) {
             ERHE_PROFILE_SCOPE("mesh span");

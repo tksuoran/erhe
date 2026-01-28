@@ -496,7 +496,7 @@ void Vertex_input_state_tracker::set_index_buffer(const Buffer* buffer) const
 void Vertex_input_state_tracker::set_vertex_buffer(const std::uintptr_t binding_index, const Buffer* const buffer, const std::uintptr_t offset)
 {
     ERHE_VERIFY(m_last != 0); // Must have VAO bound
-    ERHE_VERIFY(buffer != nullptr);
+    ERHE_VERIFY((binding_index != 0) || (buffer != nullptr));
     for (const Vertex_input_binding& binding : m_bindings) {
         if (binding.binding == binding_index) {
             gl::vertex_array_vertex_buffer(

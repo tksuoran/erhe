@@ -542,30 +542,37 @@ public:
             );
 #endif
 
-            m_vertex_format = erhe::dataformat::Vertex_format{
-                {
-                    0,
+            {
+                using namespace erhe::dataformat;
+                m_vertex_format = erhe::dataformat::Vertex_format{
                     {
-                        { erhe::dataformat::Format::format_32_vec3_float, erhe::dataformat::Vertex_attribute_usage::position,      0},
-                        { erhe::dataformat::Format::format_32_vec4_uint,  erhe::dataformat::Vertex_attribute_usage::joint_indices, 0},
-                        { erhe::dataformat::Format::format_32_vec4_float, erhe::dataformat::Vertex_attribute_usage::joint_weights, 0}
-                    }
-                },
-                {
-                    1,
+                        0,
+                        {
+                            { Format::format_32_vec3_float, Vertex_attribute_usage::position,      0},
+                            { Format::format_8_vec4_uint,   Vertex_attribute_usage::joint_indices, 0},
+                            { Format::format_8_vec4_unorm,  Vertex_attribute_usage::joint_weights, 0}
+                        }
+                    },
                     {
-                        { erhe::dataformat::Format::format_32_vec3_float, erhe::dataformat::Vertex_attribute_usage::normal,    0},
-                        { erhe::dataformat::Format::format_32_vec3_float, erhe::dataformat::Vertex_attribute_usage::normal,    1}, // wireframe bias requires smooth normal attribute
-                        { erhe::dataformat::Format::format_32_vec4_float, erhe::dataformat::Vertex_attribute_usage::tangent,   0},
-                        // { erhe::dataformat::Format::format_32_vec3_float, erhe::dataformat::Vertex_attribute_usage::bitangent, 0},
-                        { erhe::dataformat::Format::format_32_vec2_float, erhe::dataformat::Vertex_attribute_usage::tex_coord, 0},
-                        { erhe::dataformat::Format::format_32_vec4_float, erhe::dataformat::Vertex_attribute_usage::color,     0},
-                        { erhe::dataformat::Format::format_8_vec2_unorm,  erhe::dataformat::Vertex_attribute_usage::custom,    erhe::dataformat::custom_attribute_aniso_control},
-                        { erhe::dataformat::Format::format_16_vec2_uint,  erhe::dataformat::Vertex_attribute_usage::custom,    erhe::dataformat::custom_attribute_valency_edge_count},
-                        { erhe::dataformat::Format::format_8_vec3_unorm,  erhe::dataformat::Vertex_attribute_usage::custom,    erhe::dataformat::custom_attribute_id}
+                        1,
+                        {
+                            { Format::format_32_vec3_float, Vertex_attribute_usage::normal,    normal_attribute},
+                            { Format::format_32_vec4_float, Vertex_attribute_usage::tangent,   0},
+                            { Format::format_32_vec2_float, Vertex_attribute_usage::tex_coord, 0},
+                            { Format::format_32_vec4_float, Vertex_attribute_usage::color,     0},
+                        }
+                    },
+                    {
+                        2,
+                        {
+                            { Format::format_32_vec3_float, Vertex_attribute_usage::normal, normal_attribute_smooth}, // wireframe bias requires smooth normal attribute
+                            { Format::format_8_vec2_unorm,  Vertex_attribute_usage::custom, custom_attribute_aniso_control},
+                            { Format::format_16_vec2_uint,  Vertex_attribute_usage::custom, custom_attribute_valency_edge_count},
+                            { Format::format_8_vec4_unorm,  Vertex_attribute_usage::custom, custom_attribute_id}
+                        }
                     }
-                }
-            };
+                };
+            }
 
             m_clipboard            = std::make_unique<Clipboard     >(commands, m_app_context, app_message_bus);
             m_app_scenes           = std::make_unique<App_scenes    >(m_app_context);
