@@ -402,12 +402,12 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
 #else
         if (force_bindless_textures_off) {
             m_info.use_bindless_texture = false;
-            log_startup->warn("Force disabled GL_ARB_bindless_texture due to erhe.ini setting force_bindless_textures_off");
+            log_startup->warn("Force disabled GL_ARB_bindless_texture due to erhe.toml setting force_bindless_textures_off");
         }
         else
         if (capture_support) {
             m_info.use_bindless_texture = false;
-            log_startup->warn("Force disabled GL_ARB_bindless_texture due to erhe.ini enabling RenderDoc capture");
+            log_startup->warn("Force disabled GL_ARB_bindless_texture due to erhe.toml enabling RenderDoc capture");
         }
 #endif
     }
