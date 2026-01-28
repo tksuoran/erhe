@@ -46,30 +46,30 @@ static_enable  = true
 dynamic_enable = true
 
 [scene]
-imgui_window_scene_view      = true # NOTE This is ignored with OpenXR at the moment
-camera_exposure              =   1.0
-shadow_range                 =  30.0
-directional_light_intensity  =   4.0 # formation total intensity
-directional_light_radius     =   4.5 # formation radius
-directional_light_height     =  10.0 # formation height
-directional_light_count      =   8
-spot_light_intensity         = 500.0
-spot_light_radius            =  10.0 # formation radius
-spot_light_height            =   5.0 # formation height
-spot_light_count             =   0
-floor_size                   = 32.0
-floor_height                 = 1.0
-floor                        = true
-mass_scale                   = 8.0
-detail                       = 4
-camera_distance              = 4.0
-camera_elevation             = 1.3 # Sitting person eye height
-instance_count               = 1
-instance_gap                 = 0.50
-object_scale                 = 0.25
-make_johnson_solid_brushes   = true
-make_platonic_solid_brushes_ = true
-make_curved_brushes          = true
+imgui_window_scene_view     = true # NOTE This is ignored with OpenXR at the moment
+camera_exposure             =   1.0
+shadow_range                =  30.0
+directional_light_intensity =   4.0 # formation total intensity
+directional_light_radius    =   4.5 # formation radius
+directional_light_height    =  10.0 # formation height
+directional_light_count     =   8
+spot_light_intensity        = 500.0
+spot_light_radius           =  10.0 # formation radius
+spot_light_height           =   5.0 # formation height
+spot_light_count            =   0
+floor_size                  = 32.0
+floor_height                = 1.0
+floor                       = true
+mass_scale                  = 8.0
+detail                      = 4
+camera_distance             = 4.0
+camera_elevation            = 1.3 # Sitting person eye height
+instance_count              = 1
+instance_gap                = 0.50
+object_scale                = 0.25
+make_johnson_solid_brushes  = true
+make_platonic_solid_brushes = true
+make_curved_brushes         = true
 # Value of 0.25 object scale makes edges of platonic solids to be 25cm.
 # That makes height of all platonic solids to be around 40cm at most.
 
