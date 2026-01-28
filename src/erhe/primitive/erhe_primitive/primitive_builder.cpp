@@ -246,7 +246,8 @@ Build_context::Build_context(
 
     using namespace erhe::dataformat;
     attribute_writers.position           = get_attribute_writer(Vertex_attribute_usage::position);
-    attribute_writers.normal             = get_attribute_writer(Vertex_attribute_usage::normal);
+    attribute_writers.normal             = get_attribute_writer(Vertex_attribute_usage::normal, normal_attribute);
+    attribute_writers.normal_smooth      = get_attribute_writer(Vertex_attribute_usage::normal, normal_attribute_smooth);
     attribute_writers.tangent            = get_attribute_writer(Vertex_attribute_usage::tangent);
     attribute_writers.bitangent          = get_attribute_writer(Vertex_attribute_usage::bitangent);
     attribute_writers.color_0            = get_attribute_writer(Vertex_attribute_usage::color);
@@ -434,7 +435,7 @@ void Build_context::build_vertex_normal(bool do_normal, bool do_normal_smooth)
     
         std::optional<GEO::vec3f> smooth_vertex_normal = mesh_attributes.vertex_normal_smooth.try_get(mesh_vertex);
         if (smooth_vertex_normal.has_value()) {
-            attribute_writers.normal->write(root.vertex_attributes.normal_smooth, to_glm_vec3(smooth_vertex_normal.value()));
+            attribute_writers.normal_smooth->write(root.vertex_attributes.normal_smooth, to_glm_vec3(smooth_vertex_normal.value()));
         } else {
             // Smooth normals are currently used only for wide line depth bias.
             // If edge lines are not used, do not generate warning about missing smooth normals.
@@ -443,7 +444,7 @@ void Build_context::build_vertex_normal(bool do_normal, bool do_normal_smooth)
                 used_fallback_smooth_normal = true;
             }
             const GEO::vec3f fallback_vertex_normal_smooth{0.0f, 1.0f, 0.0f};
-            attribute_writers.normal->write(root.vertex_attributes.normal_smooth, fallback_vertex_normal_smooth);
+            attribute_writers.normal_smooth->write(root.vertex_attributes.normal_smooth, fallback_vertex_normal_smooth);
         }
     }
 }

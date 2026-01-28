@@ -139,6 +139,7 @@ private:
     public:
         Vertex_buffer_writer* position;
         Vertex_buffer_writer* normal;
+        Vertex_buffer_writer* normal_smooth;
         Vertex_buffer_writer* tangent;
         Vertex_buffer_writer* bitangent;
         Vertex_buffer_writer* color_0;
