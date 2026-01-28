@@ -66,26 +66,28 @@ void Composition_pass::render(const Render_context& context) const
 
     // NOTE This overrides settings in App_rendering::App_rendering()
     // TODO This is a bit hacky, route this better.
-    const int64_t t0_ns  = context.app_context.time->get_host_system_time_ns();
-    const double  t0     = static_cast<double>(t0_ns) / 1'000'000'000.0;
-    const float   period = 1.0f / context.viewport_config.selection_highlight_frequency;
-    const float   t1     = static_cast<float>(::fmod(t0, period));
-    const float   t2     = static_cast<float>(0.5f + triangle_wave(t1, period) * 0.5f);
-    context.app_context.app_rendering->selection_outline->primitive_settings = erhe::scene_renderer::Primitive_interface_settings{
-        .color_source    = erhe::scene_renderer::Primitive_color_source::constant_color,
-        .constant_color0 = glm::mix(
-            context.viewport_config.selection_highlight_low,
-            context.viewport_config.selection_highlight_high,
-            t2
-        ),
-        .constant_color1 = glm::vec4{0.2f, 0.5, 1.0f, 1.0f},
-        .size_source     = erhe::scene_renderer::Primitive_size_source::constant_size,
-        .constant_size   = mix(
-            context.viewport_config.selection_highlight_width_low,
-            context.viewport_config.selection_highlight_width_high,
-            t2
-        )
-    };
+    if (context.app_context.app_rendering->selection_outline) {
+        const int64_t t0_ns  = context.app_context.time->get_host_system_time_ns();
+        const double  t0     = static_cast<double>(t0_ns) / 1'000'000'000.0;
+        const float   period = 1.0f / context.viewport_config.selection_highlight_frequency;
+        const float   t1     = static_cast<float>(::fmod(t0, period));
+        const float   t2     = static_cast<float>(0.5f + triangle_wave(t1, period) * 0.5f);
+        context.app_context.app_rendering->selection_outline->primitive_settings = erhe::scene_renderer::Primitive_interface_settings{
+            .color_source    = erhe::scene_renderer::Primitive_color_source::constant_color,
+            .constant_color0 = glm::mix(
+                context.viewport_config.selection_highlight_low,
+                context.viewport_config.selection_highlight_high,
+                t2
+            ),
+            .constant_color1 = glm::vec4{0.2f, 0.5, 1.0f, 1.0f},
+            .size_source     = erhe::scene_renderer::Primitive_size_source::constant_size,
+            .constant_size   = mix(
+                context.viewport_config.selection_highlight_width_low,
+                context.viewport_config.selection_highlight_width_high,
+                t2
+            )
+        };
+    }
 
     const auto scene_root = this->override_scene_root ? override_scene_root : context.scene_view.get_scene_root();
     if (!scene_root) {

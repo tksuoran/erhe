@@ -83,7 +83,9 @@ void Brush::late_initialize()
 {
     const auto geometry = get_geometry();
     ERHE_VERIFY(geometry);
-    m_primitive = std::make_shared<erhe::primitive::Primitive>(geometry);
+    if (!m_primitive) {
+        m_primitive = std::make_shared<erhe::primitive::Primitive>(geometry);
+    }
     if (!m_primitive->has_renderable_triangles()) {
         bool brush_renderable_mesh_ok = m_primitive->make_renderable_mesh(m_data.build_info, m_data.normal_style);
         if (!brush_renderable_mesh_ok) {

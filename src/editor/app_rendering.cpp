@@ -802,7 +802,9 @@ void App_rendering::request_renderdoc_capture()
 void App_rendering::set_grid_visibility(bool visible)
 {
     // TODO Consider using Item visibility flag and removing enabled
-    m_grid_composition_pass->enabled = visible;
+    if (m_grid_composition_pass != nullptr) {
+        m_grid_composition_pass->enabled = visible;
+    }
 }
 
 void App_rendering::end_frame()

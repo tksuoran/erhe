@@ -992,7 +992,7 @@ auto Item_tree::item_icon_and_text(const std::shared_ptr<erhe::Item_base>& item,
     if (content_library_node) {
         const auto& brush = std::dynamic_pointer_cast<Brush>(content_library_node->item);
         static_cast<void>(brush);
-        if (brush) {
+        if (brush && m_context.thumbnails) {
             thumbnail_drawn = m_context.thumbnails->draw(
                 brush,
                 [this, brush](const std::shared_ptr<erhe::graphics::Texture>& texture, int64_t time) {
