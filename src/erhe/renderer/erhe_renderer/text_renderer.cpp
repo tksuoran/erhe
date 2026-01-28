@@ -113,7 +113,7 @@ Text_renderer::Text_renderer(erhe::graphics::Device& graphics_device)
     ini.get("font_size", config.font_size);
 
     if (!config.enabled) {
-        log_startup->info("Text renderer disabled due to erhe.ini setting");
+        log_startup->info("Text renderer disabled due to erhe.toml setting");
         return;
     }
 

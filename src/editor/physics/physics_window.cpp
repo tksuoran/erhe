@@ -53,7 +53,7 @@ void Physics_window::imgui()
     if (!m_context.app_settings->physics.static_enable) {
         ImGui::EndDisabled();
         if (ImGui::IsItemHovered()) {
-            ImGui::SetTooltip("erhe.ini has [physics] static_enable = false");
+            ImGui::SetTooltip("erhe.toml has [physics] static_enable = false");
         }
     }
 
