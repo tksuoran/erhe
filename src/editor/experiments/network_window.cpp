@@ -18,7 +18,7 @@ Network_window::Network_window(
     erhe::imgui::Imgui_windows&  imgui_windows,
     App_context&                 app_context
 )
-    : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Network", "network"}
+    : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Network", "network", true}
     , m_context                {app_context}
 {
     const auto& ini = erhe::configuration::get_ini_file_section(erhe::c_erhe_config_file_path, "network");

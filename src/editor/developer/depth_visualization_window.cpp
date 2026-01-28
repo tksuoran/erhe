@@ -174,7 +174,7 @@ Depth_visualization_window::Depth_visualization_window(
     Mesh_memory&                            mesh_memory,
     Programs&                               programs
 )
-    : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Depth Visualization", "depth_visualization"}
+    : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Depth Visualization", "depth_visualization", true}
     , m_context                {context}
 {
     if (context.OpenXR || !context.developer_mode) {

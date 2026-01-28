@@ -40,7 +40,7 @@ Logs::Logs(erhe::commands::Commands& commands, Imgui_renderer& imgui_renderer)
 }
 
 Log_settings_window::Log_settings_window(Imgui_renderer& imgui_renderer, Imgui_windows& imgui_windows, Logs& logs)
-    : Imgui_window{imgui_renderer, imgui_windows, "Log Settings", "log_settings"}
+    : Imgui_window{imgui_renderer, imgui_windows, "Log Settings", "log_settings", true}
     , m_logs{logs}
 {
     m_min_size[0] = 220.0f;
@@ -48,7 +48,7 @@ Log_settings_window::Log_settings_window(Imgui_renderer& imgui_renderer, Imgui_w
 }
 
 Tail_log_window::Tail_log_window(Imgui_renderer& imgui_renderer, Imgui_windows& imgui_windows, Logs& logs)
-    : Imgui_window{imgui_renderer, imgui_windows, "Tail Log", "tail_log"}
+    : Imgui_window{imgui_renderer, imgui_windows, "Tail Log", "tail_log", true}
     , m_logs{logs}
 {
     m_min_size[0] = 220.0f;
@@ -56,7 +56,7 @@ Tail_log_window::Tail_log_window(Imgui_renderer& imgui_renderer, Imgui_windows& 
 }
 
 Frame_log_window::Frame_log_window(Imgui_renderer& imgui_renderer, Imgui_windows& imgui_windows, Logs& logs)
-    : Imgui_window{imgui_renderer, imgui_windows, "Frame Log", "frame_log"}
+    : Imgui_window{imgui_renderer, imgui_windows, "Frame Log", "frame_log", true}
     , m_logs{logs}
 {
     m_min_size[0] = 220.0f;

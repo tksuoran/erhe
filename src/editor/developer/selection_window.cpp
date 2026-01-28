@@ -14,7 +14,7 @@ Selection_window::Selection_window(
     erhe::imgui::Imgui_windows&  imgui_windows,
     App_context&                 app_context
 )
-    : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Selection", "selection"}
+    : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Selection", "selection", true}
     , m_context                {app_context}
 {
 }

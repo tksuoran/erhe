@@ -85,7 +85,7 @@ Graph_window::Graph_window(
     App_context&                 app_context,
     App_message_bus&             app_message_bus
 )
-    : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Graph", "graph"}
+    : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Graph", "graph", true}
     , m_app_context            {app_context}
 {
     static_cast<void>(commands); // TODO Keeping in case we need to add commands here

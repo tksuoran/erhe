@@ -15,12 +15,14 @@ Imgui_window::Imgui_window(
     Imgui_renderer&        imgui_renderer,
     Imgui_windows&         imgui_windows,
     const std::string_view title,
-    const std::string_view ini_label
+    const std::string_view ini_label,
+    bool                   developer
 )
     : m_imgui_renderer{imgui_renderer}
     , m_imgui_windows {imgui_windows}
     , m_title         {title}
     , m_ini_label     {ini_label}
+    , m_developer     {developer}
 {
     if (!ini_label.empty()) {
         m_is_visible = imgui_windows.get_persistent_window_open(ini_label);

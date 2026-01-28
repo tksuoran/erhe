@@ -1084,36 +1084,6 @@ public:
             m_app_settings->physics.dynamic_enable = false;
         }
 
-        {
-            m_clipboard_window   ->set_developer();
-            m_commands_window    ->set_developer();
-            m_composer_window    ->set_developer();
-            m_debug_view_window  ->set_developer();
-            m_hover_tool         ->set_developer();
-            m_frame_log_window   ->set_developer();
-            m_log_settings_window->set_developer();
-            m_performance_window ->set_developer();
-            m_pipelines          ->set_developer();
-#if defined(ERHE_XR_LIBRARY_OPENXR)
-            ////m_theremin.set_developer();
-#endif
-            m_graph_window          ->set_developer();
-            m_gradient_editor       ->set_developer();
-            m_node_properties_window->set_developer();
-            m_network_window        ->set_developer();
-            m_headset_view          ->set_developer();
-            m_sheet_window          ->set_developer();
-
-            m_icon_browser          ->set_developer();
-            m_layers_window         ->set_developer();
-            m_network_window        ->set_developer();
-            m_post_processing_window->set_developer();
-            m_rendergraph_window    ->set_developer();
-            m_selection_window      ->set_developer();
-            m_tail_log_window       ->set_developer();
-            m_operation_stack       ->set_developer();
-        }
-
         m_hotbar->get_all_tools();
 
         // Notify ImGui renderer about current font settings

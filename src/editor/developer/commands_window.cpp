@@ -29,7 +29,7 @@ Commands_window::Commands_window(
     erhe::imgui::Imgui_windows&  imgui_windows,
     App_context&                 app_context
 )
-    : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Commands", "commands"}
+    : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Commands", "commands", true}
     , m_context                {app_context}
 {
 }

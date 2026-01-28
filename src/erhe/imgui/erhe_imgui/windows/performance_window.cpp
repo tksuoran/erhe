@@ -344,7 +344,7 @@ void Plot::imgui()
 #pragma endregion Plot
 
 Performance_window::Performance_window(Imgui_renderer& imgui_renderer, Imgui_windows& imgui_windows)
-    : Imgui_window{imgui_renderer, imgui_windows, "Performance", "performance"}
+    : Imgui_window{imgui_renderer, imgui_windows, "Performance", "performance", true}
 {
 }
 

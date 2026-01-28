@@ -33,7 +33,7 @@ Hover_tool::Hover_tool(
     App_message_bus&             app_message_bus,
     Tools&                       tools
 )
-    : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Hover Tool", "hover_tool"}
+    : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Hover Tool", "hover_tool", true}
     , Tool                     {app_context}
 {
     set_flags      (Tool_flags::background | Tool_flags::toolbox);

@@ -24,7 +24,7 @@
 namespace editor {
 
 Rendergraph_window::Rendergraph_window(erhe::imgui::Imgui_renderer& imgui_renderer, erhe::imgui::Imgui_windows& imgui_windows, App_context& app_context)
-    : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Render Graph", "rendergraph"}
+    : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Render Graph", "rendergraph", true}
     , m_context                {app_context}
 {
 }

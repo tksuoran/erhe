@@ -26,7 +26,7 @@ Node_properties_window::Node_properties_window(
     erhe::imgui::Imgui_windows&  imgui_windows,
     App_context&                 app_context
 )
-    : Imgui_window{imgui_renderer, imgui_windows, "Node Properties", "node_pproperties"}
+    : Imgui_window{imgui_renderer, imgui_windows, "Node Properties", "node_pproperties", true}
     , m_context   {app_context}
 {
 }

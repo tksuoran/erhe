@@ -91,7 +91,7 @@ Sheet_window::Sheet_window(
     App_context&                 context,
     App_message_bus&             app_message_bus
 )
-    : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Sheet", "sheet"}
+    : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Sheet", "sheet", true}
     , m_context                {context}
 {
     static_cast<void>(commands); // TODO Keeping in case we need to add commands here

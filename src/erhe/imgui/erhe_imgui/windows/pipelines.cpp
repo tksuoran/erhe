@@ -16,7 +16,7 @@
 namespace erhe::imgui {
 
 Pipelines::Pipelines(Imgui_renderer& imgui_renderer, Imgui_windows& imgui_windows)
-    : Imgui_window{imgui_renderer, imgui_windows, "Pipelines", "pipelines"}
+    : Imgui_window{imgui_renderer, imgui_windows, "Pipelines", "pipelines", true}
 {
 }
 

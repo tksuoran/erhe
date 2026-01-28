@@ -25,7 +25,8 @@ public:
         Imgui_renderer&  imgui_renderer,
         Imgui_windows&   imgui_windows,
         std::string_view title,
-        std::string_view ini_label
+        std::string_view ini_label,
+        bool             developer = false
     );
     virtual ~Imgui_window() noexcept;
 

@@ -58,7 +58,7 @@ Operation_stack::Operation_stack(
     erhe::imgui::Imgui_windows&  imgui_windows,
     App_context&                 context
 )
-    : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Operation Stack", "operation_stack"}
+    : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Operation Stack", "operation_stack", true}
     , m_context     {context}
     , m_executor    {executor}
     , m_undo_command{commands, context}

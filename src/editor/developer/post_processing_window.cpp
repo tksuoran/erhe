@@ -16,7 +16,7 @@
 namespace editor {
 
 Post_processing_window::Post_processing_window(erhe::imgui::Imgui_renderer& imgui_renderer, erhe::imgui::Imgui_windows& imgui_windows, App_context& app_context)
-    : Imgui_window{imgui_renderer, imgui_windows, "Post Processing", "post_processing"}
+    : Imgui_window{imgui_renderer, imgui_windows, "Post Processing", "post_processing", true}
     , m_context   {app_context}
 {
 }

@@ -139,7 +139,7 @@ Theremin::Theremin(
     Hand_tracker&                hand_tracker,
     App_context&                 app_context
 )
-    : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Theremin", "theremin"}
+    : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Theremin", "theremin", true}
     , m_context{app_context}
     //// , m_audio_config             {}
     //// , m_audio_device             {}
