@@ -102,11 +102,6 @@ public:
     erhe::graphics::Shader_resource* shadow_sampler_compare;
     erhe::graphics::Shader_resource* shadow_sampler_no_compare;
     erhe::graphics::Shader_resource* texture_sampler;
-
-    erhe::graphics::Sampler          nearest_sampler;
-    erhe::graphics::Sampler          linear_sampler;
-    erhe::graphics::Sampler          linear_mipmap_linear_sampler;
-
     erhe::graphics::Reloadable_shader_stages error;
     erhe::graphics::Reloadable_shader_stages brdf_slice;
     erhe::graphics::Reloadable_shader_stages brush;
