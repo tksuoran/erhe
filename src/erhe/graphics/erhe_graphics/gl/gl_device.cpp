@@ -859,6 +859,7 @@ auto Device_impl::get_buffer_alignment(Buffer_target target) -> std::size_t
 Device_impl::~Device_impl() noexcept
 {
     if (m_staging_buffer != 0) {
+        gl::unmap_named_buffer(m_staging_buffer);
         gl::delete_buffers(1, &m_staging_buffer);
     }
 }
@@ -898,6 +899,8 @@ inline auto access_mask(Device& device) -> gl::Map_buffer_access_mask
 
 void Device_impl::upload_to_buffer(const Buffer& buffer, size_t offset, const void* data, size_t length)
 {
+#if 1
+    // Old path
     if ((m_staging_buffer == 0) || (m_staging_buffer_size < length)) {
         if (m_staging_buffer != 0) {
             log_buffer->trace("Deleting old staging buffer {} of size {}", m_staging_buffer, m_staging_buffer_size);
@@ -916,6 +919,36 @@ void Device_impl::upload_to_buffer(const Buffer& buffer, size_t offset, const vo
         gl::named_buffer_sub_data(m_staging_buffer, 0, static_cast<GLsizeiptr>(length), data);
     }
     gl::copy_named_buffer_sub_data(m_staging_buffer, buffer.get_impl().gl_name(), 0, offset, length);
+#else
+    // Suggested by reaper
+    if ((m_staging_buffer == 0) || (m_staging_buffer_size < length)) {
+        if (m_staging_buffer != 0) {
+            log_buffer->trace("Deleting old staging buffer {} of size {}", m_staging_buffer, m_staging_buffer_size);
+            gl::unmap_named_buffer(m_staging_buffer);
+            gl::delete_buffers(1, &m_staging_buffer);
+        }
+        gl::create_buffers(1, &m_staging_buffer);
+        gl::named_buffer_storage(
+            m_staging_buffer,
+            static_cast<GLsizeiptr>(length),
+            0,
+            gl::Buffer_storage_mask::map_write_bit | gl::Buffer_storage_mask::map_persistent_bit
+        );
+        m_staging_buffer_data = gl::map_named_buffer_range(
+            m_staging_buffer,
+            0,
+            static_cast<GLsizeiptr>(length),
+            gl::Map_buffer_access_mask::map_flush_explicit_bit |
+            gl::Map_buffer_access_mask::map_write_bit |
+            gl::Map_buffer_access_mask::map_persistent_bit
+        );
+        m_staging_buffer_size = length;
+        log_buffer->trace("Created new staging buffer {} of size {}", m_staging_buffer, m_staging_buffer_size);
+    }
+    memcpy(m_staging_buffer_data, data, length);
+    gl::flush_mapped_named_buffer_range(m_staging_buffer, 0, static_cast<GLsizeiptr>(length));
+    gl::copy_named_buffer_sub_data(m_staging_buffer, buffer.get_impl().gl_name(), 0, offset, length);
+#endif
 }
 
 void Device_impl::add_completion_handler(std::function<void()> callback)

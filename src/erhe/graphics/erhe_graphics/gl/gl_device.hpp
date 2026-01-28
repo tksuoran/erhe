@@ -102,6 +102,7 @@ private:
 
     unsigned int               m_staging_buffer{0};
     size_t                     m_staging_buffer_size{0};
+    void*                      m_staging_buffer_data{nullptr};
 
     std::vector<uint64_t>      m_pending_frames;
     std::vector<uint64_t>      m_completed_frames;
