@@ -9,8 +9,8 @@ out gl_PerVertex
 
 void main()
 {
-    mat4 world_from_node        = primitive.primitives[gl_DrawID].world_from_node;
-    mat4 world_from_node_normal = primitive.primitives[gl_DrawID].world_from_node_normal;
+    mat4 world_from_node        = primitive.primitives[ERHE_DRAW_ID].world_from_node;
+    mat4 world_from_node_normal = primitive.primitives[ERHE_DRAW_ID].world_from_node_normal;
     mat4 clip_from_world        = camera.cameras[0].clip_from_world;
 
     vec4 position        = world_from_node * vec4(a_position, 1.0);
@@ -25,11 +25,11 @@ void main()
     vec3  v        = normalize(view_position_in_world - position.xyz);
     float NdotV    = dot(normal, v);
     float d        = distance(view_position_in_world, position.xyz);
-    //float max_size = (NdotV > 0.0) ? primitive.primitives[gl_DrawID].size : 0.0; // cull back facing points
-    float max_size = primitive.primitives[gl_DrawID].size;
+    //float max_size = (NdotV > 0.0) ? primitive.primitives[ERHE_DRAW_ID].size : 0.0; // cull back facing points
+    float max_size = primitive.primitives[ERHE_DRAW_ID].size;
     float bias     = camera.cameras[0].clip_depth_direction * 0.0005 * abs(NdotV);
     v_normal       = normal;
-    v_color        = primitive.primitives[gl_DrawID].color;
+    v_color        = primitive.primitives[ERHE_DRAW_ID].color;
     gl_Position    = clip_from_world * position;
     gl_Position.z -= bias;
     gl_PointSize   = max(max_size / d, 2.0);

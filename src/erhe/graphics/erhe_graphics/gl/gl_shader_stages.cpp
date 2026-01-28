@@ -108,4 +108,9 @@ void Shader_stages_tracker::execute(const Shader_stages* state)
     m_last = name;
 }
 
+auto Shader_stages_tracker::get_draw_id_uniform_location() const -> int
+{
+    return m_last != 0 ? gl::get_uniform_location(m_last, "ERHE_DRAW_ID") : -1;
+}
+
 } // namespace erhe::graphics

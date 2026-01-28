@@ -10,9 +10,9 @@ void main()
     mat4 world_from_node;
     mat4 world_from_node_normal;
 
-    if (primitive.primitives[gl_DrawID].skinning_factor < 0.5) {
-        world_from_node        = primitive.primitives[gl_DrawID].world_from_node;
-        world_from_node_normal = primitive.primitives[gl_DrawID].world_from_node_normal;
+    if (primitive.primitives[ERHE_DRAW_ID].skinning_factor < 0.5) {
+        world_from_node        = primitive.primitives[ERHE_DRAW_ID].world_from_node;
+        world_from_node_normal = primitive.primitives[ERHE_DRAW_ID].world_from_node_normal;
     } else {
         world_from_node =
             a_joint_weights_0.x * joint.joints[int(a_joint_indices_0.x)].world_from_bind +
@@ -37,7 +37,7 @@ void main()
     v_TBN            = mat3(tangent, bitangent, normal);
     v_position       = position;
     gl_Position      = clip_from_world * position;
-    v_draw_id        = gl_DrawID;
+    v_draw_id        = ERHE_DRAW_ID;
     v_texcoord       = a_texcoord_0;
     v_color          = a_color_0;
     v_aniso_control  = a_custom_1; //aniso_control;

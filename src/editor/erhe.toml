@@ -159,14 +159,14 @@ downstream_address = "0.0.0.0"
 downstream_port    = 34567
 
 [graphics]
-initial_clear                = true
-post_processing              = true # Note: This is ignored (and set to false) for OpenXR
-#force_bindless_textures_off  = true
-#force_no_persistent_buffers  = true
-#force_no_direct_state_access = true
-#force_no_multi_draw_indirect = true
-#force_gl_version             = 450
-#force_glsl_version           = 450
+initial_clear                      = true
+post_processing                    = true # Note: This is ignored (and set to false) for OpenXR
+#force_bindless_textures_off       = true
+#force_no_persistent_buffers       = true
+#force_no_direct_state_access      = true
+#force_emulate_multi_draw_indirect = true
+#force_gl_version                  = 450
+#force_glsl_version                = 450
 
 [threading]
 thread_count = 8

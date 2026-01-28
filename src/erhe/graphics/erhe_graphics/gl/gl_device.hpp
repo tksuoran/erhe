@@ -72,6 +72,7 @@ public:
     [[nodiscard]] auto get_info                           () const -> const Device_info&;
 
     void reset_shader_stages_state_tracker();
+    [[nodiscard]] auto get_draw_id_uniform_location() const -> GLint;
 
 private:
     void frame_completed (uint64_t frame);

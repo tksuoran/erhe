@@ -63,6 +63,10 @@ auto Shader_stages_create_info::attributes_source() const -> std::string
             sb << attribute.name,
             sb << ";\n";
         }
+        for (const auto& attribute : vertex_input.attributes) {
+            sb << "#define ERHE_ATTRIBUTE_" << attribute.name << " 1\n";
+            sb << ";\n";
+        }
         sb << "\n";
     }
 
@@ -187,14 +191,16 @@ auto Shader_stages_create_info::final_source(
         sb << "#extension GL_ARB_shading_language_packing : enable\n";
         sb << "#define ERHE_HAS_ARB_SHADING_LANGUAGE_PACKING 1\n";
     }
-    if (graphics_device.get_info().gl_version < 460) {
-        if (gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shader_draw_parameters)) {
-            sb << "#extension GL_ARB_shader_draw_parameters : enable\n";
-            sb << "#define ERHE_HAS_ARB_SHADER_DRAW_PARAMETERS 1\n";
-            sb << "#define gl_DrawID gl_DrawIDARB\n";
-        } else {
-            log_glsl->warn("gl_DrawID is not supported and GL_ARB_shader_draw_parameters is not supported");
-        }
+    if (graphics_device.get_info().use_multi_draw_indirect_core) {
+        sb << "#define ERHE_DRAW_ID gl_DrawID\n";
+    } else if (graphics_device.get_info().use_multi_draw_indirect_arb) {
+        sb << "#extension GL_ARB_shader_draw_parameters : enable\n";
+        sb << "#define ERHE_HAS_ARB_SHADER_DRAW_PARAMETERS 1\n";
+        sb << "#define ERHE_DRAW_ID gl_DrawIDARB\n";
+    } else if (graphics_device.get_info().emulate_multi_draw_indirect) {
+        sb << "uniform int ERHE_DRAW_ID;\n";
+    } else {
+        log_glsl->warn("gl_DrawID is not supported");
     }
     sb << "\n";
 #endif

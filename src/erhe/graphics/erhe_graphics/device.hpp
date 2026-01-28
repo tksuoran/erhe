@@ -81,14 +81,16 @@ public:
     uint32_t vulkan_api_version {0};
 #endif
 
-    bool use_binary_shaders     {false};
-    bool use_integer_polygon_ids{false};
-    bool use_bindless_texture   {false};
-    bool use_sparse_texture     {false};
-    bool use_persistent_buffers {false};
-    bool use_multi_draw_indirect{false};
-    bool use_compute_shader     {false};
-    bool use_clear_texture      {false};
+    bool use_binary_shaders          {false};
+    bool use_integer_polygon_ids     {false};
+    bool use_bindless_texture        {false};
+    bool use_sparse_texture          {false};
+    bool use_persistent_buffers      {false};
+    bool use_multi_draw_indirect_core{false};
+    bool use_multi_draw_indirect_arb {false};
+    bool emulate_multi_draw_indirect {false};
+    bool use_compute_shader          {false};
+    bool use_clear_texture           {false};
 
     // limits
     int max_compute_workgroup_count[3] = { 1, 1, 1 };

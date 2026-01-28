@@ -1,13 +1,15 @@
 #include "erhe_graphics/gl/gl_render_command_encoder.hpp"
+#include "erhe_gl/gl_helpers.hpp"
+#include "erhe_gl/wrapper_enums.hpp"
+#include "erhe_gl/wrapper_functions.hpp"
+#include "erhe_graphics/draw_indirect.hpp"
 #include "erhe_graphics/gl/gl_buffer.hpp"
 #include "erhe_graphics/gl/gl_device.hpp"
 #include "erhe_graphics/gl/gl_render_pass.hpp"
 #include "erhe_graphics/gl/gl_state_tracker.hpp"
-#include "erhe_graphics/state/viewport_state.hpp"
-#include "erhe_gl/wrapper_enums.hpp"
-#include "erhe_gl/wrapper_functions.hpp"
-#include "erhe_gl/gl_helpers.hpp"
+#include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/render_pipeline_state.hpp"
+#include "erhe_graphics/state/viewport_state.hpp"
 #include "erhe_verify/verify.hpp"
 
 namespace erhe::graphics {
@@ -180,13 +182,60 @@ void Render_command_encoder_impl::multi_draw_indexed_primitives_indirect(
     const gl::Primitive_type     gl_primitive_type = to_gl(primitive_type);
     const gl::Draw_elements_type gl_index_type     = gl_helpers::convert_to_gl_index_type(index_type).value();
 
-    gl::multi_draw_elements_indirect(
-        gl_primitive_type,
-        gl_index_type,
-        reinterpret_cast<const void *>(indirect_offset),
-        static_cast<GLsizei>(drawcount),
-        static_cast<GLsizei>(stride)
-    );
+    //for (unsigned int i = 0; i < 16; ++i) {
+    //    int binding = m_device.get_impl().get_vertex_attribute_binding(i);
+    //    log_vertex_stream->trace("  attribute {} binding = {}", i, binding);
+    //}
+    //for (unsigned int i = 0; i < 16; ++i) {
+    //    int buffer = m_device.get_impl().get_binding_buffer(i);
+    //    log_vertex_stream->trace("  binding {} buffer = {}", i, buffer);
+    //}
+
+    const Device_info& info = m_device.get_info();
+    if (info.use_multi_draw_indirect_core || info.use_multi_draw_indirect_arb) {
+        gl::multi_draw_elements_indirect(
+            gl_primitive_type,
+            gl_index_type,
+            reinterpret_cast<const void *>(indirect_offset),
+            static_cast<GLsizei>(drawcount),
+            static_cast<GLsizei>(stride)
+        );
+        return;
+    }
+
+    if (info.emulate_multi_draw_indirect) {
+        GLint draw_id_location = m_device.get_impl().get_draw_id_uniform_location();
+        if (draw_id_location >= 0) {
+            const size_t   type_byte_count = erhe::dataformat::get_format_size_bytes(index_type);
+            const uint64_t offset          = static_cast<uint64_t>(indirect_offset);
+            GLintptr       gl_offset       = (GLintptr)offset;
+
+            for (GLsizei draw_id = 0; draw_id < drawcount; draw_id++) {
+                Draw_indexed_primitives_indirect_command draw_indirect_record = {};
+                gl::get_buffer_sub_data(
+                    gl::Buffer_target::draw_indirect_buffer,
+                    gl_offset,
+                    sizeof(Draw_indexed_primitives_indirect_command),
+                    &draw_indirect_record
+                );
+                const void* gl_indices = reinterpret_cast<const void *>(
+                    static_cast<uintptr_t>(draw_indirect_record.first_index) * type_byte_count
+                );
+
+                gl::uniform_1i(draw_id_location, static_cast<GLint>(draw_id));
+                gl::draw_elements_instanced_base_vertex_base_instance(
+                    gl_primitive_type,
+                    draw_indirect_record.index_count,
+                    gl_index_type,
+                    gl_indices,
+                    draw_indirect_record.instance_count,
+                    draw_indirect_record.base_vertex,
+                    draw_indirect_record.base_instance
+                );
+                gl_offset += stride ? stride : sizeof(Draw_indexed_primitives_indirect_command);
+            }
+        }
+    }
 }
 
 } // namespace erhe::graphics
