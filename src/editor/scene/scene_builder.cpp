@@ -99,6 +99,7 @@ Scene_builder::Scene_builder(
     setup_lights();
     make_brushes(app_settings, mesh_memory, executor);
     add_room    ();
+    mesh_memory.buffer_transfer_queue.flush();
 }
 
 Scene_builder::~Scene_builder() noexcept
@@ -680,9 +681,13 @@ void Scene_builder::make_brushes(App_settings& app_settings, Mesh_memory& mesh_m
         );
     };
 
-    m_johnson_solids_folder->disable_flag_bits(erhe::Item_flags::expand);
-    sort_folder(*m_platonic_solids_folder.get());
-    sort_folder(*m_johnson_solids_folder.get());
+    if (make_platonic_solid_brushes_) {
+        sort_folder(*m_platonic_solids_folder.get());
+    }
+    if (make_johnson_solid_brushes) {
+        sort_folder(*m_johnson_solids_folder.get());
+        m_johnson_solids_folder->disable_flag_bits(erhe::Item_flags::expand);
+    }
 
     mesh_memory.buffer_transfer_queue.flush();
 }
