@@ -13,17 +13,17 @@ size             = [ 1920, 1080 ]
 
 # Buffer sizes use megabytes as unit
 [mesh_memory]
-vertex_buffer_size = 1280
-index_buffer_size  =  512
+vertex_buffer_size = 64
+index_buffer_size  =  8
 
 # NOTE: Primitive is as GLTF primitive (NOT triangle etc)
 [renderer]
-max_material_count  = 1000
+max_material_count  = 100
 max_light_count     = 32
-max_camera_count    = 256
-max_joint_count     = 400
-max_primitive_count = 400
-max_draw_count      = 400
+max_camera_count    = 64
+max_joint_count     = 200
+max_primitive_count = 200
+max_draw_count      = 200
 
 [camera_controls]
 invert_x           = false
@@ -47,7 +47,7 @@ turn_speed         = 1.0
 enable = true
 
 [graphics]
-initial_clear                = true
+initial_clear                = false
 #force_bindless_textures_off       = true
 #force_no_persistent_buffers       = true
 #force_no_direct_state_access      = true
