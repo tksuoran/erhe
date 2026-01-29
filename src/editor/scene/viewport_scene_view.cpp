@@ -330,7 +330,7 @@ void Viewport_scene_view::update_hover(bool ray_only)
         scene_root->update_pointer_for_rendertarget_meshes(this);
     }
 
-    if (m_context.id_renderer->enabled) {
+    if (m_context.id_renderer && m_context.id_renderer->enabled) {
         update_hover_with_id_render();
     } else {
         update_hover_with_raytrace();
