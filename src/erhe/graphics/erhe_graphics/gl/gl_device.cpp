@@ -655,6 +655,12 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
     );
 
     m_last_ok_frame_timestamp = std::chrono::steady_clock::now();
+
+    m_staging_buffer = std::make_unique<Ring_buffer_client>(
+        device,
+        erhe::graphics::Buffer_target::transfer_src,
+        "Device::m_staging_buffer"
+    );
 }
 
 auto Device_impl::get_surface() -> Surface*
@@ -869,10 +875,12 @@ auto Device_impl::get_buffer_alignment(Buffer_target target) -> std::size_t
 
 Device_impl::~Device_impl() noexcept
 {
-    if (m_staging_buffer != 0) {
-        gl::unmap_named_buffer(m_staging_buffer);
-        gl::delete_buffers(1, &m_staging_buffer);
+#if 0 // old staging buffer path
+    if (m_staging_buffer_name != 0) {
+        gl::unmap_named_buffer(m_staging_buffer_name);
+        gl::delete_buffers(1, &m_staging_buffer_name);
     }
+#endif
 }
 
 /// Ring buffer
@@ -910,55 +918,59 @@ inline auto access_mask(Device& device) -> gl::Map_buffer_access_mask
 
 void Device_impl::upload_to_buffer(const Buffer& buffer, size_t offset, const void* data, size_t length)
 {
-#if 1
+#if 0
     // Old path
-    if ((m_staging_buffer == 0) || (m_staging_buffer_size < length)) {
-        if (m_staging_buffer != 0) {
-            log_buffer->trace("Deleting old staging buffer {} of size {}", m_staging_buffer, m_staging_buffer_size);
-            gl::delete_buffers(1, &m_staging_buffer);
+    if ((m_staging_buffer_name == 0) || (m_staging_buffer_size < length)) {
+        if (m_staging_buffer_name != 0) {
+            log_buffer->trace("Deleting old staging buffer {} of size {}", m_staging_buffer_name, m_staging_buffer_size);
+            gl::delete_buffers(1, &m_staging_buffer_name);
         }
-        gl::create_buffers(1, &m_staging_buffer);
+        gl::create_buffers(1, &m_staging_buffer_name);
         gl::named_buffer_storage(
-            m_staging_buffer,
-            static_cast<GLsizeiptr>(length),
-            data,
-            gl::Buffer_storage_mask::client_storage_bit | gl::Buffer_storage_mask::dynamic_storage_bit
+            m_staging_buffer_name,                         // GLuint              buffer
+            static_cast<GLsizeiptr>(length),               // GLsizeiptr          size
+            data,                                          // const void *        data
+            gl::Buffer_storage_mask::client_storage_bit |  // Buffer_storage_mask flags
+            gl::Buffer_storage_mask::dynamic_storage_bit
         );
-        log_buffer->trace("Created new staging buffer {} of size {}", m_staging_buffer, m_staging_buffer_size);
+        log_buffer->trace("Created new staging buffer {} of size {}", m_staging_buffer_name, m_staging_buffer_size);
         m_staging_buffer_size = length;
     } else {
-        gl::named_buffer_sub_data(m_staging_buffer, 0, static_cast<GLsizeiptr>(length), data);
+        gl::named_buffer_sub_data(
+            m_staging_buffer_name,            // GLuint       buffer
+            0,                                // GLintptr     offset
+            static_cast<GLsizeiptr>(length),  // GLsizeiptr   size
+            data                              // const void * data
+        );
     }
-    gl::copy_named_buffer_sub_data(m_staging_buffer, buffer.get_impl().gl_name(), 0, offset, length);
+    gl::copy_named_buffer_sub_data(
+        m_staging_buffer_name,        // GLuint   readBuffer
+        buffer.get_impl().gl_name(),  // GLuint   writeBuffer
+        0,                            // GLintptr readOffset
+        offset,                       // GLintptr writeOffset
+        length                        // GLsizeiptr size
+    );
 #else
-    // Suggested by reaper
-    if ((m_staging_buffer == 0) || (m_staging_buffer_size < length)) {
-        if (m_staging_buffer != 0) {
-            log_buffer->trace("Deleting old staging buffer {} of size {}", m_staging_buffer, m_staging_buffer_size);
-            gl::unmap_named_buffer(m_staging_buffer);
-            gl::delete_buffers(1, &m_staging_buffer);
-        }
-        gl::create_buffers(1, &m_staging_buffer);
-        gl::named_buffer_storage(
-            m_staging_buffer,
-            static_cast<GLsizeiptr>(length),
-            0,
-            gl::Buffer_storage_mask::map_write_bit | gl::Buffer_storage_mask::map_persistent_bit
-        );
-        m_staging_buffer_data = gl::map_named_buffer_range(
-            m_staging_buffer,
-            0,
-            static_cast<GLsizeiptr>(length),
-            gl::Map_buffer_access_mask::map_flush_explicit_bit |
-            gl::Map_buffer_access_mask::map_write_bit |
-            gl::Map_buffer_access_mask::map_persistent_bit
-        );
-        m_staging_buffer_size = length;
-        log_buffer->trace("Created new staging buffer {} of size {}", m_staging_buffer, m_staging_buffer_size);
-    }
-    memcpy(m_staging_buffer_data, data, length);
-    gl::flush_mapped_named_buffer_range(m_staging_buffer, 0, static_cast<GLsizeiptr>(length));
-    gl::copy_named_buffer_sub_data(m_staging_buffer, buffer.get_impl().gl_name(), 0, offset, length);
+    // Path using persistently mapped circular ring buffer ranges guarded by frame fences
+    Ring_buffer_range    staging_buffer_range = m_staging_buffer->acquire(Ring_buffer_usage::CPU_write, length);
+    std::span<std::byte> staging_buffer_span  = staging_buffer_range.get_span();
+    memcpy(
+        staging_buffer_span.data(),  // void *dst
+        data,                        // const void *src
+        length                       // size_t len
+    );
+    staging_buffer_range.bytes_written(length);
+    staging_buffer_range.close();
+
+    gl::copy_named_buffer_sub_data(
+        staging_buffer_range.get_buffer()->get_buffer()->get_impl().gl_name(),  // GLuint   readBuffer
+        buffer.get_impl().gl_name(),                                            // GLuint   writeBuffer
+        staging_buffer_range.get_byte_start_offset_in_buffer(),                 // GLintptr readOffset
+        offset,                                                                 // GLintptr writeOffset
+        length                                                                  // GLsizeiptr size
+    );
+
+    staging_buffer_range.release();
 #endif
 }
 

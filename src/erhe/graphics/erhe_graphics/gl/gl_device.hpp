@@ -28,7 +28,7 @@ public:
 
 class Frame_state;
 class Frame_end_info;
-
+class Ring_buffer_client;
 class Surface;
 class Swapchain;
 
@@ -101,9 +101,12 @@ private:
     uint64_t                              m_frame_index{1};
     std::chrono::steady_clock::time_point m_last_ok_frame_timestamp;
 
-    unsigned int               m_staging_buffer{0};
-    size_t                     m_staging_buffer_size{0};
-    void*                      m_staging_buffer_data{nullptr};
+    std::unique_ptr<Ring_buffer_client>   m_staging_buffer;
+#if 0 // old staging buffer path
+    unsigned int                          m_staging_buffer_name{0};
+    size_t                                m_staging_buffer_size{0};
+    void*                                 m_staging_buffer_data{nullptr};
+#endif
 
     std::vector<uint64_t>      m_pending_frames;
     std::vector<uint64_t>      m_completed_frames;
