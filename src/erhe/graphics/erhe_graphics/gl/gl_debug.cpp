@@ -69,13 +69,20 @@ void erhe_opengl_callback(
     );
 
 #if !defined(NDEBUG)
-    if (severity == gl::Debug_severity::debug_severity_high) {
+    switch (severity) {
+        case gl::Debug_severity::debug_severity_high:
+        case gl::Debug_severity::debug_severity_medium: {
 #if defined(WIN32)
-        DebugBreak();
+            DebugBreak();
 #else
-        static int counter = 0;
-        ++counter; // breakpoint placeholder
+            static int counter = 0;
+            ++counter; // breakpoint placeholder
 #endif
+        }
+        case gl::Debug_severity::debug_severity_low:
+        case gl::Debug_severity::debug_severity_notification:
+        default:
+            break;
     }
 #endif
 }
