@@ -15,7 +15,11 @@
 
 namespace editor {
 
-Post_processing_window::Post_processing_window(erhe::imgui::Imgui_renderer& imgui_renderer, erhe::imgui::Imgui_windows& imgui_windows, App_context& app_context)
+Post_processing_window::Post_processing_window(
+    erhe::imgui::Imgui_renderer& imgui_renderer,
+    erhe::imgui::Imgui_windows&  imgui_windows,
+    App_context&                 app_context
+)
     : Imgui_window{imgui_renderer, imgui_windows, "Post Processing", "post_processing", true}
     , m_context   {app_context}
 {
@@ -88,15 +92,15 @@ void Post_processing_window::imgui()
 
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{0.0f, 0.0f});
     for (size_t source_level : node->downsample_source_levels) {
-        size_t destination_level = source_level + 1;
-        auto& texture = node->downsample_texture_views.at(destination_level);
+        const size_t destination_level = source_level + 1;
+        const std::shared_ptr<erhe::graphics::Texture>& texture = node->downsample_texture_views.at(destination_level);
         if (!texture || (texture->get_width() < 1) || (texture->get_height() < 1)) {
             continue;
         }
 
-        int width  = static_cast<int>(m_size * static_cast<float>(node->level_widths.at(0)));
-        int height = static_cast<int>(m_size * static_cast<float>(node->level_heights.at(0)));
-        draw_image(texture.get(), width, height, m_linear_filter ? erhe::graphics::Filter::linear : erhe::graphics::Filter::nearest);
+        const int width  = static_cast<int>(m_size * static_cast<float>(node->level_widths.at(0)));
+        const int height = static_cast<int>(m_size * static_cast<float>(node->level_heights.at(0)));
+        draw_image(texture, width, height, m_linear_filter ? erhe::graphics::Filter::linear : erhe::graphics::Filter::nearest);
         if (ImGui::IsItemHovered()) {
             ImGui::BeginTooltip();
             ImGui::TextUnformatted(texture->get_debug_label().c_str());
@@ -104,15 +108,20 @@ void Post_processing_window::imgui()
         }
     }
     for (size_t source_level : node->upsample_source_levels) {
-        size_t destination_level = source_level - 1;
-        auto& texture = node->upsample_texture_views.at(destination_level);
+        const size_t destination_level = source_level - 1;
+        const std::shared_ptr<erhe::graphics::Texture>& texture = node->upsample_texture_views.at(destination_level);
         if (!texture || (texture->get_width() < 1) || (texture->get_height() < 1)) {
             continue;
         }
     
-        int width  = static_cast<int>(m_size * static_cast<float>(node->level_widths.at(0)));
-        int height = static_cast<int>(m_size * static_cast<float>(node->level_heights.at(0)));
-        draw_image(texture.get(), width, height, m_linear_filter ? erhe::graphics::Filter::linear : erhe::graphics::Filter::nearest);
+        const int width  = static_cast<int>(m_size * static_cast<float>(node->level_widths.at(0)));
+        const int height = static_cast<int>(m_size * static_cast<float>(node->level_heights.at(0)));
+        draw_image(
+            texture, // std::static_pointer_cast<erhe::graphics::Texture_reference>(texture),
+            width,
+            height,
+            m_linear_filter ? erhe::graphics::Filter::linear : erhe::graphics::Filter::nearest
+        );
         if (ImGui::IsItemHovered()) {
             ImGui::BeginTooltip();
             ImGui::TextUnformatted(texture->get_debug_label().c_str());

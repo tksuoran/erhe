@@ -78,6 +78,21 @@ public:
     erhe::graphics::Shader_resource  default_uniform_block; // containing sampler uniforms for non bindless textures
 };
 
+class Draw_texture_parameters
+{
+public:
+    std::shared_ptr<erhe::graphics::Texture_reference> texture_reference{};
+    ImGuiID                                            id{0};
+    int                                                width{0};
+    int                                                height{0};
+    glm::vec2                                          uv0              {0.0f, 1.0f};
+    glm::vec2                                          uv1              {1.0f, 0.0f};
+    glm::vec4                                          background_color {0.0f, 0.0f, 0.0f, 0.0f};
+    glm::vec4                                          tint_color       {1.0f, 1.0f, 1.0f, 1.0f};
+    erhe::graphics::Filter                             filter           {erhe::graphics::Filter::nearest};
+    erhe::graphics::Sampler_mipmap_mode                mipmap_mode      {erhe::graphics::Sampler_mipmap_mode::not_mipmapped};
+};
+
 class Imgui_renderer final
 {
 public:
@@ -93,30 +108,8 @@ public:
 
     void on_font_config_changed(Imgui_settings& settings);
 
-    auto image(
-        const erhe::graphics::Texture_reference* texture_reference,
-        int                                      width,
-        int                                      height,
-        glm::vec2                                uv0              = {0.0f, 1.0f},
-        glm::vec2                                uv1              = {1.0f, 0.0f},
-        glm::vec4                                background_color = {0.0f, 0.0f, 0.0f, 0.0f},
-        glm::vec4                                tint_color       = {1.0f, 1.0f, 1.0f, 1.0f},
-        erhe::graphics::Filter                   filter           = erhe::graphics::Filter::nearest,
-        erhe::graphics::Sampler_mipmap_mode      mipmap_mode      = erhe::graphics::Sampler_mipmap_mode::not_mipmapped
-    ) -> bool;
-
-    auto image_button(
-        uint32_t                                 id,
-        const erhe::graphics::Texture_reference* texture_reference,
-        int                                      width,
-        int                                      height,
-        glm::vec2                                uv0              = {0.0f, 1.0f},
-        glm::vec2                                uv1              = {1.0f, 0.0f},
-        glm::vec4                                background_color = {0.0f, 0.0f, 0.0f, 0.0f},
-        glm::vec4                                tint_color       = {1.0f, 1.0f, 1.0f, 1.0f},
-        erhe::graphics::Filter                   filter           = erhe::graphics::Filter::nearest,
-        erhe::graphics::Sampler_mipmap_mode      mipmap_mode      = erhe::graphics::Sampler_mipmap_mode::not_mipmapped
-    ) const -> bool;
+    auto image       (Draw_texture_parameters&& parameters) -> bool;
+    auto image_button(Draw_texture_parameters&& parameters) -> bool;
 
     void render_draw_data(erhe::graphics::Render_command_encoder& encoder);
 
@@ -145,6 +138,7 @@ public:
 private:
     void update_texture(ImTextureData* tex);
 
+    [[nodiscard]] auto get_sampler(const Erhe_ImTextureID& texture_id) const -> const erhe::graphics::Sampler&;
     [[nodiscard]] auto get_sampler(
         erhe::graphics::Filter              filter,
         erhe::graphics::Sampler_mipmap_mode mipmap_mode

@@ -47,7 +47,7 @@ class Texture;
 class Texture_reference
 {
 public:
-    virtual ~Texture_reference();
+    virtual ~Texture_reference() noexcept;
     [[nodiscard]] virtual auto get_referenced_texture() const -> const Texture* = 0;
 };
 

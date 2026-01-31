@@ -272,7 +272,11 @@ void Viewport_window::imgui()
                 color_texture->gl_name(),
                 color_texture->debug_label()
             );
-            draw_image(rendergraph_output_node.get(), static_cast<int>(size.x), static_cast<int>(size.y));
+            draw_image(
+                rendergraph_output_node,
+                static_cast<int>(size.x),
+                static_cast<int>(size.y)
+            );
             const ImVec2 rect_min = ImGui::GetItemRectMin();
             const ImVec2 rect_max = ImGui::GetItemRectMax();
             viewport_scene_view->set_window_viewport(

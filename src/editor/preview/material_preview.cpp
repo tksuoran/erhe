@@ -198,15 +198,11 @@ void Material_preview::render_preview(const std::shared_ptr<erhe::primitive::Mat
 void Material_preview::show_preview()
 {
     m_context.imgui_renderer->image(
-        m_color_texture.get(),
-        m_width,
-        m_height,
-        glm::vec2{0.0f, 1.0f},
-        glm::vec2{1.0f, 0.0f},
-        glm::vec4{0.0f, 0.0f, 0.0f, 0.0f},
-        glm::vec4{1.0f, 1.0f, 1.0f, 1.0f},
-        erhe::graphics::Filter::nearest,
-        erhe::graphics::Sampler_mipmap_mode::not_mipmapped
+        erhe::imgui::Draw_texture_parameters{
+            .texture_reference = m_color_texture, //std::static_pointer_cast<erhe::graphics::Texture_reference>(m_color_texture),
+            .width             = m_width,
+            .height            = m_height,
+        }
     );
 }
 

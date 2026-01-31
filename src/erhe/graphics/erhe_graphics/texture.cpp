@@ -17,7 +17,7 @@
 
 namespace erhe::graphics {
 
-Texture_reference::~Texture_reference() = default;
+Texture_reference::~Texture_reference() noexcept = default;
 
 auto Texture::get_mipmap_dimensions(const Texture_type type) -> int
 {

@@ -172,7 +172,15 @@ void Brdf_slice::show_brdf_slice(int area_size)
         (texture_height > 0) &&
         (area_size      > 0)
     ) {
-        m_context.imgui_renderer->image(texture.get(), area_size, area_size);
+        m_context.imgui_renderer->image(
+            erhe::imgui::Draw_texture_parameters{
+                .texture_reference = std::static_pointer_cast<erhe::graphics::Texture_reference>(texture),
+                .width             = area_size,
+                .height            = area_size,
+                .filter            = erhe::graphics::Filter::nearest,
+                .mipmap_mode       = erhe::graphics::Sampler_mipmap_mode::not_mipmapped
+            }
+        );
     }
 }
 

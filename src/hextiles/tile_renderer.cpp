@@ -812,15 +812,13 @@ auto Tile_renderer::terrain_image(const terrain_tile_t terrain_tile, const int s
     };
 
     return m_imgui_renderer.image(
-        m_tileset_texture.get(),
-        Tile_shape::full_width * scale,
-        Tile_shape::height * scale,
-        uv0,
-        uv1,
-        glm::vec4{0.0f, 0.0f, 0.0f, 0.0f},
-        glm::vec4{1.0f, 1.0f, 1.0f, 1.0f},
-        erhe::graphics::Filter::nearest,
-        erhe::graphics::Sampler_mipmap_mode::not_mipmapped
+        erhe::imgui::Draw_texture_parameters{
+            .texture_reference = m_tileset_texture,
+            .width             = Tile_shape::full_width * scale,
+            .height            = Tile_shape::height * scale,
+            .uv0               = uv0,
+            .uv1               = uv1
+        }
     );
 }
 
@@ -837,33 +835,26 @@ auto Tile_renderer::unit_image(const unit_tile_t unit_tile, const int scale) -> 
     };
 
     return m_imgui_renderer.image(
-        m_tileset_texture.get(),
-        Tile_shape::full_width * scale,
-        Tile_shape::height * scale,
-        uv0,
-        uv1,
-        glm::vec4{0.0f, 0.0f, 0.0f, 0.0f},
-        glm::vec4{1.0f, 1.0f, 1.0f, 1.0f},
-        erhe::graphics::Filter::nearest,
-        erhe::graphics::Sampler_mipmap_mode::not_mipmapped
+        erhe::imgui::Draw_texture_parameters{
+            .texture_reference = m_tileset_texture,
+            .width             = Tile_shape::full_width * scale,
+            .height            = Tile_shape::height * scale,
+            .uv0               = uv0,
+            .uv1               = uv1
+        }
     );
 }
 
 void Tile_renderer::show_texture()
 {
-    const glm::vec2 uv0{0.0f, 0.0f};
-    const glm::vec2 uv1{1.0f, 1.0f};
-
     m_imgui_renderer.image(
-        m_tileset_texture.get(),
-        m_tileset_texture->get_width(),
-        m_tileset_texture->get_height(),
-        uv0,
-        uv1,
-        glm::vec4{0.0f, 0.0f, 0.0f, 0.0f},
-        glm::vec4{1.0f, 1.0f, 1.0f, 1.0f},
-        erhe::graphics::Filter::nearest,
-        erhe::graphics::Sampler_mipmap_mode::not_mipmapped
+        erhe::imgui::Draw_texture_parameters{
+            .texture_reference = m_tileset_texture,
+            .width             = m_tileset_texture->get_width(),
+            .height            = m_tileset_texture->get_height(),
+            .uv0               = glm::vec2{0.0f, 0.0f},
+            .uv1               = glm::vec2{1.0f, 1.0f}
+        }
     );
 }
 
@@ -876,10 +867,9 @@ void Tile_renderer::make_terrain_type_combo(const char* label, terrain_t& value)
     if (ImGui::BeginCombo(label, preview_value, ImGuiComboFlags_NoArrowButton | ImGuiComboFlags_HeightLarge)) {
         const terrain_t end = static_cast<unit_t>(m_tiles.get_terrain_type_count());
         for (terrain_t i = 0; i < end; i++) {
-            terrain_tile_t terrain_tile = m_tiles.get_terrain_tile_from_terrain(i);
-            auto&          terrain_type = m_tiles.get_terrain_type(i);
-            const auto     id           = fmt::format("##{}-{}", label, i);
-            ImGui::PushID(id.c_str());
+            terrain_tile_t    terrain_tile = m_tiles.get_terrain_tile_from_terrain(i);
+            Terrain_type&     terrain_type = m_tiles.get_terrain_type(i);
+            ImGui::PushID(i);
             bool is_selected = (value == i);
             if (terrain_image(terrain_tile, 1)) {
                 value = i;
@@ -901,17 +891,16 @@ void Tile_renderer::make_terrain_type_combo(const char* label, terrain_t& value)
 
 void Tile_renderer::make_unit_type_combo(const char* label, unit_t& value, const int player)
 {
-    auto&       preview_unit  = m_tiles.get_unit_type(value);
+    Unit_type&  preview_unit  = m_tiles.get_unit_type(value);
     const char* preview_value = preview_unit.name.c_str();
 
     ImGui::SetNextItemWidth(100.0f);
     if (ImGui::BeginCombo(label, preview_value, ImGuiComboFlags_NoArrowButton | ImGuiComboFlags_HeightLarge)) {
         const unit_t end = static_cast<unit_t>(m_tiles.get_unit_type_count());
         for (unit_t i = 0; i < end; i++) {
-            unit_tile_t unit_tile = get_single_unit_tile(player, i);
-            Unit_type&  unit_type = m_tiles.get_unit_type(i);
-            const auto  id        = fmt::format("##{}-{}", label, i);
-            ImGui::PushID(id.c_str());
+            unit_tile_t       unit_tile = get_single_unit_tile(player, i);
+            Unit_type&        unit_type = m_tiles.get_unit_type(i);
+            ImGui::PushID(i);
             bool is_selected = (value == i);
             if (unit_image(unit_tile, 1)) {
                 value = i;

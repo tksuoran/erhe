@@ -600,6 +600,14 @@ auto Imgui_renderer::get_font_atlas() -> ImFontAtlas*
     return &m_font_atlas;
 }
 
+auto Imgui_renderer::get_sampler(const Erhe_ImTextureID& texture_id) const -> const erhe::graphics::Sampler&
+{
+    return get_sampler(
+        static_cast<erhe::graphics::Filter             >(texture_id.filter),
+        static_cast<erhe::graphics::Sampler_mipmap_mode>(texture_id.mipmap_mode)
+    );
+}
+
 auto Imgui_renderer::get_sampler(
     const erhe::graphics::Filter              filter,
     const erhe::graphics::Sampler_mipmap_mode mipmap_mode
@@ -633,40 +641,34 @@ auto Imgui_renderer::get_sampler(
     return m_nearest_sampler;
 }
 
-auto Imgui_renderer::image(
-    const erhe::graphics::Texture_reference*  texture_reference,
-    const int                                 width,
-    const int                                 height,
-    const glm::vec2                           uv0,
-    const glm::vec2                           uv1,
-    const glm::vec4                           background_color,
-    const glm::vec4                           tint_color,
-    const erhe::graphics::Filter              filter,
-    const erhe::graphics::Sampler_mipmap_mode mipmap_mode
-) -> bool
+auto Imgui_renderer::image(Draw_texture_parameters&& parameters) -> bool
 {
     SPDLOG_LOGGER_TRACE(
         log_imgui,
         "Imgui_renderer::image(texture {}, width = {}, height = {}, uv0 = {}, uv1 = {}, tint_color = {}, linear = {})",
-        (texture_reference != nullptr) ? texture_reference->get_texture().gl_name() : 0,
-        width,
-        height,
-        uv0,
-        uv1,
-        tint_color,
-        linear
+        (parameters.texture_reference) ? parameters.texture_reference.get_texture().get_impl().gl_name() : 0,
+        parameters.width,
+        parameters.height,
+        parameters.uv0,
+        parameters.uv1,
+        parameters.tint_color,
+        parameters.linear
     );
-    const erhe::graphics::Sampler& sampler = get_sampler(filter, mipmap_mode);
+    //const erhe::graphics::Sampler& sampler = get_sampler(parameters.filter, parameters.mipmap_mode);
 
-    if (texture_reference != nullptr) {
+    if (parameters.texture_reference) {
         ImGui::ImageWithBg(
-            Erhe_ImTextureID{texture_reference, &sampler},
-            ImVec2{static_cast<float>(width), static_cast<float>(height)},
-            uv0, uv1,
-            background_color, tint_color
+            Erhe_ImTextureID{
+                parameters.texture_reference.get(),
+                static_cast<unsigned int>(parameters.filter),
+                static_cast<unsigned int>(parameters.mipmap_mode)
+            },
+            ImVec2{static_cast<float>(parameters.width), static_cast<float>(parameters.height)},
+            parameters.uv0, parameters.uv1,
+            parameters.background_color, parameters.tint_color
         );
     } else {
-        ImGui::Dummy(ImVec2{static_cast<float>(width), static_cast<float>(height)});
+        ImGui::Dummy(ImVec2{static_cast<float>(parameters.width), static_cast<float>(parameters.height)});
     }
 
     return ImGui::IsItemClicked();
@@ -681,41 +683,38 @@ namespace {
 
 }
 
-auto Imgui_renderer::image_button(
-    const uint32_t                            id,
-    const erhe::graphics::Texture_reference*  texture_reference,
-    const int                                 width,
-    const int                                 height,
-    const glm::vec2                           uv0,
-    const glm::vec2                           uv1,
-    const glm::vec4                           background_color,
-    const glm::vec4                           tint_color,
-    const erhe::graphics::Filter              filter,
-    const erhe::graphics::Sampler_mipmap_mode mipmap_mode
-) const -> bool
+auto Imgui_renderer::image_button(Draw_texture_parameters&& parameters) -> bool
 {
-    if (texture_reference == nullptr) {
-        if ((width == 0) || (height == 0)) {
+    if (parameters.texture_reference) {
+        if ((parameters.width == 0) || (parameters.height == 0)) {
             return false;
         }
-        ImGui::PushID        (id);
-        ImGui::PushStyleColor(ImGuiCol_Button, background_color);
-        ImGui::Button        ("", ImVec2{static_cast<float>(width), static_cast<float>(height)});
+        if (parameters.id != 0) {
+            ImGui::PushID(parameters.id);
+        }
+        ImGui::PushStyleColor(ImGuiCol_Button, parameters.background_color);
+        ImGui::Button        ("", ImVec2{static_cast<float>(parameters.width), static_cast<float>(parameters.height)});
         ImGui::PopStyleColor ();
-        ImGui::PopID         ();
+        if (parameters.id != 0) {
+            ImGui::PopID();
+        }
         return ImGui::IsItemClicked();
     }
 
-    const erhe::graphics::Sampler& sampler = get_sampler(filter, mipmap_mode);
+    //const erhe::graphics::Sampler& sampler = get_sampler(parameters.filter, parameters.mipmap_mode);
     //// const uint64_t handle = m_graphics_device.get_handle(*texture.get(), sampler);
     ImGui::ImageButtonEx(
-        id,
-        Erhe_ImTextureID{texture_reference, &sampler},
-        ImVec2{static_cast<float>(width), static_cast<float>(height)},
-        uv0,
-        uv1,
-        from_glm(background_color),
-        from_glm(tint_color)
+        parameters.id,
+        Erhe_ImTextureID{
+            .texture_reference = parameters.texture_reference.get(),
+            .filter            = static_cast<unsigned int>(parameters.filter),
+            .mipmap_mode       = static_cast<unsigned int>(parameters.mipmap_mode)
+        },
+        ImVec2{static_cast<float>(parameters.width), static_cast<float>(parameters.height)},
+        parameters.uv0,
+        parameters.uv1,
+        from_glm(parameters.background_color),
+        from_glm(parameters.tint_color)
     );
     return ImGui::IsItemClicked();
 }
@@ -778,11 +777,11 @@ void Imgui_renderer::update_texture(ImTextureData* tex)
 
         buffer_range.release();
 
-        const erhe::graphics::Sampler& sampler = get_sampler(erhe::graphics::Filter::linear, erhe::graphics::Sampler_mipmap_mode::not_mipmapped);
         tex->SetTexID(
             Erhe_ImTextureID(
                 texture.get(),
-                &sampler
+                static_cast<unsigned int>(erhe::graphics::Filter::linear),
+                static_cast<unsigned int>(erhe::graphics::Sampler_mipmap_mode::not_mipmapped)
             )
         );
         tex->SetStatus(ImTextureStatus_OK);
@@ -964,12 +963,12 @@ void Imgui_renderer::render_draw_data(erhe::graphics::Render_command_encoder& re
                         const ImTextureID                        texture_id        = pcmd->TexRef.GetTexID();
                         const erhe::graphics::Texture_reference* texture_reference = texture_id.texture_reference;
                         const erhe::graphics::Texture*           texture           = (texture_reference != nullptr) ? texture_reference->get_referenced_texture() : nullptr;
-                        const erhe::graphics::Sampler*           sampler           = texture_id.sampler;
+                        const erhe::graphics::Sampler&           sampler           = get_sampler(texture_id);
                         if (texture == nullptr) {
                             texture = m_dummy_texture.get();
                         }
                         ERHE_VERIFY(texture != nullptr);
-                        const uint64_t shader_handle = texture_heap.allocate(texture, sampler);
+                        const uint64_t shader_handle = texture_heap.allocate(texture, &sampler);
                         if (shader_handle == erhe::graphics::invalid_texture_handle) {
                             break;
                         }
@@ -1070,15 +1069,15 @@ void Imgui_renderer::render_draw_data(erhe::graphics::Render_command_encoder& re
                             const ImTextureID                        texture_id        = pcmd->TexRef.GetTexID();
                             const erhe::graphics::Texture_reference* texture_reference = texture_id.texture_reference;
                             const erhe::graphics::Texture*           texture           = (texture_reference != nullptr) ? texture_reference->get_referenced_texture() : nullptr;
-                            const erhe::graphics::Sampler*           sampler           = texture_id.sampler;
+                            const erhe::graphics::Sampler&           sampler           = get_sampler(texture_id);
 
                             if (texture == nullptr) {
                                 texture = m_dummy_texture.get();
                             }
                             ERHE_VERIFY(texture != nullptr);
 
-                            const uint64_t                           shader_handle  = texture_heap.get_shader_handle(texture, sampler);
-                            const uint64_t                           padding{0};
+                            const uint64_t shader_handle  = texture_heap.get_shader_handle(texture, &sampler);
+                            const uint64_t padding{0};
 
                             write(
                                 draw_parameter_gpu_data,

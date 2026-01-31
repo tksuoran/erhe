@@ -179,10 +179,16 @@ namespace erhe::graphics {
 class Erhe_ImTextureID
 {
 public:
-    const erhe::graphics::Texture_reference* texture_reference{nullptr};
-    const erhe::graphics::Sampler*           sampler{nullptr};
+    erhe::graphics::Texture_reference* texture_reference{nullptr};
+    unsigned int                       filter           {0u};
+    unsigned int                       mipmap_mode      {0u};
 
-    auto operator==(const Erhe_ImTextureID& other) const -> bool { return (texture_reference == other.texture_reference) && (sampler == other.sampler);}
+    auto operator==(const Erhe_ImTextureID& other) const -> bool {
+        return
+            (texture_reference == other.texture_reference) &&
+            (filter == other.filter) &&
+            (mipmap_mode == other.mipmap_mode);
+    }
     auto operator!=(const Erhe_ImTextureID& other) const -> bool {
         return !(*this == other);
     }
@@ -190,7 +196,7 @@ public:
 
 #define ImTextureID Erhe_ImTextureID
 
-inline constexpr ImTextureID c_ImTextureID_Invalid = Erhe_ImTextureID{nullptr, nullptr};
+inline const ImTextureID c_ImTextureID_Invalid = Erhe_ImTextureID{nullptr, 0u, 0u};
 
 #define ImTextureID_Invalid c_ImTextureID_Invalid
 

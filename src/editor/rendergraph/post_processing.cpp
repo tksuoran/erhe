@@ -77,7 +77,7 @@ auto Post_processing_node::update_size() -> bool
     // Input determines the size of intermediate nodes and size of the input node for the post processing render graph node.
     // Input should be multisample resolved.
 
-    const std::shared_ptr<erhe::graphics::Texture> input_texture = get_consumer_input_texture(erhe::rendergraph::Rendergraph_node_key::viewport_texture);
+    const std::shared_ptr<erhe::graphics::Texture>& input_texture = get_consumer_input_texture(erhe::rendergraph::Rendergraph_node_key::viewport_texture);
     if (!input_texture) {
         return downsample_nodes_unchanged; // not yet connected
     }

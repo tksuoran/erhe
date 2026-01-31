@@ -358,15 +358,15 @@ auto Map_window::tile_image(terrain_tile_t terrain_tile, const int scale) -> boo
     };
 
     return m_imgui_renderer.image(
-        tileset_texture.get(),
-        Tile_shape::full_width * scale,
-        Tile_shape::height * scale,
-        uv0,
-        uv1,
-        glm::vec4{0.0f, 0.0f, 0.0f, 0.0f},
-        glm::vec4{1.0f, 1.0f, 1.0f, 1.0f},
-        erhe::graphics::Filter::nearest,
-        erhe::graphics::Sampler_mipmap_mode::not_mipmapped
+        erhe::imgui::Draw_texture_parameters{
+            .texture_reference = tileset_texture,
+            .width             = Tile_shape::full_width * scale,
+            .height            = Tile_shape::height     * scale,
+            .uv0               = uv0,
+            .uv1               = uv1,
+            .filter            = erhe::graphics::Filter::nearest,
+            .mipmap_mode       = erhe::graphics::Sampler_mipmap_mode::not_mipmapped
+        }
     );
 }
 

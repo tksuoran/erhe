@@ -202,15 +202,11 @@ void Rendergraph_window::imgui()
             ) {
                 const float aspect = static_cast<float>(texture->get_width()) / static_cast<float>(texture->get_height());
                 m_imgui_renderer.image(
-                    texture.get(),
-                    static_cast<int>(zoom * aspect * m_image_size),
-                    static_cast<int>(zoom * m_image_size),
-                    glm::vec2{0.0f, 1.0f},
-                    glm::vec2{1.0f, 0.0f},
-                    glm::vec4{0.0f, 0.0f, 0.0f, 0.0f},
-                    glm::vec4{1.0f, 1.0f, 1.0f, 1.0f},
-                    erhe::graphics::Filter::nearest,
-                    erhe::graphics::Sampler_mipmap_mode::not_mipmapped
+                    erhe::imgui::Draw_texture_parameters{
+                        .texture_reference = std::static_pointer_cast<erhe::graphics::Texture_reference>(texture),
+                        .width             = static_cast<int>(zoom * aspect * m_image_size),
+                        .height            = static_cast<int>(zoom * m_image_size)
+                    }
                 );
                 //std::string text = fmt::format(
                 //    "O: {} Size: {} x {} Format: {}",

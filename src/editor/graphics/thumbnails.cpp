@@ -94,15 +94,13 @@ auto Thumbnails::draw(
             thumbnail.last_use_frame_number = m_context.graphics_device->get_frame_index();
             const float height = ImGui::GetTextLineHeightWithSpacing();
             m_context.imgui_renderer->image(
-                thumbnail.texture_view.get(),
-                static_cast<int>(height), //m_size_pixels,
-                static_cast<int>(height), //m_size_pixels,
-                glm::vec2{0.0f, 1.0f},
-                glm::vec2{1.0f, 0.0f},
-                glm::vec4{0.0f, 0.0f, 0.0f, 0.0f},
-                glm::vec4{1.0f, 1.0f, 1.0f, 1.0f},
-                erhe::graphics::Filter::linear,
-                erhe::graphics::Sampler_mipmap_mode::linear
+                erhe::imgui::Draw_texture_parameters{
+                    .texture_reference = thumbnail.texture_view,
+                    .width             = static_cast<int>(height),
+                    .height            = static_cast<int>(height),
+                    .filter            = erhe::graphics::Filter::linear,
+                    .mipmap_mode       = erhe::graphics::Sampler_mipmap_mode::linear
+                }
             );
             if (ImGui::IsItemHovered()) {
                 thumbnail.callback = callback;
@@ -110,15 +108,11 @@ auto Thumbnails::draw(
                 ImGui::PushStyleColor(ImGuiCol_PopupBg, ImVec4{0.0f, 0.0f, 0.0f, 0.8f});
                 ImGui::BeginTooltip();
                 m_context.imgui_renderer->image(
-                    thumbnail.texture_view.get(),
-                    m_size_pixels,
-                    m_size_pixels,
-                    glm::vec2{0.0f, 1.0f},
-                    glm::vec2{1.0f, 0.0f},
-                    glm::vec4{0.0f, 0.0f, 0.0f, 0.0f},
-                    glm::vec4{1.0f, 1.0f, 1.0f, 1.0f},
-                    erhe::graphics::Filter::nearest,
-                    erhe::graphics::Sampler_mipmap_mode::not_mipmapped
+                    erhe::imgui::Draw_texture_parameters{
+                        .texture_reference = thumbnail.texture_view,
+                        .width             = static_cast<int>(m_size_pixels),
+                        .height            = static_cast<int>(m_size_pixels),
+                    }
                 );
                 ImGui::EndTooltip();
                 ImGui::PopStyleColor();

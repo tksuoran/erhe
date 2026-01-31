@@ -317,7 +317,11 @@ void Depth_visualization_window::imgui()
         ImGui::SetCursorPos(cursor_position);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{0.0f, 0.0f});
         SPDLOG_LOGGER_TRACE(log_render, "Depth_visualization_window::imgui() - drawing image using texture {}", m_texture->gl_name());
-        draw_image(m_depth_to_color_node.get(), area_size, area_size);
+        draw_image(
+            std::static_pointer_cast<erhe::graphics::Texture_reference>(texture),
+            area_size,
+            area_size
+        );
         // bool is_hovered = ImGui::IsItemHovered();
         ImGui::PopStyleVar();
     } else {
