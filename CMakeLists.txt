@@ -203,8 +203,8 @@ add_definitions(-DGLM_ENABLE_EXPERIMENTAL)
 if (ERHE_SPIRV)
     CPMAddPackage(
         NAME              glslang
-        VERSION           16.1.0
-        GIT_TAG           16.1.0
+        VERSION           16.2.0
+        GIT_TAG           16.2.0
         GIT_SHALLOW       TRUE
         GITHUB_REPOSITORY KhronosGroup/glslang
         OPTIONS
