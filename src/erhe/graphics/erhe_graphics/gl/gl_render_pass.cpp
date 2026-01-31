@@ -14,7 +14,7 @@
 
 namespace erhe::graphics {
 
-void dump_fbo_attachment(int fbo_name, gl::Framebuffer_attachment attachment)
+void dump_fbo_attachment(const int fbo_name, const gl::Framebuffer_attachment attachment)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -95,7 +95,7 @@ void dump_fbo_attachment(int fbo_name, gl::Framebuffer_attachment attachment)
     }
 }
 
-void dump_fbo(int fbo_name)
+void dump_fbo(const int fbo_name)
 {
     int samples       {0};
     int sample_buffers{0};
@@ -230,7 +230,10 @@ void Render_pass_impl::create()
         m_gl_multisample_resolve_framebuffer.emplace(Gl_framebuffer{});
     }
 
-    auto process_attachment = [this](gl::Framebuffer_attachment attachment_point, Render_pass_attachment_descriptor& attachment) -> bool {
+    auto process_attachment = [this](
+        const gl::Framebuffer_attachment   attachment_point,
+        Render_pass_attachment_descriptor& attachment
+    ) -> bool {
         if (attachment.texture != nullptr) {
             ERHE_VERIFY(attachment.texture->get_width() >= 1);
             ERHE_VERIFY(attachment.texture->get_height() >= 1);
@@ -265,7 +268,10 @@ void Render_pass_impl::create()
         return false;
     };
 
-    auto process_multisample_resolve_attachment = [this](gl::Framebuffer_attachment attachment_point, Render_pass_attachment_descriptor& attachment) {
+    auto process_multisample_resolve_attachment = [this](
+        const gl::Framebuffer_attachment   attachment_point,
+        Render_pass_attachment_descriptor& attachment
+    ) {
         if (attachment.resolve_texture != nullptr) {
             ERHE_VERIFY(attachment.resolve_texture->get_width() >= 1);
             ERHE_VERIFY(attachment.resolve_texture->get_height() >= 1);
@@ -293,10 +299,14 @@ void Render_pass_impl::create()
     {
         unsigned int color_index = 0;
         for (auto& attachment : m_color_attachments) {
-            const gl::Framebuffer_attachment attachment_point = static_cast<gl::Framebuffer_attachment>(static_cast<unsigned int>(gl::Framebuffer_attachment::color_attachment0) + color_index);
+            const gl::Framebuffer_attachment attachment_point = static_cast<gl::Framebuffer_attachment>(
+                static_cast<unsigned int>(gl::Framebuffer_attachment::color_attachment0) + color_index
+            );
             bool has_attachment = process_attachment(attachment_point, attachment);
             if (has_attachment) {
-                const gl::Color_buffer color_buffer = static_cast<gl::Color_buffer>(static_cast<unsigned int>(gl::Color_buffer::color_attachment0) + color_index);
+                const gl::Color_buffer color_buffer = static_cast<gl::Color_buffer>(
+                    static_cast<unsigned int>(gl::Color_buffer::color_attachment0) + color_index
+                );
                 m_draw_buffers.push_back(color_buffer);
             }
             ++color_index;
@@ -316,13 +326,18 @@ void Render_pass_impl::create()
     if (m_uses_multisample_resolve) {
         unsigned int color_index = 0;
         for (auto& attachment : m_color_attachments) {
-            const gl::Framebuffer_attachment attachment_point = static_cast<gl::Framebuffer_attachment>(static_cast<unsigned int>(gl::Framebuffer_attachment::color_attachment0) + color_index);
+            const gl::Framebuffer_attachment attachment_point = static_cast<gl::Framebuffer_attachment>(static_cast<unsigned int>(
+                gl::Framebuffer_attachment::color_attachment0) + color_index
+            );
             process_multisample_resolve_attachment(attachment_point, attachment);
         }
         process_multisample_resolve_attachment(gl::Framebuffer_attachment::depth_attachment,   m_depth_attachment);
         process_multisample_resolve_attachment(gl::Framebuffer_attachment::stencil_attachment, m_stencil_attachment);
 
-        const std::string multisample_resolve_debug_label = fmt::format("(F:{}) {} Multisample Resolve", gl_multisample_resolve_name(), m_debug_label);
+        const std::string multisample_resolve_debug_label = fmt::format(
+            "(F:{}) {} Multisample Resolve",
+            gl_multisample_resolve_name(), m_debug_label
+        );
         gl::object_label(gl::Object_identifier::framebuffer, gl_multisample_resolve_name(), -1, multisample_resolve_debug_label.c_str());
     }
 
@@ -429,7 +444,7 @@ void Render_pass_impl::start_render_pass()
         m_debug_group_name.data()
     );
 
-    std::string begin_debug_group_name = fmt::format("Render_pass_impl::start_render_pass() {}", m_debug_group_name);
+    const std::string begin_debug_group_name = fmt::format("Render_pass_impl::start_render_pass() {}", m_debug_group_name);
     gl::push_debug_group(
         gl::Debug_source::debug_source_application,
         0,
@@ -505,9 +520,10 @@ void Render_pass_impl::start_render_pass()
         }
         if (attachment.load_action == Load_action::Clear) {
             const erhe::dataformat::Format      pixelformat = attachment.get_pixelformat();
-            const erhe::dataformat::Format_kind format_kind = (m_swapchain != nullptr)
-                ? erhe::dataformat::Format_kind::format_kind_float // default framebuffer is always unorm
-                : erhe::dataformat::get_format_kind(pixelformat);
+            const erhe::dataformat::Format_kind format_kind =
+                (m_swapchain != nullptr)
+                    ? erhe::dataformat::Format_kind::format_kind_float // default framebuffer is always unorm
+                    : erhe::dataformat::get_format_kind(pixelformat);
             switch (format_kind) {
                 case erhe::dataformat::Format_kind::format_kind_float: {
                     ERHE_VERIFY(
@@ -525,7 +541,7 @@ void Render_pass_impl::start_render_pass()
                             )
                         )
                     );
-                    GLfloat f[4] = {
+                    const GLfloat f[4] = {
                         static_cast<GLfloat>(attachment.clear_value[0]),
                         static_cast<GLfloat>(attachment.clear_value[1]),
                         static_cast<GLfloat>(attachment.clear_value[2]),
@@ -536,7 +552,7 @@ void Render_pass_impl::start_render_pass()
                     break;
                 }
                 case erhe::dataformat::Format_kind::format_kind_signed_integer: {
-                    GLint i[4] = {
+                    const GLint i[4] = {
                         static_cast<GLint>(attachment.clear_value[0]),
                         static_cast<GLint>(attachment.clear_value[1]),
                         static_cast<GLint>(attachment.clear_value[2]),
@@ -546,7 +562,7 @@ void Render_pass_impl::start_render_pass()
                     break;
                 }
                 case erhe::dataformat::Format_kind::format_kind_unsigned_integer: {
-                    GLuint ui[4] = {
+                    const GLuint ui[4] = {
                         static_cast<GLuint>(attachment.clear_value[0]),
                         static_cast<GLuint>(attachment.clear_value[1]),
                         static_cast<GLuint>(attachment.clear_value[2]),
@@ -561,8 +577,8 @@ void Render_pass_impl::start_render_pass()
             }
         }
     }
-    bool clear_depth   = ((m_swapchain != nullptr) && m_swapchain->has_depth  ()) || (m_depth_attachment  .is_defined() && (m_depth_attachment  .load_action == Load_action::Clear));
-    bool clear_stencil = ((m_swapchain != nullptr) && m_swapchain->has_stencil()) || (m_stencil_attachment.is_defined() && (m_stencil_attachment.load_action == Load_action::Clear));
+    const bool clear_depth   = ((m_swapchain != nullptr) && m_swapchain->has_depth  ()) || (m_depth_attachment  .is_defined() && (m_depth_attachment  .load_action == Load_action::Clear));
+    const bool clear_stencil = ((m_swapchain != nullptr) && m_swapchain->has_stencil()) || (m_stencil_attachment.is_defined() && (m_stencil_attachment.load_action == Load_action::Clear));
     if (clear_depth && clear_stencil) {
         gl::clear_named_framebufferf_i(
             name,
@@ -573,7 +589,7 @@ void Render_pass_impl::start_render_pass()
         );
     } else {
         if (clear_depth) {
-            GLfloat f[4] = {
+            const GLfloat f[4] = {
                 static_cast<GLfloat>(m_depth_attachment.clear_value[0]),
                 static_cast<GLfloat>(m_depth_attachment.clear_value[1]),
                 static_cast<GLfloat>(m_depth_attachment.clear_value[2]),
@@ -582,7 +598,7 @@ void Render_pass_impl::start_render_pass()
             gl::clear_named_framebuffer_fv(name, gl::Buffer::depth, 0, &f[0]);
         }
         if (clear_stencil) {
-            GLuint ui[4] = {
+            const GLuint ui[4] = {
                 static_cast<GLuint>(m_stencil_attachment.clear_value[0]),
                 static_cast<GLuint>(m_stencil_attachment.clear_value[1]),
                 static_cast<GLuint>(m_stencil_attachment.clear_value[2]),
@@ -603,7 +619,7 @@ void Render_pass_impl::end_render_pass()
     ERHE_VERIFY(m_is_active);
     m_is_active = false;
 
-    std::string end_debug_group_name = fmt::format("Render_pass_impl::end_render_pass() {}", m_debug_group_name);
+    const std::string end_debug_group_name = fmt::format("Render_pass_impl::end_render_pass() {}", m_debug_group_name);
     gl::push_debug_group(
         gl::Debug_source::debug_source_application,
         0,

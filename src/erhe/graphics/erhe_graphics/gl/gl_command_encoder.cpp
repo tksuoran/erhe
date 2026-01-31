@@ -30,9 +30,15 @@ Command_encoder_impl::~Command_encoder_impl() noexcept
     }
 }
 
-void Command_encoder_impl::set_buffer(const Buffer_target buffer_target, const Buffer* buffer, std::uintptr_t offset, std::uintptr_t length, std::uintptr_t index)
+void Command_encoder_impl::set_buffer(
+    const Buffer_target  buffer_target,
+    const Buffer* const  buffer,
+    const std::uintptr_t offset,
+    const std::uintptr_t length,
+    const std::uintptr_t index
+)
 {
-    gl::Buffer_target gl_buffer_target = convert_to_gl(buffer_target);
+    const gl::Buffer_target gl_buffer_target = convert_to_gl(buffer_target);
     gl::bind_buffer_range(
         gl_buffer_target,
         static_cast<GLuint>    (index),
@@ -42,9 +48,9 @@ void Command_encoder_impl::set_buffer(const Buffer_target buffer_target, const B
     );
 }
 
-void Command_encoder_impl::set_buffer(Buffer_target buffer_target, const Buffer* buffer)
+void Command_encoder_impl::set_buffer(const Buffer_target buffer_target, const Buffer* const buffer)
 {
-    gl::Buffer_target gl_buffer_target = convert_to_gl(buffer_target);
+    const gl::Buffer_target gl_buffer_target = convert_to_gl(buffer_target);
     gl::bind_buffer(
         gl_buffer_target,
         static_cast<GLuint>(buffer->get_impl().gl_name())

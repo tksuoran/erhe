@@ -97,7 +97,7 @@ public:
 
 private:
     std::vector<Vertex_input_binding> m_bindings;
-    unsigned int m_last{0};
+    unsigned int                      m_last{0};
 };
 
 class Viewport_rect_state_tracker

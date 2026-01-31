@@ -17,15 +17,10 @@ public:
     Sampler_impl(Device& device, const Sampler_create_info& create_info);
     ~Sampler_impl() noexcept = default;
 
-    [[nodiscard]] auto gl_name() const -> unsigned int
-    {
-        return m_handle.gl_name();
-    }
-
+    [[nodiscard]] auto gl_name        () const -> unsigned int;
     [[nodiscard]] auto get_debug_label() const -> const std::string&;
     [[nodiscard]] auto uses_mipmaps   () const -> bool;
-
-    auto get_lod_bias() const -> float;
+    [[nodiscard]] auto get_lod_bias   () const -> float;
 
 private:
     void apply();

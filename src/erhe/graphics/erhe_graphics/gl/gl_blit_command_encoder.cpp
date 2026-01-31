@@ -12,9 +12,7 @@ Blit_command_encoder_impl::Blit_command_encoder_impl(Device& device)
 {
 }
 
-Blit_command_encoder_impl::~Blit_command_encoder_impl() noexcept
-{
-}
+Blit_command_encoder_impl::~Blit_command_encoder_impl() noexcept = default;
 
 // This is the only way to copy to/from the default framebuffer. Only color buffer is supported
 void Blit_command_encoder_impl::blit_framebuffer(
@@ -50,15 +48,15 @@ void Blit_command_encoder_impl::blit_framebuffer(
 
 // Texture to texture copy, single level, single array slice
 void Blit_command_encoder_impl::copy_from_texture(
-    const Texture* source_texture,
-    std::uintptr_t source_slice,
-    std::uintptr_t source_level,
-    glm::ivec3     source_origin,
-    glm::ivec3     source_size,
-    const Texture* destination_texture,
-    std::uintptr_t destination_slice,
-    std::uintptr_t destination_level,
-    glm::ivec3     destination_origin
+    const Texture* const source_texture,
+    const std::uintptr_t source_slice,
+    const std::uintptr_t source_level,
+    const glm::ivec3     source_origin,
+    const glm::ivec3     source_size,
+    const Texture* const destination_texture,
+    const std::uintptr_t destination_slice,
+    const std::uintptr_t destination_level,
+    const glm::ivec3     destination_origin
 )
 {
     const gl::Texture_target gl_source_texture_target = convert_to_gl_texture_target(
@@ -104,15 +102,15 @@ void Blit_command_encoder_impl::copy_from_texture(
 
 // Buffer to texture copy
 void Blit_command_encoder_impl::copy_from_buffer(
-    const Buffer*  source_buffer,
-    std::uintptr_t source_offset,
-    std::uintptr_t source_bytes_per_row,
-    std::uintptr_t source_bytes_per_image,
-    glm::ivec3     source_size,
-    const Texture* destination_texture,
-    std::uintptr_t destination_slice,
-    std::uintptr_t destination_level,
-    glm::ivec3     destination_origin
+    const Buffer* const  source_buffer,
+    const std::uintptr_t source_offset,
+    const std::uintptr_t source_bytes_per_row,
+    const std::uintptr_t source_bytes_per_image,
+    const glm::ivec3     source_size,
+    const Texture* const destination_texture,
+    const std::uintptr_t destination_slice,
+    const std::uintptr_t destination_level,
+    const glm::ivec3     destination_origin
 )
 {
     ERHE_VERIFY(source_size.x <= destination_texture->get_width ());
@@ -136,14 +134,14 @@ void Blit_command_encoder_impl::copy_from_buffer(
     int gl_destination_z = destination_origin.z;
     convert_texture_offset_to_gl(gl_destination_texture_target, gl_destination_x, gl_destination_y, gl_destination_z, static_cast<int>(destination_slice));
 
-    std::size_t gl_bytes_per_pixel = get_gl_pixel_byte_count(destination_texture->get_pixelformat());
+    const std::size_t gl_bytes_per_pixel = get_gl_pixel_byte_count(destination_texture->get_pixelformat());
 
     // Convert bytes to pixels
-    std::size_t gl_unpack_row_length = source_bytes_per_row / gl_bytes_per_pixel;
+    const std::size_t gl_unpack_row_length = source_bytes_per_row / gl_bytes_per_pixel;
     ERHE_VERIFY(source_bytes_per_row % gl_bytes_per_pixel == 0);
 
     // Convert bytes to rows
-    std::size_t gl_unpack_image_height = source_bytes_per_image / source_bytes_per_row;
+    const std::size_t gl_unpack_image_height = source_bytes_per_image / source_bytes_per_row;
     ERHE_VERIFY(source_bytes_per_image % source_bytes_per_row == 0);
 
     const int alignment = (source_bytes_per_row % 8 == 0) ? 8 :
@@ -219,15 +217,15 @@ void Blit_command_encoder_impl::copy_from_buffer(
 
 // Copy from texture to buffer
 void Blit_command_encoder_impl::copy_from_texture(
-    const Texture* source_texture,
-    std::uintptr_t source_slice,
-    std::uintptr_t source_level,
-    glm::ivec3     source_origin,
-    glm::ivec3     source_size,
-    const Buffer*  destination_buffer,
-    std::uintptr_t destination_offset,
-    std::uintptr_t destination_bytes_per_row,
-    std::uintptr_t destination_bytes_per_image
+    const Texture* const source_texture,
+    const std::uintptr_t source_slice,
+    const std::uintptr_t source_level,
+    const glm::ivec3     source_origin,
+    const glm::ivec3     source_size,
+    const Buffer* const  destination_buffer,
+    const std::uintptr_t destination_offset,
+    const std::uintptr_t destination_bytes_per_row,
+    const std::uintptr_t destination_bytes_per_image
 )
 {
     const gl::Texture_target gl_source_texture_target = convert_to_gl_texture_target(
@@ -324,10 +322,10 @@ void Blit_command_encoder_impl::generate_mipmaps(const Texture* texture)
 }
 
 void Blit_command_encoder_impl::fill_buffer(
-    const Buffer*  buffer,
-    std::uintptr_t offset,
-    std::uintptr_t length,
-    uint8_t        value
+    const Buffer* const  buffer,
+    const std::uintptr_t offset,
+    const std::uintptr_t length,
+    const uint8_t        value
 )
 {
     gl::clear_named_buffer_sub_data(
@@ -343,14 +341,14 @@ void Blit_command_encoder_impl::fill_buffer(
 
 // Texture to texture copy, multiple array slices and/or mipmap levels
 void Blit_command_encoder_impl::copy_from_texture(
-    const Texture* source_texture,
-    std::uintptr_t source_slice,
-    std::uintptr_t source_level,
-    const Texture* destination_texture,
-    std::uintptr_t destination_slice,
-    std::uintptr_t destination_level,
-    std::uintptr_t slice_count,
-    std::uintptr_t level_count
+    const Texture* const source_texture,
+    const std::uintptr_t source_slice,
+    const std::uintptr_t source_level,
+    const Texture* const destination_texture,
+    const std::uintptr_t destination_slice,
+    const std::uintptr_t destination_level,
+    const std::uintptr_t slice_count,
+    const std::uintptr_t level_count
 )
 {
     const gl::Texture_target gl_source_texture_target = convert_to_gl_texture_target(
@@ -397,8 +395,8 @@ void Blit_command_encoder_impl::copy_from_texture(
 }
 
 void Blit_command_encoder_impl::copy_from_texture(
-    const Texture* source_texture,
-    const Texture* destination_texture
+    const Texture* const source_texture,
+    const Texture* const destination_texture
 )
 {
     // Texture to texture copy, all layer slices and mipmap levels
@@ -421,11 +419,11 @@ void Blit_command_encoder_impl::copy_from_texture(
 }
 
 void Blit_command_encoder_impl::copy_from_buffer(
-    const Buffer*  source_buffer,
-    std::uintptr_t source_offset,
-    const Buffer*  destination_buffer,
-    std::uintptr_t destination_offset,
-    std::uintptr_t size
+    const Buffer* const  source_buffer,
+    const std::uintptr_t source_offset,
+    const Buffer* const  destination_buffer,
+    const std::uintptr_t destination_offset,
+    const std::uintptr_t size
 )
 {
     // Buffer to buffer copy

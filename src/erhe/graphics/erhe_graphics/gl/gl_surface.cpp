@@ -20,9 +20,7 @@ Surface_impl::Surface_impl(Device_impl& device_impl, const Surface_create_info& 
 {
 }
 
-Surface_impl::~Surface_impl() noexcept
-{
-}
+Surface_impl::~Surface_impl() noexcept = default;
 
 [[nodiscard]] auto Surface_impl::get_swapchain() -> Swapchain*
 {

@@ -34,10 +34,7 @@ public:
     auto link_program   () -> bool;
     void dump_reflection() const;
 
-    auto get_final_source(
-        const Shader_stage&         shader,
-        std::optional<unsigned int> gl_name
-    ) -> std::string;
+    [[nodiscard]] auto get_final_source(const Shader_stage& shader, std::optional<unsigned int> gl_name) -> std::string;
 
 private:
     void post_link();

@@ -41,7 +41,7 @@ public:
     void operator=(const Device_impl&) = delete;
     Device_impl   (Device_impl&&)      = delete;
     void operator=(Device_impl&&)      = delete;
-    ~Device_impl  () noexcept;
+    ~Device_impl() noexcept;
 
     [[nodiscard]] auto wait_frame (Frame_state& out_frame_state) -> bool;
     [[nodiscard]] auto begin_frame(const Frame_begin_info& frame_begin_info) -> bool;
@@ -75,7 +75,7 @@ public:
     [[nodiscard]] auto get_draw_id_uniform_location() const -> GLint;
 
 private:
-    void frame_completed (uint64_t frame);
+    void frame_completed(uint64_t frame);
 
     using PFN_generic          = void (*) ();
     using PFN_get_proc_address = PFN_generic (*) (const char*);
@@ -85,12 +85,12 @@ private:
     friend class Render_command_encoder_impl;
     friend class Render_pass_impl;
 
-    Device&                       m_device;
-    std::unique_ptr<Surface>      m_surface{};
-    Shader_monitor                m_shader_monitor;
-    OpenGL_state_tracker          m_gl_state_tracker;
-    Gl_context_provider           m_gl_context_provider;
-    Device_info                   m_info;
+    Device&                   m_device;
+    std::unique_ptr<Surface>  m_surface{};
+    Shader_monitor            m_shader_monitor;
+    OpenGL_state_tracker      m_gl_state_tracker;
+    Gl_context_provider       m_gl_context_provider;
+    Device_info               m_info;
 
     std::unordered_map<gl::Internal_format, Format_properties> format_properties;
 
@@ -100,17 +100,12 @@ private:
     std::array<Frame_sync, 16>            m_frame_syncs;
     uint64_t                              m_frame_index{1};
     std::chrono::steady_clock::time_point m_last_ok_frame_timestamp;
+    std::vector<uint64_t>                 m_pending_frames;
+    std::vector<uint64_t>                 m_completed_frames;
+    bool                                  m_need_sync{false};
 
     std::unique_ptr<Ring_buffer_client>   m_staging_buffer;
-#if 0 // old staging buffer path
-    unsigned int                          m_staging_buffer_name{0};
-    size_t                                m_staging_buffer_size{0};
-    void*                                 m_staging_buffer_data{nullptr};
-#endif
 
-    std::vector<uint64_t>      m_pending_frames;
-    std::vector<uint64_t>      m_completed_frames;
-    bool                       m_need_sync{false};
 
     class Completion_handler
     {

@@ -27,6 +27,11 @@ Sampler_impl::Sampler_impl(Device& device, const Sampler_create_info& create_inf
     log_texture->trace("Created sampler '{}'", get_debug_label());
 }
 
+auto Sampler_impl::gl_name() const -> unsigned int
+{
+    return m_handle.gl_name();
+}
+
 auto Sampler_impl::get_debug_label() const -> const std::string&
 {
     return m_debug_label;
@@ -73,7 +78,7 @@ auto Sampler_impl::to_gl(const Sampler_address_mode address_mode) -> int
     }
 };
 
-auto Sampler_impl::to_gl(Filter filter, Sampler_mipmap_mode mipmap_mode) -> int
+auto Sampler_impl::to_gl(const Filter filter, const Sampler_mipmap_mode mipmap_mode) -> int
 {
     switch (mipmap_mode) {
         case Sampler_mipmap_mode::not_mipmapped: {
@@ -146,16 +151,5 @@ auto operator!=(const Sampler_impl& lhs, const Sampler_impl& rhs) noexcept -> bo
 {
     return !(lhs == rhs);
 }
-
-//class Sampler_hash
-//{
-//public:
-//    [[nodiscard]] auto operator()(const Sampler_impl& sampler) const noexcept -> size_t
-//    {
-//        ERHE_VERIFY(sampler.gl_name() != 0);
-//
-//        return static_cast<size_t>(sampler.gl_name());
-//    }
-//};
 
 } // namespace erhe::graphics

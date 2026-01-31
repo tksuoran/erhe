@@ -13,10 +13,6 @@
 
 namespace erhe::graphics {
 
-//[[nodiscard]] auto get_gl_attribute_type    (erhe::dataformat::Format format) -> gl::Attribute_type;
-//[[nodiscard]] auto get_gl_vertex_attrib_type(erhe::dataformat::Format format) -> gl::Vertex_attrib_type;
-//[[nodiscard]] auto get_gl_normalized        (erhe::dataformat::Format format) -> bool;
-
 void Color_blend_state_tracker::reset()
 {
     gl::blend_color(0.0f, 0.0f, 0.0f, 0.0f);
@@ -493,7 +489,11 @@ void Vertex_input_state_tracker::set_index_buffer(const Buffer* buffer) const
     );
 }
 
-void Vertex_input_state_tracker::set_vertex_buffer(const std::uintptr_t binding_index, const Buffer* const buffer, const std::uintptr_t offset)
+void Vertex_input_state_tracker::set_vertex_buffer(
+    const std::uintptr_t binding_index,
+    const Buffer* const  buffer,
+    const std::uintptr_t offset
+)
 {
     ERHE_VERIFY(m_last != 0); // Must have VAO bound
     ERHE_VERIFY((binding_index != 0) || (buffer != nullptr));

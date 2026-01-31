@@ -78,7 +78,7 @@ auto split(const std::string& text, const char separator) -> std::vector<std::st
     return result;
 }
 
-auto digits_only(std::string s) -> std::string
+auto digits_only(const std::string& s) -> std::string
 {
     const std::size_t size = s.size();
     for (std::size_t i = 0; i < size; ++i) {
@@ -95,7 +95,7 @@ auto contains(const std::vector<std::string>& collection, const std::string& key
     return i != collection.cend();
 }
 
-auto get_string(gl::String_name string_name) -> std::string
+auto get_string(const gl::String_name string_name) -> std::string
 {
     const GLubyte* gl_str = gl::get_string(string_name);
     const char*    c_str  = reinterpret_cast<const char*>(gl_str);
@@ -663,6 +663,8 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
     );
 }
 
+Device_impl::~Device_impl() noexcept = default;
+
 auto Device_impl::get_surface() -> Surface*
 {
     return m_surface.get();
@@ -706,7 +708,7 @@ auto Device_impl::get_supported_depth_stencil_formats() const -> std::vector<erh
     return result;
 }
 
-void Device_impl::sort_depth_stencil_formats(std::vector<erhe::dataformat::Format>& formats, unsigned int sort_flags, int requested_sample_count) const
+void Device_impl::sort_depth_stencil_formats(std::vector<erhe::dataformat::Format>& formats, const unsigned int sort_flags, const int requested_sample_count) const
 {
     using namespace erhe::utility;
     const bool require_depth     = test_bit_set(sort_flags, format_flag_require_depth    );
@@ -852,7 +854,7 @@ auto Device_impl::get_info() const -> const Device_info&
     return m_info;
 }
 
-auto Device_impl::get_buffer_alignment(Buffer_target target) -> std::size_t
+auto Device_impl::get_buffer_alignment(const Buffer_target target) -> std::size_t
 {
     switch (target) {
         case Buffer_target::storage: {
@@ -871,16 +873,6 @@ auto Device_impl::get_buffer_alignment(Buffer_target target) -> std::size_t
             return 64; // TODO
         }
     }
-}
-
-Device_impl::~Device_impl() noexcept
-{
-#if 0 // old staging buffer path
-    if (m_staging_buffer_name != 0) {
-        gl::unmap_named_buffer(m_staging_buffer_name);
-        gl::delete_buffers(1, &m_staging_buffer_name);
-    }
-#endif
 }
 
 /// Ring buffer
@@ -918,40 +910,6 @@ inline auto access_mask(Device& device) -> gl::Map_buffer_access_mask
 
 void Device_impl::upload_to_buffer(const Buffer& buffer, size_t offset, const void* data, size_t length)
 {
-#if 0
-    // Old path
-    if ((m_staging_buffer_name == 0) || (m_staging_buffer_size < length)) {
-        if (m_staging_buffer_name != 0) {
-            log_buffer->trace("Deleting old staging buffer {} of size {}", m_staging_buffer_name, m_staging_buffer_size);
-            gl::delete_buffers(1, &m_staging_buffer_name);
-        }
-        gl::create_buffers(1, &m_staging_buffer_name);
-        gl::named_buffer_storage(
-            m_staging_buffer_name,                         // GLuint              buffer
-            static_cast<GLsizeiptr>(length),               // GLsizeiptr          size
-            data,                                          // const void *        data
-            gl::Buffer_storage_mask::client_storage_bit |  // Buffer_storage_mask flags
-            gl::Buffer_storage_mask::dynamic_storage_bit
-        );
-        log_buffer->trace("Created new staging buffer {} of size {}", m_staging_buffer_name, m_staging_buffer_size);
-        m_staging_buffer_size = length;
-    } else {
-        gl::named_buffer_sub_data(
-            m_staging_buffer_name,            // GLuint       buffer
-            0,                                // GLintptr     offset
-            static_cast<GLsizeiptr>(length),  // GLsizeiptr   size
-            data                              // const void * data
-        );
-    }
-    gl::copy_named_buffer_sub_data(
-        m_staging_buffer_name,        // GLuint   readBuffer
-        buffer.get_impl().gl_name(),  // GLuint   writeBuffer
-        0,                            // GLintptr readOffset
-        offset,                       // GLintptr writeOffset
-        length                        // GLsizeiptr size
-    );
-#else
-    // Path using persistently mapped circular ring buffer ranges guarded by frame fences
     Ring_buffer_range    staging_buffer_range = m_staging_buffer->acquire(Ring_buffer_usage::CPU_write, length);
     std::span<std::byte> staging_buffer_span  = staging_buffer_range.get_span();
     memcpy(
@@ -971,7 +929,6 @@ void Device_impl::upload_to_buffer(const Buffer& buffer, size_t offset, const vo
     );
 
     staging_buffer_range.release();
-#endif
 }
 
 void Device_impl::add_completion_handler(std::function<void()> callback)
@@ -1114,9 +1071,9 @@ auto Device_impl::get_frame_index() const -> uint64_t
 }
 
 auto Device_impl::allocate_ring_buffer_entry(
-    Buffer_target     buffer_target,
-    Ring_buffer_usage ring_buffer_usage,
-    std::size_t       byte_count
+    const Buffer_target     buffer_target,
+    const Ring_buffer_usage ring_buffer_usage,
+    const std::size_t       byte_count
 ) -> Ring_buffer_range
 {
     m_need_sync = true;
@@ -1158,7 +1115,7 @@ auto Device_impl::allocate_ring_buffer_entry(
     }
 
     // No existing usable buffer found, create new buffer
-    Ring_buffer_create_info create_info{
+    const Ring_buffer_create_info create_info{
         .size              = std::max(m_min_buffer_size, 4 * byte_count),
         .ring_buffer_usage = ring_buffer_usage,
         .debug_label       = "Ring_buffer"
@@ -1167,16 +1124,16 @@ auto Device_impl::allocate_ring_buffer_entry(
     return m_ring_buffers.back()->acquire(required_alignment, ring_buffer_usage, byte_count);
 }
 
-void Device_impl::memory_barrier(Memory_barrier_mask barriers)
+void Device_impl::memory_barrier(const Memory_barrier_mask barriers)
 {
     gl::memory_barrier(static_cast<gl::Memory_barrier_mask>(barriers)); // TODO Proper conversion
 }
 
-auto Device_impl::get_format_properties(erhe::dataformat::Format format) const -> Format_properties
+auto Device_impl::get_format_properties(const erhe::dataformat::Format format) const -> Format_properties
 {
-    std::optional<gl::Internal_format> gl_format_opt = gl_helpers::convert_to_gl(format);
+    const std::optional<gl::Internal_format> gl_format_opt = gl_helpers::convert_to_gl(format);
     ERHE_VERIFY(gl_format_opt.has_value());
-    gl::Internal_format gl_format = gl_format_opt.value();
+    const gl::Internal_format gl_format = gl_format_opt.value();
     auto i = format_properties.find(gl_format);
     if (i == format_properties.end()) {
         return {};
@@ -1184,7 +1141,7 @@ auto Device_impl::get_format_properties(erhe::dataformat::Format format) const -
     return i->second;
 }
 
-void Device_impl::clear_texture(const Texture& texture, std::array<double, 4> value)
+void Device_impl::clear_texture(const Texture& texture, const std::array<double, 4> value)
 {
     const erhe::dataformat::Format      pixelformat       = texture.get_pixelformat();
     const erhe::dataformat::Format_kind format_kind       = erhe::dataformat::get_format_kind      (pixelformat);

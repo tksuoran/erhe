@@ -31,13 +31,16 @@ void Render_command_encoder_impl::set_render_pipeline_state(const Render_pipelin
     m_device.get_impl().m_gl_state_tracker.execute_(pipeline, false);
 }
 
-void Render_command_encoder_impl::set_render_pipeline_state(const Render_pipeline_state& pipeline, const Shader_stages* override_shader_stages)
+void Render_command_encoder_impl::set_render_pipeline_state(
+    const Render_pipeline_state& pipeline,
+    const Shader_stages* const   override_shader_stages
+)
 {
     m_device.get_impl().m_gl_state_tracker.execute_(pipeline, true);
     m_device.get_impl().m_gl_state_tracker.shader_stages.execute(override_shader_stages);
 }
 
-void Render_command_encoder_impl::set_viewport_rect(int x, int y, int width, int height)
+void Render_command_encoder_impl::set_viewport_rect(const int x, const int y, const int width, const int height)
 {
     m_device.get_impl().m_gl_state_tracker.viewport_rect.execute(
         Viewport_rect_state{
@@ -59,7 +62,7 @@ void Render_command_encoder_impl::set_viewport_depth_range(const float min_depth
     );
 }
 
-void Render_command_encoder_impl::set_scissor_rect(int x, int y, int width, int height)
+void Render_command_encoder_impl::set_scissor_rect(const int x, const int y, const int width, const int height)
 {
     m_device.get_impl().m_gl_state_tracker.scissor.execute(
         Scissor_state{
@@ -81,17 +84,21 @@ void Render_command_encoder_impl::end_render_pass()
     m_render_pass.get_impl().end_render_pass();
 }
 
-void Render_command_encoder_impl::set_index_buffer(const Buffer* buffer)
+void Render_command_encoder_impl::set_index_buffer(const Buffer* const buffer)
 {
     m_device.get_impl().m_gl_state_tracker.vertex_input.set_index_buffer(buffer);
 }
 
-void Render_command_encoder_impl::set_vertex_buffer(const Buffer* buffer, std::uintptr_t offset, std::uintptr_t index)
+void Render_command_encoder_impl::set_vertex_buffer(
+    const Buffer* const  buffer,
+    const std::uintptr_t offset,
+    const std::uintptr_t index
+)
 {
     m_device.get_impl().m_gl_state_tracker.vertex_input.set_vertex_buffer(index, buffer, offset);
 }
 
-[[nodiscard]] auto to_gl(Primitive_type primitive_type) -> gl::Primitive_type
+[[nodiscard]] auto to_gl(const Primitive_type primitive_type) -> gl::Primitive_type
 {
     switch (primitive_type) {
         case Primitive_type::point         : return gl::Primitive_type::points        ;
@@ -107,10 +114,10 @@ void Render_command_encoder_impl::set_vertex_buffer(const Buffer* buffer, std::u
 }
 
 void Render_command_encoder_impl::draw_primitives(
-    Primitive_type primitive_type,
-    std::uintptr_t vertex_start,
-    std::uintptr_t vertex_count,
-    std::uintptr_t instance_count
+    const Primitive_type primitive_type,
+    const std::uintptr_t vertex_start,
+    const std::uintptr_t vertex_count,
+    const std::uintptr_t instance_count
 )
 {
     const gl::Primitive_type gl_primitive_type = to_gl(primitive_type);
@@ -123,9 +130,9 @@ void Render_command_encoder_impl::draw_primitives(
 }
 
 void Render_command_encoder_impl::draw_primitives(
-    Primitive_type primitive_type,
-    std::uintptr_t vertex_start,
-    std::uintptr_t vertex_count
+    const Primitive_type primitive_type,
+    const std::uintptr_t vertex_start,
+    const std::uintptr_t vertex_count
 )
 {
     const gl::Primitive_type gl_primitive_type = to_gl(primitive_type);
@@ -137,11 +144,12 @@ void Render_command_encoder_impl::draw_primitives(
 }
 
 void Render_command_encoder_impl::draw_indexed_primitives(
-    Primitive_type           primitive_type,
-    std::uintptr_t           index_count,
-    erhe::dataformat::Format index_type,
-    std::uintptr_t           index_buffer_offset,
-    std::uintptr_t           instance_count)
+    const Primitive_type           primitive_type,
+    const std::uintptr_t           index_count,
+    const erhe::dataformat::Format index_type,
+    const std::uintptr_t           index_buffer_offset,
+    const std::uintptr_t           instance_count
+)
 {
     const gl::Primitive_type     gl_primitive_type = to_gl(primitive_type);
     const gl::Draw_elements_type gl_index_type     = gl_helpers::convert_to_gl_index_type(index_type).value();
@@ -155,10 +163,10 @@ void Render_command_encoder_impl::draw_indexed_primitives(
 }
 
 void Render_command_encoder_impl::draw_indexed_primitives(
-    Primitive_type           primitive_type,
-    std::uintptr_t           index_count,
-    erhe::dataformat::Format index_type,
-    std::uintptr_t           index_buffer_offset
+    const Primitive_type           primitive_type,
+    const std::uintptr_t           index_count,
+    const erhe::dataformat::Format index_type,
+    const std::uintptr_t           index_buffer_offset
 )
 {
     const gl::Primitive_type     gl_primitive_type = to_gl(primitive_type);
@@ -172,24 +180,15 @@ void Render_command_encoder_impl::draw_indexed_primitives(
 }
 
 void Render_command_encoder_impl::multi_draw_indexed_primitives_indirect(
-    Primitive_type           primitive_type,
-    erhe::dataformat::Format index_type,
-    std::uintptr_t           indirect_offset,
-    std::uintptr_t           drawcount,
-    std::uintptr_t           stride
+    const Primitive_type           primitive_type,
+    const erhe::dataformat::Format index_type,
+    const std::uintptr_t           indirect_offset,
+    const std::uintptr_t           drawcount,
+    const std::uintptr_t           stride
 )
 {
     const gl::Primitive_type     gl_primitive_type = to_gl(primitive_type);
     const gl::Draw_elements_type gl_index_type     = gl_helpers::convert_to_gl_index_type(index_type).value();
-
-    //for (unsigned int i = 0; i < 16; ++i) {
-    //    int binding = m_device.get_impl().get_vertex_attribute_binding(i);
-    //    log_vertex_stream->trace("  attribute {} binding = {}", i, binding);
-    //}
-    //for (unsigned int i = 0; i < 16; ++i) {
-    //    int buffer = m_device.get_impl().get_binding_buffer(i);
-    //    log_vertex_stream->trace("  binding {} buffer = {}", i, buffer);
-    //}
 
     const Device_info& info = m_device.get_info();
     if (info.use_multi_draw_indirect_core || info.use_multi_draw_indirect_arb) {
@@ -204,7 +203,7 @@ void Render_command_encoder_impl::multi_draw_indexed_primitives_indirect(
     }
 
     if (info.emulate_multi_draw_indirect) {
-        GLint draw_id_location = m_device.get_impl().get_draw_id_uniform_location();
+        const GLint draw_id_location = m_device.get_impl().get_draw_id_uniform_location();
         if (draw_id_location >= 0) {
             const size_t   type_byte_count = erhe::dataformat::get_format_size_bytes(index_type);
             const uint64_t offset          = static_cast<uint64_t>(indirect_offset);
