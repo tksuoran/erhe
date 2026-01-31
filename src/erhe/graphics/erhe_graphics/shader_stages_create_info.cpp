@@ -204,6 +204,9 @@ auto Shader_stages_create_info::final_source(
     }
     sb << "\n";
 #endif
+#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+    sb << "#define ERHE_DRAW_ID gl_DrawID\n";
+#endif
 
     if (shader.type == Shader_type::vertex_shader) {
         sb << attributes_source();

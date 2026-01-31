@@ -35,7 +35,7 @@ void Shader_stages_prototype_impl::compile_shaders()
     for (const auto& shader : m_create_info.shaders) {
         if (!m_glslang_shader_stages.compile_shader(m_device, shader)) {
             m_state = Shader_build_state::fail;
-            break;
+            return;
         }
     }
     m_state = Shader_build_state::shader_compilation_started;
