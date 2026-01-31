@@ -1505,9 +1505,4 @@ auto Device_impl::get_frame_in_flight_index() const -> uint64_t
     return m_frame_index % get_number_of_frames_in_flight();
 }
 
-auto Device_impl::get_draw_id_uniform_location() const -> GLint
-{
-    m_opengl
-}
-
 } // namespace erhe::graphics
