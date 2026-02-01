@@ -305,7 +305,7 @@ void Viewport_window::imgui()
             }
         );
 
-        log_scene_view->warn("{} no rendergraph output node", get_name());
+        log_scene_view->warn("{} no rendergraph output node", get_title());
         set_is_window_hovered(false);
         viewport_scene_view->set_is_scene_view_hovered(false);
     }
