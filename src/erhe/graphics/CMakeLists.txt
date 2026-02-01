@@ -170,6 +170,9 @@ if (ERHE_GRAPHICS_API_VULKAN)
         erhe_graphics/vulkan/vulkan_texture_heap.hpp
         erhe_graphics/vulkan/vulkan_vertex_input_state.cpp
         erhe_graphics/vulkan/vulkan_vertex_input_state.hpp
+        erhe_graphics/vulkan/vulkan_immediate_commands.cpp
+        erhe_graphics/vulkan/vulkan_immediate_commands.hpp
+        erhe_graphics/vulkan/vulkan_submit_handle.hpp
         erhe_graphics/vulkan/vma_usage.cpp
     )
 

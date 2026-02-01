@@ -17,7 +17,8 @@ namespace erhe::graphics {
 [[nodiscard]] auto c_str(VkDriverId driver_id) -> const char*;
 [[nodiscard]] auto c_str(VkFormat format) -> const char*;
 [[nodiscard]] auto c_str(VkColorSpaceKHR color_space) -> const char*;
-[[nodiscard]] auto c_str(const VkPresentModeKHR present_mode) -> const char*;
+[[nodiscard]] auto c_str(VkPresentModeKHR present_mode) -> const char*;
+[[nodiscard]] auto c_str(VkDeviceFaultAddressTypeEXT type) -> const char*;
 [[nodiscard]] auto to_string_VkDebugReportFlagsEXT(const VkDebugReportFlagsEXT flags) -> std::string;
 [[nodiscard]] auto to_string_VkDebugUtilsMessageSeverityFlagsEXT(const VkDebugUtilsMessageSeverityFlagsEXT severity) -> std::string;
 [[nodiscard]] auto to_string_VkDebugUtilsMessageTypeFlagsEXT(const VkDebugUtilsMessageTypeFlagsEXT message_type) -> std::string;

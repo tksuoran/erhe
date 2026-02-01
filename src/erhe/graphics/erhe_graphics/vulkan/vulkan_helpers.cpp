@@ -532,6 +532,20 @@ auto c_str(const VkPresentModeKHR present_mode) -> const char*
     }
 }
 
+auto c_str(const VkDeviceFaultAddressTypeEXT type) -> const char*
+{
+    switch (type) {
+        case VK_DEVICE_FAULT_ADDRESS_TYPE_NONE_EXT:                        return "VK_DEVICE_FAULT_ADDRESS_TYPE_NONE_EXT";
+        case VK_DEVICE_FAULT_ADDRESS_TYPE_READ_INVALID_EXT:                return "VK_DEVICE_FAULT_ADDRESS_TYPE_READ_INVALID_EXT";
+        case VK_DEVICE_FAULT_ADDRESS_TYPE_WRITE_INVALID_EXT:               return "VK_DEVICE_FAULT_ADDRESS_TYPE_WRITE_INVALID_EXT";
+        case VK_DEVICE_FAULT_ADDRESS_TYPE_EXECUTE_INVALID_EXT:             return "VK_DEVICE_FAULT_ADDRESS_TYPE_EXECUTE_INVALID_EXT";
+        case VK_DEVICE_FAULT_ADDRESS_TYPE_INSTRUCTION_POINTER_UNKNOWN_EXT: return "VK_DEVICE_FAULT_ADDRESS_TYPE_INSTRUCTION_POINTER_UNKNOWN_EXT";
+        case VK_DEVICE_FAULT_ADDRESS_TYPE_INSTRUCTION_POINTER_INVALID_EXT: return "VK_DEVICE_FAULT_ADDRESS_TYPE_INSTRUCTION_POINTER_INVALID_EXT";
+        case VK_DEVICE_FAULT_ADDRESS_TYPE_INSTRUCTION_POINTER_FAULT_EXT:   return "VK_DEVICE_FAULT_ADDRESS_TYPE_INSTRUCTION_POINTER_FAULT_EXT";
+        default: return "?";
+    }
+}
+
 auto to_string_VkDebugReportFlagsEXT(const VkDebugReportFlagsEXT flags) -> std::string
 {
     std::stringstream ss;

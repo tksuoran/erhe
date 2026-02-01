@@ -2,6 +2,7 @@
 
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/shader_monitor.hpp"
+#include "erhe_dataformat/dataformat.hpp"
 
 #include "volk.h"
 // vma forward declaration
