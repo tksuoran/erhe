@@ -1,6 +1,7 @@
 #include "developer/post_processing_window.hpp"
 
 #include "app_context.hpp"
+#include "editor_log.hpp"
 
 #include "rendergraph/post_processing.hpp"
 #include "scene/viewport_scene_views.hpp"
@@ -28,6 +29,8 @@ Post_processing_window::Post_processing_window(
 void Post_processing_window::imgui()
 {
     ERHE_PROFILE_FUNCTION();
+
+    // log_frame->trace("Post_processing_window::imgui()");
 
     bool edited = false;
     const std::vector<std::shared_ptr<Post_processing_node>>& nodes = m_context.scene_views->get_post_processing_nodes();

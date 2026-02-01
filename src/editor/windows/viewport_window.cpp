@@ -248,8 +248,11 @@ void Viewport_window::imgui()
 {
     ERHE_PROFILE_FUNCTION();
 
+    // log_frame->trace("Viewport_window::imgui()");
+
     std::shared_ptr<Viewport_scene_view> viewport_scene_view = m_viewport_scene_view.lock();
     if (!viewport_scene_view) {
+        log_frame->warn(" - no viewport_scene_view");
         return;
     }
 
@@ -257,43 +260,38 @@ void Viewport_window::imgui()
 
     const ImVec2 size = ImGui::GetContentRegionAvail();
     std::shared_ptr<erhe::rendergraph::Rendergraph_node> rendergraph_output_node = m_rendergraph_output_node.lock();
-    const std::shared_ptr<erhe::graphics::Texture>& color_texture = 
-        rendergraph_output_node 
-            ? rendergraph_output_node->get_producer_output_texture(erhe::rendergraph::Rendergraph_node_key::viewport_texture)
-            : std::shared_ptr<erhe::graphics::Texture>{};
-    if (color_texture) {
-        const int texture_width  = color_texture->get_width();
-        const int texture_height = color_texture->get_height();
+    if (rendergraph_output_node) {
+        SPDLOG_LOGGER_TRACE(
+            log_render,
+            "Viewport_window::imgui() rendering texture {} {}",
+            color_texture->gl_name(),
+            color_texture->debug_label()
+        );
+        m_app_context.imgui_renderer->image(
+            erhe::imgui::Draw_texture_parameters{
+                .texture_reference = rendergraph_output_node,
+                .width             = static_cast<int>(size.x),
+                .height            = static_cast<int>(size.y),
+                .debug_label       = "Viewport_window::imgui()"
+            }
+        );
 
-        if ((texture_width >= 1) && (texture_height >= 1)) {
-            SPDLOG_LOGGER_TRACE(
-                log_render,
-                "Viewport_window::imgui() rendering texture {} {}",
-                color_texture->gl_name(),
-                color_texture->debug_label()
-            );
-            draw_image(
-                rendergraph_output_node,
-                static_cast<int>(size.x),
-                static_cast<int>(size.y)
-            );
-            const ImVec2 rect_min = ImGui::GetItemRectMin();
-            const ImVec2 rect_max = ImGui::GetItemRectMax();
-            viewport_scene_view->set_window_viewport(
-                erhe::math::Viewport{
-                    static_cast<int>(rect_min.x),
-                    static_cast<int>(rect_min.y),
-                    static_cast<int>(rect_max.x - rect_min.x + 1.0f),
-                    static_cast<int>(rect_max.y - rect_min.y + 1.0f)
-                }
-            );
+        const ImVec2 rect_min = ImGui::GetItemRectMin();
+        const ImVec2 rect_max = ImGui::GetItemRectMax();
+        viewport_scene_view->set_window_viewport(
+            erhe::math::Viewport{
+                static_cast<int>(rect_min.x),
+                static_cast<int>(rect_min.y),
+                static_cast<int>(rect_max.x - rect_min.x + 1.0f),
+                static_cast<int>(rect_max.y - rect_min.y + 1.0f)
+            }
+        );
 
-            const bool is_hovered = ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem | ImGuiHoveredFlags_AllowWhenBlockedByPopup);
-            SPDLOG_LOGGER_TRACE(log_scene_view, "{} ImGui::IsItemHovered() = {}", get_name(), is_hovered);
-            set_is_window_hovered(is_hovered);
-            viewport_scene_view->set_is_scene_view_hovered(is_hovered);
-            drag_and_drop_target(rect_min.x, rect_min.y, rect_max.x, rect_max.y);
-        }
+        const bool is_hovered = ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem | ImGuiHoveredFlags_AllowWhenBlockedByPopup);
+        SPDLOG_LOGGER_TRACE(log_scene_view, "{} ImGui::IsItemHovered() = {}", get_name(), is_hovered);
+        set_is_window_hovered(is_hovered);
+        viewport_scene_view->set_is_scene_view_hovered(is_hovered);
+        drag_and_drop_target(rect_min.x, rect_min.y, rect_max.x, rect_max.y);
     } else {
         ImGui::Dummy(size);
         const ImVec2 rect_min = ImGui::GetItemRectMin();
@@ -307,7 +305,7 @@ void Viewport_window::imgui()
             }
         );
 
-        SPDLOG_LOGGER_TRACE(log_scene_view, "{} no color texture", get_name());
+        log_scene_view->warn("{} no rendergraph output node", get_name());
         set_is_window_hovered(false);
         viewport_scene_view->set_is_scene_view_hovered(false);
     }

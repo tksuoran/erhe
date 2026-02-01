@@ -54,6 +54,8 @@ auto get_connection_color(const int key) -> ImVec4
 
 void Rendergraph_window::imgui()
 {
+    // log_frame->trace("Rendergraph_window::imgui()");
+
 #if 0
     const ImGuiTreeNodeFlags parent_flags{
         ImGuiTreeNodeFlags_OpenOnArrow       |

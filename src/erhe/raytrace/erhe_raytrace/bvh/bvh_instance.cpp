@@ -59,7 +59,7 @@ auto Bvh_instance::is_enabled() const -> bool
 
 void Bvh_instance::set_transform(const glm::mat4 transform)
 {
-    //log_frame->trace("Bvh_instance::set_transform {}", m_debug_label);
+    // log_frame->trace("Bvh_instance::set_transform {}", m_debug_label);
     m_transform = transform;
 }
 
@@ -84,11 +84,11 @@ auto Bvh_instance::intersect(Ray& ray, Hit& hit) -> bool
     ERHE_PROFILE_FUNCTION();
 
     if (!m_enabled) {
-        log_frame->trace("Bvh_instance::intersect() {}. No hit because instance is disabled.", m_debug_label);
+        // log_frame->trace("Bvh_instance::intersect() {}. No hit because instance is disabled.", m_debug_label);
         return false;
     }
     if ((ray.mask & m_mask) == 0) {
-        log_frame->trace("Bvh_instance::intersect() {}. No hit because instance mask test failed.", m_debug_label);
+        // log_frame->trace("Bvh_instance::intersect() {}. No hit because instance mask test failed.", m_debug_label);
         return false;
     }
 
@@ -99,7 +99,7 @@ auto Bvh_instance::intersect(Ray& ray, Hit& hit) -> bool
     auto*      bvh_scene         = reinterpret_cast<Bvh_scene*>(instance_scene);
     const bool is_hit            = bvh_scene->intersect_instance(local_ray, hit, this); // instance to scene -> depth increment
     ray.t_far = local_ray.t_far;
-    log_frame->trace("Bvh_instance::intersect() {}. is_hit = {} ray.mask = {:04x} mask = {:04x}", m_debug_label, is_hit, ray.mask, m_mask);
+    // log_frame->trace("Bvh_instance::intersect() {}. is_hit = {} ray.mask = {:04x} mask = {:04x}", m_debug_label, is_hit, ray.mask, m_mask);
     return is_hit;
 }
 

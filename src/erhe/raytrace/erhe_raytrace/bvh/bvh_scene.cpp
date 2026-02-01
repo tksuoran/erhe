@@ -119,10 +119,10 @@ void Bvh_scene::commit()
 
 auto Bvh_scene::intersect(Ray& ray, Hit& hit) -> bool
 {
-    log_frame->trace(
-        "Bvh_scene {} intersect mask = {:04x} instances = {}, geometries = {}, ray origin = {}, direction = {}",
-        m_debug_label, ray.mask, m_instances.size(), m_geometries.size(), ray.origin, ray.direction
-    );
+    // log_frame->trace(
+    //     "Bvh_scene {} intersect mask = {:04x} instances = {}, geometries = {}, ray origin = {}, direction = {}",
+    //     m_debug_label, ray.mask, m_instances.size(), m_geometries.size(), ray.origin, ray.direction
+    // );
 
     ERHE_PROFILE_FUNCTION();
 

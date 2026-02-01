@@ -756,6 +756,8 @@ void App_rendering::imgui()
 {
     ERHE_PROFILE_FUNCTION();
 
+    // log_frame->trace("App_rendering::imgui()");
+
     const ImGuiTreeNodeFlags flags{
         ImGuiTreeNodeFlags_Framed            |
         ImGuiTreeNodeFlags_OpenOnArrow       |
@@ -787,6 +789,8 @@ void App_rendering::begin_frame()
 {
     ERHE_PROFILE_FUNCTION();
 
+    // log_frame->trace("App_rendering::begin_frame() (check for renderdoc frame capture)");
+
     if (m_trigger_capture) {
         erhe::window::start_frame_capture(*m_context.context_window);
     }
@@ -810,6 +814,8 @@ void App_rendering::set_grid_visibility(bool visible)
 void App_rendering::end_frame()
 {
     ERHE_PROFILE_FUNCTION();
+
+    // log_frame->trace("App_rendering::end_frame() (check for renderdoc frame capture)");
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     m_context.headset_view->end_frame();
@@ -868,6 +874,8 @@ void App_rendering::render_viewport_main(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION();
 
+    // log_frame->trace("App_rendering::render_viewport_main()");
+
     render_composer(context);
 }
 
@@ -882,6 +890,8 @@ void App_rendering::render_viewport_renderables(const Render_context& context)
 
 void App_rendering::render_composer(const Render_context& context)
 {
+    // log_frame->trace("App_rendering::render_composer()");
+
     static constexpr std::string_view c_id_main{"Main"};
     //ERHE_PROFILE_GPU_SCOPE(c_id_main);
     erhe::graphics::Scoped_gpu_timer timer{m_content_timer};
@@ -895,6 +905,8 @@ void App_rendering::render_composer(const Render_context& context)
 void App_rendering::render_id(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION();
+
+    // log_frame->trace("App_rendering::render_id()");
 
     const auto scene_root = context.scene_view.get_scene_root();
     if (!scene_root){

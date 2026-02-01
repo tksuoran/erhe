@@ -212,6 +212,7 @@ public:
         ERHE_PROFILE_FUNCTION();
         m_frame_log_window->on_frame_begin();
 
+        // log_frame->trace("tick() begin");
         erhe::graphics::Frame_state frame_state{};
         const bool wait_ok = m_graphics_device->wait_frame(frame_state);
         ERHE_VERIFY(wait_ok);
@@ -277,8 +278,11 @@ public:
         // - Call all ImGui code (Imgui_window)
         m_hover_tool->reset_item_tree_hover();
 
+        // log_frame->trace("Imgui_windows::begin_frame()");
         m_imgui_windows->begin_frame();
+        // log_frame->trace("Imgui_windows::draw_imgui_windows()");
         m_imgui_windows->draw_imgui_windows();
+        // log_frame->trace("Imgui_windows::end_frame()");
         m_imgui_windows->end_frame();
 
         // - Apply all command bindings (OpenXR bindings were already executed above)
@@ -363,6 +367,7 @@ public:
         //}
         // TODO move this logic to m_graphics_device->end_of_frame();
 #endif // TODO
+        // log_frame->trace("tick() end");
         m_frame_log_window->on_frame_end();
     }
 

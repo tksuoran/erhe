@@ -136,6 +136,8 @@ auto Thumbnails::draw(
 
 void Thumbnails::update()
 {
+    // log_frame->trace("Thumbnails::update()");
+
     erhe::graphics::Scoped_debug_group render_graph_scope{"Thumbnails::update()"};
 
     for (size_t i = 0, end = m_thumbnails.size(); i < end; ++i) {

@@ -348,9 +348,9 @@ void Node::update_transform(uint64_t serial)
         // if (node_data.transforms.update_serial >= serial) {
         //     return;
         // }
-        if (is_shown_in_ui()) {
-            log_frame->trace("{} TX update parent {}", get_name(), current_parent->get_name());
-        }
+        // if (is_shown_in_ui()) {
+        //     log_frame->trace("{} TX update parent {}", get_name(), current_parent->get_name());
+        // }
 
         const glm::mat4 world_from_node = current_parent->world_from_node() * parent_from_node();
         const glm::mat4 node_from_world = node_from_parent() * current_parent->node_from_world();

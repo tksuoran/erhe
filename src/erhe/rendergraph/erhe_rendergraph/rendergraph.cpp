@@ -74,7 +74,7 @@ void Rendergraph::sort()
             // Remove from unsorted nodes
             const auto i = std::remove(unsorted_nodes.begin(), unsorted_nodes.end(), node);
             if (i == unsorted_nodes.end()) {
-                log_frame->error("Sort: Node '{}' is not in graph nodes", node->get_name());
+                // log_frame->error("Sort: Node '{}' is not in graph nodes", node->get_name());
             } else {
                 unsorted_nodes.erase(i, unsorted_nodes.end());
             }

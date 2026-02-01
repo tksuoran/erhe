@@ -1,6 +1,7 @@
 ﻿#include "rendergraph/post_processing.hpp"
 
 #include "app_context.hpp"
+#include "editor_log.hpp"
 
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/device.hpp"
@@ -92,20 +93,17 @@ Post_processing_node::~Post_processing_node() noexcept
 
 auto Post_processing_node::update_size() -> bool
 {
-    constexpr bool downsample_nodes_unchanged = true;
-    constexpr bool downsample_nodes_changed   = false;
-
     // Input determines the size of intermediate nodes and size of the input node for the post processing render graph node.
     // Input should be multisample resolved.
 
     const std::shared_ptr<erhe::graphics::Texture>& input_texture = get_consumer_input_texture(erhe::rendergraph::Rendergraph_node_key::viewport_texture);
     if (!input_texture) {
-        return downsample_nodes_unchanged; // not yet connected
+        return false; // not yet connected
     }
     const int width  = input_texture->get_width();
     const int height = input_texture->get_height();
     if ((level0_width == width) && (level0_height == height)) {
-        return downsample_nodes_unchanged;
+        return (width > 0) && (height > 0);
     }
 
     downsample_texture.reset();
@@ -115,7 +113,7 @@ auto Post_processing_node::update_size() -> bool
     level0_width  = width;
     level0_height = height;
     if (level0_width < 1 || level0_height < 1) {
-        return downsample_nodes_changed;
+        return false;
     }
 
     // Create textures
@@ -260,11 +258,13 @@ auto Post_processing_node::update_size() -> bool
     }
 
     update_parameters();
-    return downsample_nodes_changed;
+    return true;
 }
 
 void Post_processing_node::update_parameters()
 {
+    // log_frame->trace("Post_processing_node::update_parameters()");
+
     // Prepare parameter buffer
     const erhe::graphics::Sampler&  sampler_linear                = m_post_processing.get_sampler_linear();
     const erhe::graphics::Sampler&  sampler_linear_mipmap_nearest = m_post_processing.get_sampler_linear_mipmap_nearest();
@@ -364,8 +364,8 @@ void Post_processing_node::execute_rendergraph_node()
     ERHE_PROFILE_FUNCTION();
     //ERHE_PROFILE_GPU_SCOPE(c_post_processing)
 
-    const bool downsample_nodes_unchanged = update_size();
-    if (!downsample_nodes_unchanged) {
+    const bool can_post_process = update_size();
+    if (!can_post_process) {
         return;
     }
 
@@ -566,6 +566,8 @@ auto Post_processing::get_nodes() -> const std::vector<std::shared_ptr<Post_proc
 void Post_processing::post_process(Post_processing_node& node)
 {
     erhe::graphics::Device& graphics_device = *m_context.graphics_device;
+
+    // log_frame->trace("Post_processing::post_process()");
 
     const std::shared_ptr<erhe::graphics::Texture> input_texture = node.get_consumer_input_texture(erhe::rendergraph::Rendergraph_node_key::viewport_texture);
     ERHE_VERIFY(input_texture);
