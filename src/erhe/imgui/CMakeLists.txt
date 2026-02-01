@@ -62,6 +62,7 @@ target_link_libraries(${_target}
         fmt::fmt
         erhe::commands
         erhe::configuration
+        erhe::defer
         erhe::graphics
         erhe::log
         erhe::math

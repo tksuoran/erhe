@@ -33,9 +33,30 @@ Post_processing::Offsets::Offsets(erhe::graphics::Shader_resource& block)
 {
 }
 
+Post_processing_node_texture_reference::Post_processing_node_texture_reference(
+    const std::shared_ptr<Post_processing_node>& node,
+    const int                                    direction,
+    const size_t                                 level
+)
+    : m_node     {node}
+    , m_direction{direction}
+    , m_level    {level}
+{
+};
+
+Post_processing_node_texture_reference::~Post_processing_node_texture_reference() noexcept = default;
+
+auto Post_processing_node_texture_reference::get_referenced_texture() const -> const erhe::graphics::Texture*
+{
+    if (m_direction > 0) {
+        return m_level < m_node->upsample_texture_views.size() ? m_node->upsample_texture_views.at(m_level).get() : nullptr;
+    } else {
+        return m_level < m_node->downsample_texture_views.size() ? m_node->downsample_texture_views.at(m_level).get() : nullptr;
+    }
+}
+
 // http://cdn2.gran-turismo.com/data/www/pdi_publications/PracticalHDRandWCGinGTS.pdf
 // https://www.elopezr.com/temporal-aa-and-the-quest-for-the-holy-trail/
-
 Post_processing_node::Post_processing_node(
     erhe::graphics::Device&         graphics_device,
     erhe::rendergraph::Rendergraph& rendergraph,

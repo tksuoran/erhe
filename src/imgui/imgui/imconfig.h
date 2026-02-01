@@ -182,6 +182,7 @@ public:
     erhe::graphics::Texture_reference* texture_reference{nullptr};
     unsigned int                       filter           {0u};
     unsigned int                       mipmap_mode      {0u};
+    const char*                        debug_label      {nullptr};
 
     auto operator==(const Erhe_ImTextureID& other) const -> bool {
         return

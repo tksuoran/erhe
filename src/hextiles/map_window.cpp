@@ -365,7 +365,8 @@ auto Map_window::tile_image(terrain_tile_t terrain_tile, const int scale) -> boo
             .uv0               = uv0,
             .uv1               = uv1,
             .filter            = erhe::graphics::Filter::nearest,
-            .mipmap_mode       = erhe::graphics::Sampler_mipmap_mode::not_mipmapped
+            .mipmap_mode       = erhe::graphics::Sampler_mipmap_mode::not_mipmapped,
+            .debug_label       = "Map_window::tile_image()"
         }
     );
 }

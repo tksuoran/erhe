@@ -82,15 +82,16 @@ class Draw_texture_parameters
 {
 public:
     std::shared_ptr<erhe::graphics::Texture_reference> texture_reference{};
-    ImGuiID                                            id{0};
-    int                                                width{0};
-    int                                                height{0};
+    ImGuiID                                            id               {0};
+    int                                                width            {0};
+    int                                                height           {0};
     glm::vec2                                          uv0              {0.0f, 1.0f};
     glm::vec2                                          uv1              {1.0f, 0.0f};
     glm::vec4                                          background_color {0.0f, 0.0f, 0.0f, 0.0f};
     glm::vec4                                          tint_color       {1.0f, 1.0f, 1.0f, 1.0f};
     erhe::graphics::Filter                             filter           {erhe::graphics::Filter::nearest};
     erhe::graphics::Sampler_mipmap_mode                mipmap_mode      {erhe::graphics::Sampler_mipmap_mode::not_mipmapped};
+    const char*                                        debug_label      {nullptr};
 };
 
 class Imgui_renderer final
@@ -182,6 +183,7 @@ private:
     std::vector<std::function<void()>> m_at_end_of_frame;
 
     std::vector<std::shared_ptr<erhe::graphics::Texture>> m_imgui_textures;
+    std::vector<std::shared_ptr<erhe::graphics::Texture_reference>> m_draw_texture_references;
 
     Imgui_host* m_ime_host{nullptr};
 };

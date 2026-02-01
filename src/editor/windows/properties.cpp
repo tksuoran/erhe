@@ -312,7 +312,8 @@ void Properties::texture_properties(const std::shared_ptr<erhe::graphics::Textur
             erhe::imgui::Draw_texture_parameters{
                 .texture_reference = texture, //texture.get(),
                 .width             = texture->get_width(),
-                .height            = texture->get_height()
+                .height            = texture->get_height(),
+                .debug_label       = "Properties::texture_properties()"
             }
         );
     });

@@ -91,6 +91,7 @@ void Post_processing_window::imgui()
     }
 
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{0.0f, 0.0f});
+    node->texture_references.clear();
     for (size_t source_level : node->downsample_source_levels) {
         const size_t destination_level = source_level + 1;
         const std::shared_ptr<erhe::graphics::Texture>& texture = node->downsample_texture_views.at(destination_level);
@@ -100,7 +101,19 @@ void Post_processing_window::imgui()
 
         const int width  = static_cast<int>(m_size * static_cast<float>(node->level_widths.at(0)));
         const int height = static_cast<int>(m_size * static_cast<float>(node->level_heights.at(0)));
-        draw_image(texture, width, height, m_linear_filter ? erhe::graphics::Filter::linear : erhe::graphics::Filter::nearest);
+
+        node->texture_references.push_back(
+            std::make_shared<Post_processing_node_texture_reference>(node, -1, destination_level)
+        );
+        m_context.imgui_renderer->image(
+            erhe::imgui::Draw_texture_parameters{
+                .texture_reference = node->texture_references.back(),
+                .width             = width,
+                .height            = height,
+                .filter            = m_linear_filter ? erhe::graphics::Filter::linear : erhe::graphics::Filter::nearest
+            }
+        );
+
         if (ImGui::IsItemHovered()) {
             ImGui::BeginTooltip();
             ImGui::TextUnformatted(texture->get_debug_label().c_str());
@@ -116,11 +129,17 @@ void Post_processing_window::imgui()
     
         const int width  = static_cast<int>(m_size * static_cast<float>(node->level_widths.at(0)));
         const int height = static_cast<int>(m_size * static_cast<float>(node->level_heights.at(0)));
-        draw_image(
-            texture, // std::static_pointer_cast<erhe::graphics::Texture_reference>(texture),
-            width,
-            height,
-            m_linear_filter ? erhe::graphics::Filter::linear : erhe::graphics::Filter::nearest
+
+        node->texture_references.push_back(
+            std::make_shared<Post_processing_node_texture_reference>(node, 1, destination_level)
+        );
+        m_context.imgui_renderer->image(
+            erhe::imgui::Draw_texture_parameters{
+                .texture_reference = node->texture_references.back(),
+                .width             = width,
+                .height            = height,
+                .filter            = m_linear_filter ? erhe::graphics::Filter::linear : erhe::graphics::Filter::nearest
+            }
         );
         if (ImGui::IsItemHovered()) {
             ImGui::BeginTooltip();

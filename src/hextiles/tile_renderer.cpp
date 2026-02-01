@@ -817,7 +817,8 @@ auto Tile_renderer::terrain_image(const terrain_tile_t terrain_tile, const int s
             .width             = Tile_shape::full_width * scale,
             .height            = Tile_shape::height * scale,
             .uv0               = uv0,
-            .uv1               = uv1
+            .uv1               = uv1,
+            .debug_label       = "Tile_renderer::terrain_image()"
         }
     );
 }
@@ -840,7 +841,8 @@ auto Tile_renderer::unit_image(const unit_tile_t unit_tile, const int scale) -> 
             .width             = Tile_shape::full_width * scale,
             .height            = Tile_shape::height * scale,
             .uv0               = uv0,
-            .uv1               = uv1
+            .uv1               = uv1,
+            .debug_label       = "Tile_renderer::unit_image()"
         }
     );
 }
@@ -853,7 +855,8 @@ void Tile_renderer::show_texture()
             .width             = m_tileset_texture->get_width(),
             .height            = m_tileset_texture->get_height(),
             .uv0               = glm::vec2{0.0f, 0.0f},
-            .uv1               = glm::vec2{1.0f, 1.0f}
+            .uv1               = glm::vec2{1.0f, 1.0f},
+            .debug_label       = "Tile_renderer::show_texture()"
         }
     );
 }

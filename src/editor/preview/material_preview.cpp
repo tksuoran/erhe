@@ -202,6 +202,7 @@ void Material_preview::show_preview()
             .texture_reference = m_color_texture, //std::static_pointer_cast<erhe::graphics::Texture_reference>(m_color_texture),
             .width             = m_width,
             .height            = m_height,
+            .debug_label       = "Material_preview::show_preview()"
         }
     );
 }

@@ -10,6 +10,8 @@
 # include "erhe_gl/wrapper_functions.hpp"
 #endif
 
+#include "erhe_defer/defer.hpp"
+
 #include "erhe_graphics/blit_command_encoder.hpp"
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/device.hpp"
@@ -659,14 +661,16 @@ auto Imgui_renderer::image(Draw_texture_parameters&& parameters) -> bool
     if (parameters.texture_reference) {
         ImGui::ImageWithBg(
             Erhe_ImTextureID{
-                parameters.texture_reference.get(),
-                static_cast<unsigned int>(parameters.filter),
-                static_cast<unsigned int>(parameters.mipmap_mode)
+                .texture_reference = parameters.texture_reference.get(),
+                .filter            = static_cast<unsigned int>(parameters.filter),
+                .mipmap_mode       = static_cast<unsigned int>(parameters.mipmap_mode),
+                .debug_label       = parameters.debug_label
             },
             ImVec2{static_cast<float>(parameters.width), static_cast<float>(parameters.height)},
             parameters.uv0, parameters.uv1,
             parameters.background_color, parameters.tint_color
         );
+        m_draw_texture_references.push_back(parameters.texture_reference);
     } else {
         ImGui::Dummy(ImVec2{static_cast<float>(parameters.width), static_cast<float>(parameters.height)});
     }
@@ -708,7 +712,8 @@ auto Imgui_renderer::image_button(Draw_texture_parameters&& parameters) -> bool
         Erhe_ImTextureID{
             .texture_reference = parameters.texture_reference.get(),
             .filter            = static_cast<unsigned int>(parameters.filter),
-            .mipmap_mode       = static_cast<unsigned int>(parameters.mipmap_mode)
+            .mipmap_mode       = static_cast<unsigned int>(parameters.mipmap_mode),
+            .debug_label       = parameters.debug_label
         },
         ImVec2{static_cast<float>(parameters.width), static_cast<float>(parameters.height)},
         parameters.uv0,
@@ -716,6 +721,7 @@ auto Imgui_renderer::image_button(Draw_texture_parameters&& parameters) -> bool
         from_glm(parameters.background_color),
         from_glm(parameters.tint_color)
     );
+    m_draw_texture_references.push_back(parameters.texture_reference);
     return ImGui::IsItemClicked();
 }
 
@@ -781,7 +787,8 @@ void Imgui_renderer::update_texture(ImTextureData* tex)
             Erhe_ImTextureID(
                 texture.get(),
                 static_cast<unsigned int>(erhe::graphics::Filter::linear),
-                static_cast<unsigned int>(erhe::graphics::Sampler_mipmap_mode::not_mipmapped)
+                static_cast<unsigned int>(erhe::graphics::Sampler_mipmap_mode::not_mipmapped),
+                "ImGui texture"
             )
         );
         tex->SetStatus(ImTextureStatus_OK);
@@ -845,7 +852,7 @@ void Imgui_renderer::update_texture(ImTextureData* tex)
 
     } else if (tex->Status == ImTextureStatus_WantDestroy && tex->UnusedFrames > 0) {
 
-        Erhe_ImTextureID                         texture_id        = tex->GetTexID();
+        const Erhe_ImTextureID                   texture_id        = tex->GetTexID();
         const erhe::graphics::Texture_reference* texture_reference = texture_id.texture_reference;
         const erhe::graphics::Texture*           texture           = (texture_reference != nullptr) ? texture_reference->get_referenced_texture() : nullptr;
         ERHE_VERIFY(texture != nullptr);
@@ -871,6 +878,8 @@ void Imgui_renderer::render_draw_data(erhe::graphics::Render_command_encoder& re
     SPDLOG_LOGGER_TRACE(log_frame, "begin Imgui_renderer::render_draw_data()");
 
     ERHE_PROFILE_FUNCTION();
+
+    ERHE_DEFER( m_draw_texture_references.clear(); );
 
     const ImDrawData* draw_data = ImGui::GetDrawData();
     if (draw_data == nullptr) {

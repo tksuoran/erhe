@@ -205,7 +205,8 @@ void Rendergraph_window::imgui()
                     erhe::imgui::Draw_texture_parameters{
                         .texture_reference = std::static_pointer_cast<erhe::graphics::Texture_reference>(texture),
                         .width             = static_cast<int>(zoom * aspect * m_image_size),
-                        .height            = static_cast<int>(zoom * m_image_size)
+                        .height            = static_cast<int>(zoom * m_image_size),
+                        .debug_label       = "Rendergraph_window::imgui()"
                     }
                 );
                 //std::string text = fmt::format(

@@ -22,7 +22,22 @@ namespace editor {
 
 class App_context;
 class Post_processing;
+class Post_processing_node;
 class Programs;
+
+class Post_processing_node_texture_reference : public erhe::graphics::Texture_reference
+{
+public:
+    Post_processing_node_texture_reference(const std::shared_ptr<Post_processing_node>& node, int direction, size_t level);
+    ~Post_processing_node_texture_reference() noexcept override;
+
+    auto get_referenced_texture() const -> const erhe::graphics::Texture* override;
+
+private:
+    std::shared_ptr<Post_processing_node> m_node;
+    int                                   m_direction;
+    size_t                                m_level;
+};
 
 class Post_processing_node : public erhe::rendergraph::Rendergraph_node
 {
@@ -61,6 +76,7 @@ public:
     std::vector<size_t>                                       downsample_source_levels;
     std::vector<size_t>                                       upsample_source_levels;
     std::vector<float>                                        weights;
+    std::vector<std::shared_ptr<Post_processing_node_texture_reference>> texture_references;
     int                                                       level0_width  {0};
     int                                                       level0_height {0};
     erhe::graphics::Buffer                                    parameter_buffer;

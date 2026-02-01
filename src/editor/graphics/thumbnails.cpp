@@ -99,7 +99,8 @@ auto Thumbnails::draw(
                     .width             = static_cast<int>(height),
                     .height            = static_cast<int>(height),
                     .filter            = erhe::graphics::Filter::linear,
-                    .mipmap_mode       = erhe::graphics::Sampler_mipmap_mode::linear
+                    .mipmap_mode       = erhe::graphics::Sampler_mipmap_mode::linear,
+                    .debug_label       = "Thumbnails::draw()",
                 }
             );
             if (ImGui::IsItemHovered()) {
@@ -112,6 +113,7 @@ auto Thumbnails::draw(
                         .texture_reference = thumbnail.texture_view,
                         .width             = static_cast<int>(m_size_pixels),
                         .height            = static_cast<int>(m_size_pixels),
+                        .debug_label       = "Thumbnails::draw()"
                     }
                 );
                 ImGui::EndTooltip();

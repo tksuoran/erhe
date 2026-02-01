@@ -178,7 +178,8 @@ void Brdf_slice::show_brdf_slice(int area_size)
                 .width             = area_size,
                 .height            = area_size,
                 .filter            = erhe::graphics::Filter::nearest,
-                .mipmap_mode       = erhe::graphics::Sampler_mipmap_mode::not_mipmapped
+                .mipmap_mode       = erhe::graphics::Sampler_mipmap_mode::not_mipmapped,
+                .debug_label       = "Brdf_slice::show_brdf_slice"
             }
         );
     }

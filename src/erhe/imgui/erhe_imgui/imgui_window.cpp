@@ -50,7 +50,8 @@ void Imgui_window::draw_image(
             .width             = width,
             .height            = height,
             .filter            = filter,
-            .mipmap_mode       = mipmap_mode
+            .mipmap_mode       = mipmap_mode,
+            .debug_label       = "Imgui_window::draw_image()"
         }
     );
 }
