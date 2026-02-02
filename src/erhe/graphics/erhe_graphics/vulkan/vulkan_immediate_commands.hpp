@@ -18,7 +18,7 @@ public:
     // an existing buffer becomes available
     static constexpr uint32_t kMaxCommandBuffers = 64;
 
-    Vulkan_immediate_commands (Device& device, uint32_t queue_family_index, bool has_EXT_device_fault, const char* debug_name);
+    Vulkan_immediate_commands (Device_impl& device_impl, uint32_t queue_family_index, bool has_EXT_device_fault, const char* debug_name);
     ~Vulkan_immediate_commands();
     Vulkan_immediate_commands (const Vulkan_immediate_commands&) = delete;
     auto operator=(const Vulkan_immediate_commands&) -> Vulkan_immediate_commands& = delete;

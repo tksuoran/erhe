@@ -1,6 +1,8 @@
 #include "erhe_graphics/vulkan/vulkan_blit_command_encoder.hpp"
 #include "erhe_graphics/vulkan/vulkan_buffer.hpp"
+#include "erhe_graphics/vulkan/vulkan_device.hpp"
 #include "erhe_graphics/vulkan/vulkan_helpers.hpp"
+#include "erhe_graphics/vulkan/vulkan_immediate_commands.hpp"
 #include "erhe_graphics/vulkan/vulkan_render_pass.hpp"
 #include "erhe_graphics/vulkan/vulkan_texture.hpp"
 #include "erhe_verify/verify.hpp"
@@ -121,8 +123,10 @@ void Blit_command_encoder_impl::copy_from_buffer(
         }
     };
 
+    const Vulkan_immediate_commands::Command_buffer_wrapper& command_buffer_wrapper = m_device.get_impl().get_immediate_commands().acquire();
+
     vkCmdCopyBufferToImage(
-        VK_NULL_HANDLE, // TODO
+        command_buffer_wrapper.m_cmd_buf,
         vk_source_buffer,
         vk_destination_image,
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
@@ -131,16 +135,6 @@ void Blit_command_encoder_impl::copy_from_buffer(
     );
 
     // layout transition?
-    ERHE_FATAL("Not implemented");
-    static_cast<void>(source_buffer);
-    static_cast<void>(source_offset);
-    static_cast<void>(source_bytes_per_row);
-    static_cast<void>(source_bytes_per_image);
-    static_cast<void>(source_size);
-    static_cast<void>(destination_texture);
-    static_cast<void>(destination_slice);
-    static_cast<void>(destination_level);
-    static_cast<void>(destination_origin);
 }
 
 // Copy from texture to buffer

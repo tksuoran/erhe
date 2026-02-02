@@ -71,6 +71,7 @@ class Frame_end_info;
 class Ring_buffer;
 class Surface_impl;
 class Swapchain;
+class Vulkan_immediate_commands;
 
 class Device;
 class Device_impl final
@@ -126,6 +127,7 @@ public:
     [[nodiscard]] auto get_driver_properties          () const -> const VkPhysicalDeviceDriverProperties&;
     [[nodiscard]] auto get_memory_type                (uint32_t memory_type_index) const -> const VkMemoryType&;
     [[nodiscard]] auto get_memory_heap                (uint32_t memory_heap_index) const -> const VkMemoryHeap&;
+    [[nodiscard]] auto get_immediate_commands         () -> Vulkan_immediate_commands&;
 
     [[nodiscard]] auto debug_report_callback(
         VkDebugReportFlagsEXT      flags,
@@ -179,6 +181,8 @@ private:
         std::function<void()> callback;
     };
     std::vector<Completion_handler> m_completion_handlers;
+
+    std::unique_ptr<Vulkan_immediate_commands> m_immediate_commands;
 
     VkInstance               m_vulkan_instance            {VK_NULL_HANDLE};
     VkPhysicalDevice         m_vulkan_physical_device     {VK_NULL_HANDLE};

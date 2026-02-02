@@ -6,12 +6,12 @@
 namespace erhe::graphics {
 
 Vulkan_immediate_commands::Vulkan_immediate_commands(
-    Device&     device,
-    uint32_t    queue_family_index,
-    bool        has_EXT_device_fault,
-    const char* debug_name
+    Device_impl&      device_impl,
+    const uint32_t    queue_family_index,
+    const bool        has_EXT_device_fault,
+    const char* const debug_name
 )
-    : m_device              {device.get_impl().get_vulkan_device()}
+    : m_device              {device_impl.get_vulkan_device()}
     , m_queue_family_index  {queue_family_index}
     , m_has_EXT_device_fault{has_EXT_device_fault}
     , m_debug_name          {debug_name}
@@ -19,10 +19,10 @@ Vulkan_immediate_commands::Vulkan_immediate_commands(
     vkGetDeviceQueue(m_device, queue_family_index, 0, &m_queue);
 
     const VkCommandPoolCreateInfo command_pool_create_info{
-      .sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-      .pNext            = nullptr,
-      .flags            = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT | VK_COMMAND_POOL_CREATE_TRANSIENT_BIT,
-      .queueFamilyIndex = queue_family_index
+        .sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+        .pNext            = nullptr,
+        .flags            = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT | VK_COMMAND_POOL_CREATE_TRANSIENT_BIT,
+        .queueFamilyIndex = queue_family_index
     };
 
     VkResult result = VK_SUCCESS;
@@ -32,9 +32,7 @@ Vulkan_immediate_commands::Vulkan_immediate_commands(
         abort();
     }
 
-    //// ERHE_VERIFY(setDebugObjectName(device, VK_OBJECT_TYPE_COMMAND_POOL, (uint64_t)m_command_pool, debug_name));
-
-    const VkCommandBufferAllocateInfo command_bufgfer_allocate_info{
+    const VkCommandBufferAllocateInfo command_buffer_allocate_info{
         .sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
         .pNext              = nullptr,
         .commandPool        = m_command_pool,
@@ -44,16 +42,10 @@ Vulkan_immediate_commands::Vulkan_immediate_commands(
 
     for (uint32_t i = 0; i != kMaxCommandBuffers; i++) {
         Command_buffer_wrapper& buf = m_buffers[i];
-        //char fenceName    [256] = {0};
-        //char semaphoreName[256] = {0};
-        //if (debug_name) {
-        //    snprintf(fenceName,     sizeof(fenceName)     - 1, "Fence: %s (cmdbuf %u)", debugName, i);
-        //    snprintf(semaphoreName, sizeof(semaphoreName) - 1, "Semaphore: %s (cmdbuf %u)", debugName, i);
-        //}
-
 
         const VkSemaphoreCreateInfo semaphore_create_info{
             .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+            .pNext = nullptr,
             .flags = 0,
         };
         result = vkCreateSemaphore(m_device, &semaphore_create_info, nullptr, &buf.m_semaphore);
@@ -61,12 +53,16 @@ Vulkan_immediate_commands::Vulkan_immediate_commands(
             log_context->critical("vkCreateSemaphore() failed with {} {}", static_cast<int32_t>(result), c_str(result));
             abort();
         }
-
-        //VK_ASSERT(lvk::setDebugObjectName(device, VK_OBJECT_TYPE_SEMAPHORE, (uint64_t)semaphore, debugName));
+        device_impl.set_debug_label(
+            VK_OBJECT_TYPE_SEMAPHORE,
+            reinterpret_cast<uint64_t>(buf.m_fence),
+            fmt::format("Semaphore: {} (cmdbuf {})", i, debug_name)
+        );
 
         const VkFenceCreateInfo fence_create_info{
             .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
-            .flags = 0, //isSignaled ? VK_FENCE_CREATE_SIGNALED_BIT : 0u,
+            .pNext = nullptr,
+            .flags = 0
         };
         result = vkCreateFence(m_device, &fence_create_info, nullptr, &buf.m_fence);
         if (result != VK_SUCCESS) {
@@ -74,17 +70,18 @@ Vulkan_immediate_commands::Vulkan_immediate_commands(
             abort();
         }
 
-        ///VK_ASSERT(lvk::setDebugObjectName(device, VK_OBJECT_TYPE_FENCE, (uint64_t)fence, debugName));
+        device_impl.set_debug_label(
+            VK_OBJECT_TYPE_FENCE,
+            reinterpret_cast<uint64_t>(buf.m_fence),
+            fmt::format("Fence: {} (cmdbuf {})", i, debug_name)
+        );
 
-
-        //buf.m_semaphore = createSemaphore(m_device, semaphoreName);
-        //
-        //buf.m_fence     = createFence    (m_device, fenceName);
-        result = vkAllocateCommandBuffers(m_device, &command_bufgfer_allocate_info, &buf.m_cmd_buf_allocated);
+        result = vkAllocateCommandBuffers(m_device, &command_buffer_allocate_info, &buf.m_cmd_buf_allocated);
         if (result != VK_SUCCESS) {
             log_context->critical("vkAllocateCommandBuffers() failed with {} {}", static_cast<int32_t>(result), c_str(result));
             abort();
         }
+
         m_buffers[i].m_handle.m_buffer_index = i;
     }
 }
@@ -102,6 +99,7 @@ Vulkan_immediate_commands::~Vulkan_immediate_commands()
     vkDestroyCommandPool(m_device, m_command_pool, nullptr);
 }
 
+// Waits submitted command buffers and resets completed ones
 void Vulkan_immediate_commands::purge()
 {
     const uint32_t buffer_count = static_cast<uint32_t>(m_buffers.size());
@@ -275,13 +273,13 @@ auto Vulkan_immediate_commands::submit(const Command_buffer_wrapper& wrapper) ->
         abort();
     }
 
-    VkSemaphoreSubmitInfo waitSemaphores[] = {{}, {}};
+    VkSemaphoreSubmitInfo wait_semaphores[] = {{}, {}};
     uint32_t num_wait_semaphores = 0;
     if (m_wait_semaphore.semaphore) {
-        waitSemaphores[num_wait_semaphores++] = m_wait_semaphore;
+        wait_semaphores[num_wait_semaphores++] = m_wait_semaphore;
     }
     if (m_last_submit_semaphore.semaphore) {
-        waitSemaphores[num_wait_semaphores++] = m_last_submit_semaphore;
+        wait_semaphores[num_wait_semaphores++] = m_last_submit_semaphore;
     }
     VkSemaphoreSubmitInfo signal_semaphores[] = {
         VkSemaphoreSubmitInfo{
@@ -292,7 +290,7 @@ auto Vulkan_immediate_commands::submit(const Command_buffer_wrapper& wrapper) ->
             .stageMask   = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
             .deviceIndex = 0
         },
-        {},
+        {}
     };
     uint32_t num_signal_semaphores = 1;
     if (m_signal_semaphore.semaphore) {
@@ -305,18 +303,18 @@ auto Vulkan_immediate_commands::submit(const Command_buffer_wrapper& wrapper) ->
         .commandBuffer = wrapper.m_cmd_buf,
         .deviceMask    = 0
     };
-    const VkSubmitInfo2 si{
+    const VkSubmitInfo2 submit_info{
         .sType                    = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
         .pNext                    = nullptr,
         .flags                    = 0,
         .waitSemaphoreInfoCount   = num_wait_semaphores,
-        .pWaitSemaphoreInfos      = waitSemaphores,
+        .pWaitSemaphoreInfos      = wait_semaphores,
         .commandBufferInfoCount   = 1u,
         .pCommandBufferInfos      = &bufferSI,
         .signalSemaphoreInfoCount = num_signal_semaphores,
         .pSignalSemaphoreInfos    = signal_semaphores,
     };
-    VkResult submit_result = vkQueueSubmit2(m_queue, 1u, &si, wrapper.m_fence);
+    VkResult submit_result = vkQueueSubmit2(m_queue, 1u, &submit_info, wrapper.m_fence);
     if (m_has_EXT_device_fault && (submit_result == VK_ERROR_DEVICE_LOST)) {
         VkDeviceFaultCountsEXT count{
             .sType            = VK_STRUCTURE_TYPE_DEVICE_FAULT_COUNTS_EXT,
@@ -334,7 +332,7 @@ auto Vulkan_immediate_commands::submit(const Command_buffer_wrapper& wrapper) ->
         std::vector<VkDeviceFaultAddressInfoEXT> addressInfo(count.addressInfoCount);
         std::vector<VkDeviceFaultVendorInfoEXT>  vendorInfo(count.vendorInfoCount);
         std::vector<uint8_t> binary(count.vendorBinarySize);
-        VkDeviceFaultInfoEXT info = {
+        VkDeviceFaultInfoEXT info{
             .sType             = VK_STRUCTURE_TYPE_DEVICE_FAULT_INFO_EXT,
             .pAddressInfos     = addressInfo.data(),
             .pVendorInfos      = vendorInfo.data(),
@@ -347,52 +345,52 @@ auto Vulkan_immediate_commands::submit(const Command_buffer_wrapper& wrapper) ->
         }
 
         log_context->error("VK_ERROR_DEVICE_LOST: %s\n", info.description);
-        for (const VkDeviceFaultAddressInfoEXT& aInfo : addressInfo) {
-            VkDeviceSize lowerAddress = aInfo.reportedAddress & ~(aInfo.addressPrecision - 1);
-            VkDeviceSize upperAddress = aInfo.reportedAddress | (aInfo.addressPrecision - 1);
+        for (const VkDeviceFaultAddressInfoEXT& address_info : addressInfo) {
+            VkDeviceSize lowerAddress = address_info.reportedAddress & ~(address_info.addressPrecision - 1);
+            VkDeviceSize upperAddress = address_info.reportedAddress | (address_info.addressPrecision - 1);
             log_context->info(
                 "...address range [ {}, {} ]: {}",
                 lowerAddress,
                 upperAddress,
-                c_str(aInfo.addressType)
+                c_str(address_info.addressType)
             );
         }
-        for (const VkDeviceFaultVendorInfoEXT& vInfo : vendorInfo) {
+        for (const VkDeviceFaultVendorInfoEXT& vendor_info : vendorInfo) {
             log_context->info(
                 "...caused by `{}` with error code {} and data {}",
-                vInfo.description,
-                vInfo.vendorFaultCode,
-                vInfo.vendorFaultData
+                vendor_info.description,
+                vendor_info.vendorFaultCode,
+                vendor_info.vendorFaultData
             );
         }
-        const VkDeviceSize binarySize = count.vendorBinarySize;
-        if (info.pVendorBinaryData && binarySize >= sizeof(VkDeviceFaultVendorBinaryHeaderVersionOneEXT)) {
+        const VkDeviceSize binary_size = count.vendorBinarySize;
+        if (info.pVendorBinaryData && (binary_size >= sizeof(VkDeviceFaultVendorBinaryHeaderVersionOneEXT))) {
             const VkDeviceFaultVendorBinaryHeaderVersionOneEXT* header = std::launder(
                 reinterpret_cast<const VkDeviceFaultVendorBinaryHeaderVersionOneEXT*>(info.pVendorBinaryData)
             );
-            const char hexDigits[] = "0123456789abcdef";
+            const char hex_digits[] = "0123456789abcdef";
             char uuid[VK_UUID_SIZE * 2 + 1] = {};
             for (uint32_t i = 0; i < VK_UUID_SIZE; ++i) {
-                uuid[i * 2 + 0] = hexDigits[(header->pipelineCacheUUID[i] >> 4) & 0xF];
-                uuid[i * 2 + 1] = hexDigits[header->pipelineCacheUUID[i] & 0xF];
+                uuid[i * 2 + 0] = hex_digits[(header->pipelineCacheUUID[i] >> 4) & 0xF];
+                uuid[i * 2 + 1] = hex_digits[header->pipelineCacheUUID[i] & 0xF];
             }
             log_context->info("VkDeviceFaultVendorBinaryHeaderVersionOne:");
             log_context->info("   headerSize        : {}", header->headerSize);
-            log_context->info("   headerVersion     : {}", (uint32_t)header->headerVersion);
+            log_context->info("   headerVersion     : {}", static_cast<uint32_t>(header->headerVersion));
             log_context->info("   vendorID          : {}", header->vendorID);
             log_context->info("   deviceID          : {}", header->deviceID);
             log_context->info("   driverVersion     : {}", header->driverVersion);
             log_context->info("   pipelineCacheUUID : {}", uuid);
-            if (header->applicationNameOffset && header->applicationNameOffset < binarySize) {
-                log_context->info("   applicationName   : {}", (const char*)info.pVendorBinaryData + header->applicationNameOffset);
+            if (header->applicationNameOffset && header->applicationNameOffset < binary_size) {
+                log_context->info("   applicationName   : {}", static_cast<const char*>(info.pVendorBinaryData) + header->applicationNameOffset);
             }
             log_context->info(
                 "   applicationVersion: {}.{}.{}",
                 VK_API_VERSION_MAJOR(header->applicationVersion),
                 VK_API_VERSION_MINOR(header->applicationVersion),
                 VK_API_VERSION_PATCH(header->applicationVersion));
-            if (header->engineNameOffset && header->engineNameOffset < binarySize) {
-                log_context->info("   engineName        : {}", (const char*)info.pVendorBinaryData + header->engineNameOffset);
+            if (header->engineNameOffset && header->engineNameOffset < binary_size) {
+                log_context->info("   engineName        : {}", static_cast<const char*>(info.pVendorBinaryData) + header->engineNameOffset);
             }
             log_context->info(
                 "   engineVersion     : {}.{}.{}",

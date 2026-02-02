@@ -1,6 +1,7 @@
 #include "erhe_graphics/vulkan/vulkan_device.hpp"
 #include "erhe_graphics/vulkan/vulkan_buffer.hpp"
 #include "erhe_graphics/vulkan/vulkan_helpers.hpp"
+#include "erhe_graphics/vulkan/vulkan_immediate_commands.hpp"
 #include "erhe_graphics/vulkan/vulkan_sampler.hpp"
 #include "erhe_graphics/vulkan/vulkan_surface.hpp"
 #include "erhe_graphics/vulkan/vulkan_swapchain.hpp"
@@ -758,9 +759,23 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         abort();
     }
 
-    m_info.glsl_version       = 460;
-    m_info.vulkan_api_version = application_info.apiVersion;
-    m_info.vendor             = get_vendor(properties.vendorID);
+    m_immediate_commands = std::make_unique<Vulkan_immediate_commands>(
+        *this, m_graphics_queue_family_index, false, "Device_impl::m_immediate_commands"
+    );
+
+    m_info.vendor                       = get_vendor(properties.vendorID);
+    m_info.glsl_version                 = 460;
+    m_info.vulkan_api_version           = application_info.apiVersion;
+    m_info.use_binary_shaders           = true;
+    m_info.use_integer_polygon_ids      = true;
+    m_info.use_bindless_texture         = false;
+    m_info.use_sparse_texture           = false;
+    m_info.use_multi_draw_indirect_core = true;
+    m_info.use_multi_draw_indirect_arb  = false;
+    m_info.emulate_multi_draw_indirect  = false;
+    m_info.use_compute_shader           = true;
+    m_info.use_clear_texture            = true;
+    m_info.use_persistent_buffers       = true;
 
     m_info.max_per_stage_descriptor_samplers = 32; // TODO properties.limits.maxPerStageDescriptorSamplers;
 }
@@ -1083,9 +1098,15 @@ auto Device_impl::get_memory_type(uint32_t memory_type_index) const -> const VkM
 {
     return m_memory_properties.memoryProperties.memoryTypes[memory_type_index];
 }
+
 auto Device_impl::get_memory_heap(uint32_t memory_heap_index) const -> const VkMemoryHeap&
 {
     return m_memory_properties.memoryProperties.memoryHeaps[memory_heap_index];
+}
+
+auto Device_impl::get_immediate_commands() -> Vulkan_immediate_commands&
+{
+    return *m_immediate_commands.get();
 }
 
 auto Device_impl::get_handle(const Texture& texture, const Sampler& sampler) const -> uint64_t
