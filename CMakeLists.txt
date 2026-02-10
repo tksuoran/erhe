@@ -170,7 +170,7 @@ CPMAddPackage(
 CPMAddPackage(
     NAME              concurrentqueue 
     #GIT_TAG           master
-    GIT_TAG           c68072129c8a5b4025122ca5a0c82ab14b30cb03
+    GIT_TAG           00dd7ba09164fcd25b590818747e3d9a32dddc9c
     GIT_SHALLOW       TRUE
     GITHUB_REPOSITORY cameron314/concurrentqueue
 )
