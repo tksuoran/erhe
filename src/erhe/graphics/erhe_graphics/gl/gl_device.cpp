@@ -448,7 +448,7 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         m_info.use_multi_draw_indirect_core = true;
         m_info.use_multi_draw_indirect_arb = false;
         m_info.emulate_multi_draw_indirect = false;
-        log_startup->info("Multi Draw Indirect: GF core 4.3+");
+        log_startup->info("Multi Draw Indirect: OpenGL core 4.3+");
     } else if (gl::is_extension_supported(gl::Extension::Extension_GL_ARB_multi_draw_indirect)) {
         m_info.use_multi_draw_indirect_core = false;
         m_info.use_multi_draw_indirect_arb = true;
@@ -458,7 +458,7 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         m_info.emulate_multi_draw_indirect = false;
         log_startup->info("Multi Draw Indirect: emulation");
     }
-    log_startup->info("Persistent Buffers supported:  {}", m_info.use_persistent_buffers);
+    log_startup->info("Persistent Buffers supported: {}", m_info.use_persistent_buffers);
     if (force_emulate_multi_draw_indirect) {
         m_info.use_multi_draw_indirect_core = false;
         m_info.use_multi_draw_indirect_arb = false;

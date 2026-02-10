@@ -570,9 +570,9 @@ void Buffer_impl::unmap() noexcept
     ERHE_VERIFY(m_map.empty());
 }
 
-void Buffer_impl::invalidate(std::size_t byte_offset, std::size_t byte_count) noexcept
+void Buffer_impl::invalidate(const std::size_t byte_offset, const std::size_t byte_count) noexcept
 {
-    gl::glInvalidateBufferSubData(gl_name(), byte_offset, byte_count);
+    gl::invalidate_buffer_sub_data(gl_name(), byte_offset, byte_count);
 }
 
 void Buffer_impl::flush_bytes(const std::size_t byte_offset, const std::size_t byte_count) noexcept
@@ -594,7 +594,7 @@ void Buffer_impl::flush_bytes(const std::size_t byte_offset, const std::size_t b
        "Buffer_impl::flush(byte_offset = {}, byte_count = {}) m_mapped_ptr = {} name = {} {}",
         byte_offset,
         byte_count,
-        reinterpret_cast<intptr_t>(m_map.data()),
+        fmt::ptr(m_map.data()),
         gl_name(),
         m_debug_label
     );

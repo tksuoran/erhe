@@ -1,20 +1,14 @@
 # erhe configuration file
 
-[imgui]
-window_viewport = true
-padding         = 2.0
-rounding        = 3.0
-
 [window]
-show             = true
-fullscreen       = false
-use_transparency = false
-size             = [ 1920, 1080 ]
+show       = true
+fullscreen = false
+size       = [ 1920, 1080 ]
 
 # Buffer sizes use megabytes as unit
 [mesh_memory]
-vertex_buffer_size = 64
-index_buffer_size  =  8
+vertex_buffer_size = 8
+index_buffer_size  = 1
 
 # NOTE: Primitive is as GLTF primitive (NOT triangle etc)
 [renderer]
@@ -47,17 +41,16 @@ turn_speed         = 1.0
 enable = true
 
 [graphics]
-initial_clear                = false
+initial_clear                     = false
 #force_bindless_textures_off       = true
 #force_no_persistent_buffers       = true
-#force_no_direct_state_access      = true
 #force_emulate_multi_draw_indirect = true
 #force_gl_version                  = 450
 #force_glsl_version                = 450
 
 [renderdoc]
-capture_support = true
+capture_support = false
 
 [shader_monitor]
-enabled = true
+enabled = false
 

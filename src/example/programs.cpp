@@ -78,8 +78,8 @@ Programs::Programs(erhe::graphics::Device& graphics_device, erhe::scene_renderer
                     .default_uniform_block = graphics_device.get_info().use_bindless_texture
                         ? nullptr
                         : &default_uniform_block,
-                    .dump_interface    = true,
-                    .dump_final_source = true
+                    .dump_interface    = false,
+                    .dump_final_source = false
                 }
             )
         )

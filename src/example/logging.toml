@@ -34,27 +34,12 @@ dataformat = "warning"
 file = "info"
 graph = "warning"
 
-["erhe.raytrace"]
-device = "info"
-buffer = "info"
-geometry = "info"
-instance = "info"
-scene = "info"
-embree = "info"
-frame = "info"
-
-["erhe.net"]
-server = "info"
-net = "info"
-socket = "info"
-client = "info"
-
 ["erhe.graphics"]
 threads = "info"
 fragment_outputs = "info"
 program = "info"
 save_png = "info"
-buffer = "info"
+buffer = "debug"
 context = "info"
 debug = "info"
 framebuffer = "info"
@@ -71,16 +56,6 @@ startup = "info"
 ["erhe.gltf"]
 log = "info"
 
-["erhe.imgui"]
-performance = "info"
-input_events = "info"
-imgui = "info"
-windows = "info"
-frame = "info"
-
-["erhe.xr"]
-log = "info"
-
 ["erhe.primitive"]
 primitive_builder = "warning"
 primitive = "warning"
@@ -92,10 +67,6 @@ tail = "info"
 ["erhe.item"]
 log = "info"
 log_frame = "info"
-
-["erhe.physics"]
-physics = "info"
-physics_frame = "info"
 
 ["erhe.math"]
 input_axis = "warning"
@@ -122,12 +93,6 @@ shadow_renderer = "info"
 startup = "info"
 material_buffer = "info"
 primitive_buffer = "info"
-
-["erhe.window"]
-space_mouse = "info"
-window = "info"
-window_event = "info"
-renderdoc = "info"
 
 ["erhe.ui"]
 text_buffer = "info"
