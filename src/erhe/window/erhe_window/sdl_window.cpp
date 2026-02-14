@@ -300,6 +300,19 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
             fputs("Failed to initialize SDL\n", stderr);
             return false;
         }
+
+        {
+            int num_displays = 0;
+            SDL_DisplayID* displays = SDL_GetDisplays(&num_displays);
+            for (int i = 0; i < num_displays; i++) {
+                SDL_PropertiesID prop_id = SDL_GetDisplayProperties(displays[i]);
+                if(!SDL_GetBooleanProperty(prop_id, SDL_PROP_DISPLAY_HDR_ENABLED_BOOLEAN, false)) {
+                    log_window->info("Display with ID {} does not have HDR enabled.", displays[i]);
+                } else {
+                    log_window->info("Display with ID {} has HDR enabled.", displays[i]);
+                }
+            }
+        }
     }
 
 #if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
