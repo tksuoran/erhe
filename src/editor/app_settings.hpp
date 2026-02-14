@@ -67,7 +67,7 @@ class App_settings
 public:
     explicit App_settings();
 
-    void apply_limits(erhe::graphics::Device& instance, App_message_bus& message_bus);
+    void apply_limits(erhe::graphics::Device& instance, App_message_bus& message_bus, float window_scale_factor);
     void read        ();
     void write       ();
 

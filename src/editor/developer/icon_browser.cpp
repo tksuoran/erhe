@@ -200,10 +200,13 @@ void Icon_browser::imgui()
         ? m_context.imgui_renderer->material_design_font()
         : m_context.imgui_renderer->icon_font();
 
-    const float font_size = (m_selected_font == 0)
-        ? m_imgui_renderer.get_imgui_settings().material_design_font_size
-
-        : m_imgui_renderer.get_imgui_settings().icon_font_size;
+    const float font_size =
+        m_imgui_renderer.get_imgui_settings().scale_factor *
+        (
+            (m_selected_font == 0)
+            ? m_imgui_renderer.get_imgui_settings().material_design_font_size
+            : m_imgui_renderer.get_imgui_settings().icon_font_size
+        );
     ImGui::PushFont(m_context.imgui_renderer->material_design_font(), m_imgui_renderer.get_imgui_settings().font_size);
     ImGui::TextUnformatted(ICON_MDI_FILTER);
     ImGui::PopFont();

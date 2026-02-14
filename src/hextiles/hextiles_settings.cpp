@@ -6,7 +6,7 @@
 namespace hextiles {
 
 Hextiles_settings::Hextiles_settings(
-    erhe::window::Context_window& context_window
+    erhe::window::Context_window&
 )
 {
 #if 0 // TODO
@@ -24,8 +24,6 @@ Hextiles_settings::Hextiles_settings(
         }
     }
 #endif
-
-    imgui.font_size *= context_window.get_scale_factor();
 }
 
 }

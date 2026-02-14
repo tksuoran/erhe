@@ -473,7 +473,7 @@ public:
             m_app_settings      = std::make_unique<App_settings                  >();
             m_input_state       = std::make_unique<Input_state                   >();
             m_time              = std::make_unique<Time                          >();
-            auto& commands        = *m_commands          .get();
+            auto& commands        = *m_commands       .get();
             auto& app_message_bus = *m_app_message_bus.get();
 
 #if defined(ERHE_PARALLEL_INIT)
@@ -503,7 +503,11 @@ public:
 
             );
 
-            m_app_settings->apply_limits(*m_graphics_device.get(), app_message_bus);
+            m_app_settings->apply_limits(
+                *m_graphics_device.get(),
+                app_message_bus,
+                m_window->get_scale_factor()
+            );
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
             // Apparently it is necessary to create OpenXR session in the main thread / original OpenGL

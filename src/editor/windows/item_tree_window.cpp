@@ -1225,7 +1225,11 @@ void Item_tree::imgui_tree(float ui_scale)
     ImGui::PushID(table_id);
     ERHE_DEFER( ImGui::PopID(); );
 
-    ImGui::PushFont(m_context.imgui_renderer->material_design_font(), m_context.imgui_renderer->get_imgui_settings().font_size);
+    ImGui::PushFont(
+        m_context.imgui_renderer->material_design_font(),
+        m_context.imgui_renderer->get_imgui_settings().scale_factor *
+        m_context.imgui_renderer->get_imgui_settings().font_size
+    );
     ImGui::TextUnformatted(ICON_MDI_FILTER);
     ImGui::PopFont();
     ImGui::SameLine();

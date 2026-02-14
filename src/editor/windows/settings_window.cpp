@@ -49,7 +49,15 @@ void Settings_window::on_message(App_message& message)
                 return;
             }
         }
+        }
     }
+
+auto Settings_window::get_graphics_preset() -> Graphics_preset&
+{
+    Graphics_settings&            graphics         = m_context.app_settings->graphics;
+    std::vector<Graphics_preset>& graphics_presets = graphics.graphics_presets;
+    Graphics_preset&              graphics_preset  = graphics_presets.at(m_graphics_preset_index);
+    return graphics_preset;
 }
 
 void Settings_window::imgui()
@@ -62,7 +70,7 @@ void Settings_window::imgui()
     push_group("User Interface", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen);
     add_entry("UI Font Size", [this](){
         auto& imgui = m_context.app_settings->imgui;
-        const bool font_size_changed = ImGui::DragFloat("UI Font Size", &imgui.font_size, 0.1f, 4.0f, 100.0f, "%.1f");
+        const bool font_size_changed = ImGui::DragFloat("UI Font Size", &imgui.font_size, 0.1f, 6.0f, 100.0f, "%.1f");
         if (font_size_changed) {
             m_context.imgui_renderer->on_font_config_changed(imgui);
         }
@@ -70,7 +78,7 @@ void Settings_window::imgui()
 
     add_entry("Material Design Font Size", [this](){
         auto& imgui = m_context.app_settings->imgui;
-        const bool font_size_changed = ImGui::DragFloat("Material Design Font Size", &imgui.material_design_font_size, 0.1f, 4.0f, 100.0f, "%.1f");
+        const bool font_size_changed = ImGui::DragFloat("Material Design Font Size", &imgui.material_design_font_size, 0.1f, 6.0f, 100.0f, "%.1f");
         if (font_size_changed) {
             m_context.imgui_renderer->on_font_config_changed(imgui);
         }
@@ -78,21 +86,21 @@ void Settings_window::imgui()
 
     add_entry("Icon Font Size", [this](){
         auto& imgui = m_context.app_settings->imgui;
-        const bool font_size_changed = ImGui::DragFloat("Icon Font Size", &imgui.icon_font_size, 0.1f, 4.0f, 100.0f, "%.1f");
+        const bool font_size_changed = ImGui::DragFloat("Icon Font Size", &imgui.icon_font_size, 0.1f, 6.0f, 100.0f, "%.1f");
         if (font_size_changed) {
             m_context.imgui_renderer->on_font_config_changed(imgui);
         }
     });
 
     add_entry("Small Icon Size", [this](){
-        ImGui::DragInt("##", &m_context.app_settings->icon_settings.small_icon_size, 0.1f, 4, 512);
+        ImGui::DragInt("##", &m_context.app_settings->icon_settings.small_icon_size, 0.1f, 6, 512);
     });
     add_entry("Large Icon Size", [this](){
-        ImGui::DragInt("##", &m_context.app_settings->icon_settings.large_icon_size, 0.1f, 4, 512);
+        ImGui::DragInt("##", &m_context.app_settings->icon_settings.large_icon_size, 0.1f, 6, 512);
     });
 
     add_entry("Hotbar Icon Size", [this](){
-        ImGui::DragInt("##", &m_context.app_settings->icon_settings.hotbar_icon_size, 0.1f, 4, 512);
+        ImGui::DragInt("##", &m_context.app_settings->icon_settings.hotbar_icon_size, 0.1f, 6, 512);
     });
 
     pop_group();
@@ -125,13 +133,15 @@ void Settings_window::imgui()
     ImGui::NewLine();
 
     if (!graphics_presets.empty()) {
-        Graphics_preset& graphics_preset = graphics_presets.at(m_graphics_preset_index);
-        add_entry("Preset Name", [&graphics_preset](){
+        add_entry("Preset Name", [this](){
+            Graphics_preset& graphics_preset = get_graphics_preset();
             ImGui::InputText("##", &graphics_preset.name);
         });
 
-        add_entry("MSAA Sample Count", [this, &graphics, &graphics_preset](){
-            auto& msaa_sample_count_entry_values = graphics.msaa_sample_count_entry_values;
+        add_entry("MSAA Sample Count", [this](){
+            Graphics_preset&   graphics_preset                = get_graphics_preset();
+            Graphics_settings& graphics                       = m_context.app_settings->graphics;
+            std::vector<int>&  msaa_sample_count_entry_values = graphics.msaa_sample_count_entry_values;
             for (
                 m_msaa_sample_count_entry_index = 0;
                 m_msaa_sample_count_entry_index < msaa_sample_count_entry_values.size();
@@ -157,10 +167,12 @@ void Settings_window::imgui()
             }
         });
 
-        add_entry("Shadows Enabled", [&graphics_preset]() {
+        add_entry("Shadows Enabled", [this]() {
+            Graphics_preset& graphics_preset = get_graphics_preset();
             ImGui::Checkbox("##", &graphics_preset.shadow_enable);
         });
-        add_entry("Shadow Resolution", [this, &graphics_preset](){
+        add_entry("Shadow Resolution", [this](){
+            Graphics_preset& graphics_preset = get_graphics_preset();
             const int   shadow_resolution_values[] = {  256, 512, 1024, 1024 * 2, 1024 * 3, 1024 * 4, 1024 * 5, 1024 * 6, 1024 * 7, 1024 * 8 };
             const char* shadow_resolution_items [] = { "256", "512", "1024", "2048", "3072", "4096", "5120", "6144", "7168", "8192" };
             m_shadow_resolution_index = 0;
@@ -182,48 +194,60 @@ void Settings_window::imgui()
                 graphics_preset.shadow_resolution = shadow_resolution_values[m_shadow_resolution_index];
             }
         });
-        add_entry("Shadow Depth Bits", [this, &graphics_preset](){
-            std::vector<erhe::dataformat::Format> formats = m_context.graphics_device->get_supported_depth_stencil_formats();
-            std::set<size_t> depth_sizes;
-            for (const erhe::dataformat::Format format : formats) {
-                depth_sizes.insert(erhe::dataformat::get_depth_size_bits(format));
-            }
-            std::vector<int>         shadow_depth_bits_values;
-            std::vector<std::string> shadow_depth_bits_items_string;
-            std::vector<const char*> shadow_depth_bits_items;
-            for (const size_t depth_size : depth_sizes) {
-                shadow_depth_bits_values.push_back(static_cast<int>(depth_size));
-            }
-            std::sort(shadow_depth_bits_values.begin(), shadow_depth_bits_values.end());
-            for (const int depth_size : shadow_depth_bits_values) {
-                shadow_depth_bits_items_string.push_back(fmt::format("{}", depth_size));
-                shadow_depth_bits_items.push_back(shadow_depth_bits_items_string.back().c_str());
-            }
-            m_shadow_depth_bits_index = 0;
-            for (int i = 0, end = static_cast<int>(shadow_depth_bits_values.size()); i < end; ++i) {
-                if (shadow_depth_bits_values[i] == graphics_preset.shadow_depth_bits) {
-                    m_shadow_depth_bits_index = i;
-                    break;
+        {
+            add_entry(
+                "Shadow Depth Bits",
+                [this]() {
+                    Graphics_preset& graphics_preset = get_graphics_preset();
+                    std::vector<erhe::dataformat::Format> formats = m_context.graphics_device->get_supported_depth_stencil_formats();
+                    std::set<int> depth_size_set;
+                    for (const erhe::dataformat::Format format : formats) {
+                        depth_size_set.insert(static_cast<int>(erhe::dataformat::get_depth_size_bits(format)));
+                    }
+                    if (depth_size_set.empty()) {
+                        return;
+                    }
+                    std::vector<int> depth_sizes(depth_size_set.begin(), depth_size_set.end());
+                    std::sort(depth_sizes.begin(), depth_sizes.end());
+
+                    bool found = false;
+                    for (size_t i = 0, end = depth_sizes.size(); i < end; ++i) {
+                        if (depth_sizes[i] == graphics_preset.shadow_depth_bits) {
+                            m_shadow_depth_bits_index = static_cast<int>(i);
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found) {
+                        m_shadow_depth_bits_index = 0;
+                    }
+
+                    std::string preview_value = fmt::format("{} bits", depth_sizes.at(m_shadow_depth_bits_index));
+                    if (ImGui::BeginCombo("##", preview_value.c_str())) {
+                        for (size_t i = 0, end = depth_sizes.size(); i < end; ++i) {
+                            std::string option_label = fmt::format("{} bits", depth_sizes.at(i));
+                            if (ImGui::Selectable(option_label.c_str(), m_shadow_depth_bits_index == static_cast<int>(i))) {
+                                m_shadow_depth_bits_index = static_cast<int>(i);
+                                graphics_preset.shadow_depth_bits = depth_sizes.at(i);
+                            }
+                        }
+                    }
+                    ImGui::EndCombo();
                 }
-            }
-            if (ImGui::Combo(
-                "##",
-                &m_shadow_depth_bits_index,
-                shadow_depth_bits_items.data(),
-                static_cast<int>(shadow_depth_bits_items.size()),
-                static_cast<int>(shadow_depth_bits_items.size())
-            )) {
-                graphics_preset.shadow_depth_bits = shadow_depth_bits_values[m_shadow_depth_bits_index];
-            }
-        });
+            );
+        }
 
         //ImGui::SliderInt  ("Shadow Resolution",  &graphics_preset.shadow_resolution,  1, graphics.max_shadow_resolution);
-        add_entry("Shadow Light Count", [&graphics, &graphics_preset](){
+        add_entry("Shadow Light Count", [this](){
+            Graphics_preset&   graphics_preset = get_graphics_preset();
+            Graphics_settings& graphics        = m_context.app_settings->graphics;
             ImGui::SliderInt("##", &graphics_preset.shadow_light_count, 1, std::min(graphics.max_depth_layers, 32));
         });
     }
 
-    add_entry("", [this, button_size, &graphics_presets](){
+    add_entry("", [this, button_size](){
+        std::vector<Graphics_preset>& graphics_presets = m_context.app_settings->graphics.graphics_presets;
+
         const bool add_pressed = ImGui::Button("Add", button_size);
         if (add_pressed || graphics_presets.empty()) {
             Graphics_preset new_graphics_preset{

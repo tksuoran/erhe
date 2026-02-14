@@ -38,6 +38,7 @@ public:
     std::string mono_font                {"res/fonts/SourceCodePro-Semibold.otf"};
     std::string material_design_font     {"res/fonts/materialdesignicons-webfont.ttf"};
     std::string icon_font                {"res/fonts/icons.ttf"};
+    float       scale_factor             { 1.0f};
     float       font_size                {24.0f};
     float       vr_font_size             {24.0f};
     float       material_design_font_size{0.0f};

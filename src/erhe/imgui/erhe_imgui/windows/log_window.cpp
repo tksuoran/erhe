@@ -244,7 +244,9 @@ void Tail_log_window::imgui()
 void Frame_log_window::imgui()
 {
     //auto& frame = erhe::log::get_frame_store_log();
-    float font_size = m_imgui_renderer.get_imgui_settings().font_size;
+    float font_size =
+        m_imgui_renderer.get_imgui_settings().scale_factor *
+        m_imgui_renderer.get_imgui_settings().font_size;
     std::deque<erhe::log::Entry>& frame_entries = m_frame_entries;
     ImGui::PushFont(m_imgui_renderer.mono_font(), font_size); // TODO mono font size
     ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2{0.0f, 0.0f});
@@ -334,7 +336,9 @@ void Logs::tail_log_imgui()
             );
             ImGui::TableNextRow();
             if (ImGui::TableSetColumnIndex(0)) {
-                float font_size = m_imgui_renderer.get_imgui_settings().font_size; // TODO mono font size
+                float font_size =
+                    m_imgui_renderer.get_imgui_settings().scale_factor *
+                    m_imgui_renderer.get_imgui_settings().font_size; // TODO mono font size
                 ImGui::PushFont(m_imgui_renderer.mono_font(), font_size);
                 ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2{0.0f, 0.0f});
                 const ImVec2 outer_size{-FLT_MIN, 0.0f};

@@ -14,11 +14,12 @@ static constexpr const char* const c_erhe_config_file_path = "erhe.toml";
 
 App_settings::App_settings()
 {
-   read();
+    read();
 }
 
-void App_settings::apply_limits(erhe::graphics::Device& instance, App_message_bus& app_message_bus)
+void App_settings::apply_limits(erhe::graphics::Device& instance, App_message_bus& app_message_bus, const float window_scale_factor)
 {
+    imgui.scale_factor = window_scale_factor;
     graphics.get_limits(instance, erhe::dataformat::Format::format_d32_sfloat); // TODO Do not hard code depth format
     graphics.select_active_graphics_preset(app_message_bus);
 }

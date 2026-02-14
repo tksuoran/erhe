@@ -12,6 +12,7 @@ namespace editor {
 class App_context;
 class App_message;
 class App_message_bus;
+class Graphics_preset;
 
 class Settings_window : public erhe::imgui::Imgui_window, public Property_editor
 {
@@ -27,6 +28,7 @@ public:
     void imgui() override;
 
 private:
+    [[nodiscard]] auto get_graphics_preset() -> Graphics_preset&;
     void update_preset_names();
     void on_message(App_message& message);
 

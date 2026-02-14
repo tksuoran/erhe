@@ -292,10 +292,10 @@ Imgui_renderer::Imgui_renderer(erhe::graphics::Device& graphics_device, Imgui_se
 {
     ERHE_PROFILE_FUNCTION();
 
-    m_primary_font    = m_font_atlas.AddFontFromFileTTF(settings.primary_font.c_str(), settings.font_size);
-    m_mono_font       = m_font_atlas.AddFontFromFileTTF(settings.mono_font   .c_str(), settings.font_size);
-    m_vr_primary_font = m_font_atlas.AddFontFromFileTTF(settings.primary_font.c_str(), settings.vr_font_size);
-    m_vr_mono_font    = m_font_atlas.AddFontFromFileTTF(settings.mono_font   .c_str(), settings.vr_font_size);
+    m_primary_font    = m_font_atlas.AddFontFromFileTTF(settings.primary_font.c_str(), settings.scale_factor * settings.font_size);
+    m_mono_font       = m_font_atlas.AddFontFromFileTTF(settings.mono_font   .c_str(), settings.scale_factor * settings.font_size);
+    m_vr_primary_font = m_font_atlas.AddFontFromFileTTF(settings.primary_font.c_str(), settings.scale_factor * settings.vr_font_size);
+    m_vr_mono_font    = m_font_atlas.AddFontFromFileTTF(settings.mono_font   .c_str(), settings.scale_factor * settings.vr_font_size);
 
     if (settings.material_design_font_size > 0.0f) {
     // TODO Something nicer
@@ -307,10 +307,17 @@ Imgui_renderer::Imgui_renderer(erhe::graphics::Device& graphics_device, Imgui_se
         builder.AddRanges(ranges);
         ImVector<ImWchar> range;
         builder.BuildRanges(&range);
-        m_material_design_font = m_font_atlas.AddFontFromFileTTF(settings.material_design_font.c_str(), settings.material_design_font_size, nullptr, range.Data);
+        m_material_design_font = m_font_atlas.AddFontFromFileTTF(
+            settings.material_design_font.c_str(),
+            settings.scale_factor * settings.material_design_font_size,
+            nullptr, range.Data
+        );
     }
     if (settings.icon_font_size > 0.0f) {
-        m_icon_font = m_font_atlas.AddFontFromFileTTF(settings.icon_font.c_str(), settings.icon_font_size);
+        m_icon_font = m_font_atlas.AddFontFromFileTTF(
+            settings.icon_font.c_str(),
+            settings.scale_factor * settings.icon_font_size
+        );
     }
 
     // (1) If you manage font atlases yourself, e.g. create a ImFontAtlas yourself you need to call ImFontAtlasUpdateNewFrame() on it.

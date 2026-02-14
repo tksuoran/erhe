@@ -243,7 +243,9 @@ namespace
 
 void Type_editor::terrain_editor_imgui()
 {
-    float font_size = m_imgui_renderer.get_imgui_settings().font_size; // TODO mono font size
+    float font_size =
+        m_imgui_renderer.get_imgui_settings().scale_factor *
+        m_imgui_renderer.get_imgui_settings().font_size; // TODO mono font size
     constexpr ImVec2 button_size{110.0f, 0.0f};
 
     static int show_tile = 0;
@@ -360,7 +362,9 @@ void Type_editor::terrain_editor_imgui()
 
 void Type_editor::terrain_group_editor_imgui()
 {
-    float font_size = m_imgui_renderer.get_imgui_settings().font_size; // TODO mono font size
+    float font_size =
+        m_imgui_renderer.get_imgui_settings().scale_factor *
+        m_imgui_renderer.get_imgui_settings().font_size; // TODO mono font size
     constexpr int column_count = 13;
 
     if (!begin_table(column_count)) {
@@ -457,7 +461,9 @@ void Type_editor::terrain_replacement_rule_editor_imgui()
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2{2.0f, 2.0f});
     ImGui::PushStyleVar(ImGuiStyleVar_CellPadding,  ImVec2{1.0f, 0.0f});
 
-    float font_size = m_imgui_renderer.get_imgui_settings().font_size; // TODO mono font size
+    float font_size =
+        m_imgui_renderer.get_imgui_settings().scale_factor *
+        m_imgui_renderer.get_imgui_settings().font_size; // TODO mono font size
     constexpr float narrow_column_width = 60.0f;
     constexpr float wide_column_width   = 120.0f;
 
@@ -529,7 +535,9 @@ void Type_editor::terrain_replacement_rule_editor_imgui()
 
 void Type_editor::unit_editor_imgui()
 {
-    float font_size = m_imgui_renderer.get_imgui_settings().font_size; // TODO mono font size
+    float font_size =
+        m_imgui_renderer.get_imgui_settings().scale_factor *
+        m_imgui_renderer.get_imgui_settings().font_size; // TODO mono font size
     static int show_tile = 0;
     m_tile_renderer.unit_image(static_cast<unit_tile_t>(show_tile), 4);
     ImGui::SameLine();

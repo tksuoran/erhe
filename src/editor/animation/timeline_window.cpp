@@ -118,7 +118,9 @@ void Timeline_window::imgui()
     if (icon_font == nullptr) {
         return;
     }
-    const float font_size = m_imgui_renderer.get_imgui_settings().material_design_font_size;
+    const float font_size =
+        m_imgui_renderer.get_imgui_settings().scale_factor *
+        m_imgui_renderer.get_imgui_settings().material_design_font_size;
 
     {
         ImGui::PushID("##seek_start");

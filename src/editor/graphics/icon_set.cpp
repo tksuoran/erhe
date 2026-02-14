@@ -134,7 +134,9 @@ void Icon_set::draw_icon(const char* code, glm::vec4 color, ImFont* font, float 
     }
 
     ImFont*     icon_font = (font != nullptr) ? font : m_context.imgui_renderer->icon_font();
-    const float font_size = m_context.imgui_renderer->get_imgui_settings().icon_font_size;
+    const float font_size =
+        m_context.imgui_renderer->get_imgui_settings().scale_factor *
+        m_context.imgui_renderer->get_imgui_settings().icon_font_size;
 
     ImGui::PushFont(icon_font, size == 0.0f ? font_size : size);
     ImGui::PushStyleColor(ImGuiCol_Text, color);
@@ -160,7 +162,9 @@ auto Icon_set::icon_button(
     }
 
     ImFont*     icon_font = (font != nullptr) ? font : m_context.imgui_renderer->icon_font();
-    const float font_size = m_context.imgui_renderer->get_imgui_settings().icon_font_size;
+    const float font_size =
+        m_context.imgui_renderer->get_imgui_settings().scale_factor *
+        m_context.imgui_renderer->get_imgui_settings().icon_font_size;
 
     ImGui::PushID        (id);
     ImGui::PushFont      (icon_font, size == 0.0f ? font_size : size);

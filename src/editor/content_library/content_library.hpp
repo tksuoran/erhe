@@ -129,7 +129,7 @@ auto Content_library_node::combo(
             }
         }
 
-        // TODO Consideer keeping flat vector of entries
+        // TODO Consider keeping flat vector of entries
         for_each_const<Content_library_node>(
             [this, &context, &selection_changed, &in_out_selected_entry](const Content_library_node& node) -> bool {
                 auto node_item_shared = std::dynamic_pointer_cast<T>(node.item);

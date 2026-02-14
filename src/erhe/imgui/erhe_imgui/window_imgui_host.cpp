@@ -148,7 +148,11 @@ void Window_imgui_host::begin_imgui_frame()
     ImGui::NewFrame();
 
     ImFont* font = m_imgui_renderer.primary_font();
-    ImGui::PushFont(font, m_imgui_renderer.get_imgui_settings().font_size);
+    ImGui::PushFont(
+        font,
+        m_imgui_renderer.get_imgui_settings().scale_factor *
+        m_imgui_renderer.get_imgui_settings().font_size
+    );
 
     const float status_bar_height = ImGui::GetFrameHeight();
 

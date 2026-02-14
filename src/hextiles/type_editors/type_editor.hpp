@@ -267,7 +267,9 @@ void Type_editor::make_bit_mask_def(const char* tooltip_text, uint32_t& value)
     static_cast<void>(tooltip_text);
     static_cast<void>(value);
 
-    const float font_size = m_imgui_renderer.get_imgui_settings().font_size; // TODO mono font size
+    const float font_size =
+        m_imgui_renderer.get_imgui_settings().scale_factor *
+        m_imgui_renderer.get_imgui_settings().font_size; // TODO mono font size
 
     std::array<bool, T::bit_count> type_boolean;
     char preview_chars[T::bit_count + 1];
