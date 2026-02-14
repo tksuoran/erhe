@@ -11,6 +11,7 @@ class Context_widdow;
 class Window_configuration
 {
 public:
+    int             color_bit_depth         {8};
     bool            use_depth               {false};
     bool            use_stencil             {false};
     int             msaa_sample_count       {0};
@@ -19,6 +20,7 @@ public:
     bool            show                    {true};
     bool            fullscreen              {false};
     bool            framebuffer_transparency{false};
+    bool            high_pixel_density      {false};
     bool            enable_joystick         {true};
 #if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
     bool            use_finish              {false};

@@ -639,10 +639,16 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         m_shader_monitor.begin();
     }
 
+    gl::enable      (gl::Enable_cap::primitive_restart_fixed_index);
     gl::enable      (gl::Enable_cap::scissor_test);
     gl::clip_control(gl::Clip_control_origin::lower_left, gl::Clip_control_depth::zero_to_one);
-    gl::enable      (gl::Enable_cap::framebuffer_srgb);
-    gl::enable      (gl::Enable_cap::primitive_restart_fixed_index);
+
+    if (
+        (surface_create_info.context_window != nullptr) &&
+        (surface_create_info.context_window->get_window_configuration().color_bit_depth <= 8)
+    ) {
+        gl::enable(gl::Enable_cap::framebuffer_srgb);
+    }
 
     std::fill(
         m_frame_syncs.begin(),

@@ -366,21 +366,24 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
     if (configuration.framebuffer_transparency) {
         window_flags |= SDL_WINDOW_TRANSPARENT;
     }
+    if (configuration.high_pixel_density) {
+        window_flags |= SDL_WINDOW_HIGH_PIXEL_DENSITY;
+    }
     if (!primary) {
         window_flags |= SDL_WINDOW_HIDDEN;
         window_flags |= SDL_WINDOW_NOT_FOCUSABLE;
     }
 
 #if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
-    SDL_GL_SetAttribute(SDL_GL_RED_SIZE,       8);
-    SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE,     8);
-    SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE,      8);
-    SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE,     8);
+    SDL_GL_SetAttribute(SDL_GL_RED_SIZE,       configuration.color_bit_depth);
+    SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE,     configuration.color_bit_depth);
+    SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE,      configuration.color_bit_depth);
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE,     configuration.use_depth   ? 24 : 0);
     SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE,   configuration.use_stencil ?  8 : 0);
-    //SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 0);
+    // For debugging:
+    // SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 0);
 
-    SDL_GL_SetAttribute(SDL_GL_FRAMEBUFFER_SRGB_CAPABLE, 1);
+    SDL_GL_SetAttribute(SDL_GL_FRAMEBUFFER_SRGB_CAPABLE, configuration.color_bit_depth <= 8 ? 1 : 0);
     if (configuration.msaa_sample_count > 0) {
         SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
         SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, configuration.msaa_sample_count);
@@ -458,6 +461,17 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
     }
 #endif
 
+    int red_size = 0;
+    int green_size = 0;
+    int blue_size = 0;
+    SDL_GL_GetAttribute(SDL_GL_RED_SIZE,   &red_size);
+    SDL_GL_GetAttribute(SDL_GL_GREEN_SIZE, &green_size);
+    SDL_GL_GetAttribute(SDL_GL_BLUE_SIZE,  &blue_size);
+    const float pixel_density = SDL_GetWindowPixelDensity(sdl_window);
+    const float display_scale = SDL_GetWindowDisplayScale(sdl_window);
+    log_window->info("Window color depth red = {}, green = {}, blue = {}", red_size, green_size, blue_size);
+    log_window->info("Window pixel density = {}, display scale = {}", pixel_density, display_scale);
+
 #if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
     Uint32 vulkan_instance_extension_count = 0;
     char const* const* vulkan_instance_extensions = SDL_Vulkan_GetInstanceExtensions(&vulkan_instance_extension_count);
@@ -474,6 +488,7 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
     s_window_count++;
     m_is_mouse_relative_hold_enabled = false;
     m_configuration = configuration;
+    m_configuration.color_bit_depth = red_size;
     SDL_GetMouseState(&m_last_mouse_x, &m_last_mouse_y);
 
     const bool event_watch_ok = SDL_AddEventWatch(Context_window_SDL_EventFilter, static_cast<void*>(this));
@@ -1169,7 +1184,8 @@ auto Context_window::get_wl_display() const -> struct wl_display*
 
 auto Context_window::get_scale_factor() const -> float
 {
-    return 1.0f; // TODO
+    auto* window = static_cast<SDL_Window*>(m_sdl_window);
+    return window != nullptr ? SDL_GetWindowDisplayScale(window) : 1.0f;
 }
 
 }

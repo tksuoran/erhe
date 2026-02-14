@@ -420,16 +420,18 @@ public:
             .title             = erhe::window::format_window_title("erhe editor by Timo Suoranta")
         };
 
-        window_section.get("show",             configuration.show);
-        window_section.get("fullscreen",       configuration.fullscreen);
-        window_section.get("use_transparency", configuration.framebuffer_transparency);
+        window_section.get("show",               configuration.show);
+        window_section.get("fullscreen",         configuration.fullscreen);
+        window_section.get("high_pixel_density", configuration.high_pixel_density);
+        window_section.get("use_transparency",   configuration.framebuffer_transparency);
 #if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
-        window_section.get("gl_major",         configuration.gl_major);
-        window_section.get("gl_minor",         configuration.gl_minor);
+        window_section.get("gl_major",           configuration.gl_major);
+        window_section.get("gl_minor",           configuration.gl_minor);
 #endif
-        window_section.get("size",             configuration.size);
-        window_section.get("swap_interval",    configuration.swap_interval);
-        window_section.get("enable_joystick",  configuration.enable_joystick);
+        window_section.get("size",               configuration.size);
+        window_section.get("swap_interval",      configuration.swap_interval);
+        window_section.get("enable_joystick",    configuration.enable_joystick);
+        window_section.get("color_bit_depth",    configuration.color_bit_depth);
 
         if (m_app_context.OpenXR) {
             configuration.swap_interval = 0;
@@ -1103,7 +1105,9 @@ public:
 
 #if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
         gl::clip_control(gl::Clip_control_origin::lower_left, gl::Clip_control_depth::zero_to_one);
-        gl::enable      (gl::Enable_cap::framebuffer_srgb);
+        if (m_window->get_window_configuration().color_bit_depth <= 8) {
+            gl::enable(gl::Enable_cap::framebuffer_srgb);
+        }
 #endif
 
         const std::shared_ptr<erhe::imgui::Window_imgui_host>& window_imgui_host = m_imgui_windows->get_window_imgui_host();
