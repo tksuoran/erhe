@@ -83,6 +83,7 @@ public:
     float                                                     tonemap_luminance_max{1.5f};
     float                                                     tonemap_alpha{1.0f / 1.5f};
     int                                                       lowpass_count{2};
+    float                                                     tonemap_white_level{1.0f};
 
 private:
     erhe::graphics::Device& m_graphics_device;
@@ -109,6 +110,11 @@ public:
         std::size_t mix_weight           {0}; // float
         std::size_t tonemap_luminance_max{0}; // float
         std::size_t tonemap_alpha        {0}; // float
+
+        std::size_t tonemap_white_level  {0}; // float
+        std::size_t reserved_0           {0}; // float
+        std::size_t reserved_1           {0}; // float
+        std::size_t reserved_2           {0}; // float
     };
 
     Post_processing(erhe::graphics::Device& graphics_device, App_context& context);

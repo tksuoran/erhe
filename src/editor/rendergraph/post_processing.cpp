@@ -13,6 +13,8 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_utility/align.hpp"
 
+#include <imgui/imgui.h>
+
 #include <fmt/format.h>
 
 namespace editor {
@@ -31,6 +33,11 @@ Post_processing::Offsets::Offsets(erhe::graphics::Shader_resource& block)
 
     , tonemap_luminance_max{block.add_float("tonemap_luminance_max")->get_offset_in_parent()}
     , tonemap_alpha        {block.add_float("tonemap_alpha"        )->get_offset_in_parent()}
+
+    , tonemap_white_level  {block.add_float("tonemap_white_level"  )->get_offset_in_parent()}
+    , reserved_0           {block.add_float("reserved_0"           )->get_offset_in_parent()}
+    , reserved_1           {block.add_float("reserved_1"           )->get_offset_in_parent()}
+    , reserved_2           {block.add_float("reserved_2"           )->get_offset_in_parent()}
 {
 }
 
@@ -327,6 +334,11 @@ void Post_processing_node::update_parameters()
         write<float   >(float_data, write_offset + offsets.mix_weight,            weights.at(source_level));
         write<float   >(float_data, write_offset + offsets.tonemap_luminance_max, tonemap_luminance_max);
         write<float   >(float_data, write_offset + offsets.tonemap_alpha,         tonemap_alpha);
+        write<float   >(float_data, write_offset + offsets.tonemap_white_level,   tonemap_white_level);
+        write<float   >(float_data, write_offset + offsets.reserved_0,            0.0f);
+        write<float   >(float_data, write_offset + offsets.reserved_1,            0.0f);
+        write<float   >(float_data, write_offset + offsets.reserved_1,            0.0f);
+        write<float   >(float_data, write_offset + offsets.reserved_2,            0.0f);
         write_offset += level_offset_size;
     }
     m_graphics_device.upload_to_buffer(parameter_buffer, 0, start, byte_count);
@@ -335,6 +347,8 @@ void Post_processing_node::update_parameters()
 void Post_processing_node::viewport_toolbar()
 {
     // TODO Fix ImGui::Checkbox("Post Processing", &m_enabled);
+    ImGui::SetNextItemWidth(200.0f);
+    ImGui::SliderFloat("WL", &tonemap_white_level, 1.0f, 8.0f, "%.3f", ImGuiSliderFlags_Logarithmic | ImGuiSliderFlags_NoRoundToFormat);
 }
 
 auto Post_processing_node::get_producer_output_texture(const int key, int) const -> std::shared_ptr<erhe::graphics::Texture>

@@ -168,7 +168,16 @@ auto Scene_views::create_viewport_scene_view(
         );
         out_rendergraph_output_node = post_processing_node;
         m_post_processing_nodes.push_back(post_processing_node);
-        rendergraph.connect(erhe::rendergraph::Rendergraph_node_key::viewport_texture, new_viewport.get(), post_processing_node.get());
+        rendergraph.connect(
+            erhe::rendergraph::Rendergraph_node_key::viewport_texture,
+            new_viewport.get(),
+            post_processing_node.get()
+        );
+        new_viewport->register_toolbar_callback(
+            [post_processing_node]() {
+                post_processing_node->viewport_toolbar();
+            }
+        );
     } else {
         out_rendergraph_output_node = new_viewport;
     }

@@ -119,6 +119,8 @@ public:
     [[nodiscard]] auto get_show_navigation_gizmo           () const -> bool;
     [[nodiscard]] auto get_cursor_relative_hold            () const -> bool;
 
+    void register_toolbar_callback(std::function<void()> callback);
+
 private:
     [[nodiscard]] auto get_override_shader_stages() const -> const erhe::graphics::Shader_stages*;
 
@@ -144,6 +146,7 @@ private:
     bool                               m_is_scene_view_hovered{false};
     bool                               m_show_navigation_gizmo{true};
     bool                               m_relative_hold_enable{false};
+    std::vector<std::function<void()>> m_toolbar_callbacks;
 };
 
 }

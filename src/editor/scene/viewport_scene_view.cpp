@@ -489,6 +489,11 @@ auto Viewport_scene_view::get_show_navigation_gizmo() const -> bool
     return m_show_navigation_gizmo;
 }
 
+void Viewport_scene_view::register_toolbar_callback(std::function<void()> callback)
+{
+    m_toolbar_callbacks.push_back(std::move(callback));
+}
+
 auto Viewport_scene_view::viewport_toolbar() -> bool
 {
     bool hovered = false;
@@ -576,6 +581,12 @@ auto Viewport_scene_view::viewport_toolbar() -> bool
         hovered = true;
     }
     ImGui::SameLine();
+
+    for (const auto& callback : m_toolbar_callbacks) {
+        callback();
+    }
+
+    ImGui::SetNextItemWidth(80.0f);
     ImGui::Combo(
         "##Shader",
         reinterpret_cast<int*>(&m_shader_stages_variant),

@@ -42,7 +42,7 @@ void main()
 
 #if defined(LAST_PASS)
     vec3 color = mix(curr, down, post_processing.mix_weight);
-    out_color.rgb = PBRNeutralToneMapping(color);
+    out_color.rgb = PBRNeutralToneMapping_scRGB(color, post_processing.tonemap_white_level);
 #else
     vec3 color = mix(curr, down, post_processing.mix_weight);
     out_color.rgb = color;
