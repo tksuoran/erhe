@@ -1904,8 +1904,13 @@ void ImGuiIO::SetAppAcceptingEvents(bool accepting_events)
     AppAcceptingEvents = accepting_events;
 }
 
-// Queue a mouse move event
 void ImGuiIO::AddMousePosEvent(float x, float y)
+{
+    AddMousePosEventWithRelative(x, y, -FLT_MAX, -FLT_MAX);
+}
+
+// Queue a mouse move event
+void ImGuiIO::AddMousePosEventWithRelative(float x, float y, float dx, float dy)
 {
     IM_ASSERT(Ctx != NULL);
     ImGuiContext& g = *Ctx;
@@ -1918,7 +1923,10 @@ void ImGuiIO::AddMousePosEvent(float x, float y)
     // Filter duplicate
     const ImGuiInputEvent* latest_event = FindLatestInputEvent(&g, ImGuiInputEventType_MousePos);
     const ImVec2 latest_pos = latest_event ? ImVec2(latest_event->MousePos.PosX, latest_event->MousePos.PosY) : g.IO.MousePos;
-    if (latest_pos.x == pos.x && latest_pos.y == pos.y)
+    const float MOUSE_INVALID = -256000.0f;
+    const bool delta_x_unchanged = (dx == 0.0f) || (dx < MOUSE_INVALID);
+    const bool delta_y_unchanged = (dy == 0.0f) || (dy < MOUSE_INVALID);
+    if (latest_pos.x == pos.x && latest_pos.y == pos.y && delta_x_unchanged && delta_y_unchanged)
         return;
 
     ImGuiInputEvent e;
@@ -1927,6 +1935,8 @@ void ImGuiIO::AddMousePosEvent(float x, float y)
     e.EventId = g.InputEventsNextEventId++;
     e.MousePos.PosX = pos.x;
     e.MousePos.PosY = pos.y;
+    e.MousePos.DeltaX = dx;
+    e.MousePos.DeltaY = dy;
     e.MousePos.MouseSource = g.InputEventsNextMouseSource;
     g.InputEventsQueue.push_back(e);
 }
@@ -10762,10 +10772,12 @@ static void ImGui::UpdateMouseInputs()
         io.MousePos = g.MouseLastValidPos = ImFloor(io.MousePos);
 
     // If mouse just appeared or disappeared (usually denoted by -FLT_MAX components) we cancel out movement in MouseDelta
-    if (IsMousePosValid(&io.MousePos) && IsMousePosValid(&io.MousePosPrev))
-        io.MouseDelta = io.MousePos - io.MousePosPrev;
-    else
-        io.MouseDelta = ImVec2(0.0f, 0.0f);
+    const float MOUSE_INVALID = -256000.0f;
+    if (io.MouseDelta.x <= MOUSE_INVALID || io.MouseDelta.y <= MOUSE_INVALID )
+        if (IsMousePosValid(&io.MousePos) && IsMousePosValid(&io.MousePosPrev))
+            io.MouseDelta = io.MousePos - io.MousePosPrev;
+        else
+            io.MouseDelta = ImVec2(0.0f, 0.0f);
 
     // Update stationary timer.
     // FIXME: May need to rework again to have some tolerance for occasional small movement, while being functional on high-framerates.
@@ -11005,7 +11017,7 @@ static void DebugPrintInputEvent(const char* prefix, const ImGuiInputEvent* e)
 {
     ImGuiContext& g = *GImGui;
     char buf[5];
-    if (e->Type == ImGuiInputEventType_MousePos)    { if (e->MousePos.PosX == -FLT_MAX && e->MousePos.PosY == -FLT_MAX) IMGUI_DEBUG_LOG_IO("[io] %s: MousePos (-FLT_MAX, -FLT_MAX)\n", prefix); else IMGUI_DEBUG_LOG_IO("[io] %s: MousePos (%.1f, %.1f) (%s)\n", prefix, e->MousePos.PosX, e->MousePos.PosY, GetMouseSourceName(e->MousePos.MouseSource)); return; }
+    if (e->Type == ImGuiInputEventType_MousePos)    { if (e->MousePos.PosX == -FLT_MAX && e->MousePos.PosY == -FLT_MAX) IMGUI_DEBUG_LOG_IO("[io] %s: MousePos (-FLT_MAX, -FLT_MAX)\n", prefix); else IMGUI_DEBUG_LOG_IO("[io] %s: MousePos (%.1f, %.1f) delta (%.2f, %.2f) (%s)\n", prefix, e->MousePos.PosX, e->MousePos.PosY, e->MousePos.DeltaX, e->MousePos.DeltaY, GetMouseSourceName(e->MousePos.MouseSource)); return; }
     if (e->Type == ImGuiInputEventType_MouseButton) { IMGUI_DEBUG_LOG_IO("[io] %s: MouseButton %d %s (%s)\n", prefix, e->MouseButton.Button, e->MouseButton.Down ? "Down" : "Up", GetMouseSourceName(e->MouseButton.MouseSource)); return; }
     if (e->Type == ImGuiInputEventType_MouseWheel)  { IMGUI_DEBUG_LOG_IO("[io] %s: MouseWheel (%.3f, %.3f) (%s)\n", prefix, e->MouseWheel.WheelX, e->MouseWheel.WheelY, GetMouseSourceName(e->MouseWheel.MouseSource)); return; }
     if (e->Type == ImGuiInputEventType_MouseViewport){IMGUI_DEBUG_LOG_IO("[io] %s: MouseViewport (0x%08X)\n", prefix, e->MouseViewport.HoveredViewportID); return; }
@@ -11034,6 +11046,9 @@ void ImGui::UpdateInputEvents(bool trickle_fast_inputs)
     ImBitArray<ImGuiKey_NamedKey_COUNT> key_changed_mask;
 
     int event_n = 0;
+    const float MOUSE_INVALID = -256000.0f;
+    bool valid_mouse_deltas = true;
+    io.MouseDelta = ImVec2(0.0f, 0.0f);
     for (; event_n < g.InputEventsQueue.Size; event_n++)
     {
         ImGuiInputEvent* e = &g.InputEventsQueue[event_n];
@@ -11046,6 +11061,20 @@ void ImGui::UpdateInputEvents(bool trickle_fast_inputs)
             if (trickle_fast_inputs && (mouse_button_changed != 0 || mouse_wheeled || key_changed || text_inputted))
                 break;
             io.MousePos = event_pos;
+            if (valid_mouse_deltas)
+            {
+                if (e->MousePos.DeltaX < MOUSE_INVALID || e->MousePos.DeltaY < MOUSE_INVALID)
+                {
+                    valid_mouse_deltas = false;
+                    io.MouseDelta.x = -FLT_MAX;
+                    io.MouseDelta.y = -FLT_MAX;
+                }
+                else
+                {
+                    io.MouseDelta.x += e->MousePos.DeltaX;
+                    io.MouseDelta.y += e->MousePos.DeltaY;
+                }
+            }
             io.MouseSource = e->MousePos.MouseSource;
             mouse_moved = true;
         }

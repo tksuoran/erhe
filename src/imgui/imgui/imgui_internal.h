@@ -1554,7 +1554,7 @@ enum ImGuiInputSource : int
 
 // FIXME: Structures in the union below need to be declared as anonymous unions appears to be an extension?
 // Using ImVec2() would fail on Clang 'union member 'MousePos' has a non-trivial default constructor'
-struct ImGuiInputEventMousePos      { float PosX, PosY; ImGuiMouseSource MouseSource; };
+struct ImGuiInputEventMousePos      { float PosX, PosY, DeltaX, DeltaY; ImGuiMouseSource MouseSource; };
 struct ImGuiInputEventMouseWheel    { float WheelX, WheelY; ImGuiMouseSource MouseSource; };
 struct ImGuiInputEventMouseButton   { int Button; bool Down; ImGuiMouseSource MouseSource; };
 struct ImGuiInputEventMouseViewport { ImGuiID HoveredViewportID; };
