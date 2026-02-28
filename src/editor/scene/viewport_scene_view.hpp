@@ -96,11 +96,12 @@ public:
     void execute_rendergraph_node() override;
 
     // Public API
-    void set_window_viewport       (erhe::math::Viewport viewport);
-    void set_is_scene_view_hovered (bool is_hovered);
-    void set_camera                (const std::shared_ptr<erhe::scene::Camera>& camera);
-    void update_pointer_2d_position(glm::vec2 position_in_viewport);
-    void update_hover              (bool ray_only = false);
+    void set_window_viewport         (erhe::math::Viewport viewport);
+    void set_is_scene_view_hovered   (bool is_hovered);
+    void set_camera                  (const std::shared_ptr<erhe::scene::Camera>& camera);
+    void update_pointer_2d_position  (glm::vec2 position_in_viewport);
+    void update_hover                (bool ray_only = false);
+    void request_cursor_relative_hold(bool relative_hold_enable);
 
     void set_shader_stages_variant(Shader_stages_variant variant);
     auto get_shader_stages_variant() const -> Shader_stages_variant;
@@ -116,6 +117,7 @@ public:
     [[nodiscard]] auto get_position_in_world_viewport_depth(float viewport_depth) const -> std::optional<glm::vec3>;
     [[nodiscard]] auto viewport_toolbar                    () -> bool;
     [[nodiscard]] auto get_show_navigation_gizmo           () const -> bool;
+    [[nodiscard]] auto get_cursor_relative_hold            () const -> bool;
 
 private:
     [[nodiscard]] auto get_override_shader_stages() const -> const erhe::graphics::Shader_stages*;
@@ -141,6 +143,7 @@ private:
     Shader_stages_variant              m_shader_stages_variant{Shader_stages_variant::circular_brushed_metal};
     bool                               m_is_scene_view_hovered{false};
     bool                               m_show_navigation_gizmo{true};
+    bool                               m_relative_hold_enable{false};
 };
 
 }

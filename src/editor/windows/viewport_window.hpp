@@ -43,17 +43,18 @@ public:
     ~Viewport_window() noexcept override;
 
     // Implements Imgui_window
-    void imgui               () override;
-    void hidden              () override;
-    auto has_toolbar         () const -> bool override { return true; }
-    void toolbar             (bool& hovered) override;
-    void on_begin            () override;
-    void on_end              () override;
-    void set_imgui_host      (erhe::imgui::Imgui_host* imgui_host) override;
-    auto want_mouse_events   () const -> bool override;
-    auto want_keyboard_events() const -> bool override;
-    void on_mouse_move       (glm::vec2 mouse_position_in_window);
-    void update_hover_info   ();
+    void imgui                    () override;
+    void hidden                   () override;
+    auto has_toolbar              () const -> bool override { return true; }
+    void toolbar                  (bool& hovered) override;
+    void on_begin                 () override;
+    void on_end                   () override;
+    void set_imgui_host           (erhe::imgui::Imgui_host* imgui_host) override;
+    auto want_mouse_events        () const -> bool override;
+    auto want_keyboard_events     () const -> bool override;
+    auto want_cursor_relative_hold() const -> bool override;
+    void on_mouse_move            (glm::vec2 mouse_position_in_window);
+    void update_hover_info        ();
 
     // Public API
     [[nodiscard]] auto viewport_scene_view() const -> std::shared_ptr<Viewport_scene_view>;
@@ -69,6 +70,7 @@ private:
     bool                                               m_brush_drag_and_drop_active{false};
 
     std::unique_ptr<ImViewGuizmo::Context>             m_nagivation_gizmo;
+    bool                                               m_request_cursor_relative_hold{false};
 };
 
 }

@@ -188,6 +188,11 @@ auto Imgui_window::want_mouse_events() const -> bool
     return false;
 }
 
+auto Imgui_window::want_cursor_relative_hold() const -> bool
+{
+    return false;
+}
+
 void Imgui_window::on_begin()
 {
 }

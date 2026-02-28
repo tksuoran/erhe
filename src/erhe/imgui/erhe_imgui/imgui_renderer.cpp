@@ -292,6 +292,7 @@ Imgui_renderer::Imgui_renderer(erhe::graphics::Device& graphics_device, Imgui_se
 {
     ERHE_PROFILE_FUNCTION();
 
+    m_font_atlas.RefCount = 1; // This should never be deleted due to refcount going to zero
     m_primary_font    = m_font_atlas.AddFontFromFileTTF(settings.primary_font.c_str(), settings.scale_factor * settings.font_size);
     m_mono_font       = m_font_atlas.AddFontFromFileTTF(settings.mono_font   .c_str(), settings.scale_factor * settings.font_size);
     m_vr_primary_font = m_font_atlas.AddFontFromFileTTF(settings.primary_font.c_str(), settings.scale_factor * settings.vr_font_size);
@@ -1196,9 +1197,7 @@ void Imgui_renderer::render_draw_data(erhe::graphics::Render_command_encoder& re
 
 } // namespace erhe::imgui
 
-void ImGui_ImplErhe_assert_user_error(const bool condition, const char* message)
+void ImGui_ImplErhe_assert_user_error(const char* message)
 {
-    if (!condition) {
-        erhe::imgui::log_imgui->error("{}", message);
-    }
+    erhe::imgui::log_imgui->error("{}", message);
 }

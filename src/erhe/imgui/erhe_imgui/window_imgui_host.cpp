@@ -37,9 +37,12 @@ Window_imgui_host::Window_imgui_host(
 
     io.BackendPlatformUserData = this;
     io.BackendPlatformName = "imgui_impl_erhe";
-    io.BackendFlags |= ImGuiBackendFlags_HasMouseCursors;         // We can honor GetMouseCursor() values (optional)
+    io.BackendFlags |= ImGuiBackendFlags_HasMouseCursors; // Backend Platform supports honoring GetMouseCursor() value to change the OS cursor shape.
     //io.BackendFlags |= ImGuiBackendFlags_HasSetMousePos;          // We can honor io.WantSetMousePos requests (optional, rarely used)
     //io.BackendFlags |= ImGuiBackendFlags_PlatformHasViewports;    // We can create multi-viewports on the Platform side (optional)
+
+    // NOTE: Imgui_renderer::use_as_backend_renderer_on_context() adds more BackendFlags,
+    // ImGuiBackendFlags_RendererHasTextures and ImGuiBackendFlags_RendererHasVtxOffset
 
     // TODO Clipboard
     // TODO Update monitors
@@ -193,11 +196,16 @@ void Window_imgui_host::begin_imgui_frame()
     ImGui::EndChild();
 
     ImGui::End();
+
+    m_request_cursor_relative_hold = false;
 }
 
 void Window_imgui_host::end_imgui_frame()
 {
     SPDLOG_LOGGER_TRACE(log_frame, "Window_imgui_host::end_imgui_frame()");
+
+    m_context_window.set_cursor_relative_hold(m_request_cursor_relative_hold);
+
     ImGui::PopFont();
     ImGui::EndFrame();
     ImGui::Render();

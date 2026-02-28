@@ -8,6 +8,7 @@
 #include "erhe_imgui/imgui_window.hpp"
 #include "erhe_imgui/windows/graph.hpp"
 #include "erhe_imgui/windows/graph_plotter.hpp"
+#include "erhe_math/aabb.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_window/window_event_handler.hpp" // keycode
 
@@ -193,6 +194,9 @@ public:
     void translation(int64_t timestamp_ns, int tx, int ty, int tz);
     void rotation   (int64_t timestamp_ns, int rx, int ry, int rz);
 
+    void set_framed_aabb(erhe::math::Aabb& aabb);
+    [[nodiscard]] auto get_framed_aabb() const -> const erhe::math::Aabb&;
+
     // API for commands
     void on_hover_viewport_change();
     auto try_ready               () -> bool;
@@ -249,6 +253,7 @@ private:
     std::optional<glm::vec3>              m_tumble_pivot;
     std::optional<glm::vec3>              m_track_plane_point;
     std::optional<glm::vec3>              m_track_plane_normal;
+    erhe::math::Aabb                      m_framed_aabb{};
 
     ERHE_PROFILE_MUTEX(std::mutex,    m_mutex);
     float                             m_sensitivity        {1.0f};

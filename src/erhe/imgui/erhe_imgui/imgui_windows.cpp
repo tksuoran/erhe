@@ -12,6 +12,7 @@
 #include "erhe_rendergraph/rendergraph.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
+#include "erhe_window/window.hpp"
 
 namespace erhe::imgui {
 
@@ -23,6 +24,7 @@ Imgui_windows::Imgui_windows(
     std::string_view                windows_ini_path
 )
     : m_imgui_renderer  {imgui_renderer}
+    , m_context_window  {context_window}
     , m_rendergraph     {rendergraph}
     , m_windows_ini_path{windows_ini_path}
 {
@@ -224,6 +226,9 @@ void Imgui_windows::draw_imgui_windows()
                         window_wants_keyboard = window_wants_keyboard || imgui_window->want_keyboard_events();
                         window_wants_mouse    = window_wants_mouse    || imgui_window->want_mouse_events();
                     }
+                    if (imgui_window->want_cursor_relative_hold()) {
+                        imgui_host->request_cursor_relative_hold();
+                    }
 
                     imgui_window->end();
 
@@ -246,8 +251,10 @@ void Imgui_windows::debug_imgui()
     const auto& imgui_hosts = m_imgui_renderer.get_imgui_hosts();
     for (const auto& imgui_host : imgui_hosts) {
         if (ImGui::TreeNodeEx(imgui_host->name().c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
-            ImGui::Text("Want capture mouse: %s",    imgui_host->want_capture_mouse()    ? "Yes" : "No");
-            ImGui::Text("Want capture keyboard: %s", imgui_host->want_capture_keyboard() ? "Yes" : "No");
+            ImGui::Text("Want capture mouse: %s",      imgui_host->want_capture_mouse()    ? "Yes" : "No");
+            ImGui::Text("Want capture keyboard: %s",   imgui_host->want_capture_keyboard() ? "Yes" : "No");
+            ImGui::Text("Window request mouse: %s",    imgui_host->get_window_request_mouse()    ? "Yes" : "No");
+            ImGui::Text("Window request keyboard: %s", imgui_host->get_window_request_keyboard() ? "Yes" : "No");
             for (auto& imgui_window : m_imgui_windows) {
                 if (imgui_window->get_imgui_host() != imgui_host) {
                     continue;

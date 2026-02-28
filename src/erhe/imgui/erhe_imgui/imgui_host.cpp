@@ -3,6 +3,7 @@
 #include "erhe_imgui/imgui_host.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_imgui/imgui_log.hpp"
+#include "erhe_imgui/scoped_imgui_context.hpp"
 
 #include <imgui/imgui_internal.h>
 
@@ -168,8 +169,24 @@ Imgui_host::~Imgui_host() noexcept
 {
     m_imgui_renderer.unregister_imgui_host(this);
 
-    m_imgui_context->IO.BackendPlatformUserData = nullptr;
-    m_imgui_context->IO.BackendRendererUserData = nullptr;
+    Scoped_imgui_context imgui_context{*this}; // Needed for DestroyPlatformWindows()
+
+    ImGuiIO& io = m_imgui_context->IO;
+    ImGuiPlatformIO& platform_io = m_imgui_context->PlatformIO;
+
+    io.BackendPlatformName = nullptr;
+    io.BackendPlatformUserData = nullptr;
+    io.BackendFlags &= ~(ImGuiBackendFlags_HasMouseCursors);
+    platform_io.ClearPlatformHandlers();
+
+    io.BackendRendererName = nullptr;
+    io.BackendRendererUserData = nullptr;
+    io.BackendFlags &= ~(ImGuiBackendFlags_RendererHasVtxOffset | ImGuiBackendFlags_RendererHasTextures);
+    platform_io.ClearRendererHandlers();
+    platform_io.Platform_SetImeDataFn = nullptr;
+
+    ImGui::DestroyPlatformWindows();
+
     ImGui::DestroyContext(m_imgui_context);
     m_imgui_context = nullptr;
 }
@@ -201,6 +218,15 @@ auto Imgui_host::want_capture_mouse() const -> bool
     return io.WantCaptureMouse && !m_request_mouse;
 }
 
+auto Imgui_host::get_window_request_keyboard() const -> bool
+{
+    return m_request_keyboard;
+}
+auto Imgui_host::get_window_request_mouse() const -> bool
+{
+    return m_request_mouse;
+}
+
 auto Imgui_host::has_cursor() const -> bool
 {
     return m_has_cursor;
@@ -225,6 +251,11 @@ void Imgui_host::update_input_request(const bool request_keyboard, const bool re
 {
     m_request_keyboard = request_keyboard;
     m_request_mouse    = request_mouse;
+}
+
+void Imgui_host::request_cursor_relative_hold()
+{
+    m_request_cursor_relative_hold = true;
 }
 
 auto Imgui_host::get_mouse_position() const -> glm::vec2
@@ -262,7 +293,10 @@ auto Imgui_host::on_mouse_move_event(const erhe::window::Input_event& input_even
 {
     SPDLOG_LOGGER_TRACE(log_input_events, "Imgui_host::on_mouse_move_event(x = {}, y = {}) {}", input_event.u.mouse_move_event.x, input_event.u.mouse_move_event.y, get_name());
     ImGuiIO& io = m_imgui_context->IO;
-    io.AddMousePosEvent(input_event.u.mouse_move_event.x, input_event.u.mouse_move_event.y);
+    io.AddMousePosEventWithRelative(
+        input_event.u.mouse_move_event.x, input_event.u.mouse_move_event.y,
+        input_event.u.mouse_move_event.dx, input_event.u.mouse_move_event.dy
+    );
     return want_capture_mouse();
 }
 

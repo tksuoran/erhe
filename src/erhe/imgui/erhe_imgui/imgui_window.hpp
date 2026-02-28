@@ -62,9 +62,10 @@ public:
     virtual void on_end              ();
     virtual auto flags               () -> ImGuiWindowFlags;
     virtual void toolbar             (bool& hovered);
-    [[nodiscard]] virtual auto has_toolbar         () const -> bool;
-    [[nodiscard]] virtual auto want_keyboard_events() const -> bool;
-    [[nodiscard]] virtual auto want_mouse_events   () const -> bool;
+    [[nodiscard]] virtual auto has_toolbar              () const -> bool;
+    [[nodiscard]] virtual auto want_keyboard_events     () const -> bool;
+    [[nodiscard]] virtual auto want_mouse_events        () const -> bool;
+    [[nodiscard]] virtual auto want_cursor_relative_hold() const -> bool;
 
 protected:
     void set_is_window_hovered(bool hovered);

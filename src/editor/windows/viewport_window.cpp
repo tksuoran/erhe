@@ -1,5 +1,3 @@
-// #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
-
 #include "windows/viewport_window.hpp"
 
 #include "app_context.hpp"
@@ -10,6 +8,7 @@
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
 #include "time.hpp"
+#include "tools/fly_camera_tool.hpp"
 
 #define IMVIEWGUIZMO_IMPLEMENTATION
 #include "ImViewGuizmo.h"
@@ -49,7 +48,7 @@ Viewport_window::Viewport_window(
     , m_app_context            {app_context}
     , m_viewport_scene_view    {viewport_scene_view}
     , m_rendergraph_output_node{rendergraph_output_node}
-    , m_nagivation_gizmo       {new ImViewGuizmo::Context}
+    , m_nagivation_gizmo       {std::make_unique<ImViewGuizmo::Context>()}
 {
     show_window();
 
@@ -144,12 +143,20 @@ void Viewport_window::toolbar(bool& hovered)
         ImVec2 window_position = ImGui::GetWindowPos();
         ImVec2 window_size = ImGui::GetWindowSize();
         ImViewGuizmo::Style& style = ImViewGuizmo::GetStyle();
+        style.snapAnimationDurationNs = 200'000'000;
         const float rotate_radius = style.bigCircleRadius * style.scale;
         const float button_radius = style.toolButtonRadius * style.scale;
         ImVec2 position = window_position + ImVec2{window_size.x - rotate_radius, after_toolbar_cursor_pos.y + rotate_radius};
         bool modified = false;
         const int64_t time_ns = m_app_context.time->get_host_system_time_ns();
-        if (m_nagivation_gizmo->Rotate(time_ns, camera_position, camera_rotation, position)) {
+
+        const erhe::math::Aabb& framed_aabb = m_app_context.fly_camera_tool->get_framed_aabb();
+        const float focus_distance = framed_aabb.is_valid()
+            ? glm::distance(framed_aabb.center(), camera_position)
+            : 2.0f;
+
+        m_nagivation_gizmo->BeginFrame();
+        if (m_nagivation_gizmo->Rotate(time_ns, camera_position, camera_rotation, position, 0.01f, focus_distance)) {
             modified = true;
         }
         position.y += rotate_radius;
@@ -178,6 +185,9 @@ void Viewport_window::toolbar(bool& hovered)
         if (m_nagivation_gizmo->IsOver()) {
             hovered = true;
         }
+
+        const bool using_navigation_gizmo = m_nagivation_gizmo->IsUsing();
+        m_request_cursor_relative_hold = using_navigation_gizmo;
     }
 }
 
@@ -319,6 +329,18 @@ auto Viewport_window::want_mouse_events() const -> bool
 auto Viewport_window::want_keyboard_events() const -> bool
 {
     return true;
+}
+
+auto Viewport_window::want_cursor_relative_hold() const -> bool
+{
+    if (m_request_cursor_relative_hold) {
+        return true;
+    }
+    std::shared_ptr<Viewport_scene_view> viewport_scene_view = m_viewport_scene_view.lock();
+    if (!viewport_scene_view) {
+        return false;
+    }
+    return viewport_scene_view->get_cursor_relative_hold();
 }
 
 }

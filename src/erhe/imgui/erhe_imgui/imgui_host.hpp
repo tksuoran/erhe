@@ -58,13 +58,16 @@ public:
     [[nodiscard]] virtual auto is_visible     () const -> bool = 0; // TODO XXX FIX
     [[nodiscard]] virtual auto get_scale_value() const -> float;
 
-    [[nodiscard]] auto name                 () const -> const std::string&;
-    [[nodiscard]] auto want_capture_keyboard() const -> bool;
-    [[nodiscard]] auto want_capture_mouse   () const -> bool;
-    [[nodiscard]] auto has_cursor           () const -> bool;
-    [[nodiscard]] auto imgui_context        () const -> ImGuiContext*;
+    [[nodiscard]] auto name                       () const -> const std::string&;
+    [[nodiscard]] auto want_capture_keyboard      () const -> bool;
+    [[nodiscard]] auto want_capture_mouse         () const -> bool;
+    [[nodiscard]] auto get_window_request_keyboard() const -> bool;
+    [[nodiscard]] auto get_window_request_mouse   () const -> bool;
+    [[nodiscard]] auto has_cursor                 () const -> bool;
+    [[nodiscard]] auto imgui_context              () const -> ImGuiContext*;
 
     void update_input_request(bool request_keyboard, bool request_mouse);
+    void request_cursor_relative_hold();
 
     auto on_window_focus_event(const erhe::window::Input_event& input_event) -> bool override;
     auto on_cursor_enter_event(const erhe::window::Input_event& input_event) -> bool override;
@@ -82,9 +85,10 @@ public:
 protected:
     std::function<void(Imgui_host& viewport)> m_begin_callback;
     std::string     m_imgui_ini_path;
-    bool            m_has_cursor      {false};
-    bool            m_request_keyboard{false}; // hovered window requests keyboard events
-    bool            m_request_mouse   {false}; // hovered winodw requests mouse events
+    bool            m_has_cursor                  {false};
+    bool            m_request_keyboard            {false}; // hovered window requests keyboard events
+    bool            m_request_mouse               {false}; // hovered winodw requests mouse events
+    bool            m_request_cursor_relative_hold{false};
     Imgui_renderer& m_imgui_renderer;
     ImGuiContext*   m_imgui_context{nullptr};
 };

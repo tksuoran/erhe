@@ -1,6 +1,5 @@
 
 #include "tools/fly_camera_tool.hpp"
-#include "tools/fly_camera_tool.hpp"
 
 #include "app_context.hpp"
 #include "editor_log.hpp"
@@ -424,6 +423,7 @@ auto Fly_camera_frame_command::try_call() -> bool
             bbox.include(world_bounding_box);
         }
     }
+    m_context.fly_camera_tool->set_framed_aabb(bbox);
     if (!bbox.is_valid()) {
         return false;
     }
@@ -930,6 +930,16 @@ void Fly_camera_tool::rotation(int64_t timestamp_ns, const int rx, const int ry,
     m_camera_controller->rotate_z.adjust(m_sensitivity * static_cast<float>(rz) / scale);
 }
 
+void Fly_camera_tool::set_framed_aabb(erhe::math::Aabb& aabb)
+{
+    m_framed_aabb = aabb;
+}
+
+[[nodiscard]] auto Fly_camera_tool::get_framed_aabb() const -> const erhe::math::Aabb&
+{
+    return m_framed_aabb;
+}
+
 void Fly_camera_tool::on_hover_viewport_change()
 {
     m_camera_controller->translate_x.reset();
@@ -1024,7 +1034,16 @@ auto Fly_camera_tool::turn_relative(int64_t timestamp_ns, const float dx, const 
 void Fly_camera_tool::set_cursor_relative_mode(bool relative_mode_enabled)
 {
     if (!m_context.OpenXR) {
-        m_context.context_window->set_cursor_relative_hold(relative_mode_enabled);
+        Scene_view* scene_view = get_hover_scene_view();
+        if (scene_view == nullptr) {
+            return;
+        }
+
+        Viewport_scene_view* viewport_scene_view = scene_view->as_viewport_scene_view();
+        if (viewport_scene_view == nullptr) {
+            return;
+        }
+        viewport_scene_view->request_cursor_relative_hold(relative_mode_enabled);
     }
 }
 

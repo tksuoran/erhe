@@ -76,6 +76,7 @@ public:
 
 private:
     Imgui_renderer&                    m_imgui_renderer;
+    erhe::window::Context_window*      m_context_window{nullptr};
     std::recursive_mutex               m_mutex;
     bool                               m_iterating{false};
     std::vector<Imgui_window*>         m_imgui_windows;

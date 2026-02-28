@@ -304,6 +304,16 @@ void Viewport_scene_view::update_pointer_2d_position(const glm::vec2 position_in
     m_position_in_viewport = position_in_viewport;
 }
 
+void Viewport_scene_view::request_cursor_relative_hold(bool relative_hold_enable)
+{
+    m_relative_hold_enable = relative_hold_enable;
+}
+
+auto Viewport_scene_view::get_cursor_relative_hold() const -> bool
+{
+    return m_relative_hold_enable;
+}
+
 void Viewport_scene_view::update_hover(bool ray_only)
 {
     // Note: Using reverse Z
