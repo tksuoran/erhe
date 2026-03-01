@@ -209,29 +209,18 @@ void Imgui_windows::draw_imgui_windows()
                 }
                 bool hidden = true;
                 if (imgui_window->is_window_visible()) {
-                    bool toolbar_hovered = false;
                     ImGui::PushID(++window_id);
                     const bool is_window_visible = imgui_window->begin();
                     if (is_window_visible) {
-                        const ImVec2 before_cursor_pos = ImGui::GetCursorPos();
                         imgui_window->imgui();
                         hidden = false;
-                        if (imgui_window->has_toolbar()) {
-                            ImGui::SetCursorPos(before_cursor_pos);
-                            imgui_window->toolbar(toolbar_hovered);
-                        }
                     }
-                    const bool window_hovered = ImGui::IsWindowHovered();
-                    if (!toolbar_hovered && window_hovered) {
-                        window_wants_keyboard = window_wants_keyboard || imgui_window->want_keyboard_events();
-                        window_wants_mouse    = window_wants_mouse    || imgui_window->want_mouse_events();
-                    }
+                    window_wants_keyboard = window_wants_keyboard || imgui_window->want_keyboard_events();
+                    window_wants_mouse    = window_wants_mouse    || imgui_window->want_mouse_events();
                     if (imgui_window->want_cursor_relative_hold()) {
                         imgui_host->request_cursor_relative_hold();
                     }
-
                     imgui_window->end();
-
                     ImGui::PopID();
                 }
                 if (hidden) {
@@ -261,9 +250,7 @@ void Imgui_windows::debug_imgui()
                 }
                 if (ImGui::TreeNodeEx(imgui_window->get_title().c_str())) {
                     ImGui::Text("Visible: %s",       imgui_window->is_window_visible()    ? "Yes" : "No");
-                    ImGui::Text("Hovered: %s",       imgui_window->is_window_hovered()    ? "Yes" : "No");
                     ImGui::Text("Show in menu: %s",  imgui_window->show_in_menu()         ? "Yes" : "No");
-                    ImGui::Text("Has toolbar: %s",   imgui_window->has_toolbar()          ? "Yes" : "No");
                     ImGui::Text("Want mouse: %s",    imgui_window->want_mouse_events()    ? "Yes" : "No");
                     ImGui::Text("Want keyboard: %s", imgui_window->want_keyboard_events() ? "Yes" : "No");
                     ImGui::Text("Scale: %f",         imgui_window->get_scale_value());

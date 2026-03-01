@@ -130,7 +130,7 @@ public:
     // Implements Imgui_window
     //void imgui() override;
 
-    void viewport_toolbar(bool& hovered);
+    void viewport_toolbar();
 };
 
 class Scoped_selection_change

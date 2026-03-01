@@ -192,13 +192,13 @@ void Transform_tool::on_message(App_message& message)
     }
 }
 
-void Transform_tool::viewport_toolbar(bool& hovered)
+void Transform_tool::viewport_toolbar()
 {
     Handle_visualizations* visualizations = shared.get_visualizations();
     if (visualizations == nullptr) {
         return;
     }
-    visualizations->viewport_toolbar(hovered);
+    visualizations->viewport_toolbar();
 }
 
 auto Transform_tool::is_transform_tool_active() const -> bool

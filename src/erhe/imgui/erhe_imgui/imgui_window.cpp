@@ -77,12 +77,6 @@ void Imgui_window::set_window_visibility(const bool visible)
     }
 }
 
-void Imgui_window::set_is_window_hovered(const bool hovered)
-{
-    SPDLOG_LOGGER_TRACE(log_frame, "{} set_is_window_hovered({})", m_title, hovered);
-    m_is_hovered = hovered;
-}
-
 void Imgui_window::show_window()
 {
     set_window_visibility(true);
@@ -106,12 +100,6 @@ auto Imgui_window::show_in_menu() const -> bool
 auto Imgui_window::is_window_visible() const -> bool
 {
     return m_is_visible;
-}
-
-auto Imgui_window::is_window_hovered() const -> bool
-{
-    SPDLOG_LOGGER_TRACE(log_frame, "{} is_window_hovered() = {}", m_title, m_is_hovered);
-    return m_is_hovered;
 }
 
 auto Imgui_window::get_ini_label() const -> const std::string&
@@ -166,11 +154,6 @@ void Imgui_window::end()
 auto Imgui_window::flags() -> ImGuiWindowFlags
 {
     return 0; //ImGuiWindowFlags_NoCollapse;
-}
-
-auto Imgui_window::has_toolbar() const -> bool
-{
-    return false;
 }
 
 void Imgui_window::toolbar(bool& hovered)

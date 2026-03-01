@@ -166,6 +166,8 @@ private:
     float                         m_zoom        {1.0f};
     glm::vec2                     m_pixel_offset{0.0f, 0.0f};
     Tile_coordinate               m_center_tile {0, 0};
+
+    bool                          m_is_hovered{false};
 };
 
 } // namespace hextiles

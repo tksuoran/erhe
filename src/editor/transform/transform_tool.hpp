@@ -172,7 +172,7 @@ public:
     void imgui() override;
 
     // Public API
-    void viewport_toolbar(bool& hovered);
+    void viewport_toolbar();
 
     [[nodiscard]] auto is_transform_tool_active() const -> bool;
 

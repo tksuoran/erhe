@@ -10,6 +10,7 @@
 #include "erhe_time/timestamp.hpp"
 
 #include <imgui/imgui.h>
+#include <imgui/misc/cpp/imgui_stdlib.h>
 #include <toml++/toml.hpp>
 
 #include <algorithm>
@@ -106,9 +107,19 @@ void Logs::log_entry(erhe::log::Entry& entry)
     if (ImGui::TableSetColumnIndex(2)) {
         ImGui::PushStyleColor(ImGuiCol_Text, get_log_level_color(entry.level));
         ImGui::PushID(static_cast<int>(entry.serial));
-        if (ImGui::Selectable(entry.message.c_str(), entry.selected)) {
-            entry.selected = !entry.selected;
-        }
+        ImGui::InputText(
+            "##",                         // const char* label,
+            &entry.message,               // std::string* str
+            ImGuiInputTextFlags_ReadOnly, // ImGuiInputTextFlags flags = 0,
+            nullptr,                      // ImGuiInputTextCallback callback = NULL,
+            nullptr                       // void* user_data = NULL);
+        );
+        //if (ImGui::IsItemClicked()) {
+        //    entry.selected = !entry.selected;
+        //}
+        //if (ImGui::Selectable(entry.message.c_str(), entry.selected)) {
+        //    entry.selected = !entry.selected;
+        //}
         //if (entry.repeat_count > 0)
         //{
         //    ImGui::TextColored(

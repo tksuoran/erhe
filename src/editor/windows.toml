@@ -34,6 +34,6 @@ settings = false
 sheet = false
 tail_log = false
 timeline = true
-tool_properties = true
+tool_properties = false
 transform = true
 viewport_config = false

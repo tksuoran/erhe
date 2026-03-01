@@ -114,81 +114,14 @@ void Viewport_window::set_imgui_host(erhe::imgui::Imgui_host* imgui_host)
     Imgui_window::set_imgui_host(imgui_host);
 }
 
-void Viewport_window::toolbar(bool& hovered)
+void Viewport_window::toolbar()
 {
     const std::shared_ptr<Viewport_scene_view> viewport_scene_view = m_viewport_scene_view.lock();
     if (!viewport_scene_view) {
         return;
     }
 
-    if (viewport_scene_view->viewport_toolbar()) {
-        hovered = true;
-    }
-
-    if (viewport_scene_view->get_show_navigation_gizmo()) {
-        const ImVec2 after_toolbar_cursor_pos = ImGui::GetCursorPos();
-
-        std::shared_ptr<erhe::scene::Camera> camera = viewport_scene_view->get_camera();
-        if (!camera) {
-            return;
-        }
-        erhe::scene::Node* node = camera->get_node();
-        if (node == nullptr) {
-            return;
-        }
-        erhe::scene::Trs_transform transform = node->world_from_node_transform();
-        glm::quat camera_rotation = transform.get_rotation();
-        glm::vec3 camera_position = transform.get_translation();
-
-        ImVec2 window_position = ImGui::GetWindowPos();
-        ImVec2 window_size = ImGui::GetWindowSize();
-        ImViewGuizmo::Style& style = ImViewGuizmo::GetStyle();
-        style.snapAnimationDurationNs = 200'000'000;
-        const float rotate_radius = style.bigCircleRadius * style.scale;
-        const float button_radius = style.toolButtonRadius * style.scale;
-        ImVec2 position = window_position + ImVec2{window_size.x - rotate_radius, after_toolbar_cursor_pos.y + rotate_radius};
-        bool modified = false;
-        const int64_t time_ns = m_app_context.time->get_host_system_time_ns();
-
-        const erhe::math::Aabb& framed_aabb = m_app_context.fly_camera_tool->get_framed_aabb();
-        const float focus_distance = framed_aabb.is_valid()
-            ? glm::distance(framed_aabb.center(), camera_position)
-            : 2.0f;
-
-        m_nagivation_gizmo->BeginFrame();
-        if (m_nagivation_gizmo->Rotate(time_ns, camera_position, camera_rotation, position, 0.01f, focus_distance)) {
-            modified = true;
-        }
-        position.y += rotate_radius;
-        position.x = window_position.x + window_size.x - 2.0f * button_radius;
-        if (m_nagivation_gizmo->Zoom(camera_position, camera_rotation, position)) {
-            modified = true;
-        }
-        position.y += 2.0f * button_radius;
-        if (m_nagivation_gizmo->Pan(camera_position, camera_rotation, position)) {
-            modified = true;
-            node->set_world_from_node(transform);
-        }
-
-        if (modified) {
-            transform.set_translation(camera_position);
-            transform.set_rotation(camera_rotation);
-            node->set_world_from_node(transform);
-            m_app_context.app_message_bus->send_message(
-                App_message{
-                    .update_flags = Message_flag_bit::c_flag_bit_node_touched_nagivation_gizmo,
-                    .node         = node
-                }
-            );
-        }
-
-        if (m_nagivation_gizmo->IsOver()) {
-            hovered = true;
-        }
-
-        const bool using_navigation_gizmo = m_nagivation_gizmo->IsUsing();
-        m_request_cursor_relative_hold = using_navigation_gizmo;
-    }
+    viewport_scene_view->viewport_toolbar();
 }
 
 void Viewport_window::hidden()
@@ -256,6 +189,87 @@ void Viewport_window::drag_and_drop_target(float min_x, float min_y, float max_x
 
 void Viewport_window::imgui()
 {
+    toolbar();
+    ImGui::BeginChildEx(
+        "Viewport_window::imgui()", // name
+        ImGuiID{1},                 // id
+        ImVec2{0.0f, 0.0f},         // size_arg
+        ImGuiChildFlags_None,       // child_flags
+
+        // window_flags:
+        ImGuiWindowFlags_NoTitleBar   | ImGuiWindowFlags_NoResize          | ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoScrollbar  | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoCollapse |
+        ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoSavedSettings
+    );
+    ImVec2 viewport_start = ImGui::GetCursorPos();
+    imgui_viewport();
+    const std::shared_ptr<Viewport_scene_view> viewport_scene_view = m_viewport_scene_view.lock();
+    if (viewport_scene_view && viewport_scene_view->get_show_navigation_gizmo()) {
+        ImGui::SetCursorPos(viewport_start);
+        const ImVec2 after_toolbar_cursor_pos = ImGui::GetCursorPos();
+
+        std::shared_ptr<erhe::scene::Camera> camera = viewport_scene_view->get_camera();
+        if (!camera) {
+            return;
+        }
+        erhe::scene::Node* node = camera->get_node();
+        if (node == nullptr) {
+            return;
+        }
+        erhe::scene::Trs_transform transform = node->world_from_node_transform();
+        glm::quat camera_rotation = transform.get_rotation();
+        glm::vec3 camera_position = transform.get_translation();
+
+        ImVec2 window_position = ImGui::GetWindowPos();
+        ImVec2 window_size = ImGui::GetWindowSize();
+        ImViewGuizmo::Style& style = ImViewGuizmo::GetStyle();
+        style.snapAnimationDurationNs = 200'000'000;
+        const float rotate_radius = style.bigCircleRadius * style.scale;
+        const float button_radius = style.toolButtonRadius * style.scale;
+        ImVec2 position = window_position + ImVec2{window_size.x - rotate_radius, after_toolbar_cursor_pos.y + rotate_radius};
+        bool modified = false;
+        const int64_t time_ns = m_app_context.time->get_host_system_time_ns();
+
+        const erhe::math::Aabb& framed_aabb = m_app_context.fly_camera_tool->get_framed_aabb();
+        const float focus_distance = framed_aabb.is_valid()
+            ? glm::distance(framed_aabb.center(), camera_position)
+            : 2.0f;
+
+        m_nagivation_gizmo->BeginFrame();
+        if (m_nagivation_gizmo->Rotate(time_ns, camera_position, camera_rotation, position, 0.01f, focus_distance)) {
+            modified = true;
+        }
+        position.y += rotate_radius;
+        position.x = window_position.x + window_size.x - 2.0f * button_radius;
+        if (m_nagivation_gizmo->Zoom(camera_position, camera_rotation, position)) {
+            modified = true;
+        }
+        position.y += 2.0f * button_radius;
+        if (m_nagivation_gizmo->Pan(camera_position, camera_rotation, position)) {
+            modified = true;
+            node->set_world_from_node(transform);
+        }
+
+        if (modified) {
+            transform.set_translation(camera_position);
+            transform.set_rotation(camera_rotation);
+            node->set_world_from_node(transform);
+            m_app_context.app_message_bus->send_message(
+                App_message{
+                    .update_flags = Message_flag_bit::c_flag_bit_node_touched_nagivation_gizmo,
+                    .node         = node
+                }
+            );
+        }
+
+        const bool using_navigation_gizmo = m_nagivation_gizmo->IsUsing();
+        m_request_cursor_relative_hold = using_navigation_gizmo;
+    }
+    ImGui::EndChild();
+}
+
+void Viewport_window::imgui_viewport()
+{
     ERHE_PROFILE_FUNCTION();
 
     // log_frame->trace("Viewport_window::imgui()");
@@ -297,10 +311,12 @@ void Viewport_window::imgui()
             }
         );
 
-        const bool is_hovered = ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem | ImGuiHoveredFlags_AllowWhenBlockedByPopup);
-        SPDLOG_LOGGER_TRACE(log_scene_view, "{} ImGui::IsItemHovered() = {}", get_name(), is_hovered);
-        set_is_window_hovered(is_hovered);
-        viewport_scene_view->set_is_scene_view_hovered(is_hovered);
+        m_viewport_child_window_hovered = ImGui::IsWindowHovered(
+            ImGuiHoveredFlags_AllowWhenBlockedByActiveItem | ImGuiHoveredFlags_AllowWhenBlockedByPopup
+        );
+        m_viewport_child_window_focused = ImGui::IsWindowFocused();
+
+        viewport_scene_view->set_is_scene_view_hovered(m_viewport_child_window_hovered);
         drag_and_drop_target(rect_min.x, rect_min.y, rect_max.x, rect_max.y);
     } else {
         ImGui::Dummy(size);
@@ -314,25 +330,26 @@ void Viewport_window::imgui()
                 static_cast<int>(rect_max.y - rect_min.y + 1.0f)
             }
         );
+        m_viewport_child_window_focused = ImGui::IsWindowFocused();
 
-        log_scene_view->warn("{} no rendergraph output node", get_title());
-        set_is_window_hovered(false);
+        // log_frame->warn("{} no rendergraph output node", get_title());
         viewport_scene_view->set_is_scene_view_hovered(false);
     }
 }
 
 auto Viewport_window::want_mouse_events() const -> bool
 {
-    return true;
+    return m_viewport_child_window_focused;
 }
 
 auto Viewport_window::want_keyboard_events() const -> bool
 {
-    return true;
+    return m_viewport_child_window_focused;
 }
 
 auto Viewport_window::want_cursor_relative_hold() const -> bool
 {
+    // TODO Consider m_viewport_child_window_focused ?
     if (m_request_cursor_relative_hold) {
         return true;
     }

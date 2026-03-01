@@ -12,6 +12,9 @@ namespace erhe::rendergraph {
 Rendergraph::Rendergraph(erhe::graphics::Device& graphics_device)
     : m_graphics_device{graphics_device}
 {
+    m_nodes         .reserve(128);
+    m_unsorted_nodes.reserve(128);
+    m_sorted_nodes  .reserve(128);
 }
 
 Rendergraph::~Rendergraph() noexcept
@@ -27,12 +30,12 @@ void Rendergraph::sort()
 {
     //std::lock_guard<std::mutex> lock{m_mutex};
 
-    std::vector<Rendergraph_node*> unsorted_nodes = m_nodes;
-    std::vector<Rendergraph_node*> sorted_nodes;
+    m_unsorted_nodes = m_nodes;
+    m_sorted_nodes.clear();
 
-    while (!unsorted_nodes.empty()) {
+    while (!m_unsorted_nodes.empty()) {
         bool found_node{false};
-        for (const auto& node : unsorted_nodes) {
+        for (const auto& node : m_unsorted_nodes) {
             SPDLOG_LOGGER_TRACE(log_frame, "Sort: Considering node '{}'", node->get_name());
             {
                 bool any_missing_dependency{false};
@@ -40,13 +43,13 @@ void Rendergraph::sort()
                     for (auto* producer_node : input.producer_nodes) {
                         // See if dependency is in already sorted nodes
                         const auto i = std::find_if(
-                            sorted_nodes.begin(),
-                            sorted_nodes.end(),
+                            m_sorted_nodes.begin(),
+                            m_sorted_nodes.end(),
                             [&producer_node](Rendergraph_node* entry) {
                                 return entry == producer_node;
                             }
                         );
-                        if (i == sorted_nodes.end()) {
+                        if (i == m_sorted_nodes.end()) {
                             //// const auto& producer = producer_node.lock();
                             SPDLOG_LOGGER_TRACE(
                                 log_frame,
@@ -69,14 +72,14 @@ void Rendergraph::sort()
             found_node = true;
 
             // Add selected node to sorted nodes
-            sorted_nodes.push_back(node);
+            m_sorted_nodes.push_back(node);
 
             // Remove from unsorted nodes
-            const auto i = std::remove(unsorted_nodes.begin(), unsorted_nodes.end(), node);
-            if (i == unsorted_nodes.end()) {
+            const auto i = std::remove(m_unsorted_nodes.begin(), m_unsorted_nodes.end(), node);
+            if (i == m_unsorted_nodes.end()) {
                 // log_frame->error("Sort: Node '{}' is not in graph nodes", node->get_name());
             } else {
-                unsorted_nodes.erase(i, unsorted_nodes.end());
+                m_unsorted_nodes.erase(i, m_unsorted_nodes.end());
             }
 
             // restart loop
@@ -96,12 +99,12 @@ void Rendergraph::sort()
             }
 
             log_frame->info("sorted nodes:");
-            for (auto* node : sorted_nodes) {
+            for (auto* node : m_sorted_nodes) {
                 log_frame->info("    Node: {}", node->get_name());
             }
 
             log_frame->info("unsorted nodes:");
-            for (auto* node : unsorted_nodes) {
+            for (auto* node : m_unsorted_nodes) {
                 log_frame->info("    Node: {}", node->get_name());
                 for (const auto& input : node->get_inputs()) {
                     log_frame->info("        Input key: {}", input.key);
@@ -114,7 +117,7 @@ void Rendergraph::sort()
         }
     }
 
-    std::swap(m_nodes, sorted_nodes);
+    std::swap(m_nodes, m_sorted_nodes);
 }
 
 void Rendergraph::execute()

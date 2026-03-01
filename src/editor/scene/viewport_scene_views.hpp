@@ -105,7 +105,7 @@ public:
     [[nodiscard]] auto hover_scene_view() -> std::shared_ptr<Viewport_scene_view>;
     [[nodiscard]] auto last_scene_view () -> std::shared_ptr<Viewport_scene_view>;
 
-    void viewport_toolbar(Viewport_scene_view& viewport_scene_view, bool& hovered);
+    void viewport_toolbar(Viewport_scene_view& viewport_scene_view);
 
     [[nodiscard]] auto get_post_processing_nodes() const -> const std::vector<std::shared_ptr<Post_processing_node>>&;
 

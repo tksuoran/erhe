@@ -133,7 +133,6 @@ void Framebuffer_window::imgui()
             m_viewport.width,
             m_viewport.height
         );
-        set_is_window_hovered(ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem));
         const ImVec2 rect_min = ImGui::GetItemRectMin();
         const ImVec2 rect_max = ImGui::GetItemRectMax();
         m_content_rect_x      = rect_min.x;

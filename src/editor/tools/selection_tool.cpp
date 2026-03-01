@@ -856,7 +856,7 @@ void Selection::sanity_check()
 ////     }
 //// }
 
-void Selection_tool::viewport_toolbar(bool& hovered)
+void Selection_tool::viewport_toolbar()
 {
     ImGui::PushID("Selection_tool::viewport_toolbar");
     const auto& icon_set = m_context.icon_set;
@@ -871,7 +871,6 @@ void Selection_tool::viewport_toolbar(bool& hovered)
     );
     erhe::imgui::end_button_style(mode);
     if (ImGui::IsItemHovered()) {
-        hovered = true;
         ImGui::SetTooltip(boost > 0 ? "De-prioritize Selection Tool" : "Prioritize Selection Tool");
     }
     if (button_pressed) {

@@ -102,6 +102,7 @@ public:
     void update_pointer_2d_position  (glm::vec2 position_in_viewport);
     void update_hover                (bool ray_only = false);
     void request_cursor_relative_hold(bool relative_hold_enable);
+    void viewport_toolbar            ();
 
     void set_shader_stages_variant(Shader_stages_variant variant);
     auto get_shader_stages_variant() const -> Shader_stages_variant;
@@ -115,7 +116,6 @@ public:
     [[nodiscard]] auto get_projection_viewport             () const -> const erhe::math::Viewport&;
     [[nodiscard]] auto get_position_in_viewport            () const -> std::optional<glm::vec2>;
     [[nodiscard]] auto get_position_in_world_viewport_depth(float viewport_depth) const -> std::optional<glm::vec3>;
-    [[nodiscard]] auto viewport_toolbar                    () -> bool;
     [[nodiscard]] auto get_show_navigation_gizmo           () const -> bool;
     [[nodiscard]] auto get_cursor_relative_hold            () const -> bool;
 

@@ -624,7 +624,7 @@ void Handle_visualizations::set_anchor(const erhe::scene::Trs_transform& world_f
     m_world_from_anchor = world_from_anchor;
 }
 
-void Handle_visualizations::viewport_toolbar(bool& hovered)
+void Handle_visualizations::viewport_toolbar()
 {
     ImGui::PushID("Handle_visualizations::viewport_toolbar");
     const auto& icon_set = m_context.icon_set;
@@ -632,7 +632,6 @@ void Handle_visualizations::viewport_toolbar(bool& hovered)
     auto& settings = m_context.transform_tool->shared.settings;
     const auto local_pressed = erhe::imgui::make_button("L", settings.local ? erhe::imgui::Item_mode::active : erhe::imgui::Item_mode::normal);
     if (ImGui::IsItemHovered()) {
-        hovered = true;
         ImGui::SetTooltip("Transform in Local space");
     }
     if (local_pressed) {
@@ -642,7 +641,6 @@ void Handle_visualizations::viewport_toolbar(bool& hovered)
     ImGui::SameLine();
     const auto global_pressed = erhe::imgui::make_button("W", (!settings.local) ? erhe::imgui::Item_mode::active : erhe::imgui::Item_mode::normal);
     if (ImGui::IsItemHovered()) {
-        hovered = true;
         ImGui::SetTooltip("Transform in World space");
     }
     if (global_pressed) {
@@ -657,7 +655,6 @@ void Handle_visualizations::viewport_toolbar(bool& hovered)
         const bool translate_pressed = icon_set->icon_button(ERHE_HASH("move"), m_context.icon_set->icons.move);
         erhe::imgui::end_button_style(mode);
         if (ImGui::IsItemHovered()) {
-            hovered = true;
             ImGui::SetTooltip(settings.show_translate ? "Hide Translate Tool" : "Show Translate Tool");
         }
         if (translate_pressed) {
@@ -673,7 +670,6 @@ void Handle_visualizations::viewport_toolbar(bool& hovered)
         const bool rotate_pressed = icon_set->icon_button(ERHE_HASH("rotate"), m_context.icon_set->icons.rotate);
         erhe::imgui::end_button_style(mode);
         if (ImGui::IsItemHovered()) {
-            hovered = true;
             ImGui::SetTooltip(settings.show_rotate ? "Hide Rotate Tool" : "Show Rotate Tool");
         }
         if (rotate_pressed) {
@@ -689,7 +685,6 @@ void Handle_visualizations::viewport_toolbar(bool& hovered)
         const bool scale_pressed = icon_set->icon_button(ERHE_HASH("scale"), m_context.icon_set->icons.scale);
         erhe::imgui::end_button_style(mode);
         if (ImGui::IsItemHovered()) {
-            hovered = true;
             ImGui::SetTooltip(settings.show_scale ? "Hide Scale Tool" : "Show Scale Tool");
         }
         if (scale_pressed) {

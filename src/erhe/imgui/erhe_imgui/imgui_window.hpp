@@ -31,7 +31,6 @@ public:
     virtual ~Imgui_window() noexcept;
 
     [[nodiscard]] auto is_window_visible     () const -> bool;
-    [[nodiscard]] auto is_window_hovered     () const -> bool;
     [[nodiscard]] auto get_ini_label         () const -> const std::string&;
     [[nodiscard]] auto get_title             () const -> const std::string&;
     [[nodiscard]] auto get_scale_value       () const -> float;
@@ -62,14 +61,11 @@ public:
     virtual void on_end              ();
     virtual auto flags               () -> ImGuiWindowFlags;
     virtual void toolbar             (bool& hovered);
-    [[nodiscard]] virtual auto has_toolbar              () const -> bool;
     [[nodiscard]] virtual auto want_keyboard_events     () const -> bool;
     [[nodiscard]] virtual auto want_mouse_events        () const -> bool;
     [[nodiscard]] virtual auto want_cursor_relative_hold() const -> bool;
 
 protected:
-    void set_is_window_hovered(bool hovered);
-
     Imgui_renderer& m_imgui_renderer;
     Imgui_windows&  m_imgui_windows;
 

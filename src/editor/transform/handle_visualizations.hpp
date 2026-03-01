@@ -63,7 +63,7 @@ public:
     [[nodiscard]] auto get_handle           (erhe::scene::Mesh* mesh) const -> Handle;
     [[nodiscard]] auto get_handle_material  (Handle handle, Mode mode) -> std::shared_ptr<erhe::primitive::Material>;
     [[nodiscard]] auto get_handle_visibility(Handle handle) const -> bool;
-    void viewport_toolbar (bool& hovered);
+    void viewport_toolbar ();
     void update_visibility(Transform_tool_settings& settings);
     void update_for_view  (Scene_view* scene_view);
     void update_transforms(); //const uint64_t serial);

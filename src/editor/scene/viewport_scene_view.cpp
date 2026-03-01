@@ -183,7 +183,7 @@ void Viewport_scene_view::set_window_viewport(erhe::math::Viewport viewport)
 
 void Viewport_scene_view::set_is_scene_view_hovered(const bool is_hovered)
 {
-    SPDLOG_LOGGER_TRACE(log_scene_view, "{}->set_is_scene_view_hovered({})", get_name(), m_is_scene_view_hovered);
+    // log_frame->debug("{}->set_is_scene_view_hovered({})", get_name(), m_is_scene_view_hovered);
     m_is_scene_view_hovered = is_hovered;
 }
 
@@ -195,7 +195,7 @@ void Viewport_scene_view::set_camera(const std::shared_ptr<erhe::scene::Camera>&
 
 auto Viewport_scene_view::is_scene_view_hovered() const -> bool
 {
-    SPDLOG_LOGGER_TRACE(log_scene_view, "{}->is_scene_view_hovered() = {}", get_name(), m_is_scene_view_hovered);
+    // log_frame->debug("{}->is_scene_view_hovered() = {}", get_name(), m_is_scene_view_hovered);
     return m_is_scene_view_hovered;
 }
 
@@ -424,17 +424,17 @@ void Viewport_scene_view::update_hover_with_id_render()
     const bool hover_tool         = id_query.mesh && test_bit_set(flags, erhe::Item_flags::tool        );
     const bool hover_brush        = id_query.mesh && test_bit_set(flags, erhe::Item_flags::brush       );
     const bool hover_rendertarget = id_query.mesh && test_bit_set(flags, erhe::Item_flags::rendertarget);
-    SPDLOG_LOGGER_TRACE(
-        log_controller_ray,
-        "hover mesh = {} primitive index = {} facet {} {}{}{}{}",
-        entry.scene_mesh ? entry.scene_mesh->get_name() : "()",
-        entry.scene_mesh_primitive_index,
-        entry.facet,
-        hover_content      ? "content "      : "",
-        hover_tool         ? "tool "         : "",
-        hover_brush        ? "brush "        : "",
-        hover_rendertarget ? "rendertarget " : ""
-    );
+    std::shared_ptr<erhe::scene::Mesh> entry_scene_mesh = entry.scene_mesh_weak.lock();
+    // log_controller_ray->debug(
+    //     "hover mesh = {} primitive index = {} facet {} {}{}{}{}",
+    //     entry_scene_mesh ? entry_scene_mesh->get_name() : "()",
+    //     entry.scene_mesh_primitive_index,
+    //     entry.facet,
+    //     hover_content      ? "content "      : "",
+    //     hover_tool         ? "tool "         : "",
+    //     hover_brush        ? "brush "        : "",
+    //     hover_rendertarget ? "rendertarget " : ""
+    // );
 
     set_hover(Hover_entry::content_slot     , hover_content      ? entry : Hover_entry{});
     set_hover(Hover_entry::tool_slot        , hover_tool         ? entry : Hover_entry{});
@@ -489,17 +489,14 @@ auto Viewport_scene_view::get_show_navigation_gizmo() const -> bool
     return m_show_navigation_gizmo;
 }
 
-auto Viewport_scene_view::viewport_toolbar() -> bool
+void Viewport_scene_view::viewport_toolbar()
 {
-    bool hovered = false;
-
     {
         ImGui::PushID("viewport toolbar debug");
 
         const auto navigation_gizmo_pressed = erhe::imgui::make_button("N", m_show_navigation_gizmo ? erhe::imgui::Item_mode::active : erhe::imgui::Item_mode::normal);
         ImGui::SameLine();
         if (ImGui::IsItemHovered()) {
-            hovered = true;
             ImGui::SetTooltip("Show/Hide Navigation Gizmo");
         }
         if (navigation_gizmo_pressed) {
@@ -508,11 +505,11 @@ auto Viewport_scene_view::viewport_toolbar() -> bool
         ImGui::PopID();
     }
 
-    m_context.scene_views->viewport_toolbar(*this, hovered);
+    m_context.scene_views->viewport_toolbar(*this);
 
     //// TODO Tool_flags::viewport_toolbar
-    m_context.selection_tool->viewport_toolbar(hovered);
-    m_context.transform_tool->viewport_toolbar(hovered);
+    m_context.selection_tool->viewport_toolbar();
+    m_context.transform_tool->viewport_toolbar();
     //// m_context.grid_tool->viewport_toolbar(hovered);
     //// TODO m_physics_window.viewport_toolbar(hovered);
 
@@ -522,18 +519,12 @@ auto Viewport_scene_view::viewport_toolbar() -> bool
     ImGui::SameLine();
     ImGui::SetNextItemWidth(110.0f);
     erhe::imgui::make_text_with_background("Scene:", rounding, background_color);
-    if (ImGui::IsItemHovered()) {
-        hovered = true;
-    }
     ImGui::SameLine();
     auto                        old_scene_root = m_scene_root;
     std::shared_ptr<Scene_root> scene_root     = get_scene_root();
     Scene_root*                 scene_root_raw = scene_root.get();
     ImGui::SetNextItemWidth(110.0f);
     const bool combo_used     = m_context.app_scenes->scene_combo("##Scene", scene_root_raw, false);
-    if (ImGui::IsItemHovered()) {
-        hovered = true;
-    }
     if (combo_used) {
         scene_root = (scene_root_raw != nullptr) 
             ? scene_root_raw->shared_from_this()
@@ -549,7 +540,7 @@ auto Viewport_scene_view::viewport_toolbar() -> bool
         }
     }
     if (!scene_root) {
-        return hovered;
+        return;
     }
 
     //get_scene_root()->camera_combo("##Camera", m_camera);
@@ -557,24 +548,15 @@ auto Viewport_scene_view::viewport_toolbar() -> bool
     ImGui::SameLine();
     ImGui::SetNextItemWidth(110.0f);
     erhe::imgui::make_text_with_background("Camera:", rounding, background_color);
-    if (ImGui::IsItemHovered()) {
-        hovered = true;
-    }
     ImGui::SameLine();
     ImGui::SetNextItemWidth(110.0f);
     get_scene_root()->camera_combo("##Camera", m_camera);
-    if (ImGui::IsItemHovered()) {
-        hovered = true;
-    }
 
     ImGui::SameLine();
 
     ImGui::SameLine();
     ImGui::SetNextItemWidth(110.0f);
     erhe::imgui::make_text_with_background("Shader:", rounding, background_color);
-    if (ImGui::IsItemHovered()) {
-        hovered = true;
-    }
     ImGui::SameLine();
     ImGui::Combo(
         "##Shader",
@@ -583,17 +565,12 @@ auto Viewport_scene_view::viewport_toolbar() -> bool
         IM_ARRAYSIZE(c_shader_stages_variant_strings),
         IM_ARRAYSIZE(c_shader_stages_variant_strings)
     );
-    if (ImGui::IsItemHovered()) {
-        hovered = true;
-    }
-
     //// const auto& post_processing_node = m_post_processing_node.lock();
     //// if (post_processing_node)
     //// {
     ////     ImGui::SameLine();
     ////     post_processing_node->viewport_toolbar();
     //// }
-    return hovered;
 }
 
 void Viewport_scene_view::set_shader_stages_variant(Shader_stages_variant variant)

@@ -294,8 +294,7 @@ void Scene_views::open_new_viewport_scene_view_node()
 void Scene_views::debug_imgui()
 {
     if (m_hover_scene_view) {
-        const bool hovered = m_hover_scene_view->viewport_toolbar();
-        static_cast<void>(hovered);
+        m_hover_scene_view->viewport_toolbar();
     }
     ImGui::TextUnformatted("Window hover stack:");
     for (auto& i : m_hover_stack) {
@@ -361,7 +360,7 @@ void Scene_views::update_pointer(erhe::imgui::Imgui_host* imgui_host)
         //  }
         for (const std::shared_ptr<Viewport_window>& window : m_viewport_windows) {
             if (window->get_imgui_host() == imgui_host) {
-                if (window->is_window_hovered()) {
+                if (window->is_viewport_hovered()) {
                     window->on_mouse_move(mouse_position);
                 }
             }
@@ -397,7 +396,7 @@ void Scene_views::update_hover_info(erhe::imgui::Imgui_host* imgui_host)
 
     for (auto& window : m_viewport_windows) {
         if (window->get_imgui_host() == imgui_host) {
-            if (window->is_window_hovered()) {
+            if (window->is_viewport_hovered()) {
                 window->update_hover_info();
             }
         }
@@ -417,7 +416,7 @@ void Scene_views::update_pointer_from_imgui_viewport_windows(erhe::imgui::Imgui_
             continue;
         }
 
-        if (window->is_window_hovered()) {
+        if (window->is_viewport_hovered()) {
             // log_scene_view->info("pushing {} to hover stack", viewport_scene_view->get_name());
             m_last_scene_view = viewport_scene_view;
             m_hover_stack.push_back(m_last_scene_view);
@@ -438,7 +437,7 @@ auto Scene_views::last_scene_view() -> std::shared_ptr<Viewport_scene_view>
     return m_last_scene_view.lock();
 }
 
-void Scene_views::viewport_toolbar(Viewport_scene_view& viewport_scene_view, bool& hovered)
+void Scene_views::viewport_toolbar(Viewport_scene_view& viewport_scene_view)
 {
     ImGui::PushID("Scene_views::viewport_toolbar");
     const auto& icon_set = m_app_context.icon_set;
@@ -452,9 +451,6 @@ void Scene_views::viewport_toolbar(Viewport_scene_view& viewport_scene_view, boo
         ERHE_HASH("open_config"),
         m_app_context.icon_set->icons.three_dots
     );
-    if (ImGui::IsItemHovered()) {
-        hovered = true;
-    }
     if (button_pressed) {
         m_app_context.viewport_config_window->show_window();
         m_app_context.viewport_config_window->set_edit_data(&viewport_scene_view.get_config());

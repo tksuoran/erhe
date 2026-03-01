@@ -189,6 +189,7 @@ void Map_window::on_begin()
 void Map_window::on_end()
 {
     ImGui::PopStyleVar();
+    m_is_hovered = ImGui::IsWindowHovered();
 }
 
 auto Map_window::want_keyboard_events() const -> bool
@@ -203,7 +204,7 @@ auto Map_window::want_mouse_events() const -> bool
 
 auto Map_window::mouse_scroll_try_ready() const -> bool
 {
-    return is_window_hovered();
+    return m_is_hovered;
 }
 
 void Map_window::scroll(glm::vec2 delta)

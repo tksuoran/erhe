@@ -39,6 +39,10 @@ private:
     erhe::graphics::Device&        m_graphics_device;
     ERHE_PROFILE_MUTEX(std::mutex, m_mutex);
     std::vector<Rendergraph_node*> m_nodes;
+
+    std::vector<Rendergraph_node*> m_unsorted_nodes;
+    std::vector<Rendergraph_node*> m_sorted_nodes;
+
 };
 
 } // namespace erhe::rendergraph
