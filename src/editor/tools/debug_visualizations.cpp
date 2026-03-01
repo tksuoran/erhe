@@ -801,7 +801,7 @@ void Debug_visualizations::selection_visualization(const Render_context& context
     erhe::renderer::Primitive_renderer line_renderer = context.get({erhe::graphics::Primitive_type::line, 2, true, true});
     const auto& selection = m_context.selection->get_selected_items();
 
-    m_selection_bounding_volume = erhe::math::Bounding_volume_combiner{}; // reset
+    m_selection_bounding_volume.reset();
     for (const auto& item : selection) {
         const auto& node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
         if (node) {

@@ -309,13 +309,13 @@ public:
         }
         lights.push_back(m_light);
 
-        erhe::scene_renderer::Light_projections light_projections{
+        m_light_projections.apply(
             lights,
             m_camera.get(),
             viewport,
             erhe::math::Viewport{},
             std::shared_ptr<erhe::graphics::Texture>{}
-        };
+        );
 
         std::vector<std::shared_ptr<erhe::scene::Mesh>> meshes;
         for (const auto& node : m_gltf_data.nodes) {
@@ -339,7 +339,7 @@ public:
                 .vertex_buffer1         = &m_mesh_memory.non_position_vertex_buffer,
                 .ambient_light          = glm::vec3{0.1f, 0.1f, 0.1f},
                 .camera                 = m_camera.get(),
-                .light_projections      = &light_projections,
+                .light_projections      = &m_light_projections,
                 .lights                 = lights,
                 .skins                  = m_gltf_data.skins,
                 .materials              = m_gltf_data.materials,
@@ -475,6 +475,8 @@ private:
     erhe::scene_renderer::Forward_renderer       m_forward_renderer;
     std::unique_ptr<erhe::graphics::Render_pass> m_render_pass;
     Programs                                     m_programs;
+
+    erhe::scene_renderer::Light_projections m_light_projections;
 
     erhe::gltf::Gltf_data                   m_gltf_data;
     bool                                    m_close_requested{false};

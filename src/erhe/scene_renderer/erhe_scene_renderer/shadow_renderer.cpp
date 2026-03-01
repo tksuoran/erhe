@@ -111,13 +111,13 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
     ERHE_VERIFY(parameters.texture);
 
     // Also assigns lights slot in uniform block shader resource
-    parameters.light_projections = Light_projections{
+    parameters.light_projections.apply(
         parameters.lights,
         parameters.view_camera,
         parameters.view_camera_viewport,
         parameters.light_camera_viewport,
         parameters.texture
-    };
+    );
 
     erhe::graphics::Scoped_debug_group debug_group{"Shadow_renderer::render()"};
     erhe::graphics::Scoped_gpu_timer   timer      {m_gpu_timer};

@@ -79,13 +79,12 @@ public:
 class Light_projections
 {
 public:
-    Light_projections();
-    Light_projections(
+    void apply(
         const std::span<const std::shared_ptr<erhe::scene::Light>>& lights,
         const erhe::scene::Camera*                                  main_camera,
         const erhe::math::Viewport&                                 main_camera_viewport,
         const erhe::math::Viewport&                                 light_texture_viewport,
-        const std::shared_ptr<erhe::graphics::Texture>&             shadow_map_texture
+        const std::shared_ptr<erhe::graphics::Texture>&             in_shadow_map_texture
     );
 
     // Warning: Returns pointer to element of member vector. That pointer

@@ -156,13 +156,13 @@ void Material_preview::render_preview(const std::shared_ptr<erhe::primitive::Mat
 
     const auto& layers = m_scene_root_shared->layers();
 
-    m_light_projections = erhe::scene_renderer::Light_projections{
+    m_light_projections.apply(
         layers.light()->lights,
         m_camera.get(),
         viewport,
         erhe::math::Viewport{},
         m_shadow_texture
-    };
+    );
 
     erhe::graphics::Render_command_encoder render_encoder = m_graphics_device.make_render_command_encoder(*m_render_pass.get());
     const Render_context context{

@@ -126,24 +126,21 @@ Light_buffer::Light_buffer(erhe::graphics::Device& graphics_device, Light_interf
 {
 }
 
-Light_projections::Light_projections()
-{
-}
-
-Light_projections::Light_projections(
+void Light_projections::apply(
     const std::span<const std::shared_ptr<erhe::scene::Light>>& lights,
     const erhe::scene::Camera*                                  view_camera,
     const erhe::math::Viewport&                                 view_camera_viewport,
     const erhe::math::Viewport&                                 light_texture_viewport,
-    const std::shared_ptr<erhe::graphics::Texture>&             shadow_map_texture
+    const std::shared_ptr<erhe::graphics::Texture>&             in_shadow_map_texture
 )
-    : parameters{
+{
+    parameters = erhe::scene::Light_projection_parameters{
         .view_camera          = view_camera,
         .main_camera_viewport = view_camera_viewport,
         .shadow_map_viewport  = light_texture_viewport
-    }
-    , shadow_map_texture{shadow_map_texture}
-{
+    };
+    shadow_map_texture = in_shadow_map_texture;
+
     light_projection_transforms.clear();
 
     for (const auto& light : lights) {

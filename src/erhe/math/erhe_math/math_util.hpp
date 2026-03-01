@@ -767,6 +767,7 @@ class Bounding_volume_combiner : public erhe::math::Bounding_volume_source
 public:
     Bounding_volume_combiner()
     {
+#if 0
         // https://polyhedr.com/mathematical-properties-of-the-platonic-solids.html
         // Radius
 
@@ -828,6 +829,7 @@ public:
         static_cast<void>(r9 );
         static_cast<void>(r10);
         static_cast<void>(r11);
+#endif
     }
 
     void add_point(const glm::mat4& transform, const glm::vec3& point)
@@ -893,6 +895,13 @@ public:
     auto get_point(const std::size_t element_index, const std::size_t point_index) const -> std::optional<glm::vec3> override
     {
         return m_points.at(m_offsets.at(element_index) + point_index);
+    }
+
+    void reset()
+    {
+        m_sizes.clear();
+        m_offsets.clear();
+        m_points.clear();
     }
 
 private:
