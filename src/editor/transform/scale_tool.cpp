@@ -46,8 +46,8 @@ auto Scale_tool::update(Scene_view* scene_view) -> bool
     switch (std::popcount(m_axis_mask)) {
         case 1: {
             const vec3 drag_world_direction = get_axis_direction();
-            const vec3 P0                   = shared.initial_drag_position_in_world - drag_world_direction;
-            const vec3 P1                   = shared.initial_drag_position_in_world + drag_world_direction;
+            const vec3 P0                   = shared.get_initial_drag_position_in_world() - drag_world_direction;
+            const vec3 P1                   = shared.get_initial_drag_position_in_world() + drag_world_direction;
             const auto closest_point        = scene_view->get_closest_point_on_line(P0, P1);
             if (closest_point.has_value()) {
                 update(closest_point.value());
@@ -57,7 +57,7 @@ auto Scale_tool::update(Scene_view* scene_view) -> bool
         }
 
         case 2: {
-            const vec3 P             = shared.initial_drag_position_in_world;
+            const vec3 P             = shared.get_initial_drag_position_in_world();
             const vec3 N             = get_plane_normal(!shared.settings.local);
             const auto closest_point = scene_view->get_closest_point_on_plane(N, P);
             if (closest_point.has_value()) {
@@ -77,7 +77,7 @@ void Scale_tool::update(const vec3 drag_position_in_world)
 {
     const auto& shared           = get_shared();
     const vec3  center_of_scale  = shared.world_from_anchor_initial_state.get_translation();
-    const float initial_distance = glm::distance(center_of_scale, shared.initial_drag_position_in_world);
+    const float initial_distance = glm::distance(center_of_scale, shared.get_initial_drag_position_in_world());
     const float current_distance = glm::distance(center_of_scale, drag_position_in_world);
     const float s                = current_distance / initial_distance;
     const vec3  scale = [&](){

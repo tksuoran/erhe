@@ -182,8 +182,8 @@ void Transform_tool::on_message(App_message& message)
         test_any_rhs_bits_set(
             message.update_flags,
             Message_flag_bit::c_flag_bit_node_touched_operation_stack  |
-            Message_flag_bit::c_flag_bit_node_touched_nagivation_gizmo |
-            Message_flag_bit::c_flag_bit_node_touched_fly_camera_tool
+            Message_flag_bit::c_flag_bit_node_touched_nagivation_gizmo //|
+            //Message_flag_bit::c_flag_bit_node_touched_fly_camera_tool
         )
     ) {
         update_target_nodes(message.node);
@@ -372,7 +372,7 @@ void Transform_tool::adjust(const mat4& updated_world_from_anchor)
     shared.world_from_anchor.set(updated_world_from_anchor);
 }
 
-void Transform_tool::adjust_translation(const vec3 translation)
+void Transform_tool::adjust_translation(const glm::vec3 translation)
 {
     using namespace erhe::utility;
     touch();
@@ -545,8 +545,8 @@ auto Transform_tool::on_drag_ready() -> bool
         return false;
     }
 
-    shared.initial_drag_position_in_world = hover_entry.position.value();
-    shared.initial_drag_distance = distance(
+    shared.set_initial_drag_position_in_world(hover_entry.position.value());
+    shared.initial_drag_position_distance_to_camera = distance(
         vec3{camera_node->position_in_world()},
         hover_entry.position.value()
     );
@@ -570,7 +570,7 @@ void Transform_tool::end_drag()
 
     m_active_handle = Handle::e_handle_none;
     m_active_tool   = nullptr;
-    shared.initial_drag_distance = 0.0;
+    shared.initial_drag_position_distance_to_camera = 0.0;
 
     log_trs_tool->trace("drag ended");
 }

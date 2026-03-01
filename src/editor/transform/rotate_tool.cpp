@@ -147,7 +147,7 @@ auto Rotate_tool::update_parallel(Scene_view* scene_view) -> bool
     const auto& shared = get_shared();
     const auto p0        = p_origin_opt.value();
     const auto direction = p_direction_opt.value();
-    const auto q0        = p0 + shared.initial_drag_distance * direction;
+    const auto q0        = p0 + shared.initial_drag_position_distance_to_camera * direction;
 
     m_intersection = project_to_offset_plane(m_center_of_rotation, q0);
     return true;

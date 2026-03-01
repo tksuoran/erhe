@@ -37,10 +37,10 @@ public:
     void set(const glm::mat4& matrix);
     void set(const glm::mat4& matrix, const glm::mat4& inverse_matrix);
 
-    [[nodiscard]] auto get_scale      () const -> glm::vec3{ return m_scale;       }
-    [[nodiscard]] auto get_rotation   () const -> glm::quat{ return m_rotation;    }
-    [[nodiscard]] auto get_translation() const -> glm::vec3{ return m_translation; }
-    [[nodiscard]] auto get_skew       () const -> glm::vec3{ return m_skew;        }
+    [[nodiscard]] auto get_scale      () const -> glm::vec3 { return m_scale;       }
+    [[nodiscard]] auto get_rotation   () const -> glm::quat { return m_rotation;    }
+    [[nodiscard]] auto get_translation() const -> glm::vec3 { return m_translation; }
+    [[nodiscard]] auto get_skew       () const -> glm::vec3 { return m_skew;        }
 
 private:
     void compose  ();

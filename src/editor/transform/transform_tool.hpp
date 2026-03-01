@@ -83,10 +83,19 @@ public:
         return visualizations.get();
     }
 
+    [[nodiscard]] auto get_initial_drag_position_in_world() const -> glm::vec3
+    {
+        return world_from_anchor_initial_state.get_translation() + m_initial_drag_position_from_anchor_initial_state;
+    }
+    void set_initial_drag_position_in_world(glm::vec3 in_initial_drag_position_in_world)
+    {
+        m_initial_drag_position_from_anchor_initial_state = in_initial_drag_position_in_world - world_from_anchor_initial_state.get_translation();
+    }
+
     Transform_tool_settings                settings;
     std::vector<Transform_entry>           entries;
-    glm::vec3                              initial_drag_position_in_world{0.0f};
-    float                                  initial_drag_distance         {0.0f};
+    glm::vec3                              m_initial_drag_position_from_anchor_initial_state{0.0f};
+    float                                  initial_drag_position_distance_to_camera{0.0f};
     erhe::scene::Trs_transform             world_from_anchor_initial_state;
     erhe::scene::Trs_transform             world_from_anchor;
     bool                                   touched             {false};
