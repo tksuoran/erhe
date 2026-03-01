@@ -1224,21 +1224,6 @@ void Fly_camera_tool::on_frame_begin()
 void Fly_camera_tool::on_frame_end()
 {
     m_jitter.sleep();
-
-    const std::shared_ptr<Viewport_scene_view> viewport_scene_view = m_context.scene_views->hover_scene_view();
-    const std::shared_ptr<erhe::scene::Camera> camera = (viewport_scene_view)
-        ? viewport_scene_view->get_camera()
-        : std::shared_ptr<erhe::scene::Camera>{};
-    erhe::scene::Node* camera_node = camera ? camera->get_node() : nullptr;
-
-    if (camera_node != nullptr) {
-        m_context.app_message_bus->queue_message(
-            App_message{
-                .update_flags = Message_flag_bit::c_flag_bit_node_touched_fly_camera_tool,
-                .node         = camera_node
-            }
-        );
-    }
 }
 
 void Fly_camera_tool::update_fixed_step(const Time_context& time_context)

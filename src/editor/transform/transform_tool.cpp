@@ -181,9 +181,8 @@ void Transform_tool::on_message(App_message& message)
     if (
         test_any_rhs_bits_set(
             message.update_flags,
-            Message_flag_bit::c_flag_bit_node_touched_operation_stack  |
-            Message_flag_bit::c_flag_bit_node_touched_nagivation_gizmo //|
-            //Message_flag_bit::c_flag_bit_node_touched_fly_camera_tool
+            Message_flag_bit::c_flag_bit_node_touched_operation_stack |
+            Message_flag_bit::c_flag_bit_node_touched_nagivation_gizmo
         )
     ) {
         update_target_nodes(message.node);
