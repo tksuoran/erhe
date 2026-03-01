@@ -29,6 +29,7 @@ pipelines = false
 post_processing = false
 properties = true
 rendergraph = false
+scene_view_config = false
 selection = false
 settings = false
 sheet = false
