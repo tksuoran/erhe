@@ -339,12 +339,12 @@ void Viewport_window::imgui_viewport()
 
 auto Viewport_window::want_mouse_events() const -> bool
 {
-    return m_viewport_child_window_focused;
+    return m_viewport_child_window_hovered;
 }
 
 auto Viewport_window::want_keyboard_events() const -> bool
 {
-    return m_viewport_child_window_focused;
+    return m_viewport_child_window_hovered;
 }
 
 auto Viewport_window::want_cursor_relative_hold() const -> bool
