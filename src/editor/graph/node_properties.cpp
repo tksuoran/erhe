@@ -55,7 +55,7 @@ void Node_properties_window::item_flags(const std::shared_ptr<erhe::Item_base>& 
         m_property_editor.add_entry(Item_flags::c_bit_labels[bit_position], [item, bit_position, flags, this]() {
             const uint64_t bit_mask = uint64_t{1} << bit_position;
             bool           value    = test_bit_set(flags, bit_mask);
-            if (ImGui::Checkbox("##", &value)) {
+            if (ImGui::Checkbox("##Node_properties_window::item_flags(", &value)) {
                 if (bit_mask == Item_flags::selected) {
                     if (value) {
                         m_context.selection->add_to_selection(item);
@@ -89,7 +89,7 @@ void Node_properties_window::item_properties(const std::shared_ptr<erhe::Item_ba
         std::string label_name = fmt::format("{} Name", item->get_type_name());
         m_property_editor.add_entry(label_name, [item]() {
             std::string name = item->get_name();
-            const bool enter_pressed = ImGui::InputText("##", &name, ImGuiInputTextFlags_EnterReturnsTrue);
+            const bool enter_pressed = ImGui::InputText("##Node_properties_window::item_properties()", &name, ImGuiInputTextFlags_EnterReturnsTrue);
             if (enter_pressed || ImGui::IsItemDeactivatedAfterEdit()) { // TODO
                 if (name != item->get_name()) {
                     item->set_name(name);

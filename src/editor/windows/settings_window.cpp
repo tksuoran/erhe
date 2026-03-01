@@ -231,8 +231,8 @@ void Settings_window::imgui()
                                 graphics_preset.shadow_depth_bits = depth_sizes.at(i);
                             }
                         }
+                        ImGui::EndCombo();
                     }
-                    ImGui::EndCombo();
                 }
             );
         }

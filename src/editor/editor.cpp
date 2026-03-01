@@ -62,6 +62,7 @@
 #include "windows/properties.hpp"
 #include "windows/settings_window.hpp"
 #include "windows/viewport_config_window.hpp"
+#include "windows/scene_view_config_window.hpp"
 
 #include "xr/headset_view.hpp"
 #if defined(ERHE_XR_LIBRARY_OPENXR)
@@ -245,6 +246,7 @@ public:
             bool headset_update_actions_ok = headset_begin_frame_ok && m_headset_view->update_actions();
             if (headset_update_actions_ok) {
                 m_viewport_config_window->set_edit_data(&m_headset_view->get_config());
+                // TODO m_scene_view_config_window
             } else{
                 ERHE_PROFILE_SCOPE("OpenXR sleep");
                 // Throttle loop since xrWaitFrame won't be called.
@@ -744,6 +746,7 @@ public:
                 m_rendergraph_window     = std::make_unique<Rendergraph_window              >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_tool_properties_window = std::make_unique<Tool_properties_window          >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_viewport_config_window = std::make_unique<Viewport_config_window          >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
+                m_scene_view_config_window = std::make_unique<Scene_view_config_window      >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_logs                   = std::make_unique<erhe::imgui::Logs               >(*m_commands.get(),       *m_imgui_renderer.get());
                 m_log_settings_window    = std::make_unique<erhe::imgui::Log_settings_window>(*m_imgui_renderer.get(), *m_imgui_windows.get(),  *m_logs.get());
                 m_tail_log_window        = std::make_unique<erhe::imgui::Tail_log_window    >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  *m_logs.get());
@@ -1278,68 +1281,69 @@ public:
     {
         ERHE_PROFILE_FUNCTION();
 
-        m_app_context.executor               = m_executor.get();
+        m_app_context.executor                 = m_executor.get();
 
-        m_app_context.commands               = m_commands              .get();
-        m_app_context.graphics_device        = m_graphics_device       .get();
-        m_app_context.imgui_renderer         = m_imgui_renderer        .get();
-        m_app_context.imgui_windows          = m_imgui_windows         .get();
+        m_app_context.commands                 = m_commands              .get();
+        m_app_context.graphics_device          = m_graphics_device       .get();
+        m_app_context.imgui_renderer           = m_imgui_renderer        .get();
+        m_app_context.imgui_windows            = m_imgui_windows         .get();
 #if defined(ERHE_PHYSICS_LIBRARY_JOLT) && defined(JPH_DEBUG_RENDERER)
-        m_app_context.jolt_debug_renderer    = m_jolt_debug_renderer   .get();
+        m_app_context.jolt_debug_renderer      = m_jolt_debug_renderer   .get();
 #endif
-        m_app_context.debug_renderer         = m_debug_renderer        .get();
-        m_app_context.text_renderer          = m_text_renderer         .get();
-        m_app_context.rendergraph            = m_rendergraph           .get();
-        m_app_context.scene_message_bus      = m_scene_message_bus     .get();
-        m_app_context.forward_renderer       = m_forward_renderer      .get();
-        m_app_context.shadow_renderer        = m_shadow_renderer       .get();
-        m_app_context.context_window         = m_window                .get();
-        m_app_context.brdf_slice             = m_brdf_slice            .get();
-        m_app_context.brush_tool             = m_brush_tool            .get();
-        m_app_context.clipboard              = m_clipboard             .get();
-        m_app_context.clipboard_window       = m_clipboard_window      .get();
-        m_app_context.create                 = m_create                .get();
-        m_app_context.app_message_bus        = m_app_message_bus       .get();
-        m_app_context.app_rendering          = m_app_rendering         .get();
-        m_app_context.app_scenes             = m_app_scenes            .get();
-        m_app_context.app_settings           = m_app_settings          .get();
-        m_app_context.app_windows            = m_app_windows           .get();
-        m_app_context.fly_camera_tool        = m_fly_camera_tool       .get();
-        m_app_context.grid_tool              = m_grid_tool             .get();
+        m_app_context.debug_renderer           = m_debug_renderer        .get();
+        m_app_context.text_renderer            = m_text_renderer         .get();
+        m_app_context.rendergraph              = m_rendergraph           .get();
+        m_app_context.scene_message_bus        = m_scene_message_bus     .get();
+        m_app_context.forward_renderer         = m_forward_renderer      .get();
+        m_app_context.shadow_renderer          = m_shadow_renderer       .get();
+        m_app_context.context_window           = m_window                .get();
+        m_app_context.brdf_slice               = m_brdf_slice            .get();
+        m_app_context.brush_tool               = m_brush_tool            .get();
+        m_app_context.clipboard                = m_clipboard             .get();
+        m_app_context.clipboard_window         = m_clipboard_window      .get();
+        m_app_context.create                   = m_create                .get();
+        m_app_context.app_message_bus          = m_app_message_bus       .get();
+        m_app_context.app_rendering            = m_app_rendering         .get();
+        m_app_context.app_scenes               = m_app_scenes            .get();
+        m_app_context.app_settings             = m_app_settings          .get();
+        m_app_context.app_windows              = m_app_windows           .get();
+        m_app_context.fly_camera_tool          = m_fly_camera_tool       .get();
+        m_app_context.grid_tool                = m_grid_tool             .get();
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-        m_app_context.hand_tracker           = m_hand_tracker          .get();
+        m_app_context.hand_tracker             = m_hand_tracker          .get();
 #endif
-        m_app_context.headset_view           = m_headset_view          .get();
-        m_app_context.hotbar                 = m_hotbar                .get();
-        m_app_context.hud                    = m_hud                   .get();
-        m_app_context.icon_set               = m_icon_set              .get();
-        m_app_context.id_renderer            = m_id_renderer           .get();
-        m_app_context.input_state            = m_input_state           .get();
-        m_app_context.material_paint_tool    = m_material_paint_tool   .get();
-        m_app_context.material_preview       = m_material_preview      .get();
-        m_app_context.brush_preview          = m_brush_preview         .get();
-        m_app_context.mesh_memory            = m_mesh_memory           .get();
-        m_app_context.move_tool              = m_move_tool             .get();
-        m_app_context.operation_stack        = m_operation_stack       .get();
-        m_app_context.paint_tool             = m_paint_tool            .get();
-        m_app_context.physics_tool           = m_physics_tool          .get();
-        m_app_context.post_processing        = m_post_processing       .get();
-        m_app_context.programs               = m_programs              .get();
-        m_app_context.rotate_tool            = m_rotate_tool           .get();
-        m_app_context.scale_tool             = m_scale_tool            .get();
-        m_app_context.scene_builder          = m_scene_builder         .get();
-        m_app_context.scene_commands         = m_scene_commands        .get();
-        m_app_context.selection              = m_selection             .get();
-        m_app_context.selection_tool         = m_selection_tool        .get();
-        m_app_context.settings_window        = m_settings_window       .get();
-        m_app_context.sheet_window           = m_sheet_window          .get();
-        m_app_context.thumbnails             = m_thumbnails            .get();
-        m_app_context.time                   = m_time                  .get();
-        m_app_context.timeline_window        = m_timeline_window       .get();
-        m_app_context.tools                  = m_tools                 .get();
-        m_app_context.transform_tool         = m_transform_tool        .get();
-        m_app_context.viewport_config_window = m_viewport_config_window.get();
-        m_app_context.scene_views            = m_viewport_scene_views  .get();
+        m_app_context.headset_view             = m_headset_view          .get();
+        m_app_context.hotbar                   = m_hotbar                .get();
+        m_app_context.hud                      = m_hud                   .get();
+        m_app_context.icon_set                 = m_icon_set              .get();
+        m_app_context.id_renderer              = m_id_renderer           .get();
+        m_app_context.input_state              = m_input_state           .get();
+        m_app_context.material_paint_tool      = m_material_paint_tool   .get();
+        m_app_context.material_preview         = m_material_preview      .get();
+        m_app_context.brush_preview            = m_brush_preview         .get();
+        m_app_context.mesh_memory              = m_mesh_memory           .get();
+        m_app_context.move_tool                = m_move_tool             .get();
+        m_app_context.operation_stack          = m_operation_stack       .get();
+        m_app_context.paint_tool               = m_paint_tool            .get();
+        m_app_context.physics_tool             = m_physics_tool          .get();
+        m_app_context.post_processing          = m_post_processing       .get();
+        m_app_context.programs                 = m_programs              .get();
+        m_app_context.rotate_tool              = m_rotate_tool           .get();
+        m_app_context.scale_tool               = m_scale_tool            .get();
+        m_app_context.scene_builder            = m_scene_builder         .get();
+        m_app_context.scene_commands           = m_scene_commands        .get();
+        m_app_context.selection                = m_selection             .get();
+        m_app_context.selection_tool           = m_selection_tool        .get();
+        m_app_context.settings_window          = m_settings_window       .get();
+        m_app_context.sheet_window             = m_sheet_window          .get();
+        m_app_context.thumbnails               = m_thumbnails            .get();
+        m_app_context.time                     = m_time                  .get();
+        m_app_context.timeline_window          = m_timeline_window       .get();
+        m_app_context.tools                    = m_tools                 .get();
+        m_app_context.transform_tool           = m_transform_tool        .get();
+        m_app_context.viewport_config_window   = m_viewport_config_window.get();
+        m_app_context.scene_view_config_window = m_scene_view_config_window.get();
+        m_app_context.scene_views              = m_viewport_scene_views  .get();
     }
 
     auto on_key_event(const erhe::window::Input_event& input_event) -> bool override
@@ -1481,6 +1485,7 @@ public:
     std::unique_ptr<Timeline_window                 >        m_timeline_window;
     std::unique_ptr<Tool_properties_window          >        m_tool_properties_window;
     std::unique_ptr<Viewport_config_window          >        m_viewport_config_window;
+    std::unique_ptr<Scene_view_config_window        >        m_scene_view_config_window;
     std::unique_ptr<erhe::imgui::Logs               >        m_logs;
     std::unique_ptr<erhe::imgui::Log_settings_window>        m_log_settings_window;
     std::unique_ptr<erhe::imgui::Tail_log_window    >        m_tail_log_window;

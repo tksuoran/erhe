@@ -16,13 +16,17 @@
 #include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
 #include "transform/transform_tool.hpp"
+#include "windows/viewport_config_window.hpp"
+#include "windows/scene_view_config_window.hpp"
 
-#include "erhe_utility/bit_helpers.hpp"
+#include "erhe_defer/defer.hpp"
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_graphics/compute_command_encoder.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/texture.hpp"
+#include "erhe_hash/xxhash.hpp"
+#include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_imgui/imgui_helpers.hpp"
 #include "erhe_log/log_glm.hpp"
 #include "erhe_math/math_util.hpp"
@@ -34,10 +38,18 @@
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/scene.hpp"
+#include "erhe_utility/bit_helpers.hpp"
 
 #include <glm/gtx/matrix_operation.hpp>
 
 #include <imgui/imgui.h>
+
+// #include "IconsMaterialDesignIcons.h"
+#define ICON_MDI_AXIS_ARROW                               "\xf3\xb0\xb5\x89" // U+F0D49
+#define ICON_MDI_CAMERA                                   "\xf3\xb0\x84\x80" // U+F0100
+#define ICON_MDI_DOTS_TRIANGLE                            "\xf3\xb1\x97\xbe" // U+F15FE
+#define ICON_MDI_EYE                                      "\xf3\xb0\x88\x88" // U+F0208
+#define ICON_MDI_PALETTE                                  "\xf3\xb0\x8f\x98" // U+F03D8
 
 namespace editor {
 
@@ -491,21 +503,59 @@ auto Viewport_scene_view::get_show_navigation_gizmo() const -> bool
 
 void Viewport_scene_view::viewport_toolbar()
 {
+    ImGui::PushID("Viewport_scene_view::viewport_toolbar()");
+    ERHE_DEFER( ImGui::PopID(); );
+
+    ImFont* icon_font = m_context.imgui_renderer->material_design_font();
+    const float font_size =
+        m_context.imgui_renderer->get_imgui_settings().scale_factor *
+        m_context.imgui_renderer->get_imgui_settings().material_design_font_size;
+
+    auto icon_button = [&](const char* icon, const char* fallback_text, const char* tooltip, bool& toggle) -> bool {
+        bool pressed;
+        erhe::imgui::Item_mode mode = toggle ? erhe::imgui::Item_mode::active : erhe::imgui::Item_mode::normal;
+        erhe::imgui::begin_button_style(mode);
+        if (icon_font) {
+            ImGui::PushFont(icon_font, font_size);
+            pressed = ImGui::Button(icon);
+            ImGui::PopFont();
+        } else {
+            pressed = ImGui::Button(fallback_text);
+        }
+        erhe::imgui::end_button_style(mode);
+        if (tooltip != nullptr && ImGui::IsItemHovered()) {
+            ImGui::SetTooltip(tooltip);
+        }
+        if (pressed) {
+            toggle = !toggle;
+        }
+        return pressed;
+    };
+
     {
         ImGui::PushID("viewport toolbar debug");
-
-        const auto navigation_gizmo_pressed = erhe::imgui::make_button("N", m_show_navigation_gizmo ? erhe::imgui::Item_mode::active : erhe::imgui::Item_mode::normal);
-        ImGui::SameLine();
-        if (ImGui::IsItemHovered()) {
-            ImGui::SetTooltip("Show/Hide Navigation Gizmo");
-        }
-        if (navigation_gizmo_pressed) {
-            m_show_navigation_gizmo = !m_show_navigation_gizmo;
-        }
+        icon_button(
+            ICON_MDI_AXIS_ARROW "##navigation_gizmo",
+            "N##navigation_gizmo",
+            "Show/Hide Navigation Gizmo",
+            m_show_navigation_gizmo
+        );
         ImGui::PopID();
     }
 
-    m_context.scene_views->viewport_toolbar(*this);
+    bool show_viewport_config = m_context.viewport_config_window->is_window_visible();
+    bool viewport_config_pressed = icon_button(
+        ICON_MDI_EYE "##viewport_config",
+        "...##viewport_config",
+        "Show/Hide Viewport Config",
+        show_viewport_config
+    );
+    if (viewport_config_pressed) {
+        m_context.viewport_config_window->set_window_visibility(show_viewport_config);
+        if (show_viewport_config) {
+            m_context.viewport_config_window->set_edit_data(&get_config());
+        }
+    }
 
     //// TODO Tool_flags::viewport_toolbar
     m_context.selection_tool->viewport_toolbar();
@@ -513,64 +563,27 @@ void Viewport_scene_view::viewport_toolbar()
     //// m_context.grid_tool->viewport_toolbar(hovered);
     //// TODO m_physics_window.viewport_toolbar(hovered);
 
-    const float  rounding        {3.0f};
-    const ImVec4 background_color{0.20f, 0.26f, 0.25f, 0.72f};
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(110.0f);
 
-    ImGui::SameLine();
-    ImGui::SetNextItemWidth(110.0f);
-    erhe::imgui::make_text_with_background("Scene:", rounding, background_color);
-    ImGui::SameLine();
-    auto                        old_scene_root = m_scene_root;
-    std::shared_ptr<Scene_root> scene_root     = get_scene_root();
-    Scene_root*                 scene_root_raw = scene_root.get();
-    ImGui::SetNextItemWidth(110.0f);
-    const bool combo_used     = m_context.app_scenes->scene_combo("##Scene", scene_root_raw, false);
-    if (combo_used) {
-        scene_root = (scene_root_raw != nullptr) 
-            ? scene_root_raw->shared_from_this()
-            : std::shared_ptr<Scene_root>{};
-        m_scene_root = scene_root;
-        if (old_scene_root.lock() != scene_root) {
-            if (scene_root) {
-                const auto& cameras = scene_root->get_hosted_scene()->get_cameras();
-                m_camera = cameras.empty() ? std::weak_ptr<erhe::scene::Camera>{} : cameras.front();
-            } else {
-                m_camera.reset();
-            }
+    std::shared_ptr<Scene_root> scene_root = get_scene_root();
+
+    bool show_scene_view_config = m_context.scene_view_config_window->is_window_visible();
+    bool scene_view_config_pressed = icon_button(
+        ICON_MDI_DOTS_TRIANGLE "##scene_view_config",
+        "S##scene_view_config",
+        "Show/Hide Scene View Config",
+        show_scene_view_config
+    );
+    if (scene_view_config_pressed) { 
+        m_context.scene_view_config_window->set_window_visibility(show_scene_view_config);
+        if (show_scene_view_config) {
+            m_context.scene_view_config_window->set_scene_view(this);
         }
     }
     if (!scene_root) {
         return;
     }
-
-    //get_scene_root()->camera_combo("##Camera", m_camera);
-
-    ImGui::SameLine();
-    ImGui::SetNextItemWidth(110.0f);
-    erhe::imgui::make_text_with_background("Camera:", rounding, background_color);
-    ImGui::SameLine();
-    ImGui::SetNextItemWidth(110.0f);
-    get_scene_root()->camera_combo("##Camera", m_camera);
-
-    ImGui::SameLine();
-
-    ImGui::SameLine();
-    ImGui::SetNextItemWidth(110.0f);
-    erhe::imgui::make_text_with_background("Shader:", rounding, background_color);
-    ImGui::SameLine();
-    ImGui::Combo(
-        "##Shader",
-        reinterpret_cast<int*>(&m_shader_stages_variant),
-        c_shader_stages_variant_strings,
-        IM_ARRAYSIZE(c_shader_stages_variant_strings),
-        IM_ARRAYSIZE(c_shader_stages_variant_strings)
-    );
-    //// const auto& post_processing_node = m_post_processing_node.lock();
-    //// if (post_processing_node)
-    //// {
-    ////     ImGui::SameLine();
-    ////     post_processing_node->viewport_toolbar();
-    //// }
 }
 
 void Viewport_scene_view::set_shader_stages_variant(Shader_stages_variant variant)

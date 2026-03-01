@@ -89,6 +89,7 @@ class Timeline_window;
 class Tools;
 class Transform_tool;
 class Viewport_config_window;
+class Scene_view_config_window;
 class Scene_views;
 
 class App_context
@@ -164,7 +165,8 @@ public:
     Tools*                                  tools                 {nullptr};
     Transform_tool*                         transform_tool        {nullptr};
     Viewport_config_window*                 viewport_config_window{nullptr};
-    Scene_views*                            scene_views           {nullptr};
+    Scene_view_config_window*               scene_view_config_window{nullptr};
+    Scene_views*                            scene_views             {nullptr};
 };
 
 }

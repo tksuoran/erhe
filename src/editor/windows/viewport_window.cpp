@@ -121,7 +121,10 @@ void Viewport_window::toolbar()
         return;
     }
 
-    viewport_scene_view->viewport_toolbar();
+    if (ImGui::BeginMenuBar()) {
+        viewport_scene_view->viewport_toolbar();
+        ImGui::EndMenuBar();
+    }
 }
 
 void Viewport_window::hidden()
@@ -131,6 +134,11 @@ void Viewport_window::hidden()
         return;
     }
     viewport_scene_view->set_enabled(false);
+}
+
+auto Viewport_window::flags() -> ImGuiWindowFlags
+{
+    return ImGuiWindowFlags_MenuBar;
 }
 
 void Viewport_window::cancel_brush_drag_and_drop()

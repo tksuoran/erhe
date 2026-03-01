@@ -158,7 +158,7 @@ void Sheet_window::imgui()
             std::string& cell_string = m_sheet.get_expression(row, col);
             ImGui::SetNextItemWidth(-FLT_MIN);
             if (m_show_expression) {
-                ImGui::InputText("##", &cell_string);
+                ImGui::InputText("##Sheet_window::imgui()", &cell_string);
                 if (ImGui::IsItemEdited()) {
                     dirty = true;
                     m_sheet.set_expression(row, col, cell_string);
@@ -167,10 +167,10 @@ void Sheet_window::imgui()
                 if (!cell_string.empty()) { //te_expression != nullptr) {
                     const double value = m_sheet.get_value(row, col);
                     std::string value_string = fmt::format("{}", value);
-                    ImGui::InputText("##", &value_string, ImGuiInputTextFlags_ReadOnly);
+                    ImGui::InputText("##Sheet_window::imgui()", &value_string, ImGuiInputTextFlags_ReadOnly);
                 } else {
                     std::string value_string{};
-                    ImGui::InputText("##", &value_string, ImGuiInputTextFlags_ReadOnly);
+                    ImGui::InputText("##Sheet_window::imgui()", &value_string, ImGuiInputTextFlags_ReadOnly);
                 }
             }
         }

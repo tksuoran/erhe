@@ -437,27 +437,6 @@ auto Scene_views::last_scene_view() -> std::shared_ptr<Viewport_scene_view>
     return m_last_scene_view.lock();
 }
 
-void Scene_views::viewport_toolbar(Viewport_scene_view& viewport_scene_view)
-{
-    ImGui::PushID("Scene_views::viewport_toolbar");
-    const auto& icon_set = m_app_context.icon_set;
-
-    static constexpr std::string_view open_config{"open_config"};
-    static constexpr uint32_t viewport_open_config_id{
-        compiletime_xxhash::xxh32(open_config.data(), open_config.size(), {})
-    };
-
-    const bool button_pressed = icon_set->icon_button(
-        ERHE_HASH("open_config"),
-        m_app_context.icon_set->icons.three_dots
-    );
-    if (button_pressed) {
-        m_app_context.viewport_config_window->show_window();
-        m_app_context.viewport_config_window->set_edit_data(&viewport_scene_view.get_config());
-    }
-    ImGui::PopID();
-}
-
 auto Scene_views::get_post_processing_nodes() const -> const std::vector<std::shared_ptr<Post_processing_node>>&
 {
     return m_post_processing_nodes;

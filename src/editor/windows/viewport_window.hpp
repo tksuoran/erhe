@@ -45,13 +45,15 @@ public:
     // Implements Imgui_window
     void imgui                    () override;
     void hidden                   () override;
-    void toolbar                  ();
+    auto flags                    () -> ImGuiWindowFlags override;
     void on_begin                 () override;
     void on_end                   () override;
     void set_imgui_host           (erhe::imgui::Imgui_host* imgui_host) override;
     auto want_mouse_events        () const -> bool override;
     auto want_keyboard_events     () const -> bool override;
     auto want_cursor_relative_hold() const -> bool override;
+
+    void toolbar                  ();
     void on_mouse_move            (glm::vec2 mouse_position_in_window);
     void update_hover_info        ();
 

@@ -151,7 +151,7 @@ void Post_processing_window::imgui()
         }
         ImGui::SameLine();
         ImGui::PushID(static_cast<int>(source_level));
-        ImGui::SliderFloat("##", &node->weights[source_level], 0.0f, 1.0f, "%.4f");
+        ImGui::SliderFloat("##Post_processing_window::imgui()", &node->weights[source_level], 0.0f, 1.0f, "%.4f");
         if (ImGui::IsItemEdited()) edited = true;
         ImGui::PopID();
     }

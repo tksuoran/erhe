@@ -1265,7 +1265,7 @@ void Fly_camera_tool::show_input_axis_ui(const char* label, erhe::math::Input_ax
     ImGui::TableSetColumnIndex(3); 
     ImGui::SetNextItemWidth(-FLT_MIN);
     ImGui::PushID(3);
-    ImGui::SliderFloat("##", &damp, 0.0f, 1.0, "%.3f", ImGuiSliderFlags_NoRoundToFormat);
+    ImGui::SliderFloat("##Fly_camera_tool::show_input_axis_ui() damp", &damp, 0.0f, 1.0, "%.3f", ImGuiSliderFlags_NoRoundToFormat);
     if (ImGui::IsItemEdited()) {
         input_axis.set_damp(damp);
     }
