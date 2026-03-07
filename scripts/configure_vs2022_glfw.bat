@@ -4,7 +4,7 @@
 cmake ^
  -G "Visual Studio 17 2022" ^
  -A x64 ^
- -B build ^
+ -B build_vs2022_glfw ^
  -S . ^
  -DCMAKE_EXPORT_COMPILE_COMMANDS=1 ^
  -Wno-dev ^
