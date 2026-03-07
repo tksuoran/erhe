@@ -11,7 +11,7 @@ for /f "delims=" %%a in ('powershell -nologo -command "Get-Date -Format o"') do 
 cmake ^
  -G "Visual Studio 17 2022" ^
  -A x64 ^
- -B build ^
+ -B build_vs2022_vulkan ^
  -S . ^
  -Wno-dev ^
  %* ^
