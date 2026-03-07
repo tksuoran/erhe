@@ -35,26 +35,50 @@
 #
 #   define ERHE_PROFILE_FUNCTION() ZoneScoped
 //#   define ERHE_PROFILE_FUNCTION() ZoneScopedS(62)
-#   define ERHE_PROFILE_SCOPE(erhe_profile_id) ZoneScopedN(erhe_profile_id)
-#   define ERHE_PROFILE_COLOR(erhe_profile_id, erhe_profile_color) ZoneScopedNC(erhe_profile_id, erhe_profile_color);
-#   define ERHE_PROFILE_DATA(erhe_profile_id, erhe_profile_data, erhe_profile_data_length) ZoneName(erhe_profile_data, erhe_profile_data_length)
-#   define ERHE_PROFILE_MESSAGE(erhe_profile_message, erhe_profile_message_length) TracyMessage(erhe_profile_message, erhe_profile_message_length)
-#   define ERHE_PROFILE_MESSAGE_LITERAL(erhe_profile_message) TracyMessageL(erhe_profile_message)
-#   define ERHE_PROFILE_GPU_SCOPE(erhe_profile_id) TracyGpuZone(erhe_profile_id.data())
-#   define ERHE_PROFILE_GPU_CONTEXT TracyGpuContext
-#   define ERHE_PROFILE_FRAME_END FrameMark; TracyGpuCollect
-#   define ERHE_PROFILE_MUTEX_DECLARATION(Type, mutex_variable) tracy::Lockable<Type> mutex_variable
-#   define ERHE_PROFILE_MUTEX(Type, mutex_variable) TracyLockable(Type, mutex_variable)
-#   define ERHE_PROFILE_LOCKABLE_BASE(Type) LockableBase(Type)
-#   define ERHE_PROFILE_MEM_ALLOC(ptr, size) TracyAlloc(ptr, size)
-#   define ERHE_PROFILE_MEM_ALLOC_S(ptr, size) TracyAllocS(ptr, size, 40)
-#   define ERHE_PROFILE_MEM_ALLOC_N(ptr, size, name) TracyAllocN(ptr, size, name)
-#   define ERHE_PROFILE_MEM_ALLOC_NS(ptr, size, name) TracyAllocNS(ptr, size, 40, name)
-#   define ERHE_PROFILE_MEM_FREE(ptr) TracyFree(ptr)
-#   define ERHE_PROFILE_MEM_FREE_S(ptr) TracyFreeS(ptr, 40)
-#   define ERHE_PROFILE_MEM_FREE_N(ptr, name) TracyFreeN(ptr, name)
-#   define ERHE_PROFILE_MEM_FREE_NS(ptr, name) TracyFreeNS(ptr, 40, name)
-#
+//#   define ERHE_PROFILE_SCOPE(erhe_profile_id) ZoneScopedN(erhe_profile_id)
+//#   define ERHE_PROFILE_COLOR(erhe_profile_id, erhe_profile_color) ZoneScopedNC(erhe_profile_id, erhe_profile_color);
+//#   define ERHE_PROFILE_DATA(erhe_profile_id, erhe_profile_data, erhe_profile_data_length) ZoneName(erhe_profile_data, erhe_profile_data_length)
+//#   define ERHE_PROFILE_MESSAGE(erhe_profile_message, erhe_profile_message_length) TracyMessage(erhe_profile_message, erhe_profile_message_length)
+//#   define ERHE_PROFILE_MESSAGE_LITERAL(erhe_profile_message) TracyMessageL(erhe_profile_message)
+//#   define ERHE_PROFILE_GPU_SCOPE(erhe_profile_id) TracyGpuZone(erhe_profile_id.data())
+//#   define ERHE_PROFILE_GPU_CONTEXT TracyGpuContext
+//#   define ERHE_PROFILE_FRAME_END FrameMark; TracyGpuCollect
+
+//#   define ERHE_PROFILE_FUNCTION();
+#   define ERHE_PROFILE_SCOPE(erhe_profile_id) static_cast<void>(erhe_profile_id);
+#   define ERHE_PROFILE_COLOR(erhe_profile_id, erhe_profile_color) static_cast<void>(erhe_profile_id);
+#   define ERHE_PROFILE_DATA(erhe_profile_id, erhe_profile_data, erhe_profile_data_length) static_cast<void>(erhe_profile_id);
+#   define ERHE_PROFILE_MESSAGE(erhe_profile_message, erhe_profile_message_length) static_cast<void>(erhe_profile_message);
+#   define ERHE_PROFILE_MESSAGE_LITERAL(erhe_profile_message) static_cast<void>(erhe_profile_message);
+#   define ERHE_PROFILE_GPU_SCOPE(erhe_profile_id) static_cast<void>(erhe_profile_id);
+#   define ERHE_PROFILE_GPU_CONTEXT
+#   define ERHE_PROFILE_FRAME_END
+
+//#   define ERHE_PROFILE_MUTEX_DECLARATION(Type, mutex_variable) tracy::Lockable<Type> mutex_variable
+//#   define ERHE_PROFILE_MUTEX(Type, mutex_variable) TracyLockable(Type, mutex_variable)
+//#   define ERHE_PROFILE_LOCKABLE_BASE(Type) LockableBase(Type)
+#   define ERHE_PROFILE_MUTEX_DECLARATION(Type, mutex_variable) Type mutex_variable
+#   define ERHE_PROFILE_MUTEX(Type, mutex_variable) Type mutex_variable
+#   define ERHE_PROFILE_LOCKABLE_BASE(Type) Type
+
+
+//#   define ERHE_PROFILE_MEM_ALLOC(ptr, size) TracyAlloc(ptr, size)
+//#   define ERHE_PROFILE_MEM_ALLOC_S(ptr, size) TracyAllocS(ptr, size, 40)
+//#   define ERHE_PROFILE_MEM_ALLOC_N(ptr, size, name) TracyAllocN(ptr, size, name)
+//#   define ERHE_PROFILE_MEM_ALLOC_NS(ptr, size, name) TracyAllocNS(ptr, size, 40, name)
+//#   define ERHE_PROFILE_MEM_FREE(ptr) TracyFree(ptr)
+//#   define ERHE_PROFILE_MEM_FREE_S(ptr) TracyFreeS(ptr, 40)
+//#   define ERHE_PROFILE_MEM_FREE_N(ptr, name) TracyFreeN(ptr, name)
+//#   define ERHE_PROFILE_MEM_FREE_NS(ptr, name) TracyFreeNS(ptr, 40, name)
+#   define ERHE_PROFILE_MEM_ALLOC(ptr, size)
+#   define ERHE_PROFILE_MEM_ALLOC_S(ptr, size)
+#   define ERHE_PROFILE_MEM_ALLOC_N(ptr, size, name)
+#   define ERHE_PROFILE_MEM_ALLOC_NS(ptr, size, name)
+#   define ERHE_PROFILE_MEM_FREE(ptr)
+#   define ERHE_PROFILE_MEM_FREE_S(ptr)
+#   define ERHE_PROFILE_MEM_FREE_N(ptr, name)
+#   define ERHE_PROFILE_MEM_FREE_NS(ptr, name)
+
 #elif defined(ERHE_PROFILE_LIBRARY_SUPERLUMINAL) && defined(_WIN32)
 #   include <PerformanceAPI.h>
 #
