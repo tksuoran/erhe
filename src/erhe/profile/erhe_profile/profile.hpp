@@ -43,9 +43,12 @@
 #   define ERHE_PROFILE_GPU_SCOPE(erhe_profile_id) TracyGpuZone(erhe_profile_id.data())
 #   define ERHE_PROFILE_GPU_CONTEXT TracyGpuContext
 #   define ERHE_PROFILE_FRAME_END FrameMark; TracyGpuCollect
+
 #   define ERHE_PROFILE_MUTEX_DECLARATION(Type, mutex_variable) tracy::Lockable<Type> mutex_variable
 #   define ERHE_PROFILE_MUTEX(Type, mutex_variable) TracyLockable(Type, mutex_variable)
 #   define ERHE_PROFILE_LOCKABLE_BASE(Type) LockableBase(Type)
+
+
 #   define ERHE_PROFILE_MEM_ALLOC(ptr, size) TracyAlloc(ptr, size)
 #   define ERHE_PROFILE_MEM_ALLOC_S(ptr, size) TracyAllocS(ptr, size, 40)
 #   define ERHE_PROFILE_MEM_ALLOC_N(ptr, size, name) TracyAllocN(ptr, size, name)
@@ -54,7 +57,7 @@
 #   define ERHE_PROFILE_MEM_FREE_S(ptr) TracyFreeS(ptr, 40)
 #   define ERHE_PROFILE_MEM_FREE_N(ptr, name) TracyFreeN(ptr, name)
 #   define ERHE_PROFILE_MEM_FREE_NS(ptr, name) TracyFreeNS(ptr, 40, name)
-#
+
 #elif defined(ERHE_PROFILE_LIBRARY_SUPERLUMINAL) && defined(_WIN32)
 #   include <PerformanceAPI.h>
 #

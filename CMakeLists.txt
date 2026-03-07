@@ -403,7 +403,7 @@ elseif (${ERHE_PROFILE_LIBRARY} STREQUAL "tracy")
         VERSION           0.13.1
         GIT_SHALLOW       TRUE
         GITHUB_REPOSITORY wolfpld/tracy
-        OPTIONS 
+        OPTIONS "TRACY_ON_DEMAND ON"
     )
     message(STATUS "Erhe configured to use Tracy for profiling.")
     add_definitions(-DERHE_PROFILE_LIBRARY_TRACY)

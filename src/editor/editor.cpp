@@ -1529,6 +1529,12 @@ public:
 
 void run_editor()
 {
+//#if defined(ERHE_PROFILE_LIBRARY_TRACY) && TRACY_ENABLE
+//    while (!TracyIsConnected) {
+//        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+//    }
+//#endif
+
     ERHE_PROFILE_FUNCTION();
 
 #if defined(ERHE_PROFILE_LIBRARY_NVTX)
