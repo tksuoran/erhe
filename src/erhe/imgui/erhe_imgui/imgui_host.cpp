@@ -148,12 +148,12 @@ void update_key_modifiers(ImGuiIO& io, const uint32_t modifier_mask)
 Imgui_host::Imgui_host(
     erhe::rendergraph::Rendergraph& rendergraph,
     Imgui_renderer&                 imgui_renderer,
-    const std::string_view          name,
+    erhe::utility::Debug_label      debug_label,
     const bool                      imgui_ini,
     ImFontAtlas*                    font_atlas
 )
-    : Rendergraph_node{rendergraph, fmt::format("Imgui_host {}", name)}
-    , m_imgui_ini_path{imgui_ini ? fmt::format("imgui_{}.ini", name) : ""}
+    : Rendergraph_node{rendergraph, debug_label}
+    , m_imgui_ini_path{imgui_ini ? fmt::format("imgui_{}.ini", debug_label.string_view()) : ""}
     , m_imgui_renderer{imgui_renderer}
 {
     IMGUI_CHECKVERSION();

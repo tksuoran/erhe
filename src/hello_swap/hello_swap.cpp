@@ -204,7 +204,7 @@ private:
         render_pass_descriptor.stencil_attachment  .load_action    = erhe::graphics::Load_action::Clear;
         render_pass_descriptor.render_target_width  = width;
         render_pass_descriptor.render_target_height = height;
-        render_pass_descriptor.debug_label          = "Example Render_pass";
+        render_pass_descriptor.debug_label          = erhe::utility::Debug_label{"Example Render_pass"};
         m_render_pass = std::make_unique<erhe::graphics::Render_pass>(m_graphics_device, render_pass_descriptor);
     }
 

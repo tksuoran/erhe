@@ -5,6 +5,7 @@
 #include "erhe_item/item.hpp"
 #include "erhe_math/viewport.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_utility/debug_label.hpp"
 
 #include <glm/glm.hpp>
 
@@ -33,13 +34,13 @@ public:
 class Rendergraph_producer_connector : public Rendergraph_id
 {
 public:
-    Rendergraph_producer_connector(std::string label, int key)
+    Rendergraph_producer_connector(erhe::utility::Debug_label label, int key)
         : label{label}
         , key  {key}
     {
     }
 
-    std::string                    label           {};
+    erhe::utility::Debug_label     label           {};
     int                            key             {0};
     std::vector<Rendergraph_node*> consumer_nodes  {};
 };
@@ -47,13 +48,13 @@ public:
 class Rendergraph_consumer_connector : public Rendergraph_id
 {
 public:
-    Rendergraph_consumer_connector(std::string label, int key)
+    Rendergraph_consumer_connector(erhe::utility::Debug_label label, int key)
         : label{label}
         , key  {key}
     {
     }
 
-    std::string                    label         {};
+    erhe::utility::Debug_label     label         {};
     int                            key           {0};
     std::vector<Rendergraph_node*> producer_nodes{};
 };
@@ -70,7 +71,7 @@ class Rendergraph_node
     , public erhe::graphics::Texture_reference
 {
 public:
-    Rendergraph_node(Rendergraph& rendergraph, std::string_view name);
+    Rendergraph_node(Rendergraph& rendergraph, erhe::utility::Debug_label name);
     virtual ~Rendergraph_node() noexcept;
 
     // Implements Item_base
@@ -84,7 +85,7 @@ public:
 
     [[nodiscard]] auto get_rendergraph() -> Rendergraph&;
     [[nodiscard]] auto get_rendergraph() const -> const Rendergraph&;
-    [[nodiscard]] auto get_name       () const -> const std::string&;
+    [[nodiscard]] auto get_debug_label() const -> erhe::utility::Debug_label;
     [[nodiscard]] auto get_inputs     () const -> const std::vector<Rendergraph_consumer_connector>&;
     [[nodiscard]] auto get_inputs     ()       ->       std::vector<Rendergraph_consumer_connector>&;
     [[nodiscard]] auto get_outputs    () const -> const std::vector<Rendergraph_producer_connector>&;
@@ -102,8 +103,8 @@ public:
     void set_position     (glm::vec2 position);
     void set_selected     (bool selected); // TODO XXX FIX
     void set_enabled      (bool value);
-    auto register_input   (std::string_view label, int key) -> bool;
-    auto register_output  (std::string_view label, int key) -> bool;
+    auto register_input   (erhe::utility::Debug_label, int key) -> bool;
+    auto register_output  (erhe::utility::Debug_label, int key) -> bool;
     auto connect_input    (int key, Rendergraph_node* producer_node) -> bool;
     auto connect_output   (int key, Rendergraph_node* consumer_node) -> bool;
     auto disconnect_input (int key, Rendergraph_node* producer_node) -> bool;
@@ -123,7 +124,7 @@ protected:
 
     Rendergraph&                                m_rendergraph;
     ERHE_PROFILE_MUTEX(std::mutex,              m_mutex);
-    std::string                                 m_name;
+    erhe::utility::Debug_label                  m_debug_label;
     bool                                        m_enabled {true};
     std::vector<Rendergraph_consumer_connector> m_inputs;
     std::vector<Rendergraph_producer_connector> m_outputs;

@@ -64,7 +64,7 @@ auto Render_pass::get_swapchain() const -> Swapchain*
 {
     return m_impl->get_swapchain();
 }
-auto Render_pass::get_debug_label() const -> const std::string&
+auto Render_pass::get_debug_label() const -> erhe::utility::Debug_label
 {
     return m_impl->get_debug_label();
 }

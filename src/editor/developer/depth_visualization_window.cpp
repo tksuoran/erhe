@@ -36,7 +36,7 @@ Depth_to_color_rendergraph_node::Depth_to_color_rendergraph_node(
     : erhe::rendergraph::Texture_rendergraph_node{
         erhe::rendergraph::Texture_rendergraph_node_create_info{
             .rendergraph          = rendergraph,
-            .name                 = std::string{"Depth_to_color_rendergraph_node"},
+            .debug_label          = erhe::utility::Debug_label{"Depth_to_color_rendergraph_node"},
             .input_key            = erhe::rendergraph::Rendergraph_node_key::shadow_maps,
             .output_key           = erhe::rendergraph::Rendergraph_node_key::depth_visualization,
             .color_format         = erhe::dataformat::Format::format_8_vec4_srgb,
@@ -49,7 +49,7 @@ Depth_to_color_rendergraph_node::Depth_to_color_rendergraph_node(
     , m_pipeline_pass{
         erhe::graphics::Render_pipeline_state{
             erhe::graphics::Render_pipeline_data{
-                .name           = "Debug_view",
+                .debug_label    = erhe::utility::Debug_label{"Debug_view"},
                 .shader_stages  = &programs.debug_depth.shader_stages,
                 .vertex_input   = &m_empty_vertex_input,
                 .input_assembly = erhe::graphics::Input_assembly_state::triangle,

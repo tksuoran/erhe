@@ -222,7 +222,7 @@ Imgui_renderer::Imgui_renderer(erhe::graphics::Device& graphics_device, Imgui_se
     , m_vertex_input{graphics_device, erhe::graphics::Vertex_input_state_data::make(m_imgui_program_interface.vertex_format)}
     , m_pipeline{
         erhe::graphics::Render_pipeline_data{
-            .name           = "ImGui Renderer",
+            .debug_label    = erhe::utility::Debug_label{"ImGui Renderer"},
             .shader_stages  = &m_shader_stages,
             .vertex_input   = &m_vertex_input,
             .input_assembly = erhe::graphics::Input_assembly_state::triangle,
@@ -672,7 +672,7 @@ auto Imgui_renderer::image(Draw_texture_parameters&& parameters) -> bool
                 .texture_reference = parameters.texture_reference.get(),
                 .filter            = static_cast<unsigned int>(parameters.filter),
                 .mipmap_mode       = static_cast<unsigned int>(parameters.mipmap_mode),
-                .debug_label       = parameters.debug_label
+                .debug_label       = parameters.debug_label.string_view()
             },
             ImVec2{static_cast<float>(parameters.width), static_cast<float>(parameters.height)},
             parameters.uv0, parameters.uv1,
@@ -721,7 +721,7 @@ auto Imgui_renderer::image_button(Draw_texture_parameters&& parameters) -> bool
             .texture_reference = parameters.texture_reference.get(),
             .filter            = static_cast<unsigned int>(parameters.filter),
             .mipmap_mode       = static_cast<unsigned int>(parameters.mipmap_mode),
-            .debug_label       = parameters.debug_label
+            .debug_label       = parameters.debug_label.string_view()
         },
         ImVec2{static_cast<float>(parameters.width), static_cast<float>(parameters.height)},
         parameters.uv0,

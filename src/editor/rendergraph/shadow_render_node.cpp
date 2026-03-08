@@ -146,7 +146,7 @@ void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, co
         render_pass_descriptor.depth_attachment.clear_value[0] = 0.0; // Reverse Z
         render_pass_descriptor.render_target_width             = resolution;
         render_pass_descriptor.render_target_height            = resolution;
-        render_pass_descriptor.debug_label                     = fmt::format("Shadow {}", i);
+        render_pass_descriptor.debug_label                     = erhe::utility::Debug_label{fmt::format("Shadow {}", i)};
         std::unique_ptr<erhe::graphics::Render_pass> render_pass = std::make_unique<Render_pass>(graphics_device, render_pass_descriptor);
         m_render_passes.emplace_back(std::move(render_pass));
     }

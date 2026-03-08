@@ -3,16 +3,17 @@
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/enums.hpp"
 #include "erhe_graphics/ring_buffer_range.hpp"
+#include "erhe_utility/debug_label.hpp"
 
 namespace erhe::graphics {
 
 class Ring_buffer_create_info
 {
 public:
-    std::size_t       size             {0};
-    Ring_buffer_usage ring_buffer_usage{Ring_buffer_usage::None};
-    Buffer_usage      buffer_usage     {0xff}; // TODO
-    const char*       debug_label      {nullptr};
+    std::size_t                size             {0};
+    Ring_buffer_usage          ring_buffer_usage{Ring_buffer_usage::None};
+    Buffer_usage               buffer_usage     {0xff}; // TODO
+    erhe::utility::Debug_label debug_label      {};
 };
 
 class Ring_buffer_impl;
@@ -66,8 +67,6 @@ private:
     std::size_t             m_last_write_wrap_count{1}; // for handling write wraps wraps
     std::size_t             m_read_wrap_count      {0};
     std::size_t             m_read_offset          {0}; // This is the first offset where we cannot write
-
-    std::string             m_name;
 
     std::vector<Ring_buffer_sync_entry> m_sync_entries;
 };

@@ -248,7 +248,7 @@ void Buffer_impl::allocate_storage(const void* init_data)
 
     log_buffer->trace(
         "Buffer_impl::allocate_storage buffer = {} {}, m_capacity_byte_count = {}, gl_storage_mask = {}",
-        gl_name(), m_debug_label, m_capacity_byte_count, gl::to_string(gl_storage_mask)
+        gl_name(), m_debug_label.string_view(), m_capacity_byte_count, gl::to_string(gl_storage_mask)
     );
 
     gl::named_buffer_storage(gl_name(), static_cast<GLintptr>(m_capacity_byte_count), init_data, gl_storage_mask);
@@ -257,7 +257,7 @@ void Buffer_impl::allocate_storage(const void* init_data)
         TracyCZoneCtx zone{};
         if (!m_debug_label.empty()) {
             const uint32_t color = 0x804020ffu;
-            uint64_t srcloc = ___tracy_alloc_srcloc_name(1, "", 0, "", 0, m_debug_label.c_str(), m_debug_label.length(), color);
+            uint64_t srcloc = ___tracy_alloc_srcloc_name(1, "", 0, "", 0, m_debug_label.data(), m_debug_label.size(), color);
             zone = ___tracy_emit_zone_begin_alloc(srcloc, 1);
         }
 #endif
@@ -299,10 +299,10 @@ Buffer_impl::Buffer_impl(Device& device, const Buffer_create_info& create_info) 
         to_string_memory_property_flag_bit_mask(m_required_memory_property_bit_mask),
         to_string_memory_property_flag_bit_mask(m_preferred_memory_property_bit_mask),
         gl_name(),
-        m_debug_label
+        m_debug_label.string_view()
     );
     if (!m_debug_label.empty()) {
-        gl::object_label(gl::Object_identifier::buffer, gl_name(), -1, m_debug_label.c_str());
+        gl::object_label(gl::Object_identifier::buffer, gl_name(), -1, m_debug_label.data());
     }
     allocate_storage(create_info.init_data);
 }
@@ -353,7 +353,7 @@ auto Buffer_impl::get_map() const -> std::span<std::byte>
     return m_map;
 }
 
-auto Buffer_impl::get_debug_label() const noexcept -> const std::string&
+auto Buffer_impl::get_debug_label() const noexcept -> erhe::utility::Debug_label
 {
     return m_debug_label;
 }
@@ -384,7 +384,7 @@ auto Buffer_impl::begin_write(const std::size_t byte_offset, std::size_t byte_co
             m_map_byte_offset,
             byte_count,
             fmt::ptr(map_pointer),
-            m_debug_label
+            m_debug_label.string_view()
         );
 
         m_map = std::span<std::byte>(map_pointer, byte_count);
@@ -465,7 +465,7 @@ auto Buffer_impl::map_bytes(const std::size_t byte_offset, const std::size_t byt
         byte_offset,
         byte_count,
         gl_name(),
-        m_debug_label
+        m_debug_label.string_view()
     );
 
     ERHE_VERIFY(byte_offset + byte_count <= m_capacity_byte_count);
@@ -555,7 +555,7 @@ void Buffer_impl::unmap() noexcept
         m_map.size(),
         reinterpret_cast<intptr_t>(m_map.data()),
         gl_name(),
-        m_debug_label
+        m_debug_label.string_view()
     );
     //const log::Indenter indented;
     //Log::set_text_color(erhe::log::Console_color::GREY);
@@ -596,7 +596,7 @@ void Buffer_impl::flush_bytes(const std::size_t byte_offset, const std::size_t b
         byte_count,
         fmt::ptr(m_map.data()),
         gl_name(),
-        m_debug_label
+        m_debug_label.string_view()
     );
 
     gl::flush_mapped_named_buffer_range(

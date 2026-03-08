@@ -96,7 +96,7 @@ Text_renderer::Text_renderer(erhe::graphics::Device& graphics_device)
     , m_vertex_input      {graphics_device, {}}
     , m_pipeline{
         erhe::graphics::Render_pipeline_data{
-            .name           = "Text renderer",
+            .debug_label    = erhe::utility::Debug_label{"Text renderer"},
             .shader_stages  = &m_shader_stages,
             .vertex_input   = &m_vertex_input,
             .input_assembly = erhe::graphics::Input_assembly_state::triangle,

@@ -134,7 +134,7 @@ Map_window::Map_window(
     erhe::renderer::Text_renderer& text_renderer,
     Tile_renderer&                 tile_renderer
 )
-    : Framebuffer_window    {graphics_device, imgui_renderer, imgui_windows, "Map", "map"}
+    : Framebuffer_window    {graphics_device, imgui_renderer, imgui_windows, "Map", erhe::utility::Debug_label{"map"}, "map"}
     , m_text_renderer       {text_renderer}
     , m_tile_renderer       {tile_renderer}
     , m_free_zoom_command   {commands, *this}

@@ -54,7 +54,7 @@ Id_renderer::Id_renderer(
     , m_draw_indirect_buffers{graphics_device}
     , m_primitive_buffers    {graphics_device, program_interface.primitive_interface}
     , m_pipeline{erhe::graphics::Render_pipeline_data{
-        .name           = "ID Renderer",
+        .debug_label    = erhe::utility::Debug_label{"ID Renderer"},
         .shader_stages  = &programs.id.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangle,
@@ -64,7 +64,7 @@ Id_renderer::Id_renderer(
     }}
 
     , m_selective_depth_clear_pipeline{erhe::graphics::Render_pipeline_data{
-        .name           = "ID Renderer selective depth clear",
+        .debug_label    = erhe::utility::Debug_label{"ID Renderer selective depth clear"},
         .shader_stages  = &programs.id.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangle,

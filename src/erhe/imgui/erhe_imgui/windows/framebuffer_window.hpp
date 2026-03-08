@@ -23,11 +23,12 @@ class Framebuffer_window : public Imgui_window
 {
 public:
     Framebuffer_window(
-        erhe::graphics::Device& graphics_device,
-        Imgui_renderer&         imgui_renderer,
-        Imgui_windows&          imgui_windows,
-        std::string_view        title,
-        const char*             ini_label
+        erhe::graphics::Device&    graphics_device,
+        Imgui_renderer&            imgui_renderer,
+        Imgui_windows&             imgui_windows,
+        std::string_view           title,
+        erhe::utility::Debug_label debug_label,
+        const char*                ini_label
     );
     ~Framebuffer_window() noexcept override;
 
@@ -46,7 +47,7 @@ public:
 
 protected:
     erhe::graphics::Device&                      m_graphics_device;
-    std::string                                  m_debug_label;
+    erhe::utility::Debug_label                   m_debug_label;
     erhe::math::Viewport                         m_viewport           {0, 0, 0, 0};
     float                                        m_content_rect_x     {0.0f};
     float                                        m_content_rect_y     {0.0f};

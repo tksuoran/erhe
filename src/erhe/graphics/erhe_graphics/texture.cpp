@@ -124,20 +124,20 @@ auto Texture_create_info::make_view(Device& device, const std::shared_ptr<Textur
     create_info.depth                  = view_source->get_depth();
     create_info.array_layer_count      = view_source->get_array_layer_count();
     create_info.level_count            = view_source->get_level_count();
-    create_info.debug_label            = fmt::format("View of {}", view_source->get_debug_label());
+    create_info.debug_label            = erhe::utility::Debug_label{ fmt::format("View of {}", view_source->get_debug_label().string_view()) };
     create_info.view_source            = view_source;
     return create_info;
 }
 
 
 Texture::Texture(Device& device, const Texture_create_info& create_info)
-    : Item{create_info.debug_label}
+    : Item{create_info.debug_label.string_view()}
     , m_impl{std::make_unique<Texture_impl>(device, create_info)}
 {
     ERHE_VERIFY(create_info.usage_mask != 0);
     enable_flag_bits(erhe::Item_flags::show_in_ui);
 }
-auto Texture::get_debug_label() const -> const std::string&
+auto Texture::get_debug_label() const -> erhe::utility::Debug_label
 {
     return m_impl->get_debug_label();
 }

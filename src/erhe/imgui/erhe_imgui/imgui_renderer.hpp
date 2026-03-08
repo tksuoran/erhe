@@ -10,6 +10,7 @@
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
+#include "erhe_utility/debug_label.hpp"
 
 #include <imgui/imgui.h>
 
@@ -92,7 +93,7 @@ public:
     glm::vec4                                          tint_color       {1.0f, 1.0f, 1.0f, 1.0f};
     erhe::graphics::Filter                             filter           {erhe::graphics::Filter::nearest};
     erhe::graphics::Sampler_mipmap_mode                mipmap_mode      {erhe::graphics::Sampler_mipmap_mode::not_mipmapped};
-    const char*                                        debug_label      {nullptr};
+    erhe::utility::Debug_label                         debug_label      {};
 };
 
 class Imgui_renderer final

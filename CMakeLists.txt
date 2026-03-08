@@ -425,8 +425,13 @@ if (${ERHE_PROFILE_LIBRARY} STREQUAL "tracy")
         GIT_SHALLOW       TRUE
         GITHUB_REPOSITORY tksuoran/mimalloc
         OPTIONS
-               "MI_OVERRIDE ON"
-            "MI_TRACK_TRACY ON"
+                "MI_OVERRIDE OFF"
+            "MI_WIN_REDIRECT OFF"
+            "MI_BUILD_SHARED OFF"
+            "MI_BUILD_STATIC ON"
+            "MI_BUILD_OBJECT OFF"
+             "MI_BUILD_TESTS OFF"
+             "MI_TRACK_TRACY ON"
     )
     message(STATUS "Erhe configured to use mimalloc with Tracy tracking.")
 else ()

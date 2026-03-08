@@ -31,7 +31,7 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(Mesh_memory& mesh_memor
     // Tool pass one: For hidden tool parts, set stencil to s_stencil_tool_mesh_hidden.
     // Only reads depth buffer, only writes stencil buffer.
     : tool1_hidden_stencil{erhe::graphics::Render_pipeline_state{{
-        .name                    = "Tool pass 1: Tag depth hidden `s_stencil_tool_mesh_hidden`",
+        .debug_label             = erhe::utility::Debug_label{"Tool pass 1: Tag depth hidden `s_stencil_tool_mesh_hidden`"},
         .shader_stages           = &programs.tool.shader_stages,
         .vertex_input            = &mesh_memory.vertex_input,
         .input_assembly          = Input_assembly_state::triangle,
@@ -66,7 +66,7 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(Mesh_memory& mesh_memor
     // Tool pass two: For visible tool parts, set stencil to s_stencil_tool_mesh_visible.
     // Only reads depth buffer, only writes stencil buffer.
     , tool2_visible_stencil{erhe::graphics::Render_pipeline_state{{
-        .name                    = "Tool pass 2: Tag visible tool parts `s_stencil_tool_mesh_visible`",
+        .debug_label             = erhe::utility::Debug_label{"Tool pass 2: Tag visible tool parts `s_stencil_tool_mesh_visible`"},
         .shader_stages           = &programs.tool.shader_stages,
         .vertex_input            = &mesh_memory.vertex_input,
         .input_assembly          = erhe::graphics::Input_assembly_state::triangle,
@@ -103,7 +103,7 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(Mesh_memory& mesh_memor
     , tool3_depth_clear{
         erhe::graphics::Render_pipeline_state{
             {
-                .name                 = "Tool pass 3: Set depth to fixed value",
+                .debug_label          = erhe::utility::Debug_label{"Tool pass 3: Set depth to fixed value"},
                 .shader_stages        = &programs.tool.shader_stages,
                 .vertex_input         = &mesh_memory.vertex_input,
                 .input_assembly       = Input_assembly_state::triangle,
@@ -121,7 +121,7 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(Mesh_memory& mesh_memor
     // Tool pass four: Set depth to proper tool depth
     // Normal depth buffer update with depth test.
     , tool4_depth{erhe::graphics::Render_pipeline_state{{
-        .name           = "Tool pass 4: Set depth to proper tool depth",
+        .debug_label    = erhe::utility::Debug_label{"Tool pass 4: Set depth to proper tool depth"},
         .shader_stages  = &programs.tool.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangle,
@@ -133,7 +133,7 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(Mesh_memory& mesh_memor
     // Tool pass five: Render visible tool parts
     // Normal depth test, stencil test require s_stencil_tool_mesh_visible, color writes enabled, no blending
     , tool5_visible_color{erhe::graphics::Render_pipeline_state{{
-        .name                    = "Tool pass 5: Render visible tool parts, require `s_stencil_tool_mesh_visible`",
+        .debug_label             = erhe::utility::Debug_label{"Tool pass 5: Render visible tool parts, require `s_stencil_tool_mesh_visible`"},
         .shader_stages           = &programs.tool.shader_stages,
         .vertex_input            = &mesh_memory.vertex_input,
         .input_assembly          = Input_assembly_state::triangle,
@@ -168,7 +168,7 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(Mesh_memory& mesh_memor
     // Tool pass six: Render hidden tool parts
     // Normal depth test, stencil test requires s_stencil_tool_mesh_hidden, color writes enabled, blending
     , tool6_hidden_color{erhe::graphics::Render_pipeline_state{{
-        .name                       = "Tool pass 6: Render hidden tool parts, require `s_stencil_tool_mesh_hidden`",
+        .debug_label                = erhe::utility::Debug_label{"Tool pass 6: Render hidden tool parts, require `s_stencil_tool_mesh_hidden`"},
         .shader_stages              = &programs.tool.shader_stages,
         .vertex_input               = &mesh_memory.vertex_input,
         .input_assembly             = Input_assembly_state::triangle,

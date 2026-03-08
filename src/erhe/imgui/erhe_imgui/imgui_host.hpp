@@ -40,7 +40,7 @@ public:
     Imgui_host(
         erhe::rendergraph::Rendergraph& rendergraph,
         Imgui_renderer&                 imgui_renderer,
-        std::string_view                name,
+        erhe::utility::Debug_label      debug_label,
         bool                            imgui_ini,
         ImFontAtlas*                    font_atlas
     );

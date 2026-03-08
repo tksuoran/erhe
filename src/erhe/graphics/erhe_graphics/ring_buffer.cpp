@@ -275,11 +275,6 @@ auto Ring_buffer::get_buffer() -> Buffer*
     return m_buffer.get();
 }
 
-auto Ring_buffer::get_name() const -> const std::string&
-{
-    return m_name;
-}
-
 void Ring_buffer::frame_completed(const uint64_t completed_frame)
 {
     ERHE_PROFILE_FUNCTION();

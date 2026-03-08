@@ -11,6 +11,7 @@
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_rendergraph/rendergraph_node.hpp"
+#include "erhe_utility/debug_label.hpp"
 
 #include <string>
 #include <string_view>
@@ -46,7 +47,7 @@ public:
         erhe::graphics::Device&         graphics_device,
         erhe::rendergraph::Rendergraph& rendergraph,
         Post_processing&                post_processing,
-        const std::string_view          name
+        erhe::utility::Debug_label      debug_label
     );
     ~Post_processing_node() noexcept override;
 
@@ -77,6 +78,7 @@ public:
     std::vector<size_t>                                       upsample_source_levels;
     std::vector<float>                                        weights;
     std::vector<std::shared_ptr<Post_processing_node_texture_reference>> texture_references;
+    std::vector<std::byte>                                    parameter_data;
     int                                                       level0_width  {0};
     int                                                       level0_height {0};
     erhe::graphics::Buffer                                    parameter_buffer;
@@ -117,7 +119,7 @@ public:
     [[nodiscard]] auto create_node(
         erhe::graphics::Device&         graphics_device,
         erhe::rendergraph::Rendergraph& rendergraph,
-        std::string_view                name
+        erhe::utility::Debug_label      debug_label
     ) -> std::shared_ptr<Post_processing_node>;
 
     [[nodiscard]] auto get_nodes() -> const std::vector<std::shared_ptr<Post_processing_node>>&;

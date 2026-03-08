@@ -2,6 +2,7 @@
 
 #include "erhe_graphics/enums.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_utility/debug_label.hpp"
 
 #include <memory>
 #include <mutex>
@@ -16,13 +17,13 @@ class Device;
 class Buffer_create_info
 {
 public:
-    std::size_t  capacity_byte_count                   {0};
-    uint64_t     memory_allocation_create_flag_bit_mask{0};
-    Buffer_usage usage                                 {0};
-    uint64_t     required_memory_property_bit_mask     {0};
-    uint64_t     preferred_memory_property_bit_mask    {0};
-    const void*  init_data                             {nullptr};
-    std::string  debug_label                           {};
+    std::size_t                capacity_byte_count                   {0};
+    uint64_t                   memory_allocation_create_flag_bit_mask{0};
+    Buffer_usage               usage                                 {0};
+    uint64_t                   required_memory_property_bit_mask     {0};
+    uint64_t                   preferred_memory_property_bit_mask    {0};
+    const void*                init_data                             {nullptr};
+    erhe::utility::Debug_label debug_label                           {};
 };
 
 class Buffer_impl;
@@ -38,7 +39,7 @@ public:
     Buffer         (Buffer&& other) noexcept;
     auto operator= (Buffer&& other) noexcept -> Buffer&;
 
-    [[nodiscard]] auto get_debug_label        () const noexcept -> const std::string&;
+    [[nodiscard]] auto get_debug_label        () const noexcept -> erhe::utility::Debug_label;
     [[nodiscard]] auto get_map                () const -> std::span<std::byte>;
     [[nodiscard]] auto get_capacity_byte_count() const noexcept -> std::size_t;
 

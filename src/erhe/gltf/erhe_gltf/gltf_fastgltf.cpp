@@ -956,7 +956,7 @@ private:
             .depth       = image_info.depth,
             .level_count = image_info.level_count,
             .row_stride  = image_info.row_stride,
-            .debug_label = std::string{image_name} // path.filename().string()
+            .debug_label = erhe::utility::Debug_label{image_name} // path.filename().string()
         };
         const int  mipmap_count    = texture_create_info.get_texture_level_count();
         const bool generate_mipmap = mipmap_count != image_info.level_count;
@@ -1016,7 +1016,7 @@ private:
             .usage_mask  =
                 erhe::graphics::Image_usage_flag_bit_mask::sampled |
                 erhe::graphics::Image_usage_flag_bit_mask::transfer_dst,
-            .debug_label = name
+            .debug_label = erhe::utility::Debug_label{name}
         };
         int  mipmap_count    = 0;
         bool generate_mipmap = false;
@@ -1046,7 +1046,7 @@ private:
                     texture_create_info.depth       = image_info.depth;
                     texture_create_info.level_count = image_info.level_count;
                     texture_create_info.row_stride  = image_info.row_stride;
-                    texture_create_info.debug_label = name;
+                    texture_create_info.debug_label = erhe::utility::Debug_label{name};
 
                     mipmap_count    = texture_create_info.get_texture_level_count();
                     generate_mipmap = mipmap_count != image_info.level_count;

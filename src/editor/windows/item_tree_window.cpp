@@ -361,7 +361,7 @@ void Item_tree::drag_and_drop_source(const std::shared_ptr<erhe::Item_base>& ite
 {
     ERHE_PROFILE_FUNCTION();
 
-    log_tree_frame->trace("DnD source: '{}'", item->describe());
+    // log_tree_frame->trace("DnD source: '{}'", item->describe());
 
     if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
         erhe::Item_base* item_raw = item.get();

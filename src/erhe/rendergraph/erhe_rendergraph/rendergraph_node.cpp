@@ -23,19 +23,19 @@ auto Rendergraph_node::get_type_name() const -> std::string_view
     return static_type_name;
 }
 
-Rendergraph_node::Rendergraph_node(Rendergraph& rendergraph, const std::string_view name)
+Rendergraph_node::Rendergraph_node(Rendergraph& rendergraph, const erhe::utility::Debug_label debug_label)
     : m_rendergraph{rendergraph}
-    , m_name       {name}
+    , m_debug_label{debug_label}
 {
     m_rendergraph.register_node(this);
 
-    register_input ("dependency", erhe::rendergraph::Rendergraph_node_key::dependency);
-    register_output("dependency", erhe::rendergraph::Rendergraph_node_key::dependency);
+    register_input (erhe::utility::Debug_label{"dependency"}, erhe::rendergraph::Rendergraph_node_key::dependency);
+    register_output(erhe::utility::Debug_label{"dependency"}, erhe::rendergraph::Rendergraph_node_key::dependency);
 }
 
 Rendergraph_node::~Rendergraph_node() noexcept
 {
-    log_tail->trace("~Rendergraph_node() {}", get_name());
+    log_tail->trace("~Rendergraph_node() {}", get_debug_label().string_view());
     m_rendergraph.unregister_node(this);
 }
 
@@ -49,7 +49,7 @@ auto Rendergraph_node::get_input(const int key, const int depth) const -> const 
     SPDLOG_LOGGER_TRACE(
         log_tail,
         "{} Rendergraph_node::get_input(resource_routing = {}, key = {}, depth = {})",
-        get_name(),
+        get_debug_label().string_view(),
         c_str(resource_routing),
         key,
         depth
@@ -69,25 +69,25 @@ auto Rendergraph_node::get_input(const int key, const int depth) const -> const 
         return &*i;
     }
 
-    log_tail->error("Node '{}' input for key '{}' is not registered", get_name(), key);
+    log_tail->error("Node '{}' input for key '{}' is not registered", get_debug_label().string_view(), key);
     return nullptr;
 }
 
 auto Rendergraph_node::get_consumer_input_node(const int key, const int depth) const -> Rendergraph_node*
 {
     if (!inputs_allowed()) {
-        log_tail->error("Node '{}' inputs are not allowed ('{}')", get_name(), key);
+        log_tail->error("Node '{}' inputs are not allowed ('{}')", get_debug_label().string_view(), key);
         return nullptr;
     }
 
     const auto* input = get_input(key, depth + 1);
     if (input == nullptr) {
-        log_tail->error("Node '{}' input for key '{}' is not registered", get_name(), key);
+        log_tail->error("Node '{}' input for key '{}' is not registered", get_debug_label().string_view(), key);
         return nullptr;
     }
 
     if (input->producer_nodes.empty()) {
-        //log_tail->warning("Node '{}' input for key '{}' is not connected", get_name(), key);
+        //log_tail->warning("Node '{}' input for key '{}' is not connected", get_debug_label().string_view(), key);
         return nullptr;
     }
 
@@ -107,7 +107,7 @@ auto Rendergraph_node::get_output(const int key, const int depth) const -> const
     SPDLOG_LOGGER_TRACE(
         log_tail,
         "{} Rendergraph_node::get_output(key = {}, depth = {})",
-        get_name(),
+        get_debug_label().string_view(),
         key,
         depth
     );
@@ -126,25 +126,25 @@ auto Rendergraph_node::get_output(const int key, const int depth) const -> const
         return &*i;
     };
 
-    log_tail->error("Node '{}' output for key '{}' is not registered", get_name(), key);
+    log_tail->error("Node '{}' output for key '{}' is not registered", get_debug_label().string_view(), key);
     return nullptr;
 }
 
 auto Rendergraph_node::get_producer_output_node(const int key, const int depth) const -> Rendergraph_node*
 {
     if (!outputs_allowed()) {
-        log_tail->error("Node '{}' outputs are not allowed ('{}')", get_name(), key);
+        log_tail->error("Node '{}' outputs are not allowed ('{}')", get_debug_label().string_view(), key);
         return nullptr;
     }
 
     const auto* output = get_output(key, depth + 1);
     if (output == nullptr) {
-        log_tail->error("Node '{}' output for key '{}' is not registered", get_name(), key);
+        log_tail->error("Node '{}' output for key '{}' is not registered", get_debug_label().string_view(), key);
         return nullptr;
     }
 
     if (output->consumer_nodes.empty()) {
-        log_tail->error("Node '{}' output for key '{}' is not connected", get_name(), key);
+        log_tail->error("Node '{}' output for key '{}' is not connected", get_debug_label().string_view(), key);
         return nullptr;
     }
 
@@ -214,9 +214,9 @@ auto Rendergraph_node::get_rendergraph() const -> const Rendergraph&
     return m_rendergraph;
 }
 
-auto Rendergraph_node::get_name() const -> const std::string&
+auto Rendergraph_node::get_debug_label() const -> erhe::utility::Debug_label
 {
-    return m_name;
+    return m_debug_label;
 }
 
 void Rendergraph_node::set_enabled(bool value)
@@ -224,10 +224,10 @@ void Rendergraph_node::set_enabled(bool value)
     m_enabled = value;
 }
 
-auto Rendergraph_node::register_input(const std::string_view label, const int key) -> bool
+auto Rendergraph_node::register_input(const erhe::utility::Debug_label debug_label, const int key) -> bool
 {
     if (!inputs_allowed()) {
-        log_tail->error("Node '{}' inputs are not allowed (label = {}, key = {})", get_name(), label, key);
+        log_tail->error("Node '{}' inputs are not allowed (label = {}, key = {})", get_debug_label().string_view(), debug_label.string_view(), key);
         return false;
     }
 
@@ -241,17 +241,17 @@ auto Rendergraph_node::register_input(const std::string_view label, const int ke
         }
     );
     if (i != m_inputs.end()) {
-        log_tail->error("Node '{}' input key '{}' is already registered", get_name(), key);
+        log_tail->error("Node '{}' input key '{}' is already registered", get_debug_label().string_view(), key);
         return false;
     }
-    m_inputs.push_back(Rendergraph_consumer_connector{std::string{label}, key});
+    m_inputs.push_back(Rendergraph_consumer_connector{debug_label, key});
     return true;
 }
 
-auto Rendergraph_node::register_output(const std::string_view label, const int key) -> bool
+auto Rendergraph_node::register_output(const erhe::utility::Debug_label debug_label, const int key) -> bool
 {
     if (!outputs_allowed()) {
-        log_tail->error("Node '{}' outputs are not allowed (label = {}, key = {})", get_name(), label, key);
+        log_tail->error("Node '{}' outputs are not allowed (label = {}, key = {})", get_debug_label().string_view(), debug_label.string_view(), key);
         return false;
     }
 
@@ -265,17 +265,17 @@ auto Rendergraph_node::register_output(const std::string_view label, const int k
         }
     );
     if (i != m_outputs.end()) {
-        log_tail->error("Node '{}' output key '{}' is already registered", get_name(), key);
+        log_tail->error("Node '{}' output key '{}' is already registered", get_debug_label().string_view(), key);
         return false;
     }
-    m_outputs.push_back(Rendergraph_producer_connector{std::string{label}, key,});
+    m_outputs.push_back(Rendergraph_producer_connector{debug_label, key});
     return true;
 }
 
 auto Rendergraph_node::connect_input(const int key, Rendergraph_node* producer) -> bool
 {
     if (!inputs_allowed()) {
-        log_tail->error("Node '{}' inputs are not allowed (key = {})", get_name(), key);
+        log_tail->error("Node '{}' inputs are not allowed (key = {})", get_debug_label().string_view(), key);
         return false;
     }
 
@@ -289,7 +289,7 @@ auto Rendergraph_node::connect_input(const int key, Rendergraph_node* producer) 
         }
     );
     if (i == m_inputs.end()) {
-        log_tail->error("Node '{}' does not have input '{}' registered", get_name(), key);
+        log_tail->error("Node '{}' does not have input '{}' registered", get_debug_label().string_view(), key);
         return false;
     }
 
@@ -299,7 +299,7 @@ auto Rendergraph_node::connect_input(const int key, Rendergraph_node* producer) 
     if (!producer_nodes.empty()) {
         log_tail->warn(
             "Node '{}' input key {} already has {} producer{} registered",
-            get_name(),
+            get_debug_label().string_view(),
             key,
             producer_nodes.size(),
             producer_nodes.size() > 1 ? "s" : ""
@@ -317,9 +317,9 @@ auto Rendergraph_node::connect_input(const int key, Rendergraph_node* producer) 
     if (j != producer_nodes.end()) {
         log_tail->error(
             "Node '{}' input key '{}' already has producer '{}' connected",
-            get_name(),
+            get_debug_label().string_view(),
             key,
-            producer->get_name()
+            producer->get_debug_label().string_view()
         );
         return false;
     }
@@ -333,7 +333,7 @@ auto Rendergraph_node::connect_input(const int key, Rendergraph_node* producer) 
 auto Rendergraph_node::connect_output(const int key, Rendergraph_node* consumer) -> bool
 {
     if (!outputs_allowed()) {
-        log_tail->error("Node '{}' outputs are not allowed (key = {})", get_name(), key);
+        log_tail->error("Node '{}' outputs are not allowed (key = {})", get_debug_label().string_view(), key);
         return false;
     }
 
@@ -347,7 +347,7 @@ auto Rendergraph_node::connect_output(const int key, Rendergraph_node* consumer)
         }
     );
     if (i == m_outputs.end()) {
-        log_tail->error("Node '{}' does not have output '{}' registered", get_name(), key);
+        log_tail->error("Node '{}' does not have output '{}' registered", get_debug_label().string_view(), key);
         return false;
     }
 
@@ -356,7 +356,7 @@ auto Rendergraph_node::connect_output(const int key, Rendergraph_node* consumer)
     if (!consumer_nodes.empty()) {
         log_tail->trace(
             "Node '{}' output key {} already has {} consumer{} registered - this is OK",
-            get_name(),
+            get_debug_label().string_view(),
             key,
             consumer_nodes.size(),
             consumer_nodes.size() > 1 ? "s" : ""
@@ -373,9 +373,9 @@ auto Rendergraph_node::connect_output(const int key, Rendergraph_node* consumer)
     if (j != consumer_nodes.end()) {
         log_tail->error(
             "Node '{}' output key '{}' already has consumer '{}' connected",
-            get_name(),
+            get_debug_label().string_view(),
             key,
-            consumer->get_name()
+            consumer->get_debug_label().string_view()
         );
         return false;
     }
@@ -394,7 +394,7 @@ auto Rendergraph_node::disconnect_input(const int key, Rendergraph_node* produce
         }
     );
     if (i == m_inputs.end()) {
-        log_tail->error("Node '{}' does not have input '{}' registered", get_name(), key);
+        log_tail->error("Node '{}' does not have input '{}' registered", get_debug_label().string_view(), key);
         return false;
     }
 
@@ -410,9 +410,9 @@ auto Rendergraph_node::disconnect_input(const int key, Rendergraph_node* produce
     if (j == producer_nodes.end()) {
         log_tail->error(
             "Node '{}' input key '{}' producer '{}' not found",
-            get_name(),
+            get_debug_label().string_view(),
             key,
-            producer->get_name()
+            producer->get_debug_label().string_view()
         );
         return false;
     }
@@ -433,7 +433,7 @@ auto Rendergraph_node::disconnect_output(const int key, Rendergraph_node* consum
         }
     );
     if (i == m_outputs.end()) {
-        log_tail->error("Node '{}' does not have output '{}' registered", get_name(), key);
+        log_tail->error("Node '{}' does not have output '{}' registered", get_debug_label().string_view(), key);
         return false;
     }
 
@@ -450,7 +450,7 @@ auto Rendergraph_node::disconnect_output(const int key, Rendergraph_node* consum
             "Node '{}' output key '{}' consumer '{}' not found",
             get_name(),
             key,
-            consumer->get_name()
+            consumer->get_debug_label().string_view()
         );
         return false;
     }

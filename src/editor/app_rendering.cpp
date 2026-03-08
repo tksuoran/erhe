@@ -405,7 +405,7 @@ using Color_blend_state          = erhe::graphics::Color_blend_state;
 Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_device, Mesh_memory&mesh_memory, Programs& programs)
     : m_empty_vertex_input{graphics_device}
     , polygon_fill_standard_opaque_positive_determinant{erhe::graphics::Render_pipeline_state{{
-        .name           = "Polygon Fill Opaque Positive Determinant",
+        .debug_label    = erhe::utility::Debug_label{"Polygon Fill Opaque Positive Determinant"},
         .shader_stages  = &programs.circular_brushed_metal.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangle,
@@ -414,7 +414,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .color_blend    = Color_blend_state::color_blend_disabled
     }}}
     , polygon_fill_standard_opaque_negative_determinant{erhe::graphics::Render_pipeline_state{{
-        .name           = "Polygon Fill Opaque Negative Determinant",
+        .debug_label    = erhe::utility::Debug_label{"Polygon Fill Opaque Negative Determinant"},
         .shader_stages  = &programs.circular_brushed_metal.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangle,
@@ -423,7 +423,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .color_blend    = Color_blend_state::color_blend_disabled
     }}}
     , polygon_fill_standard_opaque_selected_positive_determinant{erhe::graphics::Render_pipeline_state{{
-        .name           = "Polygon Fill Opaque Selected Positive Determinant",
+        .debug_label    = erhe::utility::Debug_label{"Polygon Fill Opaque Selected Positive Determinant"},
         .shader_stages  = &programs.circular_brushed_metal.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangle,
@@ -455,7 +455,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .color_blend    = Color_blend_state::color_blend_disabled
     }}}
     , polygon_fill_standard_opaque_selected_negative_determinant{erhe::graphics::Render_pipeline_state{{
-        .name           = "Polygon Fill Opaque Selected Negative Determinant",
+        .debug_label    = erhe::utility::Debug_label{"Polygon Fill Opaque Selected Negative Determinant"},
         .shader_stages  = &programs.circular_brushed_metal.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangle,
@@ -487,7 +487,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .color_blend    = Color_blend_state::color_blend_disabled
     }}}
     , polygon_fill_standard_translucent{erhe::graphics::Render_pipeline_state{{
-        .name           = "Polygon Fill Translucent",
+        .debug_label    = erhe::utility::Debug_label{"Polygon Fill Translucent"},
         .shader_stages  = &programs.circular_brushed_metal.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangle,
@@ -496,7 +496,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .color_blend    = Color_blend_state::color_blend_premultiplied
     }}}
     , line_hidden_blend{erhe::graphics::Render_pipeline_state{{
-        .name                    = "Hidden lines with blending",
+        .debug_label             = erhe::utility::Debug_label{"Hidden lines with blending"},
         .shader_stages           = &programs.wide_lines_draw_color.shader_stages,
         .vertex_input            = &mesh_memory.vertex_input,
         .input_assembly          = Input_assembly_state::line,
@@ -544,7 +544,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         }
     }}}
     , brush_back{erhe::graphics::Render_pipeline_state{{
-        .name           = "Brush back faces",
+        .debug_label    = erhe::utility::Debug_label{"Brush back faces"},
         .shader_stages  = &programs.brush.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangle,
@@ -553,7 +553,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .color_blend    = Color_blend_state::color_blend_premultiplied
     }}}
     , brush_front{erhe::graphics::Render_pipeline_state{{
-        .name           = "Brush front faces",
+        .debug_label    = erhe::utility::Debug_label{"Brush front faces"},
         .shader_stages  = &programs.brush.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangle,
@@ -562,7 +562,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .color_blend    = Color_blend_state::color_blend_premultiplied
     }}}
     , edge_lines{erhe::graphics::Render_pipeline_state{{
-        .name           = "Edge Lines",
+        .debug_label    = erhe::utility::Debug_label{"Edge Lines"},
         .shader_stages  = &programs.wide_lines_draw_color.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::line,
@@ -594,7 +594,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .color_blend    = Color_blend_state::color_blend_premultiplied
     }}}
     , outline{erhe::graphics::Render_pipeline_state{{
-        .name           = "Outline (selection/hover)",
+        .debug_label    = erhe::utility::Debug_label{"Outline (selection/hover)"},
         .shader_stages  = &programs.fat_triangle.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangle,
@@ -629,7 +629,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .color_blend    = Color_blend_state::color_blend_premultiplied
     }}}
     , corner_points{erhe::graphics::Render_pipeline_state{{
-        .name           = "Corner Points",
+        .debug_label    = erhe::utility::Debug_label{"Corner Points"},
         .shader_stages  = &programs.points.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::point,
@@ -638,7 +638,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .color_blend    = Color_blend_state::color_blend_disabled
     }}}
     , polygon_centroids{erhe::graphics::Render_pipeline_state{{
-        .name           = "Polygon Centroids",
+        .debug_label    = erhe::utility::Debug_label{"Polygon Centroids"},
         .shader_stages  = &programs.points.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::point,
@@ -647,7 +647,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .color_blend    = Color_blend_state::color_blend_disabled
     }}}
     , rendertarget_meshes{erhe::graphics::Render_pipeline_state{{
-        .name           = "Rendertarget Meshes",
+        .debug_label    = erhe::utility::Debug_label{"Rendertarget Meshes"},
         .shader_stages  = &programs.textured.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangle,
@@ -660,7 +660,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
     , sky{
         erhe::graphics::Render_pipeline_state{
             erhe::graphics::Render_pipeline_data{
-                .name                 = "Sky",
+                .debug_label          = erhe::utility::Debug_label{"Sky"},
                 .shader_stages        = &programs.sky.shader_stages,
                 .vertex_input         = &mesh_memory.vertex_input,
                 .input_assembly       = Input_assembly_state::triangle,
@@ -700,7 +700,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
     , grid{
         erhe::graphics::Render_pipeline_state{
             erhe::graphics::Render_pipeline_data{
-                .name           = "Grid",
+                .debug_label    = erhe::utility::Debug_label{"Grid"},
                 .shader_stages  = &programs.grid.shader_stages,
                 .vertex_input   = &mesh_memory.vertex_input,
                 .input_assembly = Input_assembly_state::triangle,

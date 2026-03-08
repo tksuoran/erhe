@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_dataformat/dataformat.hpp"
+#include "erhe_utility/debug_label.hpp"
 
 #include <array>
 #include <memory>
@@ -59,7 +60,7 @@ public:
     Render_pass_attachment_descriptor                stencil_attachment  {};
     int                                              render_target_width {0};
     int                                              render_target_height{0};
-    std::string                                      debug_label;
+    erhe::utility::Debug_label                       debug_label;
 };
 
 class Render_pass_impl;
@@ -77,7 +78,7 @@ public:
     [[nodiscard]] auto get_render_target_width () const -> int;
     [[nodiscard]] auto get_render_target_height() const -> int;
     [[nodiscard]] auto get_swapchain           () const -> Swapchain*;
-    [[nodiscard]] auto get_debug_label         () const -> const std::string&;
+    [[nodiscard]] auto get_debug_label         () const -> erhe::utility::Debug_label;
     [[nodiscard]] auto get_impl                () -> Render_pass_impl&;
     [[nodiscard]] auto get_impl                () const -> const Render_pass_impl&;
 

@@ -149,6 +149,7 @@ namespace ImGui
 #include <glm/glm.hpp>
 
 #include <memory>
+#include <string_view>
 
 #define IM_VEC2_CLASS_EXTRA                                   \
         ImVec2(const glm::vec2 f) { x = f.x; y = f.y; }      \
@@ -185,7 +186,7 @@ public:
     erhe::graphics::Texture_reference* texture_reference{nullptr};
     unsigned int                       filter           {0u};
     unsigned int                       mipmap_mode      {0u};
-    const char*                        debug_label      {nullptr};
+    std::string_view                   debug_label      {};
 
     auto operator==(const Erhe_ImTextureID& other) const -> bool {
         return

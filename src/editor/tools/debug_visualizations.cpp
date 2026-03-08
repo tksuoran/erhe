@@ -110,7 +110,7 @@ Debug_visualizations::Debug_visualizations(
     , m_shadow_texel_pipeline{
         erhe::graphics::Render_pipeline_state{
             erhe::graphics::Render_pipeline_data{
-                .name           = "Shadow_debug",
+                .debug_label    = erhe::utility::Debug_label{"Shadow_debug"},
                 .shader_stages  = &programs.debug_shadow.shader_stages,
                 .vertex_input   = &m_empty_vertex_input,
                 .input_assembly = erhe::graphics::Input_assembly_state::triangle,

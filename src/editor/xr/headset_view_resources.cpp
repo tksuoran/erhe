@@ -51,7 +51,7 @@ Headset_view_resources::Headset_view_resources(
 #if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
             .wrap_texture_name = render_view.color_texture,
 #endif
-            .debug_label       = fmt::format("XR color {}", slot)
+            .debug_label       = erhe::utility::Debug_label{fmt::format("XR color {}", slot)}
         }
     );
 
@@ -68,7 +68,7 @@ Headset_view_resources::Headset_view_resources(
 #if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
             .wrap_texture_name = render_view.depth_stencil_texture,
 #endif
-            .debug_label       = fmt::format("XR depth stencil {}", slot)
+            .debug_label       = erhe::utility::Debug_label{fmt::format("XR depth stencil {}", slot)}
         }
     );
 
@@ -100,7 +100,7 @@ Headset_view_resources::Headset_view_resources(
     }
     render_pass_descriptor.render_target_width  = m_width;
     render_pass_descriptor.render_target_height = m_height;
-    render_pass_descriptor.debug_label = fmt::format("XR {}", slot);
+    render_pass_descriptor.debug_label = erhe::utility::Debug_label{fmt::format("XR {}", slot)};
     m_render_pass = std::make_shared<Render_pass>(graphics_device, render_pass_descriptor);
 
     m_camera = std::make_shared<erhe::scene::Camera>(

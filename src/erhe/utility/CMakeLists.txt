@@ -4,12 +4,14 @@ add_library(erhe::utility ALIAS ${_target})
 
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
-    erhe_utility/bit_helpers.cpp
-    erhe_utility/bit_helpers.hpp
     erhe_utility/align.cpp
     erhe_utility/align.hpp
+    erhe_utility/bit_helpers.cpp
+    erhe_utility/bit_helpers.hpp
+    erhe_utility/debug_label.cpp
+    erhe_utility/debug_label.hpp
 )
 
-target_include_directories(${_target} INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 erhe_target_settings(${_target} "erhe")

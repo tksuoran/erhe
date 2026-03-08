@@ -52,7 +52,7 @@ auto Buffer::operator=(Buffer&& other) noexcept -> Buffer&
     m_impl = std::move(other.m_impl);
     return *this;
 }
-auto Buffer::get_debug_label() const noexcept -> const std::string&
+auto Buffer::get_debug_label() const noexcept -> erhe::utility::Debug_label
 {
     return m_impl->get_debug_label();
 }
@@ -156,7 +156,10 @@ auto Buffer_allocator::allocate_bytes(const std::size_t byte_count, const std::s
 
     m_next_free_byte = next_free_byte;
     ERHE_VERIFY(m_next_free_byte <= capacity_byte_count);
-    log_buffer->trace("buffer {}: allocated {} bytes at offset {}", m_buffer->get_debug_label(), byte_count, offset);
+    log_buffer->trace(
+        "buffer {}: allocated {} bytes at offset {}",
+        m_buffer->get_debug_label().string_view(), byte_count, offset
+    );
     return offset;
 }
 

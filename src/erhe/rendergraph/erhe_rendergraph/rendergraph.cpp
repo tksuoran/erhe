@@ -130,13 +130,14 @@ void Rendergraph::execute()
 
     sort();
 
-    erhe::graphics::Scoped_debug_group render_graph_scope{"Rendergraph::execute()"};
+    erhe::graphics::Scoped_debug_group render_graph_scope{
+        erhe::utility::Debug_label{"Rendergraph::execute()"}
+    };
 
     for (const auto& node : m_nodes) {
         if (node->is_enabled()) {
             SPDLOG_LOGGER_TRACE(log_frame, "Execute render graph node '{}'", node->get_name());
-            std::string debug_group_name = fmt::format("Rendergraph node: {}", node->get_name());
-            erhe::graphics::Scoped_debug_group render_graph_node_scope{debug_group_name};
+            erhe::graphics::Scoped_debug_group node_scope{node->get_debug_label()};
             node->execute_rendergraph_node();
         }
     }

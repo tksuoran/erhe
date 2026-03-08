@@ -2,6 +2,7 @@
 
 #include "erhe_rendergraph/rendergraph_node.hpp"
 #include "erhe_dataformat/dataformat.hpp"
+#include "erhe_utility/debug_label.hpp"
 
 #include <memory>
 #include <string>
@@ -19,13 +20,13 @@ namespace erhe::rendergraph {
 class Texture_rendergraph_node_create_info
 {
 public:
-    Rendergraph&             rendergraph;
-    std::string              name;
-    int                      input_key           {Rendergraph_node_key::none};
-    int                      output_key          {Rendergraph_node_key::none};
-    erhe::dataformat::Format color_format        {erhe::dataformat::Format::format_undefined};
-    erhe::dataformat::Format depth_stencil_format{erhe::dataformat::Format::format_undefined};
-    int                      sample_count        {0};
+    Rendergraph&               rendergraph;
+    erhe::utility::Debug_label debug_label;
+    int                        input_key           {Rendergraph_node_key::none};
+    int                        output_key          {Rendergraph_node_key::none};
+    erhe::dataformat::Format   color_format        {erhe::dataformat::Format::format_undefined};
+    erhe::dataformat::Format   depth_stencil_format{erhe::dataformat::Format::format_undefined};
+    int                        sample_count        {0};
 };
 
 // Rendergraph node that holds a texture and render pass.

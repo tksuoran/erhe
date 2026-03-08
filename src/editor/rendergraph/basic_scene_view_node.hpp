@@ -17,7 +17,7 @@ class Basic_scene_view_node : public erhe::rendergraph::Sink_rendergraph_node
 public:
     Basic_scene_view_node(
         erhe::rendergraph::Rendergraph&             rendergraph,
-        const std::string_view                      name,
+        erhe::utility::Debug_label                  debug_label,
         const std::shared_ptr<Viewport_scene_view>& viewport_scene_view
     );
 

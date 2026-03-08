@@ -86,51 +86,54 @@ void App_windows::viewport_menu(erhe::imgui::Imgui_host& imgui_host)
             }
         }
 
+        if (ImGui::BeginMenu("Commands")) {
         const auto& menu_bindings = m_context.commands->get_menu_bindings();
         for (const erhe::commands::Menu_binding& menu_binding : menu_bindings) {
             const std::string& menu_path = menu_binding.get_menu_path();
             std::size_t path_end = menu_path.length();
             std::size_t offset = 0;
-            std::vector<std::string> menu_path_entries;
-            while (true) {
-                std::size_t separator_position = menu_path.find_first_of('.', offset);
-                if (separator_position == std::string::npos) {
-                    separator_position = path_end;
-                }
-                std::size_t span_length = separator_position - offset;
-                if (span_length > 1) {
-                    const std::string menu_label = menu_path.substr(offset, span_length);
-                    menu_path_entries.emplace_back(menu_label);
-                }
-                offset = separator_position + 1;
-                if (offset >= path_end) {
-                    break;
-                }
-            }
-            bool activate = false;
-            size_t begin_menu_count = 0;
-            for (size_t i = 0, end = menu_path_entries.size(); i < end; ++i) {
-                const std::string& label = menu_path_entries[i];
-                if (i == end - 1) {
-                    activate = ImGui::MenuItem(label.c_str());
-                } else {
-                    if (!ImGui::BeginMenu(label.c_str())) {
+                std::vector<std::string> menu_path_entries;
+                while (true) {
+                    std::size_t separator_position = menu_path.find_first_of('.', offset);
+                    if (separator_position == std::string::npos) {
+                        separator_position = path_end;
+                    }
+                    std::size_t span_length = separator_position - offset;
+                    if (span_length > 1) {
+                        const std::string menu_label = menu_path.substr(offset, span_length);
+                        menu_path_entries.emplace_back(menu_label);
+                    }
+                    offset = separator_position + 1;
+                    if (offset >= path_end) {
                         break;
                     }
-                    ++begin_menu_count;
                 }
-            }
-            for (size_t i = 0; i < begin_menu_count; ++i) {
-                ImGui::EndMenu();
-            }
-            if (activate) {
-                erhe::commands::Command* command = menu_binding.get_command();
-                if (command != nullptr) {
-                    if (command->is_enabled()) {
-                        command->try_call();
+                bool activate = false;
+                size_t begin_menu_count = 0;
+                for (size_t i = 0, end = menu_path_entries.size(); i < end; ++i) {
+                    const std::string& label = menu_path_entries[i];
+                    if (i == end - 1) {
+                        activate = ImGui::MenuItem(label.c_str());
+                    } else {
+                        if (!ImGui::BeginMenu(label.c_str())) {
+                            break;
+                        }
+                        ++begin_menu_count;
+                    }
+                }
+                for (size_t i = 0; i < begin_menu_count; ++i) {
+                    ImGui::EndMenu();
+                }
+                if (activate) {
+                    erhe::commands::Command* command = menu_binding.get_command();
+                    if (command != nullptr) {
+                        if (command->is_enabled()) {
+                            command->try_call();
+                        }
                     }
                 }
             }
+            ImGui::EndMenu();
         }
 
         if (ImGui::BeginMenu("Window")) {

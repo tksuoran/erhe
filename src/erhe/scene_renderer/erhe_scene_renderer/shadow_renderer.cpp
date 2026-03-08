@@ -88,7 +88,7 @@ auto Shadow_renderer::get_pipeline(const Vertex_input_state* vertex_input_state)
     lru_entry->serial = m_pipeline_cache_serial;
     lru_entry->pipeline = erhe::graphics::Render_pipeline_state{
         erhe::graphics::Render_pipeline_data{
-            .name           = "Shadow Renderer",
+            .debug_label    = erhe::utility::Debug_label{"Shadow Renderer"},
             .shader_stages  = &m_shader_stages.shader_stages,
             .vertex_input   = vertex_input_state,
             .input_assembly = Input_assembly_state::triangle,
@@ -149,7 +149,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
     Ring_buffer_range joint_range    = m_joint_buffer.update(glm::uvec4{0, 0, 0, 0}, {}, parameters.skins);
     Ring_buffer_range light_range    = m_light_buffer.update(lights, &parameters.light_projections, glm::vec3{0.0f}, texture_heap);
 
-    log_shadow_renderer->trace("Rendering shadow map to '{}'", parameters.texture->get_debug_label());
+    log_shadow_renderer->trace("Rendering shadow map to '{}'", parameters.texture->get_debug_label().string_view());
 
     const erhe::primitive::Primitive_mode primitive_mode{erhe::primitive::Primitive_mode::polygon_fill};
 

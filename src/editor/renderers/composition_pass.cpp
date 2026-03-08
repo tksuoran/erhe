@@ -176,7 +176,7 @@ void Composition_pass::render(const Render_context& context) const
 
         log_composer->debug("calling render with {} passes", passes.size());
         for (const auto& pass : passes) {
-            log_composer->trace("pass using pipeline = {}", pass->pipeline.data.name);
+            log_composer->trace("pass using pipeline = {}", pass->pipeline.data.debug_label.string_view());
         }
         log_composer->trace("primitive_mode = {}", c_str(primitive_mode));
         log_composer->trace("filter = {}", filter.describe());

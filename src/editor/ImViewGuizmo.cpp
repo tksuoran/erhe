@@ -132,10 +132,10 @@ bool Context::Rotate(int64_t timeNs, glm::vec3& cameraPos, glm::quat& cameraRot,
 	glm::mat4 gizmoProjectionMatrix = glm::ortho(-1.f, 1.f, -1.f, 1.f, -100.0f, 100.0f);
 	glm::mat4 gizmoMvp              = gizmoProjectionMatrix * gizmoViewMatrix;
 
-	std::vector<GizmoAxis> axes;
+	std::array<GizmoAxis, 6> axes;
 	for (int i = 0; i < 3; ++i) {
-		axes.push_back({i * 2,     i, (gizmoViewMatrix * glm::vec4{ axisVectors[i], 0.0f}).z,  axisVectors[i]});
-		axes.push_back({i * 2 + 1, i, (gizmoViewMatrix * glm::vec4{-axisVectors[i], 0.0f}).z, -axisVectors[i]});
+		axes[i * 2 + 0] = {i * 2 + 0, i, (gizmoViewMatrix * glm::vec4{ axisVectors[i], 0.0f}).z,  axisVectors[i]};
+		axes[i * 2 + 1] = {i * 2 + 1, i, (gizmoViewMatrix * glm::vec4{-axisVectors[i], 0.0f}).z, -axisVectors[i]};
 	}
 
 	std::sort(

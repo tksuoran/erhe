@@ -68,14 +68,14 @@ void erhe_opengl_callback(
         (message != nullptr) ? message : ""
     );
 
-#if !defined(NDEBUG) && 0
+#if !defined(NDEBUG)
     switch (severity) {
         case gl::Debug_severity::debug_severity_high:
         case gl::Debug_severity::debug_severity_medium: {
 #if defined(WIN32)
             DebugBreak();
 #else
-            static int counter = 0;                                  e
+            static int counter = 0;
             ++counter; // breakpoint placeholder
 #endif
         }
@@ -87,21 +87,21 @@ void erhe_opengl_callback(
 #endif
 }
 
-Scoped_debug_group::Scoped_debug_group(const std::string_view debug_label)
-    : m_debug_label{debug_label}
+void Scoped_debug_group::begin()
 {
-    gl::log_gl->trace("---- begin: {}", debug_label);
+    ERHE_VERIFY(!m_debug_label.empty());
+    log_debug->trace("---- begin: {}", m_debug_label.string_view());
     gl::push_debug_group(
         gl::Debug_source::debug_source_application,
         0,
-        static_cast<GLsizei>(debug_label.length() + 1),
-        debug_label.data()
+        static_cast<GLsizei>(m_debug_label.size() + 1),
+        m_debug_label.data()
     );
 }
 
-Scoped_debug_group::~Scoped_debug_group() noexcept
+void Scoped_debug_group::end()
 {
-    gl::log_gl->trace("---- end: {}", m_debug_label);
+    log_debug->trace("---- end: {}", m_debug_label.string_view());
     gl::pop_debug_group();
 }
 

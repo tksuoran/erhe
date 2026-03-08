@@ -160,8 +160,8 @@ void Forward_renderer::render(const Render_parameters& parameters)
             pass->begin();
         }
 
-        const std::string debug_group_name = fmt::format("Forward_renderer::render() pass: {}", pipeline.data.name);
-        erhe::graphics::Scoped_debug_group pass_scope{debug_group_name};
+        erhe::graphics::Scoped_debug_group pass_scope{"Forward_renderer::render() pass"};
+        erhe::graphics::Scoped_debug_group pipeline_scope{pipeline.data.debug_label};
 
         if (use_override_shader_stages) {
             parameters.render_encoder.set_render_pipeline_state(pipeline, used_shader_stages);
@@ -287,8 +287,7 @@ void Forward_renderer::draw_primitives(const Render_parameters& parameters, cons
             pass->begin();
         }
 
-        const std::string debug_group_name = fmt::format("Forward_renderer::draw_primitives() pass: {}", pipeline.data.name);
-        erhe::graphics::Scoped_debug_group pass_scope{debug_group_name};
+        erhe::graphics::Scoped_debug_group pass_scope{pipeline.data.debug_label};
 
         parameters.render_encoder.set_render_pipeline_state(pipeline);
         parameters.render_encoder.draw_primitives(pipeline.data.input_assembly.primitive_topology, 0, parameters.non_mesh_vertex_count);

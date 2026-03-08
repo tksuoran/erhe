@@ -11,25 +11,25 @@
 namespace erhe::rendergraph {
 
 Texture_rendergraph_node::Texture_rendergraph_node(const Texture_rendergraph_node_create_info& create_info)
-    : Rendergraph_node      {create_info.rendergraph, create_info.name}
+    : Rendergraph_node      {create_info.rendergraph, create_info.debug_label}
     , m_input_key           {create_info.input_key}
     , m_output_key          {create_info.output_key}
     , m_color_format        {create_info.color_format}
     , m_depth_stencil_format{create_info.depth_stencil_format}
     , m_sample_count        {create_info.sample_count}
 {
-    register_output(create_info.name, erhe::rendergraph::Rendergraph_node_key::viewport_texture);
+    register_output(create_info.debug_label, erhe::rendergraph::Rendergraph_node_key::viewport_texture);
 }
 
 Texture_rendergraph_node::Texture_rendergraph_node(const Texture_rendergraph_node_create_info&& create_info)
-    : Rendergraph_node      {create_info.rendergraph, create_info.name}
+    : Rendergraph_node      {create_info.rendergraph, create_info.debug_label}
     , m_input_key           {create_info.input_key}
     , m_output_key          {create_info.output_key}
     , m_color_format        {create_info.color_format}
     , m_depth_stencil_format{create_info.depth_stencil_format}
     , m_sample_count        {create_info.sample_count}
 {
-    register_output(create_info.name, erhe::rendergraph::Rendergraph_node_key::viewport_texture);
+    register_output(create_info.debug_label, erhe::rendergraph::Rendergraph_node_key::viewport_texture);
 }
 
 Texture_rendergraph_node::~Texture_rendergraph_node() noexcept = default;
@@ -57,7 +57,7 @@ void Texture_rendergraph_node::update_render_pass(int width, int height, erhe::g
         render_pass_descriptor.swapchain            = swapchain;
         render_pass_descriptor.render_target_width  = width;
         render_pass_descriptor.render_target_height = height;
-        render_pass_descriptor.debug_label          = fmt::format("{} Texture_rendergraph_node renderpass (default framebuffer)", get_name());
+        render_pass_descriptor.debug_label          = get_debug_label();
         m_render_pass = std::make_unique<Render_pass>(graphics_device, render_pass_descriptor);
     }
 
@@ -105,7 +105,9 @@ void Texture_rendergraph_node::update_render_pass(int width, int height, erhe::g
                     .sample_count = m_sample_count,
                     .width        = width,
                     .height       = height,
-                    .debug_label  = fmt::format("{} Texture_rendergraph_node multisampled color texture", get_name())
+                    .debug_label  = erhe::utility::Debug_label{
+                        fmt::format("{} Texture_rendergraph_node multisampled color texture", get_name())
+                    }
                 }
             );
         }
@@ -124,7 +126,9 @@ void Texture_rendergraph_node::update_render_pass(int width, int height, erhe::g
                 .sample_count = 0,
                 .width        = width,
                 .height       = height,
-                .debug_label  = fmt::format("{} Texture_rendergraph_node color texture", get_name())
+                .debug_label  = erhe::utility::Debug_label{
+                    fmt::format("{} Texture_rendergraph_node color texture", get_name())
+                }
             }
         );
         const float clear_value[4] = { 1.0f, 0.0f, 1.0f, 1.0f };
@@ -145,7 +149,9 @@ void Texture_rendergraph_node::update_render_pass(int width, int height, erhe::g
                     .sample_count = m_sample_count,
                     .width        = width,
                     .height       = height,
-                    .debug_label  = fmt::format("{} Texture_rendergraph_node depth-stencil texture", get_name())
+                    .debug_label  = erhe::utility::Debug_label{
+                        fmt::format("{} Texture_rendergraph_node depth-stencil texture", get_name())
+                    }
                 }
             );
         }
@@ -176,7 +182,9 @@ void Texture_rendergraph_node::update_render_pass(int width, int height, erhe::g
             }
             render_pass_descriptor.render_target_width  = width;
             render_pass_descriptor.render_target_height = height;
-            render_pass_descriptor.debug_label          = fmt::format("{} Texture_rendergraph_node renderpass", get_name());
+            render_pass_descriptor.debug_label          = erhe::utility::Debug_label{
+                fmt::format("{} Texture_rendergraph_node renderpass", get_name())
+            };
             m_render_pass = std::make_unique<Render_pass>(graphics_device, render_pass_descriptor);
         }
 

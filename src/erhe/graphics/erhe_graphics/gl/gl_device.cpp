@@ -804,7 +804,7 @@ auto Device_impl::create_dummy_texture(const erhe::dataformat::Format format) ->
         .sample_count = 0,
         .width        = 2,
         .height       = 2,
-        .debug_label  = fmt::format("dummy {} texture", c_str(format))
+        .debug_label  = erhe::utility::Debug_label{ fmt::format("dummy {} texture", c_str(format)) }
     };
 
     auto texture = std::make_shared<Texture>(m_device, create_info);

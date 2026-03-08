@@ -68,7 +68,7 @@ Thumbnails::Thumbnails(erhe::graphics::Device& graphics_device, App_context& con
         texture_create_info.use_mipmaps           = true;
         texture_create_info.level_count           = m_color_texture->get_level_count();
         texture_create_info.view_base_array_layer = i;
-        texture_create_info.debug_label           = fmt::format("Thumbnail layer {}", i);
+        texture_create_info.debug_label           = erhe::utility::Debug_label{fmt::format("Thumbnail layer {}", i)};
         t.texture_view = std::make_shared<erhe::graphics::Texture>(m_graphics_device, texture_create_info);
     }
 }

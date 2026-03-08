@@ -39,17 +39,16 @@ public:
     [[nodiscard]] auto get_buffer() const -> Ring_buffer*;
 
 private:
-    Ring_buffer*           m_ring_buffer{nullptr};
-    std::vector<std::byte> m_cpu_buffer;
-    std::span<std::byte>   m_span;
-    std::size_t            m_wrap_count{0};
-    size_t                 m_byte_span_start_offset_in_buffer{0};
-    size_t                 m_byte_write_position_in_span{0};
-    size_t                 m_byte_flush_position_in_span{0};
-    Ring_buffer_usage      m_usage{Ring_buffer_usage::None};
-    bool                   m_is_closed{false};
-    bool                   m_is_released{false};
-    bool                   m_is_cancelled{false};
+    Ring_buffer*         m_ring_buffer{nullptr};
+    std::span<std::byte> m_span;
+    std::size_t          m_wrap_count{0};
+    size_t               m_byte_span_start_offset_in_buffer{0};
+    size_t               m_byte_write_position_in_span{0};
+    size_t               m_byte_flush_position_in_span{0};
+    Ring_buffer_usage    m_usage{Ring_buffer_usage::None};
+    bool                 m_is_closed{false};
+    bool                 m_is_released{false};
+    bool                 m_is_cancelled{false};
 };
 
 } // namespace erhe::graphics

@@ -32,7 +32,7 @@ Scene_preview::Scene_preview(
     : Scene_view       {context, Viewport_config{}}
     , m_graphics_device{graphics_device}
     , m_pipeline_pass  {erhe::graphics::Render_pipeline_state{{
-        .name           = "Polygon Fill Opaque",
+        .debug_label    = erhe::utility::Debug_label{"Polygon Fill Opaque"},
         .shader_stages  = &programs.standard.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangle,
@@ -78,7 +78,7 @@ Scene_preview::Scene_preview(
             .height            = 1,
             .depth             = 1,
             .array_layer_count = 1,
-            .debug_label       = "Scene_preview::m_shadow_texture (dummy shadowmap)"
+            .debug_label       = erhe::utility::Debug_label{"Scene_preview::m_shadow_texture (dummy shadowmap)"}
         }
     );
 
@@ -136,7 +136,7 @@ void Scene_preview::update_rendertarget(erhe::graphics::Device& graphics_device)
                 .pixelformat = m_color_format,
                 .width       = m_width,
                 .height      = m_height,
-                .debug_label = "Preview Color Texture"
+                .debug_label = erhe::utility::Debug_label{"Preview Color Texture"}
             }
         );
         graphics_device.clear_texture(*m_color_texture.get(), { 1.0, 0.0, 0.5, 0.0 });
@@ -162,7 +162,7 @@ void Scene_preview::update_rendertarget(erhe::graphics::Device& graphics_device)
                 .pixelformat = m_depth_format,
                 .width       = m_width,
                 .height      = m_height,
-                .debug_label = "Material Preview Depth Texture"
+                .debug_label = erhe::utility::Debug_label{"Material Preview Depth Texture"}
             }
         );
         attachment_changed = true;

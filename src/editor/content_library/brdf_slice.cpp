@@ -27,7 +27,7 @@ Brdf_slice_rendergraph_node::Brdf_slice_rendergraph_node(
     : erhe::rendergraph::Texture_rendergraph_node{
         erhe::rendergraph::Texture_rendergraph_node_create_info{
             .rendergraph          = rendergraph,
-            .name                 = std::string{"Brdf_slice_rendergraph_node"},
+            .debug_label          = erhe::utility::Debug_label{"Brdf_slice_rendergraph_node"},
             .output_key           = erhe::rendergraph::Rendergraph_node_key::texture_for_gui,
             .color_format         = erhe::dataformat::Format::format_16_vec4_float,
             .depth_stencil_format = erhe::dataformat::Format::format_undefined
@@ -39,7 +39,7 @@ Brdf_slice_rendergraph_node::Brdf_slice_rendergraph_node(
     , m_pipeline_pass{
         erhe::graphics::Render_pipeline_state{
             erhe::graphics::Render_pipeline_data{
-                .name           = "Brdf_slice",
+                .debug_label    = erhe::utility::Debug_label{"Brdf_slice"},
                 .shader_stages  = &programs.brdf_slice.shader_stages,
                 .vertex_input   = &m_empty_vertex_input,
                 .input_assembly = erhe::graphics::Input_assembly_state::triangle,

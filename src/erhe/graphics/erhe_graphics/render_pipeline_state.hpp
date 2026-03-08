@@ -8,6 +8,7 @@
 #include "erhe_graphics/state/scissor_state.hpp"
 #include "erhe_graphics/state/rasterization_state.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_utility/debug_label.hpp"
 
 #include <mutex>
 #include <vector>
@@ -20,7 +21,7 @@ class Vertex_input_state;
 class Render_pipeline_data
 {
 public:
-    const char*                name                {nullptr};
+    erhe::utility::Debug_label debug_label         {};
     Shader_stages*             shader_stages       {nullptr};
     const Vertex_input_state*  vertex_input        {nullptr};
     Input_assembly_state       input_assembly      {};

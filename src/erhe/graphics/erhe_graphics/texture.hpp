@@ -3,6 +3,7 @@
 #include "erhe_graphics/enums.hpp"
 #include "erhe_dataformat/dataformat.hpp"
 #include "erhe_item/item.hpp"
+#include "erhe_utility/debug_label.hpp"
 
 #include <string>
 
@@ -20,26 +21,26 @@ public:
 
     static auto make_view(Device& device, const std::shared_ptr<Texture>& view_source) -> Texture_create_info;
 
-    Device&                  device;
-    uint64_t                 usage_mask            {0};
-    Texture_type             type                  {Texture_type::texture_2d};
-    erhe::dataformat::Format pixelformat           {erhe::dataformat::Format::format_8_vec4_srgb};
-    bool                     use_mipmaps           {false};
-    bool                     fixed_sample_locations{true};
-    bool                     sparse                {false};
-    int                      sample_count          {0};
-    int                      width                 {1};
-    int                      height                {1};
-    int                      depth                 {1};
-    int                      array_layer_count     {0};
-    int                      level_count           {0};
-    int                      row_stride            {0};
-    Buffer*                  buffer                {nullptr};
-    uint64_t                 wrap_texture_name     {0};
-    std::string              debug_label           {};
-    std::shared_ptr<Texture> view_source           {};
-    int                      view_base_level       {0};
-    int                      view_base_array_layer {0};
+    Device&                    device;
+    uint64_t                   usage_mask            {0};
+    Texture_type               type                  {Texture_type::texture_2d};
+    erhe::dataformat::Format   pixelformat           {erhe::dataformat::Format::format_8_vec4_srgb};
+    bool                       use_mipmaps           {false};
+    bool                       fixed_sample_locations{true};
+    bool                       sparse                {false};
+    int                        sample_count          {0};
+    int                        width                 {1};
+    int                        height                {1};
+    int                        depth                 {1};
+    int                        array_layer_count     {0};
+    int                        level_count           {0};
+    int                        row_stride            {0};
+    Buffer*                    buffer                {nullptr};
+    uint64_t                   wrap_texture_name     {0};
+    erhe::utility::Debug_label debug_label           {};
+    std::shared_ptr<Texture>   view_source           {};
+    int                        view_base_level       {0};
+    int                        view_base_array_layer {0};
 };
 
 class Texture;
@@ -77,7 +78,7 @@ public:
     [[nodiscard]] static auto get_mipmap_dimensions(Texture_type type) -> int;
     [[nodiscard]] static auto get_size_level_count (int size) -> int;
 
-    [[nodiscard]] auto get_debug_label           () const -> const std::string&;
+    [[nodiscard]] auto get_debug_label           () const -> erhe::utility::Debug_label;
     [[nodiscard]] auto get_pixelformat           () const -> erhe::dataformat::Format;
     [[nodiscard]] auto get_width                 (unsigned int level = 0) const -> int;
     [[nodiscard]] auto get_height                (unsigned int level = 0) const -> int;

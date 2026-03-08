@@ -383,43 +383,45 @@ endif ()
 
 target_link_libraries(
     ${_target}
+    PUBLIC
+        mimalloc-static
     PRIVATE
-    erhe::utility
-    erhe::commands
-    erhe::configuration
-    erhe::defer
-    erhe::dataformat
-    erhe::file
-    erhe::geometry
-    erhe::geometry_renderer
-    erhe::gltf
-    erhe::graph
-    erhe::graphics
-    erhe::graphics_buffer_sink
-    erhe::imgui
-    erhe::log
-    erhe::math
-    erhe::net
-    erhe::physics
-    erhe::primitive
-    erhe::profile
-    erhe::renderer
-    erhe::rendergraph
-    erhe::scene
-    erhe::scene_renderer
-    erhe::time
-    erhe::ui
-    erhe::verify
-    #meshoptimizer
-    geogram
-    imgui
-    imgui_gradient::imgui_gradient
-    rapidjson
-    RectangleBinPack
-    # reflectcpp::reflectcpp
-    Taskflow
-    tinyexpr
-    tomlplusplus::tomlplusplus
+        erhe::utility
+        erhe::commands
+        erhe::configuration
+        erhe::defer
+        erhe::dataformat
+        erhe::file
+        erhe::geometry
+        erhe::geometry_renderer
+        erhe::gltf
+        erhe::graph
+        erhe::graphics
+        erhe::graphics_buffer_sink
+        erhe::imgui
+        erhe::log
+        erhe::math
+        erhe::net
+        erhe::physics
+        erhe::primitive
+        erhe::profile
+        erhe::renderer
+        erhe::rendergraph
+        erhe::scene
+        erhe::scene_renderer
+        erhe::time
+        erhe::ui
+        erhe::verify
+        #meshoptimizer
+        geogram
+        imgui
+        imgui_gradient::imgui_gradient
+        rapidjson
+        RectangleBinPack
+        # reflectcpp::reflectcpp
+        Taskflow
+        tinyexpr
+        tomlplusplus::tomlplusplus
 )
 
 # Icon font download and process
@@ -481,6 +483,8 @@ erhe_target_sources_grouped(
 )
 target_link_libraries(
     ${_target}
+    PUBLIC
+        mimalloc-static
     PRIVATE
         geogram
         erhe::log

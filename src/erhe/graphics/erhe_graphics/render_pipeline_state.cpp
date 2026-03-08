@@ -60,7 +60,7 @@ Render_pipeline_state::~Render_pipeline_state() noexcept
 
 void Render_pipeline_state::reset()
 {
-    data.name           = nullptr;
+    data.debug_label    = {};
     data.shader_stages  = nullptr;
     data.vertex_input   = nullptr;
     data.input_assembly = Input_assembly_state{};

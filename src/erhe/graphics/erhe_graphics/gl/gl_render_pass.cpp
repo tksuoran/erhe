@@ -122,15 +122,17 @@ Render_pass_impl*              Render_pass_impl::s_active_render_pass = nullptr;
 
 
 Render_pass_impl::Render_pass_impl(Device& device, const Render_pass_descriptor& descriptor)
-    : m_device                  {device}
-    , m_swapchain               {descriptor.swapchain}
-    , m_color_attachments       {descriptor.color_attachments}
-    , m_depth_attachment        {descriptor.depth_attachment}
-    , m_stencil_attachment      {descriptor.stencil_attachment}
-    , m_render_target_width     {descriptor.render_target_width}
-    , m_render_target_height    {descriptor.render_target_height}
-    , m_debug_label             {descriptor.debug_label}
-    , m_debug_group_name        {fmt::format("Render pass: {}", descriptor.debug_label)}
+    : m_device              {device}
+    , m_swapchain           {descriptor.swapchain}
+    , m_color_attachments   {descriptor.color_attachments}
+    , m_depth_attachment    {descriptor.depth_attachment}
+    , m_stencil_attachment  {descriptor.stencil_attachment}
+    , m_render_target_width {descriptor.render_target_width}
+    , m_render_target_height{descriptor.render_target_height}
+    , m_debug_label         {descriptor.debug_label}
+    , m_debug_group_name      {erhe::utility::Debug_label{fmt::format("Render pass: {}", descriptor.debug_label.string_view())}}
+    , m_end_debug_group_name  {erhe::utility::Debug_label{fmt::format("Render_pass_impl::end_render_pass() {}", descriptor.debug_label.string_view())}}
+    , m_begin_debug_group_name{erhe::utility::Debug_label{fmt::format("Render_pass_impl::start_render_pass() {}", descriptor.debug_label.string_view())}}
 {
     auto check_multisample_resolve = [this](const Render_pass_attachment_descriptor& attachment)
     {
@@ -320,8 +322,8 @@ void Render_pass_impl::create()
         gl::named_framebuffer_read_buffer(gl_name(), m_draw_buffers.front());
     }
 
-    const std::string debug_label = fmt::format("(F:{}) {}", gl_name(), m_debug_label);
-    gl::object_label(gl::Object_identifier::framebuffer, gl_name(), -1, debug_label.c_str());
+    erhe::utility::Debug_label debug_label{ fmt::format("(F:{}) {}", gl_name(), m_debug_label.string_view()) };
+    gl::object_label(gl::Object_identifier::framebuffer, gl_name(), -1, debug_label.data());
 
     if (m_uses_multisample_resolve) {
         unsigned int color_index = 0;
@@ -336,7 +338,7 @@ void Render_pass_impl::create()
 
         const std::string multisample_resolve_debug_label = fmt::format(
             "(F:{}) {} Multisample Resolve",
-            gl_multisample_resolve_name(), m_debug_label
+            gl_multisample_resolve_name(), m_debug_label.string_view()
         );
         gl::object_label(gl::Object_identifier::framebuffer, gl_multisample_resolve_name(), -1, multisample_resolve_debug_label.c_str());
     }
@@ -377,7 +379,10 @@ auto Render_pass_impl::check_status() const -> bool
 #if !defined(NDEBUG)
     gl::Framebuffer_status status = gl::check_named_framebuffer_status(gl_name(), gl::Framebuffer_target::draw_framebuffer);
     if (status != gl::Framebuffer_status::framebuffer_complete) {
-        log_render_pass->warn("Render_pass_impl {} FBO {} not complete: {}", get_debug_label(), gl_name(), gl::c_str(status));
+        log_render_pass->warn(
+            "Render_pass_impl {} FBO {} not complete: {}",
+            get_debug_label().string_view(), gl_name(), gl::c_str(status)
+        );
         dump_fbo(gl_name());
         return false;
     }
@@ -388,7 +393,10 @@ auto Render_pass_impl::check_status() const -> bool
     if (m_uses_multisample_resolve) {
         status = gl::check_named_framebuffer_status(gl_multisample_resolve_name(), gl::Framebuffer_target::draw_framebuffer);
         if (status != gl::Framebuffer_status::framebuffer_complete) {
-            log_render_pass->warn("Render_pass_impl {} multisample resolve FBO {} not complete: {}", get_debug_label(), gl_multisample_resolve_name(), gl::c_str(status));
+            log_render_pass->warn(
+                "Render_pass_impl {} multisample resolve FBO {} not complete: {}",
+                get_debug_label().string_view(), gl_multisample_resolve_name(), gl::c_str(status)
+            );
             dump_fbo(gl_multisample_resolve_name());
             return false;
         }
@@ -425,7 +433,7 @@ auto Render_pass_impl::get_swapchain() const -> Swapchain*
     return m_swapchain;
 }
 
-auto Render_pass_impl::get_debug_label() const -> const std::string&
+auto Render_pass_impl::get_debug_label() const -> erhe::utility::Debug_label
 {
     return m_debug_label;
 }
@@ -437,19 +445,20 @@ void Render_pass_impl::start_render_pass()
     ERHE_VERIFY(!m_is_active);
     m_is_active = true;
 
+    log_debug->trace("---- push m_debug_group_name = {}", m_debug_group_name.string_view());
     gl::push_debug_group(
         gl::Debug_source::debug_source_application,
         0,
-        static_cast<GLsizei>(m_debug_group_name.length() + 1),
+        static_cast<GLsizei>(m_debug_group_name.size() + 1),
         m_debug_group_name.data()
     );
 
-    const std::string begin_debug_group_name = fmt::format("Render_pass_impl::start_render_pass() {}", m_debug_group_name);
+    log_debug->trace("---- push m_begin_debug_group_name = {}", m_begin_debug_group_name.string_view());
     gl::push_debug_group(
         gl::Debug_source::debug_source_application,
         0,
-        static_cast<GLsizei>(begin_debug_group_name.length() + 1),
-        begin_debug_group_name.c_str()
+        static_cast<GLsizei>(m_begin_debug_group_name.size() + 1),
+        m_begin_debug_group_name.data()
     );
 
     if (m_device.get_info().vendor == Vendor::Nvidia) {
@@ -608,6 +617,7 @@ void Render_pass_impl::start_render_pass()
         }
     }
 
+    log_debug->trace("---- pop m_begin_debug_group_name = {}", m_begin_debug_group_name.string_view());
     gl::pop_debug_group();
 }
 
@@ -619,12 +629,12 @@ void Render_pass_impl::end_render_pass()
     ERHE_VERIFY(m_is_active);
     m_is_active = false;
 
-    const std::string end_debug_group_name = fmt::format("Render_pass_impl::end_render_pass() {}", m_debug_group_name);
+    log_debug->trace("---- push m_end_debug_group_name = {}", m_end_debug_group_name.string_view());
     gl::push_debug_group(
         gl::Debug_source::debug_source_application,
         0,
-        static_cast<GLsizei>(end_debug_group_name.length() + 1),
-        end_debug_group_name.c_str()
+        static_cast<GLsizei>(m_end_debug_group_name.size() + 1),
+        m_end_debug_group_name.data()
     );
 
     std::array<gl::Framebuffer_attachment, 4> color_attachment_points = {
@@ -633,7 +643,8 @@ void Render_pass_impl::end_render_pass()
         gl::Framebuffer_attachment::color_attachment2,
         gl::Framebuffer_attachment::color_attachment3
     };
-    std::vector<gl::Invalidate_framebuffer_attachment> invalidate_attachments;
+    std::array<gl::Invalidate_framebuffer_attachment, 8> invalidate_attachments;
+    int invalidate_attachments_count = 0;
 
     auto check_multisample_resolve = [this](const Render_pass_attachment_descriptor& attachment, int& blit_width, int& blit_height) -> bool
     {
@@ -753,11 +764,12 @@ void Render_pass_impl::end_render_pass()
         }
     }
 
-    auto check_invalidate_attachment = [&invalidate_attachments](const Render_pass_attachment_descriptor& attachment, gl::Framebuffer_attachment attachment_point)
+    auto check_invalidate_attachment = [&invalidate_attachments, &invalidate_attachments_count](const Render_pass_attachment_descriptor& attachment, gl::Framebuffer_attachment attachment_point)
     {
         if (attachment.texture != nullptr) { // || (attachment.renderbuffer != nullptr)){
             if (attachment.store_action == Store_action::Dont_care) {
-                invalidate_attachments.push_back(static_cast<gl::Invalidate_framebuffer_attachment>(attachment_point));
+                ERHE_VERIFY(invalidate_attachments_count < static_cast<int>(invalidate_attachments.size()));
+                invalidate_attachments[invalidate_attachments_count++] = static_cast<gl::Invalidate_framebuffer_attachment>(attachment_point);
             }
         }
     };
@@ -771,15 +783,17 @@ void Render_pass_impl::end_render_pass()
     check_invalidate_attachment(m_depth_attachment,   gl::Framebuffer_attachment::depth_attachment);
     check_invalidate_attachment(m_stencil_attachment, gl::Framebuffer_attachment::stencil_attachment);
 
-    if (!invalidate_attachments.empty()) {
+    if (invalidate_attachments_count > 0) {
         gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, gl_name());
-        gl::invalidate_framebuffer(gl::Framebuffer_target::draw_framebuffer, static_cast<GLsizei>(invalidate_attachments.size()), invalidate_attachments.data());
+        gl::invalidate_framebuffer(gl::Framebuffer_target::draw_framebuffer, invalidate_attachments_count, invalidate_attachments.data());
     }
 
     // TODO Strictly speaking this is redundant, but might be useful for debugging
     gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);
 
+    log_debug->trace("---- pop m_end_debug_group_name = {}", m_end_debug_group_name.string_view());
     gl::pop_debug_group();
+    log_debug->trace("---- pop m_debug_group_name = {}", m_debug_group_name.string_view());
     gl::pop_debug_group();
 }
 

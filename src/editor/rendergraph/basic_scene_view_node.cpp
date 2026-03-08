@@ -9,10 +9,10 @@ using erhe::graphics::Texture;
 
 Basic_scene_view_node::Basic_scene_view_node(
     erhe::rendergraph::Rendergraph&             rendergraph,
-    const std::string_view                      name,
+    erhe::utility::Debug_label                  debug_label,
     const std::shared_ptr<Viewport_scene_view>& viewport_scene_view
 )
-    : erhe::rendergraph::Sink_rendergraph_node{rendergraph, std::string{name}}
+    : erhe::rendergraph::Sink_rendergraph_node{rendergraph, debug_label}
     , m_viewport_scene_view{viewport_scene_view}
 {
     // Initially empty viewport. Layout is done by Scene_views

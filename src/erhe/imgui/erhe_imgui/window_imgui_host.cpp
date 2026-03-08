@@ -22,9 +22,9 @@ Window_imgui_host::Window_imgui_host(
     erhe::graphics::Device&         graphics_device,
     erhe::rendergraph::Rendergraph& rendergraph,
     erhe::window::Context_window&   context_window,
-    const std::string_view          name
+    erhe::utility::Debug_label      debug_label
 )
-    : Imgui_host       {rendergraph, imgui_renderer, name, true, imgui_renderer.get_font_atlas()}
+    : Imgui_host       {rendergraph, imgui_renderer, debug_label, true, imgui_renderer.get_font_atlas()}
     , m_context_window {context_window}
     , m_graphics_device{graphics_device}
 {
@@ -81,7 +81,7 @@ void Window_imgui_host::update_render_pass(int width, int height)
     render_pass_descriptor.stencil_attachment  .load_action    = erhe::graphics::Load_action::Dont_care;
     render_pass_descriptor.render_target_width  = width;
     render_pass_descriptor.render_target_height = height;
-    render_pass_descriptor.debug_label          = "Window_imgui_host Render_pass";
+    render_pass_descriptor.debug_label          = erhe::utility::Debug_label{"Window_imgui_host Render_pass"};
     m_render_pass = std::make_unique<erhe::graphics::Render_pass>(m_graphics_device, render_pass_descriptor);
 }
 

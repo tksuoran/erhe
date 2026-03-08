@@ -459,7 +459,7 @@ void Font::post_process()
         .use_mipmaps = false,
         .width       = m_texture_width,
         .height      = m_texture_height,
-        .debug_label = fmt::format("Font::m_texture {}", m_path.filename().generic_string())
+        .debug_label = erhe::utility::Debug_label{ fmt::format("Font::m_texture {}", m_path.filename().generic_string())}
     };
 
     m_texture = std::make_unique<Texture>(m_graphics_device, create_info);

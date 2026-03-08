@@ -119,7 +119,7 @@ void Post_processing_window::imgui()
 
         if (ImGui::IsItemHovered()) {
             ImGui::BeginTooltip();
-            ImGui::TextUnformatted(texture->get_debug_label().c_str());
+            ImGui::TextUnformatted(texture->get_debug_label().data());
             ImGui::EndTooltip();
         }
     }
@@ -146,7 +146,7 @@ void Post_processing_window::imgui()
         );
         if (ImGui::IsItemHovered()) {
             ImGui::BeginTooltip();
-            ImGui::TextUnformatted(texture->get_debug_label().c_str());
+            ImGui::TextUnformatted(texture->get_debug_label().data());
             ImGui::EndTooltip();
         }
         ImGui::SameLine();

@@ -175,7 +175,7 @@ void Rendergraph_window::imgui()
         ImGui::TableSetupColumn("InputPin",   ImGuiTableColumnFlags_WidthFixed, 20.0f);
         ImGui::TableSetupColumn("InputLabel", ImGuiTableColumnFlags_None);
         for (const auto& input : inputs) {
-            log_graph_editor->trace("  Input {} {}", input.id.get_id(), input.label);
+            log_graph_editor->trace("  Input {} {}", input.id.get_id(), input.label.string_view());
             const ax::NodeEditor::PinId pin_id{input.id.get_id()};
             ImGui::TableNextRow();
 
@@ -185,7 +185,7 @@ void Rendergraph_window::imgui()
             m_node_editor->EndPin();
 
             ImGui::TableSetColumnIndex(1);
-            ImGui::TextUnformatted(input.label.c_str());
+            ImGui::TextUnformatted(input.label.data());
         }
         ImGui::EndTable();
 
@@ -208,7 +208,7 @@ void Rendergraph_window::imgui()
                         .texture_reference = std::static_pointer_cast<erhe::graphics::Texture_reference>(texture),
                         .width             = static_cast<int>(zoom * aspect * m_image_size),
                         .height            = static_cast<int>(zoom * m_image_size),
-                        .debug_label       = "Rendergraph_window::imgui()"
+                        .debug_label       = erhe::utility::Debug_label{"Rendergraph_window::imgui()"}
                     }
                 );
                 //std::string text = fmt::format(
@@ -237,11 +237,11 @@ void Rendergraph_window::imgui()
         ImGui::TableSetupColumn("OutputLabel", ImGuiTableColumnFlags_None);
         ImGui::TableSetupColumn("OutputPin",   ImGuiTableColumnFlags_WidthFixed, 20.0f);
         for (const auto& output : outputs) {
-            log_graph_editor->trace("  Output {} {}", output.id.get_id(), output.label);
+            log_graph_editor->trace("  Output {} {}", output.id.get_id(), output.label.string_view());
             const ax::NodeEditor::PinId pin_id{output.id.get_id()};
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
-            ImGui::TextUnformatted(output.label.c_str());
+            ImGui::TextUnformatted(output.label.data());
 
             ImGui::TableSetColumnIndex(1);
             m_node_editor->BeginPin(pin_id, ax::NodeEditor::PinKind::Output);

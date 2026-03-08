@@ -385,7 +385,7 @@ void Pipelines::imgui()
         auto* pipeline = pipelines[i];
         if (
             (pipeline == nullptr) ||
-            (pipeline->data.name == nullptr)
+            (pipeline->data.debug_label.empty())
         ) {
             continue;
         }
@@ -396,7 +396,7 @@ void Pipelines::imgui()
 
 void pipeline_imgui(erhe::graphics::Render_pipeline_state& pipeline)
 {
-    const char* name = (pipeline.data.name != nullptr) ? pipeline.data.name : "";
+    const char* name = pipeline.data.debug_label.data();
     if (ImGui::TreeNodeEx(name, ImGuiTreeNodeFlags_Framed)) {
         if (pipeline.data.shader_stages != nullptr) {
             ImGui::Text("Shader stages: %s", pipeline.data.shader_stages->name().c_str());
@@ -406,20 +406,20 @@ void pipeline_imgui(erhe::graphics::Render_pipeline_state& pipeline)
                 const erhe::graphics::Vertex_input_state_data& vertex_input_data = pipeline.data.vertex_input->get_data();
                 int attribute_index = 0;
                 for (const erhe::graphics::Vertex_input_attribute& attribute : vertex_input_data.attributes) {
-                    std::string attribute_label = fmt::format("Attribute {}", attribute_index++);
+                    const std::string attribute_label = fmt::format("Attribute {}", attribute_index++);
                     ImGui::PushID(attribute_index);
                     if (ImGui::TreeNodeEx(attribute_label.c_str(), ImGuiTreeNodeFlags_Framed)) {
                         ImGui::Text("Location: %u", attribute.layout_location);
-                        ImGui::Text("Stride: %zu",   attribute.stride);
+                        ImGui::Text("Stride: %zu",  attribute.stride);
                         ImGui::Text("Format: %s",   c_str(attribute.format) ? "yes" : "no");
-                        ImGui::Text("Offset: %zu",   attribute.offset);
+                        ImGui::Text("Offset: %zu",  attribute.offset);
                         ImGui::TreePop();
                     }
                     ImGui::PopID();
                 }
                 int binding_index = 0;
                 for (const erhe::graphics::Vertex_input_binding& binding : vertex_input_data.bindings) {
-                    std::string binding_label = fmt::format("Binding {}", binding_index++);
+                    const std::string binding_label = fmt::format("Binding {}", binding_index++);
                     ImGui::PushID(100 + binding_index);
                     if (ImGui::TreeNodeEx(binding_label.c_str(), ImGuiTreeNodeFlags_Framed)) {
                         ImGui::Text("Binding: %zu", binding.binding);

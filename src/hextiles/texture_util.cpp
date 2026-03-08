@@ -97,7 +97,7 @@ auto load_texture(erhe::graphics::Device& graphics_device, const std::filesystem
         .depth       = image.info.depth,
         .level_count = image.info.level_count,
         .row_stride  = image.info.row_stride,
-        .debug_label = path.string()
+        .debug_label = erhe::utility::Debug_label{path.string()}
     };
 
     auto texture = std::make_shared<erhe::graphics::Texture>(graphics_device, texture_create_info);

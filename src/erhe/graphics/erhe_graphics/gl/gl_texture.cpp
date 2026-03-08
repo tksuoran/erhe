@@ -469,7 +469,7 @@ Texture_impl::Texture_impl(Texture_impl&&) noexcept = default;
 
 Texture_impl::~Texture_impl() noexcept
 {
-    log_texture->trace("Deleting texture {} {}", gl_name(), m_debug_label);
+    log_texture->trace("Deleting texture {} {}", gl_name(), m_debug_label.string_view());
     if (m_allocated) {
         ERHE_PROFILE_MEM_FREE_NS(this, s_pool_name);
     }
@@ -639,14 +639,14 @@ Texture_impl::Texture_impl(Device& device, const Texture_create_info& create_inf
 
     log_texture->trace(
         "New GL {} {} {} {} {}x{}x{} [{}] {} sample count = {}",
-        gl::c_str(gl_texture_target), c_str(m_type), gl_name(), m_debug_label,
+        gl::c_str(gl_texture_target), c_str(m_type), gl_name(), m_debug_label.string_view(),
         m_width, m_height, m_depth, m_array_layer_count,
         erhe::dataformat::c_str(m_pixelformat), m_sample_count
     );
 
     if (!create_info.view_source) {
-        const std::string debug_label = fmt::format("(T:{}) {}", gl_name(), m_debug_label);
-        gl::object_label(gl::Object_identifier::texture, gl_name(), -1, debug_label.c_str());
+        erhe::utility::Debug_label debug_label{ fmt::format("(T:{}) {}", gl_name(), m_debug_label.string_view()) };
+        gl::object_label(gl::Object_identifier::texture, gl_name(), -1, debug_label.data());
     }
 
     // TODO consider different texture targets
@@ -761,8 +761,8 @@ Texture_impl::Texture_impl(Device& device, const Texture_create_info& create_inf
             gl_name(), gl_texture_target, create_info.view_source->get_impl().gl_name(), internal_format,
             create_info.view_base_level, create_info.level_count, create_info.view_base_array_layer, 1 // TODO layer count
         );
-        const std::string debug_label = fmt::format("(T:{}) {} (texture view)", gl_name(), m_debug_label);
-        gl::object_label(gl::Object_identifier::texture, gl_name(), -1, debug_label.c_str());
+        erhe::utility::Debug_label debug_label{ fmt::format("(T:{}) {} (texture view)", gl_name(), m_debug_label.string_view()) };
+        gl::object_label(gl::Object_identifier::texture, gl_name(), -1, debug_label.data());
     } else {
         int gl_width  = m_width;
         int gl_height = m_height;
@@ -826,7 +826,7 @@ Texture_impl::Texture_impl(Device& device, const Texture_create_info& create_inf
         TracyCZoneCtx zone{};
         if (!m_debug_label.empty()) {
             const uint32_t color = 0x804020ffu;
-            uint64_t srcloc = ___tracy_alloc_srcloc_name(1, "", 0, "", 0, m_debug_label.c_str(), m_debug_label.length(), color);
+            uint64_t srcloc = ___tracy_alloc_srcloc_name(1, "", 0, "", 0, m_debug_label.data(), m_debug_label.size(), color);
             zone = ___tracy_emit_zone_begin_alloc(srcloc, 1);
         }
 #endif
@@ -856,7 +856,7 @@ auto Texture_impl::is_sparse() const -> bool
     return m_is_sparse;
 }
 
-auto Texture_impl::get_debug_label() const -> const std::string&
+auto Texture_impl::get_debug_label() const -> erhe::utility::Debug_label
 {
     return m_debug_label;
 }

@@ -4,6 +4,7 @@
 #include "erhe_graphics/ring_buffer_range.hpp"
 #include "erhe_graphics/shader_monitor.hpp"
 #include "erhe_graphics/surface.hpp"
+#include "erhe_utility/debug_label.hpp"
 
 #include <array>
 #include <functional>
@@ -195,11 +196,29 @@ private:
 class Scoped_debug_group final
 {
 public:
-    explicit Scoped_debug_group(std::string_view debug_label);
-    ~Scoped_debug_group() noexcept;
+    template<std::size_t N>
+    explicit Scoped_debug_group(const char (&debug_label)[N])
+        : m_debug_label{std::string_view{debug_label, N - 1}}
+    {
+        begin();
+    }
+
+    explicit Scoped_debug_group(erhe::utility::Debug_label debug_label)
+        : m_debug_label{debug_label}
+    {
+        begin();
+    }
+
+    ~Scoped_debug_group() noexcept
+    {
+        end();
+    }
+
+    void begin();
+    void end();
 
 private:
-    std::string m_debug_label;
+    erhe::utility::Debug_label m_debug_label;
 };
 
 } // namespace erhe::graphics

@@ -19,15 +19,17 @@ endif ()
 
 target_link_libraries(
     ${_target}
+    PUBLIC
+        mimalloc-static
     PRIVATE
-    erhe::configuration
-    erhe::file
-    erhe::graphics
-    erhe::log
-    erhe::math
-    erhe::utility
-    erhe::verify
-    erhe::window
+        erhe::configuration
+        erhe::file
+        erhe::graphics
+        erhe::log
+        erhe::math
+        erhe::utility
+        erhe::verify
+        erhe::window
 )
 
 if (DEFINED ERHE_PROFILE_TARGET)

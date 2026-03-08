@@ -235,12 +235,12 @@ auto Texture_heap_impl::bind() -> std::size_t
             }
             if (!m_gl_bindless_texture_resident[slot]) {
                 const uint64_t gl_bindless_texture_handle = m_gl_bindless_texture_handles[slot];
-                log_texture_heap->trace(
-                    "making texture handle {} resident / texture {}, sampler {}",
-                    format_texture_handle(gl_bindless_texture_handle),
-                    m_textures[slot]->get_impl().gl_name(),
-                    m_samplers[slot]->get_impl().gl_name()
-                );
+                // log_texture_heap->trace(
+                //     "making texture handle {} resident / texture {}, sampler {}",
+                //     format_texture_handle(gl_bindless_texture_handle),
+                //     m_textures[slot]->get_impl().gl_name(),
+                //     m_samplers[slot]->get_impl().gl_name()
+                // );
                 gl::make_texture_handle_resident_arb(gl_bindless_texture_handle);
                 m_gl_bindless_texture_resident[slot] = true;
             }

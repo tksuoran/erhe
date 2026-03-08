@@ -25,7 +25,7 @@ public:
         erhe::rendergraph::Rendergraph& rendergraph,
         App_context&                    context,
         Rendertarget_mesh*              rendertarget_mesh,
-        const std::string_view          name,
+        erhe::utility::Debug_label      debug_label,
         bool                            imgui_ini = true
     );
     virtual ~Rendertarget_imgui_host() noexcept;

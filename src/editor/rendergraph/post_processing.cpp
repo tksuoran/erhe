@@ -62,9 +62,9 @@ Post_processing_node::Post_processing_node(
     erhe::graphics::Device&         graphics_device,
     erhe::rendergraph::Rendergraph& rendergraph,
     Post_processing&                post_processing,
-    const std::string_view          name
+    erhe::utility::Debug_label      debug_label
 )
-    : erhe::rendergraph::Rendergraph_node{rendergraph, name}
+    : erhe::rendergraph::Rendergraph_node{rendergraph, debug_label}
     , parameter_buffer{
         graphics_device,
         erhe::graphics::Buffer_create_info{
@@ -77,7 +77,7 @@ Post_processing_node::Post_processing_node(
             .usage                                  = get_buffer_usage(post_processing.get_parameter_block().get_binding_target()),
             .required_memory_property_bit_mask      = 0, // GPU only
             .preferred_memory_property_bit_mask     = erhe::graphics::Memory_property_flag_bit_mask::device_local,
-            .debug_label                            = "post processing"
+            .debug_label                            = erhe::utility::Debug_label{"post processing"}
         }
     }
     , m_graphics_device{graphics_device}
@@ -130,7 +130,7 @@ auto Post_processing_node::update_size() -> bool
             .sample_count = 0,
             .width        = level0_width,
             .height       = level0_height,
-            .debug_label  = fmt::format("{} downsample", get_name())
+            .debug_label  = erhe::utility::Debug_label{fmt::format("{} downsample", get_name())}
         }
     );
     upsample_texture = std::make_shared<erhe::graphics::Texture>(
@@ -146,7 +146,7 @@ auto Post_processing_node::update_size() -> bool
             .sample_count = 0,
             .width        = level0_width,
             .height       = level0_height,
-            .debug_label  = fmt::format("{} upsample", get_name())
+            .debug_label  = erhe::utility::Debug_label{fmt::format("{} upsample", get_name())}
         }
     );
 
@@ -172,7 +172,7 @@ auto Post_processing_node::update_size() -> bool
             render_pass_descriptor.color_attachments[0].store_action  = erhe::graphics::Store_action::Store;
             render_pass_descriptor.render_target_width                = downsample_texture->get_width(level);
             render_pass_descriptor.render_target_height               = downsample_texture->get_height(level);
-            render_pass_descriptor.debug_label                        = fmt::format("{} downsample level {}", get_name(), level);
+            render_pass_descriptor.debug_label                        = erhe::utility::Debug_label{fmt::format("{} downsample level {}", get_name(), level)};
 
             ERHE_VERIFY(render_pass_descriptor.render_target_width  == level_width);
             ERHE_VERIFY(render_pass_descriptor.render_target_height == level_height);
@@ -189,7 +189,7 @@ auto Post_processing_node::update_size() -> bool
             texture_create_info.view_base_array_layer = 0;
             texture_create_info.width                 = level_width;
             texture_create_info.height                = level_height;
-            texture_create_info.debug_label           = fmt::format("Downsample level {}", level);
+            texture_create_info.debug_label           = erhe::utility::Debug_label{fmt::format("Downsample level {}", level)};
             downsample_texture_views.push_back(std::make_shared<erhe::graphics::Texture>(m_graphics_device, texture_create_info));
         }
         {
@@ -200,7 +200,7 @@ auto Post_processing_node::update_size() -> bool
             render_pass_descriptor.color_attachments[0].store_action  = erhe::graphics::Store_action::Store;
             render_pass_descriptor.render_target_width                = downsample_texture->get_width(level);
             render_pass_descriptor.render_target_height               = downsample_texture->get_height(level);
-            render_pass_descriptor.debug_label                        = fmt::format("{} upsample level {}", get_name(), level);
+            render_pass_descriptor.debug_label                        = erhe::utility::Debug_label{fmt::format("{} upsample level {}", get_name(), level)};
 
             ERHE_VERIFY(render_pass_descriptor.render_target_width == level_width);
             ERHE_VERIFY(render_pass_descriptor.render_target_height == level_height);
@@ -219,7 +219,7 @@ auto Post_processing_node::update_size() -> bool
             texture_create_info.view_base_array_layer = 0;
             texture_create_info.width                 = level_width;
             texture_create_info.height                = level_height;
-            texture_create_info.debug_label           = fmt::format("Upsample level {}", level);
+            texture_create_info.debug_label           = erhe::utility::Debug_label{fmt::format("Upsample level {}", level)};
             upsample_texture_views.push_back(std::make_shared<erhe::graphics::Texture>(m_graphics_device, texture_create_info));
         }
         if ((level_width == 1) && (level_height == 1)) {
@@ -305,7 +305,9 @@ void Post_processing_node::update_parameters()
     size_t                    level_count  = level_widths.size();
     std::size_t               write_offset = 0;
     const std::size_t         byte_count   = level_offset_size * Post_processing::s_max_mipmap_levels;
-    std::vector<std::byte>    parameter_data(byte_count);
+    if (parameter_data.size() < byte_count) {
+        parameter_data.reserve(byte_count);
+    }
     std::byte* const          start        = parameter_data.data();
     const std::size_t         word_count   = byte_count / sizeof(float);
     const std::span<float>    float_data{reinterpret_cast<float*   >(start), word_count};
@@ -470,7 +472,7 @@ Post_processing::Post_processing(erhe::graphics::Device& d, App_context& app_con
     , m_pipelines{
         .downsample_with_lowpass_input = erhe::graphics::Render_pipeline_state{
             erhe::graphics::Render_pipeline_data{
-                .name           = "Downsample with Lowpass from input",
+                .debug_label    = erhe::utility::Debug_label{"Downsample with Lowpass from input"},
                 .shader_stages  = &m_shader_stages.downsample_with_lowpass_input.shader_stages,
                 .vertex_input   = &m_empty_vertex_input,
                 .input_assembly = erhe::graphics::Input_assembly_state::triangle_strip,
@@ -481,7 +483,7 @@ Post_processing::Post_processing(erhe::graphics::Device& d, App_context& app_con
         },
         .downsample_with_lowpass = erhe::graphics::Render_pipeline_state{
             erhe::graphics::Render_pipeline_data{
-                .name           = "Downsample with Lowpass",
+                .debug_label    = erhe::utility::Debug_label{"Downsample with Lowpass"},
                 .shader_stages  = &m_shader_stages.downsample_with_lowpass.shader_stages,
                 .vertex_input   = &m_empty_vertex_input,
                 .input_assembly = erhe::graphics::Input_assembly_state::triangle,
@@ -492,7 +494,7 @@ Post_processing::Post_processing(erhe::graphics::Device& d, App_context& app_con
         },
         .downsample = erhe::graphics::Render_pipeline_state{
             erhe::graphics::Render_pipeline_data{
-                .name           = "Post Processing Downsample",
+                .debug_label    = erhe::utility::Debug_label{"Post Processing Downsample"},
                 .shader_stages  = &m_shader_stages.downsample.shader_stages,
                 .vertex_input   = &m_empty_vertex_input,
                 .input_assembly = erhe::graphics::Input_assembly_state::triangle,
@@ -503,7 +505,7 @@ Post_processing::Post_processing(erhe::graphics::Device& d, App_context& app_con
         },
         .upsample_first = erhe::graphics::Render_pipeline_state{
             erhe::graphics::Render_pipeline_data{
-                .name           = "Post Processing Upsample first",
+                .debug_label    = erhe::utility::Debug_label{"Post Processing Upsample first"},
                 .shader_stages  = &m_shader_stages.upsample_first.shader_stages,
                 .vertex_input   = &m_empty_vertex_input,
                 .input_assembly = erhe::graphics::Input_assembly_state::triangle,
@@ -514,7 +516,7 @@ Post_processing::Post_processing(erhe::graphics::Device& d, App_context& app_con
         },
         .upsample = erhe::graphics::Render_pipeline_state{
             erhe::graphics::Render_pipeline_data{
-                .name           = "Post Processing Upsample",
+                .debug_label    = erhe::utility::Debug_label{"Post Processing Upsample"},
                 .shader_stages  = &m_shader_stages.upsample.shader_stages,
                 .vertex_input   = &m_empty_vertex_input,
                 .input_assembly = erhe::graphics::Input_assembly_state::triangle,
@@ -525,7 +527,7 @@ Post_processing::Post_processing(erhe::graphics::Device& d, App_context& app_con
         },
         .upsample_last = erhe::graphics::Render_pipeline_state{
             erhe::graphics::Render_pipeline_data{
-                .name           = "Post Processing Upsample last",
+                .debug_label    = erhe::utility::Debug_label{"Post Processing Upsample last"},
                 .shader_stages  = &m_shader_stages.upsample_last.shader_stages,
                 .vertex_input   = &m_empty_vertex_input,
                 .input_assembly = erhe::graphics::Input_assembly_state::triangle,
@@ -547,10 +549,10 @@ Post_processing::Post_processing(erhe::graphics::Device& d, App_context& app_con
 auto Post_processing::create_node(
     erhe::graphics::Device&         graphics_device,
     erhe::rendergraph::Rendergraph& rendergraph,
-    const std::string_view          name
+    erhe::utility::Debug_label      debug_label
 ) -> std::shared_ptr<Post_processing_node>
 {
-    std::shared_ptr<Post_processing_node> new_node = std::make_shared<Post_processing_node>(graphics_device, rendergraph, *this, name);
+    std::shared_ptr<Post_processing_node> new_node = std::make_shared<Post_processing_node>(graphics_device, rendergraph, *this, debug_label);
     m_nodes.push_back(new_node);
     return new_node;
 }

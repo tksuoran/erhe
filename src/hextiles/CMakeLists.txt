@@ -93,23 +93,25 @@ endif ()
 
 target_link_libraries(
     ${_target}
+    PUBLIC
+        mimalloc-static
     PRIVATE
-    etl::etl
-    erhe::commands
-    erhe::file
-    erhe::geometry
-    erhe::graphics
-    erhe::imgui
-    erhe::log
-    erhe::net
-    erhe::profile
-    erhe::renderer
-    erhe::rendergraph
-    erhe::ui
-    erhe::verify
-    erhe::window
-    imgui
-    nlohmann_json::nlohmann_json
+        etl::etl
+        erhe::commands
+        erhe::file
+        erhe::geometry
+        erhe::graphics
+        erhe::imgui
+        erhe::log
+        erhe::net
+        erhe::profile
+        erhe::renderer
+        erhe::rendergraph
+        erhe::ui
+        erhe::verify
+        erhe::window
+        imgui
+        nlohmann_json::nlohmann_json
 )
 
 if (${ERHE_SVG_LIBRARY} STREQUAL "plutosvg")

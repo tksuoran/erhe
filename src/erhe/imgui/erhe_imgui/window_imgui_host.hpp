@@ -26,7 +26,7 @@ public:
         erhe::graphics::Device&         graphics_device,
         erhe::rendergraph::Rendergraph& rendergraph,
         erhe::window::Context_window&   context_window,
-        std::string_view                name
+        erhe::utility::Debug_label      debug_label
     );
     ~Window_imgui_host() noexcept override;
 

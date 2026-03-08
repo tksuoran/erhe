@@ -37,25 +37,27 @@ endif ()
 
 target_link_libraries(
     ${_target}
+    PUBLIC
+        mimalloc-static
     PRIVATE
-    Taskflow
-    erhe::utility
-    erhe::dataformat
-    erhe::file
-    erhe::gltf
-    erhe::graphics
-    erhe::graphics_buffer_sink
-    erhe::log
-    erhe::math
-    erhe::primitive
-    erhe::profile
-    erhe::raytrace # TODO Make it optional - glTF loader currently uses it and log needs to be initialized..
-    erhe::renderer
-    erhe::scene
-    erhe::scene_renderer
-    erhe::ui
-    erhe::verify
-    erhe::window
+        Taskflow
+        erhe::utility
+        erhe::dataformat
+        erhe::file
+        erhe::gltf
+        erhe::graphics
+        erhe::graphics_buffer_sink
+        erhe::log
+        erhe::math
+        erhe::primitive
+        erhe::profile
+        erhe::raytrace # TODO Make it optional - glTF loader currently uses it and log needs to be initialized..
+        erhe::renderer
+        erhe::scene
+        erhe::scene_renderer
+        erhe::ui
+        erhe::verify
+        erhe::window
 )
 
 if (DEFINED ERHE_PROFILE_TARGET)

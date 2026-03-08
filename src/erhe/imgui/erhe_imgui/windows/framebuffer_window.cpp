@@ -17,15 +17,16 @@ using erhe::graphics::Render_pass;
 using erhe::graphics::Texture;
 
 Framebuffer_window::Framebuffer_window(
-    erhe::graphics::Device& graphics_device,
-    Imgui_renderer&         imgui_renderer,
-    Imgui_windows&          imgui_windows,
-    const std::string_view  title,
-    const char*             ini_label
+    erhe::graphics::Device&    graphics_device,
+    Imgui_renderer&            imgui_renderer,
+    Imgui_windows&             imgui_windows,
+    const std::string_view     title,
+    erhe::utility::Debug_label debug_label,
+    const char*                ini_label
 )
     : Imgui_window     {imgui_renderer, imgui_windows, title, ini_label}
     , m_graphics_device{graphics_device}
-    , m_debug_label    {ini_label}
+    , m_debug_label    {debug_label}
     , m_vertex_input   {graphics_device, erhe::graphics::Vertex_input_state_data{}}
 {
 }
@@ -107,7 +108,7 @@ void Framebuffer_window::update_render_pass()
             .sample_count = 0,
             .width        = m_viewport.width,
             .height       = m_viewport.height,
-            .debug_label  = fmt::format("Framebuffer_window {}", m_debug_label)
+            .debug_label  = m_debug_label
         }
     );
     m_graphics_device.clear_texture(*m_texture.get(), { 1.0, 0.0, 1.0, 1.0 });

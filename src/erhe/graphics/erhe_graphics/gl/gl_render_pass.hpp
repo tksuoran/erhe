@@ -35,7 +35,7 @@ public:
     [[nodiscard]] auto get_render_target_width () const -> int;
     [[nodiscard]] auto get_render_target_height() const -> int;
     [[nodiscard]] auto get_swapchain           () const -> Swapchain*;
-    [[nodiscard]] auto get_debug_label         () const -> const std::string&;
+    [[nodiscard]] auto get_debug_label         () const -> erhe::utility::Debug_label;
 
 private:
     friend class Render_command_encoder_impl;
@@ -53,11 +53,14 @@ private:
     Render_pass_attachment_descriptor                m_stencil_attachment;
     int                                              m_render_target_width{0};
     int                                              m_render_target_height{0};
-    std::string                                      m_debug_label;
-    std::string                                      m_debug_group_name;
+    erhe::utility::Debug_label                       m_debug_label;
     bool                                             m_uses_multisample_resolve{false};
     std::thread::id                                  m_owner_thread;
     bool                                             m_is_active{false};
+
+    erhe::utility::Debug_label m_debug_group_name;
+    erhe::utility::Debug_label m_end_debug_group_name;
+    erhe::utility::Debug_label m_begin_debug_group_name;
 
     static ERHE_PROFILE_MUTEX_DECLARATION(std::mutex, s_mutex);
     static std::vector<Render_pass_impl*>             s_all_framebuffers;

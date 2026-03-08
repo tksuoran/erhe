@@ -59,7 +59,7 @@ void Composer::render(const Render_context& context)
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{mutex};
 
     for (const auto& composition_pass : composition_passes) {
-        log_composer->trace("  rp: {}", composition_pass->describe());
+        // log_composer->trace("  rp: {}", composition_pass->describe());
         composition_pass->render(context);
     }
 }

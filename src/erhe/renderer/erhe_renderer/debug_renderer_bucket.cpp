@@ -34,7 +34,7 @@ auto Debug_renderer_bucket::Debug_renderer_bucket::make_pipeline(const bool visi
     const Compare_operation depth_compare_op  = reverse_depth ? reverse(depth_compare_op0) : depth_compare_op0;
     return Render_pipeline_state{
         Render_pipeline_data{
-            .name           = "Line Renderer",
+            .debug_label    = erhe::utility::Debug_label{"Line Renderer"},
             .shader_stages  = graphics_shader_stages,
             .vertex_input   = m_debug_renderer.get_vertex_input(),
             .input_assembly = Input_assembly_state::triangle,

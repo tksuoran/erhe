@@ -34,13 +34,13 @@ Rendertarget_imgui_host::Rendertarget_imgui_host(
     erhe::rendergraph::Rendergraph& rendergraph,
     App_context&                    app_context,
     Rendertarget_mesh*              rendertarget_mesh,
-    const std::string_view          name,
+    erhe::utility::Debug_label      debug_label,
     const bool                      imgui_ini
 )
     : erhe::imgui::Imgui_host{
         rendergraph,
         imgui_renderer,
-        name,
+        debug_label,
         imgui_ini,
         imgui_renderer.get_font_atlas()
     }

@@ -164,7 +164,7 @@ auto Scene_views::create_viewport_scene_view(
             graphics_device,
             rendergraph,
             post_processing,
-            fmt::format("Post processing for {}", name)
+            erhe::utility::Debug_label{fmt::format("Post processing for {}", name)}
         );
         out_rendergraph_output_node = post_processing_node;
         m_post_processing_nodes.push_back(post_processing_node);

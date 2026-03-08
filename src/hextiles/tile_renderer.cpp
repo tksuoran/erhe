@@ -153,7 +153,7 @@ Tile_renderer::Tile_renderer(
     , m_vertex_input{m_graphics_device, erhe::graphics::Vertex_input_state_data::make(m_vertex_format)}
     , m_pipeline{
         erhe::graphics::Render_pipeline_data{
-            .name           = "Map renderer",
+            .debug_label    = erhe::utility::Debug_label{"Map renderer"},
             .shader_stages  = &m_shader_stages,
             .vertex_input   = &m_vertex_input,
             .input_assembly = erhe::graphics::Input_assembly_state::triangle_strip,
@@ -318,7 +318,7 @@ void Tile_renderer::compose_tileset_texture()
         .height      = ty_offset * Tile_shape::height,
         .depth       = 1,
         .level_count = 1,
-        .debug_label = fmt::format("Tile_renderer::m_tileset_texture {}", texture_path.string())
+        .debug_label = erhe::utility::Debug_label{ fmt::format("Tile_renderer::m_tileset_texture {}", texture_path.string()) }
     };
 
     m_tileset_texture = std::make_shared<erhe::graphics::Texture>(m_graphics_device, texture_create_info);

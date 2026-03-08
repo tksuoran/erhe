@@ -2,6 +2,7 @@
 
 #include "erhe_graphics/texture.hpp"
 #include "erhe_graphics/gl/gl_objects.hpp"
+#include "erhe_utility/debug_label.hpp"
 #include "erhe_verify/verify.hpp"
 
 namespace erhe::graphics {
@@ -22,7 +23,7 @@ public:
     [[nodiscard]] static auto get_mipmap_dimensions (gl::Texture_target target) -> int;
     [[nodiscard]] static auto get_mipmap_dimensions (Texture_type type) -> int;
 
-    [[nodiscard]] auto get_debug_label           () const -> const std::string&;
+    [[nodiscard]] auto get_debug_label           () const -> erhe::utility::Debug_label;
     [[nodiscard]] auto get_pixelformat           () const -> erhe::dataformat::Format;
     [[nodiscard]] auto get_width                 (unsigned int level = 0) const -> int;
     [[nodiscard]] auto get_height                (unsigned int level = 0) const -> int;
@@ -45,20 +46,20 @@ public:
 private:
     static constexpr const char* s_pool_name = "glTexture";
 
-    Gl_texture               m_handle;
-    Texture_type             m_type                  {Texture_type::texture_2d};
-    erhe::dataformat::Format m_pixelformat           {erhe::dataformat::Format::format_8_vec4_srgb};
-    bool                     m_fixed_sample_locations{true};
-    bool                     m_is_sparse             {false};
-    bool                     m_allocated             {false};
-    int                      m_sample_count          {0};
-    int                      m_width                 {0};
-    int                      m_height                {0};
-    int                      m_depth                 {0};
-    int                      m_array_layer_count     {0};
-    int                      m_level_count           {0};
-    Buffer*                  m_buffer                {nullptr};
-    std::string              m_debug_label;
+    Gl_texture                 m_handle;
+    Texture_type               m_type                  {Texture_type::texture_2d};
+    erhe::dataformat::Format   m_pixelformat           {erhe::dataformat::Format::format_8_vec4_srgb};
+    bool                       m_fixed_sample_locations{true};
+    bool                       m_is_sparse             {false};
+    bool                       m_allocated             {false};
+    int                        m_sample_count          {0};
+    int                        m_width                 {0};
+    int                        m_height                {0};
+    int                        m_depth                 {0};
+    int                        m_array_layer_count     {0};
+    int                        m_level_count           {0};
+    Buffer*                    m_buffer                {nullptr};
+    erhe::utility::Debug_label m_debug_label;
 };
 
 [[nodiscard]] auto gl_name(const Texture& texture) -> GLuint;
