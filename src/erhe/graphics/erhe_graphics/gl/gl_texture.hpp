@@ -43,11 +43,14 @@ public:
     void clear() const;
 
 private:
+    static constexpr const char* s_pool_name = "glTexture";
+
     Gl_texture               m_handle;
     Texture_type             m_type                  {Texture_type::texture_2d};
     erhe::dataformat::Format m_pixelformat           {erhe::dataformat::Format::format_8_vec4_srgb};
     bool                     m_fixed_sample_locations{true};
     bool                     m_is_sparse             {false};
+    bool                     m_allocated             {false};
     int                      m_sample_count          {0};
     int                      m_width                 {0};
     int                      m_height                {0};

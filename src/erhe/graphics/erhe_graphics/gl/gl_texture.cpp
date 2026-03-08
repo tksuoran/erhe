@@ -13,6 +13,10 @@
 
 #include <fmt/format.h>
 
+#if defined(ERHE_PROFILE_LIBRARY_TRACY)
+#   include <tracy/TracyC.h>
+#endif
+
 namespace erhe::graphics {
 
 class InternalFormatFormatType
@@ -144,6 +148,11 @@ auto get_gl_pixel_byte_count(const erhe::dataformat::Format pixelformat)-> size_
             return component_count(entry.format) * byte_count(entry.type);
         }
     }
+
+    if (pixelformat == erhe::dataformat::Format::format_d32_sfloat_s8_uint) {
+        return 8;
+    }
+
     ERHE_FATAL("Bad internal format");
 }
 
@@ -461,6 +470,9 @@ Texture_impl::Texture_impl(Texture_impl&&) noexcept = default;
 Texture_impl::~Texture_impl() noexcept
 {
     log_texture->trace("Deleting texture {} {}", gl_name(), m_debug_label);
+    if (m_allocated) {
+        ERHE_PROFILE_MEM_FREE_NS(this, s_pool_name);
+    }
 }
 
 auto Texture_impl::gl_name() const -> GLuint
@@ -795,6 +807,36 @@ Texture_impl::Texture_impl(Device& device, const Texture_create_info& create_inf
                 ERHE_FATAL("Bad texture target");
             }
         }
+
+        m_allocated = true;
+
+        // TODO Do cubemaps have depth = 6 or depth = 1?
+        size_t layer_size = 0;
+        size_t gl_bytes_per_pixel = get_gl_pixel_byte_count(m_pixelformat);
+        for (int level = 0; level < m_level_count; level++) {
+            const int level_width  = std::max(1, get_width (level));
+            const int level_height = std::max(1, get_height(level));
+            const int level_depth  = std::max(1, get_depth (level));
+            size_t level_size = level_width * level_height * level_depth * gl_bytes_per_pixel * std::max(1, m_sample_count);
+            layer_size += level_size;
+        }
+        size_t texture_size = std::max(1, m_array_layer_count) * layer_size;
+
+#if TRACY_ENABLE
+        TracyCZoneCtx zone{};
+        if (!m_debug_label.empty()) {
+            const uint32_t color = 0x804020ffu;
+            uint64_t srcloc = ___tracy_alloc_srcloc_name(1, "", 0, "", 0, m_debug_label.c_str(), m_debug_label.length(), color);
+            zone = ___tracy_emit_zone_begin_alloc(srcloc, 1);
+        }
+#endif
+        ERHE_PROFILE_MEM_ALLOC_NS(this, texture_size, s_pool_name);
+#if TRACY_ENABLE
+        if (!m_debug_label.empty()) {
+            ___tracy_emit_zone_end(zone);
+        }
+#endif
+
     }
 }
 

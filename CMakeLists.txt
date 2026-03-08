@@ -403,11 +403,12 @@ elseif (${ERHE_PROFILE_LIBRARY} STREQUAL "tracy")
         VERSION           0.13.1
         GIT_SHALLOW       TRUE
         GITHUB_REPOSITORY wolfpld/tracy
-        OPTIONS "TRACY_ON_DEMAND ON"
+        OPTIONS
+            "TRACY_ON_DEMAND ON"
     )
     message(STATUS "Erhe configured to use Tracy for profiling.")
     add_definitions(-DERHE_PROFILE_LIBRARY_TRACY)
-    set(ERHE_PROFILE_TARGET TracyClient) # CACHE STRING "" FORCE)
+    set(ERHE_PROFILE_TARGET Tracy::TracyClient) # CACHE STRING "" FORCE)
 elseif (${ERHE_PROFILE_LIBRARY} STREQUAL "superluminal")
     message(STATUS "Erhe configured to use Superluminal for profiling.")
     add_definitions(-DERHE_PROFILE_LIBRARY_SUPERLUMINAL)
@@ -415,6 +416,29 @@ elseif (${ERHE_PROFILE_LIBRARY} STREQUAL "superluminal")
 else ()
     message(STATUS "Erhe configured to use disable for instrumented profiling.")
     add_definitions(-DERHE_PROFILE_LIBRARY_NONE)
+endif ()
+
+if (${ERHE_PROFILE_LIBRARY} STREQUAL "tracy")
+    CPMAddPackage(
+        NAME              mimalloc
+        GIT_TAG           tracy
+        GIT_SHALLOW       TRUE
+        GITHUB_REPOSITORY tksuoran/mimalloc
+        OPTIONS
+               "MI_OVERRIDE ON"
+            "MI_TRACK_TRACY ON"
+    )
+    message(STATUS "Erhe configured to use mimalloc with Tracy tracking.")
+else ()
+    CPMAddPackage(
+        NAME              mimalloc
+        GIT_TAG           tracy
+        GIT_SHALLOW       TRUE
+        GITHUB_REPOSITORY tksuoran/mimalloc
+        OPTIONS
+               "MI_OVERRIDE ON"
+    )
+    message(STATUS "Erhe configured to use mimalloc without tracking.")
 endif ()
 
 if (${ERHE_GUI_LIBRARY} STREQUAL "imgui")

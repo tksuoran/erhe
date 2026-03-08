@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <limits>
 #include <new>
+#include <vector>
 
 #ifdef _MSC_VER
 #pragma warning(disable : 4714)
@@ -47,7 +48,6 @@
 #   define ERHE_PROFILE_MUTEX_DECLARATION(Type, mutex_variable) tracy::Lockable<Type> mutex_variable
 #   define ERHE_PROFILE_MUTEX(Type, mutex_variable) TracyLockable(Type, mutex_variable)
 #   define ERHE_PROFILE_LOCKABLE_BASE(Type) LockableBase(Type)
-
 
 #   define ERHE_PROFILE_MEM_ALLOC(ptr, size) TracyAlloc(ptr, size)
 #   define ERHE_PROFILE_MEM_ALLOC_S(ptr, size) TracyAllocS(ptr, size, 40)
@@ -155,4 +155,17 @@ public:
         std::free(p);
     }
 };
+
+namespace erhe {
+template <typename T>
+using vector = std::vector<T, Profile_allocator<T>>;
+}
+
+#else
+
+namespace erhe {
+template <typename T>
+using vector = std::vector<T>;
+}
+
 #endif
