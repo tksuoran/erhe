@@ -12,6 +12,9 @@ src/editor/res/fonts/materialdesignicons-webfont.ttf
 src/editor/res/fonts/materialdesignicons.css
 !src/editor/cache/bvh/keep
 build
+build_vs2022_opengl
+build_vs2026_opengl
+build_vs2026_vulkan
 cmake-build-*
 vscode-cmake-*
 log.txt
