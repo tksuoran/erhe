@@ -24,6 +24,7 @@ namespace erhe::graphics {
     class Sampler;
     class Shader_monitor;
     class Shader_stages;
+    class Texture_heap;
 }
 namespace erhe::ui {
     class Font;
@@ -93,6 +94,7 @@ private:
     erhe::graphics::Render_pipeline_state  m_pipeline;
 
     std::vector<erhe::graphics::Ring_buffer_range> m_vertex_buffer_ranges;
+    std::unique_ptr<erhe::graphics::Texture_heap>  m_texture_heap;
 };
 
 } // namespace erhe::renderer

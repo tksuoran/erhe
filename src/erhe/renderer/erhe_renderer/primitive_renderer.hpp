@@ -57,6 +57,7 @@ public:
     void add_lines(const glm::mat4& transform, const std::vector<Line>& lines);
     void add_lines(const glm::mat4& transform, const std::initializer_list<Line> lines);
     void add_lines(const glm::mat4& transform, const std::initializer_list<Line4> lines);
+    void add_lines(const glm::mat4& transform, std::span<Line> lines);
 
     void add_line(const glm::vec4& color0, float width0, glm::vec3 p0, const glm::vec4& color1, float width1, glm::vec3 p2);
 
@@ -66,6 +67,11 @@ public:
         add_lines(transform, lines);
     }
     void add_lines(const glm::mat4 transform, const glm::vec4& color, const std::vector<Line>& lines)
+    {
+        set_line_color(color);
+        add_lines(transform, lines);
+    }
+    void add_lines(const glm::mat4 transform, const glm::vec4& color, std::span<Line> lines)
     {
         set_line_color(color);
         add_lines(transform, lines);

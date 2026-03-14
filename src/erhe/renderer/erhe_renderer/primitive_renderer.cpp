@@ -105,6 +105,17 @@ void Primitive_renderer::set_thickness(const float thickness)
 }
 
 #pragma region add
+void Primitive_renderer::add_lines(const glm::mat4& transform, std::span<Line> lines)
+{
+    make_lines(lines.size());
+    for (const Line& line : lines) {
+        const glm::vec4 p0{transform * glm::vec4{line.p0, 1.0f}};
+        const glm::vec4 p1{transform * glm::vec4{line.p1, 1.0f}};
+        put(glm::vec3{p0} / p0.w, m_half_line_thickness, m_line_color);
+        put(glm::vec3{p1} / p1.w, m_half_line_thickness, m_line_color);
+    }
+}
+
 void Primitive_renderer::add_lines(const glm::mat4& transform, const std::vector<Line>& lines)
 {
     make_lines(lines.size());

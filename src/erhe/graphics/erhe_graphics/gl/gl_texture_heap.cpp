@@ -24,48 +24,48 @@ Texture_heap_impl::Texture_heap_impl(
     // log_texture_heap->trace("Texture_heap_impl::Texture_heap_impl()");
 
     if (m_device.get_info().use_bindless_texture) {
+        reset_heap();
         const uint64_t fallback_texture_handle = m_device.get_handle(m_fallback_texture, m_fallback_sampler);
-        m_textures.resize(m_reserved_slot_count);
-        m_samplers.resize(m_reserved_slot_count);
-        m_assigned.resize(m_reserved_slot_count);
-        m_gl_bindless_texture_handles.resize(m_reserved_slot_count);
-        m_gl_bindless_texture_resident.resize(m_reserved_slot_count);
         std::fill(m_assigned.begin(), m_assigned.end(), false);
         std::fill(m_textures.begin(), m_textures.end(), &m_fallback_texture);
         std::fill(m_samplers.begin(), m_samplers.end(), &m_fallback_sampler);
         std::fill(m_gl_bindless_texture_handles.begin(), m_gl_bindless_texture_handles.end(), fallback_texture_handle);
         std::fill(m_gl_bindless_texture_resident.begin(), m_gl_bindless_texture_resident.end(), false);
-        m_used_slot_count = 0;
     } else {
         m_textures.resize(device.get_info().max_per_stage_descriptor_samplers);
         m_samplers.resize(device.get_info().max_per_stage_descriptor_samplers);
         m_gl_textures.resize(device.get_info().max_per_stage_descriptor_samplers);
         m_gl_samplers.resize(device.get_info().max_per_stage_descriptor_samplers);
         m_zero_vector.resize(device.get_info().max_per_stage_descriptor_samplers);
-        reset();
+        reset_heap();
     }
 }
 
-Texture_heap_impl::~Texture_heap_impl()
+Texture_heap_impl::~Texture_heap_impl() noexcept
 {
     // log_texture_heap->trace("Texture_heap_impl::~Texture_heap_impl()");
 }
 
-void Texture_heap_impl::reset()
+void Texture_heap_impl::reset_heap()
 {
-    // log_texture_heap->trace("Texture_heap_impl::reset()");
+    // log_texture_heap->trace("Texture_heap_impl::reset_heap()");
 
-    if (!m_device.get_info().use_bindless_texture) {
+    if (m_device.get_info().use_bindless_texture) {
+        m_textures.resize(m_reserved_slot_count);
+        m_samplers.resize(m_reserved_slot_count);
+        m_assigned.resize(m_reserved_slot_count);
+        m_gl_bindless_texture_handles.resize(m_reserved_slot_count);
+        m_gl_bindless_texture_resident.resize(m_reserved_slot_count);
+        m_used_slot_count = 0;
+    } else {
         const GLuint fallback_texture_name = m_fallback_texture.get_impl().gl_name();
         const GLuint fallback_sampler_name = m_fallback_sampler.get_impl().gl_name();
         std::fill(m_textures.begin(), m_textures.end(), &m_fallback_texture);
         std::fill(m_samplers.begin(), m_samplers.end(), &m_fallback_sampler);
         std::fill(m_gl_textures.begin(), m_gl_textures.end(), fallback_texture_name);
         std::fill(m_gl_samplers.begin(), m_gl_samplers.end(), fallback_sampler_name);
-        m_used_slot_count = 0;
-    } else {
-        ERHE_FATAL("This should not happen");
     }
+    m_used_slot_count = 0;
 }
 
 auto Texture_heap_impl::get_shader_handle(const Texture* texture, const Sampler* sampler) -> uint64_t
@@ -82,6 +82,11 @@ auto Texture_heap_impl::get_shader_handle(const Texture* texture, const Sampler*
             }
         }
     }
+    // log_texture_heap->error(
+    //     "texture {} {} sampler {} {} not found in texture heap",
+    //     texture->get_impl().gl_name(), texture->get_debug_label().string_view(),
+    //     sampler->get_impl().gl_name(), sampler->get_debug_label().string_view()
+    // );
     ERHE_FATAL("texture %u sampler %u not found in texture heap", texture->get_impl().gl_name(), sampler->get_impl().gl_name());
 }
 
@@ -102,8 +107,13 @@ auto Texture_heap_impl::assign(std::size_t slot, const Texture* texture, const S
         m_textures                    [slot] = texture;
         m_samplers                    [slot] = sampler;
         // log_texture_heap->trace(
-        //     "assigned texture heap slot {} for texture {}, sampler {} bindless handle {}",
-        //     slot, texture->get_impl().gl_name(), sampler->get_impl().gl_name(), format_texture_handle(gl_bindless_texture_handle)
+        //     "assigned texture heap slot {} for texture {} {}, sampler {} {} bindless handle {}",
+        //     slot,
+        //     texture->get_impl().gl_name(),
+        //     texture->get_debug_label().string_view(),
+        //     sampler->get_impl().gl_name(),
+        //     sampler->get_debug_label().string_view(),
+        //     format_texture_handle(gl_bindless_texture_handle)
         // );
         return gl_bindless_texture_handle;
 
@@ -114,8 +124,12 @@ auto Texture_heap_impl::assign(std::size_t slot, const Texture* texture, const S
         m_gl_textures[slot] = texture->get_impl().gl_name();
         m_gl_samplers[slot] = sampler->get_impl().gl_name();
         // log_texture_heap->trace(
-        //     "assigned texture heap slot {} for texture {}, sampler {}",
-        //     slot, texture->get_impl().gl_name(), sampler->get_impl().gl_name()
+        //     "assigned texture heap slot {} for texture {} {}, sampler {} {}",
+        //     slot,
+        //     texture->get_impl().gl_name(),
+        //     texture->get_debug_label().string_view(),
+        //     sampler->get_impl().gl_name(),
+        //     sampler->get_debug_label().string_view()
         // );
         return slot;
     }
@@ -149,8 +163,11 @@ auto Texture_heap_impl::allocate(const Texture* texture, const Sampler* sampler)
         m_textures                    .push_back(texture);
         m_samplers                    .push_back(sampler);
         // log_texture_heap->trace(
-        //     "allocated texture heap slot {} for texture {}, sampler {} bindless handle = {}",
-        //     m_used_slot_count, texture_name, sampler_name, format_texture_handle(gl_bindless_texture_handle)
+        //     "allocated texture heap slot {} for texture {} {}, sampler {} {} bindless handle = {}",
+        //     slot,
+        //     texture_name, texture->get_debug_label().string_view(),
+        //     sampler_name, sampler->get_debug_label().string_view(),
+        //     format_texture_handle(gl_bindless_texture_handle)
         // );
         ++m_used_slot_count;
         return gl_bindless_texture_handle;
@@ -164,11 +181,20 @@ auto Texture_heap_impl::allocate(const Texture* texture, const Sampler* sampler)
             m_gl_textures[slot] = texture->get_impl().gl_name();
             m_gl_samplers[slot] = sampler->get_impl().gl_name();
             ++m_used_slot_count;
-            // log_texture_heap->trace("allocated texture heap slot {} for texture {}, sampler {}", slot, texture_name, sampler_name);
+            // log_texture_heap->trace(
+            //     "allocated texture heap slot {} for texture {} {}, sampler {} {}",
+            //     slot,
+            //     texture_name, texture->get_debug_label().string_view(),
+            //     sampler_name, sampler->get_debug_label().string_view()
+            // );
             return static_cast<uint64_t>(slot - m_reserved_slot_count);
         }
 
-        // log_texture_heap->trace("texture heap is full, unable to allocate slot for texture {}, sampler {}", texture_name, sampler_name);
+        // log_texture_heap->trace(
+        //     "texture heap is full, unable to allocate slot for texture {} {}, sampler {} {}",
+        //     texture_name, texture->get_debug_label().string_view(),
+        //     sampler_name, sampler->get_debug_label().string_view()
+        // );
         return {};
     }
 }

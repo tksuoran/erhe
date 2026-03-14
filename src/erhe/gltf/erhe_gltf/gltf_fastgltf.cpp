@@ -1181,7 +1181,7 @@ private:
         create_info.address_mode[1] = from_gl(sampler.wrapT);
         create_info.address_mode[2] = from_gl(sampler.wrapT);
         create_info.max_anisotropy  = m_arguments.graphics_device.get_info().max_texture_max_anisotropy; // TODO
-        create_info.debug_label     = sampler_name;
+        create_info.debug_label     = erhe::utility::Debug_label{sampler_name};
 
         auto erhe_sampler = std::make_shared<erhe::graphics::Sampler>(m_arguments.graphics_device, create_info);
         // TODO erhe_sampler->set_source_path(m_path);

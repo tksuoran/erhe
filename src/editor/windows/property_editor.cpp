@@ -55,16 +55,10 @@ void Property_editor::show_entries(const char* label, ImVec2 cell_padding)
     ImGui::TableSetupColumn("label", ImGuiTableColumnFlags_WidthFixed, 100.0f);
     ImGui::TableSetupColumn("editor", ImGuiTableColumnFlags_WidthStretch, 1.0f);
 
-    struct Stack_entry
-    {
-        bool subtree_open;
-        float indent_amount;
-    };
-    std::vector<Stack_entry> stack;
     for (const Entry& entry : m_entries) {
         ImGui::PushID(m_row++);
-        bool currently_open = stack.empty() || stack.back().subtree_open;
-        float indent_amount = stack.empty() ? 0.0f : stack.back().indent_amount;
+        bool currently_open = m_stack.empty() || m_stack.back().subtree_open;
+        float indent_amount = m_stack.empty() ? 0.0f : m_stack.back().indent_amount;
         if (entry.push_group) {
             if (currently_open) {
                 ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2{4.0f, 4.0f});
@@ -76,12 +70,12 @@ void Property_editor::show_entries(const char* label, ImVec2 cell_padding)
                     *entry.open_state = subtree_open;
                 }
                 ImGui::PopStyleVar(1);
-                stack.emplace_back(subtree_open, entry.indent);
+                m_stack.emplace_back(subtree_open, entry.indent);
                 if (entry.indent != 0.0f) {
                     ImGui::Indent(entry.indent);
                 }
             } else {
-                stack.emplace_back(false, 0.0f);
+                m_stack.emplace_back(false, 0.0f);
             }
         } else if (entry.pop_group) {
             if (indent_amount != 0.0f) {
@@ -90,7 +84,7 @@ void Property_editor::show_entries(const char* label, ImVec2 cell_padding)
             if (currently_open) {
                 ImGui::TreePop();
             }
-            stack.pop_back();
+            m_stack.pop_back();
         } else if (currently_open) {
             ImGui::TableNextRow(ImGuiTableRowFlags_None);
             ImGui::TableSetColumnIndex(0);
@@ -132,7 +126,7 @@ void Property_editor::show_entries(const char* label, ImVec2 cell_padding)
         }
         ImGui::PopID();
     }
-    ERHE_VERIFY(stack.empty());
+    ERHE_VERIFY(m_stack.empty());
 
     ImGui::EndTable();
     ImGui::PopStyleVar(1);

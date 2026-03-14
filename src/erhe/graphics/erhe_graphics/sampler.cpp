@@ -16,7 +16,7 @@ Sampler::Sampler(Device& device, const Sampler_create_info& create_info)
 {
 }
 Sampler::~Sampler() noexcept = default;
-auto Sampler::get_debug_label() const -> const std::string&
+auto Sampler::get_debug_label() const -> erhe::utility::Debug_label
 {
     return m_impl->get_debug_label();
 }

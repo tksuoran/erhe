@@ -56,7 +56,7 @@ auto triangle_wave(float t, float p) -> float
     return 2.0f * std::abs(2.0f * (t / p - std::floor(t / p + 0.5f))) - 1.0f;
 }
 
-void Composition_pass::render(const Render_context& context) const
+void Composition_pass::render(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -160,26 +160,26 @@ void Composition_pass::render(const Render_context& context) const
         );
     } else {
         erhe::scene::Scene* scene = scene_root->get_hosted_scene();
-        std::vector<std::span<const std::shared_ptr<erhe::scene::Mesh>>> mesh_spans;
+        m_mesh_spans.clear();
         for (const auto id : this->mesh_layers) {
             const auto mesh_layer = scene->get_mesh_layer_by_id(id);
             if (mesh_layer) {
-                mesh_spans.push_back(mesh_layer->meshes);
+                m_mesh_spans.push_back(mesh_layer->meshes);
                 log_composer->trace("adding mesh layer {} with {} meshes", mesh_layer->name, mesh_layer->meshes.size());
             } else {
                 log_composer->warn("mesh layer not found for id {}", id);
             }
         }
-        if (mesh_spans.empty()) {
+        if (m_mesh_spans.empty()) {
             return;
         }
 
         log_composer->debug("calling render with {} passes", passes.size());
-        for (const auto& pass : passes) {
-            log_composer->trace("pass using pipeline = {}", pass->pipeline.data.debug_label.string_view());
-        }
-        log_composer->trace("primitive_mode = {}", c_str(primitive_mode));
-        log_composer->trace("filter = {}", filter.describe());
+        // for (const auto& pass : passes) {
+        //     log_composer->trace("pass using pipeline = {}", pass->pipeline.data.debug_label.string_view());
+        // }
+        // log_composer->trace("primitive_mode = {}", c_str(primitive_mode));
+        // log_composer->trace("filter = {}", filter.describe());
 
         context.app_context.forward_renderer->render(
             erhe::scene_renderer::Forward_renderer::Render_parameters{
@@ -195,7 +195,7 @@ void Composition_pass::render(const Render_context& context) const
                 .lights                 = layers.light()->lights,
                 .skins                  = scene->get_skins(),
                 .materials              = materials,
-                .mesh_spans             = mesh_spans,
+                .mesh_spans             = m_mesh_spans,
                 .passes                 = this->passes,
                 .primitive_mode         = this->primitive_mode,
                 .primitive_settings     = 

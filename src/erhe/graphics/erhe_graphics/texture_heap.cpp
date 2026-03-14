@@ -12,14 +12,17 @@ Texture_heap::Texture_heap(
     std::size_t    reserved_slot_count
 )
     : m_impl{std::make_unique<Texture_heap_impl>(device, fallback_texture, fallback_sampler, reserved_slot_count)}
+    //: m_impl{device, fallback_texture, fallback_sampler, reserved_slot_count}
 {
+    //static_assert(sizeof(Texture_heap_impl) <= 376);
+    //static_assert(alignof(Texture_heap_impl) <= alignof(std::max_align_t));
 }
 
 Texture_heap::~Texture_heap() noexcept = default;
 
-void Texture_heap::reset()
+void Texture_heap::reset_heap()
 {
-    m_impl->reset();
+    m_impl->reset_heap();
 }
 
 auto Texture_heap::get_shader_handle(const Texture* texture, const Sampler* sampler) -> uint64_t

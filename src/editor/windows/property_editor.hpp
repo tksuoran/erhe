@@ -47,10 +47,18 @@ protected:
         bool*                   open_state{nullptr};
     };
 
-    float              m_indent{10.0f};
-    int                m_row   {0};
-    Editor_state*      m_state {nullptr};
-    std::vector<Entry> m_entries;
+    float                    m_indent{10.0f};
+    int                      m_row   {0};
+    Editor_state*            m_state {nullptr};
+    std::vector<Entry>       m_entries;
+
+    struct Stack_entry
+    {
+        bool subtree_open;
+        float indent_amount;
+    };
+
+    std::vector<Stack_entry> m_stack;
 };
 
 }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_graphics/enums.hpp"
+#include "erhe_utility/debug_label.hpp"
 
 #include <array>
 #include <memory>
@@ -22,13 +23,13 @@ public:
         Sampler_address_mode::clamp_to_edge,
         Sampler_address_mode::clamp_to_edge
     };
-    bool                compare_enable   {false};
-    Compare_operation   compare_operation{Compare_operation::always};
-    float               lod_bias         {    0.0f};
-    float               max_lod          { 1000.0f};
-    float               min_lod          {-1000.0f};
-    float               max_anisotropy   {1.0f};
-    std::string         debug_label;
+    bool                       compare_enable   {false};
+    Compare_operation          compare_operation{Compare_operation::always};
+    float                      lod_bias         {    0.0f};
+    float                      max_lod          { 1000.0f};
+    float                      min_lod          {-1000.0f};
+    float                      max_anisotropy   {1.0f};
+    erhe::utility::Debug_label debug_label      {};
 };
 
 class Sampler_impl;
@@ -38,7 +39,7 @@ public:
     Sampler(Device& device, const Sampler_create_info& create_info);
     ~Sampler() noexcept;
 
-    [[nodiscard]] auto get_debug_label() const -> const std::string&;
+    [[nodiscard]] auto get_debug_label() const -> erhe::utility::Debug_label;
     [[nodiscard]] auto uses_mipmaps   () const -> bool;
     [[nodiscard]] auto get_lod_bias   () const -> float;
     [[nodiscard]] auto get_impl       () -> Sampler_impl&;

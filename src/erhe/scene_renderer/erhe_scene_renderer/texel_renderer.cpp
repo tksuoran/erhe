@@ -29,6 +29,14 @@ Texel_renderer::Texel_renderer(erhe::graphics::Device& graphics_device, Program_
         }
     }
     , m_dummy_texture{graphics_device.create_dummy_texture(erhe::dataformat::Format::format_8_vec4_snorm)}
+    , m_texture_heap{
+        std::make_unique<erhe::graphics::Texture_heap>(
+            m_graphics_device,
+            *m_dummy_texture.get(),
+            m_fallback_sampler,
+            erhe::scene_renderer::c_texture_heap_slot_count_reserved
+        )
+    }
 {
 }
 
@@ -58,17 +66,12 @@ void Texel_renderer::render(const Render_parameters& parameters)
     );
     m_camera_buffer.bind(parameters.render_encoder, camera_buffer_range.value());
 
-    erhe::graphics::Texture_heap texture_heap{
-        m_graphics_device,
-        *m_dummy_texture.get(),
-        m_fallback_sampler,
-        erhe::scene_renderer::c_texture_heap_slot_count_reserved
-    };
+    m_texture_heap->reset_heap();
 
-    Ring_buffer_range light_range = m_light_buffer.update(lights, parameters.light_projections, glm::vec3{0.0f}, texture_heap);
+    Ring_buffer_range light_range = m_light_buffer.update(lights, parameters.light_projections, glm::vec3{0.0f}, *m_texture_heap.get());
     m_light_buffer.bind_light_buffer(parameters.render_encoder, light_range);
 
-    texture_heap.bind();
+    m_texture_heap->bind();
 
     const erhe::graphics::Render_pipeline_state& pipeline = parameters.pipeline;
 
@@ -84,7 +87,7 @@ void Texel_renderer::render(const Render_parameters& parameters)
 
     camera_buffer_range.value().release();
     light_range.release();
-    texture_heap.unbind();
+    m_texture_heap->unbind();
 }
 
 } // namespace erhe::scene_renderer

@@ -63,9 +63,20 @@ Shadow_renderer::Shadow_renderer(erhe::graphics::Device& graphics_device, Progra
     , m_primitive_buffer    {graphics_device, program_interface.primitive_interface}
     , m_material_buffer     {graphics_device, program_interface.material_interface}
     , m_gpu_timer           {graphics_device, "Shadow_renderer"}
+    // NOTE m_dummy_texture is NOT used for shadow map texture
+    , m_texture_heap{
+        std::make_unique<erhe::graphics::Texture_heap>(
+            m_graphics_device,
+            *m_dummy_texture.get(),
+            m_fallback_sampler,
+            erhe::scene_renderer::c_texture_heap_slot_count_reserved
+        )
+    }
 {
     m_pipeline_cache_entries.resize(8);
 }
+
+Shadow_renderer::~Shadow_renderer() noexcept = default;
 
 auto Shadow_renderer::get_pipeline(const Vertex_input_state* vertex_input_state) -> erhe::graphics::Render_pipeline_state&
 {
@@ -137,17 +148,10 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
     using Ring_buffer_range          = erhe::graphics::Ring_buffer_range;
     using Draw_indirect_buffer_range = erhe::renderer::Draw_indirect_buffer_range;
 
-    // NOTE m_dummy_texture is NOT used for shadow map texture
-    erhe::graphics::Texture_heap texture_heap{
-        m_graphics_device,
-        *m_dummy_texture.get(),
-        m_fallback_sampler,
-        erhe::scene_renderer::c_texture_heap_slot_count_reserved
-    };
-
-    Ring_buffer_range material_range = m_material_buffer.update(texture_heap, parameters.materials);
+    m_texture_heap->reset_heap();
+    Ring_buffer_range material_range = m_material_buffer.update(*m_texture_heap.get(), parameters.materials);
     Ring_buffer_range joint_range    = m_joint_buffer.update(glm::uvec4{0, 0, 0, 0}, {}, parameters.skins);
-    Ring_buffer_range light_range    = m_light_buffer.update(lights, &parameters.light_projections, glm::vec3{0.0f}, texture_heap);
+    Ring_buffer_range light_range    = m_light_buffer.update(lights, &parameters.light_projections, glm::vec3{0.0f}, *m_texture_heap.get());
 
     log_shadow_renderer->trace("Rendering shadow map to '{}'", parameters.texture->get_debug_label().string_view());
 
@@ -192,7 +196,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
         Ring_buffer_range control_range = m_light_buffer.update_control(light_index);
         m_light_buffer.bind_control_buffer(encoder, control_range);
 
-        texture_heap.bind();
+        m_texture_heap->bind();
 
         for (const auto& meshes : mesh_spans) {
             std::size_t primitive_count{0};
@@ -232,7 +236,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
         control_range.release();
     }
 
-    texture_heap.unbind();
+    m_texture_heap->unbind();
 
     material_range.release();
     joint_range.release();

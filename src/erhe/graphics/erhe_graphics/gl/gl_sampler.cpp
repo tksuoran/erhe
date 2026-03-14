@@ -22,9 +22,14 @@ Sampler_impl::Sampler_impl(Device& device, const Sampler_create_info& create_inf
     static_cast<void>(device);
     ERHE_VERIFY(m_handle.gl_name() != 0);
     apply();
-    m_debug_label = fmt::format("(S:{}) {}", gl_name(), create_info.debug_label);
-    gl::object_label(gl::Object_identifier::sampler, gl_name(), -1, m_debug_label.c_str());
-    log_texture->trace("Created sampler '{}'", get_debug_label());
+    m_debug_label = erhe::utility::Debug_label{fmt::format("(S:{}) {}", gl_name(), create_info.debug_label.string_view())};
+    gl::object_label(
+        gl::Object_identifier::sampler,
+        gl_name(),
+        static_cast<GLsizei>(m_debug_label.size() + 1),
+        m_debug_label.data()
+    );
+    log_texture->trace("Created sampler '{}'", get_debug_label().string_view());
 }
 
 auto Sampler_impl::gl_name() const -> unsigned int
@@ -32,7 +37,7 @@ auto Sampler_impl::gl_name() const -> unsigned int
     return m_handle.gl_name();
 }
 
-auto Sampler_impl::get_debug_label() const -> const std::string&
+auto Sampler_impl::get_debug_label() const -> erhe::utility::Debug_label
 {
     return m_debug_label;
 }

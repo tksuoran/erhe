@@ -124,6 +124,13 @@ Text_renderer::Text_renderer(erhe::graphics::Device& graphics_device)
         config.font_size,
         0.0f // TODO reimplement outline better 1.0f
     );
+
+    m_texture_heap = std::make_unique<erhe::graphics::Texture_heap>(
+        m_graphics_device,
+        *m_font->texture(),
+        m_nearest_sampler,
+        0
+    );
 }
 
 Text_renderer::~Text_renderer() noexcept
@@ -208,12 +215,7 @@ void Text_renderer::render(erhe::graphics::Render_command_encoder& encoder, erhe
 
     erhe::graphics::Scoped_debug_group pass_scope{"Text_renderer::render()"};
 
-    erhe::graphics::Texture_heap texture_heap{
-        m_graphics_device,
-        *m_font->texture(),
-        m_nearest_sampler,
-        0
-    };
+    m_texture_heap->reset_heap();
 
     erhe::graphics::Ring_buffer_range projection_buffer_range = m_projection_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, m_projection_block.get_size_bytes());
     {
@@ -225,7 +227,7 @@ void Text_renderer::render(erhe::graphics::Render_command_encoder& encoder, erhe
             1.0f
         );
 
-        const uint64_t shader_handle = texture_heap.allocate(m_font->texture(), &m_nearest_sampler);
+        const uint64_t shader_handle = m_texture_heap->allocate(m_font->texture(), &m_nearest_sampler);
 
         using erhe::graphics::as_span;
         using erhe::graphics::write;
@@ -238,7 +240,7 @@ void Text_renderer::render(erhe::graphics::Render_command_encoder& encoder, erhe
 
     encoder.set_viewport_rect(viewport.x, viewport.y, viewport.width, viewport.height);
     encoder.set_render_pipeline_state(m_pipeline);
-    texture_heap.bind();
+    m_texture_heap->bind();
 
     const std::size_t vertex_ssbo_stride = m_u_vertex_data_size;
     const std::size_t bytes_per_quad     = 4 * vertex_ssbo_stride;
@@ -262,7 +264,7 @@ void Text_renderer::render(erhe::graphics::Render_command_encoder& encoder, erhe
 
     projection_buffer_range.release();
 
-    texture_heap.unbind();
+    m_texture_heap->unbind();
 
     m_vertex_buffer_ranges.clear();
 }

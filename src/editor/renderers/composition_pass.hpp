@@ -27,7 +27,7 @@ public:
 
     explicit Composition_pass(std::string_view name);
 
-    virtual void render(const Render_context& context) const;
+    virtual void render(const Render_context& context);
     void imgui();
 
     // Implements Item_base
@@ -49,6 +49,9 @@ public:
     std::function<void()>                                                  begin;
     std::function<void()>                                                  end; 
     std::function<const Render_style_data&(const Render_context& context)> get_render_style;
+
+private:
+    std::vector<std::span<const std::shared_ptr<erhe::scene::Mesh>>> m_mesh_spans;
 };
 
 }

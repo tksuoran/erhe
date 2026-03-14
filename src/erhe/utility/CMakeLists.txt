@@ -10,6 +10,8 @@ erhe_target_sources_grouped(
     erhe_utility/bit_helpers.hpp
     erhe_utility/debug_label.cpp
     erhe_utility/debug_label.hpp
+    erhe_utility/pimpl_ptr.cpp
+    erhe_utility/pimpl_ptr.hpp
 )
 
 target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})

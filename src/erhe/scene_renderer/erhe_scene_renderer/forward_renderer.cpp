@@ -77,8 +77,18 @@ Forward_renderer::Forward_renderer(erhe::graphics::Device& graphics_device, Prog
         }
     }
     , m_dummy_texture{graphics_device.create_dummy_texture(erhe::dataformat::Format::format_8_vec4_srgb)}
+    , m_texture_heap{
+        std::make_unique<erhe::graphics::Texture_heap>(
+            m_graphics_device,
+            *m_dummy_texture.get(),
+            m_fallback_sampler,
+            erhe::scene_renderer::c_texture_heap_slot_count_reserved
+        )
+    }
 {
 }
+
+Forward_renderer::~Forward_renderer() noexcept = default;
 
 static constexpr std::string_view c_forward_renderer_render{"Forward_renderer::render()"};
 
@@ -122,14 +132,9 @@ void Forward_renderer::render(const Render_parameters& parameters)
         m_camera_buffer.bind(parameters.render_encoder, camera_buffer_range.value());
     }
 
-    erhe::graphics::Texture_heap texture_heap{
-        m_graphics_device,
-        *m_dummy_texture.get(),
-        m_fallback_sampler,
-        erhe::scene_renderer::c_texture_heap_slot_count_reserved
-    };
+    m_texture_heap->reset_heap();
 
-    Ring_buffer_range material_range = m_material_buffer.update(texture_heap, materials);
+    Ring_buffer_range material_range = m_material_buffer.update(*m_texture_heap.get(), materials);
     m_material_buffer.bind(parameters.render_encoder, material_range);
 
     Ring_buffer_range joint_range = m_joint_buffer.update(parameters.debug_joint_indices, parameters.debug_joint_colors, skins);
@@ -137,10 +142,10 @@ void Forward_renderer::render(const Render_parameters& parameters)
 
     // This must be done even if lights is empty.
     // For example, the number of lights is read from the light buffer.
-    Ring_buffer_range light_range = m_light_buffer.update(lights, parameters.light_projections, parameters.ambient_light, texture_heap);
+    Ring_buffer_range light_range = m_light_buffer.update(lights, parameters.light_projections, parameters.ambient_light, *m_texture_heap.get());
     m_light_buffer.bind_light_buffer(parameters.render_encoder, light_range);
 
-    texture_heap.bind();
+    m_texture_heap->bind();
 
     for (auto& pass : passes) {
         const auto& pipeline = pass->pipeline;
@@ -222,7 +227,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
     joint_range.release();
     light_range.release();
 
-    texture_heap.unbind();
+    m_texture_heap->unbind();
 }
 
 void Forward_renderer::draw_primitives(const Render_parameters& parameters, const erhe::scene::Light* light)
@@ -234,15 +239,10 @@ void Forward_renderer::draw_primitives(const Render_parameters& parameters, cons
     const auto& lights   = parameters.lights;
     const auto& passes   = parameters.passes;
 
-    erhe::graphics::Texture_heap texture_heap{
-        m_graphics_device,
-        *m_dummy_texture.get(),
-        m_fallback_sampler,
-        erhe::scene_renderer::c_texture_heap_slot_count_reserved
-    };
+    m_texture_heap->reset_heap();
 
     using Ring_buffer_range = erhe::graphics::Ring_buffer_range;
-    Ring_buffer_range material_range = m_material_buffer.update(texture_heap, parameters.materials);
+    Ring_buffer_range material_range = m_material_buffer.update(*m_texture_heap.get(), parameters.materials);
     if (material_range.get_buffer() != nullptr) {
         m_material_buffer.bind(parameters.render_encoder, material_range);
     }
@@ -272,10 +272,10 @@ void Forward_renderer::draw_primitives(const Render_parameters& parameters, cons
         }
     }
 
-    Ring_buffer_range light_range = m_light_buffer.update(lights, parameters.light_projections, parameters.ambient_light, texture_heap);
+    Ring_buffer_range light_range = m_light_buffer.update(lights, parameters.light_projections, parameters.ambient_light, *m_texture_heap.get());
     m_light_buffer.bind_light_buffer(parameters.render_encoder, light_range);
 
-    texture_heap.bind();
+    m_texture_heap->bind();
 
     for (auto& pass : passes) {
         const auto& pipeline = pass->pipeline;
@@ -307,7 +307,7 @@ void Forward_renderer::draw_primitives(const Render_parameters& parameters, cons
         camera_range.value().release();
     }
 
-    texture_heap.unbind();
+    m_texture_heap->unbind();
 }
 
 } // namespace erhe::scene_renderer

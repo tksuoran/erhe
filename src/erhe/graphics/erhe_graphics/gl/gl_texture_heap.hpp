@@ -17,10 +17,10 @@ public:
         const Sampler& fallback_sampler,
         std::size_t    reserved_slot_count
     );
-    ~Texture_heap_impl();
+    ~Texture_heap_impl() noexcept;
 
     auto assign           (std::size_t slot, const Texture* texture, const Sampler* sample) -> uint64_t;
-    void reset            ();
+    void reset_heap       ();
     auto allocate         (const Texture* texture, const Sampler* sample) -> uint64_t;
     auto get_shader_handle(const Texture* texture, const Sampler* sample) -> uint64_t; // bindless ? handle : slot
     auto bind             () -> std::size_t;

@@ -40,6 +40,7 @@ public:
     using Mesh_layer_collection = std::vector<const erhe::scene::Mesh_layer*>;
 
     Forward_renderer(erhe::graphics::Device& graphics_device, Program_interface& program_interface);
+    ~Forward_renderer() noexcept;
 
     // Public API
     class Render_parameters
@@ -83,18 +84,19 @@ public:
     void draw_primitives(const Render_parameters& parameters, const erhe::scene::Light* light);
 
 private:
-    erhe::graphics::Device&                  m_graphics_device;
-    Program_interface&                       m_program_interface;
-    Camera_buffer                            m_camera_buffer;
-    erhe::renderer::Draw_indirect_buffer     m_draw_indirect_buffer;
-    Joint_buffer                             m_joint_buffer;
-    Light_buffer                             m_light_buffer;
-    Material_buffer                          m_material_buffer;
-    Primitive_buffer                         m_primitive_buffer;
-    erhe::graphics::Sampler                  m_shadow_sampler_compare;
-    erhe::graphics::Sampler                  m_shadow_sampler_no_compare;
-    erhe::graphics::Sampler                  m_fallback_sampler;
-    std::shared_ptr<erhe::graphics::Texture> m_dummy_texture;
+    erhe::graphics::Device&                       m_graphics_device;
+    Program_interface&                            m_program_interface;
+    Camera_buffer                                 m_camera_buffer;
+    erhe::renderer::Draw_indirect_buffer          m_draw_indirect_buffer;
+    Joint_buffer                                  m_joint_buffer;
+    Light_buffer                                  m_light_buffer;
+    Material_buffer                               m_material_buffer;
+    Primitive_buffer                              m_primitive_buffer;
+    erhe::graphics::Sampler                       m_shadow_sampler_compare;
+    erhe::graphics::Sampler                       m_shadow_sampler_no_compare;
+    erhe::graphics::Sampler                       m_fallback_sampler;
+    std::shared_ptr<erhe::graphics::Texture>      m_dummy_texture;
+    std::unique_ptr<erhe::graphics::Texture_heap> m_texture_heap;
 };
 
 } // namespace erhe::scene_renderer

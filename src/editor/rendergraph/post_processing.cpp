@@ -544,7 +544,16 @@ Post_processing::Post_processing(erhe::graphics::Device& d, App_context& app_con
     d.get_shader_monitor().add(m_shader_stages.downsample                   );
     d.get_shader_monitor().add(m_shader_stages.upsample                     );
     d.get_shader_monitor().add(m_shader_stages.upsample_last                );
+
+    m_texture_heap = std::make_unique<erhe::graphics::Texture_heap>(
+        d,
+        *m_dummy_texture.get(),
+        m_sampler_linear,
+        s_reserved_texture_slot_count
+    );
 }
+
+Post_processing::~Post_processing() noexcept = default;
 
 auto Post_processing::create_node(
     erhe::graphics::Device&         graphics_device,
@@ -567,8 +576,6 @@ auto Post_processing::get_nodes() -> const std::vector<std::shared_ptr<Post_proc
 
 void Post_processing::post_process(Post_processing_node& node)
 {
-    erhe::graphics::Device& graphics_device = *m_context.graphics_device;
-
     // log_frame->trace("Post_processing::post_process()");
 
     const std::shared_ptr<erhe::graphics::Texture> input_texture = node.get_consumer_input_texture(erhe::rendergraph::Rendergraph_node_key::viewport_texture);
@@ -579,13 +586,13 @@ void Post_processing::post_process(Post_processing_node& node)
         m_context.graphics_device->get_buffer_alignment(m_parameter_block.get_binding_target())
     );
 
-    erhe::graphics::Texture_heap texture_heap{graphics_device, *m_dummy_texture.get(), m_sampler_linear, s_reserved_texture_slot_count};
+    m_texture_heap->reset_heap();
 
-    texture_heap.assign(s_input_texture,      input_texture.get(),           &m_sampler_linear);
-    texture_heap.assign(s_downsample_texture, node.downsample_texture.get(), &m_sampler_linear_mipmap_nearest);
-    texture_heap.assign(s_upsample_texture,   node.upsample_texture.get(),   &m_sampler_linear_mipmap_nearest);
+    m_texture_heap->assign(s_input_texture,      input_texture.get(),           &m_sampler_linear);
+    m_texture_heap->assign(s_downsample_texture, node.downsample_texture.get(), &m_sampler_linear_mipmap_nearest);
+    m_texture_heap->assign(s_upsample_texture,   node.upsample_texture.get(),   &m_sampler_linear_mipmap_nearest);
 
-    texture_heap.bind();
+    m_texture_heap->bind();
 
     // Downsample passes
     for (const size_t source_level : node.downsample_source_levels) {
@@ -649,7 +656,7 @@ void Post_processing::post_process(Post_processing_node& node)
         encoder.draw_primitives(erhe::graphics::Primitive_type::triangle, 0, 3);
     }
 
-    texture_heap.unbind();
+    m_texture_heap->unbind();
 }
 
 }

@@ -43,6 +43,7 @@ public:
     static const int shadow_texture_unit_no_compare{1};
 
     Shadow_renderer(erhe::graphics::Device& graphics_device, Program_interface& program_interface);
+    ~Shadow_renderer() noexcept;
 
     // Public API
     class Render_parameters
@@ -85,20 +86,21 @@ private:
 
     [[nodiscard]] auto get_pipeline(const erhe::graphics::Vertex_input_state* vertex_input_state) -> erhe::graphics::Render_pipeline_state&;
 
-    erhe::graphics::Device&                  m_graphics_device;
-    uint64_t                                 m_pipeline_cache_serial{0};
-    std::vector<Pipeline_cache_entry>        m_pipeline_cache_entries;
-    erhe::graphics::Reloadable_shader_stages m_shader_stages;
-    std::shared_ptr<erhe::graphics::Texture> m_dummy_texture;
-    erhe::graphics::Sampler                  m_fallback_sampler;
+    erhe::graphics::Device&                       m_graphics_device;
+    uint64_t                                      m_pipeline_cache_serial{0};
+    std::vector<Pipeline_cache_entry>             m_pipeline_cache_entries;
+    erhe::graphics::Reloadable_shader_stages      m_shader_stages;
+    std::shared_ptr<erhe::graphics::Texture>      m_dummy_texture;
+    erhe::graphics::Sampler                       m_fallback_sampler;
 
-    erhe::graphics::Vertex_input_state       m_vertex_input;
-    erhe::renderer::Draw_indirect_buffer     m_draw_indirect_buffer;
-    Joint_buffer                             m_joint_buffer;
-    Light_buffer                             m_light_buffer;
-    Primitive_buffer                         m_primitive_buffer;
-    Material_buffer                          m_material_buffer;
-    erhe::graphics::Gpu_timer                m_gpu_timer;
+    erhe::graphics::Vertex_input_state            m_vertex_input;
+    erhe::renderer::Draw_indirect_buffer          m_draw_indirect_buffer;
+    Joint_buffer                                  m_joint_buffer;
+    Light_buffer                                  m_light_buffer;
+    Primitive_buffer                              m_primitive_buffer;
+    Material_buffer                               m_material_buffer;
+    erhe::graphics::Gpu_timer                     m_gpu_timer;
+    std::unique_ptr<erhe::graphics::Texture_heap> m_texture_heap;
 };
 
 

@@ -326,7 +326,16 @@ Imgui_renderer::Imgui_renderer(erhe::graphics::Device& graphics_device, Imgui_se
     // (2) If you have multiple font atlases, make sure the 'atlas->RendererHasTextures' as specified in the ImFontAtlasUpdateNewFrame() call matches for that.
     // (3) If you have multiple imgui contexts, they also need to have a matching value for ImGuiBackendFlags_RendererHasTextures.
     m_font_atlas.RendererHasTextures = true;
+
+    m_texture_heap = std::make_unique<erhe::graphics::Texture_heap>(
+        m_graphics_device,
+        *m_dummy_texture.get(),
+        m_nearest_sampler,
+        0
+    );
 }
+
+Imgui_renderer::~Imgui_renderer() noexcept = default;
 
 void Imgui_renderer::lock_mutex()
 {
@@ -939,12 +948,7 @@ void Imgui_renderer::render_draw_data(erhe::graphics::Render_command_encoder& re
     // and most other state
     render_encoder.set_render_pipeline_state(m_pipeline);
 
-    erhe::graphics::Texture_heap texture_heap{
-        m_graphics_device,
-        *m_dummy_texture.get(),
-        m_nearest_sampler,
-        0
-    };
+    m_texture_heap->reset_heap();
 
     for (int n = 0; n < draw_data->CmdListsCount; n++) {
         erhe::graphics::Scoped_debug_group cmd_list_scope{"CmdList"};
@@ -985,7 +989,7 @@ void Imgui_renderer::render_draw_data(erhe::graphics::Render_command_encoder& re
                             texture = m_dummy_texture.get();
                         }
                         ERHE_VERIFY(texture != nullptr);
-                        const uint64_t shader_handle = texture_heap.allocate(texture, &sampler);
+                        const uint64_t shader_handle = m_texture_heap->allocate(texture, &sampler);
                         if (shader_handle == erhe::graphics::invalid_texture_handle) {
                             break;
                         }
@@ -1093,7 +1097,7 @@ void Imgui_renderer::render_draw_data(erhe::graphics::Render_command_encoder& re
                             }
                             ERHE_VERIFY(texture != nullptr);
 
-                            const uint64_t shader_handle  = texture_heap.get_shader_handle(texture, &sampler);
+                            const uint64_t shader_handle = m_texture_heap->get_shader_handle(texture, &sampler);
                             const uint64_t padding{0};
 
                             write(
@@ -1150,7 +1154,7 @@ void Imgui_renderer::render_draw_data(erhe::graphics::Render_command_encoder& re
                 render_encoder.set_index_buffer(index_buffer);
                 render_encoder.set_vertex_buffer(vertex_buffer, vertex_buffer_binding_offset, 0);
 
-                texture_heap.bind();
+                m_texture_heap->bind();
 
                 ERHE_VERIFY(draw_parameter_buffer_range.get_written_byte_count() > 0);
                 m_draw_parameter_buffer.bind(render_encoder, draw_parameter_buffer_range);
@@ -1178,7 +1182,7 @@ void Imgui_renderer::render_draw_data(erhe::graphics::Render_command_encoder& re
             if (cmd_batch_end == cmd_list->CmdBuffer.Size) {
                 break;
             } else {
-                texture_heap.reset();
+                m_texture_heap->reset_heap();
             }
         } // outer loop going throught batches of commands
     } // for all cmd lists
@@ -1190,7 +1194,7 @@ void Imgui_renderer::render_draw_data(erhe::graphics::Render_command_encoder& re
     gl::disable(gl::Enable_cap::clip_distance3);
 #endif // TODO
 
-    texture_heap.unbind();
+    m_texture_heap->unbind();
 
     SPDLOG_LOGGER_TRACE(log_frame, "end Imgui_renderer::render_draw_data()");
 }

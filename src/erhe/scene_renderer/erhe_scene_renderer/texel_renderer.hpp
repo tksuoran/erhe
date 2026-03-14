@@ -37,12 +37,13 @@ public:
     void render(const Render_parameters& parameters);
 
 private:
-    erhe::graphics::Device&                  m_graphics_device;
-    Program_interface&                       m_program_interface;
-    Camera_buffer                            m_camera_buffer;
-    Light_buffer                             m_light_buffer;
-    erhe::graphics::Sampler                  m_fallback_sampler;
-    std::shared_ptr<erhe::graphics::Texture> m_dummy_texture;
+    erhe::graphics::Device&                       m_graphics_device;
+    Program_interface&                            m_program_interface;
+    Camera_buffer                                 m_camera_buffer;
+    Light_buffer                                  m_light_buffer;
+    erhe::graphics::Sampler                       m_fallback_sampler;
+    std::shared_ptr<erhe::graphics::Texture>      m_dummy_texture;
+    std::unique_ptr<erhe::graphics::Texture_heap> m_texture_heap;
 };
 
 } // erhe::scene_renderer

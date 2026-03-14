@@ -61,6 +61,7 @@ public:
         App_rendering&                           app_rendering,
         Programs&                                programs
     );
+    ~Debug_visualizations() noexcept;
 
     // Implements Renderable
     void render(const Render_context& context) override;

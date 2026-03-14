@@ -16,6 +16,7 @@
 #include "transform/transform_tool.hpp"
 
 #include "erhe_utility/bit_helpers.hpp"
+#include "erhe_graphics/texture_heap.hpp"
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_imgui/imgui_helpers.hpp"
 #include "erhe_imgui/imgui_window.hpp"
@@ -132,6 +133,8 @@ Debug_visualizations::Debug_visualizations(
         }
     );
 }
+
+Debug_visualizations::~Debug_visualizations() noexcept = default;
 
 auto Debug_visualizations::get_selected_camera(const Render_context& render_context) -> std::shared_ptr<erhe::scene::Camera>
 {
@@ -412,7 +415,7 @@ void Debug_visualizations::directional_light_visualization(const Light_visualiza
 
     const float r_minor = light_projections.parameters.view_camera->get_shadow_range() / (100.0f * projection_scale);
     line_renderer.set_thickness(-2.0f);
-    std::vector<erhe::renderer::Line> lines(7);
+    std::array<erhe::renderer::Line, 7> lines;
     for (int i = 0; i < 7; ++i) {
         const float rel   = static_cast<float>(i) / 7.0f;
         const float theta = rel * glm::pi<float>();

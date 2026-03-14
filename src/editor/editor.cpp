@@ -1127,20 +1127,43 @@ public:
             window_imgui_host->set_status_bar_callback(
                 [this](erhe::imgui::Window_imgui_host&) {
                     {
-                        std::stringstream ss;
-                        ss << fmt::format("{:.2f} ms", m_time->get_frame_time_average_ms());
+                        // std::stringstream ss;
+                        // ss << fmt::format("{:.2f} ms", m_time->get_frame_time_average_ms());
+                        // const int running_async_ops = m_app_context.running_async_ops.load();
+                        // if (running_async_ops > 0) {
+                        //     ss << " " << running_async_ops << " running operations";
+                        // }
+                        // const int pending_async_ops = m_app_context.pending_async_ops.load();
+                        // if (pending_async_ops > 0) {
+                        //     if (running_async_ops > 0) {
+                        //         ss << ", ";
+                        //     }
+                        //     ss << pending_async_ops << " queued operations";
+                        // }
+                        // ImGui::TextUnformatted(ss.str().c_str());
+                        const float frame_ms = m_time->get_frame_time_average_ms();
                         const int running_async_ops = m_app_context.running_async_ops.load();
-                        if (running_async_ops > 0) {
-                            ss << " " << running_async_ops << " running operations";
-                        }
                         const int pending_async_ops = m_app_context.pending_async_ops.load();
-                        if (pending_async_ops > 0) {
-                            if (running_async_ops > 0) {
-                                ss << ", ";
-                            }
-                            ss << pending_async_ops << " queued operations";
+                        if (running_async_ops > 0 && pending_async_ops > 0) {
+                            ImGui::Text(
+                                "%.2f ms %d running operations, %d queued operations",
+                                frame_ms, running_async_ops, pending_async_ops
+                            );
                         }
-                        ImGui::TextUnformatted(ss.str().c_str());
+                        else if (running_async_ops > 0) {
+                            ImGui::Text(
+                                "%.2f ms %d running operations",
+                                frame_ms, running_async_ops
+                            );
+                        }
+                        else if (pending_async_ops > 0) {
+                            ImGui::Text(
+                                "%.2f ms %d queued operations",
+                                frame_ms, pending_async_ops
+                            );
+                        } else {
+                            ImGui::Text("%.2f ms", frame_ms);
+                        }
                         ImGui::SameLine();
                     }
                     struct Input_record

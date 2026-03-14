@@ -1,5 +1,7 @@
 #pragma once
 
+#include "erhe_utility/pimpl_ptr.hpp"
+
 #include <memory>
 
 namespace erhe::graphics {
@@ -24,7 +26,7 @@ public:
     ~Texture_heap() noexcept;
 
     auto assign           (std::size_t slot, const Texture* texture, const Sampler* sample) -> uint64_t;
-    void reset            ();
+    void reset_heap       ();
     auto allocate         (const Texture* texture, const Sampler* sample) -> uint64_t;
     auto get_shader_handle(const Texture* texture, const Sampler* sample) -> uint64_t; // bindless ? handle : slot
     auto bind             () -> std::size_t;
@@ -32,6 +34,7 @@ public:
 
 private:
     std::unique_ptr<Texture_heap_impl> m_impl;
+    //erhe::utility::pimpl_ptr<Texture_heap_impl, 376, 8> m_impl;
 };
 
 } // namespace erhe::graphics

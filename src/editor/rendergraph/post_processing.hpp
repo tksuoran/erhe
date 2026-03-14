@@ -16,7 +16,7 @@
 #include <string>
 #include <string_view>
 
-namespace erhe::graphics       { class Texture; }
+namespace erhe::graphics       { class Texture; class Texture_heap; }
 namespace erhe::scene_renderer { class Program_interface; }
 
 namespace editor {
@@ -114,6 +114,7 @@ public:
     };
 
     Post_processing(erhe::graphics::Device& graphics_device, App_context& context);
+    ~Post_processing() noexcept;
 
     // Public API
     [[nodiscard]] auto create_node(
@@ -170,6 +171,7 @@ private:
 
     App_context&                                       m_context;
     std::vector<std::shared_ptr<Post_processing_node>> m_nodes;
+    std::unique_ptr<erhe::graphics::Texture_heap>      m_texture_heap;
     erhe::graphics::Fragment_outputs                   m_fragment_outputs;
     std::shared_ptr<erhe::graphics::Texture>           m_dummy_texture;
     erhe::graphics::Sampler                            m_sampler_linear;

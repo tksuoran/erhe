@@ -24,6 +24,7 @@ namespace erhe::graphics {
     class Render_command_encoder;
     class Sampler;
     class Texture;
+    class Texture_heap;
     class Vertex_input_state;
 }
 namespace erhe::window {
@@ -100,6 +101,7 @@ class Imgui_renderer final
 {
 public:
     Imgui_renderer(erhe::graphics::Device& graphics_device, Imgui_settings& settings);
+    ~Imgui_renderer() noexcept;
 
     static constexpr std::size_t s_uivec4_size = 4 * sizeof(uint32_t); // for non bindless textures
     static constexpr std::size_t s_uvec2_size  = 2 * sizeof(uint32_t);
@@ -151,16 +153,17 @@ private:
     static constexpr std::size_t s_max_index_count    = 2'400'000;
     static constexpr std::size_t s_max_vertex_count   = 2'400'000;
 
-    erhe::graphics::Device&                  m_graphics_device;
-    Imgui_program_interface                  m_imgui_program_interface;
-    erhe::graphics::Shader_stages            m_shader_stages;
-    erhe::graphics::Ring_buffer_client       m_vertex_buffer;
-    erhe::graphics::Ring_buffer_client       m_index_buffer;
-    erhe::graphics::Ring_buffer_client       m_draw_parameter_buffer;
-    erhe::graphics::Ring_buffer_client       m_draw_indirect_buffer;
-    erhe::graphics::Vertex_input_state       m_vertex_input;
-    erhe::graphics::Render_pipeline_state    m_pipeline;
-    Imgui_settings                           m_imgui_settings;
+    erhe::graphics::Device&                       m_graphics_device;
+    Imgui_program_interface                       m_imgui_program_interface;
+    erhe::graphics::Shader_stages                 m_shader_stages;
+    erhe::graphics::Ring_buffer_client            m_vertex_buffer;
+    erhe::graphics::Ring_buffer_client            m_index_buffer;
+    erhe::graphics::Ring_buffer_client            m_draw_parameter_buffer;
+    erhe::graphics::Ring_buffer_client            m_draw_indirect_buffer;
+    erhe::graphics::Vertex_input_state            m_vertex_input;
+    erhe::graphics::Render_pipeline_state         m_pipeline;
+    Imgui_settings                                m_imgui_settings;
+    std::unique_ptr<erhe::graphics::Texture_heap> m_texture_heap;
 
     ImFontAtlas                              m_font_atlas;
     ImFont*                                  m_primary_font        {nullptr};
