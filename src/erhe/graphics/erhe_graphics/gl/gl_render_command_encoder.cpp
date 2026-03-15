@@ -14,17 +14,12 @@
 
 namespace erhe::graphics {
 
-Render_command_encoder_impl::Render_command_encoder_impl(Device& device, Render_pass& render_pass)
+Render_command_encoder_impl::Render_command_encoder_impl(Device& device)
     : Command_encoder_impl{device}
-    , m_render_pass       {render_pass}
 {
-    start_render_pass();
 }
 
-Render_command_encoder_impl::~Render_command_encoder_impl() noexcept
-{
-    end_render_pass();
-}
+Render_command_encoder_impl::~Render_command_encoder_impl() noexcept = default;
 
 void Render_command_encoder_impl::set_render_pipeline_state(const Render_pipeline_state& pipeline)
 {
@@ -74,16 +69,6 @@ void Render_command_encoder_impl::set_scissor_rect(const int x, const int y, con
     );
 }
 
-void Render_command_encoder_impl::start_render_pass()
-{
-    m_render_pass.get_impl().start_render_pass();
-}
-
-void Render_command_encoder_impl::end_render_pass()
-{
-    m_render_pass.get_impl().end_render_pass();
-}
-
 void Render_command_encoder_impl::set_index_buffer(const Buffer* const buffer)
 {
     m_device.get_impl().m_gl_state_tracker.vertex_input.set_index_buffer(buffer);
@@ -118,7 +103,7 @@ void Render_command_encoder_impl::draw_primitives(
     const std::uintptr_t vertex_start,
     const std::uintptr_t vertex_count,
     const std::uintptr_t instance_count
-)
+) const
 {
     const gl::Primitive_type gl_primitive_type = to_gl(primitive_type);
     gl::draw_arrays_instanced(
@@ -133,7 +118,7 @@ void Render_command_encoder_impl::draw_primitives(
     const Primitive_type primitive_type,
     const std::uintptr_t vertex_start,
     const std::uintptr_t vertex_count
-)
+) const
 {
     const gl::Primitive_type gl_primitive_type = to_gl(primitive_type);
     gl::draw_arrays(
@@ -149,7 +134,7 @@ void Render_command_encoder_impl::draw_indexed_primitives(
     const erhe::dataformat::Format index_type,
     const std::uintptr_t           index_buffer_offset,
     const std::uintptr_t           instance_count
-)
+) const
 {
     const gl::Primitive_type     gl_primitive_type = to_gl(primitive_type);
     const gl::Draw_elements_type gl_index_type     = gl_helpers::convert_to_gl_index_type(index_type).value();
@@ -167,7 +152,7 @@ void Render_command_encoder_impl::draw_indexed_primitives(
     const std::uintptr_t           index_count,
     const erhe::dataformat::Format index_type,
     const std::uintptr_t           index_buffer_offset
-)
+) const
 {
     const gl::Primitive_type     gl_primitive_type = to_gl(primitive_type);
     const gl::Draw_elements_type gl_index_type     = gl_helpers::convert_to_gl_index_type(index_type).value();
@@ -185,7 +170,7 @@ void Render_command_encoder_impl::multi_draw_indexed_primitives_indirect(
     const std::uintptr_t           indirect_offset,
     const std::uintptr_t           drawcount,
     const std::uintptr_t           stride
-)
+) const
 {
     const gl::Primitive_type     gl_primitive_type = to_gl(primitive_type);
     const gl::Draw_elements_type gl_index_type     = gl_helpers::convert_to_gl_index_type(index_type).value();

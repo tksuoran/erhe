@@ -104,7 +104,7 @@ void Composition_pass::render(const Render_context& context)
 
     // TODO: Keep this vector in content library and update when needed.
     //       Make content library item host for content library nodes.
-    std::vector<std::shared_ptr<erhe::primitive::Material>> materials = material_library->get_all<erhe::primitive::Material>();
+    const std::vector<std::shared_ptr<erhe::primitive::Material>>& materials = material_library->get_all<erhe::primitive::Material>();
 
     using namespace erhe::primitive;
 
@@ -141,7 +141,7 @@ void Composition_pass::render(const Render_context& context)
                 .lights                 = {},
                 .skins                  = {},
                 .materials              = {},
-                .mesh_spans             = {},
+                .mesh_spans             = erhe::scene_renderer::Forward_renderer::empty_mesh_spans,
                 .non_mesh_vertex_count  = this->non_mesh_vertex_count,
                 .render_pipeline_states = this->render_pipeline_states,
                 .primitive_mode         = this->primitive_mode,
@@ -154,7 +154,7 @@ void Composition_pass::render(const Render_context& context)
                 .viewport               = context.viewport,
                 .override_shader_stages = this->allow_shader_stages_override ? context.override_shader_stages : nullptr,
                 .error_shader_stages    = &context.app_context.programs->error.shader_stages,
-                .debug_label            = get_name()
+                .debug_label            = get_debug_label().string_view()
             },
             nullptr
         );

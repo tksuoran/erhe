@@ -1018,14 +1018,14 @@ auto Item_tree::item_icon_and_text(const std::shared_ptr<erhe::Item_base>& item,
     const auto& hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy     >(item);
     const auto& scene     = std::dynamic_pointer_cast<erhe::scene::Scene  >(item);
 
-    const char* c_name = [&item, &content_library_node](){
+    const erhe::utility::Debug_label debug_label = [&item, &content_library_node](){
         if (content_library_node) {
             const std::size_t child_count = content_library_node->get_child_count();
             if ((child_count == 0) && content_library_node->item) {
-                return content_library_node->item->get_label().c_str();
+                return content_library_node->item->get_debug_label();
             }
         }
-        return item->get_label().c_str();
+        return item->get_debug_label();
     }();
 
     bool is_leaf = true;
@@ -1066,7 +1066,7 @@ auto Item_tree::item_icon_and_text(const std::shared_ptr<erhe::Item_base>& item,
         (update && (item->is_selected()) ? ImGuiTreeNodeFlags_Selected : ImGuiTreeNodeFlags_None);
         ////(update && (item->is_selected() || is_last_selected) ? ImGuiTreeNodeFlags_Selected : ImGuiTreeNodeFlags_None);
 
-    const bool item_node_open = ImGui::TreeNodeEx(c_name, flags);
+    const bool item_node_open = ImGui::TreeNodeEx(debug_label.data(), flags);
     //// if (is_last_selected) {
     ////     ImGui::PopStyleColor();
     //// }

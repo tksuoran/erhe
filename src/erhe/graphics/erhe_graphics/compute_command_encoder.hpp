@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_graphics/command_encoder.hpp"
+#include "erhe_utility/pimpl_ptr.hpp"
 
 #include <cstdint>
 #include <memory>
@@ -28,7 +29,7 @@ public:
     void dispatch_compute          (std::uintptr_t x_size, std::uintptr_t y_size, std::uintptr_t z_size);
 
 private:
-    std::unique_ptr<Compute_command_encoder_impl> m_impl;
+    erhe::utility::pimpl_ptr<Compute_command_encoder_impl, 64, 16> m_impl;
 };
 
 } // namespace erhe::graphics

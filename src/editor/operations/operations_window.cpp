@@ -488,7 +488,7 @@ void Operations::bake_transform()
             );
             // Second: Reset transform in all nodes
             const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items = m_context.selection->get_selected_items();
-            const std::vector<std::shared_ptr<erhe::scene::Node>> nodes = get_all<erhe::scene::Node>(selected_items);
+            const std::vector<std::shared_ptr<erhe::scene::Node>>& nodes = get_all<erhe::scene::Node>(selected_items);
             for (const std::shared_ptr<erhe::scene::Node>& node : nodes) {
                 compound_operation_parameters.operations.push_back(
                     std::make_shared<Node_transform_operation>(
@@ -532,7 +532,7 @@ void Operations::center_transform()
             );
             // Second: Reset transform in all nodes
             const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items = m_context.selection->get_selected_items();
-            const std::vector<std::shared_ptr<erhe::scene::Node>> nodes = get_all<erhe::scene::Node>(selected_items);
+            const std::vector<std::shared_ptr<erhe::scene::Node>>& nodes = get_all<erhe::scene::Node>(selected_items);
             for (const std::shared_ptr<erhe::scene::Node>& node : nodes) {
                 const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(node.get());
                 if (!mesh) {

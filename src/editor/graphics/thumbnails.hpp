@@ -10,7 +10,6 @@
 
 namespace erhe::graphics {
     class Device;
-    class Render_command_encoder;
     class Texture;
 }
 

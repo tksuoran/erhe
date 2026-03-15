@@ -131,7 +131,8 @@ void Depth_to_color_rendergraph_node::execute_rendergraph_node()
     }
 
     erhe::graphics::Device& graphics_device = m_rendergraph.get_graphics_device();
-    erhe::graphics::Render_command_encoder render_encoder = graphics_device.make_render_command_encoder(*m_render_pass.get());
+    erhe::graphics::Render_command_encoder render_encoder = graphics_device.make_render_command_encoder();
+    erhe::graphics::Scoped_render_pass scoped_render_pass{*m_render_pass.get()};
 
     const auto& light_projection_transforms = light_projections.light_projection_transforms.at(m_light_index);
     const auto& layers = scene_root->layers();

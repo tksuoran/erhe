@@ -83,7 +83,28 @@ public:
     [[nodiscard]] auto get_impl                () const -> const Render_pass_impl&;
 
 private:
+    friend class Scoped_render_pass;
+    void start_render_pass();
+    void end_render_pass  ();
+
+private:
     std::unique_ptr<Render_pass_impl> m_impl;
+};
+
+class Scoped_render_pass final
+{
+public:
+    Scoped_render_pass (Render_pass& render_pass);
+    ~Scoped_render_pass() noexcept;
+    Scoped_render_pass (const Scoped_render_pass&) = delete;
+    void operator=(const Scoped_render_pass&) = delete;
+    Scoped_render_pass(Scoped_render_pass&&) = delete;
+    void operator=(Scoped_render_pass&&) = delete;
+
+private:
+    friend class Render_pass;
+
+    Render_pass& m_render_pass;
 };
 
 } // namespace erhe::graphics

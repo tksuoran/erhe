@@ -1,4 +1,5 @@
 #include "erhe_graphics/render_command_encoder.hpp"
+#include "erhe_graphics/render_pass.hpp"
 
 #if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
 # include "erhe_graphics/gl/gl_render_command_encoder.hpp"
@@ -9,10 +10,13 @@
 
 namespace erhe::graphics {
 
-Render_command_encoder::Render_command_encoder(Device& device, Render_pass& render_pass)
-    : m_impl{std::make_unique<Render_command_encoder_impl>(device, render_pass)}
+Render_command_encoder::Render_command_encoder(Device& device)
+    : m_impl{device}
 {
+    static_assert(sizeof(Render_command_encoder_impl) <= 512);
+    static_assert(alignof(Render_command_encoder_impl) <= 16);
 }
+
 Render_command_encoder::~Render_command_encoder() noexcept = default;
 void Render_command_encoder::set_buffer(Buffer_target buffer_target, const Buffer* buffer, std::uintptr_t offset,
     std::uintptr_t length, std::uintptr_t index)
@@ -23,32 +27,32 @@ void Render_command_encoder::set_buffer(Buffer_target buffer_target, const Buffe
 {
     m_impl->set_buffer(buffer_target, buffer);
 }
-void Render_command_encoder::set_render_pipeline_state(const Render_pipeline_state& pipeline) const
+void Render_command_encoder::set_render_pipeline_state(const Render_pipeline_state& pipeline)
 {
     m_impl->set_render_pipeline_state(pipeline);
 }
 void Render_command_encoder::set_render_pipeline_state(const Render_pipeline_state& pipeline,
-    const Shader_stages* override_shader_stages) const
+    const Shader_stages* override_shader_stages)
 {
     m_impl->set_render_pipeline_state(pipeline, override_shader_stages);
 }
-void Render_command_encoder::set_viewport_rect(int x, int y, int width, int height) const
+void Render_command_encoder::set_viewport_rect(int x, int y, int width, int height)
 {
     m_impl->set_viewport_rect(x, y, width, height);
 }
-void Render_command_encoder::set_viewport_depth_range(float min_depth, float max_depth) const
+void Render_command_encoder::set_viewport_depth_range(float min_depth, float max_depth)
 {
     m_impl->set_viewport_depth_range(min_depth, max_depth);
 }
-void Render_command_encoder::set_scissor_rect(int x, int y, int width, int height) const
+void Render_command_encoder::set_scissor_rect(int x, int y, int width, int height)
 {
     m_impl->set_scissor_rect(x, y, width, height);
 }
-void Render_command_encoder::set_index_buffer(const Buffer* buffer) const
+void Render_command_encoder::set_index_buffer(const Buffer* buffer)
 {
     m_impl->set_index_buffer(buffer);
 }
-void Render_command_encoder::set_vertex_buffer(const Buffer* buffer, std::uintptr_t offset, std::uintptr_t index) const
+void Render_command_encoder::set_vertex_buffer(const Buffer* buffer, std::uintptr_t offset, std::uintptr_t index)
 {
     m_impl->set_vertex_buffer(buffer, offset, index);
 }

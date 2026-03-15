@@ -68,6 +68,7 @@ auto Render_pass::get_debug_label() const -> erhe::utility::Debug_label
 {
     return m_impl->get_debug_label();
 }
+
 auto Render_pass::get_impl() -> Render_pass_impl&
 {
     return *m_impl.get();
@@ -75,6 +76,30 @@ auto Render_pass::get_impl() -> Render_pass_impl&
 auto Render_pass::get_impl() const -> const Render_pass_impl&
 {
     return *m_impl.get();
+}
+
+//
+
+void Render_pass::start_render_pass()
+{
+    m_impl->start_render_pass();
+}
+
+void Render_pass::end_render_pass()
+{
+    m_impl->end_render_pass();
+}
+
+
+Scoped_render_pass::Scoped_render_pass(Render_pass& render_pass)
+    : m_render_pass{render_pass}
+{
+    m_render_pass.start_render_pass();
+}
+
+Scoped_render_pass::~Scoped_render_pass()
+{
+    m_render_pass.end_render_pass();
 }
 
 } // namespace erhe::graphics

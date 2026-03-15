@@ -311,7 +311,8 @@ public:
 
         update_render_pass(viewport.width, viewport.height);
 
-        erhe::graphics::Render_command_encoder render_encoder = m_graphics_device.make_render_command_encoder(*m_render_pass.get());
+        erhe::graphics::Render_command_encoder render_encoder = m_graphics_device.make_render_command_encoder();
+        erhe::graphics::Scoped_render_pass scoped_render_pass{*m_render_pass.get()};
 
         m_forward_renderer.render(
             erhe::scene_renderer::Forward_renderer::Render_parameters{

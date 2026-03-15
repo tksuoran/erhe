@@ -85,8 +85,8 @@ auto Item_filter::describe() const -> std::string
 Item_base::Item_base() = default;
 
 Item_base::Item_base(const std::string_view name)
-    : m_name {name}
-    , m_label{fmt::format("{}##{}", name, get_id())}
+    : m_name       {name}
+    , m_debug_label{erhe::utility::Debug_label{fmt::format("{}##{}", name, get_id())}}
 {
 }
 
@@ -94,17 +94,17 @@ Item_base::Item_base(const Item_base& other)
     : enable_shared_from_this{other}
     , m_flag_bits  {other.m_flag_bits & ~Item_flags::selected}
     , m_name       {fmt::format("{} Copy", other.m_name)}
+    , m_debug_label{erhe::utility::Debug_label{fmt::format("{}##{}", m_name, get_id())}}
     , m_source_path{other.m_source_path}
 {
-    m_label = fmt::format("{}##{}", m_name, get_id());
 }
 
 auto Item_base::operator=(const Item_base& other) -> Item_base&
 {
     m_flag_bits   = other.m_flag_bits & ~Item_flags::selected;
     m_name        = fmt::format("{} Copy", other.m_name);
+    m_debug_label = erhe::utility::Debug_label{fmt::format("{}##{}", m_name, get_id())};
     m_source_path = other.m_source_path;
-    m_label       = fmt::format("{}##{}", m_name, get_id());
     return *this;
 }
 
@@ -115,9 +115,9 @@ auto Item_base::get_name() const -> const std::string&
     return m_name;
 }
 
-auto Item_base::get_label() const -> const std::string&
+auto Item_base::get_debug_label() const -> erhe::utility::Debug_label
 {
-    return m_label;
+    return m_debug_label;
 }
 
 auto Item_base::get_flag_bits() const -> uint64_t
@@ -217,7 +217,7 @@ auto Item_base::get_source_path() const -> const std::filesystem::path&
 void Item_base::set_name(const std::string_view name)
 {
     m_name = name;
-    m_label = fmt::format("{}##{}", name, get_id());
+    m_debug_label = erhe::utility::Debug_label{fmt::format("{}##{}", name, get_id())};
 }
 
 auto Item_base::describe(int level) const -> std::string

@@ -10,6 +10,7 @@
 #include "erhe_rendergraph/rendergraph.hpp"
 #include "erhe_rendergraph/texture_rendergraph_node.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
+#include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_scene_renderer/forward_renderer.hpp"
 #include "erhe_profile/profile.hpp"
@@ -78,11 +79,8 @@ void Brdf_slice_rendergraph_node::execute_rendergraph_node()
 
     ERHE_PROFILE_FUNCTION();
 
+    erhe::graphics::Scoped_render_pass scoped_render_pass{*m_render_pass.get()};
     erhe::graphics::Scoped_debug_group pass_scope{"Brdf_slice_rendergraph_node::execute_rendergraph_node()"};
-    erhe::graphics::Device& graphics_device = m_rendergraph.get_graphics_device();
-
-    erhe::graphics::Render_command_encoder render_encoder = graphics_device.make_render_command_encoder(*m_render_pass.get());
-
     erhe::scene_renderer::Light_projections light_projections;
     light_projections.brdf_phi          = m_brdf_slice.phi;
     light_projections.brdf_incident_phi = m_brdf_slice.incident_phi;
@@ -94,6 +92,8 @@ void Brdf_slice_rendergraph_node::execute_rendergraph_node()
         .width  = m_area_size,
         .height = m_area_size
     };
+
+    erhe::graphics::Render_command_encoder render_encoder{m_rendergraph.get_graphics_device()};
 
     m_forward_renderer.draw_primitives(
         erhe::scene_renderer::Forward_renderer::Render_parameters{

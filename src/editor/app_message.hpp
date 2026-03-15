@@ -32,17 +32,23 @@ public:
 class Scene_root;
 class Scene_view;
 
+class Selection_change
+{
+public:
+    std::vector<std::shared_ptr<erhe::Item_base>> no_longer_selected{};
+    std::vector<std::shared_ptr<erhe::Item_base>> newly_selected    {};
+};
+
 class App_message
 {
 public:
-    uint64_t                                      update_flags      {0};
-    Scene_view*                                   scene_view        {nullptr};
-    std::shared_ptr<Scene_root>                   scene_root        {};
-    erhe::scene::Node*                            node              {nullptr};
-    std::shared_ptr<erhe::Item_base>              item              {};
-    std::vector<std::shared_ptr<erhe::Item_base>> no_longer_selected{};
-    std::vector<std::shared_ptr<erhe::Item_base>> newly_selected    {};
-    Graphics_preset*                              graphics_preset   {nullptr};
+    uint64_t                         update_flags    {0};
+    Scene_view*                      scene_view      {nullptr};
+    std::shared_ptr<Scene_root>      scene_root      {};
+    erhe::scene::Node*               node            {nullptr};
+    std::shared_ptr<erhe::Item_base> item            {};
+    Graphics_preset*                 graphics_preset {nullptr};
+    std::optional<Selection_change>  selection_change{};
 };
 
 }

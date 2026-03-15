@@ -10,7 +10,9 @@
 #include <vector>
 
 namespace erhe::graphics {
-    
+
+class Render_pipeline_state;
+
 class Render_pass_impl final
 {
 public:
@@ -38,7 +40,7 @@ public:
     [[nodiscard]] auto get_debug_label         () const -> erhe::utility::Debug_label;
 
 private:
-    friend class Render_command_encoder_impl;
+    friend class Render_pass;
     void start_render_pass();
     void end_render_pass  ();
 

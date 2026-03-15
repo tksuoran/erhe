@@ -59,7 +59,7 @@ public:
         const std::span<const std::shared_ptr<erhe::scene::Light>>&        lights           {};
         const std::span<const std::shared_ptr<erhe::scene::Skin>>&         skins            {};
         const std::span<const std::shared_ptr<erhe::primitive::Material>>& materials        {};
-/* ! */ const std::vector<
+        const std::vector<
             std::span<const std::shared_ptr<erhe::scene::Mesh>>
         >&                                                                 mesh_spans;
         std::size_t                                                        non_mesh_vertex_count{0};
@@ -82,6 +82,8 @@ public:
 
     void render(const Render_parameters& parameters);
     void draw_primitives(const Render_parameters& parameters, const erhe::scene::Light* light);
+
+    static const std::vector<std::span<const std::shared_ptr<erhe::scene::Mesh>>> empty_mesh_spans;
 
 private:
     erhe::graphics::Device&                       m_graphics_device;

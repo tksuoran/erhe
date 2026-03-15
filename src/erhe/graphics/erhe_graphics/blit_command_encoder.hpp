@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_graphics/command_encoder.hpp"
+#include "erhe_utility/pimpl_ptr.hpp"
 
 #include <glm/glm.hpp>
 
@@ -55,7 +56,7 @@ public:
     // void resolve_counters                (const CounterSampleBuffer* sampleBuffer, NS::Range range, const class Buffer* destination_buffer, std::uintptr_t destination_offset);
 
 private:
-    std::unique_ptr<Blit_command_encoder_impl> m_impl;
+    erhe::utility::pimpl_ptr<Blit_command_encoder_impl, 64, 16> m_impl;
 };
 
 } // namespace erhe::graphics

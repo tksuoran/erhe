@@ -17,6 +17,7 @@
 
 #include "erhe_commands/commands.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
+#include "erhe_graphics/render_pass.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_scene/camera.hpp"
@@ -269,7 +270,8 @@ auto Scene_commands::create_new_rendertarget(erhe::scene::Node* parent) -> std::
 
     {
         // Clear once
-        erhe::graphics::Render_command_encoder render_encoder = m_context.graphics_device->make_render_command_encoder(*mesh->get_render_pass());
+        erhe::graphics::Render_command_encoder render_encoder = m_context.graphics_device->make_render_command_encoder();
+        erhe::graphics::Scoped_render_pass scoped_render_pass{*mesh->get_render_pass()};
         mesh->render_done(m_context);
     }
 

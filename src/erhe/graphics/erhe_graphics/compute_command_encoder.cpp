@@ -10,8 +10,10 @@
 namespace erhe::graphics {
 
 Compute_command_encoder::Compute_command_encoder(Device& device)
-    : m_impl{std::make_unique<Compute_command_encoder_impl>(device)}
+    : m_impl{device}
 {
+    static_assert(sizeof(Compute_command_encoder_impl) <= 64);
+    static_assert(alignof(Compute_command_encoder_impl) <= 16);
 }
 Compute_command_encoder::~Compute_command_encoder() noexcept
 {

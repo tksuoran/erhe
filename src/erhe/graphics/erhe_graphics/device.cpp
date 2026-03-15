@@ -104,9 +104,9 @@ void Device::clear_texture(const Texture& texture, std::array<double, 4> value)
 {
     m_impl->clear_texture(texture, value);
 }
-auto Device::make_render_command_encoder(Render_pass& render_pass) -> Render_command_encoder
+auto Device::make_render_command_encoder() -> Render_command_encoder
 {
-    return m_impl->make_render_command_encoder(render_pass);
+    return m_impl->make_render_command_encoder();
 }
 auto Device::make_blit_command_encoder() -> Blit_command_encoder
 {

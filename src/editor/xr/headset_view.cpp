@@ -485,7 +485,8 @@ auto Headset_view::render_headset() -> bool
             }
 
             {
-                erhe::graphics::Render_command_encoder encoder = graphics_device.make_render_command_encoder(*render_pass);
+                erhe::graphics::Render_command_encoder encoder = graphics_device.make_render_command_encoder();
+                erhe::graphics::Scoped_render_pass scoped_render_pass{*render_pass};
                 render_context.encoder = &encoder;
                 ERHE_VERIFY(render_view.width  == static_cast<uint32_t>(render_pass->get_render_target_width()));
                 ERHE_VERIFY(render_view.height == static_cast<uint32_t>(render_pass->get_render_target_height()));

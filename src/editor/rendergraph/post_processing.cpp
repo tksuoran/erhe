@@ -600,7 +600,8 @@ void Post_processing::post_process(Post_processing_node& node)
         erhe::graphics::Render_pass* render_pass       = node.downsample_render_passes.at(destination_level).get();
         const unsigned int           binding_point     = m_parameter_block.get_binding_point();
 
-        erhe::graphics::Render_command_encoder encoder = m_context.graphics_device->make_render_command_encoder(*render_pass);
+        erhe::graphics::Render_command_encoder encoder = m_context.graphics_device->make_render_command_encoder();
+        erhe::graphics::Scoped_render_pass scoped_render_pass{*render_pass};
 
         encoder.set_buffer(
             m_parameter_block.get_binding_target(),
@@ -632,7 +633,8 @@ void Post_processing::post_process(Post_processing_node& node)
         erhe::graphics::Render_pass* render_pass = node.upsample_render_passes.at(destination_level).get();
         const unsigned int binding_point = m_parameter_block.get_binding_point();
 
-        erhe::graphics::Render_command_encoder encoder = m_context.graphics_device->make_render_command_encoder(*render_pass);
+        erhe::graphics::Render_command_encoder encoder = m_context.graphics_device->make_render_command_encoder();
+        erhe::graphics::Scoped_render_pass scoped_render_pass{*render_pass};
 
         if (source_level == node.upsample_source_levels.front()) {
             encoder.set_render_pipeline_state(m_pipelines.upsample_first);

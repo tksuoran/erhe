@@ -8,7 +8,7 @@ namespace erhe::graphics {
 class Render_command_encoder_impl final : public Command_encoder_impl
 {
 public:
-    Render_command_encoder_impl(Device& device, Render_pass& render_pass);
+    Render_command_encoder_impl(Device& device);
     Render_command_encoder_impl(const Render_command_encoder_impl&) = delete;
     Render_command_encoder_impl& operator=(const Render_command_encoder_impl&) = delete;
     Render_command_encoder_impl(Render_command_encoder_impl&&) = delete;
@@ -22,10 +22,10 @@ public:
     void set_scissor_rect         (int x, int y, int width, int height);
     void set_index_buffer         (const Buffer* buffer);
     void set_vertex_buffer        (const Buffer* buffer, std::uintptr_t offset, std::uintptr_t index);
-    void draw_primitives          (Primitive_type primitive_type, std::uintptr_t vertex_start, std::uintptr_t vertex_count, std::uintptr_t instance_count);
-    void draw_primitives          (Primitive_type primitive_type, std::uintptr_t vertex_start, std::uintptr_t vertex_count);
-    void draw_indexed_primitives  (Primitive_type primitive_type, std::uintptr_t index_count, erhe::dataformat::Format index_type, std::uintptr_t index_buffer_offset, std::uintptr_t instance_count);
-    void draw_indexed_primitives  (Primitive_type primitive_type, std::uintptr_t index_count, erhe::dataformat::Format index_type, std::uintptr_t index_buffer_offset);
+    void draw_primitives          (Primitive_type primitive_type, std::uintptr_t vertex_start, std::uintptr_t vertex_count, std::uintptr_t instance_count) const;
+    void draw_primitives          (Primitive_type primitive_type, std::uintptr_t vertex_start, std::uintptr_t vertex_count) const;
+    void draw_indexed_primitives  (Primitive_type primitive_type, std::uintptr_t index_count, erhe::dataformat::Format index_type, std::uintptr_t index_buffer_offset, std::uintptr_t instance_count) const;
+    void draw_indexed_primitives  (Primitive_type primitive_type, std::uintptr_t index_count, erhe::dataformat::Format index_type, std::uintptr_t index_buffer_offset) const;
 
     void multi_draw_indexed_primitives_indirect(
         Primitive_type           primitive_type,
@@ -33,13 +33,7 @@ public:
         std::uintptr_t           indirect_offset,
         std::uintptr_t           drawcount,
         std::uintptr_t           stride
-    );
-
-private:
-    void start_render_pass();
-    void end_render_pass();
-
-    Render_pass& m_render_pass;
+    ) const;
 };
 
 } // namespace erhe::graphics

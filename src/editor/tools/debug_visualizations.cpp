@@ -1567,16 +1567,18 @@ void Debug_visualizations::render(const Render_context& context)
 
     // Skins can be shared by multiple meshes.
     // Visualize each skin only once.
-    std::set<erhe::scene::Skin*> skins;
-    for (erhe::scene::Mesh_layer* layer : scene_root->layers().mesh_layers()) {
-        for (const auto& mesh : layer->meshes) {
-            if (mesh->skin && should_visualize(m_skins, mesh)) {
-                skins.insert(mesh->skin.get());
+    if (m_skins != Visualization_mode::None) {
+        std::set<erhe::scene::Skin*> skins;
+        for (erhe::scene::Mesh_layer* layer : scene_root->layers().mesh_layers()) {
+            for (const auto& mesh : layer->meshes) {
+                if (mesh->skin && should_visualize(m_skins, mesh)) {
+                    skins.insert(mesh->skin.get());
+                }
             }
         }
-    }
-    for (auto* skin : skins) {
-        skin_visualization(context, *skin);
+        for (auto* skin : skins) {
+            skin_visualization(context, *skin);
+        }
     }
 
     physics_nodes_visualization(context);

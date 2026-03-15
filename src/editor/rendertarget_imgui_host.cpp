@@ -502,7 +502,8 @@ void Rendertarget_imgui_host::execute_rendergraph_node()
     erhe::graphics::Device& graphics_device = m_rendergraph.get_graphics_device();
     erhe::graphics::Render_pass* render_pass = m_rendertarget_mesh->get_render_pass();
     ERHE_VERIFY(render_pass != nullptr);
-    erhe::graphics::Render_command_encoder render_encoder = graphics_device.make_render_command_encoder(*render_pass);
+    erhe::graphics::Render_command_encoder render_encoder = graphics_device.make_render_command_encoder();
+    erhe::graphics::Scoped_render_pass scoped_render_pass{*render_pass};
     m_app_context.imgui_renderer->render_draw_data(render_encoder);
     m_rendertarget_mesh->render_done(m_app_context);
 }

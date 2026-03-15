@@ -33,8 +33,7 @@ public:
     void unbind           ();
 
 private:
-    std::unique_ptr<Texture_heap_impl> m_impl;
-    //erhe::utility::pimpl_ptr<Texture_heap_impl, 376, 8> m_impl;
+    erhe::utility::pimpl_ptr<Texture_heap_impl, 512, 16> m_impl;
 };
 
 } // namespace erhe::graphics

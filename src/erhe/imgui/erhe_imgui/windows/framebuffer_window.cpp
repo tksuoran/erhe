@@ -49,11 +49,6 @@ auto Framebuffer_window::to_content(const glm::vec2 position_in_root) const -> g
     return glm::vec2{content_x, content_y};
 }
 
-auto Framebuffer_window::make_render_command_encoder() -> erhe::graphics::Render_command_encoder
-{
-    return m_graphics_device.make_render_command_encoder(*m_render_pass.get());
-}
-
 void Framebuffer_window::update_render_pass()
 {
     ERHE_PROFILE_FUNCTION();

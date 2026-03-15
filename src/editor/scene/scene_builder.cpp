@@ -782,7 +782,7 @@ void Scene_builder::add_torus_chain(const Make_mesh_config& config, bool connect
     const float minor_radius = 0.25f * config.object_scale;
 
     auto&       material_library = m_scene_root->get_content_library()->materials;
-    const auto  materials        = material_library->get_all<erhe::primitive::Material>();
+    const auto& materials        = material_library->get_all<erhe::primitive::Material>();
     std::size_t material_index   = 0;
 
     float x = 0.0f;
@@ -900,7 +900,7 @@ void Scene_builder::make_mesh_nodes(const Make_mesh_config& config, std::vector<
         ERHE_PROFILE_SCOPE("make instances");
 
         auto&       material_library = m_scene_root->get_content_library()->materials;
-        const auto  materials        = material_library->get_all<erhe::primitive::Material>();
+        const auto& materials        = material_library->get_all<erhe::primitive::Material>();
         std::size_t material_index   = 0;
 
         std::size_t visible_material_count = 0;

@@ -21,10 +21,10 @@ target_link_libraries(
     ${_target}
     PUBLIC
         erhe::profile
+        erhe::utility
         glm::glm-header-only
         Taskflow
     PRIVATE
-        erhe::utility
         erhe::log
         erhe::message_bus
         erhe::verify

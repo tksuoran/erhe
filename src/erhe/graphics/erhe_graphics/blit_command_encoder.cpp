@@ -10,8 +10,10 @@
 namespace erhe::graphics {
 
 Blit_command_encoder::Blit_command_encoder(Device& device)
-    : m_impl{std::make_unique<Blit_command_encoder_impl>(device)}
+    : m_impl{device}
 {
+    static_assert(sizeof(Blit_command_encoder_impl) <= 64);
+    static_assert(alignof(Blit_command_encoder_impl) <= 16);
 }
 Blit_command_encoder::~Blit_command_encoder() noexcept
 {

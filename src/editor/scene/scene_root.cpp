@@ -194,8 +194,12 @@ Scene_root::Scene_root(
         app_message_bus->add_receiver(
             [this](App_message& message) {
                 using namespace erhe::utility;
-                if (test_bit_set(message.update_flags, Message_flag_bit::c_flag_bit_selection)) {
-                    for (const auto& item : message.no_longer_selected) {
+                if (
+                    test_bit_set(message.update_flags, Message_flag_bit::c_flag_bit_selection) &&
+                    message.selection_change.has_value()
+                ) {
+                    Selection_change& selection_change = message.selection_change.value();
+                    for (const auto& item : selection_change.no_longer_selected) {
                         if (item->get_item_host() != this) {
                             continue;
                         }
@@ -222,7 +226,7 @@ Scene_root::Scene_root(
                         }
                     }
 
-                    for (const auto& item : message.newly_selected) {
+                    for (const auto& item : selection_change.newly_selected) {
                         if (item->get_item_host() != this) {
                             continue;
                         }

@@ -1229,7 +1229,8 @@ void Device_impl::clear_texture(const Texture& texture, const std::array<double,
     render_pass_descriptor.render_target_height = texture.get_height();
     Render_pass render_pass{m_device, render_pass_descriptor};
 
-    Render_command_encoder clear_render_encoder = make_render_command_encoder(render_pass);
+    Render_command_encoder clear_render_encoder = make_render_command_encoder();
+    Scoped_render_pass scoped_render_pass{render_pass};
 }
 
 auto Device_impl::make_blit_command_encoder() -> Blit_command_encoder
@@ -1239,12 +1240,11 @@ auto Device_impl::make_blit_command_encoder() -> Blit_command_encoder
 
 auto Device_impl::make_compute_command_encoder() -> Compute_command_encoder
 {
-    return Compute_command_encoder(m_device);
+    return Compute_command_encoder{m_device};
 }
-
-auto Device_impl::make_render_command_encoder(Render_pass& render_pass) -> Render_command_encoder
+auto Device_impl::make_render_command_encoder() -> Render_command_encoder
 {
-    return Render_command_encoder(m_device, render_pass);
+    return Render_command_encoder{m_device};
 }
 
 void Device_impl::reset_shader_stages_state_tracker()

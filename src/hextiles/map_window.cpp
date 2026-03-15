@@ -426,14 +426,15 @@ void Map_window::render()
     const auto& terrain_shapes = m_tile_renderer.get_terrain_shapes();
     const auto& unit_shapes    = m_tile_renderer.get_unit_shapes();
 
-    erhe::graphics::Render_command_encoder encoder = m_graphics_device.make_render_command_encoder(*m_render_pass.get());
+    erhe::graphics::Render_command_encoder encoder = m_graphics_device.make_render_command_encoder();
+    erhe::graphics::Scoped_render_pass scoped_render_pass{*m_render_pass.get()};
 
     std::size_t width_in_tiles  = static_cast<size_t>(std::ceil(extent_x / (Tile_shape::interleave_width * m_zoom)));
     std::size_t height_in_tiles = static_cast<size_t>(std::ceil(extent_y / (Tile_shape::height           * m_zoom)));
 
     coordinate_t half_width_in_tiles  = static_cast<coordinate_t>(2 + (width_in_tiles / 2));
     coordinate_t half_height_in_tiles = static_cast<coordinate_t>(2 + (height_in_tiles / 2));
-    std::size_t tile_count      = (half_width_in_tiles * 2) * (half_height_in_tiles * 2);
+    std::size_t  tile_count           = (half_width_in_tiles * 2) * (half_height_in_tiles * 2);
 
     // TODO units should have fixed max count <1000
     if (m_grid) {

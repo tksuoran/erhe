@@ -156,7 +156,8 @@ void Viewport_scene_view::execute_rendergraph_node()
 
     ERHE_VERIFY(m_render_pass);
 
-    erhe::graphics::Render_command_encoder encoder = graphics_device.make_render_command_encoder(*m_render_pass.get());
+    erhe::graphics::Render_command_encoder encoder = graphics_device.make_render_command_encoder();
+    erhe::graphics::Scoped_render_pass scoped_render_pass{*m_render_pass.get()};
     context.encoder = &encoder;
 
     // Starting render encoder clears render target texture(s)

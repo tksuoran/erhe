@@ -1,6 +1,3 @@
-// #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
-
-#include "erhe_graphics/texture_heap.hpp"
 #include "erhe_graphics/gl/gl_texture_heap.hpp"
 
 namespace erhe::graphics {
@@ -11,11 +8,10 @@ Texture_heap::Texture_heap(
     const Sampler& fallback_sampler,
     std::size_t    reserved_slot_count
 )
-    : m_impl{std::make_unique<Texture_heap_impl>(device, fallback_texture, fallback_sampler, reserved_slot_count)}
-    //: m_impl{device, fallback_texture, fallback_sampler, reserved_slot_count}
+    : m_impl{device, fallback_texture, fallback_sampler, reserved_slot_count}
 {
-    //static_assert(sizeof(Texture_heap_impl) <= 376);
-    //static_assert(alignof(Texture_heap_impl) <= alignof(std::max_align_t));
+    static_assert(sizeof(Texture_heap_impl) <= 512);
+    static_assert(alignof(Texture_heap_impl) <= 16);
 }
 
 Texture_heap::~Texture_heap() noexcept = default;

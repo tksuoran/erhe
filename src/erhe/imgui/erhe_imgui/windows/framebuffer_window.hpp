@@ -43,8 +43,6 @@ public:
     // Public API
     virtual void update_render_pass();
 
-    [[nodiscard]] auto make_render_command_encoder() -> erhe::graphics::Render_command_encoder;
-
 protected:
     erhe::graphics::Device&                      m_graphics_device;
     erhe::utility::Debug_label                   m_debug_label;

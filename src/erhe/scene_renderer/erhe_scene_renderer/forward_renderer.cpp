@@ -20,6 +20,8 @@
 
 namespace erhe::scene_renderer {
 
+const std::vector<std::span<const std::shared_ptr<erhe::scene::Mesh>>> Forward_renderer::empty_mesh_spans{};
+
 Forward_renderer::Forward_renderer(erhe::graphics::Device& graphics_device, Program_interface& program_interface)
     : m_graphics_device     {graphics_device}
     , m_program_interface   {program_interface}

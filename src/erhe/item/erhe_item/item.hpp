@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_item/unique_id.hpp"
+#include "erhe_utility/debug_label.hpp"
 
 #include <taskflow/taskflow.hpp>
 
@@ -274,7 +275,7 @@ public:
     [[nodiscard]] auto is_hidden                   () const -> bool;
     [[nodiscard]] auto get_source_path             () const -> const std::filesystem::path&;
     [[nodiscard]] auto get_name                    () const -> const std::string&;
-    [[nodiscard]] auto get_label                   () const -> const std::string&;
+    [[nodiscard]] auto get_debug_label             () const -> erhe::utility::Debug_label;
     [[nodiscard]] auto describe                    (int level = 0) const -> std::string;
     [[nodiscard]] auto get_task                    () -> const tf::AsyncTask&;
     void set_task         (tf::AsyncTask& task);
@@ -289,14 +290,13 @@ public:
     void hide             ();
     void set_source_path  (const std::filesystem::path& path);
 
-
 protected:
-    Unique_id<Item_base>  m_id         {};
-    uint64_t              m_flag_bits  {Item_flags::none};
-    std::string           m_name       {};
-    std::string           m_label      {};
-    std::filesystem::path m_source_path{};
-    tf::AsyncTask         m_task       {};
+    Unique_id<Item_base>       m_id         {};
+    uint64_t                   m_flag_bits  {Item_flags::none};
+    std::string                m_name       {};
+    erhe::utility::Debug_label m_debug_label{};
+    std::filesystem::path      m_source_path{};
+    tf::AsyncTask              m_task       {};
 };
 
 template <typename T>

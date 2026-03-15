@@ -11,6 +11,7 @@
 #include <imgui/imgui.h>
 
 #include <algorithm>
+#include <any>
 #include <cstdint>
 #include <memory>
 #include <mutex>
@@ -61,8 +62,33 @@ public:
     template <typename T>
     auto remove(const std::shared_ptr<T>& entry) -> bool;
 
+    // template <typename T>
+    // [[nodiscard]] auto get_all() -> std::vector<std::shared_ptr<T>> {
+    //     std::vector<std::shared_ptr<T>> result;
+    //     for_each<Content_library_node>(
+    //         [&result](const Content_library_node& node) {
+    //             auto entry = std::dynamic_pointer_cast<T>(node.item);
+    //             if (entry) {
+    //                 result.push_back(entry);
+    //             }
+    //             return true;
+    //         }
+    //     );
+    //     return result;
+    // }
     template <typename T>
-    [[nodiscard]] auto get_all() -> std::vector<std::shared_ptr<T>> {
+    [[nodiscard]] auto get_all() -> const std::vector<std::shared_ptr<T>>&
+    {
+        const uint64_t key{T::get_static_type()};
+        auto it = m_cache.find(key);
+        if (it != m_cache.end()) {
+            return
+                std::any_cast<
+                    const std::vector<std::shared_ptr<T>>&
+                >(it->second);
+        }
+
+        // Build and store cache
         std::vector<std::shared_ptr<T>> result;
         for_each<Content_library_node>(
             [&result](const Content_library_node& node) {
@@ -73,12 +99,21 @@ public:
                 return true;
             }
         );
-        return result;
+        auto [inserted_it, _] = m_cache.emplace(key, std::move(result));
+        return std::any_cast<const std::vector<std::shared_ptr<T>>&>(inserted_it->second);
     }
-
     uint64_t                         type_code{};
     std::string                      type_name{};
     std::shared_ptr<erhe::Item_base> item;
+
+private:
+    template <typename T>
+    void invalidate_cache()
+    {
+        m_cache.erase(T::get_static_type());
+    }
+
+    std::unordered_map<uint64_t, std::any> m_cache;
 };
 
 class Content_library
@@ -114,7 +149,7 @@ auto Content_library_node::combo(
 ) const -> bool
 {
     const bool empty_entry = empty_option || (!in_out_selected_entry);
-    const char* preview_value = in_out_selected_entry ? in_out_selected_entry->get_label().c_str() : "(none)";
+    const char* preview_value = in_out_selected_entry ? in_out_selected_entry->get_name().c_str() : "(none)";
     bool selection_changed = false;
     const bool begin = ImGui::BeginCombo(label, preview_value, ImGuiComboFlags_NoArrowButton | ImGuiComboFlags_HeightLarge);
     if (begin) {
@@ -141,7 +176,7 @@ auto Content_library_node::combo(
                 }
                 bool is_selected = (in_out_selected_entry == node.item);
                 context.icon_set->add_icons(node.item->get_type(), 1.0f);
-                if (ImGui::Selectable(node.item->get_label().c_str(), is_selected)) {
+                if (ImGui::Selectable(node.item->get_debug_label().data(), is_selected)) {
                     in_out_selected_entry = node_item_shared;
                     selection_changed = true;
                 }
@@ -206,6 +241,7 @@ void Content_library_node::add(const std::shared_ptr<T>& entry)
     }
     auto node = std::make_shared<Content_library_node>(entry);
     node->set_parent(this);
+    invalidate_cache<T>();
 }
 
 template <typename T>
@@ -228,6 +264,7 @@ auto Content_library_node::remove(const std::shared_ptr<T>& entry) -> bool
     }
     std::shared_ptr<Hierarchy> hierarchy = *i;
     i->remove();
+    invalidate_cache<T>();
     return true;
 }
 

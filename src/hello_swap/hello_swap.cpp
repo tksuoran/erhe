@@ -168,7 +168,8 @@ public:
         update_render_pass(width, height);
 
         {
-            erhe::graphics::Render_command_encoder render_encoder = m_graphics_device.make_render_command_encoder(*m_render_pass.get());
+            erhe::graphics::Render_command_encoder render_encoder = m_graphics_device.make_render_command_encoder();
+            erhe::graphics::Scoped_render_pass scoped_render_pass{*m_render_pass.get()};
         }
 
         const erhe::graphics::Frame_end_info frame_end_info{

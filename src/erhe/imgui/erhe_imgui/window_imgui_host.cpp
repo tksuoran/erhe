@@ -238,7 +238,8 @@ void Window_imgui_host::execute_rendergraph_node()
 
     Scoped_imgui_context imgui_context{*this};
 
-    erhe::graphics::Render_command_encoder render_encoder = m_graphics_device.make_render_command_encoder(*m_render_pass.get());
+    erhe::graphics::Render_command_encoder render_encoder = m_graphics_device.make_render_command_encoder();
+    erhe::graphics::Scoped_render_pass scoped_render_pass{*m_render_pass.get()};
     m_imgui_renderer.render_draw_data(render_encoder);
 }
 

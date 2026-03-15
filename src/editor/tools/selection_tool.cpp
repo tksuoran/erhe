@@ -567,23 +567,26 @@ void Selection::end_selection_change()
     const auto sorted_old = get_sorted(m_begin_selection_change_state);
     const auto sorted_new = get_sorted(m_selection);
 
+    Selection_change selection_change;
+
+    std::set_difference(
+        sorted_old.begin(), sorted_old.end(),
+        sorted_new.begin(), sorted_new.end(),
+        std::back_inserter(selection_change.no_longer_selected),
+        item_set_sort_predicate
+    );
+
+    std::set_difference(
+        sorted_new.begin(), sorted_new.end(),
+        sorted_old.begin(), sorted_old.end(),
+        std::back_inserter(selection_change.newly_selected),
+        item_set_sort_predicate
+    );
+
     App_message selection_changed_message{
-        .update_flags = Message_flag_bit::c_flag_bit_selection,
+        .update_flags     = Message_flag_bit::c_flag_bit_selection,
+        .selection_change = selection_change
     };
-
-    std::set_difference(
-        sorted_old.begin(), sorted_old.end(),
-        sorted_new.begin(), sorted_new.end(),
-        std::back_inserter(selection_changed_message.no_longer_selected),
-        item_set_sort_predicate
-    );
-
-    std::set_difference(
-        sorted_new.begin(), sorted_new.end(),
-        sorted_old.begin(), sorted_old.end(),
-        std::back_inserter(selection_changed_message.newly_selected),
-        item_set_sort_predicate
-    );
 
     m_context.app_message_bus->send_message(selection_changed_message);
 }
