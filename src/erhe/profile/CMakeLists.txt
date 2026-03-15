@@ -8,7 +8,10 @@ erhe_target_sources_grouped(
 )
 
 target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(${_target} PUBLIC mimalloc-static)
+
+if (ERHE_USE_MIMALLOC)
+    target_link_libraries(${_target} PUBLIC mimalloc-static)
+endif ()
 
 if (DEFINED ERHE_PROFILE_TARGET)
     target_link_libraries(${_target} PUBLIC ${ERHE_PROFILE_TARGET})

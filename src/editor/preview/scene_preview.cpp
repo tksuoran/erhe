@@ -57,7 +57,8 @@ Scene_preview::Scene_preview(
         nullptr, // Don't process editor messages
         nullptr, // Don't register to App_scenes
         m_content_library,
-        "Material preview scene"
+        "Material preview scene",
+        false
     );
 
     // I know, this is a bit dirty:

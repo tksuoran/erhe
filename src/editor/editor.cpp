@@ -791,6 +791,7 @@ public:
                 auto content_library = std::make_shared<Content_library>();
                 add_default_materials(*content_library.get());
 
+                const bool enable_physics = m_app_settings->physics.static_enable;
                 m_default_scene = std::make_shared<Scene_root>(
                     m_imgui_renderer.get(),
                     m_imgui_windows.get(),
@@ -799,7 +800,8 @@ public:
                     m_app_message_bus.get(),
                     m_app_scenes.get(),
                     content_library,
-                    "Default Scene"
+                    "Default Scene",
+                    enable_physics
                 );
                 m_default_scene_browser = m_default_scene->make_browser_window(
                     *m_imgui_renderer.get(), *m_imgui_windows.get(), m_app_context, *m_app_settings.get()

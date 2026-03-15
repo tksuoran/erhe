@@ -381,10 +381,12 @@ if (ERHE_GRAPHICS_API_OPENGL)
     target_link_libraries(${_target} PRIVATE erhe::gl)
 endif ()
 
+if (ERHE_USE_MIMALLOC)
+    target_link_libraries(${_target} PUBLIC mimalloc-static)
+endif ()
+
 target_link_libraries(
     ${_target}
-    PUBLIC
-        mimalloc-static
     PRIVATE
         erhe::utility
         erhe::commands
@@ -481,10 +483,13 @@ erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
     net_test.cpp
 )
+
+if (ERHE_USE_MIMALLOC)
+    target_link_libraries(${_target} PUBLIC mimalloc-static)
+endif ()
+
 target_link_libraries(
     ${_target}
-    PUBLIC
-        mimalloc-static
     PRIVATE
         geogram
         erhe::log

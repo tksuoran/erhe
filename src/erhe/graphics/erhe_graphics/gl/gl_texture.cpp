@@ -810,6 +810,7 @@ Texture_impl::Texture_impl(Device& device, const Texture_create_info& create_inf
 
         m_allocated = true;
 
+#if defined(ERHE_PROFILE_LIBRARY_TRACY)
         // TODO Do cubemaps have depth = 6 or depth = 1?
         size_t layer_size = 0;
         size_t gl_bytes_per_pixel = get_gl_pixel_byte_count(m_pixelformat);
@@ -822,21 +823,21 @@ Texture_impl::Texture_impl(Device& device, const Texture_create_info& create_inf
         }
         size_t texture_size = std::max(1, m_array_layer_count) * layer_size;
 
-#if TRACY_ENABLE
+#   if TRACY_ENABLE
         TracyCZoneCtx zone{};
         if (!m_debug_label.empty()) {
             const uint32_t color = 0x804020ffu;
             uint64_t srcloc = ___tracy_alloc_srcloc_name(1, "", 0, "", 0, m_debug_label.data(), m_debug_label.size(), color);
             zone = ___tracy_emit_zone_begin_alloc(srcloc, 1);
         }
-#endif
+#   endif
         ERHE_PROFILE_MEM_ALLOC_NS(this, texture_size, s_pool_name);
-#if TRACY_ENABLE
+#   if TRACY_ENABLE
         if (!m_debug_label.empty()) {
             ___tracy_emit_zone_end(zone);
         }
+#   endif
 #endif
-
     }
 }
 

@@ -240,7 +240,8 @@ Tools::Tools(
         nullptr, // Do not process editor messages
         nullptr, // Do not register to App_scenes
         tools_content_library,
-        "Tool scene"
+        "Tool scene",
+        false
     );
 
     m_scene_root->get_scene().disable_flag_bits(erhe::Item_flags::show_in_ui);

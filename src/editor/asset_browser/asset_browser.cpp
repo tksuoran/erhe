@@ -4,6 +4,7 @@
 #include "app_scenes.hpp"
 #include "app_message.hpp"
 #include "app_message_bus.hpp"
+#include "app_settings.hpp"
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
 #include "operations/operation.hpp"
@@ -55,6 +56,7 @@ void Scene_open_operation::execute(App_context& context)
     if (!m_scene_root) {
         m_content_library = std::make_shared<Content_library>();
 
+        const bool enable_physics = context.app_settings->physics.static_enable;
         m_scene_root = std::make_shared<Scene_root>(
             context.imgui_renderer,
             context.imgui_windows,
@@ -63,7 +65,8 @@ void Scene_open_operation::execute(App_context& context)
             context.app_message_bus,
             context.app_scenes, // registers into App_scenes
             m_content_library,
-            erhe::file::to_string(m_path.filename())
+            erhe::file::to_string(m_path.filename()),
+            enable_physics
         );
 
         auto browser_window = m_scene_root->make_browser_window(

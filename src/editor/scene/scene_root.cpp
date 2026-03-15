@@ -110,7 +110,8 @@ Scene_root::Scene_root(
     App_message_bus*                        app_message_bus,
     App_scenes*                             app_scenes,
     const std::shared_ptr<Content_library>& content_library,
-    const std::string_view                  name
+    const std::string_view                  name,
+    bool                                    enable_physics
 )
     : m_content_library{content_library}
 {
@@ -127,43 +128,45 @@ Scene_root::Scene_root(
 
     //m_scene->enable_flag_bits(erhe::Item_flags::show_in_ui);
     m_scene->get_root_node()->enable_flag_bits(erhe::Item_flags::invisible_parent);
-    m_physics_world  = erhe::physics::IWorld::create_unique();
-    m_physics_world->set_on_body_activated(
-        [this](erhe::physics::IRigid_body* rigid_body) {
-            ERHE_VERIFY(rigid_body != nullptr);
-            if (rigid_body->get_motion_mode() != erhe::physics::Motion_mode::e_dynamic) {
-                return;
+    if (enable_physics) {
+        m_physics_world = erhe::physics::IWorld::create_unique();
+        m_physics_world->set_on_body_activated(
+            [this](erhe::physics::IRigid_body* rigid_body) {
+                ERHE_VERIFY(rigid_body != nullptr);
+                if (rigid_body->get_motion_mode() != erhe::physics::Motion_mode::e_dynamic) {
+                    return;
+                }
+                void* owner = rigid_body->get_owner();
+                Node_physics* node_physics = reinterpret_cast<Node_physics*>(owner);
+                if (node_physics == nullptr) {
+                    return;
+                }
+                erhe::scene::Node* node = node_physics->get_node();
+                if (node == nullptr) {
+                    return;
+                }
+                node->enable_flag_bits(erhe::Item_flags::no_transform_update);
             }
-            void* owner = rigid_body->get_owner();
-            Node_physics* node_physics = reinterpret_cast<Node_physics*>(owner);
-            if (node_physics == nullptr) {
-                return;
+        );
+        m_physics_world->set_on_body_deactivated(
+            [this](erhe::physics::IRigid_body* rigid_body) {
+                ERHE_VERIFY(rigid_body != nullptr);
+                //if (rigid_body->get_motion_mode() != erhe::physics::Motion_mode::e_dynamic) {
+                //    return;
+                //}
+                void* owner = rigid_body->get_owner();
+                Node_physics* node_physics = reinterpret_cast<Node_physics*>(owner);
+                if (node_physics == nullptr) {
+                    return;
+                }
+                erhe::scene::Node* node = node_physics->get_node();
+                if (node == nullptr) {
+                    return;
+                }
+                node->disable_flag_bits(erhe::Item_flags::no_transform_update);
             }
-            erhe::scene::Node* node = node_physics->get_node();
-            if (node == nullptr) {
-                return;
-            }
-            node->enable_flag_bits(erhe::Item_flags::no_transform_update);
-        }
-    );
-    m_physics_world->set_on_body_deactivated(
-        [this](erhe::physics::IRigid_body* rigid_body) {
-            ERHE_VERIFY(rigid_body != nullptr);
-            //if (rigid_body->get_motion_mode() != erhe::physics::Motion_mode::e_dynamic) {
-            //    return;
-            //}
-            void* owner = rigid_body->get_owner();
-            Node_physics* node_physics = reinterpret_cast<Node_physics*>(owner);
-            if (node_physics == nullptr) {
-                return;
-            }
-            erhe::scene::Node* node = node_physics->get_node();
-            if (node == nullptr) {
-                return;
-            }
-            node->disable_flag_bits(erhe::Item_flags::no_transform_update);
-        }
-    );
+        );
+    }
 
     m_raytrace_scene = erhe::raytrace::IScene::create_unique("rt_root_scene");
 

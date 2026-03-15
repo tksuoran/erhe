@@ -112,7 +112,8 @@ public:
         App_message_bus*                        app_message_bus,
         App_scenes*                             app_scenes,
         const std::shared_ptr<Content_library>& content_library,
-        std::string_view                        name
+        std::string_view                        name,
+        bool                                    enable_physics
     );
     ~Scene_root() noexcept override;
 
