@@ -16,7 +16,6 @@
 #include "scene/scene_builder.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
-#include "windows/property_editor.hpp"
 
 #include "erhe_commands/commands.hpp"
 #include "erhe_configuration/configuration.hpp"
@@ -234,7 +233,8 @@ void Operations::imgui()
 {
     ERHE_PROFILE_FUNCTION();
 
-    Property_editor p;
+    Property_editor& p = m_property_editor;
+    p.reset();
 
     bool scenes_open{false};
     p.push_group("Scenes", ImGuiTreeNodeFlags_DefaultOpen, 0.0f, &scenes_open);

@@ -23,10 +23,10 @@ public:
     void reset_row          ();
     void reset              ();
     void resume             ();
-    void push_group         (std::string_view label, ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_None, float indent = 0.0f, bool* open_state = nullptr);
+    void push_group         (const char* label, ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_None, float indent = 0.0f, bool* open_state = nullptr);
     void pop_group          ();
-    void add_entry          (std::string_view label, std::function<void()> editor);
-    void add_entry          (std::string_view label, uint32_t label_text_color, uint32_t label_background_color, std::function<void()> editor);
+    void add_entry          (const char* label, std::function<void()> editor);
+    void add_entry          (const char* label, uint32_t label_text_color, uint32_t label_background_color, std::function<void()> editor);
     void show_entries       (const char* label = "##", ImVec2 cell_padding = ImVec2{0.0f, 0.0f});
     void use_state          (Editor_state* state);
     void set_dirty_editing  ();
@@ -38,7 +38,7 @@ protected:
     public:
         bool                    push_group{false};
         bool                    pop_group{false};
-        std::string             label;
+        const char*             label;
         std::function<void()>   editor;
         ImGuiTreeNodeFlags      flags{ImGuiTreeNodeFlags_None};
         float                   indent{0.0f};

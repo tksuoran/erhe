@@ -33,8 +33,15 @@ private:
     void item_properties(const std::shared_ptr<erhe::Item_base>& item);
     void node_properties(Shader_graph_node& node);
 
-    App_context&    m_context;
-    Property_editor m_property_editor;
+    App_context&       m_context;
+    Property_editor    m_property_editor;
+
+    struct Item_properities_buffers
+    {
+        fmt::memory_buffer group;
+        fmt::memory_buffer name;
+    };
+    Item_properities_buffers m_item_properties_buffers;
 };
 
 }

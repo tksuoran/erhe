@@ -4,6 +4,7 @@
 #include "erhe_commands/command.hpp"
 #include "scene/scene_builder.hpp"
 #include "operations/mesh_operation.hpp"
+#include "windows/property_editor.hpp"
 
 namespace erhe::imgui { class Imgui_windows; }
 
@@ -166,6 +167,7 @@ private:
     Scene_view*                    m_last_hover_scene_view{nullptr};
 
     Make_mesh_config m_make_mesh_config{};
+    Property_editor  m_property_editor{};
 };
 
 }

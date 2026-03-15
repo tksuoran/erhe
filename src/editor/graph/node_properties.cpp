@@ -83,11 +83,11 @@ void Node_properties_window::item_properties(const std::shared_ptr<erhe::Item_ba
         return;
     }
 
-    std::string group_label = fmt::format("{} {}", item->get_type_name().data(), item->get_name());
-    m_property_editor.push_group(group_label.c_str(), ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed, 0.0f);
+    fmt::format_to(std::back_inserter(m_item_properties_buffers.group), "{} {}", item->get_type_name().data(), item->get_name());
+    m_property_editor.push_group(m_item_properties_buffers.group.data(), ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed, 0.0f);
     {
-        std::string label_name = fmt::format("{} Name", item->get_type_name());
-        m_property_editor.add_entry(label_name, [item]() {
+        fmt::format_to(std::back_inserter(m_item_properties_buffers.name), "{} Name", item->get_type_name());
+        m_property_editor.add_entry(m_item_properties_buffers.name.data(), [item]() {
             std::string name = item->get_name();
             const bool enter_pressed = ImGui::InputText("##Node_properties_window::item_properties()", &name, ImGuiInputTextFlags_EnterReturnsTrue);
             if (enter_pressed || ImGui::IsItemDeactivatedAfterEdit()) { // TODO

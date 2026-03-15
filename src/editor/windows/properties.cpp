@@ -369,8 +369,10 @@ void Properties::buffer_mesh_properties(const char* label, const erhe::primitive
     for (size_t i = 0, end = buffer_mesh->vertex_buffer_ranges.size(); i < end; ++i) {
         const erhe::primitive::Buffer_range& vertex_buffer_range = buffer_mesh->vertex_buffer_ranges.at(i);
         if (vertex_buffer_range.count > 0) {
-            const std::string stream_label = fmt::format("Vertex stream {}", i);
-            push_group(stream_label, ImGuiTreeNodeFlags_DefaultOpen, m_indent);
+            while (m_vertex_stream_labels.size() <= i) {
+                m_vertex_stream_labels.push_back(fmt::format("Vertex stream {}", m_vertex_stream_labels.size()));
+            }
+            push_group(m_vertex_stream_labels.at(i).c_str(), ImGuiTreeNodeFlags_DefaultOpen, m_indent);
             add_entry("Vertices",     [=](){ ImGui::Text("%zu", vertex_buffer_range.count); });
             add_entry("Vertex Bytes", [=](){ ImGui::Text("%zu", vertex_buffer_range.get_byte_size()); });
             pop_group();
@@ -452,8 +454,10 @@ void Properties::mesh_properties(erhe::scene::Mesh& mesh)
     }
     int primitive_index = 0;
     for (erhe::scene::Mesh_primitive& mesh_primitive : mesh.get_mutable_primitives()) { // may edit material
-        std::string label = fmt::format("Primitive {}", primitive_index++);
-        push_group(label, ImGuiTreeNodeFlags_DefaultOpen, m_indent);
+        while (m_primitive_labels.size() <= primitive_index) {
+            m_primitive_labels.push_back(fmt::format("Primitive {}", m_primitive_labels.size()));
+        }
+        push_group(m_primitive_labels.at(primitive_index).c_str(), ImGuiTreeNodeFlags_DefaultOpen, m_indent);
         add_entry("Material", [&](){ material_library->combo(m_context, "##", mesh_primitive.material, false); });
         if (m_context.developer_mode) {
             if (mesh_primitive.material) {
@@ -486,10 +490,13 @@ void Properties::mesh_properties(erhe::scene::Mesh& mesh)
         if (!rt_primitives.empty()) {
             push_group("Raytrace Primitives", ImGuiTreeNodeFlags_None, m_indent);
             for (const auto& rt_primitive : rt_primitives) {
-                std::string label = fmt::format("Raytrace Primitive {}", primitive_index++);
+                while (m_rt_primitive_labels.size() <= primitive_index) {
+                    m_rt_primitive_labels.push_back(fmt::format("Raytrace Primitive {}", m_rt_primitive_labels.size()));
+                }
+
                 const auto* rt_instance = rt_primitive->rt_instance.get();
                 const auto* rt_scene    = rt_primitive->rt_scene.get();
-                push_group(label, ImGuiTreeNodeFlags_DefaultOpen, m_indent);
+                push_group(m_rt_primitive_labels.at(primitive_index).c_str(), ImGuiTreeNodeFlags_DefaultOpen, m_indent);
                 add_entry("Mesh",            [&](){ ImGui::TextUnformatted((rt_primitive->mesh != nullptr) ? rt_primitive->mesh->get_name().c_str() : "(nullptr)"); });
                 add_entry("Primitive Index", [&](){ ImGui::Text("%zu", rt_primitive->primitive_index); });
                 add_entry("RT Instance",     [=](){ ImGui::TextUnformatted((rt_instance != nullptr) ? rt_instance->debug_label().data() : "(nullptr)"); });
@@ -548,9 +555,13 @@ void Properties::brush_placement_properties(Brush_placement& brush_placement)
     for (const auto& i : facets) {
         const GEO::index_t corner_count  = i.first;
         const std::size_t  polygon_count = i.second.size();
-        const std::string  label         = fmt::format("{}-gons", corner_count);
+
+        while (m_ngon_labels.size() <= corner_count) {
+            m_ngon_labels.push_back(fmt::format("{}-gons", m_ngon_labels.size()));
+        }
+
         add_entry(
-            label,
+            m_ngon_labels.at(corner_count).c_str(),
             [polygon_count]() {
                 ImGui::Text("%zu", polygon_count);
             }
@@ -714,15 +725,24 @@ void Properties::item_properties(const std::shared_ptr<erhe::Item_base>& item_in
         return;
     }
 
-    std::string group_label = fmt::format("{} {}", item->get_type_name().data(), item->get_name());
+    fmt::format_to(
+        std::back_inserter(m_item_group_label),
+        "{} {}",
+        item->get_type_name().data(),
+        item->get_name()
+    );
     ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_Framed;
     if (!node_physics && !rendertarget) {
         flags |= ImGuiTreeNodeFlags_DefaultOpen;
     }
-    push_group(group_label.c_str(), flags, m_indent);
+    push_group(m_item_group_label.data(), flags, m_indent);
     if (show_item_details(item.get())) {
-        std::string label_name = fmt::format("{} Name", item->get_type_name());
-        add_entry(label_name, [item]() {
+        fmt::format_to(
+            std::back_inserter(m_item_name_label),
+            "{} Name",
+            item->get_type_name()
+        );
+        add_entry(m_item_name_label.data(), [item]() {
             std::string name = item->get_name();
             const bool enter_pressed = ImGui::InputText("##", &name, ImGuiInputTextFlags_EnterReturnsTrue);
             if (enter_pressed || ImGui::IsItemDeactivatedAfterEdit()) { // TODO

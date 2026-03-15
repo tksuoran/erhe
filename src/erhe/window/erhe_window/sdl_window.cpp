@@ -890,7 +890,7 @@ void Context_window::handle_window_focus_event(int64_t timestamp, bool focused)
             }
         }
     );
-    log_window_event->trace(m_input_events[m_input_event_queue_write].back().describe());
+    // log_window_event->trace(m_input_events[m_input_event_queue_write].back().describe());
 }
 
 void Context_window::handle_cursor_enter_event(int64_t timestamp, bool entered)
@@ -906,7 +906,7 @@ void Context_window::handle_cursor_enter_event(int64_t timestamp, bool entered)
             }
         }
     );
-    log_window_event->trace(m_input_events[m_input_event_queue_write].back().describe());
+    // log_window_event->trace(m_input_events[m_input_event_queue_write].back().describe());
 }
 
 void Context_window::handle_mouse_button_event(int64_t timestamp, int button, bool pressed)

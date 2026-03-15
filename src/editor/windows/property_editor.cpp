@@ -21,9 +21,9 @@ void Property_editor::resume()
     m_entries.clear();
 }
 
-void Property_editor::push_group(std::string_view label, ImGuiTreeNodeFlags flags, float indent, bool* open_state)
+void Property_editor::push_group(const char* label, ImGuiTreeNodeFlags flags, float indent, bool* open_state)
 {
-    m_entries.push_back(Entry{true, false, std::string{label}, {}, flags, indent, {}, {}, open_state});
+    m_entries.push_back(Entry{true, false, label, {}, flags, indent, {}, {}, open_state});
 }
 
 void Property_editor::pop_group()
@@ -31,14 +31,14 @@ void Property_editor::pop_group()
     m_entries.push_back(Entry{false, true, {}, {}});
 }
 
-void Property_editor::add_entry(std::string_view label, std::function<void()> editor)
+void Property_editor::add_entry(const char* label, std::function<void()> editor)
 {
-    m_entries.push_back(Entry{false, false, std::string{label}, {editor}});
+    m_entries.push_back(Entry{false, false, label, {editor}});
 }
 
-void Property_editor::add_entry(std::string_view label, uint32_t label_text_color, uint32_t label_background_color, std::function<void()> editor)
+void Property_editor::add_entry(const char* label, uint32_t label_text_color, uint32_t label_background_color, std::function<void()> editor)
 {
-    m_entries.push_back(Entry{false, false, std::string{label}, {editor}, ImGuiTreeNodeFlags_None, 0.0f, label_text_color, label_background_color});
+    m_entries.push_back(Entry{false, false, label, {editor}, ImGuiTreeNodeFlags_None, 0.0f, label_text_color, label_background_color});
 }
 
 void Property_editor::show_entries(const char* label, ImVec2 cell_padding)
@@ -65,7 +65,7 @@ void Property_editor::show_entries(const char* label, ImVec2 cell_padding)
                 ImGui::TableNextRow(ImGuiTableRowFlags_None);
                 ImGui::TableSetColumnIndex(0);
                 const ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_SpanAllColumns | ImGuiTreeNodeFlags_LabelSpanAllColumns | entry.flags;
-                const bool subtree_open = ImGui::TreeNodeEx(entry.label.c_str(), flags);
+                const bool subtree_open = ImGui::TreeNodeEx(entry.label, flags);
                 if (entry.open_state != nullptr) {
                     *entry.open_state = subtree_open;
                 }
@@ -100,10 +100,10 @@ void Property_editor::show_entries(const char* label, ImVec2 cell_padding)
                 ImGui::PushItemFlag    (ImGuiItemFlags_NoNav, true);
                 //ImGui::SetNextItemWidth(22.0f); // TODO
                 ImVec2 button_size{22.0f, 0.0f};
-                ImGui::Button          (entry.label.c_str(), button_size);
+                ImGui::Button          (entry.label, button_size);
                 ImGui::PopItemFlag     ();
             } else {
-                ImGui::TextUnformatted(entry.label.c_str());
+                ImGui::TextUnformatted(entry.label);
             }
             if (entry.label_text_color.has_value()) {
                 ImGui::PopStyleColor(1);
