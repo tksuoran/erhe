@@ -86,21 +86,21 @@ auto Scene_layers::rendertarget() const -> erhe::scene::Mesh_layer*
     return m_rendertarget.get();
 }
 
-auto Scene_layers::mesh_layers() const -> std::vector<erhe::scene::Mesh_layer*>
-{
-    return std::vector<erhe::scene::Mesh_layer*>{
-        m_content.get(),
-        m_controller.get(),
-        m_tool.get(),
-        m_brush.get(),
-        m_rendertarget.get()
-    };
-}
-
 auto Scene_layers::light() const -> erhe::scene::Light_layer*
 {
     return m_light.get();
 }
+
+auto Scene_layers::mesh_layers() const -> std::array<erhe::scene::Mesh_layer*, 5>
+{
+    return std::array<erhe::scene::Mesh_layer*, 5>{
+        content(),
+        controller(),
+        tool(),
+        brush(),
+        rendertarget()
+    };
+};
 
 Scene_root::Scene_root(
     erhe::imgui::Imgui_renderer*            imgui_renderer,

@@ -9,7 +9,7 @@
 #include <functional>
 #include <string_view>
 
-namespace erhe::renderer { class Pipeline_pass; }
+namespace erhe::graphics { class Render_pipeline_state; }
 namespace erhe::scene    { using Layer_id = uint64_t; }
 
 namespace editor {
@@ -36,14 +36,14 @@ public:
     auto get_type     () const -> uint64_t         override;
     auto get_type_name() const -> std::string_view override;
 
-    bool                                        enabled{true}; // TODO consider using Item visibility flag
-    std::vector<erhe::scene::Layer_id>          mesh_layers;
-    std::size_t                                 non_mesh_vertex_count{0};
-    std::vector<erhe::renderer::Pipeline_pass*> passes;
-    erhe::primitive::Primitive_mode             primitive_mode{erhe::primitive::Primitive_mode::polygon_fill};
-    erhe::Item_filter                           filter{};
-    std::shared_ptr<Scene_root>                 override_scene_root{};
-    bool                                        allow_shader_stages_override{true};
+    bool                                                enabled{true}; // TODO consider using Item visibility flag
+    std::vector<erhe::scene::Layer_id>                  mesh_layers;
+    std::size_t                                         non_mesh_vertex_count{0};
+    std::vector<erhe::graphics::Render_pipeline_state*> render_pipeline_states;
+    erhe::primitive::Primitive_mode                     primitive_mode{erhe::primitive::Primitive_mode::polygon_fill};
+    erhe::Item_filter                                   filter{};
+    std::shared_ptr<Scene_root>                         override_scene_root{};
+    bool                                                allow_shader_stages_override{true};
 
     std::optional<erhe::scene_renderer::Primitive_interface_settings>      primitive_settings;
     std::function<void()>                                                  begin;

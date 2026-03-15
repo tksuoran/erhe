@@ -3,7 +3,6 @@
 #include "erhe_dataformat/dataformat.hpp"
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_renderer/draw_indirect_buffer.hpp"
-#include "erhe_renderer/pipeline_renderpass.hpp"
 #include "erhe_scene_renderer/camera_buffer.hpp"
 #include "erhe_scene_renderer/joint_buffer.hpp"
 #include "erhe_scene_renderer/light_buffer.hpp"
@@ -21,6 +20,7 @@ namespace erhe {
 namespace erhe::graphics {
     class Device;
     class Render_command_encoder;
+    class Render_pipeline_state;
     class Texture;
 }
 namespace erhe::scene {
@@ -59,11 +59,11 @@ public:
         const std::span<const std::shared_ptr<erhe::scene::Light>>&        lights           {};
         const std::span<const std::shared_ptr<erhe::scene::Skin>>&         skins            {};
         const std::span<const std::shared_ptr<erhe::primitive::Material>>& materials        {};
-        const std::vector<
+/* ! */ const std::vector<
             std::span<const std::shared_ptr<erhe::scene::Mesh>>
         >&                                                                 mesh_spans;
         std::size_t                                                        non_mesh_vertex_count{0};
-        const std::vector<erhe::renderer::Pipeline_pass*>                  passes;
+        const std::span<erhe::graphics::Render_pipeline_state*>            render_pipeline_states;
         erhe::primitive::Primitive_mode                                    primitive_mode{erhe::primitive::Primitive_mode::polygon_fill};
         Primitive_interface_settings                                       primitive_settings{};
         const erhe::math::Viewport&                                        viewport;

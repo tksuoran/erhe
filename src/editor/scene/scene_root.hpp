@@ -88,7 +88,7 @@ public:
     [[nodiscard]] auto tool        () const -> erhe::scene::Mesh_layer*;
     [[nodiscard]] auto rendertarget() const -> erhe::scene::Mesh_layer*;
     [[nodiscard]] auto light       () const -> erhe::scene::Light_layer*;
-    [[nodiscard]] auto mesh_layers () const -> std::vector<erhe::scene::Mesh_layer*>;
+    [[nodiscard]] auto mesh_layers () const -> std::array<erhe::scene::Mesh_layer*, 5>;
 
 private:
     std::shared_ptr<erhe::scene::Mesh_layer>  m_content;

@@ -5,7 +5,6 @@
 #include "renderers/composition_pass.hpp" // TODO remove - for Fill_mode, Blend_mode, Selection_mode
 #include "erhe_commands/command.hpp"
 #include "erhe_profile/profile.hpp"
-#include "erhe_renderer/pipeline_renderpass.hpp"
 #include "erhe_rendergraph/rendergraph.hpp"
 #include "erhe_scene_renderer/shadow_renderer.hpp"
 
@@ -46,22 +45,22 @@ class Pipeline_renderpasses
 public:
     Pipeline_renderpasses(erhe::graphics::Device& graphics_device, Mesh_memory& mesh_memory, Programs& programs);
 
-    erhe::graphics::Vertex_input_state m_empty_vertex_input;
-    erhe::renderer::Pipeline_pass      polygon_fill_standard_opaque_positive_determinant;
-    erhe::renderer::Pipeline_pass      polygon_fill_standard_opaque_negative_determinant;
-    erhe::renderer::Pipeline_pass      polygon_fill_standard_opaque_selected_positive_determinant;
-    erhe::renderer::Pipeline_pass      polygon_fill_standard_opaque_selected_negative_determinant;
-    erhe::renderer::Pipeline_pass      polygon_fill_standard_translucent;
-    erhe::renderer::Pipeline_pass      line_hidden_blend;
-    erhe::renderer::Pipeline_pass      brush_back;
-    erhe::renderer::Pipeline_pass      brush_front;
-    erhe::renderer::Pipeline_pass      edge_lines;
-    erhe::renderer::Pipeline_pass      outline;
-    erhe::renderer::Pipeline_pass      corner_points;
-    erhe::renderer::Pipeline_pass      polygon_centroids;
-    erhe::renderer::Pipeline_pass      rendertarget_meshes;
-    erhe::renderer::Pipeline_pass      sky;
-    erhe::renderer::Pipeline_pass      grid;
+    erhe::graphics::Vertex_input_state    m_empty_vertex_input;
+    erhe::graphics::Render_pipeline_state polygon_fill_standard_opaque_positive_determinant;
+    erhe::graphics::Render_pipeline_state polygon_fill_standard_opaque_negative_determinant;
+    erhe::graphics::Render_pipeline_state polygon_fill_standard_opaque_selected_positive_determinant;
+    erhe::graphics::Render_pipeline_state polygon_fill_standard_opaque_selected_negative_determinant;
+    erhe::graphics::Render_pipeline_state polygon_fill_standard_translucent;
+    erhe::graphics::Render_pipeline_state line_hidden_blend;
+    erhe::graphics::Render_pipeline_state brush_back;
+    erhe::graphics::Render_pipeline_state brush_front;
+    erhe::graphics::Render_pipeline_state edge_lines;
+    erhe::graphics::Render_pipeline_state outline;
+    erhe::graphics::Render_pipeline_state corner_points;
+    erhe::graphics::Render_pipeline_state polygon_centroids;
+    erhe::graphics::Render_pipeline_state rendertarget_meshes;
+    erhe::graphics::Render_pipeline_state sky;
+    erhe::graphics::Render_pipeline_state grid;
 };
 
 class App_rendering
@@ -112,12 +111,12 @@ public:
 private:
     void handle_graphics_settings_changed(Graphics_preset* graphics_preset);
 
-    [[nodiscard]] auto get_pipeline_pass(
+    [[nodiscard]] auto get_render_pipeline_state(
         const Composition_pass&    renderpass,
         erhe::renderer::Blend_mode blend_mode,
         bool                       selected,
         bool                       negative_determinant
-    ) -> erhe::renderer::Pipeline_pass*;
+    ) -> erhe::graphics::Render_pipeline_state*;
 
     [[nodiscard]] auto width () const -> int;
     [[nodiscard]] auto height() const -> int;

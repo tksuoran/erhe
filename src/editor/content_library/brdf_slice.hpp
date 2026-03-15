@@ -1,8 +1,8 @@
 #pragma once
 
 #include "erhe_rendergraph/texture_rendergraph_node.hpp"
+#include "erhe_graphics/render_pipeline_state.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
-#include "erhe_renderer/pipeline_renderpass.hpp"
 
 #include <memory>
 
@@ -41,9 +41,10 @@ private:
     Brdf_slice&                                m_brdf_slice;
     std::shared_ptr<erhe::primitive::Material> m_material;
 
-    erhe::graphics::Vertex_input_state m_empty_vertex_input;
-    erhe::renderer::Pipeline_pass      m_pipeline_pass;
-    int                                m_area_size{0};
+    erhe::graphics::Vertex_input_state                  m_empty_vertex_input;
+    erhe::graphics::Render_pipeline_state               m_render_pipeline_state;
+    std::vector<erhe::graphics::Render_pipeline_state*> m_render_pipeline_states;
+    int                                                 m_area_size{0};
 };
 
 

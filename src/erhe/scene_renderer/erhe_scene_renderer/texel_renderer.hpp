@@ -3,11 +3,11 @@
 #include "erhe_scene_renderer/camera_buffer.hpp"
 #include "erhe_scene_renderer/light_buffer.hpp"
 #include "erhe_scene_renderer/primitive_buffer.hpp"
-#include "erhe_renderer/pipeline_renderpass.hpp"
 
 namespace erhe::graphics {
     class Device;
     class Render_command_encoder;
+    class Render_pipeline_state;
 }
 namespace erhe::scene { class Camera; }
 namespace erhe::math  { class Viewport; }

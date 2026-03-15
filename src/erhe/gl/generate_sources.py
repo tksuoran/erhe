@@ -513,7 +513,7 @@ class GLGenerator:
         log_format_entries = ''
         if len(format_entries) > 0:
             separator = ',\n        '
-            log_format_entries = separator + separator.join(format_entries)
+            log_format_entries = separator.join(format_entries)
 
         formatting = {
             'COMMAND_NAME':              command_name,

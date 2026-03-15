@@ -11,8 +11,6 @@ erhe_target_sources_grouped(
     erhe_renderer/draw_indirect_buffer.hpp
     erhe_renderer/primitive_renderer.cpp
     erhe_renderer/primitive_renderer.hpp
-    erhe_renderer/pipeline_renderpass.cpp
-    erhe_renderer/pipeline_renderpass.hpp
     erhe_renderer/renderer_log.cpp
     erhe_renderer/renderer_log.hpp
     erhe_renderer/text_renderer.cpp

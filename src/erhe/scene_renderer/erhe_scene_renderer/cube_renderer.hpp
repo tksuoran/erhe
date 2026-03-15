@@ -4,11 +4,11 @@
 #include "erhe_scene_renderer/camera_buffer.hpp"
 #include "erhe_scene_renderer/light_buffer.hpp"
 #include "erhe_scene_renderer/primitive_buffer.hpp"
-#include "erhe_renderer/pipeline_renderpass.hpp"
 
 namespace erhe::graphics {
     class Device;
     class Render_command_encoder;
+    class Render_pipeline_state;
 }
 namespace erhe::scene    { class Camera; }
 namespace erhe::math     { class Viewport; }
@@ -30,7 +30,7 @@ public:
     public:
         Cube_instance_buffer&                   cube_instance_buffer;
         erhe::graphics::Render_command_encoder& render_encoder;
-        erhe::graphics::Render_pipeline_state&  pipeline;
+        erhe::graphics::Render_pipeline_state&  render_pipeline_state;
         const erhe::scene::Camera*              camera{nullptr};
         std::shared_ptr<erhe::scene::Node>      node{};
         Primitive_interface_settings            primitive_settings{};

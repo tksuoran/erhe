@@ -31,15 +31,18 @@ Scene_preview::Scene_preview(
 )
     : Scene_view       {context, Viewport_config{}}
     , m_graphics_device{graphics_device}
-    , m_pipeline_pass  {erhe::graphics::Render_pipeline_state{{
-        .debug_label    = erhe::utility::Debug_label{"Polygon Fill Opaque"},
-        .shader_stages  = &programs.standard.shader_stages,
-        .vertex_input   = &mesh_memory.vertex_input,
-        .input_assembly = Input_assembly_state::triangle,
-        .rasterization  = Rasterization_state::cull_mode_back_ccw,
-        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(),
-        .color_blend    = Color_blend_state::color_blend_disabled
-    }}}
+    , m_render_pipeline_state{
+        {
+            .debug_label    = erhe::utility::Debug_label{"Polygon Fill Opaque"},
+            .shader_stages  = &programs.standard.shader_stages,
+            .vertex_input   = &mesh_memory.vertex_input,
+            .input_assembly = Input_assembly_state::triangle,
+            .rasterization  = Rasterization_state::cull_mode_back_ccw,
+            .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(),
+            .color_blend    = Color_blend_state::color_blend_disabled
+        }
+    }
+    , m_render_pipeline_states{&m_render_pipeline_state}
     , m_composer{"Material Preview Composer"}
 {
     ERHE_PROFILE_FUNCTION();

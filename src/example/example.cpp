@@ -28,7 +28,6 @@
 #include "erhe_math/math_log.hpp"
 #include "erhe_primitive/primitive_log.hpp"
 #include "erhe_raytrace/raytrace_log.hpp"
-#include "erhe_renderer/pipeline_renderpass.hpp"
 #include "erhe_renderer/renderer_log.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
@@ -287,22 +286,6 @@ public:
 
         m_scene.update_node_transforms();
 
-        std::vector<erhe::renderer::Pipeline_pass*> passes;
-        erhe::renderer::Pipeline_pass standard_pipeline_renderpass{
-            erhe::graphics::Render_pipeline_state{
-                erhe::graphics::Render_pipeline_data{
-                    .debug_label    = erhe::utility::Debug_label{"Example Render_pass"},
-                    .shader_stages  = &m_programs.standard,
-                    .vertex_input   = &m_mesh_memory.vertex_input,
-                    .input_assembly = erhe::graphics::Input_assembly_state::triangle,
-                    .rasterization  = erhe::graphics::Rasterization_state::cull_mode_back_ccw,
-                    .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled(),
-                    .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled
-                }
-            }
-        };
-        passes.push_back(&standard_pipeline_renderpass);
-
         std::vector<std::shared_ptr<erhe::scene::Light>> lights;
         for (const auto& light : m_gltf_data.lights) {
             lights.push_back(light);
@@ -344,7 +327,7 @@ public:
                 .skins                  = m_gltf_data.skins,
                 .materials              = m_gltf_data.materials,
                 .mesh_spans             = { meshes },
-                .passes                 = passes,
+                .render_pipeline_states = m_render_pipeline_states,
                 .primitive_mode         = erhe::primitive::Primitive_mode::polygon_fill,
                 .primitive_settings     = erhe::scene_renderer::Primitive_interface_settings{},
                 .viewport               = viewport,
@@ -380,6 +363,22 @@ private:
         render_pass_descriptor.render_target_height = height;
         render_pass_descriptor.debug_label          = erhe::utility::Debug_label{"Example Render_pass"};
         m_render_pass = std::make_unique<erhe::graphics::Render_pass>(m_graphics_device, render_pass_descriptor);
+    }
+
+    void make_render_pipeline_states()
+    {
+        m_standard_render_pipeline_state = std::make_unique<erhe::graphics::Render_pipeline_state>(
+            erhe::graphics::Render_pipeline_data{
+                .debug_label    = erhe::utility::Debug_label{"Example Render_pass"},
+                .shader_stages  = &m_programs.standard,
+                .vertex_input   = &m_mesh_memory.vertex_input,
+                .input_assembly = erhe::graphics::Input_assembly_state::triangle,
+                .rasterization  = erhe::graphics::Rasterization_state::cull_mode_back_ccw,
+                .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled(),
+                .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled
+            }
+        );
+        m_render_pipeline_states.push_back(m_standard_render_pipeline_state.get());
     }
 
     auto make_camera(const std::string_view name, const glm::vec3 position, const glm::vec3 look_at) -> std::shared_ptr<erhe::scene::Camera>
@@ -475,6 +474,9 @@ private:
     erhe::scene_renderer::Forward_renderer       m_forward_renderer;
     std::unique_ptr<erhe::graphics::Render_pass> m_render_pass;
     Programs                                     m_programs;
+
+    std::vector<erhe::graphics::Render_pipeline_state*>    m_render_pipeline_states;
+    std::unique_ptr<erhe::graphics::Render_pipeline_state> m_standard_render_pipeline_state;
 
     erhe::scene_renderer::Light_projections m_light_projections;
 

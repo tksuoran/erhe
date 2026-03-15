@@ -143,7 +143,7 @@ void Composition_pass::render(const Render_context& context)
                 .materials              = {},
                 .mesh_spans             = {},
                 .non_mesh_vertex_count  = this->non_mesh_vertex_count,
-                .passes                 = this->passes,
+                .render_pipeline_states = this->render_pipeline_states,
                 .primitive_mode         = this->primitive_mode,
                 .primitive_settings     = 
                     primitive_settings.has_value()
@@ -174,8 +174,8 @@ void Composition_pass::render(const Render_context& context)
             return;
         }
 
-        log_composer->debug("calling render with {} passes", passes.size());
-        // for (const auto& pass : passes) {
+        log_composer->debug("calling render with {} render pipeline states", render_pipeline_states.size());
+        // for (const auto& pass : render_pipeline_states) {
         //     log_composer->trace("pass using pipeline = {}", pass->pipeline.data.debug_label.string_view());
         // }
         // log_composer->trace("primitive_mode = {}", c_str(primitive_mode));
@@ -196,7 +196,7 @@ void Composition_pass::render(const Render_context& context)
                 .skins                  = scene->get_skins(),
                 .materials              = materials,
                 .mesh_spans             = m_mesh_spans,
-                .passes                 = this->passes,
+                .render_pipeline_states = this->render_pipeline_states,
                 .primitive_mode         = this->primitive_mode,
                 .primitive_settings     = 
                     primitive_settings.has_value()
@@ -221,9 +221,9 @@ void Composition_pass::imgui()
     ImGui::Checkbox("Enabled", &enabled);
     if (ImGui::TreeNodeEx("Pipeline passes", ImGuiTreeNodeFlags_Framed)) {
         int pipeline_pass_index = 0;
-        for (erhe::renderer::Pipeline_pass* pass : passes) {
+        for (erhe::graphics::Render_pipeline_state* render_pipeline_state : render_pipeline_states) {
             ImGui::PushID(pipeline_pass_index++);
-            erhe::imgui::pipeline_imgui(pass->pipeline);
+            erhe::imgui::pipeline_imgui(*render_pipeline_state);
             ImGui::PopID();
         }
         ImGui::TreePop();

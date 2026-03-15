@@ -15,6 +15,7 @@ namespace gl {{
 
 //#define ERHE_CHECK_GL_ERRORS gl_helpers::check_error();
 #define ERHE_CHECK_GL_ERRORS
+//#define ERHE_LOG_GL_FUNCTIONS
 
 auto glbitfield(const ::GLbitfield value) -> ::GLbitfield
 {{

@@ -130,10 +130,10 @@ void Material_preview::make_preview_scene(Mesh_memory& mesh_memory)
     );
 
     auto composition_pass = std::make_shared<Composition_pass>("Material Preview Composition_pass");
-    composition_pass->mesh_layers = {Mesh_layer_id::content};
-    composition_pass->primitive_mode = erhe::primitive::Primitive_mode::polygon_fill;
-    composition_pass->filter = erhe::Item_filter{};
-    composition_pass->passes = {&m_pipeline_pass};
+    composition_pass->mesh_layers            = {Mesh_layer_id::content};
+    composition_pass->primitive_mode         = erhe::primitive::Primitive_mode::polygon_fill;
+    composition_pass->filter                 = erhe::Item_filter{};
+    composition_pass->render_pipeline_states = m_render_pipeline_states;
     {
         std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_composer.mutex};
         m_composer.composition_passes.push_back(composition_pass);

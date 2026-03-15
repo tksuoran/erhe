@@ -253,7 +253,7 @@ Tools::Tools(
     using Item_flags = erhe::Item_flags;
     auto tool = app_rendering.make_composition_pass("Tool");
     tool->mesh_layers    = { Mesh_layer_id::tool };
-    tool->passes         = {
+    tool->render_pipeline_states = {
         &m_pipeline_renderpasses.tool1_hidden_stencil,   // tag_depth_hidden_with_stencil
         &m_pipeline_renderpasses.tool2_visible_stencil,  // tag_depth_visible_with_stencil
         &m_pipeline_renderpasses.tool3_depth_clear,      // clear_depth

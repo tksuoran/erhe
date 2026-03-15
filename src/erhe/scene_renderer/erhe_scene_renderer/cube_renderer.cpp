@@ -3,7 +3,7 @@
 
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
-#include "erhe_graphics/state/vertex_input_state.hpp"
+#include "erhe_graphics/render_pipeline_state.hpp"
 #include "erhe_graphics/span.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene_renderer/program_interface.hpp"
@@ -128,11 +128,11 @@ void Cube_renderer::render(const Render_parameters& parameters)
     );
     m_cube_control_buffer.bind(parameters.render_encoder, cube_control_range);
 
-    const erhe::graphics::Render_pipeline_state& pipeline = parameters.pipeline;
-    parameters.render_encoder.set_render_pipeline_state(pipeline);
+    const erhe::graphics::Render_pipeline_state& render_pipeline_state = parameters.render_pipeline_state;
+    parameters.render_encoder.set_render_pipeline_state(render_pipeline_state);
     const std::size_t cube_count   = parameters.cube_instance_buffer.bind(parameters.render_encoder);
     const std::size_t vertex_count = cube_count * 6 * 6;
-    parameters.render_encoder.draw_primitives(pipeline.data.input_assembly.primitive_topology, 0, vertex_count);
+    parameters.render_encoder.draw_primitives(render_pipeline_state.data.input_assembly.primitive_topology, 0, vertex_count);
 
     camera_buffer_range.value().release();
     primitive_range.release();

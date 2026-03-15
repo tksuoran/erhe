@@ -3,7 +3,7 @@
 #include "renderers/composer.hpp"
 #include "scene/scene_view.hpp"
 
-#include "erhe_renderer/pipeline_renderpass.hpp"
+#include "erhe_graphics/render_pipeline_state.hpp"
 #include "erhe_scene_renderer/light_buffer.hpp"
 
 #include <glm/glm.hpp>
@@ -65,24 +65,25 @@ public:
     void update_rendertarget(erhe::graphics::Device& graphics_device);
 
 protected:
-    erhe::graphics::Device&                       m_graphics_device;
-    int                                           m_width{0};
-    int                                           m_height{0};
-    glm::vec4                                     m_clear_color{0.5f, 0.5f, 0.5f, 0.0f};
-    bool                                          m_use_external_color_texture{false};
-    erhe::dataformat::Format                      m_color_format;
-    std::shared_ptr<erhe::graphics::Texture>      m_color_texture;
-    erhe::dataformat::Format                      m_depth_format;
-    std::unique_ptr<erhe::graphics::Texture>      m_depth_texture;
-    std::shared_ptr<erhe::graphics::Render_pass>  m_render_pass;
-    erhe::scene_renderer::Light_projections       m_light_projections;
-    erhe::renderer::Pipeline_pass                 m_pipeline_pass;
-    Composer                                      m_composer;
-    std::shared_ptr<Scene_root>                   m_scene_root_shared;
-    std::shared_ptr<erhe::scene::Node>            m_camera_node;
-    std::shared_ptr<erhe::scene::Camera>          m_camera;
-    std::shared_ptr<Content_library>              m_content_library;
-    std::shared_ptr<erhe::graphics::Texture>      m_shadow_texture;
+    erhe::graphics::Device&                             m_graphics_device;
+    int                                                 m_width{0};
+    int                                                 m_height{0};
+    glm::vec4                                           m_clear_color{0.5f, 0.5f, 0.5f, 0.0f};
+    bool                                                m_use_external_color_texture{false};
+    erhe::dataformat::Format                            m_color_format;
+    std::shared_ptr<erhe::graphics::Texture>            m_color_texture;
+    erhe::dataformat::Format                            m_depth_format;
+    std::unique_ptr<erhe::graphics::Texture>            m_depth_texture;
+    std::shared_ptr<erhe::graphics::Render_pass>        m_render_pass;
+    erhe::scene_renderer::Light_projections             m_light_projections;
+    erhe::graphics::Render_pipeline_state               m_render_pipeline_state;
+    std::vector<erhe::graphics::Render_pipeline_state*> m_render_pipeline_states;
+    Composer                                            m_composer;
+    std::shared_ptr<Scene_root>                         m_scene_root_shared;
+    std::shared_ptr<erhe::scene::Node>                  m_camera_node;
+    std::shared_ptr<erhe::scene::Camera>                m_camera;
+    std::shared_ptr<Content_library>                    m_content_library;
+    std::shared_ptr<erhe::graphics::Texture>            m_shadow_texture;
 };
 
 }

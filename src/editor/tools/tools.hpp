@@ -2,23 +2,23 @@
 
 #include "brushes/brush_tool.hpp"
 #include "create/create.hpp"
+#include "grid/grid_tool.hpp"
+#include "physics/physics_tool.hpp"
 #include "tools/debug_visualizations.hpp"
 #include "tools/fly_camera_tool.hpp"
-#include "grid/grid_tool.hpp"
 #include "tools/hotbar.hpp"
 #include "tools/hover_tool.hpp"
 #include "tools/hud.hpp"
 #include "tools/material_paint_tool.hpp"
 #include "tools/paint_tool.hpp"
-#include "physics/physics_tool.hpp"
 #include "tools/selection_tool.hpp"
 #include "transform/transform_tool.hpp"
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/headset_view.hpp"
 #endif
 
+#include "erhe_graphics/render_pipeline_state.hpp"
 #include "erhe_profile/profile.hpp"
-#include "erhe_renderer/pipeline_renderpass.hpp"
 
 namespace erhe::commands {
     class Commands;
@@ -50,12 +50,12 @@ class Tools_pipeline_renderpasses
 {
 public:
     Tools_pipeline_renderpasses(Mesh_memory& mesh_memory, Programs& programs);
-    erhe::renderer::Pipeline_pass tool1_hidden_stencil;
-    erhe::renderer::Pipeline_pass tool2_visible_stencil;
-    erhe::renderer::Pipeline_pass tool3_depth_clear;
-    erhe::renderer::Pipeline_pass tool4_depth;
-    erhe::renderer::Pipeline_pass tool5_visible_color;
-    erhe::renderer::Pipeline_pass tool6_hidden_color;
+    erhe::graphics::Render_pipeline_state tool1_hidden_stencil;
+    erhe::graphics::Render_pipeline_state tool2_visible_stencil;
+    erhe::graphics::Render_pipeline_state tool3_depth_clear;
+    erhe::graphics::Render_pipeline_state tool4_depth;
+    erhe::graphics::Render_pipeline_state tool5_visible_color;
+    erhe::graphics::Render_pipeline_state tool6_hidden_color;
 };
 
 class Tools

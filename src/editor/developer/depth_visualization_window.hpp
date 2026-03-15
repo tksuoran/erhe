@@ -3,7 +3,6 @@
 #include "erhe_rendergraph/texture_rendergraph_node.hpp"
 #include "erhe_imgui/imgui_window.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
-#include "erhe_renderer/pipeline_renderpass.hpp"
 
 namespace erhe::graphics       { class Device; }
 namespace erhe::imgui          { class Imgui_windows; }
@@ -42,9 +41,10 @@ private:
     Mesh_memory&                            m_mesh_memory;
 
     // TODO These resources should not be per node
-    erhe::graphics::Vertex_input_state m_empty_vertex_input;
-    erhe::renderer::Pipeline_pass      m_pipeline_pass;
-    int                                m_light_index{};
+    erhe::graphics::Vertex_input_state                  m_empty_vertex_input;
+    erhe::graphics::Render_pipeline_state               m_render_pipeline_state;
+    std::vector<erhe::graphics::Render_pipeline_state*> m_render_pipeline_states;
+    int                                                 m_light_index{};
 };
 
 /// Rendergraph sink node for showing texture in ImGui window

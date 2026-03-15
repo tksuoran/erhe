@@ -46,19 +46,18 @@ Depth_to_color_rendergraph_node::Depth_to_color_rendergraph_node(
     , m_forward_renderer  {forward_renderer}
     , m_mesh_memory       {mesh_memory}
     , m_empty_vertex_input{rendergraph.get_graphics_device()}
-    , m_pipeline_pass{
-        erhe::graphics::Render_pipeline_state{
-            erhe::graphics::Render_pipeline_data{
-                .debug_label    = erhe::utility::Debug_label{"Debug_view"},
-                .shader_stages  = &programs.debug_depth.shader_stages,
-                .vertex_input   = &m_empty_vertex_input,
-                .input_assembly = erhe::graphics::Input_assembly_state::triangle,
-                .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
-                .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
-                .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled
-            }
+    , m_render_pipeline_state{
+        erhe::graphics::Render_pipeline_data{
+            .debug_label    = erhe::utility::Debug_label{"Debug_view"},
+            .shader_stages  = &programs.debug_depth.shader_stages,
+            .vertex_input   = &m_empty_vertex_input,
+            .input_assembly = erhe::graphics::Input_assembly_state::triangle,
+            .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
+            .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
+            .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled
         }
     }
+    ,m_render_pipeline_states{&m_render_pipeline_state}
 {
     // Registered in Texture_rendergraph_node constructor:
     register_input ("shadow_maps",         erhe::rendergraph::Rendergraph_node_key::shadow_maps);
@@ -139,19 +138,19 @@ void Depth_to_color_rendergraph_node::execute_rendergraph_node()
 
     m_forward_renderer.draw_primitives(
         erhe::scene_renderer::Forward_renderer::Render_parameters{
-            .render_encoder        = render_encoder,
-            .index_type            = m_mesh_memory.buffer_info.index_type,
-            .index_buffer          = nullptr,
-            .vertex_buffer0        = nullptr,
-            .vertex_buffer1        = nullptr,
-            .light_projections     = &light_projections,
-            .lights                = layers.light()->lights,
-            .materials             = {},
-            .mesh_spans            = {},
-            .non_mesh_vertex_count = 3, // Full-screen triangle
-            .passes                = { &m_pipeline_pass },
-            .viewport              = viewport,
-            .debug_label           = "Depth_to_color_rendergraph_node::execute_rendergraph_node()"
+            .render_encoder         = render_encoder,
+            .index_type             = m_mesh_memory.buffer_info.index_type,
+            .index_buffer           = nullptr,
+            .vertex_buffer0         = nullptr,
+            .vertex_buffer1         = nullptr,
+            .light_projections      = &light_projections,
+            .lights                 = layers.light()->lights,
+            .materials              = {},
+            .mesh_spans             = {},
+            .non_mesh_vertex_count  = 3, // Full-screen triangle
+            .render_pipeline_states = m_render_pipeline_states,
+            .viewport               = viewport,
+            .debug_label            = "Depth_to_color_rendergraph_node::execute_rendergraph_node()"
         },
         light_projection_transforms.light
     );
