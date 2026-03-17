@@ -8,7 +8,6 @@ and generates C++ headers/sources into <output_dir>.
 """
 
 import sys
-import os
 import importlib.util
 from pathlib import Path
 
@@ -22,6 +21,26 @@ def load_definitions(definitions_dir: Path) -> None:
             continue
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
+
+
+def _to_snake_case(name: str) -> str:
+    """Convert PascalCase to snake_case."""
+    result = []
+    for i, c in enumerate(name):
+        if c.isupper() and i > 0 and name[i - 1] != '_':
+            result.append('_')
+        result.append(c.lower())
+    return ''.join(result)
+
+
+def write_if_changed(path: Path, content: str) -> bool:
+    """Write file only if content differs. Returns True if written."""
+    if path.exists():
+        existing = path.read_text(encoding="utf-8")
+        if existing == content:
+            return False
+    path.write_text(content, encoding="utf-8")
+    return True
 
 
 def main() -> None:
@@ -48,6 +67,8 @@ def main() -> None:
         get_enum_registry,
         validate_references,
     )
+    from erhe_codegen.emit_hpp import emit_struct_hpp
+    from erhe_codegen.emit_cpp import emit_struct_cpp
 
     # Load all definition files
     load_definitions(definitions_dir)
@@ -60,11 +81,29 @@ def main() -> None:
 
     print(f"Loaded {len(structs)} struct(s) and {len(enums)} enum(s)")
 
-    # TODO (M2+): Generate C++ headers and sources
+    files_written = 0
+
+    # Generate struct headers and sources
     for name, s in structs.items():
-        print(f"  struct {name} v{s.version} ({len(s.fields)} fields)")
-    for name, e in enums.items():
-        print(f"  enum {name} ({len(e.values)} values)")
+        snake = _to_snake_case(name)
+
+        hpp_content = emit_struct_hpp(s)
+        cpp_content = emit_struct_cpp(s)
+
+        if write_if_changed(output_dir / f"{snake}.hpp", hpp_content):
+            files_written += 1
+            print(f"  wrote {snake}.hpp")
+
+        if write_if_changed(output_dir / f"{snake}.cpp", cpp_content):
+            files_written += 1
+            print(f"  wrote {snake}.cpp")
+
+    # TODO (M3): Generate enum headers and sources
+
+    if files_written == 0:
+        print("  all files up to date")
+    else:
+        print(f"  {files_written} file(s) written")
 
 
 if __name__ == "__main__":

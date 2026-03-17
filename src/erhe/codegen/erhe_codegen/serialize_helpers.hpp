@@ -19,19 +19,37 @@ void serialize_uint  (std::string& out, uint64_t value);
 void serialize_float (std::string& out, float value);
 void serialize_double(std::string& out, double value);
 
+// Per-element serialization (used by array/vector templates)
+inline void serialize_element(std::string& out, bool value)               { serialize_bool(out, value); }
+inline void serialize_element(std::string& out, int8_t value)             { serialize_int(out, value); }
+inline void serialize_element(std::string& out, uint8_t value)            { serialize_uint(out, value); }
+inline void serialize_element(std::string& out, int16_t value)            { serialize_int(out, value); }
+inline void serialize_element(std::string& out, uint16_t value)           { serialize_uint(out, value); }
+inline void serialize_element(std::string& out, int32_t value)            { serialize_int(out, value); }
+inline void serialize_element(std::string& out, uint32_t value)           { serialize_uint(out, value); }
+inline void serialize_element(std::string& out, int value)                { serialize_int(out, value); }
+inline void serialize_element(std::string& out, unsigned int value)       { serialize_uint(out, value); }
+inline void serialize_element(std::string& out, int64_t value)            { serialize_int(out, value); }
+inline void serialize_element(std::string& out, uint64_t value)           { serialize_uint(out, value); }
+inline void serialize_element(std::string& out, float value)              { serialize_float(out, value); }
+inline void serialize_element(std::string& out, double value)             { serialize_double(out, value); }
+inline void serialize_element(std::string& out, const std::string& value) { serialize_string(out, value); }
+
 // Deserialization helpers (scalar)
-void deserialize_field(simdjson::ondemand::value val, bool&        out);
-void deserialize_field(simdjson::ondemand::value val, int8_t&      out);
-void deserialize_field(simdjson::ondemand::value val, uint8_t&     out);
-void deserialize_field(simdjson::ondemand::value val, int16_t&     out);
-void deserialize_field(simdjson::ondemand::value val, uint16_t&    out);
-void deserialize_field(simdjson::ondemand::value val, int32_t&     out);
-void deserialize_field(simdjson::ondemand::value val, uint32_t&    out);
-void deserialize_field(simdjson::ondemand::value val, int64_t&     out);
-void deserialize_field(simdjson::ondemand::value val, uint64_t&    out);
-void deserialize_field(simdjson::ondemand::value val, float&       out);
-void deserialize_field(simdjson::ondemand::value val, double&      out);
-void deserialize_field(simdjson::ondemand::value val, std::string& out);
+void deserialize_field(simdjson::ondemand::value val, bool&         out);
+void deserialize_field(simdjson::ondemand::value val, int8_t&       out);
+void deserialize_field(simdjson::ondemand::value val, uint8_t&      out);
+void deserialize_field(simdjson::ondemand::value val, int16_t&      out);
+void deserialize_field(simdjson::ondemand::value val, uint16_t&     out);
+void deserialize_field(simdjson::ondemand::value val, int32_t&      out);
+void deserialize_field(simdjson::ondemand::value val, uint32_t&     out);
+void deserialize_field(simdjson::ondemand::value val, int&          out);
+void deserialize_field(simdjson::ondemand::value val, unsigned int& out);
+void deserialize_field(simdjson::ondemand::value val, int64_t&      out);
+void deserialize_field(simdjson::ondemand::value val, uint64_t&     out);
+void deserialize_field(simdjson::ondemand::value val, float&        out);
+void deserialize_field(simdjson::ondemand::value val, double&       out);
+void deserialize_field(simdjson::ondemand::value val, std::string&  out);
 
 // Deserialization helpers (glm)
 void deserialize_field(simdjson::ondemand::value val, glm::vec2& out);
@@ -46,14 +64,14 @@ void serialize_vec4(std::string& out, const glm::vec4& value);
 void serialize_mat4(std::string& out, const glm::mat4& value);
 
 // Serialization helpers (vector/array) — templates in header
-template <typename T>
-void serialize_array_elements(std::string& out, const T* data, std::size_t count);
-
 template <typename T, std::size_t N>
 void serialize_array(std::string& out, const std::array<T, N>& value)
 {
     out += '[';
-    serialize_array_elements(out, value.data(), N);
+    for (std::size_t i = 0; i < N; ++i) {
+        if (i > 0) out += ',';
+        serialize_element(out, value[i]);
+    }
     out += ']';
 }
 
@@ -61,20 +79,28 @@ template <typename T>
 void serialize_vector(std::string& out, const std::vector<T>& value)
 {
     out += '[';
-    serialize_array_elements(out, value.data(), value.size());
+    for (std::size_t i = 0; i < value.size(); ++i) {
+        if (i > 0) out += ',';
+        serialize_element(out, value[i]);
+    }
     out += ']';
 }
 
 // Deserialization helpers (vector/array) — templates in header
-template <typename T>
-void deserialize_array_elements(simdjson::ondemand::array arr, T* data, std::size_t count);
-
 template <typename T, std::size_t N>
 void deserialize_field(simdjson::ondemand::value val, std::array<T, N>& out)
 {
     simdjson::ondemand::array arr;
     if (!val.get_array().get(arr)) {
-        deserialize_array_elements(arr, out.data(), N);
+        std::size_t i = 0;
+        for (auto element : arr) {
+            if (i >= N) break;
+            simdjson::ondemand::value elem_val;
+            if (!element.get(elem_val)) {
+                deserialize_field(elem_val, out[i]);
+            }
+            ++i;
+        }
     }
 }
 
