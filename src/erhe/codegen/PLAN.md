@@ -908,40 +908,40 @@ endfunction()
 ## 9. Implementation Milestones
 
 ### M1 — Scaffold
-- [ ] Create directory structure under `src/erhe/codegen/`
-- [ ] Create `CMakeLists.txt` with static library and generator function
-- [ ] Create Python package skeleton (`erhe_codegen/__init__.py`, `types.py`, `schema.py`)
-- [ ] Create `field_info.hpp` with `Field_info`, `Numeric_limits`, `Struct_info`
+- [x] Create directory structure under `src/erhe/codegen/`
+- [x] Create `CMakeLists.txt` with static library and generator function
+- [x] Create Python package skeleton (`erhe_codegen/__init__.py`, `types.py`, `schema.py`)
+- [x] Create `field_info.hpp` with `Field_info`, `Numeric_limits`, `Struct_info`
 
 ### M2 — POD Types + Versioning
-- [ ] Implement `types.py` with all scalar types
-- [ ] Implement `schema.py` (Struct/Field schema classes, version validation, global registry)
-- [ ] Implement `emit_hpp.py` — generate header with versioned struct + `[[deprecated]]` fields
-- [ ] Implement `emit_cpp.py` — generate versioned serialize/deserialize for scalar fields
-- [ ] Implement C++ runtime helpers for scalar types
-- [ ] Write a test definition and verify generated code compiles
+- [x] Implement `types.py` with all scalar types
+- [x] Implement `schema.py` (Struct/Field schema classes, version validation, global registry)
+- [x] Implement `emit_hpp.py` — generate header with versioned struct + `[[deprecated]]` fields
+- [x] Implement `emit_cpp.py` — generate versioned serialize/deserialize for scalar fields
+- [x] Implement C++ runtime helpers for scalar types
+- [x] Write a test definition and verify generated code compiles
 
 ### M3 — Enums
-- [ ] Implement `EnumSchema` / `EnumValueSchema` in `schema.py`
-- [ ] Add `enum()`, `value()`, `EnumRef()` to Python API
+- [x] Implement `EnumSchema` / `EnumValueSchema` in `schema.py` *(done in M1)*
+- [x] Add `enum()`, `value()`, `EnumRef()` to Python API *(done in M1)*
 - [ ] Implement `emit_enum.py` — generate `enum class`, `to_string`, `from_string`
 - [ ] Generate `Enum_value_info` / `Enum_info` reflection tables with `short_desc`, `long_desc`
 - [ ] Generate `get_enum_info()` overload
-- [ ] Support `EnumRef("Name")` as a field type in structs (serialize as string, deserialize via `from_string`)
-- [ ] Validate: no duplicate names/values, integer underlying type
+- [x] Support `EnumRef("Name")` as a field type in structs (serialize as string, deserialize via `from_string`) *(emit_cpp.py handles this)*
+- [x] Validate: no duplicate names/values, integer underlying type *(done in M1)*
 - [ ] Test with enum definition + struct field using `EnumRef`
 
 ### M4 — Composite Types
-- [ ] Add `Vector(T)`, `Array(T, N)`, `StructRef("Name")` to type system
-- [ ] Generate versioned serialization/deserialization for vectors, arrays, nested structs
-- [ ] Nested structs carry their own `_version` in the JSON
-- [ ] Add template helpers to C++ runtime
+- [x] Add `Vector(T)`, `Array(T, N)`, `StructRef("Name")` to type system *(done in M1)*
+- [x] Generate versioned serialization/deserialization for vectors, arrays, nested structs *(done in M2)*
+- [x] Nested structs carry their own `_version` in the JSON *(emit_cpp.py handles this)*
+- [x] Add template helpers to C++ runtime *(done in M1/M2)*
 - [ ] Test with nested struct definitions
 
 ### M5 — glm Types
-- [ ] Add `Vec2`, `Vec3`, `Vec4`, `Mat4` to type system
-- [ ] Implement serialize/deserialize as JSON arrays
-- [ ] Add C++ runtime helpers for glm types
+- [x] Add `Vec2`, `Vec3`, `Vec4`, `Mat4` to type system *(done in M1)*
+- [x] Implement serialize/deserialize as JSON arrays *(done in M2)*
+- [x] Add C++ runtime helpers for glm types *(done in M1)*
 
 ### M6 — Reflection + Metadata
 - [ ] Implement `emit_reflect.py` — generate `Field_info` tables with full metadata
@@ -950,17 +950,17 @@ endfunction()
 - [ ] Test reflection API
 
 ### M7 — Migration Callbacks
-- [ ] Implement `migration.hpp` / `migration.cpp` with `register_migration<T>()` and `run_migrations<T>()`
-- [ ] Implement type-erased `Migration_registry` with thread-safe callback storage
-- [ ] Update generated `deserialize()` to call `run_migrations()` when `_version` differs from `current_version`
+- [x] Implement `migration.hpp` / `migration.cpp` with `register_migration<T>()` and `run_migrations<T>()` *(done in M1)*
+- [x] Implement type-erased `Migration_registry` with thread-safe callback storage *(done in M1)*
+- [x] Update generated `deserialize()` to call `run_migrations()` when `_version` differs from `current_version` *(done in M2)*
 - [ ] Test: register a migration callback, deserialize old version data, verify callback runs and transforms struct
 
 ### M8 — Hard Limit Clamping
-- [ ] Generate post-deserialization clamping code for fields with `hard_min` / `hard_max`
+- [x] Generate post-deserialization clamping code for fields with `hard_min` / `hard_max` *(done in M2)*
 - [ ] Test with out-of-range values in JSON
 
 ### M9 — CMake Integration
-- [ ] Implement `erhe_codegen_generate()` CMake function
+- [x] Implement `erhe_codegen_generate()` CMake function *(done in M1)*
 - [ ] Wire up to editor build as a proof-of-concept
 - [ ] Verify incremental rebuilds work (re-generate only when definitions change)
 
