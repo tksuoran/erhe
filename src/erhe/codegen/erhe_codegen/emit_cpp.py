@@ -10,6 +10,29 @@ from erhe_codegen.types import (
 from erhe_codegen.emit_hpp import _to_snake_case
 
 
+def _can_use_serialize_template(t: TypeBase) -> bool:
+    """Check if a type can use the serialize_element/deserialize_field template overloads."""
+    return isinstance(t, (ScalarType, GlmType))
+
+
+def _deserialize_element_code(t: TypeBase, target: str, indent: str) -> list[str]:
+    """Generate deserialization for an element inside a vector/array loop (uses elem_val)."""
+    lines: list[str] = []
+    if isinstance(t, StructRefType):
+        lines.append(f"{indent}simdjson::ondemand::object nested_obj;")
+        lines.append(f"{indent}if (!elem_val.get_object().get(nested_obj)) {{")
+        lines.append(f"{indent}    deserialize(nested_obj, {target});")
+        lines.append(f"{indent}}}")
+    elif isinstance(t, EnumRefType):
+        lines.append(f"{indent}std::string_view str;")
+        lines.append(f"{indent}if (!elem_val.get_string().get(str)) {{")
+        lines.append(f"{indent}    from_string(str, {target});")
+        lines.append(f"{indent}}}")
+    else:
+        lines.append(f"{indent}erhe::codegen::deserialize_field(elem_val, {target});")
+    return lines
+
+
 def _serialize_field_code(f: FieldSchema, indent: str = "    ") -> list[str]:
     """Generate serialization code for a single field."""
     lines: list[str] = []
@@ -49,9 +72,25 @@ def _serialize_value_code(t: TypeBase, expr: str, indent: str) -> list[str]:
         elif t.name == "Mat4":
             lines.append(f"{indent}erhe::codegen::serialize_mat4(out, {expr});")
     elif isinstance(t, VectorType):
-        lines.append(f"{indent}erhe::codegen::serialize_vector(out, {expr});")
+        if _can_use_serialize_template(t.element_type):
+            lines.append(f"{indent}erhe::codegen::serialize_vector(out, {expr});")
+        else:
+            lines.append(f"{indent}out += '[';")
+            lines.append(f"{indent}for (std::size_t i = 0; i < {expr}.size(); ++i) {{")
+            lines.append(f"{indent}    if (i > 0) out += ',';")
+            lines.extend(_serialize_value_code(t.element_type, f"{expr}[i]", indent + "    "))
+            lines.append(f"{indent}}}")
+            lines.append(f"{indent}out += ']';")
     elif isinstance(t, ArrayType):
-        lines.append(f"{indent}erhe::codegen::serialize_array(out, {expr});")
+        if _can_use_serialize_template(t.element_type):
+            lines.append(f"{indent}erhe::codegen::serialize_array(out, {expr});")
+        else:
+            lines.append(f"{indent}out += '[';")
+            lines.append(f"{indent}for (std::size_t i = 0; i < {t.size}; ++i) {{")
+            lines.append(f"{indent}    if (i > 0) out += ',';")
+            lines.extend(_serialize_value_code(t.element_type, f"{expr}[i]", indent + "    "))
+            lines.append(f"{indent}}}")
+            lines.append(f"{indent}out += ']';")
     elif isinstance(t, StructRefType):
         # Nested struct: serialize as embedded JSON object
         lines.append(f"{indent}out += serialize({expr});")
@@ -109,8 +148,45 @@ def _deserialize_value_code(t: TypeBase, target: str, indent: str) -> list[str]:
 
     if isinstance(t, (ScalarType, GlmType)):
         lines.append(f"{indent}erhe::codegen::deserialize_field(val, {target});")
-    elif isinstance(t, (VectorType, ArrayType)):
-        lines.append(f"{indent}erhe::codegen::deserialize_field(val, {target});")
+    elif isinstance(t, VectorType):
+        if _can_use_serialize_template(t.element_type):
+            lines.append(f"{indent}erhe::codegen::deserialize_field(val, {target});")
+        else:
+            elem_cpp = t.element_type.cpp_type
+            lines.append(f"{indent}{{")
+            lines.append(f"{indent}    simdjson::ondemand::array arr;")
+            lines.append(f"{indent}    if (!val.get_array().get(arr)) {{")
+            lines.append(f"{indent}        {target}.clear();")
+            lines.append(f"{indent}        for (auto element : arr) {{")
+            lines.append(f"{indent}            {elem_cpp} item{{}};")
+            lines.append(f"{indent}            simdjson::ondemand::value elem_val;")
+            lines.append(f"{indent}            if (!element.get(elem_val)) {{")
+            # Recurse for the element deserialization, using elem_val as the value
+            lines.extend(_deserialize_element_code(t.element_type, "item", indent + "                "))
+            lines.append(f"{indent}            }}")
+            lines.append(f"{indent}            {target}.push_back(std::move(item));")
+            lines.append(f"{indent}        }}")
+            lines.append(f"{indent}    }}")
+            lines.append(f"{indent}}}")
+    elif isinstance(t, ArrayType):
+        if _can_use_serialize_template(t.element_type):
+            lines.append(f"{indent}erhe::codegen::deserialize_field(val, {target});")
+        else:
+            elem_cpp = t.element_type.cpp_type
+            lines.append(f"{indent}{{")
+            lines.append(f"{indent}    simdjson::ondemand::array arr;")
+            lines.append(f"{indent}    if (!val.get_array().get(arr)) {{")
+            lines.append(f"{indent}        std::size_t i = 0;")
+            lines.append(f"{indent}        for (auto element : arr) {{")
+            lines.append(f"{indent}            if (i >= {t.size}) break;")
+            lines.append(f"{indent}            simdjson::ondemand::value elem_val;")
+            lines.append(f"{indent}            if (!element.get(elem_val)) {{")
+            lines.extend(_deserialize_element_code(t.element_type, f"{target}[i]", indent + "                "))
+            lines.append(f"{indent}            }}")
+            lines.append(f"{indent}            ++i;")
+            lines.append(f"{indent}        }}")
+            lines.append(f"{indent}    }}")
+            lines.append(f"{indent}}}")
     elif isinstance(t, StructRefType):
         # Nested struct: get as object, call deserialize recursively
         lines.append(f"{indent}simdjson::ondemand::object nested_obj;")

@@ -927,7 +927,7 @@ endfunction()
 - [x] Generate versioned serialization/deserialization for vectors, arrays, nested structs *(done in M2)*
 - [x] Nested structs carry their own `_version` in the JSON *(emit_cpp.py handles this)*
 - [x] Add template helpers to C++ runtime *(done in M1/M2)*
-- [ ] Test with nested struct definitions
+- [x] Test with nested struct definitions (color.py + light.py with StructRef, Vector(StructRef), Optional(StructRef))
 
 ### M5 — glm Types
 - [x] Add `Vec2`, `Vec3`, `Vec4`, `Mat4` to type system *(done in M1)*
