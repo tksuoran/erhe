@@ -21,15 +21,25 @@ target_link_libraries(${_target}
 
 erhe_target_settings(${_target} "erhe")
 
-add_subdirectory(test)
-
 # Code generation function for consumers
+#
+# Usage:
+#   erhe_codegen_generate(
+#       TARGET          <target>           # CMake target that depends on generated code
+#       DEFINITIONS_DIR <path>             # Directory containing .py definition files
+#       OUTPUT_DIR      <path>             # Directory where .hpp/.cpp files are generated
+#   )
+#
+# The caller must add the generated source files to their target and add
+# OUTPUT_DIR to the target's include directories.
 function(erhe_codegen_generate)
     cmake_parse_arguments(ARG "" "TARGET;DEFINITIONS_DIR;OUTPUT_DIR" "" ${ARGN})
 
-    file(GLOB DEFINITION_FILES "${ARG_DEFINITIONS_DIR}/*.py")
+    file(GLOB DEFINITION_FILES CONFIGURE_DEPENDS "${ARG_DEFINITIONS_DIR}/*.py")
 
-    set(GENERATOR_SCRIPT "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/generate.py")
+    set(_codegen_dir "${CMAKE_CURRENT_FUNCTION_LIST_DIR}")
+    set(GENERATOR_SCRIPT "${_codegen_dir}/generate.py")
+    file(GLOB GENERATOR_PACKAGE_FILES CONFIGURE_DEPENDS "${_codegen_dir}/erhe_codegen/*.py")
 
     add_custom_command(
         OUTPUT ${ARG_OUTPUT_DIR}/generated_stamp.txt
@@ -37,10 +47,12 @@ function(erhe_codegen_generate)
             ${ARG_DEFINITIONS_DIR}
             ${ARG_OUTPUT_DIR}
         COMMAND ${CMAKE_COMMAND} -E touch ${ARG_OUTPUT_DIR}/generated_stamp.txt
-        DEPENDS ${DEFINITION_FILES} ${GENERATOR_SCRIPT}
-        COMMENT "Generating C++ code from struct definitions"
+        DEPENDS ${DEFINITION_FILES} ${GENERATOR_SCRIPT} ${GENERATOR_PACKAGE_FILES}
+        COMMENT "erhe_codegen: generating C++ from ${ARG_DEFINITIONS_DIR}"
     )
 
     add_custom_target(${ARG_TARGET}_codegen DEPENDS ${ARG_OUTPUT_DIR}/generated_stamp.txt)
     add_dependencies(${ARG_TARGET} ${ARG_TARGET}_codegen)
 endfunction()
+
+add_subdirectory(test)

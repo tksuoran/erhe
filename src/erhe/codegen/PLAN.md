@@ -951,8 +951,8 @@ endfunction()
 
 ### M9 — CMake Integration
 - [x] Implement `erhe_codegen_generate()` CMake function *(done in M1)*
-- [ ] Wire up to editor build as a proof-of-concept
-- [ ] Verify incremental rebuilds work (re-generate only when definitions change)
+- [x] Wire up to build as proof-of-concept (erhe_codegen_test uses erhe_codegen_generate())
+- [x] Verify incremental rebuilds work (re-generate only when definitions or generator scripts change)
 
 ---
 

@@ -1,4 +1,4 @@
-#include "generated/settings.hpp"
+#include "settings.hpp"
 
 #include <erhe_codegen/migration.hpp>
 
