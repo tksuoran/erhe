@@ -189,8 +189,8 @@ Deserialization matches the string against known enumerator names. Unknown strin
 | `long_desc`   | no       | str    | Longer description (for documentation / detailed tooltips) |
 | `ui_min`      | no       | str    | Recommended minimum for UI sliders/inputs (numeric only)   |
 | `ui_max`      | no       | str    | Recommended maximum for UI sliders/inputs (numeric only)   |
-| `hard_min`    | no       | str    | Absolute minimum, values clamped on deserialization         |
-| `hard_max`    | no       | str    | Absolute maximum, values clamped on deserialization         |
+| `hard_min`    | no       | str    | Absolute minimum (exposed via reflection for application use) |
+| `hard_max`    | no       | str    | Absolute maximum (exposed via reflection for application use) |
 | `comment`     | no       | str    | Code comment emitted next to the field                     |
 
 **Validation rules** (enforced by the generator):
@@ -832,20 +832,9 @@ A small static library providing:
   - Template helpers for `std::vector<T>` and `std::array<T, N>`
   - Enum serialize/deserialize is generated per-enum (uses `to_string`/`from_string`), not templated
 
-### 6.1 Hard Limits Clamping
+### 6.1 Hard Limits
 
-For fields with `hard_min` / `hard_max`, the generated deserialization code applies clamping after reading:
-
-```cpp
-// metallic: added_in=1, hard_min=0.0, hard_max=1.0
-if (version >= 1) {
-    if (!obj["metallic"].get(val)) {
-        deserialize_field(val, out.metallic);
-        if (out.metallic < 0.0f) out.metallic = 0.0f;
-        if (out.metallic > 1.0f) out.metallic = 1.0f;
-    }
-}
-```
+`hard_min` / `hard_max` values are **not** applied by generated code. They are exposed through the `Numeric_limits` struct in the reflection tables so the application can enforce them as needed (e.g., in UI input validation, property editors, or custom deserialization wrappers).
 
 ---
 
@@ -890,7 +879,7 @@ endfunction()
 
 ## 8. Error Handling Strategy
 
-- **Deserialization**: Missing fields keep their C++ default. Type mismatches return `simdjson::error_code`. Hard limit violations are clamped silently.
+- **Deserialization**: Missing fields keep their C++ default. Type mismatches return `simdjson::error_code`.
 - **Missing `_version`**: Treated as version 1.
 - **Future `_version`** (higher than current): Deserialize what is known, ignore unknown fields. simdjson on-demand naturally skips unrecognized keys.
 - **Serialization**: Always succeeds (no I/O, just string building). Always writes `current_version`.
@@ -955,9 +944,8 @@ endfunction()
 - [x] Update generated `deserialize()` to call `run_migrations()` when `_version` differs from `current_version` *(done in M2)*
 - [ ] Test: register a migration callback, deserialize old version data, verify callback runs and transforms struct
 
-### M8 — Hard Limit Clamping
-- [x] Generate post-deserialization clamping code for fields with `hard_min` / `hard_max` *(done in M2)*
-- [ ] Test with out-of-range values in JSON
+### M8 — ~~Hard Limit Clamping~~ *(removed)*
+- Hard limits are reflection-only metadata, not enforced by generated code. Applications use `Numeric_limits` from `Field_info` to enforce as needed.
 
 ### M9 — CMake Integration
 - [x] Implement `erhe_codegen_generate()` CMake function *(done in M1)*

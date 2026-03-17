@@ -88,13 +88,6 @@ def _deserialize_field_code(f: FieldSchema, indent: str = "    ") -> list[str]:
     lines.append(f'{inner}if (!obj["{f.name}"].get(val)) {{')
     lines.extend(_deserialize_value_code(f.type, f"out.{f.name}", inner + "    "))
 
-    # Hard limits clamping (for numeric scalars)
-    if isinstance(f.type, ScalarType) and f.type.is_numeric:
-        if f.hard_min is not None:
-            lines.append(f"{inner}    if (out.{f.name} < {f.hard_min}) out.{f.name} = {f.hard_min};")
-        if f.hard_max is not None:
-            lines.append(f"{inner}    if (out.{f.name} > {f.hard_max}) out.{f.name} = {f.hard_max};")
-
     lines.append(f"{inner}}}")
 
     if guard:
