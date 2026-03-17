@@ -935,10 +935,10 @@ endfunction()
 - [x] Add C++ runtime helpers for glm types *(done in M1)*
 
 ### M6 — Reflection + Metadata
-- [ ] Implement `emit_reflect.py` — generate `Field_info` tables with full metadata
-- [ ] Generate `get_fields()` and `get_struct_info()` overloads
-- [ ] Include version ranges, descriptions, numeric limits in reflection data
-- [ ] Test reflection API
+- [x] Implement `emit_reflect.py` — generate `Field_info` tables with full metadata
+- [x] Generate `get_fields()` and `get_struct_info()` overloads
+- [x] Include version ranges, descriptions, numeric limits in reflection data
+- [x] Test reflection API
 
 ### M7 — Migration Callbacks
 - [x] Implement `migration.hpp` / `migration.cpp` with `register_migration<T>()` and `run_migrations<T>()` *(done in M1)*

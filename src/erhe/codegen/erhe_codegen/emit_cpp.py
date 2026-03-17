@@ -145,6 +145,8 @@ def emit_struct_cpp(s: StructSchema) -> str:
 
     lines.append(f'#include "{snake}.hpp"')
     lines.append("")
+    lines.append("#include <cstddef>")
+    lines.append("")
     lines.append("#include <erhe_codegen/serialize_helpers.hpp>")
     lines.append("#include <erhe_codegen/migration.hpp>")
     lines.append("")
@@ -195,5 +197,9 @@ def emit_struct_cpp(s: StructSchema) -> str:
     lines.append("    return simdjson::SUCCESS;")
     lines.append("}")
     lines.append("")
+
+    # --- Reflection ---
+    from erhe_codegen.emit_reflect import emit_struct_reflect
+    lines.append(emit_struct_reflect(s))
 
     return "\n".join(lines)

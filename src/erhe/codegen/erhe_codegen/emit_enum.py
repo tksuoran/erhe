@@ -102,7 +102,7 @@ def emit_enum_cpp(e: EnumSchema) -> str:
 
     # Enum_info
     underlying_name = e.underlying_type.cpp_type
-    lines.append(f"static constexpr erhe::codegen::Enum_info {snake}_enum_info = {{")
+    lines.append(f"const erhe::codegen::Enum_info {snake}_enum_info = {{")
     lines.append(f'    .name                 = "{e.name}",')
     lines.append(f'    .underlying_type_name = "{underlying_name}",')
     lines.append(f"    .values               = {snake}_values,")
