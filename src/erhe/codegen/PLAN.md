@@ -28,7 +28,7 @@ Struct definitions live in `.py` files under a `definitions/` directory (or pass
 # example: definitions/material.py
 from erhe_codegen import *
 
-struct("Material", version=3,
+struct("Material",
     field("name",             String,
         added_in=1,
         short_desc="Material name",
@@ -79,6 +79,7 @@ struct("Material", version=3,
         short_desc="UV channel scales",
         default="1.0f, 1.0f, 1.0f, 1.0f",
     ),
+    version=3,
 )
 ```
 
@@ -90,24 +91,26 @@ Enums are defined with `enum()` and `value()` calls. Each value has metadata for
 # example: definitions/blend_mode.py
 from erhe_codegen import *
 
-enum("Blend_mode", underlying_type=UInt8,
+enum("Blend_mode",
     value("opaque",       0, short_desc="Opaque",        long_desc="No transparency"),
     value("alpha_blend",  1, short_desc="Alpha Blend",   long_desc="Standard alpha blending"),
     value("additive",     2, short_desc="Additive",      long_desc="Additive blending for glow effects"),
     value("multiply",     3, short_desc="Multiply",      long_desc="Multiplicative blending"),
+    underlying_type=UInt8,
 )
 ```
 
 Enum values can then be used as struct field types via `EnumRef("Blend_mode")`:
 
 ```python
-struct("Material", version=4,
+struct("Material",
     # ... other fields ...
     field("blend_mode",  EnumRef("Blend_mode"),
         added_in=4,
         short_desc="Blend mode",
         default="Blend_mode::opaque",
     ),
+    version=4,
 )
 ```
 

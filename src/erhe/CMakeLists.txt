@@ -13,6 +13,7 @@ add_subdirectory(utility)
 add_subdirectory(item)
 
 add_subdirectory(buffer)
+add_subdirectory(codegen)
 add_subdirectory(commands)
 add_subdirectory(configuration)
 add_subdirectory(dataformat)
