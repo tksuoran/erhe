@@ -227,6 +227,18 @@ def emit_struct_cpp(s: StructSchema) -> str:
     lines.append("#include <erhe_codegen/migration.hpp>")
     lines.append("")
 
+    # Suppress deprecation warnings for removed fields accessed in deserialize/reflection
+    has_deprecated = any(f.removed_in is not None for f in s.fields)
+    if has_deprecated:
+        lines.append("#if defined(_MSC_VER)")
+        lines.append("#   pragma warning(push)")
+        lines.append('#   pragma warning(disable : 4996)')
+        lines.append("#elif defined(__GNUC__) || defined(__clang__)")
+        lines.append('#   pragma GCC diagnostic push')
+        lines.append('#   pragma GCC diagnostic ignored "-Wdeprecated-declarations"')
+        lines.append("#endif")
+        lines.append("")
+
     # --- Serialize ---
     lines.append(f"auto serialize(const {s.name}& value) -> std::string")
     lines.append("{")
@@ -277,5 +289,13 @@ def emit_struct_cpp(s: StructSchema) -> str:
     # --- Reflection ---
     from erhe_codegen.emit_reflect import emit_struct_reflect
     lines.append(emit_struct_reflect(s))
+
+    if has_deprecated:
+        lines.append("#if defined(_MSC_VER)")
+        lines.append("#   pragma warning(pop)")
+        lines.append("#elif defined(__GNUC__) || defined(__clang__)")
+        lines.append("#   pragma GCC diagnostic pop")
+        lines.append("#endif")
+        lines.append("")
 
     return "\n".join(lines)

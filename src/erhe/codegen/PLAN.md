@@ -944,7 +944,7 @@ endfunction()
 - [x] Implement `migration.hpp` / `migration.cpp` with `register_migration<T>()` and `run_migrations<T>()` *(done in M1)*
 - [x] Implement type-erased `Migration_registry` with thread-safe callback storage *(done in M1)*
 - [x] Update generated `deserialize()` to call `run_migrations()` when `_version` differs from `current_version` *(done in M2)*
-- [ ] Test: register a migration callback, deserialize old version data, verify callback runs and transforms struct
+- [x] Test: register a migration callback, deserialize old version data, verify callback runs and transforms struct
 
 ### M8 — ~~Hard Limit Clamping~~ *(removed)*
 - Hard limits are reflection-only metadata, not enforced by generated code. Applications use `Numeric_limits` from `Field_info` to enforce as needed.

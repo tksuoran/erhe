@@ -21,6 +21,8 @@ target_link_libraries(${_target}
 
 erhe_target_settings(${_target} "erhe")
 
+add_subdirectory(test)
+
 # Code generation function for consumers
 function(erhe_codegen_generate)
     cmake_parse_arguments(ARG "" "TARGET;DEFINITIONS_DIR;OUTPUT_DIR" "" ${ARGN})

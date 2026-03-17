@@ -130,22 +130,6 @@ void deserialize_field(simdjson::ondemand::value val, uint32_t& out)
     }
 }
 
-void deserialize_field(simdjson::ondemand::value val, int& out)
-{
-    int64_t v;
-    if (!val.get_int64().get(v)) {
-        out = static_cast<int>(v);
-    }
-}
-
-void deserialize_field(simdjson::ondemand::value val, unsigned int& out)
-{
-    uint64_t v;
-    if (!val.get_uint64().get(v)) {
-        out = static_cast<unsigned int>(v);
-    }
-}
-
 void deserialize_field(simdjson::ondemand::value val, int64_t& out)
 {
     int64_t v;

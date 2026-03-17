@@ -5,6 +5,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <vector>
 
 #include <glm/glm.hpp>
@@ -28,8 +29,11 @@ inline void serialize_element(std::string& out, int16_t value)            { seri
 inline void serialize_element(std::string& out, uint16_t value)           { serialize_uint(out, value); }
 inline void serialize_element(std::string& out, int32_t value)            { serialize_int(out, value); }
 inline void serialize_element(std::string& out, uint32_t value)           { serialize_uint(out, value); }
-inline void serialize_element(std::string& out, int value)                { serialize_int(out, value); }
-inline void serialize_element(std::string& out, unsigned int value)       { serialize_uint(out, value); }
+// Only provide int/unsigned int overloads if they are distinct types from int32_t/uint32_t
+template <typename T, std::enable_if_t<std::is_same_v<T, int> && !std::is_same_v<int, int32_t>, int> = 0>
+inline void serialize_element(std::string& out, T value)                  { serialize_int(out, value); }
+template <typename T, std::enable_if_t<std::is_same_v<T, unsigned int> && !std::is_same_v<unsigned int, uint32_t>, int> = 0>
+inline void serialize_element(std::string& out, T value)                  { serialize_uint(out, value); }
 inline void serialize_element(std::string& out, int64_t value)            { serialize_int(out, value); }
 inline void serialize_element(std::string& out, uint64_t value)           { serialize_uint(out, value); }
 inline void serialize_element(std::string& out, float value)              { serialize_float(out, value); }
@@ -37,20 +41,31 @@ inline void serialize_element(std::string& out, double value)             { seri
 inline void serialize_element(std::string& out, const std::string& value) { serialize_string(out, value); }
 
 // Deserialization helpers (scalar)
-void deserialize_field(simdjson::ondemand::value val, bool&         out);
-void deserialize_field(simdjson::ondemand::value val, int8_t&       out);
-void deserialize_field(simdjson::ondemand::value val, uint8_t&      out);
-void deserialize_field(simdjson::ondemand::value val, int16_t&      out);
-void deserialize_field(simdjson::ondemand::value val, uint16_t&     out);
-void deserialize_field(simdjson::ondemand::value val, int32_t&      out);
-void deserialize_field(simdjson::ondemand::value val, uint32_t&     out);
-void deserialize_field(simdjson::ondemand::value val, int&          out);
-void deserialize_field(simdjson::ondemand::value val, unsigned int& out);
-void deserialize_field(simdjson::ondemand::value val, int64_t&      out);
-void deserialize_field(simdjson::ondemand::value val, uint64_t&     out);
-void deserialize_field(simdjson::ondemand::value val, float&        out);
-void deserialize_field(simdjson::ondemand::value val, double&       out);
-void deserialize_field(simdjson::ondemand::value val, std::string&  out);
+void deserialize_field(simdjson::ondemand::value val, bool&     out);
+void deserialize_field(simdjson::ondemand::value val, int8_t&   out);
+void deserialize_field(simdjson::ondemand::value val, uint8_t&  out);
+void deserialize_field(simdjson::ondemand::value val, int16_t&  out);
+void deserialize_field(simdjson::ondemand::value val, uint16_t& out);
+void deserialize_field(simdjson::ondemand::value val, int32_t&  out);
+void deserialize_field(simdjson::ondemand::value val, uint32_t& out);
+void deserialize_field(simdjson::ondemand::value val, int64_t&  out);
+void deserialize_field(simdjson::ondemand::value val, uint64_t& out);
+void deserialize_field(simdjson::ondemand::value val, float&    out);
+void deserialize_field(simdjson::ondemand::value val, double&   out);
+void deserialize_field(simdjson::ondemand::value val, std::string& out);
+// int/unsigned int: only if distinct from int32_t/uint32_t (platform-dependent)
+template <typename T, std::enable_if_t<std::is_same_v<T, int> && !std::is_same_v<int, int32_t>, int> = 0>
+void deserialize_field(simdjson::ondemand::value val, T& out)
+{
+    int64_t tmp;
+    if (!val.get_int64().get(tmp)) { out = static_cast<T>(tmp); }
+}
+template <typename T, std::enable_if_t<std::is_same_v<T, unsigned int> && !std::is_same_v<unsigned int, uint32_t>, int> = 0>
+void deserialize_field(simdjson::ondemand::value val, T& out)
+{
+    uint64_t tmp;
+    if (!val.get_uint64().get(tmp)) { out = static_cast<T>(tmp); }
+}
 
 // Deserialization helpers (glm)
 void deserialize_field(simdjson::ondemand::value val, glm::vec2& out);
