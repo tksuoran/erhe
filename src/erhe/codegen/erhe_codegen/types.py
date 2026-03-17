@@ -67,6 +67,22 @@ class ArrayType(TypeBase):
         return f"Array({self.element_type!r}, {self.size})"
 
 
+class OptionalType(TypeBase):
+    """std::optional<T>"""
+
+    def __init__(self, element_type: TypeBase):
+        self.element_type = element_type
+        self.is_numeric = False
+        self.is_integer = False
+
+    @property
+    def cpp_type(self) -> str:
+        return f"std::optional<{_cpp_type_of(self.element_type)}>"
+
+    def __repr__(self) -> str:
+        return f"Optional({self.element_type!r})"
+
+
 class StructRefType(TypeBase):
     """Reference to another generated struct by name."""
 
@@ -131,6 +147,7 @@ Mat4 = GlmType("Mat4", "glm::mat4", 16)
 # Composite type constructors
 Vector    = VectorType
 Array     = ArrayType
+Optional  = OptionalType
 StructRef = StructRefType
 EnumRef   = EnumRefType
 

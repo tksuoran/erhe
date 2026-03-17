@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Optional
 
 from erhe_codegen.types import (
-    TypeBase, ScalarType, GlmType, VectorType, ArrayType,
+    TypeBase, ScalarType, GlmType, VectorType, ArrayType, OptionalType,
     StructRefType, EnumRefType, INTEGER_TYPES,
 )
 
@@ -300,6 +300,5 @@ def _validate_field_type_refs(struct_name: str, field_name: str, t: TypeBase) ->
                 f"Struct {struct_name!r}, field {field_name!r}: "
                 f"EnumRef({t.name!r}) target not found in registry"
             )
-    elif isinstance(t, (VectorType, ArrayType)):
-        element = t.element_type if isinstance(t, VectorType) else t.element_type
-        _validate_field_type_refs(struct_name, field_name, element)
+    elif isinstance(t, (VectorType, ArrayType, OptionalType)):
+        _validate_field_type_refs(struct_name, field_name, t.element_type)

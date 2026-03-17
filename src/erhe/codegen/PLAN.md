@@ -173,10 +173,12 @@ Deserialization matches the string against known enumerator names. Unknown strin
 |----------------------------|-------------------------------|
 | `Vector(T)`                | `std::vector<T>`              |
 | `Array(T, N)`              | `std::array<T, N>`            |
+| `Optional(T)`              | `std::optional<T>`            |
 | `StructRef("Foo")`         | `Foo` (value, nested struct)  |
 | `Vector(StructRef("Foo"))` | `std::vector<Foo>`            |
 | `EnumRef("Bar")`           | `Bar` (enum type)             |
 | `Vector(EnumRef("Bar"))`   | `std::vector<Bar>`            |
+| `Optional(Float)`          | `std::optional<float>`        |
 
 ### 1.3 Field Options
 
@@ -956,7 +958,7 @@ endfunction()
 
 ## 10. Open Questions / Future Extensions
 
-- **Optional fields**: `std::optional<T>` support — serialize as present/absent JSON keys?
+- ~~**Optional fields**: `std::optional<T>` support~~ — Implemented. Serialized as value or `null`.
 - **ImGui editor generation**: Use reflection tables (descriptions, numeric limits) to auto-generate property editor UI?
 - **Binary serialization**: Alternative to JSON for performance-critical paths?
 - **Validation beyond clamping**: Generate validation functions (custom predicates, required fields)?

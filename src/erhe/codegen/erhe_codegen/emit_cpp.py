@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from erhe_codegen.schema import StructSchema, FieldSchema
 from erhe_codegen.types import (
-    TypeBase, ScalarType, GlmType, VectorType, ArrayType,
+    TypeBase, ScalarType, GlmType, VectorType, ArrayType, OptionalType,
     StructRefType, EnumRefType,
 )
 from erhe_codegen.emit_hpp import _to_snake_case
@@ -58,6 +58,13 @@ def _serialize_value_code(t: TypeBase, expr: str, indent: str) -> list[str]:
     elif isinstance(t, EnumRefType):
         # Enum: serialize as string via to_string
         lines.append(f"{indent}erhe::codegen::serialize_string(out, to_string({expr}));")
+    elif isinstance(t, OptionalType):
+        # Optional: serialize value or null
+        lines.append(f"{indent}if ({expr}.has_value()) {{")
+        lines.extend(_serialize_value_code(t.element_type, f"{expr}.value()", indent + "    "))
+        lines.append(f"{indent}}} else {{")
+        lines.append(f"{indent}    out += \"null\";")
+        lines.append(f"{indent}}}")
 
     return lines
 
@@ -115,6 +122,17 @@ def _deserialize_value_code(t: TypeBase, target: str, indent: str) -> list[str]:
         lines.append(f"{indent}std::string_view str;")
         lines.append(f"{indent}if (!val.get_string().get(str)) {{")
         lines.append(f"{indent}    from_string(str, {target});")
+        lines.append(f"{indent}}}")
+    elif isinstance(t, OptionalType):
+        # Optional: null → nullopt, otherwise deserialize inner value
+        inner_cpp = t.element_type.cpp_type
+        lines.append(f"{indent}if (val.is_null()) {{")
+        lines.append(f"{indent}    {target} = std::nullopt;")
+        lines.append(f"{indent}}} else {{")
+        lines.append(f"{indent}    {inner_cpp} tmp{{}};")
+        # For the inner deserialization, we need to use 'val' and target 'tmp'
+        lines.extend(_deserialize_value_code(t.element_type, "tmp", indent + "    "))
+        lines.append(f"{indent}    {target} = std::move(tmp);")
         lines.append(f"{indent}}}")
 
     return lines
