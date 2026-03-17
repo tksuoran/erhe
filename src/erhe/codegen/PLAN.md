@@ -962,3 +962,4 @@ endfunction()
 - **ImGui editor generation**: Use reflection tables (descriptions, numeric limits) to auto-generate property editor UI?
 - **Binary serialization**: Alternative to JSON for performance-critical paths?
 - **Validation beyond clamping**: Generate validation functions (custom predicates, required fields)?
+- **Pointer/smart pointer support**: `std::unique_ptr<T>`, `std::shared_ptr<T>` for polymorphic or graph structures. Currently all fields are value-typed; `Optional(T)` covers the nullable case. Pointers would require ownership semantics, null handling, and cycle detection for serialization.
