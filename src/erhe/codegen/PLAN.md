@@ -924,12 +924,12 @@ endfunction()
 ### M3 — Enums
 - [x] Implement `EnumSchema` / `EnumValueSchema` in `schema.py` *(done in M1)*
 - [x] Add `enum()`, `value()`, `EnumRef()` to Python API *(done in M1)*
-- [ ] Implement `emit_enum.py` — generate `enum class`, `to_string`, `from_string`
-- [ ] Generate `Enum_value_info` / `Enum_info` reflection tables with `short_desc`, `long_desc`
-- [ ] Generate `get_enum_info()` overload
+- [x] Implement `emit_enum.py` — generate `enum class`, `to_string`, `from_string`
+- [x] Generate `Enum_value_info` / `Enum_info` reflection tables with `short_desc`, `long_desc`
+- [x] Generate `get_enum_info()` overload
 - [x] Support `EnumRef("Name")` as a field type in structs (serialize as string, deserialize via `from_string`) *(emit_cpp.py handles this)*
 - [x] Validate: no duplicate names/values, integer underlying type *(done in M1)*
-- [ ] Test with enum definition + struct field using `EnumRef`
+- [x] Test with enum definition + struct field using `EnumRef`
 
 ### M4 — Composite Types
 - [x] Add `Vector(T)`, `Array(T, N)`, `StructRef("Name")` to type system *(done in M1)*

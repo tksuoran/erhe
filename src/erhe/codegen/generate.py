@@ -69,6 +69,7 @@ def main() -> None:
     )
     from erhe_codegen.emit_hpp import emit_struct_hpp
     from erhe_codegen.emit_cpp import emit_struct_cpp
+    from erhe_codegen.emit_enum import emit_enum_hpp, emit_enum_cpp
 
     # Load all definition files
     load_definitions(definitions_dir)
@@ -98,7 +99,20 @@ def main() -> None:
             files_written += 1
             print(f"  wrote {snake}.cpp")
 
-    # TODO (M3): Generate enum headers and sources
+    # Generate enum headers and sources
+    for name, e in enums.items():
+        snake = _to_snake_case(name)
+
+        hpp_content = emit_enum_hpp(e)
+        cpp_content = emit_enum_cpp(e)
+
+        if write_if_changed(output_dir / f"{snake}.hpp", hpp_content):
+            files_written += 1
+            print(f"  wrote {snake}.hpp")
+
+        if write_if_changed(output_dir / f"{snake}.cpp", cpp_content):
+            files_written += 1
+            print(f"  wrote {snake}.cpp")
 
     if files_written == 0:
         print("  all files up to date")
