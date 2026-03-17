@@ -1479,9 +1479,9 @@ auto Device_impl::make_compute_command_encoder() -> Compute_command_encoder
     return Compute_command_encoder(m_device);
 }
 
-auto Device_impl::make_render_command_encoder(Render_pass& render_pass) -> Render_command_encoder
+auto Device_impl::make_render_command_encoder() -> Render_command_encoder
 {
-    return Render_command_encoder(m_device, render_pass);
+    return Render_command_encoder(m_device);
 }
 
 void Device_impl::set_debug_label(VkObjectType object_type, uint64_t object_handle, const char* label)

@@ -37,7 +37,7 @@ Buffer_impl::Buffer_impl(Device& device, const Buffer_create_info& create_info) 
         to_string(m_usage),
         to_string_memory_property_flag_bit_mask(create_info.required_memory_property_bit_mask),
         to_string_memory_property_flag_bit_mask(create_info.preferred_memory_property_bit_mask),
-        m_debug_label
+        m_debug_label.data()
     );
 
     const VkBufferCreateInfo buffer_create_info{
@@ -79,7 +79,7 @@ Buffer_impl::Buffer_impl(Device& device, const Buffer_create_info& create_info) 
         device_impl.set_debug_label(
             VK_OBJECT_TYPE_BUFFER,
             reinterpret_cast<uint64_t>(m_vk_buffer),
-            create_info.debug_label.c_str()
+            create_info.debug_label.data()
         );
     }
 
@@ -192,7 +192,7 @@ auto Buffer_impl::get_map() const -> std::span<std::byte>
     return m_map;
 }
 
-auto Buffer_impl::get_debug_label() const noexcept -> const std::string&
+auto Buffer_impl::get_debug_label() const noexcept -> erhe::utility::Debug_label
 {
     return m_debug_label;
 }

@@ -2,6 +2,7 @@
 
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_utility/debug_label.hpp"
 
 #include "volk.h"
 
@@ -31,11 +32,11 @@ public:
     [[nodiscard]] auto get_render_target_height() const -> int;
     [[nodiscard]] auto get_sample_count        () const -> unsigned int;
     [[nodiscard]] auto get_swapchain           () const -> Swapchain*;
-    [[nodiscard]] auto get_debug_label         () const -> const std::string&;
+    [[nodiscard]] auto get_debug_label         () const -> erhe::utility::Debug_label;
 
     // For Render_command_encoder;
-    [[nodiscard]] auto start_render_pass() -> VkCommandBuffer;
-    void end_render_pass  ();
+    void start_render_pass();
+    void end_render_pass();
 
 private:
     Device&                                          m_device;
@@ -45,13 +46,14 @@ private:
     Render_pass_attachment_descriptor                m_stencil_attachment;
     int                                              m_render_target_width{0};
     int                                              m_render_target_height{0};
-    std::string                                      m_debug_label;
-    std::string                                      m_debug_group_name;
+    erhe::utility::Debug_label                       m_debug_label;
+    erhe::utility::Debug_label                       m_debug_group_name;
     bool                                             m_uses_multisample_resolve{false};
     bool                                             m_is_active{false};
 
     Device_impl&              m_device_impl;
     VkRenderPass              m_render_pass   {VK_NULL_HANDLE};
+    VkCommandBuffer           m_command_buffer{VK_NULL_HANDLE};
     VkRenderPassBeginInfo     m_begin_info{};
     std::vector<VkClearValue> m_clear_values;
 };

@@ -725,24 +725,24 @@ void Properties::item_properties(const std::shared_ptr<erhe::Item_base>& item_in
         return;
     }
 
-    fmt::format_to(
-        std::back_inserter(m_item_group_label),
-        "{} {}",
-        item->get_type_name().data(),
-        item->get_name()
-    );
     ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_Framed;
     if (!node_physics && !rendertarget) {
         flags |= ImGuiTreeNodeFlags_DefaultOpen;
     }
-    push_group(m_item_group_label.data(), flags, m_indent);
+
+    // TODO: Avoid formatting this label every frame. Store it somewhere; storage needs to
+    //       be able to handle multiple items. Avoid storing the label in the item, as that
+    //       would require adding a string member to all items, and most items don't need it.
+    std::string group_label = fmt::format(
+        "{} {}",
+        item->get_type_name().data(),
+        item->get_name()
+    );
+    push_group(group_label.c_str(), flags, m_indent);
     if (show_item_details(item.get())) {
-        fmt::format_to(
-            std::back_inserter(m_item_name_label),
-            "{} Name",
-            item->get_type_name()
-        );
-        add_entry(m_item_name_label.data(), [item]() {
+        // TODO Same as group_label above - avoid heap allocation every frame
+        std::string item_name_label = fmt::format("{} Name", item->get_type_name());
+        add_entry(item_name_label.c_str(), [item]() {
             std::string name = item->get_name();
             const bool enter_pressed = ImGui::InputText("##", &name, ImGuiInputTextFlags_EnterReturnsTrue);
             if (enter_pressed || ImGui::IsItemDeactivatedAfterEdit()) { // TODO

@@ -8,16 +8,13 @@
 
 namespace erhe::graphics {
 
-Render_command_encoder_impl::Render_command_encoder_impl(Device& device, Render_pass& render_pass)
-    : m_device     {device}
-    , m_render_pass{render_pass}
+Render_command_encoder_impl::Render_command_encoder_impl(Device& device)
+    : m_device{device}
 {
-    start_render_pass();
 }
 
 Render_command_encoder_impl::~Render_command_encoder_impl() noexcept
 {
-    end_render_pass();
 }
 
 void Render_command_encoder_impl::set_buffer(Buffer_target buffer_target, const Buffer* buffer, std::uintptr_t offset, std::uintptr_t length, std::uintptr_t index)
@@ -75,16 +72,6 @@ void Render_command_encoder_impl::set_scissor_rect(int x, int y, int width, int 
     static_cast<void>(height);
 }
 
-void Render_command_encoder_impl::start_render_pass()
-{
-    m_command_buffer = m_render_pass.get_impl().start_render_pass();
-}
-
-void Render_command_encoder_impl::end_render_pass()
-{
-    m_render_pass.get_impl().end_render_pass();
-}
-
 void Render_command_encoder_impl::set_index_buffer(const Buffer* buffer)
 {
     ERHE_FATAL("Not implemented");
@@ -104,7 +91,7 @@ void Render_command_encoder_impl::draw_primitives(
     std::uintptr_t vertex_start,
     std::uintptr_t vertex_count,
     std::uintptr_t instance_count
-)
+) const
 {
     ERHE_FATAL("Not implemented");
     static_cast<void>(primitive_type);
@@ -117,7 +104,7 @@ void Render_command_encoder_impl::draw_primitives(
     Primitive_type primitive_type,
     std::uintptr_t vertex_start,
     std::uintptr_t vertex_count
-)
+) const
 {
     ERHE_FATAL("Not implemented");
     static_cast<void>(primitive_type);
@@ -130,7 +117,8 @@ void Render_command_encoder_impl::draw_indexed_primitives(
     std::uintptr_t           index_count,
     erhe::dataformat::Format index_type,
     std::uintptr_t           index_buffer_offset,
-    std::uintptr_t           instance_count)
+    std::uintptr_t           instance_count
+) const
 {
     ERHE_FATAL("Not implemented");
     static_cast<void>(primitive_type);
@@ -145,7 +133,7 @@ void Render_command_encoder_impl::draw_indexed_primitives(
     std::uintptr_t           index_count,
     erhe::dataformat::Format index_type,
     std::uintptr_t           index_buffer_offset
-)
+) const
 {
     ERHE_FATAL("Not implemented");
     static_cast<void>(primitive_type);
@@ -160,7 +148,7 @@ void Render_command_encoder_impl::multi_draw_indexed_primitives_indirect(
     std::uintptr_t           indirect_offset,
     std::uintptr_t           drawcount,
     std::uintptr_t           stride
-)
+) const
 {
     ERHE_FATAL("Not implemented");
     static_cast<void>(primitive_type);

@@ -2,13 +2,14 @@
 
 namespace erhe::graphics {
 
-Scoped_debug_group::Scoped_debug_group(const std::string_view debug_label)
-    : m_debug_label{debug_label}
+void Scoped_debug_group::begin()
 {
+    // TODO Not yet implemented
 }
 
-Scoped_debug_group::~Scoped_debug_group() noexcept
+void Scoped_debug_group::end()
 {
+    // TODO Not yet implemented
 }
 
 } // namespace erhe::graphics

@@ -306,7 +306,7 @@ void Post_processing_node::update_parameters()
     std::size_t               write_offset = 0;
     const std::size_t         byte_count   = level_offset_size * Post_processing::s_max_mipmap_levels;
     if (parameter_data.size() < byte_count) {
-        parameter_data.reserve(byte_count);
+        parameter_data.resize(byte_count);
     }
     std::byte* const          start        = parameter_data.data();
     const std::size_t         word_count   = byte_count / sizeof(float);

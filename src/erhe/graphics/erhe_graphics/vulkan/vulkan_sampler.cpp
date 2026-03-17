@@ -21,7 +21,7 @@ Sampler_impl::Sampler_impl(Device& device, const Sampler_create_info& create_inf
     static_cast<void>(device);
 }
 
-auto Sampler_impl::get_debug_label() const -> const std::string&
+auto Sampler_impl::get_debug_label() const -> erhe::utility::Debug_label
 {
     return m_debug_label;
 }

@@ -23,7 +23,7 @@ Render_pass_impl::Render_pass_impl(Device& device, const Render_pass_descriptor&
     , m_render_target_width {descriptor.render_target_width}
     , m_render_target_height{descriptor.render_target_height}
     , m_debug_label         {descriptor.debug_label}
-    , m_debug_group_name    {fmt::format("Render pass: {}", descriptor.debug_label)}
+    , m_debug_group_name    {fmt::format("Render pass: {}", descriptor.debug_label.string_view())}
 {
     VkDevice vulkan_device = m_device_impl.get_vulkan_device();
     VkResult result        = VK_SUCCESS;
@@ -178,12 +178,12 @@ auto Render_pass_impl::get_render_target_height() const -> int
     return m_render_target_height;
 }
 
-auto Render_pass_impl::get_debug_label() const -> const std::string&
+auto Render_pass_impl::get_debug_label() const -> erhe::utility::Debug_label
 {
     return m_debug_label;
 }
 
-auto Render_pass_impl::start_render_pass() -> VkCommandBuffer
+void Render_pass_impl::start_render_pass()
 {
     if (m_swapchain != nullptr) {
         VkRenderPassBeginInfo render_pass_begin_info{
@@ -195,7 +195,7 @@ auto Render_pass_impl::start_render_pass() -> VkCommandBuffer
             .clearValueCount = static_cast<uint32_t>(m_clear_values.size()), // uint32_t
             .pClearValues    = m_clear_values.data()                         // const VkClearValue*
         };
-        return m_swapchain->get_impl().begin_render_pass(render_pass_begin_info);
+        m_command_buffer = m_swapchain->get_impl().begin_render_pass(render_pass_begin_info);
     } else {
         ERHE_FATAL("Render_pass_impl::start_render_pass(): non-swapchain render passes not implemented");
     }

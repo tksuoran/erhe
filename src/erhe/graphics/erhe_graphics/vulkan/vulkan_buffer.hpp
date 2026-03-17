@@ -2,6 +2,7 @@
 
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_utility/debug_label.hpp"
 
 #include "volk.h"
 #include "vk_mem_alloc.h"
@@ -22,7 +23,7 @@ public:
     auto operator=      (Buffer_impl&& old) noexcept -> Buffer_impl&;
 
     [[nodiscard]] auto get_capacity_byte_count () const noexcept -> std::size_t;
-    [[nodiscard]] auto get_debug_label         () const noexcept -> const std::string&;
+    [[nodiscard]] auto get_debug_label         () const noexcept -> erhe::utility::Debug_label;
     [[nodiscard]] auto get_map                 () const -> std::span<std::byte>;
     void unmap                () noexcept;
     void invalidate           (std::size_t byte_offset, std::size_t byte_count) noexcept;
@@ -65,12 +66,12 @@ private:
     VkMemoryType  m_vk_memory_type     {};
     bool          m_persistently_mapped{false};
 
-    Buffer_usage  m_usage                                 {0};
-    uint64_t      m_memory_allocation_create_flag_bit_mask{0};
-    uint64_t      m_required_memory_property_bit_mask     {0};
-    uint64_t      m_preferred_memory_property_bit_mask    {0};
-    std::string   m_debug_label                           {};
-    std::size_t   m_capacity_byte_count                   {0};
+    Buffer_usage               m_usage                                 {0};
+    uint64_t                   m_memory_allocation_create_flag_bit_mask{0};
+    uint64_t                   m_required_memory_property_bit_mask     {0};
+    uint64_t                   m_preferred_memory_property_bit_mask    {0};
+    erhe::utility::Debug_label m_debug_label                           {};
+    std::size_t                m_capacity_byte_count                   {0};
 
     std::span<std::byte> m_map_all;
     std::span<std::byte> m_map;

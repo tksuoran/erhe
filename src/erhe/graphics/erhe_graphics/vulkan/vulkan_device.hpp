@@ -100,7 +100,7 @@ public:
     [[nodiscard]] auto allocate_ring_buffer_entry         (Buffer_target buffer_target, Ring_buffer_usage usage, std::size_t byte_count) -> Ring_buffer_range;
     [[nodiscard]] auto make_blit_command_encoder          () -> Blit_command_encoder;
     [[nodiscard]] auto make_compute_command_encoder       () -> Compute_command_encoder;
-    [[nodiscard]] auto make_render_command_encoder        (Render_pass& render_pass) -> Render_command_encoder;
+    [[nodiscard]] auto make_render_command_encoder        () -> Render_command_encoder;
     [[nodiscard]] auto get_format_properties              (erhe::dataformat::Format format) const -> Format_properties;
     [[nodiscard]] auto get_supported_depth_stencil_formats() const -> std::vector<erhe::dataformat::Format>;
                   void sort_depth_stencil_formats         (std::vector<erhe::dataformat::Format>& formats, unsigned int sort_flags, int requested_sample_count) const;

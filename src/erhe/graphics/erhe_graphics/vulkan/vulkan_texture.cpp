@@ -131,7 +131,7 @@ auto Texture_impl::is_sparse() const -> bool
     return m_is_sparse;
 }
 
-auto Texture_impl::get_debug_label() const -> const std::string&
+auto Texture_impl::get_debug_label() const -> erhe::utility::Debug_label
 {
     return m_debug_label;
 }

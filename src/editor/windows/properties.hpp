@@ -77,8 +77,6 @@ private:
     std::shared_ptr<erhe::primitive::Material> m_inspected_material;
     erhe::primitive::Material_data             m_inspected_material_initial_state;
 
-    fmt::memory_buffer       m_item_group_label;
-    fmt::memory_buffer       m_item_name_label;
     std::vector<std::string> m_vertex_stream_labels;
     std::vector<std::string> m_primitive_labels;
     std::vector<std::string> m_rt_primitive_labels;

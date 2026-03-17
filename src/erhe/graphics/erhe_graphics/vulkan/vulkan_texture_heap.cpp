@@ -23,14 +23,17 @@ Texture_heap_impl::Texture_heap_impl(
 
 Texture_heap_impl::~Texture_heap_impl() noexcept
 {
+    ERHE_FATAL("Not implemented");
 }
 
-void Texture_heap_impl::reset()
+void Texture_heap_impl::reset_heap()
 {
+    ERHE_FATAL("Not implemented");
 }
 
 auto Texture_heap_impl::get_shader_handle(const Texture* texture, const Sampler* sampler) -> uint64_t
 {
+    ERHE_FATAL("Not implemented");
     static_cast<void>(texture);
     static_cast<void>(sampler);
     return 0;
@@ -38,6 +41,7 @@ auto Texture_heap_impl::get_shader_handle(const Texture* texture, const Sampler*
 
 auto Texture_heap_impl::assign(std::size_t slot, const Texture* texture, const Sampler* sampler) -> uint64_t
 {
+    ERHE_FATAL("Not implemented");
     static_cast<void>(slot);
     static_cast<void>(texture);
     static_cast<void>(sampler);
@@ -46,6 +50,7 @@ auto Texture_heap_impl::assign(std::size_t slot, const Texture* texture, const S
 
 auto Texture_heap_impl::allocate(const Texture* texture, const Sampler* sampler) -> uint64_t
 {
+    ERHE_FATAL("Not implemented");
     static_cast<void>(texture);
     static_cast<void>(sampler);
     return 0;
@@ -53,10 +58,12 @@ auto Texture_heap_impl::allocate(const Texture* texture, const Sampler* sampler)
 
 void Texture_heap_impl::unbind()
 {
+    ERHE_FATAL("Not implemented");
 }
 
 auto Texture_heap_impl::bind() -> std::size_t
 {
+    ERHE_FATAL("Not implemented");
     return 0;
 }
 
