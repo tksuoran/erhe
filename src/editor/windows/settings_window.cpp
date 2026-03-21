@@ -107,9 +107,6 @@ void imgui_field(void* base, const erhe::codegen::Field_info& field)
             ImGui::TextUnformatted(field.type_name);
             break;
     }
-    if (field.long_desc != nullptr && field.long_desc[0] != '\0' && ImGui::IsItemHovered()) {
-        ImGui::SetTooltip("%s", field.long_desc);
-    }
 }
 
 } // anonymous namespace
@@ -388,9 +385,12 @@ void Settings_window::imgui()
                 const char* entry_label = (field.short_desc != nullptr && field.short_desc[0] != '\0')
                     ? field.short_desc
                     : field.name;
+                std::string tooltip = (field.long_desc != nullptr && field.long_desc[0] != '\0')
+                    ? std::string{field.long_desc}
+                    : std::string{};
                 add_entry(std::string{entry_label}, [&section, &field]() {
                     imgui_field(&section, field);
-                });
+                }, std::move(tooltip));
             }
             pop_group();
         };
