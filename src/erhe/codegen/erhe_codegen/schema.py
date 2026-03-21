@@ -200,13 +200,14 @@ def value(
 
 def struct(
     name: str,
-    *fields: FieldSchema,
+    *,
     version: int,
     short_desc: Optional[str] = None,
     long_desc: Optional[str] = None,
+    fields: list[FieldSchema],
 ) -> StructSchema:
     """Register a struct definition."""
-    schema = StructSchema(name, list(fields), version=version, short_desc=short_desc, long_desc=long_desc)
+    schema = StructSchema(name, fields, version=version, short_desc=short_desc, long_desc=long_desc)
     _validate_struct(schema)
     _struct_registry[name] = schema
     return schema

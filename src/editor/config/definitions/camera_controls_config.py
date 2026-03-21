@@ -1,71 +1,73 @@
 from erhe_codegen import *
 
 struct("Camera_controls_config",
-    field(
-        "invert_x",
-        Bool,
-        added_in=1,
-        default="false",
-        short_desc="Invert Mouse X Direction",
-        long_desc=""
-    ),
-    field(
-        "invert_y",
-        Bool,
-        added_in=1,
-        default="false",
-        short_desc="Invert Mouse Y Direction",
-        long_desc=""
-    ),
-    field(
-        "sensitivity",
-        Float,
-        added_in=1,
-        default="1.0f",
-        short_desc="Camera Sensitivity",
-        long_desc=""
-    ),
-    field(
-        "velocity_damp",
-        Float,
-        added_in=1,
-        default="0.92f",
-        short_desc="",
-        long_desc=""
-    ),
-    field(
-        "velocity_max_delta",
-        Float,
-        added_in=1,
-        default="0.004f",
-        short_desc="",
-        long_desc=""
-    ),
-    field(
-        "move_power",
-        Float,
-        added_in=1,
-        default="1000.0f",
-        short_desc="",
-        long_desc=""
-    ),
-    field(
-        "move_speed",
-        Float,
-        added_in=1,
-        default="2.0f",
-        short_desc="",
-        long_desc=""
-    ),
-    field(
-        "turn_speed",
-        Float,
-        added_in=1,
-        default="1.0f",
-        short_desc="",
-        long_desc=""
-    ),
     version=1,
     short_desc="",
     long_desc="",
+    fields=[
+        field(
+            "invert_x",
+            Bool,
+            added_in=1,
+            default="false",
+            short_desc="Invert Mouse X Direction",
+            long_desc=""
+        ),
+        field(
+            "invert_y",
+            Bool,
+            added_in=1,
+            default="false",
+            short_desc="Invert Mouse Y Direction",
+            long_desc=""
+        ),
+        field(
+            "sensitivity",
+            Float,
+            added_in=1,
+            default="1.0f",
+            short_desc="Camera Sensitivity",
+            long_desc=""
+        ),
+        field(
+            "velocity_damp",
+            Float,
+            added_in=1,
+            default="0.92f",
+            short_desc="",
+            long_desc=""
+        ),
+        field(
+            "velocity_max_delta",
+            Float,
+            added_in=1,
+            default="0.004f",
+            short_desc="",
+            long_desc=""
+        ),
+        field(
+            "move_power",
+            Float,
+            added_in=1,
+            default="1000.0f",
+            short_desc="",
+            long_desc=""
+        ),
+        field(
+            "move_speed",
+            Float,
+            added_in=1,
+            default="2.0f",
+            short_desc="",
+            long_desc=""
+        ),
+        field(
+            "turn_speed",
+            Float,
+            added_in=1,
+            default="1.0f",
+            short_desc="",
+            long_desc=""
+        ),
+    ],
 )
