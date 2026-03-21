@@ -34,7 +34,7 @@ struct("Headset_config",
             short_desc="Enable Quad View (Varjo)",
             long_desc="",
             visible=True,
-            developer=False
+            developer=True
         ),
         field(
             "debug",
@@ -44,7 +44,7 @@ struct("Headset_config",
             short_desc="Enable OpenXR Debug",
             long_desc="",
             visible=True,
-            developer=False
+            developer=True
         ),
         field(
             "validation",
@@ -54,7 +54,7 @@ struct("Headset_config",
             short_desc="Enable OpenXR Validation",
             long_desc="",
             visible=True,
-            developer=False
+            developer=True
         ),
         field(
             "api_dump",
@@ -64,7 +64,7 @@ struct("Headset_config",
             short_desc="Enable OpenXR API Dump",
             long_desc="",
             visible=True,
-            developer=False
+            developer=True
         ),
         field(
             "depth",
@@ -74,7 +74,7 @@ struct("Headset_config",
             short_desc="",
             long_desc="",
             visible=True,
-            developer=False
+            developer=True
         ),
         field(
             "visibility_mask",
@@ -84,7 +84,7 @@ struct("Headset_config",
             short_desc="",
             long_desc="",
             visible=True,
-            developer=False
+            developer=True
         ),
         field(
             "hand_tracking",
@@ -94,7 +94,7 @@ struct("Headset_config",
             short_desc="",
             long_desc="",
             visible=True,
-            developer=False
+            developer=True
         ),
         field(
             "passthrough_fb",
@@ -104,7 +104,7 @@ struct("Headset_config",
             short_desc="",
             long_desc="",
             visible=True,
-            developer=False
+            developer=True
         ),
         field(
             "composition_alpha",
@@ -114,7 +114,7 @@ struct("Headset_config",
             short_desc="",
             long_desc="",
             visible=True,
-            developer=False
+            developer=True
         ),
     ],
 )

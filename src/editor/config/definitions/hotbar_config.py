@@ -4,7 +4,7 @@ struct("Hotbar_config",
     version=1,
     short_desc="Hotbar",
     long_desc="",
-    developer=False,
+    developer=True,
     fields=[
         field(
             "enabled",

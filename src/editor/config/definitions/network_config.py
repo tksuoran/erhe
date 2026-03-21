@@ -4,7 +4,7 @@ struct("Network_config",
     version=1,
     short_desc="",
     long_desc="",
-    developer=False,
+    developer=True,
     fields=[
         field(
             "upstream_address",

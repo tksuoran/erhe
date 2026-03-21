@@ -4,7 +4,7 @@ struct("Id_renderer_config",
     version=1,
     short_desc="ID Renderer",
     long_desc="",
-    developer=False,
+    developer=True,
     fields=[
         field(
             "enabled",

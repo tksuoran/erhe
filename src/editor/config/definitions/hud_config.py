@@ -4,7 +4,7 @@ struct("Hud_config",
     version=1,
     short_desc="HUD",
     long_desc="HUD is intended for Virtual Reality - It can show ImGui UI in VR surface",
-    developer=False,
+    developer=True,
     fields=[
         field(
             "enabled",

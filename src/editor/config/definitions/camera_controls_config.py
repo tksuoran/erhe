@@ -44,7 +44,7 @@ struct("Camera_controls_config",
             short_desc="Velocity Damp",
             long_desc="",
             visible=True,
-            developer=False
+            developer=True
         ),
         field(
             "velocity_max_delta",
@@ -54,7 +54,7 @@ struct("Camera_controls_config",
             short_desc="Velocity Max Delta",
             long_desc="",
             visible=True,
-            developer=False
+            developer=True
         ),
         field(
             "move_power",
