@@ -42,34 +42,33 @@ namespace {
 void imgui_field(void* base, const erhe::codegen::Field_info& field)
 {
     void* ptr = static_cast<char*>(base) + field.offset;
-    const std::string label = std::string{"##"} + field.name;
 
     if (std::strcmp(field.type_name, "bool") == 0) {
-        ImGui::Checkbox(label.c_str(), static_cast<bool*>(ptr));
+        ImGui::Checkbox("##", static_cast<bool*>(ptr));
     } else if (std::strcmp(field.type_name, "int") == 0) {
         if (field.numeric_limits.has_ui_min && field.numeric_limits.has_ui_max) {
-            ImGui::SliderInt(label.c_str(), static_cast<int*>(ptr),
+            ImGui::SliderInt("##", static_cast<int*>(ptr),
                 static_cast<int>(field.numeric_limits.ui_min),
                 static_cast<int>(field.numeric_limits.ui_max));
         } else {
-            ImGui::DragInt(label.c_str(), static_cast<int*>(ptr));
+            ImGui::DragInt("##", static_cast<int*>(ptr));
         }
     } else if (std::strcmp(field.type_name, "float") == 0) {
         if (field.numeric_limits.has_ui_min && field.numeric_limits.has_ui_max) {
-            ImGui::SliderFloat(label.c_str(), static_cast<float*>(ptr),
+            ImGui::SliderFloat("##", static_cast<float*>(ptr),
                 static_cast<float>(field.numeric_limits.ui_min),
                 static_cast<float>(field.numeric_limits.ui_max));
         } else {
-            ImGui::DragFloat(label.c_str(), static_cast<float*>(ptr), 0.01f);
+            ImGui::DragFloat("##", static_cast<float*>(ptr), 0.01f);
         }
     } else if (std::strcmp(field.type_name, "std::string") == 0) {
-        ImGui::InputText(label.c_str(), static_cast<std::string*>(ptr));
+        ImGui::InputText("##", static_cast<std::string*>(ptr));
     } else if (std::strcmp(field.type_name, "glm::vec3") == 0) {
-        ImGui::ColorEdit3(label.c_str(), static_cast<float*>(ptr));
+        ImGui::ColorEdit3("##", static_cast<float*>(ptr));
     } else if (std::strcmp(field.type_name, "glm::vec4") == 0) {
-        ImGui::ColorEdit4(label.c_str(), static_cast<float*>(ptr));
+        ImGui::ColorEdit4("##", static_cast<float*>(ptr));
     } else if (std::strcmp(field.type_name, "glm::ivec2") == 0) {
-        ImGui::DragInt2(label.c_str(), static_cast<int*>(ptr));
+        ImGui::DragInt2("##", static_cast<int*>(ptr));
     }
 }
 
@@ -346,7 +345,10 @@ void Settings_window::imgui()
                 if (field.removed_in != 0) {
                     continue;
                 }
-                add_entry(std::string{field.name}, [&section, &field]() {
+                const char* entry_label = (field.short_desc != nullptr && field.short_desc[0] != '\0')
+                    ? field.short_desc
+                    : field.name;
+                add_entry(std::string{entry_label}, [&section, &field]() {
                     imgui_field(&section, field);
                 });
             }
