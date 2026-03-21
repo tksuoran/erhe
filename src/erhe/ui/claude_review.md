@@ -19,6 +19,9 @@ A font rendering and UI primitive library built on FreeType and HarfBuzz. The `F
 - **[minor]** `Bitmap` bounds checking in `put()` always runs (even in Release), while `get()` only checks in Debug. This inconsistency means Release builds pay for `put()` checks but not `get()` checks.
 - **[minor]** `Font` has a fixed-size array `m_chars_256[256]` (font.hpp:166) -- this only handles ASCII/Latin-1 but the glyph map (`m_glyph_to_char`) handles arbitrary Unicode. The relationship between these is unclear.
 
+## Fixed
+- `Rectangle::set_size()` bug: `m_max.y = m_min.y + value.y + 1.0f` changed to `- 1.0f` to match x-component (rectangle.hpp:107)
+
 ## Suggestions
 - Delete `color_picker.cpp` entirely -- it references nonexistent headers and is fully disabled
 - Fix the `Rectangle::set_size()` bug: change `+ 1.0f` to `- 1.0f` for the y-component
