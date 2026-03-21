@@ -3,8 +3,6 @@
 #include "erhe_item/unique_id.hpp"
 #include "erhe_utility/debug_label.hpp"
 
-#include <taskflow/taskflow.hpp>
-
 #include <cstdint>
 #include <filesystem>
 #include <memory>
@@ -179,6 +177,7 @@ public:
         "Node",
         "Asset_folder",
         "Asset_file_gltf",
+        "Asset_file_geogram",
         "Asset_file_other",
         "Content_library_folder",
         "Content_library_node",
@@ -189,7 +188,6 @@ public:
         "Render_style",
         "Graph",
         "Graph_node",
-        "Graph_link",
         "Graph_link",
         "Rendergraph_node"
     };
@@ -241,6 +239,8 @@ public:
             return std::shared_ptr<Base>{};
         }
     }
+    auto get_type     () const -> uint64_t         override { return Self::get_static_type(); }
+    auto get_type_name() const -> std::string_view override { return Self::static_type_name; }
 };
 
 class Item_base
@@ -273,12 +273,10 @@ public:
     [[nodiscard]] auto is_visible                  () const -> bool;
     [[nodiscard]] auto is_shown_in_ui              () const -> bool;
     [[nodiscard]] auto is_hidden                   () const -> bool;
-    [[nodiscard]] auto get_source_path             () const -> const std::filesystem::path&;
+    [[nodiscard]] auto get_source_path             () const -> const std::filesystem::path*;
     [[nodiscard]] auto get_name                    () const -> const std::string&;
     [[nodiscard]] auto get_debug_label             () const -> erhe::utility::Debug_label;
     [[nodiscard]] auto describe                    (int level = 0) const -> std::string;
-    [[nodiscard]] auto get_task                    () -> const tf::AsyncTask&;
-    void set_task         (tf::AsyncTask& task);
 
     void set_flag_bits    (uint64_t mask, bool value);
     void enable_flag_bits (uint64_t mask);
@@ -291,26 +289,26 @@ public:
     void set_source_path  (const std::filesystem::path& path);
 
 protected:
-    Unique_id<Item_base>       m_id         {};
-    uint64_t                   m_flag_bits  {Item_flags::none};
-    std::string                m_name       {};
-    erhe::utility::Debug_label m_debug_label{};
-    std::filesystem::path      m_source_path{};
-    tf::AsyncTask              m_task       {};
+    Unique_id<Item_base>                   m_id         {};
+    uint64_t                               m_flag_bits  {Item_flags::none};
+    std::string                            m_name       {};
+    erhe::utility::Debug_label             m_debug_label{};
+    std::unique_ptr<std::filesystem::path> m_source_path{};
 };
 
 template <typename T>
-auto is(const erhe::Item_base* const base) -> bool
+auto is(const erhe::Item_base* const item) -> bool
 {
-    auto ptr = dynamic_cast<const T*>(base);
-    return ptr != nullptr;
+    if (item == nullptr) {
+        return false;
+    }
+    return (item->get_type() & T::get_static_type()) == T::get_static_type();
 }
 
 template <typename T>
-auto is(const std::shared_ptr<erhe::Item_base>& base) -> bool
+auto is(const std::shared_ptr<erhe::Item_base>& item) -> bool
 {
-    return static_cast<bool>(std::dynamic_pointer_cast<T>(base));
+    return erhe::is<T>(item.get());
 }
-
 
 } // namespace erhe

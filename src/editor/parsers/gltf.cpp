@@ -161,7 +161,7 @@ void import_gltf(
             if (!node) {
                 continue;
             }
-            auto mesh = erhe::scene::get_mesh(node.get());
+            auto mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
             if (mesh) {
                 ++mesh_count;
                 std::vector<erhe::scene::Mesh_primitive>& mesh_primitives = mesh->get_mutable_primitives();
@@ -175,19 +175,19 @@ void import_gltf(
                 continue;
             }
             // Apply primitive data, attach node raytrace
-            const std::shared_ptr<erhe::scene::Camera> camera = erhe::scene::get_camera(node.get());
+            const std::shared_ptr<erhe::scene::Camera> camera = erhe::scene::get_attachment<erhe::scene::Camera>(node.get());
             if (camera) {
                 //content_library->cameras.add(camera);
                 add_default_camera = false;
             }
 
-            const std::shared_ptr<erhe::scene::Light> light = erhe::scene::get_light(node.get());
+            const std::shared_ptr<erhe::scene::Light> light = erhe::scene::get_attachment<erhe::scene::Light>(node.get());
             if (light) {
                 //content_library->lights.add(light);
                 add_default_light = false;
             }
 
-            const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(node.get());
+            const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
             if (mesh) {
                 mesh_node_items.push_back(node);
 

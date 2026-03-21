@@ -33,21 +33,6 @@ auto Texture::get_mipmap_dimensions(const Texture_type type) -> int
     }
 }
 
-auto Texture::get_static_type() -> uint64_t
-{
-    return erhe::Item_type::texture;
-}
-
-auto Texture::get_type() const -> uint64_t
-{
-    return get_static_type();
-}
-
-auto Texture::get_type_name() const -> std::string_view
-{
-    return static_type_name;
-}
-
 Texture::Texture(Texture&&) noexcept = default;
 
 Texture::~Texture() noexcept

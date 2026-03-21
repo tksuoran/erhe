@@ -28,9 +28,7 @@ public:
 
     // Implements Item_base
     static constexpr std::string_view static_type_name{"Node_physics"};
-    [[nodiscard]] static auto get_static_type() -> uint64_t;
-    auto get_type     () const -> uint64_t                    override;
-    auto get_type_name() const -> std::string_view            override;
+    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::node_attachment | erhe::Item_type::physics; }
 
     // Implements / overrides Node_attachment
     auto clone_attachment       () const -> std::shared_ptr<Node_attachment>                     override;
@@ -55,10 +53,5 @@ private:
     erhe::physics::IRigid_body_create_info      m_create_info;
     std::shared_ptr<erhe::physics::IRigid_body> m_rigid_body;
 };
-
-auto is_physics(const erhe::Item_base* item) -> bool;
-auto is_physics(const std::shared_ptr<erhe::Item_base>& item) -> bool;
-
-auto get_node_physics(const erhe::scene::Node* node) -> std::shared_ptr<Node_physics>;
 
 }

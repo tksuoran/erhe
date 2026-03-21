@@ -31,17 +31,13 @@ public:
 
     // Implements Item_base
     static constexpr std::string_view static_type_name{"Skin"};
-    [[nodiscard]] static auto get_static_type() -> uint64_t;
-    auto get_type     () const -> uint64_t         override;
-    auto get_type_name() const -> std::string_view override;
+    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return Item_type::node_attachment | Item_type::skin; }
 
     Skin_data skin_data;
 };
 
 [[nodiscard]] auto operator<(const Skin& lhs, const Skin& rhs) -> bool;
 
-[[nodiscard]] auto is_skin(const Item_base* item) -> bool;
-[[nodiscard]] auto is_skin(const std::shared_ptr<Item_base>& item) -> bool;
 [[nodiscard]] auto is_bone(const Item_base* const item) -> bool;
 [[nodiscard]] auto is_bone(const std::shared_ptr<Item_base>& item) -> bool;
 

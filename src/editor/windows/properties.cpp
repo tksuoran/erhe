@@ -700,9 +700,9 @@ void Properties::item_flags(const std::shared_ptr<erhe::Item_base>& item)
 [[nodiscard]] auto show_item_details(const erhe::Item_base* const item)
 {
     return
-        !is_physics         (item) &&
-        !is_frame_controller(item) &&
-        !is_rendertarget    (item);
+        !erhe::is<Node_physics>     (item) &&
+        !erhe::is<Frame_controller> (item) &&
+        !erhe::is<Rendertarget_mesh>(item);
 }
 
 void Properties::item_properties(const std::shared_ptr<erhe::Item_base>& item_in)

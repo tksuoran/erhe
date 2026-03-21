@@ -2,21 +2,6 @@
 
 namespace editor {
 
-auto Render_style::get_static_type() -> uint64_t
-{
-    return erhe::Item_type::node;
-}
-
-auto Render_style::get_type() const -> uint64_t
-{
-    return get_static_type();
-}
-
-auto Render_style::get_type_name() const -> std::string_view
-{
-    return static_type_name;
-}
-
 Render_style::Render_style() = default;
 Render_style::~Render_style() noexcept = default;
 

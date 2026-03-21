@@ -23,6 +23,9 @@ public:
     Asset_node& operator=(const Asset_node&);
     ~Asset_node() noexcept override;
     explicit Asset_node(const std::filesystem::path& path);
+
+    static constexpr std::string_view static_type_name{"Asset_node"};
+    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return 0; }
 };
 
 class Asset_folder : public erhe::Item<erhe::Item_base, Asset_node, Asset_folder>
@@ -36,9 +39,7 @@ public:
 
     // Implements Item_base
     static constexpr std::string_view static_type_name{"Asset_folder"};
-    [[nodiscard]] static auto get_static_type() -> uint64_t;
-    auto get_type     () const -> uint64_t         override;
-    auto get_type_name() const -> std::string_view override;
+    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::asset_folder; }
 };
 
 class Asset_file_gltf : public erhe::Item<erhe::Item_base, Asset_node, Asset_file_gltf>
@@ -52,9 +53,7 @@ public:
 
     // Implements Item_base
     static constexpr std::string_view static_type_name{"Asset_file_gltf"};
-    [[nodiscard]] static auto get_static_type() -> uint64_t;
-    auto get_type     () const -> uint64_t         override;
-    auto get_type_name() const -> std::string_view override;
+    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::asset_file_gltf; }
 
     bool                     is_scanned{false};
     std::vector<std::string> contents;
@@ -71,9 +70,7 @@ public:
 
     // Implements Item_base
     static constexpr std::string_view static_type_name{"Asset_file_geogram"};
-    [[nodiscard]] static auto get_static_type() -> uint64_t;
-    auto get_type     () const -> uint64_t         override;
-    auto get_type_name() const -> std::string_view override;
+    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::asset_file_geogram; }
 
     std::vector<std::string> contents;
 };
@@ -89,9 +86,7 @@ public:
 
     // Implements Item_base
     static constexpr std::string_view static_type_name{"Asset_file_other"};
-    [[nodiscard]] static auto get_static_type() -> uint64_t;
-    auto get_type     () const -> uint64_t         override;
-    auto get_type_name() const -> std::string_view override;
+    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::asset_file_other; }
 };
 
 class Asset_browser;

@@ -56,9 +56,7 @@ public:
 
     // Implements Item_base
     static constexpr std::string_view static_type_name{"Light"};
-    [[nodiscard]] static auto get_static_type() -> uint64_t;
-    auto get_type     () const -> uint64_t         override;
-    auto get_type_name() const -> std::string_view override;
+    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::node_attachment | erhe::Item_type::light; }
 
     // Implements Node_attachment
     void handle_item_host_update(erhe::Item_host* old_item_host, erhe::Item_host* new_item_host) override;
@@ -102,10 +100,5 @@ private:
         -1.0f,-1.0f, 0.0f, 1.0f
     };
 };
-
-[[nodiscard]] auto is_light(const Item_base* item) -> bool;
-[[nodiscard]] auto is_light(const std::shared_ptr<Item_base>& item) -> bool;
-
-auto get_light(const erhe::scene::Node* node) -> std::shared_ptr<Light>;
 
 } // namespace erhe::scene

@@ -73,9 +73,7 @@ public:
 
     // Implements Item_base
     static constexpr std::string_view static_type_name{"Animation"};
-    [[nodiscard]] static auto get_static_type() -> uint64_t;
-    auto get_type     () const -> uint64_t         override;
-    auto get_type_name() const -> std::string_view override;
+    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return Item_type::animation; }
 
     // Public API
     [[nodiscard]] auto evaluate      (float time_current, std::size_t channel_index, std::size_t component) -> float;

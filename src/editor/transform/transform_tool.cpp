@@ -28,6 +28,7 @@
 #include "erhe_renderer/primitive_renderer.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/mesh.hpp"
+#include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_utility/bit_helpers.hpp"
 
@@ -596,7 +597,7 @@ void Transform_tool::render_rays(erhe::scene::Node& node)
 {
     ERHE_PROFILE_FUNCTION();
 
-    std::shared_ptr<erhe::scene::Mesh> mesh = get_mesh(&node);
+    std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(&node);
     if (!mesh) {
         return;
     }

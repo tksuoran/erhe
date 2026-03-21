@@ -105,22 +105,6 @@ Mesh::~Mesh() noexcept
     }
 }
 
-auto Mesh::get_static_type() -> uint64_t
-{
-    return Item_type::node_attachment | erhe::Item_type::mesh;
-}
-
-auto Mesh::get_type() const -> uint64_t
-{
-    return get_static_type();
-}
-
-auto Mesh::get_type_name() const -> std::string_view
-{
-    return static_type_name;
-}
-
-
 auto Mesh::get_rt_scene() const -> erhe::raytrace::IScene*
 {
     return m_rt_scene;
@@ -229,33 +213,6 @@ auto operator<(const Mesh& lhs, const Mesh& rhs) -> bool
     return lhs.get_id() < rhs.get_id();
 }
 
-auto is_mesh(const Item_base* const item) -> bool
-{
-    if (item == nullptr) {
-        return false;
-    }
-    return erhe::utility::test_bit_set(item->get_type(), erhe::Item_type::mesh);
-}
-
-auto is_mesh(const std::shared_ptr<erhe::Item_base>& item) -> bool
-{
-    return is_mesh(item.get());
-}
-
-auto get_mesh(const erhe::scene::Node* const node) -> std::shared_ptr<Mesh>
-{
-    if (node == nullptr) {
-        return {};
-    }
-    for (const auto& attachment : node->get_attachments()) {
-        auto mesh = std::dynamic_pointer_cast<Mesh>(attachment);
-        if (mesh) {
-            return mesh;
-        }
-    }
-    return {};
-}
-
 auto get_mesh(const std::shared_ptr<erhe::Item_base>& item) -> std::shared_ptr<Mesh>
 {
     std::shared_ptr<Mesh> scene_mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(item);
@@ -265,9 +222,8 @@ auto get_mesh(const std::shared_ptr<erhe::Item_base>& item) -> std::shared_ptr<M
 
     // If we have node, get mesh from node
     std::shared_ptr<Node> node_shared = std::dynamic_pointer_cast<erhe::scene::Node>(item);
-    Node* node = node_shared.get();
-    if (node != nullptr) {
-        return erhe::scene::get_mesh(node);
+    if (node_shared) {
+        return get_attachment<Mesh>(node_shared.get());
     }
 
     return {};

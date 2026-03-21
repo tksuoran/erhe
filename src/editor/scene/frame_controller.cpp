@@ -84,21 +84,6 @@ auto Frame_controller::get_orientation() const -> glm::mat4
     return m_orientation;
 }
 
-auto Frame_controller::get_static_type() -> uint64_t
-{
-    return erhe::Item_type::node_attachment | erhe::Item_type::frame_controller;
-}
-
-auto Frame_controller::get_type() const -> uint64_t
-{
-    return get_static_type();
-}
-
-auto Frame_controller::get_type_name() const -> std::string_view
-{
-    return static_type_name;
-}
-
 void Frame_controller::get_transform_from_node(erhe::scene::Node* node)
 {
     if (node == nullptr) {
@@ -278,41 +263,6 @@ void Frame_controller::apply_tumble(glm::vec3 pivot, float rx, float ry, float r
     }
     m_orientation = new_orientation;
     update();
-}
-
-auto is_frame_controller(const erhe::Item_base* const item) -> bool
-{
-    if (item == nullptr) {
-        return false;
-    }
-    return erhe::utility::test_bit_set(item->get_type(), erhe::Item_type::frame_controller);
-}
-
-auto is_frame_controller(const std::shared_ptr<erhe::Item_base>& item) -> bool
-{
-    return is_frame_controller(item.get());
-}
-
-auto as_frame_controller(erhe::Item_base* item) -> Frame_controller*
-{
-    if (item == nullptr) {
-        return nullptr;
-    }
-    if (!erhe::utility::test_bit_set(item->get_type(),erhe::Item_type::frame_controller)) {
-        return nullptr;
-    }
-    return static_cast<Frame_controller*>(item);
-}
-
-auto get_frame_controller(const erhe::scene::Node* node) -> std::shared_ptr<Frame_controller>
-{
-    for (const auto& attachment : node->get_attachments()) {
-        auto frame_controller = std::dynamic_pointer_cast<Frame_controller>(attachment);
-        if (frame_controller) {
-            return frame_controller;
-        }
-    }
-    return {};
 }
 
 }

@@ -1840,7 +1840,7 @@ private:
             parse_skin(skin_index);
         }
         std::shared_ptr<erhe::scene::Node> erhe_node = m_data_out.nodes[node_index];
-        std::shared_ptr<erhe::scene::Mesh> erhe_mesh = get_mesh(erhe_node.get());
+        std::shared_ptr<erhe::scene::Mesh> erhe_mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(erhe_node.get());
         erhe_mesh->skin = m_data_out.skins[skin_index];
     }
 };
@@ -2508,12 +2508,12 @@ private:
         gltf_node.name = erhe_node.get_name();
         gltf_node.transform = from_erhe(erhe_node.parent_from_node_transform());
 
-        const std::shared_ptr<erhe::scene::Mesh> erhe_mesh = get_mesh(&erhe_node);
+        const std::shared_ptr<erhe::scene::Mesh> erhe_mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(&erhe_node);
         if (erhe_mesh) {
             gltf_node.meshIndex = process_mesh(erhe_mesh.get());
         }
 
-        const std::shared_ptr<erhe::scene::Camera> erhe_camera = get_camera(&erhe_node);
+        const std::shared_ptr<erhe::scene::Camera> erhe_camera = erhe::scene::get_attachment<erhe::scene::Camera>(&erhe_node);
         if (erhe_camera) {
             gltf_node.cameraIndex = process_camera(erhe_camera.get());
         }

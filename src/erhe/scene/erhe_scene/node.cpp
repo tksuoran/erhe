@@ -33,22 +33,6 @@ Node_data::Node_data(const Node_data& src, for_clone)
     // Attachments are handled in Node(const Node&)
 }
 
-auto Node::get_static_type() -> uint64_t
-{
-    return erhe::Item_type::node;
-}
-
-auto Node::get_type() const -> uint64_t
-{
-    return get_static_type();
-}
-
-auto Node::get_type_name() const -> std::string_view
-{
-    return static_type_name;
-}
-
-
 Node::Node() = default;
 Node::Node(const Node&) { ERHE_FATAL("TODO"); }
 Node& Node::operator=(const Node&) { ERHE_FATAL("TODO"); }
@@ -626,19 +610,6 @@ auto Node_data::diff_mask(const Node_data& lhs, const Node_data& rhs)-> unsigned
     if (lhs.transforms.parent_from_node != rhs.transforms.parent_from_node) mask |= Node_data::bit_transform;
     if (lhs.transforms.world_from_node  != rhs.transforms.world_from_node ) mask |= Node_data::bit_transform;
     return mask;
-}
-
-auto is_node(const Item_base* const item) -> bool
-{
-    if (item == nullptr) {
-        return false;
-    }
-    return erhe::utility::test_bit_set(item->get_type(), erhe::Item_type::node);
-}
-
-auto is_node(const std::shared_ptr<erhe::Item_base>& item) -> bool
-{
-    return is_node(item.get());
 }
 
 } // namespace erhe::scene

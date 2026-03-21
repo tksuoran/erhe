@@ -21,6 +21,7 @@
 #include "erhe_primitive/primitive.hpp"
 #include "erhe_renderer/primitive_renderer.hpp"
 #include "erhe_scene/mesh.hpp"
+#include "erhe_scene/node.hpp"
 #include "erhe_verify/verify.hpp"
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
@@ -522,7 +523,7 @@ void Paint_tool::imgui()
             auto mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(item);
             if (!mesh) {
                 if (node) {
-                    mesh = erhe::scene::get_mesh(node);
+                    mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node);
                 }
                 if (!mesh) {
                     continue;

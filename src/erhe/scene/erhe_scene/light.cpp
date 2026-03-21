@@ -20,21 +20,6 @@ Light::Light(const std::string_view name)
 {
 }
 
-auto Light::get_static_type() -> uint64_t
-{
-    return erhe::Item_type::node_attachment | erhe::Item_type::light;
-}
-
-auto Light::get_type() const -> uint64_t
-{
-    return get_static_type();
-}
-
-auto Light::get_type_name() const -> std::string_view
-{
-    return static_type_name;
-}
-
 void Light::handle_item_host_update(erhe::Item_host* const old_item_host, erhe::Item_host* const new_item_host)
 {
     const auto shared_this = std::static_pointer_cast<Light>(shared_from_this()); // keep alive
@@ -408,30 +393,6 @@ auto Light::spot_light_projection_transforms(const Light_projection_parameters& 
         .clip_from_world         = clip_from_world,
         .texture_from_world      = texture_from_world
     };
-}
-
-auto is_light(const erhe::Item_base* const item) -> bool
-{
-    if (item == nullptr) {
-        return false;
-    }
-    return erhe::utility::test_bit_set(item->get_type(), erhe::Item_type::light);
-}
-
-auto is_light(const std::shared_ptr<erhe::Item_base>& item) -> bool
-{
-    return is_light(item.get());
-}
-
-auto get_light(const erhe::scene::Node* const node) -> std::shared_ptr<Light>
-{
-    for (const auto& attachment : node->get_attachments()) {
-        auto light = std::dynamic_pointer_cast<Light>(attachment);
-        if (light) {
-            return light;
-        }
-    }
-    return {};
 }
 
 } // namespace erhe::scene

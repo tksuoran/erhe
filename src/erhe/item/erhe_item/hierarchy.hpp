@@ -2,8 +2,8 @@
 
 #include "erhe_item/item.hpp"
 
+#include <concepts>
 #include <cstdint>
-#include <functional>
 #include <memory>
 #include <optional>
 #include <string_view>
@@ -27,9 +27,7 @@ public:
 
     // Overrides Item_base
     static constexpr std::string_view static_type_name{"Hierarchy"};
-    [[nodiscard]] static auto get_static_type() -> uint64_t{ return 0; }
-    auto get_type     () const -> uint64_t          override { return get_static_type(); }
-    auto get_type_name() const -> std::string_view  override { return static_type_name; }
+    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return 0; }
 
     virtual void set_parent          (const std::shared_ptr<Hierarchy>& parent);
     virtual void set_parent          (const std::shared_ptr<Hierarchy>& parent, std::size_t position);
@@ -57,10 +55,20 @@ public:
     void hierarchy_sanity_check         (bool destruction_in_progress = false) const;
     void sanity_check_root_path         (const Hierarchy* node) const;
     void trace                          ();
-    void for_each                       (const std::function<bool(Hierarchy& hierarchy)>& fun);
 
-    template <typename T>
-    auto for_each(const std::function<bool(T&)>& callback) -> bool
+    template <std::invocable<Hierarchy&> F>
+    void for_each(const F& fun)
+    {
+        if (!fun(*this)) {
+            return;
+        }
+        for (const auto& child : m_children) {
+            child->for_each(fun);
+        }
+    }
+
+    template <typename T, std::invocable<T&> F>
+    auto for_each(const F& callback) -> bool
     {
         T* item = dynamic_cast<T*>(this);
         if (item != nullptr) {
@@ -70,26 +78,26 @@ public:
         }
 
         for (const std::shared_ptr<Hierarchy>& child : m_children) {
-            if (!child->for_each<T>(callback)) {
+            if (!child->template for_each<T>(callback)) {
                 return false;
             }
         }
         return true;
     }
 
-    template <typename T>
-    auto for_each_child(const std::function<bool(T&)>& callback) -> bool
+    template <typename T, std::invocable<T&> F>
+    auto for_each_child(const F& callback) -> bool
     {
         for (const std::shared_ptr<Hierarchy>& child : m_children) {
-            if (!child->for_each<T>(callback)) {
+            if (!child->template for_each<T>(callback)) {
                 return false;
             }
         }
         return true;
     }
 
-    template <typename T>
-    auto for_each_const(const std::function<bool(const T&)>& callback) const -> bool
+    template <typename T, std::invocable<const T&> F>
+    auto for_each_const(const F& callback) const -> bool
     {
         const T* item = dynamic_cast<const T*>(this);
         if (item != nullptr) {
@@ -99,18 +107,18 @@ public:
         }
 
         for (const std::shared_ptr<Hierarchy>& child : m_children) {
-            if (!child->for_each_const<T>(callback)) {
+            if (!child->template for_each_const<T>(callback)) {
                 return false;
             }
         }
         return true;
     }
 
-    template <typename T>
-    auto for_each_child_const(const std::function<bool(const T&)>& callback) const -> bool
+    template <typename T, std::invocable<const T&> F>
+    auto for_each_child_const(const F& callback) const -> bool
     {
         for (const std::shared_ptr<Hierarchy>& child : m_children) {
-            if (!child->for_each_const<T>(callback)) {
+            if (!child->template for_each_const<T>(callback)) {
                 return false;
             }
         }

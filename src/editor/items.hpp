@@ -127,4 +127,15 @@ void async_for_nodes_with_mesh(
     std::function<void(Mesh_operation_parameters&&)>     op
 );
 
+// RAII guard that clears async task handles on destruction.
+// Must be destroyed before the executor and loggers.
+class Item_async_task_guard
+{
+public:
+    Item_async_task_guard();
+    Item_async_task_guard(const Item_async_task_guard&) = delete;
+    Item_async_task_guard& operator=(const Item_async_task_guard&) = delete;
+    ~Item_async_task_guard() noexcept;
+};
+
 }

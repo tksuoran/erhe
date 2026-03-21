@@ -3,7 +3,31 @@
 #include "scene/scene_root.hpp"
 #include "renderers/mesh_memory.hpp"
 
+#include "erhe_scene/node.hpp"
+#include "erhe_verify/verify.hpp"
+
+#include <taskflow/taskflow.hpp>
+
+#include <unordered_map>
+
 namespace editor {
+
+// Maps item ID -> pending async task handle.
+// Entries are purged when completed to prevent unbounded growth.
+// Item IDs are monotonically increasing (never reused), so stale
+// entries for destroyed items are harmless and get purged here.
+namespace {
+
+std::unordered_map<std::size_t, tf::AsyncTask> s_item_tasks;
+
+void purge_completed_tasks()
+{
+    std::erase_if(s_item_tasks, [](const auto& entry) {
+        return entry.second.empty() || entry.second.is_done();
+    });
+}
+
+} // anonymous namespace
 
 void async_for_nodes_with_mesh(
     App_context&                                                context,
@@ -11,6 +35,8 @@ void async_for_nodes_with_mesh(
     std::function<void(Mesh_operation_parameters&& parameters)> op
 )
 {
+    purge_completed_tasks();
+
     // Locate item host
     erhe::Item_host* item_host = nullptr;
     {
@@ -28,7 +54,7 @@ void async_for_nodes_with_mesh(
 
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{scene_root->item_host_mutex};
 
-    // Gather items with mesh and their tasks
+    // Gather items with mesh and collect their pending tasks as dependencies
     std::vector<std::shared_ptr<erhe::Item_base>> items;
     std::vector<tf::AsyncTask> item_tasks;
     for (const std::shared_ptr<erhe::Item_base>& item : input_items) {
@@ -42,14 +68,14 @@ void async_for_nodes_with_mesh(
             continue;
         }
         const erhe::scene::Node* raw_node = node.get();
-        std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(raw_node);
+        std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(raw_node);
         if (!mesh) {
             continue;
         }
         items.push_back(item);
-        const tf::AsyncTask& previous_task = item->get_task();
-        if (!previous_task.empty()) {
-            item_tasks.push_back(item->get_task());
+        auto it = s_item_tasks.find(item->get_id());
+        if (it != s_item_tasks.end() && !it->second.empty()) {
+            item_tasks.push_back(it->second);
         }
     }
 
@@ -84,8 +110,15 @@ void async_for_nodes_with_mesh(
     );
 
     for (const std::shared_ptr<erhe::Item_base>& item : items) {
-        item->set_task(task);
+        s_item_tasks.insert_or_assign(item->get_id(), task);
     }
+}
+
+Item_async_task_guard::Item_async_task_guard() = default;
+
+Item_async_task_guard::~Item_async_task_guard() noexcept
+{
+    s_item_tasks.clear();
 }
 
 }

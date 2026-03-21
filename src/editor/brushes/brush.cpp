@@ -26,21 +26,6 @@ auto Brush_data::get_name() const -> const std::string&
     return name;
 }
 
-auto Brush::get_static_type() -> uint64_t
-{
-    return erhe::Item_type::brush;
-}
-
-auto Brush::get_type() const -> uint64_t
-{
-    return get_static_type();
-}
-
-auto Brush::get_type_name() const -> std::string_view
-{
-    return static_type_name;
-}
-
 Brush::Brush(const Brush_data& create_info)
     : Item  {create_info.get_name()}
     , m_data{create_info}

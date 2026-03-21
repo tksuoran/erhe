@@ -33,6 +33,7 @@
 #include "erhe_scene/light.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/mesh_raytrace.hpp"
+#include "erhe_scene/node.hpp"
 #include "erhe_scene/projection.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene/skin.hpp"
@@ -1120,7 +1121,7 @@ void Debug_visualizations::physics_nodes_visualization(const Render_context& con
                 continue;
             }
 
-            const auto& node_physics = get_node_physics(node);
+            const auto& node_physics = erhe::scene::get_attachment<Node_physics>(node);
             if (!node_physics) {
                 continue;
             }
@@ -1517,7 +1518,7 @@ void Debug_visualizations::render(const Render_context& context)
     std::shared_ptr<erhe::scene::Camera> selected_camera;
     const auto& selection = m_context.selection->get_selected_items();
     for (const auto& item : selection) {
-        if (erhe::scene::is_camera(item)) {
+        if (erhe::is<erhe::scene::Camera>(item)) {
             selected_camera = std::dynamic_pointer_cast<erhe::scene::Camera>(item);
         }
     }

@@ -50,7 +50,7 @@ public:
 
     // Implements Item_base
     static constexpr std::string_view static_type_name{"Rendertarget_mesh"};
-    [[nodiscard]] static auto get_static_type() -> uint64_t;
+    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::node_attachment | erhe::Item_type::mesh | erhe::Item_type::rendertarget; }
     auto get_type     () const -> uint64_t         override;
     auto get_type_name() const -> std::string_view override;
 
@@ -98,10 +98,5 @@ private:
 
     static float s_rendertarget_mesh_lod_bias;
 };
-
-[[nodiscard]] auto is_rendertarget(const erhe::Item_base* item) -> bool;
-[[nodiscard]] auto is_rendertarget(const std::shared_ptr<erhe::Item_base>& item) -> bool;
-
-[[nodiscard]] auto get_rendertarget(const erhe::scene::Node* node) -> std::shared_ptr<Rendertarget_mesh>;
 
 }

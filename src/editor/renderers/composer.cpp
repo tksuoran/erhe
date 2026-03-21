@@ -43,16 +43,6 @@ Composer::Composer(const std::string_view name)
 {
 }
 
-auto Composer::get_type() const -> uint64_t
-{
-    return get_static_type();
-}
-
-auto Composer::get_type_name() const -> std::string_view
-{
-    return static_type_name;
-}
-
 void Composer::render(const Render_context& context)
 {
     log_composer->trace("Composer::render()");

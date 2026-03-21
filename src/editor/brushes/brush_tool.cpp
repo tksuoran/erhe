@@ -27,6 +27,7 @@
 #include "erhe_primitive/material.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_scene/mesh.hpp"
+#include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_utility/bit_helpers.hpp"
 
@@ -259,7 +260,7 @@ auto Brush_tool::try_rotate(int direction) -> bool
     std::shared_ptr<erhe::Item_base>   node_item_base = node->shared_from_this();
     std::shared_ptr<erhe::scene::Node> node_shared    = std::dynamic_pointer_cast<erhe::scene::Node>(node_item_base);
 
-    std::shared_ptr<Brush_placement> brush_placement = get_brush_placement(node);
+    std::shared_ptr<Brush_placement> brush_placement = erhe::scene::get_attachment<Brush_placement>(node);
     if (!brush_placement) {
         return false;
     }
@@ -332,7 +333,7 @@ auto Brush_tool::get_hover_brush() const -> std::shared_ptr<Brush>
         return {};
     }
 
-    std::shared_ptr<Brush_placement> brush_placement = get_brush_placement(node);
+    std::shared_ptr<Brush_placement> brush_placement = erhe::scene::get_attachment<Brush_placement>(node);
     if (!brush_placement) {
         return {};
     }

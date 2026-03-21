@@ -40,9 +40,7 @@ public:
     explicit Render_style(std::string_view name);
 
     static constexpr std::string_view static_type_name{"Render_style"};
-    [[nodiscard]] static auto get_static_type() -> uint64_t;
-    auto get_type     () const -> uint64_t         override;
-    auto get_type_name() const -> std::string_view override;
+    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::node; }
 
     Render_style_data data;
 };

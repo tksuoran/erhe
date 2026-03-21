@@ -210,7 +210,7 @@ Scene_root::Scene_root(
                         if (!node) {
                             continue;
                         }
-                        const auto& node_physics = get_node_physics(node.get());
+                        const auto& node_physics = erhe::scene::get_attachment<Node_physics>(node.get());
                         if (!node_physics) {
                             continue;
                         }
@@ -237,7 +237,7 @@ Scene_root::Scene_root(
                         if (!node) {
                             continue;
                         }
-                        const auto node_physics = get_node_physics(node.get());
+                        const auto node_physics = erhe::scene::get_attachment<Node_physics>(node.get());
                         if (!node_physics) {
                             continue;
                         }
@@ -450,7 +450,7 @@ void Scene_root::register_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
         register_skin(mesh->skin);
     }
 
-    if (is_rendertarget(mesh)) {
+    if (erhe::is<Rendertarget_mesh>(mesh)) {
         const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_rendertarget_meshes_mutex};
         m_rendertarget_meshes.push_back(std::dynamic_pointer_cast<Rendertarget_mesh>(mesh));
     }
@@ -473,7 +473,7 @@ void Scene_root::unregister_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
 
     mesh->detach_rt_from_scene();
 
-    if (is_rendertarget(mesh)) {
+    if (erhe::is<Rendertarget_mesh>(mesh)) {
         const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_rendertarget_meshes_mutex};
         const auto rendertarget = std::dynamic_pointer_cast<Rendertarget_mesh>(mesh);
         const auto i = std::remove(m_rendertarget_meshes.begin(), m_rendertarget_meshes.end(), rendertarget);

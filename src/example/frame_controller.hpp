@@ -25,7 +25,7 @@ public:
     Frame_controller();
 
     static constexpr std::string_view static_type_name{"Frame_controller"};
-    [[nodiscard]] static auto get_static_type() -> uint64_t;
+    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::node_attachment | erhe::Item_type::frame_controller; }
 
     // Implements Item_base
     auto get_type     () const -> uint64_t         override;
@@ -68,9 +68,5 @@ private:
     glm::vec3 m_position        {0.0f};
     bool      m_transform_update{false};
 };
-
-auto is_frame_controller(const erhe::Item_base* item) -> bool;
-auto is_frame_controller(const std::shared_ptr<erhe::Item_base>& item) -> bool;
-auto get_frame_controller(const erhe::scene::Node* node) -> std::shared_ptr<Frame_controller>;
 
 } // namespace example

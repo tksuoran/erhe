@@ -22,6 +22,7 @@
 #include "erhe_raytrace/ray.hpp"
 #include "erhe_renderer/primitive_renderer.hpp"
 #include "erhe_scene/mesh.hpp"
+#include "erhe_scene/node.hpp"
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/headset_view.hpp"
@@ -215,7 +216,7 @@ auto Physics_tool::acquire_target() -> bool
     erhe::scene::Node*                 target_node = target_mesh->get_node();
     ERHE_VERIFY(target_node != nullptr);
 
-    auto target_node_physics = get_node_physics(target_node);
+    auto target_node_physics = erhe::scene::get_attachment<Node_physics>(target_node);
     if (!target_node_physics) {
         log_physics->warn("Cant target: No physics mesh");
         return false;

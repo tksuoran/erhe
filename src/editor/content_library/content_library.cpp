@@ -20,21 +20,6 @@ Content_library_node::Content_library_node(const std::shared_ptr<erhe::Item_base
 {
 }
 
-auto Content_library_node::get_static_type() -> uint64_t
-{
-    return erhe::Item_type::content_library_node;
-}
-
-auto Content_library_node::get_type() const -> uint64_t
-{
-    return get_static_type();
-}
-
-auto Content_library_node::get_type_name() const -> std::string_view
-{
-    return static_type_name;
-}
-
 auto Content_library_node::make_folder(const std::string_view folder_name) -> std::shared_ptr<Content_library_node>
 {
     auto new_folder_node = std::make_shared<Content_library_node>(folder_name, type_code, type_name);

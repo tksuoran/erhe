@@ -49,9 +49,7 @@ public:
 
     // Implements Item_base
     static constexpr std::string_view static_type_name{"Mesh"};
-    [[nodiscard]] static auto get_static_type() -> uint64_t;
-    auto get_type               () const -> uint64_t                             override;
-    auto get_type_name          () const -> std::string_view                     override;
+    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return Item_type::node_attachment | erhe::Item_type::mesh; }
     void handle_flag_bits_update(uint64_t old_flag_bits, uint64_t new_flag_bits) override;
 
     // Implements Node_attachment
@@ -87,10 +85,6 @@ private:
 
 [[nodiscard]] auto operator<(const Mesh& lhs, const Mesh& rhs) -> bool;
 
-[[nodiscard]] auto is_mesh(const erhe::Item_base* item) -> bool;
-[[nodiscard]] auto is_mesh(const std::shared_ptr<erhe::Item_base>& item) -> bool;
-
-[[nodiscard]] auto get_mesh(const erhe::scene::Node* node) -> std::shared_ptr<Mesh>;
 [[nodiscard]] auto get_mesh(const std::shared_ptr<erhe::Item_base>& item) -> std::shared_ptr<Mesh>;
 
 } // namespace erhe::scene

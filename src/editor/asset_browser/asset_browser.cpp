@@ -123,33 +123,21 @@ Asset_node::Asset_node(const std::filesystem::path& path)
 }
 
 
-auto Asset_folder::get_static_type()       -> uint64_t        { return erhe::Item_type::asset_folder; }
-auto Asset_folder::get_type       () const -> uint64_t        { return get_static_type(); }
-auto Asset_folder::get_type_name  () const -> std::string_view{ return static_type_name; }
 Asset_folder::Asset_folder(const Asset_folder&)            = default;
 Asset_folder& Asset_folder::operator=(const Asset_folder&) = default;
 Asset_folder::~Asset_folder() noexcept                     = default;
 Asset_folder::Asset_folder(const std::filesystem::path& path) : Item{path} {}
 
-auto Asset_file_gltf::get_static_type()       -> uint64_t        { return erhe::Item_type::asset_file_gltf; }
-auto Asset_file_gltf::get_type       () const -> uint64_t        { return get_static_type(); }
-auto Asset_file_gltf::get_type_name  () const -> std::string_view{ return static_type_name; }
 Asset_file_gltf::Asset_file_gltf(const Asset_file_gltf&)            = default;
 Asset_file_gltf& Asset_file_gltf::operator=(const Asset_file_gltf&) = default;
 Asset_file_gltf::~Asset_file_gltf() noexcept                        = default;
 Asset_file_gltf::Asset_file_gltf(const std::filesystem::path& path) : Item{path} {}
 
-auto Asset_file_geogram::get_static_type()       -> uint64_t        { return erhe::Item_type::asset_file_geogram; }
-auto Asset_file_geogram::get_type       () const -> uint64_t        { return get_static_type(); }
-auto Asset_file_geogram::get_type_name  () const -> std::string_view{ return static_type_name; }
 Asset_file_geogram::Asset_file_geogram(const Asset_file_geogram&)            = default;
 Asset_file_geogram& Asset_file_geogram::operator=(const Asset_file_geogram&) = default;
 Asset_file_geogram::~Asset_file_geogram() noexcept                        = default;
 Asset_file_geogram::Asset_file_geogram(const std::filesystem::path& path) : Item{path} {}
 
-auto Asset_file_other::get_static_type()       -> uint64_t        { return erhe::Item_type::asset_file_other; }
-auto Asset_file_other::get_type       () const -> uint64_t        { return get_static_type(); }
-auto Asset_file_other::get_type_name  () const -> std::string_view{ return static_type_name; }
 Asset_file_other::Asset_file_other(const Asset_file_other&)            = default;
 Asset_file_other& Asset_file_other::operator=(const Asset_file_other&) = default;
 Asset_file_other::~Asset_file_other() noexcept                         = default;
@@ -294,7 +282,7 @@ void Asset_browser::scan()
 
 auto Asset_browser::try_import(const std::shared_ptr<Asset_file_gltf>& gltf) -> bool
 {
-    std::string import_label = fmt::format("Import '{}'", erhe::file::to_string(gltf->get_source_path()));
+    std::string import_label = fmt::format("Import '{}'", erhe::file::to_string(*gltf->get_source_path()));
     if (ImGui::MenuItem(import_label.c_str())) {
         import_gltf(
             m_context,
@@ -308,7 +296,7 @@ auto Asset_browser::try_import(const std::shared_ptr<Asset_file_gltf>& gltf) -> 
                 .buffer_info = m_context.mesh_memory->buffer_info
             },
             *m_context.scene_builder->get_scene_root().get(),
-            gltf->get_source_path()
+            *gltf->get_source_path()
         );
         ImGui::CloseCurrentPopup();
         return true;
@@ -318,7 +306,7 @@ auto Asset_browser::try_import(const std::shared_ptr<Asset_file_gltf>& gltf) -> 
 
 auto Asset_browser::try_import(const std::shared_ptr<Asset_file_geogram>& geogram) -> bool
 {
-    std::string import_label = fmt::format("Import '{}'", erhe::file::to_string(geogram->get_source_path()));
+    std::string import_label = fmt::format("Import '{}'", erhe::file::to_string(*geogram->get_source_path()));
     if (ImGui::MenuItem(import_label.c_str())) {
         import_geogram(
             erhe::primitive::Build_info{
@@ -331,7 +319,7 @@ auto Asset_browser::try_import(const std::shared_ptr<Asset_file_geogram>& geogra
                 .buffer_info = m_context.mesh_memory->buffer_info
             },
             *m_context.scene_builder->get_scene_root().get(),
-            geogram->get_source_path()
+            *geogram->get_source_path()
         );
         ImGui::CloseCurrentPopup();
         return true;
@@ -341,11 +329,11 @@ auto Asset_browser::try_import(const std::shared_ptr<Asset_file_geogram>& geogra
 
 auto Asset_browser::try_open(const std::shared_ptr<Asset_file_gltf>& gltf) -> bool
 {
-    std::string open_label = fmt::format("Open '{}'", erhe::file::to_string(gltf->get_source_path()));
+    std::string open_label = fmt::format("Open '{}'", erhe::file::to_string(*gltf->get_source_path()));
     if (ImGui::MenuItem(open_label.c_str())) {
         //////
         m_context.operation_stack->queue(
-            std::make_shared<Scene_open_operation>(gltf->get_source_path())
+            std::make_shared<Scene_open_operation>(*gltf->get_source_path())
         );
 
         m_popup_node = nullptr;
@@ -396,7 +384,7 @@ auto Asset_browser::item_callback(const std::shared_ptr<erhe::Item_base>& item) 
     const auto gltf = std::dynamic_pointer_cast<Asset_file_gltf>(item);
     if (gltf) {
         if (!gltf->is_scanned) {
-            gltf->contents = scan_gltf(gltf->get_source_path());
+            gltf->contents = scan_gltf(*gltf->get_source_path());
             gltf->is_scanned = true;
         }
 

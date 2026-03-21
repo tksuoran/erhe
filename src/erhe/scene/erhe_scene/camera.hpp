@@ -33,9 +33,7 @@ public:
 
     // Implements Item_base
     static constexpr std::string_view static_type_name{"Camera"};
-    [[nodiscard]] static auto get_static_type() -> uint64_t;
-    auto get_type     () const -> uint64_t         override;
-    auto get_type_name() const -> std::string_view override;
+    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::node_attachment | erhe::Item_type::camera; }
 
     // Implements Node_attachment
     auto clone_attachment       () const -> std::shared_ptr<Node_attachment> override;
@@ -57,10 +55,5 @@ private:
     float      m_exposure    {1.0f};
     float      m_shadow_range{22.0f};
 };
-
-[[nodiscard]] auto is_camera(const Item_base* item) -> bool;
-[[nodiscard]] auto is_camera(const std::shared_ptr<Item_base>& item) -> bool;
-
-auto get_camera(const erhe::scene::Node* node) -> std::shared_ptr<Camera>;
 
 } // namespace erhe::scene

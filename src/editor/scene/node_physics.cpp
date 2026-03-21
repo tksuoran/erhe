@@ -39,21 +39,6 @@ Node_physics::~Node_physics() noexcept
     set_node(nullptr);
 }
 
-auto Node_physics::get_static_type() -> uint64_t
-{
-    return erhe::Item_type::node_attachment | erhe::Item_type::physics;
-}
-
-auto Node_physics::get_type() const -> uint64_t
-{
-    return get_static_type();
-}
-
-auto Node_physics::get_type_name() const -> std::string_view
-{
-    return static_type_name;
-}
-
 void Node_physics::set_physics_world(erhe::physics::IWorld* value)
 {
     if (value != nullptr) {
@@ -144,30 +129,6 @@ auto Node_physics::get_rigid_body() -> IRigid_body*
 auto Node_physics::get_rigid_body() const -> const IRigid_body*
 {
     return (m_physics_world != nullptr) ? m_rigid_body.get() : nullptr;
-}
-
-auto is_physics(const erhe::Item_base* const scene_item) -> bool
-{
-    if (scene_item == nullptr) {
-        return false;
-    }
-    return erhe::utility::test_bit_set(scene_item->get_type(), erhe::Item_type::physics);
-}
-
-auto is_physics(const std::shared_ptr<erhe::Item_base>& item) -> bool
-{
-    return is_physics(item.get());
-}
-
-auto get_node_physics(const erhe::scene::Node* node) -> std::shared_ptr<Node_physics>
-{
-    for (const auto& attachment : node->get_attachments()) {
-        auto node_physics = std::dynamic_pointer_cast<Node_physics>(attachment);
-        if (node_physics) {
-            return node_physics;
-        }
-    }
-    return {};
 }
 
 }

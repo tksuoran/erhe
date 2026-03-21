@@ -28,21 +28,6 @@ auto Camera::clone_attachment() const -> std::shared_ptr<Node_attachment>
     return std::make_shared<Camera>(*this, for_clone{});
 }
 
-auto Camera::get_static_type() -> uint64_t
-{
-    return erhe::Item_type::node_attachment | erhe::Item_type::camera;
-}
-
-auto Camera::get_type() const -> uint64_t
-{
-    return get_static_type();
-}
-
-auto Camera::get_type_name() const -> std::string_view
-{
-    return static_type_name;
-}
-
 void Camera::handle_item_host_update(Item_host* const old_item_host, Item_host* const new_item_host)
 {
     const auto shared_this = std::static_pointer_cast<Camera>(shared_from_this()); // keep alive
@@ -105,33 +90,6 @@ auto Camera::projection() const -> const Projection*
 auto Camera::get_projection_scale() const -> float
 {
     return m_projection.get_scale();
-}
-
-auto is_camera(const Item_base* const item) -> bool
-{
-    if (item == nullptr) {
-        return false;
-    }
-    return erhe::utility::test_bit_set(item->get_type(), Item_type::camera);
-}
-
-auto is_camera(const std::shared_ptr<Item_base>& item) -> bool
-{
-    return is_camera(item.get());
-}
-
-auto get_camera(const erhe::scene::Node* const node) -> std::shared_ptr<Camera>
-{
-    if (node == nullptr) {
-        return {};
-    }
-    for (const auto& attachment : node->get_attachments()) {
-        auto camera = std::dynamic_pointer_cast<Camera>(attachment);
-        if (camera) {
-            return camera;
-        }
-    }
-    return {};
 }
 
 } // namespace erhe::scene

@@ -290,21 +290,6 @@ Animation::Animation(const std::string_view name)
 {
 }
 
-auto Animation::get_static_type() -> uint64_t
-{
-    return Item_type::animation;
-}
-
-auto Animation::get_type() const -> uint64_t
-{
-    return get_static_type();
-}
-
-auto Animation::get_type_name() const -> std::string_view
-{
-    return static_type_name;
-}
-
 auto Animation::get_first_time() const -> float
 {
     float first_time = std::numeric_limits<float>::max();

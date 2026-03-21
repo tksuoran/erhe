@@ -29,6 +29,7 @@
 #include "erhe_primitive/material.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_scene/mesh.hpp"
+#include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
 
 #include <imgui/imgui.h>
@@ -218,11 +219,11 @@ auto Operations::count_selected_meshes() const -> size_t
         auto node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
         if (node) {
             for (const auto& attachment : node->get_attachments()) {
-                if (erhe::scene::is_mesh(attachment)) {
+                if (erhe::is<erhe::scene::Mesh>(attachment)) {
                     ++count;
                 }
             }
-        } else if (erhe::scene::is_mesh(item)) {
+        } else if (erhe::is<erhe::scene::Mesh>(item)) {
             ++count;
         }
     }
@@ -519,7 +520,7 @@ void Operations::center_transform()
             Mesh_operation_parameters parameters = mesh_context();
             //std::unordered_map<uint64_t, glm::mat4> mesh_transform;
             parameters.make_entry_node_callback = [](erhe::scene::Node* node, Mesh_operation_parameters& parameters) {
-                const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(node);
+                const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node);
                 if (!mesh) {
                     return;
                 }
@@ -534,7 +535,7 @@ void Operations::center_transform()
             const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items = m_context.selection->get_selected_items();
             const std::vector<std::shared_ptr<erhe::scene::Node>>& nodes = get_all<erhe::scene::Node>(selected_items);
             for (const std::shared_ptr<erhe::scene::Node>& node : nodes) {
-                const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(node.get());
+                const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
                 if (!mesh) {
                     return;
                 }
@@ -592,7 +593,7 @@ void Operations::make_geometry()
                 ERHE_VERIFY(scene_mesh);
 
                 erhe::scene::Node*                              node              = scene_mesh->get_node();
-                std::shared_ptr<Node_physics>                   node_physics      = get_node_physics(node);
+                std::shared_ptr<Node_physics>                   node_physics      = erhe::scene::get_attachment<Node_physics>(node);
                 const std::vector<erhe::scene::Mesh_primitive>& primitives_before = scene_mesh->get_primitives();
                 std::vector<erhe::scene::Mesh_primitive>        primitives_after  = primitives_before;
 

@@ -8,21 +8,6 @@
 
 namespace erhe::rendergraph {
 
-auto Rendergraph_node::get_static_type() -> uint64_t
-{
-    return erhe::Item_type::texture;
-}
-
-auto Rendergraph_node::get_type() const -> uint64_t
-{
-    return get_static_type();
-}
-
-auto Rendergraph_node::get_type_name() const -> std::string_view
-{
-    return static_type_name;
-}
-
 Rendergraph_node::Rendergraph_node(Rendergraph& rendergraph, const erhe::utility::Debug_label debug_label)
     : m_rendergraph{rendergraph}
     , m_debug_label{debug_label}

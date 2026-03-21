@@ -4,6 +4,7 @@
 
 #include <fmt/format.h>
 
+#include <filesystem>
 #include <sstream>
 
 namespace erhe {
@@ -95,7 +96,7 @@ Item_base::Item_base(const Item_base& other)
     , m_flag_bits  {other.m_flag_bits & ~Item_flags::selected}
     , m_name       {fmt::format("{} Copy", other.m_name)}
     , m_debug_label{erhe::utility::Debug_label{fmt::format("{}##{}", m_name, get_id())}}
-    , m_source_path{other.m_source_path}
+    , m_source_path{other.m_source_path ? std::make_unique<std::filesystem::path>(*other.m_source_path) : nullptr}
 {
 }
 
@@ -104,7 +105,7 @@ auto Item_base::operator=(const Item_base& other) -> Item_base&
     m_flag_bits   = other.m_flag_bits & ~Item_flags::selected;
     m_name        = fmt::format("{} Copy", other.m_name);
     m_debug_label = erhe::utility::Debug_label{fmt::format("{}##{}", m_name, get_id())};
-    m_source_path = other.m_source_path;
+    m_source_path = other.m_source_path ? std::make_unique<std::filesystem::path>(*other.m_source_path) : nullptr;
     return *this;
 }
 
@@ -206,12 +207,12 @@ auto Item_base::is_hidden() const -> bool
 
 void Item_base::set_source_path(const std::filesystem::path& path)
 {
-    m_source_path = path;
+    m_source_path = std::make_unique<std::filesystem::path>(path);
 }
 
-auto Item_base::get_source_path() const -> const std::filesystem::path&
+auto Item_base::get_source_path() const -> const std::filesystem::path*
 {
-    return m_source_path;
+    return m_source_path.get();
 }
 
 void Item_base::set_name(const std::string_view name)
@@ -233,17 +234,6 @@ auto Item_base::describe(int level) const -> std::string
 auto Item_base::get_id() const -> std::size_t
 {
     return m_id.get_id();
-}
-
-auto Item_base::get_task() -> const tf::AsyncTask&
-{
-    return m_task;
-}
-
-void Item_base::set_task(tf::AsyncTask& task)
-{
-    ERHE_VERIFY(m_task.empty() || m_task.is_done());
-    m_task = task;
 }
 
 } // namespace erhe

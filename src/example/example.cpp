@@ -99,7 +99,7 @@ public:
         };
 
         for (const auto& node : m_gltf_data.nodes) {
-            auto mesh = erhe::scene::get_mesh(node.get());
+            auto mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
             if (mesh) {
                 std::vector<erhe::scene::Mesh_primitive>& mesh_primitives = mesh->get_mutable_primitives();
                 for (erhe::scene::Mesh_primitive& mesh_primitive : mesh_primitives) {
@@ -302,7 +302,7 @@ public:
 
         std::vector<std::shared_ptr<erhe::scene::Mesh>> meshes;
         for (const auto& node : m_gltf_data.nodes) {
-            std::shared_ptr<erhe::scene::Mesh> mesh = get_mesh(node.get());
+            std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
             if (!mesh) {
                 continue;
             }

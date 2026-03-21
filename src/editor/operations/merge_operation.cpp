@@ -10,6 +10,7 @@
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_physics/icollision_shape.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -76,13 +77,13 @@ Merge_operation::Merge_operation(Parameters&& parameters)
         }
         erhe::scene::Node* node = shared_node.get();
 
-        const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(node);
+        const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node);
         if (!mesh) {
             continue;
         }
 
         mat4 transform;
-        const std::shared_ptr<Node_physics> node_physics = get_node_physics(node);
+        const std::shared_ptr<Node_physics> node_physics = erhe::scene::get_attachment<Node_physics>(node);
 
         Entry source_entry{
             .mesh          = mesh,
@@ -233,7 +234,7 @@ void Merge_operation::execute(App_context& context)
             node->set_parent(std::shared_ptr<erhe::Hierarchy>{});
 
             // For first mesh: Replace mesh primitives
-            auto old_node_physics = get_node_physics(node);
+            auto old_node_physics = erhe::scene::get_attachment<Node_physics>(node);
             if (old_node_physics) {
                 node->detach(old_node_physics.get());
             }
@@ -293,7 +294,7 @@ void Merge_operation::undo(App_context& context)
 
             first_entry = false;
 
-            auto old_node_physics = get_node_physics(node);
+            auto old_node_physics = erhe::scene::get_attachment<Node_physics>(node);
             if (old_node_physics) {
                 node->detach(old_node_physics.get());
             }

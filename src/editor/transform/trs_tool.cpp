@@ -32,6 +32,7 @@
 #include "erhe_raytrace/ray.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/mesh.hpp"
+#include "erhe_scene/node.hpp"
 #include "erhe_message_bus/message_bus.hpp"
 #include "erhe_utility/bit_helpers.hpp"
 #include "erhe_profile/profile.hpp"
@@ -230,14 +231,14 @@ auto Trs_tool::get_target_node() const -> std::shared_ptr<erhe::scene::Node>
     return m_target_node.lock();
 }
 
-[[nodiscard]] auto Trs_tool::get_target_node_physics() const -> std::shared_ptr<Node_physics>
+[[nodiscard]] auto Trs_tool::get_tarerhe::scene::get_attachment<Node_physics>() const -> std::shared_ptr<Node_physics>
 {
     const auto target_node = get_target_node();
     if (!target_node)
     {
         return {};
     }
-    return get_node_physics(target_node.get());
+    return erhe::scene::get_attachment<Node_physics>(target_node.get());
 }
 
 void Trs_tool::set_node(
@@ -265,7 +266,7 @@ void Trs_tool::touch()
 void Trs_tool::begin_move()
 {
     m_touched = true;
-    const auto node_physics = get_target_node_physics();
+    const auto node_physics = get_tarerhe::scene::get_attachment<Node_physics>();
     auto* const rigid_body = node_physics
         ? node_physics->get_rigid_body()
         : nullptr;
@@ -285,7 +286,7 @@ void Trs_tool::begin_move()
 
 void Trs_tool::end_move()
 {
-    const auto  node_physics = get_target_node_physics();
+    const auto  node_physics = get_tarerhe::scene::get_attachment<Node_physics>();
     auto* const rigid_body   = node_physics->get_rigid_body();
     if (node_physics && (rigid_body != nullptr))
     {

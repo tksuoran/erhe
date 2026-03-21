@@ -71,9 +71,7 @@ public:
 
     // Implements Item_base
     static constexpr std::string_view static_type_name{"Node"};
-    [[nodiscard]] static auto get_static_type() -> uint64_t;
-    auto get_type               () const -> uint64_t                             override;
-    auto get_type_name          () const -> std::string_view                     override;
+    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::node; }
     auto get_item_host          () const -> erhe::Item_host*                     override;
     void handle_flag_bits_update(uint64_t old_flag_bits, uint64_t new_flag_bits) override;
 
@@ -130,7 +128,19 @@ public:
     Node_data node_data;
 };
 
-[[nodiscard]] auto is_node(const erhe::Item_base* item) -> bool;
-[[nodiscard]] auto is_node(const std::shared_ptr<erhe::Item_base>& item) -> bool;
+template <typename T>
+auto get_attachment(const Node* node) -> std::shared_ptr<T>
+{
+    if (node == nullptr) {
+        return {};
+    }
+    for (const auto& attachment : node->get_attachments()) {
+        auto result = std::dynamic_pointer_cast<T>(attachment);
+        if (result) {
+            return result;
+        }
+    }
+    return {};
+}
 
 } // namespace erhe::scene

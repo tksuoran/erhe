@@ -249,16 +249,6 @@ void Hierarchy::set_depth_recursive(const std::size_t depth)
     }
 }
 
-void Hierarchy::for_each(const std::function<bool(Hierarchy& hierarchy)>& fun)
-{
-    if (!fun(*this)) {
-        return;
-    }
-    for (const auto& child : m_children) {
-        child->for_each(fun);
-    }
-}
-
 auto Hierarchy::get_root() -> std::weak_ptr<Hierarchy>
 {
     const auto& current_parent = get_parent().lock();

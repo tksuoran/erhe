@@ -31,14 +31,10 @@ public:
     Frame_controller();
 
     static constexpr std::string_view static_type_name{"Frame_controller"};
-    [[nodiscard]] static auto get_static_type() -> uint64_t;
+    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::node_attachment | erhe::Item_type::frame_controller; }
 
     // TODO disallow cloning
     auto clone() const -> std::shared_ptr<erhe::Item_base> override;
-
-    // Implements Node_attachment
-    auto get_type                    () const -> uint64_t                                       override;
-    auto get_type_name               () const -> std::string_view                               override;
     void handle_node_update          (erhe::scene::Node* old_node, erhe::scene::Node* new_node) override;
     void handle_node_transform_update()                                                         override;
 
@@ -82,10 +78,5 @@ private:
     glm::mat4 m_orientation;
     bool      m_transform_update{false};
 };
-
-auto is_frame_controller(const erhe::Item_base* item) -> bool;
-auto is_frame_controller(const std::shared_ptr<erhe::Item_base>& item) -> bool;
-
-auto get_frame_controller(const erhe::scene::Node* node) -> std::shared_ptr<Frame_controller>;
 
 }

@@ -86,11 +86,6 @@ auto Frame_controller::get_heading() const -> float
     return m_heading;
 }
 
-auto Frame_controller::get_static_type() -> uint64_t
-{
-    return erhe::Item_type::node_attachment | erhe::Item_type::frame_controller;
-}
-
 auto Frame_controller::get_type() const -> uint64_t
 {
     return get_static_type();
@@ -222,31 +217,6 @@ void Frame_controller::update_fixed_step()
     }
 
     update_transform();
-}
-
-auto is_frame_controller(const erhe::Item_base* const item) -> bool
-{
-    if (item == nullptr) {
-        return false;
-    }
-    using namespace erhe::utility;
-    return test_bit_set(item->get_type(), erhe::Item_type::frame_controller);
-}
-
-auto is_frame_controller(const std::shared_ptr<erhe::Item_base>& item) -> bool
-{
-    return is_frame_controller(item.get());
-}
-
-auto get_frame_controller(const erhe::scene::Node* node) -> std::shared_ptr<Frame_controller>
-{
-    for (const auto& attachment : node->get_attachments()) {
-        const auto frame_controller = std::dynamic_pointer_cast<Frame_controller>(attachment);
-        if (frame_controller) {
-            return frame_controller;
-        }
-    }
-    return {};
 }
 
 } // namespace example

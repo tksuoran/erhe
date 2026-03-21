@@ -14,10 +14,6 @@
 
 namespace erhe::scene {
 
-auto Scene::get_static_type()       -> uint64_t         { return erhe::Item_type::scene; }
-auto Scene::get_type       () const -> uint64_t         { return get_static_type(); }
-auto Scene::get_type_name  () const -> std::string_view { return static_type_name; }
-
 #pragma region Layers
 Mesh_layer::Mesh_layer(const std::string_view name, const uint64_t flags, const Layer_id id)
     : name {name}

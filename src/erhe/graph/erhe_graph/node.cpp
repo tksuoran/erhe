@@ -4,21 +4,6 @@
 
 namespace erhe::graph {
 
-auto Node::get_static_type() -> uint64_t
-{
-    return erhe::Item_type::graph_node;
-}
-
-auto Node::get_type() const -> uint64_t
-{
-    return get_static_type();
-}
-
-auto Node::get_type_name() const -> std::string_view
-{
-    return static_type_name;
-}
-
 Node::Node(const Node&) = default;
 
 Node& Node::operator=(const Node&) = default;

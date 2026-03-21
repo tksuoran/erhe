@@ -8,6 +8,7 @@
 #include "editor.hpp"
 
 #include "app_context.hpp"
+#include "items.hpp"
 #include "editor_log.hpp"
 #include "app_message_bus.hpp"
 #include "app_rendering.hpp"
@@ -1444,6 +1445,7 @@ public:
 
 
     std::unique_ptr<tf::Executor>       m_executor;
+    Item_async_task_guard               m_item_task_guard; // destroyed before m_executor
 
     App_context                         m_app_context;
 

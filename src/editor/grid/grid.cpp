@@ -28,21 +28,6 @@ Grid::Grid()
     update();
 }
 
-auto Grid::get_static_type() -> uint64_t
-{
-    return erhe::Item_type::node_attachment | erhe::Item_type::grid;
-}
-
-auto Grid::get_type() const -> uint64_t
-{
-    return get_static_type();
-}
-
-auto Grid::get_type_name() const -> std::string_view
-{
-    return static_type_name;
-}
-
 auto Grid::snap_world_position(const glm::vec3& position_in_world) const -> glm::vec3
 {
     if (!m_snap_enabled) {

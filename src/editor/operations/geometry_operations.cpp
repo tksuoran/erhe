@@ -26,6 +26,7 @@
 #include "erhe_geometry/operation/subdivision/catmull_clark_subdivision.hpp"
 #include "erhe_geometry/operation/subdivision/sqrt3_subdivision.hpp"
 #include "erhe_geometry/operation/triangulate.hpp"
+#include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
 
 #include <fmt/format.h>
@@ -231,7 +232,7 @@ auto Binary_mesh_operation::make_operations(
             continue;
         }
         erhe::scene::Node* raw_node = node.get();
-        std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(raw_node);
+        std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(raw_node);
         if (!mesh) {
             continue;
         }

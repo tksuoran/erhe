@@ -76,9 +76,7 @@ public:
 
     // Implements Item_base
     static constexpr std::string_view static_type_name{"Material"};
-    [[nodiscard]] static auto get_static_type() -> uint64_t;
-    auto get_type     () const -> uint64_t         override;
-    auto get_type_name() const -> std::string_view override;
+    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::material; }
 
     uint32_t                material_buffer_index{0}; // updated by Material_buffer::update()
     std::optional<uint32_t> preview_slot;

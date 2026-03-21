@@ -31,21 +31,6 @@ Composition_pass::Composition_pass(const std::string_view name)
 {
 }
 
-auto Composition_pass::get_static_type() -> uint64_t
-{
-    return erhe::Item_type::composition_pass;
-}
-
-auto Composition_pass::get_type() const -> uint64_t
-{
-    return get_static_type();
-}
-
-auto Composition_pass::get_type_name() const -> std::string_view
-{
-    return static_type_name;
-}
-
 auto mix(float x, float y, float a) -> float
 {
     return x * (1.0f - a) + y * a;

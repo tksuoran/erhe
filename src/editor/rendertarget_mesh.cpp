@@ -36,11 +36,6 @@ Rendertarget_mesh::Rendertarget_mesh(
     resize_rendertarget(graphics_device, mesh_memory, width, height);
 }
 
-auto Rendertarget_mesh::get_static_type() -> uint64_t
-{
-    return erhe::Item_type::node_attachment | erhe::Item_type::mesh | erhe::Item_type::rendertarget;
-}
-
 auto Rendertarget_mesh::get_type() const -> uint64_t
 {
     return get_static_type();
@@ -344,30 +339,6 @@ auto Rendertarget_mesh::get_height() const -> float
 auto Rendertarget_mesh::get_pixels_per_meter() const -> float
 {
     return m_pixels_per_meter;
-}
-
-auto is_rendertarget(const erhe::Item_base* const item) -> bool
-{
-    if (item == nullptr) {
-        return false;
-    }
-    return erhe::utility::test_bit_set(item->get_type(), erhe::Item_type::rendertarget);
-}
-
-auto is_rendertarget(const std::shared_ptr<erhe::Item_base>& item) -> bool
-{
-    return is_rendertarget(item.get());
-}
-
-auto get_rendertarget(const erhe::scene::Node* const node) -> std::shared_ptr<Rendertarget_mesh>
-{
-    for (const auto& attachment : node->get_attachments()) {
-        auto rendertarget = std::dynamic_pointer_cast<Rendertarget_mesh>(attachment);
-        if (rendertarget) {
-            return rendertarget;
-        }
-    }
-    return {};
 }
 
 float Rendertarget_mesh::s_rendertarget_mesh_lod_bias{-0.666f};

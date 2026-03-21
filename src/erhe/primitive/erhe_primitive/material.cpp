@@ -2,10 +2,6 @@
 
 namespace erhe::primitive {
 
-auto Material::get_static_type()       -> uint64_t         { return erhe::Item_type::material;}
-auto Material::get_type       () const -> uint64_t         { return get_static_type(); }
-auto Material::get_type_name  () const -> std::string_view { return static_type_name; }
-
 Material::Material()                           = default;
 Material::Material(const Material&)            = default;
 Material& Material::operator=(const Material&) = default;

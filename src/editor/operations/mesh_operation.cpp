@@ -64,7 +64,7 @@ void Mesh_operation::execute(App_context&)
 
         node->set_parent(std::shared_ptr<erhe::Hierarchy>{});
 
-        auto old_node_physics = get_node_physics(node);
+        auto old_node_physics = erhe::scene::get_attachment<Node_physics>(node);
         if (old_node_physics) {
             node->detach(old_node_physics.get());
         }
@@ -106,7 +106,7 @@ void Mesh_operation::undo(App_context&)
 
         node->set_parent(std::shared_ptr<erhe::Hierarchy>{});
 
-        auto old_node_physics = get_node_physics(node);
+        auto old_node_physics = erhe::scene::get_attachment<Node_physics>(node);
         if (old_node_physics) {
             node->detach(old_node_physics.get());
         }
@@ -148,7 +148,7 @@ void Mesh_operation::make_entries(
                 // TODO consider keeping node alive always .node   = node_shared,
                 .scene_mesh = scene_mesh,
                 .before = {
-                    .node_physics = get_node_physics(node),
+                    .node_physics = erhe::scene::get_attachment<Node_physics>(node),
                     .primitives   = scene_mesh->get_primitives()
                 },
             };
@@ -273,7 +273,7 @@ void Mesh_operation::make_entries(
         // If we have node selected, get mesh from node
         if (!scene_mesh) {
             if (node != nullptr) {
-                scene_mesh = erhe::scene::get_mesh(node);
+                scene_mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node);
             }
         }
         if (!scene_mesh) {
