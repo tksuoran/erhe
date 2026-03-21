@@ -9,7 +9,7 @@ auto serialize(const Scene_file& value) -> std::string
 {
     std::string out;
     out += '{';
-    out += "\"_version\":1,";
+    out += "\"_version\":2,";
     out += "\"name\":";
     erhe::codegen::serialize_string(out, value.name);
     out += ',';
@@ -45,6 +45,14 @@ auto serialize(const Scene_file& value) -> std::string
     for (std::size_t i = 0; i < value.mesh_references.size(); ++i) {
         if (i > 0) out += ',';
         out += serialize(value.mesh_references[i]);
+    }
+    out += ']';
+    out += ',';
+    out += "\"node_physics\":";
+    out += '[';
+    for (std::size_t i = 0; i < value.node_physics.size(); ++i) {
+        if (i > 0) out += ',';
+        out += serialize(value.node_physics[i]);
     }
     out += ']';
     out += ',';
@@ -158,6 +166,29 @@ auto deserialize(simdjson::ondemand::object obj, Scene_file& out) -> simdjson::e
         }
     }
 
+    // node_physics: added_in=2
+    if (version >= 2) {
+        if (!obj["node_physics"].get(val)) {
+            {
+                simdjson::ondemand::array arr;
+                if (!val.get_array().get(arr)) {
+                    out.node_physics.clear();
+                    for (auto element : arr) {
+                        Node_physics_data item{};
+                        simdjson::ondemand::value elem_val;
+                        if (!element.get(elem_val)) {
+                            simdjson::ondemand::object nested_obj;
+                            if (!elem_val.get_object().get(nested_obj)) {
+                                deserialize(nested_obj, item);
+                            }
+                        }
+                        out.node_physics.push_back(std::move(item));
+                    }
+                }
+            }
+        }
+    }
+
     if (version != Scene_file::current_version) {
         erhe::codegen::run_migrations(
             out,
@@ -260,11 +291,26 @@ static const erhe::codegen::Field_info scene_file_fields[] = {
         .is_enum       = false,
         .enum_info     = nullptr,
     },
+    {
+        .name          = "node_physics",
+        .type_name     = "std::vector<Node_physics_data>",
+        .offset        = offsetof(Scene_file, node_physics),
+        .size          = sizeof(std::vector<Node_physics_data>),
+        .added_in      = 2,
+        .removed_in    = 0,
+        .short_desc    = nullptr,
+        .long_desc     = nullptr,
+        .default_value = nullptr,
+        .numeric_limits = {},
+        .is_numeric    = false,
+        .is_enum       = false,
+        .enum_info     = nullptr,
+    },
 };
 
 static const erhe::codegen::Struct_info scene_file_struct_info = {
     .name    = "Scene_file",
-    .version = 1,
+    .version = 2,
     .fields  = scene_file_fields,
 };
 

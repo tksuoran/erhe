@@ -5,6 +5,7 @@
 #include "editor_log.hpp"
 #include "parsers/gltf.hpp"
 #include "renderers/mesh_memory.hpp"
+#include "scene/node_physics.hpp"
 #include "scene/scene_root.hpp"
 
 #include "scene/generated/scene_file.hpp"
@@ -12,6 +13,7 @@
 #include "erhe_file/file.hpp"
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_gltf/gltf.hpp"
+#include "erhe_physics/icollision_shape.hpp"
 #include "erhe_gltf/image_transfer.hpp"
 #include "erhe_primitive/build_info.hpp"
 #include "erhe_primitive/material.hpp"
@@ -116,6 +118,28 @@ auto from_light_type_serial(Light_type_serial type) -> erhe::scene::Light_type
         case Light_type_serial::point:       return erhe::scene::Light_type::point;
         case Light_type_serial::spot:        return erhe::scene::Light_type::spot;
         default:                             return erhe::scene::Light_type::directional;
+    }
+}
+
+auto to_motion_mode_serial(erhe::physics::Motion_mode mode) -> Motion_mode_serial
+{
+    switch (mode) {
+        case erhe::physics::Motion_mode::e_static:                 return Motion_mode_serial::e_static;
+        case erhe::physics::Motion_mode::e_kinematic_non_physical: return Motion_mode_serial::e_kinematic_non_physical;
+        case erhe::physics::Motion_mode::e_kinematic_physical:     return Motion_mode_serial::e_kinematic_physical;
+        case erhe::physics::Motion_mode::e_dynamic:                return Motion_mode_serial::e_dynamic;
+        default:                                                   return Motion_mode_serial::e_dynamic;
+    }
+}
+
+auto from_motion_mode_serial(Motion_mode_serial mode) -> erhe::physics::Motion_mode
+{
+    switch (mode) {
+        case Motion_mode_serial::e_static:                 return erhe::physics::Motion_mode::e_static;
+        case Motion_mode_serial::e_kinematic_non_physical: return erhe::physics::Motion_mode::e_kinematic_non_physical;
+        case Motion_mode_serial::e_kinematic_physical:     return erhe::physics::Motion_mode::e_kinematic_physical;
+        case Motion_mode_serial::e_dynamic:                return erhe::physics::Motion_mode::e_dynamic;
+        default:                                           return erhe::physics::Motion_mode::e_dynamic;
     }
 }
 
@@ -231,8 +255,29 @@ auto save_scene(
         }
     }
 
+    // Serialize node physics
+    for (const auto& node : flat_nodes) {
+        auto node_physics = erhe::scene::get_attachment<Node_physics>(node.get());
+        if (!node_physics) {
+            continue;
+        }
+        const uint64_t node_id = node_id_map[node.get()];
+        const auto* rigid_body = node_physics->get_rigid_body();
+        Node_physics_data physics_data{
+            .node_id           = node_id,
+            .motion_mode       = to_motion_mode_serial(node_physics->get_motion_mode()),
+            .friction          = rigid_body ? rigid_body->get_friction()        : 0.5f,
+            .restitution       = rigid_body ? rigid_body->get_restitution()     : 0.2f,
+            .linear_damping    = rigid_body ? rigid_body->get_linear_damping()  : 0.05f,
+            .angular_damping   = rigid_body ? rigid_body->get_angular_damping() : 0.05f,
+            .mass              = rigid_body ? std::optional<float>{rigid_body->get_mass()} : std::nullopt,
+            .enable_collisions = true,
+        };
+        scene_file.node_physics.push_back(std::move(physics_data));
+    }
+
     // Serialize mesh references and save geometry files
-    bool has_gltf_meshes = false;
+    bool has_any_meshes  = false;
     int  mesh_index      = 0;
 
     GEO::MeshIOFlags geo_ioflags;
@@ -245,6 +290,8 @@ auto save_scene(
             const uint64_t node_id = get_node_id(mesh->get_node(), node_id_map);
             const auto&    primitives = mesh->get_primitives();
             const bool     geom_normative = is_geometry_normative(*mesh);
+
+            has_any_meshes = true;
 
             // Save geometry files for geometry-normative meshes
             std::string geometry_base;
@@ -266,8 +313,6 @@ auto save_scene(
                         log_parsers->error("save_scene: failed to save geometry: {}", full_path.string());
                     }
                 }
-            } else {
-                has_gltf_meshes = true;
             }
 
             // Material references (stored by name for both source types)
@@ -276,7 +321,7 @@ auto save_scene(
             for (const auto& prim : primitives) {
                 if (prim.material) {
                     material_refs.push_back(Gltf_source_reference{
-                        .gltf_path  = geom_normative ? std::string{} : glb_filename,
+                        .gltf_path  = glb_filename,
                         .item_name  = prim.material->get_name(),
                         .item_index = prim_index,
                         .item_type  = "material",
@@ -306,8 +351,8 @@ auto save_scene(
         }
     }
 
-    // Export glTF-normative meshes to companion .glb
-    if (has_gltf_meshes) {
+    // Export companion .glb (meshes and materials)
+    if (has_any_meshes) {
         const std::filesystem::path glb_path = scene_dir / glb_filename;
         const std::string glb_data = erhe::gltf::export_gltf(*root_node, true);
         if (!erhe::file::write_file(glb_path, glb_data)) {
@@ -445,8 +490,8 @@ auto load_scene(
         }
     }
 
-    // Load meshes
-    if (context == nullptr || scene_file.mesh_references.empty()) {
+    // Load meshes and physics
+    if (context == nullptr || (scene_file.mesh_references.empty() && scene_file.node_physics.empty())) {
         return scene_root;
     }
 
@@ -460,23 +505,17 @@ auto load_scene(
         erhe::Item_flags::id          |
         erhe::Item_flags::show_in_ui;
 
-    // Collect unique glTF paths for glTF-normative meshes
+    // Collect unique glTF paths from all mesh references (both types need the .glb for materials)
     std::unordered_map<std::string, erhe::gltf::Gltf_data> gltf_cache;
-    for (const auto& mesh_ref : scene_file.mesh_references) {
-        if (mesh_ref.source_type != Mesh_source_type::gltf) {
-            continue;
-        }
-        const std::string& glb_path_str = mesh_ref.gltf_source.gltf_path;
+    auto cache_gltf = [&](const std::string& glb_path_str) {
         if (glb_path_str.empty() || gltf_cache.contains(glb_path_str)) {
-            continue;
+            return;
         }
-
         const std::filesystem::path glb_path = scene_dir / glb_path_str;
         if (!std::filesystem::exists(glb_path)) {
             log_parsers->error("load_scene: glTF file not found: {}", glb_path.string());
-            continue;
+            return;
         }
-
         erhe::scene::Scene temp_scene{"temp", nullptr};
         auto temp_root = std::make_shared<erhe::scene::Node>("temp_root");
         temp_root->set_parent(temp_scene.get_root_node());
@@ -491,6 +530,14 @@ auto load_scene(
             .path            = glb_path,
         };
         gltf_cache[glb_path_str] = erhe::gltf::parse_gltf(parse_args);
+    };
+    for (const auto& mesh_ref : scene_file.mesh_references) {
+        // Cache glTF source path (for glTF-normative meshes)
+        cache_gltf(mesh_ref.gltf_source.gltf_path);
+        // Cache material reference paths (for all mesh types)
+        for (const auto& mat_ref : mesh_ref.material_refs) {
+            cache_gltf(mat_ref.gltf_path);
+        }
     }
 
     // Process each mesh reference
@@ -562,20 +609,36 @@ auto load_scene(
                 );
                 static_cast<void>(primitive->make_raytrace());
 
-                // Try to find material by name from content library
+                // Find material from companion .glb or content library
                 std::shared_ptr<erhe::primitive::Material> material;
                 for (const auto& mat_ref : mesh_ref.material_refs) {
                     if (mat_ref.item_index == p) {
-                        content_library->materials->for_each<Content_library_node>(
-                            [&material, &mat_ref](const Content_library_node& node) {
-                                auto entry = std::dynamic_pointer_cast<erhe::primitive::Material>(node.item);
-                                if (entry && entry->get_name() == mat_ref.item_name) {
-                                    material = entry;
-                                    return false;
+                        // First try the glTF cache (companion .glb)
+                        if (!mat_ref.gltf_path.empty()) {
+                            auto cache_it = gltf_cache.find(mat_ref.gltf_path);
+                            if (cache_it != gltf_cache.end()) {
+                                for (const auto& m : cache_it->second.materials) {
+                                    if (m && m->get_name() == mat_ref.item_name) {
+                                        material = m;
+                                        content_library->materials->add(material);
+                                        break;
+                                    }
                                 }
-                                return true;
                             }
-                        );
+                        }
+                        // Fall back to content library
+                        if (!material) {
+                            content_library->materials->for_each<Content_library_node>(
+                                [&material, &mat_ref](const Content_library_node& node) {
+                                    auto entry = std::dynamic_pointer_cast<erhe::primitive::Material>(node.item);
+                                    if (entry && entry->get_name() == mat_ref.item_name) {
+                                        material = entry;
+                                        return false;
+                                    }
+                                    return true;
+                                }
+                            );
+                        }
                         break;
                     }
                 }
@@ -656,6 +719,65 @@ auto load_scene(
                 }
             }
         }
+    }
+
+    // Create node physics
+    for (const auto& physics_data : scene_file.node_physics) {
+        if (physics_data.node_id == 0) {
+            continue;
+        }
+        auto node_it = node_map.find(physics_data.node_id);
+        if (node_it == node_map.end()) {
+            continue;
+        }
+        const auto& node = node_it->second;
+
+        // Derive collision shape from mesh geometry attached to this node
+        std::shared_ptr<erhe::physics::ICollision_shape> collision_shape;
+        auto mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
+        if (mesh) {
+            for (const auto& prim : mesh->get_primitives()) {
+                if (prim.primitive && prim.primitive->render_shape) {
+                    const auto& geom = prim.primitive->render_shape->get_geometry_const();
+                    if (geom && geom->get_mesh().vertices.nb() > 0) {
+                        GEO::Mesh convex_hull{};
+                        if (make_convex_hull(geom->get_mesh(), convex_hull)) {
+                            const auto vertex_count = convex_hull.vertices.nb();
+                            std::vector<float> coordinates(3 * vertex_count);
+                            for (GEO::index_t v = 0; v < vertex_count; ++v) {
+                                const auto* ptr = convex_hull.vertices.single_precision_point_ptr(v);
+                                coordinates[3 * v + 0] = ptr[0];
+                                coordinates[3 * v + 1] = ptr[1];
+                                coordinates[3 * v + 2] = ptr[2];
+                            }
+                            collision_shape = erhe::physics::ICollision_shape::create_convex_hull_shape_shared(
+                                coordinates.data(),
+                                static_cast<int>(vertex_count),
+                                static_cast<int>(3 * sizeof(float))
+                            );
+                        }
+                        break; // Use first primitive with geometry
+                    }
+                }
+            }
+        }
+
+        if (!collision_shape) {
+            collision_shape = erhe::physics::ICollision_shape::create_empty_shape_shared();
+        }
+
+        const erhe::physics::IRigid_body_create_info create_info{
+            .friction          = physics_data.friction,
+            .restitution       = physics_data.restitution,
+            .linear_damping    = physics_data.linear_damping,
+            .angular_damping   = physics_data.angular_damping,
+            .collision_shape   = collision_shape,
+            .mass              = physics_data.mass,
+            .enable_collisions = physics_data.enable_collisions,
+            .motion_mode       = from_motion_mode_serial(physics_data.motion_mode),
+        };
+        auto node_physics = std::make_shared<Node_physics>(create_info);
+        node->attach(node_physics);
     }
 
     return scene_root;

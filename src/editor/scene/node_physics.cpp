@@ -20,17 +20,18 @@ Node_physics::Node_physics(const Node_physics&) = default;
 Node_physics& Node_physics::operator=(const Node_physics&) = default;
 
 Node_physics::Node_physics(const Node_physics& src, erhe::for_clone)
-    : Item               {src, erhe::for_clone{}}
-    , markers            {}        // clone does not initially have markers
-    , physics_motion_mode{src.physics_motion_mode}
-    , m_physics_world    {nullptr} // clone is initially detached
-    , m_create_info      {src.m_create_info}
-    , m_rigid_body       {}        // clone rigid body is not initially created
+    : Item          {src, erhe::for_clone{}}
+    , markers       {}        // clone does not initially have markers
+    , m_physics_world{nullptr} // clone is initially detached
+    , m_create_info {src.m_create_info}
+    , m_rigid_body  {}        // clone rigid body is not initially created
+    , m_motion_mode {src.m_motion_mode}
 {
 }
 
 Node_physics::Node_physics(const IRigid_body_create_info& create_info)
     : m_create_info{create_info}
+    , m_motion_mode{create_info.motion_mode}
 {
 }
 
@@ -129,6 +130,39 @@ auto Node_physics::get_rigid_body() -> IRigid_body*
 auto Node_physics::get_rigid_body() const -> const IRigid_body*
 {
     return (m_physics_world != nullptr) ? m_rigid_body.get() : nullptr;
+}
+
+auto Node_physics::get_motion_mode() const -> Motion_mode
+{
+    return m_motion_mode;
+}
+
+void Node_physics::set_motion_mode(Motion_mode mode)
+{
+    m_motion_mode = mode;
+    if (m_rigid_body) {
+        m_rigid_body->set_motion_mode(mode);
+    }
+}
+
+void Node_physics::begin_interaction()
+{
+    if (!m_rigid_body) {
+        return;
+    }
+    // m_motion_mode already holds the intended mode — no need to re-read
+    // from the rigid body, which may already be kinematic from a prior call.
+    m_rigid_body->set_motion_mode(Motion_mode::e_kinematic_physical);
+    m_rigid_body->begin_move();
+}
+
+void Node_physics::end_interaction()
+{
+    if (!m_rigid_body) {
+        return;
+    }
+    m_rigid_body->set_motion_mode(m_motion_mode);
+    m_rigid_body->end_move();
 }
 
 }

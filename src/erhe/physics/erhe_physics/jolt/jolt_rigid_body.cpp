@@ -174,6 +174,12 @@ void Jolt_rigid_body::set_gravity_factor(const float gravity_factor)
         m_debug_label,
         gravity_factor
     );
+
+    if ((m_motion_mode == Motion_mode::e_static) || m_body->IsStatic()) {
+        log_physics->error("set_gravity_factor() for static rigid body ignored");
+        return;
+    }
+
     get_body_interface().SetGravityFactor(m_body->GetID(), gravity_factor);
 }
 
@@ -182,6 +188,7 @@ auto Jolt_rigid_body::get_restitution() const -> float
     if (m_body == nullptr) {
         return 0.0f;
     }
+
     return m_body->GetRestitution();
 }
 
@@ -376,6 +383,9 @@ auto Jolt_rigid_body::get_linear_damping() const -> float
     if (m_body == nullptr) {
         return 0.0f;
     }
+    if ((m_motion_mode == Motion_mode::e_static) || m_body->IsStatic()) {
+        return 0.0f;
+    }
     auto* motion_properties = m_body->GetMotionProperties();
     if (motion_properties == nullptr) {
         return 0.0f;
@@ -392,6 +402,11 @@ void Jolt_rigid_body::set_damping(const float linear_damping, const float angula
 
     log_physics->trace("{} set damping linear = {}, angular = {}", m_debug_label, linear_damping, angular_damping);
 
+    if ((m_motion_mode == Motion_mode::e_static) || m_body->IsStatic()) {
+        log_physics->warn("set_damiping{} for static rigid body ignored");
+        return;
+    }
+
     auto* motion_properties = m_body->GetMotionProperties();
     if (motion_properties == nullptr) {
         log_physics->warn("{} no motion properties");
@@ -404,6 +419,10 @@ void Jolt_rigid_body::set_damping(const float linear_damping, const float angula
 auto Jolt_rigid_body::get_angular_damping() const -> float
 {
     if (m_body == nullptr) {
+        return 0.0f;
+    }
+
+    if ((m_motion_mode == Motion_mode::e_static) || m_body->IsStatic()) {
         return 0.0f;
     }
 

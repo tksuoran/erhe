@@ -98,15 +98,28 @@ Functions:
 - [x] Step 5: Editor integration (Save/Load Scene menu commands in Operations window)
 - [x] Mesh re-import from glTF references during load
 - [x] Dual-format mesh serialization: Geometry-normative meshes saved as geogram `.meshb`, glTF-normative meshes saved to companion `.glb`
+- [x] Material persistence: Companion `.glb` always exported so materials are preserved for both mesh types
+- [x] Node_physics serialization: motion mode, friction, restitution, damping, mass; collision shape re-derived from mesh geometry on load
 
 ## Dual Mesh Serialization
 
-- **Geometry-normative**: Mesh has `erhe::geometry::Geometry` (scene-built or manipulated). Saved as `.meshb` files (one per primitive). Preserves polygon structure.
+- **Geometry-normative**: Mesh has `erhe::geometry::Geometry` (scene-built or manipulated). Saved as `.geogram` files (one per primitive). Preserves polygon structure. Materials stored in companion `.glb`.
 - **glTF-normative**: Mesh has only `Triangle_soup` (glTF import, unmodified). Saved to companion `.glb` file. Preserves triangle mesh as-is.
 - Detection: if any primitive in a mesh has `render_shape->get_geometry_const()` non-null, the mesh is geometry-normative.
 - `Mesh_reference` codegen struct (v2): added `source_type` (enum), `geometry_path`, `mesh_name`, `primitive_count`.
 - `Mesh_source_type` enum: `geometry` (0), `gltf` (1).
-- File naming: `{scene_stem}_mesh_{N}_p{P}.meshb` for geometry primitives.
+- File naming: `{scene_stem}_mesh_{N}_p{P}.geogram` for geometry primitives.
+- Companion `.glb` is always exported when any meshes exist, storing materials (and glTF-normative mesh data).
+- On load, geometry-normative mesh materials are resolved from the companion `.glb` via name lookup, then added to content library.
+
+## Node Physics Serialization
+
+- `Node_physics_data` codegen struct: `node_id`, `motion_mode`, `friction`, `restitution`, `linear_damping`, `angular_damping`, `mass` (optional), `density` (optional), `enable_collisions`.
+- `Motion_mode_serial` enum: `e_static` (1), `e_kinematic_non_physical` (2), `e_kinematic_physical` (3), `e_dynamic` (4).
+- `Scene_file` v2: added `node_physics` field (`Vector(Node_physics_data)`).
+- On save: iterates all nodes, serializes `Node_physics` attachment properties. Mass read from rigid body if active.
+- On load: creates `Node_physics` attachments. Collision shape is re-derived as convex hull from the mesh geometry attached to the same node (same approach as `Brush`). Falls back to empty shape if no geometry available.
+- Collision shape parameters (box extents, sphere radius, etc.) are NOT serialized — convex hull is always used on load. This is acceptable for geometry-normative meshes where the original geometry is available.
 
 ## Verification
 

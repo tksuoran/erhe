@@ -153,13 +153,9 @@ void Mesh_operation::make_entries(
                 },
             };
 
-            erhe::physics::IRigid_body* rigid_body  = entry.before.node_physics ? entry.before.node_physics->get_rigid_body() : nullptr;
-            erhe::physics::Motion_mode  motion_mode = (rigid_body != nullptr) ? rigid_body->get_motion_mode() : erhe::physics::Motion_mode::e_invalid;
-            if (m_parameters.context.app_settings->physics.static_enable) {
-                if (entry.before.node_physics && (entry.before.node_physics->physics_motion_mode != motion_mode)) {
-                    motion_mode = entry.before.node_physics->physics_motion_mode;
-                }
-            }
+            erhe::physics::Motion_mode motion_mode = entry.before.node_physics
+                ? entry.before.node_physics->get_motion_mode()
+                : erhe::physics::Motion_mode::e_invalid;
 
             for (erhe::scene::Mesh_primitive& mesh_primitive : scene_mesh->get_mutable_primitives()) {
                 const erhe::primitive::Primitive&                               primitive       = *mesh_primitive.primitive.get();
@@ -214,7 +210,6 @@ void Mesh_operation::make_entries(
 
                     if (entry.before.node_physics) {
                         entry.after.node_physics = std::make_shared<Node_physics>(rigid_body_create_info);
-                        entry.after.node_physics->physics_motion_mode = entry.before.node_physics->physics_motion_mode;
                     }
                 }
 

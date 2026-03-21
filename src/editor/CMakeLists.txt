@@ -407,8 +407,12 @@ erhe_target_sources_grouped(
     scene/generated/mesh_reference.cpp
     scene/generated/mesh_source_type.hpp
     scene/generated/mesh_source_type.cpp
+    scene/generated/motion_mode_serial.hpp
+    scene/generated/motion_mode_serial.cpp
     scene/generated/node_data_serial.hpp
     scene/generated/node_data_serial.cpp
+    scene/generated/node_physics_data.hpp
+    scene/generated/node_physics_data.cpp
     scene/generated/projection_data.hpp
     scene/generated/projection_data.cpp
     scene/generated/scene_file.hpp

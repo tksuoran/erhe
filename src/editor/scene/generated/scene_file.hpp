@@ -13,10 +13,11 @@
 #include "light_data.hpp"
 #include "mesh_reference.hpp"
 #include "node_data_serial.hpp"
+#include "node_physics_data.hpp"
 
 struct Scene_file
 {
-    static constexpr uint32_t current_version = 1;
+    static constexpr uint32_t current_version = 2;
 
     std::string name{""}; // v1+
     bool enable_physics{true}; // v1+
@@ -24,6 +25,7 @@ struct Scene_file
     std::vector<Camera_data> cameras{}; // v1+
     std::vector<Light_data> lights{}; // v1+
     std::vector<Mesh_reference> mesh_references{}; // v1+
+    std::vector<Node_physics_data> node_physics{}; // v2+
 };
 
 auto serialize  (const Scene_file& value) -> std::string;

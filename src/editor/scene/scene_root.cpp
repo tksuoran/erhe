@@ -211,8 +211,7 @@ Scene_root::Scene_root(
                         continue;
                     }
                     log_physics->trace("release physics: {}", node->describe());
-                    rigid_body->set_motion_mode(node_physics->physics_motion_mode);
-                    rigid_body->end_move       (); // allows sleeping
+                    node_physics->end_interaction();
                     const auto i = std::remove(m_physics_disabled_nodes.begin(), m_physics_disabled_nodes.end(), item);
                     if (i == m_physics_disabled_nodes.end()) {
                         log_physics->error("node {} not in physics disabled nodes", item->get_name());
@@ -238,9 +237,7 @@ Scene_root::Scene_root(
                         continue;
                     }
                     log_physics->trace("acquire physics: {}", node->describe());
-                    node_physics->physics_motion_mode = rigid_body->get_motion_mode();
-                    rigid_body->set_motion_mode(erhe::physics::Motion_mode::e_kinematic_physical);
-                    rigid_body->begin_move();
+                    node_physics->begin_interaction();
 
 #ifndef NDEBUG
                     const auto i = std::find(m_physics_disabled_nodes.begin(), m_physics_disabled_nodes.end(), item);
