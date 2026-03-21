@@ -11,7 +11,8 @@ struct("Threading_config",
             added_in=1,
             default="8",
             short_desc="",
-            long_desc=""
+            long_desc="",
+            visible=True
         ),
     ],
 )

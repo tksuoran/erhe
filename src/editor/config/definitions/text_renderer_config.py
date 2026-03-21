@@ -11,7 +11,8 @@ struct("Text_renderer_config",
             added_in=1,
             default="true",
             short_desc="",
-            long_desc=""
+            long_desc="",
+            visible=True
         ),
         field(
             "font_size",
@@ -19,7 +20,8 @@ struct("Text_renderer_config",
             added_in=1,
             default="14",
             short_desc="",
-            long_desc=""
+            long_desc="",
+            visible=True
         ),
     ],
 )

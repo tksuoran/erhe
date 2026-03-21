@@ -11,7 +11,8 @@ struct("Hud_config",
             added_in=1,
             default="false",
             short_desc="",
-            long_desc=""
+            long_desc="",
+            visible=True
         ),
         field(
             "show",
@@ -19,7 +20,8 @@ struct("Hud_config",
             added_in=1,
             default="false",
             short_desc="",
-            long_desc=""
+            long_desc="",
+            visible=True
         ),
         field(
             "locked",
@@ -27,7 +29,8 @@ struct("Hud_config",
             added_in=1,
             default="false",
             short_desc="",
-            long_desc=""
+            long_desc="",
+            visible=True
         ),
         field(
             "width",
@@ -35,7 +38,8 @@ struct("Hud_config",
             added_in=1,
             default="1024",
             short_desc="",
-            long_desc=""
+            long_desc="",
+            visible=True
         ),
         field(
             "height",
@@ -43,7 +47,8 @@ struct("Hud_config",
             added_in=1,
             default="1024",
             short_desc="",
-            long_desc=""
+            long_desc="",
+            visible=True
         ),
         field(
             "ppm",
@@ -51,7 +56,8 @@ struct("Hud_config",
             added_in=1,
             default="5000.0f",
             short_desc="",
-            long_desc=""
+            long_desc="",
+            visible=True
         ),
         field(
             "x",
@@ -59,7 +65,8 @@ struct("Hud_config",
             added_in=1,
             default="-0.09f",
             short_desc="",
-            long_desc=""
+            long_desc="",
+            visible=True
         ),
         field(
             "y",
@@ -67,7 +74,8 @@ struct("Hud_config",
             added_in=1,
             default="0.0f",
             short_desc="",
-            long_desc=""
+            long_desc="",
+            visible=True
         ),
         field(
             "z",
@@ -75,7 +83,8 @@ struct("Hud_config",
             added_in=1,
             default="-0.38f",
             short_desc="",
-            long_desc=""
+            long_desc="",
+            visible=True
         ),
     ],
 )

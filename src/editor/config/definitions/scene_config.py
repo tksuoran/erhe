@@ -11,7 +11,8 @@ struct("Scene_config",
             added_in=1,
             default="true",
             short_desc="",
-            long_desc=""
+            long_desc="",
+            visible=True
         ),
         field(
             "camera_exposure",
@@ -19,7 +20,8 @@ struct("Scene_config",
             added_in=1,
             default="1.0f",
             short_desc="",
-            long_desc=""
+            long_desc="",
+            visible=True
         ),
         field(
             "shadow_range",
@@ -27,7 +29,8 @@ struct("Scene_config",
             added_in=1,
             default="22.0f",
             short_desc="",
-            long_desc=""
+            long_desc="",
+            visible=True
         ),
         field(
             "directional_light_intensity",
@@ -35,7 +38,8 @@ struct("Scene_config",
             added_in=1,
             default="20.0f",
             short_desc="",
-            long_desc=""
+            long_desc="",
+            visible=True
         ),
         field(
             "directional_light_radius",
@@ -43,7 +47,8 @@ struct("Scene_config",
             added_in=1,
             default="6.0f",
             short_desc="",
-            long_desc=""
+            long_desc="",
+            visible=True
         ),
         field(
             "directional_light_height",
@@ -51,7 +56,8 @@ struct("Scene_config",
             added_in=1,
             default="10.0f",
             short_desc="",
-            long_desc=""
+            long_desc="",
+            visible=True
         ),
         field(
             "directional_light_count",
@@ -59,7 +65,8 @@ struct("Scene_config",
             added_in=1,
             default="4",
             short_desc="",
-            long_desc=""
+            long_desc="",
+            visible=True
         ),
         field(
             "spot_light_intensity",
@@ -67,7 +74,8 @@ struct("Scene_config",
             added_in=1,
             default="150.0f",
             short_desc="",
-            long_desc=""
+            long_desc="",
+            visible=True
         ),
         field(
             "spot_light_radius",
@@ -75,7 +83,8 @@ struct("Scene_config",
             added_in=1,
             default="20.0f",
             short_desc="",
-            long_desc=""
+            long_desc="",
+            visible=True
         ),
         field(
             "spot_light_height",
@@ -83,7 +92,8 @@ struct("Scene_config",
             added_in=1,
             default="10.0f",
             short_desc="",
-            long_desc=""
+            long_desc="",
+            visible=True
         ),
         field(
             "spot_light_count",
@@ -91,7 +101,8 @@ struct("Scene_config",
             added_in=1,
             default="3",
             short_desc="",
-            long_desc=""
+            long_desc="",
+            visible=True
         ),
         field(
             "floor_size",
@@ -99,7 +110,8 @@ struct("Scene_config",
             added_in=1,
             default="1.0f",
             short_desc="",
-            long_desc=""
+            long_desc="",
+            visible=True
         ),
         field(
             "floor_height",
@@ -107,7 +119,8 @@ struct("Scene_config",
             added_in=1,
             default="0.001f",
             short_desc="",
-            long_desc=""
+            long_desc="",
+            visible=True
         ),
         field(
             "floor",
@@ -115,7 +128,8 @@ struct("Scene_config",
             added_in=1,
             default="true",
             short_desc="",
-            long_desc=""
+            long_desc="",
+            visible=True
         ),
         field(
             "mass_scale",
@@ -123,7 +137,8 @@ struct("Scene_config",
             added_in=1,
             default="0.0f",
             short_desc="",
-            long_desc=""
+            long_desc="",
+            visible=True
         ),
         field(
             "detail",
@@ -131,7 +146,8 @@ struct("Scene_config",
             added_in=1,
             default="0",
             short_desc="",
-            long_desc=""
+            long_desc="",
+            visible=True
         ),
         field(
             "camera_distance",
@@ -139,7 +155,8 @@ struct("Scene_config",
             added_in=1,
             default="3.0f",
             short_desc="",
-            long_desc=""
+            long_desc="",
+            visible=True
         ),
         field(
             "camera_elevation",
@@ -147,7 +164,8 @@ struct("Scene_config",
             added_in=1,
             default="1.6f",
             short_desc="",
-            long_desc=""
+            long_desc="",
+            visible=True
         ),
         field(
             "instance_count",
@@ -155,7 +173,8 @@ struct("Scene_config",
             added_in=1,
             default="1",
             short_desc="",
-            long_desc=""
+            long_desc="",
+            visible=True
         ),
         field(
             "instance_gap",
@@ -163,7 +182,8 @@ struct("Scene_config",
             added_in=1,
             default="0.50f",
             short_desc="",
-            long_desc=""
+            long_desc="",
+            visible=True
         ),
         field(
             "object_scale",
@@ -171,7 +191,8 @@ struct("Scene_config",
             added_in=1,
             default="0.25f",
             short_desc="",
-            long_desc=""
+            long_desc="",
+            visible=True
         ),
         field(
             "make_johnson_solid_brushes",
@@ -179,7 +200,8 @@ struct("Scene_config",
             added_in=1,
             default="true",
             short_desc="",
-            long_desc=""
+            long_desc="",
+            visible=True
         ),
         field(
             "make_platonic_solid_brushes",
@@ -187,7 +209,8 @@ struct("Scene_config",
             added_in=1,
             default="true",
             short_desc="",
-            long_desc=""
+            long_desc="",
+            visible=True
         ),
         field(
             "make_curved_brushes",
@@ -195,7 +218,8 @@ struct("Scene_config",
             added_in=1,
             default="true",
             short_desc="",
-            long_desc=""
+            long_desc="",
+            visible=True
         ),
     ],
 )

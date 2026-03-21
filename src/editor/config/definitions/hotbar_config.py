@@ -11,7 +11,8 @@ struct("Hotbar_config",
             added_in=1,
             default="true",
             short_desc="",
-            long_desc=""
+            long_desc="",
+            visible=True
         ),
         field(
             "show",
@@ -19,7 +20,8 @@ struct("Hotbar_config",
             added_in=1,
             default="true",
             short_desc="",
-            long_desc=""
+            long_desc="",
+            visible=True
         ),
         field(
             "use_radial",
@@ -27,7 +29,8 @@ struct("Hotbar_config",
             added_in=1,
             default="false",
             short_desc="",
-            long_desc=""
+            long_desc="",
+            visible=True
         ),
         field(
             "x",
@@ -35,7 +38,8 @@ struct("Hotbar_config",
             added_in=1,
             default="0.0f",
             short_desc="",
-            long_desc=""
+            long_desc="",
+            visible=True
         ),
         field(
             "y",
@@ -43,7 +47,8 @@ struct("Hotbar_config",
             added_in=1,
             default="-0.140f",
             short_desc="",
-            long_desc=""
+            long_desc="",
+            visible=True
         ),
         field(
             "z",
@@ -51,7 +56,8 @@ struct("Hotbar_config",
             added_in=1,
             default="-0.5f",
             short_desc="",
-            long_desc=""
+            long_desc="",
+            visible=True
         ),
     ],
 )

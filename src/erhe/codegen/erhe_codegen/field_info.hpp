@@ -78,6 +78,7 @@ struct Field_info
     Numeric_limits   numeric_limits;
     bool             is_numeric;
     bool             is_enum;
+    bool             visible;
     const Enum_info* enum_info;
 };
 

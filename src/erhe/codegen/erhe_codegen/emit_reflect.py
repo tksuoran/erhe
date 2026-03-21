@@ -144,6 +144,7 @@ def emit_struct_reflect(s: StructSchema) -> str:
         lines.append(_numeric_limits_code(f, "        "))
         lines.append(f"        .is_numeric    = {'true' if _is_numeric(f.type) else 'false'},")
         lines.append(f"        .is_enum       = {'true' if _is_enum_field(f.type) else 'false'},")
+        lines.append(f"        .visible       = {'true' if f.visible else 'false'},")
         lines.append(f"        .enum_info     = {_enum_info_ptr(f.type)},")
         lines.append("    },")
 

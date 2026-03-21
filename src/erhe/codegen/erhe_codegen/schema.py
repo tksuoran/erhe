@@ -23,6 +23,7 @@ class FieldSchema:
         short_desc: Optional[str] = None,
         long_desc: Optional[str] = None,
         path: str = "",
+        visible: bool = True,
         ui_min: Optional[str] = None,
         ui_max: Optional[str] = None,
         hard_min: Optional[str] = None,
@@ -37,6 +38,7 @@ class FieldSchema:
         self.short_desc = short_desc
         self.long_desc = long_desc
         self.path = path
+        self.visible = visible
         self.ui_min = ui_min
         self.ui_max = ui_max
         self.hard_min = hard_min
@@ -160,6 +162,7 @@ def field(
     short_desc: Optional[str] = None,
     long_desc: Optional[str] = None,
     path: str = "",
+    visible: bool = True,
     ui_min: Optional[str] = None,
     ui_max: Optional[str] = None,
     hard_min: Optional[str] = None,
@@ -175,6 +178,7 @@ def field(
         short_desc=short_desc,
         long_desc=long_desc,
         path=path,
+        visible=visible,
         ui_min=ui_min,
         ui_max=ui_max,
         hard_min=hard_min,

@@ -11,7 +11,8 @@ struct("Mesh_memory_config",
             added_in=1,
             default="128",
             short_desc="",
-            long_desc=""
+            long_desc="",
+            visible=True
         ),
         field(
             "index_buffer_size",
@@ -19,7 +20,8 @@ struct("Mesh_memory_config",
             added_in=1,
             default="64",
             short_desc="",
-            long_desc=""
+            long_desc="",
+            visible=True
         ),
     ],
 )

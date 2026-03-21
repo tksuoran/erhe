@@ -11,7 +11,8 @@ struct("Viewport_config_data",
             added_in=1,
             default="3.0f",
             short_desc="",
-            long_desc=""
+            long_desc="",
+            visible=True
         ),
         field(
             "polygon_fill",
@@ -19,7 +20,8 @@ struct("Viewport_config_data",
             added_in=1,
             default="true",
             short_desc="",
-            long_desc=""
+            long_desc="",
+            visible=True
         ),
         field(
             "edge_lines",
@@ -27,7 +29,8 @@ struct("Viewport_config_data",
             added_in=1,
             default="false",
             short_desc="",
-            long_desc=""
+            long_desc="",
+            visible=True
         ),
         field(
             "selection_polygon_fill",
@@ -35,7 +38,8 @@ struct("Viewport_config_data",
             added_in=1,
             default="true",
             short_desc="",
-            long_desc=""
+            long_desc="",
+            visible=True
         ),
         field(
             "selection_edge_lines",
@@ -43,7 +47,8 @@ struct("Viewport_config_data",
             added_in=1,
             default="false",
             short_desc="",
-            long_desc=""
+            long_desc="",
+            visible=True
         ),
         field(
             "corner_points",
@@ -51,7 +56,8 @@ struct("Viewport_config_data",
             added_in=1,
             default="false",
             short_desc="",
-            long_desc=""
+            long_desc="",
+            visible=True
         ),
         field(
             "polygon_centroids",
@@ -59,7 +65,8 @@ struct("Viewport_config_data",
             added_in=1,
             default="false",
             short_desc="",
-            long_desc=""
+            long_desc="",
+            visible=True
         ),
         field(
             "selection_bounding_box",
@@ -67,7 +74,8 @@ struct("Viewport_config_data",
             added_in=1,
             default="true",
             short_desc="",
-            long_desc=""
+            long_desc="",
+            visible=True
         ),
         field(
             "selection_bounding_sphere",
@@ -75,7 +83,8 @@ struct("Viewport_config_data",
             added_in=1,
             default="true",
             short_desc="",
-            long_desc=""
+            long_desc="",
+            visible=True
         ),
         field(
             "edge_color",
@@ -83,7 +92,8 @@ struct("Viewport_config_data",
             added_in=1,
             default="0.0f, 0.0f, 0.0f, 0.5f",
             short_desc="",
-            long_desc=""
+            long_desc="",
+            visible=True
         ),
         field(
             "selection_edge_color",
@@ -91,7 +101,8 @@ struct("Viewport_config_data",
             added_in=1,
             default="0.0f, 0.0f, 0.0f, 0.5f",
             short_desc="",
-            long_desc=""
+            long_desc="",
+            visible=True
         ),
         field(
             "clear_color",
@@ -99,7 +110,8 @@ struct("Viewport_config_data",
             added_in=1,
             default="0.1f, 0.2f, 0.4f, 1.0f",
             short_desc="",
-            long_desc=""
+            long_desc="",
+            visible=True
         ),
     ],
 )

@@ -11,7 +11,8 @@ struct("Renderdoc_config",
             added_in=1,
             default="false",
             short_desc="",
-            long_desc=""
+            long_desc="",
+            visible=True
         ),
     ],
 )
