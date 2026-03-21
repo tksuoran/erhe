@@ -44,6 +44,7 @@ struct Field_info
     uint32_t         removed_in;
     const char*      short_desc;
     const char*      long_desc;
+    const char*      path;
     const char*      default_value;
     Numeric_limits   numeric_limits;
     bool             is_numeric;

@@ -93,6 +93,7 @@ def emit_struct_reflect(s: StructSchema) -> str:
         lines.append(f"        .removed_in    = {f.removed_in if f.removed_in is not None else 0},")
         lines.append(f"        .short_desc    = {_c_string_literal(f.short_desc)},")
         lines.append(f"        .long_desc     = {_c_string_literal(f.long_desc)},")
+        lines.append(f"        .path          = {_c_string_literal(f.path)},")
         lines.append(f"        .default_value = {_c_string_literal(f.default)},")
         lines.append(_numeric_limits_code(f, "        "))
         lines.append(f"        .is_numeric    = {'true' if _is_numeric(f.type) else 'false'},")
