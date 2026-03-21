@@ -23,7 +23,7 @@
 
 namespace erhe::graphics {
 
-Device::Device(const Surface_create_info& surface_create_info, const Device_graphics_config& graphics_config)
+Device::Device(const Surface_create_info& surface_create_info, const Graphics_config& graphics_config)
     : m_impl{std::make_unique<Device_impl>(*this, surface_create_info, graphics_config)}
 {
 }

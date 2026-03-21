@@ -209,11 +209,29 @@ if (ERHE_SPIRV)
     )
 endif()
 
-target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+# Graphics config codegen
+set(_gfx_config_defs "${CMAKE_CURRENT_SOURCE_DIR}/definitions")
+set(_gfx_config_out  "${CMAKE_CURRENT_BINARY_DIR}/erhe_graphics/generated")
+
+erhe_codegen_generate(
+    TARGET          ${_target}
+    DEFINITIONS_DIR "${_gfx_config_defs}"
+    OUTPUT_DIR      "${_gfx_config_out}"
+)
+
+set(_gfx_config_sources
+    ${_gfx_config_out}/graphics_config.hpp
+    ${_gfx_config_out}/graphics_config.cpp
+)
+set_source_files_properties(${_gfx_config_sources} PROPERTIES GENERATED TRUE)
+target_sources(${_target} PRIVATE ${_gfx_config_sources})
+
+target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
 
 target_link_libraries(${_target}
     PUBLIC
         concurrentqueue
+        erhe::codegen
         erhe::configuration
         erhe::dataformat
         erhe::item

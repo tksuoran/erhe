@@ -9,5 +9,7 @@ struct("Graphics_config",
     field("force_emulate_multi_draw_indirect", Bool, added_in=1, default="false"),
     field("force_gl_version",                  Int,  added_in=1, default="0"),
     field("force_glsl_version",                Int,  added_in=1, default="0"),
+    field("renderdoc_capture_support",         Bool, added_in=1, default="false"),
+    field("shader_monitor_enabled",            Bool, added_in=1, default="true"),
     version=1,
 )

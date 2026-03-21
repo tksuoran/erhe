@@ -489,17 +489,12 @@ public:
                     .prefer_low_bandwidth      = false,
                     .prefer_high_dynamic_range = false
                 },
-                erhe::graphics::Device_graphics_config{
-                    .initial_clear                     = m_editor_config.graphics.initial_clear,
-                    .force_bindless_textures_off        = m_editor_config.graphics.force_bindless_textures_off,
-                    .force_no_persistent_buffers        = m_editor_config.graphics.force_no_persistent_buffers,
-                    .force_no_direct_state_access       = m_editor_config.graphics.force_no_direct_state_access,
-                    .force_emulate_multi_draw_indirect  = m_editor_config.graphics.force_emulate_multi_draw_indirect,
-                    .force_gl_version                   = m_editor_config.graphics.force_gl_version,
-                    .force_glsl_version                 = m_editor_config.graphics.force_glsl_version,
-                    .renderdoc_capture_support          = m_editor_config.renderdoc.capture_support,
-                    .shader_monitor_enabled             = m_editor_config.shader_monitor.enabled
-                }
+                [this]() {
+                    Graphics_config config = m_editor_config.graphics;
+                    config.renderdoc_capture_support = m_editor_config.renderdoc.capture_support;
+                    config.shader_monitor_enabled    = m_editor_config.shader_monitor.enabled;
+                    return config;
+                }()
             );
 
             m_app_settings->apply_limits(

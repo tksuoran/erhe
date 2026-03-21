@@ -446,8 +446,6 @@ set(_config_sources
     ${_config_out}/camera_controls_config.cpp
     ${_config_out}/developer_config.hpp
     ${_config_out}/developer_config.cpp
-    ${_config_out}/graphics_config.hpp
-    ${_config_out}/graphics_config.cpp
     ${_config_out}/grid_config.hpp
     ${_config_out}/grid_config.cpp
     ${_config_out}/headset_config.hpp

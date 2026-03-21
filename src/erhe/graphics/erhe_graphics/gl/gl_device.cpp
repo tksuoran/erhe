@@ -103,7 +103,7 @@ auto get_string(const gl::String_name string_name) -> std::string
 
 //
 
-Device_impl::Device_impl(Device& device, const Surface_create_info& surface_create_info, const Device_graphics_config& graphics_config)
+Device_impl::Device_impl(Device& device, const Surface_create_info& surface_create_info, const Graphics_config& graphics_config)
     : m_device             {device}
     , m_shader_monitor     {device}
     , m_gl_context_provider{device, m_gl_state_tracker}
@@ -367,7 +367,7 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
 
     const bool force_bindless_textures_off       = graphics_config.force_bindless_textures_off;
     const bool force_no_persistent_buffers       = graphics_config.force_no_persistent_buffers;
-    const bool force_no_direct_state_access      = graphics_config.force_no_direct_state_access;
+    //const bool force_no_direct_state_access      = graphics_config.force_no_direct_state_access;
     const bool force_emulate_multi_draw_indirect = graphics_config.force_emulate_multi_draw_indirect;
     const int  force_gl_version                  = graphics_config.force_gl_version;
     const int  force_glsl_version                = graphics_config.force_glsl_version;

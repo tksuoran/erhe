@@ -2,7 +2,7 @@
 
 #include "config/generated/camera_controls_config.hpp"
 #include "config/generated/developer_config.hpp"
-#include "config/generated/graphics_config.hpp"
+#include "erhe_graphics/generated/graphics_config.hpp"
 #include "config/generated/grid_config.hpp"
 #include "config/generated/headset_config.hpp"
 #include "config/generated/hotbar_config.hpp"

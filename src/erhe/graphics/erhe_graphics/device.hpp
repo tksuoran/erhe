@@ -4,6 +4,7 @@
 #include "erhe_graphics/ring_buffer_range.hpp"
 #include "erhe_graphics/shader_monitor.hpp"
 #include "erhe_graphics/surface.hpp"
+#include "erhe_graphics/generated/graphics_config.hpp"
 #include "erhe_utility/debug_label.hpp"
 
 #include <array>
@@ -142,19 +143,6 @@ public:
     unsigned int uniform_buffer_offset_alignment       {256};
 };
 
-struct Device_graphics_config
-{
-    bool initial_clear                    {true};
-    bool force_bindless_textures_off      {false};
-    bool force_no_persistent_buffers      {false};
-    bool force_no_direct_state_access     {false};
-    bool force_emulate_multi_draw_indirect{false};
-    int  force_gl_version                 {0};
-    int  force_glsl_version               {0};
-    bool renderdoc_capture_support        {false};
-    bool shader_monitor_enabled           {true};
-};
-
 class Frame_state;
 class Frame_begin_info;
 class Frame_end_info;
@@ -163,7 +151,7 @@ class Device_impl;
 class Device final
 {
 public:
-    Device(const Surface_create_info& surface_create_info, const Device_graphics_config& graphics_config = {});
+    Device(const Surface_create_info& surface_create_info, const Graphics_config& graphics_config = {});
     Device         (const Device&) = delete;
     void operator= (const Device&) = delete;
     Device         (Device&&)      = delete;
