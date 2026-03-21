@@ -16,30 +16,47 @@ Hierarchy::~Hierarchy() noexcept = default;
 Hierarchy::Hierarchy(const Hierarchy& src)
     : Item{src} // m_parent is not copied from other
 {
+    // Don't use set_parent() here: `this` is not yet managed by a shared_ptr,
+    // so shared_from_this() would throw. Also set_parent() would double-add
+    // children (we already push_back below). Wire members directly instead.
     m_children.reserve(src.m_children.size());
     for (const auto& src_child : src.m_children) {
         std::shared_ptr<erhe::Item_base> base      = src_child->clone();
         std::shared_ptr<erhe::Hierarchy> dst_child = std::dynamic_pointer_cast<erhe::Hierarchy>(base);
         if (dst_child) {
+            dst_child->m_parent = {}; // can't point to `this` yet - no shared_ptr exists
+            dst_child->m_depth  = m_depth + 1;
             m_children.push_back(dst_child);
-            dst_child->set_parent(this);
         }
     }
 }
 
 Hierarchy::Hierarchy(const Hierarchy& src, for_clone) : Hierarchy{src} {}
 
+void Hierarchy::adopt_orphan_children()
+{
+    auto self = shared_hierarchy_from_this();
+    for (const auto& child : m_children) {
+        if (child->m_parent.expired()) {
+            child->m_parent = self;
+        }
+        child->adopt_orphan_children();
+    }
+}
+
 Hierarchy& Hierarchy::operator=(const Hierarchy& src)
 {
     Item::operator=(src);
+    m_children.clear();
     m_children.reserve(src.m_children.size());
     m_parent.reset();
     m_depth = 0;
     for (const auto& src_child : src.m_children) {
         auto dst_child = std::dynamic_pointer_cast<erhe::Hierarchy>(src_child->clone());
         if (dst_child) {
+            dst_child->m_parent = shared_hierarchy_from_this();
+            dst_child->m_depth  = m_depth + 1;
             m_children.push_back(dst_child);
-            dst_child->set_parent(this);
         }
     }
     return *this;
@@ -162,6 +179,11 @@ void Hierarchy::set_parent(const std::shared_ptr<Hierarchy>& new_parent_, const 
     // - We need to keep this alive while being removed from old parent before being added to new parent
     // - Also in case new_parent is empty, for any other access to this
     auto shared_this = std::static_pointer_cast<Hierarchy>(weak_from_this().lock());
+
+    // The copy constructor cannot set children's m_parent (shared_from_this()
+    // is not available during construction). Fix up the back-links now that
+    // this object is managed by a shared_ptr.
+    adopt_orphan_children();
 
     if (old_parent) {
         old_parent->handle_remove_child(this);

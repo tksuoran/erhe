@@ -51,6 +51,7 @@ public:
     void remove_all_children_recursively();
     void set_parent                     (Hierarchy* parent);
     void set_parent                     (Hierarchy* parent, std::size_t position);
+    void adopt_orphan_children          ();
     void set_depth_recursive            (std::size_t depth);
     void hierarchy_sanity_check         (bool destruction_in_progress = false) const;
     void sanity_check_root_path         (const Hierarchy* node) const;
