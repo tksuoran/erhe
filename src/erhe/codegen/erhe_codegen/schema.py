@@ -24,6 +24,7 @@ class FieldSchema:
         long_desc: Optional[str] = None,
         path: str = "",
         visible: bool = True,
+        developer: bool = False,
         ui_min: Optional[str] = None,
         ui_max: Optional[str] = None,
         hard_min: Optional[str] = None,
@@ -39,6 +40,7 @@ class FieldSchema:
         self.long_desc = long_desc
         self.path = path
         self.visible = visible
+        self.developer = developer
         self.ui_min = ui_min
         self.ui_max = ui_max
         self.hard_min = hard_min
@@ -110,12 +112,14 @@ class StructSchema:
         version: int,
         short_desc: Optional[str] = None,
         long_desc: Optional[str] = None,
+        developer: bool = False,
     ):
         self.name = name
         self.fields = fields
         self.version = version
         self.short_desc = short_desc
         self.long_desc = long_desc
+        self.developer = developer
 
     def active_fields(self, version: Optional[int] = None) -> list[FieldSchema]:
         """Return fields active in the given version (default: current)."""
@@ -163,6 +167,7 @@ def field(
     long_desc: Optional[str] = None,
     path: str = "",
     visible: bool = True,
+    developer: bool = False,
     ui_min: Optional[str] = None,
     ui_max: Optional[str] = None,
     hard_min: Optional[str] = None,
@@ -179,6 +184,7 @@ def field(
         long_desc=long_desc,
         path=path,
         visible=visible,
+        developer=developer,
         ui_min=ui_min,
         ui_max=ui_max,
         hard_min=hard_min,
@@ -208,10 +214,11 @@ def struct(
     version: int,
     short_desc: Optional[str] = None,
     long_desc: Optional[str] = None,
+    developer: bool = False,
     fields: list[FieldSchema],
 ) -> StructSchema:
     """Register a struct definition."""
-    schema = StructSchema(name, fields, version=version, short_desc=short_desc, long_desc=long_desc)
+    schema = StructSchema(name, fields, version=version, short_desc=short_desc, long_desc=long_desc, developer=developer)
     _validate_struct(schema)
     _struct_registry[name] = schema
     return schema

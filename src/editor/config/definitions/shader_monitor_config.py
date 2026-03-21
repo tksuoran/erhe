@@ -4,6 +4,7 @@ struct("Shader_monitor_config",
     version=1,
     short_desc="",
     long_desc="",
+    developer=False,
     fields=[
         field(
             "enabled",
@@ -12,7 +13,8 @@ struct("Shader_monitor_config",
             default="true",
             short_desc="",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
     ],
 )

@@ -4,6 +4,7 @@ struct("Physics_config",
     version=1,
     short_desc="",
     long_desc="",
+    developer=False,
     fields=[
         field(
             "static_enable",
@@ -12,7 +13,8 @@ struct("Physics_config",
             default="true",
             short_desc="",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "dynamic_enable",
@@ -21,7 +23,8 @@ struct("Physics_config",
             default="true",
             short_desc="",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
     ],
 )

@@ -4,6 +4,7 @@ struct("Headset_config",
     version=1,
     short_desc="Virtual Reality Headset",
     long_desc="",
+    developer=False,
     fields=[
         field(
             "openxr",
@@ -12,7 +13,8 @@ struct("Headset_config",
             default="false",
             short_desc="OpenXR Enable",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "openxr_mirror",
@@ -21,7 +23,8 @@ struct("Headset_config",
             default="false",
             short_desc="OpenXR Mirror Window",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "quad_view",
@@ -30,7 +33,8 @@ struct("Headset_config",
             default="false",
             short_desc="Enable Quad View (Varjo)",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "debug",
@@ -39,7 +43,8 @@ struct("Headset_config",
             default="false",
             short_desc="Enable OpenXR Debug",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "validation",
@@ -48,7 +53,8 @@ struct("Headset_config",
             default="false",
             short_desc="Enable OpenXR Validation",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "api_dump",
@@ -57,7 +63,8 @@ struct("Headset_config",
             default="false",
             short_desc="Enable OpenXR API Dump",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "depth",
@@ -66,7 +73,8 @@ struct("Headset_config",
             default="false",
             short_desc="",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "visibility_mask",
@@ -75,7 +83,8 @@ struct("Headset_config",
             default="false",
             short_desc="",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "hand_tracking",
@@ -84,7 +93,8 @@ struct("Headset_config",
             default="false",
             short_desc="",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "passthrough_fb",
@@ -93,7 +103,8 @@ struct("Headset_config",
             default="false",
             short_desc="",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "composition_alpha",
@@ -102,7 +113,8 @@ struct("Headset_config",
             default="false",
             short_desc="",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
     ],
 )

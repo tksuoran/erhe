@@ -145,6 +145,7 @@ def emit_struct_reflect(s: StructSchema) -> str:
         lines.append(f"        .is_numeric    = {'true' if _is_numeric(f.type) else 'false'},")
         lines.append(f"        .is_enum       = {'true' if _is_enum_field(f.type) else 'false'},")
         lines.append(f"        .visible       = {'true' if f.visible else 'false'},")
+        lines.append(f"        .developer     = {'true' if f.developer else 'false'},")
         lines.append(f"        .enum_info     = {_enum_info_ptr(f.type)},")
         lines.append("    },")
 
@@ -157,6 +158,7 @@ def emit_struct_reflect(s: StructSchema) -> str:
     lines.append(f"    .version    = {s.version},")
     lines.append(f"    .short_desc = {_c_string_literal(s.short_desc)},")
     lines.append(f"    .long_desc  = {_c_string_literal(s.long_desc)},")
+    lines.append(f"    .developer  = {'true' if s.developer else 'false'},")
     lines.append(f"    .fields     = {snake}_fields,")
     lines.append("};")
     lines.append("")

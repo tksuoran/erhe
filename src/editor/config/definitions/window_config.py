@@ -4,6 +4,7 @@ struct("Window_config",
     version=1,
     short_desc="",
     long_desc="",
+    developer=False,
     fields=[
         field(
             "show",
@@ -12,7 +13,8 @@ struct("Window_config",
             default="true",
             short_desc="",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "fullscreen",
@@ -21,7 +23,8 @@ struct("Window_config",
             default="false",
             short_desc="",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "use_transparency",
@@ -30,7 +33,8 @@ struct("Window_config",
             default="false",
             short_desc="",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "gl_major",
@@ -39,7 +43,8 @@ struct("Window_config",
             default="4",
             short_desc="",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "gl_minor",
@@ -48,7 +53,8 @@ struct("Window_config",
             default="6",
             short_desc="",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "size",
@@ -57,7 +63,8 @@ struct("Window_config",
             default="1920, 1080",
             short_desc="",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "color_bit_depth",
@@ -66,7 +73,8 @@ struct("Window_config",
             default="8",
             short_desc="",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "high_pixel_density",
@@ -75,7 +83,8 @@ struct("Window_config",
             default="true",
             short_desc="",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "use_finish",
@@ -84,7 +93,8 @@ struct("Window_config",
             default="false",
             short_desc="",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "use_sleep",
@@ -93,7 +103,8 @@ struct("Window_config",
             default="false",
             short_desc="",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "sleep_margin",
@@ -102,7 +113,8 @@ struct("Window_config",
             default="0.0f",
             short_desc="",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "swap_interval",
@@ -111,7 +123,8 @@ struct("Window_config",
             default="0",
             short_desc="",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "enable_joystick",
@@ -120,7 +133,8 @@ struct("Window_config",
             default="true",
             short_desc="",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
     ],
 )

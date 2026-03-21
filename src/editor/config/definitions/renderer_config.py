@@ -4,6 +4,7 @@ struct("Renderer_config",
     version=1,
     short_desc="",
     long_desc="",
+    developer=False,
     fields=[
         field(
             "max_material_count",
@@ -12,7 +13,8 @@ struct("Renderer_config",
             default="1000",
             short_desc="",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "max_light_count",
@@ -21,7 +23,8 @@ struct("Renderer_config",
             default="32",
             short_desc="",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "max_camera_count",
@@ -30,7 +33,8 @@ struct("Renderer_config",
             default="256",
             short_desc="",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "max_joint_count",
@@ -39,7 +43,8 @@ struct("Renderer_config",
             default="1000",
             short_desc="",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "max_primitive_count",
@@ -48,7 +53,8 @@ struct("Renderer_config",
             default="6000",
             short_desc="",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "max_draw_count",
@@ -57,7 +63,8 @@ struct("Renderer_config",
             default="6000",
             short_desc="",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
     ],
 )

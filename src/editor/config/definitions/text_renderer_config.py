@@ -4,6 +4,7 @@ struct("Text_renderer_config",
     version=1,
     short_desc="",
     long_desc="",
+    developer=False,
     fields=[
         field(
             "enabled",
@@ -12,7 +13,8 @@ struct("Text_renderer_config",
             default="true",
             short_desc="",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "font_size",
@@ -21,7 +23,8 @@ struct("Text_renderer_config",
             default="14",
             short_desc="",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
     ],
 )

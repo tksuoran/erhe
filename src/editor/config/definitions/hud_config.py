@@ -2,8 +2,9 @@ from erhe_codegen import *
 
 struct("Hud_config",
     version=1,
-    short_desc="",
-    long_desc="",
+    short_desc="HUD",
+    long_desc="HUD is intended for Virtual Reality - It can show ImGui UI in VR surface",
+    developer=False,
     fields=[
         field(
             "enabled",
@@ -12,7 +13,8 @@ struct("Hud_config",
             default="false",
             short_desc="",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "show",
@@ -21,7 +23,8 @@ struct("Hud_config",
             default="false",
             short_desc="",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "locked",
@@ -30,7 +33,8 @@ struct("Hud_config",
             default="false",
             short_desc="",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "width",
@@ -39,7 +43,8 @@ struct("Hud_config",
             default="1024",
             short_desc="",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "height",
@@ -48,7 +53,8 @@ struct("Hud_config",
             default="1024",
             short_desc="",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "ppm",
@@ -57,7 +63,8 @@ struct("Hud_config",
             default="5000.0f",
             short_desc="",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "x",
@@ -66,7 +73,8 @@ struct("Hud_config",
             default="-0.09f",
             short_desc="",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "y",
@@ -75,7 +83,8 @@ struct("Hud_config",
             default="0.0f",
             short_desc="",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "z",
@@ -84,7 +93,8 @@ struct("Hud_config",
             default="-0.38f",
             short_desc="",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
     ],
 )

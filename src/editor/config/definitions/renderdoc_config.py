@@ -4,6 +4,7 @@ struct("Renderdoc_config",
     version=1,
     short_desc="",
     long_desc="",
+    developer=False,
     fields=[
         field(
             "capture_support",
@@ -12,7 +13,8 @@ struct("Renderdoc_config",
             default="false",
             short_desc="",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
     ],
 )

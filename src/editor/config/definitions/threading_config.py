@@ -4,6 +4,7 @@ struct("Threading_config",
     version=1,
     short_desc="",
     long_desc="",
+    developer=False,
     fields=[
         field(
             "thread_count",
@@ -12,7 +13,8 @@ struct("Threading_config",
             default="8",
             short_desc="",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
     ],
 )

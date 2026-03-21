@@ -374,9 +374,13 @@ void Settings_window::imgui()
 
     if (m_context.editor_config != nullptr) {
         Editor_config& config = *m_context.editor_config;
+        const bool show_developer = config.developer.enable;
 
-        auto add_config_section = [this](auto& section) {
+        auto add_config_section = [this, show_developer](auto& section) {
             const auto& struct_info = get_struct_info(static_cast<const std::remove_reference_t<decltype(section)>*>(nullptr));
+            if (struct_info.developer && !show_developer) {
+                return;
+            }
             const char* label = (struct_info.short_desc != nullptr && struct_info.short_desc[0] != '\0')
                 ? struct_info.short_desc
                 : struct_info.name;
@@ -384,6 +388,9 @@ void Settings_window::imgui()
             const auto fields = get_fields(static_cast<const std::remove_reference_t<decltype(section)>*>(nullptr));
             for (const auto& field : fields) {
                 if (field.removed_in != 0) {
+                    continue;
+                }
+                if (field.developer && !show_developer) {
                     continue;
                 }
                 const char* entry_label = (field.short_desc != nullptr && field.short_desc[0] != '\0')

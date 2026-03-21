@@ -2,26 +2,29 @@ from erhe_codegen import *
 
 struct("Hotbar_config",
     version=1,
-    short_desc="",
+    short_desc="Hotbar",
     long_desc="",
+    developer=False,
     fields=[
         field(
             "enabled",
             Bool,
             added_in=1,
             default="true",
-            short_desc="",
+            short_desc="Enable Hotbar",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "show",
             Bool,
             added_in=1,
             default="true",
-            short_desc="",
+            short_desc="Show Hotbar",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "use_radial",
@@ -30,7 +33,8 @@ struct("Hotbar_config",
             default="false",
             short_desc="",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "x",
@@ -39,7 +43,8 @@ struct("Hotbar_config",
             default="0.0f",
             short_desc="",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "y",
@@ -48,7 +53,8 @@ struct("Hotbar_config",
             default="-0.140f",
             short_desc="",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "z",
@@ -57,7 +63,8 @@ struct("Hotbar_config",
             default="-0.5f",
             short_desc="",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
     ],
 )

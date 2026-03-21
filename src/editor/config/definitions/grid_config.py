@@ -4,6 +4,7 @@ struct("Grid_config",
     version=1,
     short_desc="Grid",
     long_desc="",
+    developer=False,
     fields=[
         field(
             "snap_enabled",
@@ -12,7 +13,8 @@ struct("Grid_config",
             default="true",
             short_desc="Snap Enable",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "visible",
@@ -21,7 +23,8 @@ struct("Grid_config",
             default="true",
             short_desc="Visible",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "major_color",
@@ -30,7 +33,8 @@ struct("Grid_config",
             default="1.0f, 1.0f, 1.0f, 1.0f",
             short_desc="Major Grid Line Color",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "minor_color",
@@ -39,7 +43,8 @@ struct("Grid_config",
             default="0.5f, 0.5f, 0.5f, 0.5f",
             short_desc="Minor Grid Line Color",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "major_width",
@@ -48,7 +53,8 @@ struct("Grid_config",
             default="4.0f",
             short_desc="Major Grid Line Width",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "minor_width",
@@ -57,7 +63,8 @@ struct("Grid_config",
             default="2.0f",
             short_desc="Minor Grid Line width",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "cell_size",
@@ -66,7 +73,8 @@ struct("Grid_config",
             default="1.0f",
             short_desc="Grid Cell Size",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "cell_div",
@@ -75,7 +83,8 @@ struct("Grid_config",
             default="10",
             short_desc="Grid Cell Subdivision",
             long_desc="How many Minor Cells are in one Major Cell",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "cell_count",
@@ -84,7 +93,8 @@ struct("Grid_config",
             default="2",
             short_desc="Grid Cell Count per Coordinate Axis",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
     ],
 )

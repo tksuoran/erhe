@@ -4,6 +4,7 @@ struct("Network_config",
     version=1,
     short_desc="",
     long_desc="",
+    developer=False,
     fields=[
         field(
             "upstream_address",
@@ -12,7 +13,8 @@ struct("Network_config",
             default='"127.0.0.1"',
             short_desc="",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "upstream_port",
@@ -21,7 +23,8 @@ struct("Network_config",
             default="34567",
             short_desc="",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "downstream_address",
@@ -30,7 +33,8 @@ struct("Network_config",
             default='"0.0.0.0"',
             short_desc="",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "downstream_port",
@@ -39,7 +43,8 @@ struct("Network_config",
             default="34567",
             short_desc="",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
     ],
 )

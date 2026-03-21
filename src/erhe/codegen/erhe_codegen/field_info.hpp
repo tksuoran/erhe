@@ -79,6 +79,7 @@ struct Field_info
     bool             is_numeric;
     bool             is_enum;
     bool             visible;
+    bool             developer;
     const Enum_info* enum_info;
 };
 
@@ -88,6 +89,7 @@ struct Struct_info
     uint32_t                        version;
     const char*                     short_desc;
     const char*                     long_desc;
+    bool                            developer;
     std::span<const Field_info>     fields;
 };
 

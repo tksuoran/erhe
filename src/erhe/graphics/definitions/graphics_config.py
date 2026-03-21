@@ -4,6 +4,7 @@ struct("Graphics_config",
     version=1,
     short_desc="Graphics Settings",
     long_desc="",
+    developer=False,
     fields=[
         field(
             "initial_clear",
@@ -12,7 +13,8 @@ struct("Graphics_config",
             default="true",
             short_desc="Initial Clear",
             long_desc="Submit few empty frames during Startup",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "post_processing",
@@ -21,7 +23,8 @@ struct("Graphics_config",
             default="true",
             short_desc="Post Processing",
             long_desc="Enable Post Processing",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "force_bindless_textures_off",
@@ -30,7 +33,8 @@ struct("Graphics_config",
             default="false",
             short_desc="Force Disable OpenGL Bindless Textures",
             long_desc="Prevent any use of OpenGL Bindless Textures. Always used when RenderDoc capture is enabled.",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "force_no_persistent_buffers",
@@ -39,7 +43,8 @@ struct("Graphics_config",
             default="false",
             short_desc="Force Disable OpenGL Persistent Buffers",
             long_desc="Prevent any use of OpenGL presistent buffer. Only meaningful for debugging.",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "force_no_direct_state_access",
@@ -48,7 +53,8 @@ struct("Graphics_config",
             default="false",
             short_desc="Force Disable OpenGL Direct State Access",
             long_desc="Prevent any use of OpenGL DSA (Direct State Access). Only meaningful for debugging.",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "force_emulate_multi_draw_indirect",
@@ -57,7 +63,8 @@ struct("Graphics_config",
             default="false",
             short_desc="Force Disable OpenGL Multi Draw Indirect",
             long_desc="Prevent any use of OpenGL MDI (Multi Draw Indirect). Only meaningful for debugging.",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "force_gl_version",
@@ -66,7 +73,8 @@ struct("Graphics_config",
             default="0",
             short_desc="Force OpenGL Version",
             long_desc="Request specific OpenGL version. Only meaningful for debugging.",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "force_glsl_version",
@@ -75,7 +83,8 @@ struct("Graphics_config",
             default="0",
             short_desc="Force OpenGL GLSL Version",
             long_desc="Request specific OpenGL GLSL version. Only meaningful for debugging.",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "renderdoc_capture_support",
@@ -84,7 +93,8 @@ struct("Graphics_config",
             default="false",
             short_desc="Enable RenderDoc Capture Support",
             long_desc="Enables RenderDoc Capture Support. Disables use of OpenGL Bindless Textures. Only meaningful for debugging.",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "shader_monitor_enabled",
@@ -93,7 +103,8 @@ struct("Graphics_config",
             default="true",
             short_desc="Enable Shader Monitor",
             long_desc="Enables Shader Monitor, allowing Shader Hot-reloading. Only meaningful for debugging.",
-            visible=True
+            visible=True,
+            developer=False
         ),
     ],
 )

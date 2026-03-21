@@ -4,6 +4,7 @@ struct("Camera_controls_config",
     version=1,
     short_desc="Camera Control",
     long_desc="",
+    developer=False,
     fields=[
         field(
             "invert_x",
@@ -12,7 +13,8 @@ struct("Camera_controls_config",
             default="false",
             short_desc="Invert Mouse X Direction",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "invert_y",
@@ -21,7 +23,8 @@ struct("Camera_controls_config",
             default="false",
             short_desc="Invert Mouse Y Direction",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "sensitivity",
@@ -30,7 +33,8 @@ struct("Camera_controls_config",
             default="1.0f",
             short_desc="Camera Sensitivity",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "velocity_damp",
@@ -39,7 +43,8 @@ struct("Camera_controls_config",
             default="0.92f",
             short_desc="Velocity Damp",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "velocity_max_delta",
@@ -48,7 +53,8 @@ struct("Camera_controls_config",
             default="0.004f",
             short_desc="Velocity Max Delta",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "move_power",
@@ -57,7 +63,8 @@ struct("Camera_controls_config",
             default="1000.0f",
             short_desc="Move Power",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "move_speed",
@@ -66,7 +73,8 @@ struct("Camera_controls_config",
             default="2.0f",
             short_desc="Move Speed",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "turn_speed",
@@ -75,7 +83,8 @@ struct("Camera_controls_config",
             default="1.0f",
             short_desc="Turn Speed",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
     ],
 )

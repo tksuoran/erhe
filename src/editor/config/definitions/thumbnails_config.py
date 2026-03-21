@@ -4,6 +4,7 @@ struct("Thumbnails_config",
     version=1,
     short_desc="",
     long_desc="",
+    developer=False,
     fields=[
         field(
             "capacity",
@@ -12,7 +13,8 @@ struct("Thumbnails_config",
             default="200",
             short_desc="",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
         field(
             "size_pixels",
@@ -21,7 +23,8 @@ struct("Thumbnails_config",
             default="256",
             short_desc="",
             long_desc="",
-            visible=True
+            visible=True,
+            developer=False
         ),
     ],
 )
