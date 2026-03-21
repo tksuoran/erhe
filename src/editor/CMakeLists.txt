@@ -400,6 +400,18 @@ erhe_codegen_generate(
     TARGET          ${_target}
     DEFINITIONS_DIR "${_codegen_defs}"
     OUTPUT_DIR      "${_codegen_out}"
+    DEFINITIONS
+        "${_codegen_defs}/camera_data.py"
+        "${_codegen_defs}/gltf_source_reference.py"
+        "${_codegen_defs}/light_data.py"
+        "${_codegen_defs}/mesh_reference.py"
+        "${_codegen_defs}/mesh_source_type.py"
+        "${_codegen_defs}/motion_mode_serial.py"
+        "${_codegen_defs}/node_data.py"
+        "${_codegen_defs}/node_physics_data.py"
+        "${_codegen_defs}/projection_data.py"
+        "${_codegen_defs}/scene_file.py"
+        "${_codegen_defs}/transform_data.py"
 )
 
 set(_codegen_sources
@@ -439,6 +451,7 @@ set(_codegen_sources
 )
 set_source_files_properties(${_codegen_sources} PROPERTIES GENERATED TRUE)
 target_sources(${_target} PRIVATE ${_codegen_sources})
+source_group("codegen generated/scene" FILES ${_codegen_sources})
 
 # Editor config codegen — generate into build directory
 set(_config_defs "${CMAKE_CURRENT_SOURCE_DIR}/config/definitions")
@@ -448,6 +461,27 @@ erhe_codegen_generate(
     TARGET          ${_target}
     DEFINITIONS_DIR "${_config_defs}"
     OUTPUT_DIR      "${_config_out}"
+    DEFINITIONS
+        "${_config_defs}/camera_controls_config.py"
+        "${_config_defs}/developer_config.py"
+        "${_config_defs}/grid_config.py"
+        "${_config_defs}/headset_config.py"
+        "${_config_defs}/hotbar_config.py"
+        "${_config_defs}/hud_config.py"
+        "${_config_defs}/id_renderer_config.py"
+        "${_config_defs}/mesh_memory_config.py"
+        "${_config_defs}/network_config.py"
+        "${_config_defs}/physics_config.py"
+        "${_config_defs}/renderdoc_config.py"
+        "${_config_defs}/renderer_config.py"
+        "${_config_defs}/scene_config.py"
+        "${_config_defs}/shader_monitor_config.py"
+        "${_config_defs}/text_renderer_config.py"
+        "${_config_defs}/threading_config.py"
+        "${_config_defs}/thumbnails_config.py"
+        "${_config_defs}/transform_tool_config.py"
+        "${_config_defs}/viewport_config_data.py"
+        "${_config_defs}/window_config.py"
 )
 
 set(_config_sources
@@ -514,6 +548,7 @@ set(_config_sources
 )
 set_source_files_properties(${_config_sources} PROPERTIES GENERATED TRUE)
 target_sources(${_target} PRIVATE ${_config_sources})
+source_group("codegen generated/config" FILES ${_config_sources})
 
 # Graphics_config serialize/deserialize must compile here (same target as
 # other simdjson users) to avoid ABI mismatch from differing arch flags.
@@ -524,6 +559,7 @@ set(_gfx_ser_sources
 )
 set_source_files_properties(${_gfx_ser_sources} PROPERTIES GENERATED TRUE)
 target_sources(${_target} PRIVATE ${_gfx_ser_sources})
+source_group("codegen generated/graphics" FILES ${_gfx_ser_sources})
 
 target_link_libraries(
     ${_target}

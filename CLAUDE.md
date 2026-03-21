@@ -59,7 +59,7 @@ Required packages: `libwayland-dev libxkbcommon-dev xorg-dev` (Ubuntu) or equiva
 
 ### Library Structure (`src/erhe/`)
 
-Each subdirectory is a separate CMake target (`erhe_<name>`):
+Each subdirectory is a separate CMake target (`erhe_<name>`). **Each library has a `notes.md`** file with details on purpose, key types, public API, dependencies, and implementation notes. Always check `src/erhe/<name>/notes.md` first when working with a library.
 
 - **`erhe::gl`** — Python-generated type-safe OpenGL API wrappers (`generate_sources.py` parses `gl.xml`). Provides strongly-typed enums, call logging, and extension queries.
 - **`erhe::graphics`** — Vulkan-style abstraction over OpenGL: `Pipeline`, framebuffers, textures, shaders, buffers. Core rendering primitives.
@@ -90,6 +90,8 @@ The `editor` executable is the main application. Entry point is `src/editor/main
 
 ### CMake Conventions
 
+- Follow modern CMake best practices. Do not use deprecated CMake features.
+- **Never use `file(GLOB)` or `file(GLOB_RECURSE)` to collect source files.** All source and definition files must be listed explicitly in `CMakeLists.txt`. This is the CMake-recommended practice — globbing does not detect added/removed files without a reconfigure.
 - `erhe_target_sources_grouped()` helper macro (in `cmake/functions.cmake`) organizes sources into IDE source groups.
 - Each component has its own `CMakeLists.txt`.
 - External dependencies are fetched at configure time via CPM (`cmake/CPM.cmake`).

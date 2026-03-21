@@ -31,8 +31,15 @@ target_link_libraries(${_target}
 erhe_target_settings(${_target} "erhe")
 
 # Wire up code generation
+set(_test_defs "${CMAKE_CURRENT_SOURCE_DIR}/definitions")
 erhe_codegen_generate(
     TARGET          ${_target}
-    DEFINITIONS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/definitions"
+    DEFINITIONS_DIR "${_test_defs}"
     OUTPUT_DIR      "${_codegen_out}"
+    DEFINITIONS
+        "${_test_defs}/blend_mode.py"
+        "${_test_defs}/color.py"
+        "${_test_defs}/light.py"
+        "${_test_defs}/material.py"
+        "${_test_defs}/settings.py"
 )
