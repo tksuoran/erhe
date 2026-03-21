@@ -239,6 +239,75 @@ Scene_root::Scene_root(
                 }
             }
         );
+        m_content_library_tree_window->set_item_callback(
+            [this, context](const std::shared_ptr<erhe::Item_base>& item) -> bool {
+                if (!ImGui::IsDragDropActive()) {
+                    return false;
+                }
+                auto content_node = std::dynamic_pointer_cast<Content_library_node>(item);
+                if (!content_node) {
+                    return false;
+                }
+
+                // Accept drop on the materials folder or on material items within it
+                const auto& materials_folder = m_content_library->materials;
+                const bool is_materials_folder = (content_node == materials_folder);
+                const bool is_material_item    = !is_materials_folder &&
+                    content_node->item &&
+                    std::dynamic_pointer_cast<erhe::primitive::Material>(content_node->item) &&
+                    (content_node->get_parent().lock() == materials_folder);
+                if (!is_materials_folder && !is_material_item) {
+                    return false;
+                }
+
+                // Check payload is a Content_library_node with a Material
+                const ImGuiPayload* payload_peek = ImGui::GetDragDropPayload();
+                if (!payload_peek || !payload_peek->IsDataType("Content_library_node")) {
+                    return false;
+                }
+                erhe::Item_base* payload_item_base = *(static_cast<erhe::Item_base**>(payload_peek->Data));
+                auto source_node = std::dynamic_pointer_cast<Content_library_node>(payload_item_base->shared_from_this());
+                if (!source_node || !source_node->item) {
+                    return false;
+                }
+                auto source_material = std::dynamic_pointer_cast<erhe::primitive::Material>(source_node->item);
+                if (!source_material) {
+                    return false;
+                }
+
+                // Only copy across different content libraries
+                bool is_same_library = false;
+                for (auto check = source_node->get_parent().lock(); check; check = check->get_parent().lock()) {
+                    if (check == m_content_library->root) {
+                        is_same_library = true;
+                        break;
+                    }
+                }
+                if (is_same_library) {
+                    return false;
+                }
+
+                if (ImGui::BeginDragDropTarget()) {
+                    const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("Content_library_node");
+                    if (payload != nullptr) {
+                        auto new_material = std::make_shared<erhe::primitive::Material>(*source_material);
+                        auto new_node = std::make_shared<Content_library_node>(new_material);
+                        auto op = std::make_shared<Item_insert_remove_operation>(
+                            Item_insert_remove_operation::Parameters{
+                                .context = *context,
+                                .item    = new_node,
+                                .parent  = materials_folder,
+                                .mode    = Item_insert_remove_operation::Mode::insert
+                            }
+                        );
+                        context->operation_stack->queue(op);
+                    }
+                    ImGui::EndDragDropTarget();
+                    return true;
+                }
+                return false;
+            }
+        );
     }
 
     if (app_message_bus != nullptr) {
