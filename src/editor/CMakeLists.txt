@@ -389,43 +389,44 @@ if (ERHE_USE_MIMALLOC)
     target_link_libraries(${_target} PUBLIC mimalloc-static)
 endif ()
 
-# Scene serialization codegen
+# Scene serialization codegen — generate into build directory
 set(_codegen_defs "${CMAKE_CURRENT_SOURCE_DIR}/scene/definitions")
-set(_codegen_out  "${CMAKE_CURRENT_SOURCE_DIR}/scene/generated")
-
-erhe_target_sources_grouped(
-    ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
-    scene/generated/camera_data.hpp
-    scene/generated/camera_data.cpp
-    scene/generated/gltf_source_reference.hpp
-    scene/generated/gltf_source_reference.cpp
-    scene/generated/light_data.hpp
-    scene/generated/light_data.cpp
-    scene/generated/light_type_serial.hpp
-    scene/generated/light_type_serial.cpp
-    scene/generated/mesh_reference.hpp
-    scene/generated/mesh_reference.cpp
-    scene/generated/mesh_source_type.hpp
-    scene/generated/mesh_source_type.cpp
-    scene/generated/motion_mode_serial.hpp
-    scene/generated/motion_mode_serial.cpp
-    scene/generated/node_data_serial.hpp
-    scene/generated/node_data_serial.cpp
-    scene/generated/node_physics_data.hpp
-    scene/generated/node_physics_data.cpp
-    scene/generated/projection_data.hpp
-    scene/generated/projection_data.cpp
-    scene/generated/scene_file.hpp
-    scene/generated/scene_file.cpp
-    scene/generated/transform_data.hpp
-    scene/generated/transform_data.cpp
-)
+set(_codegen_out  "${CMAKE_CURRENT_BINARY_DIR}/scene/generated")
 
 erhe_codegen_generate(
     TARGET          ${_target}
     DEFINITIONS_DIR "${_codegen_defs}"
     OUTPUT_DIR      "${_codegen_out}"
 )
+
+set(_codegen_sources
+    ${_codegen_out}/camera_data.hpp
+    ${_codegen_out}/camera_data.cpp
+    ${_codegen_out}/gltf_source_reference.hpp
+    ${_codegen_out}/gltf_source_reference.cpp
+    ${_codegen_out}/light_data.hpp
+    ${_codegen_out}/light_data.cpp
+    ${_codegen_out}/light_type_serial.hpp
+    ${_codegen_out}/light_type_serial.cpp
+    ${_codegen_out}/mesh_reference.hpp
+    ${_codegen_out}/mesh_reference.cpp
+    ${_codegen_out}/mesh_source_type.hpp
+    ${_codegen_out}/mesh_source_type.cpp
+    ${_codegen_out}/motion_mode_serial.hpp
+    ${_codegen_out}/motion_mode_serial.cpp
+    ${_codegen_out}/node_data_serial.hpp
+    ${_codegen_out}/node_data_serial.cpp
+    ${_codegen_out}/node_physics_data.hpp
+    ${_codegen_out}/node_physics_data.cpp
+    ${_codegen_out}/projection_data.hpp
+    ${_codegen_out}/projection_data.cpp
+    ${_codegen_out}/scene_file.hpp
+    ${_codegen_out}/scene_file.cpp
+    ${_codegen_out}/transform_data.hpp
+    ${_codegen_out}/transform_data.cpp
+)
+set_source_files_properties(${_codegen_sources} PROPERTIES GENERATED TRUE)
+target_sources(${_target} PRIVATE ${_codegen_sources})
 
 target_link_libraries(
     ${_target}
@@ -506,7 +507,7 @@ endif ()
 if (${ERHE_XR_LIBRARY} STREQUAL "openxr")
     target_link_libraries(${_target} PRIVATE erhe_xr openxr_loader)
 endif ()
-target_include_directories(${_target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${_codegen_out})
+target_include_directories(${_target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR} ${_codegen_out})
 
 set_target_properties(
     ${_target} PROPERTIES
