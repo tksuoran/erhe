@@ -137,6 +137,8 @@ erhe_target_sources_grouped(
     ImViewGuizmo.cpp
     ImViewGuizmo.h
     main.cpp
+    mcp/mcp_server.cpp
+    mcp/mcp_server.hpp
     operations/compound_operation.cpp
     operations/compound_operation.hpp
     operations/geometry_operations.cpp
@@ -578,6 +580,8 @@ target_link_libraries(
         erhe::codegen
         erhe::utility
         erhe::commands
+        httplib::httplib
+        nlohmann_json::nlohmann_json
         erhe::configuration
         erhe::defer
         erhe::dataformat
