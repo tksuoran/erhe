@@ -10,8 +10,6 @@ class Null_uniform_scaling_shape : public Null_collision_shape
 {
 public:
     Null_uniform_scaling_shape(ICollision_shape* shape, const float scale)
-        //: m_shape{shape}
-        //, m_scale{scale}
     {
         static_cast<void>(shape);
         static_cast<void>(scale);
@@ -21,10 +19,7 @@ public:
     auto is_convex              () const -> bool                       override;
     auto get_center_of_mass     () const -> glm::vec3                  override;
     auto get_mass_properties    () const -> Mass_properties            override;
-
-private:
-    //ICollision_shape* m_shape{nullptr};
-    //float             m_scale{1.0f};
+    auto get_shape_type         () const -> Collision_shape_type       override { return Collision_shape_type::e_uniform_scaling; }
 };
 
 } // namespace erhe::physics

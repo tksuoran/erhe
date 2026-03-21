@@ -37,6 +37,7 @@ public:
     // Public API
     [[nodiscard]] auto get_rigid_body()       ->       erhe::physics::IRigid_body*;
     [[nodiscard]] auto get_rigid_body() const -> const erhe::physics::IRigid_body*;
+    [[nodiscard]] auto get_collision_shape() const -> const std::shared_ptr<erhe::physics::ICollision_shape>&;
 
     void before_physics_simulation();
     void after_physics_simulation();

@@ -402,6 +402,9 @@ erhe_codegen_generate(
     OUTPUT_DIR      "${_codegen_out}"
     DEFINITIONS
         "${_codegen_defs}/camera_data.py"
+        "${_codegen_defs}/collision_shape_data.py"
+        "${_codegen_defs}/collision_shape_type_serial.py"
+        "${_codegen_defs}/compound_child_data.py"
         "${_codegen_defs}/gltf_source_reference.py"
         "${_codegen_defs}/light_data.py"
         "${_codegen_defs}/mesh_reference.py"
@@ -418,6 +421,14 @@ set(_codegen_sources
     ${_codegen_out}/camera_data.hpp
     ${_codegen_out}/camera_data_serialization.hpp
     ${_codegen_out}/camera_data.cpp
+    ${_codegen_out}/collision_shape_data.hpp
+    ${_codegen_out}/collision_shape_data_serialization.hpp
+    ${_codegen_out}/collision_shape_data.cpp
+    ${_codegen_out}/collision_shape_type_serial.hpp
+    ${_codegen_out}/collision_shape_type_serial.cpp
+    ${_codegen_out}/compound_child_data.hpp
+    ${_codegen_out}/compound_child_data_serialization.hpp
+    ${_codegen_out}/compound_child_data.cpp
     ${_codegen_out}/gltf_source_reference.hpp
     ${_codegen_out}/gltf_source_reference_serialization.hpp
     ${_codegen_out}/gltf_source_reference.cpp

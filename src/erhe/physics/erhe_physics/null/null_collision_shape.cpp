@@ -116,4 +116,9 @@ auto Null_collision_shape::describe() const -> std::string
     return {};
 }
 
+auto Null_collision_shape::get_shape_type() const -> Collision_shape_type
+{
+    return Collision_shape_type::e_empty;
+}
+
 } // namespace erhe::physics
