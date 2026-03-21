@@ -6,7 +6,7 @@ struct("Camera_controls_config",
         Bool,
         added_in=1,
         default="false",
-        short_desc="",
+        short_desc="Invert Mouse X Direction",
         long_desc=""
     ),
     field(
@@ -14,7 +14,7 @@ struct("Camera_controls_config",
         Bool,
         added_in=1,
         default="false",
-        short_desc="",
+        short_desc="Invert Mouse Y Direction",
         long_desc=""
     ),
     field(
@@ -22,7 +22,7 @@ struct("Camera_controls_config",
         Float,
         added_in=1,
         default="1.0f",
-        short_desc="",
+        short_desc="Camera Sensitivity",
         long_desc=""
     ),
     field(
@@ -66,4 +66,6 @@ struct("Camera_controls_config",
         long_desc=""
     ),
     version=1,
+    short_desc="",
+    long_desc="",
 )

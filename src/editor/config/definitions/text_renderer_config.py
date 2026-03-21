@@ -18,4 +18,6 @@ struct("Text_renderer_config",
         long_desc=""
     ),
     version=1,
+    short_desc="",
+    long_desc="",
 )

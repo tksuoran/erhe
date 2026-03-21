@@ -82,4 +82,6 @@ struct("Graphics_config",
         long_desc="Enables Shader Monitor, allowing Shader Hot-reloading. Only meaningful for debugging."
     ),
     version=1,
+    short_desc="",
+    long_desc="",
 )

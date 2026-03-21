@@ -98,4 +98,6 @@ struct("Viewport_config_data",
         long_desc=""
     ),
     version=1,
+    short_desc="",
+    long_desc="",
 )
