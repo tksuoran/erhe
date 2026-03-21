@@ -1,6 +1,13 @@
 from erhe_codegen import *
 
 struct("Renderdoc_config",
-    field("capture_support", Bool, added_in=1, default="false"),
+    field(
+        "capture_support",
+        Bool,
+        added_in=1,
+        default="false",
+        short_desc="",
+        long_desc=""
+    ),
     version=1,
 )

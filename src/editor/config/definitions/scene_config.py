@@ -1,29 +1,197 @@
 from erhe_codegen import *
 
 struct("Scene_config",
-    field("imgui_window_scene_view",      Bool,  added_in=1, default="true"),
-    field("camera_exposure",              Float, added_in=1, default="1.0f"),
-    field("shadow_range",                 Float, added_in=1, default="22.0f"),
-    field("directional_light_intensity",  Float, added_in=1, default="20.0f"),
-    field("directional_light_radius",     Float, added_in=1, default="6.0f"),
-    field("directional_light_height",     Float, added_in=1, default="10.0f"),
-    field("directional_light_count",      Int,   added_in=1, default="4"),
-    field("spot_light_intensity",         Float, added_in=1, default="150.0f"),
-    field("spot_light_radius",            Float, added_in=1, default="20.0f"),
-    field("spot_light_height",            Float, added_in=1, default="10.0f"),
-    field("spot_light_count",             Int,   added_in=1, default="3"),
-    field("floor_size",                   Float, added_in=1, default="1.0f"),
-    field("floor_height",                 Float, added_in=1, default="0.001f"),
-    field("floor",                        Bool,  added_in=1, default="true"),
-    field("mass_scale",                   Float, added_in=1, default="0.0f"),
-    field("detail",                       Int,   added_in=1, default="0"),
-    field("camera_distance",              Float, added_in=1, default="3.0f"),
-    field("camera_elevation",             Float, added_in=1, default="1.6f"),
-    field("instance_count",               Int,   added_in=1, default="1"),
-    field("instance_gap",                 Float, added_in=1, default="0.50f"),
-    field("object_scale",                 Float, added_in=1, default="0.25f"),
-    field("make_johnson_solid_brushes",   Bool,  added_in=1, default="true"),
-    field("make_platonic_solid_brushes",  Bool,  added_in=1, default="true"),
-    field("make_curved_brushes",          Bool,  added_in=1, default="true"),
+    field(
+        "imgui_window_scene_view",
+        Bool,
+        added_in=1,
+        default="true",
+        short_desc="",
+        long_desc=""
+    ),
+    field(
+        "camera_exposure",
+        Float,
+        added_in=1,
+        default="1.0f",
+        short_desc="",
+        long_desc=""
+    ),
+    field(
+        "shadow_range",
+        Float,
+        added_in=1,
+        default="22.0f",
+        short_desc="",
+        long_desc=""
+    ),
+    field(
+        "directional_light_intensity",
+        Float,
+        added_in=1,
+        default="20.0f",
+        short_desc="",
+        long_desc=""
+    ),
+    field(
+        "directional_light_radius",
+        Float,
+        added_in=1,
+        default="6.0f",
+        short_desc="",
+        long_desc=""
+    ),
+    field(
+        "directional_light_height",
+        Float,
+        added_in=1,
+        default="10.0f",
+        short_desc="",
+        long_desc=""
+    ),
+    field(
+        "directional_light_count",
+        Int,
+        added_in=1,
+        default="4",
+        short_desc="",
+        long_desc=""
+    ),
+    field(
+        "spot_light_intensity",
+        Float,
+        added_in=1,
+        default="150.0f",
+        short_desc="",
+        long_desc=""
+    ),
+    field(
+        "spot_light_radius",
+        Float,
+        added_in=1,
+        default="20.0f",
+        short_desc="",
+        long_desc=""
+    ),
+    field(
+        "spot_light_height",
+        Float,
+        added_in=1,
+        default="10.0f",
+        short_desc="",
+        long_desc=""
+    ),
+    field(
+        "spot_light_count",
+        Int,
+        added_in=1,
+        default="3",
+        short_desc="",
+        long_desc=""
+    ),
+    field(
+        "floor_size",
+        Float,
+        added_in=1,
+        default="1.0f",
+        short_desc="",
+        long_desc=""
+    ),
+    field(
+        "floor_height",
+        Float,
+        added_in=1,
+        default="0.001f",
+        short_desc="",
+        long_desc=""
+    ),
+    field(
+        "floor",
+        Bool,
+        added_in=1,
+        default="true",
+        short_desc="",
+        long_desc=""
+    ),
+    field(
+        "mass_scale",
+        Float,
+        added_in=1,
+        default="0.0f",
+        short_desc="",
+        long_desc=""
+    ),
+    field(
+        "detail",
+        Int,
+        added_in=1,
+        default="0",
+        short_desc="",
+        long_desc=""
+    ),
+    field(
+        "camera_distance",
+        Float,
+        added_in=1,
+        default="3.0f",
+        short_desc="",
+        long_desc=""
+    ),
+    field(
+        "camera_elevation",
+        Float,
+        added_in=1,
+        default="1.6f",
+        short_desc="",
+        long_desc=""
+    ),
+    field(
+        "instance_count",
+        Int,
+        added_in=1,
+        default="1",
+        short_desc="",
+        long_desc=""
+    ),
+    field(
+        "instance_gap",
+        Float,
+        added_in=1,
+        default="0.50f",
+        short_desc="",
+        long_desc=""
+    ),
+    field(
+        "object_scale",
+        Float,
+        added_in=1,
+        default="0.25f",
+        short_desc="",
+        long_desc=""
+    ),
+    field(
+        "make_johnson_solid_brushes",
+        Bool,
+        added_in=1,
+        default="true",
+        short_desc="",
+        long_desc=""
+    ),
+    field(
+        "make_platonic_solid_brushes",
+        Bool,
+        added_in=1,
+        default="true",
+        short_desc="",
+        long_desc=""
+    ),
+    field(
+        "make_curved_brushes",
+        Bool,
+        added_in=1,
+        default="true",
+        short_desc="",
+        long_desc=""
+    ),
     version=1,
 )
