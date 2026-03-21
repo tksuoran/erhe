@@ -3,6 +3,8 @@
 #include "tools/tool.hpp"
 
 #include "erhe_commands/command.hpp"
+#include "app_message.hpp"
+#include "erhe_message_bus/message_bus.hpp"
 
 #include <memory>
 
@@ -77,6 +79,7 @@ public:
 private:
     [[nodiscard]] auto get_hover_mesh() const -> const Hover_entry*;
 
+    erhe::message_bus::Subscription<Hover_scene_view_message> m_hover_scene_view_subscription;
     Material_paint_command m_paint_command;
     Material_pick_command  m_pick_command;
 

@@ -20,13 +20,11 @@ namespace editor {
 using namespace glm;
 
 Rotate_tool::Rotate_tool(App_context& app_context, Icon_set& icon_set, Tools& tools)
-    : Subtool{app_context}
+    : Subtool{app_context, tools, Tool_flags::toolbox | Tool_flags::allow_secondary}
 {
     set_base_priority  (c_priority);
     set_description    ("Rotate");
-    set_flags          (Tool_flags::toolbox | Tool_flags::allow_secondary);
     set_icon           (icon_set.custom_icons, icon_set.icons.rotate);
-    tools.register_tool(this);
 }
 
 Rotate_tool::~Rotate_tool() noexcept = default;

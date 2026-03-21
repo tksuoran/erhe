@@ -33,7 +33,6 @@ namespace ax::NodeEditor {
 namespace editor {
 
 class App_context;
-class App_message;
 class App_message_bus;
 
 class Sheet;
@@ -65,8 +64,6 @@ private:
     auto make_sub        () -> Shader_graph_node*;
     auto make_mul        () -> Shader_graph_node*;
     auto make_div        () -> Shader_graph_node*;
-
-    void on_message(App_message& message);
 
     App_context&                                    m_app_context;
     Shader_graph                                    m_graph;

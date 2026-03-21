@@ -2,11 +2,13 @@
 
 #include "time.hpp"
 #include "tools/tool.hpp"
+#include "tools/tool_window.hpp"
 #include "scene/frame_controller.hpp"
 
 #include "erhe_commands/command.hpp"
-#include "erhe_imgui/imgui_window.hpp"
 #include "erhe_imgui/windows/graph.hpp"
+#include "app_message.hpp"
+#include "erhe_message_bus/message_bus.hpp"
 #include "erhe_imgui/windows/graph_plotter.hpp"
 #include "erhe_math/aabb.hpp"
 #include "erhe_profile/profile.hpp"
@@ -16,6 +18,7 @@
 #include <glm/gtc/quaternion.hpp>
 
 #include <deque>
+#include <memory>
 #include <random>
 #include <vector>
 
@@ -153,9 +156,7 @@ private:
     bool         m_store;
 };
 
-class Fly_camera_tool
-    : public erhe::imgui::Imgui_window
-    , public Tool
+class Fly_camera_tool : public Tool
 {
 public:
     class Config
@@ -178,9 +179,6 @@ public:
         App_message_bus&             app_message_bus,
         Tools&                       tools
     );
-
-    // Implements Window
-    void imgui() override;
 
     // Implements tool
     //// void tool_render(const Render_context& context);
@@ -220,8 +218,11 @@ public:
 
 private:
     void update_camera();
+    void window_imgui();
     void show_input_axis_ui(const char* label, erhe::math::Input_axis& input_axis) const;
 
+    Tool_window                           m_window;
+    erhe::message_bus::Subscription<Hover_scene_view_message> m_hover_scene_view_subscription;
     Fly_camera_turn_command               m_turn_command;
     Fly_camera_tumble_command             m_tumble_command;
     Fly_camera_track_command              m_track_command;

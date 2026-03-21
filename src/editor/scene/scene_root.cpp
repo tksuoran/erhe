@@ -21,7 +21,6 @@
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene/skin.hpp"
-#include "erhe_utility/bit_helpers.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -105,7 +104,6 @@ auto Scene_layers::mesh_layers() const -> std::array<erhe::scene::Mesh_layer*, 5
 Scene_root::Scene_root(
     erhe::imgui::Imgui_renderer*            imgui_renderer,
     erhe::imgui::Imgui_windows*             imgui_windows,
-    erhe::scene::Scene_message_bus&         scene_message_bus,
     App_context*                            context,
     App_message_bus*                        app_message_bus,
     const std::shared_ptr<Content_library>& content_library,
@@ -116,7 +114,7 @@ Scene_root::Scene_root(
 {
     ERHE_PROFILE_FUNCTION();
 
-    m_scene = std::make_unique<Scene>(scene_message_bus, name, this);
+    m_scene = std::make_unique<Scene>(name, this);
     //m_scene->enable_flag_bits(erhe::Item_flags::invisible_parent);
     m_layers.add_layers_to_scene(*m_scene.get());
 
@@ -193,71 +191,65 @@ Scene_root::Scene_root(
     }
 
     if (app_message_bus != nullptr) {
-        app_message_bus->add_receiver(
-            [this](App_message& message) {
-                using namespace erhe::utility;
-                if (
-                    test_bit_set(message.update_flags, Message_flag_bit::c_flag_bit_selection) &&
-                    message.selection_change.has_value()
-                ) {
-                    Selection_change& selection_change = message.selection_change.value();
-                    for (const auto& item : selection_change.no_longer_selected) {
-                        if (item->get_item_host() != this) {
-                            continue;
-                        }
-                        const auto& node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
-                        if (!node) {
-                            continue;
-                        }
-                        const auto& node_physics = erhe::scene::get_attachment<Node_physics>(node.get());
-                        if (!node_physics) {
-                            continue;
-                        }
-                        auto* rigid_body = node_physics->get_rigid_body();
-                        if (rigid_body == nullptr) {
-                            continue;
-                        }
-                        log_physics->trace("release physics: {}", node->describe());
-                        rigid_body->set_motion_mode(node_physics->physics_motion_mode);
-                        rigid_body->end_move       (); // allows sleeping
-                        const auto i = std::remove(m_physics_disabled_nodes.begin(), m_physics_disabled_nodes.end(), item);
-                        if (i == m_physics_disabled_nodes.end()) {
-                            log_physics->error("node {} not in physics disabled nodes", item->get_name());
-                        } else {
-                            m_physics_disabled_nodes.erase(i, m_physics_disabled_nodes.end());
-                        }
+        m_selection_subscription = app_message_bus->selection.subscribe(
+            [this](Selection_message& message) {
+                Selection_change& selection_change = message.selection_change;
+                for (const auto& item : selection_change.no_longer_selected) {
+                    if (item->get_item_host() != this) {
+                        continue;
                     }
+                    const auto& node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
+                    if (!node) {
+                        continue;
+                    }
+                    const auto& node_physics = erhe::scene::get_attachment<Node_physics>(node.get());
+                    if (!node_physics) {
+                        continue;
+                    }
+                    auto* rigid_body = node_physics->get_rigid_body();
+                    if (rigid_body == nullptr) {
+                        continue;
+                    }
+                    log_physics->trace("release physics: {}", node->describe());
+                    rigid_body->set_motion_mode(node_physics->physics_motion_mode);
+                    rigid_body->end_move       (); // allows sleeping
+                    const auto i = std::remove(m_physics_disabled_nodes.begin(), m_physics_disabled_nodes.end(), item);
+                    if (i == m_physics_disabled_nodes.end()) {
+                        log_physics->error("node {} not in physics disabled nodes", item->get_name());
+                    } else {
+                        m_physics_disabled_nodes.erase(i, m_physics_disabled_nodes.end());
+                    }
+                }
 
-                    for (const auto& item : selection_change.newly_selected) {
-                        if (item->get_item_host() != this) {
-                            continue;
-                        }
-                        const auto node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
-                        if (!node) {
-                            continue;
-                        }
-                        const auto node_physics = erhe::scene::get_attachment<Node_physics>(node.get());
-                        if (!node_physics) {
-                            continue;
-                        }
-                        auto* rigid_body = node_physics->get_rigid_body();
-                        if (rigid_body == nullptr) {
-                            continue;
-                        }
-                        log_physics->trace("acquire physics: {}", node->describe());
-                        node_physics->physics_motion_mode = rigid_body->get_motion_mode();
-                        rigid_body->set_motion_mode(erhe::physics::Motion_mode::e_kinematic_physical);
-                        rigid_body->begin_move();
+                for (const auto& item : selection_change.newly_selected) {
+                    if (item->get_item_host() != this) {
+                        continue;
+                    }
+                    const auto node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
+                    if (!node) {
+                        continue;
+                    }
+                    const auto node_physics = erhe::scene::get_attachment<Node_physics>(node.get());
+                    if (!node_physics) {
+                        continue;
+                    }
+                    auto* rigid_body = node_physics->get_rigid_body();
+                    if (rigid_body == nullptr) {
+                        continue;
+                    }
+                    log_physics->trace("acquire physics: {}", node->describe());
+                    node_physics->physics_motion_mode = rigid_body->get_motion_mode();
+                    rigid_body->set_motion_mode(erhe::physics::Motion_mode::e_kinematic_physical);
+                    rigid_body->begin_move();
 
 #ifndef NDEBUG
-                        const auto i = std::find(m_physics_disabled_nodes.begin(), m_physics_disabled_nodes.end(), item);
-                        if (i != m_physics_disabled_nodes.end()) {
-                            log_physics->error("node {} already in physics disabled nodes", item->get_name());
-                        } else
+                    const auto i = std::find(m_physics_disabled_nodes.begin(), m_physics_disabled_nodes.end(), item);
+                    if (i != m_physics_disabled_nodes.end()) {
+                        log_physics->error("node {} already in physics disabled nodes", item->get_name());
+                    } else
 #endif
-                            m_physics_disabled_nodes.push_back(item);
-                        }
-                }
+                        m_physics_disabled_nodes.push_back(item);
+                    }
             }
         );
     }
@@ -337,10 +329,9 @@ auto Scene_root::make_browser_window(
     );
     m_node_tree_window->set_hover_callback(
         [this, &context]() {
-            context.app_message_bus->send_message(
-                App_message{
-                    .update_flags = Message_flag_bit::c_flag_bit_hover_scene_item_tree,
-                    .scene_root   = dynamic_pointer_cast<Scene_root>(shared_from_this())
+            context.app_message_bus->hover_scene_item_tree.send_message(
+                Hover_scene_item_tree_message{
+                    .scene_root = dynamic_pointer_cast<Scene_root>(shared_from_this())
                 }
             );
         }

@@ -50,29 +50,23 @@ Clipboard::Clipboard(erhe::commands::Commands& commands, App_context& context, A
     commands.bind_command_to_menu(&m_paste_command, "Edit.Paste");
     m_paste_command.set_host(this);
 
-    app_message_bus.add_receiver(
-        [&](App_message& message) {
-            on_message(message);
+    m_hover_scene_view_subscription = app_message_bus.hover_scene_view.subscribe(
+        [&](Hover_scene_view_message& message) {
+            m_hover_scene_view = message.scene_view;
+            if (message.scene_view != nullptr) {
+                m_last_hover_scene_view = message.scene_view;
+                m_last_hover_scene_item_tree = nullptr;
+            }
         }
     );
-}
-
-void Clipboard::on_message(App_message& message)
-{
-    using namespace erhe::utility;
-    if (test_bit_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_view)) {
-        m_hover_scene_view = message.scene_view;
-        if (message.scene_view != nullptr) {
-            m_last_hover_scene_view = message.scene_view;
-            m_last_hover_scene_item_tree = nullptr;
+    m_hover_scene_item_tree_subscription = app_message_bus.hover_scene_item_tree.subscribe(
+        [&](Hover_scene_item_tree_message& message) {
+            m_last_hover_scene_item_tree = message.scene_root.get();
+            if (message.scene_root) {
+                m_last_hover_scene_view = nullptr;
+            }
         }
-    }
-    if (test_bit_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_item_tree)) {
-        m_last_hover_scene_item_tree = message.scene_root.get();
-        if (message.scene_root) {
-            m_last_hover_scene_view = nullptr;
-        }
-    }
+    );
 }
 
 auto Clipboard::try_ready() -> bool

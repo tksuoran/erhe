@@ -38,6 +38,8 @@ public:
     [[nodiscard]] auto show_in_developer_menu() const -> bool;
     void set_developer           ();
     void set_min_size            (float min_width, float min_height);
+    void set_max_size            (float max_width, float max_height);
+    void set_show_in_menu        (bool show);
     auto begin                   () -> bool;
     void end                     ();
     void set_window_visibility   (bool visible);

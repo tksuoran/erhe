@@ -20,7 +20,6 @@ namespace erhe::imgui {
 }
 namespace erhe::scene {
     class Node;
-    class Scene_message_bus;
 }
 
 namespace editor {

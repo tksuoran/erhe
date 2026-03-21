@@ -5,6 +5,8 @@
 
 #include "erhe_physics/irigid_body.hpp"
 #include "erhe_commands/command.hpp"
+#include "app_message.hpp"
+#include "erhe_message_bus/message_bus.hpp"
 
 #include <glm/glm.hpp>
 
@@ -24,8 +26,8 @@ namespace erhe::scene {
 
 namespace editor {
 
-class App_message;
 class App_message_bus;
+struct Hover_scene_view_message;
 class Headset_view;
 class Icon_set;
 class Node_physics;
@@ -81,12 +83,13 @@ public:
     auto on_drag      () -> bool;
 
 private:
-    using Tool::on_message; // Intentionally hide Tool::on_message()
-    void on_message(App_message& message);
+    void on_message(Hover_scene_view_message& message);
     void tool_hover(Scene_view* scene_view);
 
     void move_drag_point_instant  (glm::vec3 position);
     void move_drag_point_kinematic(glm::vec3 position);
+
+    erhe::message_bus::Subscription<Hover_scene_view_message> m_hover_scene_view_subscription;
 
     // Commands
     Physics_tool_drag_command                 m_drag_command;

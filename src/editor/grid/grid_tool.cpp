@@ -25,16 +25,13 @@ Grid_tool::Grid_tool(
     Icon_set&                    icon_set,
     Tools&                       tools
 )
-    : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Grid", "grid"}
-    , Tool                     {context}
+    : Tool    {context, tools, Tool_flags::background}
+    , m_window{imgui_renderer, imgui_windows, "Grid", "grid", [this]() { window_imgui(); }}
 {
     ERHE_PROFILE_FUNCTION();
 
     set_description("Grid");
-    set_flags      (Tool_flags::background);
     set_icon       (icon_set.custom_icons, icon_set.icons.grid);
-
-    tools.register_tool(this);
 
     const auto& ini = erhe::configuration::get_ini_file_section(erhe::c_erhe_config_file_path, "grid");
     bool initial_snap_enable{true};
@@ -126,7 +123,7 @@ auto get_plane_transform(const Grid_plane_type plane_type) -> glm::mat4
     }
 }
 
-void Grid_tool::imgui()
+void Grid_tool::window_imgui()
 {
     ERHE_PROFILE_FUNCTION();
 

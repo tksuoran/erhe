@@ -1,7 +1,7 @@
 #pragma once
 
 #include "tools/tool.hpp"
-#include "erhe_imgui/imgui_window.hpp"
+#include "tools/tool_window.hpp"
 
 #include <glm/glm.hpp>
 
@@ -22,9 +22,7 @@ public:
     std::shared_ptr<Grid> grid    {};
 };
 
-class Grid_tool
-    : public erhe::imgui::Imgui_window
-    , public Tool
+class Grid_tool : public Tool
 {
 public:
     class Config
@@ -51,15 +49,15 @@ public:
     // Implements Tool
     void tool_render(const Render_context& context)  override;
 
-    // Implements Imgui_window
-    void imgui() override;
-
     // Public API
     //void viewport_toolbar(bool& hovered);
 
     auto update_hover(glm::vec3 ray_origin, glm::vec3 ray_direction) const -> Grid_hover_position;
 
 private:
+    void window_imgui();
+
+    Tool_window                        m_window;
     std::vector<std::shared_ptr<Grid>> m_grids;
     int                                m_grid_index{0};
 };

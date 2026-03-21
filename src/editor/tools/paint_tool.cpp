@@ -91,8 +91,8 @@ Paint_tool::Paint_tool(
     Icon_set&                    icon_set,
     Tools&                       tools
 )
-    : erhe::imgui::Imgui_window     {imgui_renderer, imgui_windows, "Paint Tool", "paint_tool"}
-    , Tool                          {context}
+    : Tool                          {context, tools, Tool_flags::toolbox}
+    , m_window                      {imgui_renderer, imgui_windows, "Paint Tool", "paint_tool", [this]() { window_imgui(); }}
     , m_paint_vertex_command        {commands, context}
     , m_drag_redirect_update_command{commands, m_paint_vertex_command}
     , m_drag_enable_command         {commands, m_drag_redirect_update_command}
@@ -101,9 +101,7 @@ Paint_tool::Paint_tool(
 
     set_base_priority  (c_priority);
     set_description    ("Paint Tool");
-    set_flags          (Tool_flags::toolbox);
     set_icon           (icon_set.custom_icons, icon_set.icons.brush_small);
-    tools.register_tool(this);
 
     m_paint_vertex_command        .set_host(this);
     m_drag_redirect_update_command.set_host(this);
@@ -176,8 +174,8 @@ Paint_tool::Paint_tool(
     m_ngon_colors.emplace_back(255.0f / 255.0f, 255.0f / 255.0f, 255.0f / 255.0f, 1.0f);
     m_ngon_colors.emplace_back(  0.0f / 255.0f,   0.0f / 255.0f,   0.0f / 255.0f, 1.0f);
 
-    app_message_bus.add_receiver(
-        [&](App_message& message) {
+    m_hover_scene_view_subscription = app_message_bus.hover_scene_view.subscribe(
+        [&](Hover_scene_view_message& message) {
             Tool::on_message(message);
         }
     );
@@ -489,7 +487,7 @@ void Paint_tool::tool_properties(erhe::imgui::Imgui_window&)
     }
 }
 
-void Paint_tool::imgui()
+void Paint_tool::window_imgui()
 {
     const float ui_scale = m_context.app_settings->get_ui_scale();
     const ImVec2 button_size{110.0f * ui_scale, 0.0f};

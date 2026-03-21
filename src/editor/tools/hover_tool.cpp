@@ -33,16 +33,24 @@ Hover_tool::Hover_tool(
     App_message_bus&             app_message_bus,
     Tools&                       tools
 )
-    : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Hover Tool", "hover_tool", true}
-    , Tool                     {app_context}
+    : Tool    {app_context, tools, Tool_flags::background | Tool_flags::toolbox}
+    , m_window{imgui_renderer, imgui_windows, "Hover Tool", "hover_tool", [this]() { window_imgui(); }, true}
 {
-    set_flags      (Tool_flags::background | Tool_flags::toolbox);
     set_description("Hover Tool");
-    tools.register_tool(this);
 
-    app_message_bus.add_receiver(
-        [&](App_message& message) {
+    m_hover_scene_view_subscription = app_message_bus.hover_scene_view.subscribe(
+        [&](Hover_scene_view_message& message) {
             on_message(message);
+        }
+    );
+    m_hover_mesh_subscription = app_message_bus.hover_mesh.subscribe(
+        [&](Hover_mesh_message& message) {
+            on_hover_mesh(message);
+        }
+    );
+    m_hover_tree_node_subscription = app_message_bus.hover_tree_node.subscribe(
+        [&](Hover_tree_node_message& message) {
+            on_hover_tree_node(message);
         }
     );
 }
@@ -79,63 +87,54 @@ auto Hover_tool::get_hover_node() const -> std::shared_ptr<erhe::scene::Node>
 
 void Hover_tool::reset_item_tree_hover()
 {
-    m_context.app_message_bus->queue_message(
-        App_message{
-            .update_flags = Message_flag_bit::c_flag_bit_hover_tree_node,
-            .item         = {}
-        }
-    );
+    m_context.app_message_bus->hover_tree_node.queue_message(Hover_tree_node_message{.item = {}});
 }
 
-void Hover_tool::on_message(App_message& message)
+void Hover_tool::on_message(Hover_scene_view_message& message)
 {
     Tool::on_message(message);
-    using namespace erhe::utility;
-    
-    if (test_bit_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_view)) {
-        m_context.app_message_bus->queue_message(
-            App_message{
-                .update_flags = Message_flag_bit::c_flag_bit_hover_mesh
-            }
-        );
-    }
-    if (test_bit_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_mesh)) {
-        std::shared_ptr<erhe::scene::Node> hovered_node     = get_hover_node();
-        std::shared_ptr<erhe::scene::Node> old_hovered_node = m_hovered_node_in_viewport.lock();
-        if (old_hovered_node != hovered_node) {
-            log_pointer->debug("Hover_tool::on_message() c_flag_bit_hover_mesh");
-            if (old_hovered_node) {
-                log_pointer->debug("clearing hovered bit for {}", old_hovered_node->get_name());
-                old_hovered_node->disable_flag_bits(erhe::Item_flags::hovered_in_viewport);
-            }
-            if (hovered_node) {
-                log_pointer->debug("setting hovered bit for {}", hovered_node->get_name());
-                hovered_node->enable_flag_bits(erhe::Item_flags::hovered_in_viewport);
-            } else {
-                log_pointer->debug("no new hovered mesh / node");
-            }
-            m_hovered_node_in_viewport = hovered_node;
-        }
-    }
+    m_context.app_message_bus->hover_mesh.queue_message(Hover_mesh_message{});
+}
 
-    if (test_bit_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_tree_node)) {
-        std::shared_ptr<erhe::scene::Node> old_hovered_node = m_hovered_node_in_item_tree.lock();
+void Hover_tool::on_hover_mesh(Hover_mesh_message& message)
+{
+    static_cast<void>(message);
+    std::shared_ptr<erhe::scene::Node> hovered_node     = get_hover_node();
+    std::shared_ptr<erhe::scene::Node> old_hovered_node = m_hovered_node_in_viewport.lock();
+    if (old_hovered_node != hovered_node) {
+        log_pointer->debug("Hover_tool::on_hover_mesh()");
         if (old_hovered_node) {
-            old_hovered_node->disable_flag_bits(erhe::Item_flags::hovered_in_item_tree);
+            log_pointer->debug("clearing hovered bit for {}", old_hovered_node->get_name());
+            old_hovered_node->disable_flag_bits(erhe::Item_flags::hovered_in_viewport);
         }
-
-        std::shared_ptr<erhe::scene::Node> hovered_node = std::dynamic_pointer_cast<erhe::scene::Node>(message.item);
-        if (!hovered_node) {
-            m_hovered_node_in_item_tree.reset();
-            return;
+        if (hovered_node) {
+            log_pointer->debug("setting hovered bit for {}", hovered_node->get_name());
+            hovered_node->enable_flag_bits(erhe::Item_flags::hovered_in_viewport);
+        } else {
+            log_pointer->debug("no new hovered mesh / node");
         }
-
-        hovered_node->enable_flag_bits(erhe::Item_flags::hovered_in_item_tree);
-        m_hovered_node_in_item_tree = hovered_node;
+        m_hovered_node_in_viewport = hovered_node;
     }
 }
 
-void Hover_tool::imgui()
+void Hover_tool::on_hover_tree_node(Hover_tree_node_message& message)
+{
+    std::shared_ptr<erhe::scene::Node> old_hovered_node = m_hovered_node_in_item_tree.lock();
+    if (old_hovered_node) {
+        old_hovered_node->disable_flag_bits(erhe::Item_flags::hovered_in_item_tree);
+    }
+
+    std::shared_ptr<erhe::scene::Node> hovered_node = std::dynamic_pointer_cast<erhe::scene::Node>(message.item);
+    if (!hovered_node) {
+        m_hovered_node_in_item_tree.reset();
+        return;
+    }
+
+    hovered_node->enable_flag_bits(erhe::Item_flags::hovered_in_item_tree);
+    m_hovered_node_in_item_tree = hovered_node;
+}
+
+void Hover_tool::window_imgui()
 {
     std::shared_ptr<erhe::scene::Node> hovered_in_viewport  = m_hovered_node_in_viewport.lock();
     std::shared_ptr<erhe::scene::Node> hovered_in_item_tree = m_hovered_node_in_item_tree.lock();
@@ -146,7 +145,7 @@ void Hover_tool::imgui()
         ImGui::Text("Hovered in Item tree: %s", hovered_in_item_tree->get_name().c_str());
     }
 
-    erhe::imgui::Imgui_host* imgui_host = get_imgui_host();
+    erhe::imgui::Imgui_host* imgui_host = m_window.get_imgui_host();
     glm::vec2 mouse_position{0.0f, 0.0f};
     if (imgui_host != nullptr) {
         mouse_position = imgui_host->get_mouse_position();

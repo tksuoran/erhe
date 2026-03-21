@@ -26,7 +26,6 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_rendergraph/rendergraph.hpp"
 #include "erhe_scene/scene.hpp"
-#include "erhe_utility/bit_helpers.hpp"
 #include "erhe_window/renderdoc_capture.hpp"
 #include "erhe_verify/verify.hpp"
 #include "erhe_window/window.hpp"
@@ -276,12 +275,9 @@ App_rendering::App_rendering(
     };
     rendertarget->allow_shader_stages_override = false;
     //rendertarget->allow_shader_stages_override = true;
-    app_message_bus.add_receiver(
-        [&](App_message& message) {
-            using namespace erhe::utility;
-            if (test_bit_set(message.update_flags, Message_flag_bit::c_flag_bit_graphics_settings)) {
-                handle_graphics_settings_changed(message.graphics_preset);
-            }
+    m_graphics_settings_subscription = app_message_bus.graphics_settings.subscribe(
+        [&](Graphics_settings_message& message) {
+            handle_graphics_settings_changed(message.graphics_preset);
         }
     );
 

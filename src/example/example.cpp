@@ -33,7 +33,6 @@
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene/scene_log.hpp"
-#include "erhe_scene/scene_message_bus.hpp"
 #include "erhe_scene_renderer/forward_renderer.hpp"
 #include "erhe_scene_renderer/program_interface.hpp"
 #include "erhe_scene_renderer/scene_renderer_log.hpp"
@@ -62,8 +61,7 @@ public:
                 .title     = "erhe example"
             }
         }
-        , m_scene_message_bus{}
-        , m_scene            {m_scene_message_bus, "example scene", nullptr}
+        , m_scene            {"example scene", nullptr}
         , m_graphics_device{
             erhe::graphics::Surface_create_info{
                 .context_window            = &m_window,
@@ -466,7 +464,6 @@ private:
     }
 
     erhe::window::Context_window                 m_window;
-    erhe::scene::Scene_message_bus               m_scene_message_bus;
     erhe::scene::Scene                           m_scene;
     erhe::graphics::Device                       m_graphics_device;
     erhe::gltf::Image_transfer                   m_image_transfer;

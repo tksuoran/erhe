@@ -2,6 +2,8 @@
 
 #include "erhe_rendergraph/rendergraph_node.hpp"
 #include "erhe_commands/command.hpp"
+#include "app_message.hpp"
+#include "erhe_message_bus/message_bus.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_scene/camera.hpp"
 
@@ -20,7 +22,6 @@ namespace erhe::scene_renderer {
 namespace editor {
 
 class App_context;
-class App_message;
 class App_message_bus;
 class App_rendering;
 class App_settings;
@@ -107,11 +108,11 @@ public:
     [[nodiscard]] auto get_post_processing_nodes() const -> const std::vector<std::shared_ptr<Post_processing_node>>&;
 
 private:
-    void on_message                      (App_message& message);
     void handle_graphics_settings_changed(Graphics_preset* graphics_preset);
 
     void update_pointer_from_imgui_viewport_windows(erhe::imgui::Imgui_host* imgui_host);
 
+    erhe::message_bus::Subscription<Graphics_settings_message> m_graphics_settings_subscription;
     App_context& m_app_context;
 
     // Commands

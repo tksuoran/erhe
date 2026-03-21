@@ -29,7 +29,6 @@
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
-#include "erhe_utility/bit_helpers.hpp"
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/headset_view.hpp"
@@ -123,7 +122,7 @@ Brush_tool::Brush_tool(
     Icon_set&                 icon_set,
     Tools&                    tools
 )
-    : Tool                            {context}
+    : Tool                            {context, tools, Tool_flags::toolbox}
     , m_preview_command               {commands, context}
     , m_insert_command                {commands, context}
     , m_pick_command                  {commands, context}
@@ -144,7 +143,6 @@ Brush_tool::Brush_tool(
 
     set_base_priority(Brush_tool::c_priority);
     set_description  ("Brush Tool");
-    set_flags        (Tool_flags::toolbox);
     set_icon         (icon_set.custom_icons, icon_set.icons.brush_big);
 
     commands.register_command(&m_preview_command);
@@ -175,11 +173,14 @@ Brush_tool::Brush_tool(
     static_cast<void>(headset_view);
 #endif
 
-    tools.register_tool(this);
-
-    app_message_bus.add_receiver(
-        [&](App_message& message) {
-            on_message(message);
+    m_hover_scene_view_subscription = app_message_bus.hover_scene_view.subscribe(
+        [&](Hover_scene_view_message& message) {
+            on_hover_scene_view(message);
+        }
+    );
+    m_hover_mesh_subscription = app_message_bus.hover_mesh.subscribe(
+        [&](Hover_mesh_message& message) {
+            on_hover_mesh(message);
         }
     );
 
@@ -195,23 +196,21 @@ Brush_tool::Brush_tool(
     m_toggle_brush_preview_command  .set_host(this);
 }
 
-void Brush_tool::on_message(App_message& message)
+void Brush_tool::on_hover_scene_view(Hover_scene_view_message& message)
 {
     Scene_view* const old_scene_view = get_hover_scene_view();
-
     Tool::on_message(message);
-    using namespace erhe::utility;
-    if (test_bit_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_mesh)) {
-        on_motion();
-    }
-    if (test_bit_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_view)) {
-        if (message.scene_view != old_scene_view) {
-            bool visible = message.scene_view && (get_hover_scene_view() == message.scene_view);
-            if (!visible) {
-                remove_preview_mesh();
-            }
+    if (message.scene_view != old_scene_view) {
+        bool visible = message.scene_view && (get_hover_scene_view() == message.scene_view);
+        if (!visible) {
+            remove_preview_mesh();
         }
     }
+}
+
+void Brush_tool::on_hover_mesh(Hover_mesh_message&)
+{
+    on_motion();
 }
 
 void Brush_tool::handle_priority_update(int old_priority, int new_priority)

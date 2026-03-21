@@ -11,7 +11,7 @@
 #include "scene/scene_root.hpp"
 #include "tools/tools.hpp"
 
-#include "erhe_utility/bit_helpers.hpp"
+#include "app_message.hpp"
 #include "erhe_commands/commands.hpp"
 #include "erhe_log/log_glm.hpp"
 #include "erhe_physics/iconstraint.hpp"
@@ -92,7 +92,7 @@ Physics_tool::Physics_tool(
     Icon_set&                 icon_set,
     Tools&                    tools
 )
-    : Tool                          {context}
+    : Tool                          {context, tools, Tool_flags::toolbox}
     , m_drag_command                {commands, context}
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     , m_drag_redirect_update_command{commands, m_drag_command}
@@ -103,9 +103,7 @@ Physics_tool::Physics_tool(
 
     set_base_priority(c_priority);
     set_description  ("Physics Tool");
-    set_flags        (Tool_flags::toolbox);
     set_icon         (icon_set.custom_icons, icon_set.icons.drag);
-    tools.register_tool(this);
 
     commands.register_command(&m_drag_command);
     commands.bind_command_to_mouse_drag(&m_drag_command, erhe::window::Mouse_button_right, true);
@@ -125,8 +123,8 @@ Physics_tool::Physics_tool(
 
     m_motion_mode = erhe::physics::Motion_mode::e_kinematic_non_physical;
 
-    app_message_bus.add_receiver(
-        [&](App_message& message) {
+    m_hover_scene_view_subscription = app_message_bus.hover_scene_view.subscribe(
+        [&](Hover_scene_view_message& message) {
             on_message(message);
         }
     );
@@ -144,29 +142,25 @@ Physics_tool::~Physics_tool() noexcept
     }
 }
 
-void Physics_tool::on_message(App_message& message)
+void Physics_tool::on_message(Hover_scene_view_message& message)
 {
-    // Re-implementing here Tool::on_message(message);
+    if (get_hover_scene_view() != message.scene_view) {
+        set_hover_scene_view(message.scene_view);
 
-    if (erhe::utility::test_bit_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_view)) {
-        if (get_hover_scene_view() != message.scene_view) {
-            set_hover_scene_view(message.scene_view);
-
-            if (m_physics_world != nullptr) {
-                if (m_target_constraint) {
-                    m_physics_world->remove_constraint(m_target_constraint.get());
-                    m_target_constraint.reset();
-                }
-                release_target();
-                m_physics_world = nullptr;
+        if (m_physics_world != nullptr) {
+            if (m_target_constraint) {
+                m_physics_world->remove_constraint(m_target_constraint.get());
+                m_target_constraint.reset();
             }
+            release_target();
+            m_physics_world = nullptr;
+        }
 
-            Scene_view* scene_view = get_hover_scene_view();
-            if (scene_view != nullptr) {
-                auto scene_root = scene_view->get_scene_root();
-                if (scene_root) {
-                    m_physics_world = &scene_root->get_physics_world();
-                }
+        Scene_view* scene_view = get_hover_scene_view();
+        if (scene_view != nullptr) {
+            auto scene_root = scene_view->get_scene_root();
+            if (scene_root) {
+                m_physics_world = &scene_root->get_physics_world();
             }
         }
     }

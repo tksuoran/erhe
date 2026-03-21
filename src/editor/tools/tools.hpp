@@ -27,10 +27,6 @@ namespace erhe::imgui {
     class Imgui_renderer;
     class Imgui_windows;
 }
-namespace erhe::scene {
-    class Scene_message_bus;
-}
-
 namespace editor {
 
 class App_context;
@@ -41,7 +37,6 @@ class Operation_stack;
 class Operations;
 class Render_context;
 class Scene_commands;
-class Scene_message_bus;
 class Scene_root;
 class Tool;
 class Scene_views;
@@ -64,7 +59,6 @@ public:
     Tools(
         erhe::imgui::Imgui_renderer&    imgui_renderer,
         erhe::imgui::Imgui_windows&     imgui_windows,
-        erhe::scene::Scene_message_bus& scene_message_bus,
         App_context&                    context,
         App_rendering&                  app_rendering,
         App_settings&                   app_settings,

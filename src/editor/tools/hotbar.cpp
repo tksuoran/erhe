@@ -198,8 +198,8 @@ Hotbar::Hotbar(
     Scene_builder&               scene_builder,
     Tools&                       tools
 )
-    : erhe::imgui::Imgui_window  {imgui_renderer, imgui_windows, "Hotbar", ""}
-    , Tool                       {app_context}
+    : Tool                       {app_context}
+    , m_window                   {imgui_renderer, imgui_windows, "Hotbar", "", [this]() { window_imgui(); }}
     , m_toggle_visibility_command{commands, app_context}
     , m_prev_tool_command        {commands, app_context, -1}
     , m_next_tool_command        {commands, app_context, 1}
@@ -210,6 +210,10 @@ Hotbar::Hotbar(
 #endif
 {
     ERHE_PROFILE_FUNCTION();
+
+    m_window.flags_callback    = [this]() { return window_flags(); };
+    m_window.on_begin_callback = [this]() { window_on_begin(); };
+    m_window.on_end_callback   = [this]() { window_on_end(); };
 
     const auto& ini = erhe::configuration::get_ini_file_section(erhe::c_erhe_config_file_path, "hotbar");
     ini.get("enabled",    m_enabled);
@@ -231,7 +235,7 @@ Hotbar::Hotbar(
     ini.get("z",          m_z);
 
     if (!m_enabled) {
-        hide_window();
+        m_window.hide_window();
         return;
     }
 
@@ -264,24 +268,34 @@ Hotbar::Hotbar(
     static_cast<void>(headset_view);
 #endif
 
-    set_description("Hotbar");
-    set_flags      (Tool_flags::background);
-    tools.register_tool(this);
+    set_description  ("Hotbar");
+    set_flags        (Tool_flags::background);
+    register_tool    (tools);
 
     set_mesh_visibility(m_show);
 
     auto* scene_root_ptr = scene_builder.get_scene_root().get();
     auto& scene_root = *scene_root_ptr;
     if (m_use_radial) {
-        hide_window();
+        m_window.hide_window();
         init_radial_menu(mesh_memory, scene_root);
     } else {
-        this->Imgui_window::m_show_in_menu = false;
+        m_window.set_show_in_menu(false);
     }
 
-    app_message_bus.add_receiver(
-        [&](App_message& message) {
-            on_message(message);
+    m_hover_scene_view_subscription = app_message_bus.hover_scene_view.subscribe(
+        [&](Hover_scene_view_message& message) {
+            on_hover_scene_view_message(message);
+        }
+    );
+    m_tool_select_subscription = app_message_bus.tool_select.subscribe(
+        [&](Tool_select_message& message) {
+            on_tool_select_message(message);
+        }
+    );
+    m_render_scene_view_subscription = app_message_bus.render_scene_view.subscribe(
+        [&](Render_scene_view_message& message) {
+            on_render_scene_view_message(message);
         }
     );
 }
@@ -329,7 +343,7 @@ void Hotbar::init_hotbar()
     style.ItemInnerSpacing = ImVec2{0.0f, 0.0f};
     style.MouseCursorScale = 2.0f;
 
-    this->Hotbar::set_imgui_host(m_rendertarget_imgui_host.get());
+    m_window.set_imgui_host(m_rendertarget_imgui_host.get());
 
     if (m_context.developer_mode) {
         m_rendertarget_mesh->enable_flag_bits(erhe::Item_flags::show_in_ui);
@@ -430,7 +444,7 @@ void Hotbar::get_all_tools()
     init_hotbar();
 }
 
-void Hotbar::on_message(App_message& message)
+void Hotbar::on_hover_scene_view_message(Hover_scene_view_message& message)
 {
     Scene_view* const old_scene_view = get_hover_scene_view();
     Tool::on_message(message);
@@ -439,42 +453,49 @@ void Hotbar::on_message(App_message& message)
         return;
     }
 
-    using namespace erhe::utility;
-    if (test_bit_set(message.update_flags, Message_flag_bit::c_flag_bit_tool_select)) {
-        update_slot_from_tool(m_context.tools->get_priority_tool());
-    }
+    if (message.scene_view != old_scene_view) {
+        if (m_use_radial) {
+            update_node_transform();
+        } else {
+            using Rendergraph_node = erhe::rendergraph::Rendergraph_node;
+            auto old_node = (old_scene_view     != nullptr) ? old_scene_view    ->get_rendergraph_node() : nullptr;
+            auto new_node = (message.scene_view != nullptr) ? message.scene_view->get_rendergraph_node() : nullptr;
 
-    if (test_bit_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_view)) {
-        if (message.scene_view != old_scene_view) {
-            if (m_use_radial) {
-                update_node_transform();
-            } else {
-                using Rendergraph_node = erhe::rendergraph::Rendergraph_node;
-                auto old_node = (old_scene_view     != nullptr) ? old_scene_view    ->get_rendergraph_node() : nullptr;
-                auto new_node = (message.scene_view != nullptr) ? message.scene_view->get_rendergraph_node() : nullptr;
-
-                erhe::rendergraph::Rendergraph& rendergraph = *m_context.rendergraph;
-                if (old_node != new_node) {
-                    if (old_node) {
-                        rendergraph.disconnect(erhe::rendergraph::Rendergraph_node_key::rendertarget_texture, m_rendertarget_imgui_host.get(), old_node);
-                    }
-                    set_mesh_visibility(static_cast<bool>(new_node));
-                    if (new_node) {
-                        rendergraph.connect(erhe::rendergraph::Rendergraph_node_key::rendertarget_texture, m_rendertarget_imgui_host.get(), new_node);
-                    }
+            erhe::rendergraph::Rendergraph& rendergraph = *m_context.rendergraph;
+            if (old_node != new_node) {
+                if (old_node) {
+                    rendergraph.disconnect(erhe::rendergraph::Rendergraph_node_key::rendertarget_texture, m_rendertarget_imgui_host.get(), old_node);
+                }
+                set_mesh_visibility(static_cast<bool>(new_node));
+                if (new_node) {
+                    rendergraph.connect(erhe::rendergraph::Rendergraph_node_key::rendertarget_texture, m_rendertarget_imgui_host.get(), new_node);
                 }
             }
         }
     }
+}
 
-    // Update rendertarget node transform to match render camera.
-    // This is used only for horizontal hotbar, not for radial menu.
-    if (test_bit_set(message.update_flags, Message_flag_bit::c_flag_bit_render_scene_view)) {
-        bool visible = message.scene_view && (get_hover_scene_view() == message.scene_view);
-        set_mesh_visibility(visible);
-        if (!m_use_radial) {
-            update_node_transform();
-        }
+void Hotbar::on_tool_select_message(Tool_select_message&)
+{
+    if (!m_enabled || !m_show) {
+        return;
+    }
+
+    update_slot_from_tool(m_context.tools->get_priority_tool());
+}
+
+// Update rendertarget node transform to match render camera.
+// This is used only for horizontal hotbar, not for radial menu.
+void Hotbar::on_render_scene_view_message(Render_scene_view_message& message)
+{
+    if (!m_enabled || !m_show) {
+        return;
+    }
+
+    bool visible = message.scene_view && (get_hover_scene_view() == message.scene_view);
+    set_mesh_visibility(visible);
+    if (!m_use_radial) {
+        update_node_transform();
     }
 }
 
@@ -556,7 +577,7 @@ void Hotbar::update_node_transform()
     }
 }
 
-auto Hotbar::flags() -> ImGuiWindowFlags
+auto Hotbar::window_flags() -> ImGuiWindowFlags
 {
     return
         ImGuiWindowFlags_NoBackground      |
@@ -572,13 +593,13 @@ auto Hotbar::flags() -> ImGuiWindowFlags
         ImGuiWindowFlags_NoDocking;
 }
 
-void Hotbar::on_begin()
+void Hotbar::window_on_begin()
 {
     if (m_rendertarget_mesh) {
-        m_min_size[0] = static_cast<float>(m_rendertarget_mesh->get_width());
-        m_min_size[1] = static_cast<float>(m_rendertarget_mesh->get_height());
-        m_max_size[0] = m_min_size[0];
-        m_max_size[1] = m_min_size[1];
+        const float w = static_cast<float>(m_rendertarget_mesh->get_width());
+        const float h = static_cast<float>(m_rendertarget_mesh->get_height());
+        m_window.set_min_size(w, h);
+        m_window.set_max_size(w, h);
     }
     ImGui::SetNextWindowPos(ImVec2{0.0f, 0.0f});
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2{0.0f, 0.0f});
@@ -587,7 +608,7 @@ void Hotbar::on_begin()
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
 }
 
-void Hotbar::on_end()
+void Hotbar::window_on_end()
 {
     ImGui::PopStyleVar(4);
 }
@@ -710,7 +731,7 @@ void Hotbar::update_slot_from_tool(Tool* tool)
     }
 }
 
-void Hotbar::imgui()
+void Hotbar::window_imgui()
 {
     ERHE_PROFILE_FUNCTION();
     ImGui::PushID("Hotbar::imgui");
@@ -752,7 +773,7 @@ void Hotbar::set_mesh_visibility(const bool value)
     if (m_rendertarget_node) {
         m_rendertarget_node->set_visible(value);
     }
-    Imgui_window::set_window_visibility(value);
+    m_window.set_window_visibility(value);
 
     if (m_rendertarget_mesh) {
         m_rendertarget_imgui_host->set_enabled(value);

@@ -1,10 +1,12 @@
 #pragma once
 
 #include "tools/tool.hpp"
+#include "tools/tool_window.hpp"
 
 #include "erhe_commands/command.hpp"
-#include "erhe_imgui/imgui_window.hpp"
 #include "erhe_geometry/types.hpp"
+#include "app_message.hpp"
+#include "erhe_message_bus/message_bus.hpp"
 
 #include <geogram/mesh/mesh.h>
 
@@ -52,9 +54,7 @@ class Mesh_memory;
 class Selection_tool;
 class Headset_view;
 
-class Paint_tool
-    : public erhe::imgui::Imgui_window
-    , public Tool
+class Paint_tool : public Tool
 {
 public:
     static constexpr int c_priority{4};
@@ -69,9 +69,6 @@ public:
         Icon_set&                    icon_set,
         Tools&                       tools
     );
-
-    // Implements Imgui_window
-    void imgui() override;
 
     // Implements Tool
     void handle_priority_update(int old_priority, int new_priority) override;
@@ -101,6 +98,10 @@ private:
         glm::vec4          color
     );
 
+    void window_imgui();
+
+    Tool_window                         m_window;
+    erhe::message_bus::Subscription<Hover_scene_view_message> m_hover_scene_view_subscription;
     Paint_vertex_command                m_paint_vertex_command;
     erhe::commands::Redirect_command    m_drag_redirect_update_command;
     erhe::commands::Drag_enable_command m_drag_enable_command;

@@ -218,7 +218,6 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(Mesh_memory& mesh_memor
 Tools::Tools(
     erhe::imgui::Imgui_renderer&    imgui_renderer,
     erhe::imgui::Imgui_windows&     imgui_windows,
-    erhe::scene::Scene_message_bus& scene_message_bus,
     App_context&                    app_context,
     App_rendering&                  app_rendering,
     App_settings&                   app_settings,
@@ -235,7 +234,6 @@ Tools::Tools(
     m_scene_root = std::make_shared<Scene_root>(
         nullptr,
         nullptr,
-        scene_message_bus,
         nullptr,
         nullptr, // Do not process editor messages
         tools_content_library,
@@ -345,7 +343,8 @@ void Tools::set_priority_tool(Tool* priority_tool)
 
     if (m_priority_tool != nullptr) {
         log_tools->trace("prioritizing tool {}", m_priority_tool->get_description());
-        m_priority_tool->set_priority_boost(100);
+        constexpr int c_priority_tool_boost = 100;
+        m_priority_tool->set_priority_boost(c_priority_tool_boost);
     } else {
         log_tools->trace("active tool reset");
     }
@@ -374,10 +373,8 @@ void Tools::set_priority_tool(Tool* priority_tool)
     }
 
     m_context.commands->sort_bindings();
-    m_context.app_message_bus->send_message(
-        App_message{
-            .update_flags = Message_flag_bit::c_flag_bit_tool_select
-        }
+    m_context.app_message_bus->tool_select.send_message(
+        Tool_select_message{}
     );
 }
 

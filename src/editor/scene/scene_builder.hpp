@@ -32,7 +32,6 @@ namespace erhe::rendergraph {
 namespace erhe::scene {
     class Camera;
     class Light;
-    class Scene_message_bus;
 }
 namespace erhe::scene_renderer {
     class Shadow_renderer;

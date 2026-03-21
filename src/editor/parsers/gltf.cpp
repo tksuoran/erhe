@@ -104,8 +104,7 @@ void import_gltf(
     erhe::graphics::Device& graphics_device = *context.graphics_device;
     tf::Executor&           executor        = *context.executor;
 
-    erhe::scene::Scene_message_bus temp_scene_message_bus;
-    erhe::scene::Scene temp_scene{temp_scene_message_bus, "temp scene", nullptr};
+    erhe::scene::Scene temp_scene{"temp scene", nullptr};
     const auto temp_scene_root_node = temp_scene.get_root_node();
     auto root_node = std::make_shared<erhe::scene::Node>(erhe::file::to_string(path.filename()));
     root_node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);

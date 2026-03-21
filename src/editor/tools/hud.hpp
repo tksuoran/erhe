@@ -4,8 +4,12 @@
 #include "tools/tool.hpp"
 
 #include "erhe_commands/command.hpp"
+#include "app_message.hpp"
+#include "erhe_message_bus/message_bus.hpp"
 
 #include <glm/glm.hpp>
+
+#include <memory>
 
 namespace erhe::graphics    { class Device; }
 namespace erhe::imgui       { class Imgui_renderer; }
@@ -15,7 +19,6 @@ namespace erhe::scene       { class Node; };
 namespace editor {
 
 class App_context;
-class App_message;
 class App_message_bus;
 class App_windows;
 class Headset_view;
@@ -88,10 +91,9 @@ public:
     [[nodiscard]] auto intersect_ray  (const glm::vec3& ray_origin_in_world, const glm::vec3& ray_direction_in_world) -> std::optional<glm::vec3>;
 
 private:
-    using Tool::on_message; // Intentionally hide Tool::on_message()
-    void on_message           (App_message& message);
     void update_node_transform(const glm::mat4& world_from_hud);
 
+    erhe::message_bus::Subscription<Hover_scene_view_message> m_hover_scene_view_subscription;
     Toggle_hud_visibility_command m_toggle_visibility_command;
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)

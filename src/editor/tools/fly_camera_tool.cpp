@@ -679,8 +679,8 @@ Fly_camera_tool::Fly_camera_tool(
     App_message_bus&             app_message_bus,
     Tools&                       tools
 )
-    : erhe::imgui::Imgui_window       {imgui_renderer, imgui_windows, "Fly Camera", "fly_camera"}
-    , Tool                            {app_context}
+    : Tool                            {app_context, tools, Tool_flags::background}
+    , m_window                        {imgui_renderer, imgui_windows, "Fly Camera", "fly_camera", [this]() { window_imgui(); }}
     , m_turn_command                  {commands, app_context}
     , m_tumble_command                {commands, app_context}
     , m_track_command                 {commands, app_context}
@@ -755,9 +755,6 @@ Fly_camera_tool::Fly_camera_tool(
 
     set_base_priority(c_priority);
     set_description  ("Fly Camera");
-    set_flags        (Tool_flags::background);
-
-    tools.register_tool(this);
 
     commands.register_command(&m_move_up_active_command);
     commands.register_command(&m_move_up_inactive_command);
@@ -820,13 +817,10 @@ Fly_camera_tool::Fly_camera_tool(
     commands.bind_command_to_controller_axis(&m_active_rotate_y_command, 5);
     commands.bind_command_to_controller_axis(&m_active_rotate_z_command, 4);
 
-    app_message_bus.add_receiver(
-        [&](App_message& message) {
+    m_hover_scene_view_subscription = app_message_bus.hover_scene_view.subscribe(
+        [&](Hover_scene_view_message& message) {
             Tool::on_message(message);
-            using namespace erhe::utility;
-            if (test_bit_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_view)) {
-                on_hover_viewport_change();
-            }
+            on_hover_viewport_change();
         }
     );
 
@@ -1276,7 +1270,7 @@ void Fly_camera_tool::show_input_axis_ui(const char* label, erhe::math::Input_ax
     ImGui::PopID();
 }
 
-void Fly_camera_tool::imgui()
+void Fly_camera_tool::window_imgui()
 {
     ERHE_PROFILE_FUNCTION();
 

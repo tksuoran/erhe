@@ -23,9 +23,6 @@ namespace erhe::renderer {
 namespace erhe::rendergraph {
     class Rendergraph;
 }
-namespace erhe::scene {
-    class Scene_message_bus;
-}
 namespace erhe::scene_renderer {
     class Forward_renderer;
     class Shadow_renderer;
@@ -78,7 +75,6 @@ class Rotate_tool;
 class Scale_tool;
 class Scene_builder;
 class Scene_commands;
-class Scene_message_bus;
 class Selection;
 class Selection_tool;
 class Settings_window;
@@ -116,7 +112,6 @@ public:
     erhe::renderer::Debug_renderer*         debug_renderer        {nullptr};
     erhe::renderer::Text_renderer*          text_renderer         {nullptr};
     erhe::rendergraph::Rendergraph*         rendergraph           {nullptr};
-    erhe::scene::Scene_message_bus*         scene_message_bus     {nullptr};
     erhe::scene_renderer::Forward_renderer* forward_renderer      {nullptr};
     erhe::scene_renderer::Shadow_renderer*  shadow_renderer       {nullptr};
     erhe::window::Context_window*           context_window        {nullptr};

@@ -188,34 +188,26 @@ Operations::Operations(
     ini.get("object_scale",   m_make_mesh_config.object_scale);
     ini.get("detail",         m_make_mesh_config.detail);
 
-    app_message_bus.add_receiver(
-        [&](App_message& message) {
-            on_message(message);
+    m_hover_scene_view_subscription = app_message_bus.hover_scene_view.subscribe(
+        [&](Hover_scene_view_message& message) {
+            m_hover_scene_view = message.scene_view;
+            if (message.scene_view != nullptr) {
+                m_last_hover_scene_view = message.scene_view;
+            }
         }
     );
-}
-
-void Operations::on_message(App_message& message)
-{
-    if (erhe::utility::test_bit_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_view)) {
-        m_hover_scene_view = message.scene_view;
-        if (message.scene_view != nullptr) {
-            m_last_hover_scene_view = message.scene_view;
-        }
-    }
-    if (erhe::utility::test_bit_set(message.update_flags, Message_flag_bit::c_flag_bit_load_scene_file)) {
-        if (message.load_scene_path.has_value()) {
+    m_load_scene_file_subscription = app_message_bus.load_scene_file.subscribe(
+        [&](Load_scene_file_message& message) {
             try {
                 auto content_library = std::make_shared<Content_library>();
                 auto scene_root = editor::load_scene(
                     m_context.imgui_renderer,
                     m_context.imgui_windows,
-                    *m_context.scene_message_bus,
                     &m_context,
                     m_context.app_message_bus,
                     m_context.app_scenes,
                     content_library,
-                    message.load_scene_path.value()
+                    message.path
                 );
                 if (scene_root) {
                     log_operations->info("Scene loaded: {}", scene_root->get_name());
@@ -247,8 +239,9 @@ void Operations::on_message(App_message& message)
                 log_operations->error("exception: load scene");
             }
         }
-    }
+    );
 }
+
 
 auto Operations::mesh_context() -> Mesh_operation_parameters
 {
@@ -898,10 +891,9 @@ void Operations::load_scene()
         }
 
         // Queue the load to happen outside ImGui iteration
-        m_context.app_message_bus->queue_message(
-            App_message{
-                .update_flags    = Message_flag_bit::c_flag_bit_load_scene_file,
-                .load_scene_path = path_opt.value(),
+        m_context.app_message_bus->load_scene_file.queue_message(
+            Load_scene_file_message{
+                .path = path_opt.value(),
             }
         );
     } catch (...) {

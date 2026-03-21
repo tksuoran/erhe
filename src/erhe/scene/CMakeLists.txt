@@ -25,9 +25,6 @@ erhe_target_sources_grouped(
     erhe_scene/scene_host.hpp
     erhe_scene/scene_log.cpp
     erhe_scene/scene_log.hpp
-    erhe_scene/scene_message.hpp
-    erhe_scene/scene_message_bus.cpp
-    erhe_scene/scene_message_bus.hpp
     erhe_scene/skin.cpp
     erhe_scene/skin.hpp
     erhe_scene/transform.cpp
@@ -43,7 +40,6 @@ target_link_libraries(
     PUBLIC
         erhe::item
         erhe::math
-        erhe::message_bus
         erhe::primitive
         erhe::profile
         glm::glm-header-only

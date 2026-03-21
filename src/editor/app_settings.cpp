@@ -144,9 +144,8 @@ void Graphics_settings::select_active_graphics_preset(App_message_bus& app_messa
             current_graphics_preset = graphics_preset;
             log_startup->info("Using graphics preset {}", graphics_preset.name);
             // Queue instead of instant send
-            app_message_bus.queue_message(
-                App_message{
-                    .update_flags    = Message_flag_bit::c_flag_bit_graphics_settings,
+            app_message_bus.graphics_settings.queue_message(
+                Graphics_settings_message{
                     .graphics_preset = &current_graphics_preset
                 }
             );

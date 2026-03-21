@@ -188,7 +188,10 @@ auto Command::get_host_priority() const -> int
 
 auto Command::get_priority() const -> int
 {
-    return get_base_priority() * 20 + get_host_priority();
+    // Multiplier ensures command state (Active=4, Ready=3, Inactive=2, Disabled=1)
+    // dominates over host priority (typically 0..~110 for tools).
+    constexpr int c_state_priority_multiplier = 20;
+    return get_base_priority() * c_state_priority_multiplier + get_host_priority();
 }
 
 //

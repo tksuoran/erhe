@@ -319,6 +319,8 @@ erhe_target_sources_grouped(
     tools/selection_tool.hpp
     tools/tool.cpp
     tools/tool.hpp
+    tools/tool_window.cpp
+    tools/tool_window.hpp
     tools/tools.cpp
     tools/tools.hpp
     transform/handle_enums.cpp
@@ -440,6 +442,7 @@ target_link_libraries(
         erhe::imgui
         erhe::log
         erhe::math
+        erhe::message_bus
         erhe::net
         erhe::physics
         erhe::primitive

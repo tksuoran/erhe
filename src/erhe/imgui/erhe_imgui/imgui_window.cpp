@@ -123,6 +123,17 @@ void Imgui_window::set_min_size(const float min_width, const float min_height)
     m_min_size[1] = min_height;
 }
 
+void Imgui_window::set_max_size(const float max_width, const float max_height)
+{
+    m_max_size[0] = max_width;
+    m_max_size[1] = max_height;
+}
+
+void Imgui_window::set_show_in_menu(const bool show)
+{
+    m_show_in_menu = show;
+}
+
 auto Imgui_window::begin() -> bool
 {
     ERHE_PROFILE_FUNCTION();

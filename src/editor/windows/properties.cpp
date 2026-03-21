@@ -103,10 +103,8 @@ void Properties::animation_properties(erhe::scene::Animation& animation)
     const float time_in_timeline = m_context.timeline_window->get_play_position();
     animation.apply(start_time + time_in_timeline);
 
-    m_context.app_message_bus->send_message(
-        App_message{
-            .update_flags = Message_flag_bit::c_flag_bit_animation_update
-        }
+    m_context.app_message_bus->animation_update.send_message(
+        Animation_update_message{}
     );
 
     // TODO assert all animation channels targets point to same scene?

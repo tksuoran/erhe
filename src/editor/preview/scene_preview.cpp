@@ -24,7 +24,6 @@ using Color_blend_state    = erhe::graphics::Color_blend_state;
 
 Scene_preview::Scene_preview(
     erhe::graphics::Device&         graphics_device,
-    erhe::scene::Scene_message_bus& scene_message_bus,
     App_context&                    context,
     Mesh_memory&                    mesh_memory,
     Programs&                       programs
@@ -52,7 +51,6 @@ Scene_preview::Scene_preview(
     m_scene_root_shared = std::make_shared<Scene_root>(
         nullptr, // No Imgui_renderer
         nullptr, // No Imgui_windows
-        scene_message_bus,
         nullptr, // No App_context
         nullptr, // Don't process editor messages
         m_content_library,

@@ -1,7 +1,9 @@
 #pragma once
 
+#include "app_message.hpp"
 #include "scene/frame_controller.hpp"
 
+#include "erhe_message_bus/message_bus.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_scene/scene_host.hpp"
 
@@ -46,7 +48,6 @@ namespace erhe::scene {
     class Message_bus;
     class Node;
     class Scene;
-    class Scene_message_bus;
 }
 
 namespace editor {
@@ -107,7 +108,6 @@ public:
     Scene_root(
         erhe::imgui::Imgui_renderer*            imgui_renderer,
         erhe::imgui::Imgui_windows*             imgui_windows,
-        erhe::scene::Scene_message_bus&         scene_message_bus,
         App_context*                            context,
         App_message_bus*                        app_message_bus,
         const std::shared_ptr<Content_library>& content_library,
@@ -175,6 +175,8 @@ public:
 
 private:
     [[nodiscard]] auto get_node_rt_mask(erhe::scene::Node* node) -> uint32_t;
+
+    erhe::message_bus::Subscription<Selection_message> m_selection_subscription;
 
     static int s_browser_window_count;
 

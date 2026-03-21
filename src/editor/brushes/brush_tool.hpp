@@ -5,6 +5,8 @@
 #include "scene/scene_view.hpp"
 #include "erhe_commands/command.hpp"
 #include "erhe_geometry/types.hpp"
+#include "app_message.hpp"
+#include "erhe_message_bus/message_bus.hpp"
 #include "erhe_profile/profile.hpp"
 
 #include <memory>
@@ -15,8 +17,9 @@ namespace editor {
 class Brush;
 class Brush_tool;
 class Content_library;
-class App_message;
 class App_message_bus;
+struct Hover_scene_view_message;
+struct Hover_mesh_message;
 class App_scenes;
 class Icon_set;
 class Item_tree;
@@ -99,7 +102,8 @@ public:
     [[nodiscard]] auto get_hover_brush() const -> std::shared_ptr<Brush>;
 
 private:
-    void on_message                        (App_message& app_message);
+    void on_hover_scene_view               (Hover_scene_view_message& message);
+    void on_hover_mesh                     (Hover_mesh_message& message);
     void update_preview_mesh               ();
     void do_insert_operation               (Brush& brush);
     void add_preview_mesh                  (Brush& brush);
@@ -114,6 +118,8 @@ private:
     [[nodiscard]] auto get_placement_facet  () const -> GEO::index_t;
     [[nodiscard]] auto get_placement_corner0() const -> GEO::index_t;
 
+    erhe::message_bus::Subscription<Hover_scene_view_message> m_hover_scene_view_subscription;
+    erhe::message_bus::Subscription<Hover_mesh_message>       m_hover_mesh_subscription;
     Brush_preview_command                   m_preview_command;
     Brush_insert_command                    m_insert_command;
     Brush_pick_command                      m_pick_command;

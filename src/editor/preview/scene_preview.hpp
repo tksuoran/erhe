@@ -24,7 +24,6 @@ namespace erhe::scene {
     class Light;
     class Mesh;
     class Node;
-    class Scene_message_bus;
 }
 
 namespace editor {
@@ -42,7 +41,6 @@ class Scene_preview : public Scene_view
 public:
     Scene_preview(
         erhe::graphics::Device&         graphics_device,
-        erhe::scene::Scene_message_bus& scene_message_bus,
         App_context&                    app_context,
         Mesh_memory&                    mesh_memory,
         Programs&                       programs

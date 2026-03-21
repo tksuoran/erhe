@@ -122,10 +122,10 @@ void Time::finish_all_transform_animations(App_message_bus& app_message_bus)
 {
     for (Transform_animation_entry& entry : m_transform_animations) {
         entry.node->set_parent_from_node(entry.parent_from_node_after);
-        app_message_bus.send_message(
-            App_message{
-                .update_flags = Message_flag_bit::c_flag_bit_node_touched_operation_stack,
-                .node         = entry.node.get()
+        app_message_bus.node_touched.send_message(
+            Node_touched_message{
+                .source = Node_touch_source::operation_stack,
+                .node   = entry.node.get()
             }
         );
     }
@@ -142,10 +142,10 @@ void Time::update_transform_animations(App_message_bus& app_message_bus)
                 const int64_t time_position = m_host_system_last_frame_start_time - entry.start_time_ns;
                 if (time_position >= entry.time_duration_ns) {
                     entry.node->set_parent_from_node(entry.parent_from_node_after);
-                    app_message_bus.send_message(
-                        App_message{
-                            .update_flags = Message_flag_bit::c_flag_bit_node_touched_operation_stack,
-                            .node         = entry.node.get()
+                    app_message_bus.node_touched.send_message(
+                        Node_touched_message{
+                            .source = Node_touch_source::operation_stack,
+                            .node   = entry.node.get()
                         }
                     );
                     return true;
@@ -168,10 +168,10 @@ void Time::update_transform_animations(App_message_bus& app_message_bus)
         const erhe::scene::Trs_transform t1{entry.parent_from_node_after.get_matrix()};
         const erhe::scene::Trs_transform transform = erhe::scene::interpolate(t0, t1, t_);
         entry.node->set_parent_from_node(transform);
-        app_message_bus.send_message(
-            App_message{
-                .update_flags = Message_flag_bit::c_flag_bit_node_touched_operation_stack,
-                .node         = entry.node.get()
+        app_message_bus.node_touched.send_message(
+            Node_touched_message{
+                .source = Node_touch_source::operation_stack,
+                .node   = entry.node.get()
             }
         );
     }

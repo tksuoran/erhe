@@ -4,6 +4,7 @@
 
 #include <glm/glm.hpp>
 
+#include <functional>
 #include <optional>
 
 namespace editor {
@@ -20,6 +21,7 @@ class Subtool : public Tool
 {
 public:
     explicit Subtool(App_context& app_context);
+    Subtool(App_context& app_context, Tools& tools, uint64_t flags);
     ~Subtool() noexcept override;
 
     [[nodiscard]] virtual auto begin (unsigned int axis_mask, Scene_view* scene_view) -> bool = 0;
@@ -31,6 +33,8 @@ public:
 
     [[nodiscard]] auto is_active    () const -> bool;
     [[nodiscard]] auto get_axis_mask() const -> unsigned int;
+
+    void set_transform_shared(Transform_tool_shared& shared, std::function<void()> record_operation);
 
 protected:
     [[nodiscard]] auto get_shared              () const -> Transform_tool_shared&;
@@ -45,6 +49,10 @@ protected:
 
     bool         m_active   {false};
     unsigned int m_axis_mask{0u};
+
+private:
+    Transform_tool_shared* m_shared           {nullptr};
+    std::function<void()>  m_record_operation;
 };
 
 }

@@ -2,6 +2,10 @@
 
 #include "erhe_imgui/imgui_window.hpp"
 #include "erhe_commands/command.hpp"
+#include "app_message.hpp"
+#include "erhe_message_bus/message_bus.hpp"
+
+#include <memory>
 #include "scene/scene_builder.hpp"
 #include "operations/mesh_operation.hpp"
 #include "windows/property_editor.hpp"
@@ -59,7 +63,6 @@ struct Tool_slot
 };
 
 class App_context;
-class App_message;
 class App_message_bus;
 class Scene_view;
 
@@ -126,8 +129,8 @@ private:
 
     template<typename T> void async_mesh_operation();
 
-    void on_message(App_message& message);
-
+    erhe::message_bus::Subscription<Hover_scene_view_message> m_hover_scene_view_subscription;
+    erhe::message_bus::Subscription<Load_scene_file_message>  m_load_scene_file_subscription;
     App_context& m_context;
 
     erhe::commands::Lambda_command m_merge_command;

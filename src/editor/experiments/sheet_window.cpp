@@ -95,19 +95,7 @@ Sheet_window::Sheet_window(
     , m_context                {context}
 {
     static_cast<void>(commands); // TODO Keeping in case we need to add commands here
-
-    app_message_bus.add_receiver(
-        [&](App_message& message) {
-            on_message(message);
-        }
-    );
-}
-
-void Sheet_window::on_message(App_message&)
-{
-    //// using namespace erhe::utility;
-    //// if (test_any_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_selection)) {
-    //// }
+    static_cast<void>(app_message_bus);
 }
 
 auto Sheet_window::get_sheet() -> Sheet*

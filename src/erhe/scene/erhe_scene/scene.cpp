@@ -5,7 +5,6 @@
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene_host.hpp"
 #include "erhe_scene/scene_log.hpp"
-#include "erhe_scene/scene_message_bus.hpp"
 #include "erhe_scene/skin.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
@@ -265,8 +264,7 @@ void Scene::update_node_transforms()
     }
 }
 
-Scene::Scene(const Scene& src)
-    : m_message_bus{src.m_message_bus}
+Scene::Scene(const Scene&)
 {
     ERHE_FATAL("This probably won't work");
 }
@@ -276,10 +274,9 @@ Scene& Scene::operator=(const Scene&)
     ERHE_FATAL("This probably won't work");
 }
 
-Scene::Scene(Scene_message_bus& message_bus, const std::string_view name, Scene_host* const host)
-    : Item         {name}
-    , m_message_bus{message_bus}
-    , m_host       {host}
+Scene::Scene(const std::string_view name, Scene_host* const host)
+    : Item  {name}
+    , m_host{host}
     , m_root_node  {std::make_shared<Node>("root")}
 {
     enable_flag_bits(
@@ -341,16 +338,6 @@ void Scene::register_node(const std::shared_ptr<erhe::scene::Node>& node)
     }
 
     ERHE_VERIFY(!node->get_parent().expired());
-
-    if ((node->get_flag_bits() & erhe::Item_flags::no_message) == 0) {
-        m_message_bus.send_message(
-            Scene_message{
-                .event_type = Scene_event_type::node_added_to_scene,
-                .scene      = this,
-                .lhs        = node
-            }
-        );
-    }
 }
 
 void Scene::unregister_node(const std::shared_ptr<erhe::scene::Node>& node)
@@ -373,16 +360,6 @@ void Scene::unregister_node(const std::shared_ptr<erhe::scene::Node>& node)
 #if !defined(NDEBUG)
     sanity_check();
 #endif
-
-    if ((node->get_flag_bits() & erhe::Item_flags::no_message) == 0) {
-        m_message_bus.send_message(
-            Scene_message{
-                .event_type = Scene_event_type::node_removed_from_scene,
-                .scene      = this,
-                .lhs        = node
-            }
-        );
-    }
 }
 
 void Scene::register_camera(const std::shared_ptr<Camera>& camera)

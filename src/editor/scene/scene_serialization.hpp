@@ -7,9 +7,6 @@ namespace erhe::imgui {
     class Imgui_renderer;
     class Imgui_windows;
 }
-namespace erhe::scene {
-    class Scene_message_bus;
-}
 
 namespace editor {
 
@@ -27,7 +24,6 @@ auto save_scene(
 auto load_scene(
     erhe::imgui::Imgui_renderer*            imgui_renderer,
     erhe::imgui::Imgui_windows*             imgui_windows,
-    erhe::scene::Scene_message_bus&         scene_message_bus,
     App_context*                            context,
     App_message_bus*                        app_message_bus,
     App_scenes*                             app_scenes,

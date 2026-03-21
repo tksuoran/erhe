@@ -6,7 +6,7 @@
 #include "scene/scene_root.hpp"
 #include "scene/scene_view.hpp"
 #include "tools/selection_tool.hpp"
-#include "erhe_utility/bit_helpers.hpp"
+#include "tools/tools.hpp"
 #include "erhe_primitive/material.hpp"
 
 namespace editor {
@@ -16,12 +16,16 @@ Tool::Tool(App_context& app_context)
 {
 }
 
-void Tool::on_message(App_message& message)
+Tool::Tool(App_context& app_context, Tools& tools, const uint64_t flags)
+    : m_context{app_context}
+    , m_flags  {flags}
 {
-    using namespace erhe::utility;
-    if (test_bit_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_view)) {
-        set_hover_scene_view(message.scene_view);
-    }
+    tools.register_tool(this);
+}
+
+void Tool::on_message(Hover_scene_view_message& message)
+{
+    set_hover_scene_view(message.scene_view);
 }
 
 auto Tool::get_priority() const -> int
@@ -90,6 +94,11 @@ void Tool::set_base_priority(const int base_priority)
 void Tool::set_flags(const uint64_t flags)
 {
     m_flags = flags;
+}
+
+void Tool::register_tool(Tools& tools)
+{
+    tools.register_tool(this);
 }
 
 void Tool::set_icon(ImFont* icon_font, const char* icon_code)

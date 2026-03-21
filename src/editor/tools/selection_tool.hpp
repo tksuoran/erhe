@@ -4,6 +4,8 @@
 #include "tools/tool.hpp"
 
 #include "erhe_commands/command.hpp"
+#include "app_message.hpp"
+#include "erhe_message_bus/message_bus.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/node_attachment.hpp"
 #include "erhe_utility/bit_helpers.hpp"
@@ -188,6 +190,7 @@ public:
 private:
     void toggle_mesh_selection(const std::shared_ptr<erhe::scene::Mesh>& mesh, bool was_selected, bool clear_others);
 
+    erhe::message_bus::Subscription<Hover_scene_view_message> m_hover_scene_view_subscription;
     App_context&                   m_context;
 
     Viewport_select_command        m_viewport_select_command;

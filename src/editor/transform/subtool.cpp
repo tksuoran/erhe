@@ -1,6 +1,5 @@
 #include "transform/subtool.hpp"
 
-#include "app_context.hpp"
 #include "scene/scene_view.hpp"
 #include "transform/handle_enums.hpp"
 #include "transform/transform_tool.hpp"
@@ -14,6 +13,11 @@ using namespace glm;
 
 Subtool::Subtool(App_context& app_context)
     : Tool{app_context}
+{
+}
+
+Subtool::Subtool(App_context& app_context, Tools& tools, const uint64_t flags)
+    : Tool{app_context, tools, flags}
 {
 }
 
@@ -35,8 +39,16 @@ auto Subtool::get_axis_mask() const -> unsigned int
 
 void Subtool::end()
 {
-    m_context.transform_tool->record_transform_operation();
+    if (m_record_operation) {
+        m_record_operation();
+    }
     m_active = false;
+}
+
+void Subtool::set_transform_shared(Transform_tool_shared& shared, std::function<void()> record_operation)
+{
+    m_shared           = &shared;
+    m_record_operation = std::move(record_operation);
 }
 
 namespace {
@@ -47,7 +59,8 @@ constexpr glm::mat4 mat4_identity{1.0f};
 
 auto Subtool::get_shared() const -> Transform_tool_shared&
 {
-    return m_context.transform_tool->shared;
+    ERHE_VERIFY(m_shared != nullptr);
+    return *m_shared;
 }
 
 auto Subtool::get_basis() const -> const glm::mat4&

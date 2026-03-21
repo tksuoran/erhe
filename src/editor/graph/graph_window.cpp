@@ -89,12 +89,7 @@ Graph_window::Graph_window(
     , m_app_context            {app_context}
 {
     static_cast<void>(commands); // TODO Keeping in case we need to add commands here
-
-    app_message_bus.add_receiver(
-        [&](App_message& message) {
-            on_message(message);
-        }
-    );
+    static_cast<void>(app_message_bus);
 
     ax::NodeEditor::Config config;
     m_node_editor = std::make_unique<ax::NodeEditor::EditorContext>(nullptr);
@@ -104,13 +99,6 @@ Graph_window::Graph_window(
 
 Graph_window::~Graph_window() noexcept
 {
-}
-
-void Graph_window::on_message(App_message&)
-{
-    //// using namespace erhe::utility;
-    //// if (test_any_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_selection)) {
-    //// }
 }
 
 auto Graph_window::flags() -> ImGuiWindowFlags

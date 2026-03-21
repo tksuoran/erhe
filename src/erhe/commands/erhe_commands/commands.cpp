@@ -352,9 +352,11 @@ auto Commands::get_command_priority(Command* const command) const -> int
         return 0; // Disabled command host -> minimum priority for command
     }
 
-    // Give priority for active mouse / controller trigger commands
+    // Active mouse command gets maximum priority so it cannot be preempted mid-drag.
+    // Must exceed any value from Command::get_priority() (state * 20 + host_priority).
+    constexpr int c_active_mouse_command_priority = 10000;
     if (command == m_active_mouse_command) {
-        return 10000; // TODO max priority
+        return c_active_mouse_command_priority;
     }
     return command->get_priority();
 }
@@ -843,6 +845,8 @@ auto Commands::on_xr_vector2f_event(const erhe::window::Input_event& input_event
 void Commands::sort_bindings()
 {
     sort_mouse_bindings();
+    sort_controller_bindings();
+    sort_xr_bindings();
 }
 
 }  // erhe::commands

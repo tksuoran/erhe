@@ -324,7 +324,6 @@ auto save_scene(
 auto load_scene(
     erhe::imgui::Imgui_renderer*            imgui_renderer,
     erhe::imgui::Imgui_windows*             imgui_windows,
-    erhe::scene::Scene_message_bus&         scene_message_bus,
     App_context*                            context,
     App_message_bus*                        app_message_bus,
     App_scenes*                             app_scenes,
@@ -370,7 +369,6 @@ auto load_scene(
     auto scene_root = std::make_shared<Scene_root>(
         imgui_renderer,
         imgui_windows,
-        scene_message_bus,
         context,
         app_message_bus,
         content_library,
@@ -479,8 +477,7 @@ auto load_scene(
             continue;
         }
 
-        erhe::scene::Scene_message_bus temp_scene_message_bus;
-        erhe::scene::Scene temp_scene{temp_scene_message_bus, "temp", nullptr};
+        erhe::scene::Scene temp_scene{"temp", nullptr};
         auto temp_root = std::make_shared<erhe::scene::Node>("temp_root");
         temp_root->set_parent(temp_scene.get_root_node());
 

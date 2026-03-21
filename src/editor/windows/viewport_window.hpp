@@ -2,6 +2,8 @@
 
 #include "erhe_rendergraph/texture_rendergraph_node.hpp"
 #include "erhe_imgui/imgui_window.hpp"
+#include "app_message.hpp"
+#include "erhe_message_bus/message_bus.hpp"
 
 #include <glm/glm.hpp>
 
@@ -22,7 +24,6 @@ namespace erhe::rendergraph {
 namespace editor {
 
 class App_context;
-class App_message;
 class App_message_bus;
 class Post_processing_node;
 class Viewport_scene_view;
@@ -64,10 +65,10 @@ public:
 
 private:
     void imgui_viewport            ();
-    void on_message                (App_message& message);
     void drag_and_drop_target      (float min_x, float min_y, float max_x, float max_y);
     void cancel_brush_drag_and_drop();
 
+    erhe::message_bus::Subscription<Open_scene_message> m_open_scene_subscription;
     App_context&                                       m_app_context;
     std::weak_ptr<Viewport_scene_view>                 m_viewport_scene_view;
     std::weak_ptr<erhe::rendergraph::Rendergraph_node> m_rendergraph_output_node;

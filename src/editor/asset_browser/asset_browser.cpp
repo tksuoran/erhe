@@ -60,7 +60,6 @@ void Scene_open_operation::execute(App_context& context)
         m_scene_root = std::make_shared<Scene_root>(
             context.imgui_renderer,
             context.imgui_windows,
-            *context.scene_message_bus,
             &context,
             context.app_message_bus,
             m_content_library,
@@ -96,10 +95,9 @@ void Scene_open_operation::execute(App_context& context)
         m_scene_root->register_to_editor_scenes(*context.app_scenes);
     }
 
-    context.app_message_bus->send_message(
-        App_message{
-            .update_flags = Message_flag_bit::c_flag_bit_open_scene,
-            .scene_root   = m_scene_root
+    context.app_message_bus->open_scene.send_message(
+        Open_scene_message{
+            .scene_root = m_scene_root
         }
     );
 }

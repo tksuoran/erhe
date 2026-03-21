@@ -442,11 +442,11 @@ auto Headset_view::render_headset() -> bool
 
                 // TODO Consider multiple scene view being able to be (hover) active
                 //      (viewport window and headset view).
-                m_context.app_message_bus->send_message(
-                    App_message{
-                        .update_flags = Message_flag_bit::c_flag_bit_hover_scene_view | Message_flag_bit::c_flag_bit_render_scene_view,
-                        .scene_view   = this
-                    }
+                m_context.app_message_bus->hover_scene_view.send_message(
+                    Hover_scene_view_message{.scene_view = this}
+                );
+                m_context.app_message_bus->render_scene_view.send_message(
+                    Render_scene_view_message{.scene_view = this}
                 );
             }
 

@@ -113,8 +113,8 @@ Transform_tool::Transform_tool(
     Mesh_memory&                 mesh_memory,
     Tools&                       tools
 )
-    : Imgui_window                  {imgui_renderer, imgui_windows, "Transform", "transform"}
-    , Tool                          {app_context}
+    : Tool    {app_context, tools}
+    , m_window{imgui_renderer, imgui_windows, "Transform", "transform", [this]() { window_imgui(); }}
     , m_drag_command                {commands, app_context}
     , m_drag_redirect_update_command{commands, m_drag_command}
     , m_drag_enable_command         {commands, m_drag_redirect_update_command}
@@ -137,7 +137,6 @@ Transform_tool::Transform_tool(
 
     set_base_priority(c_priority);
     set_description  ("Transform");
-    tools.register_tool(this);
 
     commands.register_command(&m_drag_command);
     commands.bind_command_to_mouse_drag(&m_drag_command, erhe::window::Mouse_button_left, true);
@@ -154,43 +153,79 @@ Transform_tool::Transform_tool(
     static_cast<void>(headset_view);
 #endif
 
-    app_message_bus.add_receiver(
-        [&](App_message& message) {
-            on_message(message);
+    m_hover_scene_view_subscription = app_message_bus.hover_scene_view.subscribe(
+        [&](Hover_scene_view_message& message) {
+            on_hover_scene_view(message);
+        }
+    );
+    m_hover_mesh_subscription = app_message_bus.hover_mesh.subscribe(
+        [&](Hover_mesh_message& message) {
+            on_hover_mesh(message);
+        }
+    );
+    m_selection_subscription = app_message_bus.selection.subscribe(
+        [&](Selection_message& message) {
+            on_selection(message);
+        }
+    );
+    m_animation_update_subscription = app_message_bus.animation_update.subscribe(
+        [&](Animation_update_message& message) {
+            on_animation_update(message);
+        }
+    );
+    m_node_touched_subscription = app_message_bus.node_touched.subscribe(
+        [&](Node_touched_message& message) {
+            on_node_touched(message);
+        }
+    );
+    m_render_scene_view_subscription = app_message_bus.render_scene_view.subscribe(
+        [&](Render_scene_view_message& message) {
+            on_render_scene_view(message);
         }
     );
 
     m_drag_command.set_host(this);
+
+    auto record_fn = [this]() { record_transform_operation(); };
+    if (m_context.move_tool != nullptr) {
+        m_context.move_tool->set_transform_shared(shared, record_fn);
+    }
+    if (m_context.rotate_tool != nullptr) {
+        m_context.rotate_tool->set_transform_shared(shared, record_fn);
+    }
+    if (m_context.scale_tool != nullptr) {
+        m_context.scale_tool->set_transform_shared(shared, record_fn);
+    }
 }
 
-void Transform_tool::on_message(App_message& message)
+void Transform_tool::on_hover_scene_view(Hover_scene_view_message& message)
 {
     Tool::on_message(message);
+}
 
-    using namespace erhe::utility;
-    if (test_bit_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_mesh)) {
-        update_hover();
-    }
-    if (
-        test_any_rhs_bits_set(
-            message.update_flags,
-            Message_flag_bit::c_flag_bit_selection | Message_flag_bit::c_flag_bit_animation_update
-        )
-    ) {
-        update_target_nodes(nullptr);
-    }
-    if (
-        test_any_rhs_bits_set(
-            message.update_flags,
-            Message_flag_bit::c_flag_bit_node_touched_operation_stack |
-            Message_flag_bit::c_flag_bit_node_touched_nagivation_gizmo
-        )
-    ) {
-        update_target_nodes(message.node);
-    }
-    if (test_bit_set(message.update_flags, Message_flag_bit::c_flag_bit_render_scene_view)) {
-        update_for_view(message.scene_view);
-    }
+void Transform_tool::on_hover_mesh(Hover_mesh_message&)
+{
+    update_hover();
+}
+
+void Transform_tool::on_selection(Selection_message&)
+{
+    update_target_nodes(nullptr);
+}
+
+void Transform_tool::on_animation_update(Animation_update_message&)
+{
+    update_target_nodes(nullptr);
+}
+
+void Transform_tool::on_node_touched(Node_touched_message& message)
+{
+    update_target_nodes(message.node);
+}
+
+void Transform_tool::on_render_scene_view(Render_scene_view_message& message)
+{
+    update_for_view(message.scene_view);
 }
 
 void Transform_tool::viewport_toolbar()
@@ -209,7 +244,7 @@ auto Transform_tool::is_transform_tool_active() const -> bool
         : m_active_tool->is_active();
 }
 
-void Transform_tool::imgui()
+void Transform_tool::window_imgui()
 {
     auto& settings = shared.settings;
     const ImVec2 button_size{ImGui::GetContentRegionAvail().x / 2, 0.0f};

@@ -127,9 +127,9 @@ Hud::Hud(
         return;
     }
 
-    set_description("Hud");
-    set_flags      (Tool_flags::background);
-    tools.register_tool(this);
+    set_description  ("Hud");
+    set_flags        (Tool_flags::background);
+    register_tool    (tools);
 
     commands.register_command   (&m_toggle_visibility_command);
     commands.bind_command_to_key(&m_toggle_visibility_command, erhe::window::Key_e, true);
@@ -186,9 +186,9 @@ Hud::Hud(
 
     set_mesh_visibility(true);
 
-    app_message_bus.add_receiver(
-        [&](App_message& message) {
-            on_message(message);
+    m_hover_scene_view_subscription = app_message_bus.hover_scene_view.subscribe(
+        [&](Hover_scene_view_message& message) {
+            Tool::on_message(message);
         }
     );
 }
@@ -309,11 +309,6 @@ void Hud::end_drag()
 {
     m_node_from_control.reset();
     m_drag_node.reset();
-}
-
-void Hud::on_message(App_message& message)
-{
-    Tool::on_message(message);
 }
 
 void Hud::update_node_transform(const glm::mat4& world_from_hud)

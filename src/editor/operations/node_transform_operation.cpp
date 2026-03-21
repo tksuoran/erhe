@@ -102,10 +102,10 @@ void Node_transform_operation::execute(App_context& context)
     log_operations->trace("Op Execute {}", describe());
     if (m_parameters.time_duration == 0.0f) {
         m_parameters.node->set_parent_from_node(m_parameters.parent_from_node_after);
-        context.app_message_bus->send_message(
-            App_message{
-                .update_flags = Message_flag_bit::c_flag_bit_node_touched_operation_stack,
-                .node         = m_parameters.node.get()
+        context.app_message_bus->node_touched.send_message(
+            Node_touched_message{
+                .source = Node_touch_source::operation_stack,
+                .node   = m_parameters.node.get()
             }
         );
     } else {
@@ -122,10 +122,10 @@ void Node_transform_operation::undo(App_context& context)
 {
     log_operations->trace("Op Undo {}", describe());
     m_parameters.node->set_parent_from_node(m_parameters.parent_from_node_before);
-    context.app_message_bus->send_message(
-        App_message{
-            .update_flags = Message_flag_bit::c_flag_bit_node_touched_operation_stack,
-            .node         = m_parameters.node.get()
+    context.app_message_bus->node_touched.send_message(
+        Node_touched_message{
+            .source = Node_touch_source::operation_stack,
+            .node   = m_parameters.node.get()
         }
     );
 }

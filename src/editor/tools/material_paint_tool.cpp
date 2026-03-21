@@ -87,7 +87,7 @@ Material_paint_tool::Material_paint_tool(
     Icon_set&                 icon_set,
     Tools&                    tools
 )
-    : Tool           {app_context}
+    : Tool           {app_context, tools, Tool_flags::toolbox}
     , m_paint_command{commands, app_context}
     , m_pick_command {commands, app_context}
 {
@@ -95,9 +95,7 @@ Material_paint_tool::Material_paint_tool(
 
     set_base_priority  (c_priority);
     set_description    ("Material Paint Tool (command host)");
-    set_flags          (Tool_flags::toolbox);
     set_icon           (icon_set.custom_icons, icon_set.icons.material);
-    tools.register_tool(this);
 
     commands.register_command(&m_paint_command);
     commands.register_command(&m_pick_command);
@@ -119,9 +117,9 @@ Material_paint_tool::Material_paint_tool(
     m_paint_command.set_host(this);
     m_pick_command .set_host(this);
 
-    app_message_bus.add_receiver(
-        [&](App_message& message) {
-            on_message(message);
+    m_hover_scene_view_subscription = app_message_bus.hover_scene_view.subscribe(
+        [&](Hover_scene_view_message& message) {
+            Tool::on_message(message);
         }
     );
 }

@@ -170,10 +170,9 @@ void Viewport_scene_view::execute_rendergraph_node()
     // TODO This would be? needed for basic (non-ImGui) viewports?
     // encoder.set_scissor_rect(context.viewport.x, context.viewport.y, context.viewport.width, context.viewport.height);
 
-    m_context.app_message_bus->send_message(
-        App_message{
-            .update_flags = Message_flag_bit::c_flag_bit_render_scene_view,
-            .scene_view   = this
+    m_context.app_message_bus->render_scene_view.send_message(
+        Render_scene_view_message{
+            .scene_view = this
         }
     );
 
@@ -362,10 +361,8 @@ void Viewport_scene_view::update_hover(bool ray_only)
     update_grid_hover();
 
     if (m_hover_update_pending) {
-        m_context.app_message_bus->send_message(
-            App_message{
-                .update_flags = Message_flag_bit::c_flag_bit_hover_mesh,
-            }
+        m_context.app_message_bus->hover_mesh.send_message(
+            Hover_mesh_message{}
         );
         m_hover_update_pending = false;
     }

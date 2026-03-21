@@ -4,6 +4,8 @@
 #include "renderers/mesh_memory.hpp"
 #include "renderers/composition_pass.hpp" // TODO remove - for Fill_mode, Blend_mode, Selection_mode
 #include "erhe_commands/command.hpp"
+#include "app_message.hpp"
+#include "erhe_message_bus/message_bus.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_rendergraph/rendergraph.hpp"
 #include "erhe_scene_renderer/shadow_renderer.hpp"
@@ -121,6 +123,7 @@ private:
     [[nodiscard]] auto width () const -> int;
     [[nodiscard]] auto height() const -> int;
 
+    erhe::message_bus::Subscription<Graphics_settings_message> m_graphics_settings_subscription;
     App_context&              m_context;
 
     // Commands

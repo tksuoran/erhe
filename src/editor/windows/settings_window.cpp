@@ -1,13 +1,11 @@
 #include "windows/settings_window.hpp"
 
 #include "app_context.hpp"
-#include "app_message.hpp"
 #include "app_message_bus.hpp"
 #include "app_settings.hpp"
 
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
-#include "erhe_utility/bit_helpers.hpp"
 
 #include <fmt/format.h>
 
@@ -25,9 +23,17 @@ Settings_window::Settings_window(
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Settings", "settings"}
     , m_context                {app_context}
 {
-    app_message_bus.add_receiver(
-        [&](App_message& message) {
-            on_message(message);
+    m_graphics_settings_subscription = app_message_bus.graphics_settings.subscribe(
+        [&](Graphics_settings_message& /*message*/) {
+            const std::string& current_preset_name = m_context.app_settings->graphics.current_graphics_preset.name;
+            auto& graphics         = m_context.app_settings->graphics;
+            auto& graphics_presets = graphics.graphics_presets;
+            for (size_t i = 0, end = graphics_presets.size(); i < end; ++i) {
+                if (current_preset_name == graphics_presets[i].name) {
+                    m_graphics_preset_index = static_cast<int>(i);
+                    return;
+                }
+            }
         }
     );
 }
@@ -35,22 +41,6 @@ Settings_window::Settings_window(
 void Settings_window::update_preset_names()
 {
 }
-
-void Settings_window::on_message(App_message& message)
-{
-    using namespace erhe::utility;
-    if (test_bit_set(message.update_flags, Message_flag_bit::c_flag_bit_graphics_settings)) {
-        const std::string& current_preset_name = m_context.app_settings->graphics.current_graphics_preset.name;
-        auto& graphics         = m_context.app_settings->graphics;
-        auto& graphics_presets = graphics.graphics_presets;
-        for (size_t i = 0, end = graphics_presets.size(); i < end; ++i) {
-            if (current_preset_name == graphics_presets[i].name) {
-                m_graphics_preset_index = static_cast<int>(i);
-                return;
-            }
-        }
-        }
-    }
 
 auto Settings_window::get_graphics_preset() -> Graphics_preset&
 {
@@ -264,9 +254,8 @@ void Settings_window::imgui()
         ImGui::SameLine();
         if (ImGui::Button("Use", button_size)) {
             m_context.app_settings->graphics.current_graphics_preset = graphics_presets.at(m_graphics_preset_index);
-            m_context.app_message_bus->queue_message(
-                App_message{
-                    .update_flags    = Message_flag_bit::c_flag_bit_graphics_settings,
+            m_context.app_message_bus->graphics_settings.queue_message(
+                Graphics_settings_message{
                     .graphics_preset = &m_context.app_settings->graphics.current_graphics_preset
                 }
             );

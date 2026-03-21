@@ -114,6 +114,10 @@ On this Windows machine, use the `py` launcher to run Python scripts (not `pytho
 py -3 src/erhe/codegen/generate.py <definitions_dir> <output_dir>
 ```
 
+## Editor Improvement Plan
+
+See [`doc/editor_improvements.md`](doc/editor_improvements.md) for the prioritized list of architectural improvements to `src/editor/`.
+
 ## C++ Standard
 
 This project uses **C++20**. Prefer modern C++20 features over older alternatives (e.g. concepts over SFINAE, `std::span` over pointer+size, `std::format`/`fmt` over `sprintf`, `constexpr` where possible, designated initializers, `requires` clauses).

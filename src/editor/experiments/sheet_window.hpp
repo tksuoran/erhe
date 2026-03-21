@@ -13,7 +13,6 @@ namespace erhe::imgui    { class Imgui_windows; }
 namespace editor {
 
 class App_context;
-class App_message;
 class App_message_bus;
 
 class Sheet
@@ -54,8 +53,6 @@ public:
     auto get_sheet() -> Sheet*;
 
 private:
-    void on_message(App_message& message);
-
     App_context& m_context;
     bool         m_show_expression{false};
     Sheet        m_sheet;

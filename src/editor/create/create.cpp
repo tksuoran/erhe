@@ -19,7 +19,6 @@
 
 #include "erhe_imgui/imgui_helpers.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
-#include "erhe_imgui/imgui_window.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_scene/mesh.hpp"
@@ -40,13 +39,11 @@ Create::Create(
     App_context&                 context,
     Tools&                       tools
 )
-    : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Create", "create"}
-    , Tool{context}
+    : Tool    {context, tools, Tool_flags::background}
+    , m_window{imgui_renderer, imgui_windows, "Create", "create", [this]() { window_imgui(); }}
 {
     set_base_priority  (c_priority);
     set_description    ("Create");
-    set_flags          (Tool_flags::background);
-    tools.register_tool(this);
 }
 
 
@@ -96,7 +93,7 @@ auto Create::find_parent() -> std::shared_ptr<erhe::scene::Node>
     return parent;
 }
 
-void Create::imgui()
+void Create::window_imgui()
 {
     ERHE_PROFILE_FUNCTION();
 

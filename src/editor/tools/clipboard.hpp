@@ -1,6 +1,8 @@
 #pragma once
 
 #include "erhe_commands/command.hpp"
+#include "app_message.hpp"
+#include "erhe_message_bus/message_bus.hpp"
 
 #include <memory>
 #include <vector>
@@ -17,7 +19,6 @@ namespace editor {
 
 class Content_library;
 class App_context;
-class App_message;
 class App_message_bus;
 class Scene_view;
 class Scene_root;
@@ -55,9 +56,10 @@ public:
     auto get_contents() -> const std::vector<std::shared_ptr<erhe::Item_base>>&;
 
 private:
-    void on_message(App_message& message);
     [[nodiscard]] auto resolve_paste_target() -> std::shared_ptr<erhe::Hierarchy>;
 
+    erhe::message_bus::Subscription<Hover_scene_view_message>      m_hover_scene_view_subscription;
+    erhe::message_bus::Subscription<Hover_scene_item_tree_message> m_hover_scene_item_tree_subscription;
     Clipboard_paste_command                       m_paste_command;
     App_context&                                  m_context;
     std::vector<std::shared_ptr<erhe::Item_base>> m_contents;

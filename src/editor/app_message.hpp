@@ -2,7 +2,6 @@
 
 #include <filesystem>
 #include <memory>
-#include <optional>
 #include <vector>
 
 namespace erhe        { class Item_base; }
@@ -11,27 +10,6 @@ namespace erhe::scene { class Node; }
 namespace editor {
 
 class Graphics_preset;
-
-class Message_flag_bit
-{
-public:
-    static constexpr uint64_t c_flag_bit_selection                      = (1u <<  0);
-    static constexpr uint64_t c_flag_bit_hover_viewport                 = (1u <<  1);
-    static constexpr uint64_t c_flag_bit_hover_mesh                     = (1u <<  2);
-    static constexpr uint64_t c_flag_bit_hover_scene_view               = (1u <<  3);
-    static constexpr uint64_t c_flag_bit_hover_scene_item_tree          = (1u <<  4);
-    static constexpr uint64_t c_flag_bit_hover_tree_node                = (1u <<  5);
-    static constexpr uint64_t c_flag_bit_graphics_settings              = (1u <<  6);
-    static constexpr uint64_t c_flag_bit_render_scene_view              = (1u <<  7);
-    static constexpr uint64_t c_flag_bit_tool_select                    = (1u <<  8);
-    static constexpr uint64_t c_flag_bit_node_touched_operation_stack   = (1u <<  9); // TODO Merge to single flag, add
-    static constexpr uint64_t c_flag_bit_node_touched_transform_tool    = (1u << 10); //      event source field to message.
-    static constexpr uint64_t c_flag_bit_node_touched_nagivation_gizmo  = (1u << 11);
-    static constexpr uint64_t c_flag_bit_animation_update               = (1u << 12);
-    static constexpr uint64_t c_flag_bit_open_scene                     = (1u << 13);
-    static constexpr uint64_t c_flag_bit_load_scene_file                = (1u << 14);
-};
-
 class Scene_root;
 class Scene_view;
 
@@ -42,17 +20,67 @@ public:
     std::vector<std::shared_ptr<erhe::Item_base>> newly_selected    {};
 };
 
-class App_message
+struct Hover_scene_view_message
 {
-public:
-    uint64_t                                  update_flags    {0};
-    Scene_view*                               scene_view      {nullptr};
-    std::shared_ptr<Scene_root>               scene_root      {};
-    erhe::scene::Node*                        node            {nullptr};
-    std::shared_ptr<erhe::Item_base>          item            {};
-    Graphics_preset*                          graphics_preset {nullptr};
-    std::optional<Selection_change>           selection_change{};
-    std::optional<std::filesystem::path>      load_scene_path {};
+    Scene_view* scene_view{nullptr};
+};
+
+struct Hover_mesh_message
+{
+};
+
+struct Hover_tree_node_message
+{
+    std::shared_ptr<erhe::Item_base> item{};
+};
+
+struct Hover_scene_item_tree_message
+{
+    std::shared_ptr<Scene_root> scene_root{};
+};
+
+struct Selection_message
+{
+    Selection_change selection_change{};
+};
+
+struct Graphics_settings_message
+{
+    Graphics_preset* graphics_preset{nullptr};
+};
+
+enum class Node_touch_source : int {
+    operation_stack,
+    navigation_gizmo
+};
+
+struct Node_touched_message
+{
+    Node_touch_source  source{Node_touch_source::operation_stack};
+    erhe::scene::Node* node  {nullptr};
+};
+
+struct Open_scene_message
+{
+    std::shared_ptr<Scene_root> scene_root{};
+};
+
+struct Load_scene_file_message
+{
+    std::filesystem::path path{};
+};
+
+struct Tool_select_message
+{
+};
+
+struct Render_scene_view_message
+{
+    Scene_view* scene_view{nullptr};
+};
+
+struct Animation_update_message
+{
 };
 
 }

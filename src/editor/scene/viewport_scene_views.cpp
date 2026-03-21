@@ -74,9 +74,9 @@ Scene_views::Scene_views(
     commands.register_command   (&m_open_new_viewport_scene_view_command);
     commands.bind_command_to_key(&m_open_new_viewport_scene_view_command, erhe::window::Key_f1, true);
 
-    app_message_bus.add_receiver(
-        [&](App_message& message) {
-            on_message(message);
+    m_graphics_settings_subscription = app_message_bus.graphics_settings.subscribe(
+        [&](Graphics_settings_message& message) {
+            handle_graphics_settings_changed(message.graphics_preset);
         }
     );
 
@@ -105,13 +105,6 @@ Scene_views::~Scene_views() noexcept
     m_post_processing_nodes.clear();
 }
 
-void Scene_views::on_message(App_message& message)
-{
-    using namespace erhe::utility;
-    if (test_bit_set(message.update_flags, Message_flag_bit::c_flag_bit_graphics_settings)) {
-        handle_graphics_settings_changed(message.graphics_preset);
-    }
-}
 
 void Scene_views::handle_graphics_settings_changed(Graphics_preset* graphics_preset)
 {
@@ -397,10 +390,9 @@ void Scene_views::update_pointer(erhe::imgui::Imgui_host* imgui_host)
 
     if (old_scene_view != m_hover_scene_view) {
         // log_scene_view->info("Changing hover scene view to: {}", m_hover_scene_view ? m_hover_scene_view->get_name().c_str() : "");
-        m_app_context.app_message_bus->send_message(
-            App_message{
-                .update_flags = Message_flag_bit::c_flag_bit_hover_viewport | Message_flag_bit::c_flag_bit_hover_scene_view,
-                .scene_view   = m_hover_scene_view.get()
+        m_app_context.app_message_bus->hover_scene_view.send_message(
+            Hover_scene_view_message{
+                .scene_view = m_hover_scene_view.get()
             }
         );
     } else {

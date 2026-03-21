@@ -1,7 +1,6 @@
 #include "windows/viewport_window.hpp"
 
 #include "app_context.hpp"
-#include "app_message.hpp"
 #include "app_message_bus.hpp"
 #include "brushes/brush.hpp"
 #include "brushes/brush_tool.hpp"
@@ -24,7 +23,6 @@
 #include "erhe_primitive/material.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_scene/node.hpp"
-#include "erhe_utility/bit_helpers.hpp"
 
 #include <imgui/imgui.h>
 #include <imgui/imgui_internal.h>
@@ -52,25 +50,17 @@ Viewport_window::Viewport_window(
 {
     show_window();
 
-    app_message_bus.add_receiver(
-        [this](App_message& message) {
-            on_message(message);
+    m_open_scene_subscription = app_message_bus.open_scene.subscribe(
+        [this](Open_scene_message& message) {
+            std::shared_ptr<Viewport_scene_view> scene_view = m_viewport_scene_view.lock();
+            if (scene_view) {
+                scene_view->set_scene_root(message.scene_root);
+            }
         }
     );
 }
 
 Viewport_window::~Viewport_window() noexcept = default;
-
-void Viewport_window::on_message(App_message& message)
-{
-    using namespace erhe::utility;
-    if (test_bit_set(message.update_flags, Message_flag_bit::c_flag_bit_open_scene)) {
-        std::shared_ptr<Viewport_scene_view> scene_view = m_viewport_scene_view.lock();
-        if (scene_view) {
-            scene_view->set_scene_root(message.scene_root);
-        }
-    }
-}
 
 auto Viewport_window::viewport_scene_view() const -> std::shared_ptr<Viewport_scene_view>
 {
@@ -262,10 +252,10 @@ void Viewport_window::imgui()
             transform.set_translation(camera_position);
             transform.set_rotation(camera_rotation);
             node->set_world_from_node(transform);
-            m_app_context.app_message_bus->send_message(
-                App_message{
-                    .update_flags = Message_flag_bit::c_flag_bit_node_touched_nagivation_gizmo,
-                    .node         = node
+            m_app_context.app_message_bus->node_touched.send_message(
+                Node_touched_message{
+                    .source = Node_touch_source::navigation_gizmo,
+                    .node   = node
                 }
             );
         }

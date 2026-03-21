@@ -17,27 +17,43 @@ namespace editor {
 
 class Content_library;
 class App_context;
-class App_message;
+struct Hover_scene_view_message;
 class Render_context;
 class Scene_view;
 class Scene_root;
 class Tools;
 
+/// Tool vs Command_host taxonomy:
+///
+/// A Tool is a Command_host that participates in the priority/toolbox system,
+/// can render into the viewport (tool_render), and can display properties in
+/// the tool properties panel (tool_properties). Tools are managed by the Tools
+/// container and support priority-based enable/disable.
+///
+/// A Command_host that only provides keyboard shortcuts or manages application
+/// state (e.g. Selection, Clipboard, Operation_stack) is NOT a Tool. These
+/// classes own commands but do not participate in the tool priority system.
+///
+/// Classes that render overlays but manage their own ImGui window without
+/// participating in the tool priority system (e.g. Debug_visualizations)
+/// inherit from Renderable + Imgui_window instead of Tool.
+
 class Tool_flags
 {
 public:
     static constexpr uint64_t none            = 0u;
-    static constexpr uint64_t enabled         = (1u << 0);
-    static constexpr uint64_t background      = (1u << 1);
-    static constexpr uint64_t toolbox         = (1u << 2);
-    static constexpr uint64_t secondary       = (1u << 3);
-    static constexpr uint64_t allow_secondary = (1u << 4);
+    static constexpr uint64_t enabled         = (1u << 0); ///< Tool is enabled; disabled tools' commands are skipped
+    static constexpr uint64_t background      = (1u << 1); ///< Always-active tool (registered in background_tools)
+    static constexpr uint64_t toolbox         = (1u << 2); ///< Appears in hotbar/tool selector; subject to priority enable/disable
+    static constexpr uint64_t secondary       = (1u << 3); ///< Can remain active alongside the priority tool
+    static constexpr uint64_t allow_secondary = (1u << 4); ///< When this is the priority tool, secondary tools stay enabled
 };
 
 class Tool : public erhe::commands::Command_host
 {
 public:
     explicit Tool(App_context& context);
+    Tool(App_context& context, Tools& tools, uint64_t flags = Tool_flags::none);
 
     // Implements Command_host
     [[nodiscard]] auto get_priority() const -> int override;
@@ -66,9 +82,10 @@ protected:
     [[nodiscard]] auto get_content_library() const -> std::shared_ptr<Content_library>;
     [[nodiscard]] auto get_material       () const -> std::shared_ptr<erhe::primitive::Material>;
 
-    void on_message          (App_message& message);
+    void on_message          (Hover_scene_view_message& message);
     void set_base_priority   (int base_priority);
     void set_flags           (uint64_t flags);
+    void register_tool       (Tools& tools);
     void set_icon            (ImFont* icon_font, const char* icon_code);
     void set_hover_scene_view(Scene_view* scene_view);
 

@@ -1,6 +1,5 @@
 #pragma once
 
-#include "app_message.hpp"
 #include "transform/handle_enums.hpp"
 #include "transform/handle_visualizations.hpp"
 #include "transform/rotation_inspector.hpp"
@@ -9,7 +8,9 @@
 #include "windows/property_editor.hpp"
 
 #include "erhe_commands/command.hpp"
-#include "erhe_imgui/imgui_window.hpp"
+#include "app_message.hpp"
+#include "erhe_message_bus/message_bus.hpp"
+#include "tools/tool_window.hpp"
 #include "erhe_imgui/imgui_helpers.hpp"
 #include "erhe_physics/irigid_body.hpp"
 #include "erhe_scene/node.hpp"
@@ -42,6 +43,12 @@ namespace editor {
 
 class Compound_operation;
 class App_message_bus;
+struct Hover_scene_view_message;
+struct Hover_mesh_message;
+struct Selection_message;
+struct Animation_update_message;
+struct Node_touched_message;
+struct Render_scene_view_message;
 class Headset_view;
 class Node_physics;
 class Scene_root;
@@ -146,9 +153,7 @@ public:
     erhe::imgui::Value_edit_state      m_skew_state;
 };
 
-class Transform_tool
-    : public erhe::imgui::Imgui_window
-    , public Tool
+class Transform_tool : public Tool
 {
 public:
     static constexpr int c_priority{1};
@@ -167,9 +172,6 @@ public:
 
     // Implements Tool
     void tool_render(const Render_context& context) override;
-
-    // Implements Imgui_window
-    void imgui() override;
 
     // Public API
     void viewport_toolbar();
@@ -206,11 +208,24 @@ public:
     Transform_tool_shared shared;
 
 private:
-    void on_message     (App_message& message);
-    void update_for_view(Scene_view* scene_view);
-    void update_hover   ();
+    void window_imgui       ();
+    void on_hover_scene_view(Hover_scene_view_message& message);
+    void on_hover_mesh      (Hover_mesh_message& message);
+    void on_selection       (Selection_message& message);
+    void on_animation_update(Animation_update_message& message);
+    void on_node_touched    (Node_touched_message& message);
+    void on_render_scene_view(Render_scene_view_message& message);
+    void update_for_view    (Scene_view* scene_view);
+    void update_hover       ();
     void render_rays    (erhe::scene::Node& node);
 
+    Tool_window                         m_window;
+    erhe::message_bus::Subscription<Hover_scene_view_message>  m_hover_scene_view_subscription;
+    erhe::message_bus::Subscription<Hover_mesh_message>        m_hover_mesh_subscription;
+    erhe::message_bus::Subscription<Selection_message>         m_selection_subscription;
+    erhe::message_bus::Subscription<Animation_update_message>  m_animation_update_subscription;
+    erhe::message_bus::Subscription<Node_touched_message>      m_node_touched_subscription;
+    erhe::message_bus::Subscription<Render_scene_view_message> m_render_scene_view_subscription;
     Transform_tool_drag_command         m_drag_command;
     erhe::commands::Redirect_command    m_drag_redirect_update_command;
     erhe::commands::Drag_enable_command m_drag_enable_command;

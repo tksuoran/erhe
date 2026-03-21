@@ -1260,7 +1260,10 @@ void Item_tree::imgui_tree(float ui_scale)
         content_library->materials.make("Default");
         const bool enable_physics = m_context.app_settings->physics.static_enable;
         auto scene_root = std::make_shared<Scene_root>(
-            *m_context.scene_message_bus,
+            nullptr,
+            nullptr,
+            nullptr,
+            nullptr,
             content_library,
             "new scene",
             enable_physics
@@ -1374,10 +1377,9 @@ void Item_tree_window::imgui()
     imgui_tree(get_scale_value());
 
     if (ImGui::IsWindowHovered()) {
-        m_context.app_message_bus->queue_message(
-            App_message{
-                .update_flags = Message_flag_bit::c_flag_bit_hover_tree_node,
-                .item         = get_hovered_item()
+        m_context.app_message_bus->hover_tree_node.queue_message(
+            Hover_tree_node_message{
+                .item = get_hovered_item()
             }
         );
     }

@@ -1,8 +1,11 @@
 #pragma once
 
 #include "erhe_imgui/imgui_window.hpp"
+#include "app_message.hpp"
+#include "erhe_message_bus/message_bus.hpp"
 #include "windows/property_editor.hpp"
 
+#include <memory>
 #include <vector>
 
 namespace erhe::imgui { class Imgui_windows; }
@@ -10,7 +13,6 @@ namespace erhe::imgui { class Imgui_windows; }
 namespace editor {
 
 class App_context;
-class App_message;
 class App_message_bus;
 class Graphics_preset;
 
@@ -30,8 +32,8 @@ public:
 private:
     [[nodiscard]] auto get_graphics_preset() -> Graphics_preset&;
     void update_preset_names();
-    void on_message(App_message& message);
 
+    erhe::message_bus::Subscription<Graphics_settings_message> m_graphics_settings_subscription;
     App_context&             m_context;
     int                      m_msaa_sample_count_entry_index{0};
     std::vector<const char*> m_graphics_preset_names;

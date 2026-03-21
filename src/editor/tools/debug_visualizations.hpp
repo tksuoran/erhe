@@ -5,6 +5,8 @@
 
 #include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_imgui/imgui_window.hpp"
+#include "app_message.hpp"
+#include "erhe_message_bus/message_bus.hpp"
 #include "erhe_math/math_util.hpp"
 
 #include <memory>
@@ -114,6 +116,7 @@ private:
 
     void make_combo(const char* label, Visualization_mode& visualization);
 
+    erhe::message_bus::Subscription<Hover_scene_view_message> m_hover_scene_view_subscription;
     App_context&                         m_context;
     Scene_view*                          m_hover_scene_view{nullptr};
     erhe::math::Bounding_volume_combiner m_selection_bounding_volume;

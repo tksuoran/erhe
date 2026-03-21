@@ -246,15 +246,13 @@ auto Selection_duplicate_command::try_call() -> bool
 #pragma endregion Commands
 
 Selection_tool::Selection_tool(App_context& app_context, Icon_set& icon_set, Tools& tools)
-    : Tool{app_context}
+    : Tool{app_context, tools, Tool_flags::toolbox | Tool_flags::secondary}
 {
     ERHE_PROFILE_FUNCTION();
 
     set_base_priority  (c_priority);
     set_description    ("Selection Tool");
-    set_flags          (Tool_flags::toolbox | Tool_flags::secondary);
     set_icon           (icon_set.custom_icons, icon_set.icons.select);
-    tools.register_tool(this);
 }
 
 Selection::Selection(erhe::commands::Commands& commands, App_context& context, App_message_bus& app_message_bus)
@@ -285,12 +283,9 @@ Selection::Selection(erhe::commands::Commands& commands, App_context& context, A
     commands.bind_command_to_menu(&m_duplicate_command, "Edit.Duplicate");
     commands.bind_command_to_menu(&m_duplicate_command, "Edit.Paster");
 
-    app_message_bus.add_receiver(
-        [&](App_message& message) {
-            using namespace erhe::utility;
-            if (test_bit_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_view)) {
-                m_hover_scene_view = message.scene_view;
-            }
+    m_hover_scene_view_subscription = app_message_bus.hover_scene_view.subscribe(
+        [&](Hover_scene_view_message& message) {
+            m_hover_scene_view = message.scene_view;
         }
     );
 
@@ -583,12 +578,11 @@ void Selection::end_selection_change()
         item_set_sort_predicate
     );
 
-    App_message selection_changed_message{
-        .update_flags     = Message_flag_bit::c_flag_bit_selection,
-        .selection_change = selection_change
-    };
-
-    m_context.app_message_bus->send_message(selection_changed_message);
+    m_context.app_message_bus->selection.send_message(
+        Selection_message{
+            .selection_change = selection_change
+        }
+    );
 }
 
 auto Selection::on_viewport_select_try_ready() -> bool

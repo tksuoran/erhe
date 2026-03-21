@@ -5,9 +5,9 @@
 #include "create/create_torus.hpp"
 #include "create/create_uv_sphere.hpp"
 #include "tools/tool.hpp"
+#include "tools/tool_window.hpp"
 
 #include "erhe_primitive/enums.hpp"
-#include "erhe_imgui/imgui_window.hpp"
 
 #include <imgui/imgui.h>
 
@@ -19,9 +19,7 @@ namespace editor {
 class Brush;
 class Render_context;
 
-class Create
-    : public erhe::imgui::Imgui_window
-    , public Tool
+class Create : public Tool
 {
 public:
     static constexpr int c_priority{4};
@@ -33,16 +31,18 @@ public:
         Tools&                       tools
     );
 
-    void imgui() override;
     void tool_render(const Render_context& context) override;
 
 private:
+    void window_imgui();
+
     [[nodiscard]] auto get_button_size() -> ImVec2;
 
     void brush_create_button(const char* label, Create_shape* brush_create);
 
     [[nodiscard]] auto find_parent() -> std::shared_ptr<erhe::scene::Node>;
 
+    Tool_window                   m_window;
     erhe::primitive::Normal_style m_normal_style{erhe::primitive::Normal_style::point_normals};
     float                         m_density     {1.0f};
     bool                          m_preview_ideal_shape{false};

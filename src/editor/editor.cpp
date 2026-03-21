@@ -115,7 +115,6 @@
 #include "erhe_rendergraph/rendergraph.hpp"
 #include "erhe_rendergraph/rendergraph_log.hpp"
 #include "erhe_scene/scene_log.hpp"
-#include "erhe_scene/scene_message_bus.hpp"
 #include "erhe_scene_renderer/forward_renderer.hpp"
 #include "erhe_scene_renderer/program_interface.hpp"
 #include "erhe_scene_renderer/scene_renderer_log.hpp"
@@ -473,7 +472,6 @@ public:
 #endif
 
             m_commands          = std::make_unique<erhe::commands::Commands      >();
-            m_scene_message_bus = std::make_unique<erhe::scene::Scene_message_bus>();
             m_app_message_bus   = std::make_unique<App_message_bus               >();
             m_app_settings      = std::make_unique<App_settings                  >();
             m_input_state       = std::make_unique<Input_state                   >();
@@ -767,7 +765,6 @@ public:
                 m_tools = std::make_unique<Tools>(
                     *m_imgui_renderer.get(),
                     *m_imgui_windows.get(),
-                    *m_scene_message_bus.get(),
                     m_app_context,
                     *m_app_rendering.get(),
                     *m_app_settings.get(),
@@ -798,7 +795,6 @@ public:
                 m_default_scene = std::make_shared<Scene_root>(
                     m_imgui_renderer.get(),
                     m_imgui_windows.get(),
-                    *m_scene_message_bus.get(),
                     &m_app_context,
                     m_app_message_bus.get(),
                     content_library,
@@ -988,14 +984,12 @@ public:
                 ERHE_GET_GL_CONTEXT
                 m_material_preview = std::make_unique<Material_preview>(
                     *m_graphics_device.get(),
-                    *m_scene_message_bus.get(),
                     m_app_context,
                     *m_mesh_memory.get(),
                     *m_programs.get()
                 );
                 m_brush_preview = std::make_unique<Brush_preview>(
                     *m_graphics_device.get(),
-                    *m_scene_message_bus.get(),
                     m_app_context,
                     *m_mesh_memory.get(),
                     *m_programs.get()
@@ -1321,7 +1315,6 @@ public:
         m_app_context.debug_renderer           = m_debug_renderer        .get();
         m_app_context.text_renderer            = m_text_renderer         .get();
         m_app_context.rendergraph              = m_rendergraph           .get();
-        m_app_context.scene_message_bus        = m_scene_message_bus     .get();
         m_app_context.forward_renderer         = m_forward_renderer      .get();
         m_app_context.shadow_renderer          = m_shadow_renderer       .get();
         m_app_context.context_window           = m_window                .get();
@@ -1456,7 +1449,6 @@ public:
 
     // No dependencies (constructors)
     std::unique_ptr<erhe::commands::Commands      > m_commands;
-    std::unique_ptr<erhe::scene::Scene_message_bus> m_scene_message_bus;
     std::unique_ptr<App_message_bus               > m_app_message_bus;
     std::unique_ptr<Input_state                   > m_input_state;
     std::unique_ptr<Time                          > m_time;
