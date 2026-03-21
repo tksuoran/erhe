@@ -23,12 +23,12 @@ void Property_editor::resume()
 
 void Property_editor::push_group(std::string&& label, ImGuiTreeNodeFlags flags, float indent, bool* open_state)
 {
-    m_entries.push_back(Entry{true, false, std::move(label), {}, flags, indent, {}, {}, open_state});
+    m_entries.push_back(Entry{true, false, std::move(label), {}, {}, flags, indent, {}, {}, open_state});
 }
 
 void Property_editor::pop_group()
 {
-    m_entries.push_back(Entry{false, true, {}, {}});
+    m_entries.push_back(Entry{false, true, {}, {}, {}});
 }
 
 void Property_editor::add_entry(std::string&& label, std::function<void()> editor, std::string&& tooltip)
@@ -38,7 +38,7 @@ void Property_editor::add_entry(std::string&& label, std::function<void()> edito
 
 void Property_editor::add_entry(std::string&& label, uint32_t label_text_color, uint32_t label_background_color, std::function<void()> editor)
 {
-    m_entries.push_back(Entry{false, false, std::move(label), {editor}, ImGuiTreeNodeFlags_None, 0.0f, label_text_color, label_background_color});
+    m_entries.push_back(Entry{false, false, std::move(label), {}, {editor}, ImGuiTreeNodeFlags_None, 0.0f, label_text_color, label_background_color});
 }
 
 void Property_editor::show_entries(const char* label, ImVec2 cell_padding)
