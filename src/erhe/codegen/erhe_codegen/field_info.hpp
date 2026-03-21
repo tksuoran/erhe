@@ -85,6 +85,8 @@ struct Struct_info
 {
     const char*                     name;
     uint32_t                        version;
+    const char*                     short_desc;
+    const char*                     long_desc;
     std::span<const Field_info>     fields;
 };
 

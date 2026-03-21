@@ -375,7 +375,11 @@ void Settings_window::imgui()
     if (m_context.editor_config != nullptr) {
         Editor_config& config = *m_context.editor_config;
 
-        auto add_config_section = [this](const char* label, auto& section) {
+        auto add_config_section = [this](auto& section) {
+            const auto& struct_info = get_struct_info(static_cast<const std::remove_reference_t<decltype(section)>*>(nullptr));
+            const char* label = (struct_info.short_desc != nullptr && struct_info.short_desc[0] != '\0')
+                ? struct_info.short_desc
+                : struct_info.name;
             push_group(label, ImGuiTreeNodeFlags_Framed);
             const auto fields = get_fields(static_cast<const std::remove_reference_t<decltype(section)>*>(nullptr));
             for (const auto& field : fields) {
@@ -396,27 +400,27 @@ void Settings_window::imgui()
         };
 
         push_group("Editor Config", ImGuiTreeNodeFlags_Framed);
-        add_config_section("Camera Controls", config.camera_controls);
-        add_config_section("Developer",       config.developer);
-        add_config_section("Graphics",        config.graphics);
-        add_config_section("Grid",            config.grid);
-        add_config_section("Headset",         config.headset);
-        add_config_section("Hotbar",          config.hotbar);
-        add_config_section("HUD",             config.hud);
-        add_config_section("ID Renderer",     config.id_renderer);
-        add_config_section("Mesh Memory",     config.mesh_memory);
-        add_config_section("Network",         config.network);
-        add_config_section("Physics",         config.physics);
-        add_config_section("Renderdoc",       config.renderdoc);
-        add_config_section("Renderer",        config.renderer);
-        add_config_section("Scene",           config.scene);
-        add_config_section("Shader Monitor",  config.shader_monitor);
-        add_config_section("Text Renderer",   config.text_renderer);
-        add_config_section("Threading",       config.threading);
-        add_config_section("Thumbnails",      config.thumbnails);
-        add_config_section("Transform Tool",  config.transform_tool);
-        add_config_section("Viewport",        config.viewport);
-        add_config_section("Window",          config.window);
+        add_config_section(config.camera_controls);
+        add_config_section(config.developer);
+        add_config_section(config.graphics);
+        add_config_section(config.grid);
+        add_config_section(config.headset);
+        add_config_section(config.hotbar);
+        add_config_section(config.hud);
+        add_config_section(config.id_renderer);
+        add_config_section(config.mesh_memory);
+        add_config_section(config.network);
+        add_config_section(config.physics);
+        add_config_section(config.renderdoc);
+        add_config_section(config.renderer);
+        add_config_section(config.scene);
+        add_config_section(config.shader_monitor);
+        add_config_section(config.text_renderer);
+        add_config_section(config.threading);
+        add_config_section(config.thumbnails);
+        add_config_section(config.transform_tool);
+        add_config_section(config.viewport);
+        add_config_section(config.window);
 
         add_entry("", [this, button_size, &config](){
             if (ImGui::Button("Save Config", button_size)) {

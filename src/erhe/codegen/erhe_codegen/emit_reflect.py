@@ -152,9 +152,11 @@ def emit_struct_reflect(s: StructSchema) -> str:
 
     # Struct_info
     lines.append(f"static const erhe::codegen::Struct_info {snake}_struct_info = {{")
-    lines.append(f"    .name    = \"{s.name}\",")
-    lines.append(f"    .version = {s.version},")
-    lines.append(f"    .fields  = {snake}_fields,")
+    lines.append(f"    .name       = \"{s.name}\",")
+    lines.append(f"    .version    = {s.version},")
+    lines.append(f"    .short_desc = {_c_string_literal(s.short_desc)},")
+    lines.append(f"    .long_desc  = {_c_string_literal(s.long_desc)},")
+    lines.append(f"    .fields     = {snake}_fields,")
     lines.append("};")
     lines.append("")
 

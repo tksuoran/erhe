@@ -106,10 +106,14 @@ class StructSchema:
         fields: list[FieldSchema],
         *,
         version: int,
+        short_desc: Optional[str] = None,
+        long_desc: Optional[str] = None,
     ):
         self.name = name
         self.fields = fields
         self.version = version
+        self.short_desc = short_desc
+        self.long_desc = long_desc
 
     def active_fields(self, version: Optional[int] = None) -> list[FieldSchema]:
         """Return fields active in the given version (default: current)."""
@@ -194,9 +198,15 @@ def value(
     )
 
 
-def struct(name: str, *fields: FieldSchema, version: int) -> StructSchema:
+def struct(
+    name: str,
+    *fields: FieldSchema,
+    version: int,
+    short_desc: Optional[str] = None,
+    long_desc: Optional[str] = None,
+) -> StructSchema:
     """Register a struct definition."""
-    schema = StructSchema(name, list(fields), version=version)
+    schema = StructSchema(name, list(fields), version=version, short_desc=short_desc, long_desc=long_desc)
     _validate_struct(schema)
     _struct_registry[name] = schema
     return schema
