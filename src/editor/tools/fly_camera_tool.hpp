@@ -26,9 +26,10 @@ namespace erhe::commands { class Commands; }
 namespace erhe::imgui    { class Imgui_windows; }
 namespace erhe::scene    { class Camera; }
 
+struct Camera_controls_config;
+
 namespace editor {
 
-struct Camera_controls_config;
 class App_message_bus;
 class Fly_camera_tool;
 class Tools;

@@ -12,6 +12,8 @@
 
 namespace erhe::imgui { class Imgui_windows; }
 
+struct Scene_config;
+
 namespace editor {
 
 struct Tool_slot
@@ -62,7 +64,6 @@ struct Tool_slot
     };
 };
 
-struct Scene_config;
 class App_context;
 class App_message_bus;
 class Scene_view;
