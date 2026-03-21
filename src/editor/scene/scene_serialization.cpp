@@ -8,7 +8,7 @@
 #include "scene/node_physics.hpp"
 #include "scene/scene_root.hpp"
 
-#include "scene/generated/scene_file.hpp"
+#include "scene/generated/scene_file_serialization.hpp"
 
 #include "erhe_file/file.hpp"
 #include "erhe_geometry/geometry.hpp"

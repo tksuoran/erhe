@@ -219,19 +219,16 @@ erhe_codegen_generate(
     OUTPUT_DIR      "${_gfx_config_out}"
 )
 
-set(_gfx_config_sources
-    ${_gfx_config_out}/graphics_config.hpp
-    ${_gfx_config_out}/graphics_config.cpp
-)
-set_source_files_properties(${_gfx_config_sources} PROPERTIES GENERATED TRUE)
-target_sources(${_target} PRIVATE ${_gfx_config_sources})
+# Only the struct header — serialize/deserialize .cpp compiles in the editor
+# to avoid simdjson ABI mismatch across targets with different arch flags.
+set_source_files_properties(${_gfx_config_out}/graphics_config.hpp PROPERTIES GENERATED TRUE)
+target_sources(${_target} PRIVATE ${_gfx_config_out}/graphics_config.hpp)
 
 target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
 
 target_link_libraries(${_target}
     PUBLIC
         concurrentqueue
-        erhe::codegen
         erhe::configuration
         erhe::dataformat
         erhe::item

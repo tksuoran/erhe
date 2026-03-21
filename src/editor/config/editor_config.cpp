@@ -1,5 +1,27 @@
 #include "config/editor_config.hpp"
 
+#include "config/generated/camera_controls_config_serialization.hpp"
+#include "config/generated/developer_config_serialization.hpp"
+#include "config/generated/grid_config_serialization.hpp"
+#include "config/generated/headset_config_serialization.hpp"
+#include "config/generated/hotbar_config_serialization.hpp"
+#include "config/generated/hud_config_serialization.hpp"
+#include "config/generated/id_renderer_config_serialization.hpp"
+#include "config/generated/mesh_memory_config_serialization.hpp"
+#include "config/generated/network_config_serialization.hpp"
+#include "config/generated/physics_config_serialization.hpp"
+#include "config/generated/renderdoc_config_serialization.hpp"
+#include "config/generated/renderer_config_serialization.hpp"
+#include "config/generated/scene_config_serialization.hpp"
+#include "config/generated/shader_monitor_config_serialization.hpp"
+#include "config/generated/text_renderer_config_serialization.hpp"
+#include "config/generated/threading_config_serialization.hpp"
+#include "config/generated/thumbnails_config_serialization.hpp"
+#include "config/generated/transform_tool_config_serialization.hpp"
+#include "config/generated/viewport_config_data_serialization.hpp"
+#include "config/generated/window_config_serialization.hpp"
+#include "erhe_graphics/generated/graphics_config_serialization.hpp"
+
 #include "erhe_file/file.hpp"
 
 #include <simdjson.h>

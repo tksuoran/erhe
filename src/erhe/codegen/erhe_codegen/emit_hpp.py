@@ -185,8 +185,9 @@ def _to_snake_case(name: str) -> str:
 
 
 def emit_struct_hpp(s: StructSchema) -> str:
-    """Generate the C++ header for a struct."""
+    """Generate the C++ header for a struct (type definition only, no simdjson dependency)."""
     lines: list[str] = []
+    snake = _to_snake_case(s.name)
     lines.append("#pragma once")
     lines.append("")
 
@@ -197,7 +198,6 @@ def emit_struct_hpp(s: StructSchema) -> str:
     includes.append("<cstdint>")  # always for current_version
     if _needs_optional_include(s):
         includes.append("<optional>")
-    includes.append("<span>")     # always for get_fields
     if _needs_string_include(s):
         includes.append("<string>")
     if _needs_vector_include(s):
@@ -211,21 +211,17 @@ def emit_struct_hpp(s: StructSchema) -> str:
     # Library includes
     if _needs_glm_include(s):
         lines.append("#include <glm/glm.hpp>")
-    lines.append("#include <simdjson.h>")
-    lines.append("")
-    lines.append("#include <erhe_codegen/field_info.hpp>")
+        lines.append("")
 
     # StructRef includes
     struct_refs = _collect_struct_refs(s)
     enum_refs = _collect_enum_refs(s)
-    if struct_refs or enum_refs:
-        lines.append("")
     for ref in struct_refs:
         lines.append(f'#include "{_to_snake_case(ref)}.hpp"')
     for ref in enum_refs:
         lines.append(f'#include "{_to_snake_case(ref)}.hpp"')
-
-    lines.append("")
+    if struct_refs or enum_refs:
+        lines.append("")
 
     # Struct declaration
     lines.append(f"struct {s.name}")
@@ -244,6 +240,25 @@ def emit_struct_hpp(s: StructSchema) -> str:
         lines.append(f"    {cpp_type} {f.name}{default}; {comment}")
 
     lines.append("};")
+    lines.append("")
+
+    return "\n".join(lines)
+
+
+def emit_struct_serialization_hpp(s: StructSchema) -> str:
+    """Generate the serialization header (serialize/deserialize/reflection declarations)."""
+    lines: list[str] = []
+    snake = _to_snake_case(s.name)
+    lines.append("#pragma once")
+    lines.append("")
+    lines.append(f'#include "{snake}.hpp"')
+    lines.append("")
+    lines.append("#include <span>")
+    lines.append("#include <string>")
+    lines.append("")
+    lines.append("#include <simdjson.h>")
+    lines.append("")
+    lines.append("#include <erhe_codegen/field_info.hpp>")
     lines.append("")
 
     # Function declarations

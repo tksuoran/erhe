@@ -404,28 +404,37 @@ erhe_codegen_generate(
 
 set(_codegen_sources
     ${_codegen_out}/camera_data.hpp
+    ${_codegen_out}/camera_data_serialization.hpp
     ${_codegen_out}/camera_data.cpp
     ${_codegen_out}/gltf_source_reference.hpp
+    ${_codegen_out}/gltf_source_reference_serialization.hpp
     ${_codegen_out}/gltf_source_reference.cpp
     ${_codegen_out}/light_data.hpp
+    ${_codegen_out}/light_data_serialization.hpp
     ${_codegen_out}/light_data.cpp
     ${_codegen_out}/light_type_serial.hpp
     ${_codegen_out}/light_type_serial.cpp
     ${_codegen_out}/mesh_reference.hpp
+    ${_codegen_out}/mesh_reference_serialization.hpp
     ${_codegen_out}/mesh_reference.cpp
     ${_codegen_out}/mesh_source_type.hpp
     ${_codegen_out}/mesh_source_type.cpp
     ${_codegen_out}/motion_mode_serial.hpp
     ${_codegen_out}/motion_mode_serial.cpp
     ${_codegen_out}/node_data_serial.hpp
+    ${_codegen_out}/node_data_serial_serialization.hpp
     ${_codegen_out}/node_data_serial.cpp
     ${_codegen_out}/node_physics_data.hpp
+    ${_codegen_out}/node_physics_data_serialization.hpp
     ${_codegen_out}/node_physics_data.cpp
     ${_codegen_out}/projection_data.hpp
+    ${_codegen_out}/projection_data_serialization.hpp
     ${_codegen_out}/projection_data.cpp
     ${_codegen_out}/scene_file.hpp
+    ${_codegen_out}/scene_file_serialization.hpp
     ${_codegen_out}/scene_file.cpp
     ${_codegen_out}/transform_data.hpp
+    ${_codegen_out}/transform_data_serialization.hpp
     ${_codegen_out}/transform_data.cpp
 )
 set_source_files_properties(${_codegen_sources} PROPERTIES GENERATED TRUE)
@@ -443,48 +452,78 @@ erhe_codegen_generate(
 
 set(_config_sources
     ${_config_out}/camera_controls_config.hpp
+    ${_config_out}/camera_controls_config_serialization.hpp
     ${_config_out}/camera_controls_config.cpp
     ${_config_out}/developer_config.hpp
+    ${_config_out}/developer_config_serialization.hpp
     ${_config_out}/developer_config.cpp
     ${_config_out}/grid_config.hpp
+    ${_config_out}/grid_config_serialization.hpp
     ${_config_out}/grid_config.cpp
     ${_config_out}/headset_config.hpp
+    ${_config_out}/headset_config_serialization.hpp
     ${_config_out}/headset_config.cpp
     ${_config_out}/hotbar_config.hpp
+    ${_config_out}/hotbar_config_serialization.hpp
     ${_config_out}/hotbar_config.cpp
     ${_config_out}/hud_config.hpp
+    ${_config_out}/hud_config_serialization.hpp
     ${_config_out}/hud_config.cpp
     ${_config_out}/id_renderer_config.hpp
+    ${_config_out}/id_renderer_config_serialization.hpp
     ${_config_out}/id_renderer_config.cpp
     ${_config_out}/mesh_memory_config.hpp
+    ${_config_out}/mesh_memory_config_serialization.hpp
     ${_config_out}/mesh_memory_config.cpp
     ${_config_out}/network_config.hpp
+    ${_config_out}/network_config_serialization.hpp
     ${_config_out}/network_config.cpp
     ${_config_out}/physics_config.hpp
+    ${_config_out}/physics_config_serialization.hpp
     ${_config_out}/physics_config.cpp
     ${_config_out}/renderdoc_config.hpp
+    ${_config_out}/renderdoc_config_serialization.hpp
     ${_config_out}/renderdoc_config.cpp
     ${_config_out}/renderer_config.hpp
+    ${_config_out}/renderer_config_serialization.hpp
     ${_config_out}/renderer_config.cpp
     ${_config_out}/scene_config.hpp
+    ${_config_out}/scene_config_serialization.hpp
     ${_config_out}/scene_config.cpp
     ${_config_out}/shader_monitor_config.hpp
+    ${_config_out}/shader_monitor_config_serialization.hpp
     ${_config_out}/shader_monitor_config.cpp
     ${_config_out}/text_renderer_config.hpp
+    ${_config_out}/text_renderer_config_serialization.hpp
     ${_config_out}/text_renderer_config.cpp
     ${_config_out}/threading_config.hpp
+    ${_config_out}/threading_config_serialization.hpp
     ${_config_out}/threading_config.cpp
     ${_config_out}/thumbnails_config.hpp
+    ${_config_out}/thumbnails_config_serialization.hpp
     ${_config_out}/thumbnails_config.cpp
     ${_config_out}/transform_tool_config.hpp
+    ${_config_out}/transform_tool_config_serialization.hpp
     ${_config_out}/transform_tool_config.cpp
     ${_config_out}/viewport_config_data.hpp
+    ${_config_out}/viewport_config_data_serialization.hpp
     ${_config_out}/viewport_config_data.cpp
     ${_config_out}/window_config.hpp
+    ${_config_out}/window_config_serialization.hpp
     ${_config_out}/window_config.cpp
 )
 set_source_files_properties(${_config_sources} PROPERTIES GENERATED TRUE)
 target_sources(${_target} PRIVATE ${_config_sources})
+
+# Graphics_config serialize/deserialize must compile here (same target as
+# other simdjson users) to avoid ABI mismatch from differing arch flags.
+set(_gfx_gen "${CMAKE_BINARY_DIR}/src/erhe/graphics/erhe_graphics/generated")
+set(_gfx_ser_sources
+    ${_gfx_gen}/graphics_config_serialization.hpp
+    ${_gfx_gen}/graphics_config.cpp
+)
+set_source_files_properties(${_gfx_ser_sources} PROPERTIES GENERATED TRUE)
+target_sources(${_target} PRIVATE ${_gfx_ser_sources})
 
 target_link_libraries(
     ${_target}

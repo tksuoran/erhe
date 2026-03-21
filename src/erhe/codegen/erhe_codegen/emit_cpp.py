@@ -242,7 +242,7 @@ def emit_struct_cpp(s: StructSchema) -> str:
     lines: list[str] = []
     snake = _to_snake_case(s.name)
 
-    lines.append(f'#include "{snake}.hpp"')
+    lines.append(f'#include "{snake}_serialization.hpp"')
     lines.append("")
     lines.append("#include <cstddef>")
     lines.append("")

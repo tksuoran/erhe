@@ -11,6 +11,7 @@ erhe_target_sources_grouped(
 # Generated sources (listed explicitly so CMake knows about them)
 set(_generated_sources
     ${_codegen_out}/settings.hpp
+    ${_codegen_out}/settings_serialization.hpp
     ${_codegen_out}/settings.cpp
 )
 set_source_files_properties(${_generated_sources} PROPERTIES GENERATED TRUE)
