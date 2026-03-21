@@ -2,7 +2,7 @@
 
 #include "scene/viewport_scene_view.hpp"
 
-#include "viewport_config_data.hpp"
+#include "config/generated/viewport_config_data.hpp"
 #include "app_context.hpp"
 #include "editor_log.hpp"
 #include "app_message_bus.hpp"

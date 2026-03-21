@@ -5,7 +5,7 @@
 #include "app_settings.hpp"
 #include "time.hpp"
 
-#include "thumbnails_config.hpp"
+#include "config/generated/thumbnails_config.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/texture.hpp"
 

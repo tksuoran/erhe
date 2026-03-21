@@ -13,8 +13,8 @@
 
 #include "SkylineBinPack.h" // RectangleBinPack
 
-#include "scene_config.hpp"
-#include "graphics_config.hpp"
+#include "config/generated/scene_config.hpp"
+#include "config/generated/graphics_config.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_rendergraph/rendergraph.hpp"
 #include "erhe_geometry/shapes/cone.hpp"

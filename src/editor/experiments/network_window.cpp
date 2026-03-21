@@ -2,7 +2,7 @@
 
 #include "app_context.hpp"
 
-#include "network_config.hpp"
+#include "config/generated/network_config.hpp"
 #include "erhe_imgui/imgui_window.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_net/client.hpp"

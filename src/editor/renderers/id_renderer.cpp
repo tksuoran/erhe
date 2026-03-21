@@ -4,7 +4,7 @@
 #include "renderers/mesh_memory.hpp"
 #include "renderers/programs.hpp"
 
-#include "id_renderer_config.hpp"
+#include "config/generated/id_renderer_config.hpp"
 #include "erhe_graphics/blit_command_encoder.hpp"
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/device.hpp"

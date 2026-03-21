@@ -11,7 +11,7 @@
 #include "rendertarget_imgui_host.hpp"
 
 #include "erhe_commands/commands.hpp"
-#include "hud_config.hpp"
+#include "config/generated/hud_config.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_rendergraph/rendergraph.hpp"

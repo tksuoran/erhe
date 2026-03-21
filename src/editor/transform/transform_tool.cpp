@@ -19,7 +19,7 @@
 #include "transform/handle_enums.hpp"
 
 #include "erhe_commands/commands.hpp"
-#include "transform_tool_config.hpp"
+#include "config/generated/transform_tool_config.hpp"
 #include "erhe_imgui/imgui_helpers.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_message_bus/message_bus.hpp"

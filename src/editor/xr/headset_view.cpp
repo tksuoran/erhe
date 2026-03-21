@@ -1,6 +1,6 @@
 #include "xr/headset_view.hpp"
 
-#include "viewport_config_data.hpp"
+#include "config/generated/viewport_config_data.hpp"
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
 #include "app_rendering.hpp"

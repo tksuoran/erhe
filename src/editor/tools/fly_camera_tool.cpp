@@ -13,7 +13,7 @@
 
 #include "erhe_commands/input_arguments.hpp"
 #include "erhe_commands/commands.hpp"
-#include "camera_controls_config.hpp"
+#include "config/generated/camera_controls_config.hpp"
 #include "erhe_configuration/configuration.hpp"
 #include "erhe_file/file.hpp"
 #include "erhe_imgui/imgui_windows.hpp"

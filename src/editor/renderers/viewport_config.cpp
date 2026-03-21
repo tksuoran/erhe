@@ -1,5 +1,5 @@
 #include "renderers/viewport_config.hpp"
-#include "viewport_config_data.hpp"
+#include "config/generated/viewport_config_data.hpp"
 
 namespace editor {
 

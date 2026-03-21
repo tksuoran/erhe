@@ -21,7 +21,7 @@
 
 #include "erhe_commands/command.hpp"
 #include "erhe_commands/commands.hpp"
-#include "scene_config.hpp"
+#include "config/generated/scene_config.hpp"
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_primitive/material.hpp"

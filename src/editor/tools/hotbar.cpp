@@ -21,7 +21,7 @@
 
 #include "erhe_commands/commands.hpp"
 #include "erhe_commands/input_arguments.hpp"
-#include "hotbar_config.hpp"
+#include "config/generated/hotbar_config.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_item/item.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"

@@ -6,7 +6,7 @@
 #include "grid/grid.hpp"
 #include "tools/tools.hpp"
 
-#include "grid_config.hpp"
+#include "config/generated/grid_config.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_profile/profile.hpp"
 

@@ -1,6 +1,6 @@
 #include "renderers/mesh_memory.hpp"
 
-#include "mesh_memory_config.hpp"
+#include "config/generated/mesh_memory_config.hpp"
 #include "erhe_scene_renderer/program_interface.hpp"
 
 namespace editor {

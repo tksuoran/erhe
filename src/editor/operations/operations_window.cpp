@@ -24,7 +24,7 @@
 #include "erhe_rendergraph/rendergraph_node.hpp"
 
 #include "erhe_commands/commands.hpp"
-#include "scene_config.hpp"
+#include "config/generated/scene_config.hpp"
 #include "erhe_defer/defer.hpp"
 #include "erhe_file/file.hpp"
 #include "erhe_gltf/gltf.hpp"
