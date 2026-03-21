@@ -26,3 +26,4 @@ vscode-cmake-*
 log.txt
 releases
 erhe_cmake_dependencies.dot*
+.cpm_cache

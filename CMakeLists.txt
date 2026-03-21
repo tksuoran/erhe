@@ -24,10 +24,17 @@ project(
 
 include(cmake/CPM.cmake)
 
+# Use a persistent source cache so CPM downloads survive --fresh rebuilds.
+# Override with -DCPM_SOURCE_CACHE=<path> or the CPM_SOURCE_CACHE env var.
+if (NOT CPM_SOURCE_CACHE AND NOT DEFINED ENV{CPM_SOURCE_CACHE})
+    set(CPM_SOURCE_CACHE "${PROJECT_SOURCE_DIR}/.cpm_cache" CACHE PATH "CPM source cache directory")
+endif()
+
+# Pass -DFETCHCONTENT_FULLY_DISCONNECTED=ON to skip all network access
+# when sources are already cached (fastest possible reconfigure).
+
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 set(ERHE_INCLUDE_ROOT "${PROJECT_SOURCE_DIR}/src")
-
-#set(FETCHCONTENT_UPDATES_DISCONNECTED ON CACHE BOOL "Do not update everytime I run cmake, please")
 
 # Split parts to cmake/
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_LIST_DIR}/cmake")
