@@ -7,6 +7,8 @@
 #include "scene/scene_root.hpp"
 #include "operations/mesh_operation.hpp"
 
+#include "scene/generated/gltf_source_reference.hpp"
+
 #include "items.hpp"
 
 #include "erhe_file/file.hpp"
@@ -34,6 +36,23 @@
 namespace editor {
 
 namespace {
+
+void set_gltf_source_on_library_node(
+    Content_library_node&          library_folder,
+    const erhe::Item_base*         item,
+    const Gltf_source_reference&   ref
+)
+{
+    library_folder.for_each<Content_library_node>(
+        [item, &ref](Content_library_node& node) -> bool {
+            if (node.item.get() == item) {
+                node.gltf_source = ref;
+                return false;
+            }
+            return true;
+        }
+    );
+}
 
 void color_graph(
     erhe::scene::Node*                           node,
@@ -116,24 +135,56 @@ void import_gltf(
         // TODO Make importing an operation
 
         std::shared_ptr<Content_library> content_library = scene_root.get_content_library();
+        const std::string gltf_path_str = path.generic_string();
+
         log_parsers->info("Processing {} textures", gltf_data.images.size());
-        for (const auto& image : gltf_data.images) {
+        for (size_t i = 0; i < gltf_data.images.size(); ++i) {
+            const auto& image = gltf_data.images[i];
             if (image) {
                 content_library->textures->add(image);
+                set_gltf_source_on_library_node(
+                    *content_library->textures, image.get(),
+                    Gltf_source_reference{
+                        .gltf_path  = gltf_path_str,
+                        .item_name  = image->get_name(),
+                        .item_index = static_cast<int>(i),
+                        .item_type  = "texture",
+                    }
+                );
             }
         }
 
         log_parsers->info("Processing {} materials", gltf_data.materials.size());
-        for (const auto& material : gltf_data.materials) {
+        for (size_t i = 0; i < gltf_data.materials.size(); ++i) {
+            const auto& material = gltf_data.materials[i];
             if (material) {
                 content_library->materials->add(material);
+                set_gltf_source_on_library_node(
+                    *content_library->materials, material.get(),
+                    Gltf_source_reference{
+                        .gltf_path  = gltf_path_str,
+                        .item_name  = material->get_name(),
+                        .item_index = static_cast<int>(i),
+                        .item_type  = "material",
+                    }
+                );
             }
         }
 
         log_parsers->info("Processing {} skins", gltf_data.skins.size());
-        for (const auto& skin : gltf_data.skins) {
+        for (size_t i = 0; i < gltf_data.skins.size(); ++i) {
+            const auto& skin = gltf_data.skins[i];
             if (skin) {
                 content_library->skins->add(skin);
+                set_gltf_source_on_library_node(
+                    *content_library->skins, skin.get(),
+                    Gltf_source_reference{
+                        .gltf_path  = gltf_path_str,
+                        .item_name  = skin->get_name(),
+                        .item_index = static_cast<int>(i),
+                        .item_type  = "skin",
+                    }
+                );
             }
         }
 
@@ -286,12 +337,21 @@ void import_gltf(
         ////     }
         //// }
 
-        for (const auto& animation : gltf_data.animations) {
+        for (size_t i = 0; i < gltf_data.animations.size(); ++i) {
+            const auto& animation = gltf_data.animations[i];
             if (!animation) {
                 continue;
             }
             scene_root.get_content_library()->animations->add(animation);
-            //animation->apply(0.0f);
+            set_gltf_source_on_library_node(
+                *content_library->animations, animation.get(),
+                Gltf_source_reference{
+                    .gltf_path  = gltf_path_str,
+                    .item_name  = animation->get_name(),
+                    .item_index = static_cast<int>(i),
+                    .item_type  = "animation",
+                }
+            );
         }
     }
 

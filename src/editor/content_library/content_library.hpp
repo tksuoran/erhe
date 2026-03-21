@@ -3,6 +3,7 @@
 #include "app_context.hpp"
 #include "editor_log.hpp"
 #include "graphics/icon_set.hpp"
+#include "scene/generated/gltf_source_reference.hpp"
 
 #include "erhe_item/hierarchy.hpp"
 #include "erhe_profile/profile.hpp"
@@ -15,6 +16,7 @@
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -100,9 +102,10 @@ public:
         auto [inserted_it, _] = m_cache.emplace(key, std::move(result));
         return std::any_cast<const std::vector<std::shared_ptr<T>>&>(inserted_it->second);
     }
-    uint64_t                         type_code{};
-    std::string                      type_name{};
-    std::shared_ptr<erhe::Item_base> item;
+    uint64_t                                  type_code{};
+    std::string                               type_name{};
+    std::shared_ptr<erhe::Item_base>          item;
+    std::optional<Gltf_source_reference>      gltf_source;
 
 private:
     template <typename T>

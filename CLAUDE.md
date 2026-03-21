@@ -106,10 +106,14 @@ The `editor` executable is the main application. Entry point is `src/editor/main
 
 Many systems have swappable backends selected at CMake configure time via `#ifdef ERHE_<SUBSYSTEM>_LIBRARY_<VALUE>` guards. This is especially true for physics, raytrace, window, and XR subsystems.
 
+## Python
+
+On this Windows machine, use the `py` launcher to run Python scripts (not `python` or `python3`, which resolve to the Microsoft Store stub). Example:
+
+```bash
+py -3 src/erhe/codegen/generate.py <definitions_dir> <output_dir>
+```
+
 ## C++ Standard
 
 This project uses **C++20**. Prefer modern C++20 features over older alternatives (e.g. concepts over SFINAE, `std::span` over pointer+size, `std::format`/`fmt` over `sprintf`, `constexpr` where possible, designated initializers, `requires` clauses).
-
-## Active Work
-
-- **Item system improvements** — See `doc/item-system-improvements.md` for the current plan (7 steps covering bug fixes, flag splitting, type decentralization, boilerplate reduction, naming cleanup, and member refactoring).

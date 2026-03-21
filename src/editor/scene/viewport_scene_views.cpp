@@ -83,6 +83,28 @@ Scene_views::Scene_views(
     m_open_new_viewport_scene_view_command.set_host(this);
 }
 
+Scene_views::~Scene_views() noexcept
+{
+    // Reset all references to Viewport_scene_view before destroying vectors.
+    m_hover_scene_view.reset();
+    m_last_scene_view.reset();
+    m_hover_stack.clear();
+
+    // ~Viewport_scene_view calls erase() which modifies m_viewport_scene_views.
+    // Swap to locals so the member is empty before any element destructors run;
+    // erase() on the empty member is a no-op. Using clear() would corrupt the
+    // vector because element destructors modify it mid-iteration.
+    {
+        std::vector<std::shared_ptr<Viewport_scene_view>> views;
+        views.swap(m_viewport_scene_views);
+    }
+    {
+        std::vector<std::shared_ptr<Viewport_window>> windows;
+        windows.swap(m_viewport_windows);
+    }
+    m_post_processing_nodes.clear();
+}
+
 void Scene_views::on_message(App_message& message)
 {
     using namespace erhe::utility;

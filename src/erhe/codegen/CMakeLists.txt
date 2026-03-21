@@ -21,6 +21,13 @@ target_link_libraries(${_target}
 
 erhe_target_settings(${_target} "erhe")
 
+find_package(Python3 COMPONENTS Interpreter)
+if (NOT ${Python3_FOUND})
+    message(FATAL_ERROR "Python3 is needed for erhe_codegen code generation.")
+endif()
+# Cache the Python executable so the function below (and callers) can access it
+set(ERHE_PYTHON3_EXECUTABLE "${Python3_EXECUTABLE}" CACHE INTERNAL "Python3 interpreter for erhe_codegen")
+
 # Code generation function for consumers
 #
 # Usage:
@@ -30,29 +37,26 @@ erhe_target_settings(${_target} "erhe")
 #       OUTPUT_DIR      <path>             # Directory where .hpp/.cpp files are generated
 #   )
 #
-# The caller must add the generated source files to their target and add
-# OUTPUT_DIR to the target's include directories.
+# Runs the generator at configure time (like erhe_gl), so no build-time
+# dependency on Python. Re-configure to regenerate after changing definitions.
 function(erhe_codegen_generate)
     cmake_parse_arguments(ARG "" "TARGET;DEFINITIONS_DIR;OUTPUT_DIR" "" ${ARGN})
 
-    file(GLOB DEFINITION_FILES CONFIGURE_DEPENDS "${ARG_DEFINITIONS_DIR}/*.py")
-
     set(_codegen_dir "${CMAKE_CURRENT_FUNCTION_LIST_DIR}")
     set(GENERATOR_SCRIPT "${_codegen_dir}/generate.py")
-    file(GLOB GENERATOR_PACKAGE_FILES CONFIGURE_DEPENDS "${_codegen_dir}/erhe_codegen/*.py")
 
-    add_custom_command(
-        OUTPUT ${ARG_OUTPUT_DIR}/generated_stamp.txt
-        COMMAND ${Python3_EXECUTABLE} ${GENERATOR_SCRIPT}
-            ${ARG_DEFINITIONS_DIR}
-            ${ARG_OUTPUT_DIR}
-        COMMAND ${CMAKE_COMMAND} -E touch ${ARG_OUTPUT_DIR}/generated_stamp.txt
-        DEPENDS ${DEFINITION_FILES} ${GENERATOR_SCRIPT} ${GENERATOR_PACKAGE_FILES}
-        COMMENT "erhe_codegen: generating C++ from ${ARG_DEFINITIONS_DIR}"
+    message(STATUS "erhe_codegen: generating C++ from ${ARG_DEFINITIONS_DIR}")
+    execute_process(
+        COMMAND "${ERHE_PYTHON3_EXECUTABLE}" "${GENERATOR_SCRIPT}"
+            "${ARG_DEFINITIONS_DIR}"
+            "${ARG_OUTPUT_DIR}"
+        RESULT_VARIABLE _codegen_result
+        OUTPUT_VARIABLE _codegen_output
+        ERROR_VARIABLE  _codegen_error
     )
-
-    add_custom_target(${ARG_TARGET}_codegen DEPENDS ${ARG_OUTPUT_DIR}/generated_stamp.txt)
-    add_dependencies(${ARG_TARGET} ${ARG_TARGET}_codegen)
+    if (_codegen_result)
+        message(FATAL_ERROR "erhe_codegen generation failed (exit code ${_codegen_result}):\nstdout: ${_codegen_output}\nstderr: ${_codegen_error}\nCommand: ${ERHE_PYTHON3_EXECUTABLE} ${GENERATOR_SCRIPT} ${ARG_DEFINITIONS_DIR} ${ARG_OUTPUT_DIR}")
+    endif()
 endfunction()
 
 add_subdirectory(test)

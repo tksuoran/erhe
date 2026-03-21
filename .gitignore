@@ -4,7 +4,9 @@
 .vs
 .vscode/compile_commands.json
 erhe_cmake_profiling.json
-src/erhe/codegen/erhe_codegen/__pycache__
+**/__pycache__/
+*.pyc
+*.pyo
 src/editor/user.ini
 src/editor/erhe_init_graph.dot
 src/editor/cache/bvh/*

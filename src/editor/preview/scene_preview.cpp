@@ -55,7 +55,6 @@ Scene_preview::Scene_preview(
         scene_message_bus,
         nullptr, // No App_context
         nullptr, // Don't process editor messages
-        nullptr, // Don't register to App_scenes
         m_content_library,
         "Material preview scene",
         false

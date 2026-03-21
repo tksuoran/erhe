@@ -1,0 +1,22 @@
+from erhe_codegen import *
+
+struct("Projection_data",
+    field("projection_type", Int,   added_in=1, default="4",      short_desc="Projection::Type as int"),
+    field("z_near",          Float, added_in=1, default="0.03f"),
+    field("z_far",           Float, added_in=1, default="64.0f"),
+    field("fov_x",           Float, added_in=1, default="0.7853981633974483f", short_desc="pi/4"),
+    field("fov_y",           Float, added_in=1, default="0.7853981633974483f", short_desc="pi/4"),
+    field("fov_left",        Float, added_in=1, default="-0.7853981633974483f"),
+    field("fov_right",       Float, added_in=1, default="0.7853981633974483f"),
+    field("fov_up",          Float, added_in=1, default="0.7853981633974483f"),
+    field("fov_down",        Float, added_in=1, default="-0.7853981633974483f"),
+    field("ortho_left",      Float, added_in=1, default="-0.5f"),
+    field("ortho_width",     Float, added_in=1, default="1.0f"),
+    field("ortho_bottom",    Float, added_in=1, default="-0.5f"),
+    field("ortho_height",    Float, added_in=1, default="1.0f"),
+    field("frustum_left",    Float, added_in=1, default="-0.5f"),
+    field("frustum_right",   Float, added_in=1, default="0.5f"),
+    field("frustum_bottom",  Float, added_in=1, default="-0.5f"),
+    field("frustum_top",     Float, added_in=1, default="0.5f"),
+    version=1,
+)

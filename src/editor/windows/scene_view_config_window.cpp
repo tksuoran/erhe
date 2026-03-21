@@ -55,12 +55,9 @@ void Scene_view_config_window::imgui()
     ImGui::TableNextColumn();
 
     //std::shared_ptr<Scene_root> old_scene_root = m_scene_view->get_scene_root();
-    Scene_root* scene_root_raw = scene_root.get();
-    const bool combo_used = m_context.app_scenes->scene_combo("##Scene", scene_root_raw, false);
-    if (combo_used && scene_root.get() != scene_root_raw) {
-        scene_root = (scene_root_raw != nullptr) 
-            ? scene_root_raw->shared_from_this()
-            : std::shared_ptr<Scene_root>{};
+    auto old_scene_root = scene_root;
+    const bool combo_used = m_context.app_scenes->scene_combo("##Scene", scene_root, false);
+    if (combo_used && scene_root != old_scene_root) {
         m_scene_view->set_scene_root(scene_root);
         Viewport_scene_view* viewport_scene_view = m_scene_view->as_viewport_scene_view();
         if (viewport_scene_view != nullptr) {

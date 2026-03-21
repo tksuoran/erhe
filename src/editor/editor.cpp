@@ -138,9 +138,11 @@
 #   include <tracy/TracyC.h>
 #endif
 
+#include <geogram/basic/attributes.h>
 #include <geogram/basic/common.h>
 #include <geogram/basic/command_line.h>
 #include <geogram/basic/command_line_args.h>
+#include <geogram/basic/geometry.h>
 #include <geogram/basic/logger.h>
 
 #include <atomic>
@@ -799,11 +801,11 @@ public:
                     *m_scene_message_bus.get(),
                     &m_app_context,
                     m_app_message_bus.get(),
-                    m_app_scenes.get(),
                     content_library,
                     "Default Scene",
                     enable_physics
                 );
+                m_default_scene->register_to_editor_scenes(*m_app_scenes);
                 m_default_scene_browser = m_default_scene->make_browser_window(
                     *m_imgui_renderer.get(), *m_imgui_windows.get(), m_app_context, *m_app_settings.get()
                 );
@@ -1616,6 +1618,15 @@ void run_editor()
         GEO::initialize(GEO::GEOGRAM_INSTALL_NONE);
         GEO::CmdLine::import_arg_group("algo");
         GEO::CmdLine::set_arg("sys:multithread", "true");
+        GEO::geo_register_attribute_type<GEO::vec2f>("vec2f");
+        GEO::geo_register_attribute_type<GEO::vec3f>("vec3f");
+        GEO::geo_register_attribute_type<GEO::vec4f>("vec4f");
+        GEO::geo_register_attribute_type<GEO::vec2i>("vec2i");
+        GEO::geo_register_attribute_type<GEO::vec3i>("vec3i");
+        GEO::geo_register_attribute_type<GEO::vec4i>("vec4i");
+        GEO::geo_register_attribute_type<GEO::vec2u>("vec2u");
+        GEO::geo_register_attribute_type<GEO::vec3u>("vec3u");
+        GEO::geo_register_attribute_type<GEO::vec4u>("vec4u");
         // TODO
         // GEO::Logger::unregister_all_clients();
         // GEO::Logger::register_client(s_geogram_logger_client.get());

@@ -13,7 +13,7 @@
 
 namespace erhe::codegen {
 
-// Serialization helpers (append to output string)
+// Serialization helpers (append to output string) — implemented in .cpp
 void serialize_string(std::string& out, std::string_view value);
 void serialize_bool  (std::string& out, bool value);
 void serialize_int   (std::string& out, int64_t value);
@@ -40,40 +40,171 @@ inline void serialize_element(std::string& out, float value)              { seri
 inline void serialize_element(std::string& out, double value)             { serialize_double(out, value); }
 inline void serialize_element(std::string& out, const std::string& value) { serialize_string(out, value); }
 
-// Deserialization helpers (scalar)
-void deserialize_field(simdjson::ondemand::value val, bool&     out);
-void deserialize_field(simdjson::ondemand::value val, int8_t&   out);
-void deserialize_field(simdjson::ondemand::value val, uint8_t&  out);
-void deserialize_field(simdjson::ondemand::value val, int16_t&  out);
-void deserialize_field(simdjson::ondemand::value val, uint16_t& out);
-void deserialize_field(simdjson::ondemand::value val, int32_t&  out);
-void deserialize_field(simdjson::ondemand::value val, uint32_t& out);
-void deserialize_field(simdjson::ondemand::value val, int64_t&  out);
-void deserialize_field(simdjson::ondemand::value val, uint64_t& out);
-void deserialize_field(simdjson::ondemand::value val, float&    out);
-void deserialize_field(simdjson::ondemand::value val, double&   out);
-void deserialize_field(simdjson::ondemand::value val, std::string& out);
+// Deserialization helpers (scalar) — inline to avoid simdjson ABI mismatch
+// (simdjson::ondemand::value resolves to a platform-specific namespace like
+// simdjson::haswell::ondemand::value, which can differ between translation
+// units compiled with different /arch flags)
+inline void deserialize_field(simdjson::ondemand::value val, bool& out)
+{
+    bool v;
+    if (!val.get_bool().get(v)) {
+        out = v;
+    }
+}
+inline void deserialize_field(simdjson::ondemand::value val, int8_t& out)
+{
+    int64_t v;
+    if (!val.get_int64().get(v)) {
+        out = static_cast<int8_t>(v);
+    }
+}
+inline void deserialize_field(simdjson::ondemand::value val, uint8_t& out)
+{
+    uint64_t v;
+    if (!val.get_uint64().get(v)) {
+        out = static_cast<uint8_t>(v);
+    }
+}
+inline void deserialize_field(simdjson::ondemand::value val, int16_t& out)
+{
+    int64_t v;
+    if (!val.get_int64().get(v)) {
+        out = static_cast<int16_t>(v);
+    }
+}
+inline void deserialize_field(simdjson::ondemand::value val, uint16_t& out)
+{
+    uint64_t v;
+    if (!val.get_uint64().get(v)) {
+        out = static_cast<uint16_t>(v);
+    }
+}
+inline void deserialize_field(simdjson::ondemand::value val, int32_t& out)
+{
+    int64_t v;
+    if (!val.get_int64().get(v)) {
+        out = static_cast<int32_t>(v);
+    }
+}
+inline void deserialize_field(simdjson::ondemand::value val, uint32_t& out)
+{
+    uint64_t v;
+    if (!val.get_uint64().get(v)) {
+        out = static_cast<uint32_t>(v);
+    }
+}
+inline void deserialize_field(simdjson::ondemand::value val, int64_t& out)
+{
+    int64_t v;
+    if (!val.get_int64().get(v)) {
+        out = v;
+    }
+}
+inline void deserialize_field(simdjson::ondemand::value val, uint64_t& out)
+{
+    uint64_t v;
+    if (!val.get_uint64().get(v)) {
+        out = v;
+    }
+}
+inline void deserialize_field(simdjson::ondemand::value val, float& out)
+{
+    double v;
+    if (!val.get_double().get(v)) {
+        out = static_cast<float>(v);
+    }
+}
+inline void deserialize_field(simdjson::ondemand::value val, double& out)
+{
+    double v;
+    if (!val.get_double().get(v)) {
+        out = v;
+    }
+}
+inline void deserialize_field(simdjson::ondemand::value val, std::string& out)
+{
+    std::string_view v;
+    if (!val.get_string().get(v)) {
+        out = v;
+    }
+}
 // int/unsigned int: only if distinct from int32_t/uint32_t (platform-dependent)
 template <typename T, std::enable_if_t<std::is_same_v<T, int> && !std::is_same_v<int, int32_t>, int> = 0>
-void deserialize_field(simdjson::ondemand::value val, T& out)
+inline void deserialize_field(simdjson::ondemand::value val, T& out)
 {
     int64_t tmp;
     if (!val.get_int64().get(tmp)) { out = static_cast<T>(tmp); }
 }
 template <typename T, std::enable_if_t<std::is_same_v<T, unsigned int> && !std::is_same_v<unsigned int, uint32_t>, int> = 0>
-void deserialize_field(simdjson::ondemand::value val, T& out)
+inline void deserialize_field(simdjson::ondemand::value val, T& out)
 {
     uint64_t tmp;
     if (!val.get_uint64().get(tmp)) { out = static_cast<T>(tmp); }
 }
 
-// Deserialization helpers (glm)
-void deserialize_field(simdjson::ondemand::value val, glm::vec2& out);
-void deserialize_field(simdjson::ondemand::value val, glm::vec3& out);
-void deserialize_field(simdjson::ondemand::value val, glm::vec4& out);
-void deserialize_field(simdjson::ondemand::value val, glm::mat4& out);
+// Deserialization helpers (glm) — inline for same reason
+inline void deserialize_field(simdjson::ondemand::value val, glm::vec2& out)
+{
+    simdjson::ondemand::array arr;
+    if (!val.get_array().get(arr)) {
+        std::size_t i = 0;
+        for (auto element : arr) {
+            if (i >= 2) break;
+            double v;
+            if (!element.get_double().get(v)) {
+                out[static_cast<glm::length_t>(i)] = static_cast<float>(v);
+            }
+            ++i;
+        }
+    }
+}
+inline void deserialize_field(simdjson::ondemand::value val, glm::vec3& out)
+{
+    simdjson::ondemand::array arr;
+    if (!val.get_array().get(arr)) {
+        std::size_t i = 0;
+        for (auto element : arr) {
+            if (i >= 3) break;
+            double v;
+            if (!element.get_double().get(v)) {
+                out[static_cast<glm::length_t>(i)] = static_cast<float>(v);
+            }
+            ++i;
+        }
+    }
+}
+inline void deserialize_field(simdjson::ondemand::value val, glm::vec4& out)
+{
+    simdjson::ondemand::array arr;
+    if (!val.get_array().get(arr)) {
+        std::size_t i = 0;
+        for (auto element : arr) {
+            if (i >= 4) break;
+            double v;
+            if (!element.get_double().get(v)) {
+                out[static_cast<glm::length_t>(i)] = static_cast<float>(v);
+            }
+            ++i;
+        }
+    }
+}
+inline void deserialize_field(simdjson::ondemand::value val, glm::mat4& out)
+{
+    simdjson::ondemand::array arr;
+    if (!val.get_array().get(arr)) {
+        std::size_t i = 0;
+        for (auto element : arr) {
+            if (i >= 16) break;
+            double v;
+            if (!element.get_double().get(v)) {
+                out[static_cast<glm::length_t>(i / 4)][static_cast<glm::length_t>(i % 4)] = static_cast<float>(v);
+            }
+            ++i;
+        }
+    }
+}
 
-// Serialization helpers (glm)
+// Serialization helpers (glm) — implemented in .cpp
 void serialize_vec2(std::string& out, const glm::vec2& value);
 void serialize_vec3(std::string& out, const glm::vec3& value);
 void serialize_vec4(std::string& out, const glm::vec4& value);

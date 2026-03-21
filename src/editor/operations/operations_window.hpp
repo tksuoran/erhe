@@ -113,6 +113,9 @@ public:
     void export_gltf();
     void export_callback(const char* const* filelist, int filter);
 
+    void save_scene();
+    void load_scene();
+
     void create_material();
 
 private:
@@ -160,6 +163,8 @@ private:
     erhe::commands::Lambda_command m_make_raytrace_command;
 
     erhe::commands::Lambda_command m_export_gltf_command;
+    erhe::commands::Lambda_command m_save_scene_command;
+    erhe::commands::Lambda_command m_load_scene_command;
 
     erhe::commands::Lambda_command m_create_material;
 

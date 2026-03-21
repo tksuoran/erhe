@@ -289,6 +289,8 @@ erhe_target_sources_grouped(
     scene/scene_commands.hpp
     scene/scene_root.cpp
     scene/scene_root.hpp
+    scene/scene_serialization.cpp
+    scene/scene_serialization.hpp
     scene/scene_view.cpp
     scene/scene_view.hpp
     scene/viewport_scene_view.cpp
@@ -385,9 +387,44 @@ if (ERHE_USE_MIMALLOC)
     target_link_libraries(${_target} PUBLIC mimalloc-static)
 endif ()
 
+# Scene serialization codegen
+set(_codegen_defs "${CMAKE_CURRENT_SOURCE_DIR}/scene/definitions")
+set(_codegen_out  "${CMAKE_CURRENT_SOURCE_DIR}/scene/generated")
+
+erhe_target_sources_grouped(
+    ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+    scene/generated/camera_data.hpp
+    scene/generated/camera_data.cpp
+    scene/generated/gltf_source_reference.hpp
+    scene/generated/gltf_source_reference.cpp
+    scene/generated/light_data.hpp
+    scene/generated/light_data.cpp
+    scene/generated/light_type_serial.hpp
+    scene/generated/light_type_serial.cpp
+    scene/generated/mesh_reference.hpp
+    scene/generated/mesh_reference.cpp
+    scene/generated/mesh_source_type.hpp
+    scene/generated/mesh_source_type.cpp
+    scene/generated/node_data_serial.hpp
+    scene/generated/node_data_serial.cpp
+    scene/generated/projection_data.hpp
+    scene/generated/projection_data.cpp
+    scene/generated/scene_file.hpp
+    scene/generated/scene_file.cpp
+    scene/generated/transform_data.hpp
+    scene/generated/transform_data.cpp
+)
+
+erhe_codegen_generate(
+    TARGET          ${_target}
+    DEFINITIONS_DIR "${_codegen_defs}"
+    OUTPUT_DIR      "${_codegen_out}"
+)
+
 target_link_libraries(
     ${_target}
     PRIVATE
+        erhe::codegen
         erhe::utility
         erhe::commands
         erhe::configuration
@@ -462,7 +499,7 @@ endif ()
 if (${ERHE_XR_LIBRARY} STREQUAL "openxr")
     target_link_libraries(${_target} PRIVATE erhe_xr openxr_loader)
 endif ()
-target_include_directories(${_target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(${_target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${_codegen_out})
 
 set_target_properties(
     ${_target} PROPERTIES

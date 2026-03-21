@@ -108,7 +108,6 @@ Scene_root::Scene_root(
     erhe::scene::Scene_message_bus&         scene_message_bus,
     App_context*                            context,
     App_message_bus*                        app_message_bus,
-    App_scenes*                             app_scenes,
     const std::shared_ptr<Content_library>& content_library,
     const std::string_view                  name,
     bool                                    enable_physics
@@ -170,9 +169,9 @@ Scene_root::Scene_root(
 
     m_raytrace_scene = erhe::raytrace::IScene::create_unique("rt_root_scene");
 
-    if (app_scenes != nullptr) {
-        register_to_editor_scenes(*app_scenes);
-    }
+    // NOTE: register_to_editor_scenes() must be called by the caller after
+    // make_shared<Scene_root>() returns, because shared_from_this() cannot
+    // be used during construction.
 
     if ((imgui_renderer != nullptr) && (imgui_windows != nullptr) && (context != nullptr)) {
         m_content_library_tree_window = std::make_shared<Item_tree_window>(
@@ -266,7 +265,7 @@ Scene_root::Scene_root(
 
 Scene_root::~Scene_root() noexcept
 {
-    if (m_is_registered) { // && (m_app_scenes != nullptr)) {
+    if (m_is_registered) {
         unregister_from_editor_scenes(*m_app_scenes);
     }
 }
@@ -359,7 +358,7 @@ void Scene_root::register_to_editor_scenes(App_scenes& app_scenes)
     ERHE_VERIFY(m_is_registered == false);
     ERHE_VERIFY(m_app_scenes == nullptr);
     m_app_scenes = &app_scenes;
-    app_scenes.register_scene_root(this);
+    app_scenes.register_scene_root(shared_from_this());
     m_is_registered = true;
 }
 

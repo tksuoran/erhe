@@ -2,6 +2,7 @@
 
 #include "erhe_profile/profile.hpp"
 
+#include <memory>
 #include <mutex>
 #include <vector>
 
@@ -15,8 +16,9 @@ class App_scenes
 {
 public:
     explicit App_scenes(App_context& context);
+    ~App_scenes() noexcept;
 
-    void register_scene_root                 (Scene_root* scene_root);
+    void register_scene_root                 (const std::shared_ptr<Scene_root>& scene_root);
     void unregister_scene_root               (Scene_root* scene_root);
     void sanity_check                        ();
 
@@ -25,16 +27,15 @@ public:
     void after_physics_simulation_steps      ();
     void update_node_transforms              ();
 
-    [[nodiscard]] auto get_scene_roots() -> const std::vector<Scene_root*>&;
-    [[nodiscard]] auto scene_combo(const char* label, Scene_root*& in_out_selected_entry, bool empty_option) const -> bool;
+    [[nodiscard]] auto get_scene_roots() -> const std::vector<std::shared_ptr<Scene_root>>&;
+    [[nodiscard]] auto scene_combo(const char* label, std::shared_ptr<Scene_root>& in_out_selected_entry, bool empty_option) const -> bool;
 
     void imgui();
 
 private:
-    App_context&                   m_context;
-    ERHE_PROFILE_MUTEX(std::mutex, m_mutex);
-    std::vector<Scene_root*>       m_scene_roots;
+    App_context&                                m_context;
+    ERHE_PROFILE_MUTEX(std::mutex,              m_mutex);
+    std::vector<std::shared_ptr<Scene_root>>    m_scene_roots;
 };
 
 }
-

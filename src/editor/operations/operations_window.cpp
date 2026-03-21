@@ -2,6 +2,7 @@
 
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
+#include "app_settings.hpp"
 #include "content_library/content_library.hpp"
 #include "items.hpp"
 #include "operations/geometry_operations.hpp"
@@ -15,7 +16,12 @@
 #include "scene/node_physics.hpp"
 #include "scene/scene_builder.hpp"
 #include "scene/scene_root.hpp"
+#include "scene/scene_serialization.hpp"
+#include "scene/viewport_scene_views.hpp"
 #include "tools/selection_tool.hpp"
+#include "windows/item_tree_window.hpp"
+
+#include "erhe_rendergraph/rendergraph_node.hpp"
 
 #include "erhe_commands/commands.hpp"
 #include "erhe_configuration/configuration.hpp"
@@ -102,6 +108,8 @@ Operations::Operations(
     , m_make_raytrace_command    {commands, "Mesh.MakeRaytrace",              [this]() -> bool { make_raytrace(); return true; } }
 
     , m_export_gltf_command   {commands, "File.Export.glTF",                   [this]() -> bool { export_gltf   (); return true; } }
+    , m_save_scene_command    {commands, "File.SaveScene",                     [this]() -> bool { save_scene     (); return true; } }
+    , m_load_scene_command    {commands, "File.LoadScene",                     [this]() -> bool { load_scene     (); return true; } }
     , m_create_material       {commands, "Create.Material",                    [this]() -> bool { create_material(); return true; } }
 {
     commands.register_command(&m_merge_command         );
@@ -135,6 +143,8 @@ Operations::Operations(
     commands.register_command(&m_make_raytrace_command );
 
     commands.register_command(&m_export_gltf_command);
+    commands.register_command(&m_save_scene_command);
+    commands.register_command(&m_load_scene_command);
     commands.register_command(&m_create_material);
 
     commands.bind_command_to_menu(&m_merge_command,            "Geometry.Merge");
@@ -168,6 +178,8 @@ Operations::Operations(
     commands.bind_command_to_menu(&m_make_raytrace_command,     "Mesh.Make Raytrace");
 
     commands.bind_command_to_menu(&m_export_gltf_command, "File.Export glTF");
+    commands.bind_command_to_menu(&m_save_scene_command,  "File.Save Scene");
+    commands.bind_command_to_menu(&m_load_scene_command,  "File.Load Scene");
     commands.bind_command_to_menu(&m_create_material,     "Create.Material");
 
     const auto& ini = erhe::configuration::get_ini_file_section(erhe::c_erhe_config_file_path, "scene");
@@ -189,6 +201,51 @@ void Operations::on_message(App_message& message)
         m_hover_scene_view = message.scene_view;
         if (message.scene_view != nullptr) {
             m_last_hover_scene_view = message.scene_view;
+        }
+    }
+    if (erhe::utility::test_bit_set(message.update_flags, Message_flag_bit::c_flag_bit_load_scene_file)) {
+        if (message.load_scene_path.has_value()) {
+            try {
+                auto content_library = std::make_shared<Content_library>();
+                auto scene_root = editor::load_scene(
+                    m_context.imgui_renderer,
+                    m_context.imgui_windows,
+                    *m_context.scene_message_bus,
+                    &m_context,
+                    m_context.app_message_bus,
+                    m_context.app_scenes,
+                    content_library,
+                    message.load_scene_path.value()
+                );
+                if (scene_root) {
+                    log_operations->info("Scene loaded: {}", scene_root->get_name());
+                    auto browser_window = scene_root->make_browser_window(
+                        *m_context.imgui_renderer,
+                        *m_context.imgui_windows,
+                        m_context,
+                        *m_context.app_settings
+                    );
+                    browser_window->show_window();
+
+                    // Create viewport window for the loaded scene
+                    std::shared_ptr<erhe::rendergraph::Rendergraph_node> rendergraph_output_node;
+                    auto viewport_scene_view = m_context.scene_views->open_new_viewport_scene_view(
+                        rendergraph_output_node,
+                        scene_root
+                    );
+                    m_context.scene_views->create_viewport_window(
+                        *m_context.imgui_renderer,
+                        *m_context.imgui_windows,
+                        *m_context.app_message_bus,
+                        viewport_scene_view,
+                        rendergraph_output_node,
+                        scene_root->get_name(),
+                        ""
+                    );
+                }
+            } catch (...) {
+                log_operations->error("exception: load scene");
+            }
         }
     }
 }
@@ -810,6 +867,46 @@ void Operations::export_gltf()
     int filter = 0;
     export_callback(filelist, filter);
 #endif
+}
+
+void Operations::save_scene()
+{
+    if (m_last_hover_scene_view == nullptr) {
+        return;
+    }
+    std::shared_ptr<Scene_root> scene_root = m_last_hover_scene_view->get_scene_root();
+    if (!scene_root) {
+        return;
+    }
+
+    try {
+        std::optional<std::filesystem::path> path_opt = erhe::file::select_file_for_write();
+        if (path_opt.has_value()) {
+            editor::save_scene(*scene_root, path_opt.value());
+        }
+    } catch (...) {
+        log_operations->error("exception: file dialog / save scene");
+    }
+}
+
+void Operations::load_scene()
+{
+    try {
+        std::optional<std::filesystem::path> path_opt = erhe::file::select_file_for_read();
+        if (!path_opt.has_value()) {
+            return;
+        }
+
+        // Queue the load to happen outside ImGui iteration
+        m_context.app_message_bus->queue_message(
+            App_message{
+                .update_flags    = Message_flag_bit::c_flag_bit_load_scene_file,
+                .load_scene_path = path_opt.value(),
+            }
+        );
+    } catch (...) {
+        log_operations->error("exception: file dialog / load scene");
+    }
 }
 
 void Operations::create_material()

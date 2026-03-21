@@ -1,6 +1,8 @@
 #pragma once
 
+#include <filesystem>
 #include <memory>
+#include <optional>
 #include <vector>
 
 namespace erhe        { class Item_base; }
@@ -27,6 +29,7 @@ public:
     static constexpr uint64_t c_flag_bit_node_touched_nagivation_gizmo  = (1u << 11);
     static constexpr uint64_t c_flag_bit_animation_update               = (1u << 12);
     static constexpr uint64_t c_flag_bit_open_scene                     = (1u << 13);
+    static constexpr uint64_t c_flag_bit_load_scene_file                = (1u << 14);
 };
 
 class Scene_root;
@@ -42,13 +45,14 @@ public:
 class App_message
 {
 public:
-    uint64_t                         update_flags    {0};
-    Scene_view*                      scene_view      {nullptr};
-    std::shared_ptr<Scene_root>      scene_root      {};
-    erhe::scene::Node*               node            {nullptr};
-    std::shared_ptr<erhe::Item_base> item            {};
-    Graphics_preset*                 graphics_preset {nullptr};
-    std::optional<Selection_change>  selection_change{};
+    uint64_t                                  update_flags    {0};
+    Scene_view*                               scene_view      {nullptr};
+    std::shared_ptr<Scene_root>               scene_root      {};
+    erhe::scene::Node*                        node            {nullptr};
+    std::shared_ptr<erhe::Item_base>          item            {};
+    Graphics_preset*                          graphics_preset {nullptr};
+    std::optional<Selection_change>           selection_change{};
+    std::optional<std::filesystem::path>      load_scene_path {};
 };
 
 }

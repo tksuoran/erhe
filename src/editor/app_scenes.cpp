@@ -18,7 +18,16 @@ App_scenes::App_scenes(App_context& context)
 {
 }
 
-void App_scenes::register_scene_root(Scene_root* scene_root)
+App_scenes::~App_scenes() noexcept
+{
+    // ~Scene_root calls unregister_from_editor_scenes() which modifies
+    // m_scene_roots. Swap to a local so the member is empty before any
+    // element destructors run; unregister on the empty member is a no-op.
+    std::vector<std::shared_ptr<Scene_root>> roots;
+    roots.swap(m_scene_roots);
+}
+
+void App_scenes::register_scene_root(const std::shared_ptr<Scene_root>& scene_root)
 {
     const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
 
@@ -34,7 +43,12 @@ void App_scenes::unregister_scene_root(Scene_root* scene_root)
 {
     const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
 
-    const auto i = std::remove(m_scene_roots.begin(), m_scene_roots.end(), scene_root);
+    const auto i = std::remove_if(
+        m_scene_roots.begin(), m_scene_roots.end(),
+        [scene_root](const std::shared_ptr<Scene_root>& entry) {
+            return entry.get() == scene_root;
+        }
+    );
     if (i == m_scene_roots.end()) {
         log_scene->error("Scene '{}' not registered in App_scenes", scene_root->get_name());
     } else {
@@ -106,7 +120,7 @@ void App_scenes::after_physics_simulation_steps()
     }
 }
 
-auto App_scenes::get_scene_roots() -> const std::vector<Scene_root*>&
+auto App_scenes::get_scene_roots() -> const std::vector<std::shared_ptr<Scene_root>>&
 {
     return m_scene_roots;
 }
@@ -120,12 +134,12 @@ void App_scenes::sanity_check()
 #endif
 }
 
-auto App_scenes::scene_combo(const char* label, Scene_root*& in_out_selected_entry, const bool empty_option) const -> bool
+auto App_scenes::scene_combo(const char* label, std::shared_ptr<Scene_root>& in_out_selected_entry, const bool empty_option) const -> bool
 {
     int selection_index = 0;
     int index = 0;
     std::vector<const char*> names;
-    std::vector<Scene_root*> entries;
+    std::vector<std::shared_ptr<Scene_root>> entries;
     const bool empty_entry = empty_option || (!in_out_selected_entry);
     if (empty_entry) {
         names.push_back("(none)");
@@ -156,5 +170,4 @@ auto App_scenes::scene_combo(const char* label, Scene_root*& in_out_selected_ent
     return selection_changed;
 }
 
-} // namespace hextiles
-
+} // namespace editor

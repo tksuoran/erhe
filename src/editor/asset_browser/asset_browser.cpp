@@ -63,11 +63,11 @@ void Scene_open_operation::execute(App_context& context)
             *context.scene_message_bus,
             &context,
             context.app_message_bus,
-            context.app_scenes, // registers into App_scenes
             m_content_library,
             erhe::file::to_string(m_path.filename()),
             enable_physics
         );
+        m_scene_root->register_to_editor_scenes(*context.app_scenes);
 
         auto browser_window = m_scene_root->make_browser_window(
             *context.imgui_renderer,
@@ -107,7 +107,7 @@ void Scene_open_operation::execute(App_context& context)
 void Scene_open_operation::undo(App_context& context)
 {
     ERHE_VERIFY(m_scene_root);
-    context.app_scenes->unregister_scene_root(m_scene_root.get());
+    m_scene_root->unregister_from_editor_scenes(*context.app_scenes);
     m_scene_root->remove_browser_window();
 }
 

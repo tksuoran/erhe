@@ -54,6 +54,7 @@ class Scene_views : erhe::commands::Command_host
 {
 public:
     Scene_views(erhe::commands::Commands& commands, App_context& context, App_message_bus& app_message_bus);
+    ~Scene_views() noexcept;
 
     // Public API
 

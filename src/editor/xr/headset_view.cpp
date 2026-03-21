@@ -182,12 +182,8 @@ void Headset_view::imgui()
     // Scene selection
     auto                        old_scene_root = m_scene_root;
     std::shared_ptr<Scene_root> scene_root     = get_scene_root();
-    Scene_root*                 scene_root_raw = scene_root.get();
-    const bool combo_used = m_app_context.app_scenes->scene_combo("##Scene", scene_root_raw, false);
+    const bool combo_used = m_app_context.app_scenes->scene_combo("##Scene", scene_root, false);
     if (combo_used) {
-        scene_root = (scene_root_raw != nullptr) 
-            ? scene_root_raw->shared_from_this()
-            : std::shared_ptr<Scene_root>{};
         m_scene_root = scene_root;
     }
 

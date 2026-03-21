@@ -238,7 +238,6 @@ Tools::Tools(
         scene_message_bus,
         nullptr,
         nullptr, // Do not process editor messages
-        nullptr, // Do not register to App_scenes
         tools_content_library,
         "Tool scene",
         false
