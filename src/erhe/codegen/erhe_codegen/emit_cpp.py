@@ -7,7 +7,7 @@ from erhe_codegen.types import (
     TypeBase, ScalarType, GlmType, VectorType, ArrayType, OptionalType,
     StructRefType, EnumRefType,
 )
-from erhe_codegen.emit_hpp import _to_snake_case
+from erhe_codegen.emit_hpp import _to_snake_case, _collect_struct_refs
 
 
 def _can_use_serialize_template(t: TypeBase) -> bool:
@@ -243,6 +243,12 @@ def emit_struct_cpp(s: StructSchema) -> str:
     snake = _to_snake_case(s.name)
 
     lines.append(f'#include "{snake}_serialization.hpp"')
+
+    # Include serialization headers for referenced structs (needed for their serialize/deserialize)
+    struct_refs = _collect_struct_refs(s)
+    for ref in struct_refs:
+        lines.append(f'#include "{_to_snake_case(ref)}_serialization.hpp"')
+
     lines.append("")
     lines.append("#include <cstddef>")
     lines.append("")
