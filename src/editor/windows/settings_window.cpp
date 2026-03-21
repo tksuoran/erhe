@@ -107,6 +107,9 @@ void imgui_field(void* base, const erhe::codegen::Field_info& field)
             ImGui::TextUnformatted(field.type_name);
             break;
     }
+    if (field.long_desc != nullptr && field.long_desc[0] != '\0' && ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("%s", field.long_desc);
+    }
 }
 
 } // anonymous namespace
