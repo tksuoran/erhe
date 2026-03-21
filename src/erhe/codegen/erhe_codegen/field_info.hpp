@@ -7,6 +7,34 @@
 
 namespace erhe::codegen {
 
+enum class Field_type : uint8_t
+{
+    bool_,
+    int_,
+    unsigned_int,
+    int8,
+    uint8,
+    int16,
+    uint16,
+    int32,
+    uint32,
+    int64,
+    uint64,
+    float_,
+    double_,
+    string,
+    vec2,
+    vec3,
+    vec4,
+    ivec2,
+    mat4,
+    vector,
+    array,
+    optional,
+    struct_ref,
+    enum_ref,
+};
+
 struct Numeric_limits
 {
     double ui_min;
@@ -38,6 +66,7 @@ struct Field_info
 {
     const char*      name;
     const char*      type_name;
+    Field_type       field_type;
     std::size_t      offset;
     std::size_t      size;
     uint32_t         added_in;

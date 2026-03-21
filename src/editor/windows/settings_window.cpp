@@ -35,40 +35,77 @@
 #include <imgui/imgui.h>
 #include <imgui/misc/cpp/imgui_stdlib.h>
 
-#include <cstring>
-
 namespace {
 
 void imgui_field(void* base, const erhe::codegen::Field_info& field)
 {
+    using erhe::codegen::Field_type;
     void* ptr = static_cast<char*>(base) + field.offset;
 
-    if (std::strcmp(field.type_name, "bool") == 0) {
-        ImGui::Checkbox("##", static_cast<bool*>(ptr));
-    } else if (std::strcmp(field.type_name, "int") == 0) {
-        if (field.numeric_limits.has_ui_min && field.numeric_limits.has_ui_max) {
-            ImGui::SliderInt("##", static_cast<int*>(ptr),
-                static_cast<int>(field.numeric_limits.ui_min),
-                static_cast<int>(field.numeric_limits.ui_max));
-        } else {
+    switch (field.field_type) {
+        case Field_type::bool_:
+            ImGui::Checkbox("##", static_cast<bool*>(ptr));
+            break;
+        case Field_type::int_:
+        case Field_type::int8:
+        case Field_type::int16:
+        case Field_type::int32:
+        case Field_type::int64:
+            if (field.numeric_limits.has_ui_min && field.numeric_limits.has_ui_max) {
+                ImGui::SliderInt("##", static_cast<int*>(ptr),
+                    static_cast<int>(field.numeric_limits.ui_min),
+                    static_cast<int>(field.numeric_limits.ui_max));
+            } else {
+                ImGui::DragInt("##", static_cast<int*>(ptr));
+            }
+            break;
+        case Field_type::unsigned_int:
+        case Field_type::uint8:
+        case Field_type::uint16:
+        case Field_type::uint32:
+        case Field_type::uint64:
             ImGui::DragInt("##", static_cast<int*>(ptr));
-        }
-    } else if (std::strcmp(field.type_name, "float") == 0) {
-        if (field.numeric_limits.has_ui_min && field.numeric_limits.has_ui_max) {
-            ImGui::SliderFloat("##", static_cast<float*>(ptr),
-                static_cast<float>(field.numeric_limits.ui_min),
-                static_cast<float>(field.numeric_limits.ui_max));
-        } else {
-            ImGui::DragFloat("##", static_cast<float*>(ptr), 0.01f);
-        }
-    } else if (std::strcmp(field.type_name, "std::string") == 0) {
-        ImGui::InputText("##", static_cast<std::string*>(ptr));
-    } else if (std::strcmp(field.type_name, "glm::vec3") == 0) {
-        ImGui::ColorEdit3("##", static_cast<float*>(ptr));
-    } else if (std::strcmp(field.type_name, "glm::vec4") == 0) {
-        ImGui::ColorEdit4("##", static_cast<float*>(ptr));
-    } else if (std::strcmp(field.type_name, "glm::ivec2") == 0) {
-        ImGui::DragInt2("##", static_cast<int*>(ptr));
+            break;
+        case Field_type::float_:
+            if (field.numeric_limits.has_ui_min && field.numeric_limits.has_ui_max) {
+                ImGui::SliderFloat("##", static_cast<float*>(ptr),
+                    static_cast<float>(field.numeric_limits.ui_min),
+                    static_cast<float>(field.numeric_limits.ui_max));
+            } else {
+                ImGui::DragFloat("##", static_cast<float*>(ptr), 0.01f);
+            }
+            break;
+        case Field_type::double_:
+            {
+                float v = static_cast<float>(*static_cast<double*>(ptr));
+                if (ImGui::DragFloat("##", &v, 0.01f)) {
+                    *static_cast<double*>(ptr) = static_cast<double>(v);
+                }
+            }
+            break;
+        case Field_type::string:
+            ImGui::InputText("##", static_cast<std::string*>(ptr));
+            break;
+        case Field_type::vec2:
+            ImGui::DragFloat2("##", static_cast<float*>(ptr), 0.01f);
+            break;
+        case Field_type::vec3:
+            ImGui::ColorEdit3("##", static_cast<float*>(ptr));
+            break;
+        case Field_type::vec4:
+            ImGui::ColorEdit4("##", static_cast<float*>(ptr));
+            break;
+        case Field_type::ivec2:
+            ImGui::DragInt2("##", static_cast<int*>(ptr));
+            break;
+        case Field_type::mat4:
+        case Field_type::vector:
+        case Field_type::array:
+        case Field_type::optional:
+        case Field_type::struct_ref:
+        case Field_type::enum_ref:
+            ImGui::TextUnformatted(field.type_name);
+            break;
     }
 }
 

@@ -22,6 +22,51 @@ def _cpp_type_name(t: TypeBase) -> str:
     return t.cpp_type
 
 
+_SCALAR_FIELD_TYPE_MAP = {
+    "bool":         "erhe::codegen::Field_type::bool_",
+    "int":          "erhe::codegen::Field_type::int_",
+    "unsigned int": "erhe::codegen::Field_type::unsigned_int",
+    "int8_t":       "erhe::codegen::Field_type::int8",
+    "uint8_t":      "erhe::codegen::Field_type::uint8",
+    "int16_t":      "erhe::codegen::Field_type::int16",
+    "uint16_t":     "erhe::codegen::Field_type::uint16",
+    "int32_t":      "erhe::codegen::Field_type::int32",
+    "uint32_t":     "erhe::codegen::Field_type::uint32",
+    "int64_t":      "erhe::codegen::Field_type::int64",
+    "uint64_t":     "erhe::codegen::Field_type::uint64",
+    "float":        "erhe::codegen::Field_type::float_",
+    "double":       "erhe::codegen::Field_type::double_",
+    "std::string":  "erhe::codegen::Field_type::string",
+}
+
+_GLM_FIELD_TYPE_MAP = {
+    "Vec2":  "erhe::codegen::Field_type::vec2",
+    "Vec3":  "erhe::codegen::Field_type::vec3",
+    "Vec4":  "erhe::codegen::Field_type::vec4",
+    "IVec2": "erhe::codegen::Field_type::ivec2",
+    "Mat4":  "erhe::codegen::Field_type::mat4",
+}
+
+
+def _field_type_enum(t: TypeBase) -> str:
+    """Get the C++ Field_type enum value for a type."""
+    if isinstance(t, ScalarType):
+        return _SCALAR_FIELD_TYPE_MAP.get(t.cpp_type, "erhe::codegen::Field_type::int_")
+    if isinstance(t, GlmType):
+        return _GLM_FIELD_TYPE_MAP.get(t.name, "erhe::codegen::Field_type::vec4")
+    if isinstance(t, VectorType):
+        return "erhe::codegen::Field_type::vector"
+    if isinstance(t, ArrayType):
+        return "erhe::codegen::Field_type::array"
+    if isinstance(t, OptionalType):
+        return "erhe::codegen::Field_type::optional"
+    if isinstance(t, StructRefType):
+        return "erhe::codegen::Field_type::struct_ref"
+    if isinstance(t, EnumRefType):
+        return "erhe::codegen::Field_type::enum_ref"
+    return "erhe::codegen::Field_type::int_"
+
+
 def _is_numeric(t: TypeBase) -> bool:
     return isinstance(t, ScalarType) and t.is_numeric
 
@@ -87,6 +132,7 @@ def emit_struct_reflect(s: StructSchema) -> str:
         lines.append("    {")
         lines.append(f"        .name          = \"{f.name}\",")
         lines.append(f"        .type_name     = \"{_cpp_type_name(f.type)}\",")
+        lines.append(f"        .field_type    = {_field_type_enum(f.type)},")
         lines.append(f"        .offset        = offsetof({s.name}, {f.name}),")
         lines.append(f"        .size          = sizeof({_cpp_type_name(f.type)}),")
         lines.append(f"        .added_in      = {f.added_in},")
