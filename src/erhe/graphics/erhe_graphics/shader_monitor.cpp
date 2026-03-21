@@ -9,7 +9,6 @@
 
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/glsl_file_loader.hpp"
-#include "erhe_configuration/configuration.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_file/file.hpp"
 #include "erhe_verify/verify.hpp"
@@ -20,13 +19,12 @@ namespace erhe::graphics {
 
 using std::string;
 
-void Shader_monitor::begin()
+void Shader_monitor::begin(const bool enabled)
 {
-    const auto& ini = erhe::configuration::get_ini_file_section(c_erhe_config_file_path, "shader_monitor");
-    ini.get("enabled", m_run);
+    m_run = enabled;
 
     if (!m_run) {
-        log_shader_monitor->info("Shader monitor disabled due to erhe.toml setting");
+        log_shader_monitor->info("Shader monitor disabled due to config setting");
         return;
     }
 

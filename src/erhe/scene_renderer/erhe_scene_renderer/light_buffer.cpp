@@ -5,7 +5,6 @@
 #include "erhe_scene_renderer/shadow_renderer.hpp"
 #include "erhe_renderer/renderer_config.hpp"
 
-#include "erhe_configuration/configuration.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/span.hpp"
 #include "erhe_graphics/texture.hpp"
@@ -20,16 +19,8 @@
 
 namespace erhe::scene_renderer {
 
-[[nodiscard]] auto get_max_light_count() -> std::size_t
-{
-    int max_light_count{1};
-    const auto& ini = erhe::configuration::get_ini_file_section(c_erhe_config_file_path, "renderer");
-    ini.get("max_light_count", max_light_count);
-    return max_light_count;
-}
-
-Light_interface::Light_interface(erhe::graphics::Device& graphics_device)
-    : max_light_count    {get_max_light_count()}
+Light_interface::Light_interface(erhe::graphics::Device& graphics_device, const int max_light_count)
+    : max_light_count    {static_cast<std::size_t>(max_light_count)}
     , light_block        {graphics_device, "light_block",         light_buffer_binding_point,         erhe::graphics::Shader_resource::Type::uniform_block}
     , light_control_block{graphics_device, "light_control_block", light_control_buffer_binding_point, erhe::graphics::Shader_resource::Type::uniform_block}
     , light_struct       {graphics_device, "Light"}

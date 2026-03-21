@@ -235,7 +235,7 @@ void set_env(const char* key, const char* value)
     }
 }
 
-Device_impl::Device_impl(Device& device, const Surface_create_info& surface_create_info)
+Device_impl::Device_impl(Device& device, const Surface_create_info& surface_create_info, const Device_graphics_config& graphics_config)
     : m_context_window{surface_create_info.context_window}
     , m_device        {device}
     , m_shader_monitor{device}

@@ -36,7 +36,7 @@ class Device;
 class Device_impl final
 {
 public:
-    Device_impl   (Device& device, const Surface_create_info& surface_create_info);
+    Device_impl   (Device& device, const Surface_create_info& surface_create_info, const Device_graphics_config& graphics_config = {});
     Device_impl   (const Device_impl&) = delete;
     void operator=(const Device_impl&) = delete;
     Device_impl   (Device_impl&&)      = delete;

@@ -3,7 +3,6 @@
 #include "erhe_scene_renderer/joint_buffer.hpp"
 #include "erhe_scene_renderer/buffer_binding_points.hpp"
 
-#include "erhe_configuration/configuration.hpp"
 #include "erhe_graphics/span.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_scene/node.hpp"
@@ -15,12 +14,11 @@
 
 namespace erhe::scene_renderer {
 
-Joint_interface::Joint_interface(erhe::graphics::Device& graphics_device)
+Joint_interface::Joint_interface(erhe::graphics::Device& graphics_device, const int max_joint_count)
     : joint_block {erhe::graphics::Shader_resource{graphics_device, "joint", joint_buffer_binding_point, erhe::graphics::Shader_resource::Type::shader_storage_block}}
     , joint_struct{erhe::graphics::Shader_resource{graphics_device, "Joint"}}
+    , max_joint_count{static_cast<std::size_t>(max_joint_count)}
 {
-    const auto& ini = erhe::configuration::get_ini_file_section(c_erhe_config_file_path, "renderer");
-    ini.get("max_joint_count", max_joint_count);
 
     offsets.debug_joint_indices     = joint_block.add_uvec4("debug_joint_indices"    )->get_offset_in_parent();
     offsets.debug_joint_color_count = joint_block.add_uint ("debug_joint_color_count")->get_offset_in_parent(),

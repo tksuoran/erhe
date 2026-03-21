@@ -1,6 +1,5 @@
 #include "erhe_renderer/text_renderer.hpp"
 #include "erhe_renderer/renderer_log.hpp"
-#include "erhe_configuration/configuration.hpp"
 
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
@@ -50,7 +49,7 @@ auto Text_renderer::build_shader_stages() -> erhe::graphics::Shader_stages_proto
     return prototype;
 }
 
-Text_renderer::Text_renderer(erhe::graphics::Device& graphics_device)
+Text_renderer::Text_renderer(erhe::graphics::Device& graphics_device, const bool enabled, const int font_size)
     : m_graphics_device          {graphics_device}
     , m_default_uniform_block    {graphics_device}
     , m_projection_block         {graphics_device, "projection", 0, erhe::graphics::Shader_resource::Type::uniform_block}
@@ -108,12 +107,11 @@ Text_renderer::Text_renderer(erhe::graphics::Device& graphics_device)
 {
     ERHE_PROFILE_FUNCTION();
 
-    const auto& ini = erhe::configuration::get_ini_file_section(c_erhe_config_file_path, "text_renderer");
-    ini.get("enabled",   config.enabled);
-    ini.get("font_size", config.font_size);
+    config.enabled   = enabled;
+    config.font_size = font_size;
 
     if (!config.enabled) {
-        log_startup->info("Text renderer disabled due to erhe.toml setting");
+        log_startup->info("Text renderer disabled due to config setting");
         return;
     }
 

@@ -43,7 +43,7 @@ public:
     };
     Config config;
 
-    explicit Text_renderer(erhe::graphics::Device& graphics_device);
+    Text_renderer(erhe::graphics::Device& graphics_device, bool enabled = true, int font_size = 14);
     ~Text_renderer() noexcept;
 
     Text_renderer (const Text_renderer&) = delete;

@@ -10,7 +10,6 @@
 
 namespace editor {
 
-static constexpr const char* const c_erhe_config_file_path = "erhe.toml";
 
 App_settings::App_settings()
 {

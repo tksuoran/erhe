@@ -33,7 +33,7 @@ public:
 class Joint_interface
 {
 public:
-    explicit Joint_interface(erhe::graphics::Device& graphics_device);
+    Joint_interface(erhe::graphics::Device& graphics_device, int max_joint_count);
 
     erhe::graphics::Shader_resource joint_block;
     erhe::graphics::Shader_resource joint_struct;

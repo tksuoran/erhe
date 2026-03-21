@@ -61,7 +61,7 @@ static constexpr uint32_t c_texture_heap_slot_count_reserved   {2};
 class Light_interface
 {
 public:
-    explicit Light_interface(erhe::graphics::Device& graphics_device);
+    Light_interface(erhe::graphics::Device& graphics_device, int max_light_count);
 
     [[nodiscard]] auto get_sampler(bool compare) const -> const erhe::graphics::Sampler*;
 

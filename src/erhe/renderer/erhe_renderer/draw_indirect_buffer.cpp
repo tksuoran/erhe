@@ -2,7 +2,6 @@
 
 #include "erhe_renderer/draw_indirect_buffer.hpp"
 #include "erhe_renderer/renderer_log.hpp"
-#include "erhe_configuration/configuration.hpp"
 #include "erhe_graphics/span.hpp"
 #include "erhe_graphics/draw_indirect.hpp"
 #include "erhe_scene/mesh.hpp"
@@ -10,20 +9,13 @@
 
 namespace erhe::renderer {
 
-auto Draw_indirect_buffer::get_max_draw_count() -> int
-{
-    int max_draw_count = 0;
-    const auto& ini = erhe::configuration::get_ini_file_section(c_erhe_config_file_path, "renderer");
-    ini.get("max_draw_count", max_draw_count);
-    return max_draw_count;
-}
-
-Draw_indirect_buffer::Draw_indirect_buffer(erhe::graphics::Device& graphics_device)
+Draw_indirect_buffer::Draw_indirect_buffer(erhe::graphics::Device& graphics_device, const int max_draw_count)
     : Ring_buffer_client{
         graphics_device,
         erhe::graphics::Buffer_target::draw_indirect,
         "Draw_indirect_buffer"
     }
+    , m_max_draw_count{max_draw_count}
 {
 }
 

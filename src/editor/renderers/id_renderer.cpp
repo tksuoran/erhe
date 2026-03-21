@@ -52,7 +52,7 @@ Id_renderer::Id_renderer(
     : m_graphics_device      {graphics_device}
     , m_mesh_memory          {mesh_memory}
     , m_camera_buffers       {graphics_device, program_interface.camera_interface}
-    , m_draw_indirect_buffers{graphics_device}
+    , m_draw_indirect_buffers{graphics_device, program_interface.config.max_draw_count}
     , m_primitive_buffers    {graphics_device, program_interface.primitive_interface}
     , m_pipeline{erhe::graphics::Render_pipeline_data{
         .debug_label    = erhe::utility::Debug_label{"ID Renderer"},

@@ -14,7 +14,8 @@ using erhe::graphics::Vertex_attribute;
 
 Program_interface::Program_interface(
     erhe::graphics::Device&          graphics_device,
-    erhe::dataformat::Vertex_format& vertex_format
+    erhe::dataformat::Vertex_format& vertex_format,
+    const Program_interface_config&  config
 )
     : graphics_device{graphics_device}
     , fragment_outputs{
@@ -25,12 +26,13 @@ Program_interface::Program_interface(
         }
     }
     , vertex_format      {vertex_format}
-    , camera_interface   {graphics_device}
+    , config             {config}
+    , camera_interface   {graphics_device, config.max_camera_count}
     , cube_interface     {graphics_device}
-    , joint_interface    {graphics_device}
-    , light_interface    {graphics_device}
-    , material_interface {graphics_device}
-    , primitive_interface{graphics_device}
+    , joint_interface    {graphics_device, config.max_joint_count}
+    , light_interface    {graphics_device, config.max_light_count}
+    , material_interface {graphics_device, config.max_material_count}
+    , primitive_interface{graphics_device, config.max_primitive_count}
 {
 }
 

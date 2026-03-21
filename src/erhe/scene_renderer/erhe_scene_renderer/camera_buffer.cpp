@@ -3,7 +3,6 @@
 #include "erhe_scene_renderer/camera_buffer.hpp"
 #include "erhe_scene_renderer/buffer_binding_points.hpp"
 
-#include "erhe_configuration/configuration.hpp"
 #include "erhe_graphics/span.hpp"
 #include "erhe_math/viewport.hpp"
 #include "erhe_profile/profile.hpp"
@@ -14,7 +13,7 @@
 
 namespace erhe::scene_renderer {
 
-Camera_interface::Camera_interface(erhe::graphics::Device& graphics_device)
+Camera_interface::Camera_interface(erhe::graphics::Device& graphics_device, const int max_camera_count)
     : camera_block{graphics_device, "camera", camera_buffer_binding_point, erhe::graphics::Shader_resource::Type::uniform_block}
     , camera_struct{graphics_device, "Camera"}
     , offsets{
@@ -32,10 +31,8 @@ Camera_interface::Camera_interface(erhe::graphics::Device& graphics_device)
         .frame_number         = camera_struct.add_uvec2("frame_number"        )->get_offset_in_parent(),
         .padding              = camera_struct.add_uvec2("padding"             )->get_offset_in_parent(),
     }
+    , max_camera_count{static_cast<std::size_t>(max_camera_count)}
 {
-    const auto& ini = erhe::configuration::get_ini_file_section(c_erhe_config_file_path, "renderer");
-    ini.get("max_camera_count", max_camera_count);
-
     camera_block.add_struct("cameras", &camera_struct, 1);
 }
 

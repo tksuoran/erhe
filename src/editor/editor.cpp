@@ -488,8 +488,18 @@ public:
                     .context_window            = m_window.get(),
                     .prefer_low_bandwidth      = false,
                     .prefer_high_dynamic_range = false
+                },
+                erhe::graphics::Device_graphics_config{
+                    .initial_clear                     = m_editor_config.graphics.initial_clear,
+                    .force_bindless_textures_off        = m_editor_config.graphics.force_bindless_textures_off,
+                    .force_no_persistent_buffers        = m_editor_config.graphics.force_no_persistent_buffers,
+                    .force_no_direct_state_access       = m_editor_config.graphics.force_no_direct_state_access,
+                    .force_emulate_multi_draw_indirect  = m_editor_config.graphics.force_emulate_multi_draw_indirect,
+                    .force_gl_version                   = m_editor_config.graphics.force_gl_version,
+                    .force_glsl_version                 = m_editor_config.graphics.force_glsl_version,
+                    .renderdoc_capture_support          = m_editor_config.renderdoc.capture_support,
+                    .shader_monitor_enabled             = m_editor_config.shader_monitor.enabled
                 }
-
             );
 
             m_app_settings->apply_limits(
@@ -573,7 +583,18 @@ public:
             m_selection            = std::make_unique<Selection     >(commands, m_app_context, app_message_bus);
             m_scene_commands       = std::make_unique<Scene_commands>(commands, m_app_context);
             m_debug_draw           = std::make_unique<Debug_draw    >(m_app_context);
-            m_program_interface    = std::make_unique<erhe::scene_renderer::Program_interface>(*m_graphics_device.get(), m_vertex_format);
+            m_program_interface    = std::make_unique<erhe::scene_renderer::Program_interface>(
+                *m_graphics_device.get(),
+                m_vertex_format,
+                erhe::scene_renderer::Program_interface_config{
+                    .max_camera_count    = m_editor_config.renderer.max_camera_count,
+                    .max_joint_count     = m_editor_config.renderer.max_joint_count,
+                    .max_light_count     = m_editor_config.renderer.max_light_count,
+                    .max_material_count  = m_editor_config.renderer.max_material_count,
+                    .max_primitive_count = m_editor_config.renderer.max_primitive_count,
+                    .max_draw_count      = m_editor_config.renderer.max_draw_count
+                }
+            );
             m_programs             = std::make_unique<Programs>(*m_graphics_device.get());
 
             ERHE_TASK_HEADER(programs_load_task)
@@ -623,7 +644,11 @@ public:
             ERHE_TASK_HEADER(text_renderer_task)
             {
                 ERHE_GET_GL_CONTEXT
-                m_text_renderer = std::make_unique<erhe::renderer::Text_renderer>(*m_graphics_device.get());
+                m_text_renderer = std::make_unique<erhe::renderer::Text_renderer>(
+                    *m_graphics_device.get(),
+                    m_editor_config.text_renderer.enabled,
+                    m_editor_config.text_renderer.font_size
+                );
             }
             ERHE_TASK_FOOTER( .name("Text_renderer") );
 
@@ -1556,7 +1581,7 @@ void run_editor()
 
     // Workaround for
     // https://intellij-support.jetbrains.com/hc/en-us/community/posts/27792220824466-CMake-C-git-project-How-to-share-working-directory-in-git
-    erhe::file::ensure_working_directory_contains("editor", erhe::c_erhe_config_file_path);
+    erhe::file::ensure_working_directory_contains("editor", "erhe.json");
 
     {
         ERHE_PROFILE_SCOPE("initialize logging");

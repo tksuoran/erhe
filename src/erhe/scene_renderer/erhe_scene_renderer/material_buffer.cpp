@@ -4,7 +4,6 @@
 #include "erhe_scene_renderer/buffer_binding_points.hpp"
 #include "erhe_renderer/renderer_config.hpp"
 
-#include "erhe_configuration/configuration.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_graphics/span.hpp"
@@ -17,7 +16,7 @@
 
 namespace erhe::scene_renderer {
 
-Material_interface::Material_interface(erhe::graphics::Device& graphics_device)
+Material_interface::Material_interface(erhe::graphics::Device& graphics_device, const int max_material_count)
     : material_block {graphics_device, "material", material_buffer_binding_point, erhe::graphics::Shader_resource::Type::shader_storage_block}
     , material_struct{graphics_device, "Material"}
     , offsets        {
@@ -52,10 +51,8 @@ Material_interface::Material_interface(erhe::graphics::Device& graphics_device)
         .occlusion_texture_strength = material_struct.add_float("occlusion_texture_strength")->get_offset_in_parent(),
         .unlit                      = material_struct.add_uint ("unlit")->get_offset_in_parent(),
     }
+    , max_material_count{static_cast<std::size_t>(max_material_count)}
 {
-    const auto& ini = erhe::configuration::get_ini_file_section(c_erhe_config_file_path, "renderer");
-    ini.get("max_material_count", max_material_count);
-
     material_block.add_struct("materials", &material_struct, erhe::graphics::Shader_resource::unsized_array);
     material_block.set_readonly(true);
 }
