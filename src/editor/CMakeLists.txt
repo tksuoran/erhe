@@ -486,6 +486,12 @@ set(_config_sources
 set_source_files_properties(${_config_sources} PROPERTIES GENERATED TRUE)
 target_sources(${_target} PRIVATE ${_config_sources})
 
+# Graphics_config .cpp must compile in the editor target (not erhe_graphics)
+# to avoid simdjson ABI mismatch from differing /arch flags.
+set(_gfx_config_cpp "${CMAKE_BINARY_DIR}/src/erhe/graphics/erhe_graphics/generated/graphics_config.cpp")
+set_source_files_properties(${_gfx_config_cpp} PROPERTIES GENERATED TRUE)
+target_sources(${_target} PRIVATE ${_gfx_config_cpp})
+
 target_link_libraries(
     ${_target}
     PRIVATE

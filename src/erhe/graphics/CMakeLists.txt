@@ -219,12 +219,8 @@ erhe_codegen_generate(
     OUTPUT_DIR      "${_gfx_config_out}"
 )
 
-set(_gfx_config_sources
-    ${_gfx_config_out}/graphics_config.hpp
-    ${_gfx_config_out}/graphics_config.cpp
-)
-set_source_files_properties(${_gfx_config_sources} PROPERTIES GENERATED TRUE)
-target_sources(${_target} PRIVATE ${_gfx_config_sources})
+set_source_files_properties(${_gfx_config_out}/graphics_config.hpp PROPERTIES GENERATED TRUE)
+target_sources(${_target} PRIVATE ${_gfx_config_out}/graphics_config.hpp)
 
 target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
 
