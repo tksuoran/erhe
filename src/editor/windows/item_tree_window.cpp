@@ -16,7 +16,6 @@
 #include "operations/item_reposition_in_parent_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "preview/brush_preview.hpp"
-#include "scene/scene_commands.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/clipboard.hpp"
 #include "tools/selection_tool.hpp"
@@ -69,6 +68,11 @@ void Item_tree::set_item_callback(std::function<bool(const std::shared_ptr<erhe:
 void Item_tree::set_hover_callback(std::function<void()> fun)
 {
     m_hover_callback = fun;
+}
+
+void Item_tree::set_context_menu_callback(Context_menu_callback fun)
+{
+    m_context_menu_callback = fun;
 }
 
 void Item_tree::clear_selection()
@@ -703,9 +707,8 @@ void Item_tree::item_update_selection(const std::shared_ptr<erhe::Item_base>& it
 
 void Item_tree::item_popup_menu(const std::shared_ptr<erhe::Item_base>& item)
 {
-    const auto& node       = std::dynamic_pointer_cast<erhe::scene::Node>(item);
-    Scene_root* scene_root = static_cast<Scene_root*>(item->get_item_host());
-    if (!node || (scene_root == nullptr)) {
+    const auto& hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(item);
+    if (!hierarchy) {
         return;
     }
 
@@ -715,7 +718,7 @@ void Item_tree::item_popup_menu(const std::shared_ptr<erhe::Item_base>& item)
         !m_popup_item
     ) {
         m_popup_item = item;
-        m_popup_id_string = fmt::format("{}##Node{}-popup-menu", item->get_name(), item->get_id());
+        m_popup_id_string = fmt::format("{}##{}-popup-menu", item->get_name(), item->get_id());
         m_popup_id = ImGui::GetID(m_popup_id_string.c_str());
         ImGui::OpenPopupEx(
             m_popup_id,
@@ -733,48 +736,28 @@ void Item_tree::item_popup_menu(const std::shared_ptr<erhe::Item_base>& item)
         ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoSavedSettings
     );
     if (begin_popup_context_item) {
-        auto parent_node = node->get_parent_node();
-
         bool close{false};
-        if (ImGui::BeginMenu("Create")) {
-            if (ImGui::MenuItem("Empty Node")) {
-                m_operations.push_back(
-                    [this, scene_root, parent_node]() {
-                        m_context.scene_commands->create_new_empty_node(parent_node.get());
-                    }
-                );
-                close = true;
-            }
-            if (ImGui::MenuItem("Camera")) {
-                m_operations.push_back(
-                    [this, scene_root, parent_node]() {
-                        m_context.scene_commands->create_new_camera(parent_node.get());
-                    }
-                );
-                close = true;
-            }
-            if (ImGui::MenuItem("Light")) {
-                m_operations.push_back(
-                    [this, scene_root, parent_node]() {
-                        m_context.scene_commands->create_new_light(parent_node.get());
-                    }
-                );
-                close = true;
-            }
-            ImGui::EndMenu();
+
+        if (m_context_menu_callback) {
+            m_context_menu_callback(item, m_operations, close);
+            ImGui::Separator();
         }
 
-        ImGui::Separator();
-        const auto& hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(item);
+        // In the content library, only Materials are copyable for now.
+        const auto& content_node = std::dynamic_pointer_cast<Content_library_node>(item);
+        const bool is_content_library_non_copyable = content_node && (
+            !content_node->item || !std::dynamic_pointer_cast<erhe::primitive::Material>(content_node->item)
+        );
+
         const bool selected_or_hierarchy = item->is_selected() || hierarchy;
-        if (!selected_or_hierarchy) {
+        const bool can_copy = selected_or_hierarchy && !is_content_library_non_copyable;
+        if (!can_copy) {
             ImGui::BeginDisabled();
         }
         if (ImGui::MenuItem("Cut")) {
             if (item->is_selected()) {
                 m_context.selection->cut_selection();
             } else {
-                ERHE_VERIFY(hierarchy);
                 m_context.clipboard->set_contents(item);
                 auto op = std::make_shared<Item_insert_remove_operation>(
                     Item_insert_remove_operation::Parameters{
@@ -794,32 +777,41 @@ void Item_tree::item_popup_menu(const std::shared_ptr<erhe::Item_base>& item)
                 m_context.clipboard->set_contents(item->clone());
             }
         }
-
-        if (!selected_or_hierarchy) {
+        if (!can_copy) {
             ImGui::EndDisabled();
         }
 
+        // For content library nodes, paste always targets the folder.
+        // If the target is a leaf item, redirect to its parent folder.
+        // Only allow paste into the Materials folder for now.
+        std::shared_ptr<erhe::Hierarchy> paste_target = hierarchy;
+        if (content_node && content_node->item) {
+            paste_target = hierarchy->get_parent().lock();
+        }
+        const auto& paste_target_content_node = std::dynamic_pointer_cast<Content_library_node>(paste_target);
+        const bool is_materials_folder = paste_target_content_node &&
+            !paste_target_content_node->item &&
+            paste_target_content_node->type_code == erhe::Item_type::material;
+
         const std::vector<std::shared_ptr<erhe::Item_base>>& clipboard_contents = m_context.clipboard->get_contents();
-        const bool clipboard_is_empty = clipboard_contents.empty();
-        if (clipboard_is_empty || !hierarchy) {
+        const bool can_paste = !clipboard_contents.empty() && paste_target && (!content_node || is_materials_folder);
+        if (!can_paste) {
             ImGui::BeginDisabled();
         }
         if (ImGui::MenuItem("Paste")) {
-            m_context.clipboard->try_paste(hierarchy, hierarchy->get_child_count());
+            m_context.clipboard->try_paste(paste_target, paste_target->get_child_count());
         }
-        if (clipboard_is_empty || !hierarchy) {
+        if (!can_paste) {
             ImGui::EndDisabled();
         }
 
-        if (!selected_or_hierarchy) {
+        if (!can_copy) {
             ImGui::BeginDisabled();
         }
-
         if (ImGui::MenuItem("Duplicate")) {
             if (item->is_selected()) {
                 m_context.selection->duplicate_selection();
             } else {
-                ERHE_VERIFY(hierarchy);
                 auto op = std::make_shared<Item_insert_remove_operation>(
                     Item_insert_remove_operation::Parameters{
                         .context         = m_context,
@@ -832,11 +824,17 @@ void Item_tree::item_popup_menu(const std::shared_ptr<erhe::Item_base>& item)
                 m_context.operation_stack->queue(op);
              }
         }
+        if (!can_copy) {
+            ImGui::EndDisabled();
+        }
+
+        if (!selected_or_hierarchy) {
+            ImGui::BeginDisabled();
+        }
         if (ImGui::MenuItem("Delete")) {
             if (item->is_selected()) {
                 m_context.selection->delete_selection();
             } else {
-                ERHE_VERIFY(hierarchy);
                 auto op = std::make_shared<Item_insert_remove_operation>(
                     Item_insert_remove_operation::Parameters{
                         .context = m_context,
@@ -872,19 +870,13 @@ void Item_tree::root_popup_menu()
         return;
     }
 
-    const auto& node       = std::dynamic_pointer_cast<erhe::scene::Node>(m_root);
-    Scene_root* scene_root = static_cast<Scene_root*>(m_root->get_item_host());
-    if (!node || (scene_root == nullptr)) {
-        return;
-    }
-
     static bool opened = false;
     if (
         ImGui::IsMouseReleased(ImGuiMouseButton_Right) &&
         !m_popup_item
     ) {
         m_popup_item = m_root;
-        m_popup_id_string = fmt::format("{}##Node{}-popup-menu", m_root->get_name(), m_root->get_id());
+        m_popup_id_string = fmt::format("{}##{}-popup-menu", m_root->get_name(), m_root->get_id());
         m_popup_id = ImGui::GetID(m_popup_id_string.c_str());
         ImGui::OpenPopupEx(
             m_popup_id,
@@ -906,47 +898,23 @@ void Item_tree::root_popup_menu()
         ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoSavedSettings
     );
     if (begin_popup_context_item) {
-        auto parent_node = node->get_parent_node();
-
         bool close{false};
-        if (ImGui::BeginMenu("Create")) {
-            if (ImGui::MenuItem("Empty Node")) {
-                m_operations.push_back(
-                    [this, scene_root, parent_node]() {
-                        m_context.scene_commands->create_new_empty_node(parent_node.get());
-                    }
-                );
-                close = true;
-            }
-            if (ImGui::MenuItem("Camera")) {
-                m_operations.push_back(
-                    [this, scene_root, parent_node]() {
-                        m_context.scene_commands->create_new_camera(parent_node.get());
-                    }
-                );
-                close = true;
-            }
-            if (ImGui::MenuItem("Light")) {
-                m_operations.push_back(
-                    [this, scene_root, parent_node]() {
-                        m_context.scene_commands->create_new_light(parent_node.get());
-                    }
-                );
-                close = true;
-            }
-            ImGui::EndMenu();
+
+        if (m_context_menu_callback) {
+            m_context_menu_callback(m_root, m_operations, close);
+            ImGui::Separator();
         }
 
-        ImGui::Separator();
-        const auto& hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(m_root);
-        
         const std::vector<std::shared_ptr<erhe::Item_base>>& clipboard_contents = m_context.clipboard->get_contents();
         const bool clipboard_is_empty = clipboard_contents.empty();
         if (clipboard_is_empty) {
             ImGui::BeginDisabled();
         }
         if (ImGui::MenuItem("Paste")) {
-            m_context.clipboard->try_paste(hierarchy, hierarchy->get_child_count());
+            const auto& hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(m_root);
+            if (hierarchy) {
+                m_context.clipboard->try_paste(hierarchy, hierarchy->get_child_count());
+            }
         }
         if (clipboard_is_empty) {
             ImGui::EndDisabled();
@@ -1333,6 +1301,14 @@ void Item_tree::imgui_tree(float ui_scale)
             m_hover_callback();
         }
         root_popup_menu();
+    }
+
+    // Clear stale popup state when the popup item was removed from the tree
+    // (e.g. after Delete) and ImGui already closed the popup.
+    if (m_popup_item && (m_popup_id != 0) && !ImGui::IsPopupOpen(m_popup_id, ImGuiPopupFlags_None)) {
+        m_popup_item.reset();
+        m_popup_id_string.clear();
+        m_popup_id = 0;
     }
 
     ImGui::EndTable();

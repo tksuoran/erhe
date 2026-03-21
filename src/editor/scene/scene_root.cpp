@@ -6,8 +6,12 @@
 #include "app_settings.hpp"
 #include "rendertarget_mesh.hpp"
 
+#include "app_context.hpp"
 #include "content_library/content_library.hpp"
+#include "operations/item_insert_remove_operation.hpp"
+#include "operations/operation_stack.hpp"
 #include "scene/node_physics.hpp"
+#include "scene/scene_commands.hpp"
 #include "scene/node_raytrace.hpp"
 #include "windows/item_tree_window.hpp"
 
@@ -23,6 +27,8 @@
 #include "erhe_scene/skin.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
+
+#include <fmt/format.h>
 
 #include <imgui/imgui.h>
 #include <imgui/imgui_internal.h>
@@ -172,12 +178,13 @@ Scene_root::Scene_root(
     // be used during construction.
 
     if ((imgui_renderer != nullptr) && (imgui_windows != nullptr) && (context != nullptr)) {
+        const std::size_t library_id = m_content_library->root->get_id();
         m_content_library_tree_window = std::make_shared<Item_tree_window>(
             *imgui_renderer,
             *imgui_windows,
             *context,
-            "Content Library",
-            "Content_library"
+            fmt::format("Content Library - {}###{}", name, library_id),
+            fmt::format("Content_library_{}", library_id)
         );
         m_content_library_tree_window->set_root(m_content_library->root);
         m_content_library_tree_window->set_item_filter(
@@ -186,6 +193,50 @@ Scene_root::Scene_root(
                 .require_at_least_one_bit_set   = 0,
                 .require_all_bits_clear         = 0,
                 .require_at_least_one_bit_clear = 0
+            }
+        );
+        m_content_library_tree_window->set_context_menu_callback(
+            [this, context](
+                const std::shared_ptr<erhe::Item_base>& item,
+                std::vector<std::function<void()>>&     deferred_operations,
+                bool&                                   close
+            ) {
+                const auto& content_node = std::dynamic_pointer_cast<Content_library_node>(item);
+                if (!content_node) {
+                    return;
+                }
+                // Find the folder this item belongs to (either item itself if it's a folder, or its parent)
+                const bool is_folder = !content_node->item && (content_node->type_code != 0);
+                auto materials = m_content_library->materials;
+                if (is_folder && content_node->type_code == erhe::Item_type::material) {
+                    if (ImGui::MenuItem("Create Material")) {
+                        deferred_operations.push_back(
+                            [context, materials]() {
+                                auto new_material = std::make_shared<erhe::primitive::Material>(
+                                    erhe::primitive::Material_create_info{
+                                        .name = "New Material",
+                                        .data = {
+                                            .base_color = glm::vec3{0.5f, 0.5f, 0.5f},
+                                            .roughness  = glm::vec2{0.5f, 0.5f},
+                                            .metallic   = 1.0f
+                                        }
+                                    }
+                                );
+                                auto new_node = std::make_shared<Content_library_node>(new_material);
+                                auto op = std::make_shared<Item_insert_remove_operation>(
+                                    Item_insert_remove_operation::Parameters{
+                                        .context = *context,
+                                        .item    = new_node,
+                                        .parent  = materials,
+                                        .mode    = Item_insert_remove_operation::Mode::insert
+                                    }
+                                );
+                                context->operation_stack->queue(op);
+                            }
+                        );
+                        close = true;
+                    }
+                }
             }
         );
     }
@@ -331,6 +382,46 @@ auto Scene_root::make_browser_window(
                     .scene_root = dynamic_pointer_cast<Scene_root>(shared_from_this())
                 }
             );
+        }
+    );
+    m_node_tree_window->set_context_menu_callback(
+        [this, &context](
+            const std::shared_ptr<erhe::Item_base>& item,
+            std::vector<std::function<void()>>&     deferred_operations,
+            bool&                                   close
+        ) {
+            const auto& node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
+            if (!node) {
+                return;
+            }
+            auto parent_node = node->get_parent_node();
+            if (ImGui::BeginMenu("Create")) {
+                if (ImGui::MenuItem("Empty Node")) {
+                    deferred_operations.push_back(
+                        [&context, parent_node]() {
+                            context.scene_commands->create_new_empty_node(parent_node.get());
+                        }
+                    );
+                    close = true;
+                }
+                if (ImGui::MenuItem("Camera")) {
+                    deferred_operations.push_back(
+                        [&context, parent_node]() {
+                            context.scene_commands->create_new_camera(parent_node.get());
+                        }
+                    );
+                    close = true;
+                }
+                if (ImGui::MenuItem("Light")) {
+                    deferred_operations.push_back(
+                        [&context, parent_node]() {
+                            context.scene_commands->create_new_light(parent_node.get());
+                        }
+                    );
+                    close = true;
+                }
+                ImGui::EndMenu();
+            }
         }
     );
     return m_node_tree_window;

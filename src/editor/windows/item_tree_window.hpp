@@ -18,10 +18,6 @@ namespace erhe {
 namespace erhe::imgui {
     class Imgui_windows;
 }
-namespace erhe::scene {
-    class Node;
-}
-
 namespace editor {
 
 class App_scenes;
@@ -29,7 +25,6 @@ class App_settings;
 class Icon_set;
 class Operation;
 class Operation_stack;
-class Scene_commands;
 class Selection_tool;
 
 enum class Placement : unsigned int {
@@ -55,10 +50,20 @@ class Item_tree
 public:
     Item_tree(App_context& context);
 
-    void set_root          (const std::shared_ptr<erhe::Hierarchy>& root);
-    void set_item_filter   (const erhe::Item_filter& filter);
-    void set_item_callback (std::function<bool(const std::shared_ptr<erhe::Item_base>&)> fun);
-    void set_hover_callback(std::function<void()> fun);
+    // Callback to render custom context menu items before the generic
+    // Cut/Copy/Paste/Duplicate/Delete section.  Set `close` to true
+    // when an item is selected to close the popup.
+    using Context_menu_callback = std::function<void(
+        const std::shared_ptr<erhe::Item_base>& item,
+        std::vector<std::function<void()>>&     deferred_operations,
+        bool&                                   close
+    )>;
+
+    void set_root                  (const std::shared_ptr<erhe::Hierarchy>& root);
+    void set_item_filter           (const erhe::Item_filter& filter);
+    void set_item_callback         (std::function<bool(const std::shared_ptr<erhe::Item_base>&)> fun);
+    void set_hover_callback        (std::function<void()> fun);
+    void set_context_menu_callback (Context_menu_callback fun);
 
     auto drag_and_drop_target(const std::shared_ptr<erhe::Item_base>& node) -> bool;
 
@@ -120,6 +125,7 @@ private:
     std::shared_ptr<erhe::Hierarchy>                             m_root;
     std::function<bool(const std::shared_ptr<erhe::Item_base>&)> m_item_callback;
     std::function<void()>                                        m_hover_callback;
+    Context_menu_callback                                        m_context_menu_callback;
 
     std::shared_ptr<Operation>         m_operation;
     std::vector<std::function<void()>> m_operations;

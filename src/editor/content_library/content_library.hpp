@@ -48,6 +48,10 @@ public:
     static constexpr std::string_view static_type_name{"Content_library_node"};
     [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::content_library_node; }
 
+    // Overrides Hierarchy
+    void handle_add_child   (const std::shared_ptr<erhe::Hierarchy>& child_node, std::size_t position) override;
+    void handle_remove_child(erhe::Hierarchy* child_node) override;
+
     auto make_folder(std::string_view folder_name) -> std::shared_ptr<Content_library_node>;
 
     template <typename T, typename ...Args>

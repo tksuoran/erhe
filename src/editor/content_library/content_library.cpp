@@ -2,7 +2,13 @@
 
 namespace editor {
 
-Content_library_node::Content_library_node(const Content_library_node&)            = default;
+Content_library_node::Content_library_node(const Content_library_node& other)
+    : Item     {other}
+    , type_code{other.type_code}
+    , type_name{other.type_name}
+    , item     {other.item ? other.item->clone() : std::shared_ptr<erhe::Item_base>{}}
+{
+}
 Content_library_node& Content_library_node::operator=(const Content_library_node&) = default;
 Content_library_node::~Content_library_node() noexcept                             = default;
 
@@ -18,6 +24,18 @@ Content_library_node::Content_library_node(const std::shared_ptr<erhe::Item_base
     : Item{in_item->get_name()}
     , item{in_item}
 {
+}
+
+void Content_library_node::handle_add_child(const std::shared_ptr<erhe::Hierarchy>& child_node, std::size_t position)
+{
+    Hierarchy::handle_add_child(child_node, position);
+    m_cache.clear();
+}
+
+void Content_library_node::handle_remove_child(erhe::Hierarchy* child_node)
+{
+    Hierarchy::handle_remove_child(child_node);
+    m_cache.clear();
 }
 
 auto Content_library_node::make_folder(const std::string_view folder_name) -> std::shared_ptr<Content_library_node>
