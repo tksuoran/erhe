@@ -35,6 +35,8 @@ namespace tf {
     class Executor;
 }
 
+struct Editor_config;
+
 namespace editor {
 
 class Brdf_slice;
@@ -97,6 +99,8 @@ public:
     bool  renderdoc     {false};
     bool  use_sleep     {false};
     float sleep_margin  {0.0f}; // TODO
+
+    Editor_config* editor_config{nullptr};
 
     tf::Executor*                           executor              {nullptr};
     std::atomic_int                         pending_async_ops     {};

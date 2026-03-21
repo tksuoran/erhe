@@ -1333,6 +1333,7 @@ public:
         m_app_context.app_rendering            = m_app_rendering         .get();
         m_app_context.app_scenes               = m_app_scenes            .get();
         m_app_context.app_settings             = m_app_settings          .get();
+        m_app_context.editor_config            = &m_editor_config;
         m_app_context.app_windows              = m_app_windows           .get();
         m_app_context.fly_camera_tool          = m_fly_camera_tool       .get();
         m_app_context.grid_tool                = m_grid_tool             .get();

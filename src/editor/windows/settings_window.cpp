@@ -3,7 +3,30 @@
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
 #include "app_settings.hpp"
+#include "config/editor_config.hpp"
+#include "config/generated/camera_controls_config_serialization.hpp"
+#include "config/generated/developer_config_serialization.hpp"
+#include "config/generated/grid_config_serialization.hpp"
+#include "config/generated/headset_config_serialization.hpp"
+#include "config/generated/hotbar_config_serialization.hpp"
+#include "config/generated/hud_config_serialization.hpp"
+#include "config/generated/id_renderer_config_serialization.hpp"
+#include "config/generated/mesh_memory_config_serialization.hpp"
+#include "config/generated/network_config_serialization.hpp"
+#include "config/generated/physics_config_serialization.hpp"
+#include "config/generated/renderdoc_config_serialization.hpp"
+#include "config/generated/renderer_config_serialization.hpp"
+#include "config/generated/scene_config_serialization.hpp"
+#include "config/generated/shader_monitor_config_serialization.hpp"
+#include "config/generated/text_renderer_config_serialization.hpp"
+#include "config/generated/threading_config_serialization.hpp"
+#include "config/generated/thumbnails_config_serialization.hpp"
+#include "config/generated/transform_tool_config_serialization.hpp"
+#include "config/generated/viewport_config_data_serialization.hpp"
+#include "config/generated/window_config_serialization.hpp"
+#include "erhe_graphics/generated/graphics_config_serialization.hpp"
 
+#include "erhe_codegen/field_info.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 
@@ -11,6 +34,46 @@
 
 #include <imgui/imgui.h>
 #include <imgui/misc/cpp/imgui_stdlib.h>
+
+#include <cstring>
+
+namespace {
+
+void imgui_field(void* base, const erhe::codegen::Field_info& field)
+{
+    void* ptr = static_cast<char*>(base) + field.offset;
+    const std::string label = std::string{"##"} + field.name;
+
+    if (std::strcmp(field.type_name, "bool") == 0) {
+        ImGui::Checkbox(label.c_str(), static_cast<bool*>(ptr));
+    } else if (std::strcmp(field.type_name, "int") == 0) {
+        if (field.numeric_limits.has_ui_min && field.numeric_limits.has_ui_max) {
+            ImGui::SliderInt(label.c_str(), static_cast<int*>(ptr),
+                static_cast<int>(field.numeric_limits.ui_min),
+                static_cast<int>(field.numeric_limits.ui_max));
+        } else {
+            ImGui::DragInt(label.c_str(), static_cast<int*>(ptr));
+        }
+    } else if (std::strcmp(field.type_name, "float") == 0) {
+        if (field.numeric_limits.has_ui_min && field.numeric_limits.has_ui_max) {
+            ImGui::SliderFloat(label.c_str(), static_cast<float*>(ptr),
+                static_cast<float>(field.numeric_limits.ui_min),
+                static_cast<float>(field.numeric_limits.ui_max));
+        } else {
+            ImGui::DragFloat(label.c_str(), static_cast<float*>(ptr), 0.01f);
+        }
+    } else if (std::strcmp(field.type_name, "std::string") == 0) {
+        ImGui::InputText(label.c_str(), static_cast<std::string*>(ptr));
+    } else if (std::strcmp(field.type_name, "glm::vec3") == 0) {
+        ImGui::ColorEdit3(label.c_str(), static_cast<float*>(ptr));
+    } else if (std::strcmp(field.type_name, "glm::vec4") == 0) {
+        ImGui::ColorEdit4(label.c_str(), static_cast<float*>(ptr));
+    } else if (std::strcmp(field.type_name, "glm::ivec2") == 0) {
+        ImGui::DragInt2(label.c_str(), static_cast<int*>(ptr));
+    }
+}
+
+} // anonymous namespace
 
 namespace editor {
 
@@ -272,6 +335,54 @@ void Settings_window::imgui()
             m_context.app_settings->write();
         }
     });
+
+    if (m_context.editor_config != nullptr) {
+        Editor_config& config = *m_context.editor_config;
+
+        auto add_config_section = [this](const char* label, auto& section) {
+            push_group(label, ImGuiTreeNodeFlags_Framed);
+            const auto fields = get_fields(static_cast<const std::remove_reference_t<decltype(section)>*>(nullptr));
+            for (const auto& field : fields) {
+                if (field.removed_in != 0) {
+                    continue;
+                }
+                add_entry(std::string{field.name}, [&section, &field]() {
+                    imgui_field(&section, field);
+                });
+            }
+            pop_group();
+        };
+
+        push_group("Editor Config", ImGuiTreeNodeFlags_Framed);
+        add_config_section("Camera Controls", config.camera_controls);
+        add_config_section("Developer",       config.developer);
+        add_config_section("Graphics",        config.graphics);
+        add_config_section("Grid",            config.grid);
+        add_config_section("Headset",         config.headset);
+        add_config_section("Hotbar",          config.hotbar);
+        add_config_section("HUD",             config.hud);
+        add_config_section("ID Renderer",     config.id_renderer);
+        add_config_section("Mesh Memory",     config.mesh_memory);
+        add_config_section("Network",         config.network);
+        add_config_section("Physics",         config.physics);
+        add_config_section("Renderdoc",       config.renderdoc);
+        add_config_section("Renderer",        config.renderer);
+        add_config_section("Scene",           config.scene);
+        add_config_section("Shader Monitor",  config.shader_monitor);
+        add_config_section("Text Renderer",   config.text_renderer);
+        add_config_section("Threading",       config.threading);
+        add_config_section("Thumbnails",      config.thumbnails);
+        add_config_section("Transform Tool",  config.transform_tool);
+        add_config_section("Viewport",        config.viewport);
+        add_config_section("Window",          config.window);
+
+        add_entry("", [this, button_size, &config](){
+            if (ImGui::Button("Save Config", button_size)) {
+                save_editor_config(config, "erhe.json");
+            }
+        });
+        pop_group();
+    }
 
     show_entries("Settings", ImVec2{1.0f, 1.0f});
 }
