@@ -4,6 +4,7 @@
 .vs
 .vscode/compile_commands.json
 erhe_cmake_profiling.json
+src/erhe/codegen/erhe_codegen/__pycache__
 src/editor/user.ini
 src/editor/erhe_init_graph.dot
 src/editor/cache/bvh/*
@@ -14,6 +15,8 @@ src/editor/res/fonts/materialdesignicons.css
 build
 build_vs2022_opengl
 build_vs2026_opengl
+build_vs2026_opengl_no_tracy
+build_vs2026_opengl_asan
 build_vs2026_vulkan
 cmake-build-*
 vscode-cmake-*
