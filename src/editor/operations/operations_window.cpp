@@ -24,7 +24,7 @@
 #include "erhe_rendergraph/rendergraph_node.hpp"
 
 #include "erhe_commands/commands.hpp"
-#include "erhe_configuration/configuration.hpp"
+#include "scene_config.hpp"
 #include "erhe_defer/defer.hpp"
 #include "erhe_file/file.hpp"
 #include "erhe_gltf/gltf.hpp"
@@ -69,6 +69,7 @@ void Operations::async_for_selected_nodes_with_mesh(std::function<void(Mesh_oper
 }
 
 Operations::Operations(
+    const Scene_config&          scene_config,
     erhe::commands::Commands&    commands,
     erhe::imgui::Imgui_renderer& imgui_renderer,
     erhe::imgui::Imgui_windows&  imgui_windows,
@@ -182,11 +183,10 @@ Operations::Operations(
     commands.bind_command_to_menu(&m_load_scene_command,  "File.Load Scene");
     commands.bind_command_to_menu(&m_create_material,     "Create.Material");
 
-    const auto& ini = erhe::configuration::get_ini_file_section(erhe::c_erhe_config_file_path, "scene");
-    ini.get("instance_count", m_make_mesh_config.instance_count);
-    ini.get("instance_gap",   m_make_mesh_config.instance_gap);
-    ini.get("object_scale",   m_make_mesh_config.object_scale);
-    ini.get("detail",         m_make_mesh_config.detail);
+    m_make_mesh_config.instance_count = scene_config.instance_count;
+    m_make_mesh_config.instance_gap   = scene_config.instance_gap;
+    m_make_mesh_config.object_scale   = scene_config.object_scale;
+    m_make_mesh_config.detail         = scene_config.detail;
 
     m_hover_scene_view_subscription = app_message_bus.hover_scene_view.subscribe(
         [&](Hover_scene_view_message& message) {

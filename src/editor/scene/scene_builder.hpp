@@ -42,6 +42,9 @@ namespace tf {
     class Taskflow;
 }
 
+struct Scene_config;
+struct Graphics_config;
+
 namespace editor {
 
 class Brush;
@@ -78,6 +81,8 @@ class Scene_builder final
 {
 public:
     Scene_builder(
+        const Scene_config&             scene_config,
+        const Graphics_config&          graphics_config,
         std::shared_ptr<Scene_root>     scene,
         tf::Executor&                   executor,
         erhe::graphics::Device&         graphics_device,
@@ -174,7 +179,9 @@ private:
     void make_mesh_nodes            (const Make_mesh_config& config, std::vector<std::shared_ptr<Brush>>& brushes);
     void setup_lights               ();
 
-    App_context& m_context;
+    App_context&          m_context;
+    const Scene_config&   m_scene_config;
+    const Graphics_config& m_graphics_config;
 
     // Self owned parts
     ERHE_PROFILE_MUTEX(std::mutex,      m_brush_mutex);

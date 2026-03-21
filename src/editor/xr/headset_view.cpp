@@ -1,5 +1,6 @@
 #include "xr/headset_view.hpp"
 
+#include "viewport_config_data.hpp"
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
 #include "app_rendering.hpp"
@@ -80,6 +81,7 @@ void Headset_view_node::execute_rendergraph_node()
 }
 
 Headset_view::Headset_view(
+    const Viewport_config_data&     viewport_config_data,
     erhe::commands::Commands&       commands,
     erhe::graphics::Device&         graphics_device,
     erhe::imgui::Imgui_renderer&    imgui_renderer,
@@ -93,7 +95,7 @@ Headset_view::Headset_view(
     App_rendering&                  app_rendering,
     App_settings&                   app_settings
 )
-    : Scene_view               {app_context, Viewport_config::default_config()}
+    : Scene_view               {app_context, Viewport_config::default_config(viewport_config_data)}
     , erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Headset", "headset", true}
     , m_translate_x            {}
     , m_translate_y            {}

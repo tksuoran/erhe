@@ -62,6 +62,7 @@ struct Tool_slot
     };
 };
 
+struct Scene_config;
 class App_context;
 class App_message_bus;
 class Scene_view;
@@ -70,6 +71,7 @@ class Operations : public erhe::imgui::Imgui_window
 {
 public:
     Operations(
+        const Scene_config&          scene_config,
         erhe::commands::Commands&    commands,
         erhe::imgui::Imgui_renderer& imgui_renderer,
         erhe::imgui::Imgui_windows&  imgui_windows,

@@ -28,6 +28,7 @@ namespace erhe::scene    { class Camera; }
 
 namespace editor {
 
+struct Camera_controls_config;
 class App_message_bus;
 class Fly_camera_tool;
 class Tools;
@@ -172,12 +173,13 @@ public:
     static constexpr int c_priority{5};
 
     Fly_camera_tool(
-        erhe::commands::Commands&    commands,
-        erhe::imgui::Imgui_renderer& imgui_renderer,
-        erhe::imgui::Imgui_windows&  imgui_windows,
-        App_context&                 context,
-        App_message_bus&             app_message_bus,
-        Tools&                       tools
+        const Camera_controls_config& camera_controls_config,
+        erhe::commands::Commands&     commands,
+        erhe::imgui::Imgui_renderer&  imgui_renderer,
+        erhe::imgui::Imgui_windows&   imgui_windows,
+        App_context&                  context,
+        App_message_bus&              app_message_bus,
+        Tools&                        tools
     );
 
     // Implements tool

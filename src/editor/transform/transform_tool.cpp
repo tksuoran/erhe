@@ -19,7 +19,7 @@
 #include "transform/handle_enums.hpp"
 
 #include "erhe_commands/commands.hpp"
-#include "erhe_configuration/configuration.hpp"
+#include "transform_tool_config.hpp"
 #include "erhe_imgui/imgui_helpers.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_message_bus/message_bus.hpp"
@@ -103,6 +103,7 @@ void Transform_tool_drag_command::on_inactive()
 #pragma endregion Commands
 
 Transform_tool::Transform_tool(
+    const Transform_tool_config& transform_tool_config,
     tf::Executor&                executor,
     erhe::commands::Commands&    commands,
     erhe::imgui::Imgui_renderer& imgui_renderer,
@@ -121,10 +122,9 @@ Transform_tool::Transform_tool(
 {
     ERHE_PROFILE_FUNCTION();
 
-    const auto& ini = erhe::configuration::get_ini_file_section(erhe::c_erhe_config_file_path, "transform_tool");
     auto& settings = shared.settings;
-    ini.get("show_translate", settings.show_translate);
-    ini.get("show_rotate",    settings.show_rotate);
+    settings.show_translate = transform_tool_config.show_translate;
+    settings.show_rotate    = transform_tool_config.show_rotate;
 
     //executor.silent_async(
     //    [this, &editor_context, &mesh_memory, &tools](){

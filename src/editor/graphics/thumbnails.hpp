@@ -13,6 +13,8 @@ namespace erhe::graphics {
     class Texture;
 }
 
+struct Thumbnails_config;
+
 namespace editor {
 
 class App_context;
@@ -43,7 +45,7 @@ public:
 class Thumbnails
 {
 public:
-    Thumbnails(erhe::graphics::Device& graphics_device, App_context& context);
+    Thumbnails(const Thumbnails_config& thumbnails_config, erhe::graphics::Device& graphics_device, App_context& context);
     ~Thumbnails() noexcept;
 
     // This should be called once per frame, outside command encoder

@@ -21,7 +21,7 @@
 
 #include "erhe_commands/commands.hpp"
 #include "erhe_commands/input_arguments.hpp"
-#include "erhe_configuration/configuration.hpp"
+#include "hotbar_config.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_item/item.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
@@ -188,6 +188,7 @@ auto Hotbar_rotate_tool_command::try_call() -> bool
 #pragma endregion Commands
 
 Hotbar::Hotbar(
+    const Hotbar_config&         hotbar_config,
     erhe::commands::Commands&    commands,
     erhe::imgui::Imgui_renderer& imgui_renderer,
     erhe::imgui::Imgui_windows&  imgui_windows,
@@ -215,10 +216,9 @@ Hotbar::Hotbar(
     m_window.on_begin_callback = [this]() { window_on_begin(); };
     m_window.on_end_callback   = [this]() { window_on_end(); };
 
-    const auto& ini = erhe::configuration::get_ini_file_section(erhe::c_erhe_config_file_path, "hotbar");
-    ini.get("enabled",    m_enabled);
-    ini.get("show",       m_show);
-    ini.get("use_radial", m_use_radial);
+    m_enabled    = hotbar_config.enabled;
+    m_show       = hotbar_config.show;
+    m_use_radial = hotbar_config.use_radial;
 
     if (app_context.OpenXR) {
         m_x = -0.02f;
@@ -230,9 +230,9 @@ Hotbar::Hotbar(
         m_z = -0.5f  ; // 64
     }
 
-    ini.get("x",          m_x);
-    ini.get("y",          m_y);
-    ini.get("z",          m_z);
+    m_x = hotbar_config.x;
+    m_y = hotbar_config.y;
+    m_z = hotbar_config.z;
 
     if (!m_enabled) {
         m_window.hide_window();

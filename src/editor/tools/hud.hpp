@@ -16,6 +16,8 @@ namespace erhe::imgui       { class Imgui_renderer; }
 namespace erhe::rendergraph { class Rendergraph; }
 namespace erhe::scene       { class Node; };
 
+struct Hud_config;
+
 namespace editor {
 
 class App_context;
@@ -59,6 +61,7 @@ class Hud
 {
 public:
     Hud(
+        const Hud_config&               hud_config,
         erhe::commands::Commands&       commands,
         erhe::graphics::Device&         graphics_device,
         erhe::imgui::Imgui_renderer&    imgui_renderer,

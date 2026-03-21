@@ -32,6 +32,8 @@ namespace erhe::scene_renderer {
     class Program_interface;
 }
 
+struct Id_renderer_config;
+
 namespace editor {
 
 class Programs;
@@ -55,6 +57,7 @@ public:
     };
 
     Id_renderer(
+        const Id_renderer_config&                id_renderer_config,
         erhe::graphics::Device&                  graphics_device,
         erhe::scene_renderer::Program_interface& program_interface,
         Mesh_memory&                             mesh_memory,

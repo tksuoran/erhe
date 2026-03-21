@@ -2,7 +2,7 @@
 
 #include "app_context.hpp"
 
-#include "erhe_configuration/configuration.hpp"
+#include "network_config.hpp"
 #include "erhe_imgui/imgui_window.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_net/client.hpp"
@@ -14,6 +14,7 @@
 namespace editor {
 
 Network_window::Network_window(
+    const Network_config&        network_config,
     erhe::imgui::Imgui_renderer& imgui_renderer,
     erhe::imgui::Imgui_windows&  imgui_windows,
     App_context&                 app_context
@@ -21,11 +22,10 @@ Network_window::Network_window(
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Network", "network", true}
     , m_context                {app_context}
 {
-    const auto& ini = erhe::configuration::get_ini_file_section(erhe::c_erhe_config_file_path, "network");
-    ini.get("upstream_address",   m_upstream_address);
-    ini.get("upstream_port",      m_upstream_port);
-    ini.get("downstream_address", m_downstream_address);
-    ini.get("downstream_port",    m_downstream_port);
+    m_upstream_address   = network_config.upstream_address;
+    m_upstream_port      = network_config.upstream_port;
+    m_downstream_address = network_config.downstream_address;
+    m_downstream_port    = network_config.downstream_port;
 
     m_client.set_receive_handler(
         [this](const uint8_t* data, const std::size_t length) {

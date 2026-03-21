@@ -9,6 +9,8 @@
 
 namespace erhe::imgui { class Imgui_windows; }
 
+struct Grid_config;
+
 namespace editor {
 
 class Grid;
@@ -39,6 +41,7 @@ public:
     Config config;
 
     Grid_tool(
+        const Grid_config&           grid_config,
         erhe::imgui::Imgui_renderer& imgui_renderer,
         erhe::imgui::Imgui_windows&  imgui_windows,
         App_context&                 context,

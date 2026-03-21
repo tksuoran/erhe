@@ -11,7 +11,7 @@
 #include "rendertarget_imgui_host.hpp"
 
 #include "erhe_commands/commands.hpp"
-#include "erhe_configuration/configuration.hpp"
+#include "hud_config.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_rendergraph/rendergraph.hpp"
@@ -84,6 +84,7 @@ auto Toggle_hud_visibility_command::try_call() -> bool
 #pragma endregion Commands
 
 Hud::Hud(
+    const Hud_config&               hud_config,
     erhe::commands::Commands&       commands,
     erhe::graphics::Device&         graphics_device,
     erhe::imgui::Imgui_renderer&    imgui_renderer,
@@ -108,20 +109,14 @@ Hud::Hud(
 {
     ERHE_PROFILE_FUNCTION();
 
-    int   width {1024};
-    int   height{1024};
-    float ppm   {5000.0f};
-    const auto& ini = erhe::configuration::get_ini_file_section(erhe::c_erhe_config_file_path, "hud");
+    int   width  = hud_config.width;
+    int   height = hud_config.height;
+    float ppm    = hud_config.ppm;
 
-    // Set default based on Desktop / OpenXR for case when [hud] enabled is not set in erhe.toml
-    m_enabled = app_context.OpenXR;
-    ini.get("enabled", m_enabled);
-    ini.get("width",   width);
-    ini.get("height",  height);
-    ini.get("ppm",     ppm);
-    ini.get("x",       m_x);
-    ini.get("y",       m_y);
-    ini.get("z",       m_z);
+    m_enabled = hud_config.enabled;
+    m_x       = hud_config.x;
+    m_y       = hud_config.y;
+    m_z       = hud_config.z;
 
     if (!m_enabled) {
         return;

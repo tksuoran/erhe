@@ -13,7 +13,8 @@
 
 #include "SkylineBinPack.h" // RectangleBinPack
 
-#include "erhe_configuration/configuration.hpp"
+#include "scene_config.hpp"
+#include "graphics_config.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_rendergraph/rendergraph.hpp"
 #include "erhe_geometry/shapes/cone.hpp"
@@ -59,6 +60,8 @@ using glm::vec3;
 using glm::vec4;
 
 Scene_builder::Scene_builder(
+    const Scene_config&             scene_config,
+    const Graphics_config&          graphics_config,
     std::shared_ptr<Scene_root>     scene,
     tf::Executor&                   executor,
     erhe::graphics::Device&         graphics_device,
@@ -74,14 +77,15 @@ Scene_builder::Scene_builder(
     Tools&                          tools,
     Scene_views&                    scene_views
 )
-    : m_context{context}
+    : m_context       {context}
+    , m_scene_config  {scene_config}
+    , m_graphics_config{graphics_config}
 {
     ERHE_PROFILE_FUNCTION();
     m_scene_root = scene;
 
-    const auto& ini = erhe::configuration::get_ini_file_section(erhe::c_erhe_config_file_path, "scene");
-    ini.get("mass_scale", m_mass_scale);
-    ini.get("detail",     m_detail);
+    m_mass_scale = scene_config.mass_scale;
+    m_detail     = scene_config.detail;
 
     setup_cameras(
         graphics_device,
@@ -110,11 +114,8 @@ auto Scene_builder::make_camera(std::string_view name, vec3 position, vec3 look_
 {
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{m_scene_root->item_host_mutex};
 
-    const auto& ini = erhe::configuration::get_ini_file_section(erhe::c_erhe_config_file_path, "scene");
-    float camera_exposure{1.0f};
-    float shadow_range   {22.0f};
-    ini.get("camera_exposure", camera_exposure);
-    ini.get("shadow_range",    shadow_range);
+    const float camera_exposure = m_scene_config.camera_exposure;
+    const float shadow_range   = m_scene_config.shadow_range;
 
     auto node   = std::make_shared<erhe::scene::Node>(name);
     auto camera = std::make_shared<erhe::scene::Camera>(name);
@@ -153,12 +154,8 @@ void Scene_builder::setup_cameras(
     Scene_views&                    scene_views
 )
 {
-    float camera_distance  = 3.0f;
-    float camera_elevation = 1.6f;
-
-    const auto& ini = erhe::configuration::get_ini_file_section(erhe::c_erhe_config_file_path, "scene");
-    ini.get("camera_distance",  camera_distance);
-    ini.get("camera_elevation", camera_elevation);
+    const float camera_distance  = m_scene_config.camera_distance;
+    const float camera_elevation = m_scene_config.camera_elevation;
 
     const auto& camera_a = make_camera(
         "Camera A",
@@ -183,12 +180,9 @@ void Scene_builder::setup_cameras(
         return;
     }
 
-    const auto& g_ini = erhe::configuration::get_ini_file_section(erhe::c_erhe_config_file_path, "graphics");
-    bool enable_post_processing = true;
-    g_ini.get("post_processing", enable_post_processing);
+    const bool enable_post_processing = m_graphics_config.post_processing;
 
-    bool imgui_window_scene_view = true;
-    ini.get("imgui_window_scene_view", imgui_window_scene_view);
+    bool imgui_window_scene_view = m_scene_config.imgui_window_scene_view;
     if (!imgui_window_scene_view) {
         return;
     }
@@ -196,6 +190,7 @@ void Scene_builder::setup_cameras(
     const int msaa_sample_count = app_settings.graphics.current_graphics_preset.msaa_sample_count;
     std::shared_ptr<erhe::rendergraph::Rendergraph_node> rendergraph_output_node{};
     m_primary_viewport_window = scene_views.create_viewport_scene_view(
+        scene_views.get_viewport_config_data(),
         graphics_device,
         rendergraph,
         imgui_windows,
@@ -580,20 +575,12 @@ void Scene_builder::make_brushes(App_settings& app_settings, Mesh_memory& mesh_m
 {
     ERHE_PROFILE_FUNCTION();
 
-    const auto& ini = erhe::configuration::get_ini_file_section(erhe::c_erhe_config_file_path, "scene");
-    float floor_size                  {1.0f};
-    float floor_height                {0.001f}; // NOTE: Jolt min height is 0.05
-    bool  floor                       {true};
-    bool  make_johnson_solid_brushes  {true};
-    bool  make_platonic_solid_brushes_{true};
-    bool  make_curved_brushes         {true};
-    ini.get("floor_size",   floor_size);
-    ini.get("floor_height", floor_height);
-    ini.get("floor",        floor);
-    ini.get("load_johnson_solids", floor);
-    ini.get("make_johnson_solid_brushes",  make_johnson_solid_brushes);
-    ini.get("make_platonic_solid_brushes", make_platonic_solid_brushes_);
-    ini.get("make_curved_brushes",         make_curved_brushes);
+    const float floor_size                   = m_scene_config.floor_size;
+    const float floor_height                 = m_scene_config.floor_height;
+    const bool  floor                        = m_scene_config.floor;
+    const bool  make_johnson_solid_brushes   = m_scene_config.make_johnson_solid_brushes;
+    const bool  make_platonic_solid_brushes_ = m_scene_config.make_platonic_solid_brushes;
+    const bool  make_curved_brushes          = m_scene_config.make_curved_brushes;
 
     // Floor
     if (floor) {
@@ -1148,23 +1135,14 @@ void Scene_builder::setup_lights()
     //    }
     //);
 
-    const auto& ini = erhe::configuration::get_ini_file_section(erhe::c_erhe_config_file_path, "scene");
-    float directional_light_intensity{20.0f};
-    float directional_light_radius   {6.0f};
-    float directional_light_height   {10.0f};
-    int   directional_light_count    {4};
-    float spot_light_intensity       {150.0f};
-    float spot_light_radius          {20.0f};
-    float spot_light_height          {10.0f};
-    int   spot_light_count           {3};
-    ini.get("directional_light_intensity", directional_light_intensity);
-    ini.get("directional_light_radius",    directional_light_radius);
-    ini.get("directional_light_height",    directional_light_height);
-    ini.get("directional_light_count",     directional_light_count);
-    ini.get("spot_light_intensity",        spot_light_intensity);
-    ini.get("spot_light_radius",           spot_light_radius);
-    ini.get("spot_light_height",           spot_light_height);
-    ini.get("spot_light_count",            spot_light_count);
+    const float directional_light_intensity = m_scene_config.directional_light_intensity;
+    const float directional_light_radius    = m_scene_config.directional_light_radius;
+    const float directional_light_height    = m_scene_config.directional_light_height;
+    const int   directional_light_count     = m_scene_config.directional_light_count;
+    const float spot_light_intensity        = m_scene_config.spot_light_intensity;
+    const float spot_light_radius           = m_scene_config.spot_light_radius;
+    const float spot_light_height           = m_scene_config.spot_light_height;
+    const int   spot_light_count            = m_scene_config.spot_light_count;
     if (directional_light_count == 1) {
         make_directional_light(
             "X",

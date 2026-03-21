@@ -38,6 +38,8 @@ namespace erhe::scene_renderer {
     class Light_projections;
 }
 
+struct Viewport_config_data;
+
 namespace editor {
 
 class App_message_bus;
@@ -70,6 +72,7 @@ class Viewport_scene_view
 {
 public:
     Viewport_scene_view(
+        const Viewport_config_data&                 viewport_config_data,
         App_context&                                context,
         erhe::rendergraph::Rendergraph&             rendergraph,
         Tools&                                      tools,

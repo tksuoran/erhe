@@ -35,6 +35,8 @@ namespace erhe::scene {
     class Trs_transform;
 }
 
+struct Transform_tool_config;
+
 namespace tf {
     class Executor;
 }
@@ -159,6 +161,7 @@ public:
     static constexpr int c_priority{1};
 
     Transform_tool(
+        const Transform_tool_config& transform_tool_config,
         tf::Executor&                executor,
         erhe::commands::Commands&    commands,
         erhe::imgui::Imgui_renderer& imgui_renderer,

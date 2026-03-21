@@ -1,25 +1,22 @@
 #include "renderers/mesh_memory.hpp"
 
-#include "erhe_configuration/configuration.hpp"
+#include "mesh_memory_config.hpp"
 #include "erhe_scene_renderer/program_interface.hpp"
 
 namespace editor {
 
-auto Mesh_memory::get_vertex_buffer_size(const std::size_t stream_index) const -> std::size_t
+auto Mesh_memory::get_vertex_buffer_size(const Mesh_memory_config& mesh_memory_config, const std::size_t stream_index) const -> std::size_t
 {
-    int vertex_buffer_size{stream_index == 0 ? 8 : 32}; // in megabytes
-    const auto& ini = erhe::configuration::get_ini_file_section(erhe::c_erhe_config_file_path, "mesh_memory");
-    ini.get("vertex_buffer_size", vertex_buffer_size);
+    static_cast<void>(stream_index);
+    const int vertex_buffer_size = mesh_memory_config.vertex_buffer_size;
     std::size_t kilo = 1024;
     std::size_t mega = 1024 * kilo;
     return static_cast<std::size_t>(vertex_buffer_size) * mega;
 }
 
-auto Mesh_memory::get_index_buffer_size() const -> std::size_t
+auto Mesh_memory::get_index_buffer_size(const Mesh_memory_config& mesh_memory_config) const -> std::size_t
 {
-    int index_buffer_size{4}; // in megabytes
-    const auto& ini = erhe::configuration::get_ini_file_section(erhe::c_erhe_config_file_path, "mesh_memory");
-    ini.get("index_buffer_size", index_buffer_size);
+    int index_buffer_size = mesh_memory_config.index_buffer_size;
     std::size_t kilo = 1024;
     std::size_t mega = 1024 * kilo;
     return static_cast<std::size_t>(index_buffer_size) * mega;
@@ -35,14 +32,14 @@ auto Mesh_memory::get_index_buffer_size() const -> std::size_t
     }
 }
 
-Mesh_memory::Mesh_memory(erhe::graphics::Device& graphics_device, erhe::dataformat::Vertex_format& vertex_format)
+Mesh_memory::Mesh_memory(const Mesh_memory_config& mesh_memory_config, erhe::graphics::Device& graphics_device, erhe::dataformat::Vertex_format& vertex_format)
     : graphics_device       {graphics_device}
     , buffer_transfer_queue {graphics_device}
     , vertex_format         {vertex_format}
     , vertex_buffer_position{
         graphics_device,
         erhe::graphics::Buffer_create_info{
-            .capacity_byte_count                    = get_vertex_buffer_size(s_vertex_binding_position),
+            .capacity_byte_count                    = get_vertex_buffer_size(mesh_memory_config, s_vertex_binding_position),
             .memory_allocation_create_flag_bit_mask = 0,
             .usage                                  = erhe::graphics::Buffer_usage::vertex,
             .required_memory_property_bit_mask      = erhe::graphics::Memory_property_flag_bit_mask::device_local, // GPU only
@@ -53,7 +50,7 @@ Mesh_memory::Mesh_memory(erhe::graphics::Device& graphics_device, erhe::dataform
     , vertex_buffer_non_position{
         graphics_device,
         erhe::graphics::Buffer_create_info{
-            .capacity_byte_count                    = get_vertex_buffer_size(s_vertex_binding_non_position),
+            .capacity_byte_count                    = get_vertex_buffer_size(mesh_memory_config, s_vertex_binding_non_position),
             .memory_allocation_create_flag_bit_mask = 0,
             .usage                                  = erhe::graphics::Buffer_usage::vertex,
             .required_memory_property_bit_mask      = erhe::graphics::Memory_property_flag_bit_mask::device_local, // GPU only
@@ -64,7 +61,7 @@ Mesh_memory::Mesh_memory(erhe::graphics::Device& graphics_device, erhe::dataform
     , vertex_buffer_custom{
         graphics_device,
         erhe::graphics::Buffer_create_info{
-            .capacity_byte_count                    = get_vertex_buffer_size(s_vertex_binding_non_position),
+            .capacity_byte_count                    = get_vertex_buffer_size(mesh_memory_config, s_vertex_binding_non_position),
             .memory_allocation_create_flag_bit_mask = 0,
             .usage                                  = erhe::graphics::Buffer_usage::vertex,
             .required_memory_property_bit_mask      = erhe::graphics::Memory_property_flag_bit_mask::device_local, // GPU only
@@ -75,7 +72,7 @@ Mesh_memory::Mesh_memory(erhe::graphics::Device& graphics_device, erhe::dataform
     , index_buffer{
         graphics_device,
         erhe::graphics::Buffer_create_info{
-            .capacity_byte_count                    = get_index_buffer_size(),
+            .capacity_byte_count                    = get_index_buffer_size(mesh_memory_config),
             .memory_allocation_create_flag_bit_mask = 0,
             .usage                                  = erhe::graphics::Buffer_usage::index,
             .required_memory_property_bit_mask      = erhe::graphics::Memory_property_flag_bit_mask::device_local, // GPU only
