@@ -11,6 +11,9 @@ erhe_target_sources_grouped(
     settings.toml
     windows.toml
 
+    config/editor_config.hpp
+    config/editor_config.cpp
+
     animation/animation_curve.cpp
     animation/animation_curve.hpp
     animation/animation_window.cpp
@@ -428,6 +431,63 @@ set(_codegen_sources
 set_source_files_properties(${_codegen_sources} PROPERTIES GENERATED TRUE)
 target_sources(${_target} PRIVATE ${_codegen_sources})
 
+# Editor config codegen — generate into build directory
+set(_config_defs "${CMAKE_CURRENT_SOURCE_DIR}/config/definitions")
+set(_config_out  "${CMAKE_CURRENT_BINARY_DIR}/config/generated")
+
+erhe_codegen_generate(
+    TARGET          ${_target}
+    DEFINITIONS_DIR "${_config_defs}"
+    OUTPUT_DIR      "${_config_out}"
+)
+
+set(_config_sources
+    ${_config_out}/camera_controls_config.hpp
+    ${_config_out}/camera_controls_config.cpp
+    ${_config_out}/developer_config.hpp
+    ${_config_out}/developer_config.cpp
+    ${_config_out}/graphics_config.hpp
+    ${_config_out}/graphics_config.cpp
+    ${_config_out}/grid_config.hpp
+    ${_config_out}/grid_config.cpp
+    ${_config_out}/headset_config.hpp
+    ${_config_out}/headset_config.cpp
+    ${_config_out}/hotbar_config.hpp
+    ${_config_out}/hotbar_config.cpp
+    ${_config_out}/hud_config.hpp
+    ${_config_out}/hud_config.cpp
+    ${_config_out}/id_renderer_config.hpp
+    ${_config_out}/id_renderer_config.cpp
+    ${_config_out}/mesh_memory_config.hpp
+    ${_config_out}/mesh_memory_config.cpp
+    ${_config_out}/network_config.hpp
+    ${_config_out}/network_config.cpp
+    ${_config_out}/physics_config.hpp
+    ${_config_out}/physics_config.cpp
+    ${_config_out}/renderdoc_config.hpp
+    ${_config_out}/renderdoc_config.cpp
+    ${_config_out}/renderer_config.hpp
+    ${_config_out}/renderer_config.cpp
+    ${_config_out}/scene_config.hpp
+    ${_config_out}/scene_config.cpp
+    ${_config_out}/shader_monitor_config.hpp
+    ${_config_out}/shader_monitor_config.cpp
+    ${_config_out}/text_renderer_config.hpp
+    ${_config_out}/text_renderer_config.cpp
+    ${_config_out}/threading_config.hpp
+    ${_config_out}/threading_config.cpp
+    ${_config_out}/thumbnails_config.hpp
+    ${_config_out}/thumbnails_config.cpp
+    ${_config_out}/transform_tool_config.hpp
+    ${_config_out}/transform_tool_config.cpp
+    ${_config_out}/viewport_config_data.hpp
+    ${_config_out}/viewport_config_data.cpp
+    ${_config_out}/window_config.hpp
+    ${_config_out}/window_config.cpp
+)
+set_source_files_properties(${_config_sources} PROPERTIES GENERATED TRUE)
+target_sources(${_target} PRIVATE ${_config_sources})
+
 target_link_libraries(
     ${_target}
     PRIVATE
@@ -507,7 +567,7 @@ endif ()
 if (${ERHE_XR_LIBRARY} STREQUAL "openxr")
     target_link_libraries(${_target} PRIVATE erhe_xr openxr_loader)
 endif ()
-target_include_directories(${_target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR} ${_codegen_out})
+target_include_directories(${_target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR} ${_codegen_out} ${_config_out})
 
 set_target_properties(
     ${_target} PROPERTIES

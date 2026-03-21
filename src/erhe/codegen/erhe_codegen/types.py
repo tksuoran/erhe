@@ -139,10 +139,11 @@ Double = ScalarType("Double", "double",        ".get_double()", is_numeric=True)
 String = ScalarType("String", "std::string",   ".get_string()")
 
 # glm type instances
-Vec2 = GlmType("Vec2", "glm::vec2", 2)
-Vec3 = GlmType("Vec3", "glm::vec3", 3)
-Vec4 = GlmType("Vec4", "glm::vec4", 4)
-Mat4 = GlmType("Mat4", "glm::mat4", 16)
+Vec2  = GlmType("Vec2",  "glm::vec2",  2)
+Vec3  = GlmType("Vec3",  "glm::vec3",  3)
+Vec4  = GlmType("Vec4",  "glm::vec4",  4)
+IVec2 = GlmType("IVec2", "glm::ivec2", 2)
+Mat4  = GlmType("Mat4",  "glm::mat4",  16)
 
 # Composite type constructors
 Vector    = VectorType
