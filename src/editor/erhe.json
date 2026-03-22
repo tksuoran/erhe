@@ -80,8 +80,8 @@
     },
     "mesh_memory": {
         "_version": 1,
-        "vertex_buffer_size": 2048,
-        "index_buffer_size": 1024
+        "vertex_buffer_size": 1024,
+        "index_buffer_size": 256
     },
     "network": {
         "_version": 1,

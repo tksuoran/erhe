@@ -20,8 +20,10 @@ build_vs2026_opengl
 build_vs2026_opengl_no_tracy
 build_vs2026_opengl_asan
 build_vs2026_vulkan
+build_tests_asan
 cmake-build-*
 vscode-cmake-*
 log.txt
 releases
 erhe_cmake_dependencies.dot*
+.cpm_cache

@@ -59,7 +59,7 @@ Required packages: `libwayland-dev libxkbcommon-dev xorg-dev` (Ubuntu) or equiva
 
 ### Library Structure (`src/erhe/`)
 
-Each subdirectory is a separate CMake target (`erhe_<name>`):
+Each subdirectory is a separate CMake target (`erhe_<name>`). **Each library has a `notes.md`** file with details on purpose, key types, public API, dependencies, and implementation notes. Always check `src/erhe/<name>/notes.md` first when working with a library.
 
 - **`erhe::gl`** — Python-generated type-safe OpenGL API wrappers (`generate_sources.py` parses `gl.xml`). Provides strongly-typed enums, call logging, and extension queries.
 - **`erhe::graphics`** — Vulkan-style abstraction over OpenGL: `Pipeline`, framebuffers, textures, shaders, buffers. Core rendering primitives.
@@ -90,6 +90,8 @@ The `editor` executable is the main application. Entry point is `src/editor/main
 
 ### CMake Conventions
 
+- Follow modern CMake best practices. Do not use deprecated CMake features.
+- **Never use `file(GLOB)` or `file(GLOB_RECURSE)` to collect source files.** All source and definition files must be listed explicitly in `CMakeLists.txt`. This is the CMake-recommended practice — globbing does not detect added/removed files without a reconfigure.
 - `erhe_target_sources_grouped()` helper macro (in `cmake/functions.cmake`) organizes sources into IDE source groups.
 - Each component has its own `CMakeLists.txt`.
 - External dependencies are fetched at configure time via CPM (`cmake/CPM.cmake`).
@@ -108,7 +110,9 @@ Many systems have swappable backends selected at CMake configure time via `#ifde
 
 ## Python
 
-On this Windows machine, use the `py` launcher to run Python scripts (not `python` or `python3`, which resolve to the Microsoft Store stub). Example:
+**IMPORTANT: On this Windows machine, always use the `py -3` launcher to run Python scripts. Never use `python` or `python3` — they resolve to the Microsoft Store stub and will fail.** This applies to all Python invocations: scripts, codegen, tools.
+
+Example:
 
 ```bash
 py -3 src/erhe/codegen/generate.py <definitions_dir> <output_dir>
@@ -117,6 +121,14 @@ py -3 src/erhe/codegen/generate.py <definitions_dir> <output_dir>
 ## Editor Improvement Plan
 
 See [`doc/editor_improvements.md`](doc/editor_improvements.md) for the prioritized list of architectural improvements to `src/editor/`.
+
+## C++ Coding Style
+
+- **Always use `class`, never `struct`** — this makes forward declarations trivial (always `class Foo;`).
+- **Prefer explicit types over `auto`** — spell out the actual type for readability. Reviewers should not need to trace through code to determine types.
+- **Use sufficient parentheses** — do not rely on C++ operator precedence. Add parentheses so the intent is unambiguous to readers (e.g., `(a & b) != 0` not `a & b != 0`).
+- **Never use lock-free / atomic techniques** without explicitly asking the user for permission first. Prefer simple mutex-based synchronization.
+- **Multithreading debugging**: When diagnosing deadlocks or contention, ask the user for callstacks of all threads — not just the stuck thread. The root cause is usually on another thread.
 
 ## C++ Standard
 

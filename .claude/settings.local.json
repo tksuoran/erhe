@@ -1,0 +1,42 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(py generate.py test/definitions test/generated)",
+      "Bash(grep -A 20 \"\"\"colors\"\"\" test/generated/light.cpp)",
+      "Bash(cmake --build build_vs2026_opengl --target erhe_codegen_test)",
+      "Bash(find /d/erhe/src -type f \\\\\\(-name *test* -o -name test_* \\\\\\))",
+      "Bash(grep:*)",
+      "Bash(py:*)",
+      "Bash(find /d/erhe/src/erhe/codegen -type f -name *.txt -o -name *.cmake)",
+      "Bash(ls -la D:/erhe/src/editor/scene/generated/*.cpp)",
+      "Bash(ls D:/erhe/src/editor/config/definitions/*.py)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(grep -rl '#include \"\"\"\"scene_config\\\\.hpp\"\"\"\"' src/editor/ --include='*.cpp')",
+      "Bash(while read:*)",
+      "Bash(do sed:*)",
+      "Bash(done)",
+      "Bash(for name:*)",
+      "Bash(do grep:*)",
+      "Bash(for file:*)",
+      "Bash(do)",
+      "Bash(echo \"=== $file ===\")",
+      "Read(//d/erhe/**)",
+      "Bash(cd:*)",
+      "Bash(ls:*)",
+      "Bash(for f:*)",
+      "Bash(sed -i 's/    version=1,/    version=1,\\\\n    short_desc=\"\"\"\",\\\\n    long_desc=\"\"\"\",/' \"$f\")",
+      "Bash(git clean:*)",
+      "Bash(curl:*)",
+      "Bash(python -m json.tool)",
+      "Bash(sed 's/^?? //')",
+      "Bash(do echo:*)",
+      "Bash(git log:*)",
+      "Bash(mkdir -p /tmp/erhe_mixed)",
+      "Bash(cp src/editor/CMakeLists.txt /tmp/erhe_mixed/editor_CMakeLists.txt)",
+      "Bash(cp src/editor/editor.cpp /tmp/erhe_mixed/editor.cpp)",
+      "Bash(cp src/editor/scene/scene_builder.cpp /tmp/erhe_mixed/scene_builder.cpp)",
+      "Bash(cp src/editor/brushes/brush_tool.cpp /tmp/erhe_mixed/brush_tool.cpp)"
+    ]
+  }
+}
