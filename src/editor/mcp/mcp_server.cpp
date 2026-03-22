@@ -5,6 +5,7 @@
 #include "brushes/brush.hpp"
 #include "brushes/brush_placement.hpp"
 #include "content_library/content_library.hpp"
+#include "operations/item_parent_change_operation.hpp"
 #include "operations/operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "erhe_math/math_util.hpp"
@@ -315,6 +316,7 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "select_items")       result = action_select_items   (req->arguments);
         else if (req->tool_name == "place_brush")        result = action_place_brush    (req->arguments);
         else if (req->tool_name == "toggle_physics")     result = action_toggle_physics (req->arguments);
+        else if (req->tool_name == "reparent_node")      result = action_reparent_node  (req->arguments);
         else if (req->tool_name == "lock_items")         result = action_lock_items     (req->arguments);
         else if (req->tool_name == "unlock_items")       result = action_unlock_items   (req->arguments);
         else if (req->tool_name == "add_tags")           result = action_add_tags       (req->arguments);
@@ -368,6 +370,15 @@ void Mcp_server::refresh_tool_list()
     }});
 
     m_tool_infos.push_back({"toggle_physics",     "Toggle dynamic physics simulation on/off",              schema_no_args()});
+    m_tool_infos.push_back({"reparent_node",     "Set a node's parent (by node IDs)",                    {
+        {"type", "object"},
+        {"properties", {
+            {"scene_name",    {{"type", "string"},  {"description", "Name of the scene"}}},
+            {"node_id",       {{"type", "integer"}, {"description", "ID of the node to reparent"}}},
+            {"parent_node_id",{{"type", "integer"}, {"description", "ID of the new parent node (0 for scene root)"}}}
+        }},
+        {"required", json::array({"scene_name", "node_id"})}
+    }});
     m_tool_infos.push_back({"lock_items",         "Lock items by ID (prevents deletion/modification)",   {
         {"type", "object"},
         {"properties", {
@@ -1081,6 +1092,67 @@ auto Mcp_server::action_toggle_physics(const json& args) -> std::string
 
     return make_json_content({
         {"dynamic_physics_enabled", enabled}
+    }).dump();
+}
+
+auto Mcp_server::action_reparent_node(const json& args) -> std::string
+{
+    const std::string scene_name    = args.value("scene_name", "");
+    const std::size_t node_id       = args.value("node_id", std::size_t{0});
+    const std::size_t parent_node_id = args.value("parent_node_id", std::size_t{0});
+
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        json r = make_text_content("Scene not found: " + scene_name);
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    erhe::scene::Scene& scene = sr->get_scene();
+
+    // Find child node
+    std::shared_ptr<erhe::scene::Node> child_node;
+    for (const std::shared_ptr<erhe::scene::Node>& node : scene.get_flat_nodes()) {
+        if (node->get_id() == node_id) {
+            child_node = node;
+            break;
+        }
+    }
+    if (!child_node) {
+        json r = make_text_content("Node not found: " + std::to_string(node_id));
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    // Find parent node (0 means scene root)
+    std::shared_ptr<erhe::scene::Node> new_parent;
+    if (parent_node_id == 0) {
+        new_parent = scene.get_root_node();
+    } else {
+        for (const std::shared_ptr<erhe::scene::Node>& node : scene.get_flat_nodes()) {
+            if (node->get_id() == parent_node_id) {
+                new_parent = node;
+                break;
+            }
+        }
+    }
+    if (!new_parent) {
+        json r = make_text_content("Parent node not found: " + std::to_string(parent_node_id));
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    std::shared_ptr<Operation> op = std::make_shared<Item_parent_change_operation>(
+        new_parent,
+        child_node,
+        std::shared_ptr<erhe::Hierarchy>{},
+        std::shared_ptr<erhe::Hierarchy>{}
+    );
+    m_context.operation_stack->queue(op);
+
+    return make_json_content({
+        {"node",   child_node->get_name()},
+        {"parent", new_parent->get_name()}
     }).dump();
 }
 

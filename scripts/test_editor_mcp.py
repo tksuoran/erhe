@@ -135,6 +135,8 @@ class UnitTestRunner:
             self.test_lock_edit,
             self.test_lock_edit_prevents_delete,
             self.test_tags,
+            self.test_reparent_node,
+            self.test_reparent_hierarchy,
             self.test_async_status,
             self.test_geometry_catmull_clark,
             self.test_geometry_triangulate,
@@ -492,6 +494,77 @@ class UnitTestRunner:
         # Clean up
         self.client.call("undo")  # undo place
 
+    def test_reparent_node(self):
+        """Place two brushes, reparent one under the other, verify, undo."""
+        self._require_scene()
+        parent_id = self._place_test_brush()
+        child_id = self._place_test_brush()
+
+        # Reparent child under parent
+        result = self.client.call_ok("reparent_node", {
+            "scene_name": self.scene_name,
+            "node_id": child_id,
+            "parent_node_id": parent_id
+        })
+        assert "node" in result
+        assert "parent" in result
+
+        # Verify child's parent changed
+        nodes = self.client.call_ok("get_scene_nodes", {"scene_name": self.scene_name})["nodes"]
+        child_node = next((n for n in nodes if n["id"] == child_id), None)
+        parent_node = next((n for n in nodes if n["id"] == parent_id), None)
+        assert child_node is not None, "Child node not found"
+        assert parent_node is not None, "Parent node not found"
+        assert child_node["parent"] == parent_node["name"], f"Expected parent '{parent_node['name']}', got '{child_node['parent']}'"
+
+        # Verify parent's children in node details
+        detail = self.client.call_ok("get_node_details", {"scene_name": self.scene_name, "node_name": parent_node["name"]})
+        assert child_node["name"] in [str(c) for c in detail["children"]], "Child not in parent's children list"
+
+        # Undo reparent + 2 placements
+        self.client.call("undo")  # undo reparent
+        self.client.call("undo")  # undo child placement
+        self.client.call("undo")  # undo parent placement
+
+    def test_reparent_hierarchy(self):
+        """Build a 3-level hierarchy, verify, then reparent to root."""
+        self._require_scene()
+        grandparent_id = self._place_test_brush()
+        parent_id = self._place_test_brush()
+        child_id = self._place_test_brush()
+
+        # Build hierarchy: grandparent -> parent -> child
+        self.client.call_ok("reparent_node", {
+            "scene_name": self.scene_name,
+            "node_id": parent_id,
+            "parent_node_id": grandparent_id
+        })
+        self.client.call_ok("reparent_node", {
+            "scene_name": self.scene_name,
+            "node_id": child_id,
+            "parent_node_id": parent_id
+        })
+
+        # Verify 3-level hierarchy
+        nodes = self.client.call_ok("get_scene_nodes", {"scene_name": self.scene_name})["nodes"]
+        child_node = next((n for n in nodes if n["id"] == child_id), None)
+        parent_node = next((n for n in nodes if n["id"] == parent_id), None)
+        assert child_node["parent"] == parent_node["name"]
+
+        # Reparent child directly to root (parent_node_id = 0)
+        self.client.call_ok("reparent_node", {
+            "scene_name": self.scene_name,
+            "node_id": child_id,
+            "parent_node_id": 0
+        })
+        nodes = self.client.call_ok("get_scene_nodes", {"scene_name": self.scene_name})["nodes"]
+        child_node = next((n for n in nodes if n["id"] == child_id), None)
+        assert child_node["parent"] == "root", f"Expected parent 'root', got '{child_node['parent']}'"
+
+        # Undo all: 3 reparents + 3 placements
+        for _ in range(6):
+            self.client.call("undo")
+
     def test_async_status(self):
         result = self.client.call_ok("get_async_status")
         assert "pending" in result, "Missing pending key"
@@ -632,7 +705,7 @@ class SmokeTestRunner:
         self.rng = random.Random(seed)
         self.ok_count = 0
         self.error_count = 0
-        self.stats = {"query": 0, "place": 0, "select": 0, "delete": 0, "undo": 0, "redo": 0, "toggle": 0, "detail": 0, "geometry": 0}
+        self.stats = {"query": 0, "place": 0, "select": 0, "delete": 0, "undo": 0, "redo": 0, "toggle": 0, "detail": 0, "geometry": 0, "reparent": 0}
         self.scene_name = None
         self.brush_ids = []
         self.material_names = []
@@ -732,7 +805,9 @@ class SmokeTestRunner:
                 self._do_toggle()
         elif r < 0.74:
             self._do_delete()
-        elif r < 0.88:
+        elif r < 0.80:
+            self._do_reparent()
+        elif r < 0.92:
             self._do_geometry_chain()
         else:
             self._do_undo_redo()
@@ -810,6 +885,22 @@ class SmokeTestRunner:
             self.client.call_ok("select_items", {"scene_name": self.scene_name, "ids": [node["id"]]})
             self.client.call("Selection.delete")
         self._try("delete", action)
+
+    def _do_reparent(self):
+        def action():
+            nodes = self._get_unlocked_nodes()
+            if len(nodes) < 2:
+                return
+            child = self.rng.choice(nodes)
+            parent = self.rng.choice(nodes)
+            if child["id"] == parent["id"]:
+                return
+            self.client.call_ok("reparent_node", {
+                "scene_name": self.scene_name,
+                "node_id": child["id"],
+                "parent_node_id": parent["id"]
+            })
+        self._try("reparent", action)
 
     def _do_geometry_chain(self):
         def action():

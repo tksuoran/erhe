@@ -103,6 +103,7 @@ private:
     auto action_select_items    (const nlohmann::json& args) -> std::string;
     auto action_place_brush     (const nlohmann::json& args) -> std::string;
     auto action_toggle_physics  (const nlohmann::json& args) -> std::string;
+    auto action_reparent_node   (const nlohmann::json& args) -> std::string;
     auto action_lock_items      (const nlohmann::json& args) -> std::string;
     auto action_unlock_items    (const nlohmann::json& args) -> std::string;
     auto action_add_tags        (const nlohmann::json& args) -> std::string;
