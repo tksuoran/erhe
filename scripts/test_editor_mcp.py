@@ -121,6 +121,10 @@ class UnitTestRunner:
             self.test_invalid_scene,
             self.test_invalid_method,
             self.test_undo_redo,
+            self.test_undo_redo_stack,
+            self.test_lock_edit,
+            self.test_lock_edit_prevents_delete,
+            self.test_tags,
         ]
         print("=" * 60)
         print("UNIT TESTS")
@@ -336,6 +340,130 @@ class UnitTestRunner:
         self.placed_node_id = None
 
 
+    def test_undo_redo_stack(self):
+        self._require_scene()
+        result = self.client.call_ok("get_undo_redo_stack")
+        assert "undo" in result, "Missing undo key"
+        assert "redo" in result, "Missing redo key"
+        assert "can_undo" in result, "Missing can_undo key"
+        assert "can_redo" in result, "Missing can_redo key"
+        assert isinstance(result["undo"], list)
+        assert isinstance(result["redo"], list)
+
+        # Place a brush so there's something on the undo stack
+        brushes = self.client.call_ok("get_scene_brushes", {"scene_name": self.scene_name})["brushes"]
+        if not brushes:
+            raise SkipTest("no brushes")
+        self.client.call_ok("place_brush", {
+            "scene_name": self.scene_name,
+            "brush_id": brushes[0]["id"],
+            "position": [0.0, 10.0, 0.0],
+        })
+        result_after = self.client.call_ok("get_undo_redo_stack")
+        assert result_after["can_undo"], "Should be able to undo after placing brush"
+        assert len(result_after["undo"]) > len(result["undo"]), "Undo stack should grow after place"
+
+        # Clean up
+        self.client.call("undo")
+
+    def test_lock_edit(self):
+        self._require_scene()
+        # Place a brush to get a node we own
+        brushes = self.client.call_ok("get_scene_brushes", {"scene_name": self.scene_name})["brushes"]
+        if not brushes:
+            raise SkipTest("no brushes")
+        result = self.client.call_ok("place_brush", {
+            "scene_name": self.scene_name,
+            "brush_id": brushes[0]["id"],
+            "position": [0.0, 10.0, 0.0],
+        })
+        node_id = result["node_id"]
+
+        # Lock the item
+        lock_result = self.client.call_ok("lock_items", {"scene_name": self.scene_name, "ids": [node_id]})
+        assert lock_result["locked_count"] == 1
+
+        # Verify lock state in query
+        nodes = self.client.call_ok("get_scene_nodes", {"scene_name": self.scene_name})["nodes"]
+        locked_node = next((n for n in nodes if n["id"] == node_id), None)
+        assert locked_node is not None, "Placed node not found"
+        assert locked_node["locked"], "Node should be locked"
+
+        # Unlock
+        unlock_result = self.client.call_ok("unlock_items", {"scene_name": self.scene_name, "ids": [node_id]})
+        assert unlock_result["unlocked_count"] == 1
+
+        nodes = self.client.call_ok("get_scene_nodes", {"scene_name": self.scene_name})["nodes"]
+        unlocked_node = next((n for n in nodes if n["id"] == node_id), None)
+        assert not unlocked_node["locked"], "Node should be unlocked"
+
+        # Clean up
+        self.client.call("undo")  # undo unlock
+        self.client.call("undo")  # undo lock
+        self.client.call("undo")  # undo place
+
+    def test_lock_edit_prevents_delete(self):
+        self._require_scene()
+        # Place and lock a node
+        brushes = self.client.call_ok("get_scene_brushes", {"scene_name": self.scene_name})["brushes"]
+        if not brushes:
+            raise SkipTest("no brushes")
+        result = self.client.call_ok("place_brush", {
+            "scene_name": self.scene_name,
+            "brush_id": brushes[0]["id"],
+            "position": [0.0, 10.0, 0.0],
+        })
+        node_id = result["node_id"]
+        self.client.call_ok("lock_items", {"scene_name": self.scene_name, "ids": [node_id]})
+
+        count_before = len(self.client.call_ok("get_scene_nodes", {"scene_name": self.scene_name})["nodes"])
+
+        # Try to delete the locked node
+        self.client.call_ok("select_items", {"scene_name": self.scene_name, "ids": [node_id]})
+        self.client.call("Selection.delete")
+
+        count_after = len(self.client.call_ok("get_scene_nodes", {"scene_name": self.scene_name})["nodes"])
+        assert count_after == count_before, f"Locked node should not be deleted: {count_before} -> {count_after}"
+
+        # Clean up: unlock, select, delete
+        self.client.call_ok("unlock_items", {"scene_name": self.scene_name, "ids": [node_id]})
+        self.client.call_ok("select_items", {"scene_name": self.scene_name, "ids": [node_id]})
+        self.client.call("Selection.delete")
+
+    def test_tags(self):
+        self._require_scene()
+        # Place a node to tag
+        brushes = self.client.call_ok("get_scene_brushes", {"scene_name": self.scene_name})["brushes"]
+        if not brushes:
+            raise SkipTest("no brushes")
+        result = self.client.call_ok("place_brush", {
+            "scene_name": self.scene_name,
+            "brush_id": brushes[0]["id"],
+            "position": [0.0, 10.0, 0.0],
+        })
+        node_id = result["node_id"]
+
+        # Add tags
+        tag_result = self.client.call_ok("add_tags", {"scene_name": self.scene_name, "ids": [node_id], "tags": ["test", "important"]})
+        assert tag_result["tagged_count"] == 1
+
+        # Verify tags in query
+        nodes = self.client.call_ok("get_scene_nodes", {"scene_name": self.scene_name})["nodes"]
+        tagged_node = next((n for n in nodes if n["id"] == node_id), None)
+        assert "test" in tagged_node["tags"], f"Expected 'test' in tags, got {tagged_node['tags']}"
+        assert "important" in tagged_node["tags"]
+
+        # Remove one tag
+        self.client.call_ok("remove_tags", {"scene_name": self.scene_name, "ids": [node_id], "tags": ["test"]})
+        nodes = self.client.call_ok("get_scene_nodes", {"scene_name": self.scene_name})["nodes"]
+        tagged_node = next((n for n in nodes if n["id"] == node_id), None)
+        assert "test" not in tagged_node["tags"]
+        assert "important" in tagged_node["tags"]
+
+        # Clean up
+        self.client.call("undo")  # undo place
+
+
 class SkipTest(Exception):
     pass
 
@@ -408,9 +536,9 @@ class SmokeTestRunner:
             self._do_node_detail()
         elif r < 0.85:
             self._do_material_detail()
-        elif r < 0.90:
+        elif r < 0.87:
             self._do_toggle()
-        elif r < 0.95:
+        elif r < 0.93:
             self._do_delete()
         else:
             self._do_undo_redo()
@@ -442,9 +570,13 @@ class SmokeTestRunner:
             args["material_name"] = self.rng.choice(self.material_names)
         self._try("place", lambda: self.client.call_ok("place_brush", args))
 
+    def _get_unlocked_nodes(self):
+        nodes = self.client.call_ok("get_scene_nodes", {"scene_name": self.scene_name})["nodes"]
+        return [n for n in nodes if not n.get("locked", False)]
+
     def _do_select(self):
         def action():
-            nodes = self.client.call_ok("get_scene_nodes", {"scene_name": self.scene_name})["nodes"]
+            nodes = self._get_unlocked_nodes()
             if not nodes:
                 return
             k = self.rng.randint(0, min(5, len(nodes)))
@@ -477,7 +609,7 @@ class SmokeTestRunner:
 
     def _do_delete(self):
         def action():
-            nodes = self.client.call_ok("get_scene_nodes", {"scene_name": self.scene_name})["nodes"]
+            nodes = self._get_unlocked_nodes()
             if not nodes:
                 return
             node = self.rng.choice(nodes)

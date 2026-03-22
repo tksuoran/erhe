@@ -17,6 +17,7 @@ namespace editor {
 class App_context;
 class App_message_bus;
 class Operation;
+class Mcp_server;
 class Operation_stack;
 class Selection_tool;
 
@@ -54,8 +55,8 @@ public:
     );
     ~Operation_stack() noexcept override;
 
-    [[nodiscard]] auto can_undo() const -> bool;
-    [[nodiscard]] auto can_redo() const -> bool;
+    [[nodiscard]] auto can_undo      () const -> bool;
+    [[nodiscard]] auto can_redo      () const -> bool;
     void queue(const std::shared_ptr<Operation>& operation);
     void undo();
     void redo();
@@ -68,6 +69,11 @@ public:
     [[nodiscard]] auto get_executor() -> tf::Executor&;
 
 private:
+    friend class Mcp_server;
+
+    [[nodiscard]] auto get_undo_stack() const -> const std::vector<std::shared_ptr<Operation>>&;
+    [[nodiscard]] auto get_redo_stack() const -> const std::vector<std::shared_ptr<Operation>>&;
+
     void imgui(const char* stack_label, const std::vector<std::shared_ptr<Operation>>& operations);
 
     App_context&  m_context;

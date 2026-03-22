@@ -5,6 +5,8 @@
 #include "brushes/brush.hpp"
 #include "brushes/brush_placement.hpp"
 #include "content_library/content_library.hpp"
+#include "operations/operation.hpp"
+#include "operations/operation_stack.hpp"
 #include "erhe_math/math_util.hpp"
 #include "editor_log.hpp"
 #include "scene/scene_root.hpp"
@@ -308,6 +310,7 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "get_scene_brushes")  result = query_scene_brushes  (req->arguments);
         else if (req->tool_name == "get_material_details")result = query_material_details(req->arguments);
         else if (req->tool_name == "get_selection")       result = query_selection       (req->arguments);
+        else if (req->tool_name == "get_undo_redo_stack") result = query_undo_redo_stack (req->arguments);
         else if (req->tool_name == "select_items")       result = action_select_items   (req->arguments);
         else if (req->tool_name == "place_brush")        result = action_place_brush    (req->arguments);
         else if (req->tool_name == "toggle_physics")     result = action_toggle_physics (req->arguments);
@@ -340,6 +343,7 @@ void Mcp_server::refresh_tool_list()
     m_tool_infos.push_back({"get_material_details","Get detailed material properties",                       schema_scene_and_item("material_name", "Name of the material")});
     m_tool_infos.push_back({"get_scene_brushes",  "List all brushes in a scene's content library",         schema_scene_name()});
     m_tool_infos.push_back({"get_selection",        "Get currently selected items",                          schema_no_args()});
+    m_tool_infos.push_back({"get_undo_redo_stack", "Get undo/redo operation stacks",                       schema_no_args()});
     m_tool_infos.push_back({"select_items",        "Select items by ID (scene nodes, materials, etc.)",   {
         {"type", "object"},
         {"properties", {
@@ -811,6 +815,30 @@ auto Mcp_server::query_selection(const json& args) -> std::string
     }
 
     return make_json_content({{"items", items}}).dump();
+}
+
+auto Mcp_server::query_undo_redo_stack(const json& args) -> std::string
+{
+    static_cast<void>(args);
+
+    if (!m_context.operation_stack) {
+        return make_json_content({{"undo", json::array()}, {"redo", json::array()}, {"can_undo", false}, {"can_redo", false}}).dump();
+    }
+
+    auto make_stack = [](const std::vector<std::shared_ptr<Operation>>& ops) -> json {
+        json arr = json::array();
+        for (const auto& op : ops) {
+            arr.push_back(op->describe());
+        }
+        return arr;
+    };
+
+    return make_json_content({
+        {"undo",     make_stack(m_context.operation_stack->get_undo_stack())},
+        {"redo",     make_stack(m_context.operation_stack->get_redo_stack())},
+        {"can_undo", m_context.operation_stack->can_undo()},
+        {"can_redo", m_context.operation_stack->can_redo()}
+    }).dump();
 }
 
 auto Mcp_server::find_items_by_ids(Scene_root& sr, const std::set<std::size_t>& target_ids) -> std::vector<std::shared_ptr<erhe::Item_base>>
