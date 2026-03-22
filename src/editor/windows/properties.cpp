@@ -51,6 +51,13 @@
 #include <imgui/imgui.h>
 #include <imgui/misc/cpp/imgui_stdlib.h>
 
+#define ICON_MDI_AXIS_ARROW                               "\xf3\xb0\xb5\x89" // U+F0D49
+#define ICON_MDI_AXIS_ARROW_LOCK                          "\xf3\xb0\xb5\x8a" // U+F0D4A
+#define ICON_MDI_LOCK_OPEN                                "\xf3\xb0\x8c\xbf" // U+F033F
+#define ICON_MDI_LOCK                                     "\xf3\xb0\x8c\xbe" // U+F033E
+#define ICON_MDI_LOCK_OPEN_VARIANT_OUTLINE                "\xf3\xb0\xbf\x87" // U+F0FC7
+#define ICON_MDI_LOCK_OUTLINE                             "\xf3\xb0\x8d\x81" // U+F0341
+
 namespace editor {
 
 Properties::Properties(erhe::imgui::Imgui_renderer& imgui_renderer, erhe::imgui::Imgui_windows& imgui_windows, App_context& app_context)
@@ -741,12 +748,72 @@ void Properties::item_properties(const std::shared_ptr<erhe::Item_base>& item_in
         // TODO Same as group_label above - avoid heap allocation every frame
         std::string item_name_label = fmt::format("{} Name", item->get_type_name());
         add_entry(item_name_label.c_str(), [item]() {
-            std::string name = item->get_name();
-            const bool enter_pressed = ImGui::InputText("##", &name, ImGuiInputTextFlags_EnterReturnsTrue);
-            if (enter_pressed || ImGui::IsItemDeactivatedAfterEdit()) { // TODO
-                if (name != item->get_name()) {
-                    item->set_name(name);
+            if (item->is_lock_edit()) {
+                ImGui::TextUnformatted(item->get_name().c_str());
+            } else {
+                std::string name = item->get_name();
+                const bool enter_pressed = ImGui::InputText("##", &name, ImGuiInputTextFlags_EnterReturnsTrue);
+                if (enter_pressed || ImGui::IsItemDeactivatedAfterEdit()) { // TODO
+                    if (name != item->get_name()) {
+                        item->set_name(name);
+                    }
                 }
+            }
+        });                 
+
+        add_entry("Locks", [this, item]() {
+            ImFont* icon_font = m_imgui_renderer.material_design_font();
+            if (icon_font == nullptr) {
+                return;
+            }
+            const float font_size =
+                m_imgui_renderer.get_imgui_settings().scale_factor *
+                m_imgui_renderer.get_imgui_settings().material_design_font_size;
+
+            bool lock_xfm = item->is_lock_viewport_transform();
+            bool lock_edt = item->is_lock_edit();
+            bool lock_sel = item->is_lock_viewport_selection();
+            const char* xfm_icon = lock_xfm ? ICON_MDI_AXIS_ARROW_LOCK         : ICON_MDI_AXIS_ARROW;
+            const char* edt_icon = lock_edt ? ICON_MDI_LOCK                     : ICON_MDI_LOCK_OPEN;
+            const char* sel_icon = lock_sel ? ICON_MDI_LOCK_OUTLINE             : ICON_MDI_LOCK_OPEN_VARIANT_OUTLINE;
+            const ImVec4 dim_color = ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled);
+
+            if (!lock_xfm) { ImGui::PushStyleColor(ImGuiCol_Text, dim_color); }
+            ImGui::PushFont(icon_font, font_size);
+            const bool xfm_clicked = ImGui::Button(xfm_icon);
+            ImGui::PopFont();
+            if (!lock_xfm) { ImGui::PopStyleColor(); }
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("Transform Lock: %s", lock_xfm ? "Locked" : "Unlocked");
+            }
+            if (xfm_clicked) {
+                item->set_flag_bits(erhe::Item_flags::lock_viewport_transform, !lock_xfm);
+            }
+
+            ImGui::SameLine();
+            if (!lock_edt) { ImGui::PushStyleColor(ImGuiCol_Text, dim_color); }
+            ImGui::PushFont(icon_font, font_size);
+            const bool edt_clicked = ImGui::Button(edt_icon);
+            ImGui::PopFont();
+            if (!lock_edt) { ImGui::PopStyleColor(); }
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("Edit Lock: %s", lock_edt ? "Locked" : "Unlocked");
+            }
+            if (edt_clicked) {
+                item->set_lock_edit(!lock_edt);
+            }
+
+            ImGui::SameLine();
+            if (!lock_sel) { ImGui::PushStyleColor(ImGuiCol_Text, dim_color); }
+            ImGui::PushFont(icon_font, font_size);
+            const bool sel_clicked = ImGui::Button(sel_icon);
+            ImGui::PopFont();
+            if (!lock_sel) { ImGui::PopStyleColor(); }
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("Selection Lock: %s", lock_sel ? "Locked" : "Unlocked");
+            }
+            if (sel_clicked) {
+                item->set_flag_bits(erhe::Item_flags::lock_viewport_selection, !lock_sel);
             }
         });
 
@@ -768,6 +835,11 @@ void Properties::item_properties(const std::shared_ptr<erhe::Item_base>& item_in
         ////         item->set_wireframe_color(color);
         ////     }
         //// }
+    }
+
+    const bool edit_disabled = item->is_lock_edit();
+    if (edit_disabled) {
+        ImGui::BeginDisabled();
     }
 
     if (node_physics) {
@@ -796,6 +868,10 @@ void Properties::item_properties(const std::shared_ptr<erhe::Item_base>& item_in
 
     if (texture) {
         texture_properties(texture);
+    }
+
+    if (edit_disabled) {
+        ImGui::EndDisabled();
     }
 
     if (node) {

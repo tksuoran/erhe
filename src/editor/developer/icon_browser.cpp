@@ -10,6 +10,8 @@
 
 #include <imgui/imgui.h>
 
+#include <cstdio>
+
 namespace editor {
 
 Icon_browser::Icon_browser(
@@ -207,6 +209,10 @@ void Icon_browser::imgui()
             ? m_imgui_renderer.get_imgui_settings().material_design_font_size
             : m_imgui_renderer.get_imgui_settings().icon_font_size
         );
+    if (!m_last_copied.empty()) {
+        ImGui::TextUnformatted(m_last_copied.c_str());
+    }
+
     ImGui::PushFont(m_context.imgui_renderer->material_design_font(), m_imgui_renderer.get_imgui_settings().font_size);
     ImGui::TextUnformatted(ICON_MDI_FILTER);
     ImGui::PopFont();
@@ -238,8 +244,24 @@ void Icon_browser::imgui()
             continue;
         }
         ImGui::PushFont(icon_font, font_size);
-        ImGui::Button(icon_codes[i], button_size);
+        const bool clicked = ImGui::Button(icon_codes[i], button_size);
         ImGui::PopFont();
+        if (clicked) {
+            std::string escaped;
+            for (const char* p = icon_codes[i]; *p != '\0'; ++p) {
+                char hex[5];
+                std::snprintf(hex, sizeof(hex), "\\x%02x", static_cast<unsigned char>(*p));
+                escaped += hex;
+            }
+            char define_line[256];
+            std::snprintf(
+                define_line, sizeof(define_line),
+                "#define %-50s\"%s\" // U+%05X",
+                icon_names[i], escaped.c_str(), icon_unicodes[i]
+            );
+            ImGui::SetClipboardText(define_line);
+            m_last_copied = define_line;
+        }
         if (ImGui::IsItemHovered()) {
             ImGui::BeginTooltip();
             ImGui::Text("%s - %x", icon_names[i], icon_unicodes[i]);
