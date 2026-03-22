@@ -1,5 +1,4 @@
 #include "erhe_buffer/ibuffer.hpp"
-#include "erhe_utility/align.hpp"
 #include "erhe_verify/verify.hpp"
 
 namespace erhe::buffer {
@@ -7,8 +6,8 @@ namespace erhe::buffer {
 IBuffer::~IBuffer() noexcept = default;
 
 Cpu_buffer::Cpu_buffer(const std::string_view debug_label, const std::size_t capacity_bytes_count)
-    : m_capacity_byte_count{capacity_bytes_count}
-    , m_debug_label        {debug_label}
+    : m_allocator  {capacity_bytes_count}
+    , m_debug_label{debug_label}
 {
     ERHE_VERIFY(capacity_bytes_count > 0);
     m_buffer.resize(capacity_bytes_count);
@@ -16,19 +15,19 @@ Cpu_buffer::Cpu_buffer(const std::string_view debug_label, const std::size_t cap
 }
 
 Cpu_buffer::Cpu_buffer(Cpu_buffer&& other) noexcept
-    : m_capacity_byte_count{other.m_capacity_byte_count}
-    , m_next_free_byte     {other.m_next_free_byte}
-    , m_buffer             {std::move(other.m_buffer)}
-    , m_span               {m_buffer.data(), m_buffer.size()}
+    : m_allocator  {std::move(other.m_allocator)}
+    , m_buffer     {std::move(other.m_buffer)}
+    , m_span       {m_buffer.data(), m_buffer.size()}
+    , m_debug_label{std::move(other.m_debug_label)}
 {
 }
 
 Cpu_buffer& Cpu_buffer::operator=(Cpu_buffer&& other) noexcept
 {
-    m_capacity_byte_count = other.m_capacity_byte_count;
-    m_next_free_byte      = other.m_next_free_byte;
-    m_buffer              = std::move(other.m_buffer);
-    m_span                = std::span<std::byte>(m_buffer.data(), m_buffer.size());
+    m_allocator   = std::move(other.m_allocator);
+    m_buffer      = std::move(other.m_buffer);
+    m_span        = std::span<std::byte>(m_buffer.data(), m_buffer.size());
+    m_debug_label = std::move(other.m_debug_label);
     return *this;
 }
 
@@ -36,22 +35,17 @@ Cpu_buffer::~Cpu_buffer() noexcept = default;
 
 auto Cpu_buffer::get_capacity_byte_count() const noexcept -> std::size_t
 {
-    return m_capacity_byte_count;
+    return m_allocator.get_capacity();
 }
 
 auto Cpu_buffer::allocate_bytes(const std::size_t byte_count, const std::size_t alignment) noexcept -> std::optional<std::size_t>
 {
-    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_allocate_mutex};
+    return m_allocator.allocate(byte_count, alignment);
+}
 
-    const std::size_t offset         = erhe::utility::align_offset_non_power_of_two(m_next_free_byte, alignment);
-    const std::size_t next_free_byte = offset + byte_count;
-    if (next_free_byte > m_capacity_byte_count) {
-        // TODO log warning or error
-        return {};
-    }
-    m_next_free_byte = next_free_byte;
-
-    return offset;
+void Cpu_buffer::free_bytes(const std::size_t byte_offset, const std::size_t byte_count) noexcept
+{
+    m_allocator.free(byte_offset, byte_count);
 }
 
 auto Cpu_buffer::get_span() noexcept -> std::span<std::byte>
@@ -66,18 +60,18 @@ auto Cpu_buffer::get_debug_label() const -> std::string_view
 
 auto Cpu_buffer::get_used_byte_count() const -> std::size_t
 {
-    return m_next_free_byte;
+    return m_allocator.get_used();
 }
 
-auto Cpu_buffer::get_available_byte_count(std::size_t alignment) const -> std::size_t
+auto Cpu_buffer::get_available_byte_count(const std::size_t alignment) const -> std::size_t
 {
-    ERHE_VERIFY(alignment > 0);
-
-    std::size_t aligned_offset = erhe::utility::align_offset_non_power_of_two(m_next_free_byte, alignment);
-    if (aligned_offset >= m_capacity_byte_count) {
-        return 0;
-    }
-    return m_capacity_byte_count - aligned_offset;
+    static_cast<void>(alignment);
+    return m_allocator.get_free();
 }
 
-} // namespace
+auto Cpu_buffer::get_allocator() -> Free_list_allocator&
+{
+    return m_allocator;
+}
+
+} // namespace erhe::buffer

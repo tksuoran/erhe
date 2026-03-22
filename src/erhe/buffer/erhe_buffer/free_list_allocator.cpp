@@ -1,13 +1,38 @@
-#include "erhe_graphics/free_list_allocator.hpp"
+#include "erhe_buffer/free_list_allocator.hpp"
 
 #include <algorithm>
 
-namespace erhe::graphics {
+namespace erhe::buffer {
 
 Free_list_allocator::Free_list_allocator(const std::size_t capacity)
     : m_capacity{capacity}
 {
     m_free_blocks.push_back(Free_block{.offset = 0, .size = capacity});
+}
+
+Free_list_allocator::Free_list_allocator(Free_list_allocator&& other) noexcept
+    : m_capacity        {other.m_capacity}
+    , m_used            {other.m_used}
+    , m_allocation_count{other.m_allocation_count}
+    , m_free_blocks     {std::move(other.m_free_blocks)}
+{
+    other.m_capacity         = 0;
+    other.m_used             = 0;
+    other.m_allocation_count = 0;
+}
+
+Free_list_allocator& Free_list_allocator::operator=(Free_list_allocator&& other) noexcept
+{
+    if (this != &other) {
+        m_capacity         = other.m_capacity;
+        m_used             = other.m_used;
+        m_allocation_count = other.m_allocation_count;
+        m_free_blocks      = std::move(other.m_free_blocks);
+        other.m_capacity         = 0;
+        other.m_used             = 0;
+        other.m_allocation_count = 0;
+    }
+    return *this;
 }
 
 auto Free_list_allocator::allocate(
@@ -24,38 +49,38 @@ auto Free_list_allocator::allocate(
     for (std::size_t i = 0; i < m_free_blocks.size(); ++i) {
         Free_block& block = m_free_blocks[i];
 
-        // Align the offset within this block
-        const std::size_t aligned_offset   = ((block.offset + alignment - 1) / alignment) * alignment;
-        const std::size_t alignment_waste  = aligned_offset - block.offset;
-        const std::size_t required_size    = alignment_waste + byte_count;
+        const std::size_t aligned_offset  = ((block.offset + alignment - 1) / alignment) * alignment;
+        const std::size_t alignment_waste = aligned_offset - block.offset;
+        const std::size_t required_size   = alignment_waste + byte_count;
 
         if (block.size < required_size) {
             continue;
         }
 
-        // Found a fit. Split the block.
         const std::size_t remaining = block.size - required_size;
 
         if (remaining > 0) {
-            // Shrink the free block to the remainder after the allocation
             block.offset = aligned_offset + byte_count;
             block.size   = remaining;
 
-            // If there was alignment waste at the front, add a free block for it
             if (alignment_waste > 0) {
-                const Free_block waste_block{
-                    .offset = block.offset - required_size,
+                Free_block waste_block{
+                    .offset = aligned_offset - alignment_waste,
                     .size   = alignment_waste
                 };
-                m_free_blocks.insert(m_free_blocks.begin() + static_cast<std::ptrdiff_t>(i), waste_block);
+                m_free_blocks.insert(
+                    m_free_blocks.begin() + static_cast<std::ptrdiff_t>(i),
+                    waste_block
+                );
             }
         } else {
-            // Exact fit or only alignment waste remains
             if (alignment_waste > 0) {
                 block.offset = aligned_offset - alignment_waste;
                 block.size   = alignment_waste;
             } else {
-                m_free_blocks.erase(m_free_blocks.begin() + static_cast<std::ptrdiff_t>(i));
+                m_free_blocks.erase(
+                    m_free_blocks.begin() + static_cast<std::ptrdiff_t>(i)
+                );
             }
         }
 
@@ -78,8 +103,7 @@ void Free_list_allocator::free(
 
     std::lock_guard<std::mutex> lock{m_mutex};
 
-    // Insert the freed block in sorted order
-    const Free_block freed{.offset = byte_offset, .size = byte_count};
+    Free_block freed{.offset = byte_offset, .size = byte_count};
 
     std::vector<Free_block>::iterator insert_pos = std::lower_bound(
         m_free_blocks.begin(),
@@ -136,4 +160,4 @@ auto Free_list_allocator::get_allocation_count() const -> std::size_t
     return m_allocation_count;
 }
 
-} // namespace erhe::graphics
+} // namespace erhe::buffer

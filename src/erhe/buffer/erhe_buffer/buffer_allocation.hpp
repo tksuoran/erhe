@@ -2,7 +2,7 @@
 
 #include <cstddef>
 
-namespace erhe::graphics {
+namespace erhe::buffer {
 
 class Free_list_allocator;
 
@@ -30,4 +30,4 @@ private:
     std::size_t          m_byte_count {0};
 };
 
-} // namespace erhe::graphics
+} // namespace erhe::buffer

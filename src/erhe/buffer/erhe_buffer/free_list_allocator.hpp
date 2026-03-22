@@ -5,12 +5,16 @@
 #include <optional>
 #include <vector>
 
-namespace erhe::graphics {
+namespace erhe::buffer {
 
 class Free_list_allocator
 {
 public:
     explicit Free_list_allocator(std::size_t capacity);
+    Free_list_allocator(Free_list_allocator&& other) noexcept;
+    Free_list_allocator& operator=(Free_list_allocator&& other) noexcept;
+    Free_list_allocator(const Free_list_allocator&) = delete;
+    Free_list_allocator& operator=(const Free_list_allocator&) = delete;
 
     auto allocate(std::size_t byte_count, std::size_t alignment) -> std::optional<std::size_t>;
     void free   (std::size_t byte_offset, std::size_t byte_count);
@@ -28,8 +32,6 @@ private:
         std::size_t size;
     };
 
-    void merge_adjacent_blocks();
-
     std::size_t              m_capacity;
     std::size_t              m_used{0};
     std::size_t              m_allocation_count{0};
@@ -37,4 +39,4 @@ private:
     mutable std::mutex       m_mutex;
 };
 
-} // namespace erhe::graphics
+} // namespace erhe::buffer

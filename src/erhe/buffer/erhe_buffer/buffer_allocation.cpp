@@ -1,7 +1,7 @@
-#include "erhe_graphics/buffer_allocation.hpp"
-#include "erhe_graphics/free_list_allocator.hpp"
+#include "erhe_buffer/buffer_allocation.hpp"
+#include "erhe_buffer/free_list_allocator.hpp"
 
-namespace erhe::graphics {
+namespace erhe::buffer {
 
 Buffer_allocation::Buffer_allocation()
     : m_allocator  {nullptr}
@@ -73,4 +73,4 @@ auto Buffer_allocation::is_valid() const -> bool
     return m_allocator != nullptr;
 }
 
-} // namespace erhe::graphics
+} // namespace erhe::buffer
