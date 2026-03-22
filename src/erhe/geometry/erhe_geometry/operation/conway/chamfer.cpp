@@ -353,7 +353,10 @@ void Chamfer::build()
         const GEO::index_t new_dst_vertex = destination_mesh.vertices.create_vertex();
         if (!vertex_alternative_method[src_vertex]) {
             const size_t vertex_corner_count = source.get_vertex_corners(src_vertex).size();
-            ERHE_VERIFY(vertex_corner_count > 0);
+            if (vertex_corner_count == 0) {
+                set_pointf(destination_mesh.vertices, new_dst_vertex, get_pointf(source_mesh.vertices, src_vertex));
+                continue;
+            }
             const GEO::vec3f new_pos = vertex_position_sum[src_vertex] / static_cast<float>(vertex_corner_count);
             set_pointf(destination_mesh.vertices, new_dst_vertex, new_pos);
 

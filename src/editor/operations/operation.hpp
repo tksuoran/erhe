@@ -18,12 +18,16 @@ public:
 
     [[nodiscard]] auto        describe  () const -> const std::string&;
     [[nodiscard]] inline auto get_serial() const -> std::size_t { return m_id.get_id(); }
+    [[nodiscard]] auto        get_error () const -> const std::string&;
+    [[nodiscard]] auto        has_error () const -> bool;
 
     void set_description(std::string&& description);
+    void set_error      (std::string error);
 
 private:
     erhe::Unique_id<Operation> m_id{};
     std::string                m_description;
+    std::string                m_error;
 };
 
 }

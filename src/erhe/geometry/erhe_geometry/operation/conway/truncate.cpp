@@ -33,39 +33,71 @@ void Truncate::build()
     for (GEO::index_t src_vertex : source_mesh.vertices) {
         const std::vector<GEO::index_t>& src_corners      = source.get_vertex_corners(src_vertex);
         const GEO::index_t               src_corner_count = static_cast<GEO::index_t>(src_corners.size());
-        const GEO::index_t               new_dst_facet    = destination_mesh.facets.create_polygon(src_corner_count);
+        if (src_corner_count < 3) {
+            continue;
+        }
 
-        //// Debug_src_vertex_entry debug_src_vertex_entry;
-        //// debug_src_vertex_entry.src_vertex = src_vertex;
-        //// debug_src_vertex_entry.dst_facet = new_dst_facet;
-        for (GEO::index_t local_src_vertex_corner = 0; local_src_vertex_corner < src_corner_count; ++local_src_vertex_corner) {
-            const GEO::index_t src_corner      = src_corners[local_src_vertex_corner];
-            const GEO::index_t src_facet       = source.get_corner_facet(src_corner);
+        // Collect all edge midpoints before creating the facet
+        std::vector<GEO::index_t> midpoints;
+        midpoints.reserve(src_corner_count);
+        bool all_valid = true;
+        for (GEO::index_t i = 0; i < src_corner_count; ++i) {
+            const GEO::index_t src_corner = src_corners[i];
+            const GEO::index_t src_facet  = source.get_corner_facet(src_corner);
+            if (src_facet >= source_mesh.facets.nb()) {
+                all_valid = false;
+                break;
+            }
             const GEO::index_t next_src_corner = source_mesh.facets.next_corner_around_facet(src_facet, src_corner);
             const GEO::index_t next_src_vertex = source_mesh.facet_corners.vertex(next_src_corner);
-            const GEO::index_t edge_slot       = 0;
-            const GEO::index_t edge_midpoint   = get_src_edge_new_vertex(src_vertex, next_src_vertex, edge_slot);
-            make_new_dst_corner_from_dst_vertex(new_dst_facet, local_src_vertex_corner, edge_midpoint);            
-            //// debug_src_vertex_entry.corners.push_back(edge_midpoint);
+            const GEO::index_t edge_midpoint   = get_src_edge_new_vertex(src_vertex, next_src_vertex, 0);
+            if (edge_midpoint == GEO::NO_VERTEX) {
+                all_valid = false;
+                break;
+            }
+            midpoints.push_back(edge_midpoint);
         }
-        //// debug_src_vertex_entries.push_back(debug_src_vertex_entry);
+        if (!all_valid) {
+            continue;
+        }
+
+        const GEO::index_t new_dst_facet = destination_mesh.facets.create_polygon(src_corner_count);
+        for (GEO::index_t i = 0; i < src_corner_count; ++i) {
+            make_new_dst_corner_from_dst_vertex(new_dst_facet, i, midpoints[i]);
+        }
     }
 
     // New faces from old faces, new face corner for each old corner edge 'midpoint'
     for (const GEO::index_t src_facet : source_mesh.facets) {
         const GEO::index_t src_corner_count = source_mesh.facets.nb_corners(src_facet);
-        const GEO::index_t new_dst_facet    = destination_mesh.facets.create_polygon(src_corner_count * 2);
-        GEO::index_t dst_corner = 0;
-        //// Debug_src_facet_entry debug_src_facet_entry;
-        //// debug_src_facet_entry.src_facet = src_facet;
-        //// debug_src_facet_entry.dst_facet = new_dst_facet;
-        for (GEO::index_t local_src_facet_corner = 0; local_src_facet_corner < src_corner_count; ++local_src_facet_corner) {
-            const GEO::index_t src_corner      = source_mesh.facets.corner(src_facet, local_src_facet_corner);
-            const GEO::index_t next_src_corner = source_mesh.facets.corner(src_facet, (local_src_facet_corner + 1) % src_corner_count);
-            const GEO::index_t src_vertex      = source_mesh.facet_corners.vertex(src_corner     );
+        if (src_corner_count < 3) {
+            continue;
+        }
+
+        // Collect all edge midpoint pairs before creating the facet
+        std::vector<std::pair<GEO::index_t, GEO::index_t>> edge_pairs;
+        edge_pairs.reserve(src_corner_count);
+        bool all_valid = true;
+        for (GEO::index_t i = 0; i < src_corner_count; ++i) {
+            const GEO::index_t src_corner      = source_mesh.facets.corner(src_facet, i);
+            const GEO::index_t next_src_corner = source_mesh.facets.corner(src_facet, (i + 1) % src_corner_count);
+            const GEO::index_t src_vertex      = source_mesh.facet_corners.vertex(src_corner);
             const GEO::index_t next_src_vertex = source_mesh.facet_corners.vertex(next_src_corner);
-            GEO::index_t a                     = get_src_edge_new_vertex(src_vertex, next_src_vertex, 0);
-            GEO::index_t b                     = get_src_edge_new_vertex(src_vertex, next_src_vertex, 1);
+            GEO::index_t a = get_src_edge_new_vertex(src_vertex, next_src_vertex, 0);
+            GEO::index_t b = get_src_edge_new_vertex(src_vertex, next_src_vertex, 1);
+            if (a == GEO::NO_VERTEX || b == GEO::NO_VERTEX) {
+                all_valid = false;
+                break;
+            }
+            edge_pairs.emplace_back(a, b);
+        }
+        if (!all_valid) {
+            continue;
+        }
+
+        const GEO::index_t new_dst_facet = destination_mesh.facets.create_polygon(src_corner_count * 2);
+        GEO::index_t dst_corner = 0;
+        for (const auto& [a, b] : edge_pairs) {
             make_new_dst_corner_from_dst_vertex(new_dst_facet, dst_corner++, a);
             make_new_dst_corner_from_dst_vertex(new_dst_facet, dst_corner++, b);
             //// debug_src_facet_entry.corners.push_back(a);

@@ -37,10 +37,14 @@ void Sqrt3_subdivision::build()
     // build_src_vertex_to_src_corners();
 
     for (GEO::index_t src_vertex : source_mesh.vertices) {
-        const std::vector<GEO::index_t> src_corners      = source.get_vertex_corners(src_vertex);
+        const std::vector<GEO::index_t>& src_corners = source.get_vertex_corners(src_vertex);
+        if (src_corners.empty()) {
+            make_new_dst_vertex_from_src_vertex(src_vertex);
+            continue;
+        }
         const float                     n                = static_cast<float>(src_corners.size());
         const float                     alpha            = (4.0f - 2.0f * std::cos(2.0f * pi / n)) / 9.0f;
-        const float                     alpha_per_n      = alpha / static_cast<float>(n);
+        const float                     alpha_per_n      = alpha / n;
         const float                     alpha_complement = 1.0f - alpha;
         const GEO::index_t              new_dst_vertex   = make_new_dst_vertex_from_src_vertex(alpha_complement, src_vertex);
         add_vertex_ring(new_dst_vertex, alpha_per_n, src_vertex);

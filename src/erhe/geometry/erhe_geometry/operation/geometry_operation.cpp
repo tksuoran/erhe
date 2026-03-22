@@ -112,9 +112,13 @@ auto Geometry_operation::get_src_edge_new_vertex(GEO::index_t src_vertex_a, GEO:
 
     const std::pair<GEO::index_t, GEO::index_t> src_edge_key = std::make_pair(src_vertex_a, src_vertex_b);
     const auto i = m_src_edge_to_dst_vertex.find(src_edge_key);
-    ERHE_VERIFY(i != m_src_edge_to_dst_vertex.end());
+    if (i == m_src_edge_to_dst_vertex.end()) {
+        return GEO::NO_VERTEX;
+    }
     const std::vector<GEO::index_t>& dst_vertices = i->second;
-    ERHE_VERIFY(vertex_split_position < dst_vertices.size());
+    if (vertex_split_position >= dst_vertices.size()) {
+        return GEO::NO_VERTEX;
+    }
     return dst_vertices[!swapped ? dst_vertices.size() - vertex_split_position - 1 : vertex_split_position];
 }
 
@@ -409,10 +413,11 @@ void Geometry_operation::copy_mesh_attributes()
 
 void Geometry_operation::post_processing()
 {
-    //destination.sanity_check();
-    //destination.compute_tangents();
-
     interpolate_mesh_attributes();
+
+    // Sanitize before process() to remove degenerate facets that would
+    // crash Geogram's connect() (e.g., facets with duplicate vertices).
+    destination.sanitize();
 
     const uint64_t flags =
         erhe::geometry::Geometry::process_flag_connect |

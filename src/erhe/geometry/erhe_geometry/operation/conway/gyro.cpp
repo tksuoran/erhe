@@ -35,6 +35,9 @@ void Gyro::build()
 
     for (const GEO::index_t src_facet : source_mesh.facets) {
         const GEO::index_t src_corner_count = source_mesh.facets.nb_corners(src_facet);
+        if (src_corner_count < 3) {
+            continue;
+        }
         for (GEO::index_t local_src_facet_corner = 0; local_src_facet_corner < src_corner_count; ++local_src_facet_corner) {
             const GEO::index_t prev_src_corner          = source_mesh.facets.corner(src_facet, (local_src_facet_corner + src_corner_count - 1) % src_corner_count);
             const GEO::index_t src_corner               = source_mesh.facets.corner(src_facet, local_src_facet_corner);
@@ -45,14 +48,10 @@ void Gyro::build()
             const GEO::index_t previous_edge_midpoint_0 = get_src_edge_new_vertex(a, b, 0);
             const GEO::index_t previous_edge_midpoint_1 = get_src_edge_new_vertex(a, b, 1);
             const GEO::index_t next_edge_midpoint_0     = get_src_edge_new_vertex(b, c, 0);
-            if (previous_edge_midpoint_0 == GEO::NO_VERTEX) {
-                return; // TODO Can these ever happen?
-            }
-            if (previous_edge_midpoint_1 == GEO::NO_VERTEX) {
-                return;
-            }
-            if (next_edge_midpoint_0 == GEO::NO_VERTEX) {
-                return;
+            if (previous_edge_midpoint_0 == GEO::NO_VERTEX ||
+                previous_edge_midpoint_1 == GEO::NO_VERTEX ||
+                next_edge_midpoint_0     == GEO::NO_VERTEX) {
+                continue;
             }
             const GEO::index_t new_dst_facet = make_new_dst_facet_from_src_facet(src_facet, 5);
             make_new_dst_corner_from_dst_vertex        (new_dst_facet, 0, previous_edge_midpoint_0);

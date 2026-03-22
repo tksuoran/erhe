@@ -23,6 +23,9 @@ void Kis::build()
 
     for (GEO::index_t src_facet : source_mesh.facets) {
         const GEO::index_t src_facet_corner_count = source_mesh.facets.nb_corners(src_facet);
+        if (src_facet_corner_count < 3) {
+            continue;
+        }
         for (GEO::index_t local_src_facet_corner = 0; local_src_facet_corner < src_facet_corner_count; ++local_src_facet_corner) {
             const GEO::index_t src_corner      = source_mesh.facets.corner(src_facet, local_src_facet_corner);
             const GEO::index_t next_src_corner = source_mesh.facets.corner(src_facet, (local_src_facet_corner + 1) % src_facet_corner_count);

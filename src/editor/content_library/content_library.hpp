@@ -197,6 +197,7 @@ auto Content_library_node::combo(
         const ImGuiPayload* drag_node_payload = ImGui::AcceptDragDropPayload(Content_library_node::static_type_name.data());
         const ImGuiPayload* drag_item_payload = ImGui::AcceptDragDropPayload(T::static_type_name.data());
         if ((drag_node_payload == nullptr) && (drag_item_payload == nullptr)) {
+            ImGui::EndDragDropTarget();
             return false;
         }
         const erhe::Item_base*      drag_node_ = (drag_node_payload != nullptr) ? *(static_cast<erhe::Item_base**>(drag_node_payload->Data)) : nullptr;
