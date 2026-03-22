@@ -110,7 +110,9 @@ Many systems have swappable backends selected at CMake configure time via `#ifde
 
 ## Python
 
-On this Windows machine, use the `py` launcher to run Python scripts (not `python` or `python3`, which resolve to the Microsoft Store stub). Example:
+**IMPORTANT: On this Windows machine, always use the `py -3` launcher to run Python scripts. Never use `python` or `python3` — they resolve to the Microsoft Store stub and will fail.** This applies to all Python invocations: scripts, codegen, tools.
+
+Example:
 
 ```bash
 py -3 src/erhe/codegen/generate.py <definitions_dir> <output_dir>

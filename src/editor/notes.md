@@ -130,11 +130,22 @@ ImGui window implementations:
 - `developer/` -- Developer-only windows (clipboard, commands, composer, rendergraph, etc.)
 - `experiments/` -- Experimental features (gradient editor, network, sheet)
 
+## Component Construction Rules
+
+`App_context` is a plain struct of raw pointers, all initially null. Components are constructed in dependency order by the `Editor` constructor. `App_context&` is passed to component constructors, but **component constructors must only store the reference — they must NOT access any `App_context` member pointers**. The pointers are populated later in `fill_app_context()` after all components exist.
+
+This means:
+- Constructor bodies must not read `m_context.selection`, `m_context.move_tool`, etc.
+- Constructor bodies must not check `if (m_context.xxx != nullptr)` — these are always null during construction
+- Cross-component wiring that requires other components to exist must happen after `fill_app_context()`, not in constructors
+
+Components that need references to sibling components should receive them as explicit constructor parameters (not via `App_context`). For example, `Transform_tool` receives `Move_tool&`, `Rotate_tool&`, `Scale_tool&` directly — these are constructed immediately before it in the same task block.
+
 ## Important Patterns
 
 ### Dependency Injection via App_context
 
-All subsystems receive `App_context&` and look up sibling subsystems through it. This avoids circular constructor dependencies but means subsystems are loosely typed -- null checks are important when accessing context members.
+All subsystems receive `App_context&` and look up sibling subsystems through it. This avoids circular constructor dependencies but means subsystems are loosely typed -- null checks are important when accessing context members at runtime (after construction).
 
 ### Command System
 

@@ -54,6 +54,9 @@ struct Render_scene_view_message;
 class Headset_view;
 class Node_physics;
 class Scene_root;
+class Move_tool;
+class Rotate_tool;
+class Scale_tool;
 class Subtool;
 class Tools;
 class Transform_tool;
@@ -170,7 +173,10 @@ public:
         App_message_bus&             app_message_bus,
         Headset_view&                headset_view,
         Mesh_memory&                 mesh_memory,
-        Tools&                       tools
+        Tools&                       tools,
+        Move_tool&                   move_tool,
+        Rotate_tool&                 rotate_tool,
+        Scale_tool&                  scale_tool
     );
 
     // Implements Tool

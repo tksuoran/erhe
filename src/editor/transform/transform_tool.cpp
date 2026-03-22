@@ -112,7 +112,10 @@ Transform_tool::Transform_tool(
     App_message_bus&             app_message_bus,
     Headset_view&                headset_view,
     Mesh_memory&                 mesh_memory,
-    Tools&                       tools
+    Tools&                       tools,
+    Move_tool&                   move_tool,
+    Rotate_tool&                 rotate_tool,
+    Scale_tool&                  scale_tool
 )
     : Tool    {app_context, tools}
     , m_window{imgui_renderer, imgui_windows, "Transform", "transform", [this]() { window_imgui(); }}
@@ -187,15 +190,9 @@ Transform_tool::Transform_tool(
     m_drag_command.set_host(this);
 
     auto record_fn = [this]() { record_transform_operation(); };
-    if (m_context.move_tool != nullptr) {
-        m_context.move_tool->set_transform_shared(shared, record_fn);
-    }
-    if (m_context.rotate_tool != nullptr) {
-        m_context.rotate_tool->set_transform_shared(shared, record_fn);
-    }
-    if (m_context.scale_tool != nullptr) {
-        m_context.scale_tool->set_transform_shared(shared, record_fn);
-    }
+    move_tool.set_transform_shared(shared, record_fn);
+    rotate_tool.set_transform_shared(shared, record_fn);
+    scale_tool.set_transform_shared(shared, record_fn);
 }
 
 void Transform_tool::on_hover_scene_view(Hover_scene_view_message& message)

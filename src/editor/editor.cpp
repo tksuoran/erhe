@@ -904,7 +904,10 @@ public:
                     *m_app_message_bus.get(),
                     *m_headset_view.get(),
                     *m_mesh_memory.get(),
-                    *m_tools.get()
+                    *m_tools.get(),
+                    *m_move_tool.get(),
+                    *m_rotate_tool.get(),
+                    *m_scale_tool.get()
                 );
             }
             ERHE_TASK_FOOTER(
