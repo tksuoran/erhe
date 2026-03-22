@@ -54,7 +54,7 @@ public:
     auto want_keyboard_events     () const -> bool override;
     auto want_cursor_relative_hold() const -> bool override;
 
-    void toolbar                  ();
+    void draw_toolbar             ();
     void on_mouse_move            (glm::vec2 mouse_position_in_window);
     void update_hover_info        ();
 

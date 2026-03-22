@@ -104,7 +104,7 @@ void Viewport_window::set_imgui_host(erhe::imgui::Imgui_host* imgui_host)
     Imgui_window::set_imgui_host(imgui_host);
 }
 
-void Viewport_window::toolbar()
+void Viewport_window::draw_toolbar()
 {
     const std::shared_ptr<Viewport_scene_view> viewport_scene_view = m_viewport_scene_view.lock();
     if (!viewport_scene_view) {
@@ -187,7 +187,7 @@ void Viewport_window::drag_and_drop_target(float min_x, float min_y, float max_x
 
 void Viewport_window::imgui()
 {
-    toolbar();
+    draw_toolbar();
     ImGui::BeginChildEx(
         "Viewport_window::imgui()", // name
         ImGuiID{1},                 // id

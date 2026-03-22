@@ -4,6 +4,8 @@
 
 #include "erhe_imgui/imgui_window.hpp"
 
+#include <fmt/format.h>
+
 #include <memory>
 
 namespace erhe        { class Item_base; }
