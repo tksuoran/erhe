@@ -690,10 +690,17 @@ class UnitTestRunner:
 
 
     def _run_csg_op(self, command_name):
-        """Place two brushes, select both, run CSG op, wait, verify, undo."""
+        """Place two overlapping brushes, select both, run CSG op, wait, verify, undo."""
         self._require_scene()
-        node_a_id = self._place_test_brush()
-        node_b_id = self._place_test_brush()
+        brushes = self.client.call_ok("get_scene_brushes", {"scene_name": self.scene_name})["brushes"]
+        if not brushes:
+            raise SkipTest("no brushes")
+        cube = next((b for b in brushes if b["name"] == "cube"), brushes[0])
+        # Place both at same position for guaranteed overlap
+        result_a = self.client.call_ok("place_brush", {"scene_name": self.scene_name, "brush_id": cube["id"], "position": [0.0, 10.0, 0.0]})
+        result_b = self.client.call_ok("place_brush", {"scene_name": self.scene_name, "brush_id": cube["id"], "position": [0.0, 10.0, 0.0]})
+        node_a_id = result_a["node_id"]
+        node_b_id = result_b["node_id"]
 
         # Select both nodes
         self.client.call_ok("select_items", {"scene_name": self.scene_name, "ids": [node_a_id, node_b_id]})
@@ -949,28 +956,45 @@ class SmokeTestRunner:
 
     CSG_COMMANDS = ["Geometry.Union", "Geometry.Intersection", "Geometry.Difference"]
 
+    def _place_overlapping_brushes(self):
+        """Place two brushes that are very likely to intersect. Returns (node_id_a, node_id_b)."""
+        x = self.rng.uniform(-3, 3)
+        y = self.rng.uniform(0.5, 3)
+        z = self.rng.uniform(-3, 3)
+        brush_a = self.rng.choice(self.brush_ids)
+        brush_b = self.rng.choice(self.brush_ids)
+        mat = self.rng.choice(self.material_names) if self.material_names else None
+
+        # 80% chance: same position (guaranteed overlap)
+        # 20% chance: small offset (likely overlap for most brushes)
+        if self.rng.random() < 0.8:
+            offset_x = 0.0
+            offset_y = 0.0
+            offset_z = 0.0
+        else:
+            offset_x = self.rng.uniform(-0.3, 0.3)
+            offset_y = self.rng.uniform(-0.3, 0.3)
+            offset_z = self.rng.uniform(-0.3, 0.3)
+
+        args_a = {"scene_name": self.scene_name, "brush_id": brush_a, "position": [x, y, z]}
+        args_b = {"scene_name": self.scene_name, "brush_id": brush_b, "position": [x + offset_x, y + offset_y, z + offset_z]}
+        if mat:
+            args_a["material_name"] = mat
+            args_b["material_name"] = mat
+        result_a = self.client.call_ok("place_brush", args_a)
+        result_b = self.client.call_ok("place_brush", args_b)
+        return result_a["node_id"], result_b["node_id"]
+
     def _do_csg(self):
         def action():
             if not self.brush_ids:
                 return
-            # Place two brushes close together
-            x = self.rng.uniform(-3, 3)
-            z = self.rng.uniform(-3, 3)
-            brush_a = self.rng.choice(self.brush_ids)
-            brush_b = self.rng.choice(self.brush_ids)
-            mat = self.rng.choice(self.material_names) if self.material_names else None
-            args_a = {"scene_name": self.scene_name, "brush_id": brush_a, "position": [x, 1.0, z]}
-            args_b = {"scene_name": self.scene_name, "brush_id": brush_b, "position": [x + 0.3, 1.0, z]}
-            if mat:
-                args_a["material_name"] = mat
-                args_b["material_name"] = mat
-            result_a = self.client.call_ok("place_brush", args_a)
-            result_b = self.client.call_ok("place_brush", args_b)
+            node_a_id, node_b_id = self._place_overlapping_brushes()
 
             # Select both
             self.client.call_ok("select_items", {
                 "scene_name": self.scene_name,
-                "ids": [result_a["node_id"], result_b["node_id"]]
+                "ids": [node_a_id, node_b_id]
             })
 
             undo_before = len(self.client.call_ok("get_undo_redo_stack")["undo"])
