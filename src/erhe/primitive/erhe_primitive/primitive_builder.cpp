@@ -101,8 +101,9 @@ void Build_context_root::allocate_vertex_buffers()
             build_failed = true;
             return;
         }
-        Buffer_range buffer_range = build_info.buffer_info.buffer_sink.allocate_vertex_buffer(i, total_vertex_count, sink_stream.stride);
-        buffer_mesh.vertex_buffer_ranges.emplace_back(std::move(buffer_range));
+        Buffer_sink_allocation sink_allocation = build_info.buffer_info.buffer_sink.allocate_vertex_buffer(i, total_vertex_count, sink_stream.stride);
+        buffer_mesh.vertex_buffer_ranges.emplace_back(sink_allocation.range);
+        buffer_mesh.vertex_allocations.emplace_back(std::move(sink_allocation.allocation));
     }
 }
 
@@ -128,10 +129,12 @@ void Build_context_root::allocate_index_buffer()
         index_type_size_bytes
     );
 
-    buffer_mesh.index_buffer_range = build_info.buffer_info.buffer_sink.allocate_index_buffer(
+    Buffer_sink_allocation sink_allocation = build_info.buffer_info.buffer_sink.allocate_index_buffer(
         total_index_count,
         index_type_size_bytes
     );
+    buffer_mesh.index_buffer_range = sink_allocation.range;
+    buffer_mesh.index_allocation   = std::move(sink_allocation.allocation);
 }
 
 class Mesh_point_source : public erhe::math::Bounding_volume_source

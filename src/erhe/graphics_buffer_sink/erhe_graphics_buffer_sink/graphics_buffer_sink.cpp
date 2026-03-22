@@ -26,42 +26,51 @@ auto Graphics_buffer_sink::allocate_vertex_buffer(
     const std::size_t stream,
     const std::size_t vertex_count,
     const std::size_t vertex_element_size
-) -> erhe::primitive::Buffer_range
+) -> erhe::primitive::Buffer_sink_allocation
 {
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
 
-    const std::size_t                    allocation_byte_count = vertex_count * vertex_element_size;
-    const std::size_t                    allocation_alignment  = vertex_element_size;
-    Vertex_buffer_entry&                 entry                 = m_vertex_entries.at(stream);
-    const std::optional<std::size_t>     byte_offset_opt       = entry.allocator.allocate(allocation_byte_count, allocation_alignment);
+    const std::size_t                allocation_byte_count = vertex_count * vertex_element_size;
+    const std::size_t                allocation_alignment  = vertex_element_size;
+    Vertex_buffer_entry&             entry                 = m_vertex_entries.at(stream);
+    const std::optional<std::size_t> byte_offset_opt       = entry.allocator.allocate(allocation_byte_count, allocation_alignment);
     if (!byte_offset_opt.has_value()) {
         return {};
     }
 
-    return erhe::primitive::Buffer_range{
-        .count        = vertex_count,
-        .element_size = vertex_element_size,
-        .byte_offset  = byte_offset_opt.value(),
-        .stream       = stream
+    const std::size_t byte_offset = byte_offset_opt.value();
+    return erhe::primitive::Buffer_sink_allocation{
+        .range = erhe::primitive::Buffer_range{
+            .count        = vertex_count,
+            .element_size = vertex_element_size,
+            .byte_offset  = byte_offset,
+            .stream       = stream
+        },
+        .allocation = erhe::buffer::Buffer_allocation{entry.allocator, byte_offset, allocation_byte_count}
     };
 }
 
 auto Graphics_buffer_sink::allocate_index_buffer(
     const std::size_t index_count,
     const std::size_t index_element_size
-) -> erhe::primitive::Buffer_range
+) -> erhe::primitive::Buffer_sink_allocation
 {
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
 
-    const std::optional<std::size_t> byte_offset_opt = m_index_allocator.allocate(index_count * index_element_size, index_element_size);
+    const std::size_t                allocation_byte_count = index_count * index_element_size;
+    const std::optional<std::size_t> byte_offset_opt       = m_index_allocator.allocate(allocation_byte_count, index_element_size);
     if (!byte_offset_opt.has_value()) {
         return {};
     }
 
-    return erhe::primitive::Buffer_range{
-        .count        = index_count,
-        .element_size = index_element_size,
-        .byte_offset  = byte_offset_opt.value()
+    const std::size_t byte_offset = byte_offset_opt.value();
+    return erhe::primitive::Buffer_sink_allocation{
+        .range = erhe::primitive::Buffer_range{
+            .count        = index_count,
+            .element_size = index_element_size,
+            .byte_offset  = byte_offset
+        },
+        .allocation = erhe::buffer::Buffer_allocation{m_index_allocator, byte_offset, allocation_byte_count}
     };
 }
 

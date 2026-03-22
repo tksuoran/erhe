@@ -30,8 +30,8 @@ public:
         erhe::graphics::Buffer*                        index_buffer
     );
 
-    [[nodiscard]] auto allocate_vertex_buffer(std::size_t stream, std::size_t vertex_count, std::size_t vertex_element_size) -> erhe::primitive::Buffer_range override;
-    [[nodiscard]] auto allocate_index_buffer (std::size_t index_count, std::size_t index_element_size) -> erhe::primitive::Buffer_range override;
+    [[nodiscard]] auto allocate_vertex_buffer(std::size_t stream, std::size_t vertex_count, std::size_t vertex_element_size) -> erhe::primitive::Buffer_sink_allocation override;
+    [[nodiscard]] auto allocate_index_buffer (std::size_t index_count, std::size_t index_element_size) -> erhe::primitive::Buffer_sink_allocation override;
 
     void enqueue_vertex_data            (std::size_t stream, std::size_t offset, std::vector<uint8_t>&& data) const override;
     void enqueue_index_data             (std::size_t offset, std::vector<uint8_t>&& data)                     const override;

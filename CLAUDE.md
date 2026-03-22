@@ -127,6 +127,8 @@ See [`doc/editor_improvements.md`](doc/editor_improvements.md) for the prioritiz
 - **Always use `class`, never `struct`** — this makes forward declarations trivial (always `class Foo;`).
 - **Prefer explicit types over `auto`** — spell out the actual type for readability. Reviewers should not need to trace through code to determine types.
 - **Use sufficient parentheses** — do not rely on C++ operator precedence. Add parentheses so the intent is unambiguous to readers (e.g., `(a & b) != 0` not `a & b != 0`).
+- **Never use lock-free / atomic techniques** without explicitly asking the user for permission first. Prefer simple mutex-based synchronization.
+- **Multithreading debugging**: When diagnosing deadlocks or contention, ask the user for callstacks of all threads — not just the stuck thread. The root cause is usually on another thread.
 
 ## C++ Standard
 

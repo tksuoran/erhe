@@ -397,7 +397,7 @@ void Hotbar::init_radial_menu(Mesh_memory& mesh_memory, Scene_root&  scene_root)
     );
     ERHE_VERIFY(buffer_mesh_ok); // TODO
 
-    std::shared_ptr<erhe::primitive::Primitive> new_primitive = std::make_shared<erhe::primitive::Primitive>(buffer_mesh);
+    std::shared_ptr<erhe::primitive::Primitive> new_primitive = std::make_shared<erhe::primitive::Primitive>(std::move(buffer_mesh));
     m_radial_menu_background_mesh = std::make_shared<erhe::scene::Mesh>("Radial Menu Mesh");
     m_radial_menu_background_mesh->add_primitive(new_primitive, disc_material);
 
