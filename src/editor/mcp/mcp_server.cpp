@@ -572,10 +572,21 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
         if (mesh) {
             att_json["primitive_count"] = static_cast<int>(mesh->get_primitives().size());
             json mat_names = json::array();
+            int total_vertices = 0;
+            int total_facets = 0;
             for (const auto& prim : mesh->get_primitives()) {
                 mat_names.push_back(prim.material ? prim.material->get_name() : "(none)");
+                if (prim.primitive && prim.primitive->render_shape) {
+                    const auto& geom = prim.primitive->render_shape->get_geometry_const();
+                    if (geom) {
+                        total_vertices += static_cast<int>(geom->get_mesh().vertices.nb());
+                        total_facets   += static_cast<int>(geom->get_mesh().facets.nb());
+                    }
+                }
             }
-            att_json["materials"] = mat_names;
+            att_json["materials"]     = mat_names;
+            att_json["vertex_count"]  = total_vertices;
+            att_json["facet_count"]   = total_facets;
         }
 
         auto camera = std::dynamic_pointer_cast<erhe::scene::Camera>(att);
@@ -790,9 +801,14 @@ auto Mcp_server::query_scene_brushes(const json& args) -> std::string
     json brushes = json::array();
     const auto& brush_list = library->brushes->get_all<Brush>();
     for (const auto& brush : brush_list) {
+        auto geometry = brush->get_geometry();
+        const GEO::index_t vertex_count = geometry ? geometry->get_mesh().vertices.nb() : 0;
+        const GEO::index_t facet_count  = geometry ? geometry->get_mesh().facets.nb()   : 0;
         brushes.push_back({
-            {"name", brush->get_name()},
-            {"id",   brush->get_id()}
+            {"name",         brush->get_name()},
+            {"id",           brush->get_id()},
+            {"vertex_count", vertex_count},
+            {"facet_count",  facet_count}
         });
     }
 

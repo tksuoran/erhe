@@ -622,11 +622,13 @@ class SkipTest(Exception):
 # ---------------------------------------------------------------------------
 
 class SmokeTestRunner:
-    def __init__(self, client, seed, duration, no_physics=False):
+    def __init__(self, client, seed, duration, no_physics=False, max_brush_faces=20, max_brush_vertices=20):
         self.client = client
         self.seed = seed
         self.duration = duration
         self.no_physics = no_physics
+        self.max_brush_faces = max_brush_faces
+        self.max_brush_vertices = max_brush_vertices
         self.rng = random.Random(seed)
         self.ok_count = 0
         self.error_count = 0
@@ -638,7 +640,7 @@ class SmokeTestRunner:
     def run(self):
         print("=" * 60)
         physics_str = "  no-physics" if self.no_physics else ""
-        print(f"SMOKE TEST  seed={self.seed}  duration={'infinite' if self.duration == 0 else f'{self.duration}s'}{physics_str}")
+        print(f"SMOKE TEST  seed={self.seed}  duration={'infinite' if self.duration == 0 else f'{self.duration}s'}{physics_str}  max-faces={self.max_brush_faces}  max-verts={self.max_brush_vertices}")
         print("=" * 60)
 
         # Disable physics if requested
@@ -659,7 +661,13 @@ class SmokeTestRunner:
             self.scene_name = scenes[0]["name"]
 
             brushes = self.client.call_ok("get_scene_brushes", {"scene_name": self.scene_name})["brushes"]
-            self.brush_ids = [b["id"] for b in brushes]
+            small_brushes = [b for b in brushes
+                            if b.get("facet_count", 0) <= self.max_brush_faces
+                            and b.get("vertex_count", 0) <= self.max_brush_vertices]
+            if not small_brushes:
+                small_brushes = brushes  # fallback if no brushes match
+            self.brush_ids = [b["id"] for b in small_brushes]
+            print(f"  Using {len(self.brush_ids)} of {len(brushes)} brushes (max {self.max_brush_faces} faces, {self.max_brush_vertices} vertices)")
 
             materials = self.client.call_ok("get_scene_materials", {"scene_name": self.scene_name})["materials"]
             self.material_names = [m["name"] for m in materials]
@@ -856,6 +864,8 @@ def main():
     parser.add_argument("--unit-only", action="store_true", help="Run only unit tests")
     parser.add_argument("--smoke-only", action="store_true", help="Run only smoke tests")
     parser.add_argument("--no-physics", action="store_true", help="Disable physics during smoke test")
+    parser.add_argument("--max-brush-faces", type=int, default=20, help="Max brush face count for smoke test (default: 20)")
+    parser.add_argument("--max-brush-vertices", type=int, default=20, help="Max brush vertex count for smoke test (default: 20)")
     args = parser.parse_args()
 
     client = McpClient(args.host, args.port)
@@ -880,7 +890,8 @@ def main():
 
     if not args.unit_only:
         seed = args.seed if args.seed is not None else random.randint(0, 2**32 - 1)
-        runner = SmokeTestRunner(client, seed, args.smoke_time, no_physics=args.no_physics)
+        runner = SmokeTestRunner(client, seed, args.smoke_time, no_physics=args.no_physics,
+                                 max_brush_faces=args.max_brush_faces, max_brush_vertices=args.max_brush_vertices)
         if not runner.run():
             all_passed = False
         print()
