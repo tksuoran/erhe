@@ -4,6 +4,8 @@
 
 #include <imgui/imgui.h>
 
+#include <string>
+
 namespace erhe::imgui {
     class Imgui_windows;
 }
@@ -28,6 +30,7 @@ private:
     App_context&    m_context;
     ImGuiTextFilter m_name_filter;
     int             m_selected_font{0};
+    std::string     m_last_copied;
 };
 
 }
