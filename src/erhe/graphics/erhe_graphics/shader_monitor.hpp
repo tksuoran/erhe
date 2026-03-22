@@ -18,7 +18,7 @@ public:
     explicit Shader_monitor(Device& device);
     ~Shader_monitor() noexcept;
 
-    void begin();
+    void begin(bool enabled = true);
 
     void update_once_per_frame();
 

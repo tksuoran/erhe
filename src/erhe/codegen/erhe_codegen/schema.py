@@ -22,6 +22,9 @@ class FieldSchema:
         default: Optional[str] = None,
         short_desc: Optional[str] = None,
         long_desc: Optional[str] = None,
+        path: str = "",
+        visible: bool = True,
+        developer: bool = False,
         ui_min: Optional[str] = None,
         ui_max: Optional[str] = None,
         hard_min: Optional[str] = None,
@@ -35,6 +38,9 @@ class FieldSchema:
         self.default = default
         self.short_desc = short_desc
         self.long_desc = long_desc
+        self.path = path
+        self.visible = visible
+        self.developer = developer
         self.ui_min = ui_min
         self.ui_max = ui_max
         self.hard_min = hard_min
@@ -104,10 +110,16 @@ class StructSchema:
         fields: list[FieldSchema],
         *,
         version: int,
+        short_desc: Optional[str] = None,
+        long_desc: Optional[str] = None,
+        developer: bool = False,
     ):
         self.name = name
         self.fields = fields
         self.version = version
+        self.short_desc = short_desc
+        self.long_desc = long_desc
+        self.developer = developer
 
     def active_fields(self, version: Optional[int] = None) -> list[FieldSchema]:
         """Return fields active in the given version (default: current)."""
@@ -153,6 +165,9 @@ def field(
     default: Optional[str] = None,
     short_desc: Optional[str] = None,
     long_desc: Optional[str] = None,
+    path: str = "",
+    visible: bool = True,
+    developer: bool = False,
     ui_min: Optional[str] = None,
     ui_max: Optional[str] = None,
     hard_min: Optional[str] = None,
@@ -167,6 +182,9 @@ def field(
         default=default,
         short_desc=short_desc,
         long_desc=long_desc,
+        path=path,
+        visible=visible,
+        developer=developer,
         ui_min=ui_min,
         ui_max=ui_max,
         hard_min=hard_min,
@@ -190,9 +208,17 @@ def value(
     )
 
 
-def struct(name: str, *fields: FieldSchema, version: int) -> StructSchema:
+def struct(
+    name: str,
+    *,
+    version: int,
+    short_desc: Optional[str] = None,
+    long_desc: Optional[str] = None,
+    developer: bool = False,
+    fields: list[FieldSchema],
+) -> StructSchema:
     """Register a struct definition."""
-    schema = StructSchema(name, list(fields), version=version)
+    schema = StructSchema(name, fields, version=version, short_desc=short_desc, long_desc=long_desc, developer=developer)
     _validate_struct(schema)
     _struct_registry[name] = schema
     return schema

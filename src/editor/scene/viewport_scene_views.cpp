@@ -60,11 +60,13 @@ auto Open_new_viewport_scene_view_command::try_call() -> bool
 #pragma endregion Commands
 
 Scene_views::Scene_views(
-    erhe::commands::Commands& commands,
-    App_context&              app_context,
-    App_message_bus&          app_message_bus
+    const Viewport_config_data& viewport_config_data,
+    erhe::commands::Commands&   commands,
+    App_context&                app_context,
+    App_message_bus&            app_message_bus
 )
     : m_app_context                         {app_context}
+    , m_viewport_config_data                {viewport_config_data}
     , m_open_new_viewport_scene_view_command{commands, app_context}
 {
     ERHE_PROFILE_FUNCTION();
@@ -128,6 +130,7 @@ void Scene_views::erase(Viewport_scene_view* viewport_scene_view)
 }
 
 auto Scene_views::create_viewport_scene_view(
+    const Viewport_config_data&                           viewport_config_data,
     erhe::graphics::Device&                               graphics_device,
     erhe::rendergraph::Rendergraph&                       rendergraph,
     erhe::imgui::Imgui_windows&                           imgui_windows,
@@ -144,6 +147,7 @@ auto Scene_views::create_viewport_scene_view(
 ) -> std::shared_ptr<Viewport_scene_view>
 {
     const auto new_viewport = std::make_shared<Viewport_scene_view>(
+        viewport_config_data,
         m_app_context,
         rendergraph,
         tools,
@@ -239,6 +243,7 @@ auto Scene_views::open_new_viewport_scene_view(
             const auto camera = std::dynamic_pointer_cast<erhe::scene::Camera>(item);
             if (camera) {
                 return create_viewport_scene_view(
+                    m_viewport_config_data,
                     *m_app_context.graphics_device,
                     *m_app_context.rendergraph,
                     *m_app_context.imgui_windows,
@@ -258,6 +263,7 @@ auto Scene_views::open_new_viewport_scene_view(
         if (!scene_root->get_scene().get_cameras().empty()) {
             const auto& camera = scene_root->get_scene().get_cameras().front();
             return create_viewport_scene_view(
+                m_viewport_config_data,
                 *m_app_context.graphics_device,
                 *m_app_context.rendergraph,
                 *m_app_context.imgui_windows,
@@ -276,6 +282,7 @@ auto Scene_views::open_new_viewport_scene_view(
 
     // Case for when no cameras found in scene
     return create_viewport_scene_view(
+        m_viewport_config_data,
         *m_app_context.graphics_device,
         *m_app_context.rendergraph,
         *m_app_context.imgui_windows,

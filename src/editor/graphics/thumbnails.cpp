@@ -5,7 +5,7 @@
 #include "app_settings.hpp"
 #include "time.hpp"
 
-#include "erhe_configuration/configuration.hpp"
+#include "config/generated/thumbnails_config.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/texture.hpp"
 
@@ -18,7 +18,7 @@ Thumbnail::Thumbnail(Thumbnail&&) noexcept = default;
 auto Thumbnail::operator=(Thumbnail&&) noexcept -> Thumbnail& = default;
 Thumbnail::~Thumbnail() noexcept = default;
 
-Thumbnails::Thumbnails(erhe::graphics::Device& graphics_device, App_context& context)
+Thumbnails::Thumbnails(const Thumbnails_config& thumbnails_config, erhe::graphics::Device& graphics_device, App_context& context)
     : m_context{context}
     , m_graphics_device{graphics_device}
     , m_color_sampler{
@@ -31,11 +31,8 @@ Thumbnails::Thumbnails(erhe::graphics::Device& graphics_device, App_context& con
         }
     }
 {
-    int capacity = 200;
-    int size_pixels = 256;
-    const auto& section = erhe::configuration::get_ini_file_section(erhe::c_erhe_config_file_path, "thumbnails");
-    section.get("capacity", capacity);
-    section.get("capacity", size_pixels);
+    int capacity    = thumbnails_config.capacity;
+    int size_pixels = thumbnails_config.size_pixels;
 
     m_thumbnails.resize(capacity);
     m_size_pixels = static_cast<unsigned int>(size_pixels);

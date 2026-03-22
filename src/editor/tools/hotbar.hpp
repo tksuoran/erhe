@@ -30,6 +30,8 @@ namespace erhe::scene {
     class Node;
 }
 
+struct Hotbar_config;
+
 namespace editor {
 
 class App_context;
@@ -100,6 +102,7 @@ class Hotbar : public Tool
 {
 public:
     Hotbar(
+        const Hotbar_config&         hotbar_config,
         erhe::commands::Commands&    commands,
         erhe::imgui::Imgui_renderer& imgui_renderer,
         erhe::imgui::Imgui_windows&  imgui_windows,

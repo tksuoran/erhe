@@ -1,0 +1,120 @@
+from erhe_codegen import *
+
+struct("Headset_config",
+    version=1,
+    short_desc="Virtual Reality Headset",
+    long_desc="",
+    developer=False,
+    fields=[
+        field(
+            "openxr",
+            Bool,
+            added_in=1,
+            default="false",
+            short_desc="OpenXR Enable",
+            long_desc="",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "openxr_mirror",
+            Bool,
+            added_in=1,
+            default="false",
+            short_desc="OpenXR Mirror Window",
+            long_desc="",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "quad_view",
+            Bool,
+            added_in=1,
+            default="false",
+            short_desc="Enable Quad View (Varjo)",
+            long_desc="",
+            visible=True,
+            developer=True
+        ),
+        field(
+            "debug",
+            Bool,
+            added_in=1,
+            default="false",
+            short_desc="Enable OpenXR Debug",
+            long_desc="",
+            visible=True,
+            developer=True
+        ),
+        field(
+            "validation",
+            Bool,
+            added_in=1,
+            default="false",
+            short_desc="Enable OpenXR Validation",
+            long_desc="",
+            visible=True,
+            developer=True
+        ),
+        field(
+            "api_dump",
+            Bool,
+            added_in=1,
+            default="false",
+            short_desc="Enable OpenXR API Dump",
+            long_desc="",
+            visible=True,
+            developer=True
+        ),
+        field(
+            "depth",
+            Bool,
+            added_in=1,
+            default="false",
+            short_desc="",
+            long_desc="",
+            visible=True,
+            developer=True
+        ),
+        field(
+            "visibility_mask",
+            Bool,
+            added_in=1,
+            default="false",
+            short_desc="",
+            long_desc="",
+            visible=True,
+            developer=True
+        ),
+        field(
+            "hand_tracking",
+            Bool,
+            added_in=1,
+            default="false",
+            short_desc="",
+            long_desc="",
+            visible=True,
+            developer=True
+        ),
+        field(
+            "passthrough_fb",
+            Bool,
+            added_in=1,
+            default="false",
+            short_desc="",
+            long_desc="",
+            visible=True,
+            developer=True
+        ),
+        field(
+            "composition_alpha",
+            Bool,
+            added_in=1,
+            default="false",
+            short_desc="",
+            long_desc="",
+            visible=True,
+            developer=True
+        ),
+    ],
+)

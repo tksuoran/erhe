@@ -8,7 +8,7 @@
 #include "scene/node_physics.hpp"
 #include "scene/scene_root.hpp"
 
-#include "scene/generated/scene_file.hpp"
+#include "scene/generated/scene_file_serialization.hpp"
 
 #include "erhe_file/file.hpp"
 #include "erhe_geometry/geometry.hpp"
@@ -143,6 +143,180 @@ auto from_motion_mode_serial(Motion_mode_serial mode) -> erhe::physics::Motion_m
     }
 }
 
+auto to_collision_shape_type_serial(erhe::physics::Collision_shape_type type) -> Collision_shape_type_serial
+{
+    switch (type) {
+        case erhe::physics::Collision_shape_type::e_empty:           return Collision_shape_type_serial::e_empty;
+        case erhe::physics::Collision_shape_type::e_box:             return Collision_shape_type_serial::e_box;
+        case erhe::physics::Collision_shape_type::e_sphere:          return Collision_shape_type_serial::e_sphere;
+        case erhe::physics::Collision_shape_type::e_capsule:         return Collision_shape_type_serial::e_capsule;
+        case erhe::physics::Collision_shape_type::e_cylinder:        return Collision_shape_type_serial::e_cylinder;
+        case erhe::physics::Collision_shape_type::e_compound:        return Collision_shape_type_serial::e_compound;
+        case erhe::physics::Collision_shape_type::e_convex_hull:     return Collision_shape_type_serial::e_not_specified; // derived from mesh
+        case erhe::physics::Collision_shape_type::e_uniform_scaling: return Collision_shape_type_serial::e_not_specified; // not directly serializable
+        default:                                                     return Collision_shape_type_serial::e_not_specified;
+    }
+}
+
+auto to_axis_int(erhe::physics::Axis axis) -> int
+{
+    return static_cast<int>(axis);
+}
+
+auto from_axis_int(int value) -> erhe::physics::Axis
+{
+    switch (value) {
+        case 0:  return erhe::physics::Axis::X;
+        case 1:  return erhe::physics::Axis::Y;
+        case 2:  return erhe::physics::Axis::Z;
+        default: return erhe::physics::Axis::Y;
+    }
+}
+
+void serialize_primitive_shape_params(
+    const erhe::physics::ICollision_shape& shape,
+    Collision_shape_type_serial            serial_type,
+    std::optional<glm::vec3>&              out_half_extents,
+    std::optional<float>&                  out_radius,
+    std::optional<int>&                    out_axis,
+    std::optional<float>&                  out_length
+)
+{
+    switch (serial_type) {
+        case Collision_shape_type_serial::e_box:
+            out_half_extents = shape.get_half_extents();
+            break;
+        case Collision_shape_type_serial::e_sphere:
+            out_radius = shape.get_radius();
+            break;
+        case Collision_shape_type_serial::e_capsule:
+            out_radius = shape.get_radius();
+            out_length = shape.get_length();
+            if (auto a = shape.get_axis()) {
+                out_axis = to_axis_int(*a);
+            }
+            break;
+        case Collision_shape_type_serial::e_cylinder:
+            out_half_extents = shape.get_half_extents();
+            if (auto a = shape.get_axis()) {
+                out_axis = to_axis_int(*a);
+            }
+            break;
+        default:
+            break;
+    }
+}
+
+auto serialize_collision_shape(const erhe::physics::ICollision_shape& shape) -> Collision_shape_data
+{
+    Collision_shape_data data;
+    data.type = to_collision_shape_type_serial(shape.get_shape_type());
+
+    serialize_primitive_shape_params(shape, data.type, data.half_extents, data.radius, data.axis, data.length);
+
+    if (data.type == Collision_shape_type_serial::e_compound) {
+        for (const auto& child : shape.get_children()) {
+            if (!child.shape) {
+                continue;
+            }
+            Compound_child_data child_data;
+            child_data.shape_type = to_collision_shape_type_serial(child.shape->get_shape_type());
+            serialize_primitive_shape_params(
+                *child.shape,
+                child_data.shape_type,
+                child_data.half_extents,
+                child_data.radius,
+                child_data.axis,
+                child_data.length
+            );
+            const glm::quat rotation{child.transform.basis};
+            child_data.position = child.transform.origin;
+            child_data.rotation = glm::vec4{rotation.x, rotation.y, rotation.z, rotation.w};
+            data.children.push_back(std::move(child_data));
+        }
+    }
+
+    return data;
+}
+
+auto deserialize_primitive_shape(
+    Collision_shape_type_serial         type,
+    const std::optional<glm::vec3>&     half_extents,
+    const std::optional<float>&         radius,
+    const std::optional<int>&           axis,
+    const std::optional<float>&         length
+) -> std::shared_ptr<erhe::physics::ICollision_shape>
+{
+    switch (type) {
+        case Collision_shape_type_serial::e_empty:
+            return erhe::physics::ICollision_shape::create_empty_shape_shared();
+        case Collision_shape_type_serial::e_box:
+            if (half_extents.has_value()) {
+                return erhe::physics::ICollision_shape::create_box_shape_shared(*half_extents);
+            }
+            break;
+        case Collision_shape_type_serial::e_sphere:
+            if (radius.has_value()) {
+                return erhe::physics::ICollision_shape::create_sphere_shape_shared(*radius);
+            }
+            break;
+        case Collision_shape_type_serial::e_capsule:
+            if (radius.has_value() && length.has_value()) {
+                return erhe::physics::ICollision_shape::create_capsule_shape_shared(
+                    axis.has_value() ? from_axis_int(*axis) : erhe::physics::Axis::Y,
+                    *radius,
+                    *length
+                );
+            }
+            break;
+        case Collision_shape_type_serial::e_cylinder:
+            if (half_extents.has_value()) {
+                return erhe::physics::ICollision_shape::create_cylinder_shape_shared(
+                    axis.has_value() ? from_axis_int(*axis) : erhe::physics::Axis::Y,
+                    *half_extents
+                );
+            }
+            break;
+        default:
+            break;
+    }
+    return {};
+}
+
+auto deserialize_collision_shape(const Collision_shape_data& data) -> std::shared_ptr<erhe::physics::ICollision_shape>
+{
+    if (data.type == Collision_shape_type_serial::e_not_specified) {
+        return {}; // Caller falls back to convex hull from mesh
+    }
+
+    if (data.type == Collision_shape_type_serial::e_compound) {
+        erhe::physics::Compound_shape_create_info create_info;
+        for (const auto& child_data : data.children) {
+            auto child_shape = deserialize_primitive_shape(
+                child_data.shape_type,
+                child_data.half_extents,
+                child_data.radius,
+                child_data.axis,
+                child_data.length
+            );
+            if (!child_shape) {
+                continue;
+            }
+            const glm::quat rotation{child_data.rotation.w, child_data.rotation.x, child_data.rotation.y, child_data.rotation.z};
+            create_info.children.push_back(erhe::physics::Compound_child{
+                .shape     = std::move(child_shape),
+                .transform = erhe::physics::Transform{glm::mat3_cast(rotation), child_data.position},
+            });
+        }
+        if (!create_info.children.empty()) {
+            return erhe::physics::ICollision_shape::create_compound_shape_shared(create_info);
+        }
+        return erhe::physics::ICollision_shape::create_empty_shape_shared();
+    }
+
+    return deserialize_primitive_shape(data.type, data.half_extents, data.radius, data.axis, data.length);
+}
+
 // A mesh is geometry-normative if any of its primitives has a Geometry object.
 // Scene-built meshes always have Geometry. glTF-imported meshes only have
 // Triangle_soup unless the geometry was created (make_geometry) and manipulated.
@@ -263,6 +437,7 @@ auto save_scene(
         }
         const uint64_t node_id = node_id_map[node.get()];
         const auto* rigid_body = node_physics->get_rigid_body();
+        const auto& collision_shape = node_physics->get_collision_shape();
         Node_physics_data physics_data{
             .node_id           = node_id,
             .motion_mode       = to_motion_mode_serial(node_physics->get_motion_mode()),
@@ -272,6 +447,7 @@ auto save_scene(
             .angular_damping   = rigid_body ? rigid_body->get_angular_damping() : 0.05f,
             .mass              = rigid_body ? std::optional<float>{rigid_body->get_mass()} : std::nullopt,
             .enable_collisions = true,
+            .collision_shape   = collision_shape ? serialize_collision_shape(*collision_shape) : Collision_shape_data{},
         };
         scene_file.node_physics.push_back(std::move(physics_data));
     }
@@ -732,31 +908,35 @@ auto load_scene(
         }
         const auto& node = node_it->second;
 
-        // Derive collision shape from mesh geometry attached to this node
-        std::shared_ptr<erhe::physics::ICollision_shape> collision_shape;
-        auto mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
-        if (mesh) {
-            for (const auto& prim : mesh->get_primitives()) {
-                if (prim.primitive && prim.primitive->render_shape) {
-                    const auto& geom = prim.primitive->render_shape->get_geometry_const();
-                    if (geom && geom->get_mesh().vertices.nb() > 0) {
-                        GEO::Mesh convex_hull{};
-                        if (make_convex_hull(geom->get_mesh(), convex_hull)) {
-                            const auto vertex_count = convex_hull.vertices.nb();
-                            std::vector<float> coordinates(3 * vertex_count);
-                            for (GEO::index_t v = 0; v < vertex_count; ++v) {
-                                const auto* ptr = convex_hull.vertices.single_precision_point_ptr(v);
-                                coordinates[3 * v + 0] = ptr[0];
-                                coordinates[3 * v + 1] = ptr[1];
-                                coordinates[3 * v + 2] = ptr[2];
+        // Try to recreate collision shape from serialized data
+        std::shared_ptr<erhe::physics::ICollision_shape> collision_shape = deserialize_collision_shape(physics_data.collision_shape);
+
+        // Fall back: derive collision shape from mesh geometry attached to this node
+        if (!collision_shape) {
+            auto mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
+            if (mesh) {
+                for (const auto& prim : mesh->get_primitives()) {
+                    if (prim.primitive && prim.primitive->render_shape) {
+                        const auto& geom = prim.primitive->render_shape->get_geometry_const();
+                        if (geom && geom->get_mesh().vertices.nb() > 0) {
+                            GEO::Mesh convex_hull{};
+                            if (make_convex_hull(geom->get_mesh(), convex_hull)) {
+                                const auto vertex_count = convex_hull.vertices.nb();
+                                std::vector<float> coordinates(3 * vertex_count);
+                                for (GEO::index_t v = 0; v < vertex_count; ++v) {
+                                    const auto* ptr = convex_hull.vertices.single_precision_point_ptr(v);
+                                    coordinates[3 * v + 0] = ptr[0];
+                                    coordinates[3 * v + 1] = ptr[1];
+                                    coordinates[3 * v + 2] = ptr[2];
+                                }
+                                collision_shape = erhe::physics::ICollision_shape::create_convex_hull_shape_shared(
+                                    coordinates.data(),
+                                    static_cast<int>(vertex_count),
+                                    static_cast<int>(3 * sizeof(float))
+                                );
                             }
-                            collision_shape = erhe::physics::ICollision_shape::create_convex_hull_shape_shared(
-                                coordinates.data(),
-                                static_cast<int>(vertex_count),
-                                static_cast<int>(3 * sizeof(float))
-                            );
+                            break; // Use first primitive with geometry
                         }
-                        break; // Use first primitive with geometry
                     }
                 }
             }

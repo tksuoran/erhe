@@ -7,7 +7,7 @@ from erhe_codegen.types import (
     TypeBase, ScalarType, GlmType, VectorType, ArrayType, OptionalType,
     StructRefType, EnumRefType,
 )
-from erhe_codegen.emit_hpp import _to_snake_case
+from erhe_codegen.emit_hpp import _to_snake_case, _collect_struct_refs
 
 
 def _can_use_serialize_template(t: TypeBase) -> bool:
@@ -36,11 +36,10 @@ def _deserialize_element_code(t: TypeBase, target: str, indent: str) -> list[str
 def _serialize_field_code(f: FieldSchema, indent: str = "    ") -> list[str]:
     """Generate serialization code for a single field."""
     lines: list[str] = []
-    key_prefix = f'{indent}out += "\\"{f.name}\\":";'
-
-    lines.append(key_prefix)
+    lines.append(f"{indent}out.append((indent + 1) * 4, ' ');")
+    lines.append(f'{indent}out += "\\"{f.name}\\": ";')
     lines.extend(_serialize_value_code(f.type, f"value.{f.name}", indent))
-    lines.append(f"{indent}out += ',';")
+    lines.append(f'{indent}out += ",\\n";')
 
     return lines
 
@@ -69,11 +68,24 @@ def _serialize_value_code(t: TypeBase, expr: str, indent: str) -> list[str]:
             lines.append(f"{indent}erhe::codegen::serialize_vec3(out, {expr});")
         elif t.name == "Vec4":
             lines.append(f"{indent}erhe::codegen::serialize_vec4(out, {expr});")
+        elif t.name == "IVec2":
+            lines.append(f"{indent}erhe::codegen::serialize_ivec2(out, {expr});")
         elif t.name == "Mat4":
             lines.append(f"{indent}erhe::codegen::serialize_mat4(out, {expr});")
     elif isinstance(t, VectorType):
         if _can_use_serialize_template(t.element_type):
             lines.append(f"{indent}erhe::codegen::serialize_vector(out, {expr});")
+        elif isinstance(t.element_type, StructRefType):
+            # Multi-line array of objects
+            lines.append(f'{indent}out += "[\\n";')
+            lines.append(f"{indent}for (std::size_t i = 0; i < {expr}.size(); ++i) {{")
+            lines.append(f'{indent}    if (i > 0) out += ",\\n";')
+            lines.append(f"{indent}    out.append((indent + 2) * 4, ' ');")
+            lines.append(f"{indent}    out += serialize({expr}[i], indent + 2);")
+            lines.append(f"{indent}}}")
+            lines.append(f"{indent}if (!{expr}.empty()) out += '\\n';")
+            lines.append(f"{indent}out.append((indent + 1) * 4, ' ');")
+            lines.append(f"{indent}out += ']';")
         else:
             lines.append(f"{indent}out += '[';")
             lines.append(f"{indent}for (std::size_t i = 0; i < {expr}.size(); ++i) {{")
@@ -84,6 +96,17 @@ def _serialize_value_code(t: TypeBase, expr: str, indent: str) -> list[str]:
     elif isinstance(t, ArrayType):
         if _can_use_serialize_template(t.element_type):
             lines.append(f"{indent}erhe::codegen::serialize_array(out, {expr});")
+        elif isinstance(t.element_type, StructRefType):
+            # Multi-line array of objects
+            lines.append(f'{indent}out += "[\\n";')
+            lines.append(f"{indent}for (std::size_t i = 0; i < {t.size}; ++i) {{")
+            lines.append(f'{indent}    if (i > 0) out += ",\\n";')
+            lines.append(f"{indent}    out.append((indent + 2) * 4, ' ');")
+            lines.append(f"{indent}    out += serialize({expr}[i], indent + 2);")
+            lines.append(f"{indent}}}")
+            lines.append(f"{indent}out += '\\n';")
+            lines.append(f"{indent}out.append((indent + 1) * 4, ' ');")
+            lines.append(f"{indent}out += ']';")
         else:
             lines.append(f"{indent}out += '[';")
             lines.append(f"{indent}for (std::size_t i = 0; i < {t.size}; ++i) {{")
@@ -93,7 +116,7 @@ def _serialize_value_code(t: TypeBase, expr: str, indent: str) -> list[str]:
             lines.append(f"{indent}out += ']';")
     elif isinstance(t, StructRefType):
         # Nested struct: serialize as embedded JSON object
-        lines.append(f"{indent}out += serialize({expr});")
+        lines.append(f"{indent}out += serialize({expr}, indent + 1);")
     elif isinstance(t, EnumRefType):
         # Enum: serialize as string via to_string
         lines.append(f"{indent}erhe::codegen::serialize_string(out, to_string({expr}));")
@@ -219,7 +242,13 @@ def emit_struct_cpp(s: StructSchema) -> str:
     lines: list[str] = []
     snake = _to_snake_case(s.name)
 
-    lines.append(f'#include "{snake}.hpp"')
+    lines.append(f'#include "{snake}_serialization.hpp"')
+
+    # Include serialization headers for referenced structs (needed for their serialize/deserialize)
+    struct_refs = _collect_struct_refs(s)
+    for ref in struct_refs:
+        lines.append(f'#include "{_to_snake_case(ref)}_serialization.hpp"')
+
     lines.append("")
     lines.append("#include <cstddef>")
     lines.append("")
@@ -240,17 +269,23 @@ def emit_struct_cpp(s: StructSchema) -> str:
         lines.append("")
 
     # --- Serialize ---
-    lines.append(f"auto serialize(const {s.name}& value) -> std::string")
+    lines.append(f"auto serialize(const {s.name}& value, int indent) -> std::string")
     lines.append("{")
     lines.append("    std::string out;")
-    lines.append("    out += '{';")
-    lines.append(f'    out += "\\"_version\\":{s.version},";')
+    lines.append('    out += "{\\n";')
+    lines.append("    out.append((indent + 1) * 4, ' ');")
+    lines.append(f'    out += "\\"_version\\": {s.version},\\n";')
 
     active_fields = s.active_fields()
     for f in active_fields:
         lines.extend(_serialize_field_code(f))
 
-    lines.append("    if (out.back() == ',') out.back() = '}'; else out += '}';")
+    lines.append("    if (out.size() >= 2 && out[out.size()-2] == ',' && out.back() == '\\n') {")
+    lines.append("        out.resize(out.size() - 2);")
+    lines.append("        out += '\\n';")
+    lines.append("    }")
+    lines.append("    out.append(indent * 4, ' ');")
+    lines.append("    out += '}';")
     lines.append("    return out;")
     lines.append("}")
     lines.append("")

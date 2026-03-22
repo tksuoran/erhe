@@ -2,6 +2,7 @@
 
 #include "scene/viewport_scene_view.hpp"
 
+#include "config/generated/viewport_config_data.hpp"
 #include "app_context.hpp"
 #include "editor_log.hpp"
 #include "app_message_bus.hpp"
@@ -65,6 +66,7 @@ using erhe::graphics::Texture;
 int Viewport_scene_view::s_serial = 0;
 
 Viewport_scene_view::Viewport_scene_view(
+    const Viewport_config_data&                 viewport_config_data,
     App_context&                                context,
     erhe::rendergraph::Rendergraph&             rendergraph,
     Tools&                                      tools,
@@ -74,7 +76,7 @@ Viewport_scene_view::Viewport_scene_view(
     const std::shared_ptr<erhe::scene::Camera>& camera,
     int                                         msaa_sample_count
 )
-    : Scene_view              {context, Viewport_config::default_config()}
+    : Scene_view              {context, Viewport_config::default_config(viewport_config_data)}
     , Texture_rendergraph_node{
         erhe::rendergraph::Texture_rendergraph_node_create_info{
             .rendergraph          = rendergraph,

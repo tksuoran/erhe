@@ -6,12 +6,14 @@
 
 #include <glm/glm.hpp>
 
+struct Viewport_config_data;
+
 namespace editor {
 
 class Viewport_config
 {
 public:
-    [[nodiscard]] static auto default_config() -> Viewport_config;
+    [[nodiscard]] static auto default_config(const Viewport_config_data& viewport_config_data) -> Viewport_config;
 
     // TODO Use Render_style instead of Render_style_data?
     Render_style_data render_style_not_selected;

@@ -209,7 +209,25 @@ if (ERHE_SPIRV)
     )
 endif()
 
-target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+# Graphics config codegen
+set(_gfx_config_defs "${CMAKE_CURRENT_SOURCE_DIR}/definitions")
+set(_gfx_config_out  "${CMAKE_CURRENT_BINARY_DIR}/erhe_graphics/generated")
+
+erhe_codegen_generate(
+    TARGET          ${_target}
+    DEFINITIONS_DIR "${_gfx_config_defs}"
+    OUTPUT_DIR      "${_gfx_config_out}"
+    DEFINITIONS
+        "${_gfx_config_defs}/graphics_config.py"
+)
+
+# Only the struct header — serialize/deserialize .cpp compiles in the editor
+# to avoid simdjson ABI mismatch across targets with different arch flags.
+set_source_files_properties(${_gfx_config_out}/graphics_config.hpp PROPERTIES GENERATED TRUE)
+target_sources(${_target} PRIVATE ${_gfx_config_out}/graphics_config.hpp)
+source_group("codegen generated" FILES ${_gfx_config_out}/graphics_config.hpp)
+
+target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
 
 target_link_libraries(${_target}
     PUBLIC

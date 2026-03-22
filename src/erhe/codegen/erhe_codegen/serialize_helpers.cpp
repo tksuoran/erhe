@@ -101,6 +101,14 @@ void serialize_vec4(std::string& out, const glm::vec4& value)
     out += ']';
 }
 
+void serialize_ivec2(std::string& out, const glm::ivec2& value)
+{
+    out += '[';
+    serialize_int(out, value.x); out += ',';
+    serialize_int(out, value.y);
+    out += ']';
+}
+
 void serialize_mat4(std::string& out, const glm::mat4& value)
 {
     out += '[';

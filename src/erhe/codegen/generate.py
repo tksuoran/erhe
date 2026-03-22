@@ -67,7 +67,7 @@ def main() -> None:
         get_enum_registry,
         validate_references,
     )
-    from erhe_codegen.emit_hpp import emit_struct_hpp
+    from erhe_codegen.emit_hpp import emit_struct_hpp, emit_struct_serialization_hpp
     from erhe_codegen.emit_cpp import emit_struct_cpp
     from erhe_codegen.emit_enum import emit_enum_hpp, emit_enum_cpp
 
@@ -89,11 +89,16 @@ def main() -> None:
         snake = _to_snake_case(name)
 
         hpp_content = emit_struct_hpp(s)
+        ser_content = emit_struct_serialization_hpp(s)
         cpp_content = emit_struct_cpp(s)
 
         if write_if_changed(output_dir / f"{snake}.hpp", hpp_content):
             files_written += 1
             print(f"  wrote {snake}.hpp")
+
+        if write_if_changed(output_dir / f"{snake}_serialization.hpp", ser_content):
+            files_written += 1
+            print(f"  wrote {snake}_serialization.hpp")
 
         if write_if_changed(output_dir / f"{snake}.cpp", cpp_content):
             files_written += 1

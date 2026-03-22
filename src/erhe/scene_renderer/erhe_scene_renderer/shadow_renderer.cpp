@@ -57,7 +57,7 @@ Shadow_renderer::Shadow_renderer(erhe::graphics::Device& graphics_device, Progra
         }
     }
     , m_vertex_input        {graphics_device}
-    , m_draw_indirect_buffer{graphics_device}
+    , m_draw_indirect_buffer{graphics_device, program_interface.config.max_draw_count}
     , m_joint_buffer        {graphics_device, program_interface.joint_interface}
     , m_light_buffer        {graphics_device, program_interface.light_interface}
     , m_primitive_buffer    {graphics_device, program_interface.primitive_interface}

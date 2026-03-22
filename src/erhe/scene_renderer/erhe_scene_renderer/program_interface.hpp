@@ -14,12 +14,23 @@ namespace erhe::graphics { class Device; }
 
 namespace erhe::scene_renderer {
 
+struct Program_interface_config
+{
+    int max_camera_count   {256};
+    int max_joint_count    {1000};
+    int max_light_count    {32};
+    int max_material_count {1000};
+    int max_primitive_count{6000};
+    int max_draw_count     {6000};
+};
+
 class Program_interface
 {
 public:
     Program_interface(
-        erhe::graphics::Device&          graphics_device,
-        erhe::dataformat::Vertex_format& vertex_format
+        erhe::graphics::Device&            graphics_device,
+        erhe::dataformat::Vertex_format&   vertex_format,
+        const Program_interface_config&    config = {}
     );
 
     Program_interface(const Program_interface&) = delete;
@@ -42,6 +53,7 @@ public:
     erhe::graphics::Device&          graphics_device;
     erhe::graphics::Fragment_outputs fragment_outputs;
     erhe::dataformat::Vertex_format& vertex_format;
+    Program_interface_config         config;
     Camera_interface                 camera_interface;
     Cube_interface                   cube_interface;
     Joint_interface                  joint_interface;

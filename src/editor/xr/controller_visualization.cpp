@@ -50,7 +50,7 @@ Controller_visualization::Controller_visualization(erhe::scene::Node* view_root,
     );
     ERHE_VERIFY(buffer_mesh_ok); // TODO handle possible error (out of memory)
 
-    std::shared_ptr<erhe::primitive::Primitive> primitive = std::make_shared<erhe::primitive::Primitive>(buffer_mesh);
+    std::shared_ptr<erhe::primitive::Primitive> primitive = std::make_shared<erhe::primitive::Primitive>(std::move(buffer_mesh));
 
     m_controller_node = std::make_shared<erhe::scene::Node>("Controller node");
     m_controller_mesh = std::make_shared<erhe::scene::Mesh>("Controller");

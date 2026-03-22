@@ -19,6 +19,8 @@ namespace erhe::scene_renderer {
     class Shadow_renderer;
 }
 
+struct Viewport_config_data;
+
 namespace editor {
 
 class App_context;
@@ -54,12 +56,15 @@ private:
 class Scene_views : erhe::commands::Command_host
 {
 public:
-    Scene_views(erhe::commands::Commands& commands, App_context& context, App_message_bus& app_message_bus);
+    Scene_views(const Viewport_config_data& viewport_config_data, erhe::commands::Commands& commands, App_context& context, App_message_bus& app_message_bus);
     ~Scene_views() noexcept;
 
     // Public API
 
+    [[nodiscard]] auto get_viewport_config_data() const -> const Viewport_config_data& { return m_viewport_config_data; }
+
     auto create_viewport_scene_view(
+        const Viewport_config_data&                           viewport_config_data,
         erhe::graphics::Device&                               graphics_device,
         erhe::rendergraph::Rendergraph&                       rendergraph,
         erhe::imgui::Imgui_windows&                           imgui_windows,
@@ -113,7 +118,8 @@ private:
     void update_pointer_from_imgui_viewport_windows(erhe::imgui::Imgui_host* imgui_host);
 
     erhe::message_bus::Subscription<Graphics_settings_message> m_graphics_settings_subscription;
-    App_context& m_app_context;
+    App_context&                m_app_context;
+    const Viewport_config_data& m_viewport_config_data;
 
     // Commands
     Open_new_viewport_scene_view_command m_open_new_viewport_scene_view_command;

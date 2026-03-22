@@ -23,7 +23,7 @@ public:
 class Draw_indirect_buffer : public erhe::graphics::Ring_buffer_client
 {
 public:
-    explicit Draw_indirect_buffer(erhe::graphics::Device& graphics_device);
+    Draw_indirect_buffer(erhe::graphics::Device& graphics_device, int max_draw_count = 8000);
 
     // Can discard return value
     auto update(
@@ -35,8 +35,6 @@ public:
     //// void debug_properties_window();
 
 private:
-    [[nodiscard]] static auto get_max_draw_count() -> int;
- 
     bool m_max_index_count_enable{false};
     int  m_max_index_count       {256};
     int  m_max_draw_count        {8000};

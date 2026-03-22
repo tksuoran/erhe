@@ -188,6 +188,21 @@ inline void deserialize_field(simdjson::ondemand::value val, glm::vec4& out)
         }
     }
 }
+inline void deserialize_field(simdjson::ondemand::value val, glm::ivec2& out)
+{
+    simdjson::ondemand::array arr;
+    if (!val.get_array().get(arr)) {
+        std::size_t i = 0;
+        for (auto element : arr) {
+            if (i >= 2) break;
+            int64_t v;
+            if (!element.get_int64().get(v)) {
+                out[static_cast<glm::length_t>(i)] = static_cast<int>(v);
+            }
+            ++i;
+        }
+    }
+}
 inline void deserialize_field(simdjson::ondemand::value val, glm::mat4& out)
 {
     simdjson::ondemand::array arr;
@@ -205,10 +220,11 @@ inline void deserialize_field(simdjson::ondemand::value val, glm::mat4& out)
 }
 
 // Serialization helpers (glm) — implemented in .cpp
-void serialize_vec2(std::string& out, const glm::vec2& value);
-void serialize_vec3(std::string& out, const glm::vec3& value);
-void serialize_vec4(std::string& out, const glm::vec4& value);
-void serialize_mat4(std::string& out, const glm::mat4& value);
+void serialize_vec2 (std::string& out, const glm::vec2&  value);
+void serialize_vec3 (std::string& out, const glm::vec3&  value);
+void serialize_vec4 (std::string& out, const glm::vec4&  value);
+void serialize_ivec2(std::string& out, const glm::ivec2& value);
+void serialize_mat4 (std::string& out, const glm::mat4&  value);
 
 // Serialization helpers (vector/array) — templates in header
 template <typename T, std::size_t N>

@@ -11,6 +11,9 @@ erhe_target_sources_grouped(
     settings.toml
     windows.toml
 
+    config/editor_config.hpp
+    config/editor_config.cpp
+
     animation/animation_curve.cpp
     animation/animation_curve.hpp
     animation/animation_window.cpp
@@ -389,43 +392,174 @@ if (ERHE_USE_MIMALLOC)
     target_link_libraries(${_target} PUBLIC mimalloc-static)
 endif ()
 
-# Scene serialization codegen
+# Scene serialization codegen — generate into build directory
 set(_codegen_defs "${CMAKE_CURRENT_SOURCE_DIR}/scene/definitions")
-set(_codegen_out  "${CMAKE_CURRENT_SOURCE_DIR}/scene/generated")
-
-erhe_target_sources_grouped(
-    ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
-    scene/generated/camera_data.hpp
-    scene/generated/camera_data.cpp
-    scene/generated/gltf_source_reference.hpp
-    scene/generated/gltf_source_reference.cpp
-    scene/generated/light_data.hpp
-    scene/generated/light_data.cpp
-    scene/generated/light_type_serial.hpp
-    scene/generated/light_type_serial.cpp
-    scene/generated/mesh_reference.hpp
-    scene/generated/mesh_reference.cpp
-    scene/generated/mesh_source_type.hpp
-    scene/generated/mesh_source_type.cpp
-    scene/generated/motion_mode_serial.hpp
-    scene/generated/motion_mode_serial.cpp
-    scene/generated/node_data_serial.hpp
-    scene/generated/node_data_serial.cpp
-    scene/generated/node_physics_data.hpp
-    scene/generated/node_physics_data.cpp
-    scene/generated/projection_data.hpp
-    scene/generated/projection_data.cpp
-    scene/generated/scene_file.hpp
-    scene/generated/scene_file.cpp
-    scene/generated/transform_data.hpp
-    scene/generated/transform_data.cpp
-)
+set(_codegen_out  "${CMAKE_CURRENT_BINARY_DIR}/scene/generated")
 
 erhe_codegen_generate(
     TARGET          ${_target}
     DEFINITIONS_DIR "${_codegen_defs}"
     OUTPUT_DIR      "${_codegen_out}"
+    DEFINITIONS
+        "${_codegen_defs}/camera_data.py"
+        "${_codegen_defs}/gltf_source_reference.py"
+        "${_codegen_defs}/light_data.py"
+        "${_codegen_defs}/mesh_reference.py"
+        "${_codegen_defs}/mesh_source_type.py"
+        "${_codegen_defs}/motion_mode_serial.py"
+        "${_codegen_defs}/node_data.py"
+        "${_codegen_defs}/node_physics_data.py"
+        "${_codegen_defs}/projection_data.py"
+        "${_codegen_defs}/scene_file.py"
+        "${_codegen_defs}/transform_data.py"
 )
+
+set(_codegen_sources
+    ${_codegen_out}/camera_data.hpp
+    ${_codegen_out}/camera_data_serialization.hpp
+    ${_codegen_out}/camera_data.cpp
+    ${_codegen_out}/gltf_source_reference.hpp
+    ${_codegen_out}/gltf_source_reference_serialization.hpp
+    ${_codegen_out}/gltf_source_reference.cpp
+    ${_codegen_out}/light_data.hpp
+    ${_codegen_out}/light_data_serialization.hpp
+    ${_codegen_out}/light_data.cpp
+    ${_codegen_out}/light_type_serial.hpp
+    ${_codegen_out}/light_type_serial.cpp
+    ${_codegen_out}/mesh_reference.hpp
+    ${_codegen_out}/mesh_reference_serialization.hpp
+    ${_codegen_out}/mesh_reference.cpp
+    ${_codegen_out}/mesh_source_type.hpp
+    ${_codegen_out}/mesh_source_type.cpp
+    ${_codegen_out}/motion_mode_serial.hpp
+    ${_codegen_out}/motion_mode_serial.cpp
+    ${_codegen_out}/node_data_serial.hpp
+    ${_codegen_out}/node_data_serial_serialization.hpp
+    ${_codegen_out}/node_data_serial.cpp
+    ${_codegen_out}/node_physics_data.hpp
+    ${_codegen_out}/node_physics_data_serialization.hpp
+    ${_codegen_out}/node_physics_data.cpp
+    ${_codegen_out}/projection_data.hpp
+    ${_codegen_out}/projection_data_serialization.hpp
+    ${_codegen_out}/projection_data.cpp
+    ${_codegen_out}/scene_file.hpp
+    ${_codegen_out}/scene_file_serialization.hpp
+    ${_codegen_out}/scene_file.cpp
+    ${_codegen_out}/transform_data.hpp
+    ${_codegen_out}/transform_data_serialization.hpp
+    ${_codegen_out}/transform_data.cpp
+)
+set_source_files_properties(${_codegen_sources} PROPERTIES GENERATED TRUE)
+target_sources(${_target} PRIVATE ${_codegen_sources})
+source_group("codegen generated/scene" FILES ${_codegen_sources})
+
+# Editor config codegen — generate into build directory
+set(_config_defs "${CMAKE_CURRENT_SOURCE_DIR}/config/definitions")
+set(_config_out  "${CMAKE_CURRENT_BINARY_DIR}/config/generated")
+
+erhe_codegen_generate(
+    TARGET          ${_target}
+    DEFINITIONS_DIR "${_config_defs}"
+    OUTPUT_DIR      "${_config_out}"
+    DEFINITIONS
+        "${_config_defs}/camera_controls_config.py"
+        "${_config_defs}/developer_config.py"
+        "${_config_defs}/grid_config.py"
+        "${_config_defs}/headset_config.py"
+        "${_config_defs}/hotbar_config.py"
+        "${_config_defs}/hud_config.py"
+        "${_config_defs}/id_renderer_config.py"
+        "${_config_defs}/mesh_memory_config.py"
+        "${_config_defs}/network_config.py"
+        "${_config_defs}/physics_config.py"
+        "${_config_defs}/renderdoc_config.py"
+        "${_config_defs}/renderer_config.py"
+        "${_config_defs}/scene_config.py"
+        "${_config_defs}/shader_monitor_config.py"
+        "${_config_defs}/text_renderer_config.py"
+        "${_config_defs}/threading_config.py"
+        "${_config_defs}/thumbnails_config.py"
+        "${_config_defs}/transform_tool_config.py"
+        "${_config_defs}/viewport_config_data.py"
+        "${_config_defs}/window_config.py"
+)
+
+set(_config_sources
+    ${_config_out}/camera_controls_config.hpp
+    ${_config_out}/camera_controls_config_serialization.hpp
+    ${_config_out}/camera_controls_config.cpp
+    ${_config_out}/developer_config.hpp
+    ${_config_out}/developer_config_serialization.hpp
+    ${_config_out}/developer_config.cpp
+    ${_config_out}/grid_config.hpp
+    ${_config_out}/grid_config_serialization.hpp
+    ${_config_out}/grid_config.cpp
+    ${_config_out}/headset_config.hpp
+    ${_config_out}/headset_config_serialization.hpp
+    ${_config_out}/headset_config.cpp
+    ${_config_out}/hotbar_config.hpp
+    ${_config_out}/hotbar_config_serialization.hpp
+    ${_config_out}/hotbar_config.cpp
+    ${_config_out}/hud_config.hpp
+    ${_config_out}/hud_config_serialization.hpp
+    ${_config_out}/hud_config.cpp
+    ${_config_out}/id_renderer_config.hpp
+    ${_config_out}/id_renderer_config_serialization.hpp
+    ${_config_out}/id_renderer_config.cpp
+    ${_config_out}/mesh_memory_config.hpp
+    ${_config_out}/mesh_memory_config_serialization.hpp
+    ${_config_out}/mesh_memory_config.cpp
+    ${_config_out}/network_config.hpp
+    ${_config_out}/network_config_serialization.hpp
+    ${_config_out}/network_config.cpp
+    ${_config_out}/physics_config.hpp
+    ${_config_out}/physics_config_serialization.hpp
+    ${_config_out}/physics_config.cpp
+    ${_config_out}/renderdoc_config.hpp
+    ${_config_out}/renderdoc_config_serialization.hpp
+    ${_config_out}/renderdoc_config.cpp
+    ${_config_out}/renderer_config.hpp
+    ${_config_out}/renderer_config_serialization.hpp
+    ${_config_out}/renderer_config.cpp
+    ${_config_out}/scene_config.hpp
+    ${_config_out}/scene_config_serialization.hpp
+    ${_config_out}/scene_config.cpp
+    ${_config_out}/shader_monitor_config.hpp
+    ${_config_out}/shader_monitor_config_serialization.hpp
+    ${_config_out}/shader_monitor_config.cpp
+    ${_config_out}/text_renderer_config.hpp
+    ${_config_out}/text_renderer_config_serialization.hpp
+    ${_config_out}/text_renderer_config.cpp
+    ${_config_out}/threading_config.hpp
+    ${_config_out}/threading_config_serialization.hpp
+    ${_config_out}/threading_config.cpp
+    ${_config_out}/thumbnails_config.hpp
+    ${_config_out}/thumbnails_config_serialization.hpp
+    ${_config_out}/thumbnails_config.cpp
+    ${_config_out}/transform_tool_config.hpp
+    ${_config_out}/transform_tool_config_serialization.hpp
+    ${_config_out}/transform_tool_config.cpp
+    ${_config_out}/viewport_config_data.hpp
+    ${_config_out}/viewport_config_data_serialization.hpp
+    ${_config_out}/viewport_config_data.cpp
+    ${_config_out}/window_config.hpp
+    ${_config_out}/window_config_serialization.hpp
+    ${_config_out}/window_config.cpp
+)
+set_source_files_properties(${_config_sources} PROPERTIES GENERATED TRUE)
+target_sources(${_target} PRIVATE ${_config_sources})
+source_group("codegen generated/config" FILES ${_config_sources})
+
+# Graphics_config serialize/deserialize must compile here (same target as
+# other simdjson users) to avoid ABI mismatch from differing arch flags.
+set(_gfx_gen "${CMAKE_BINARY_DIR}/src/erhe/graphics/erhe_graphics/generated")
+set(_gfx_ser_sources
+    ${_gfx_gen}/graphics_config_serialization.hpp
+    ${_gfx_gen}/graphics_config.cpp
+)
+set_source_files_properties(${_gfx_ser_sources} PROPERTIES GENERATED TRUE)
+target_sources(${_target} PRIVATE ${_gfx_ser_sources})
+source_group("codegen generated/graphics" FILES ${_gfx_ser_sources})
 
 target_link_libraries(
     ${_target}
@@ -506,7 +640,7 @@ endif ()
 if (${ERHE_XR_LIBRARY} STREQUAL "openxr")
     target_link_libraries(${_target} PRIVATE erhe_xr openxr_loader)
 endif ()
-target_include_directories(${_target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${_codegen_out})
+target_include_directories(${_target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR} ${_codegen_out})
 
 set_target_properties(
     ${_target} PROPERTIES

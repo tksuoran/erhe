@@ -38,6 +38,8 @@ namespace erhe::window {
     class Context_window;
 }
 
+struct Viewport_config_data;
+
 namespace editor {
 
 class App_context;
@@ -93,6 +95,7 @@ class Headset_view
 {
 public:
     Headset_view(
+        const Viewport_config_data&     viewport_config_data,
         erhe::commands::Commands&       commands,
         erhe::graphics::Device&         graphics_device,
         erhe::imgui::Imgui_renderer&    imgui_renderer,

@@ -345,6 +345,7 @@ auto Scene_commands::create_new_rendertarget(erhe::scene::Node* parent) -> std::
     // Viewport_scene_view is a Scene_view and rendergraph node, rendering scene view to connnected consumer node
     std::shared_ptr<erhe::rendergraph::Rendergraph_node> rendergraph_output_node;
     std::shared_ptr<Viewport_scene_view> scene_view = m_context.scene_views->create_viewport_scene_view(
+        m_context.scene_views->get_viewport_config_data(),
         *m_context.graphics_device,
         *m_context.rendergraph,
         *m_context.imgui_windows,

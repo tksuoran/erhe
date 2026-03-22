@@ -4,7 +4,7 @@
 #include "renderers/mesh_memory.hpp"
 #include "renderers/programs.hpp"
 
-#include "erhe_configuration/configuration.hpp"
+#include "config/generated/id_renderer_config.hpp"
 #include "erhe_graphics/blit_command_encoder.hpp"
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/device.hpp"
@@ -43,6 +43,7 @@ using Depth_stencil_state  = erhe::graphics::Depth_stencil_state;
 using Color_blend_state    = erhe::graphics::Color_blend_state;
 
 Id_renderer::Id_renderer(
+    const Id_renderer_config&                id_renderer_config,
     erhe::graphics::Device&                  graphics_device,
     erhe::scene_renderer::Program_interface& program_interface,
     Mesh_memory&                             mesh_memory,
@@ -51,7 +52,7 @@ Id_renderer::Id_renderer(
     : m_graphics_device      {graphics_device}
     , m_mesh_memory          {mesh_memory}
     , m_camera_buffers       {graphics_device, program_interface.camera_interface}
-    , m_draw_indirect_buffers{graphics_device}
+    , m_draw_indirect_buffers{graphics_device, program_interface.config.max_draw_count}
     , m_primitive_buffers    {graphics_device, program_interface.primitive_interface}
     , m_pipeline{erhe::graphics::Render_pipeline_data{
         .debug_label    = erhe::utility::Debug_label{"ID Renderer"},
@@ -79,8 +80,7 @@ Id_renderer::Id_renderer(
     }
     , m_gpu_timer{graphics_device, "Id_renderer"}
 {
-    const auto& ini = erhe::configuration::get_ini_file_section(erhe::c_erhe_config_file_path, "id_renderer");
-    ini.get("enabled", enabled);
+    enabled = id_renderer_config.enabled;
 }
 
 Id_renderer::~Id_renderer() noexcept

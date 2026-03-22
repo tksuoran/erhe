@@ -23,22 +23,22 @@ void Property_editor::resume()
 
 void Property_editor::push_group(std::string&& label, ImGuiTreeNodeFlags flags, float indent, bool* open_state)
 {
-    m_entries.push_back(Entry{true, false, std::move(label), {}, flags, indent, {}, {}, open_state});
+    m_entries.push_back(Entry{true, false, std::move(label), {}, {}, flags, indent, {}, {}, open_state});
 }
 
 void Property_editor::pop_group()
 {
-    m_entries.push_back(Entry{false, true, {}, {}});
+    m_entries.push_back(Entry{false, true, {}, {}, {}});
 }
 
-void Property_editor::add_entry(std::string&& label, std::function<void()> editor)
+void Property_editor::add_entry(std::string&& label, std::function<void()> editor, std::string&& tooltip)
 {
-    m_entries.push_back(Entry{false, false, std::move(label), {editor}});
+    m_entries.push_back(Entry{false, false, std::move(label), std::move(tooltip), {editor}});
 }
 
 void Property_editor::add_entry(std::string&& label, uint32_t label_text_color, uint32_t label_background_color, std::function<void()> editor)
 {
-    m_entries.push_back(Entry{false, false, std::move(label), {editor}, ImGuiTreeNodeFlags_None, 0.0f, label_text_color, label_background_color});
+    m_entries.push_back(Entry{false, false, std::move(label), {}, {editor}, ImGuiTreeNodeFlags_None, 0.0f, label_text_color, label_background_color});
 }
 
 void Property_editor::show_entries(const char* label, ImVec2 cell_padding)
@@ -105,6 +105,7 @@ void Property_editor::show_entries(const char* label, ImVec2 cell_padding)
             } else {
                 ImGui::TextUnformatted(entry.label.c_str());
             }
+            bool row_hovered = ImGui::IsItemHovered();
             if (entry.label_text_color.has_value()) {
                 ImGui::PopStyleColor(1);
             }
@@ -112,8 +113,9 @@ void Property_editor::show_entries(const char* label, ImVec2 cell_padding)
                 ImGui::PopStyleColor(3);
             }
             ImGui::TableSetColumnIndex(1);
-            ImGui::SetNextItemWidth(-FLT_MIN); 
+            ImGui::SetNextItemWidth(-FLT_MIN);
             entry.editor();
+            row_hovered = row_hovered || ImGui::IsItemHovered();
             if (m_state != nullptr) {
                 if (ImGui::IsItemDeactivatedAfterEdit()) {
                     set_dirty_completed();
@@ -122,6 +124,9 @@ void Property_editor::show_entries(const char* label, ImVec2 cell_padding)
                 } else if (ImGui::IsItemEdited()) {
                     set_dirty_editing();
                 }
+            }
+            if (row_hovered && !entry.tooltip.empty()) {
+                ImGui::SetTooltip("%s", entry.tooltip.c_str());
             }
         }
         ImGui::PopID();

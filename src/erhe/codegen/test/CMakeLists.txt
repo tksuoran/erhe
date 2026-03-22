@@ -11,6 +11,7 @@ erhe_target_sources_grouped(
 # Generated sources (listed explicitly so CMake knows about them)
 set(_generated_sources
     ${_codegen_out}/settings.hpp
+    ${_codegen_out}/settings_serialization.hpp
     ${_codegen_out}/settings.cpp
 )
 set_source_files_properties(${_generated_sources} PROPERTIES GENERATED TRUE)
@@ -30,8 +31,15 @@ target_link_libraries(${_target}
 erhe_target_settings(${_target} "erhe")
 
 # Wire up code generation
+set(_test_defs "${CMAKE_CURRENT_SOURCE_DIR}/definitions")
 erhe_codegen_generate(
     TARGET          ${_target}
-    DEFINITIONS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/definitions"
+    DEFINITIONS_DIR "${_test_defs}"
     OUTPUT_DIR      "${_codegen_out}"
+    DEFINITIONS
+        "${_test_defs}/blend_mode.py"
+        "${_test_defs}/color.py"
+        "${_test_defs}/light.py"
+        "${_test_defs}/material.py"
+        "${_test_defs}/settings.py"
 )

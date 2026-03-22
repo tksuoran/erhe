@@ -1,0 +1,250 @@
+from erhe_codegen import *
+
+struct("Scene_config",
+    version=1,
+    short_desc="Default Scene Configuration",
+    long_desc="Used to configure Default Scene",
+    developer=False,
+    fields=[
+        field(
+            "imgui_window_scene_view",
+            Bool,
+            added_in=1,
+            default="true",
+            short_desc="ImGui Window Scene Viewport",
+            long_desc="",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "camera_exposure",
+            Float,
+            added_in=1,
+            default="1.0f",
+            short_desc="Camera Exposure",
+            long_desc="",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "shadow_range",
+            Float,
+            added_in=1,
+            default="22.0f",
+            short_desc="Shadow Range",
+            long_desc="",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "directional_light_intensity",
+            Float,
+            added_in=1,
+            default="20.0f",
+            short_desc="Directional Light Intensity",
+            long_desc="",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "directional_light_radius",
+            Float,
+            added_in=1,
+            default="6.0f",
+            short_desc="Directional Light Layout Radius",
+            long_desc="",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "directional_light_height",
+            Float,
+            added_in=1,
+            default="10.0f",
+            short_desc="Directional Light Layout Height",
+            long_desc="",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "directional_light_count",
+            Int,
+            added_in=1,
+            default="4",
+            short_desc="",
+            long_desc="",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "spot_light_intensity",
+            Float,
+            added_in=1,
+            default="150.0f",
+            short_desc="Spot Light Intensity",
+            long_desc="",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "spot_light_radius",
+            Float,
+            added_in=1,
+            default="20.0f",
+            short_desc="",
+            long_desc="",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "spot_light_height",
+            Float,
+            added_in=1,
+            default="10.0f",
+            short_desc="Spot Light Layout Height",
+            long_desc="",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "spot_light_count",
+            Int,
+            added_in=1,
+            default="3",
+            short_desc="Spot Light Count",
+            long_desc="",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "floor_size",
+            Float,
+            added_in=1,
+            default="1.0f",
+            short_desc="Floor Size",
+            long_desc="",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "floor_height",
+            Float,
+            added_in=1,
+            default="0.001f",
+            short_desc="Floor Height",
+            long_desc="",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "floor",
+            Bool,
+            added_in=1,
+            default="true",
+            short_desc="Add Floor",
+            long_desc="",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "mass_scale",
+            Float,
+            added_in=1,
+            default="0.0f",
+            short_desc="Rigid Body Mass Scale",
+            long_desc="",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "detail",
+            Int,
+            added_in=1,
+            default="0",
+            short_desc="Mesh Detail",
+            long_desc="Higher Detail Value = More Detailed Meshes",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "camera_distance",
+            Float,
+            added_in=1,
+            default="3.0f",
+            short_desc="Camera Distance (m)",
+            long_desc="",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "camera_elevation",
+            Float,
+            added_in=1,
+            default="1.6f",
+            short_desc="Camera Elevation (m)",
+            long_desc="",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "instance_count",
+            Int,
+            added_in=1,
+            default="1",
+            short_desc="Object Count",
+            long_desc="",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "instance_gap",
+            Float,
+            added_in=1,
+            default="0.50f",
+            short_desc="Object Instance Gap (m)",
+            long_desc="",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "object_scale",
+            Float,
+            added_in=1,
+            default="0.25f",
+            short_desc="Object Scale",
+            long_desc="",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "make_johnson_solid_brushes",
+            Bool,
+            added_in=1,
+            default="true",
+            short_desc="",
+            long_desc="",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "make_platonic_solid_brushes",
+            Bool,
+            added_in=1,
+            default="true",
+            short_desc="",
+            long_desc="",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "make_curved_brushes",
+            Bool,
+            added_in=1,
+            default="true",
+            short_desc="",
+            long_desc="",
+            visible=True,
+            developer=False
+        ),
+    ],
+)

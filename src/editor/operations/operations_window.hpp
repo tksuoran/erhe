@@ -12,6 +12,8 @@
 
 namespace erhe::imgui { class Imgui_windows; }
 
+struct Scene_config;
+
 namespace editor {
 
 struct Tool_slot
@@ -70,6 +72,7 @@ class Operations : public erhe::imgui::Imgui_window
 {
 public:
     Operations(
+        const Scene_config&          scene_config,
         erhe::commands::Commands&    commands,
         erhe::imgui::Imgui_renderer& imgui_renderer,
         erhe::imgui::Imgui_windows&  imgui_windows,

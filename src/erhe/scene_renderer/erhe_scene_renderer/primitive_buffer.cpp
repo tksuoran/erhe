@@ -4,7 +4,6 @@
 #include "erhe_scene_renderer/buffer_binding_points.hpp"
 #include "erhe_graphics/span.hpp"
 
-#include "erhe_configuration/configuration.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_primitive/primitive.hpp"
 #include "erhe_primitive/material.hpp"
@@ -20,7 +19,7 @@
 
 namespace erhe::scene_renderer {
 
-Primitive_interface::Primitive_interface(erhe::graphics::Device& graphics_device)
+Primitive_interface::Primitive_interface(erhe::graphics::Device& graphics_device, const int max_primitive_count)
     : primitive_block {graphics_device, "primitive", primitive_buffer_binding_point, erhe::graphics::Shader_resource::Type::shader_storage_block}
     , primitive_struct{graphics_device, "Primitive"}
     , offsets{
@@ -32,10 +31,8 @@ Primitive_interface::Primitive_interface(erhe::graphics::Device& graphics_device
         .skinning_factor  = primitive_struct.add_float("skinning_factor"       )->get_offset_in_parent(),
         .base_joint_index = primitive_struct.add_uint ("base_joint_index"      )->get_offset_in_parent()
     }
+    , max_primitive_count{static_cast<std::size_t>(max_primitive_count)}
 {
-    const auto& ini = erhe::configuration::get_ini_file_section(c_erhe_config_file_path, "renderer");
-    ini.get("max_primitive_count", max_primitive_count);
-
     primitive_block.add_struct("primitives", &primitive_struct, erhe::graphics::Shader_resource::unsized_array);
     primitive_block.set_readonly(true);
 }

@@ -26,7 +26,7 @@ Forward_renderer::Forward_renderer(erhe::graphics::Device& graphics_device, Prog
     : m_graphics_device     {graphics_device}
     , m_program_interface   {program_interface}
     , m_camera_buffer       {graphics_device, program_interface.camera_interface}
-    , m_draw_indirect_buffer{graphics_device}
+    , m_draw_indirect_buffer{graphics_device, program_interface.config.max_draw_count}
     , m_joint_buffer        {graphics_device, program_interface.joint_interface}
     , m_light_buffer        {graphics_device, program_interface.light_interface}
     , m_material_buffer     {graphics_device, program_interface.material_interface}

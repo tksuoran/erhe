@@ -8,7 +8,6 @@
 #include "erhe_graphics/gl/gl_texture.hpp"
 
 #include "erhe_utility/bit_helpers.hpp"
-#include "erhe_configuration/configuration.hpp"
 #include "erhe_gl/command_info.hpp"
 #include "erhe_gl/enum_bit_mask_operators.hpp"
 #include "erhe_gl/enum_string_functions.hpp"
@@ -104,7 +103,7 @@ auto get_string(const gl::String_name string_name) -> std::string
 
 //
 
-Device_impl::Device_impl(Device& device, const Surface_create_info& surface_create_info)
+Device_impl::Device_impl(Device& device, const Surface_create_info& surface_create_info, const Graphics_config& graphics_config)
     : m_device             {device}
     , m_shader_monitor     {device}
     , m_gl_context_provider{device, m_gl_state_tracker}
@@ -366,26 +365,14 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         m_info.max_fragment_shader_storage_blocks
     );
 
-    bool force_bindless_textures_off      {false};
-    bool force_no_persistent_buffers      {false};
-    bool force_no_direct_state_access     {false};
-    bool force_emulate_multi_draw_indirect{false};
-    int  force_gl_version                 {false};
-    int  force_glsl_version               {false};
-    bool capture_support                  {false};
-    bool initial_clear                    {false};
-    {
-        const auto& ini = erhe::configuration::get_ini_file_section(c_erhe_config_file_path, "graphics");
-        //// ini.get("post_processing",              configuration.post_processing);
-        //// ini.get("use_time_query",               configuration.use_time_query );
-        ini.get("force_bindless_textures_off",       force_bindless_textures_off);
-        ini.get("force_no_persistent_buffers",       force_no_persistent_buffers);
-        ini.get("force_no_direct_state_access",      force_no_direct_state_access);
-        ini.get("force_emulate_multi_draw_indirect", force_emulate_multi_draw_indirect);
-        ini.get("force_gl_version",                  force_gl_version);
-        ini.get("force_glsl_version",                force_glsl_version);
-        ini.get("initial_clear",                     initial_clear);
-    }
+    const bool force_bindless_textures_off       = graphics_config.force_bindless_textures_off;
+    const bool force_no_persistent_buffers       = graphics_config.force_no_persistent_buffers;
+    //const bool force_no_direct_state_access      = graphics_config.force_no_direct_state_access;
+    const bool force_emulate_multi_draw_indirect = graphics_config.force_emulate_multi_draw_indirect;
+    const int  force_gl_version                  = graphics_config.force_gl_version;
+    const int  force_glsl_version                = graphics_config.force_glsl_version;
+    bool       capture_support                   = graphics_config.renderdoc_capture_support;
+    const bool initial_clear                     = graphics_config.initial_clear;
 
     if (gl::is_extension_supported(gl::Extension::Extension_GL_ARB_bindless_texture)) {
         m_info.use_bindless_texture = true;
@@ -402,12 +389,12 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
 #else
         if (force_bindless_textures_off) {
             m_info.use_bindless_texture = false;
-            log_startup->warn("Force disabled GL_ARB_bindless_texture due to erhe.toml setting force_bindless_textures_off");
+            log_startup->warn("Force disabled GL_ARB_bindless_texture due to config setting force_bindless_textures_off");
         }
         else
         if (capture_support) {
             m_info.use_bindless_texture = false;
-            log_startup->warn("Force disabled GL_ARB_bindless_texture due to erhe.toml enabling RenderDoc capture");
+            log_startup->warn("Force disabled GL_ARB_bindless_texture due to config enabling RenderDoc capture");
         }
 #endif
     }
@@ -463,22 +450,22 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         m_info.use_multi_draw_indirect_core = false;
         m_info.use_multi_draw_indirect_arb = false;
         m_info.emulate_multi_draw_indirect = true;
-        log_startup->warn("Forced emulation for Draw Indirect due to erhe.toml setting");
+        log_startup->warn("Forced emulation for Draw Indirect due to config setting");
     }
 
     if (force_gl_version > 0) {
         m_info.gl_version = force_gl_version;
-        log_startup->warn("Forced GL version to be {} due to erhe.toml setting", force_gl_version);
+        log_startup->warn("Forced GL version to be {} due to config setting", force_gl_version);
     }
     if (force_glsl_version > 0) {
         m_info.glsl_version = force_glsl_version;
-        log_startup->warn("Forced GLSL version to be {} due to erhe.toml setting", force_glsl_version);
+        log_startup->warn("Forced GLSL version to be {} due to config setting", force_glsl_version);
     }
 
     if (force_no_persistent_buffers) {
         if (m_info.use_persistent_buffers) {
             m_info.use_persistent_buffers = false;
-            log_startup->warn("Force disabled persistently mapped buffers due to erhe.toml setting");
+            log_startup->warn("Force disabled persistently mapped buffers due to config setting");
         }
     }
 
@@ -490,11 +477,6 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
                 surface_create_info.context_window->swap_buffers();
             }
         }
-    }
-
-    {
-        const auto& ini = erhe::configuration::get_ini_file_section(c_erhe_config_file_path, "renderdoc");
-        ini.get("capture_support", capture_support);
     }
 
     // TODO more formats
@@ -636,7 +618,7 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
 
     {
         ERHE_PROFILE_SCOPE("Start shader monitor");
-        m_shader_monitor.begin();
+        m_shader_monitor.begin(graphics_config.shader_monitor_enabled);
     }
 
     gl::enable      (gl::Enable_cap::primitive_restart_fixed_index);

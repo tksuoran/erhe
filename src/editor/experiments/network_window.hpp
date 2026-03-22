@@ -8,6 +8,8 @@
 
 namespace erhe::imgui { class Imgui_windows; }
 
+struct Network_config;
+
 namespace editor {
 
 class App_context;
@@ -17,6 +19,7 @@ class Network_window
 {
 public:
     Network_window(
+        const Network_config&        network_config,
         erhe::imgui::Imgui_renderer& imgui_renderer,
         erhe::imgui::Imgui_windows&  imgui_windows,
         App_context&                 app_context

@@ -58,7 +58,7 @@ public:
 class Material_interface
 {
 public:
-    explicit Material_interface(erhe::graphics::Device& graphics_device);
+    Material_interface(erhe::graphics::Device& graphics_device, int max_material_count);
 
     erhe::graphics::Shader_resource material_block;
     erhe::graphics::Shader_resource material_struct;

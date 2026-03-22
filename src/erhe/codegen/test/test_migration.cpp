@@ -1,4 +1,4 @@
-#include "settings.hpp"
+#include "settings_serialization.hpp"
 
 #include <erhe_codegen/migration.hpp>
 

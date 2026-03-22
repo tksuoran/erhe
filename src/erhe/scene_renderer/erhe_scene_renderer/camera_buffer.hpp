@@ -36,7 +36,7 @@ public:
 class Camera_interface
 {
 public:
-    explicit Camera_interface(erhe::graphics::Device& graphics_device);
+    Camera_interface(erhe::graphics::Device& graphics_device, int max_camera_count);
 
     erhe::graphics::Shader_resource camera_block;
     erhe::graphics::Shader_resource camera_struct;

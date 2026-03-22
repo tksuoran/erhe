@@ -21,7 +21,7 @@
 
 #include "erhe_commands/command.hpp"
 #include "erhe_commands/commands.hpp"
-#include "erhe_configuration/configuration.hpp"
+#include "config/generated/scene_config.hpp"
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_primitive/material.hpp"
@@ -115,6 +115,7 @@ auto Brush_rotate_command::try_call() -> bool
 #pragma endregion Commands
 
 Brush_tool::Brush_tool(
+    const Scene_config&       scene_config,
     erhe::commands::Commands& commands,
     App_context&              context,
     App_message_bus&          app_message_bus,
@@ -184,8 +185,7 @@ Brush_tool::Brush_tool(
         }
     );
 
-    const auto& ini = erhe::configuration::get_ini_file_section(erhe::c_erhe_config_file_path, "scene");
-    ini.get("object_scale", m_grid_scale);
+    m_grid_scale = scene_config.object_scale;
 
     m_preview_command               .set_host(this);
     m_insert_command                .set_host(this);

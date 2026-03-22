@@ -13,6 +13,7 @@
 
 #include "erhe_commands/input_arguments.hpp"
 #include "erhe_commands/commands.hpp"
+#include "config/generated/camera_controls_config.hpp"
 #include "erhe_configuration/configuration.hpp"
 #include "erhe_file/file.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
@@ -672,12 +673,13 @@ void Fly_camera_tool::serialize_transform(bool store)
 }
 
 Fly_camera_tool::Fly_camera_tool(
-    erhe::commands::Commands&    commands,
-    erhe::imgui::Imgui_renderer& imgui_renderer,
-    erhe::imgui::Imgui_windows&  imgui_windows,
-    App_context&                 app_context,
-    App_message_bus&             app_message_bus,
-    Tools&                       tools
+    const Camera_controls_config& camera_controls_config,
+    erhe::commands::Commands&     commands,
+    erhe::imgui::Imgui_renderer&  imgui_renderer,
+    erhe::imgui::Imgui_windows&   imgui_windows,
+    App_context&                  app_context,
+    App_message_bus&              app_message_bus,
+    Tools&                        tools
 )
     : Tool                            {app_context, tools, Tool_flags::background}
     , m_window                        {imgui_renderer, imgui_windows, "Fly Camera", "fly_camera", [this]() { window_imgui(); }}
@@ -746,12 +748,11 @@ Fly_camera_tool::Fly_camera_tool(
     m_camera_controller->get_variable(Variable::translate_y).set_damp_and_max_delta(config.velocity_damp, config.velocity_max_delta);
     m_camera_controller->get_variable(Variable::translate_z).set_damp_and_max_delta(config.velocity_damp, config.velocity_max_delta);
 
-    const auto& ini = erhe::configuration::get_ini_file_section(erhe::c_erhe_config_file_path, "camera_controls");
-    ini.get("invert_x",           config.invert_x);
-    ini.get("invert_y",           config.invert_y);
-    ini.get("velocity_damp",      config.velocity_damp);
-    ini.get("velocity_max_delta", config.velocity_max_delta);
-    ini.get("sensitivity",        m_sensitivity);
+    config.invert_x           = camera_controls_config.invert_x;
+    config.invert_y           = camera_controls_config.invert_y;
+    config.velocity_damp      = camera_controls_config.velocity_damp;
+    config.velocity_max_delta = camera_controls_config.velocity_max_delta;
+    m_sensitivity             = camera_controls_config.sensitivity;
 
     set_base_priority(c_priority);
     set_description  ("Fly Camera");

@@ -4,6 +4,7 @@
 #include "erhe_graphics/ring_buffer_range.hpp"
 #include "erhe_graphics/shader_monitor.hpp"
 #include "erhe_graphics/surface.hpp"
+#include "erhe_graphics/generated/graphics_config.hpp"
 #include "erhe_utility/debug_label.hpp"
 
 #include <array>
@@ -150,7 +151,7 @@ class Device_impl;
 class Device final
 {
 public:
-    explicit Device(const Surface_create_info& surface_create_info);
+    Device(const Surface_create_info& surface_create_info, const Graphics_config& graphics_config = {});
     Device         (const Device&) = delete;
     void operator= (const Device&) = delete;
     Device         (Device&&)      = delete;

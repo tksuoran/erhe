@@ -6,7 +6,7 @@
 #include "grid/grid.hpp"
 #include "tools/tools.hpp"
 
-#include "erhe_configuration/configuration.hpp"
+#include "config/generated/grid_config.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_profile/profile.hpp"
 
@@ -19,6 +19,7 @@ namespace editor {
 using glm::vec3;
 
 Grid_tool::Grid_tool(
+    const Grid_config&           grid_config,
     erhe::imgui::Imgui_renderer& imgui_renderer,
     erhe::imgui::Imgui_windows&  imgui_windows,
     App_context&                 context,
@@ -33,24 +34,19 @@ Grid_tool::Grid_tool(
     set_description("Grid");
     set_icon       (icon_set.custom_icons, icon_set.icons.grid);
 
-    const auto& ini = erhe::configuration::get_ini_file_section(erhe::c_erhe_config_file_path, "grid");
-    bool initial_snap_enable{true};
-    bool initial_grid_visible{true};
-    ini.get("snap_enabled", initial_snap_enable);
-    ini.get("visible",      initial_grid_visible);
-    ini.get("major_color",  config.major_color);
-    ini.get("minor_color",  config.minor_color);
-    ini.get("major_width",  config.major_width);
-    ini.get("minor_width",  config.minor_width);
-    ini.get("cell_size",    config.cell_size);
-    ini.get("cell_div",     config.cell_div);
-    ini.get("cell_count",   config.cell_count);
+    config.major_color = grid_config.major_color;
+    config.minor_color = grid_config.minor_color;
+    config.major_width = grid_config.major_width;
+    config.minor_width = grid_config.minor_width;
+    config.cell_size   = grid_config.cell_size;
+    config.cell_div    = grid_config.cell_div;
+    config.cell_count  = grid_config.cell_count;
 
     std::shared_ptr<Grid> grid = std::make_shared<Grid>();
     // TODO Move config to editor ?
     // grid->name        = "Default Grid";
-    grid->set_visible     (initial_grid_visible);
-    grid->set_snap_enabled(initial_snap_enable);
+    grid->set_visible     (grid_config.visible);
+    grid->set_snap_enabled(grid_config.snap_enabled);
     grid->set_cell_size   (config.cell_size);
     grid->set_cell_div    (config.cell_div);
     grid->set_cell_count  (config.cell_count);

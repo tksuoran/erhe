@@ -12,6 +12,8 @@
 #include <memory>
 #include <mutex>
 
+struct Scene_config;
+
 namespace editor {
 
 class Brush;
@@ -78,6 +80,7 @@ public:
     static constexpr int c_priority{4};
 
     Brush_tool(
+        const Scene_config&       scene_config,
         erhe::commands::Commands& commands,
         App_context&              context,
         App_message_bus&          app_message_bus,

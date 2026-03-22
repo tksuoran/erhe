@@ -36,7 +36,7 @@ public:
 class Primitive_interface
 {
 public:
-    explicit Primitive_interface(erhe::graphics::Device& graphics_device);
+    Primitive_interface(erhe::graphics::Device& graphics_device, int max_primitive_count);
 
     erhe::graphics::Shader_resource primitive_block;
     erhe::graphics::Shader_resource primitive_struct;
