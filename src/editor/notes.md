@@ -150,9 +150,31 @@ Controlled by `ERHE_SERIAL_INIT` / `ERHE_PARALLEL_INIT`. When parallel init is e
 
 ### Physics Integration
 
-Each `Scene_root` owns a physics world. `Node_physics` is a `Node_attachment` wrapping a Jolt rigid body. Physics callbacks (`on_body_activated`/`on_body_deactivated`) set `no_transform_update` flags to let physics drive transforms for active bodies. The owner pointer on rigid bodies uses `reinterpret_cast<Node_physics*>`.
+Each `Scene_root` owns a physics world. `Node_physics` is a `Node_attachment` wrapping a Jolt rigid body. Physics callbacks (`on_body_activated`/`on_body_deactivated`) set `no_transform_update` flags to let physics drive transforms for active bodies. The owner pointer on rigid bodies uses `reinterpret_cast<Node_physics*>`. Dynamic physics can be toggled at runtime via `App_settings::physics.dynamic_enable`.
+
+### Brush Placement
+
+`Brush` is a parametric shape template (geometry + collision shape + density). `Brush::make_instance(Instance_create_info)` creates a scene node with mesh, material, and optional physics body at a pre-scaled geometry. The `place_brush_in_scene()` free function (in `brushes/brush.hpp`) wraps `make_instance()` with undo support and `Brush_placement` attachment tracking. Both `Brush_tool` (interactive surface-aligned placement) and the MCP server (programmatic placement by position) call this shared function.
+
+### Scene Serialization
+
+Scenes serialize to JSON + companion `.glb` (meshes/materials) + `.geogram` (editable geometry). The codegen system (`erhe_codegen`) generates versioned C++ structs with simdjson-based serialization. `Scene_file` (v2) contains nodes, cameras, lights, mesh references, and node physics data. Collision shape types (box, sphere, cylinder, capsule, compound) are serialized and faithfully recreated on load instead of degrading to convex hulls.
+
+### Content Library Drag-and-Drop
+
+Content library items can be dragged between libraries (e.g., materials from one scene to another). Cross-library drops perform a copy via `Material` copy constructor + `Item_insert_remove_operation`. Same-library drags are ignored. Materials can also be dropped onto scene nodes to assign them to mesh primitives.
+
+### MCP Server (`mcp/`)
+
+The editor embeds an MCP (Model Context Protocol) server on `127.0.0.1:8080` for external tool integration. It exposes:
+
+- **Query tools**: `list_scenes`, `get_scene_nodes`, `get_node_details`, `get_scene_cameras`, `get_scene_lights`, `get_scene_materials`, `get_material_details`, `get_scene_brushes`, `get_selection`
+- **Action tools**: `select_items` (by ID), `place_brush` (by brush ID + position), `toggle_physics`
+- **Editor commands**: All registered `Command` objects (undo, redo, delete, etc.)
+
+The HTTP server (cpp-httplib) runs on a background thread. All requests are queued to the main thread via `std::promise`/`std::future` for thread safety. `process_queued_requests()` is called once per frame from `Editor::tick()`. See `mcp_server_usage.md` for full API reference with curl examples.
 
 ## Dependencies
 
 - erhe libraries: commands, graphics, imgui, renderer, rendergraph, scene, scene_renderer, physics, raytrace, geometry, primitive, item, window, log, verify, configuration, file, gltf, math, time, profile, message_bus, graph, ui, xr
-- External: Taskflow, ImGui, GLM, Geogram, spdlog/fmt, simdjson, Jolt (physics), SDL/GLFW, OpenXR
+- External: Taskflow, ImGui, GLM, Geogram, spdlog/fmt, simdjson, Jolt (physics), SDL/GLFW, OpenXR, cpp-httplib, nlohmann/json
