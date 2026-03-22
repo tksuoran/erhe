@@ -48,3 +48,7 @@ add_subdirectory(ui)
 add_subdirectory(verify)
 add_subdirectory(window)
 add_subdirectory(xr)
+
+if (${ERHE_BUILD_TESTS} STREQUAL "ON")
+    add_subdirectory(smoke)
+endif ()

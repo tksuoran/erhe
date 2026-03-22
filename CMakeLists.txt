@@ -56,6 +56,11 @@ set_option(ERHE_USE_PRECOMPILED_HEADERS    "Use precompiled headers in erhe"    
 set_option(ERHE_USE_ASAN                   "Enable AddressSanitizer"                                                    "OFF"      "ON;OFF")
 set_option(ERHE_USE_MIMALLOC               "Enable mimalloc"                                                            "OFF"      "ON;OFF")
 set_option(ERHE_SPIRV                      "Enable SPIR-V"                                                              "OFF"      "ON;OFF")
+set_option(ERHE_BUILD_TESTS                "Build erhe unit tests"                                                      "OFF"      "ON;OFF")
+
+if (${ERHE_BUILD_TESTS} STREQUAL "ON")
+    enable_testing()
+endif ()
 
 # TODO fix ERHE_USE_PRECOMPILED_HEADERS
 
