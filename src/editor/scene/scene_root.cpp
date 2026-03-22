@@ -359,14 +359,13 @@ Scene_root::Scene_root(
                     log_physics->trace("acquire physics: {}", node->describe());
                     node_physics->begin_interaction();
 
-#ifndef NDEBUG
                     const auto i = std::find(m_physics_disabled_nodes.begin(), m_physics_disabled_nodes.end(), item);
                     if (i != m_physics_disabled_nodes.end()) {
-                        log_physics->error("node {} already in physics disabled nodes", item->get_name());
-                    } else
-#endif
+                        log_physics->warn("node {} already in physics disabled nodes", item->get_name());
+                    } else {
                         m_physics_disabled_nodes.push_back(item);
                     }
+                }
             }
         );
     }
