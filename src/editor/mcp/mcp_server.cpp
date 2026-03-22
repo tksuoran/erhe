@@ -1,8 +1,10 @@
 #include "mcp/mcp_server.hpp"
 #include "app_context.hpp"
 #include "app_scenes.hpp"
+#include "app_settings.hpp"
 #include "brushes/brush.hpp"
 #include "content_library/content_library.hpp"
+#include "erhe_math/math_util.hpp"
 #include "editor_log.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
@@ -306,6 +308,8 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "get_material_details")result = query_material_details(req->arguments);
         else if (req->tool_name == "get_selection")       result = query_selection       (req->arguments);
         else if (req->tool_name == "select_items")       result = action_select_items   (req->arguments);
+        else if (req->tool_name == "place_brush")        result = action_place_brush    (req->arguments);
+        else if (req->tool_name == "toggle_physics")     result = action_toggle_physics (req->arguments);
         else                                              result = execute_command       (req->tool_name);
 
         req->result_promise.set_value(std::move(result));
@@ -339,6 +343,20 @@ void Mcp_server::refresh_tool_list()
         }},
         {"required", json::array({"scene_name", "ids"})}
     }});
+    m_tool_infos.push_back({"place_brush",         "Place a brush instance in a scene at a given position", {
+        {"type", "object"},
+        {"properties", {
+            {"scene_name",    {{"type", "string"},  {"description", "Name of the scene"}}},
+            {"brush_id",      {{"type", "integer"}, {"description", "Brush ID (from get_scene_brushes)"}}},
+            {"position",      {{"type", "array"},   {"items", {{"type", "number"}}}, {"description", "World position [x, y, z]"}}},
+            {"material_name", {{"type", "string"},  {"description", "Material name (optional, uses first available if omitted)"}}},
+            {"scale",         {{"type", "number"},  {"description", "Scale factor (optional, default 1.0)"}}},
+            {"motion_mode",   {{"type", "string"},  {"description", "Physics mode: static, dynamic (optional, default dynamic)"}}}
+        }},
+        {"required", json::array({"scene_name", "brush_id", "position"})}
+    }});
+
+    m_tool_infos.push_back({"toggle_physics",     "Toggle dynamic physics simulation on/off",              schema_no_args()});
 
     // Editor commands
     const auto& registered_commands = m_commands.get_commands();
@@ -828,6 +846,128 @@ auto Mcp_server::action_select_items(const json& args) -> std::string
     return make_json_content({
         {"selected_count", static_cast<int>(items_to_select.size())},
         {"items",          selected}
+    }).dump();
+}
+
+auto Mcp_server::action_place_brush(const json& args) -> std::string
+{
+    const std::string scene_name    = args.value("scene_name", "");
+    const std::size_t brush_id      = args.value("brush_id", std::size_t{0});
+    const json        pos_json      = args.value("position", json::array());
+    const std::string material_name = args.value("material_name", "");
+    const double      scale         = args.value("scale", 1.0);
+    const std::string motion_str    = args.value("motion_mode", "dynamic");
+
+    auto* sr = find_scene(scene_name);
+    if (!sr) {
+        json r = make_text_content("Scene not found: " + scene_name);
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    // Find brush by ID
+    auto library = sr->get_content_library();
+    if (!library || !library->brushes) {
+        json r = make_text_content("No brushes in scene");
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    std::shared_ptr<Brush> brush;
+    const auto& brush_list = library->brushes->get_all<Brush>();
+    for (const auto& b : brush_list) {
+        if (b->get_id() == brush_id) {
+            brush = b;
+            break;
+        }
+    }
+    if (!brush) {
+        json r = make_text_content("Brush not found with id: " + std::to_string(brush_id));
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    // Parse position
+    glm::vec3 position{0.0f};
+    if (pos_json.is_array() && pos_json.size() >= 3) {
+        position.x = pos_json[0].get<float>();
+        position.y = pos_json[1].get<float>();
+        position.z = pos_json[2].get<float>();
+    }
+
+    // Find material
+    std::shared_ptr<erhe::primitive::Material> material;
+    if (!material_name.empty() && library->materials) {
+        const auto& mat_list = library->materials->get_all<erhe::primitive::Material>();
+        for (const auto& mat : mat_list) {
+            if (mat->get_name() == material_name) {
+                material = mat;
+                break;
+            }
+        }
+    }
+    if (!material && library->materials) {
+        const auto& mat_list = library->materials->get_all<erhe::primitive::Material>();
+        if (!mat_list.empty()) {
+            material = mat_list.front();
+        }
+    }
+    if (!material) {
+        json r = make_text_content("No materials available");
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    // Motion mode
+    erhe::physics::Motion_mode motion_mode = erhe::physics::Motion_mode::e_dynamic;
+    if (motion_str == "static") {
+        motion_mode = erhe::physics::Motion_mode::e_static;
+    }
+
+    const glm::mat4 world_from_node = erhe::math::create_translation<float>(position);
+
+    auto node = place_brush_in_scene(
+        m_context,
+        *brush,
+        *sr,
+        world_from_node,
+        material,
+        scale,
+        motion_mode
+    );
+
+    if (!node) {
+        json r = make_text_content("Failed to place brush");
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    json result = {
+        {"node_name", node->get_name()},
+        {"node_id",   node->get_id()},
+        {"brush",     brush->get_name()},
+        {"material",  material->get_name()},
+        {"position",  {position.x, position.y, position.z}},
+        {"scale",     scale}
+    };
+    return make_json_content(result).dump();
+}
+
+auto Mcp_server::action_toggle_physics(const json& args) -> std::string
+{
+    static_cast<void>(args);
+
+    if (!m_context.app_settings) {
+        json r = make_text_content("Settings not available");
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    m_context.app_settings->physics.dynamic_enable = !m_context.app_settings->physics.dynamic_enable;
+    const bool enabled = m_context.app_settings->physics.dynamic_enable;
+
+    return make_json_content({
+        {"dynamic_physics_enabled", enabled}
     }).dump();
 }
 

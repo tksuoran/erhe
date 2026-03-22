@@ -93,6 +93,8 @@ private:
     auto query_scene_brushes    (const nlohmann::json& args) -> std::string;
     auto query_selection        (const nlohmann::json& args) -> std::string;
     auto action_select_items    (const nlohmann::json& args) -> std::string;
+    auto action_place_brush     (const nlohmann::json& args) -> std::string;
+    auto action_toggle_physics  (const nlohmann::json& args) -> std::string;
     auto execute_command        (const std::string& tool_name) -> std::string;
 
     erhe::commands::Commands& m_commands;

@@ -1,6 +1,10 @@
 #include "brushes/brush.hpp"
+#include "brushes/brush_placement.hpp"
 
+#include "app_context.hpp"
 #include "app_settings.hpp"
+#include "operations/item_insert_remove_operation.hpp"
+#include "operations/operation_stack.hpp"
 #include "scene/node_physics.hpp"
 #include "editor_log.hpp"
 
@@ -339,6 +343,69 @@ auto Brush::get_bounding_box() -> erhe::math::Aabb
         late_initialize();
     }
     return m_primitive->get_bounding_box();
+}
+
+auto place_brush_in_scene(
+    App_context&                                      context,
+    Brush&                                            brush,
+    Scene_root&                                       scene_root,
+    const glm::mat4&                                  world_from_node,
+    const std::shared_ptr<erhe::primitive::Material>& material,
+    double                                            scale,
+    erhe::physics::Motion_mode                        motion_mode,
+    std::shared_ptr<erhe::scene::Node>                parent
+) -> std::shared_ptr<erhe::scene::Node>
+{
+    constexpr uint64_t mesh_flags =
+        erhe::Item_flags::visible     |
+        erhe::Item_flags::content     |
+        erhe::Item_flags::opaque      |
+        erhe::Item_flags::shadow_cast |
+        erhe::Item_flags::id          |
+        erhe::Item_flags::show_in_ui;
+    constexpr uint64_t node_flags =
+        erhe::Item_flags::visible     |
+        erhe::Item_flags::content     |
+        erhe::Item_flags::expand      |
+        erhe::Item_flags::show_in_ui;
+
+    const Instance_create_info create_info{
+        .node_flags      = node_flags,
+        .mesh_flags      = mesh_flags,
+        .scene_root      = &scene_root,
+        .world_from_node = world_from_node,
+        .material        = material,
+        .scale           = scale,
+        .motion_mode     = motion_mode,
+    };
+
+    auto instance_node = brush.make_instance(create_info);
+
+    auto shared_brush = std::dynamic_pointer_cast<Brush>(brush.shared_from_this());
+    auto brush_placement = std::make_shared<Brush_placement>(shared_brush, GEO::NO_FACET, GEO::NO_CORNER);
+    instance_node->attach(brush_placement);
+    brush_placement->enable_flag_bits(
+        erhe::Item_flags::brush      |
+        erhe::Item_flags::visible    |
+        erhe::Item_flags::no_message |
+        erhe::Item_flags::show_in_ui
+    );
+
+    if (!parent) {
+        parent = scene_root.get_scene().get_root_node();
+    }
+
+    auto op = std::make_shared<Item_insert_remove_operation>(
+        Item_insert_remove_operation::Parameters{
+            .context = context,
+            .item    = instance_node,
+            .parent  = parent,
+            .mode    = Item_insert_remove_operation::Mode::insert
+        }
+    );
+    context.operation_stack->queue(op);
+
+    return instance_node;
 }
 
 }
