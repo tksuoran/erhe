@@ -7,7 +7,11 @@ erhe_target_sources_grouped(
     erhe_graphics/blit_command_encoder.hpp
     erhe_graphics/buffer.cpp
     erhe_graphics/buffer.hpp
+    erhe_graphics/buffer_allocation.cpp
+    erhe_graphics/buffer_allocation.hpp
     erhe_graphics/buffer_transfer_queue.cpp
+    erhe_graphics/free_list_allocator.cpp
+    erhe_graphics/free_list_allocator.hpp
     erhe_graphics/buffer_transfer_queue.hpp
     erhe_graphics/command_encoder.cpp
     erhe_graphics/command_encoder.hpp

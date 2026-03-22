@@ -122,6 +122,12 @@ py -3 src/erhe/codegen/generate.py <definitions_dir> <output_dir>
 
 See [`doc/editor_improvements.md`](doc/editor_improvements.md) for the prioritized list of architectural improvements to `src/editor/`.
 
+## C++ Coding Style
+
+- **Always use `class`, never `struct`** — this makes forward declarations trivial (always `class Foo;`).
+- **Prefer explicit types over `auto`** — spell out the actual type for readability. Reviewers should not need to trace through code to determine types.
+- **Use sufficient parentheses** — do not rely on C++ operator precedence. Add parentheses so the intent is unambiguous to readers (e.g., `(a & b) != 0` not `a & b != 0`).
+
 ## C++ Standard
 
 This project uses **C++20**. Prefer modern C++20 features over older alternatives (e.g. concepts over SFINAE, `std::span` over pointer+size, `std::format`/`fmt` over `sprintf`, `constexpr` where possible, designated initializers, `requires` clauses).
