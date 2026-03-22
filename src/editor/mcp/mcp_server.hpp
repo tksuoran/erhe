@@ -99,6 +99,7 @@ private:
     auto query_scene_brushes    (const nlohmann::json& args) -> std::string;
     auto query_selection        (const nlohmann::json& args) -> std::string;
     auto query_undo_redo_stack  (const nlohmann::json& args) -> std::string;
+    auto query_async_status     (const nlohmann::json& args) -> std::string;
     auto action_select_items    (const nlohmann::json& args) -> std::string;
     auto action_place_brush     (const nlohmann::json& args) -> std::string;
     auto action_toggle_physics  (const nlohmann::json& args) -> std::string;

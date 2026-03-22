@@ -311,6 +311,7 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "get_material_details")result = query_material_details(req->arguments);
         else if (req->tool_name == "get_selection")       result = query_selection       (req->arguments);
         else if (req->tool_name == "get_undo_redo_stack") result = query_undo_redo_stack (req->arguments);
+        else if (req->tool_name == "get_async_status")   result = query_async_status    (req->arguments);
         else if (req->tool_name == "select_items")       result = action_select_items   (req->arguments);
         else if (req->tool_name == "place_brush")        result = action_place_brush    (req->arguments);
         else if (req->tool_name == "toggle_physics")     result = action_toggle_physics (req->arguments);
@@ -344,6 +345,7 @@ void Mcp_server::refresh_tool_list()
     m_tool_infos.push_back({"get_scene_brushes",  "List all brushes in a scene's content library",         schema_scene_name()});
     m_tool_infos.push_back({"get_selection",        "Get currently selected items",                          schema_no_args()});
     m_tool_infos.push_back({"get_undo_redo_stack", "Get undo/redo operation stacks",                       schema_no_args()});
+    m_tool_infos.push_back({"get_async_status",   "Get pending/running async operation counts",          schema_no_args()});
     m_tool_infos.push_back({"select_items",        "Select items by ID (scene nodes, materials, etc.)",   {
         {"type", "object"},
         {"properties", {
@@ -838,6 +840,16 @@ auto Mcp_server::query_undo_redo_stack(const json& args) -> std::string
         {"redo",     make_stack(m_context.operation_stack->get_redo_stack())},
         {"can_undo", m_context.operation_stack->can_undo()},
         {"can_redo", m_context.operation_stack->can_redo()}
+    }).dump();
+}
+
+auto Mcp_server::query_async_status(const json& args) -> std::string
+{
+    static_cast<void>(args);
+
+    return make_json_content({
+        {"pending", m_context.pending_async_ops.load()},
+        {"running", m_context.running_async_ops.load()}
     }).dump();
 }
 

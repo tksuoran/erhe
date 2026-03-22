@@ -78,6 +78,16 @@ class McpClient:
             raise RuntimeError(f"{tool_name} returned error: {parsed}")
         return parsed
 
+    def wait_async(self, timeout=10.0, poll_interval=0.1):
+        """Poll get_async_status until pending+running reach 0. Returns True if settled."""
+        start = time.time()
+        while time.time() - start < timeout:
+            status = self.call_ok("get_async_status")
+            if status["pending"] == 0 and status["running"] == 0:
+                return True
+            time.sleep(poll_interval)
+        return False
+
     def tools_list(self):
         rpc = self.raw_rpc("tools/list")
         return rpc["result"]["tools"]
@@ -125,6 +135,9 @@ class UnitTestRunner:
             self.test_lock_edit,
             self.test_lock_edit_prevents_delete,
             self.test_tags,
+            self.test_async_status,
+            self.test_geometry_catmull_clark,
+            self.test_geometry_triangulate,
         ]
         print("=" * 60)
         print("UNIT TESTS")
@@ -462,6 +475,77 @@ class UnitTestRunner:
 
         # Clean up
         self.client.call("undo")  # undo place
+
+    def test_async_status(self):
+        result = self.client.call_ok("get_async_status")
+        assert "pending" in result, "Missing pending key"
+        assert "running" in result, "Missing running key"
+        assert result["pending"] == 0, f"Expected 0 pending, got {result['pending']}"
+        assert result["running"] == 0, f"Expected 0 running, got {result['running']}"
+
+    def _place_test_brush(self):
+        """Place a brush, return its node_id. Caller must clean up."""
+        self._require_scene()
+        brushes = self.client.call_ok("get_scene_brushes", {"scene_name": self.scene_name})["brushes"]
+        if not brushes:
+            raise SkipTest("no brushes")
+        # Pick cube if available, else first brush
+        cube = next((b for b in brushes if b["name"] == "cube"), brushes[0])
+        result = self.client.call_ok("place_brush", {
+            "scene_name": self.scene_name,
+            "brush_id": cube["id"],
+            "position": [0.0, 10.0, 0.0],
+        })
+        return result["node_id"]
+
+    def test_geometry_catmull_clark(self):
+        self._require_scene()
+        node_id = self._place_test_brush()
+
+        # Select the placed node
+        self.client.call_ok("select_items", {"scene_name": self.scene_name, "ids": [node_id]})
+
+        # Get primitive count before
+        detail_before = self.client.call_ok("get_node_details", {"scene_name": self.scene_name, "node_name": "cube"})
+        mesh_att = next((a for a in detail_before["attachments"] if a["type"] == "Mesh"), None)
+        assert mesh_att is not None, "Expected Mesh attachment"
+
+        # Run Catmull-Clark subdivision
+        self.client.call("Geometry.Subdivision.Catmull-Clark")
+
+        # Wait for async operation to complete
+        settled = self.client.wait_async(timeout=10.0)
+        assert settled, "Async operation did not complete in time"
+
+        # Verify undo stack grew
+        stack = self.client.call_ok("get_undo_redo_stack")
+        assert stack["can_undo"], "Should be able to undo after subdivision"
+
+        # Undo subdivision and placement
+        self.client.call("undo")  # undo subdivision
+        self.client.call("undo")  # undo placement
+
+    def test_geometry_triangulate(self):
+        self._require_scene()
+        node_id = self._place_test_brush()
+
+        # Select the placed node
+        self.client.call_ok("select_items", {"scene_name": self.scene_name, "ids": [node_id]})
+
+        # Run triangulate
+        self.client.call("Geometry.Triangulate")
+
+        # Wait for async
+        settled = self.client.wait_async(timeout=10.0)
+        assert settled, "Async operation did not complete in time"
+
+        # Verify undo stack
+        stack = self.client.call_ok("get_undo_redo_stack")
+        assert stack["can_undo"], "Should be able to undo after triangulate"
+
+        # Undo triangulate and placement
+        self.client.call("undo")  # undo triangulate
+        self.client.call("undo")  # undo placement
 
 
 class SkipTest(Exception):
