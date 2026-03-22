@@ -741,12 +741,33 @@ void Properties::item_properties(const std::shared_ptr<erhe::Item_base>& item_in
         // TODO Same as group_label above - avoid heap allocation every frame
         std::string item_name_label = fmt::format("{} Name", item->get_type_name());
         add_entry(item_name_label.c_str(), [item]() {
-            std::string name = item->get_name();
-            const bool enter_pressed = ImGui::InputText("##", &name, ImGuiInputTextFlags_EnterReturnsTrue);
-            if (enter_pressed || ImGui::IsItemDeactivatedAfterEdit()) { // TODO
-                if (name != item->get_name()) {
-                    item->set_name(name);
+            if (item->is_lock_edit()) {
+                ImGui::TextUnformatted(item->get_name().c_str());
+            } else {
+                std::string name = item->get_name();
+                const bool enter_pressed = ImGui::InputText("##", &name, ImGuiInputTextFlags_EnterReturnsTrue);
+                if (enter_pressed || ImGui::IsItemDeactivatedAfterEdit()) { // TODO
+                    if (name != item->get_name()) {
+                        item->set_name(name);
+                    }
                 }
+            }
+        });
+
+        add_entry("Locks", [item]() {
+            bool lock_sel = item->is_lock_viewport_selection();
+            bool lock_xfm = item->is_lock_viewport_transform();
+            bool lock_edt = item->is_lock_edit();
+            if (ImGui::Checkbox("Select##lock", &lock_sel)) {
+                item->set_flag_bits(erhe::Item_flags::lock_viewport_selection, lock_sel);
+            }
+            ImGui::SameLine();
+            if (ImGui::Checkbox("Transform##lock", &lock_xfm)) {
+                item->set_flag_bits(erhe::Item_flags::lock_viewport_transform, lock_xfm);
+            }
+            ImGui::SameLine();
+            if (ImGui::Checkbox("Edit##lock", &lock_edt)) {
+                item->set_lock_edit(lock_edt);
             }
         });
 
@@ -768,6 +789,11 @@ void Properties::item_properties(const std::shared_ptr<erhe::Item_base>& item_in
         ////         item->set_wireframe_color(color);
         ////     }
         //// }
+    }
+
+    const bool edit_disabled = item->is_lock_edit();
+    if (edit_disabled) {
+        ImGui::BeginDisabled();
     }
 
     if (node_physics) {
@@ -796,6 +822,10 @@ void Properties::item_properties(const std::shared_ptr<erhe::Item_base>& item_in
 
     if (texture) {
         texture_properties(texture);
+    }
+
+    if (edit_disabled) {
+        ImGui::EndDisabled();
     }
 
     if (node) {

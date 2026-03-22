@@ -4,6 +4,7 @@
 #include <future>
 #include <memory>
 #include <mutex>
+#include <set>
 #include <string>
 #include <thread>
 #include <vector>
@@ -17,6 +18,10 @@ namespace httplib {
 namespace erhe::commands {
     class Command;
     class Commands;
+}
+
+namespace erhe {
+    class Item_base;
 }
 
 namespace editor {
@@ -83,6 +88,7 @@ private:
 
     // Query handlers (run on main thread)
     auto find_scene             (const std::string& name) -> Scene_root*;
+    auto find_items_by_ids      (Scene_root& sr, const std::set<std::size_t>& target_ids) -> std::vector<std::shared_ptr<erhe::Item_base>>;
     auto query_list_scenes      (const nlohmann::json& args) -> std::string;
     auto query_scene_nodes      (const nlohmann::json& args) -> std::string;
     auto query_node_details     (const nlohmann::json& args) -> std::string;
@@ -95,6 +101,10 @@ private:
     auto action_select_items    (const nlohmann::json& args) -> std::string;
     auto action_place_brush     (const nlohmann::json& args) -> std::string;
     auto action_toggle_physics  (const nlohmann::json& args) -> std::string;
+    auto action_lock_items      (const nlohmann::json& args) -> std::string;
+    auto action_unlock_items    (const nlohmann::json& args) -> std::string;
+    auto action_add_tags        (const nlohmann::json& args) -> std::string;
+    auto action_remove_tags     (const nlohmann::json& args) -> std::string;
     auto execute_command        (const std::string& tool_name) -> std::string;
 
     erhe::commands::Commands& m_commands;

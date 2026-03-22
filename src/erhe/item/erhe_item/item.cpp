@@ -205,6 +205,51 @@ auto Item_base::is_hidden() const -> bool
     return !is_visible();
 }
 
+auto Item_base::is_lock_edit() const -> bool
+{
+    return (m_flag_bits & Item_flags::lock_edit) == Item_flags::lock_edit;
+}
+
+auto Item_base::is_lock_viewport_selection() const -> bool
+{
+    return (m_flag_bits & Item_flags::lock_viewport_selection) == Item_flags::lock_viewport_selection;
+}
+
+auto Item_base::is_lock_viewport_transform() const -> bool
+{
+    return (m_flag_bits & Item_flags::lock_viewport_transform) == Item_flags::lock_viewport_transform;
+}
+
+void Item_base::set_lock_edit(bool value)
+{
+    set_flag_bits(Item_flags::lock_edit, value);
+}
+
+auto Item_base::get_tags() const -> const std::set<std::string>&
+{
+    return m_tags;
+}
+
+auto Item_base::has_tag(const std::string_view tag) const -> bool
+{
+    return m_tags.contains(std::string{tag});
+}
+
+void Item_base::add_tag(const std::string_view tag)
+{
+    m_tags.emplace(tag);
+}
+
+void Item_base::remove_tag(const std::string_view tag)
+{
+    m_tags.erase(std::string{tag});
+}
+
+void Item_base::clear_tags()
+{
+    m_tags.clear();
+}
+
 void Item_base::set_source_path(const std::filesystem::path& path)
 {
     m_source_path = std::make_unique<std::filesystem::path>(path);

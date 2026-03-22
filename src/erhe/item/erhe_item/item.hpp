@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <memory>
+#include <set>
 #include <string>
 
 namespace erhe {
@@ -41,7 +42,8 @@ public:
     static constexpr uint64_t hovered_in_viewport       = (1u << 22);
     static constexpr uint64_t hovered_in_item_tree      = (1u << 23);
     static constexpr uint64_t negative_determinant      = (1u << 24);
-    static constexpr uint64_t count                     = 25;
+    static constexpr uint64_t lock_edit                  = (1u << 25);
+    static constexpr uint64_t count                     = 26;
 
     static constexpr const char* c_bit_labels[] =
     {
@@ -70,6 +72,7 @@ public:
         "Hovered in Viewport",
         "Hovered in Item Tree",
         "Negative Determinant",
+        "Lock Edit",
     };
 
     [[nodiscard]] static auto to_string(uint64_t mask) -> std::string;
@@ -273,7 +276,12 @@ public:
     [[nodiscard]] auto is_visible                  () const -> bool;
     [[nodiscard]] auto is_shown_in_ui              () const -> bool;
     [[nodiscard]] auto is_hidden                   () const -> bool;
+    [[nodiscard]] auto is_lock_edit                 () const -> bool;
+    [[nodiscard]] auto is_lock_viewport_selection   () const -> bool;
+    [[nodiscard]] auto is_lock_viewport_transform   () const -> bool;
     [[nodiscard]] auto get_source_path             () const -> const std::filesystem::path*;
+    [[nodiscard]] auto get_tags                    () const -> const std::set<std::string>&;
+    [[nodiscard]] auto has_tag                     (std::string_view tag) const -> bool;
     [[nodiscard]] auto get_name                    () const -> const std::string&;
     [[nodiscard]] auto get_debug_label             () const -> erhe::utility::Debug_label;
     [[nodiscard]] auto describe                    (int level = 0) const -> std::string;
@@ -287,6 +295,10 @@ public:
     void show             ();
     void hide             ();
     void set_source_path  (const std::filesystem::path& path);
+    void set_lock_edit    (bool value);
+    void add_tag          (std::string_view tag);
+    void remove_tag       (std::string_view tag);
+    void clear_tags       ();
 
 protected:
     Unique_id<Item_base>                   m_id         {};
@@ -294,6 +306,7 @@ protected:
     std::string                            m_name       {};
     erhe::utility::Debug_label             m_debug_label{};
     std::unique_ptr<std::filesystem::path> m_source_path{};
+    std::set<std::string>                  m_tags       {};
 };
 
 template <typename T>

@@ -333,10 +333,16 @@ auto Selection::delete_selection() -> bool
     Compound_operation::Parameters compound_parameters;
     std::vector<std::shared_ptr<erhe::Item_base>> recursive_selection;
     auto collect_item = [&recursive_selection](erhe::Hierarchy& item) -> bool {
+        if (item.is_lock_edit()) {
+            return false; // Skip locked items and their children
+        }
         recursive_selection.push_back(item.shared_from_this());
         return true;
     };
     for (const std::shared_ptr<erhe::Item_base>& item : m_selection) {
+        if (item->is_lock_edit()) {
+            continue;
+        }
         const std::shared_ptr<erhe::Hierarchy> hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(item);
         if (!hierarchy) {
             continue;

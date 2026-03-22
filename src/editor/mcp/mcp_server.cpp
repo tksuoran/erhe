@@ -311,6 +311,10 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "select_items")       result = action_select_items   (req->arguments);
         else if (req->tool_name == "place_brush")        result = action_place_brush    (req->arguments);
         else if (req->tool_name == "toggle_physics")     result = action_toggle_physics (req->arguments);
+        else if (req->tool_name == "lock_items")         result = action_lock_items     (req->arguments);
+        else if (req->tool_name == "unlock_items")       result = action_unlock_items   (req->arguments);
+        else if (req->tool_name == "add_tags")           result = action_add_tags       (req->arguments);
+        else if (req->tool_name == "remove_tags")        result = action_remove_tags    (req->arguments);
         else                                              result = execute_command       (req->tool_name);
 
         req->result_promise.set_value(std::move(result));
@@ -358,6 +362,40 @@ void Mcp_server::refresh_tool_list()
     }});
 
     m_tool_infos.push_back({"toggle_physics",     "Toggle dynamic physics simulation on/off",              schema_no_args()});
+    m_tool_infos.push_back({"lock_items",         "Lock items by ID (prevents deletion/modification)",   {
+        {"type", "object"},
+        {"properties", {
+            {"scene_name", {{"type", "string"}, {"description", "Name of the scene"}}},
+            {"ids",        {{"type", "array"}, {"items", {{"type", "integer"}}}, {"description", "Item IDs to lock"}}}
+        }},
+        {"required", json::array({"scene_name", "ids"})}
+    }});
+    m_tool_infos.push_back({"unlock_items",       "Unlock items by ID",                                  {
+        {"type", "object"},
+        {"properties", {
+            {"scene_name", {{"type", "string"}, {"description", "Name of the scene"}}},
+            {"ids",        {{"type", "array"}, {"items", {{"type", "integer"}}}, {"description", "Item IDs to unlock"}}}
+        }},
+        {"required", json::array({"scene_name", "ids"})}
+    }});
+    m_tool_infos.push_back({"add_tags",           "Add tags to items by ID",                             {
+        {"type", "object"},
+        {"properties", {
+            {"scene_name", {{"type", "string"}, {"description", "Name of the scene"}}},
+            {"ids",        {{"type", "array"}, {"items", {{"type", "integer"}}}, {"description", "Item IDs to tag"}}},
+            {"tags",       {{"type", "array"}, {"items", {{"type", "string"}}}, {"description", "Tags to add"}}}
+        }},
+        {"required", json::array({"scene_name", "ids", "tags"})}
+    }});
+    m_tool_infos.push_back({"remove_tags",        "Remove tags from items by ID",                        {
+        {"type", "object"},
+        {"properties", {
+            {"scene_name", {{"type", "string"}, {"description", "Name of the scene"}}},
+            {"ids",        {{"type", "array"}, {"items", {{"type", "integer"}}}, {"description", "Item IDs"}}},
+            {"tags",       {{"type", "array"}, {"items", {{"type", "string"}}}, {"description", "Tags to remove"}}}
+        }},
+        {"required", json::array({"scene_name", "ids", "tags"})}
+    }});
 
     // Editor commands
     const auto& registered_commands = m_commands.get_commands();
@@ -465,6 +503,11 @@ auto Mcp_server::query_scene_nodes(const json& args) -> std::string
 
         auto parent_node = node->get_parent_node();
 
+        json tags_arr = json::array();
+        for (const auto& tag : node->get_tags()) {
+            tags_arr.push_back(tag);
+        }
+
         nodes.push_back({
             {"name",             node->get_name()},
             {"id",               node->get_id()},
@@ -472,7 +515,9 @@ auto Mcp_server::query_scene_nodes(const json& args) -> std::string
             {"position",         {t.x, t.y, t.z}},
             {"rotation_xyzw",    {r.x, r.y, r.z, r.w}},
             {"scale",            {s.x, s.y, s.z}},
-            {"attachment_types", attachment_types}
+            {"attachment_types", attachment_types},
+            {"locked",           node->is_lock_edit()},
+            {"tags",             tags_arr}
         });
     }
 
@@ -577,7 +622,9 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
         {"attachments",    attachments},
         {"children",       children},
         {"visible",        found_node->is_visible()},
-        {"selected",       found_node->is_selected()}
+        {"selected",       found_node->is_selected()},
+        {"locked",         found_node->is_lock_edit()},
+        {"tags",           [&]() { json t = json::array(); for (const auto& tag : found_node->get_tags()) t.push_back(tag); return t; }()}
     };
 
     return make_json_content(result).dump();
@@ -766,6 +813,48 @@ auto Mcp_server::query_selection(const json& args) -> std::string
     return make_json_content({{"items", items}}).dump();
 }
 
+auto Mcp_server::find_items_by_ids(Scene_root& sr, const std::set<std::size_t>& target_ids) -> std::vector<std::shared_ptr<erhe::Item_base>>
+{
+    std::vector<std::shared_ptr<erhe::Item_base>> result;
+
+    const auto& scene = sr.get_scene();
+    for (const auto& node : scene.get_flat_nodes()) {
+        if (target_ids.contains(node->get_id())) {
+            result.push_back(node);
+        }
+    }
+    for (const auto& camera : scene.get_cameras()) {
+        if (target_ids.contains(camera->get_id())) {
+            result.push_back(camera);
+        }
+    }
+    for (const auto& ll : scene.get_light_layers()) {
+        for (const auto& light : ll->lights) {
+            if (target_ids.contains(light->get_id())) {
+                result.push_back(light);
+            }
+        }
+    }
+    auto library = sr.get_content_library();
+    if (library) {
+        if (library->materials) {
+            for (const auto& mat : library->materials->get_all<erhe::primitive::Material>()) {
+                if (target_ids.contains(mat->get_id())) {
+                    result.push_back(mat);
+                }
+            }
+        }
+        if (library->brushes) {
+            for (const auto& brush : library->brushes->get_all<Brush>()) {
+                if (target_ids.contains(brush->get_id())) {
+                    result.push_back(brush);
+                }
+            }
+        }
+    }
+    return result;
+}
+
 auto Mcp_server::action_select_items(const json& args) -> std::string
 {
     if (!m_context.selection) {
@@ -795,53 +884,7 @@ auto Mcp_server::action_select_items(const json& args) -> std::string
         return make_text_content("Selection cleared").dump();
     }
 
-    std::vector<std::shared_ptr<erhe::Item_base>> items_to_select;
-
-    // Search scene nodes
-    const auto& scene = sr->get_scene();
-    for (const auto& node : scene.get_flat_nodes()) {
-        if (target_ids.contains(node->get_id())) {
-            items_to_select.push_back(node);
-        }
-    }
-
-    // Search cameras
-    for (const auto& camera : scene.get_cameras()) {
-        if (target_ids.contains(camera->get_id())) {
-            items_to_select.push_back(camera);
-        }
-    }
-
-    // Search lights
-    for (const auto& ll : scene.get_light_layers()) {
-        for (const auto& light : ll->lights) {
-            if (target_ids.contains(light->get_id())) {
-                items_to_select.push_back(light);
-            }
-        }
-    }
-
-    // Search content library materials and brushes
-    auto library = sr->get_content_library();
-    if (library) {
-        if (library->materials) {
-            const auto& mat_list = library->materials->get_all<erhe::primitive::Material>();
-            for (const auto& mat : mat_list) {
-                if (target_ids.contains(mat->get_id())) {
-                    items_to_select.push_back(mat);
-                }
-            }
-        }
-        if (library->brushes) {
-            const auto& brush_list = library->brushes->get_all<Brush>();
-            for (const auto& brush : brush_list) {
-                if (target_ids.contains(brush->get_id())) {
-                    items_to_select.push_back(brush);
-                }
-            }
-        }
-    }
-
+    auto items_to_select = find_items_by_ids(*sr, target_ids);
     m_context.selection->set_selection(items_to_select);
 
     json selected = json::array();
@@ -979,6 +1022,104 @@ auto Mcp_server::action_toggle_physics(const json& args) -> std::string
     return make_json_content({
         {"dynamic_physics_enabled", enabled}
     }).dump();
+}
+
+auto Mcp_server::action_lock_items(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    auto* sr = find_scene(scene_name);
+    if (!sr) {
+        json r = make_text_content("Scene not found: " + scene_name);
+        r["isError"] = true;
+        return r.dump();
+    }
+    const json ids_json = args.value("ids", json::array());
+    std::set<std::size_t> target_ids;
+    for (const auto& v : ids_json) {
+        if (v.is_number()) target_ids.insert(v.get<std::size_t>());
+    }
+    auto items = find_items_by_ids(*sr, target_ids);
+    for (auto& item : items) {
+        item->set_lock_edit(true);
+    }
+    return make_json_content({{"locked_count", static_cast<int>(items.size())}}).dump();
+}
+
+auto Mcp_server::action_unlock_items(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    auto* sr = find_scene(scene_name);
+    if (!sr) {
+        json r = make_text_content("Scene not found: " + scene_name);
+        r["isError"] = true;
+        return r.dump();
+    }
+    const json ids_json = args.value("ids", json::array());
+    std::set<std::size_t> target_ids;
+    for (const auto& v : ids_json) {
+        if (v.is_number()) target_ids.insert(v.get<std::size_t>());
+    }
+    auto items = find_items_by_ids(*sr, target_ids);
+    for (auto& item : items) {
+        item->set_lock_edit(false);
+    }
+    return make_json_content({{"unlocked_count", static_cast<int>(items.size())}}).dump();
+}
+
+auto Mcp_server::action_add_tags(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    auto* sr = find_scene(scene_name);
+    if (!sr) {
+        json r = make_text_content("Scene not found: " + scene_name);
+        r["isError"] = true;
+        return r.dump();
+    }
+    const json ids_json  = args.value("ids", json::array());
+    const json tags_json = args.value("tags", json::array());
+    std::set<std::size_t> target_ids;
+    for (const auto& v : ids_json) {
+        if (v.is_number()) target_ids.insert(v.get<std::size_t>());
+    }
+    std::vector<std::string> tags;
+    for (const auto& v : tags_json) {
+        if (v.is_string()) tags.push_back(v.get<std::string>());
+    }
+    auto items = find_items_by_ids(*sr, target_ids);
+    for (auto& item : items) {
+        for (const auto& tag : tags) {
+            item->add_tag(tag);
+        }
+    }
+    return make_json_content({{"tagged_count", static_cast<int>(items.size())}}).dump();
+}
+
+auto Mcp_server::action_remove_tags(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    auto* sr = find_scene(scene_name);
+    if (!sr) {
+        json r = make_text_content("Scene not found: " + scene_name);
+        r["isError"] = true;
+        return r.dump();
+    }
+    const json ids_json  = args.value("ids", json::array());
+    const json tags_json = args.value("tags", json::array());
+    std::set<std::size_t> target_ids;
+    for (const auto& v : ids_json) {
+        if (v.is_number()) target_ids.insert(v.get<std::size_t>());
+    }
+    std::vector<std::string> tags;
+    for (const auto& v : tags_json) {
+        if (v.is_string()) tags.push_back(v.get<std::string>());
+    }
+    auto items = find_items_by_ids(*sr, target_ids);
+    for (auto& item : items) {
+        for (const auto& tag : tags) {
+            item->remove_tag(tag);
+        }
+    }
+    return make_json_content({{"untagged_count", static_cast<int>(items.size())}}).dump();
 }
 
 } // namespace editor

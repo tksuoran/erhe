@@ -171,6 +171,15 @@ Each `Scene_root` owns a physics world. `Node_physics` is a `Node_attachment` wr
 
 Scenes serialize to JSON + companion `.glb` (meshes/materials) + `.geogram` (editable geometry). The codegen system (`erhe_codegen`) generates versioned C++ structs with simdjson-based serialization. `Scene_file` (v2) contains nodes, cameras, lights, mesh references, and node physics data. Collision shape types (box, sphere, cylinder, capsule, compound) are serialized and faithfully recreated on load instead of degrading to convex hulls.
 
+### Item Locking and Tagging
+
+Items have three lock flags (in `Item_flags`):
+- `lock_viewport_selection` (bit 7) — prevents viewport click-to-select
+- `lock_viewport_transform` (bit 8) — prevents viewport gizmo transform
+- `lock_edit` (bit 25) — prevents deletion and property editing; `Selection::delete_selection()` skips locked items; Properties window disables editing when set
+
+Items also support arbitrary string tags via `add_tag()`, `remove_tag()`, `has_tag()`, `get_tags()`. Tags and lock state are exposed in MCP node query responses and can be set via `lock_items`, `unlock_items`, `add_tags`, `remove_tags` MCP tools. The Properties window shows lock toggles at the top of each item.
+
 ### Content Library Drag-and-Drop
 
 Content library items can be dragged between libraries (e.g., materials from one scene to another). Cross-library drops perform a copy via `Material` copy constructor + `Item_insert_remove_operation`. Same-library drags are ignored. Materials can also be dropped onto scene nodes to assign them to mesh primitives.
@@ -180,7 +189,7 @@ Content library items can be dragged between libraries (e.g., materials from one
 The editor embeds an MCP (Model Context Protocol) server on `127.0.0.1:8080` for external tool integration. It exposes:
 
 - **Query tools**: `list_scenes`, `get_scene_nodes`, `get_node_details`, `get_scene_cameras`, `get_scene_lights`, `get_scene_materials`, `get_material_details`, `get_scene_brushes`, `get_selection`
-- **Action tools**: `select_items` (by ID), `place_brush` (by brush ID + position), `toggle_physics`
+- **Action tools**: `select_items` (by ID), `place_brush` (by brush ID + position), `toggle_physics`, `lock_items`, `unlock_items`, `add_tags`, `remove_tags`
 - **Editor commands**: All registered `Command` objects (undo, redo, delete, etc.)
 
 The HTTP server (cpp-httplib) runs on a background thread. All requests are queued to the main thread via `std::promise`/`std::future` for thread safety. `process_queued_requests()` is called once per frame from `Editor::tick()`. See `mcp_server_usage.md` for full API reference with curl examples.
