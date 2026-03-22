@@ -104,7 +104,7 @@ public:
     void set_size(const glm::vec2 value) noexcept
     {
         m_max.x = m_min.x + value.x - 1.0f;
-        m_max.y = m_min.y + value.y + 1.0f;
+        m_max.y = m_min.y + value.y - 1.0f;
     }
 
     [[nodiscard]] inline auto half_size() const noexcept -> const glm::vec2
