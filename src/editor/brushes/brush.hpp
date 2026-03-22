@@ -117,4 +117,17 @@ private:
     GEO::index_t                                      m_max_corner_count{0};
 };
 
+// Place a brush in a scene with undo support. Usable from both
+// interactive UI (Brush_tool) and programmatic paths (MCP, Scene_builder).
+auto place_brush_in_scene(
+    App_context&                                      context,
+    Brush&                                            brush,
+    Scene_root&                                       scene_root,
+    const glm::mat4&                                  world_from_node,
+    const std::shared_ptr<erhe::primitive::Material>& material,
+    double                                            scale       = 1.0,
+    erhe::physics::Motion_mode                        motion_mode = erhe::physics::Motion_mode::e_dynamic,
+    std::shared_ptr<erhe::scene::Node>                parent      = {}
+) -> std::shared_ptr<erhe::scene::Node>;
+
 }

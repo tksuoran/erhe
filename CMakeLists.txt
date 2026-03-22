@@ -271,6 +271,13 @@ CPMAddPackage(
     GITHUB_REPOSITORY nlohmann/json
 )
 
+CPMAddPackage(
+    NAME              httplib
+    VERSION           0.18.7
+    GIT_SHALLOW       TRUE
+    GITHUB_REPOSITORY yhirose/cpp-httplib
+)
+
 include(vscode)
 vscode_support()
 

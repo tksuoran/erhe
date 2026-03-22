@@ -66,6 +66,7 @@
 #include "windows/viewport_config_window.hpp"
 #include "windows/scene_view_config_window.hpp"
 
+#include "mcp/mcp_server.hpp"
 #include "xr/headset_view.hpp"
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/hand_tracker.hpp"
@@ -274,6 +275,11 @@ public:
         m_app_scenes   ->after_physics_simulation_steps();
         m_imgui_windows->process_events(host_system_dt_s, host_system_time_ns);
         m_commands     ->tick(host_system_time_ns, input_events);
+
+        // Process any requests queued by the MCP server
+        if (m_mcp_server) {
+            m_mcp_server->process_queued_requests();
+        }
 
         // Once per frame updates
         m_network_window->update_network();
@@ -898,7 +904,10 @@ public:
                     *m_app_message_bus.get(),
                     *m_headset_view.get(),
                     *m_mesh_memory.get(),
-                    *m_tools.get()
+                    *m_tools.get(),
+                    *m_move_tool.get(),
+                    *m_rotate_tool.get(),
+                    *m_scale_tool.get()
                 );
             }
             ERHE_TASK_FOOTER(
@@ -1104,6 +1113,10 @@ public:
 
         fill_app_context();
 
+        // Start MCP server (exposes editor commands over HTTP)
+        m_mcp_server = std::make_unique<Mcp_server>(*m_commands.get(), m_app_context);
+        m_mcp_server->start();
+
         m_app_settings->physics.static_enable  = m_editor_config.physics.static_enable;
         m_app_settings->physics.dynamic_enable = m_editor_config.physics.dynamic_enable;
         if (!m_app_settings->physics.static_enable) {
@@ -1302,6 +1315,10 @@ public:
 
     ~Editor() noexcept
     {
+        if (m_mcp_server) {
+            m_mcp_server->stop();
+            m_mcp_server.reset();
+        }
         m_default_scene_browser.reset();
         m_default_scene.reset();
     }
@@ -1555,6 +1572,9 @@ public:
     std::unique_ptr<Paint_tool         >                     m_paint_tool;
     std::unique_ptr<Physics_tool       >                     m_physics_tool;
     std::unique_ptr<Selection_tool     >                     m_selection_tool;
+
+    // MCP server (exposes editor commands over HTTP)
+    std::unique_ptr<Mcp_server         >                     m_mcp_server;
 };
 
 void run_editor()

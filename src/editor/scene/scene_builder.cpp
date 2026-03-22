@@ -738,6 +738,7 @@ void Scene_builder::add_room()
     );
 
     floor_instance_node->set_parent(m_scene_root->get_scene().get_root_node());
+    floor_instance_node->set_lock_edit(true);
 }
 
 void Scene_builder::add_platonic_solids(const Make_mesh_config& config)

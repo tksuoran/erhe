@@ -625,51 +625,20 @@ void Brush_tool::do_insert_operation(Brush& brush)
     }
 
     std::shared_ptr<erhe::scene::Mesh> hover_scene_mesh = m_hover.scene_mesh_weak.lock();
-    std::shared_ptr<const Grid>        hover_grid       = m_hover.grid_weak.lock();
 
     if (!m_align_transform.has_value()) {
         return;
     }
     const auto hover_from_brush = m_align_transform.value();
-    const uint64_t mesh_flags =
-        erhe::Item_flags::visible     |
-        erhe::Item_flags::content     |
-        erhe::Item_flags::opaque      |
-        erhe::Item_flags::shadow_cast |
-        erhe::Item_flags::id          |
-        erhe::Item_flags::show_in_ui;
-    const uint64_t node_flags =
-        erhe::Item_flags::visible     |
-        erhe::Item_flags::content     |
-        erhe::Item_flags::expand      |
-        erhe::Item_flags::show_in_ui;
 
     auto* const hover_node = hover_scene_mesh ? hover_scene_mesh->get_node() : nullptr;
-    const Instance_create_info brush_instance_create_info {
-        .node_flags       = node_flags,
-        .mesh_flags       = mesh_flags,
-        .scene_root       = scene_root.get(),
-        .world_from_node  = (hover_node != nullptr)
-            ? hover_node->world_from_node() * hover_from_brush
-            : hover_from_brush,
-        .material         = material,
-        .scale            = m_transform_scale
-    };
-    const auto instance_node = brush.make_instance(brush_instance_create_info);
+    const glm::mat4 world_from_node = (hover_node != nullptr)
+        ? hover_node->world_from_node() * hover_from_brush
+        : hover_from_brush;
 
-    std::shared_ptr<Brush> shared_brush = std::dynamic_pointer_cast<Brush>(brush.shared_from_this());
-    std::shared_ptr<Brush_placement> brush_placement = std::make_shared<Brush_placement>(shared_brush, get_placement_facet(), get_placement_corner0());
-    instance_node->attach(brush_placement);
-    brush_placement->enable_flag_bits(
-        erhe::Item_flags::brush      |
-        erhe::Item_flags::visible    |
-        erhe::Item_flags::no_message |
-        erhe::Item_flags::show_in_ui
-    );
-
+    // Determine parent node based on tool settings
     std::shared_ptr<erhe::scene::Node> parent;
     const auto& first_selected_node = m_context.selection->get_last_selected<erhe::scene::Node>();
-
     if (m_parent_to_first_selected && first_selected_node && (first_selected_node->get_item_host() != nullptr)) {
         parent = first_selected_node;
     }
@@ -688,15 +657,16 @@ void Brush_tool::do_insert_operation(Brush& brush)
         }
     }
 
-    auto op = std::make_shared<Item_insert_remove_operation>(
-        Item_insert_remove_operation::Parameters{
-            .context = m_context,
-            .item    = instance_node,
-            .parent  = parent,
-            .mode    = Item_insert_remove_operation::Mode::insert
-        }
+    place_brush_in_scene(
+        m_context,
+        brush,
+        *scene_root,
+        world_from_node,
+        material,
+        m_transform_scale,
+        erhe::physics::Motion_mode::e_dynamic,
+        parent
     );
-    m_context.operation_stack->queue(op);
 }
 
 void Brush_tool::add_preview_mesh(Brush& brush)

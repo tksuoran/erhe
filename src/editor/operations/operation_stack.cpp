@@ -147,6 +147,16 @@ auto Operation_stack::can_redo() const -> bool
     return !m_undone.empty();
 }
 
+auto Operation_stack::get_undo_stack() const -> const std::vector<std::shared_ptr<Operation>>&
+{
+    return m_executed;
+}
+
+auto Operation_stack::get_redo_stack() const -> const std::vector<std::shared_ptr<Operation>>&
+{
+    return m_undone;
+}
+
 void Operation_stack::imgui(const char* stack_label, const std::vector<std::shared_ptr<Operation>>& operations)
 {
     const ImGuiTreeNodeFlags parent_flags{
