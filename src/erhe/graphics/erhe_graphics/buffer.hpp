@@ -1,11 +1,9 @@
 #pragma once
 
 #include "erhe_graphics/enums.hpp"
-#include "erhe_profile/profile.hpp"
 #include "erhe_utility/debug_label.hpp"
 
 #include <memory>
-#include <mutex>
 #include <optional>
 #include <span>
 #include <string>
@@ -76,27 +74,6 @@ public:
 
 private:
     std::unique_ptr<Buffer_impl> m_impl;
-};
-
-class Buffer_allocator
-{
-public:
-    explicit Buffer_allocator(Buffer* buffer);
-    ~Buffer_allocator() noexcept;
-    Buffer_allocator(Buffer_allocator&&) noexcept;
-    auto operator=(Buffer_allocator&&) noexcept -> Buffer_allocator&;
-
-    void clear() noexcept;
-    [[nodiscard]] auto allocate_bytes          (std::size_t byte_count, std::size_t alignment = 64) noexcept -> std::optional<std::size_t>;
-    [[nodiscard]] auto get_used_byte_count     () const -> std::size_t;
-    [[nodiscard]] auto get_available_byte_count(std::size_t alignment = 64) const noexcept -> std::size_t;
-    [[nodiscard]] auto get_buffer              () -> Buffer*;
-    [[nodiscard]] auto get_buffer              () const -> const Buffer*;
-
-private:
-    ERHE_PROFILE_MUTEX(std::mutex, m_allocate_mutex);
-    Buffer*     m_buffer{nullptr};
-    std::size_t m_next_free_byte{0};
 };
 
 } // namespace erhe::graphics
