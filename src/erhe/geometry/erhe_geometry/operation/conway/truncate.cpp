@@ -33,6 +33,9 @@ void Truncate::build()
     for (GEO::index_t src_vertex : source_mesh.vertices) {
         const std::vector<GEO::index_t>& src_corners      = source.get_vertex_corners(src_vertex);
         const GEO::index_t               src_corner_count = static_cast<GEO::index_t>(src_corners.size());
+        if (src_corner_count < 3) {
+            continue;
+        }
         const GEO::index_t               new_dst_facet    = destination_mesh.facets.create_polygon(src_corner_count);
 
         //// Debug_src_vertex_entry debug_src_vertex_entry;
@@ -54,6 +57,9 @@ void Truncate::build()
     // New faces from old faces, new face corner for each old corner edge 'midpoint'
     for (const GEO::index_t src_facet : source_mesh.facets) {
         const GEO::index_t src_corner_count = source_mesh.facets.nb_corners(src_facet);
+        if (src_corner_count < 3) {
+            continue;
+        }
         const GEO::index_t new_dst_facet    = destination_mesh.facets.create_polygon(src_corner_count * 2);
         GEO::index_t dst_corner = 0;
         //// Debug_src_facet_entry debug_src_facet_entry;

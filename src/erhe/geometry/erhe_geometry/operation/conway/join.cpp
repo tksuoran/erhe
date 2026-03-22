@@ -41,6 +41,9 @@ void Join::build()
         bool l_backward{false}; // b, a
         std::stringstream l_ss;
         const GEO::index_t l_corner_count = source_mesh.facets.nb_corners(src_facet_l);
+        if (l_corner_count == 0) {
+            continue;
+        }
         for (GEO::index_t local_src_facet_corner = 0; local_src_facet_corner < l_corner_count; ++local_src_facet_corner) {
             const GEO::index_t prev_src_corner = source_mesh.facets.corner(src_facet_l, (local_src_facet_corner + l_corner_count - 1) % l_corner_count);
             const GEO::index_t src_corner      = source_mesh.facets.corner(src_facet_l, local_src_facet_corner);
@@ -64,6 +67,9 @@ void Join::build()
         bool r_backward{false};
         std::stringstream r_ss;
         const GEO::index_t r_corner_count = source_mesh.facets.nb_corners(src_facet_r);
+        if (r_corner_count == 0) {
+            continue;
+        }
         for (GEO::index_t local_src_facet_corner = 0; local_src_facet_corner < r_corner_count; ++local_src_facet_corner) {
             const GEO::index_t prev_src_corner = source_mesh.facets.corner(src_facet_r, (local_src_facet_corner + r_corner_count - 1) % r_corner_count);
             const GEO::index_t src_corner      = source_mesh.facets.corner(src_facet_r, local_src_facet_corner);

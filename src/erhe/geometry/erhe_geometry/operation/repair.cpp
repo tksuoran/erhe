@@ -209,7 +209,7 @@ void Weld::scan_for_equal_and_opposite_facets()
 
         const GEO::index_t left_corner_count = source_mesh.facets.nb_corners(left_facet);
         if (left_corner_count == 0) {
-            m_facet_remove[left_corner_count] = true;
+            m_facet_remove[left_facet] = true;
             continue;
         }
 

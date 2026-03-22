@@ -28,6 +28,9 @@ void Dual::build()
     for (GEO::index_t src_vertex : source_mesh.vertices) {
         const std::vector<GEO::index_t>& src_corners = source.get_vertex_corners(src_vertex);
         const GEO::index_t src_corner_count = static_cast<GEO::index_t>(src_corners.size());
+        if (src_corner_count < 3) {
+            continue;
+        }
         const GEO::index_t new_dst_facet = destination_mesh.facets.create_polygon(src_corner_count);
         for (GEO::index_t local_facet_corner = 0; local_facet_corner < src_corner_count; ++local_facet_corner) {
             const GEO::index_t src_corner = src_corners[local_facet_corner];

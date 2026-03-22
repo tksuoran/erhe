@@ -77,6 +77,9 @@ void Catmull_clark_subdivision::build()
 
             for (GEO::index_t src_facet : source.get_edge_facets(src_edge)) {
                 const GEO::index_t src_facet_corner_count = source_mesh.facets.nb_corners(src_facet);
+                if (src_facet_corner_count == 0) {
+                    continue;
+                }
                 const auto weight = 1.0f / static_cast<float>(src_facet_corner_count);
                 add_facet_centroid(new_dst_vertex, weight, src_facet);
             }
@@ -106,11 +109,18 @@ void Catmull_clark_subdivision::build()
             //  F    <- because F is average of all centroids, it adds extra /n
             // ---
             //  n
-            const auto corner_weight = 1.0f / static_cast<float>(source_mesh.facets.nb_vertices(src_facet));
+            const GEO::index_t nb_vertices = source_mesh.facets.nb_vertices(src_facet);
+            if (nb_vertices == 0) {
+                continue;
+            }
+            const auto corner_weight = 1.0f / static_cast<float>(nb_vertices);
             for (GEO::index_t src_corner : source_mesh.facets.corners(src_facet)) {
                 const GEO::index_t               src_vertex         = source_mesh.facet_corners.vertex(src_corner);
                 const GEO::index_t               dst_vertex         = m_vertex_src_to_dst[src_vertex];
                 const std::vector<GEO::index_t>& src_vertex_corners = source.get_vertex_corners(src_vertex);
+                if (src_vertex_corners.empty()) {
+                    continue;
+                }
                 const float                      vertex_weight      = 1.0f / static_cast<float>(src_vertex_corners.size());
                 add_facet_centroid(dst_vertex, vertex_weight * vertex_weight * corner_weight, src_facet);
             }
@@ -120,7 +130,11 @@ void Catmull_clark_subdivision::build()
     // Subdivide facets, clone (and corners);
     {
         for (GEO::index_t src_facet : source_mesh.facets) {
-            for (GEO::index_t local_facet_corner = 0, corner_count = source_mesh.facets.nb_vertices(src_facet); local_facet_corner < corner_count; ++ local_facet_corner) {
+            const GEO::index_t corner_count = source_mesh.facets.nb_vertices(src_facet);
+            if (corner_count < 3) {
+                continue;
+            }
+            for (GEO::index_t local_facet_corner = 0; local_facet_corner < corner_count; ++local_facet_corner) {
                 const GEO::index_t prev_local_facet_corner = (local_facet_corner + corner_count - 1) % corner_count;
                 const GEO::index_t next_local_facet_corner = (local_facet_corner +                1) % corner_count;
                 const GEO::index_t prev_src_corner         = source_mesh.facets.corner(src_facet, prev_local_facet_corner);

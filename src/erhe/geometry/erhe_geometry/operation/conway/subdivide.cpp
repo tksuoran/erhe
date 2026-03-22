@@ -38,6 +38,9 @@ void Subdivide::build()
         //    continue;
         //}
         const GEO::index_t src_corner_count = source_mesh.facets.nb_corners(src_facet);
+        if (src_corner_count < 3) {
+            continue;
+        }
         for (GEO::index_t local_src_facet_corner = 0; local_src_facet_corner < src_corner_count; ++local_src_facet_corner) {
             const GEO::index_t prev_src_corner        = source_mesh.facets.corner(src_facet, (local_src_facet_corner + src_corner_count - 1) % src_corner_count);
             const GEO::index_t src_corner             = source_mesh.facets.corner(src_facet, local_src_facet_corner);

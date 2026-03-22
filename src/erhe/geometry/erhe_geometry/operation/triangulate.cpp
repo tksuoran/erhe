@@ -23,6 +23,9 @@ void Triangulate::build()
 
     for (const GEO::index_t src_facet : source_mesh.facets) {
         const GEO::index_t src_corner_count = source_mesh.facets.nb_corners(src_facet);
+        if (src_corner_count < 3) {
+            continue;
+        }
         if (src_corner_count == 3) {
             const GEO::index_t new_dst_facet = make_new_dst_facet_from_src_facet(src_facet, 3);
             add_facet_corners(new_dst_facet, src_facet);
