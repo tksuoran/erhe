@@ -3,6 +3,7 @@
 #include "app_scenes.hpp"
 #include "app_settings.hpp"
 #include "brushes/brush.hpp"
+#include "brushes/brush_placement.hpp"
 #include "content_library/content_library.hpp"
 #include "erhe_math/math_util.hpp"
 #include "editor_log.hpp"
@@ -542,6 +543,15 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
             att_json["color"]      = {light->color.x, light->color.y, light->color.z};
             att_json["intensity"]  = light->intensity;
             att_json["range"]      = light->range;
+        }
+
+        auto bp = std::dynamic_pointer_cast<Brush_placement>(att);
+        if (bp) {
+            auto brush = bp->get_brush();
+            if (brush) {
+                att_json["brush_name"] = brush->get_name();
+                att_json["brush_id"]   = brush->get_id();
+            }
         }
 
         attachments.push_back(att_json);

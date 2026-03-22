@@ -167,6 +167,45 @@ Returns: `{selected_count, items: [{name, type, id}]}`
 
 Pass an empty `ids` array to clear selection. All query responses include `id` fields for use with this tool.
 
+## Action Tools
+
+### place_brush
+
+Place a brush instance in a scene at a given world position.
+
+```bash
+curl -X POST http://127.0.0.1:8080/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"place_brush","arguments":{"scene_name":"Default Scene","brush_id":354,"position":[0,0.5,0],"material_name":"Gold","scale":1.0}}}'
+```
+
+Parameters:
+- `scene_name` (required) — target scene
+- `brush_id` (required) — brush ID from `get_scene_brushes`
+- `position` (required) — `[x, y, z]` world position
+- `material_name` (optional) — material name, defaults to first available
+- `scale` (optional) — scale factor, default 1.0
+- `motion_mode` (optional) — `"static"` or `"dynamic"` (default)
+
+Returns: `{node_name, node_id, brush, material, position, scale}`
+
+### toggle_physics
+
+Toggle dynamic physics simulation on/off.
+
+```bash
+curl -X POST http://127.0.0.1:8080/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"toggle_physics","arguments":{}}}'
+```
+
+Returns: `{dynamic_physics_enabled: true/false}`
+
+## Notes
+
+- `get_node_details` includes `brush_name` and `brush_id` for nodes placed via brushes (from the `Brush_placement` attachment)
+- Brush instance scale is baked into the geometry at placement time and not stored separately — it cannot be queried back from existing nodes
+
 ## Editor Command Tools
 
 All registered editor commands are also exposed as tools (undo, redo, clipboard operations, scene commands, etc.). These take no arguments:
