@@ -156,6 +156,9 @@ class UnitTestRunner:
             self.test_geometry_generate_tangents,
             self.test_geometry_bake_transform,
             self.test_geometry_chain,
+            self.test_geometry_csg_union,
+            self.test_geometry_csg_intersection,
+            self.test_geometry_csg_difference,
         ]
         print("=" * 60)
         print("UNIT TESTS")
@@ -686,6 +689,46 @@ class UnitTestRunner:
             self.client.call("undo")
 
 
+    def _run_csg_op(self, command_name):
+        """Place two brushes, select both, run CSG op, wait, verify, undo."""
+        self._require_scene()
+        node_a_id = self._place_test_brush()
+        node_b_id = self._place_test_brush()
+
+        # Select both nodes
+        self.client.call_ok("select_items", {"scene_name": self.scene_name, "ids": [node_a_id, node_b_id]})
+
+        undo_before = len(self.client.call_ok("get_undo_redo_stack")["undo"])
+
+        self.client.call(command_name)
+        self.client.wait_async(timeout=30.0)
+
+        # Wait for op to land on undo stack
+        deadline = time.time() + 30.0
+        while time.time() < deadline:
+            stack = self.client.call_ok("get_undo_redo_stack")
+            if len(stack["undo"]) > undo_before:
+                break
+            time.sleep(0.1)
+
+        stack = self.client.call_ok("get_undo_redo_stack")
+        assert len(stack["undo"]) > undo_before, f"Undo stack did not grow after {command_name}"
+
+        # Undo CSG op + 2 placements
+        self.client.call("undo")  # undo CSG
+        self.client.call("undo")  # undo placement b
+        self.client.call("undo")  # undo placement a
+
+    def test_geometry_csg_union(self):
+        self._run_csg_op("Geometry.Union")
+
+    def test_geometry_csg_intersection(self):
+        self._run_csg_op("Geometry.Intersection")
+
+    def test_geometry_csg_difference(self):
+        self._run_csg_op("Geometry.Difference")
+
+
 class SkipTest(Exception):
     pass
 
@@ -705,7 +748,7 @@ class SmokeTestRunner:
         self.rng = random.Random(seed)
         self.ok_count = 0
         self.error_count = 0
-        self.stats = {"query": 0, "place": 0, "select": 0, "delete": 0, "undo": 0, "redo": 0, "toggle": 0, "detail": 0, "geometry": 0, "reparent": 0}
+        self.stats = {"query": 0, "place": 0, "select": 0, "delete": 0, "undo": 0, "redo": 0, "toggle": 0, "detail": 0, "geometry": 0, "reparent": 0, "csg": 0}
         self.scene_name = None
         self.brush_ids = []
         self.material_names = []
@@ -805,8 +848,10 @@ class SmokeTestRunner:
                 self._do_toggle()
         elif r < 0.74:
             self._do_delete()
-        elif r < 0.80:
+        elif r < 0.78:
             self._do_reparent()
+        elif r < 0.82:
+            self._do_csg()
         elif r < 0.92:
             self._do_geometry_chain()
         else:
@@ -901,6 +946,46 @@ class SmokeTestRunner:
                 "parent_node_id": parent["id"]
             })
         self._try("reparent", action)
+
+    CSG_COMMANDS = ["Geometry.Union", "Geometry.Intersection", "Geometry.Difference"]
+
+    def _do_csg(self):
+        def action():
+            if not self.brush_ids:
+                return
+            # Place two brushes close together
+            x = self.rng.uniform(-3, 3)
+            z = self.rng.uniform(-3, 3)
+            brush_a = self.rng.choice(self.brush_ids)
+            brush_b = self.rng.choice(self.brush_ids)
+            mat = self.rng.choice(self.material_names) if self.material_names else None
+            args_a = {"scene_name": self.scene_name, "brush_id": brush_a, "position": [x, 1.0, z]}
+            args_b = {"scene_name": self.scene_name, "brush_id": brush_b, "position": [x + 0.3, 1.0, z]}
+            if mat:
+                args_a["material_name"] = mat
+                args_b["material_name"] = mat
+            result_a = self.client.call_ok("place_brush", args_a)
+            result_b = self.client.call_ok("place_brush", args_b)
+
+            # Select both
+            self.client.call_ok("select_items", {
+                "scene_name": self.scene_name,
+                "ids": [result_a["node_id"], result_b["node_id"]]
+            })
+
+            undo_before = len(self.client.call_ok("get_undo_redo_stack")["undo"])
+            cmd = self.rng.choice(self.CSG_COMMANDS)
+            self.client.call(cmd)
+            self.client.wait_async(timeout=30.0)
+
+            # Wait for op to land
+            deadline = time.time() + 30.0
+            while time.time() < deadline:
+                stack = self.client.call_ok("get_undo_redo_stack")
+                if len(stack["undo"]) > undo_before:
+                    break
+                time.sleep(0.1)
+        self._try("csg", action)
 
     def _do_geometry_chain(self):
         def action():

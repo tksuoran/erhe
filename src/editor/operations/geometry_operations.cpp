@@ -334,6 +334,12 @@ auto Binary_mesh_operation::make_operations(
 
     out_geometry->process(flags);
 
+    // If the CSG result is empty (no facets), produce an empty compound operation
+    if (out_geometry->get_mesh().facets.nb() == 0) {
+        log_operations->info("CSG operation produced empty result geometry");
+        return Compound_operation::Parameters{};
+    }
+
     // Create new Primitive
     constexpr uint64_t mesh_flags =
         erhe::Item_flags::visible     |
@@ -350,8 +356,7 @@ auto Binary_mesh_operation::make_operations(
     std::shared_ptr<erhe::primitive::Primitive> primitive = std::make_shared<erhe::primitive::Primitive>(out_geometry);
     const bool renderable_ok = primitive->make_renderable_mesh(parameters.build_info, normal_style);
     const bool raytrace_ok   = primitive->make_raytrace();
-    ERHE_VERIFY(renderable_ok);
-    ERHE_VERIFY(raytrace_ok);
+    ERHE_VERIFY(renderable_ok && raytrace_ok);
 
     // Create new Node
     std::string name{"TODO"};
