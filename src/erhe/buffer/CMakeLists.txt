@@ -4,6 +4,10 @@ add_library(erhe::buffer ALIAS ${_target})
 
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+    erhe_buffer/buffer_allocation.cpp
+    erhe_buffer/buffer_allocation.hpp
+    erhe_buffer/free_list_allocator.cpp
+    erhe_buffer/free_list_allocator.hpp
     erhe_buffer/ibuffer.hpp
     erhe_buffer/ibuffer.cpp
 )

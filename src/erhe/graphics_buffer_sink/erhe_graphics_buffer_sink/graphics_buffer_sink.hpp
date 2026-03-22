@@ -1,7 +1,11 @@
 #pragma once
 
-#include "erhe_graphics/buffer.hpp"
+#include "erhe_buffer/free_list_allocator.hpp"
 #include "erhe_primitive/buffer_sink.hpp"
+#include "erhe_profile/profile.hpp"
+
+#include <mutex>
+#include <vector>
 
 namespace erhe::graphics {
     class Buffer;
@@ -9,6 +13,13 @@ namespace erhe::graphics {
 }
 
 namespace erhe::graphics_buffer_sink {
+
+class Vertex_buffer_entry
+{
+public:
+    erhe::graphics::Buffer*        buffer;
+    erhe::buffer::Free_list_allocator allocator;
+};
 
 class Graphics_buffer_sink : public erhe::primitive::Buffer_sink
 {
@@ -19,8 +30,8 @@ public:
         erhe::graphics::Buffer*                        index_buffer
     );
 
-    [[nodiscard]] auto allocate_vertex_buffer(std::size_t stream, std::size_t vertex_count, std::size_t vertex_element_size) -> erhe::primitive::Buffer_range override;
-    [[nodiscard]] auto allocate_index_buffer (std::size_t index_count, std::size_t index_element_size) -> erhe::primitive::Buffer_range override;
+    [[nodiscard]] auto allocate_vertex_buffer(std::size_t stream, std::size_t vertex_count, std::size_t vertex_element_size) -> erhe::primitive::Buffer_sink_allocation override;
+    [[nodiscard]] auto allocate_index_buffer (std::size_t index_count, std::size_t index_element_size) -> erhe::primitive::Buffer_sink_allocation override;
 
     void enqueue_vertex_data            (std::size_t stream, std::size_t offset, std::vector<uint8_t>&& data) const override;
     void enqueue_index_data             (std::size_t offset, std::vector<uint8_t>&& data)                     const override;
@@ -31,11 +42,15 @@ public:
     auto get_used_index_byte_count      () const -> std::size_t                                                     override;
     auto get_available_index_byte_count (std::size_t alignment) const -> std::size_t                                override;
 
+    [[nodiscard]] auto get_vertex_allocator(std::size_t stream) -> erhe::buffer::Free_list_allocator&;
+    [[nodiscard]] auto get_index_allocator ()                   -> erhe::buffer::Free_list_allocator&;
+
 private:
     mutable ERHE_PROFILE_MUTEX(std::mutex,        m_mutex);
     erhe::graphics::Buffer_transfer_queue&        m_buffer_transfer_queue;
-    erhe::graphics::Buffer_allocator              m_index_buffer_allocator;
-    std::vector<erhe::graphics::Buffer_allocator> m_vertex_buffer_allocators;
+    erhe::graphics::Buffer*                       m_index_buffer;
+    erhe::buffer::Free_list_allocator             m_index_allocator;
+    std::vector<Vertex_buffer_entry>              m_vertex_entries;
 };
 
 } // namespace erhe::graphics_buffer_sink

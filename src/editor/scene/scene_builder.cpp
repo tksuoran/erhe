@@ -1012,7 +1012,7 @@ void Scene_builder::add_cubes(glm::ivec3 shape, float scale, float gap)
     );
     ERHE_VERIFY(buffer_mesh_ok); // TODO
 
-    std::shared_ptr<erhe::primitive::Primitive> primitive = std::make_shared<erhe::primitive::Primitive>(buffer_mesh);
+    std::shared_ptr<erhe::primitive::Primitive> primitive = std::make_shared<erhe::primitive::Primitive>(std::move(buffer_mesh));
     ERHE_VERIFY(primitive->render_shape->make_raytrace(cube_geo_mesh));
     const vec3 root_pos{0.0, 1.0f + y_half_extent, 0.0f};
     std::shared_ptr<erhe::scene::Node> root = std::make_shared<erhe::scene::Node>("Cubes");

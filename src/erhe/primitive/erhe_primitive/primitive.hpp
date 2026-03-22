@@ -27,8 +27,8 @@ public:
     Primitive_raytrace();
     explicit Primitive_raytrace(const GEO::Mesh& mesh, Element_mappings* element_mappings = nullptr);
     explicit Primitive_raytrace(erhe::primitive::Triangle_soup& triangle_soup);
-    Primitive_raytrace(const Primitive_raytrace& other);
-    Primitive_raytrace& operator=(const Primitive_raytrace& other);
+    Primitive_raytrace(const Primitive_raytrace&) = delete;
+    Primitive_raytrace& operator=(const Primitive_raytrace&) = delete;
     Primitive_raytrace(Primitive_raytrace&&) noexcept;
     Primitive_raytrace& operator=(Primitive_raytrace&&) noexcept;
     ~Primitive_raytrace() noexcept;
@@ -40,19 +40,22 @@ public:
     [[nodiscard]] auto get_raytrace_geometry() const -> const std::shared_ptr<erhe::raytrace::IGeometry>&;
 
 private:
-    Buffer_mesh                                m_rt_mesh;
+    // Order matters: m_rt_mesh must be destroyed before the buffers
+    // it holds allocations from (m_rt_vertex_buffer, m_rt_index_buffer).
+    // C++ destroys members in reverse declaration order.
     std::shared_ptr<erhe::buffer::Cpu_buffer>  m_rt_vertex_buffer{};
     std::shared_ptr<erhe::buffer::Cpu_buffer>  m_rt_index_buffer {};
     std::shared_ptr<erhe::raytrace::IGeometry> m_rt_geometry     {};
+    Buffer_mesh                                m_rt_mesh;
 };
 
 class Primitive_shape
 {
 public:
     Primitive_shape();
-    Primitive_shape(const Primitive_shape& other) noexcept;
+    Primitive_shape(const Primitive_shape&) = delete;
+    Primitive_shape& operator=(const Primitive_shape&) = delete;
     Primitive_shape(Primitive_shape&& old) noexcept;
-    Primitive_shape& operator=(const Primitive_shape& other) noexcept;
     Primitive_shape& operator=(Primitive_shape&& old) noexcept;
     explicit Primitive_shape(const std::shared_ptr<erhe::geometry::Geometry>& geometry);
     explicit Primitive_shape(const std::shared_ptr<Triangle_soup>& triangle_soup);
@@ -86,7 +89,6 @@ class Primitive_render_shape : public Primitive_shape
 public:
     explicit Primitive_render_shape(const std::shared_ptr<erhe::geometry::Geometry>& geometry);
     explicit Primitive_render_shape(Buffer_mesh&& renderable_mesh);
-    explicit Primitive_render_shape(const Buffer_mesh& renderable_mesh);
     explicit Primitive_render_shape(const std::shared_ptr<Triangle_soup>& triangle_soup);
 
     auto make_buffer_mesh(const Build_info& build_info, Normal_style normal_style) -> bool;
@@ -113,7 +115,7 @@ public:
     Primitive& operator=(Primitive&&) noexcept;
     ~Primitive() noexcept;
     explicit Primitive(const std::shared_ptr<Triangle_soup>& triangle_soup);
-    explicit Primitive(const Buffer_mesh& renderable_mesh);
+    explicit Primitive(Buffer_mesh&& renderable_mesh);
     explicit Primitive(const std::shared_ptr<erhe::geometry::Geometry>& geometry);
     Primitive(
         const std::shared_ptr<erhe::geometry::Geometry>& geometry,

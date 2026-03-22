@@ -179,7 +179,7 @@ Primitive_raytrace::Primitive_raytrace(Triangle_soup& triangle_soup)
     if (!buffer_mesh_opt.has_value()) {
         return; // TODO
     }
-    m_rt_mesh = buffer_mesh_opt.value();
+    m_rt_mesh = std::move(buffer_mesh_opt.value());
     m_rt_geometry = erhe::raytrace::IGeometry::create_unique(
         "triangle_soup_triangle_geometry",
         erhe::raytrace::Geometry_type::GEOMETRY_TYPE_TRIANGLE
@@ -223,10 +223,6 @@ Primitive_raytrace::Primitive_raytrace(Triangle_soup& triangle_soup)
     }
 }
 
-Primitive_raytrace::Primitive_raytrace(const Primitive_raytrace& other) = default;
-
-Primitive_raytrace& Primitive_raytrace::operator=(const Primitive_raytrace& other) = default;
-
 Primitive_raytrace::Primitive_raytrace(Primitive_raytrace&&) noexcept = default;
 
 Primitive_raytrace& Primitive_raytrace::operator=(Primitive_raytrace&&) noexcept = default;
@@ -239,11 +235,7 @@ Primitive_shape::Primitive_shape()
 {
 }
 
-Primitive_shape::Primitive_shape(const Primitive_shape& other) noexcept = default;
-
 Primitive_shape::Primitive_shape(Primitive_shape&& old) noexcept = default;
-
-Primitive_shape& Primitive_shape::operator=(const Primitive_shape& other) noexcept = default;
 
 Primitive_shape& Primitive_shape::operator=(Primitive_shape&& old) noexcept = default;
 
@@ -384,13 +376,7 @@ Primitive_render_shape::Primitive_render_shape(const std::shared_ptr<erhe::geome
 
 Primitive_render_shape::Primitive_render_shape(Buffer_mesh&& renderable_mesh)
     : m_normal_style   {Normal_style::corner_normals}
-    , m_renderable_mesh{renderable_mesh}
-{
-}
-
-Primitive_render_shape::Primitive_render_shape(const Buffer_mesh& renderable_mesh)
-    : m_normal_style   {Normal_style::corner_normals}
-    , m_renderable_mesh{renderable_mesh}
+    , m_renderable_mesh{std::move(renderable_mesh)}
 {
 }
 
@@ -431,7 +417,7 @@ auto Primitive_render_shape::make_buffer_mesh(const Buffer_info& buffer_info) ->
     }
     std::optional<Buffer_mesh> buffer_mesh_opt = build_buffer_mesh_from_triangle_soup(*m_triangle_soup.get(), buffer_info);
     if (buffer_mesh_opt.has_value()) {
-        m_renderable_mesh = buffer_mesh_opt.value();
+        m_renderable_mesh = std::move(buffer_mesh_opt.value());
     }
     return buffer_mesh_opt.has_value();
 }
@@ -444,8 +430,8 @@ auto build_buffer_mesh_from_triangle_soup(const Triangle_soup& triangle_soup, co
     const std::size_t  source_vertex_stride = triangle_soup.vertex_format.streams.front().stride;
     const std::size_t  vertex_count         = triangle_soup.vertex_data.size() / source_vertex_stride;
     const std::size_t  index_count          = triangle_soup.index_data.size();
-    const Buffer_range index_range          = buffer_info.buffer_sink.allocate_index_buffer(index_count, 4);
-    if (index_range.count == 0) {
+    Buffer_sink_allocation index_sink_allocation = buffer_info.buffer_sink.allocate_index_buffer(index_count, 4);
+    if (index_sink_allocation.range.count == 0) {
         return std::optional<Buffer_mesh>{};
     }
 
@@ -453,17 +439,20 @@ auto build_buffer_mesh_from_triangle_soup(const Triangle_soup& triangle_soup, co
     buffer_mesh.triangle_fill_indices.primitive_type = Primitive_type::triangles;
     buffer_mesh.triangle_fill_indices.first_index = 0;
     buffer_mesh.triangle_fill_indices.index_count = index_count;
-    buffer_mesh.index_buffer_range  = index_range;
+    buffer_mesh.index_buffer_range = index_sink_allocation.range;
+    buffer_mesh.index_allocation   = std::move(index_sink_allocation.allocation);
 
     for (std::size_t i = 0, end = buffer_info.vertex_format.streams.size(); i < end; ++i) {
         const erhe::dataformat::Vertex_stream& stream = buffer_info.vertex_format.streams.at(i);
-        Buffer_range vertex_range = buffer_info.buffer_sink.allocate_vertex_buffer(i, vertex_count, stream.stride);
-        if (vertex_range.count == 0) {
-            // TODO free allocations so far
+        Buffer_sink_allocation vertex_sink_allocation = buffer_info.buffer_sink.allocate_vertex_buffer(i, vertex_count, stream.stride);
+        if (vertex_sink_allocation.range.count == 0) {
             return std::optional<Buffer_mesh>{};
         }
-        buffer_mesh.vertex_buffer_ranges.emplace_back(std::move(vertex_range));
+        buffer_mesh.vertex_buffer_ranges.emplace_back(vertex_sink_allocation.range);
+        buffer_mesh.vertex_allocations.emplace_back(std::move(vertex_sink_allocation.allocation));
     }
+
+    const Buffer_range& index_range = buffer_mesh.index_buffer_range;
 
     // Copy indices to buffer
     {
@@ -554,8 +543,8 @@ Primitive::Primitive(const std::shared_ptr<Triangle_soup>& triangle_soup)
 {
 }
 
-Primitive::Primitive(const Buffer_mesh& renderable_mesh)
-    : render_shape{std::make_shared<Primitive_render_shape>(renderable_mesh)}
+Primitive::Primitive(Buffer_mesh&& renderable_mesh)
+    : render_shape{std::make_shared<Primitive_render_shape>(std::move(renderable_mesh))}
 {
 }
 

@@ -17,7 +17,7 @@ Cpu_buffer_sink::Cpu_buffer_sink(std::initializer_list<erhe::buffer::Cpu_buffer*
 {
 }
 
-auto Cpu_buffer_sink::allocate_vertex_buffer(const std::size_t stream, const std::size_t vertex_count, const std::size_t vertex_element_size) -> Buffer_range
+auto Cpu_buffer_sink::allocate_vertex_buffer(const std::size_t stream, const std::size_t vertex_count, const std::size_t vertex_element_size) -> Buffer_sink_allocation
 {
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
 
@@ -36,14 +36,18 @@ auto Cpu_buffer_sink::allocate_vertex_buffer(const std::size_t stream, const std
         return {};
     }
 
-    return Buffer_range{
-        .count        = vertex_count,
-        .element_size = vertex_element_size,
-        .byte_offset  = byte_offset_opt.value()
+    const std::size_t byte_offset = byte_offset_opt.value();
+    return Buffer_sink_allocation{
+        .range = Buffer_range{
+            .count        = vertex_count,
+            .element_size = vertex_element_size,
+            .byte_offset  = byte_offset
+        },
+        .allocation = erhe::buffer::Buffer_allocation{vertex_buffer->get_allocator(), byte_offset, allocation_byte_count}
     };
 }
 
-auto Cpu_buffer_sink::allocate_index_buffer(const std::size_t index_count, const std::size_t index_element_size) -> Buffer_range
+auto Cpu_buffer_sink::allocate_index_buffer(const std::size_t index_count, const std::size_t index_element_size) -> Buffer_sink_allocation
 {
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
 
@@ -61,10 +65,14 @@ auto Cpu_buffer_sink::allocate_index_buffer(const std::size_t index_count, const
         return {};
     }
 
-    return Buffer_range{
-        .count        = index_count,
-        .element_size = index_element_size,
-        .byte_offset  = byte_offset_opt.value()
+    const std::size_t byte_offset = byte_offset_opt.value();
+    return Buffer_sink_allocation{
+        .range = Buffer_range{
+            .count        = index_count,
+            .element_size = index_element_size,
+            .byte_offset  = byte_offset
+        },
+        .allocation = erhe::buffer::Buffer_allocation{m_index_buffer.get_allocator(), byte_offset, allocation_byte_count}
     };
 }
 

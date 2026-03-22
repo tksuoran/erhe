@@ -8,7 +8,6 @@
 # include "erhe_graphics/vulkan/vulkan_buffer.hpp"
 #endif
 
-#include "erhe_utility/align.hpp"
 #include "erhe_utility/bit_helpers.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -107,84 +106,6 @@ auto Buffer::get_impl() -> Buffer_impl&
 auto Buffer::get_impl() const -> const Buffer_impl&
 {
     return *m_impl.get();
-}
-
-////
-
-Buffer_allocator::Buffer_allocator(Buffer* buffer)
-    : m_buffer{buffer}
-{
-}
-
-Buffer_allocator::~Buffer_allocator() noexcept = default;
-
-Buffer_allocator::Buffer_allocator(Buffer_allocator&& old) noexcept
-    : m_buffer        {old.m_buffer}
-    , m_next_free_byte{old.m_next_free_byte}
-{
-}
-
-auto Buffer_allocator::operator=(Buffer_allocator&& old) noexcept -> Buffer_allocator&
-{
-    m_buffer         = old.m_buffer;
-    m_next_free_byte = old.m_next_free_byte;
-    return *this;
-}
-
-void Buffer_allocator::clear() noexcept
-{
-    m_next_free_byte = 0;
-}
-
-auto Buffer_allocator::allocate_bytes(const std::size_t byte_count, const std::size_t alignment) noexcept -> std::optional<std::size_t>
-{
-    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_allocate_mutex};
-    const std::size_t offset         = erhe::utility::align_offset_non_power_of_two(m_next_free_byte, alignment);
-    const std::size_t next_free_byte = offset + byte_count;
-    const std::size_t capacity_byte_count = m_buffer->get_capacity_byte_count();
-    if (next_free_byte > capacity_byte_count) {
-        const std::size_t available_byte_count = (offset < capacity_byte_count) ? capacity_byte_count - offset : 0;
-        log_buffer->error(
-            "erhe::graphics::Buffer_impl::allocate_bytes(): Out of memory requesting {} bytes, currently allocated {}, total size {}, free {} bytes",
-            byte_count,
-            m_next_free_byte,
-            capacity_byte_count,
-            available_byte_count
-        );
-        return {};
-    }
-
-    m_next_free_byte = next_free_byte;
-    ERHE_VERIFY(m_next_free_byte <= capacity_byte_count);
-    log_buffer->trace(
-        "buffer {}: allocated {} bytes at offset {}",
-        m_buffer->get_debug_label().string_view(), byte_count, offset
-    );
-    return offset;
-}
-
-auto Buffer_allocator::get_used_byte_count() const -> std::size_t
-{
-    return m_next_free_byte;
-}
-auto Buffer_allocator::get_available_byte_count(std::size_t alignment) const noexcept -> std::size_t
-{
-    const std::size_t capacity_byte_count = m_buffer->get_capacity_byte_count();
-    const std::size_t aligned_offset = erhe::utility::align_offset_non_power_of_two(m_next_free_byte, alignment);
-    if (aligned_offset >= capacity_byte_count) {
-        return 0;
-    }
-    return capacity_byte_count - aligned_offset;
-}
-
-auto Buffer_allocator::get_buffer() -> Buffer*
-{
-    return m_buffer;
-}
-
-auto Buffer_allocator::get_buffer() const -> const Buffer*
-{
-    return m_buffer;
 }
 
 } // namespace erhe::graphics
