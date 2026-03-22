@@ -287,7 +287,7 @@ Scene_root::Scene_root(
                     return false;
                 }
 
-                if (!ImGui::GetCurrentContext()->DragDropWithinTarget && ImGui::BeginDragDropTarget()) {
+                if (ImGui::BeginDragDropTarget()) {
                     const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("Content_library_node");
                     if (payload != nullptr) {
                         auto new_material = std::make_shared<erhe::primitive::Material>(*source_material);
