@@ -830,7 +830,11 @@ auto Mcp_server::query_undo_redo_stack(const json& args) -> std::string
     auto make_stack = [](const std::vector<std::shared_ptr<Operation>>& ops) -> json {
         json arr = json::array();
         for (const auto& op : ops) {
-            arr.push_back(op->describe());
+            json entry = {{"description", op->describe()}};
+            if (op->has_error()) {
+                entry["error"] = op->get_error();
+            }
+            arr.push_back(entry);
         }
         return arr;
     };

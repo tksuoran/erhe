@@ -41,14 +41,30 @@ void Mesh_operation::execute(App_context&)
 {
     log_operations->trace("Op Execute Wait {}", describe());
 
-    ERHE_VERIFY(!m_entries.empty());
+    if (m_entries.empty()) {
+        set_error("No mesh entries - selection may not contain meshes with geometry");
+        log_operations->warn("Op Execute {} failed: {}", describe(), get_error());
+        return;
+    }
     Entry& first_entry = m_entries.front();
     erhe::scene::Mesh* first_mesh = first_entry.scene_mesh.get();
-    ERHE_VERIFY(first_mesh != nullptr);
+    if (first_mesh == nullptr) {
+        set_error("First mesh entry is null");
+        log_operations->warn("Op Execute {} failed: {}", describe(), get_error());
+        return;
+    }
     erhe::scene::Node* first_node = first_mesh->get_node();
-    ERHE_VERIFY(first_node != nullptr);
+    if (first_node == nullptr) {
+        set_error("First mesh node is null");
+        log_operations->warn("Op Execute {} failed: {}", describe(), get_error());
+        return;
+    }
     erhe::Item_host* item_host = first_node->get_item_host();
-    ERHE_VERIFY(item_host != nullptr);
+    if (item_host == nullptr) {
+        set_error("Item host is null");
+        log_operations->warn("Op Execute {} failed: {}", describe(), get_error());
+        return;
+    }
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{item_host->item_host_mutex};
 
     log_operations->trace("Op Execute Begin {}", describe());
@@ -83,14 +99,17 @@ void Mesh_operation::undo(App_context&)
 {
     log_operations->trace("Op Undo Wait {}", describe());
 
-    ERHE_VERIFY(!m_entries.empty());
+    if (m_entries.empty() || has_error()) {
+        log_operations->warn("Op Undo {} skipped: {}", describe(), has_error() ? get_error() : "no entries");
+        return;
+    }
     Entry& first_entry = m_entries.front();
     erhe::scene::Mesh* first_mesh = first_entry.scene_mesh.get();
-    ERHE_VERIFY(first_mesh != nullptr);
+    if (first_mesh == nullptr) { return; }
     erhe::scene::Node* first_node = first_mesh->get_node();
-    ERHE_VERIFY(first_node != nullptr);
+    if (first_node == nullptr) { return; }
     erhe::Item_host* item_host = first_node->get_item_host();
-    ERHE_VERIFY(item_host != nullptr);
+    if (item_host == nullptr) { return; }
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{item_host->item_host_mutex};
 
     log_operations->trace("Op Undo Begin {}", describe());

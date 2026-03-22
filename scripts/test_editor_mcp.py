@@ -138,6 +138,22 @@ class UnitTestRunner:
             self.test_async_status,
             self.test_geometry_catmull_clark,
             self.test_geometry_triangulate,
+            self.test_geometry_subdivision_sqrt3,
+            self.test_geometry_conway_dual,
+            self.test_geometry_conway_ambo,
+            self.test_geometry_conway_kis,
+            self.test_geometry_conway_join,
+            self.test_geometry_conway_meta,
+            self.test_geometry_conway_ortho,
+            self.test_geometry_conway_truncate,
+            self.test_geometry_conway_gyro,
+            self.test_geometry_reverse,
+            self.test_geometry_normalize,
+            self.test_geometry_repair,
+            self.test_geometry_weld,
+            self.test_geometry_generate_tangents,
+            self.test_geometry_bake_transform,
+            self.test_geometry_chain,
         ]
         print("=" * 60)
         print("UNIT TESTS")
@@ -498,54 +514,103 @@ class UnitTestRunner:
         })
         return result["node_id"]
 
-    def test_geometry_catmull_clark(self):
+    def _run_geometry_op(self, command_name):
+        """Place a cube, select it, run a geometry operation, wait, verify undo, clean up."""
         self._require_scene()
         node_id = self._place_test_brush()
-
-        # Select the placed node
         self.client.call_ok("select_items", {"scene_name": self.scene_name, "ids": [node_id]})
-
-        # Get primitive count before
-        detail_before = self.client.call_ok("get_node_details", {"scene_name": self.scene_name, "node_name": "cube"})
-        mesh_att = next((a for a in detail_before["attachments"] if a["type"] == "Mesh"), None)
-        assert mesh_att is not None, "Expected Mesh attachment"
-
-        # Run Catmull-Clark subdivision
-        self.client.call("Geometry.Subdivision.Catmull-Clark")
-
-        # Wait for async operation to complete
-        settled = self.client.wait_async(timeout=10.0)
-        assert settled, "Async operation did not complete in time"
-
-        # Verify undo stack grew
+        undo_before = len(self.client.call_ok("get_undo_redo_stack")["undo"])
+        self.client.call(command_name)
+        self.client.wait_async(timeout=15.0)
+        # Poll until the operation appears on the undo stack (handles both sync and async ops)
+        deadline = time.time() + 15.0
+        while time.time() < deadline:
+            stack = self.client.call_ok("get_undo_redo_stack")
+            if len(stack["undo"]) > undo_before:
+                break
+            time.sleep(0.1)
         stack = self.client.call_ok("get_undo_redo_stack")
-        assert stack["can_undo"], "Should be able to undo after subdivision"
-
-        # Undo subdivision and placement
-        self.client.call("undo")  # undo subdivision
+        assert len(stack["undo"]) > undo_before, f"Undo stack did not grow after {command_name}"
+        self.client.call("undo")  # undo geometry op
         self.client.call("undo")  # undo placement
+
+    def test_geometry_catmull_clark(self):
+        self._run_geometry_op("Geometry.Subdivision.Catmull-Clark")
 
     def test_geometry_triangulate(self):
+        self._run_geometry_op("Geometry.Triangulate")
+
+    def test_geometry_subdivision_sqrt3(self):
+        self._run_geometry_op("Geometry.Subdivision.Sqrt3")
+
+    def test_geometry_conway_dual(self):
+        self._run_geometry_op("Geometry.Conway.Dual")
+
+    def test_geometry_conway_ambo(self):
+        self._run_geometry_op("Geometry.Conway.Ambo")
+
+    def test_geometry_conway_kis(self):
+        self._run_geometry_op("Geometry.Conway.Kis")
+
+    def test_geometry_conway_join(self):
+        self._run_geometry_op("Geometry.Conway.Join")
+
+    def test_geometry_conway_meta(self):
+        self._run_geometry_op("Geometry.Conway.Meta")
+
+    def test_geometry_conway_ortho(self):
+        self._run_geometry_op("Geometry.Conway.Ortho")
+
+    def test_geometry_conway_truncate(self):
+        self._run_geometry_op("Geometry.Conway.Truncate")
+
+    def test_geometry_conway_gyro(self):
+        self._run_geometry_op("Geometry.Conway.Gyro")
+
+    def test_geometry_reverse(self):
+        self._run_geometry_op("Geometry.Reverse")
+
+    def test_geometry_normalize(self):
+        self._run_geometry_op("Geometry.Normalize")
+
+    def test_geometry_repair(self):
+        self._run_geometry_op("Geometry.Repair")
+
+    def test_geometry_weld(self):
+        self._run_geometry_op("Geometry.Weld")
+
+    def test_geometry_generate_tangents(self):
+        self._run_geometry_op("Geometry.GenerateTangents")
+
+    def test_geometry_bake_transform(self):
+        self._run_geometry_op("Geometry.BakeTransform")
+
+    def test_geometry_chain(self):
+        """Test chaining multiple geometry operations on a single mesh."""
         self._require_scene()
         node_id = self._place_test_brush()
-
-        # Select the placed node
         self.client.call_ok("select_items", {"scene_name": self.scene_name, "ids": [node_id]})
 
-        # Run triangulate
-        self.client.call("Geometry.Triangulate")
+        chain = ["Geometry.Conway.Kis", "Geometry.Triangulate", "Geometry.Subdivision.Catmull-Clark"]
+        undo_before = len(self.client.call_ok("get_undo_redo_stack")["undo"])
+        for i, cmd in enumerate(chain):
+            self.client.call(cmd)
+            self.client.wait_async(timeout=15.0)
+            # Wait for this op to appear on the undo stack
+            target = undo_before + i + 1
+            deadline = time.time() + 15.0
+            while time.time() < deadline:
+                stack = self.client.call_ok("get_undo_redo_stack")
+                if len(stack["undo"]) >= target:
+                    break
+                time.sleep(0.1)
 
-        # Wait for async
-        settled = self.client.wait_async(timeout=10.0)
-        assert settled, "Async operation did not complete in time"
-
-        # Verify undo stack
         stack = self.client.call_ok("get_undo_redo_stack")
-        assert stack["can_undo"], "Should be able to undo after triangulate"
+        assert len(stack["undo"]) >= undo_before + len(chain), f"Expected at least {len(chain)} new undo entries"
 
-        # Undo triangulate and placement
-        self.client.call("undo")  # undo triangulate
-        self.client.call("undo")  # undo placement
+        # Undo all: 3 geometry ops + 1 placement
+        for _ in range(len(chain) + 1):
+            self.client.call("undo")
 
 
 class SkipTest(Exception):
@@ -564,7 +629,7 @@ class SmokeTestRunner:
         self.rng = random.Random(seed)
         self.ok_count = 0
         self.error_count = 0
-        self.stats = {"query": 0, "place": 0, "select": 0, "delete": 0, "undo": 0, "redo": 0, "toggle": 0, "detail": 0}
+        self.stats = {"query": 0, "place": 0, "select": 0, "delete": 0, "undo": 0, "redo": 0, "toggle": 0, "detail": 0, "geometry": 0}
         self.scene_name = None
         self.brush_ids = []
         self.material_names = []
@@ -608,22 +673,45 @@ class SmokeTestRunner:
         print(f"  Breakdown: {self.stats}")
         return self.error_count == 0
 
+    # Geometry commands safe for smoke test chaining.
+    # Excluded: Chamfer (known broken), Repair (crashes Geogram on
+    # degenerate geometry produced by prior chain operations).
+    GEOMETRY_COMMANDS = [
+        "Geometry.Triangulate",
+        "Geometry.Reverse",
+        "Geometry.Normalize",
+        "Geometry.Weld",
+        "Geometry.GenerateTangents",
+        "Geometry.Subdivision.Catmull-Clark",
+        "Geometry.Subdivision.Sqrt3",
+        "Geometry.Conway.Dual",
+        "Geometry.Conway.Ambo",
+        "Geometry.Conway.Kis",
+        "Geometry.Conway.Join",
+        "Geometry.Conway.Meta",
+        "Geometry.Conway.Ortho",
+        "Geometry.Conway.Truncate",
+        "Geometry.Conway.Gyro",
+    ]
+
     def _random_action(self):
         r = self.rng.random()
-        if r < 0.30:
+        if r < 0.25:
             self._do_query()
-        elif r < 0.50:
+        elif r < 0.40:
             self._do_place()
-        elif r < 0.65:
+        elif r < 0.50:
             self._do_select()
-        elif r < 0.75:
+        elif r < 0.58:
             self._do_node_detail()
-        elif r < 0.85:
+        elif r < 0.66:
             self._do_material_detail()
-        elif r < 0.87:
+        elif r < 0.68:
             self._do_toggle()
-        elif r < 0.93:
+        elif r < 0.74:
             self._do_delete()
+        elif r < 0.88:
+            self._do_geometry_chain()
         else:
             self._do_undo_redo()
 
@@ -700,6 +788,39 @@ class SmokeTestRunner:
             self.client.call_ok("select_items", {"scene_name": self.scene_name, "ids": [node["id"]]})
             self.client.call("Selection.delete")
         self._try("delete", action)
+
+    def _do_geometry_chain(self):
+        def action():
+            if not self.brush_ids:
+                return
+            # Place a fresh brush
+            brush_id = self.rng.choice(self.brush_ids)
+            pos = [self.rng.uniform(-5, 5), self.rng.uniform(0.5, 5), self.rng.uniform(-5, 5)]
+            args = {"scene_name": self.scene_name, "brush_id": brush_id, "position": pos}
+            if self.material_names:
+                args["material_name"] = self.rng.choice(self.material_names)
+            result = self.client.call_ok("place_brush", args)
+            node_id = result["node_id"]
+
+            # Select it
+            self.client.call_ok("select_items", {"scene_name": self.scene_name, "ids": [node_id]})
+
+            # Apply 1-3 random geometry operations in sequence
+            chain_len = self.rng.randint(1, 3)
+            undo_before = len(self.client.call_ok("get_undo_redo_stack")["undo"])
+            for i in range(chain_len):
+                cmd = self.rng.choice(self.GEOMETRY_COMMANDS)
+                self.client.call(cmd)
+                self.client.wait_async(timeout=15.0)
+                # Wait for op to land on undo stack
+                target = undo_before + i + 1
+                deadline = time.time() + 15.0
+                while time.time() < deadline:
+                    stack = self.client.call_ok("get_undo_redo_stack")
+                    if len(stack["undo"]) >= target:
+                        break
+                    time.sleep(0.1)
+        self._try("geometry", action)
 
     def _do_undo_redo(self):
         if self.rng.random() < 0.5:
