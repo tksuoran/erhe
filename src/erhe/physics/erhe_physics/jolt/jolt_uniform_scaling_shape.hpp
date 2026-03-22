@@ -12,8 +12,9 @@ class Jolt_uniform_scaling_shape : public Jolt_collision_shape
 public:
     Jolt_uniform_scaling_shape(ICollision_shape* shape, float scale);
 
-    auto get_shape_settings() -> JPH::ShapeSettings& override;
-    [[nodiscard]] auto describe() const -> std::string   override;
+    auto get_shape_settings() -> JPH::ShapeSettings&         override;
+    [[nodiscard]] auto describe      () const -> std::string          override;
+    [[nodiscard]] auto get_shape_type() const -> Collision_shape_type override;
 
 private:
     JPH::Ref<JPH::ScaledShapeSettings> m_shape_settings;

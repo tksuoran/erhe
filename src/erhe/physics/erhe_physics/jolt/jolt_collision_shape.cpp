@@ -21,6 +21,11 @@ public:
         return m_shape_settings;
     }
 
+    [[nodiscard]] auto get_shape_type() const -> Collision_shape_type override
+    {
+        return Collision_shape_type::e_empty;
+    }
+
 private:
     JPH::EmptyShapeSettings m_shape_settings;
 };
@@ -136,6 +141,7 @@ auto Jolt_collision_shape::describe() const -> std::string
 //
 
 Jolt_box_shape::Jolt_box_shape(const glm::vec3 half_extents)
+    : m_half_extents{half_extents}
 {
     m_shape_settings = new JPH::BoxShapeSettings(to_jolt(half_extents));
     auto result = m_shape_settings->Create();
@@ -153,9 +159,22 @@ auto Jolt_box_shape::describe() const -> std::string
     return "Jolt_box_shape";
 }
 
+auto Jolt_box_shape::get_shape_type() const -> Collision_shape_type
+{
+    return Collision_shape_type::e_box;
+}
+
+auto Jolt_box_shape::get_half_extents() const -> std::optional<glm::vec3>
+{
+    return m_half_extents;
+}
+
 //
 
 Jolt_capsule_shape::Jolt_capsule_shape(const Axis axis, const float radius, const float length)
+    : m_axis  {axis}
+    , m_radius{radius}
+    , m_length{length}
 {
     m_capsule_shape_settings = new JPH::CapsuleShapeSettings(length * 0.5f, radius);
     const JPH::Vec3 x_axis{1.0f, 0.0f, 0.0f};
@@ -189,9 +208,31 @@ auto Jolt_capsule_shape::describe() const -> std::string
     return "Jolt_capsule_shape";
 }
 
+auto Jolt_capsule_shape::get_shape_type() const -> Collision_shape_type
+{
+    return Collision_shape_type::e_capsule;
+}
+
+auto Jolt_capsule_shape::get_radius() const -> std::optional<float>
+{
+    return m_radius;
+}
+
+auto Jolt_capsule_shape::get_axis() const -> std::optional<Axis>
+{
+    return m_axis;
+}
+
+auto Jolt_capsule_shape::get_length() const -> std::optional<float>
+{
+    return m_length;
+}
+
 //
 
 Jolt_cylinder_shape::Jolt_cylinder_shape(const Axis axis, const glm::vec3 half_extents)
+    : m_axis        {axis}
+    , m_half_extents{half_extents}
 {
     m_cylinder_shape_settings = new JPH::CylinderShapeSettings(half_extents.x, half_extents.y);
     const JPH::Vec3 x_axis{1.0f, 0.0f, 0.0f};
@@ -223,9 +264,25 @@ auto Jolt_cylinder_shape::describe() const -> std::string
     return "Jolt_cylinder_shape";
 }
 
+auto Jolt_cylinder_shape::get_shape_type() const -> Collision_shape_type
+{
+    return Collision_shape_type::e_cylinder;
+}
+
+auto Jolt_cylinder_shape::get_half_extents() const -> std::optional<glm::vec3>
+{
+    return m_half_extents;
+}
+
+auto Jolt_cylinder_shape::get_axis() const -> std::optional<Axis>
+{
+    return m_axis;
+}
+
 //
 
 Jolt_sphere_shape::Jolt_sphere_shape(const float radius)
+    : m_radius{radius}
 {
     m_shape_settings = new JPH::SphereShapeSettings(radius);
     auto result = m_shape_settings->Create();
@@ -243,6 +300,16 @@ auto Jolt_sphere_shape::get_shape_settings() -> JPH::ShapeSettings&
 auto Jolt_sphere_shape::describe() const -> std::string
 {
     return "Jolt_sphere_shape";
+}
+
+auto Jolt_sphere_shape::get_shape_type() const -> Collision_shape_type
+{
+    return Collision_shape_type::e_sphere;
+}
+
+auto Jolt_sphere_shape::get_radius() const -> std::optional<float>
+{
+    return m_radius;
 }
 
 } // namespace erhe::physics

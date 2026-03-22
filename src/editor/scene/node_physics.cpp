@@ -132,6 +132,11 @@ auto Node_physics::get_rigid_body() const -> const IRigid_body*
     return (m_physics_world != nullptr) ? m_rigid_body.get() : nullptr;
 }
 
+auto Node_physics::get_collision_shape() const -> const std::shared_ptr<erhe::physics::ICollision_shape>&
+{
+    return m_create_info.collision_shape;
+}
+
 auto Node_physics::get_motion_mode() const -> Motion_mode
 {
     return m_motion_mode;

@@ -34,4 +34,9 @@ auto Jolt_uniform_scaling_shape::describe() const -> std::string
     return "Jolt_uniform_scaling_shape";
 }
 
+auto Jolt_uniform_scaling_shape::get_shape_type() const -> Collision_shape_type
+{
+    return Collision_shape_type::e_uniform_scaling;
+}
+
 } // namespace erhe::physics
