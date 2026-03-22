@@ -19,7 +19,7 @@
 #include "transform/handle_enums.hpp"
 
 #include "erhe_commands/commands.hpp"
-#include "erhe_configuration/configuration.hpp"
+#include "config/generated/transform_tool_config.hpp"
 #include "erhe_imgui/imgui_helpers.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_message_bus/message_bus.hpp"
@@ -103,6 +103,7 @@ void Transform_tool_drag_command::on_inactive()
 #pragma endregion Commands
 
 Transform_tool::Transform_tool(
+    const Transform_tool_config& transform_tool_config,
     tf::Executor&                executor,
     erhe::commands::Commands&    commands,
     erhe::imgui::Imgui_renderer& imgui_renderer,
@@ -111,7 +112,10 @@ Transform_tool::Transform_tool(
     App_message_bus&             app_message_bus,
     Headset_view&                headset_view,
     Mesh_memory&                 mesh_memory,
-    Tools&                       tools
+    Tools&                       tools,
+    Move_tool&                   move_tool,
+    Rotate_tool&                 rotate_tool,
+    Scale_tool&                  scale_tool
 )
     : Tool    {app_context, tools}
     , m_window{imgui_renderer, imgui_windows, "Transform", "transform", [this]() { window_imgui(); }}
@@ -121,10 +125,9 @@ Transform_tool::Transform_tool(
 {
     ERHE_PROFILE_FUNCTION();
 
-    const auto& ini = erhe::configuration::get_ini_file_section(erhe::c_erhe_config_file_path, "transform_tool");
     auto& settings = shared.settings;
-    ini.get("show_translate", settings.show_translate);
-    ini.get("show_rotate",    settings.show_rotate);
+    settings.show_translate = transform_tool_config.show_translate;
+    settings.show_rotate    = transform_tool_config.show_rotate;
 
     //executor.silent_async(
     //    [this, &editor_context, &mesh_memory, &tools](){
@@ -187,15 +190,9 @@ Transform_tool::Transform_tool(
     m_drag_command.set_host(this);
 
     auto record_fn = [this]() { record_transform_operation(); };
-    if (m_context.move_tool != nullptr) {
-        m_context.move_tool->set_transform_shared(shared, record_fn);
-    }
-    if (m_context.rotate_tool != nullptr) {
-        m_context.rotate_tool->set_transform_shared(shared, record_fn);
-    }
-    if (m_context.scale_tool != nullptr) {
-        m_context.scale_tool->set_transform_shared(shared, record_fn);
-    }
+    move_tool.set_transform_shared(shared, record_fn);
+    rotate_tool.set_transform_shared(shared, record_fn);
+    scale_tool.set_transform_shared(shared, record_fn);
 }
 
 void Transform_tool::on_hover_scene_view(Hover_scene_view_message& message)
