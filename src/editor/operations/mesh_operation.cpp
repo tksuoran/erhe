@@ -12,6 +12,12 @@
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene/node.hpp"
 
+#include <geogram/basic/geofile.h>
+#include <geogram/mesh/mesh.h>
+#include <geogram/mesh/mesh_io.h>
+
+#include <filesystem>
+
 namespace editor {
 
 Mesh_operation::Mesh_operation(Mesh_operation_parameters&& parameters)
@@ -186,10 +192,30 @@ void Mesh_operation::make_entries(
                 auto after_geometry = std::make_shared<erhe::geometry::Geometry>();
                 geometry_operation(*before_geometry.get(), *after_geometry.get(), node);
 
+                auto sanitize_warnings = after_geometry->sanitize();
+                if (!sanitize_warnings.empty()) {
+                    // Save the input geometry that produced bad output for debugging
+                    const std::filesystem::path debug_dir{"debug_geometry"};
+                    std::filesystem::create_directories(debug_dir);
+                    const std::string mesh_name = scene_mesh->get_name();
+                    const std::string filename = fmt::format("before_op{}_{}_{}.geogram", get_serial(), describe(), mesh_name);
+                    const std::filesystem::path debug_path = debug_dir / filename;
+                    GEO::MeshIOFlags ioflags;
+                    ioflags.set_dimension(3);
+                    ioflags.set_attributes(GEO::MeshAttributesFlags::MESH_ALL_ATTRIBUTES);
+                    ioflags.set_elements(GEO::MeshElementsFlags::MESH_ALL_ELEMENTS);
+                    GEO::OutputGeoFile geofile{debug_path.string(), 3};
+                    if (GEO::mesh_save(before_geometry->get_mesh(), geofile, ioflags)) {
+                        log_operations->warn("{} mesh '{}' saved pre-operation geometry to {}", describe(), mesh_name, debug_path.string());
+                    }
+                    for (const auto& warning : sanitize_warnings) {
+                        log_operations->warn("{} mesh '{}' geometry sanitized: {}", describe(), mesh_name, warning);
+                    }
+                }
                 const std::string validation_error = after_geometry->validate();
                 if (!validation_error.empty()) {
-                    set_error(fmt::format("Geometry validation failed: {}", validation_error));
-                    log_operations->warn("Op {} geometry validation failed: {}", describe(), validation_error);
+                    set_error(fmt::format("Geometry validation failed after sanitize: {}", validation_error));
+                    log_operations->warn("Op {} geometry validation failed after sanitize: {}", describe(), validation_error);
                     return;
                 }
 

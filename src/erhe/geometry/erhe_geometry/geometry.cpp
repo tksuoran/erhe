@@ -1393,6 +1393,74 @@ auto Geometry::validate() const -> std::string
     return {};
 }
 
+auto Geometry::sanitize() -> std::vector<std::string>
+{
+    std::vector<std::string> warnings;
+
+    const GEO::index_t vertex_count = m_mesh.vertices.nb();
+    const GEO::index_t corner_count = m_mesh.facet_corners.nb();
+
+    // Fix NaN/Inf vertex positions by clamping to zero
+    const bool single = m_mesh.vertices.single_precision();
+    int nan_count = 0;
+    for (GEO::index_t v = 0; v < vertex_count; ++v) {
+        if (single) {
+            float* p = m_mesh.vertices.single_precision_point_ptr(v);
+            for (int d = 0; d < 3; ++d) {
+                if (std::isnan(p[d]) || std::isinf(p[d])) {
+                    p[d] = 0.0f;
+                    ++nan_count;
+                }
+            }
+        } else {
+            double* p = m_mesh.vertices.point_ptr(v);
+            for (int d = 0; d < 3; ++d) {
+                if (std::isnan(p[d]) || std::isinf(p[d])) {
+                    p[d] = 0.0;
+                    ++nan_count;
+                }
+            }
+        }
+    }
+    if (nan_count > 0) {
+        warnings.push_back(fmt::format("Fixed {} NaN/Inf vertex components (set to 0)", nan_count));
+    }
+
+    // Mark degenerate facets for removal
+    const GEO::index_t facet_count = m_mesh.facets.nb();
+    GEO::vector<GEO::index_t> facets_to_delete(facet_count, 0);
+    int degenerate_count = 0;
+    for (GEO::index_t f = 0; f < facet_count; ++f) {
+        const GEO::index_t cb = m_mesh.facets.corners_begin(f);
+        const GEO::index_t ce = m_mesh.facets.corners_end(f);
+        const GEO::index_t nb = ce - cb;
+
+        bool bad = false;
+        if (nb < 3) {
+            bad = true;
+        } else if (cb >= corner_count || ce > corner_count) {
+            bad = true;
+        } else {
+            for (GEO::index_t c = cb; c < ce; ++c) {
+                if (m_mesh.facet_corners.vertex(c) >= vertex_count) {
+                    bad = true;
+                    break;
+                }
+            }
+        }
+        if (bad) {
+            facets_to_delete[f] = 1;
+            ++degenerate_count;
+        }
+    }
+    if (degenerate_count > 0) {
+        m_mesh.facets.delete_elements(facets_to_delete);
+        warnings.push_back(fmt::format("Removed {} degenerate facets (of {})", degenerate_count, facet_count));
+    }
+
+    return warnings;
+}
+
 void Geometry::debug_trace() const
 {
     for (GEO::index_t corner : m_mesh.facet_corners) {

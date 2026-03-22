@@ -728,6 +728,10 @@ public:
     // Returns empty string if mesh is valid, or a description of the first problem found.
     [[nodiscard]] auto validate() const -> std::string;
 
+    // Removes degenerate facets and fixes invalid vertex data.
+    // Returns a list of warnings describing what was fixed (empty if nothing needed fixing).
+    auto sanitize() -> std::vector<std::string>;
+
     void debug_trace() const;
 
     struct Debug_text
