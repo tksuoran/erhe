@@ -201,10 +201,57 @@ curl -X POST http://127.0.0.1:8080/mcp \
 
 Returns: `{dynamic_physics_enabled: true/false}`
 
+### lock_items / unlock_items
+
+Lock or unlock items by ID. Locked items (`lock_edit` flag) cannot be deleted or have properties edited.
+
+```bash
+curl -X POST http://127.0.0.1:8080/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"lock_items","arguments":{"scene_name":"Default Scene","ids":[506]}}}'
+```
+
+### add_tags / remove_tags
+
+Add or remove string tags on items by ID.
+
+```bash
+curl -X POST http://127.0.0.1:8080/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"add_tags","arguments":{"scene_name":"Default Scene","ids":[506],"tags":["important"]}}}'
+```
+
+### get_undo_redo_stack
+
+Get the undo/redo operation history.
+
+```bash
+curl -X POST http://127.0.0.1:8080/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"get_undo_redo_stack","arguments":{}}}'
+```
+
+Returns: `{undo: [{description, error?}], redo: [{description, error?}], can_undo, can_redo}`
+
+### get_async_status
+
+Get pending/running async operation counts.
+
+```bash
+curl -X POST http://127.0.0.1:8080/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"get_async_status","arguments":{}}}'
+```
+
+Returns: `{pending, running}`
+
 ## Notes
 
-- `get_node_details` includes `brush_name` and `brush_id` for nodes placed via brushes (from the `Brush_placement` attachment)
+- `get_node_details` includes `brush_name`, `brush_id`, `locked`, `tags`, and mesh `vertex_count`/`facet_count` for nodes with attachments
+- `get_scene_nodes` includes `locked` and `tags` fields per node
+- `get_scene_brushes` includes `vertex_count` and `facet_count` per brush
 - Brush instance scale is baked into the geometry at placement time and not stored separately — it cannot be queried back from existing nodes
+- Operations that fail set an `error` field visible in `get_undo_redo_stack`
 
 ## Editor Command Tools
 

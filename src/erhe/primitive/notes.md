@@ -10,8 +10,9 @@ volume computation, and PBR material definitions.
 - `Primitive` -- top-level type: owns render shape and collision shape, provides bounding box
 - `Primitive_render_shape` -- holds the renderable `Buffer_mesh` built from geometry
 - `Primitive_shape` -- holds source geometry, raytrace data, and element mappings
-- `Buffer_mesh` -- the built result: buffer ranges, index ranges, bounding box/sphere
-- `Buffer_sink` -- abstract interface for allocating buffer space (GPU or CPU)
+- `Buffer_mesh` -- the built result: buffer ranges, index ranges, bounding box/sphere. Move-only; holds `Buffer_allocation` RAII handles that free GPU/CPU buffer space on destruction.
+- `Buffer_sink` -- abstract interface for allocating buffer space (GPU or CPU). Returns `Buffer_sink_allocation` containing both `Buffer_range` (plain data) and `Buffer_allocation` (RAII handle).
+- `Buffer_sink_allocation` -- pairs a `Buffer_range` with a `Buffer_allocation` for reclaimable allocation.
 - `Cpu_buffer_sink` -- CPU-memory implementation of `Buffer_sink`
 - `Build_info` / `Buffer_info` -- configuration for mesh building (primitive types, vertex format, index type)
 - `Primitive_builder` / `Build_context` -- orchestrates the conversion from GEO::Mesh to Buffer_mesh
@@ -44,3 +45,5 @@ volume computation, and PBR material definitions.
 - Element mappings track the relationship between triangles and source mesh facets, enabling picking.
 - Raytrace geometry is built separately from render geometry, using CPU buffers.
 - The builder generates indices for four primitive modes: triangle fill, edge lines, corner points, and polygon centroids.
+- `Buffer_mesh` is move-only (due to `Buffer_allocation`). `Primitive_render_shape`, `Primitive_shape`, and `Primitive_raytrace` are also move-only.
+- **Member declaration order matters**: In `Primitive_raytrace`, `m_rt_mesh` must be declared after the `Cpu_buffer` shared_ptrs so it is destroyed first, freeing allocations while the allocator is still alive.
