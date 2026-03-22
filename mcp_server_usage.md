@@ -1,6 +1,6 @@
 # erhe Editor MCP Server
 
-The editor embeds an MCP (Model Context Protocol) server that exposes editor commands over HTTP using JSON-RPC 2.0. The server starts automatically with the editor on `127.0.0.1:8080`.
+The editor embeds an MCP (Model Context Protocol) server that exposes editor commands and scene/content-library queries over HTTP using JSON-RPC 2.0. The server starts automatically with the editor on `127.0.0.1:8080`.
 
 ## Endpoints
 
@@ -23,22 +23,9 @@ curl -X POST http://127.0.0.1:8080/mcp \
   -d '{"jsonrpc":"2.0","id":"1","method":"initialize"}'
 ```
 
-Response:
-```json
-{
-  "jsonrpc": "2.0",
-  "id": "1",
-  "result": {
-    "protocolVersion": "2024-11-05",
-    "capabilities": { "tools": {} },
-    "serverInfo": { "name": "erhe-editor", "version": "0.1.0" }
-  }
-}
-```
-
 ### tools/list
 
-List all available editor commands as MCP tools.
+List all available tools (query tools + editor commands).
 
 ```bash
 curl -X POST http://127.0.0.1:8080/mcp \
@@ -46,59 +33,153 @@ curl -X POST http://127.0.0.1:8080/mcp \
   -d '{"jsonrpc":"2.0","id":"2","method":"tools/list"}'
 ```
 
-Response:
-```json
-{
-  "jsonrpc": "2.0",
-  "id": "2",
-  "result": {
-    "tools": [
-      {
-        "name": "some_command",
-        "description": "Editor command: some_command",
-        "inputSchema": { "type": "object", "properties": {} }
-      }
-    ]
-  }
-}
-```
-
 ### tools/call
 
-Invoke an editor command by name. The command is queued for execution on the main editor thread (with a 5-second timeout).
+Invoke a tool by name. All tools are queued for execution on the main editor thread (5-second timeout).
 
 ```bash
 curl -X POST http://127.0.0.1:8080/mcp \
   -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":"3","method":"tools/call","params":{"name":"some_command"}}'
+  -d '{"jsonrpc":"2.0","id":"3","method":"tools/call","params":{"name":"TOOL_NAME","arguments":{}}}'
 ```
 
-Success response:
-```json
-{
-  "jsonrpc": "2.0",
-  "id": "3",
-  "result": {
-    "content": [{ "type": "text", "text": "Command executed successfully: some_command" }]
-  }
-}
+## Query Tools
+
+These tools query editor state and return structured JSON data.
+
+### list_scenes
+
+List all scenes with summary counts.
+
+```bash
+curl -X POST http://127.0.0.1:8080/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"list_scenes","arguments":{}}}'
 ```
 
-Error response (command not found or failed):
-```json
-{
-  "jsonrpc": "2.0",
-  "id": "3",
-  "result": {
-    "content": [{ "type": "text", "text": "Command failed or not found: some_command" }],
-    "isError": true
-  }
-}
+Returns: `{scenes: [{name, node_count, camera_count, light_count, material_count}]}`
+
+### get_scene_nodes
+
+List all nodes in a scene with transform and attachment info.
+
+```bash
+curl -X POST http://127.0.0.1:8080/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"get_scene_nodes","arguments":{"scene_name":"Default Scene"}}}'
+```
+
+Returns: `{nodes: [{name, id, parent, position, rotation_xyzw, scale, attachment_types}]}`
+
+### get_node_details
+
+Get detailed info for a specific node including world position, local transform, attachments (with mesh materials, camera/light properties), children, and selection state.
+
+```bash
+curl -X POST http://127.0.0.1:8080/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"get_node_details","arguments":{"scene_name":"Default Scene","node_name":"Cube"}}}'
+```
+
+### get_scene_cameras
+
+List all cameras in a scene.
+
+```bash
+curl -X POST http://127.0.0.1:8080/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"get_scene_cameras","arguments":{"scene_name":"Default Scene"}}}'
+```
+
+Returns: `{cameras: [{name, node, exposure, shadow_range}]}`
+
+### get_scene_lights
+
+List all lights in a scene.
+
+```bash
+curl -X POST http://127.0.0.1:8080/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"get_scene_lights","arguments":{"scene_name":"Default Scene"}}}'
+```
+
+Returns: `{lights: [{name, node, type, color, intensity, range}]}`
+
+### get_scene_materials
+
+List all materials in a scene's content library.
+
+```bash
+curl -X POST http://127.0.0.1:8080/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"get_scene_materials","arguments":{"scene_name":"Default Scene"}}}'
+```
+
+Returns: `{materials: [{name, base_color, metallic, roughness, emissive}]}`
+
+### get_material_details
+
+Get full material properties including texture presence flags.
+
+```bash
+curl -X POST http://127.0.0.1:8080/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"get_material_details","arguments":{"scene_name":"Default Scene","material_name":"Gold"}}}'
+```
+
+Returns: `{name, base_color, opacity, roughness, metallic, reflectance, emissive, unlit, has_base_color_texture, ...}`
+
+### get_scene_brushes
+
+List all brushes in a scene's content library.
+
+```bash
+curl -X POST http://127.0.0.1:8080/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"get_scene_brushes","arguments":{"scene_name":"Default Scene"}}}'
+```
+
+Returns: `{brushes: [{name, id}]}`
+
+### get_selection
+
+Get currently selected items.
+
+```bash
+curl -X POST http://127.0.0.1:8080/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"get_selection","arguments":{}}}'
+```
+
+Returns: `{items: [{name, type, id}]}`
+
+### select_items
+
+Select items by unique ID. Searches scene nodes, cameras, lights, materials, and brushes.
+
+```bash
+curl -X POST http://127.0.0.1:8080/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"select_items","arguments":{"scene_name":"Default Scene","ids":[716,720]}}}'
+```
+
+Returns: `{selected_count, items: [{name, type, id}]}`
+
+Pass an empty `ids` array to clear selection. All query responses include `id` fields for use with this tool.
+
+## Editor Command Tools
+
+All registered editor commands are also exposed as tools (undo, redo, clipboard operations, scene commands, etc.). These take no arguments:
+
+```bash
+curl -X POST http://127.0.0.1:8080/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"Undo","arguments":{}}}'
 ```
 
 ## Threading Model
 
-The HTTP server runs on a dedicated background thread. When `tools/call` is received, the command name is placed in a thread-safe queue and the HTTP handler blocks on a `std::future`. On the main editor thread, `process_queued_commands()` is called each frame, drains the queue, executes commands via `Command::try_call()`, and sets the promise to unblock the HTTP response.
+The HTTP server runs on a dedicated background thread. All `tools/call` requests are placed in a thread-safe queue and the HTTP handler blocks on a `std::future`. On the main editor thread, `process_queued_requests()` is called each frame, drains the queue, dispatches to the appropriate handler (query or command), and sets the promise to unblock the HTTP response.
 
 ## Configuration
 
@@ -107,7 +188,7 @@ The server listens on `127.0.0.1:8080` by default (localhost only). The port can
 ## Source Files
 
 - `src/editor/mcp/mcp_server.hpp` — Server class declaration
-- `src/editor/mcp/mcp_server.cpp` — Implementation
+- `src/editor/mcp/mcp_server.cpp` — Implementation (queries + command dispatch)
 - `src/editor/editor.cpp` — Startup/shutdown/tick integration
 
 ## Dependencies

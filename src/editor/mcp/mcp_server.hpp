@@ -8,6 +8,8 @@
 #include <thread>
 #include <vector>
 
+#include <nlohmann/json.hpp>
+
 namespace httplib {
     class Server;
 }
@@ -20,22 +22,30 @@ namespace erhe::commands {
 namespace editor {
 
 class App_context;
+class Scene_root;
 
 // Represents a single MCP tool descriptor
 struct Mcp_tool_info
 {
-    std::string name;
-    std::string description;
+    std::string      name;
+    std::string      description;
+    nlohmann::json   input_schema;
 };
 
-// MCP (Model Context Protocol) server that exposes editor commands over HTTP.
-// Implements a subset of the MCP specification (JSON-RPC 2.0):
+// MCP (Model Context Protocol) server that exposes editor commands and
+// scene/content-library queries over HTTP using JSON-RPC 2.0.
+//
+// Supported MCP methods:
 //   - initialize
 //   - tools/list
 //   - tools/call
 //
-// The server runs on a background thread and dispatches command invocations
-// to a queue that is drained on the main editor thread each frame.
+// Query tools: list_scenes, get_scene_nodes, get_node_details,
+//   get_scene_cameras, get_scene_lights, get_scene_materials,
+//   get_material_details, get_selection
+//
+// The server runs on a background thread and dispatches all requests
+// to the main editor thread for thread safety.
 class Mcp_server
 {
 public:
@@ -51,15 +61,11 @@ public:
     Mcp_server(Mcp_server&&)                 = delete;
     Mcp_server& operator=(Mcp_server&&)      = delete;
 
-    // Start the HTTP server on its background thread.
     void start();
-
-    // Stop the HTTP server and join its background thread.
     void stop();
 
-    // Called once per frame from the main thread to execute any
-    // queued command invocations. Returns the number of commands executed.
-    auto process_queued_commands() -> int;
+    // Called once per frame from the main thread.
+    auto process_queued_requests() -> int;
 
     [[nodiscard]] auto is_running() const -> bool;
 
@@ -68,13 +74,26 @@ private:
     void setup_routes();
 
     // JSON-RPC handlers
-    auto handle_initialize  (const std::string& id) -> std::string;
-    auto handle_tools_list  (const std::string& id) -> std::string;
-    auto handle_tools_call  (const std::string& id, const std::string& tool_name) -> std::string;
-    auto handle_error       (const std::string& id, int code, const std::string& message) -> std::string;
+    auto handle_initialize(const std::string& id) -> std::string;
+    auto handle_tools_list(const std::string& id) -> std::string;
+    auto handle_tools_call(const std::string& id, const std::string& tool_name, const nlohmann::json& arguments) -> std::string;
+    auto handle_error     (const std::string& id, int code, const std::string& message) -> std::string;
 
-    // Build list of available MCP tools from registered commands
     void refresh_tool_list();
+
+    // Query handlers (run on main thread)
+    auto find_scene             (const std::string& name) -> Scene_root*;
+    auto query_list_scenes      (const nlohmann::json& args) -> std::string;
+    auto query_scene_nodes      (const nlohmann::json& args) -> std::string;
+    auto query_node_details     (const nlohmann::json& args) -> std::string;
+    auto query_scene_cameras    (const nlohmann::json& args) -> std::string;
+    auto query_scene_lights     (const nlohmann::json& args) -> std::string;
+    auto query_scene_materials  (const nlohmann::json& args) -> std::string;
+    auto query_material_details (const nlohmann::json& args) -> std::string;
+    auto query_scene_brushes    (const nlohmann::json& args) -> std::string;
+    auto query_selection        (const nlohmann::json& args) -> std::string;
+    auto action_select_items    (const nlohmann::json& args) -> std::string;
+    auto execute_command        (const std::string& tool_name) -> std::string;
 
     erhe::commands::Commands& m_commands;
     App_context&              m_context;
@@ -86,16 +105,17 @@ private:
 
     // Tool info cache
     std::mutex                  m_tools_mutex;
-    std::vector<Mcp_tool_info> m_tool_infos;
+    std::vector<Mcp_tool_info>  m_tool_infos;
 
-    // Command execution queue (populated by HTTP thread, drained by main thread)
-    struct Queued_command
+    // Request queue (populated by HTTP thread, drained by main thread)
+    struct Queued_request
     {
-        std::string              tool_name;
-        std::promise<bool>       result_promise;
+        std::string                tool_name;
+        nlohmann::json             arguments;
+        std::promise<std::string>  result_promise;
     };
-    std::mutex                              m_queue_mutex;
-    std::vector<std::unique_ptr<Queued_command>> m_command_queue;
+    std::mutex                                       m_queue_mutex;
+    std::vector<std::unique_ptr<Queued_request>>     m_request_queue;
 };
 
 } // namespace editor

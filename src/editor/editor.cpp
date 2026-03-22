@@ -276,9 +276,9 @@ public:
         m_imgui_windows->process_events(host_system_dt_s, host_system_time_ns);
         m_commands     ->tick(host_system_time_ns, input_events);
 
-        // Process any commands queued by the MCP server
+        // Process any requests queued by the MCP server
         if (m_mcp_server) {
-            m_mcp_server->process_queued_commands();
+            m_mcp_server->process_queued_requests();
         }
 
         // Once per frame updates
