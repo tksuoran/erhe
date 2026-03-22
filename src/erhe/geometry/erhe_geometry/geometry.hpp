@@ -725,6 +725,9 @@ public:
     void update_connectivity();
     void merge_coplanar_neighbors();
 
+    // Returns empty string if mesh is valid, or a description of the first problem found.
+    [[nodiscard]] auto validate() const -> std::string;
+
     void debug_trace() const;
 
     struct Debug_text

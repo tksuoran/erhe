@@ -1342,6 +1342,57 @@ auto Geometry::get_aabb() const -> erhe::math::Aabb
     return aabb;
 }
 
+auto Geometry::validate() const -> std::string
+{
+    const GEO::index_t vertex_count = m_mesh.vertices.nb();
+    const GEO::index_t facet_count  = m_mesh.facets.nb();
+    const GEO::index_t corner_count = m_mesh.facet_corners.nb();
+
+    // Check vertex positions for NaN/Inf
+    const bool single = m_mesh.vertices.single_precision();
+    for (GEO::index_t v = 0; v < vertex_count; ++v) {
+        if (single) {
+            const float* p = m_mesh.vertices.single_precision_point_ptr(v);
+            for (int d = 0; d < 3; ++d) {
+                if (std::isnan(p[d]) || std::isinf(p[d])) {
+                    return fmt::format("Vertex {} has NaN/Inf at component {}", v, d);
+                }
+            }
+        } else {
+            const double* p = m_mesh.vertices.point_ptr(v);
+            for (int d = 0; d < 3; ++d) {
+                if (std::isnan(p[d]) || std::isinf(p[d])) {
+                    return fmt::format("Vertex {} has NaN/Inf at component {}", v, d);
+                }
+            }
+        }
+    }
+
+    // Check facets
+    for (GEO::index_t f = 0; f < facet_count; ++f) {
+        const GEO::index_t corners_begin = m_mesh.facets.corners_begin(f);
+        const GEO::index_t corners_end   = m_mesh.facets.corners_end(f);
+        const GEO::index_t nb_corners    = corners_end - corners_begin;
+
+        if (nb_corners < 3) {
+            return fmt::format("Facet {} has {} corners (need >= 3)", f, nb_corners);
+        }
+        if (corners_begin >= corner_count || corners_end > corner_count) {
+            return fmt::format("Facet {} corner range [{}, {}) out of bounds (corner_count={})", f, corners_begin, corners_end, corner_count);
+        }
+
+        // Check corner vertex references
+        for (GEO::index_t c = corners_begin; c < corners_end; ++c) {
+            const GEO::index_t v = m_mesh.facet_corners.vertex(c);
+            if (v >= vertex_count) {
+                return fmt::format("Facet {} corner {} references vertex {} (vertex_count={})", f, c, v, vertex_count);
+            }
+        }
+    }
+
+    return {};
+}
+
 void Geometry::debug_trace() const
 {
     for (GEO::index_t corner : m_mesh.facet_corners) {

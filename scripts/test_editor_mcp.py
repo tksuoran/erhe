@@ -674,12 +674,14 @@ class SmokeTestRunner:
         return self.error_count == 0
 
     # Geometry commands safe for smoke test chaining.
-    # Excluded: Chamfer (known broken), Repair (crashes Geogram on
-    # degenerate geometry produced by prior chain operations).
+    # Excluded: Chamfer (known broken).
+    # Repair is included — mesh validation after each operation
+    # prevents degenerate geometry from reaching Geogram.
     GEOMETRY_COMMANDS = [
         "Geometry.Triangulate",
         "Geometry.Reverse",
         "Geometry.Normalize",
+        "Geometry.Repair",
         "Geometry.Weld",
         "Geometry.GenerateTangents",
         "Geometry.Subdivision.Catmull-Clark",

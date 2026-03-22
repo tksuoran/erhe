@@ -186,6 +186,13 @@ void Mesh_operation::make_entries(
                 auto after_geometry = std::make_shared<erhe::geometry::Geometry>();
                 geometry_operation(*before_geometry.get(), *after_geometry.get(), node);
 
+                const std::string validation_error = after_geometry->validate();
+                if (!validation_error.empty()) {
+                    set_error(fmt::format("Geometry validation failed: {}", validation_error));
+                    log_operations->warn("Op {} geometry validation failed: {}", describe(), validation_error);
+                    return;
+                }
+
                 const uint64_t flags =
                     erhe::geometry::Geometry::process_flag_connect |
                     erhe::geometry::Geometry::process_flag_build_edges |
