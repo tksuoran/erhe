@@ -145,6 +145,9 @@ void Catmull_clark_subdivision::build()
                 const GEO::index_t next_src_vertex         = source_mesh.facet_corners.vertex(next_corner);
                 const GEO::index_t previous_edge_midpoint  = get_src_edge_new_vertex(prev_src_vertex, src_vertex, 0);
                 const GEO::index_t next_edge_midpoint      = get_src_edge_new_vertex(src_vertex, next_src_vertex, 0);
+                if (previous_edge_midpoint == GEO::NO_VERTEX || next_edge_midpoint == GEO::NO_VERTEX) {
+                    continue;
+                }
                 const GEO::index_t new_dst_facet           = make_new_dst_facet_from_src_facet(src_facet, 4);
                 make_new_dst_corner_from_src_facet_centroid(new_dst_facet, 0, src_facet);
                 make_new_dst_corner_from_dst_vertex        (new_dst_facet, 1, previous_edge_midpoint);

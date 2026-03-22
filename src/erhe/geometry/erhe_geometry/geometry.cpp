@@ -1381,11 +1381,15 @@ auto Geometry::validate() const -> std::string
             return fmt::format("Facet {} corner range [{}, {}) out of bounds (corner_count={})", f, corners_begin, corners_end, corner_count);
         }
 
-        // Check corner vertex references
+        // Check corner vertex references and duplicate vertices within facet
+        std::set<GEO::index_t> facet_vertices;
         for (GEO::index_t c = corners_begin; c < corners_end; ++c) {
             const GEO::index_t v = m_mesh.facet_corners.vertex(c);
             if (v >= vertex_count) {
                 return fmt::format("Facet {} corner {} references vertex {} (vertex_count={})", f, c, v, vertex_count);
+            }
+            if (!facet_vertices.insert(v).second) {
+                return fmt::format("Facet {} has duplicate vertex {}", f, v);
             }
         }
     }
@@ -1441,8 +1445,10 @@ auto Geometry::sanitize() -> std::vector<std::string>
         } else if (cb >= corner_count || ce > corner_count) {
             bad = true;
         } else {
+            std::set<GEO::index_t> seen;
             for (GEO::index_t c = cb; c < ce; ++c) {
-                if (m_mesh.facet_corners.vertex(c) >= vertex_count) {
+                const GEO::index_t v = m_mesh.facet_corners.vertex(c);
+                if (v >= vertex_count || !seen.insert(v).second) {
                     bad = true;
                     break;
                 }

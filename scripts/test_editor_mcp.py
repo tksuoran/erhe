@@ -622,10 +622,11 @@ class SkipTest(Exception):
 # ---------------------------------------------------------------------------
 
 class SmokeTestRunner:
-    def __init__(self, client, seed, duration):
+    def __init__(self, client, seed, duration, no_physics=False):
         self.client = client
         self.seed = seed
         self.duration = duration
+        self.no_physics = no_physics
         self.rng = random.Random(seed)
         self.ok_count = 0
         self.error_count = 0
@@ -636,8 +637,18 @@ class SmokeTestRunner:
 
     def run(self):
         print("=" * 60)
-        print(f"SMOKE TEST  seed={self.seed}  duration={'infinite' if self.duration == 0 else f'{self.duration}s'}")
+        physics_str = "  no-physics" if self.no_physics else ""
+        print(f"SMOKE TEST  seed={self.seed}  duration={'infinite' if self.duration == 0 else f'{self.duration}s'}{physics_str}")
         print("=" * 60)
+
+        # Disable physics if requested
+        if self.no_physics:
+            try:
+                status = self.client.call_ok("toggle_physics")
+                if status["dynamic_physics_enabled"]:
+                    self.client.call_ok("toggle_physics")  # was off, toggled on, toggle back off
+            except Exception:
+                pass
 
         # Discover scene
         try:
@@ -709,7 +720,8 @@ class SmokeTestRunner:
         elif r < 0.66:
             self._do_material_detail()
         elif r < 0.68:
-            self._do_toggle()
+            if not self.no_physics:
+                self._do_toggle()
         elif r < 0.74:
             self._do_delete()
         elif r < 0.88:
@@ -843,6 +855,7 @@ def main():
     parser.add_argument("--smoke-time", type=float, default=10.0, help="Smoke test duration (0=infinite)")
     parser.add_argument("--unit-only", action="store_true", help="Run only unit tests")
     parser.add_argument("--smoke-only", action="store_true", help="Run only smoke tests")
+    parser.add_argument("--no-physics", action="store_true", help="Disable physics during smoke test")
     args = parser.parse_args()
 
     client = McpClient(args.host, args.port)
@@ -867,7 +880,7 @@ def main():
 
     if not args.unit_only:
         seed = args.seed if args.seed is not None else random.randint(0, 2**32 - 1)
-        runner = SmokeTestRunner(client, seed, args.smoke_time)
+        runner = SmokeTestRunner(client, seed, args.smoke_time, no_physics=args.no_physics)
         if not runner.run():
             all_passed = False
         print()

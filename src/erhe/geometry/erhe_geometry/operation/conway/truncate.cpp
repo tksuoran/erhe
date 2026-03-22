@@ -41,14 +41,23 @@ void Truncate::build()
         //// Debug_src_vertex_entry debug_src_vertex_entry;
         //// debug_src_vertex_entry.src_vertex = src_vertex;
         //// debug_src_vertex_entry.dst_facet = new_dst_facet;
+        bool vertex_ok = true;
         for (GEO::index_t local_src_vertex_corner = 0; local_src_vertex_corner < src_corner_count; ++local_src_vertex_corner) {
             const GEO::index_t src_corner      = src_corners[local_src_vertex_corner];
             const GEO::index_t src_facet       = source.get_corner_facet(src_corner);
+            if (src_facet >= source_mesh.facets.nb()) {
+                vertex_ok = false;
+                break;
+            }
             const GEO::index_t next_src_corner = source_mesh.facets.next_corner_around_facet(src_facet, src_corner);
             const GEO::index_t next_src_vertex = source_mesh.facet_corners.vertex(next_src_corner);
             const GEO::index_t edge_slot       = 0;
             const GEO::index_t edge_midpoint   = get_src_edge_new_vertex(src_vertex, next_src_vertex, edge_slot);
-            make_new_dst_corner_from_dst_vertex(new_dst_facet, local_src_vertex_corner, edge_midpoint);            
+            if (edge_midpoint == GEO::NO_VERTEX) {
+                vertex_ok = false;
+                break;
+            }
+            make_new_dst_corner_from_dst_vertex(new_dst_facet, local_src_vertex_corner, edge_midpoint);
             //// debug_src_vertex_entry.corners.push_back(edge_midpoint);
         }
         //// debug_src_vertex_entries.push_back(debug_src_vertex_entry);
@@ -72,6 +81,9 @@ void Truncate::build()
             const GEO::index_t next_src_vertex = source_mesh.facet_corners.vertex(next_src_corner);
             GEO::index_t a                     = get_src_edge_new_vertex(src_vertex, next_src_vertex, 0);
             GEO::index_t b                     = get_src_edge_new_vertex(src_vertex, next_src_vertex, 1);
+            if (a == GEO::NO_VERTEX || b == GEO::NO_VERTEX) {
+                continue;
+            }
             make_new_dst_corner_from_dst_vertex(new_dst_facet, dst_corner++, a);
             make_new_dst_corner_from_dst_vertex(new_dst_facet, dst_corner++, b);
             //// debug_src_facet_entry.corners.push_back(a);
