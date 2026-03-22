@@ -6,11 +6,11 @@ Implements the undo/redo operation system and all concrete editor operations.
 
 ## Key Types
 
-- **`Operation`** -- Abstract base class with `execute(App_context&)` and `undo(App_context&)`. Has a unique serial ID and a description string.
+- **`Operation`** -- Abstract base class with `execute(App_context&)` and `undo(App_context&)`. Has a unique serial ID, a description string, and an error state (`set_error`/`get_error`/`has_error`). Operations that fail set the error instead of asserting.
 
 - **`Operation_stack`** -- Manages three vectors: `m_queued`, `m_executed`, `m_undone`. Operations are queued via `queue()`, then executed during `update()` (called once per frame). Undo moves from `m_executed` to `m_undone`; redo moves back. Also an `Imgui_window` that displays the operation history. Binds Ctrl+Z/Ctrl+Y for undo/redo.
 
-- **`Mesh_operation`** -- Base for operations that modify mesh geometry. Contains a list of `Entry` objects, each storing before/after mesh primitives and node physics. `make_entries()` helper applies a geometry transformation function to all selected meshes.
+- **`Mesh_operation`** -- Base for operations that modify mesh geometry. Contains a list of `Entry` objects, each storing before/after mesh primitives and node physics. `make_entries()` helper applies a geometry transformation function to all selected meshes. After each geometry transform, the output is sanitized (`Geometry::sanitize()` — fixes degenerate facets and NaN/Inf vertices) and validated (`Geometry::validate()`). When sanitization fixes problems, the pre-operation input geometry is saved to `debug_geometry/` as a `.geogram` file for investigation.
 
 - **`Compound_operation`** -- Groups multiple operations into a single undo step.
 
@@ -38,6 +38,10 @@ Implements the undo/redo operation system and all concrete editor operations.
 - `Operation_stack::queue()` -- queue an operation for execution
 - `Operation_stack::undo()` / `redo()` -- manual undo/redo
 - `Operation_stack::update()` -- called once per frame from `Editor::tick()`
+
+## Async Execution
+
+Geometry operations run asynchronously via `async_for_nodes_with_mesh()` (in `items.cpp`), which creates `tf::AsyncTask` handles chained to any pending tasks for the same items. The operation callback runs on a worker thread, creates the `Mesh_operation`, and queues it to the operation stack. `Operation_stack::update()` executes queued operations on the main thread. `App_context::pending_async_ops` and `running_async_ops` (atomic counters) track in-flight operations.
 
 ## Dependencies
 

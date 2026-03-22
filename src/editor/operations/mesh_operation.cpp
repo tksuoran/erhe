@@ -198,7 +198,10 @@ void Mesh_operation::make_entries(
                     const std::filesystem::path debug_dir{"debug_geometry"};
                     std::filesystem::create_directories(debug_dir);
                     const std::string mesh_name = scene_mesh->get_name();
-                    const std::string filename = fmt::format("before_op{}_{}_{}.geogram", get_serial(), describe(), mesh_name);
+                    std::string filename = fmt::format("before_op{}_{}_{}.geogram", get_serial(), describe(), mesh_name);
+                    for (char& c : filename) {
+                        if (c == ' ' || c == '(' || c == ')') c = '_';
+                    }
                     const std::filesystem::path debug_path = debug_dir / filename;
                     GEO::MeshIOFlags ioflags;
                     ioflags.set_dimension(3);
