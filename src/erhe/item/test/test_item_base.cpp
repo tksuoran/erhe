@@ -186,4 +186,86 @@ TEST(ItemBase, Describe)
     EXPECT_NE(d3.find("flags"), std::string::npos);
 }
 
+// --- Tags ---
+
+TEST(ItemBase, TagsDefaultEmpty)
+{
+    auto item = std::make_shared<Concrete_item>("test");
+    EXPECT_TRUE(item->get_tags().empty());
+    EXPECT_FALSE(item->has_tag("anything"));
+}
+
+TEST(ItemBase, AddTag)
+{
+    auto item = std::make_shared<Concrete_item>("test");
+    item->add_tag("floor");
+    EXPECT_TRUE(item->has_tag("floor"));
+    EXPECT_EQ(item->get_tags().size(), 1u);
+}
+
+TEST(ItemBase, AddMultipleTags)
+{
+    auto item = std::make_shared<Concrete_item>("test");
+    item->add_tag("floor");
+    item->add_tag("wall");
+    item->add_tag("ceiling");
+    EXPECT_TRUE(item->has_tag("floor"));
+    EXPECT_TRUE(item->has_tag("wall"));
+    EXPECT_TRUE(item->has_tag("ceiling"));
+    EXPECT_EQ(item->get_tags().size(), 3u);
+}
+
+TEST(ItemBase, AddDuplicateTag)
+{
+    auto item = std::make_shared<Concrete_item>("test");
+    item->add_tag("floor");
+    item->add_tag("floor");
+    EXPECT_EQ(item->get_tags().size(), 1u);
+}
+
+TEST(ItemBase, RemoveTag)
+{
+    auto item = std::make_shared<Concrete_item>("test");
+    item->add_tag("floor");
+    item->add_tag("wall");
+    item->remove_tag("floor");
+    EXPECT_FALSE(item->has_tag("floor"));
+    EXPECT_TRUE(item->has_tag("wall"));
+    EXPECT_EQ(item->get_tags().size(), 1u);
+}
+
+TEST(ItemBase, RemoveNonexistentTag)
+{
+    auto item = std::make_shared<Concrete_item>("test");
+    item->add_tag("floor");
+    item->remove_tag("wall"); // does not exist
+    EXPECT_TRUE(item->has_tag("floor"));
+    EXPECT_EQ(item->get_tags().size(), 1u);
+}
+
+TEST(ItemBase, ClearTags)
+{
+    auto item = std::make_shared<Concrete_item>("test");
+    item->add_tag("floor");
+    item->add_tag("wall");
+    item->clear_tags();
+    EXPECT_TRUE(item->get_tags().empty());
+    EXPECT_FALSE(item->has_tag("floor"));
+}
+
+TEST(ItemBase, CopyDoesNotCopyTags)
+{
+    auto original = std::make_shared<Concrete_item>("original");
+    original->add_tag("floor");
+    original->add_tag("wall");
+
+    auto copy = std::make_shared<Concrete_item>(*original);
+    EXPECT_TRUE(copy->get_tags().empty());
+    EXPECT_FALSE(copy->has_tag("floor"));
+
+    // Original tags are not affected
+    EXPECT_TRUE(original->has_tag("floor"));
+    EXPECT_TRUE(original->has_tag("wall"));
+}
+
 } // namespace

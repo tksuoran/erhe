@@ -414,6 +414,181 @@ TEST(Hierarchy, CopyDoesNotCopyParent)
     EXPECT_TRUE(copy->get_parent().expired());
 }
 
+// --- Copy: grandchild depth bug (review issue) ---
+
+TEST(Hierarchy, CopyConstructorGrandchildDepth)
+{
+    // Build a 3-level tree: root -> child -> grandchild
+    auto root       = make("root");
+    auto child      = make("child");
+    auto grandchild = make("grandchild");
+    child->set_parent(root);
+    grandchild->set_parent(child);
+
+    // Verify source depths
+    EXPECT_EQ(root->get_depth(), 0u);
+    EXPECT_EQ(child->get_depth(), 1u);
+    EXPECT_EQ(grandchild->get_depth(), 2u);
+
+    // Copy the tree and fix up parent back-pointers
+    auto copy = std::make_shared<H>(*root);
+    copy->adopt_orphan_children();
+
+    // The copy root should be at depth 0
+    EXPECT_EQ(copy->get_depth(), 0u);
+
+    // Direct child should be at depth 1
+    ASSERT_EQ(copy->get_child_count(), 1u);
+    const auto& copy_child = copy->get_children()[0];
+    EXPECT_EQ(copy_child->get_depth(), 1u);
+
+    ASSERT_EQ(copy_child->get_child_count(), 1u);
+    const auto& copy_grandchild = copy_child->get_children()[0];
+    EXPECT_EQ(copy_grandchild->get_depth(), 2u);
+}
+
+TEST(Hierarchy, CopyConstructorGrandchildParentPointers)
+{
+    // Build a 3-level tree: root -> child -> grandchild
+    auto root       = make("root");
+    auto child      = make("child");
+    auto grandchild = make("grandchild");
+    child->set_parent(root);
+    grandchild->set_parent(child);
+
+    auto copy = std::make_shared<H>(*root);
+    copy->adopt_orphan_children();
+
+    // Direct child's parent should point to copy
+    ASSERT_EQ(copy->get_child_count(), 1u);
+    const auto& copy_child = copy->get_children()[0];
+    EXPECT_EQ(copy_child->get_parent().lock(), copy);
+
+    // Grandchild's parent should point to the copied child
+    ASSERT_EQ(copy_child->get_child_count(), 1u);
+    const auto& copy_grandchild = copy_child->get_children()[0];
+    EXPECT_EQ(copy_grandchild->get_parent().lock(), copy_child);
+}
+
+TEST(Hierarchy, CopyDepthFixedBySetParent)
+{
+    // Build a 3-level tree: root -> child -> grandchild
+    auto root       = make("root");
+    auto child      = make("child");
+    auto grandchild = make("grandchild");
+    child->set_parent(root);
+    grandchild->set_parent(child);
+
+    auto copy = std::make_shared<H>(*root);
+
+    // When the copy is added to a tree via set_parent, depths are fixed
+    auto new_root = make("new_root");
+    copy->set_parent(new_root);
+
+    EXPECT_EQ(copy->get_depth(), 1u);
+    ASSERT_EQ(copy->get_child_count(), 1u);
+    const auto& copy_child = copy->get_children()[0];
+    EXPECT_EQ(copy_child->get_depth(), 2u);
+
+    ASSERT_EQ(copy_child->get_child_count(), 1u);
+    const auto& copy_grandchild = copy_child->get_children()[0];
+    EXPECT_EQ(copy_grandchild->get_depth(), 3u);
+}
+
+TEST(Hierarchy, CopyFourLevelDepth)
+{
+    // Build a 4-level tree: root -> A -> B -> C
+    auto root = make("root");
+    auto a    = make("A");
+    auto b    = make("B");
+    auto c    = make("C");
+    a->set_parent(root);
+    b->set_parent(a);
+    c->set_parent(b);
+
+    auto copy = std::make_shared<H>(*root);
+    copy->adopt_orphan_children();
+
+    // Verify structure is preserved
+    ASSERT_EQ(copy->get_child_count(), 1u);
+    const auto& ca = copy->get_children()[0];
+    ASSERT_EQ(ca->get_child_count(), 1u);
+    const auto& cb = ca->get_children()[0];
+    ASSERT_EQ(cb->get_child_count(), 1u);
+    const auto& cc = cb->get_children()[0];
+
+    EXPECT_EQ(copy->get_depth(), 0u);
+    EXPECT_EQ(ca->get_depth(), 1u);
+    EXPECT_EQ(cb->get_depth(), 2u);
+    EXPECT_EQ(cc->get_depth(), 3u);
+}
+
+// --- operator= issues (review issue) ---
+
+TEST(Hierarchy, AssignmentGrandchildDepth)
+{
+    // Build a 3-level source tree
+    auto src       = make("src");
+    auto src_child = make("src_child");
+    auto src_gc    = make("src_gc");
+    src_child->set_parent(src);
+    src_gc->set_parent(src_child);
+
+    // Assign to a target node
+    auto target = make("target");
+    *target = *src;
+
+    // Direct child depth should be 1
+    ASSERT_EQ(target->get_child_count(), 1u);
+    const auto& t_child = target->get_children()[0];
+    EXPECT_EQ(t_child->get_depth(), 1u);
+
+    ASSERT_EQ(t_child->get_child_count(), 1u);
+    const auto& t_gc = t_child->get_children()[0];
+    EXPECT_EQ(t_gc->get_depth(), 2u);
+}
+
+TEST(Hierarchy, AssignmentGrandchildParentExpired)
+{
+    // Build a 3-level source tree
+    auto src       = make("src");
+    auto src_child = make("src_child");
+    auto src_gc    = make("src_gc");
+    src_child->set_parent(src);
+    src_gc->set_parent(src_child);
+
+    auto target = make("target");
+    *target = *src;
+
+    // Direct child's parent should be set (operator= uses shared_hierarchy_from_this)
+    ASSERT_EQ(target->get_child_count(), 1u);
+    const auto& t_child = target->get_children()[0];
+    EXPECT_EQ(t_child->get_parent().lock(), target);
+
+    ASSERT_EQ(t_child->get_child_count(), 1u);
+    const auto& t_gc = t_child->get_children()[0];
+    EXPECT_EQ(t_gc->get_parent().lock(), t_child);
+}
+
+TEST(Hierarchy, AssignmentDoesNotDetachFromOldParent)
+{
+    auto old_parent = make("old_parent");
+    auto target     = make("target");
+    target->set_parent(old_parent);
+    EXPECT_EQ(old_parent->get_child_count(), 1u);
+
+    // Build a source to assign from
+    auto src       = make("src");
+    auto src_child = make("src_child");
+    src_child->set_parent(src);
+
+    // Assign: target now has src's children, but old_parent still has target
+    *target = *src;
+
+    EXPECT_EQ(old_parent->get_child_count(), 0u);
+    EXPECT_TRUE(target->get_parent().expired());
+}
+
 // --- Sanity Check ---
 
 TEST(Hierarchy, SanityCheckPasses)

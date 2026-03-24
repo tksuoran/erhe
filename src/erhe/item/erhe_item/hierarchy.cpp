@@ -25,7 +25,7 @@ Hierarchy::Hierarchy(const Hierarchy& src)
         std::shared_ptr<erhe::Hierarchy> dst_child = std::dynamic_pointer_cast<erhe::Hierarchy>(base);
         if (dst_child) {
             dst_child->m_parent = {}; // can't point to `this` yet - no shared_ptr exists
-            dst_child->m_depth  = m_depth + 1;
+            dst_child->set_depth_recursive(m_depth + 1);
             m_children.push_back(dst_child);
         }
     }
@@ -46,16 +46,30 @@ void Hierarchy::adopt_orphan_children()
 
 Hierarchy& Hierarchy::operator=(const Hierarchy& src)
 {
+    if (this == &src) {
+        return *this;
+    }
+
     Item::operator=(src);
+
+    // Detach from old parent before resetting m_parent
+    std::shared_ptr<Hierarchy> old_parent = m_parent.lock();
+    if (old_parent) {
+        old_parent->handle_remove_child(this);
+    }
+
     m_children.clear();
     m_children.reserve(src.m_children.size());
     m_parent.reset();
     m_depth = 0;
+
+    auto self = shared_hierarchy_from_this();
     for (const auto& src_child : src.m_children) {
         auto dst_child = std::dynamic_pointer_cast<erhe::Hierarchy>(src_child->clone());
         if (dst_child) {
-            dst_child->m_parent = shared_hierarchy_from_this();
-            dst_child->m_depth  = m_depth + 1;
+            dst_child->m_parent = self;
+            dst_child->set_depth_recursive(m_depth + 1);
+            dst_child->adopt_orphan_children();
             m_children.push_back(dst_child);
         }
     }
