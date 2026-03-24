@@ -191,17 +191,17 @@ void Bvh_geometry::commit()
                 const uint32_t i1 = *reinterpret_cast<const uint32_t*>(raw_index_ptr + i * index_buffer_info->byte_stride + 1 * sizeof(uint32_t));
                 const uint32_t i2 = *reinterpret_cast<const uint32_t*>(raw_index_ptr + i * index_buffer_info->byte_stride + 2 * sizeof(uint32_t));
 
-                const float p0_x = *reinterpret_cast<const float*>(raw_vertex_ptr + i0 * index_buffer_info->byte_stride + 0 * sizeof(float));
-                const float p0_y = *reinterpret_cast<const float*>(raw_vertex_ptr + i0 * index_buffer_info->byte_stride + 1 * sizeof(float));
-                const float p0_z = *reinterpret_cast<const float*>(raw_vertex_ptr + i0 * index_buffer_info->byte_stride + 2 * sizeof(float));
+                const float p0_x = *reinterpret_cast<const float*>(raw_vertex_ptr + i0 * vertex_buffer_info->byte_stride + 0 * sizeof(float));
+                const float p0_y = *reinterpret_cast<const float*>(raw_vertex_ptr + i0 * vertex_buffer_info->byte_stride + 1 * sizeof(float));
+                const float p0_z = *reinterpret_cast<const float*>(raw_vertex_ptr + i0 * vertex_buffer_info->byte_stride + 2 * sizeof(float));
 
-                const float p1_x = *reinterpret_cast<const float*>(raw_vertex_ptr + i1 * index_buffer_info->byte_stride + 0 * sizeof(float));
-                const float p1_y = *reinterpret_cast<const float*>(raw_vertex_ptr + i1 * index_buffer_info->byte_stride + 1 * sizeof(float));
-                const float p1_z = *reinterpret_cast<const float*>(raw_vertex_ptr + i1 * index_buffer_info->byte_stride + 2 * sizeof(float));
+                const float p1_x = *reinterpret_cast<const float*>(raw_vertex_ptr + i1 * vertex_buffer_info->byte_stride + 0 * sizeof(float));
+                const float p1_y = *reinterpret_cast<const float*>(raw_vertex_ptr + i1 * vertex_buffer_info->byte_stride + 1 * sizeof(float));
+                const float p1_z = *reinterpret_cast<const float*>(raw_vertex_ptr + i1 * vertex_buffer_info->byte_stride + 2 * sizeof(float));
 
-                const float p2_x = *reinterpret_cast<const float*>(raw_vertex_ptr + i2 * index_buffer_info->byte_stride + 0 * sizeof(float));
-                const float p2_y = *reinterpret_cast<const float*>(raw_vertex_ptr + i2 * index_buffer_info->byte_stride + 1 * sizeof(float));
-                const float p2_z = *reinterpret_cast<const float*>(raw_vertex_ptr + i2 * index_buffer_info->byte_stride + 2 * sizeof(float));
+                const float p2_x = *reinterpret_cast<const float*>(raw_vertex_ptr + i2 * vertex_buffer_info->byte_stride + 0 * sizeof(float));
+                const float p2_y = *reinterpret_cast<const float*>(raw_vertex_ptr + i2 * vertex_buffer_info->byte_stride + 1 * sizeof(float));
+                const float p2_z = *reinterpret_cast<const float*>(raw_vertex_ptr + i2 * vertex_buffer_info->byte_stride + 2 * sizeof(float));
 
                 hash_code = erhe::hash::hash(p0_x, p0_y, p0_z, hash_code);
                 hash_code = erhe::hash::hash(p1_x, p1_y, p1_z, hash_code);
