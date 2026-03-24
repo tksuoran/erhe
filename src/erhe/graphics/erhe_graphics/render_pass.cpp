@@ -6,6 +6,9 @@
 #if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
 # include "erhe_graphics/vulkan/vulkan_render_pass.hpp"
 #endif
+#if defined(ERHE_GRAPHICS_LIBRARY_NONE)
+# include "erhe_graphics/null/null_render_pass.hpp"
+#endif
 
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/texture.hpp"

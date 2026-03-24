@@ -6,6 +6,9 @@
 #if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
 # include "erhe_graphics/vulkan/vulkan_blit_command_encoder.hpp"
 #endif
+#if defined(ERHE_GRAPHICS_LIBRARY_NONE)
+# include "erhe_graphics/null/null_blit_command_encoder.hpp"
+#endif
 
 namespace erhe::graphics {
 

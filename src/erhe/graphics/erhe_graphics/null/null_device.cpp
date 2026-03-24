@@ -6,6 +6,7 @@
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/ring_buffer_range.hpp"
 #include "erhe_graphics/surface.hpp"
+#include "erhe_graphics/swapchain.hpp"
 #include "erhe_graphics/texture.hpp"
 
 #include "erhe_dataformat/dataformat.hpp"

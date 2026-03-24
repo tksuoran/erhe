@@ -206,6 +206,7 @@ if (ERHE_GRAPHICS_API_NONE)
         erhe_graphics/null/null_command_encoder.hpp
         erhe_graphics/null/null_compute_command_encoder.cpp
         erhe_graphics/null/null_compute_command_encoder.hpp
+        erhe_graphics/null/null_debug.cpp
         erhe_graphics/null/null_device.cpp
         erhe_graphics/null/null_device.hpp
         erhe_graphics/null/null_gpu_timer.cpp

@@ -8,6 +8,9 @@
 #if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
 # include "erhe_graphics/vulkan/vulkan_texture.hpp"
 #endif
+#if defined(ERHE_GRAPHICS_LIBRARY_NONE)
+# include "erhe_graphics/null/null_texture.hpp"
+#endif
 
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/device.hpp"

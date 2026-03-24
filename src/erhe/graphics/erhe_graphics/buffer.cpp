@@ -7,6 +7,9 @@
 #if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
 # include "erhe_graphics/vulkan/vulkan_buffer.hpp"
 #endif
+#if defined(ERHE_GRAPHICS_LIBRARY_NONE)
+# include "erhe_graphics/null/null_buffer.hpp"
+#endif
 
 #include "erhe_utility/bit_helpers.hpp"
 #include "erhe_verify/verify.hpp"

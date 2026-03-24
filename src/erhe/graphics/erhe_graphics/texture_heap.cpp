@@ -1,4 +1,9 @@
-#include "erhe_graphics/gl/gl_texture_heap.hpp"
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+# include "erhe_graphics/gl/gl_texture_heap.hpp"
+#endif
+#if defined(ERHE_GRAPHICS_LIBRARY_NONE)
+# include "erhe_graphics/null/null_texture_heap.hpp"
+#endif
 
 namespace erhe::graphics {
     

@@ -75,6 +75,18 @@ public:
     void set_text_input_area              (int x, int y, int w, int h);
     void start_text_input                 ();
     void stop_text_input                  ();
+    void handle_key_event                 (int64_t timestamp, int key, int scancode, bool pressed, int modifiers);
+    void handle_text_event                (int64_t timestamp, const char* utf8_text);
+    void handle_mouse_button_event        (int64_t timestamp, int button, bool pressed);
+    void handle_mouse_wheel_event         (int64_t timestamp, float x, float y);
+    void handle_mouse_move                (int64_t timestamp, float x, float y, float dx, float dy);
+    void handle_controller_axis_event     (int64_t timestamp, int device, int axis, int value);
+    void handle_controller_button_event   (int64_t timestamp, int device, int button, bool pressed);
+    void handle_window_resize_event       (int64_t timestamp, int width, int height);
+    void handle_window_refresh_event      (int64_t timestamp);
+    void handle_window_close_event        (int64_t timestamp);
+    void handle_window_focus_event        (int64_t timestamp, bool focused);
+    void handle_cursor_enter_event        (int64_t timestamp, bool entered);
 
     void set_input_event_synthesizer_callback(std::function<void(Context_window& context_window)> callback);
     void inject_input_event                  (const Input_event& event);

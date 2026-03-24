@@ -125,6 +125,89 @@ void Context_window::stop_text_input()
 {
 }
 
+void Context_window::handle_key_event(int64_t timestamp, int key, int scancode, bool pressed, int modifiers)
+{
+    static_cast<void>(timestamp);
+    static_cast<void>(key);
+    static_cast<void>(scancode);
+    static_cast<void>(pressed);
+    static_cast<void>(modifiers);
+}
+
+void Context_window::handle_text_event(int64_t timestamp, const char* utf8_text)
+{
+    static_cast<void>(timestamp);
+    static_cast<void>(utf8_text);
+}
+
+void Context_window::handle_mouse_button_event(int64_t timestamp, int button, bool pressed)
+{
+    static_cast<void>(timestamp);
+    static_cast<void>(button);
+    static_cast<void>(pressed);
+}
+
+void Context_window::handle_mouse_wheel_event(int64_t timestamp, float x, float y)
+{
+    static_cast<void>(timestamp);
+    static_cast<void>(x);
+    static_cast<void>(y);
+}
+
+void Context_window::handle_mouse_move(int64_t timestamp, float x, float y, float dx, float dy)
+{
+    static_cast<void>(timestamp);
+    static_cast<void>(x);
+    static_cast<void>(y);
+    static_cast<void>(dx);
+    static_cast<void>(dy);
+}
+
+void Context_window::handle_controller_axis_event(int64_t timestamp, int device, int axis, int value)
+{
+    static_cast<void>(timestamp);
+    static_cast<void>(device);
+    static_cast<void>(axis);
+    static_cast<void>(value);
+}
+
+void Context_window::handle_controller_button_event(int64_t timestamp, int device, int button, bool pressed)
+{
+    static_cast<void>(timestamp);
+    static_cast<void>(device);
+    static_cast<void>(button);
+    static_cast<void>(pressed);
+}
+
+void Context_window::handle_window_resize_event(int64_t timestamp, int width, int height)
+{
+    static_cast<void>(timestamp);
+    m_configuration.size.x = width;
+    m_configuration.size.y = height;
+}
+
+void Context_window::handle_window_refresh_event(int64_t timestamp)
+{
+    static_cast<void>(timestamp);
+}
+
+void Context_window::handle_window_close_event(int64_t timestamp)
+{
+    static_cast<void>(timestamp);
+}
+
+void Context_window::handle_window_focus_event(int64_t timestamp, bool focused)
+{
+    static_cast<void>(timestamp);
+    static_cast<void>(focused);
+}
+
+void Context_window::handle_cursor_enter_event(int64_t timestamp, bool entered)
+{
+    static_cast<void>(timestamp);
+    static_cast<void>(entered);
+}
+
 void Context_window::set_input_event_synthesizer_callback(std::function<void(Context_window& context_window)> callback)
 {
     m_input_event_synthesizer_callback = std::move(callback);

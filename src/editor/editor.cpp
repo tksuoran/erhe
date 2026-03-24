@@ -850,7 +850,9 @@ public:
             {
                 ERHE_GET_GL_CONTEXT
                 m_headset_view = std::make_unique<Headset_view>(
+#if defined(ERHE_XR_LIBRARY_OPENXR)
                     m_editor_config.viewport,
+#endif
                     *m_commands.get(),
                     *m_graphics_device.get(),
                     *m_imgui_renderer.get(),

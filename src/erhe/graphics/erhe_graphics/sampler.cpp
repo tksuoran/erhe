@@ -6,6 +6,9 @@
 #if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
 # include "erhe_graphics/vulkan/vulkan_sampler.hpp"
 #endif
+#if defined(ERHE_GRAPHICS_LIBRARY_NONE)
+# include "erhe_graphics/null/null_sampler.hpp"
+#endif
 
 #include "erhe_graphics/device.hpp"
 
