@@ -1,0 +1,51 @@
+#include "erhe_graphics/null/null_sampler.hpp"
+
+namespace erhe::graphics {
+
+Sampler_impl::Sampler_impl(Device& device, const Sampler_create_info& create_info)
+    : m_min_filter       {create_info.min_filter       }
+    , m_mag_filter       {create_info.mag_filter       }
+    , m_mipmap_mode      {create_info.mipmap_mode      }
+    , m_address_mode     {create_info.address_mode     }
+    , m_compare_enable   {create_info.compare_enable   }
+    , m_compare_operation{create_info.compare_operation}
+    , m_lod_bias         {create_info.lod_bias         }
+    , m_max_lod          {create_info.max_lod          }
+    , m_min_lod          {create_info.min_lod          }
+    , m_max_anisotropy   {create_info.max_anisotropy   }
+    , m_debug_label      {create_info.debug_label      }
+{
+    static_cast<void>(device);
+}
+
+auto Sampler_impl::gl_name() const -> unsigned int
+{
+    return 0;
+}
+
+auto Sampler_impl::get_debug_label() const -> erhe::utility::Debug_label
+{
+    return m_debug_label;
+}
+
+auto Sampler_impl::uses_mipmaps() const -> bool
+{
+    return m_mipmap_mode != Sampler_mipmap_mode::not_mipmapped;
+}
+
+auto Sampler_impl::get_lod_bias() const -> float
+{
+    return m_lod_bias;
+}
+
+auto operator==(const Sampler_impl& lhs, const Sampler_impl& rhs) noexcept -> bool
+{
+    return &lhs == &rhs;
+}
+
+auto operator!=(const Sampler_impl& lhs, const Sampler_impl& rhs) noexcept -> bool
+{
+    return !(lhs == rhs);
+}
+
+} // namespace erhe::graphics

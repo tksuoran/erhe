@@ -195,6 +195,42 @@ if (ERHE_GRAPHICS_API_VULKAN)
             GPUOpen::VulkanMemoryAllocator
     )
 endif ()
+if (ERHE_GRAPHICS_API_NONE)
+    erhe_target_sources_grouped(
+        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+        erhe_graphics/null/null_blit_command_encoder.cpp
+        erhe_graphics/null/null_blit_command_encoder.hpp
+        erhe_graphics/null/null_buffer.cpp
+        erhe_graphics/null/null_buffer.hpp
+        erhe_graphics/null/null_command_encoder.cpp
+        erhe_graphics/null/null_command_encoder.hpp
+        erhe_graphics/null/null_compute_command_encoder.cpp
+        erhe_graphics/null/null_compute_command_encoder.hpp
+        erhe_graphics/null/null_device.cpp
+        erhe_graphics/null/null_device.hpp
+        erhe_graphics/null/null_gpu_timer.cpp
+        erhe_graphics/null/null_gpu_timer.hpp
+        erhe_graphics/null/null_render_command_encoder.cpp
+        erhe_graphics/null/null_render_command_encoder.hpp
+        erhe_graphics/null/null_render_pass.cpp
+        erhe_graphics/null/null_render_pass.hpp
+        erhe_graphics/null/null_sampler.cpp
+        erhe_graphics/null/null_sampler.hpp
+        erhe_graphics/null/null_shader_stages.cpp
+        erhe_graphics/null/null_shader_stages.hpp
+        erhe_graphics/null/null_shader_stages_prototype.cpp
+        erhe_graphics/null/null_surface.cpp
+        erhe_graphics/null/null_surface.hpp
+        erhe_graphics/null/null_swapchain.cpp
+        erhe_graphics/null/null_swapchain.hpp
+        erhe_graphics/null/null_texture.cpp
+        erhe_graphics/null/null_texture.hpp
+        erhe_graphics/null/null_texture_heap.cpp
+        erhe_graphics/null/null_texture_heap.hpp
+        erhe_graphics/null/null_vertex_input_state.cpp
+        erhe_graphics/null/null_vertex_input_state.hpp
+    )
+endif ()
 
 if (ERHE_SPIRV)
     erhe_target_sources_grouped(

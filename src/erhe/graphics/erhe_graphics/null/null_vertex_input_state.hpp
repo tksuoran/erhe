@@ -1,0 +1,39 @@
+#pragma once
+
+#include "erhe_graphics/state/vertex_input_state.hpp"
+
+#include <mutex>
+#include <vector>
+
+namespace erhe::graphics {
+
+class Buffer;
+class Device;
+
+class Vertex_input_state_impl
+{
+public:
+    Vertex_input_state_impl(Device& device);
+    Vertex_input_state_impl(Device& device, Vertex_input_state_data&& create_info);
+    ~Vertex_input_state_impl() noexcept;
+
+    void set    (const Vertex_input_state_data& data);
+    void create ();
+    void reset  ();
+    void update ();
+
+    [[nodiscard]] auto gl_name () const -> unsigned int;
+    [[nodiscard]] auto get_data() const -> const Vertex_input_state_data&;
+
+    static void on_thread_enter();
+    static void on_thread_exit();
+
+private:
+    Device&                 m_device;
+    Vertex_input_state_data m_data;
+
+    static std::mutex                          s_mutex;
+    static std::vector<Vertex_input_state_impl*> s_all_vertex_input_states;
+};
+
+} // namespace erhe::graphics

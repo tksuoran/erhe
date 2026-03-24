@@ -30,6 +30,14 @@ if (${ERHE_WINDOW_LIBRARY} STREQUAL "sdl")
     )
 endif()
 
+if (${ERHE_WINDOW_LIBRARY} STREQUAL "none")
+    erhe_target_sources_grouped(
+        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+        erhe_window/null_window.cpp
+        erhe_window/null_window.hpp
+    )
+endif()
+
 target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 if (ERHE_GRAPHICS_API_OPENGL)

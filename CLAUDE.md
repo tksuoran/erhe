@@ -46,11 +46,11 @@ Required packages: `libwayland-dev libxkbcommon-dev xorg-dev` (Ubuntu) or equiva
 
 | Option | Default | Notes |
 |--------|---------|-------|
-| `ERHE_GRAPHICS_LIBRARY` | — | `opengl` or `vulkan` |
+| `ERHE_GRAPHICS_LIBRARY` | — | `opengl`, `vulkan`, or `none` (headless) |
 | `ERHE_PHYSICS_LIBRARY` | `jolt` | `jolt` or `none` |
-| `ERHE_RAYTRACE_LIBRARY` | `bvh` | `bvh`, `embree`, or `none` (none uses GPU ID-buffer picking) |
+| `ERHE_RAYTRACE_LIBRARY` | `bvh` | `bvh`, `tinybvh`, `embree`, or `none` (none uses GPU ID-buffer picking) |
 | `ERHE_PROFILE_LIBRARY` | `tracy` | `tracy`, `nvtx`, `superluminal`, or `none` |
-| `ERHE_WINDOW_LIBRARY` | `sdl` | `sdl` or `glfw` |
+| `ERHE_WINDOW_LIBRARY` | `sdl` | `sdl`, `glfw`, or `none` (headless) |
 | `ERHE_XR_LIBRARY` | `openxr` | `openxr` or `none` |
 | `ERHE_USE_ASAN` | `OFF` | AddressSanitizer |
 | `ERHE_USE_PRECOMPILED_HEADERS` | `OFF` | Speeds up builds |
