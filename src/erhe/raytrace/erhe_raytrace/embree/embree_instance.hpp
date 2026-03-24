@@ -2,7 +2,7 @@
 
 #include "erhe_raytrace/iinstance.hpp"
 
-#include <embree3/rtcore.h>
+#include <embree4/rtcore.h>
 
 #include <cstdint>
 #include <string>

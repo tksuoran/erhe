@@ -50,10 +50,10 @@ set_option(ERHE_AUDIO_LIBRARY              "Audio library. Either miniaudio or n
 set_option(ERHE_FONT_RASTERIZATION_LIBRARY "Font rasterization library. Either freetype or none"                        "freetype" "freetype;none")
 set_option(ERHE_GLTF_LIBRARY               "GLTF library. Either fastgltf or none"                                      "fastgltf" "fastgltf;none")
 set_option(ERHE_GUI_LIBRARY                "GUI library. Either imgui or none"                                          "imgui"    "imgui;none")
-set_option(ERHE_GRAPHICS_LIBRARY           "Graphics library to use with erhe. Either opengl or vulkan"                 "opengl"   "opengl;vulkan")
+set_option(ERHE_GRAPHICS_LIBRARY           "Graphics library to use with erhe. Either opengl, vulkan or none"           "opengl"   "opengl;vulkan;none")
 set_option(ERHE_PHYSICS_LIBRARY            "Physics library to use with erhe. Either jolt or none"                      "jolt"     "jolt;none")
 set_option(ERHE_PROFILE_LIBRARY            "Profile library to use with erhe. Either nvtx, superluminal, tracy or none" "none"     "nvtx;superluminal;tracy;none")
-set_option(ERHE_RAYTRACE_LIBRARY           "Raytrace library to use with erhe. Either embree, bvh or none"              "bvh"      "embree;bvh;none")
+set_option(ERHE_RAYTRACE_LIBRARY           "Raytrace library to use with erhe. Either embree, bvh, tinybvh or none"    "bvh"      "embree;bvh;tinybvh;none")
 set_option(ERHE_SVG_LIBRARY                "SVG loading library. Either plutosvg or none"                               "plutosvg" "plutosvg;none")
 set_option(ERHE_TEXT_LAYOUT_LIBRARY        "Text layout library. Either freetype, harfbuzz or none"                     "harfbuzz" "harfbuzz;freetype;none")
 set_option(ERHE_WINDOW_LIBRARY             "Window library to use with erhe. Either glfw, sdl or none"                  "sdl"      "sdl;glfw;none")
@@ -262,6 +262,10 @@ elseif (${ERHE_GRAPHICS_LIBRARY} STREQUAL "vulkan")
         GIT_SHALLOW       TRUE
         GITHUB_REPOSITORY zeux/volk
     )
+elseif (${ERHE_GRAPHICS_LIBRARY} STREQUAL "none")
+    message(STATUS "Erhe configured to use null graphics backend (headless).")
+    set(ERHE_GRAPHICS_API_NONE TRUE)
+    add_definitions(-DERHE_GRAPHICS_LIBRARY_NONE)
 endif ()
 
 CPMAddPackage(
@@ -509,7 +513,15 @@ else ()
 endif ()
 
 if (${ERHE_RAYTRACE_LIBRARY} STREQUAL "embree")
-    CPMAddPackage(NAME embree VERSION 3.13.3 GITHUB_REPOSITORY embree/embree)
+    CPMAddPackage(
+        NAME              embree
+        VERSION           4.4.0
+        GITHUB_REPOSITORY RenderKit/embree
+        OPTIONS
+            "EMBREE_ISPC_SUPPORT OFF"
+            "EMBREE_TUTORIALS OFF"
+            "EMBREE_TESTING_INTENSITY 0"
+    )
     message(STATUS "Erhe configured to use Embree for raytracing.")
     add_definitions(-DERHE_RAYTRACE_LIBRARY_EMBREE)
     set(ERHE_RAYTRACE_TARGET embree)
@@ -523,6 +535,20 @@ elseif (${ERHE_RAYTRACE_LIBRARY} STREQUAL "bvh")
     message(STATUS "Erhe configured to use bvh for raytracing.")
     add_definitions(-DERHE_RAYTRACE_LIBRARY_BVH)
     set(ERHE_RAYTRACE_TARGET bvh)
+elseif (${ERHE_RAYTRACE_LIBRARY} STREQUAL "tinybvh")
+    CPMAddPackage(
+        NAME              tinybvh
+        GIT_TAG           4735685f64d8b2bb0ad2c6c4643f291bf58774ad
+        GITHUB_REPOSITORY jbikker/tinybvh
+        DOWNLOAD_ONLY     YES
+    )
+    if (tinybvh_ADDED)
+        add_library(tinybvh INTERFACE)
+        target_include_directories(tinybvh INTERFACE "${tinybvh_SOURCE_DIR}")
+    endif()
+    message(STATUS "Erhe configured to use tinybvh for raytracing.")
+    add_definitions(-DERHE_RAYTRACE_LIBRARY_TINYBVH)
+    set(ERHE_RAYTRACE_TARGET tinybvh)
 else ()
     message(STATUS "Erhe configured to disable raytracing.")
     add_definitions(-DERHE_RAYTRACE_LIBRARY_NONE)
@@ -538,6 +564,17 @@ else()
     set(ERHE_BVH_GIT_COMMIT "unknown")
 endif()
 add_definitions(-DERHE_BVH_GIT_COMMIT="${ERHE_BVH_GIT_COMMIT}")
+if (tinybvh_SOURCE_DIR AND EXISTS "${tinybvh_SOURCE_DIR}/.git")
+    execute_process(
+        COMMAND git rev-parse HEAD
+        WORKING_DIRECTORY "${tinybvh_SOURCE_DIR}"
+        OUTPUT_VARIABLE ERHE_TINYBVH_GIT_COMMIT
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+else()
+    set(ERHE_TINYBVH_GIT_COMMIT "unknown")
+endif()
+add_definitions(-DERHE_TINYBVH_GIT_COMMIT="${ERHE_TINYBVH_GIT_COMMIT}")
 
 if (${ERHE_PHYSICS_LIBRARY} STREQUAL "jolt")
     CPMAddPackage(

@@ -2,7 +2,7 @@
 
 #include "erhe_raytrace/iscene.hpp"
 
-#include <embree3/rtcore.h>
+#include <embree4/rtcore.h>
 
 #include <string>
 

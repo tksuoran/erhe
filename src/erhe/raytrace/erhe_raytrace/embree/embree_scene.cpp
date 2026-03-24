@@ -2,7 +2,7 @@
 #include "erhe_raytrace/embree/embree_device.hpp"
 #include "erhe_raytrace/embree/embree_geometry.hpp"
 #include "erhe_raytrace/embree/embree_instance.hpp"
-#include "erhe_raytrace/log.hpp"
+#include "erhe_raytrace/raytrace_log.hpp"
 #include "erhe_raytrace/ray.hpp"
 #include "erhe_profile/profile.hpp"
 
@@ -27,16 +27,17 @@ auto IScene::create_unique(const std::string_view debug_label) -> std::unique_pt
 Embree_scene::Embree_scene(const std::string_view debug_label)
     : m_debug_label{debug_label}
 {
-    const auto device = Embree_device::get_instance().get_rtc_device();
+    const RTCDevice device = Embree_device::get_instance().get_rtc_device();
     if (device == nullptr)
     {
         m_scene = nullptr;
+        return;
     }
     m_scene = rtcNewScene(device);
     SPDLOG_LOGGER_TRACE(log_embree, "rtcNewScene() = {}", debug_label);
     if (m_scene == nullptr)
     {
-        log_scene->error("rtcNewDevice() failed");
+        log_scene->error("rtcNewScene() failed");
         Embree_device::get_instance().check_device_error();
         return;
     }
@@ -49,35 +50,17 @@ Embree_scene::~Embree_scene() noexcept
     rtcReleaseScene(m_scene);
 }
 
-// namespace {
-// 
-// constexpr std::size_t s_grow = 256;
-// 
-// }
-
 void Embree_scene::attach(IGeometry* geometry)
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
-    auto* const embree_geometry = reinterpret_cast<Embree_geometry*>(geometry);
-    const auto hgeometry        = embree_geometry->get_rtc_geometry();
+    Embree_geometry* const embree_geometry = static_cast<Embree_geometry*>(geometry);
+    const RTCGeometry hgeometry            = embree_geometry->get_rtc_geometry();
     embree_geometry->geometry_id = rtcAttachGeometry(
         m_scene,
         hgeometry
     );
 
-    //m_dirty = true;
-    //if (embree_geometry->geometry_id >= m_geometry_map.size())
-    //{
-    //    const auto old_size{embree_geometry->geometry_id};
-    //    const auto new_size{old_size + s_grow};
-    //    m_geometry_map.resize(new_size);
-    //    for (size_t i = old_size; i < new_size - 1; ++i)
-    //    {
-    //        m_geometry_map[i] = nullptr;
-    //    }
-    //}
-    //m_geometry_map[embree_geometry->geometry_id] = geometry;
     SPDLOG_LOGGER_TRACE(
         log_embree,
         "rtcAttachGeometry(scene = {}, geometry = {}) id = {}",
@@ -89,25 +72,15 @@ void Embree_scene::attach(IGeometry* geometry)
 
 void Embree_scene::attach(IInstance* instance)
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
-    auto* const embree_instance = reinterpret_cast<Embree_instance*>(instance);
-    const auto  hgeometry       = embree_instance->get_rtc_geometry();
+    Embree_instance* const embree_instance = static_cast<Embree_instance*>(instance);
+    const RTCGeometry hgeometry            = embree_instance->get_rtc_geometry();
     embree_instance->geometry_id = rtcAttachGeometry(
         m_scene,
         hgeometry
     );
-    //if (embree_instance->geometry_id >= m_instance_map.size())
-    //{
-    //    const auto old_size{embree_instance->geometry_id};
-    //    const auto new_size{old_size + s_grow};
-    //    m_instance_map.resize(new_size);
-    //    for (size_t i = old_size; i < new_size - 1; ++i)
-    //    {
-    //        m_instance_map[i] = nullptr;
-    //    }
-    //}
-    //m_instance_map[embree_instance->geometry_id] = instance;
+
     SPDLOG_LOGGER_TRACE(
         log_embree,
         "rtcAttachGeometry(scene = {}, instance = {}) id = {}",
@@ -115,18 +88,13 @@ void Embree_scene::attach(IInstance* instance)
         embree_instance->debug_label(),
         embree_instance->geometry_id
     );
-
-    //m_dirty = true;
 }
 
 void Embree_scene::detach(IGeometry* geometry)
 {
-    auto* const embree_geometry = reinterpret_cast<Embree_geometry*>(geometry);
-    const auto  geometry_id     = embree_geometry->geometry_id;
-    //if (geometry_id < m_geometry_map.size())
-    //{
-    //    m_geometry_map[geometry_id] = nullptr;
-    //}
+    Embree_geometry* const embree_geometry = static_cast<Embree_geometry*>(geometry);
+    const unsigned int geometry_id         = embree_geometry->geometry_id;
+
     SPDLOG_LOGGER_TRACE(
         log_embree,
         "rtcDetachGeometry(scene = {}, geometry = {}, id = {})",
@@ -135,49 +103,37 @@ void Embree_scene::detach(IGeometry* geometry)
         geometry_id
     );
     rtcDetachGeometry(m_scene, geometry_id);
-
-    //m_dirty = true;
 }
 
 void Embree_scene::detach(IInstance* instance)
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
-    auto* const embree_instance = reinterpret_cast<Embree_instance*>(instance);
-    const auto  geometry_id     = embree_instance->geometry_id;
-    //if (geometry_id < m_instance_map.size())
-    //{
-    //    m_instance_map[geometry_id] = nullptr;
-    //}
+    Embree_instance* const embree_instance = static_cast<Embree_instance*>(instance);
+    const unsigned int geometry_id         = embree_instance->geometry_id;
+
     SPDLOG_LOGGER_TRACE(
         log_embree,
-        "rtcDetachGeometry(scene = {}, geometry_id = {} {})",
+        "rtcDetachGeometry(scene = {}, instance = {} id = {})",
         m_debug_label,
         embree_instance->debug_label(),
         geometry_id
     );
     rtcDetachGeometry(m_scene, geometry_id);
-
-    //m_dirty = true;
 }
 
 void Embree_scene::commit()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
-    //if (m_dirty)
-    {
-        SPDLOG_LOGGER_TRACE(log_embree, "rtcCommitScene({})\n", m_debug_label);
-        rtcCommitScene(m_scene);
-        //m_dirty = false;
-    }
+    SPDLOG_LOGGER_TRACE(log_embree, "rtcCommitScene({})\n", m_debug_label);
+    rtcCommitScene(m_scene);
 }
 
-void Embree_scene::intersect(Ray& ray, Hit& hit)
+auto Embree_scene::intersect(Ray& ray, Hit& hit) -> bool
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
-    RTCIntersectContext context;
     RTCRayHit ray_hit{
         .ray = {
             .org_x = ray.origin.x,
@@ -194,12 +150,12 @@ void Embree_scene::intersect(Ray& ray, Hit& hit)
             .flags = 0
         },
         .hit = {
-            .Ng_x   = 0,
-            .Ng_y   = 0,
-            .Ng_z   = 0,
-            .u      = 0,
-            .v      = 0,
-            .primID = 0,
+            .Ng_x   = 0.0f,
+            .Ng_y   = 0.0f,
+            .Ng_z   = 0.0f,
+            .u      = 0.0f,
+            .v      = 0.0f,
+            .primID = RTC_INVALID_GEOMETRY_ID,
             .geomID = RTC_INVALID_GEOMETRY_ID,
             .instID = {
                 RTC_INVALID_GEOMETRY_ID
@@ -207,33 +163,33 @@ void Embree_scene::intersect(Ray& ray, Hit& hit)
         }
     };
 
-    SPDLOG_LOGGER_TRACE(log_embree, "rtcInitIntersectContext()");
-    rtcInitIntersectContext(&context);
     SPDLOG_LOGGER_TRACE(log_embree, "rtcIntersect1({})", m_debug_label);
-    rtcIntersect1(
-        m_scene,
-        &context,
-        &ray_hit
-    );
+    rtcIntersect1(m_scene, &ray_hit, nullptr);
+
+    if (ray_hit.hit.geomID == RTC_INVALID_GEOMETRY_ID)
+    {
+        return false;
+    }
+
     ray.t_near       = ray_hit.ray.tnear;
     ray.t_far        = ray_hit.ray.tfar;
     hit.normal       = glm::vec3{ray_hit.hit.Ng_x, ray_hit.hit.Ng_y, ray_hit.hit.Ng_z};
     hit.uv           = glm::vec2{ray_hit.hit.u, ray_hit.hit.v};
-    hit.primitive_id = ray_hit.hit.primID;
+    hit.triangle_id  = ray_hit.hit.primID;
     hit.geometry     = nullptr;
     hit.instance     = nullptr;
 
     if (ray_hit.hit.instID[0] != RTC_INVALID_GEOMETRY_ID)
     {
-        const auto instance_geometry = rtcGetGeometry(m_scene, ray_hit.hit.instID[0]);
+        const RTCGeometry instance_geometry = rtcGetGeometry(m_scene, ray_hit.hit.instID[0]);
         if (instance_geometry != nullptr)
         {
-            void* user_data       = rtcGetGeometryUserData(instance_geometry);
-            auto* embree_instance = reinterpret_cast<Embree_instance*>(user_data);
+            void* user_data                    = rtcGetGeometryUserData(instance_geometry);
+            Embree_instance* embree_instance    = static_cast<Embree_instance*>(user_data);
             hit.instance = embree_instance;
             if (embree_instance != nullptr)
             {
-                auto* embree_instance_scene = embree_instance->get_embree_scene();
+                Embree_scene* embree_instance_scene = embree_instance->get_embree_scene();
                 if (embree_instance_scene != nullptr)
                 {
                     hit.geometry = embree_instance_scene->get_geometry_from_id(ray_hit.hit.geomID);
@@ -247,12 +203,9 @@ void Embree_scene::intersect(Ray& ray, Hit& hit)
             ? get_geometry_from_id(ray_hit.hit.geomID)
             : nullptr;
     }
-}
 
-//void Embree_scene::set_dirty()
-//{
-//    m_dirty = true;
-//}
+    return true;
+}
 
 auto Embree_scene::get_rtc_scene() -> RTCScene
 {
@@ -266,11 +219,11 @@ auto Embree_scene::get_geometry_from_id(const unsigned int id) -> Embree_geometr
         return nullptr;
     }
 
-    auto rtc_geometry = rtcGetGeometry(m_scene, id);
+    RTCGeometry rtc_geometry = rtcGetGeometry(m_scene, id);
     if (rtc_geometry != nullptr)
     {
-        void* user_data       = rtcGetGeometryUserData(rtc_geometry);
-        auto* embree_geometry = reinterpret_cast<Embree_geometry*>(user_data);
+        void* user_data                    = rtcGetGeometryUserData(rtc_geometry);
+        Embree_geometry* embree_geometry   = static_cast<Embree_geometry*>(user_data);
         return embree_geometry;
     }
     return nullptr;

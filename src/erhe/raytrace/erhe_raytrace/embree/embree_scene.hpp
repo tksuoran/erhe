@@ -2,7 +2,7 @@
 
 #include "erhe_raytrace/iscene.hpp"
 
-#include <embree3/rtcore.h>
+#include <embree4/rtcore.h>
 
 #include <vector>
 
@@ -46,7 +46,7 @@ public:
     // rtcGetSceneBounds()
     // rtcGetSceneLinearBounds()
 
-    void intersect(Ray& ray, Hit& out_hit) override;
+    auto intersect(Ray& ray, Hit& hit) -> bool override;
 
     //void set_dirty();
     auto get_rtc_scene() -> RTCScene;

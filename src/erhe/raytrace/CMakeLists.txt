@@ -4,8 +4,6 @@ add_library(erhe::raytrace ALIAS ${_target})
 if (${ERHE_RAYTRACE_LIBRARY} STREQUAL "embree")
     erhe_target_sources_grouped(
         ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
-        erhe_raytrace/embree/embree_buffer.cpp
-        erhe_raytrace/embree/embree_buffer.hpp
         erhe_raytrace/embree/embree_device.cpp
         erhe_raytrace/embree/embree_device.hpp
         erhe_raytrace/embree/embree_geometry.cpp
@@ -16,6 +14,18 @@ if (${ERHE_RAYTRACE_LIBRARY} STREQUAL "embree")
         erhe_raytrace/embree/embree_scene.hpp
     )
     set(impl_link_libraries embree)
+endif ()
+if (${ERHE_RAYTRACE_LIBRARY} STREQUAL "tinybvh")
+    erhe_target_sources_grouped(
+        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+        erhe_raytrace/tinybvh/tinybvh_geometry.cpp
+        erhe_raytrace/tinybvh/tinybvh_geometry.hpp
+        erhe_raytrace/tinybvh/tinybvh_instance.cpp
+        erhe_raytrace/tinybvh/tinybvh_instance.hpp
+        erhe_raytrace/tinybvh/tinybvh_scene.cpp
+        erhe_raytrace/tinybvh/tinybvh_scene.hpp
+    )
+    set(impl_link_libraries tinybvh)
 endif ()
 if (${ERHE_RAYTRACE_LIBRARY} STREQUAL "bvh")
     erhe_target_sources_grouped(

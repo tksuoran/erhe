@@ -1,5 +1,5 @@
 #include "erhe_raytrace/embree/embree_device.hpp"
-#include "erhe_raytrace/log.hpp"
+#include "erhe_raytrace/raytrace_log.hpp"
 
 namespace erhe::raytrace
 {

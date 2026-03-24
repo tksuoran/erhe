@@ -1,12 +1,26 @@
 #include "erhe_raytrace/embree/embree_geometry.hpp"
-#include "erhe_raytrace/embree/embree_buffer.hpp"
 #include "erhe_raytrace/embree/embree_device.hpp"
 #include "erhe_raytrace/embree/embree_scene.hpp"
-#include "erhe_raytrace/log.hpp"
+#include "erhe_raytrace/raytrace_log.hpp"
+#include "erhe_buffer/ibuffer.hpp"
 #include "erhe_log/log_glm.hpp"
 
 namespace erhe::raytrace
 {
+
+namespace {
+
+auto to_rtc_format(const erhe::dataformat::Format format) -> RTCFormat
+{
+    switch (format)
+    {
+        case erhe::dataformat::Format::format_32_vec3_float: return RTC_FORMAT_FLOAT3;
+        case erhe::dataformat::Format::format_32_vec3_uint:  return RTC_FORMAT_UINT3;
+        default: return RTC_FORMAT_UNDEFINED;
+    }
+}
+
+} // anonymous namespace
 
 auto IGeometry::create(
     const std::string_view debug_label,
@@ -79,7 +93,7 @@ void Embree_geometry::disable()
 {
     SPDLOG_LOGGER_TRACE(log_embree, "rtcDisableGeometry(geometry = {})", m_debug_label);
     rtcDisableGeometry(m_geometry);
-    m_enabled = true;
+    m_enabled = false;
 }
 
 auto Embree_geometry::is_enabled() const -> bool
@@ -99,16 +113,15 @@ auto Embree_geometry::get_mask() const -> uint32_t
     return m_mask;
 }
 
-void Embree_geometry::set_user_data(void* ptr)
+void Embree_geometry::set_user_data(const void* ptr)
 {
-    m_user_data = ptr; //rtcSetGeometryUserData(m_geometry, ptr);
+    m_user_data = ptr;
 }
 
-auto Embree_geometry::get_user_data() const -> void*
+auto Embree_geometry::get_user_data() const -> const void*
 {
-    return m_user_data; //return rtcGetGeometryUserData(m_geometry);
+    return m_user_data;
 }
-
 
 void Embree_geometry::set_vertex_attribute_count(
     const unsigned int count
@@ -124,27 +137,27 @@ void Embree_geometry::set_vertex_attribute_count(
 }
 
 void Embree_geometry::set_buffer(
-    const Buffer_type  type,
-    const unsigned int slot,
-    const Format       format,
-    IBuffer* const     buffer,
-    const std::size_t  byte_offset,
-    const std::size_t  byte_stride,
-    const std::size_t  item_count
+    const Buffer_type               type,
+    const unsigned int              slot,
+    const erhe::dataformat::Format  format,
+    erhe::buffer::Cpu_buffer* const buffer,
+    const std::size_t               byte_offset,
+    const std::size_t               byte_stride,
+    const std::size_t               item_count
 )
 {
     SPDLOG_LOGGER_TRACE(
         log_embree,
-        "rtcSetGeometryBuffer(geometry = {}, slot = {})",
+        "rtcSetSharedGeometryBuffer(geometry = {}, slot = {})",
         m_debug_label,
         slot
     );
-    rtcSetGeometryBuffer(
+    rtcSetSharedGeometryBuffer(
         m_geometry,
         static_cast<RTCBufferType>(type),
         slot,
-        static_cast<RTCFormat>(format),
-        (reinterpret_cast<const Embree_buffer*>(buffer))->get_rtc_buffer(),
+        to_rtc_format(format),
+        buffer->get_span().data(),
         byte_offset,
         byte_stride,
         item_count
