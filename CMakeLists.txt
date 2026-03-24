@@ -521,6 +521,8 @@ if (${ERHE_RAYTRACE_LIBRARY} STREQUAL "embree")
             "EMBREE_ISPC_SUPPORT OFF"
             "EMBREE_TUTORIALS OFF"
             "EMBREE_TESTING_INTENSITY 0"
+            "EMBREE_TASKING_SYSTEM INTERNAL"
+            "EMBREE_STATIC_LIB ON"
     )
     message(STATUS "Erhe configured to use Embree for raytracing.")
     add_definitions(-DERHE_RAYTRACE_LIBRARY_EMBREE)

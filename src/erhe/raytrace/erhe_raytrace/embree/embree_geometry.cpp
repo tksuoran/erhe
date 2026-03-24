@@ -63,6 +63,7 @@ Embree_geometry::Embree_geometry(
     }
 
     rtcSetGeometryBuildQuality(m_geometry, RTC_BUILD_QUALITY_LOW);
+    rtcSetGeometryMask(m_geometry, m_mask);
 }
 
 Embree_geometry::~Embree_geometry() noexcept
@@ -86,6 +87,7 @@ void Embree_geometry::enable()
 {
     SPDLOG_LOGGER_TRACE(log_embree, "rtcEnableGeometry(geometry = {})", m_debug_label);
     rtcEnableGeometry(m_geometry);
+    rtcCommitGeometry(m_geometry);
     m_enabled = true;
 }
 
@@ -93,6 +95,7 @@ void Embree_geometry::disable()
 {
     SPDLOG_LOGGER_TRACE(log_embree, "rtcDisableGeometry(geometry = {})", m_debug_label);
     rtcDisableGeometry(m_geometry);
+    rtcCommitGeometry(m_geometry);
     m_enabled = false;
 }
 
@@ -105,6 +108,7 @@ void Embree_geometry::set_mask(const uint32_t mask)
 {
     SPDLOG_LOGGER_TRACE(log_embree, "rtcSetGeometryMask(geometry = {}, mask = {:#04x})", m_debug_label, mask);
     rtcSetGeometryMask(m_geometry, mask);
+    rtcCommitGeometry(m_geometry);
     m_mask = mask;
 }
 

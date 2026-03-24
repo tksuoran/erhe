@@ -89,3 +89,7 @@ if (DEFINED ERHE_RAYTRACE_TARGET)
 endif ()
 
 erhe_target_settings(${_target} "erhe")
+
+if (${ERHE_BUILD_TESTS} STREQUAL "ON")
+    add_subdirectory(test)
+endif ()

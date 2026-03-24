@@ -56,8 +56,8 @@ void Embree_instance::enable()
         return;
     }
     rtcEnableGeometry(m_geometry);
+    rtcCommitGeometry(m_geometry);
     m_enabled = true;
-    //m_scene->set_dirty();
 }
 
 void Embree_instance::disable()
@@ -68,8 +68,8 @@ void Embree_instance::disable()
         return;
     }
     rtcDisableGeometry(m_geometry);
+    rtcCommitGeometry(m_geometry);
     m_enabled = false;
-    //m_scene->set_dirty();
 }
 
 [[nodiscard]] auto Embree_instance::is_enabled() const -> bool
@@ -81,6 +81,7 @@ void Embree_instance::set_mask(const uint32_t mask)
 {
     SPDLOG_LOGGER_TRACE(log_embree, "rtcSetGeometryMask(instance = {}, mask = {:#04x})", m_debug_label, mask);
     rtcSetGeometryMask(m_geometry, mask);
+    rtcCommitGeometry(m_geometry);
     m_mask = mask;
 }
 
@@ -91,7 +92,7 @@ auto Embree_instance::get_mask() const -> uint32_t
 
 void Embree_instance::set_transform(const glm::mat4 transform)
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION()
 
     const unsigned int time_step{0};
     SPDLOG_LOGGER_TRACE(
@@ -146,7 +147,7 @@ auto Embree_instance::get_embree_scene() const -> Embree_scene*
 
 void Embree_instance::commit()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION()
 
     SPDLOG_LOGGER_TRACE(log_embree, "rtcCommitGeometry(instance = {})", m_debug_label);
     rtcCommitGeometry(m_geometry);
