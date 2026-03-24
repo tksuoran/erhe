@@ -141,6 +141,13 @@ auto Tinybvh_scene::intersect_instance(Ray& ray, Hit& hit, Tinybvh_instance* in_
             }
         }
     } else {
+        // Traverse sub-instances (for multi-level nesting)
+        for (Tinybvh_instance* instance : m_instances) {
+            const bool instance_is_hit = instance->intersect(ray, hit);
+            if (instance_is_hit) {
+                is_hit = true;
+            }
+        }
         for (Tinybvh_geometry* geometry : m_geometries) {
             const bool geometry_is_hit = geometry->intersect_instance(ray, hit, in_instance);
             if (geometry_is_hit) {

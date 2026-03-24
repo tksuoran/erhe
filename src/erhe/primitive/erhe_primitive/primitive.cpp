@@ -61,8 +61,10 @@ Primitive_raytrace::Primitive_raytrace(const GEO::Mesh& mesh, Element_mappings* 
     const std::size_t vertex_stride = vertex_stream.stride;
     const std::size_t index_stride = 4;
     const Mesh_info mesh_info = get_mesh_info(mesh);
-    m_rt_vertex_buffer = std::make_shared<erhe::buffer::Cpu_buffer>("raytrace_vertex", mesh_info.vertex_count_corners * vertex_stride);
-    m_rt_index_buffer  = std::make_shared<erhe::buffer::Cpu_buffer>("raytrace_index",  mesh_info.index_count_fill_triangles * index_stride);
+    // Tail padding of 16 bytes is required by Embree 4 for shared buffers
+    static constexpr std::size_t raytrace_buffer_tail_padding = 16;
+    m_rt_vertex_buffer = std::make_shared<erhe::buffer::Cpu_buffer>("raytrace_vertex", mesh_info.vertex_count_corners * vertex_stride, raytrace_buffer_tail_padding);
+    m_rt_index_buffer  = std::make_shared<erhe::buffer::Cpu_buffer>("raytrace_index",  mesh_info.index_count_fill_triangles * index_stride, raytrace_buffer_tail_padding);
     Cpu_buffer_sink buffer_sink{{m_rt_vertex_buffer.get()}, *m_rt_index_buffer.get()};
     Build_info build_info{
         .primitive_types = {

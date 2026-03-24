@@ -56,6 +56,7 @@ private:
     std::string  m_debug_label;
     bool         m_enabled  {true};
     uint32_t     m_mask     {0xffffffffu};
+
 };
 
 }

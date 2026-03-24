@@ -13,6 +13,7 @@ add_executable(${_target}
     main.cpp
     test_helpers.hpp
     test_geometry.cpp
+    test_hierarchy.cpp
     test_masking.cpp
     test_instance.cpp
     test_scene.cpp

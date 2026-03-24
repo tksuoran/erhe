@@ -92,7 +92,7 @@ auto Embree_instance::get_mask() const -> uint32_t
 
 void Embree_instance::set_transform(const glm::mat4 transform)
 {
-    ERHE_PROFILE_FUNCTION()
+    ERHE_PROFILE_FUNCTION();
 
     const unsigned int time_step{0};
     SPDLOG_LOGGER_TRACE(
@@ -147,7 +147,7 @@ auto Embree_instance::get_embree_scene() const -> Embree_scene*
 
 void Embree_instance::commit()
 {
-    ERHE_PROFILE_FUNCTION()
+    ERHE_PROFILE_FUNCTION();
 
     SPDLOG_LOGGER_TRACE(log_embree, "rtcCommitGeometry(instance = {})", m_debug_label);
     rtcCommitGeometry(m_geometry);

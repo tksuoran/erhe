@@ -156,6 +156,7 @@ void Embree_geometry::set_buffer(
         m_debug_label,
         slot
     );
+
     rtcSetSharedGeometryBuffer(
         m_geometry,
         static_cast<RTCBufferType>(type),

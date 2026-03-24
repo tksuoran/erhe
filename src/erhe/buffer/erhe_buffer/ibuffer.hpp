@@ -28,7 +28,7 @@ public:
 class Cpu_buffer : public IBuffer
 {
 public:
-    Cpu_buffer           (std::string_view debug_label, std::size_t capacity_bytes_count);
+    Cpu_buffer           (std::string_view debug_label, std::size_t capacity_bytes_count, std::size_t tail_padding = 0);
     explicit Cpu_buffer  (Cpu_buffer&& other) noexcept;
     Cpu_buffer& operator=(Cpu_buffer&& other) noexcept;
     ~Cpu_buffer          () noexcept override;

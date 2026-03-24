@@ -5,13 +5,13 @@ namespace erhe::buffer {
 
 IBuffer::~IBuffer() noexcept = default;
 
-Cpu_buffer::Cpu_buffer(const std::string_view debug_label, const std::size_t capacity_bytes_count)
+Cpu_buffer::Cpu_buffer(const std::string_view debug_label, const std::size_t capacity_bytes_count, const std::size_t tail_padding)
     : m_allocator  {capacity_bytes_count}
     , m_debug_label{debug_label}
 {
     ERHE_VERIFY(capacity_bytes_count > 0);
-    m_buffer.resize(capacity_bytes_count);
-    m_span = std::span<std::byte>(m_buffer.data(), m_buffer.size());
+    m_buffer.resize(capacity_bytes_count + tail_padding);
+    m_span = std::span<std::byte>(m_buffer.data(), capacity_bytes_count);
 }
 
 Cpu_buffer::Cpu_buffer(Cpu_buffer&& other) noexcept

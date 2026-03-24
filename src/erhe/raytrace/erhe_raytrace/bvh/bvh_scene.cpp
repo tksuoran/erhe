@@ -153,6 +153,13 @@ auto Bvh_scene::intersect_instance(Ray& ray, Hit& hit, Bvh_instance* in_instance
             }
         }
     } else {
+        // Traverse sub-instances (for multi-level nesting)
+        for (const auto& instance : m_instances) {
+            const bool instance_is_hit = instance->intersect(ray, hit);
+            if (instance_is_hit) {
+                is_hit = true;
+            }
+        }
         for (const auto& geometry : m_geometries) {
             const bool geometry_is_hit = geometry->intersect_instance(ray, hit, in_instance);
             if (geometry_is_hit) {
