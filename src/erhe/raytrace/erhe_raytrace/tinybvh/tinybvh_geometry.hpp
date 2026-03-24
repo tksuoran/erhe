@@ -54,6 +54,9 @@ public:
 
     // Tinybvh_geometry public API
     auto intersect_instance(Ray& ray, Hit& hit, Tinybvh_instance* instance) -> bool;
+    auto get_bvh           () -> tinybvh::BVH*;
+    auto get_triangle_count() const -> std::size_t;
+    auto get_triangles     () const -> const std::vector<tinybvh::bvhvec4>&;
 
 private:
     class Buffer_info

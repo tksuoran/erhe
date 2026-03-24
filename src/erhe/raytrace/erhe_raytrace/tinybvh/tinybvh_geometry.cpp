@@ -245,15 +245,23 @@ auto Tinybvh_geometry::intersect_instance(Ray& ray, Hit& hit, Tinybvh_instance* 
 
     const glm::mat4 transform = (instance != nullptr) ? instance->get_transform() : glm::mat4{1.0f};
 
+    // tinybvh normalizes the direction in its Ray constructor, which changes
+    // the meaning of t. We need to account for the direction length so that
+    // t values are correct in the caller's coordinate space.
+    const float direction_length = glm::length(ray.direction);
+    const float t_far_normalized = (direction_length > 0.0f) ? (ray.t_far * direction_length) : ray.t_far;
+
     tinybvh::Ray tinybvh_ray{
         tinybvh::bvhvec3{ray.origin.x,    ray.origin.y,    ray.origin.z},
         tinybvh::bvhvec3{ray.direction.x, ray.direction.y, ray.direction.z},
-        ray.t_far
+        t_far_normalized
     };
 
     m_bvh->Intersect(tinybvh_ray);
 
-    if (tinybvh_ray.hit.t < ray.t_far) {
+    const float t_original_space = (direction_length > 0.0f) ? (tinybvh_ray.hit.t / direction_length) : tinybvh_ray.hit.t;
+
+    if (t_original_space < ray.t_far) {
         const uint32_t prim_id = tinybvh_ray.hit.prim;
 
         // Compute triangle normal from stored vertices
@@ -265,7 +273,7 @@ auto Tinybvh_geometry::intersect_instance(Ray& ray, Hit& hit, Tinybvh_instance* 
         const glm::vec3 edge2        = glm::vec3{v2.x - v0.x, v2.y - v0.y, v2.z - v0.z};
         const glm::vec3 local_normal = glm::cross(edge1, edge2);
 
-        ray.t_far       = tinybvh_ray.hit.t;
+        ray.t_far       = t_original_space;
         hit.triangle_id = prim_id;
         hit.uv          = glm::vec2{tinybvh_ray.hit.u, tinybvh_ray.hit.v};
         hit.normal      = glm::vec3{transform * glm::vec4{local_normal, 0.0f}};
@@ -274,6 +282,21 @@ auto Tinybvh_geometry::intersect_instance(Ray& ray, Hit& hit, Tinybvh_instance* 
         return true;
     }
     return false;
+}
+
+auto Tinybvh_geometry::get_bvh() -> tinybvh::BVH*
+{
+    return m_bvh.get();
+}
+
+auto Tinybvh_geometry::get_triangle_count() const -> std::size_t
+{
+    return m_triangle_count;
+}
+
+auto Tinybvh_geometry::get_triangles() const -> const std::vector<tinybvh::bvhvec4>&
+{
+    return m_triangles;
 }
 
 auto Tinybvh_geometry::get_mask() const -> uint32_t
