@@ -174,9 +174,10 @@ void Hierarchy::set_parent(const std::shared_ptr<Hierarchy>& parent)
 void Hierarchy::set_parent(const std::shared_ptr<Hierarchy>& new_parent_, const std::size_t position)
 {
     ERHE_VERIFY(new_parent_.get() != this);
-    Hierarchy* old_parent = m_parent.lock().get();
+    std::shared_ptr<Hierarchy> old_parent_shared = m_parent.lock();
+    Hierarchy*                 old_parent         = old_parent_shared.get();
     m_parent = new_parent_;
-    Hierarchy* new_parent = m_parent.lock().get();
+    Hierarchy* new_parent = new_parent_.get();
 
     if (old_parent == new_parent) {
         return;
