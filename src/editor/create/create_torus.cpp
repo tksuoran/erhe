@@ -12,6 +12,9 @@
 
 #include <imgui/imgui.h>
 
+using erhe::geometry::to_geo_mat4f;
+using erhe::geometry::transform;
+
 namespace editor {
 
 Create_torus::~Create_torus() noexcept = default;

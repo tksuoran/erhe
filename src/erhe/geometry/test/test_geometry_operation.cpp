@@ -13,6 +13,8 @@
 
 #include <gtest/gtest.h>
 
+using erhe::geometry::get_pointf;
+
 namespace {
 
 auto make_solid(const char* name, void (*make_fn)(GEO::Mesh&, float), float radius = 1.0f)

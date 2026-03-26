@@ -50,6 +50,9 @@
 #include <variant>
 #include <vector>
 
+using erhe::geometry::Mesh_info;
+using erhe::geometry::get_mesh_info;
+
 namespace erhe::gltf {
 
 constexpr glm::mat4 mat4_yup_from_zup{
@@ -229,7 +232,8 @@ auto to_erhe_attribute(const fastgltf::Accessor& accessor) -> erhe::dataformat::
     }
 }
 
-using namespace erhe::geometry;
+using erhe::geometry::Mesh_info;
+using erhe::geometry::get_mesh_info;
 
 [[nodiscard]] auto to_erhe(const fastgltf::LightType gltf_light_type) -> erhe::scene::Light_type
 {

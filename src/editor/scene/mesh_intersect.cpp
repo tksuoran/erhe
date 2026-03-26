@@ -5,6 +5,9 @@
 #include "erhe_scene/node.hpp"
 #include "erhe_verify/verify.hpp"
 
+using erhe::geometry::to_geo_mat4;
+using erhe::geometry::get_pointf;
+
 namespace editor {
 
 namespace {

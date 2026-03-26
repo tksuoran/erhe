@@ -35,6 +35,8 @@
 
 #include <unordered_map>
 
+using erhe::geometry::make_convex_hull;
+
 namespace editor {
 
 namespace {

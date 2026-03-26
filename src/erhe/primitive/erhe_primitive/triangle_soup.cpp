@@ -11,6 +11,9 @@
 #include <numeric>
 #include <set>
 
+using erhe::geometry::Mesh_attributes;
+using erhe::geometry::set_pointf;
+
 namespace erhe::primitive {
 
 [[nodiscard]] auto is_per_point(erhe::dataformat::Vertex_attribute_usage value) -> bool

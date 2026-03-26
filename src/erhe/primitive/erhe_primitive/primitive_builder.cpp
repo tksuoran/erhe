@@ -11,6 +11,14 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
+using erhe::geometry::get_mesh_info;
+using erhe::geometry::get_pointf;
+using erhe::geometry::mesh_facet_centerf;
+using erhe::geometry::mesh_facet_normalf;
+using erhe::geometry::to_glm_vec3;
+using erhe::geometry::to_glm_vec4;
+using erhe::geometry::vec3_from_index;
+
 namespace erhe::primitive {
 
 Build_context_root::Build_context_root(

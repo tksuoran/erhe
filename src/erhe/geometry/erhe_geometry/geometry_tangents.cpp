@@ -5,6 +5,8 @@
 #include "erhe_verify/verify.hpp"
 #include "mikktspace/mikktspace.hpp"
 
+namespace erhe::geometry {
+
 auto compute_mesh_tangents(
     GEO::Mesh& mesh,
     const bool orthonormalize, 
@@ -479,3 +481,5 @@ auto compute_mesh_tangents(
 
     return true;
 }
+
+} // namespace erhe::geometry

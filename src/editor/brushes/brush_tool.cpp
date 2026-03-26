@@ -46,6 +46,10 @@
 #include <optional>
 #include <vector>
 
+using erhe::geometry::to_glm_mat4;
+using erhe::geometry::to_geo_vec3f;
+using erhe::geometry::to_geo_mat4f;
+
 namespace editor {
 
 #pragma region Commands

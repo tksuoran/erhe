@@ -16,6 +16,8 @@
 #include <cmath>
 #include <unordered_map>
 
+namespace erhe::geometry {
+
 void set_point(GEO::MeshVertices& mesh_vertices, GEO::index_t vertex, GEO::vec3 p)
 {
     //if (mesh_vertices.single_precision()) {
@@ -783,8 +785,6 @@ void transform_mesh(GEO::Mesh& mesh, const GEO::mat4f& transform)
     transform_mesh(mesh, attributes, mesh, attributes, transform);
 }
 
-namespace erhe::geometry {
-
 Geometry::Geometry()
     : m_mesh      {3, true}
     , m_attributes{m_mesh}
@@ -1107,7 +1107,7 @@ void Geometry::process(const uint64_t flags)
 
 void Geometry::generate_mesh_facet_texture_coordinates()
 {
-    ::generate_mesh_facet_texture_coordinates(m_mesh, m_attributes);
+    erhe::geometry::generate_mesh_facet_texture_coordinates(m_mesh, m_attributes);
 }
 
 void build_extra_connectivity(

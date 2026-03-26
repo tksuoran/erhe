@@ -43,6 +43,9 @@
 
 #include <taskflow/taskflow.hpp>
 
+using erhe::geometry::to_geo_mat4f;
+using erhe::geometry::transform;
+
 #define ERHE_ENABLE_SECOND_CAMERA 1
 
 namespace editor {

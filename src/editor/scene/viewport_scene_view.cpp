@@ -45,6 +45,9 @@
 
 #include <imgui/imgui.h>
 
+using erhe::geometry::mesh_facet_normalf;
+using erhe::geometry::to_glm_vec3;
+
 // #include "IconsMaterialDesignIcons.h"
 #define ICON_MDI_AXIS_ARROW                               "\xf3\xb0\xb5\x89" // U+F0D49
 #define ICON_MDI_CAMERA                                   "\xf3\xb0\x84\x80" // U+F0100

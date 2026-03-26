@@ -37,6 +37,9 @@
 
 #include <string>
 
+using erhe::geometry::get_pointf;
+using erhe::geometry::to_glm_vec3;
+
 namespace editor {
 
 #pragma region Commands

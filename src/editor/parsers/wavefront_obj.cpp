@@ -9,6 +9,9 @@
 #include <limits>
 #include <string>
 
+using erhe::geometry::Mesh_attributes;
+using erhe::geometry::set_pointf;
+
 namespace editor {
 
 // http://paulbourke.net/dataformats/obj/

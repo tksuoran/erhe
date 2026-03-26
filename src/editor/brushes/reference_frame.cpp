@@ -7,6 +7,14 @@
 
 #include <glm/gtx/matrix_operation.hpp>
 
+using erhe::geometry::get_pointf;
+using erhe::geometry::mesh_facet_centerf;
+using erhe::geometry::mesh_facet_normalf;
+using erhe::geometry::to_geo_mat4f;
+using erhe::geometry::to_geo_vec3f;
+using erhe::geometry::to_glm_mat4;
+using erhe::geometry::to_glm_vec3;
+
 namespace editor {
 
 Reference_frame::Reference_frame() = default;

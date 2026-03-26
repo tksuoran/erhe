@@ -38,6 +38,8 @@ namespace GEO {
 
 }
 
+namespace erhe::geometry {
+
 enum class Transform_mode : unsigned int {
     none = 0,                              // texture coordinates, colors, ...
     mat_mul_vec3_one,                      // position vectors
@@ -682,8 +684,6 @@ auto get_pointf(const GEO::MeshVertices& mesh_vertices, GEO::index_t vertex) -> 
 
 auto mesh_facet_normalf(const GEO::Mesh& M, GEO::index_t f) -> GEO::vec3f;
 auto mesh_facet_centerf(const GEO::Mesh& M, GEO::index_t f) -> GEO::vec3f;
-
-namespace erhe::geometry {
 
 class Geometry
 {

@@ -57,7 +57,7 @@ public:
     Element_mappings&                      element_mappings;
     std::size_t                            next_index_range_start{0};
     Vertex_attributes                      vertex_attributes;
-    Mesh_info                              mesh_info;
+    erhe::geometry::Mesh_info              mesh_info;
     const erhe::dataformat::Vertex_format& vertex_format;
     std::size_t                            total_vertex_count{0};
     std::size_t                            total_index_count {0};
@@ -122,7 +122,7 @@ private:
     uint32_t            primitive_index    {0}; // triangle (TODO quad) index
     Normal_style        normal_style       {Normal_style::none};
     Index_buffer_writer index_writer;
-    Mesh_attributes     mesh_attributes;
+    erhe::geometry::Mesh_attributes mesh_attributes;
     std::vector<std::unique_ptr<Vertex_buffer_writer>> vertex_writers;
     // Use root.element_mappings.corner_to_vertex_id
     // std::vector<size_t>  corner_indices;

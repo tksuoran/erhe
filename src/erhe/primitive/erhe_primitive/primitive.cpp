@@ -60,7 +60,7 @@ Primitive_raytrace::Primitive_raytrace(const GEO::Mesh& mesh, Element_mappings* 
     const erhe::dataformat::Vertex_stream& vertex_stream = vertex_format.streams.front();
     const std::size_t vertex_stride = vertex_stream.stride;
     const std::size_t index_stride = 4;
-    const Mesh_info mesh_info = get_mesh_info(mesh);
+    const erhe::geometry::Mesh_info mesh_info = erhe::geometry::get_mesh_info(mesh);
     // Tail padding of 16 bytes is required by Embree 4 for shared buffers
     static constexpr std::size_t raytrace_buffer_tail_padding = 16;
     m_rt_vertex_buffer = std::make_shared<erhe::buffer::Cpu_buffer>("raytrace_vertex", mesh_info.vertex_count_corners * vertex_stride, raytrace_buffer_tail_padding);
@@ -270,7 +270,7 @@ auto Primitive_shape::make_geometry() -> bool
 
         const erhe::dataformat::Attribute_stream tangent_stream = m_triangle_soup->vertex_format.find_attribute(erhe::dataformat::Vertex_attribute_usage::tangent);
         if (tangent_stream.attribute == nullptr) {
-            compute_mesh_tangents(mesh, false, false);
+            erhe::geometry::compute_mesh_tangents(mesh, false, false);
         }
         //mesh.vertices.set_double_precision();
         //mesh.facets.connect();

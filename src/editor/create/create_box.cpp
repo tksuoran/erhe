@@ -14,6 +14,11 @@
 
 #include <imgui/imgui.h>
 
+using erhe::geometry::to_geo_vec3f;
+using erhe::geometry::to_geo_vec3i;
+using erhe::geometry::to_geo_mat4f;
+using erhe::geometry::transform;
+
 namespace editor {
 
 Create_box::~Create_box() noexcept = default;

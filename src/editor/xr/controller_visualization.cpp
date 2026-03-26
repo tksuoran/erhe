@@ -15,6 +15,9 @@
 #include "erhe_scene/scene.hpp"
 #include "erhe_xr/xr_action.hpp"
 
+using erhe::geometry::transform_mesh;
+using erhe::geometry::to_geo_mat4f;
+
 namespace editor {
 
 Controller_visualization::Controller_visualization(erhe::scene::Node* view_root, Mesh_memory& mesh_memory, Scene_root& scene_root)

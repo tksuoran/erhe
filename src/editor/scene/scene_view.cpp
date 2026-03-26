@@ -24,6 +24,9 @@
 
 #include <glm/gtx/matrix_operation.hpp>
 
+using erhe::geometry::mesh_facet_normalf;
+using erhe::geometry::to_glm_vec3;
+
 namespace editor {
 
 static const std::string empty_string{};

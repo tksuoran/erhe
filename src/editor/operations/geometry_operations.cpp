@@ -31,6 +31,8 @@
 
 #include <fmt/format.h>
 
+using erhe::geometry::to_geo_mat4f;
+
 namespace editor {
 
 Catmull_clark_subdivision_operation::Catmull_clark_subdivision_operation(Mesh_operation_parameters&& context)

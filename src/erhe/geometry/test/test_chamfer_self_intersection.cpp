@@ -8,6 +8,10 @@
 
 #include <gtest/gtest.h>
 
+using erhe::geometry::get_pointf;
+using erhe::geometry::mesh_facet_centerf;
+using erhe::geometry::mesh_facet_normalf;
+
 #include <cmath>
 #include <memory>
 #include <string>

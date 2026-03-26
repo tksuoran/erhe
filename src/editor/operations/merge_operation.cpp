@@ -17,6 +17,8 @@
 #include <memory>
 #include <sstream>
 
+using erhe::geometry::to_geo_mat4f;
+
 namespace editor {
 
 Merge_operation::Merge_operation(Parameters&& parameters)

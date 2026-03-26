@@ -20,6 +20,9 @@
 
 #include <geogram/mesh/mesh.h>
 
+using erhe::geometry::make_convex_hull;
+using erhe::geometry::get_pointf;
+
 namespace editor {
 
 auto Brush_data::get_name() const -> const std::string&

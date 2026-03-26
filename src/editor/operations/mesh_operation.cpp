@@ -18,6 +18,10 @@
 
 #include <filesystem>
 
+using erhe::geometry::get_pointf;
+using erhe::geometry::make_convex_hull;
+using erhe::geometry::to_geo_mat4f;
+
 namespace editor {
 
 Mesh_operation::Mesh_operation(Mesh_operation_parameters&& parameters)
