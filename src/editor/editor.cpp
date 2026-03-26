@@ -1317,6 +1317,18 @@ public:
 
     ~Editor() noexcept
     {
+        // Wait for all async tasks to complete, then clear task handles
+        // and destroy the executor while m_mesh_memory is still alive.
+        // Without this, implicit member destruction destroys m_mesh_memory
+        // (line 1501) before m_item_task_guard (line 1471), and clearing
+        // the task handles cascades through shared_ptr drops to
+        // Free_list_allocator::free() on the already-destroyed allocator.
+        if (m_executor) {
+            m_executor->wait_for_all();
+        }
+        m_item_task_guard.clear();
+        m_executor.reset();
+
         if (m_mcp_server) {
             m_mcp_server->stop();
             m_mcp_server.reset();

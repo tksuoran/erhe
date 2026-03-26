@@ -136,6 +136,7 @@ public:
     Item_async_task_guard(const Item_async_task_guard&) = delete;
     Item_async_task_guard& operator=(const Item_async_task_guard&) = delete;
     ~Item_async_task_guard() noexcept;
+    void clear() noexcept;
 };
 
 }

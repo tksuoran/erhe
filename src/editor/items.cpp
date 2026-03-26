@@ -116,6 +116,11 @@ void async_for_nodes_with_mesh(
 
 Item_async_task_guard::Item_async_task_guard() = default;
 
+void Item_async_task_guard::clear() noexcept
+{
+    s_item_tasks.clear();
+}
+
 Item_async_task_guard::~Item_async_task_guard() noexcept
 {
     s_item_tasks.clear();
