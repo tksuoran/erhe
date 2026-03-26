@@ -6,32 +6,28 @@ namespace erhe::geometry::operation {
 class Gyro : public Geometry_operation
 {
 public:
-    Gyro(const Geometry& source, Geometry& destination);
+    Gyro(const Geometry& source, Geometry& destination, float ratio);
 
     void build();
+    float m_ratio;
 };
 
-Gyro::Gyro(const Geometry& source, Geometry& destination)
+Gyro::Gyro(const Geometry& source, Geometry& destination, float ratio)
     : Geometry_operation{source, destination}
+    , m_ratio{ratio}
 {
 }
 
 void Gyro::build()
 {
-    // Add midpoints 1/3 and 2/3 to edges and connect to facet center
-    // New facet on each src edge
-
-    // For each corner in the src facet,
-    // add one pentagon(centroid, previous edge midpoints 0 and 1, corner, next edge midpoint 0)
+    // For each corner in the src facet, create a pentagon from:
+    // (prev edge midpoint 0, prev edge midpoint 1, corner vertex,
+    //  next edge midpoint 0, face centroid)
+    // ratio controls edge split positions (ratio and 1-ratio).
 
     make_dst_vertices_from_src_vertices();
     make_facet_centroids();
-    make_edge_midpoints(
-        {
-            1.0f / 3.0f,
-            2.0f / 3.0f
-        }
-    );
+    make_edge_midpoints({m_ratio, 1.0f - m_ratio});
 
     for (const GEO::index_t src_facet : source_mesh.facets) {
         const GEO::index_t src_corner_count = source_mesh.facets.nb_corners(src_facet);
@@ -65,9 +61,9 @@ void Gyro::build()
     post_processing();
 }
 
-void gyro(const Geometry& source, Geometry& destination)
+void gyro(const Geometry& source, Geometry& destination, float ratio)
 {
-    Gyro operation{source, destination};
+    Gyro operation{source, destination, ratio};
     operation.build();
 }
 

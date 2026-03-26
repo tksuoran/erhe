@@ -6,21 +6,24 @@ namespace erhe::geometry::operation {
 class Truncate : public Geometry_operation
 {
 public:
-    Truncate(const Geometry& source, Geometry& destination);
+    Truncate(const Geometry& source, Geometry& destination, float ratio);
 
     void build();
+    float m_ratio;
 };
 
-Truncate::Truncate(const Geometry& source, Geometry& destination)
+Truncate::Truncate(const Geometry& source, Geometry& destination, float ratio)
     : Geometry_operation{source, destination}
+    , m_ratio{ratio}
 {
 }
 
 void Truncate::build()
 {
-    // Trisect each old edge by generating two new points.
-    const float t0 = 1.0f / 3.0f;
-    const float t1 = 2.0f / 3.0f;
+    // Split each edge at ratio and 1-ratio from each endpoint.
+    // ratio=1/3 gives standard truncation, ratio=0.5 gives ambo.
+    const float t0 = m_ratio;
+    const float t1 = 1.0f - m_ratio;
 
     // TODO At least assert these are available
     // 
@@ -106,9 +109,9 @@ void Truncate::build()
     post_processing();
 }
 
-void truncate(const Geometry& source, Geometry& destination)
+void truncate(const Geometry& source, Geometry& destination, float ratio)
 {
-    Truncate operation{source, destination};
+    Truncate operation{source, destination, ratio};
     operation.build();
 }
 

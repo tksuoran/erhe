@@ -426,31 +426,54 @@ void Operations::imgui()
     if (make_button("Join", has_selection_mode, button_size)) {
         join();
     }
+    ImGui::PushID("Kis");
+    ImGui::PushID("height");
+    ImGui::SliderFloat("##", &m_kis_height, -1.0f, 1.0f, "%.2f");
+    if (ImGui::IsItemHovered()) { ImGui::SetTooltip("Kis: Apex height along face normal (0 = flat)"); }
+    ImGui::PopID();
     if (make_button("Kis", has_selection_mode, button_size)) {
         kis();
     }
+    ImGui::PopID();
     if (make_button("Meta", has_selection_mode, button_size)) {
         meta();
     }
     if (make_button("Ortho", has_selection_mode, button_size)) {
         ortho();
     }
+    ImGui::PushID("Gyro");
+    ImGui::PushID("ratio");
+    ImGui::SliderFloat("##", &m_gyro_ratio, 0.01f, 0.49f, "%.2f");
+    if (ImGui::IsItemHovered()) { ImGui::SetTooltip("Gyro: Edge split position (1/3 = standard gyro)"); }
+    ImGui::PopID();
     if (make_button("Gyro", has_selection_mode, button_size)) {
         gyro();
     }
-    ImGui::SliderFloat("Bevel", &m_bevel_ratio, 0.0f, 1.0f, "%.2f");
+    ImGui::PopID();
+    ImGui::PushID("Chamfer");
+    ImGui::PushID("bevel");
+    ImGui::SliderFloat("##", &m_bevel_ratio, 0.0f, 1.0f, "%.2f");
+    if (ImGui::IsItemHovered()) { ImGui::SetTooltip("Chamfer: Bevel ratio (how much each face shrinks)"); }
+    ImGui::PopID();
     if (make_button("Chamfer", has_selection_mode, button_size)) {
         chamfer3();
     }
+    ImGui::PopID();
     if (make_button("Dual", has_selection_mode, button_size)) {
         dual();
     }
     if (make_button("Ambo", has_selection_mode, button_size)) {
         ambo();
     }
+    ImGui::PushID("Truncate");
+    ImGui::PushID("ratio");
+    ImGui::SliderFloat("##", &m_truncate_ratio, 0.01f, 0.5f, "%.2f");
+    if (ImGui::IsItemHovered()) { ImGui::SetTooltip("Truncate: Cut depth (1/3 = standard, 0.5 = ambo)"); }
+    ImGui::PopID();
     if (make_button("Truncate", has_selection_mode, button_size)) {
         truncate();
     }
+    ImGui::PopID();
     if (make_button("Normalize", has_selection_mode, button_size)) {
         normalize();
     }
@@ -746,7 +769,14 @@ void Operations::join()
 
 void Operations::kis()
 {
-    async_mesh_operation<Kis_operation>();
+    const float height = m_kis_height;
+    async_for_selected_nodes_with_mesh(
+        [this, height](Mesh_operation_parameters&& params) {
+            m_context.operation_stack->queue(
+                std::make_shared<Kis_operation>(std::move(params), height)
+            );
+        }
+    );
 }
 
 void Operations::meta()
@@ -766,12 +796,26 @@ void Operations::ambo()
 
 void Operations::truncate()
 {
-    async_mesh_operation<Truncate_operation>();
+    const float ratio = m_truncate_ratio;
+    async_for_selected_nodes_with_mesh(
+        [this, ratio](Mesh_operation_parameters&& params) {
+            m_context.operation_stack->queue(
+                std::make_shared<Truncate_operation>(std::move(params), ratio)
+            );
+        }
+    );
 }
 
 void Operations::gyro()
 {
-    async_mesh_operation<Gyro_operation>();
+    const float ratio = m_gyro_ratio;
+    async_for_selected_nodes_with_mesh(
+        [this, ratio](Mesh_operation_parameters&& params) {
+            m_context.operation_stack->queue(
+                std::make_shared<Gyro_operation>(std::move(params), ratio)
+            );
+        }
+    );
 }
 
 void Operations::chamfer3()

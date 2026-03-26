@@ -229,11 +229,13 @@ void Chamfer3::build()
                     break;
                 }
             }
+#if 0
             if (found0 && found1) {
                 destination.add_debug_line(new_dst_vertex, GEO::NO_INDEX,
                     to_glm_vec3(c0), to_glm_vec3(c1),
                     glm::vec4{0.0f, 1.0f, 1.0f, 1.0f}, 2.0f);
             }
+#endif
         }
     }
 
@@ -252,6 +254,7 @@ void Chamfer3::build()
             destination_mesh.facets.set_vertex(new_dst_facet, lc, dst_corner_vertex);
             set_pointf(destination_mesh.vertices, dst_corner_vertex, corner_inset_positions[corner]);
         }
+#if 0
         // Debug: blue lines for source face F edges on destination shrunk face F'
         for (GEO::index_t lc = 0; lc < corner_count; ++lc) {
             const GEO::index_t corner      = source_mesh.facets.corner(src_facet, lc);
@@ -262,6 +265,7 @@ void Chamfer3::build()
             const glm::vec3 src_p1 = to_glm_vec3(get_pointf(source_mesh.vertices, v1));
             destination.add_debug_line(src_corner_to_dst_vertex[corner], new_dst_facet, src_p0, src_p1, glm::vec4{0.3f, 0.5f, 1.0f, 1.0f}, 1.0f);
         }
+#endif
     }
 
     // Hexagonal faces at edges
@@ -317,10 +321,12 @@ void Chamfer3::build()
             destination_mesh.facets.set_vertex(new_dst_facet, 4, facet0_next_vertex);
             destination_mesh.facets.set_vertex(new_dst_facet, 5, facet0_vertex);
         }
+#if 0
         // Debug: green line for source edge E on destination hexagon
         const glm::vec3 src_lo = to_glm_vec3(get_pointf(source_mesh.vertices, lo_vertex));
         const glm::vec3 src_hi = to_glm_vec3(get_pointf(source_mesh.vertices, hi_vertex));
         destination.add_debug_line(lo_vertex, new_dst_facet, src_lo, src_hi, glm::vec4{0.2f, 1.0f, 0.3f, 1.0f}, 1.0f);
+#endif
     }
 
 #if 0

@@ -6,13 +6,15 @@ namespace erhe::geometry::operation {
 class Kis : public Geometry_operation
 {
 public:
-    Kis(const Geometry& source, Geometry& destination);
+    Kis(const Geometry& source, Geometry& destination, float height);
 
     void build();
+    float m_height;
 };
 
-Kis::Kis(const Geometry& source, Geometry& destination)
+Kis::Kis(const Geometry& source, Geometry& destination, float height)
     : Geometry_operation{source, destination}
+    , m_height{height}
 {
 }
 
@@ -37,11 +39,27 @@ void Kis::build()
     }
 
     post_processing();
+
+    // Offset each centroid vertex along the face normal by height
+    if (m_height != 0.0f) {
+        for (GEO::index_t src_facet : source_mesh.facets) {
+            if (src_facet >= m_src_facet_centroid_to_dst_vertex.size()) {
+                continue;
+            }
+            const GEO::index_t dst_vertex = m_src_facet_centroid_to_dst_vertex[src_facet];
+            if (dst_vertex == GEO::NO_INDEX) {
+                continue;
+            }
+            const GEO::vec3f normal = mesh_facet_normalf(source_mesh, src_facet);
+            const GEO::vec3f pos = get_pointf(destination_mesh.vertices, dst_vertex);
+            set_pointf(destination_mesh.vertices, dst_vertex, pos + m_height * normal);
+        }
+    }
 }
 
-void kis(const Geometry& source, Geometry& destination)
+void kis(const Geometry& source, Geometry& destination, float height)
 {
-    Kis operation{source, destination};
+    Kis operation{source, destination, height};
     operation.build();
 }
 

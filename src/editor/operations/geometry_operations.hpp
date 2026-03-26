@@ -32,7 +32,7 @@ public:
 class Kis_operation : public Mesh_operation
 {
 public:
-    explicit Kis_operation(Mesh_operation_parameters&& context);
+    Kis_operation(Mesh_operation_parameters&& context, float height);
 };
 
 class Subdivide_operation : public Mesh_operation
@@ -50,7 +50,7 @@ public:
 class Gyro_operation : public Mesh_operation
 {
 public:
-    explicit Gyro_operation(Mesh_operation_parameters&& context);
+    Gyro_operation(Mesh_operation_parameters&& context, float ratio);
 };
 
 class Chamfer3_operation : public Mesh_operation
@@ -75,7 +75,7 @@ public:
 class Truncate_operation : public Mesh_operation
 {
 public:
-    explicit Truncate_operation(Mesh_operation_parameters&& context);
+    Truncate_operation(Mesh_operation_parameters&& context, float ratio);
 };
 
 class Reverse_operation : public Mesh_operation

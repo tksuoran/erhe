@@ -165,6 +165,9 @@ private:
     erhe::commands::Lambda_command m_chamfer3_command;
 
     float m_bevel_ratio{0.5f};
+    float m_truncate_ratio{1.0f / 3.0f};
+    float m_gyro_ratio{1.0f / 3.0f};
+    float m_kis_height{0.0f};
 
     erhe::commands::Lambda_command m_generate_tangents_command;
     erhe::commands::Lambda_command m_make_geometry_command;

@@ -65,11 +65,15 @@ Join_operation::Join_operation(Mesh_operation_parameters&& context)
     set_description(fmt::format("Join {}", describe_entries()));
 }
 
-Kis_operation::Kis_operation(Mesh_operation_parameters&& context)
+Kis_operation::Kis_operation(Mesh_operation_parameters&& context, float height)
     : Mesh_operation{std::move(context)}
 {
     set_description("Kis");
-    make_entries(erhe::geometry::operation::kis);
+    make_entries(
+        [height](const erhe::geometry::Geometry& source, erhe::geometry::Geometry& destination) {
+            erhe::geometry::operation::kis(source, destination, height);
+        }
+    );
     set_description(fmt::format("Kis {}", describe_entries()));
 }
 
@@ -89,11 +93,15 @@ Meta_operation::Meta_operation(Mesh_operation_parameters&& context)
     set_description(fmt::format("Meta {}", describe_entries()));
 }
 
-Gyro_operation::Gyro_operation(Mesh_operation_parameters&& context)
+Gyro_operation::Gyro_operation(Mesh_operation_parameters&& context, float ratio)
     : Mesh_operation{std::move(context)}
 {
     set_description("Gyro");
-    make_entries(erhe::geometry::operation::gyro);
+    make_entries(
+        [ratio](const erhe::geometry::Geometry& source, erhe::geometry::Geometry& destination) {
+            erhe::geometry::operation::gyro(source, destination, ratio);
+        }
+    );
     set_description(fmt::format("Gyro {}", describe_entries()));
 }
 
@@ -125,11 +133,15 @@ Ambo_operation::Ambo_operation(Mesh_operation_parameters&& context)
     set_description(fmt::format("Ambo {}", describe_entries()));
 }
 
-Truncate_operation::Truncate_operation(Mesh_operation_parameters&& context)
+Truncate_operation::Truncate_operation(Mesh_operation_parameters&& context, float ratio)
     : Mesh_operation{std::move(context)}
 {
     set_description("Truncate");
-    make_entries(erhe::geometry::operation::truncate);
+    make_entries(
+        [ratio](const erhe::geometry::Geometry& source, erhe::geometry::Geometry& destination) {
+            erhe::geometry::operation::truncate(source, destination, ratio);
+        }
+    );
     set_description(fmt::format("Truncate {}", describe_entries()));
 }
 
