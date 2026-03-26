@@ -8,7 +8,7 @@
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_geometry/operation/bake_transform.hpp"
 #include "erhe_geometry/operation/conway/ambo.hpp"
-#include "erhe_geometry/operation/conway/chamfer.hpp"
+#include "erhe_geometry/operation/conway/chamfer3.hpp"
 #include "erhe_geometry/operation/conway/dual.hpp"
 #include "erhe_geometry/operation/conway/gyro.hpp"
 #include "erhe_geometry/operation/conway/join.hpp"
@@ -97,12 +97,16 @@ Gyro_operation::Gyro_operation(Mesh_operation_parameters&& context)
     set_description(fmt::format("Gyro {}", describe_entries()));
 }
 
-Chamfer_operation::Chamfer_operation(Mesh_operation_parameters&& context)
+Chamfer3_operation::Chamfer3_operation(Mesh_operation_parameters&& context, float bevel_ratio)
     : Mesh_operation{std::move(context)}
 {
-    set_description("Chamfer");
-    make_entries(erhe::geometry::operation::chamfer);
-    set_description(fmt::format("Chamfer {}", describe_entries()));
+    set_description("Chamfer3");
+    make_entries(
+        [bevel_ratio](const erhe::geometry::Geometry& source, erhe::geometry::Geometry& destination) {
+            erhe::geometry::operation::chamfer3(source, destination, bevel_ratio);
+        }
+    );
+    set_description(fmt::format("Chamfer3 {}", describe_entries()));
 }
 
 Dual_operation::Dual_operation(Mesh_operation_parameters&& context)

@@ -102,7 +102,7 @@ Operations::Operations(
     , m_ambo_command          {commands, "Geometry.Conway.Ambo",               [this]() -> bool { ambo          (); return true; } }
     , m_truncate_command      {commands, "Geometry.Conway.Truncate",           [this]() -> bool { truncate      (); return true; } }
     , m_gyro_command          {commands, "Geometry.Conway.Gyro",               [this]() -> bool { gyro          (); return true; } }
-    , m_chamfer_command       {commands, "Geometry.Conway.Chamfer",            [this]() -> bool { chamfer       (); return true; } }
+    , m_chamfer3_command      {commands, "Geometry.Conway.Chamfer3",           [this]() -> bool { chamfer3      (); return true; } }
 
     , m_generate_tangents_command{commands, "Geometry.GenerateTangents",      [this]() -> bool { generate_tangents(); return true; } }
     , m_make_geometry_command    {commands, "Mesh.MakeGeometry",              [this]() -> bool { make_geometry(); return true; } }
@@ -137,8 +137,6 @@ Operations::Operations(
     commands.register_command(&m_ambo_command    );
     commands.register_command(&m_truncate_command);
     commands.register_command(&m_gyro_command    );
-    commands.register_command(&m_chamfer_command );
-
     commands.register_command(&m_generate_tangents_command );
     commands.register_command(&m_make_geometry_command );
     commands.register_command(&m_make_raytrace_command );
@@ -172,7 +170,7 @@ Operations::Operations(
     commands.bind_command_to_menu(&m_ambo_command    , "Geometry.Conway Operations.Ambo");
     commands.bind_command_to_menu(&m_truncate_command, "Geometry.Conway Operations.Truncate");
     commands.bind_command_to_menu(&m_gyro_command    , "Geometry.Conway Operations.Gyro");
-    commands.bind_command_to_menu(&m_chamfer_command , "Geometry.Conway Operations.Chamfer");
+    commands.bind_command_to_menu(&m_chamfer3_command, "Geometry.Conway Operations.Chamfer3");
 
     commands.bind_command_to_menu(&m_generate_tangents_command, "Geometry.Generate Tangents");
     commands.bind_command_to_menu(&m_make_geometry_command,     "Mesh.Make Geometry");
@@ -440,8 +438,9 @@ void Operations::imgui()
     if (make_button("Gyro", has_selection_mode, button_size)) {
         gyro();
     }
+    ImGui::SliderFloat("Bevel", &m_bevel_ratio, 0.0f, 1.0f, "%.2f");
     if (make_button("Chamfer", has_selection_mode, button_size)) {
-        chamfer();
+        chamfer3();
     }
     if (make_button("Dual", has_selection_mode, button_size)) {
         dual();
@@ -775,9 +774,16 @@ void Operations::gyro()
     async_mesh_operation<Gyro_operation>();
 }
 
-void Operations::chamfer()
+void Operations::chamfer3()
 {
-    async_mesh_operation<Chamfer_operation>();
+    const float ratio = m_bevel_ratio;
+    async_for_selected_nodes_with_mesh(
+        [this, ratio](Mesh_operation_parameters&& params) {
+            m_context.operation_stack->queue(
+                std::make_shared<Chamfer3_operation>(std::move(params), ratio)
+            );
+        }
+    );
 }
 
 #if defined(ERHE_WINDOW_LIBRARY_SDL)

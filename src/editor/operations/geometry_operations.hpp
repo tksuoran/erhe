@@ -53,10 +53,10 @@ public:
     explicit Gyro_operation(Mesh_operation_parameters&& context);
 };
 
-class Chamfer_operation : public Mesh_operation
+class Chamfer3_operation : public Mesh_operation
 {
 public:
-    explicit Chamfer_operation(Mesh_operation_parameters&& context);
+    Chamfer3_operation(Mesh_operation_parameters&& context, float bevel_ratio);
 };
 
 class Dual_operation : public Mesh_operation

@@ -8,6 +8,10 @@ erhe_target_sources_grouped(
     erhe_geometry/geometry_log.cpp
     erhe_geometry/geometry_log.hpp
     erhe_geometry/geometry_tangents.cpp
+    erhe_geometry/plane_intersection.cpp
+    erhe_geometry/plane_intersection.hpp
+    erhe_geometry/self_intersection.cpp
+    erhe_geometry/self_intersection.hpp
 
     erhe_geometry/operation/csg/difference.cpp
     erhe_geometry/operation/csg/difference.hpp
@@ -18,8 +22,10 @@ erhe_target_sources_grouped(
 
     erhe_geometry/operation/conway/ambo.cpp
     erhe_geometry/operation/conway/ambo.hpp
-    erhe_geometry/operation/conway/chamfer.cpp
-    erhe_geometry/operation/conway/chamfer.hpp
+    erhe_geometry/operation/conway/chamfer_old.cpp
+    erhe_geometry/operation/conway/chamfer_old.hpp
+    erhe_geometry/operation/conway/chamfer3.cpp
+    erhe_geometry/operation/conway/chamfer3.hpp
     erhe_geometry/operation/conway/dual.cpp
     erhe_geometry/operation/conway/dual.hpp
     erhe_geometry/operation/conway/gyro.cpp
@@ -91,3 +97,7 @@ target_link_libraries(${_target}
 )
 
 erhe_target_settings(${_target} "erhe")
+
+if (${ERHE_BUILD_TESTS} STREQUAL "ON")
+    add_subdirectory(test)
+endif ()

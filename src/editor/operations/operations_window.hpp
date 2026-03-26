@@ -110,7 +110,7 @@ public:
     void ambo();
     void truncate();
     void gyro();
-    void chamfer();
+    void chamfer3();
 
     void generate_tangents();
     void make_geometry();
@@ -162,7 +162,9 @@ private:
     erhe::commands::Lambda_command m_ambo_command;
     erhe::commands::Lambda_command m_truncate_command;
     erhe::commands::Lambda_command m_gyro_command;
-    erhe::commands::Lambda_command m_chamfer_command;
+    erhe::commands::Lambda_command m_chamfer3_command;
+
+    float m_bevel_ratio{0.5f};
 
     erhe::commands::Lambda_command m_generate_tangents_command;
     erhe::commands::Lambda_command m_make_geometry_command;
