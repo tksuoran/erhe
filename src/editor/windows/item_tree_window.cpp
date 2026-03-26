@@ -457,13 +457,60 @@ auto Item_tree::drag_and_drop_target(const std::shared_ptr<erhe::Item_base>& ite
     const ImGuiID     imgui_id_center = ImGui::GetID(label_center.c_str());
     const ImGuiID     imgui_id_bottom = ImGui::GetID(label_bottom.c_str());
 
+    const ImGuiPayload* payload_peek = ImGui::GetDragDropPayload();
+
+    // Handle material drop onto a brush in the content library
+    const auto& target_cl_node = std::dynamic_pointer_cast<Content_library_node>(item);
+    if (target_cl_node && payload_peek && payload_peek->IsDataType("Content_library_node")) {
+        const auto target_brush = std::dynamic_pointer_cast<Brush>(target_cl_node->item);
+        if (target_brush) {
+            const ImRect rect{rect_min, rect_max};
+            if (ImGui::BeginDragDropTargetCustom(rect, imgui_id_center)) {
+                drag_and_drop_rectangle_preview(rect);
+                const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(
+                    "Content_library_node", ImGuiDragDropFlags_AcceptNoDrawDefaultRect
+                );
+                if (payload != nullptr) {
+                    erhe::Item_base* payload_item_base = *static_cast<erhe::Item_base**>(payload->Data);
+                    Content_library_node* payload_node = dynamic_cast<Content_library_node*>(payload_item_base);
+                    if (payload_node != nullptr) {
+                        std::shared_ptr<erhe::primitive::Material> dropped_material =
+                            std::dynamic_pointer_cast<erhe::primitive::Material>(payload_node->item);
+                        if (dropped_material) {
+                            // Find content library containing this brush
+                            std::shared_ptr<erhe::geometry::Geometry> original_geometry = target_brush->get_geometry();
+                            std::shared_ptr<erhe::Hierarchy> parent = target_cl_node->get_parent().lock();
+                            Content_library_node* brushes_folder = dynamic_cast<Content_library_node*>(parent.get());
+                            if (brushes_folder != nullptr) {
+                                // Check for existing fork with same geometry and material
+                                bool found = false;
+                                const std::vector<std::shared_ptr<Brush>>& all_brushes = brushes_folder->get_all<Brush>();
+                                for (const std::shared_ptr<Brush>& b : all_brushes) {
+                                    if ((b->get_geometry() == original_geometry) && (b->get_material() == dropped_material)) {
+                                        found = true;
+                                        break;
+                                    }
+                                }
+                                if (!found) {
+                                    std::shared_ptr<Brush> forked = target_brush->make_with_material(dropped_material);
+                                    brushes_folder->add(forked);
+                                }
+                            }
+                        }
+                    }
+                }
+                ImGui::EndDragDropTarget();
+                return true;
+            }
+        }
+    }
+
     const auto& node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
     if (!node) {
         return false;
     }
 
-    const ImGuiPayload* payload_peek    = ImGui::GetDragDropPayload();
-    const bool          payload_is_node = payload_peek->IsDataType("Node");
+    const bool payload_is_node = payload_peek->IsDataType("Node");
     std::shared_ptr<erhe::primitive::Material> material{};
 
     if (!payload_is_node && payload_peek->IsDataType("Content_library_node")){

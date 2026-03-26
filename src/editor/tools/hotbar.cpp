@@ -1,10 +1,16 @@
 ﻿#include "tools/hotbar.hpp"
 
 #include "app_context.hpp"
+#include "brushes/brush.hpp"
+#include "brushes/brush_tool.hpp"
 #include "editor_log.hpp"
 #include "app_message_bus.hpp"
 #include "app_settings.hpp"
 #include "graphics/icon_set.hpp"
+#include "graphics/thumbnails.hpp"
+#include "preview/brush_preview.hpp"
+#include "preview/material_preview.hpp"
+#include "erhe_primitive/material.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "scene/node_raytrace.hpp"
 #include "scene/scene_builder.hpp"
@@ -438,10 +444,29 @@ void Hotbar::get_all_tools()
         }
         if (erhe::utility::test_bit_set(tool->get_flags(), Tool_flags::toolbox)) {
             m_slot_last = m_slots.size();
-            m_slots.push_back(tool);
+            m_slots.push_back(Slot_entry{.tool = tool});
         }
     }
     init_hotbar();
+}
+
+void Hotbar::set_slots(const std::vector<Slot_entry>& slots)
+{
+    m_slots      = slots;
+    m_slot_first = 0;
+    m_slot_last  = m_slots.empty() ? 0 : m_slots.size() - 1;
+    if (m_slot > m_slot_last) {
+        m_slot = 0;
+    }
+    m_needs_rebuild = true;
+}
+
+void Hotbar::rebuild_if_needed()
+{
+    if (m_needs_rebuild) {
+        m_needs_rebuild = false;
+        init_hotbar();
+    }
 }
 
 void Hotbar::on_hover_scene_view_message(Hover_scene_view_message& message)
@@ -616,8 +641,11 @@ void Hotbar::window_on_end()
 void Hotbar::handle_slot_update()
 {
     if ((m_slot >= m_slot_first) && (m_slot <= m_slot_last)) {
-        Tool* new_tool = m_slots.at(m_slot);
-        m_context.tools->set_priority_tool(new_tool);
+        const Slot_entry& entry = m_slots.at(m_slot);
+        m_context.tools->set_priority_tool(entry.tool);
+        if (entry.brush && (m_context.brush_tool != nullptr)) {
+            m_context.brush_tool->set_active_brush(entry.brush);
+        }
     }
 }
 
@@ -687,35 +715,90 @@ void Hotbar::set_locked(bool value)
     m_locked = value;
 }
 
-void Hotbar::tool_button(const uint32_t id, Tool* tool)
+void Hotbar::slot_button(const uint32_t id, Slot_entry& entry)
 {
     const glm::vec4 background_color{0.05f, 0.1f, 0.5f, 0.6f};
     const glm::vec4 tint_color      {1.0f, 1.0f, 1.0f, 1.0f};
-    const bool      is_boosted      {tool->get_priority_boost() > 0};
-    const char*     icon            {tool->get_icon()};
+    const float     icon_size       {static_cast<float>(m_context.app_settings->icon_settings.hotbar_icon_size)};
 
-    if (icon == nullptr) {
-        return;
+    ImGui::PushID(id);
+
+    // Brush slot: render thumbnail
+    if (entry.brush && m_context.thumbnails && m_context.brush_preview) {
+        Tool* tool = entry.tool;
+        const bool is_boosted = (tool != nullptr) && (tool->get_priority_boost() > 0);
+        std::shared_ptr<Brush> brush = entry.brush;
+        const bool thumbnail_drawn = m_context.thumbnails->draw(
+            brush,
+            [this, brush](const std::shared_ptr<erhe::graphics::Texture>& texture, int64_t time) {
+                m_context.brush_preview->render_preview(texture, brush, time);
+            },
+            icon_size
+        );
+        if (!thumbnail_drawn) {
+            if ((tool != nullptr) && (tool->get_icon() != nullptr)) {
+                const auto& icon_set = m_context.icon_set;
+                icon_set->icon_button(id, tool->get_icon(), tool->get_icon_font(), icon_size, tint_color, is_boosted ? m_color_active : background_color);
+            }
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("%s", brush->get_name().c_str());
+        }
+        if (ImGui::IsItemClicked()) {
+            if (is_boosted) {
+                m_context.tools->set_priority_tool(nullptr);
+            } else {
+                m_context.tools->set_priority_tool(tool);
+                if (m_context.brush_tool != nullptr) {
+                    m_context.brush_tool->set_active_brush(brush);
+                }
+            }
+        }
+    } else if (entry.material && m_context.thumbnails && m_context.material_preview) {
+        // Material slot: render thumbnail
+        Tool* tool = entry.tool;
+        const bool is_boosted = (tool != nullptr) && (tool->get_priority_boost() > 0);
+        std::shared_ptr<erhe::primitive::Material> material = entry.material;
+        const bool thumbnail_drawn = m_context.thumbnails->draw(
+            material,
+            [this, material](const std::shared_ptr<erhe::graphics::Texture>& texture, int64_t) {
+                m_context.material_preview->render_preview(texture, material);
+            },
+            icon_size
+        );
+        if (!thumbnail_drawn) {
+            if ((tool != nullptr) && (tool->get_icon() != nullptr)) {
+                const auto& icon_set = m_context.icon_set;
+                icon_set->icon_button(id, tool->get_icon(), tool->get_icon_font(), icon_size, tint_color, is_boosted ? m_color_active : background_color);
+            }
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("%s", material->get_name().c_str());
+        }
+        if (ImGui::IsItemClicked()) {
+            m_context.tools->set_priority_tool(is_boosted ? nullptr : tool);
+        }
+    } else if (entry.tool != nullptr) {
+        // Tool slot: render icon
+        Tool* tool = entry.tool;
+        const bool  is_boosted = tool->get_priority_boost() > 0;
+        const char* icon       = tool->get_icon();
+        if (icon != nullptr) {
+            const auto& icon_set = m_context.icon_set;
+            const bool is_pressed = icon_set->icon_button(
+                id, icon, tool->get_icon_font(), icon_size, tint_color,
+                is_boosted ? m_color_active : background_color
+            );
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("%s", tool->get_description());
+            }
+            if (is_pressed) {
+                m_context.tools->set_priority_tool(is_boosted ? nullptr : tool);
+            }
+        }
     }
 
-    const auto& icon_set   = m_context.icon_set;
-    const float icon_size  = static_cast<float>(m_context.app_settings->icon_settings.hotbar_icon_size);
-    const bool  is_pressed = icon_set->icon_button(
-        id,
-        icon,
-        tool->get_icon_font(),
-        icon_size,
-        tint_color,
-        is_boosted ? m_color_active : background_color
-    );
-
-    if (ImGui::IsItemHovered()) {
-        ImGui::SetTooltip("%s", tool->get_description());
-    }
-
-    if (is_pressed) {
-        m_context.tools->set_priority_tool(is_boosted ? nullptr : tool);
-    }
+    ImGui::PopID();
 }
 
 void Hotbar::update_slot_from_tool(Tool* tool)
@@ -724,7 +807,7 @@ void Hotbar::update_slot_from_tool(Tool* tool)
         return;
     }
     for (size_t i = 0, end = m_slots.size(); i < end; ++i) {
-        if (m_slots.at(i) == tool) {
+        if (m_slots.at(i).tool == tool) {
             m_slot = i;
             return;
         }
@@ -735,21 +818,15 @@ void Hotbar::window_imgui()
 {
     ERHE_PROFILE_FUNCTION();
     ImGui::PushID("Hotbar::imgui");
-    //const ImVec2 button_size{64.0f, 64.0f};
-    //ImGui::SliderFloat("X", &m_x, -2.0f, 2.0f);
-    //ImGui::SliderFloat("Y", &m_y, -0.3f, 0.0f);
-    //ImGui::SliderFloat("Z", &m_z, -2.0f, 2.0f);
 
     ImGui::PushStyleColor(ImGuiCol_ButtonActive,  m_color_active);
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, m_color_hover);
     ImGui::PushStyleColor(ImGuiCol_Button,        m_color_inactive);
-    ImVec2 cursor_position = ImGui::GetCursorPos();
-    static_cast<void>(cursor_position);
 
     uint32_t id = 0;
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2{0.0f, 0.0f});
-    for (auto* tool : m_slots) {
-        tool_button(++id, tool);
+    for (Slot_entry& entry : m_slots) {
+        slot_button(++id, entry);
     }
     ImGui::PopStyleVar();
     ImGui::PopStyleColor(3);

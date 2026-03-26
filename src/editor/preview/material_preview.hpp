@@ -16,6 +16,10 @@ public:
     ~Material_preview() noexcept;
 
     void render_preview(const std::shared_ptr<erhe::primitive::Material>& material);
+    void render_preview(
+        const std::shared_ptr<erhe::graphics::Texture>&    texture,
+        const std::shared_ptr<erhe::primitive::Material>&  material
+    );
     void show_preview  ();
 
 private:

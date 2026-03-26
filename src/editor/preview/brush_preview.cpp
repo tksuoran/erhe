@@ -158,7 +158,9 @@ void Brush_preview::render_preview(
         m_mesh->layer_id = { Mesh_layer_id::brush };
     }
 
-    m_mesh->add_primitive(brush_scaled.primitive, m_material);
+    const std::shared_ptr<erhe::primitive::Material>& render_material =
+        brush->get_material() ? brush->get_material() : m_material;
+    m_mesh->add_primitive(brush_scaled.primitive, render_material);
     m_node->attach(m_mesh);
 
     // Get brush primitive aabb in world space

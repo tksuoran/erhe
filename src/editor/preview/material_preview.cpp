@@ -139,6 +139,18 @@ void Material_preview::make_preview_scene(Mesh_memory& mesh_memory)
     }
 }
 
+void Material_preview::render_preview(
+    const std::shared_ptr<erhe::graphics::Texture>&   texture,
+    const std::shared_ptr<erhe::primitive::Material>&  material
+)
+{
+    set_color_texture(texture);
+    resize(texture->get_width(), texture->get_height());
+    set_clear_color(glm::vec4{0.0f, 0.0f, 0.0f, 0.0f});
+    update_rendertarget(m_graphics_device);
+    render_preview(material);
+}
+
 void Material_preview::render_preview(const std::shared_ptr<erhe::primitive::Material>& material)
 {
     ERHE_PROFILE_FUNCTION();

@@ -16,6 +16,7 @@ grid = false
 headset = false
 hover_tool = false
 icon_browser = false
+inventory = false
 layers = false
 log_settings = false
 network = false

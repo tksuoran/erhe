@@ -3,6 +3,7 @@
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
 #include "app_settings.hpp"
+#include "windows/inventory_window.hpp"
 #include "config/editor_config.hpp"
 #include "config/generated/camera_controls_config_serialization.hpp"
 #include "config/generated/developer_config_serialization.hpp"
@@ -10,6 +11,8 @@
 #include "config/generated/headset_config_serialization.hpp"
 #include "config/generated/hotbar_config_serialization.hpp"
 #include "config/generated/hud_config_serialization.hpp"
+#include "config/generated/inventory_slot_serialization.hpp"
+#include "config/generated/inventory_config_serialization.hpp"
 #include "config/generated/id_renderer_config_serialization.hpp"
 #include "config/generated/mesh_memory_config_serialization.hpp"
 #include "config/generated/network_config_serialization.hpp"
@@ -414,6 +417,7 @@ void Settings_window::imgui()
         add_config_section(config.headset);
         add_config_section(config.hotbar);
         add_config_section(config.hud);
+        add_config_section(config.inventory);
         add_config_section(config.id_renderer);
         add_config_section(config.mesh_memory);
         add_config_section(config.network);
@@ -431,6 +435,9 @@ void Settings_window::imgui()
 
         add_entry("", [this, button_size, &config](){
             if (ImGui::Button("Save Config", button_size)) {
+                if (m_context.inventory_window != nullptr) {
+                    m_context.inventory_window->write_config(config.inventory);
+                }
                 save_editor_config(config, "erhe.json");
             }
         });

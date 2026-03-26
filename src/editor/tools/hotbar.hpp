@@ -30,6 +30,8 @@ namespace erhe::scene {
     class Node;
 }
 
+namespace erhe::primitive { class Material; }
+
 struct Hotbar_config;
 
 namespace editor {
@@ -39,6 +41,7 @@ class App_message_bus;
 struct Hover_scene_view_message;
 struct Render_scene_view_message;
 struct Tool_select_message;
+class Brush;
 class Hotbar;
 class Icon_set;
 class Mesh_memory;
@@ -49,6 +52,14 @@ class Scene_root;
 class Tools;
 class Scene_views;
 class Headset_view;
+
+class Slot_entry
+{
+public:
+    Tool*                                     tool    {nullptr};
+    std::shared_ptr<Brush>                    brush   {};  // Non-null for brush slots
+    std::shared_ptr<erhe::primitive::Material> material{}; // Non-null for material slots
+};
 
 class Toggle_menu_visibility_command : public erhe::commands::Command
 {
@@ -115,6 +126,8 @@ public:
     );
 
     void get_all_tools();
+    void set_slots             (const std::vector<Slot_entry>& slots);
+    void rebuild_if_needed     ();
 
     // Public API
     auto try_trackpad          (erhe::commands::Input_arguments& input) -> bool;
@@ -132,7 +145,7 @@ private:
     void on_tool_select_message      (Tool_select_message& message);
     void on_render_scene_view_message(Render_scene_view_message& message);
     void update_node_transform ();
-    void tool_button           (uint32_t id, Tool* tool);
+    void slot_button           (uint32_t id, Slot_entry& entry);
     void handle_slot_update    ();
     void update_slot_from_tool (Tool* tool);
 
@@ -171,7 +184,8 @@ private:
     std::vector<std::shared_ptr<erhe::scene::Mesh>> m_radial_menu_icons;
     bool                                            m_mesh_visible{true};
 
-    bool  m_enabled   {true};
+    bool  m_needs_rebuild{false};
+    bool  m_enabled      {true};
     bool  m_show      {true};
     bool  m_use_radial{true};
     bool  m_locked    {false};
@@ -182,7 +196,7 @@ private:
     std::size_t        m_slot      {0};
     std::size_t        m_slot_first{0};
     std::size_t        m_slot_last {0};
-    std::vector<Tool*> m_slots;
+    std::vector<Slot_entry> m_slots;
 
     glm::vec4 m_color_active  {0.3f, 0.3f, 0.8f, 0.8f};
     glm::vec4 m_color_hover   {0.4f, 0.4f, 0.6f, 0.8f};

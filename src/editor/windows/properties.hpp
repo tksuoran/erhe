@@ -35,6 +35,7 @@ namespace erhe::primitive {
 
 namespace editor {
 
+class Brush;
 class Brush_placement;
 class App_context;
 class Node_physics;
@@ -64,6 +65,7 @@ private:
     void skin_properties              (erhe::scene::Skin& skin);
     void material_properties          ();
     void rendertarget_properties      (Rendertarget_mesh& rendertarget);
+    void brush_properties             (const std::shared_ptr<Brush>& brush);
     void brush_placement_properties   (Brush_placement& brush_placement);
     void node_physics_properties      (Node_physics& node_physics);
     void item_flags                   (const std::shared_ptr<erhe::Item_base>& item);

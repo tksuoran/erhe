@@ -62,6 +62,7 @@ class Hud;
 class Icon_set;
 class Id_renderer;
 class Imgui_window_scene_views;
+class Inventory_window;
 class Input_state;
 class Jolt_debug_renderer;
 class Material_paint_tool;
@@ -140,6 +141,7 @@ public:
     Icon_set*                               icon_set              {nullptr};
     Id_renderer*                            id_renderer           {nullptr};
     Input_state*                            input_state           {nullptr};
+    Inventory_window*                       inventory_window      {nullptr};
     Material_paint_tool*                    material_paint_tool   {nullptr};
     Material_preview*                       material_preview      {nullptr};
     Brush_preview*                          brush_preview         {nullptr};

@@ -523,6 +523,51 @@ void Properties::rendertarget_properties(Rendertarget_mesh& rendertarget)
     add_entry("Pixels per Meter", [&](){ ImGui::Text("%f", static_cast<float>(rendertarget.get_pixels_per_meter())); });
 }
 
+void Properties::brush_properties(const std::shared_ptr<Brush>& brush)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    push_group("Brush", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed, m_indent);
+
+    add_entry("Material", [brush, this]() {
+        const std::shared_ptr<erhe::primitive::Material>& brush_material = brush->get_material();
+        const char* material_name = brush_material ? brush_material->get_name().c_str() : "(none)";
+        ImGui::Button(material_name, ImVec2{-FLT_MIN, 0.0f});
+
+        // Accept material drag-and-drop from content library
+        if (ImGui::BeginDragDropTarget()) {
+            const ImGuiPayload* node_payload = ImGui::AcceptDragDropPayload(
+                Content_library_node::static_type_name.data()
+            );
+            if (node_payload != nullptr) {
+                erhe::Item_base* item_base = *static_cast<erhe::Item_base**>(node_payload->Data);
+                Content_library_node* node = dynamic_cast<Content_library_node*>(item_base);
+                if (node != nullptr) {
+                    std::shared_ptr<erhe::primitive::Material> material =
+                        std::dynamic_pointer_cast<erhe::primitive::Material>(node->item);
+                    if (material) {
+                        brush->set_material(material);
+                    }
+                }
+            }
+            // Also accept direct Material payload
+            const ImGuiPayload* mat_payload = ImGui::AcceptDragDropPayload("Material");
+            if (mat_payload != nullptr) {
+                erhe::Item_base* item_base = *static_cast<erhe::Item_base**>(mat_payload->Data);
+                erhe::primitive::Material* raw_material = dynamic_cast<erhe::primitive::Material*>(item_base);
+                if (raw_material != nullptr) {
+                    brush->set_material(
+                        std::dynamic_pointer_cast<erhe::primitive::Material>(raw_material->shared_from_this())
+                    );
+                }
+            }
+            ImGui::EndDragDropTarget();
+        }
+    });
+
+    pop_group();
+}
+
 void Properties::brush_placement_properties(Brush_placement& brush_placement)
 {
     ERHE_PROFILE_FUNCTION();
@@ -723,6 +768,7 @@ void Properties::item_properties(const std::shared_ptr<erhe::Item_base>& item_in
     const auto& light           = std::dynamic_pointer_cast<erhe::scene::Light     >(item);
     const auto& mesh            = std::dynamic_pointer_cast<erhe::scene::Mesh      >(item);
     const auto& node            = std::dynamic_pointer_cast<erhe::scene::Node      >(item);
+    const auto& brush           = std::dynamic_pointer_cast<Brush                  >(item);
     const auto& brush_placement = std::dynamic_pointer_cast<Brush_placement        >(item);
     const auto& texture         = std::dynamic_pointer_cast<erhe::graphics::Texture>(item);
 
@@ -860,6 +906,10 @@ void Properties::item_properties(const std::shared_ptr<erhe::Item_base>& item_in
 
     if (rendertarget) {
         rendertarget_properties(*rendertarget);
+    }
+
+    if (brush) {
+        brush_properties(brush);
     }
 
     if (brush_placement) {

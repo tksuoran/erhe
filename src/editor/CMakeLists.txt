@@ -348,6 +348,8 @@ erhe_target_sources_grouped(
     transform/transform_tool_settings.hpp
     transform/trs_tool.cpp
     windows/IconsMaterialDesignIcons.h
+    windows/inventory_window.cpp
+    windows/inventory_window.hpp
     windows/item_tree_window.cpp
     windows/item_tree_window.hpp
     windows/properties.cpp
@@ -480,6 +482,7 @@ erhe_codegen_generate(
         "${_config_defs}/grid_config.py"
         "${_config_defs}/headset_config.py"
         "${_config_defs}/hotbar_config.py"
+        "${_config_defs}/inventory_config.py"
         "${_config_defs}/hud_config.py"
         "${_config_defs}/id_renderer_config.py"
         "${_config_defs}/mesh_memory_config.py"
@@ -516,6 +519,12 @@ set(_config_sources
     ${_config_out}/hud_config.hpp
     ${_config_out}/hud_config_serialization.hpp
     ${_config_out}/hud_config.cpp
+    ${_config_out}/inventory_slot.hpp
+    ${_config_out}/inventory_slot_serialization.hpp
+    ${_config_out}/inventory_slot.cpp
+    ${_config_out}/inventory_config.hpp
+    ${_config_out}/inventory_config_serialization.hpp
+    ${_config_out}/inventory_config.cpp
     ${_config_out}/id_renderer_config.hpp
     ${_config_out}/id_renderer_config_serialization.hpp
     ${_config_out}/id_renderer_config.cpp

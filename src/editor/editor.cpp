@@ -61,6 +61,7 @@
 #include "transform/move_tool.hpp"
 #include "transform/rotate_tool.hpp"
 #include "transform/scale_tool.hpp"
+#include "windows/inventory_window.hpp"
 #include "windows/properties.hpp"
 #include "windows/settings_window.hpp"
 #include "windows/viewport_config_window.hpp"
@@ -288,6 +289,7 @@ public:
         //   This may consume some input events, so that they will not get processed by m_commands.tick() below
         // - Call all ImGui code (Imgui_window)
         m_hover_tool->reset_item_tree_hover();
+        m_hotbar->rebuild_if_needed();
 
         // log_frame->trace("Imgui_windows::begin_frame()");
         m_imgui_windows->begin_frame();
@@ -946,6 +948,12 @@ public:
                     *m_scene_builder.get(),
                     *m_tools.get()
                 );
+                m_inventory_window = std::make_unique<Inventory_window>(
+                    *m_imgui_renderer.get(),
+                    *m_imgui_windows.get(),
+                    m_app_context,
+                    m_editor_config.inventory
+                );
                 m_hover_tool = std::make_unique<Hover_tool>(
                     *m_imgui_renderer.get(),
                     *m_imgui_windows.get(),
@@ -1126,6 +1134,7 @@ public:
         }
 
         m_hotbar->get_all_tools();
+        m_inventory_window->collect_tools();
 
         // Notify ImGui renderer about current font settings
         m_imgui_renderer->on_font_config_changed(m_app_settings->imgui);
@@ -1377,6 +1386,7 @@ public:
         m_app_context.icon_set                 = m_icon_set              .get();
         m_app_context.id_renderer              = m_id_renderer           .get();
         m_app_context.input_state              = m_input_state           .get();
+        m_app_context.inventory_window         = m_inventory_window      .get();
         m_app_context.material_paint_tool      = m_material_paint_tool   .get();
         m_app_context.material_preview         = m_material_preview      .get();
         m_app_context.brush_preview            = m_brush_preview         .get();
@@ -1568,6 +1578,7 @@ public:
     std::unique_ptr<Transform_tool      >                    m_transform_tool;
     std::unique_ptr<Hud                 >                    m_hud;
     std::unique_ptr<Hotbar              >                    m_hotbar;
+    std::unique_ptr<Inventory_window    >                    m_inventory_window;
     std::unique_ptr<Hover_tool          >                    m_hover_tool;
     std::unique_ptr<Brdf_slice          >                    m_brdf_slice;
     std::unique_ptr<Debug_draw          >                    m_debug_draw;

@@ -94,6 +94,10 @@ public:
     void tool_properties       (erhe::imgui::Imgui_window& imgui_window) override;
     void handle_priority_update(int old_priority, int new_priority)      override;
 
+    // Active brush (set from hotbar slot)
+    void set_active_brush  (const std::shared_ptr<Brush>& brush);
+    void clear_active_brush();
+
     // Commands
     auto try_insert_ready     () -> bool;
     auto try_insert           (Brush* brush = nullptr) -> bool;
@@ -132,6 +136,7 @@ private:
     erhe::commands::Float_threshold_command m_pick_using_float_input_command;
 
     ERHE_PROFILE_MUTEX(std::mutex,     m_brush_mutex);
+    std::shared_ptr<Brush>             m_active_brush          {};
     std::shared_ptr<Brush>             m_drag_and_drop_brush   {};
     float                              m_preview_hover_distance{0.001f};
     bool                               m_snap_to_hover_polygon {true};

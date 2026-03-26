@@ -48,6 +48,25 @@ auto Brush::get_max_corner_count() const -> GEO::index_t
     return m_max_corner_count;
 }
 
+auto Brush::get_material() const -> const std::shared_ptr<erhe::primitive::Material>&
+{
+    return m_material;
+}
+
+void Brush::set_material(const std::shared_ptr<erhe::primitive::Material>& material)
+{
+    m_material = material;
+}
+
+auto Brush::make_with_material(const std::shared_ptr<erhe::primitive::Material>& material) const -> std::shared_ptr<Brush>
+{
+    Brush_data data_copy = m_data;
+    data_copy.name = get_name() + " (" + material->get_name() + ")";
+    std::shared_ptr<Brush> result = std::make_shared<Brush>(data_copy);
+    result->set_material(material);
+    return result;
+}
+
 void Brush::update_facet_statistics()
 {
     const auto geometry = get_geometry();

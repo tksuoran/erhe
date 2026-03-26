@@ -105,12 +105,16 @@ public:
     [[nodiscard]] auto get_geometry              () -> std::shared_ptr<erhe::geometry::Geometry>;
     [[nodiscard]] auto get_corner_count_to_facets() -> const std::map<GEO::index_t, std::vector<GEO::index_t>>&;
     [[nodiscard]] auto get_max_corner_count      () const -> GEO::index_t;
+    [[nodiscard]] auto get_material              () const -> const std::shared_ptr<erhe::primitive::Material>&;
+    void               set_material              (const std::shared_ptr<erhe::primitive::Material>& material);
+    [[nodiscard]] auto make_with_material        (const std::shared_ptr<erhe::primitive::Material>& material) const -> std::shared_ptr<Brush>;
 
 private:
     void update_facet_statistics();
 
-    Brush_data                                        m_data;
-    std::shared_ptr<erhe::primitive::Primitive>       m_primitive;
+    Brush_data                                         m_data;
+    std::shared_ptr<erhe::primitive::Material>         m_material;
+    std::shared_ptr<erhe::primitive::Primitive>        m_primitive;
     std::vector<Reference_frame>                      m_reference_frames;
     std::vector<Scaled>                               m_scaled_entries;
     std::map<GEO::index_t, std::vector<GEO::index_t>> m_corner_count_to_facets;

@@ -7,6 +7,8 @@
 #include "config/generated/headset_config.hpp"
 #include "config/generated/hotbar_config.hpp"
 #include "config/generated/hud_config.hpp"
+#include "config/generated/inventory_slot.hpp"
+#include "config/generated/inventory_config.hpp"
 #include "config/generated/id_renderer_config.hpp"
 #include "config/generated/mesh_memory_config.hpp"
 #include "config/generated/network_config.hpp"
@@ -33,6 +35,7 @@ struct Editor_config
     Headset_config         headset;
     Hotbar_config          hotbar;
     Hud_config             hud;
+    Inventory_config       inventory;
     Id_renderer_config     id_renderer;
     Mesh_memory_config     mesh_memory;
     Network_config         network;

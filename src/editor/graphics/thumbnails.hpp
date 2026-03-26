@@ -55,7 +55,8 @@ public:
         const std::shared_ptr<erhe::Item_base>& item,
         std::function<void(
             const std::shared_ptr<erhe::graphics::Texture>&, int64_t
-        )> callback
+        )> callback,
+        float display_size = 0.0f // 0 = use text line height
     ) -> bool;
 
 private:

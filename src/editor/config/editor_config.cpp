@@ -6,6 +6,8 @@
 #include "config/generated/headset_config_serialization.hpp"
 #include "config/generated/hotbar_config_serialization.hpp"
 #include "config/generated/hud_config_serialization.hpp"
+#include "config/generated/inventory_slot_serialization.hpp"
+#include "config/generated/inventory_config_serialization.hpp"
 #include "config/generated/id_renderer_config_serialization.hpp"
 #include "config/generated/mesh_memory_config_serialization.hpp"
 #include "config/generated/network_config_serialization.hpp"
@@ -78,6 +80,7 @@ auto load_editor_config(std::string_view path) -> Editor_config
     deserialize_section(root, "headset",         config.headset);
     deserialize_section(root, "hotbar",          config.hotbar);
     deserialize_section(root, "hud",             config.hud);
+    deserialize_section(root, "inventory",       config.inventory);
     deserialize_section(root, "id_renderer",     config.id_renderer);
     deserialize_section(root, "mesh_memory",     config.mesh_memory);
     deserialize_section(root, "network",         config.network);
@@ -107,6 +110,7 @@ void save_editor_config(const Editor_config& config, std::string_view path)
     out += "    \"headset\": ";         out += serialize(config.headset,         1); out += ",\n";
     out += "    \"hotbar\": ";          out += serialize(config.hotbar,          1); out += ",\n";
     out += "    \"hud\": ";             out += serialize(config.hud,             1); out += ",\n";
+    out += "    \"inventory\": ";        out += serialize(config.inventory,       1); out += ",\n";
     out += "    \"id_renderer\": ";     out += serialize(config.id_renderer,     1); out += ",\n";
     out += "    \"mesh_memory\": ";     out += serialize(config.mesh_memory,     1); out += ",\n";
     out += "    \"network\": ";         out += serialize(config.network,         1); out += ",\n";

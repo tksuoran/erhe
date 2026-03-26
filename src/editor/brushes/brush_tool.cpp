@@ -200,6 +200,16 @@ Brush_tool::Brush_tool(
     m_toggle_brush_preview_command  .set_host(this);
 }
 
+void Brush_tool::set_active_brush(const std::shared_ptr<Brush>& brush)
+{
+    m_active_brush = brush;
+}
+
+void Brush_tool::clear_active_brush()
+{
+    m_active_brush.reset();
+}
+
 void Brush_tool::on_hover_scene_view(Hover_scene_view_message& message)
 {
     Scene_view* const old_scene_view = get_hover_scene_view();
@@ -224,6 +234,7 @@ void Brush_tool::handle_priority_update(int old_priority, int new_priority)
         m_preview_command.set_inactive();
         m_hover = Hover_entry{};
         remove_preview_mesh();
+        clear_active_brush();
     }
     if (new_priority > old_priority) {
         enable_command_host();
@@ -358,7 +369,11 @@ auto Brush_tool::try_pick() -> bool
 auto Brush_tool::try_insert(Brush* brush) -> bool
 {
     if (brush == nullptr) {
-        brush = m_context.selection->get_last_selected<Brush>().get();
+        if (m_active_brush) {
+            brush = m_active_brush.get();
+        } else {
+            brush = m_context.selection->get_last_selected<Brush>().get();
+        }
         if (brush == nullptr) {
             return false;
         }
@@ -563,7 +578,7 @@ void Brush_tool::update_preview_mesh_node_transform()
     m_hover_transform.reset();
     m_align_transform.reset();
 
-    auto shared_brush = m_drag_and_drop_brush ? m_drag_and_drop_brush : m_context.selection->get_last_selected<Brush>();
+    auto shared_brush = m_drag_and_drop_brush ? m_drag_and_drop_brush : (m_active_brush ? m_active_brush : m_context.selection->get_last_selected<Brush>());
     std::shared_ptr<erhe::scene::Mesh> hover_scene_mesh = m_hover.scene_mesh_weak.lock();
     std::shared_ptr<const Grid>        hover_grid       = m_hover.grid_weak.lock();
     if (
@@ -623,7 +638,8 @@ void Brush_tool::do_insert_operation(Brush& brush)
         return;
     }
 
-    const std::shared_ptr<erhe::primitive::Material>& material = get_material();
+    const std::shared_ptr<erhe::primitive::Material>& material =
+        (m_active_brush && m_active_brush->get_material()) ? m_active_brush->get_material() : get_material();
     if (!m_hover.position.has_value() || !material) {
         return;
     }
@@ -675,7 +691,8 @@ void Brush_tool::do_insert_operation(Brush& brush)
 
 void Brush_tool::add_preview_mesh(Brush& brush)
 {
-    const auto material = get_material();
+    const auto material =
+        (m_active_brush && m_active_brush->get_material()) ? m_active_brush->get_material() : get_material();
     auto* scene_view = get_hover_scene_view();
 
     std::shared_ptr<erhe::scene::Mesh> hover_scene_mesh = m_hover.scene_mesh_weak.lock();
@@ -718,7 +735,7 @@ void Brush_tool::add_preview_mesh(Brush& brush)
 
 void Brush_tool::update_preview_mesh()
 {
-    const auto brush = m_drag_and_drop_brush ? m_drag_and_drop_brush : m_context.selection->get_last_selected<Brush>();
+    const auto brush = m_drag_and_drop_brush ? m_drag_and_drop_brush : (m_active_brush ? m_active_brush : m_context.selection->get_last_selected<Brush>());
 
     std::shared_ptr<erhe::scene::Mesh> hover_scene_mesh = m_hover.scene_mesh_weak.lock();
     std::shared_ptr<const Grid>        hover_grid       = m_hover.grid_weak.lock();
@@ -861,7 +878,7 @@ void Brush_tool::tool_render(const Render_context& render_context)
     std::shared_ptr<erhe::scene::Mesh> hover_scene_mesh = m_hover.scene_mesh_weak.lock();
     std::shared_ptr<const Grid>        hover_grid       = m_hover.grid_weak.lock();
 
-    auto shared_brush = m_drag_and_drop_brush ? m_drag_and_drop_brush : m_context.selection->get_last_selected<Brush>();
+    auto shared_brush = m_drag_and_drop_brush ? m_drag_and_drop_brush : (m_active_brush ? m_active_brush : m_context.selection->get_last_selected<Brush>());
     //if (
     //    !shared_brush ||
     //    !m_hover.position.has_value() ||

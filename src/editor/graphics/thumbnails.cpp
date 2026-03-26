@@ -76,7 +76,8 @@ Thumbnails::~Thumbnails() noexcept
 
 auto Thumbnails::draw(
     const std::shared_ptr<erhe::Item_base>&                                       item,
-    std::function<void(const std::shared_ptr<erhe::graphics::Texture>&, int64_t)> callback
+    std::function<void(const std::shared_ptr<erhe::graphics::Texture>&, int64_t)> callback,
+    float                                                                         display_size
 ) -> bool
 {
     const std::size_t item_id = item->get_id();
@@ -89,7 +90,7 @@ auto Thumbnails::draw(
             !thumbnail.callback.has_value()
         ) {
             thumbnail.last_use_frame_number = m_context.graphics_device->get_frame_index();
-            const float height = ImGui::GetTextLineHeightWithSpacing();
+            const float height = (display_size > 0.0f) ? display_size : ImGui::GetTextLineHeightWithSpacing();
             m_context.imgui_renderer->image(
                 erhe::imgui::Draw_texture_parameters{
                     .texture_reference = thumbnail.texture_view,
