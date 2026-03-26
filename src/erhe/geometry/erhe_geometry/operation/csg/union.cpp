@@ -20,7 +20,7 @@ Union::Union(const Geometry& lhs, const Geometry& rhs, Geometry& destination)
 
 void Union::build()
 {
-    GEO::mesh_boolean_operation(destination_mesh, lhs_mesh, *rhs_mesh, "A+B", true);
+    GEO::mesh_boolean_operation(destination_mesh, source_mesh, *rhs_mesh, "A+B", true);
 
     //post_processing();
     interpolate_mesh_attributes();

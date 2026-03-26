@@ -22,10 +22,10 @@ Difference::Difference(const Geometry& lhs, const Geometry& rhs, Geometry& desti
 void Difference::build()
 {
 #if 1
-    GEO::mesh_boolean_operation(destination_mesh, lhs_mesh, *rhs_mesh, "A-B", true);
+    GEO::mesh_boolean_operation(destination_mesh, source_mesh, *rhs_mesh, "A-B", true);
 #else // TODO does either path make more sense?
     GEO::CSGMesh_var lhs_mesh = new GEO::CSGMesh;
-    lhs.extract_geogram_mesh(*lhs_mesh.get());
+    source.extract_geogram_mesh(*lhs_mesh.get());
     lhs_mesh->facets.connect();
     lhs_mesh->facets.triangulate();
     lhs_mesh->facets.compute_borders();

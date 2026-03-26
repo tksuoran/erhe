@@ -7,6 +7,39 @@
 
 namespace erhe::geometry::operation {
 
+void Source_table::add(GEO::index_t dst_index, float weight, GEO::index_t src_index)
+{
+    const std::size_t i = static_cast<std::size_t>(dst_index);
+    if (m_entries.size() <= i) {
+        std::size_t new_size = (m_entries.empty()) ? 20 : m_entries.size();
+        while (new_size <= i) {
+            new_size += new_size / 2 + new_size / 4;
+        }
+        m_entries.resize(new_size);
+    }
+    m_entries[i].emplace_back(weight, src_index);
+}
+
+void Source_table::resize(std::size_t count)
+{
+    m_entries.resize(count);
+}
+
+auto Source_table::get(GEO::index_t dst_index) const -> const std::vector<std::pair<float, GEO::index_t>>&
+{
+    return m_entries[static_cast<std::size_t>(dst_index)];
+}
+
+auto Source_table::size() const -> std::size_t
+{
+    return m_entries.size();
+}
+
+auto Source_table::data() -> std::vector<std::vector<std::pair<float, GEO::index_t>>>&
+{
+    return m_entries;
+}
+
 auto Geometry_operation::get_size_to_include(std::size_t size, std::size_t i) -> size_t
 {
     if (size == 0) {
@@ -254,42 +287,22 @@ void Geometry_operation::add_facet_corners(const GEO::index_t dst_facet, const G
 
 void Geometry_operation::add_vertex_source(const GEO::index_t dst_vertex, const float vertex_weight, const GEO::index_t src_vertex)
 {
-    const std::size_t i = static_cast<std::size_t>(dst_vertex);
-    const std::size_t old_size = m_dst_vertex_sources.size();
-    if (old_size <= i) {
-        m_dst_vertex_sources.resize(get_size_to_include(old_size, i));
-    }
-    m_dst_vertex_sources[i].emplace_back(vertex_weight, src_vertex);
+    m_dst_vertex_sources.add(dst_vertex, vertex_weight, src_vertex);
 }
 
 void Geometry_operation::add_vertex_corner_source(const GEO::index_t dst_vertex, const float corner_weight, const GEO::index_t src_corner)
 {
-    log_operation->trace(
-        "add_vertex_corner_source(dst_vertex= {}, weight = {}, src_corner = {})",
-        dst_vertex, corner_weight, src_corner
-    );
-
-    const std::size_t i = static_cast<std::size_t>(dst_vertex);
-    const std::size_t old_size = m_dst_vertex_corner_sources.size();
-    if (old_size <= i) {
-        m_dst_vertex_corner_sources.resize(get_size_to_include(old_size, i));
-    }
-    m_dst_vertex_corner_sources[dst_vertex].emplace_back(corner_weight, src_corner);
+    m_dst_vertex_corner_sources.add(dst_vertex, corner_weight, src_corner);
 }
 
 void Geometry_operation::add_corner_source(const GEO::index_t dst_corner, const float corner_weight, const GEO::index_t src_corner)
 {
-    const std::size_t i = static_cast<std::size_t>(dst_corner);
-    const std::size_t old_size = m_dst_corner_sources.size();
-    if (old_size <= i) {
-        m_dst_corner_sources.resize(get_size_to_include(old_size, i));
-    }
-    m_dst_corner_sources[i].emplace_back(corner_weight, src_corner);
+    m_dst_corner_sources.add(dst_corner, corner_weight, src_corner);
 }
 
 void Geometry_operation::distribute_corner_sources(const GEO::index_t dst_corner, const float vertex_weight, const GEO::index_t dst_vertex)
 {
-    const auto vertex_corner_sources = m_dst_vertex_corner_sources[dst_vertex];
+    const auto& vertex_corner_sources = m_dst_vertex_corner_sources.get(dst_vertex);
     for (const auto& vertex_corner_source : vertex_corner_sources) {
         const float        corner_weight = vertex_weight * vertex_corner_source.first;
         const GEO::index_t corner        = vertex_corner_source.second;
@@ -299,22 +312,12 @@ void Geometry_operation::distribute_corner_sources(const GEO::index_t dst_corner
 
 void Geometry_operation::add_facet_source(const GEO::index_t dst_facet, const float facet_weight, const GEO::index_t src_facet)
 {
-    const std::size_t i = static_cast<std::size_t>(dst_facet);
-    const std::size_t old_size = m_dst_facet_sources.size();
-    if (old_size <= i) {
-        m_dst_facet_sources.resize(get_size_to_include(old_size, i));
-    }
-    m_dst_facet_sources[i].emplace_back(facet_weight, src_facet);
+    m_dst_facet_sources.add(dst_facet, facet_weight, src_facet);
 }
 
 void Geometry_operation::add_edge_source(const GEO::index_t dst_edge, const float edge_weight, const GEO::index_t src_edge)
 {
-    const std::size_t i = static_cast<std::size_t>(dst_edge);
-    const std::size_t old_size = m_dst_edge_sources.size();
-    if (old_size) {
-        m_dst_edge_sources.resize(get_size_to_include(old_size, i));
-    }
-    m_dst_edge_sources[i].emplace_back(edge_weight, src_edge);
+    m_dst_edge_sources.add(dst_edge, edge_weight, src_edge);
 }
 
 void Geometry_operation::interpolate_mesh_attributes()
@@ -328,7 +331,7 @@ void Geometry_operation::interpolate_mesh_attributes()
     Mesh_attributes&       d = destination.get_attributes();
 
     for (GEO::index_t vertex : destination_mesh.vertices) {
-        const std::vector<std::pair<float, GEO::index_t>>& src_keys = m_dst_vertex_sources[vertex];
+        const std::vector<std::pair<float, GEO::index_t>>& src_keys = m_dst_vertex_sources.get(vertex);
         float sum_weights{0.0f};
         for (auto j : src_keys) {
             //const GEO::index_t src_key = j.second;
@@ -352,30 +355,30 @@ void Geometry_operation::interpolate_mesh_attributes()
     }
 
     // Recompute facet_id, facet_centroid, facet_normal
-    interpolate_attribute<GEO::vec4f>(s.facet_color_0,          d.facet_color_0,          m_dst_facet_sources);
-    interpolate_attribute<GEO::vec4f>(s.facet_color_1,          d.facet_color_1,          m_dst_facet_sources);
-    interpolate_attribute<GEO::vec2f>(s.facet_aniso_control,    d.facet_aniso_control,    m_dst_facet_sources);
-    interpolate_attribute<GEO::vec3f>(s.vertex_normal,          d.vertex_normal,          m_dst_vertex_sources);
-    interpolate_attribute<GEO::vec3f>(s.vertex_normal_smooth,   d.vertex_normal_smooth,   m_dst_vertex_sources);
-    interpolate_attribute<GEO::vec2f>(s.vertex_texcoord_0,      d.vertex_texcoord_0,      m_dst_vertex_sources);
-    interpolate_attribute<GEO::vec2f>(s.vertex_texcoord_1,      d.vertex_texcoord_1,      m_dst_vertex_sources);
-    interpolate_attribute<GEO::vec4f>(s.vertex_tangent,         d.vertex_tangent,         m_dst_vertex_sources);
-    interpolate_attribute<GEO::vec3f>(s.vertex_bitangent,       d.vertex_bitangent,       m_dst_vertex_sources);
-    interpolate_attribute<GEO::vec4f>(s.vertex_color_0,         d.vertex_color_0,         m_dst_vertex_sources);
-    interpolate_attribute<GEO::vec4f>(s.vertex_color_1,         d.vertex_color_1,         m_dst_vertex_sources);
-    interpolate_attribute<GEO::vec4f>(s.vertex_joint_weights_0, d.vertex_joint_weights_0, m_dst_vertex_sources);
-    interpolate_attribute<GEO::vec4f>(s.vertex_joint_weights_1, d.vertex_joint_weights_1, m_dst_vertex_sources);
-    interpolate_attribute<GEO::vec4u>(s.vertex_joint_indices_0, d.vertex_joint_indices_0, m_dst_vertex_sources);
-    interpolate_attribute<GEO::vec4u>(s.vertex_joint_indices_1, d.vertex_joint_indices_1, m_dst_vertex_sources);
-    interpolate_attribute<GEO::vec2f>(s.vertex_aniso_control,   d.vertex_aniso_control,   m_dst_vertex_sources);
-    interpolate_attribute<GEO::vec3f>(s.corner_normal,          d.corner_normal,          m_dst_corner_sources);
-    interpolate_attribute<GEO::vec2f>(s.corner_texcoord_0,      d.corner_texcoord_0,      m_dst_corner_sources);
-    interpolate_attribute<GEO::vec2f>(s.corner_texcoord_1,      d.corner_texcoord_1,      m_dst_corner_sources);
-    interpolate_attribute<GEO::vec4f>(s.corner_tangent,         d.corner_tangent,         m_dst_corner_sources);
-    interpolate_attribute<GEO::vec3f>(s.corner_bitangent,       d.corner_bitangent,       m_dst_corner_sources);
-    interpolate_attribute<GEO::vec4f>(s.corner_color_0,         d.corner_color_0,         m_dst_corner_sources);
-    interpolate_attribute<GEO::vec4f>(s.corner_color_1,         d.corner_color_1,         m_dst_corner_sources);
-    interpolate_attribute<GEO::vec2f>(s.corner_aniso_control,   d.corner_aniso_control,   m_dst_corner_sources);
+    interpolate_attribute<GEO::vec4f>(s.facet_color_0,          d.facet_color_0,          m_dst_facet_sources.data());
+    interpolate_attribute<GEO::vec4f>(s.facet_color_1,          d.facet_color_1,          m_dst_facet_sources.data());
+    interpolate_attribute<GEO::vec2f>(s.facet_aniso_control,    d.facet_aniso_control,    m_dst_facet_sources.data());
+    interpolate_attribute<GEO::vec3f>(s.vertex_normal,          d.vertex_normal,          m_dst_vertex_sources.data());
+    interpolate_attribute<GEO::vec3f>(s.vertex_normal_smooth,   d.vertex_normal_smooth,   m_dst_vertex_sources.data());
+    interpolate_attribute<GEO::vec2f>(s.vertex_texcoord_0,      d.vertex_texcoord_0,      m_dst_vertex_sources.data());
+    interpolate_attribute<GEO::vec2f>(s.vertex_texcoord_1,      d.vertex_texcoord_1,      m_dst_vertex_sources.data());
+    interpolate_attribute<GEO::vec4f>(s.vertex_tangent,         d.vertex_tangent,         m_dst_vertex_sources.data());
+    interpolate_attribute<GEO::vec3f>(s.vertex_bitangent,       d.vertex_bitangent,       m_dst_vertex_sources.data());
+    interpolate_attribute<GEO::vec4f>(s.vertex_color_0,         d.vertex_color_0,         m_dst_vertex_sources.data());
+    interpolate_attribute<GEO::vec4f>(s.vertex_color_1,         d.vertex_color_1,         m_dst_vertex_sources.data());
+    interpolate_attribute<GEO::vec4f>(s.vertex_joint_weights_0, d.vertex_joint_weights_0, m_dst_vertex_sources.data());
+    interpolate_attribute<GEO::vec4f>(s.vertex_joint_weights_1, d.vertex_joint_weights_1, m_dst_vertex_sources.data());
+    interpolate_attribute<GEO::vec4u>(s.vertex_joint_indices_0, d.vertex_joint_indices_0, m_dst_vertex_sources.data());
+    interpolate_attribute<GEO::vec4u>(s.vertex_joint_indices_1, d.vertex_joint_indices_1, m_dst_vertex_sources.data());
+    interpolate_attribute<GEO::vec2f>(s.vertex_aniso_control,   d.vertex_aniso_control,   m_dst_vertex_sources.data());
+    interpolate_attribute<GEO::vec3f>(s.corner_normal,          d.corner_normal,          m_dst_corner_sources.data());
+    interpolate_attribute<GEO::vec2f>(s.corner_texcoord_0,      d.corner_texcoord_0,      m_dst_corner_sources.data());
+    interpolate_attribute<GEO::vec2f>(s.corner_texcoord_1,      d.corner_texcoord_1,      m_dst_corner_sources.data());
+    interpolate_attribute<GEO::vec4f>(s.corner_tangent,         d.corner_tangent,         m_dst_corner_sources.data());
+    interpolate_attribute<GEO::vec3f>(s.corner_bitangent,       d.corner_bitangent,       m_dst_corner_sources.data());
+    interpolate_attribute<GEO::vec4f>(s.corner_color_0,         d.corner_color_0,         m_dst_corner_sources.data());
+    interpolate_attribute<GEO::vec4f>(s.corner_color_1,         d.corner_color_1,         m_dst_corner_sources.data());
+    interpolate_attribute<GEO::vec2f>(s.corner_aniso_control,   d.corner_aniso_control,   m_dst_corner_sources.data());
 
     // TODO edge attributes
 }

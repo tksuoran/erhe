@@ -13,6 +13,7 @@ add_executable(${_target}
     main.cpp
     test_chamfer_diagnostics.cpp
     test_chamfer_self_intersection.cpp
+    test_geometry_operation.cpp
     test_plane_intersection.cpp
 )
 

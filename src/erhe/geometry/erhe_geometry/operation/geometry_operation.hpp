@@ -19,28 +19,38 @@ public:
     }
 };
 
+// Tracks weighted provenance from source elements to destination elements.
+// Each destination element can have multiple source elements with weights.
+// Used for attribute interpolation (positions, normals, texcoords, etc.).
+class Source_table
+{
+public:
+    void add(GEO::index_t dst_index, float weight, GEO::index_t src_index);
+    void resize(std::size_t count);
+    [[nodiscard]] auto get(GEO::index_t dst_index) const -> const std::vector<std::pair<float, GEO::index_t>>&;
+    [[nodiscard]] auto size() const -> std::size_t;
+    [[nodiscard]] auto data() -> std::vector<std::vector<std::pair<float, GEO::index_t>>>&;
+
+private:
+    std::vector<std::vector<std::pair<float, GEO::index_t>>> m_entries;
+};
+
 class Geometry_operation
 {
 public:
     Geometry_operation(const erhe::geometry::Geometry& source, erhe::geometry::Geometry& destination)
         : source          {source}
-        , lhs             {source}
-        , rhs             {nullptr}
         , destination     {destination}
         , source_mesh     {source.get_mesh()}
-        , lhs_mesh        {source.get_mesh()}
-        , rhs_mesh        {nullptr}
         , destination_mesh{destination.get_mesh()}
     {
     }
 
     Geometry_operation(const erhe::geometry::Geometry& lhs, const erhe::geometry::Geometry& rhs, erhe::geometry::Geometry& destination)
         : source          {lhs}
-        , lhs             {lhs}
         , rhs             {&rhs}
         , destination     {destination}
-        , source_mesh     {source.get_mesh()}
-        , lhs_mesh        {source.get_mesh()}
+        , source_mesh     {lhs.get_mesh()}
         , rhs_mesh        {&rhs.get_mesh()}
         , destination_mesh{destination.get_mesh()}
     {
@@ -49,26 +59,23 @@ public:
 protected:
     void post_processing();
 
-    const erhe::geometry::Geometry&                          source;
-    const erhe::geometry::Geometry&                          lhs;
-    const erhe::geometry::Geometry*                          rhs;
-    erhe::geometry::Geometry&                                destination;
+    const erhe::geometry::Geometry&  source;
+    const erhe::geometry::Geometry*  rhs{nullptr};
+    erhe::geometry::Geometry&        destination;
 
-    const GEO::Mesh&                                         source_mesh;
-    const GEO::Mesh&                                         lhs_mesh;
-    const GEO::Mesh*                                         rhs_mesh;
-    GEO::Mesh&                                               destination_mesh;
+    const GEO::Mesh&                 source_mesh;
+    const GEO::Mesh*                 rhs_mesh{nullptr};
+    GEO::Mesh&                       destination_mesh;
 
-    std::vector<GEO::index_t>                                m_vertex_src_to_dst;
-    std::vector<GEO::index_t>                                m_facet_src_to_dst;
-    //  std::vector<GEO::index_t>                                m_corner_src_to_dst;
-    std::vector<GEO::index_t>                                m_edge_src_to_dst;
-    std::vector<GEO::index_t>                                m_src_facet_centroid_to_dst_vertex;
-    std::vector<std::vector<std::pair<float, GEO::index_t>>> m_dst_vertex_sources;
-    std::vector<std::vector<std::pair<float, GEO::index_t>>> m_dst_vertex_corner_sources;
-    std::vector<std::vector<std::pair<float, GEO::index_t>>> m_dst_corner_sources;
-    std::vector<std::vector<std::pair<float, GEO::index_t>>> m_dst_facet_sources;
-    std::vector<std::vector<std::pair<float, GEO::index_t>>> m_dst_edge_sources;
+    std::vector<GEO::index_t>        m_vertex_src_to_dst;
+    std::vector<GEO::index_t>        m_facet_src_to_dst;
+    std::vector<GEO::index_t>        m_edge_src_to_dst;
+    std::vector<GEO::index_t>        m_src_facet_centroid_to_dst_vertex;
+    Source_table                      m_dst_vertex_sources;
+    Source_table                      m_dst_vertex_corner_sources;
+    Source_table                      m_dst_corner_sources;
+    Source_table                      m_dst_facet_sources;
+    Source_table                      m_dst_edge_sources;
 
     std::unordered_map<
         std::pair<GEO::index_t, GEO::index_t>,
@@ -147,4 +154,4 @@ protected:
     [[nodiscard]] static auto get_size_to_include(std::size_t old_size, std::size_t i) -> size_t;
 };
 
-} // namespace namespace geometry
+} // namespace erhe::geometry::operation
