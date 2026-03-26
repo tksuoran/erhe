@@ -31,6 +31,7 @@
 
 #include "erhe_verify/verify.hpp"
 
+#include <simdjson.h>
 #include <fastgltf/core.hpp>
 #include <fastgltf/tools.hpp>
 #include <fastgltf/types.hpp>
@@ -1908,7 +1909,30 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
         fastgltf::Extensions::KHR_materials_sheen                 |
         //fastgltf::Extensions::KHR_draco_mesh_compression          |
         fastgltf::Extensions::KHR_materials_unlit;
+    // Collect erhe-specific extras during parsing
+    std::unordered_map<std::size_t, float> material_roughness_y;
+
     fastgltf::Parser fastgltf_parser{extensions};
+    fastgltf_parser.setUserPointer(&material_roughness_y);
+    fastgltf_parser.setExtrasParseCallback(
+        [](simdjson::dom::object* extras, std::size_t object_index, fastgltf::Category object_type, void* user_pointer) {
+            if (object_type != fastgltf::Category::Materials) {
+                return;
+            }
+            if (extras == nullptr) {
+                return;
+            }
+            auto* roughness_y_map = static_cast<std::unordered_map<std::size_t, float>*>(user_pointer);
+            simdjson::dom::element roughness_y_element;
+            if (extras->at_key("roughness_y").get(roughness_y_element) == simdjson::error_code::SUCCESS) {
+                double value = 0.0;
+                if (roughness_y_element.get_double().get(value) == simdjson::error_code::SUCCESS) {
+                    (*roughness_y_map)[object_index] = static_cast<float>(value);
+                }
+            }
+        }
+    );
+
     fastgltf::Expected<fastgltf::Asset> asset = fastgltf_parser.loadGltf(
         data.get(),
         arguments.path.parent_path(),
@@ -1923,6 +1947,16 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
     Gltf_data result;
     Gltf_parser erhe_parser{std::move(asset), result, arguments};
     erhe_parser.parse_and_build();
+
+    // Apply extras data to parsed materials
+    for (const auto& [material_index, roughness_y] : material_roughness_y) {
+        if (material_index < result.materials.size()) {
+            const std::shared_ptr<erhe::primitive::Material>& material = result.materials[material_index];
+            if (material) {
+                material->data.roughness.y = roughness_y;
+            }
+        }
+    }
 
     timer.end();
     if (timer.duration().has_value()) {
@@ -2643,10 +2677,36 @@ auto Gltf_exporter::export_gltf() -> std::string
 
     combine_buffers();
 
+    // Build reverse map: gltf material index -> erhe Material* for extras export
+    std::unordered_map<std::size_t, const erhe::primitive::Material*> index_to_material;
+    for (const auto& [material_ptr, gltf_index] : m_exported_materials) {
+        index_to_material[gltf_index] = material_ptr;
+    }
+
     fastgltf::Exporter exporter{};
+    exporter.setUserPointer(&index_to_material);
+    exporter.setExtrasWriteCallback(
+        [](std::size_t object_index, fastgltf::Category object_type, void* user_pointer) -> std::optional<std::string> {
+            if (object_type != fastgltf::Category::Materials) {
+                return std::nullopt;
+            }
+            auto* map = static_cast<std::unordered_map<std::size_t, const erhe::primitive::Material*>*>(user_pointer);
+            auto it = map->find(object_index);
+            if (it == map->end()) {
+                return std::nullopt;
+            }
+            const erhe::primitive::Material* material = it->second;
+            const float roughness_x = material->data.roughness.x;
+            const float roughness_y = material->data.roughness.y;
+            if (roughness_x == roughness_y) {
+                return std::nullopt; // No extra data needed
+            }
+            return std::string("{\"roughness_y\": ") + std::to_string(roughness_y) + "}";
+        }
+    );
 
     //static_cast<void>(m_binary);
-    if (m_binary) 
+    if (m_binary)
     {
         auto expected_result = exporter.writeGltfBinary(m_gltf_asset, fastgltf::ExportOptions::ValidateAsset);
         auto* result = expected_result.get_if();

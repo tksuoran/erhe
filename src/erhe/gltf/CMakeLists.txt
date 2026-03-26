@@ -30,6 +30,7 @@ endif ()
 target_link_libraries(${_target}
     PRIVATE
         fmt::fmt
+        simdjson::simdjson
         Taskflow
         erhe::file
         erhe::profile
