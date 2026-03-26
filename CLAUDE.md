@@ -130,6 +130,26 @@ See [`doc/editor_improvements.md`](doc/editor_improvements.md) for the prioritiz
 - **Never use lock-free / atomic techniques** without explicitly asking the user for permission first. Prefer simple mutex-based synchronization.
 - **Multithreading debugging**: When diagnosing deadlocks or contention, ask the user for callstacks of all threads — not just the stuck thread. The root cause is usually on another thread.
 
+## C++ Naming Conventions
+
+Follow these naming conventions consistently:
+
+| Element | Convention | Examples |
+|---------|-----------|----------|
+| **Class names** | `Snake_case` (capital first letter, underscores between words) | `Rendergraph_node`, `Buffer_create_info`, `Geometry_operation` |
+| **Member variables** | `m_` prefix + `snake_case` | `m_projection`, `m_line_color`, `m_dst_vertex_sources` |
+| **Methods/functions** | `snake_case` | `get_exposure()`, `make_edge_midpoints()`, `post_processing()` |
+| **Local variables** | `snake_case` | `src_vertex`, `corner_count`, `new_dst_facet` |
+| **Enum class names** | `Snake_case` (same as classes) | `Light_type`, `Buffer_target`, `Primitive_type` |
+| **Enum values** | `snake_case` | `directional`, `point`, `triangle_strip` |
+| **Namespaces** | `lowercase` (no underscores between words) | `erhe::geometry`, `erhe::scene` |
+| **Files** | `snake_case.hpp` / `snake_case.cpp` | `geometry_operation.hpp`, `imgui_host.cpp` |
+| **Constants** | `snake_case` for `constexpr`; `c_` prefix for `const char*` arrays | `shadow_cast`, `c_type_strings[]` |
+| **Template params** | Single uppercase letter or descriptive name | `T`, `Base`, `Self` |
+| **Interface classes** | `I` prefix + `Snake_case` | `ICollision_shape`, `IMotion_state` |
+| **Getters/setters** | `get_`/`set_` prefix | `get_mesh()`, `set_exposure()` |
+| **Boolean getters** | `is_`/`has_` prefix | `is_enabled()`, `has_cursor()` |
+
 ## C++ Standard
 
 This project uses **C++20**. Prefer modern C++20 features over older alternatives (e.g. concepts over SFINAE, `std::span` over pointer+size, `std::format`/`fmt` over `sprintf`, `constexpr` where possible, designated initializers, `requires` clauses).
