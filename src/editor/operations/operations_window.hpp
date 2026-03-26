@@ -123,6 +123,7 @@ public:
     void load_scene();
 
     void create_material();
+    void create_brush();
 
 private:
     void async_for_selected_nodes_with_mesh(std::function<void(Mesh_operation_parameters&&)> op);
@@ -178,6 +179,7 @@ private:
     erhe::commands::Lambda_command m_load_scene_command;
 
     erhe::commands::Lambda_command m_create_material;
+    erhe::commands::Lambda_command m_create_brush;
 
     Scene_view*                    m_hover_scene_view     {nullptr};
     Scene_view*                    m_last_hover_scene_view{nullptr};

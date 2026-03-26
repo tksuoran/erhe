@@ -2,6 +2,7 @@
 
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
+#include "brushes/brush.hpp"
 #include "app_settings.hpp"
 #include "content_library/content_library.hpp"
 #include "items.hpp"
@@ -112,6 +113,7 @@ Operations::Operations(
     , m_save_scene_command    {commands, "File.SaveScene",                     [this]() -> bool { save_scene     (); return true; } }
     , m_load_scene_command    {commands, "File.LoadScene",                     [this]() -> bool { load_scene     (); return true; } }
     , m_create_material       {commands, "Create.Material",                    [this]() -> bool { create_material(); return true; } }
+    , m_create_brush          {commands, "Create.Brush",                       [this]() -> bool { create_brush   (); return true; } }
 {
     commands.register_command(&m_merge_command         );
     commands.register_command(&m_triangulate_command   );
@@ -145,6 +147,7 @@ Operations::Operations(
     commands.register_command(&m_save_scene_command);
     commands.register_command(&m_load_scene_command);
     commands.register_command(&m_create_material);
+    commands.register_command(&m_create_brush);
 
     commands.bind_command_to_menu(&m_merge_command,            "Geometry.Merge");
     commands.bind_command_to_menu(&m_triangulate_command,      "Geometry.Triangulate");
@@ -180,6 +183,7 @@ Operations::Operations(
     commands.bind_command_to_menu(&m_save_scene_command,  "File.Save Scene");
     commands.bind_command_to_menu(&m_load_scene_command,  "File.Load Scene");
     commands.bind_command_to_menu(&m_create_material,     "Create.Material");
+    commands.bind_command_to_menu(&m_create_brush,        "Create.Brush from Selection");
 
     m_make_mesh_config.instance_count = scene_config.instance_count;
     m_make_mesh_config.instance_gap   = scene_config.instance_gap;
@@ -500,6 +504,9 @@ void Operations::imgui()
     }
     if (make_button("Center Transform", has_selection_mode, button_size)) {
         center_transform();
+    }
+    if (make_button("Create Brush", has_selection_mode, button_size)) {
+        create_brush();
     }
     //// if (make_button("GUI Quad", erhe::imgui::Item_mode::normal, button_size)) {
     ////     Scene_builder* scene_builder = get<Scene_builder>().get();
@@ -983,6 +990,66 @@ void Operations::create_material()
     );
 
     m_context.operation_stack->queue(make_material_operation);
+}
+
+void Operations::create_brush()
+{
+    std::shared_ptr<erhe::scene::Mesh> mesh = m_context.selection->get_last_selected<erhe::scene::Mesh>();
+    if (!mesh) {
+        return;
+    }
+
+    const std::vector<erhe::scene::Mesh_primitive>& primitives = mesh->get_primitives();
+    if (primitives.empty()) {
+        return;
+    }
+
+    const erhe::scene::Mesh_primitive& first_primitive = primitives.front();
+    if (!first_primitive.primitive || !first_primitive.primitive->render_shape) {
+        return;
+    }
+
+    const std::shared_ptr<erhe::geometry::Geometry>& geometry = first_primitive.primitive->render_shape->get_geometry_const();
+    if (!geometry) {
+        return;
+    }
+
+    Scene_view* scene_view = m_last_hover_scene_view ? m_last_hover_scene_view : m_hover_scene_view;
+    if (scene_view == nullptr) {
+        return;
+    }
+    std::shared_ptr<Scene_root> scene_root = scene_view->get_scene_root();
+    if (!scene_root) {
+        return;
+    }
+
+    std::shared_ptr<Content_library>      content_library = scene_root->get_content_library();
+    std::shared_ptr<Content_library_node> brushes         = content_library->brushes;
+
+    {
+        std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{content_library->mutex};
+        const erhe::primitive::Build_info brush_build_info{
+            .primitive_types = {
+                .fill_triangles  = true,
+                .edge_lines      = true,
+                .corner_points   = true,
+                .centroid_points = true
+            },
+            .buffer_info = m_context.mesh_memory->buffer_info
+        };
+        std::shared_ptr<Brush> new_brush = brushes->make<Brush>(
+            Brush_data{
+                .context      = m_context,
+                .app_settings = *m_context.app_settings,
+                .build_info   = brush_build_info,
+                .normal_style = erhe::primitive::Normal_style::polygon_normals,
+                .geometry     = geometry
+            }
+        );
+        if (first_primitive.material) {
+            new_brush->set_material(first_primitive.material);
+        }
+    }
 }
 
 }
