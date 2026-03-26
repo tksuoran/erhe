@@ -45,7 +45,7 @@ void Meta::build()
             const GEO::index_t previous_edge_midpoint = get_src_edge_new_vertex(a, b, 0);
             const GEO::index_t next_edge_midpoint     = get_src_edge_new_vertex(b, c, 0);
             if (previous_edge_midpoint == GEO::NO_INDEX) {
-                continue; // TODO can these every happen?
+                continue; // TODO can these ever happen?
             }
             if (next_edge_midpoint == GEO::NO_INDEX) {
                 continue;

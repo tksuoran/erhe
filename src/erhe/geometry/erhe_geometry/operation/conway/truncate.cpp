@@ -100,10 +100,7 @@ void Truncate::build()
         for (const auto& [a, b] : edge_pairs) {
             make_new_dst_corner_from_dst_vertex(new_dst_facet, dst_corner++, a);
             make_new_dst_corner_from_dst_vertex(new_dst_facet, dst_corner++, b);
-            //// debug_src_facet_entry.corners.push_back(a);
-            //// debug_src_facet_entry.corners.push_back(b);
         }
-        //// debug_src_facet_entries.push_back(debug_src_facet_entry);
     }
 
     post_processing();

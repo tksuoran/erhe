@@ -1,8 +1,6 @@
 #include "erhe_geometry/operation/conway/join.hpp"
 #include "erhe_geometry/operation/geometry_operation.hpp"
-#include "erhe_verify//verify.hpp"
-
-#include <sstream>
+#include "erhe_verify/verify.hpp"
 
 namespace erhe::geometry::operation {
 
@@ -39,7 +37,6 @@ void Join::build()
         const GEO::index_t src_facet_r  = src_facets[1];
         bool l_forward {false}; // a, b
         bool l_backward{false}; // b, a
-        std::stringstream l_ss;
         const GEO::index_t l_corner_count = source_mesh.facets.nb_corners(src_facet_l);
         if (l_corner_count == 0) {
             continue;
@@ -51,7 +48,6 @@ void Join::build()
             const GEO::index_t prev_src_vertex = source_mesh.facet_corners.vertex(prev_src_corner);
             const GEO::index_t src_vertex      = source_mesh.facet_corners.vertex(src_corner     );
             const GEO::index_t next_src_vertex = source_mesh.facet_corners.vertex(next_src_corner);
-            l_ss << src_vertex << " ";
             if (src_vertex == src_vertex_a) {
                 if (prev_src_vertex == src_vertex_b) {
                     l_backward = true;
@@ -65,7 +61,6 @@ void Join::build()
         }
         bool r_forward {false};
         bool r_backward{false};
-        std::stringstream r_ss;
         const GEO::index_t r_corner_count = source_mesh.facets.nb_corners(src_facet_r);
         if (r_corner_count == 0) {
             continue;
@@ -77,7 +72,6 @@ void Join::build()
             const GEO::index_t prev_src_vertex = source_mesh.facet_corners.vertex(prev_src_corner);
             const GEO::index_t src_vertex      = source_mesh.facet_corners.vertex(src_corner     );
             const GEO::index_t next_src_vertex = source_mesh.facet_corners.vertex(next_src_corner);
-            r_ss << src_vertex << " ";
             if (src_vertex == src_vertex_a) {
                 if (prev_src_vertex == src_vertex_b) {
                     r_backward = true;

@@ -1,9 +1,6 @@
 #include "erhe_geometry/operation/conway/subdivide.hpp"
 #include "erhe_geometry/operation/geometry_operation.hpp"
 
-#include <cstdint>
-#include <limits>
-
 namespace erhe::geometry::operation {
 
 class Subdivide : public Geometry_operation
@@ -31,12 +28,6 @@ void Subdivide::build()
     make_edge_midpoints({ 0.5f });
 
     for (const GEO::index_t src_facet : source_mesh.facets) {
-        //if (src_polygon.corner_count == 3)
-        //{
-        //    Polygon_id new_polygon_id = make_new_polygon_from_polygon(src_polygon_id);
-        //    add_polygon_corners(new_polygon_id, src_polygon_id);
-        //    continue;
-        //}
         const GEO::index_t src_corner_count = source_mesh.facets.nb_corners(src_facet);
         if (src_corner_count < 3) {
             continue;
@@ -53,7 +44,7 @@ void Subdivide::build()
             if (previous_edge_midpoint == GEO::NO_INDEX) {
                 continue;
             }
-            if (next_edge_midpoint == std::numeric_limits<uint32_t>::max()) {
+            if (next_edge_midpoint == GEO::NO_INDEX) {
                 continue;
             }
             const GEO::index_t new_dst_facet = make_new_dst_facet_from_src_facet(src_facet, 4);

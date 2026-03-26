@@ -24,7 +24,7 @@ void Dual::build()
     // build_src_corner_to_src_facet();
     make_facet_centroids();
 
-    // New facets from old verticess, new facet corner for each old vertex corner
+    // New facets from old vertices, new facet corner for each old vertex corner
     for (GEO::index_t src_vertex : source_mesh.vertices) {
         const std::vector<GEO::index_t>& src_corners = source.get_vertex_corners(src_vertex);
         const GEO::index_t src_corner_count = static_cast<GEO::index_t>(src_corners.size());
