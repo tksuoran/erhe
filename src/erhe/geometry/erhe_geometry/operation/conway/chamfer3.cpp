@@ -82,14 +82,14 @@ void Chamfer3::build()
         const GEO::index_t facet0_hi_local_corner = source_mesh.facets.find_edge(facet0, hi_vertex, lo_vertex);
         const bool         facet0_increasing      = facet0_lo_local_corner != GEO::NO_INDEX;
         if (!facet0_increasing && (facet0_hi_local_corner == GEO::NO_INDEX)) {
-            continue; // edge not found in facet0 — skip inconsistent edge
+            continue; // edge not found in facet0 - skip inconsistent edge
         }
         const GEO::index_t facet0_corner          = source_mesh.facets.corner(facet0, facet0_increasing ? facet0_lo_local_corner : facet0_hi_local_corner);
         const GEO::index_t facet1_lo_local_corner = source_mesh.facets.find_edge(facet1, lo_vertex, hi_vertex);
         const GEO::index_t facet1_hi_local_corner = source_mesh.facets.find_edge(facet1, hi_vertex, lo_vertex);
         const bool         facet1_increasing      = facet1_lo_local_corner != GEO::NO_INDEX;
         if (!facet1_increasing && (facet1_hi_local_corner == GEO::NO_INDEX)) {
-            continue; // edge not found in facet1 — skip inconsistent edge
+            continue; // edge not found in facet1 - skip inconsistent edge
         }
         const GEO::index_t facet1_corner          = source_mesh.facets.corner(facet1, facet1_increasing ? facet1_lo_local_corner : facet1_hi_local_corner);
         const GEO::index_t facet1_next_corner = source_mesh.facets.next_corner_around_facet(facet1, facet1_corner);
@@ -111,7 +111,7 @@ void Chamfer3::build()
         if (len > 1e-7f) {
             normal = normal / len;
         } else {
-            // Degenerate — use average of adjacent face normals
+            // Degenerate - use average of adjacent face normals
             normal = GEO::normalize(
                 mesh_facet_normalf(source_mesh, facet0) +
                 mesh_facet_normalf(source_mesh, facet1)
@@ -196,7 +196,7 @@ void Chamfer3::build()
         // Debug: draw the loop of hex quad open edges around this vertex.
         // For each adjacent edge E, the hex quad has an "open edge"
         // connecting V's two corner positions (one per face sharing E).
-        // These edges form a closed polygon — the boundary where the
+        // These edges form a closed polygon - the boundary where the
         // new vertex must be placed.
         for (GEO::index_t edge : v_edges) {
             const std::vector<GEO::index_t>& edge_facets = source.get_edge_facets(edge);

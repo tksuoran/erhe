@@ -85,8 +85,8 @@ TEST(Hierarchy, NestedTranslation)
 TEST(Hierarchy, RotationThenTranslation)
 {
     // Geometry: unit triangle at origin in XY plane
-    // Inner instance: translate by (2, 0, 0) — moves triangle to x=2
-    // Outer instance: rotate 90 degrees around Z — x=2 becomes y=2
+    // Inner instance: translate by (2, 0, 0) - moves triangle to x=2
+    // Outer instance: rotate 90 degrees around Z - x=2 becomes y=2
     // Expected: triangle centered around (0, 2, 0)
 
     Test_geometry tg = make_unit_triangle();

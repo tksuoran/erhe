@@ -7,9 +7,9 @@ Original review: 2026-03-21
 
 The following issues from the original review have been addressed:
 
-- **#2 Frame duration cap** — Needs verification: may still be 25s instead of 25ms
-- **#8 Missing EndDragDropTarget** — Fixed: added `EndDragDropTarget()` before early return in `Content_library_node::combo()`
-- **#10 Missing EndDragDropTarget in scene_root** — Fixed: removed unnecessary `DragDropWithinTarget` guard, verified all Begin/End pairs are balanced
+- **#2 Frame duration cap** - Needs verification: may still be 25s instead of 25ms
+- **#8 Missing EndDragDropTarget** - Fixed: added `EndDragDropTarget()` before early return in `Content_library_node::combo()`
+- **#10 Missing EndDragDropTarget in scene_root** - Fixed: removed unnecessary `DragDropWithinTarget` guard, verified all Begin/End pairs are balanced
 
 ## Open Findings
 
@@ -92,7 +92,7 @@ The following issues from the original review have been addressed:
 
 The bump-only `Buffer_allocator` in `erhe::graphics` has been replaced with `Free_list_allocator` in `erhe::buffer`. GPU and CPU buffer space is now reclaimed when meshes are destroyed via `Buffer_allocation` RAII handles held in `Buffer_mesh`. Key design points:
 
-- `Buffer_allocation` destructor calls `Free_list_allocator::free()` — member declaration order in containing classes must ensure the allocation is destroyed before the allocator
+- `Buffer_allocation` destructor calls `Free_list_allocator::free()` - member declaration order in containing classes must ensure the allocation is destroyed before the allocator
 - `Primitive_raytrace` member order was fixed to prevent use-after-free (confirmed with ASAN)
 - `Buffer_mesh` is now move-only (not copyable)
 - `Primitive_render_shape`, `Primitive_shape`, `Primitive_raytrace` are also move-only

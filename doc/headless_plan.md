@@ -2,10 +2,10 @@
 
 ## Goal
 
-Enable running the editor (and other erhe apps) without a display or GPU — headless/server mode for remote testing. Two new backends needed:
+Enable running the editor (and other erhe apps) without a display or GPU - headless/server mode for remote testing. Two new backends needed:
 
-1. **Null window** (`ERHE_WINDOW_LIBRARY=none`) — `Context_window` exists but does nothing
-2. **Null graphics** (`ERHE_GRAPHICS_LIBRARY=none`) — all graphics APIs implemented as no-ops, no actual GPU calls
+1. **Null window** (`ERHE_WINDOW_LIBRARY=none`) - `Context_window` exists but does nothing
+2. **Null graphics** (`ERHE_GRAPHICS_LIBRARY=none`) - all graphics APIs implemented as no-ops, no actual GPU calls
 
 ## Current State
 
@@ -28,7 +28,7 @@ All the same public API as SDL/GLFW backends. Key behaviors:
 - **`poll_events()`**: no-op (just swap empty event buffers)
 - **`get_input_events()`**: returns empty vector
 - **`get_width()`/`get_height()`**: return configured size (default 1920x1080)
-- **`make_current()`/`clear_current()`/`swap_buffers()`**: no-ops (guarded by `ERHE_GRAPHICS_LIBRARY_OPENGL` — won't be called with null graphics)
+- **`make_current()`/`clear_current()`/`swap_buffers()`**: no-ops (guarded by `ERHE_GRAPHICS_LIBRARY_OPENGL` - won't be called with null graphics)
 - **`get_cursor_position()`**: outputs 0, 0
 - **`set_cursor()`/`set_visible()`/`set_cursor_relative_hold()`**: no-ops
 - **`get_device_pointer()`/`get_window_handle()`**: return `nullptr`
@@ -40,7 +40,7 @@ All the same public API as SDL/GLFW backends. Key behaviors:
 ### CMake changes
 - `src/erhe/window/CMakeLists.txt`: add conditional block for `none` including `null_window.cpp/hpp`
 - `src/erhe/window/erhe_window/window.hpp`: add `#if defined(ERHE_WINDOW_LIBRARY_NONE)` include for `null_window.hpp`
-- No changes needed in root `CMakeLists.txt` — the `none` option and `ERHE_WINDOW_LIBRARY_NONE` define already exist
+- No changes needed in root `CMakeLists.txt` - the `none` option and `ERHE_WINDOW_LIBRARY_NONE` define already exist
 
 ## Task 2: Null Graphics Backend
 
@@ -64,21 +64,21 @@ Each mirrors the corresponding `gl/gl_*.hpp/.cpp`:
 
 | Impl class | Key behavior |
 |---|---|
-| `null_device.hpp/.cpp` | `Device_impl` — creates surface, manages frame index, ring buffers backed by CPU memory, returns sensible `Device_info` defaults, `wait_frame`/`begin_frame`/`end_frame` return `true` |
-| `null_buffer.hpp/.cpp` | `Buffer_impl` — allocates CPU `std::vector<std::byte>`, map/flush/invalidate operate on CPU memory |
-| `null_texture.hpp/.cpp` | `Texture_impl` — stores metadata only (dimensions, format, levels), no pixel storage needed, returns dummy handles |
-| `null_sampler.hpp/.cpp` | `Sampler_impl` — stores parameters, no GPU object |
+| `null_device.hpp/.cpp` | `Device_impl` - creates surface, manages frame index, ring buffers backed by CPU memory, returns sensible `Device_info` defaults, `wait_frame`/`begin_frame`/`end_frame` return `true` |
+| `null_buffer.hpp/.cpp` | `Buffer_impl` - allocates CPU `std::vector<std::byte>`, map/flush/invalidate operate on CPU memory |
+| `null_texture.hpp/.cpp` | `Texture_impl` - stores metadata only (dimensions, format, levels), no pixel storage needed, returns dummy handles |
+| `null_sampler.hpp/.cpp` | `Sampler_impl` - stores parameters, no GPU object |
 | `null_shader_stages.hpp/.cpp` | `Shader_stages_prototype_impl` (accepts sources, `is_valid()` returns `true`) + `Shader_stages_impl` (stores handle=0, pretends linked) |
-| `null_render_command_encoder.hpp/.cpp` | `Render_command_encoder_impl` — all `set_*()` and `draw_*()` are no-ops |
-| `null_command_encoder.hpp/.cpp` | `Command_encoder_impl` base — no-ops |
-| `null_blit_command_encoder.hpp/.cpp` | `Blit_command_encoder_impl` — no-ops |
-| `null_compute_command_encoder.hpp/.cpp` | `Compute_command_encoder_impl` — no-ops |
-| `null_render_pass.hpp/.cpp` | `Render_pass_impl` — start/end are no-ops |
-| `null_surface.hpp/.cpp` | `Surface_impl` — owns swapchain, no actual surface |
-| `null_swapchain.hpp/.cpp` | `Swapchain_impl` — frame lifecycle returns `true`/`should_render=true` |
-| `null_vertex_input_state.hpp/.cpp` | `Vertex_input_state_impl` — stores format info, no GPU state |
-| `null_gpu_timer.hpp/.cpp` | `Gpu_timer_impl` — no-ops, returns 0 durations |
-| `null_texture_heap.hpp/.cpp` | `Texture_heap_impl` — no-ops |
+| `null_render_command_encoder.hpp/.cpp` | `Render_command_encoder_impl` - all `set_*()` and `draw_*()` are no-ops |
+| `null_command_encoder.hpp/.cpp` | `Command_encoder_impl` base - no-ops |
+| `null_blit_command_encoder.hpp/.cpp` | `Blit_command_encoder_impl` - no-ops |
+| `null_compute_command_encoder.hpp/.cpp` | `Compute_command_encoder_impl` - no-ops |
+| `null_render_pass.hpp/.cpp` | `Render_pass_impl` - start/end are no-ops |
+| `null_surface.hpp/.cpp` | `Surface_impl` - owns swapchain, no actual surface |
+| `null_swapchain.hpp/.cpp` | `Swapchain_impl` - frame lifecycle returns `true`/`should_render=true` |
+| `null_vertex_input_state.hpp/.cpp` | `Vertex_input_state_impl` - stores format info, no GPU state |
+| `null_gpu_timer.hpp/.cpp` | `Gpu_timer_impl` - no-ops, returns 0 durations |
+| `null_texture_heap.hpp/.cpp` | `Texture_heap_impl` - no-ops |
 
 ### `Device_info` defaults for null backend
 
@@ -98,9 +98,9 @@ The null `Buffer_impl` must provide real CPU memory for `map_bytes()`/`map_eleme
 
 ## Implementation Order
 
-1. **Null window first** — smallest scope, can test independently
-2. **Null graphics** — larger scope, but follows clear pattern from GL backend
-3. **Integration test** — configure with both `none`, build editor, verify it starts and runs the main loop without crashing
+1. **Null window first** - smallest scope, can test independently
+2. **Null graphics** - larger scope, but follows clear pattern from GL backend
+3. **Integration test** - configure with both `none`, build editor, verify it starts and runs the main loop without crashing
 
 ## Verification
 
@@ -112,7 +112,7 @@ cmake --build build_headless --target editor
 
 ## Risks
 
-1. **Hidden GL/Vulkan dependencies**: Code outside `erhe_graphics` may directly reference `ERHE_GRAPHICS_LIBRARY_OPENGL` for conditional compilation. These guards need auditing — any code that's only compiled when OpenGL is active needs a `none` path or needs to be made unconditional.
+1. **Hidden GL/Vulkan dependencies**: Code outside `erhe_graphics` may directly reference `ERHE_GRAPHICS_LIBRARY_OPENGL` for conditional compilation. These guards need auditing - any code that's only compiled when OpenGL is active needs a `none` path or needs to be made unconditional.
 2. **ImGui backend**: The ImGui renderer likely calls graphics APIs directly. With null graphics, ImGui rendering must degrade gracefully (skip render calls). The existing `ERHE_GUI_LIBRARY=none` option may handle this.
 3. **Buffer mapping**: The editor relies on mapping GPU buffers to write geometry data. The null backend must provide real CPU memory for maps or the editor will crash on null pointer dereference.
 4. **Scope**: The GL backend has ~22 impl files. Writing null stubs for all of them is mechanical but tedious. Consider generating stubs or copying GL files and stripping the GL calls.

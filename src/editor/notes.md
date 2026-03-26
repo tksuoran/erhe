@@ -132,14 +132,14 @@ ImGui window implementations:
 
 ## Component Construction Rules
 
-`App_context` is a plain struct of raw pointers, all initially null. Components are constructed in dependency order by the `Editor` constructor. `App_context&` is passed to component constructors, but **component constructors must only store the reference — they must NOT access any `App_context` member pointers**. The pointers are populated later in `fill_app_context()` after all components exist.
+`App_context` is a plain struct of raw pointers, all initially null. Components are constructed in dependency order by the `Editor` constructor. `App_context&` is passed to component constructors, but **component constructors must only store the reference - they must NOT access any `App_context` member pointers**. The pointers are populated later in `fill_app_context()` after all components exist.
 
 This means:
 - Constructor bodies must not read `m_context.selection`, `m_context.move_tool`, etc.
-- Constructor bodies must not check `if (m_context.xxx != nullptr)` — these are always null during construction
+- Constructor bodies must not check `if (m_context.xxx != nullptr)` - these are always null during construction
 - Cross-component wiring that requires other components to exist must happen after `fill_app_context()`, not in constructors
 
-Components that need references to sibling components should receive them as explicit constructor parameters (not via `App_context`). For example, `Transform_tool` receives `Move_tool&`, `Rotate_tool&`, `Scale_tool&` directly — these are constructed immediately before it in the same task block.
+Components that need references to sibling components should receive them as explicit constructor parameters (not via `App_context`). For example, `Transform_tool` receives `Move_tool&`, `Rotate_tool&`, `Scale_tool&` directly - these are constructed immediately before it in the same task block.
 
 ## Important Patterns
 
@@ -174,9 +174,9 @@ Scenes serialize to JSON + companion `.glb` (meshes/materials) + `.geogram` (edi
 ### Item Locking and Tagging
 
 Items have three lock flags (in `Item_flags`):
-- `lock_viewport_selection` (bit 7) — prevents viewport click-to-select
-- `lock_viewport_transform` (bit 8) — prevents viewport gizmo transform
-- `lock_edit` (bit 25) — prevents deletion and property editing; `Selection::delete_selection()` skips locked items; Properties window disables editing when set
+- `lock_viewport_selection` (bit 7) - prevents viewport click-to-select
+- `lock_viewport_transform` (bit 8) - prevents viewport gizmo transform
+- `lock_edit` (bit 25) - prevents deletion and property editing; `Selection::delete_selection()` skips locked items; Properties window disables editing when set
 
 Items also support arbitrary string tags via `add_tag()`, `remove_tag()`, `has_tag()`, `get_tags()`. Tags and lock state are exposed in MCP node query responses and can be set via `lock_items`, `unlock_items`, `add_tags`, `remove_tags` MCP tools. The Properties window shows lock toggles at the top of each item.
 

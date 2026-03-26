@@ -8,7 +8,7 @@ Low-level rendering infrastructure for the editor: shader programs, GPU memory m
 
 - **`Programs`** -- Loads and manages all shader programs (standard, debug visualizations, tools, sky, grid, etc.). Provides `get_variant_shader_stages()` for selecting debug visualization modes. Uses `Shader_stages_builder` for deferred shader compilation.
 
-- **`Mesh_memory`** -- Allocates and manages shared GPU buffers for vertex and index data. Provides three vertex buffer streams (position, non-position attributes, custom attributes) and a single index buffer. Includes a `Buffer_transfer_queue` for staging uploads. All editor meshes share this memory pool. Uses `Free_list_allocator` (via `Graphics_buffer_sink`) for reclaimable allocation — buffer space is freed when meshes are destroyed.
+- **`Mesh_memory`** -- Allocates and manages shared GPU buffers for vertex and index data. Provides three vertex buffer streams (position, non-position attributes, custom attributes) and a single index buffer. Includes a `Buffer_transfer_queue` for staging uploads. All editor meshes share this memory pool. Uses `Free_list_allocator` (via `Graphics_buffer_sink`) for reclaimable allocation - buffer space is freed when meshes are destroyed.
 
 - **`Id_renderer`** -- GPU-based object picking. Renders mesh IDs and triangle IDs to an offscreen framebuffer, then reads back a small region around the cursor. Uses a ring buffer for async readback across frames. Returns `Id_query_result` with mesh, primitive index, triangle ID, and depth.
 

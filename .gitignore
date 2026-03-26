@@ -23,6 +23,7 @@ build_vs2026_opengl
 build_vs2026_opengl_no_tracy
 build_vs2026_opengl_asan
 build_vs2026_vulkan
+build_test_geometry
 build_test_raytrace_bvh
 build_test_raytrace_embree
 build_test_raytrace_none

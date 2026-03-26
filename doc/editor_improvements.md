@@ -19,10 +19,10 @@ Operations are queued without pre-validation. `Compound_operation` has no rollba
 
 ### 3. Fix commented-out mutex / thread safety (Small effort, Medium impact)
 
-- `app_scenes.cpp` — mutex locks commented out with TODOs
-- `Tools` — mutex on `m_tools` but not on `priority_tool`
-- `Transform_tool_shared` — `atomic<bool>` for visualization readiness but other state unprotected
-- `Operation_stack` — `m_queued` modified during `update()` iteration
+- `app_scenes.cpp` - mutex locks commented out with TODOs
+- `Tools` - mutex on `m_tools` but not on `priority_tool`
+- `Transform_tool_shared` - `atomic<bool>` for visualization readiness but other state unprotected
+- `Operation_stack` - `m_queued` modified during `update()` iteration
 
 ### 4. Add debug-mode asserts on weak_ptr::lock (Small effort, Low-Medium impact)
 

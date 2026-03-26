@@ -133,7 +133,7 @@ TEST(Geometry, CubeHitNearestFace)
     scene->attach(tg.geometry.get());
     scene->commit();
 
-    // Ray from z=2 aiming at cube center — should hit front face at z=0.5
+    // Ray from z=2 aiming at cube center - should hit front face at z=0.5
     Ray ray = make_ray({0.0f, 0.0f, 2.0f}, {0.0f, 0.0f, -1.0f});
     Hit hit{};
 

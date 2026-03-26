@@ -80,7 +80,7 @@ auto is_mesh_convex(const GEO::Mesh& mesh, float tolerance = 1e-5f) -> bool
 
 // Compare two meshes by checking that every vertex in A has a nearby
 // vertex in B (and vice versa). Returns the maximum nearest-neighbor
-// distance across both directions. O(n*m) brute force — fine for small
+// distance across both directions. O(n*m) brute force - fine for small
 // test meshes.
 auto hausdorff_vertex_distance(const GEO::Mesh& a, const GEO::Mesh& b) -> float
 {
@@ -131,7 +131,7 @@ auto apply_chamfer3(const erhe::geometry::Geometry& source)
 //
 // Verify that chamfer of a cube produces vertex positions matching a
 // known-good reference. This catches regressions in the geometric
-// computation — if any vertex moves, the test fails.
+// computation - if any vertex moves, the test fails.
 //
 
 TEST(ChamferReference, Cube_SingleChamfer_VertexPositions)
@@ -236,7 +236,7 @@ void check_chamfer_quality(
         const bool convex    = is_mesh_convex(mesh);
         const bool self_isec = erhe::geometry::has_self_intersections(mesh);
 
-        // Report all metrics — use EXPECT so all iterations run even if one fails
+        // Report all metrics - use EXPECT so all iterations run even if one fails
         EXPECT_LT(max_plan, 1e-4f)
             << "iter " << (i + 1) << " planarity " << max_plan;
         EXPECT_TRUE(convex)
@@ -248,7 +248,7 @@ void check_chamfer_quality(
     }
 }
 
-// Single iteration — both methods
+// Single iteration - both methods
 TEST(QualityRef, Tetrahedron_x1)  { check_chamfer_quality("ref", "tetrahedron",  erhe::geometry::shapes::make_tetrahedron,  apply_chamfer, 1); }
 TEST(QualityRef, Cube_x1)         { check_chamfer_quality("ref", "cube",          erhe::geometry::shapes::make_cube,          apply_chamfer, 1); }
 TEST(QualityRef, Octahedron_x1)   { check_chamfer_quality("ref", "octahedron",    erhe::geometry::shapes::make_octahedron,    apply_chamfer, 1); }
@@ -261,7 +261,7 @@ TEST(Quality3, Octahedron_x1)   { check_chamfer_quality("chamfer3", "octahedron"
 TEST(Quality3, Dodecahedron_x1) { check_chamfer_quality("chamfer3", "dodecahedron",  erhe::geometry::shapes::make_dodecahedron,  apply_chamfer3, 1); }
 TEST(Quality3, Icosahedron_x1)  { check_chamfer_quality("chamfer3", "icosahedron",   erhe::geometry::shapes::make_icosahedron,   apply_chamfer3, 1); }
 
-// 3 iterations — all methods
+// 3 iterations - all methods
 TEST(QualityRef, Tetrahedron_x3)  { check_chamfer_quality("ref", "tetrahedron",  erhe::geometry::shapes::make_tetrahedron,  apply_chamfer, 3); }
 TEST(QualityRef, Cube_x3)         { check_chamfer_quality("ref", "cube",          erhe::geometry::shapes::make_cube,          apply_chamfer, 3); }
 TEST(QualityRef, Octahedron_x3)   { check_chamfer_quality("ref", "octahedron",    erhe::geometry::shapes::make_octahedron,    apply_chamfer, 3); }
@@ -464,4 +464,4 @@ TEST(ChamferConvexity, Icosahedron_RepeatedChamfer)
     }
 }
 
-// (Reference comparison and StraightSkel tests removed — chamfer2 was a dead end)
+// (Reference comparison and StraightSkel tests removed - chamfer2 was a dead end)

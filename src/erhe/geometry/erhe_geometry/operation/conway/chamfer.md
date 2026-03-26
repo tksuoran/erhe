@@ -32,7 +32,7 @@ Each face vertex is lerped toward the face centroid:
 ```
 corner = pos + bevel_ratio * (centroid - pos)
 ```
-This is a uniform scale toward the centroid — it preserves face shape
+This is a uniform scale toward the centroid - it preserves face shape
 exactly and produces E' edges parallel to the original edges E. The
 `bevel_ratio` parameter controls how much each face shrinks.
 
@@ -49,7 +49,7 @@ is determined by a 1D least-squares fit along a ray.
 
 **Corner loop polygon**: For each edge adjacent to V, the hex quad has an
 "open edge" connecting V's two corner positions (one from each face sharing
-the edge). These open edges form a closed polygon — the boundary that V'
+the edge). These open edges form a closed polygon - the boundary that V'
 must connect to.
 
 **Ray definition**: V' is constrained to lie on the ray through the polygon
@@ -138,7 +138,7 @@ become nearly coplanar, making hex plane normals ill-conditioned.
 
 ## Failed Approaches (Historical)
 
-### chamfer_old.cpp — Edge-Plane LS (Original Reference)
+### chamfer_old.cpp - Edge-Plane LS (Original Reference)
 
 **Approach**: Edge planes (dihedral bisectors) with geometry-derived offsets.
 Corner positions via per-face LS line fitting. Inset vertices via per-vertex
@@ -151,17 +151,17 @@ asymmetric offsets that produce non-convex hexagonal faces. At iteration 3,
 48 non-convex faces appear consistently across all platonic solids.
 
 The corner computation method (LS line fitting, face-local cross-product, or
-Blender-style offset_meet) made no difference — all produce the same 48
+Blender-style offset_meet) made no difference - all produce the same 48
 non-convex faces. The root cause is the offset computation, not the corner
 or vertex positioning.
 
-Also lacks a user-controllable bevel parameter — the `0.5` factor and
+Also lacks a user-controllable bevel parameter - the `0.5` factor and
 `vertex_min_heights` metric are hardcoded.
 
 **Status**: Renamed to `chamfer_old`, removed from UI, kept in tests as
 reference for quality comparison.
 
-### chamfer2.cpp — StraightSkel 3D Straight Skeleton (Removed)
+### chamfer2.cpp - StraightSkel 3D Straight Skeleton (Removed)
 
 **Approach**: Use the StraightSkel library's `shiftFacets()` to compute
 offset polyhedra via 3D straight skeleton, then extract inset vertex
@@ -188,7 +188,7 @@ the original vertex position). No ray constraint.
 
 **Why it failed**: The 3D LS solution has three degrees of freedom. When hex
 planes are nearly parallel (coplanar adjacent faces at iterations 2-3), the
-LS solution can drift laterally — sliding along the nearly-degenerate
+LS solution can drift laterally - sliding along the nearly-degenerate
 direction. This lateral drift causes V' to intersect adjacent shrunk faces
 or hex quads. All x1 tests passed, but iterations 2-3 produced
 self-intersections and non-convex hexagons with planarity ~0.005.
@@ -206,7 +206,7 @@ planes and hex quad planes as floor).
 **Why it failed**: Two variants were tried:
 1. **Corner-centroid lerp (approach A)**: Start from the corner centroid,
    lerp toward V, clamp at half-space boundaries. Failed because the corner
-   centroid is not guaranteed to be inside the valid region — it can violate
+   centroid is not guaranteed to be inside the valid region - it can violate
    hex convexity constraints.
 2. **LS + V-to-LS clamping (approach C)**: Clamp along the line from V
    toward the LS solution. The shrunk face constraints were correct 3D
@@ -217,7 +217,7 @@ planes and hex quad planes as floor).
    unconstrained LS.
 
 **Fix**: The ray approach avoids the need for explicit half-space constraints
-entirely — the 1D parametrization inherently stays in the valid region.
+entirely - the 1D parametrization inherently stays in the valid region.
 
 ## Industry Comparison
 

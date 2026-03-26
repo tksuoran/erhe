@@ -7,11 +7,11 @@
 
 1. **Creating destination vertices** from source vertices, face centroids,
    and edge midpoints
-2. **Tracking provenance** — which source elements contributed to each
+2. **Tracking provenance** - which source elements contributed to each
    destination element, with weights
 3. **Interpolating mesh attributes** (positions, normals, texcoords,
    colors) from source to destination using the provenance weights
-4. **Post-processing** — sanitize the mesh and rebuild connectivity,
+4. **Post-processing** - sanitize the mesh and rebuild connectivity,
    edges, normals, and texture coordinates
 
 ## Architecture
@@ -40,44 +40,44 @@ lazy resize and `add(dst, weight, src)` API):
 
 ### Vertex Creation
 
-- **`make_dst_vertices_from_src_vertices()`** — copies all source
+- **`make_dst_vertices_from_src_vertices()`** - copies all source
   vertices 1:1 to the destination with weight 1.0 each. Used by most
   operations that preserve original vertices (kis, join, gyro, meta,
   subdivide).
 
-- **`make_facet_centroids()`** — creates one destination vertex per
+- **`make_facet_centroids()`** - creates one destination vertex per
   source face at the face centroid (equal weight from all corner
   vertices). Used by dual, kis, join, gyro, meta, subdivide.
 
-- **`make_edge_midpoints({t0, t1, ...})`** — creates N destination
+- **`make_edge_midpoints({t0, t1, ...})`** - creates N destination
   vertices per source edge at the specified parametric positions.
   `t=0` is vertex A, `t=1` is vertex B. Weights are `t` for A and
   `(1-t)` for B. Used by ambo (t=0.5), truncate (t=1/3, 2/3), gyro
   (t=1/3, 2/3), meta (t=0.5), subdivide (t=0.5).
 
-- **`get_src_edge_new_vertex(va, vb, slot)`** — retrieves the
+- **`get_src_edge_new_vertex(va, vb, slot)`** - retrieves the
   destination vertex for a previously created edge midpoint. Handles
   direction reversal: if `va > vb`, the slot index is mirrored so
   that slot 0 always returns the point closest to the first argument.
 
 ### Facet and Corner Creation
 
-- **`make_new_dst_facet_from_src_facet(src_facet, corner_count)`** —
+- **`make_new_dst_facet_from_src_facet(src_facet, corner_count)`** -
   creates a destination polygon and registers facet provenance. Used
   by gyro, meta, subdivide. Operations that skip this (ambo, dual,
   kis, join, truncate) lose facet attribute interpolation.
 
 - **`make_new_dst_corner_from_src_corner(dst_facet, local_corner, src_corner)`**
-  — sets a corner's vertex from the 1:1 vertex copy and registers
+  - sets a corner's vertex from the 1:1 vertex copy and registers
   corner provenance. Used when the destination corner corresponds
   directly to a source corner.
 
 - **`make_new_dst_corner_from_src_facet_centroid(dst_facet, local_corner, src_facet)`**
-  — sets a corner's vertex to the previously created centroid vertex
+  - sets a corner's vertex to the previously created centroid vertex
   and distributes corner sources from the centroid's vertex sources.
 
 - **`make_new_dst_corner_from_dst_vertex(dst_facet, local_corner, dst_vertex)`**
-  — sets a corner's vertex to an existing destination vertex (e.g.,
+  - sets a corner's vertex to an existing destination vertex (e.g.,
   an edge midpoint) and distributes corner sources.
 
 ### Attribute Interpolation
@@ -170,7 +170,7 @@ its own LS fitting algorithm rather than weighted interpolation.
 - Edge midpoints are keyed by ordered vertex pairs (min, max) in
   `m_src_edge_to_dst_vertex`. The `get_src_edge_new_vertex` method
   handles direction reversal by mirroring the slot index.
-- `add_edge_source` exists but is unused — edge attribute
+- `add_edge_source` exists but is unused - edge attribute
   interpolation is not implemented (TODO in the code).
 - The `rhs`/`rhs_mesh` members support binary operations (CSG) where
   two source geometries are combined into one destination. For unary

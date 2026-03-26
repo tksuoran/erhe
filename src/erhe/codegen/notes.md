@@ -1,4 +1,4 @@
-# erhe_codegen — Python C++ Struct Code Generator
+# erhe_codegen - Python C++ Struct Code Generator
 
 ## Overview
 
@@ -10,10 +10,10 @@ A Python code generator that produces C++ structs with versioned JSON serializat
 - **Enum declarations** with per-value metadata and string conversion
 - **JSON serialization** via direct string-building (pretty-printed with 4-space indentation)
 - **JSON deserialization** via simdjson on-demand API
-- **Schema versioning** — fields declare `added_in` / `removed_in`; deserialization handles all past versions
-- **Migration callbacks** — run user code when deserializing older versions
-- **Rich reflection** — field name, type enum, offset, size, version range, descriptions, numeric limits, path, visibility, enum info
-- **Struct metadata** — struct name, version, short/long descriptions
+- **Schema versioning** - fields declare `added_in` / `removed_in`; deserialization handles all past versions
+- **Migration callbacks** - run user code when deserializing older versions
+- **Rich reflection** - field name, type enum, offset, size, version range, descriptions, numeric limits, path, visibility, enum info
+- **Struct metadata** - struct name, version, short/long descriptions
 
 ## Generated Files
 
@@ -157,23 +157,23 @@ vector, array, optional, struct_ref, enum_ref
 
 Each field has rich metadata accessible at runtime:
 
-- `name`, `type_name` — field and C++ type names
-- `field_type` — `Field_type` enum for type-safe dispatch
-- `offset`, `size` — for pointer arithmetic from struct base
-- `added_in`, `removed_in` — version range
-- `short_desc`, `long_desc` — UI label and tooltip
-- `path` — grouping path for UI organization
-- `visible` — whether to show in UI
-- `numeric_limits` — ui_min/max, hard_min/max with has_* flags
-- `is_numeric`, `is_enum` — convenience booleans
-- `enum_info` — pointer to `Enum_info` for enum fields
+- `name`, `type_name` - field and C++ type names
+- `field_type` - `Field_type` enum for type-safe dispatch
+- `offset`, `size` - for pointer arithmetic from struct base
+- `added_in`, `removed_in` - version range
+- `short_desc`, `long_desc` - UI label and tooltip
+- `path` - grouping path for UI organization
+- `visible` - whether to show in UI
+- `numeric_limits` - ui_min/max, hard_min/max with has_* flags
+- `is_numeric`, `is_enum` - convenience booleans
+- `enum_info` - pointer to `Enum_info` for enum fields
 
 ### Struct_info struct
 
-- `name` — struct type name
-- `version` — current schema version
-- `short_desc`, `long_desc` — UI display name and description
-- `fields` — `std::span<const Field_info>`
+- `name` - struct type name
+- `version` - current schema version
+- `short_desc`, `long_desc` - UI display name and description
+- `fields` - `std::span<const Field_info>`
 
 ### Access functions
 

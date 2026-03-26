@@ -13,12 +13,12 @@ The foundational entity system for erhe, providing `Item_base` (identity, flags,
 - Excellent test coverage: unit tests for every public type (`Unique_id`, `Item_flags`, `Item_filter`, `Item_base`, CRTP, `Hierarchy`, `Item_host`) plus a randomized smoke test (`hierarchy_smoke.cpp`) that exercises create/reparent/remove/clone/iterate operations with deterministic seeding
 - Well-commented copy constructor (hierarchy.cpp:19-21) explains why `shared_from_this()` cannot be used during construction
 - Tags system (`m_tags`) provides flexible per-item metadata with MCP server integration (`add_tags`, `remove_tags`)
-- `explicit` copy constructor on `Item_base` prevents accidental copies — good design given the copy semantics (new ID, name append, strip selected)
+- `explicit` copy constructor on `Item_base` prevents accidental copies - good design given the copy semantics (new ID, name append, strip selected)
 - Test harness (test/main.cpp) correctly bootstraps the `erhe::file::log_file` logger to break the circular dependency with `erhe::log::make_logger()`
 
 ## Fixed Issues
 
-### Hierarchy copy/assignment — grandchild depth and parent pointer bugs (fixed)
+### Hierarchy copy/assignment - grandchild depth and parent pointer bugs (fixed)
 
 - **[fixed]** `Hierarchy` copy constructor previously set each cloned child's depth via direct assignment (`m_depth = m_depth + 1`), which only fixed the direct child but left grandchildren and deeper nodes at depth 1. Fixed by using `set_depth_recursive(m_depth + 1)` which propagates the correct depth through the entire cloned subtree.
 

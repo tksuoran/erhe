@@ -377,7 +377,7 @@ auto count_hex_depth_violations(const GEO::Mesh& mesh) -> int
 // Hex depth test removed: the topology-merge (corner-average inset vertex)
 // intentionally places the inset vertex at the average of per-face corners,
 // which may not lie on the hexagonal face plane. This is geometrically
-// correct for the merged topology — the non-planarity is a feature, not a
+// correct for the merged topology - the non-planarity is a feature, not a
 // bug, because it allows the vertex to serve all adjacent hexagonal faces
 // simultaneously.
 

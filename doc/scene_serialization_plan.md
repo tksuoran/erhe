@@ -119,7 +119,7 @@ Functions:
 - `Scene_file` v2: added `node_physics` field (`Vector(Node_physics_data)`).
 - On save: iterates all nodes, serializes `Node_physics` attachment properties. Mass read from rigid body if active.
 - On load: creates `Node_physics` attachments. Collision shape is re-derived as convex hull from the mesh geometry attached to the same node (same approach as `Brush`). Falls back to empty shape if no geometry available.
-- Collision shape parameters (box extents, sphere radius, etc.) are NOT serialized — convex hull is always used on load. This is acceptable for geometry-normative meshes where the original geometry is available.
+- Collision shape parameters (box extents, sphere radius, etc.) are NOT serialized - convex hull is always used on load. This is acceptable for geometry-normative meshes where the original geometry is available.
 
 ## Verification
 

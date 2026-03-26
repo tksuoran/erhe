@@ -155,7 +155,7 @@ void Node_physics::begin_interaction()
     if (!m_rigid_body) {
         return;
     }
-    // m_motion_mode already holds the intended mode — no need to re-read
+    // m_motion_mode already holds the intended mode - no need to re-read
     // from the rigid body, which may already be kinematic from a prior call.
     m_rigid_body->set_motion_mode(Motion_mode::e_kinematic_physical);
     m_rigid_body->begin_move();

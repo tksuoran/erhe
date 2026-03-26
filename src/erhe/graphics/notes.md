@@ -9,7 +9,7 @@ hides the underlying graphics API behind a pimpl pattern.
 ## Key Types
 - `Device` -- Central graphics device. Creates command encoders, manages ring buffers, queries capabilities, handles frame lifecycle (`wait_frame`/`begin_frame`/`end_frame`).
 - `Device_info` -- GPU capability queries: GLSL version, limits, feature flags (bindless textures, sparse textures, persistent buffers, compute shaders, multi-draw indirect).
-- `Buffer` -- GPU buffer (vertex, index, uniform, storage, etc.) with mapping and flush operations. Uses pimpl for backend. Pure GPU resource wrapper — allocation is handled externally by `Free_list_allocator` (in `erhe::buffer`).
+- `Buffer` -- GPU buffer (vertex, index, uniform, storage, etc.) with mapping and flush operations. Uses pimpl for backend. Pure GPU resource wrapper - allocation is handled externally by `Free_list_allocator` (in `erhe::buffer`).
 - `Texture` -- GPU texture (1D/2D/3D/cube) with mipmap, MSAA, sparse, and array layer support. Extends `erhe::Item`.
 - `Sampler` -- Texture sampler with filtering, addressing, LOD, and anisotropy settings.
 - `Shader_stages` -- Compiled and linked shader program. Created from `Shader_stages_prototype`.

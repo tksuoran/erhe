@@ -24,7 +24,7 @@ class Grid_tool
 { ... };
 ```
 
-All other tools that had this pattern — `Fly_camera_tool`, `Paint_tool`, `Hotbar`, `Hover_tool` — were already refactored to the composition approach: they inherit only from `Tool` and own a `Tool_window m_window` member that delegates `imgui()` (and optionally `flags()`, `on_begin()`, `on_end()`) back to the tool via callbacks. See `tools/tool_window.hpp`.
+All other tools that had this pattern - `Fly_camera_tool`, `Paint_tool`, `Hotbar`, `Hover_tool` - were already refactored to the composition approach: they inherit only from `Tool` and own a `Tool_window m_window` member that delegates `imgui()` (and optionally `flags()`, `on_begin()`, `on_end()`) back to the tool via callbacks. See `tools/tool_window.hpp`.
 
 These two remaining classes should be migrated for consistency. The migration is mechanical: remove `Imgui_window` from the inheritance list, add a `Tool_window m_window` member, rename the `imgui()` override to a private `window_imgui()` method, and route any calls to `Imgui_window` methods (like `hide_window()`, `set_window_visibility()`) through `m_window`.
 
@@ -44,7 +44,7 @@ Every Tool subclass manually calls `tools.register_tool(this)` at the end of its
 
 Forgetting this call means the tool silently does not appear in the tool system. There is no compile-time or runtime warning.
 
-The simplest fix is to pass `Tools&` to the `Tool` base class constructor and have it call `register_tool(this)` automatically. Since every Tool subclass already receives `Tools&` and passes `App_context&` to the base, this requires minimal change. The only subtlety is that `register_tool` is called before the derived constructor body runs, but `register_tool` only stores the pointer and reads `get_flags()` — both of which are set via `set_flags()` / `set_base_priority()` in the member initializer list or very early in the constructor. The flag-setting calls would need to move before the base constructor, or `register_tool` could be deferred (e.g., `Tools` could store pending registrations and finalize them in a second pass).
+The simplest fix is to pass `Tools&` to the `Tool` base class constructor and have it call `register_tool(this)` automatically. Since every Tool subclass already receives `Tools&` and passes `App_context&` to the base, this requires minimal change. The only subtlety is that `register_tool` is called before the derived constructor body runs, but `register_tool` only stores the pointer and reads `get_flags()` - both of which are set via `set_flags()` / `set_base_priority()` in the member initializer list or very early in the constructor. The flag-setting calls would need to move before the base constructor, or `register_tool` could be deferred (e.g., `Tools` could store pending registrations and finalize them in a second pass).
 
 An alternative is a builder pattern where `Tools` constructs all tools itself, but that is a larger change and ties tool creation to the container.
 
@@ -54,7 +54,7 @@ An alternative is a builder pattern where `Tools` constructs all tools itself, b
 
 **Effort:** Small | **Impact:** Low (reduces boilerplate)
 
-**DONE.** `Message_bus::subscribe()` now returns a `std::shared_ptr<Subscription<Message_type>>` that holds the callback. The bus stores a `weak_ptr<Subscription<T>>` — when the subscriber drops the shared_ptr, the weak_ptr expires and the bus prunes the receiver. Each subscribing class holds explicit typed subscription members (e.g. `std::shared_ptr<Subscription<Hover_scene_view_message>>`), eliminating the dummy `std::make_shared<int>(0)` witness pattern.
+**DONE.** `Message_bus::subscribe()` now returns a `std::shared_ptr<Subscription<Message_type>>` that holds the callback. The bus stores a `weak_ptr<Subscription<T>>` - when the subscriber drops the shared_ptr, the weak_ptr expires and the bus prunes the receiver. Each subscribing class holds explicit typed subscription members (e.g. `std::shared_ptr<Subscription<Hover_scene_view_message>>`), eliminating the dummy `std::make_shared<int>(0)` witness pattern.
 
 ## 4. Clarify Tool vs Command_host taxonomy
 
@@ -75,7 +75,7 @@ The boundary between "Tool" and "Command_host that is not a Tool" is unclear:
 
 `Selection` is a `Command_host` that manages selection state and owns commands like `Selection_delete_command`, but is not a Tool. Meanwhile `Selection_tool` *is* a Tool that handles mouse-based selection interaction. The two are separate classes in the same file (`selection_tool.hpp`). This split is not immediately obvious to someone reading the code.
 
-`Debug_visualizations` renders tool-like overlays (joint axes, physics shapes, light frustums) and has an `Imgui_window` for settings, but inherits from `Renderable` instead of `Tool` — so it doesn't participate in the priority system or appear in the tool list.
+`Debug_visualizations` renders tool-like overlays (joint axes, physics shapes, light frustums) and has an `Imgui_window` for settings, but inherits from `Renderable` instead of `Tool` - so it doesn't participate in the priority system or appear in the tool list.
 
 Recommendations:
 - Document the distinction: a `Tool` is specifically a Command_host that participates in the priority/toolbox system and can render into the viewport. A `Command_host` that only provides keyboard shortcuts or manages state is not a Tool.
@@ -84,7 +84,7 @@ Recommendations:
 
 ## 5. Priority system cleanup
 
-**DONE** (5a: named constants, 5b: sort_bindings fixed). Items 5c and 5d are deferred — they require behavioral testing.
+**DONE** (5a: named constants, 5b: sort_bindings fixed). Items 5c and 5d are deferred - they require behavioral testing.
 
 **Effort:** Medium | **Impact:** Medium (correctness)
 
@@ -129,7 +129,7 @@ Update bindings (per-frame tick commands) are processed in the order they were r
 
 ## 6. Tool_flags documentation and enforcement
 
-**DONE** (inline documentation added to Tool_flags members in step 5). The original observation that only `trs_tool` uses `toolbox` was incorrect — after step 2 (auto-register), flags are passed via constructors and `toolbox` is used by 10 tool classes.
+**DONE** (inline documentation added to Tool_flags members in step 5). The original observation that only `trs_tool` uses `toolbox` was incorrect - after step 2 (auto-register), flags are passed via constructors and `toolbox` is used by 10 tool classes.
 
 **Effort:** Small | **Impact:** Low (clarity)
 
@@ -141,7 +141,7 @@ Update bindings (per-frame tick commands) are processed in the order they were r
 - **`secondary`**: Tool can remain active alongside the priority tool (if the priority tool sets `allow_secondary`).
 - **`allow_secondary`**: When this tool is the priority tool, secondary tools stay enabled.
 
-However, only one place in the entire codebase calls `set_flags()` with `Tool_flags::toolbox` — `trs_tool.cpp:149`. All other tools leave flags at the default value of `0`. This means the toolbox/secondary system is effectively only used by `Trs_tool` (the combined translate/rotate/scale selector). The hotbar populates its slots from tools, but the `toolbox` flag filtering doesn't match what actually appears there.
+However, only one place in the entire codebase calls `set_flags()` with `Tool_flags::toolbox` - `trs_tool.cpp:149`. All other tools leave flags at the default value of `0`. This means the toolbox/secondary system is effectively only used by `Trs_tool` (the combined translate/rotate/scale selector). The hotbar populates its slots from tools, but the `toolbox` flag filtering doesn't match what actually appears there.
 
 The flag semantics should be documented in `tool.hpp`, and if flags beyond `toolbox` are unused, they should either be removed or their intended use should be implemented.
 
@@ -161,7 +161,7 @@ auto Subtool::get_shared() const -> Transform_tool_shared& {
 
 This reaches through `App_context` → `Transform_tool` → public `shared` member. Every subtool method that needs transform state goes through this chain. The `Subtool::end()` method similarly calls `m_context.transform_tool->record_transform_operation()`.
 
-This means subtools cannot exist without a `Transform_tool` instance, cannot be tested independently, and are tightly coupled to the god object. The coupling is structural rather than just incidental — `Transform_tool_shared` contains the selection entries, anchor transforms, visualization state, and settings that all subtools need.
+This means subtools cannot exist without a `Transform_tool` instance, cannot be tested independently, and are tightly coupled to the god object. The coupling is structural rather than just incidental - `Transform_tool_shared` contains the selection entries, anchor transforms, visualization state, and settings that all subtools need.
 
 A cleaner approach would be to pass `Transform_tool_shared&` directly to `Subtool` at construction time (or at `begin()` time), and provide a callback or interface for `record_transform_operation()`. This would make the dependency explicit and remove the `App_context` chain.
 

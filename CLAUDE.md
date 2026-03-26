@@ -19,9 +19,9 @@ scripts\configure_vs2026_opengl.bat
 This generates a Visual Studio solution in `build_vs2026_opengl/`. Open it and build the `editor` target.
 
 Alternative configurations:
-- `configure_vs2026_opengl_asan.bat` — with AddressSanitizer
-- `configure_vs2026_opengl_no_tracy.bat` — without Tracy profiler
-- `configure_vs2026_vulkan.bat` — Vulkan backend
+- `configure_vs2026_opengl_asan.bat` - with AddressSanitizer
+- `configure_vs2026_opengl_no_tracy.bat` - without Tracy profiler
+- `configure_vs2026_vulkan.bat` - Vulkan backend
 
 ### Using CMake Presets
 
@@ -46,7 +46,7 @@ Required packages: `libwayland-dev libxkbcommon-dev xorg-dev` (Ubuntu) or equiva
 
 | Option | Default | Notes |
 |--------|---------|-------|
-| `ERHE_GRAPHICS_LIBRARY` | — | `opengl`, `vulkan`, or `none` (headless) |
+| `ERHE_GRAPHICS_LIBRARY` | - | `opengl`, `vulkan`, or `none` (headless) |
 | `ERHE_PHYSICS_LIBRARY` | `jolt` | `jolt` or `none` |
 | `ERHE_RAYTRACE_LIBRARY` | `bvh` | `bvh`, `tinybvh`, `embree`, or `none` (none uses GPU ID-buffer picking) |
 | `ERHE_PROFILE_LIBRARY` | `tracy` | `tracy`, `nvtx`, `superluminal`, or `none` |
@@ -61,37 +61,37 @@ Required packages: `libwayland-dev libxkbcommon-dev xorg-dev` (Ubuntu) or equiva
 
 Each subdirectory is a separate CMake target (`erhe_<name>`). **Each library has a `notes.md`** file with details on purpose, key types, public API, dependencies, and implementation notes. Always check `src/erhe/<name>/notes.md` first when working with a library.
 
-- **`erhe::gl`** — Python-generated type-safe OpenGL API wrappers (`generate_sources.py` parses `gl.xml`). Provides strongly-typed enums, call logging, and extension queries.
-- **`erhe::graphics`** — Vulkan-style abstraction over OpenGL: `Pipeline`, framebuffers, textures, shaders, buffers. Core rendering primitives.
-- **`erhe::rendergraph`** — DAG of `Rendergraph_node`s with typed inputs/outputs. Executed in dependency order each frame.
-- **`erhe::scene`** — glTF-like scene graph: `Node` (transform + children), `Mesh`, `Camera`, `Light`, `Scene`.
-- **`erhe::scene_renderer`** — Renders `erhe::scene` content using `erhe::renderer` utilities.
-- **`erhe::geometry`** — Polygon mesh manipulation using Geogram as backend. Catmull-Clark, Conway operators, CSG (experimental).
-- **`erhe::primitive`** — Converts `erhe::geometry::Geometry` to GPU vertex/index buffers.
-- **`erhe::item`** — Base `Item` (name, id, flags) and `Hierarchy` (parent/child tree) classes.
-- **`erhe::renderer`** — GPU ring buffer, `Line_renderer` (debug lines), `Text_renderer` (2D labels in 3D viewports).
-- **`erhe::imgui`** — Custom ImGui backend and window management helpers.
-- **`erhe::physics`** — Thin abstraction over Jolt physics.
-- **`erhe::window`** — SDL/GLFW windowing abstraction.
-- **`erhe::commands`** — Input command system.
-- **`erhe::log`** — spdlog wrappers.
-- **`erhe::verify`** — `VERIFY(condition)` and `FATAL(format, ...)` macros.
+- **`erhe::gl`** - Python-generated type-safe OpenGL API wrappers (`generate_sources.py` parses `gl.xml`). Provides strongly-typed enums, call logging, and extension queries.
+- **`erhe::graphics`** - Vulkan-style abstraction over OpenGL: `Pipeline`, framebuffers, textures, shaders, buffers. Core rendering primitives.
+- **`erhe::rendergraph`** - DAG of `Rendergraph_node`s with typed inputs/outputs. Executed in dependency order each frame.
+- **`erhe::scene`** - glTF-like scene graph: `Node` (transform + children), `Mesh`, `Camera`, `Light`, `Scene`.
+- **`erhe::scene_renderer`** - Renders `erhe::scene` content using `erhe::renderer` utilities.
+- **`erhe::geometry`** - Polygon mesh manipulation using Geogram as backend. Catmull-Clark, Conway operators, CSG (experimental).
+- **`erhe::primitive`** - Converts `erhe::geometry::Geometry` to GPU vertex/index buffers.
+- **`erhe::item`** - Base `Item` (name, id, flags) and `Hierarchy` (parent/child tree) classes.
+- **`erhe::renderer`** - GPU ring buffer, `Line_renderer` (debug lines), `Text_renderer` (2D labels in 3D viewports).
+- **`erhe::imgui`** - Custom ImGui backend and window management helpers.
+- **`erhe::physics`** - Thin abstraction over Jolt physics.
+- **`erhe::window`** - SDL/GLFW windowing abstraction.
+- **`erhe::commands`** - Input command system.
+- **`erhe::log`** - spdlog wrappers.
+- **`erhe::verify`** - `VERIFY(condition)` and `FATAL(format, ...)` macros.
 
 ### Editor Application (`src/editor/`)
 
 The `editor` executable is the main application. Entry point is `src/editor/main.cpp` → `editor::run_editor()`. Key subsystems:
 
-- `rendergraph/` — Editor-specific render graph nodes (shadow maps, viewports, post-processing)
-- `tools/` — Editor tools (translate, rotate, scale, brush painting, etc.)
-- `operations/` — Geometry operations (Catmull-Clark, Conway, CSG)
-- `windows/` — ImGui windows (scene browser, properties, console, etc.)
-- `scene/` — Scene management and content library
-- `res/` — Resources: TOML configuration files and GLSL shaders
+- `rendergraph/` - Editor-specific render graph nodes (shadow maps, viewports, post-processing)
+- `tools/` - Editor tools (translate, rotate, scale, brush painting, etc.)
+- `operations/` - Geometry operations (Catmull-Clark, Conway, CSG)
+- `windows/` - ImGui windows (scene browser, properties, console, etc.)
+- `scene/` - Scene management and content library
+- `res/` - Resources: TOML configuration files and GLSL shaders
 
 ### CMake Conventions
 
 - Follow modern CMake best practices. Do not use deprecated CMake features.
-- **Never use `file(GLOB)` or `file(GLOB_RECURSE)` to collect source files.** All source and definition files must be listed explicitly in `CMakeLists.txt`. This is the CMake-recommended practice — globbing does not detect added/removed files without a reconfigure.
+- **Never use `file(GLOB)` or `file(GLOB_RECURSE)` to collect source files.** All source and definition files must be listed explicitly in `CMakeLists.txt`. This is the CMake-recommended practice - globbing does not detect added/removed files without a reconfigure.
 - `erhe_target_sources_grouped()` helper macro (in `cmake/functions.cmake`) organizes sources into IDE source groups.
 - Each component has its own `CMakeLists.txt`.
 - External dependencies are fetched at configure time via CPM (`cmake/CPM.cmake`).
@@ -102,7 +102,7 @@ The `editor` executable is the main application. Entry point is `src/editor/main
 
 ### `erhe_codegen` (Python C++ Struct Code Generator)
 
-`src/erhe/codegen/` — A Python-based code generator that produces C++ structs with versioned JSON serialization (simdjson), deserialization, rich reflection, and enum support from Python definitions. The implementation is complete.
+`src/erhe/codegen/` - A Python-based code generator that produces C++ structs with versioned JSON serialization (simdjson), deserialization, rich reflection, and enum support from Python definitions. The implementation is complete.
 
 ### Backends / Abstraction Layers
 
@@ -110,7 +110,7 @@ Many systems have swappable backends selected at CMake configure time via `#ifde
 
 ## Python
 
-**IMPORTANT: On this Windows machine, always use the `py -3` launcher to run Python scripts. Never use `python` or `python3` — they resolve to the Microsoft Store stub and will fail.** This applies to all Python invocations: scripts, codegen, tools.
+**IMPORTANT: On this Windows machine, always use the `py -3` launcher to run Python scripts. Never use `python` or `python3` - they resolve to the Microsoft Store stub and will fail.** This applies to all Python invocations: scripts, codegen, tools.
 
 Example:
 
@@ -122,13 +122,17 @@ py -3 src/erhe/codegen/generate.py <definitions_dir> <output_dir>
 
 See [`doc/editor_improvements.md`](doc/editor_improvements.md) for the prioritized list of architectural improvements to `src/editor/`.
 
+## Text Encoding
+
+**Use only ASCII characters** in all source files (.cpp, .hpp) and documentation files (.md). Never use Unicode dashes, quotes, or other non-ASCII characters. Use `-` or `--` instead of em-dash, `'` instead of curly quotes, etc.
+
 ## C++ Coding Style
 
-- **Always use `class`, never `struct`** — this makes forward declarations trivial (always `class Foo;`).
-- **Prefer explicit types over `auto`** — spell out the actual type for readability. Reviewers should not need to trace through code to determine types.
-- **Use sufficient parentheses** — do not rely on C++ operator precedence. Add parentheses so the intent is unambiguous to readers (e.g., `(a & b) != 0` not `a & b != 0`).
+- **Always use `class`, never `struct`** - this makes forward declarations trivial (always `class Foo;`).
+- **Prefer explicit types over `auto`** - spell out the actual type for readability. Reviewers should not need to trace through code to determine types.
+- **Use sufficient parentheses** - do not rely on C++ operator precedence. Add parentheses so the intent is unambiguous to readers (e.g., `(a & b) != 0` not `a & b != 0`).
 - **Never use lock-free / atomic techniques** without explicitly asking the user for permission first. Prefer simple mutex-based synchronization.
-- **Multithreading debugging**: When diagnosing deadlocks or contention, ask the user for callstacks of all threads — not just the stuck thread. The root cause is usually on another thread.
+- **Multithreading debugging**: When diagnosing deadlocks or contention, ask the user for callstacks of all threads - not just the stuck thread. The root cause is usually on another thread.
 
 ## C++ Naming Conventions
 

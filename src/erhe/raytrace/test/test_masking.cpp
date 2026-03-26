@@ -68,14 +68,14 @@ TEST(Masking, EnableDisableToggle)
     scene->attach(tg.geometry.get());
     scene->commit();
 
-    // First: enabled (default) — should hit
+    // First: enabled (default) - should hit
     {
         Ray ray = make_ray({0.25f, 0.25f, 1.0f}, {0.0f, 0.0f, -1.0f});
         Hit hit{};
         EXPECT_TRUE(scene->intersect(ray, hit));
     }
 
-    // Disable — should miss
+    // Disable - should miss
     tg.geometry->disable();
     scene->commit();
     {
@@ -84,7 +84,7 @@ TEST(Masking, EnableDisableToggle)
         EXPECT_FALSE(scene->intersect(ray, hit));
     }
 
-    // Re-enable — should hit again
+    // Re-enable - should hit again
     tg.geometry->enable();
     scene->commit();
     {

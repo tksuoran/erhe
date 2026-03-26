@@ -488,7 +488,7 @@ void Chamfer::build()
     // each vertex. Each edge plane provides a constraint "the vertex should
     // be on this plane." The LS solver minimizes total squared distance to
     // all planes with Tikhonov regularization toward the original vertex.
-    // No thresholds, no fallback switching — works uniformly for coplanar
+    // No thresholds, no fallback switching - works uniformly for coplanar
     // and non-coplanar edges.
     for (GEO::index_t src_vertex : source_mesh.vertices) {
         const GEO::index_t new_dst_vertex = destination_mesh.vertices.create_vertex();

@@ -50,7 +50,7 @@ auto load_editor_config(std::string_view path) -> Editor_config
 
     std::optional<std::string> contents = erhe::file::read("load_editor_config()", path);
     if (!contents.has_value()) {
-        // No config file — use defaults and write one
+        // No config file - use defaults and write one
         save_editor_config(config, path);
         return config;
     }

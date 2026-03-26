@@ -15,7 +15,7 @@ All requests are JSON-RPC 2.0 POST to `/mcp`.
 
 ### initialize
 
-Handshake — returns server info and capabilities.
+Handshake - returns server info and capabilities.
 
 ```bash
 curl -X POST http://127.0.0.1:8080/mcp \
@@ -180,12 +180,12 @@ curl -X POST http://127.0.0.1:8080/mcp \
 ```
 
 Parameters:
-- `scene_name` (required) — target scene
-- `brush_id` (required) — brush ID from `get_scene_brushes`
-- `position` (required) — `[x, y, z]` world position
-- `material_name` (optional) — material name, defaults to first available
-- `scale` (optional) — scale factor, default 1.0
-- `motion_mode` (optional) — `"static"` or `"dynamic"` (default)
+- `scene_name` (required) - target scene
+- `brush_id` (required) - brush ID from `get_scene_brushes`
+- `position` (required) - `[x, y, z]` world position
+- `material_name` (optional) - material name, defaults to first available
+- `scale` (optional) - scale factor, default 1.0
+- `motion_mode` (optional) - `"static"` or `"dynamic"` (default)
 
 Returns: `{node_name, node_id, brush, material, position, scale}`
 
@@ -250,7 +250,7 @@ Returns: `{pending, running}`
 - `get_node_details` includes `brush_name`, `brush_id`, `locked`, `tags`, and mesh `vertex_count`/`facet_count` for nodes with attachments
 - `get_scene_nodes` includes `locked` and `tags` fields per node
 - `get_scene_brushes` includes `vertex_count` and `facet_count` per brush
-- Brush instance scale is baked into the geometry at placement time and not stored separately — it cannot be queried back from existing nodes
+- Brush instance scale is baked into the geometry at placement time and not stored separately - it cannot be queried back from existing nodes
 - Operations that fail set an `error` field visible in `get_undo_redo_stack`
 
 ## Editor Command Tools
@@ -273,11 +273,11 @@ The server listens on `127.0.0.1:8080` by default (localhost only). The port can
 
 ## Source Files
 
-- `src/editor/mcp/mcp_server.hpp` — Server class declaration
-- `src/editor/mcp/mcp_server.cpp` — Implementation (queries + command dispatch)
-- `src/editor/editor.cpp` — Startup/shutdown/tick integration
+- `src/editor/mcp/mcp_server.hpp` - Server class declaration
+- `src/editor/mcp/mcp_server.cpp` - Implementation (queries + command dispatch)
+- `src/editor/editor.cpp` - Startup/shutdown/tick integration
 
 ## Dependencies
 
-- [cpp-httplib](https://github.com/yhirose/cpp-httplib) v0.18.7 — Single-header HTTP server (fetched via CPM)
-- [nlohmann/json](https://github.com/nlohmann/json) — JSON serialization (already in project)
+- [cpp-httplib](https://github.com/yhirose/cpp-httplib) v0.18.7 - Single-header HTTP server (fetched via CPM)
+- [nlohmann/json](https://github.com/nlohmann/json) - JSON serialization (already in project)

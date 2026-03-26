@@ -26,7 +26,7 @@ TEST(Scene, AttachDetachGeometry)
 
     auto scene = IScene::create_unique("test_scene");
 
-    // Attach — should hit
+    // Attach - should hit
     scene->attach(tg.geometry.get());
     scene->commit();
     {
@@ -35,7 +35,7 @@ TEST(Scene, AttachDetachGeometry)
         EXPECT_TRUE(scene->intersect(ray, hit));
     }
 
-    // Detach — should miss
+    // Detach - should miss
     scene->detach(tg.geometry.get());
     scene->commit();
     {
@@ -61,7 +61,7 @@ TEST(Scene, AttachDetachInstance)
 
     auto root_scene = IScene::create_unique("root");
 
-    // Attach — should hit
+    // Attach - should hit
     root_scene->attach(instance.get());
     root_scene->commit();
     {
@@ -70,7 +70,7 @@ TEST(Scene, AttachDetachInstance)
         EXPECT_TRUE(root_scene->intersect(ray, hit));
     }
 
-    // Detach — should miss
+    // Detach - should miss
     root_scene->detach(instance.get());
     root_scene->commit();
     {

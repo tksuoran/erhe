@@ -3,7 +3,7 @@
 ## Operation
 
 The gyro operator (Conway notation: **g**) replaces each face with a ring of
-pentagons that spiral around the face center. It is a chiral operation — the
+pentagons that spiral around the face center. It is a chiral operation - the
 result has a twist that breaks mirror symmetry. Applied to a Platonic solid,
 gyro produces the corresponding pentagonal polyhedron (e.g., gyro of cube =
 pentagonal icositetrahedron).
