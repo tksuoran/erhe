@@ -186,13 +186,15 @@ public:
     erhe::graphics::Texture_reference* texture_reference{nullptr};
     unsigned int                       filter           {0u};
     unsigned int                       mipmap_mode      {0u};
+    int                                array_layer      {-1}; // -1 = sampler2D, >= 0 = sampler2DArray layer
     std::string_view                   debug_label      {};
 
     auto operator==(const Erhe_ImTextureID& other) const -> bool {
         return
             (texture_reference == other.texture_reference) &&
             (filter == other.filter) &&
-            (mipmap_mode == other.mipmap_mode);
+            (mipmap_mode == other.mipmap_mode) &&
+            (array_layer == other.array_layer);
     }
     auto operator!=(const Erhe_ImTextureID& other) const -> bool {
         return !(*this == other);
@@ -201,7 +203,7 @@ public:
 
 #define ImTextureID Erhe_ImTextureID
 
-inline const ImTextureID c_ImTextureID_Invalid = Erhe_ImTextureID{nullptr, 0u, 0u};
+inline const ImTextureID c_ImTextureID_Invalid = Erhe_ImTextureID{nullptr, 0u, 0u, -1};
 
 #define ImTextureID_Invalid c_ImTextureID_Invalid
 

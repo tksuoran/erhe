@@ -68,6 +68,14 @@ Thumbnails::Thumbnails(const Thumbnails_config& thumbnails_config, erhe::graphic
             texture_create_info.view_base_array_layer = i;
             texture_create_info.debug_label           = erhe::utility::Debug_label{fmt::format("Thumbnail layer {}", i)};
             t.texture_view = std::make_shared<erhe::graphics::Texture>(m_graphics_device, texture_create_info);
+            t.texture_layer = 0; // view already targets specific layer
+        }
+    } else {
+        // Without texture views, use the array texture directly with layer index
+        for (int i = 0; i < capacity; ++i) {
+            Thumbnail& t = m_thumbnails[i];
+            t.texture_view  = m_color_texture;
+            t.texture_layer = static_cast<unsigned int>(i);
         }
     }
 }
@@ -77,9 +85,11 @@ Thumbnails::~Thumbnails() noexcept
 }
 
 auto Thumbnails::draw(
-    const std::shared_ptr<erhe::Item_base>&                                       item,
-    std::function<void(const std::shared_ptr<erhe::graphics::Texture>&, int64_t)> callback,
-    float                                                                         display_size
+    const std::shared_ptr<erhe::Item_base>& item,
+    std::function<
+        void(const std::shared_ptr<erhe::graphics::Texture>&, unsigned int, int64_t)
+    >                                       callback,
+    float                                   display_size
 ) -> bool
 {
     const std::size_t item_id = item->get_id();
@@ -93,6 +103,9 @@ auto Thumbnails::draw(
         ) {
             thumbnail.last_use_frame_number = m_context.graphics_device->get_frame_index();
             const float height = (display_size > 0.0f) ? display_size : ImGui::GetTextLineHeightWithSpacing();
+            const int array_layer = m_graphics_device.get_info().use_texture_view
+                ? -1
+                : static_cast<int>(thumbnail.texture_layer);
             m_context.imgui_renderer->image(
                 erhe::imgui::Draw_texture_parameters{
                     .texture_reference = thumbnail.texture_view,
@@ -100,6 +113,7 @@ auto Thumbnails::draw(
                     .height            = static_cast<int>(height),
                     .filter            = erhe::graphics::Filter::linear,
                     .mipmap_mode       = erhe::graphics::Sampler_mipmap_mode::linear,
+                    .array_layer       = array_layer,
                     .debug_label       = "Thumbnails::draw()",
                 }
             );
@@ -113,6 +127,7 @@ auto Thumbnails::draw(
                         .texture_reference = thumbnail.texture_view,
                         .width             = static_cast<int>(m_size_pixels),
                         .height            = static_cast<int>(m_size_pixels),
+                        .array_layer       = array_layer,
                         .debug_label       = "Thumbnails::draw()"
                     }
                 );
@@ -144,7 +159,7 @@ void Thumbnails::update()
         Thumbnail& thumbnail = m_thumbnails[i];
         if (thumbnail.callback) {
             log_render->trace("Updating thumbnail slot {}", i);
-            thumbnail.callback.value()(thumbnail.texture_view, thumbnail.time);
+            thumbnail.callback.value()(thumbnail.texture_view, thumbnail.texture_layer, thumbnail.time);
             thumbnail.callback.reset();
         }
     }

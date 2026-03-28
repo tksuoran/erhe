@@ -126,12 +126,14 @@ void Brush_preview::make_preview_scene()
 
 void Brush_preview::render_preview(
     const std::shared_ptr<erhe::graphics::Texture>& texture,
+    unsigned int                                    texture_layer,
     const std::shared_ptr<Brush>&                   brush,
     int64_t                                         time
 )
 {
     log_tree->trace("Brush_preview::render_preview()");
     set_color_texture(texture);
+    set_color_texture_layer(texture_layer);
     resize(texture->get_width(), texture->get_height());
     set_clear_color(glm::vec4{0.0f, 0.0f, 0.0f, 0.0f});
     update_rendertarget(m_graphics_device);

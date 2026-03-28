@@ -60,9 +60,10 @@ public:
 class Imgui_draw_parameter_struct_offsets
 {
 public:
-    std::size_t clip_rect{0}; // vec4
-    std::size_t texture  {0}; // uvec2
-    std::size_t padding  {0}; // uvec2
+    std::size_t clip_rect   {0}; // vec4
+    std::size_t texture     {0}; // uvec2
+    std::size_t array_layer {0}; // uint
+    std::size_t padding     {0}; // uint
 };
 
 class Imgui_program_interface
@@ -94,6 +95,7 @@ public:
     glm::vec4                                          tint_color       {1.0f, 1.0f, 1.0f, 1.0f};
     erhe::graphics::Filter                             filter           {erhe::graphics::Filter::nearest};
     erhe::graphics::Sampler_mipmap_mode                mipmap_mode      {erhe::graphics::Sampler_mipmap_mode::not_mipmapped};
+    int                                                array_layer      {-1}; // -1 = sampler2D, >= 0 = sampler2DArray layer
     erhe::utility::Debug_label                         debug_label      {};
 };
 
@@ -173,6 +175,7 @@ private:
     ImFont*                                  m_material_design_font{nullptr};
     ImFont*                                  m_icon_font           {nullptr};
     std::shared_ptr<erhe::graphics::Texture> m_dummy_texture;
+    std::shared_ptr<erhe::graphics::Texture> m_dummy_array_texture;
     erhe::graphics::Sampler                  m_nearest_sampler;
     erhe::graphics::Sampler                  m_linear_sampler;
     erhe::graphics::Sampler                  m_nearest_mipmap_nearest_sampler;

@@ -156,8 +156,8 @@ auto Inventory_window::render_slot(const int id, Slot_entry& slot, const bool is
         std::shared_ptr<Brush> brush = slot.brush;
         thumbnail_drawn = m_context.thumbnails->draw(
             brush,
-            [this, brush](const std::shared_ptr<erhe::graphics::Texture>& texture, int64_t time) {
-                m_context.brush_preview->render_preview(texture, brush, time);
+            [this, brush](const std::shared_ptr<erhe::graphics::Texture>& texture, unsigned int texture_layer, int64_t time) {
+                m_context.brush_preview->render_preview(texture, texture_layer, brush, time);
             },
             c_slot_size
         );
@@ -171,7 +171,7 @@ auto Inventory_window::render_slot(const int id, Slot_entry& slot, const bool is
         std::shared_ptr<erhe::primitive::Material> material = slot.material;
         thumbnail_drawn = m_context.thumbnails->draw(
             material,
-            [this, material](const std::shared_ptr<erhe::graphics::Texture>& texture, int64_t) {
+            [this, material](const std::shared_ptr<erhe::graphics::Texture>& texture, unsigned int /*texture_layer*/, int64_t) {
                 m_context.material_preview->render_preview(texture, material);
             },
             c_slot_size
