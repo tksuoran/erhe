@@ -15,6 +15,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <stack>
 
 namespace erhe::graphics {
@@ -35,15 +36,24 @@ class Debug_renderer_program_interface
 public:
     explicit Debug_renderer_program_interface(erhe::graphics::Device& graphics_device);
 
+    bool                                             use_compute{false};
+
     erhe::graphics::Fragment_outputs                 fragment_outputs;
+
+    // Compute path (wide lines): SSBO line vertices → compute shader → triangle vertices
     erhe::dataformat::Vertex_format                  triangle_vertex_format;
     std::unique_ptr<erhe::graphics::Shader_resource> line_vertex_struct;
     std::unique_ptr<erhe::graphics::Shader_resource> line_vertex_buffer_block;
     std::unique_ptr<erhe::graphics::Shader_resource> triangle_vertex_struct;
     std::unique_ptr<erhe::graphics::Shader_resource> triangle_vertex_buffer_block;
-    std::unique_ptr<erhe::graphics::Shader_resource> view_block;
     std::unique_ptr<erhe::graphics::Shader_stages>   compute_shader_stages;
     std::unique_ptr<erhe::graphics::Shader_stages>   graphics_shader_stages;
+
+    // Simple line path (no compute): vertex buffer → GL_LINES
+    erhe::dataformat::Vertex_format                  line_vertex_format;
+    std::unique_ptr<erhe::graphics::Shader_stages>   line_shader_stages;
+
+    std::unique_ptr<erhe::graphics::Shader_resource> view_block;
     std::size_t                                      clip_from_world_offset{0};
     std::size_t                                      viewport_offset       {0};
     std::size_t                                      fov_offset            {0};
@@ -86,13 +96,16 @@ public:
 
     // API for Debug_renderer_bucket
     auto get_program_interface() const -> const Debug_renderer_program_interface& { return m_program_interface; }
-    auto get_vertex_input     () -> erhe::graphics::Vertex_input_state* { return &m_vertex_input ;}
+    auto get_vertex_input     () -> erhe::graphics::Vertex_input_state* { return &m_vertex_input; }
+    auto get_line_vertex_input() -> erhe::graphics::Vertex_input_state* { return &m_line_vertex_input; }
+    auto use_compute          () const -> bool { return m_program_interface.use_compute; }
 
 private:
-    erhe::graphics::Device&                m_graphics_device;
-    Debug_renderer_program_interface       m_program_interface;
-    erhe::graphics::Vertex_input_state     m_vertex_input;
-    erhe::graphics::Compute_pipeline_state m_lines_to_triangles_compute_pipeline;
+    erhe::graphics::Device&                              m_graphics_device;
+    Debug_renderer_program_interface                     m_program_interface;
+    erhe::graphics::Vertex_input_state                   m_vertex_input;      // triangle path
+    erhe::graphics::Vertex_input_state                   m_line_vertex_input; // simple line path
+    std::optional<erhe::graphics::Compute_pipeline_state> m_lines_to_triangles_compute_pipeline;
     std::stack<View>                       m_view_stack{};
     View                                   m_view      {};
 

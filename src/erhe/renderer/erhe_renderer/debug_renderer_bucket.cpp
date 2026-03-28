@@ -28,16 +28,21 @@ auto Debug_renderer_bucket::Debug_renderer_bucket::make_pipeline(const bool visi
 {
     using namespace erhe::graphics;
 
-    Shader_stages* const graphics_shader_stages = m_debug_renderer.get_program_interface().graphics_shader_stages.get();
+    const auto& program_interface = m_debug_renderer.get_program_interface();
+
+    // Compute path renders triangles from compute-generated vertices; non-compute path renders GL_LINES
+    Shader_stages*     shader_stages = m_use_compute ? program_interface.graphics_shader_stages.get() : program_interface.line_shader_stages.get();
+    Vertex_input_state* vertex_input = m_use_compute ? m_debug_renderer.get_vertex_input()            : m_debug_renderer.get_line_vertex_input();
+    Input_assembly_state input_assembly = m_use_compute ? Input_assembly_state::triangle               : Input_assembly_state::line;
 
     const Compare_operation depth_compare_op0 = visible ? Compare_operation::less : Compare_operation::greater_or_equal;
     const Compare_operation depth_compare_op  = reverse_depth ? reverse(depth_compare_op0) : depth_compare_op0;
     return Render_pipeline_state{
         Render_pipeline_data{
             .debug_label    = erhe::utility::Debug_label{"Line Renderer"},
-            .shader_stages  = graphics_shader_stages,
-            .vertex_input   = m_debug_renderer.get_vertex_input(),
-            .input_assembly = Input_assembly_state::triangle,
+            .shader_stages  = shader_stages,
+            .vertex_input   = vertex_input,
+            .input_assembly = input_assembly,
             .rasterization  = Rasterization_state::cull_mode_none,
             .depth_stencil  = {
                 .depth_test_enable   = true,
@@ -91,28 +96,39 @@ Debug_renderer_bucket::Debug_renderer_bucket(
 )
     : m_graphics_device   {graphics_device}
     , m_debug_renderer    {debug_renderer}
+    , m_use_compute       {debug_renderer.use_compute()}
     , m_view_buffer{
         graphics_device,
         erhe::graphics::Buffer_target::uniform,
         "Debug_renderer::m_view_buffer",
         debug_renderer.get_program_interface().view_block->get_binding_point()
     }
-    , m_vertex_ssbo_buffer{ // compute read
-        graphics_device,
-        erhe::graphics::Buffer_target::storage,
-        "Debug_renderer_bucket::m_vertex_ssbo_buffer",
-        debug_renderer.get_program_interface().line_vertex_buffer_block->get_binding_point()
-    }
-    , m_triangle_vertex_buffer{ // compute write, vs read
-        graphics_device,
-        erhe::graphics::Buffer_target::storage,
-        "Debug_renderer_bucket::m_triangle_vertex_buffer",
-        debug_renderer.get_program_interface().triangle_vertex_buffer_block->get_binding_point()
-    }
     , m_config            {config}
     , m_pipeline_visible  {make_pipeline(true )}
     , m_pipeline_hidden   {make_pipeline(false)}
 {
+    const auto& program_interface = debug_renderer.get_program_interface();
+    if (m_use_compute) {
+        m_vertex_ssbo_buffer.emplace(
+            graphics_device,
+            erhe::graphics::Buffer_target::storage,
+            "Debug_renderer_bucket::m_vertex_ssbo_buffer",
+            program_interface.line_vertex_buffer_block->get_binding_point()
+        );
+        m_triangle_vertex_buffer.emplace(
+            graphics_device,
+            erhe::graphics::Buffer_target::storage,
+            "Debug_renderer_bucket::m_triangle_vertex_buffer",
+            program_interface.triangle_vertex_buffer_block->get_binding_point()
+        );
+    } else {
+        m_line_vertex_buffer.emplace(
+            graphics_device,
+            erhe::graphics::Buffer_target::vertex,
+            "Debug_renderer_bucket::m_line_vertex_buffer",
+            0 // binding point not used for vertex buffers
+        );
+    }
 }
 
 auto Debug_renderer_bucket::update_view_buffer(const View& view) -> erhe::graphics::Ring_buffer_range
@@ -145,10 +161,12 @@ auto Debug_renderer_bucket::make_draw(std::size_t vertex_byte_count, std::size_t
     constexpr std::size_t min_range_size = 8192; // TODO
     ERHE_VERIFY(!m_view_spans.empty());
 
+    auto& buffer_client = m_use_compute ? m_vertex_ssbo_buffer.value() : m_line_vertex_buffer.value();
+
     if (m_draws.empty() || m_start_new_draw) {
         m_start_new_draw = false;
         m_draws.emplace_back(
-            m_vertex_ssbo_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, std::max(vertex_byte_count, min_range_size)),
+            buffer_client.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, std::max(vertex_byte_count, min_range_size)),
             erhe::graphics::Ring_buffer_range{},
             0
         );
@@ -157,7 +175,7 @@ auto Debug_renderer_bucket::make_draw(std::size_t vertex_byte_count, std::size_t
     }
     if (m_draws.back().input_buffer_range.get_writable_byte_count() < vertex_byte_count) {
         m_draws.emplace_back(
-            m_vertex_ssbo_buffer.acquire(
+            buffer_client.acquire(
                 erhe::graphics::Ring_buffer_usage::CPU_write,
                 std::max(vertex_byte_count, min_range_size)
             ),
@@ -222,6 +240,10 @@ void Debug_renderer_bucket::start_view(const View& view)
 
 void Debug_renderer_bucket::dispatch_compute(erhe::graphics::Compute_command_encoder& encoder)
 {
+    if (!m_use_compute) {
+        return;
+    }
+
     if (m_config.primitive_type != erhe::graphics::Primitive_type::line) {
         ERHE_FATAL("TODO");
     }
@@ -237,21 +259,16 @@ void Debug_renderer_bucket::dispatch_compute(erhe::graphics::Compute_command_enc
             ERHE_VERIFY(draw.primitive_count > 0);
 
             draw.input_buffer_range.close();
-            m_vertex_ssbo_buffer.bind(encoder, draw.input_buffer_range);
+            m_vertex_ssbo_buffer->bind(encoder, draw.input_buffer_range);
 
             const std::size_t triangle_byte_count = 6 * draw.primitive_count * triangle_vertex_stride;
 
-            // TODO Instead of open(), close() there should be a dedicated
-            //      API for allocating GPU write range; Writing to that
-            //      range potentially needs gl::wait_sync() if there are
-            //      previous GPU reads, and possibly also
-            //      gl::memory_barrier(gl::Memory_barrier_mask::shader_storage_barrier_bit)
-            draw.draw_buffer_range = m_triangle_vertex_buffer.acquire(erhe::graphics::Ring_buffer_usage::GPU_access, triangle_byte_count);
+            draw.draw_buffer_range = m_triangle_vertex_buffer->acquire(erhe::graphics::Ring_buffer_usage::GPU_access, triangle_byte_count);
             ERHE_VERIFY(draw.draw_buffer_range.get_buffer() != nullptr);
             draw.draw_buffer_range.bytes_gpu_used(triangle_byte_count);
             draw.draw_buffer_range.close();
 
-            m_triangle_vertex_buffer.bind(encoder, draw.draw_buffer_range);
+            m_triangle_vertex_buffer->bind(encoder, draw.draw_buffer_range);
 
             encoder.dispatch_compute(draw.primitive_count, 1, 1);
 
@@ -265,41 +282,80 @@ void Debug_renderer_bucket::dispatch_compute(erhe::graphics::Compute_command_enc
 void Debug_renderer_bucket::release_buffers()
 {
     for (Debug_draw_entry& draw : m_draws) {
-        draw.draw_buffer_range.release();
+        if (m_use_compute) {
+            draw.draw_buffer_range.release();
+        } else {
+            draw.input_buffer_range.release();
+        }
     }
     clear();
 }
 
 void Debug_renderer_bucket::render(erhe::graphics::Render_command_encoder& render_encoder, bool draw_hidden, bool draw_visible)
 {
-    if (draw_hidden && m_config.draw_hidden) {
-        render_encoder.set_render_pipeline_state(m_pipeline_hidden);
-        for (const Debug_draw_entry& draw : m_draws) {
-            if (!draw.compute_dispatched) {
-                continue; // This should never happen - TODO Remove
+    if (m_use_compute) {
+        // Compute path: render triangles from compute-generated triangle vertex buffer
+        auto render_compute_draws = [&](erhe::graphics::Render_pipeline_state& pipeline) {
+            render_encoder.set_render_pipeline_state(pipeline);
+            for (const Debug_draw_entry& draw : m_draws) {
+                if (!draw.compute_dispatched) {
+                    continue;
+                }
+                erhe::graphics::Buffer* triangle_vertex_buffer       = draw.draw_buffer_range.get_buffer()->get_buffer();
+                size_t                  triangle_vertex_buffer_offset = draw.draw_buffer_range.get_byte_start_offset_in_buffer();
+                render_encoder.set_vertex_buffer(triangle_vertex_buffer, triangle_vertex_buffer_offset, 0);
+                render_encoder.draw_primitives(
+                    pipeline.data.input_assembly.primitive_topology,
+                    0,
+                    6 * draw.primitive_count
+                );
             }
-            erhe::graphics::Buffer* triangle_vertex_buffer        = draw.draw_buffer_range.get_buffer()->get_buffer();
-            size_t                  triangle_vertex_buffer_offset = draw.draw_buffer_range.get_byte_start_offset_in_buffer();
-            render_encoder.set_vertex_buffer(triangle_vertex_buffer, triangle_vertex_buffer_offset, 0);
-            render_encoder.draw_primitives(
-                m_pipeline_hidden.data.input_assembly.primitive_topology,
-                0,
-                6 * draw.primitive_count
-            );
-        }
-    }
+        };
 
-    if (draw_visible && m_config.draw_visible) {
-        render_encoder.set_render_pipeline_state(m_pipeline_visible);
-        for (const Debug_draw_entry& draw : m_draws) {
-            erhe::graphics::Buffer* triangle_vertex_buffer        = draw.draw_buffer_range.get_buffer()->get_buffer();
-            size_t                  triangle_vertex_buffer_offset = draw.draw_buffer_range.get_byte_start_offset_in_buffer();
-            render_encoder.set_vertex_buffer(triangle_vertex_buffer, triangle_vertex_buffer_offset, 0);
-            render_encoder.draw_primitives(
-                m_pipeline_visible.data.input_assembly.primitive_topology,
-                0,
-                6 * draw.primitive_count
-            );
+        if (draw_hidden && m_config.draw_hidden) {
+            render_compute_draws(m_pipeline_hidden);
+        }
+        if (draw_visible && m_config.draw_visible) {
+            render_compute_draws(m_pipeline_visible);
+        }
+    } else {
+        // Non-compute path: close input ranges (upload CPU data to GPU), then render GL_LINES
+        // Close all input ranges first (can only be done once)
+        for (Debug_draw_entry& draw : m_draws) {
+            if (draw.primitive_count > 0 && !draw.input_buffer_range.is_closed()) {
+                draw.input_buffer_range.close();
+            }
+        }
+
+        auto render_line_draws = [&](erhe::graphics::Render_pipeline_state& pipeline) {
+            render_encoder.set_render_pipeline_state(pipeline);
+            for (Debug_draw_view_span& view_span : m_view_spans) {
+                erhe::graphics::Ring_buffer_range view_buffer_range = update_view_buffer(view_span.view);
+                m_view_buffer.bind(render_encoder, view_buffer_range);
+
+                for (size_t i = view_span.begin; i < view_span.end; ++i) {
+                    Debug_draw_entry& draw = m_draws[i];
+                    if (draw.primitive_count == 0) {
+                        continue;
+                    }
+                    erhe::graphics::Buffer* line_vertex_buffer       = draw.input_buffer_range.get_buffer()->get_buffer();
+                    size_t                  line_vertex_buffer_offset = draw.input_buffer_range.get_byte_start_offset_in_buffer();
+                    render_encoder.set_vertex_buffer(line_vertex_buffer, line_vertex_buffer_offset, 0);
+                    render_encoder.draw_primitives(
+                        pipeline.data.input_assembly.primitive_topology,
+                        0,
+                        2 * draw.primitive_count
+                    );
+                }
+                view_buffer_range.release();
+            }
+        };
+
+        if (draw_hidden && m_config.draw_hidden) {
+            render_line_draws(m_pipeline_hidden);
+        }
+        if (draw_visible && m_config.draw_visible) {
+            render_line_draws(m_pipeline_visible);
         }
     }
 }

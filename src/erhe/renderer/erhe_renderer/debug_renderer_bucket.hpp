@@ -67,12 +67,17 @@ private:
 
     erhe::graphics::Device&               m_graphics_device;
     Debug_renderer&                       m_debug_renderer;
+    bool                                  m_use_compute;
     erhe::graphics::Ring_buffer_client    m_view_buffer;
-    erhe::graphics::Ring_buffer_client    m_vertex_ssbo_buffer;
-    erhe::graphics::Ring_buffer_client    m_triangle_vertex_buffer;
+
+    // Compute path: line vertices → compute shader → triangle vertices → render triangles
+    std::optional<erhe::graphics::Ring_buffer_client> m_vertex_ssbo_buffer;
+    std::optional<erhe::graphics::Ring_buffer_client> m_triangle_vertex_buffer;
+
+    // Non-compute path: line vertices → render GL_LINES directly
+    std::optional<erhe::graphics::Ring_buffer_client> m_line_vertex_buffer;
+
     Debug_renderer_config                 m_config;
-    erhe::graphics::Shader_stages*        m_compute_shader_stages{nullptr};
-    erhe::graphics::Render_pipeline_state m_compute;
     erhe::graphics::Render_pipeline_state m_pipeline_visible;
     erhe::graphics::Render_pipeline_state m_pipeline_hidden;
     std::vector<Debug_draw_entry>         m_draws;
