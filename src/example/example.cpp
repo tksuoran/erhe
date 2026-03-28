@@ -71,7 +71,7 @@ public:
         }
         , m_image_transfer   {m_graphics_device}
         , m_mesh_memory      {m_graphics_device}
-        , m_program_interface{m_graphics_device, m_mesh_memory.vertex_format}
+        , m_program_interface{m_graphics_device, m_mesh_memory.vertex_format, m_program_interface_config}
         , m_forward_renderer {m_graphics_device, m_program_interface}
         , m_programs         {m_graphics_device, m_program_interface}
     {
@@ -468,6 +468,7 @@ private:
     erhe::graphics::Device                       m_graphics_device;
     erhe::gltf::Image_transfer                   m_image_transfer;
     Mesh_memory                                  m_mesh_memory;
+    erhe::scene_renderer::Program_interface_config m_program_interface_config;
     erhe::scene_renderer::Program_interface      m_program_interface;
     erhe::scene_renderer::Forward_renderer       m_forward_renderer;
     std::unique_ptr<erhe::graphics::Render_pass> m_render_pass;
