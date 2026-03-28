@@ -37,7 +37,7 @@ public:
         "Generic Frustum"
     };
 
-    [[nodiscard]] auto clip_from_node_transform(erhe::math::Viewport viewport) const -> Transform;
+    [[nodiscard]] auto clip_from_node_transform(erhe::math::Viewport viewport, bool reverse_depth = true) const -> Transform;
 
     [[nodiscard]] auto get_projection_matrix(float viewport_aspect_ration, bool reverse_depth = true) const -> glm::mat4;
 

@@ -6,10 +6,10 @@
 
 namespace erhe::scene {
 
-auto Projection::clip_from_node_transform(const erhe::math::Viewport viewport) const -> Transform
+auto Projection::clip_from_node_transform(const erhe::math::Viewport viewport, const bool reverse_depth) const -> Transform
 {
     const auto aspect_ratio = viewport.aspect_ratio();
-    const auto m = get_projection_matrix(aspect_ratio);
+    const auto m = get_projection_matrix(aspect_ratio, reverse_depth);
     return Transform{
         m,
         glm::inverse(m)
@@ -18,7 +18,8 @@ auto Projection::clip_from_node_transform(const erhe::math::Viewport viewport) c
 
 auto Projection::get_projection_matrix(const float aspect_ratio, const bool reverse_depth) const -> glm::mat4
 {
-    const auto clip_range = reverse_depth ? Clip_range{z_far, z_near} : Clip_range{z_near, z_far};
+    const auto clip_range  = reverse_depth ? Clip_range{z_far, z_near} : Clip_range{z_near, z_far};
+    const auto depth_range = reverse_depth ? erhe::math::Depth_range::zero_to_one : erhe::math::Depth_range::negative_one_to_one;
 
     switch (projection_type) {
         //using enum Projection::Type;
@@ -27,7 +28,8 @@ auto Projection::get_projection_matrix(const float aspect_ratio, const bool reve
                 fov_x,
                 fov_y,
                 clip_range.z_near,
-                clip_range.z_far
+                clip_range.z_far,
+                depth_range
             );
         }
 
@@ -38,7 +40,8 @@ auto Projection::get_projection_matrix(const float aspect_ratio, const bool reve
                 fov_up,
                 fov_down,
                 clip_range.z_near,
-                clip_range.z_far
+                clip_range.z_far,
+                depth_range
             );
         }
 
@@ -47,7 +50,8 @@ auto Projection::get_projection_matrix(const float aspect_ratio, const bool reve
                 fov_x,
                 aspect_ratio,
                 clip_range.z_near,
-                clip_range.z_far
+                clip_range.z_far,
+                depth_range
             );
         }
 
@@ -56,7 +60,8 @@ auto Projection::get_projection_matrix(const float aspect_ratio, const bool reve
                 fov_y,
                 aspect_ratio,
                 clip_range.z_near,
-                clip_range.z_far
+                clip_range.z_far,
+                depth_range
             );
         }
 
@@ -70,7 +75,8 @@ auto Projection::get_projection_matrix(const float aspect_ratio, const bool reve
                 -0.5f * ortho_width / aspect_ratio,
                  0.5f * ortho_width / aspect_ratio,
                 clip_range.z_near,
-                clip_range.z_far
+                clip_range.z_far,
+                depth_range
             );
         }
 
@@ -84,7 +90,8 @@ auto Projection::get_projection_matrix(const float aspect_ratio, const bool reve
                 -0.5f * ortho_height,
                  0.5f * ortho_height,
                 clip_range.z_near,
-                clip_range.z_far
+                clip_range.z_far,
+                depth_range
             );
         }
 
@@ -95,7 +102,8 @@ auto Projection::get_projection_matrix(const float aspect_ratio, const bool reve
                 -0.5f * ortho_height,
                  0.5f * ortho_height,
                 clip_range.z_near,
-                clip_range.z_far
+                clip_range.z_far,
+                depth_range
             );
         }
 
@@ -106,7 +114,8 @@ auto Projection::get_projection_matrix(const float aspect_ratio, const bool reve
                 ortho_bottom,
                 ortho_bottom + ortho_height,
                 clip_range.z_near,
-                clip_range.z_far
+                clip_range.z_far,
+                depth_range
             );
         }
 
@@ -117,7 +126,8 @@ auto Projection::get_projection_matrix(const float aspect_ratio, const bool reve
                 frustum_bottom,
                 frustum_top,
                 clip_range.z_near,
-                clip_range.z_far
+                clip_range.z_far,
+                depth_range
             );
         }
 

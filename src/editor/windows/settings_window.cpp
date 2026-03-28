@@ -258,6 +258,11 @@ void Settings_window::imgui()
             }
         });
 
+        add_entry("Reverse Depth", [this]() {
+            Graphics_preset& graphics_preset = get_graphics_preset();
+            ImGui::Checkbox("##", &graphics_preset.reverse_depth);
+        });
+
         add_entry("Shadows Enabled", [this]() {
             Graphics_preset& graphics_preset = get_graphics_preset();
             ImGui::Checkbox("##", &graphics_preset.shadow_enable);

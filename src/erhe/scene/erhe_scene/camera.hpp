@@ -42,7 +42,7 @@ public:
     // Public API
     [[nodiscard]] auto projection           () -> Projection*;
     [[nodiscard]] auto projection           () const -> const Projection*;
-    [[nodiscard]] auto projection_transforms(const erhe::math::Viewport& viewport) const -> Camera_projection_transforms;
+    [[nodiscard]] auto projection_transforms(const erhe::math::Viewport& viewport, bool reverse_depth = true) const -> Camera_projection_transforms;
     [[nodiscard]] auto get_exposure         () const -> float;
     [[nodiscard]] auto get_shadow_range     () const -> float;
     [[nodiscard]] auto get_projection_scale () const -> float;

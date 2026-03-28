@@ -139,7 +139,8 @@ void Composition_pass::render(const Render_context& context)
                 .viewport               = context.viewport,
                 .override_shader_stages = this->allow_shader_stages_override ? context.override_shader_stages : nullptr,
                 .error_shader_stages    = &context.app_context.programs->error.shader_stages,
-                .debug_label            = get_debug_label().string_view()
+                .debug_label            = get_debug_label().string_view(),
+                .reverse_depth          = context.scene_view.get_reverse_depth()
             },
             nullptr
         );
@@ -195,7 +196,8 @@ void Composition_pass::render(const Render_context& context)
                 .error_shader_stages    = &context.app_context.programs->error.shader_stages,
                 .debug_joint_indices    = context.app_context.app_rendering->debug_joint_indices,
                 .debug_joint_colors     = context.app_context.app_rendering->debug_joint_colors,
-                .debug_label            = get_name()
+                .debug_label            = get_name(),
+                .reverse_depth          = context.scene_view.get_reverse_depth()
             }
         );
     }

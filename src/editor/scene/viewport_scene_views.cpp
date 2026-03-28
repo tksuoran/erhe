@@ -6,6 +6,7 @@
 #include "app_message_bus.hpp"
 #include "app_rendering.hpp"
 #include "app_settings.hpp"
+#include "erhe_graphics/device.hpp"
 #include "input_state.hpp"
 #include "graphics/icon_set.hpp"
 #include "rendergraph/shadow_render_node.hpp"
@@ -111,9 +112,12 @@ Scene_views::~Scene_views() noexcept
 void Scene_views::handle_graphics_settings_changed(Graphics_preset* graphics_preset)
 {
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
-    const int msaa_sample_count = (graphics_preset != nullptr) ? graphics_preset->msaa_sample_count : 0;
+    const bool use_clip_control  = m_app_context.graphics_device->get_info().use_clip_control;
+    const int  msaa_sample_count = (graphics_preset != nullptr) ? graphics_preset->msaa_sample_count : 0;
+    const bool reverse_depth     = (graphics_preset != nullptr) ? (graphics_preset->reverse_depth && use_clip_control) : use_clip_control;
     for (const std::shared_ptr<Viewport_scene_view>& viewport_scene_view : m_viewport_scene_views) {
         viewport_scene_view->reconfigure(msaa_sample_count); // in Texture_rendergraph_node
+        viewport_scene_view->set_reverse_depth(reverse_depth); // in Scene_view + Texture_rendergraph_node
     }
 }
 

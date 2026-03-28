@@ -37,7 +37,7 @@ Scene_preview::Scene_preview(
             .vertex_input   = &mesh_memory.vertex_input,
             .input_assembly = Input_assembly_state::triangle,
             .rasterization  = Rasterization_state::cull_mode_back_ccw,
-            .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(),
+            .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(get_reverse_depth()),
             .color_blend    = Color_blend_state::color_blend_disabled
         }
     }
@@ -83,7 +83,7 @@ Scene_preview::Scene_preview(
         }
     );
 
-    const double depth_clear_value = 0.0; // reverse Z
+    const double depth_clear_value = get_reverse_depth() ? 0.0 : 1.0;
     graphics_device.clear_texture(*m_shadow_texture.get(), { depth_clear_value, 0.0, 0.0, 0.0 });
 }
 
@@ -181,7 +181,7 @@ void Scene_preview::update_rendertarget(erhe::graphics::Device& graphics_device)
     render_pass_descriptor.color_attachments[0].clear_value  = { m_clear_color.x, m_clear_color.y, m_clear_color.z, m_clear_color.w };
     render_pass_descriptor.depth_attachment.texture          = m_depth_texture.get();
     render_pass_descriptor.depth_attachment.load_action      = erhe::graphics::Load_action::Clear;
-    render_pass_descriptor.depth_attachment.clear_value[0]   = 0.0; // Reverse Z
+    render_pass_descriptor.depth_attachment.clear_value[0]   = get_reverse_depth() ? 0.0 : 1.0;
     render_pass_descriptor.depth_attachment.store_action     = erhe::graphics::Store_action::Dont_care;
     render_pass_descriptor.render_target_width               = m_width;
     render_pass_descriptor.render_target_height              = m_height;

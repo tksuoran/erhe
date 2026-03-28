@@ -212,6 +212,12 @@ void Viewport_scene_view::set_camera(const std::shared_ptr<erhe::scene::Camera>&
     m_camera = camera;
 }
 
+void Viewport_scene_view::set_reverse_depth(const bool reverse_depth)
+{
+    Scene_view::set_reverse_depth(reverse_depth);
+    Texture_rendergraph_node::set_reverse_depth(reverse_depth);
+}
+
 auto Viewport_scene_view::is_scene_view_hovered() const -> bool
 {
     // log_frame->debug("{}->is_scene_view_hovered() = {}", get_name(), m_is_scene_view_hovered);
@@ -239,7 +245,7 @@ auto Viewport_scene_view::get_perspective_scale() const -> float
     if (!camera) {
         return 1.0f;
     }
-    const erhe::scene::Camera_projection_transforms camera_projection_transforms_ = camera->projection_transforms(m_projection_viewport);
+    const erhe::scene::Camera_projection_transforms camera_projection_transforms_ = camera->projection_transforms(m_projection_viewport, Scene_view::m_reverse_depth);
     const glm::mat4 clip_from_view = camera_projection_transforms_.clip_from_camera.get_matrix();
     const glm::mat2 projection_top_left_2x2{clip_from_view};
     const glm::mat2 inverted_top_left_2x2 = glm::inverse(projection_top_left_2x2);
@@ -280,7 +286,7 @@ auto Viewport_scene_view::project_to_viewport(const glm::vec3 position_in_world)
     if (!camera) {
         return {};
     }
-    const auto camera_projection_transforms = camera->projection_transforms(m_projection_viewport);
+    const auto camera_projection_transforms = camera->projection_transforms(m_projection_viewport, Scene_view::m_reverse_depth);
     constexpr float depth_range_near = 0.0f;
     constexpr float depth_range_far  = 1.0f;
     return erhe::math::project_to_screen_space<float>(
@@ -301,7 +307,7 @@ auto Viewport_scene_view::unproject_to_world(const glm::vec3 position_in_window)
     if (!camera) {
         return {};
     }
-    const auto camera_projection_transforms = camera->projection_transforms(m_projection_viewport);
+    const auto camera_projection_transforms = camera->projection_transforms(m_projection_viewport, Scene_view::m_reverse_depth);
     constexpr float depth_range_near = 0.0f;
     constexpr float depth_range_far  = 1.0f;
     return erhe::math::unproject<float>(
@@ -335,9 +341,11 @@ auto Viewport_scene_view::get_cursor_relative_hold() const -> bool
 
 void Viewport_scene_view::update_hover(bool ray_only)
 {
-    // Note: Using reverse Z
-    const auto near_position_in_world = get_position_in_world_viewport_depth(1.0f);
-    const auto far_position_in_world  = get_position_in_world_viewport_depth(0.0f);
+    // Reverse Z: near=1.0, far=0.0; Forward Z: near=0.0, far=1.0
+    const float near_depth = Scene_view::m_reverse_depth ? 1.0f : 0.0f;
+    const float far_depth  = Scene_view::m_reverse_depth ? 0.0f : 1.0f;
+    const auto near_position_in_world = get_position_in_world_viewport_depth(near_depth);
+    const auto far_position_in_world  = get_position_in_world_viewport_depth(far_depth);
 
     // log_input_frame->info("Viewport_scene_view::update_hover");
 
@@ -479,7 +487,7 @@ auto Viewport_scene_view::get_position_in_world_viewport_depth(const float viewp
         viewport_depth
     };
     const erhe::math::Viewport&                     vp                    = get_projection_viewport();
-    const erhe::scene::Camera_projection_transforms projection_transforms = camera->projection_transforms(vp);
+    const erhe::scene::Camera_projection_transforms projection_transforms = camera->projection_transforms(vp, Scene_view::m_reverse_depth);
     const glm::mat4                                 world_from_clip       = projection_transforms.clip_from_world.get_inverse_matrix();
 
     return erhe::math::unproject<float>(
@@ -636,8 +644,10 @@ auto Viewport_scene_view::get_closest_point_on_line(const glm::vec3 P0, const gl
     );
 
     if (ss_closest.has_value()) {
-        const auto R0_opt = unproject_to_world(vec3{ss_closest.value(), 0.0f});
-        const auto R1_opt = unproject_to_world(vec3{ss_closest.value(), 1.0f});
+        const float near_depth = Scene_view::m_reverse_depth ? 1.0f : 0.0f;
+        const float far_depth  = Scene_view::m_reverse_depth ? 0.0f : 1.0f;
+        const auto R0_opt = unproject_to_world(vec3{ss_closest.value(), near_depth});
+        const auto R1_opt = unproject_to_world(vec3{ss_closest.value(), far_depth});
         if (R0_opt.has_value() && R1_opt.has_value()) {
             const auto R0 = R0_opt.value();
             const auto R1 = R1_opt.value();
@@ -647,8 +657,10 @@ auto Viewport_scene_view::get_closest_point_on_line(const glm::vec3 P0, const gl
             }
         }
     } else {
-        const auto Q0_opt = get_position_in_world_viewport_depth(1.0);
-        const auto Q1_opt = get_position_in_world_viewport_depth(0.0);
+        const float near_depth2 = Scene_view::m_reverse_depth ? 1.0f : 0.0f;
+        const float far_depth2  = Scene_view::m_reverse_depth ? 0.0f : 1.0f;
+        const auto Q0_opt = get_position_in_world_viewport_depth(near_depth2);
+        const auto Q1_opt = get_position_in_world_viewport_depth(far_depth2);
         if (Q0_opt.has_value() && Q1_opt.has_value()) {
             const auto Q0 = Q0_opt.value();
             const auto Q1 = Q1_opt.value();
@@ -668,8 +680,10 @@ auto Viewport_scene_view::get_closest_point_on_plane(const glm::vec3 N, const gl
 
     using vec3 = glm::vec3;
 
-    const auto Q0_opt = get_position_in_world_viewport_depth(1.0);
-    const auto Q1_opt = get_position_in_world_viewport_depth(0.0);
+    const float near_depth = Scene_view::m_reverse_depth ? 1.0f : 0.0f;
+    const float far_depth  = Scene_view::m_reverse_depth ? 0.0f : 1.0f;
+    const auto Q0_opt = get_position_in_world_viewport_depth(near_depth);
+    const auto Q1_opt = get_position_in_world_viewport_depth(far_depth);
     if (
         !Q0_opt.has_value() ||
         !Q1_opt.has_value()

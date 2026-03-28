@@ -87,6 +87,11 @@ Id_renderer::~Id_renderer() noexcept
 {
 }
 
+void Id_renderer::rebuild_depth_state(const bool reverse_depth)
+{
+    m_pipeline.data.depth_stencil = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth);
+}
+
 auto Id_renderer::get_current_transfer_entry() -> Transfer_entry&
 {
     return m_transfer_entries[m_current_transfer_entry_slot];
@@ -239,7 +244,7 @@ void Id_renderer::render(const Render_parameters& parameters)
     Scoped_debug_group debug_group{"Id_renderer::render()"};
     Scoped_gpu_timer   timer      {m_gpu_timer};
 
-    const auto projection_transforms = camera.projection_transforms(viewport);
+    const auto projection_transforms = camera.projection_transforms(viewport, parameters.reverse_depth);
     const mat4 clip_from_world       = projection_transforms.clip_from_world.get_matrix();
 
     Transfer_entry& entry = get_current_transfer_entry();
@@ -258,7 +263,8 @@ void Id_renderer::render(const Render_parameters& parameters)
         1.0f,
         glm::vec4{0.0f},
         glm::vec4{0.0f},
-        0
+        0,
+        parameters.reverse_depth
     );
 
     // Render
@@ -284,7 +290,8 @@ void Id_renderer::render(const Render_parameters& parameters)
         {
             encoder.set_render_pipeline_state(m_selective_depth_clear_pipeline);
             encoder.set_viewport_rect(viewport.x, viewport.y, viewport.width, viewport.height);
-            encoder.set_viewport_depth_range(0.0f, 0.0f); // Reverse Z far
+            const float far_depth = parameters.reverse_depth ? 0.0f : 1.0f;
+            encoder.set_viewport_depth_range(far_depth, far_depth);
             for (auto mesh_spans : tool_mesh_spans) {
                 render(encoder, mesh_spans);
             }

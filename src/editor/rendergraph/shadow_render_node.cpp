@@ -90,12 +90,14 @@ void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, co
         return;
     }
 
+    const bool reverse_depth = m_scene_view.get_reverse_depth();
     if (
         m_texture &&
         (m_texture->get_width()             == resolution) &&
         (m_texture->get_height()            == resolution) &&
         (m_texture->get_array_layer_count() == std::max(1, light_count)) &&
-        (m_texture->get_pixelformat()       == depth_format)
+        (m_texture->get_pixelformat()       == depth_format) &&
+        (m_reverse_depth                    == reverse_depth)
     ) {
         log_render->debug(
             "Reconfigure shadow resolution = {}, light count = {}, format = {} - match old settings, skip",
@@ -103,6 +105,7 @@ void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, co
         );
         return;
     }
+    m_reverse_depth = reverse_depth;
     log_render->debug("Reconfigure shadow resolution = {}, light count = {}", resolution, light_count);
 
     //// TODO device.wait_for_idle()
@@ -129,7 +132,7 @@ void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, co
         );
 
         if (resolution <= 1) {
-            double depth_clear_value = 0.0; // reverse Z
+            const double depth_clear_value = m_scene_view.get_reverse_depth() ? 0.0 : 1.0;
             graphics_device.clear_texture(*m_texture.get(), { depth_clear_value, 0.0, 0.0, 0.0 });
         }
     }
@@ -143,7 +146,7 @@ void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, co
         render_pass_descriptor.depth_attachment.texture_layer  = static_cast<unsigned int>(i);
         render_pass_descriptor.depth_attachment.load_action    = erhe::graphics::Load_action::Clear;
         render_pass_descriptor.depth_attachment.store_action   = erhe::graphics::Store_action::Store;
-        render_pass_descriptor.depth_attachment.clear_value[0] = 0.0; // Reverse Z
+        render_pass_descriptor.depth_attachment.clear_value[0] = m_scene_view.get_reverse_depth() ? 0.0 : 1.0;
         render_pass_descriptor.render_target_width             = resolution;
         render_pass_descriptor.render_target_height            = resolution;
         render_pass_descriptor.debug_label                     = erhe::utility::Debug_label{fmt::format("Shadow {}", i)};
@@ -206,7 +209,8 @@ void Shadow_render_node::execute_rendergraph_node()
             .lights                       = layers.light()->lights,
             .skins                        = scene_root->get_scene().get_skins(),
             .materials                    = materials,
-            .light_projections            = m_light_projections
+            .light_projections            = m_light_projections,
+            .reverse_depth                = m_scene_view.get_reverse_depth()
         }
     );
 }

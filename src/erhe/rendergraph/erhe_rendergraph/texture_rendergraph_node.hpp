@@ -45,6 +45,7 @@ public:
 
     void update_render_pass(int width, int height, erhe::graphics::Swapchain* swapchain);
     void reconfigure       (int sample_count);
+    void set_reverse_depth (bool reverse_depth);
 
 protected:
     int                                          m_input_key;
@@ -52,6 +53,7 @@ protected:
     erhe::dataformat::Format                     m_color_format;
     erhe::dataformat::Format                     m_depth_stencil_format;
     int                                          m_sample_count;
+    bool                                         m_reverse_depth{true};
     std::shared_ptr<erhe::graphics::Texture>     m_color_texture;
     std::shared_ptr<erhe::graphics::Texture>     m_multisampled_color_texture;
     std::unique_ptr<erhe::graphics::Texture>     m_depth_stencil_texture;

@@ -63,6 +63,20 @@ Light_interface::Light_interface(erhe::graphics::Device& graphics_device, const 
             .debug_label  = "Light_interface::shadow_sampler_compare"
         }
     }
+    , shadow_sampler_compare_forward{
+        graphics_device,
+        erhe::graphics::Sampler_create_info{
+            .min_filter        = erhe::graphics::Filter::nearest,
+            .mag_filter        = erhe::graphics::Filter::nearest,
+            .mipmap_mode       = erhe::graphics::Sampler_mipmap_mode::not_mipmapped,
+            .compare_enable    = true,
+            .compare_operation = erhe::graphics::Compare_operation::less_or_equal,
+            .lod_bias     = 0.0f,
+            .max_lod      = 0.0f,
+            .min_lod      = 0.0f,
+            .debug_label  = "Light_interface::shadow_sampler_compare_forward"
+        }
+    }
     , shadow_sampler_no_compare{
         graphics_device,
         erhe::graphics::Sampler_create_info{
@@ -79,9 +93,12 @@ Light_interface::Light_interface(erhe::graphics::Device& graphics_device, const 
 {
 }
 
-auto Light_interface::get_sampler(const bool compare) const -> const erhe::graphics::Sampler*
+auto Light_interface::get_sampler(const bool compare, const bool reverse_depth) const -> const erhe::graphics::Sampler*
 {
-    return compare ? &shadow_sampler_compare : &shadow_sampler_no_compare;
+    if (!compare) {
+        return &shadow_sampler_no_compare;
+    }
+    return reverse_depth ? &shadow_sampler_compare : &shadow_sampler_compare_forward;
 }
 
 Light_buffer::Light_buffer(erhe::graphics::Device& graphics_device, Light_interface& light_interface)
@@ -122,13 +139,15 @@ void Light_projections::apply(
     const erhe::scene::Camera*                                  view_camera,
     const erhe::math::Viewport&                                 view_camera_viewport,
     const erhe::math::Viewport&                                 light_texture_viewport,
-    const std::shared_ptr<erhe::graphics::Texture>&             in_shadow_map_texture
+    const std::shared_ptr<erhe::graphics::Texture>&             in_shadow_map_texture,
+    const bool                                                  reverse_depth
 )
 {
     parameters = erhe::scene::Light_projection_parameters{
         .view_camera          = view_camera,
         .main_camera_viewport = view_camera_viewport,
-        .shadow_map_viewport  = light_texture_viewport
+        .shadow_map_viewport  = light_texture_viewport,
+        .reverse_depth        = reverse_depth
     };
     shadow_map_texture = in_shadow_map_texture;
 
@@ -197,7 +216,8 @@ auto Light_buffer::update(
     const uint32_t uint_zero              {0u};
     const uint32_t uvec4_zero[4]          {0u, 0u, 0u, 0u};
 
-    const erhe::graphics::Sampler* compare_sampler    = m_light_interface.get_sampler(true);
+    const bool reverse_depth = light_projections ? light_projections->parameters.reverse_depth : true;
+    const erhe::graphics::Sampler* compare_sampler    = m_light_interface.get_sampler(true, reverse_depth);
     const erhe::graphics::Sampler* no_compare_sampler = m_light_interface.get_sampler(false);
 
     uint64_t shadow_map_texture_handle_compare    = erhe::graphics::invalid_texture_handle;

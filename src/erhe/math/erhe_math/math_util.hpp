@@ -359,15 +359,21 @@ template <typename T>
     };
 }
 
-[[nodiscard]] auto create_frustum(float left, float right, float bottom, float top, float z_near, float z_far) -> glm::mat4;
-[[nodiscard]] auto create_frustum_simple(float width, float height, float z_near, float z_far) -> glm::mat4;
-[[nodiscard]] auto create_perspective(float fov_x, float fov_y, float z_near, float z_far) -> glm::mat4;
-[[nodiscard]] auto create_perspective_xr(float fov_left, float fov_right, float fov_up, float fov_down, float z_near, float z_far) -> glm::mat4;
-[[nodiscard]] auto create_perspective_vertical(float fov_y, float aspect_ratio, float z_near, float z_far) -> glm::mat4;
-[[nodiscard]] auto create_perspective_horizontal(float fov_x, float aspect_ratio, float z_near, float z_far) -> glm::mat4;
+enum class Depth_range : unsigned int {
+    zero_to_one,        // GL 4.5 with glClipControl(lower_left, zero_to_one) or Vulkan
+    negative_one_to_one // Default OpenGL NDC (GL 4.1 on macOS)
+};
+
+[[nodiscard]] auto create_frustum(float left, float right, float bottom, float top, float z_near, float z_far, Depth_range depth_range = Depth_range::zero_to_one) -> glm::mat4;
+[[nodiscard]] auto create_frustum_infinite_far(float left, float right, float bottom, float top, float z_near, Depth_range depth_range = Depth_range::zero_to_one) -> glm::mat4;
+[[nodiscard]] auto create_frustum_simple(float width, float height, float z_near, float z_far, Depth_range depth_range = Depth_range::zero_to_one) -> glm::mat4;
+[[nodiscard]] auto create_perspective(float fov_x, float fov_y, float z_near, float z_far, Depth_range depth_range = Depth_range::zero_to_one) -> glm::mat4;
+[[nodiscard]] auto create_perspective_xr(float fov_left, float fov_right, float fov_up, float fov_down, float z_near, float z_far, Depth_range depth_range = Depth_range::zero_to_one) -> glm::mat4;
+[[nodiscard]] auto create_perspective_vertical(float fov_y, float aspect_ratio, float z_near, float z_far, Depth_range depth_range = Depth_range::zero_to_one) -> glm::mat4;
+[[nodiscard]] auto create_perspective_horizontal(float fov_x, float aspect_ratio, float z_near, float z_far, Depth_range depth_range = Depth_range::zero_to_one) -> glm::mat4;
 [[nodiscard]] auto create_projection(float s, float p, float n, float f, float w, float h, glm::vec3 v, glm::vec3 e) -> glm::mat4;
-[[nodiscard]] auto create_orthographic(float left,float right,float bottom, float top, float z_near, float z_far) -> glm::mat4;
-[[nodiscard]] auto create_orthographic_centered(float width,float height, float z_near, float z_far) -> glm::mat4;
+[[nodiscard]] auto create_orthographic(float left, float right, float bottom, float top, float z_near, float z_far, Depth_range depth_range = Depth_range::zero_to_one) -> glm::mat4;
+[[nodiscard]] auto create_orthographic_centered(float width, float height, float z_near, float z_far, Depth_range depth_range = Depth_range::zero_to_one) -> glm::mat4;
 
 template <typename T>
 [[nodiscard]] auto create_translation(const typename vector_types<T>::vec2 t) -> typename vector_types<T>::mat4

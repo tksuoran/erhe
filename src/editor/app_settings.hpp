@@ -34,6 +34,7 @@ public:
     std::string name;
     int         msaa_sample_count{4};
     bool        bindless_textures{false};
+    bool        reverse_depth    {true};
 
     bool        shadow_enable     {true};
     int         shadow_resolution {1024};

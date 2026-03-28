@@ -44,7 +44,8 @@ class Scene_views;
 class Tools_pipeline_renderpasses
 {
 public:
-    Tools_pipeline_renderpasses(Mesh_memory& mesh_memory, Programs& programs);
+    Tools_pipeline_renderpasses(Mesh_memory& mesh_memory, Programs& programs, bool reverse_depth = true);
+    void rebuild_depth_state(bool reverse_depth);
     erhe::graphics::Render_pipeline_state tool1_hidden_stencil;
     erhe::graphics::Render_pipeline_state tool2_visible_stencil;
     erhe::graphics::Render_pipeline_state tool3_depth_clear;
@@ -71,6 +72,7 @@ public:
     void render_viewport_tools(const Render_context& context);
     void register_tool        (Tool* tool);
     void set_priority_tool    (Tool* tool);
+    void rebuild_depth_state  (bool reverse_depth);
     [[nodiscard]] auto get_priority_tool  () const -> Tool*;
     [[nodiscard]] auto get_tools          () const -> const std::vector<Tool*>&;
     [[nodiscard]] auto get_tool_scene_root() -> std::shared_ptr<Scene_root>;

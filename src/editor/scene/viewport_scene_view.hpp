@@ -102,6 +102,7 @@ public:
     void set_window_viewport         (erhe::math::Viewport viewport);
     void set_is_scene_view_hovered   (bool is_hovered);
     void set_camera                  (const std::shared_ptr<erhe::scene::Camera>& camera);
+    void set_reverse_depth           (bool reverse_depth);
     void update_pointer_2d_position  (glm::vec2 position_in_viewport);
     void update_hover                (bool ray_only = false);
     void request_cursor_relative_hold(bool relative_hold_enable);

@@ -22,6 +22,7 @@ public:
     const Camera*        view_camera{nullptr};
     erhe::math::Viewport main_camera_viewport{};
     erhe::math::Viewport shadow_map_viewport{};
+    bool                 reverse_depth{true};
 };
 
 class Light;
@@ -86,19 +87,11 @@ private:
 
     [[nodiscard]] auto spot_light_projection_transforms(const Light_projection_parameters& parameters) const -> Light_projection_transforms;
 
-    static constexpr glm::mat4 texture_from_clip{
-        0.5f, 0.0f, 0.0f, 0.0f,
-        0.0f, 0.5f, 0.0f, 0.0f,
-        0.0f, 0.0f, 1.0f, 0.0f,
-        0.5f, 0.5f, 0.0f, 1.0f
-    };
-
-    static constexpr glm::mat4 clip_from_texture{
-         2.0f, 0.0f, 0.0f, 0.0f,
-         0.0f, 2.0f, 0.0f, 0.0f,
-         0.0f, 0.0f, 1.0f, 0.0f,
-        -1.0f,-1.0f, 0.0f, 1.0f
-    };
+    // Maps clip space to [0,1] texture space.
+    // For zero_to_one (reverse_depth=true):  z is already in [0,1], identity for z
+    // For negative_one_to_one (reverse_depth=false): z is in [-1,1], needs scale+bias
+    [[nodiscard]] static auto get_texture_from_clip(bool reverse_depth) -> glm::mat4;
+    [[nodiscard]] static auto get_clip_from_texture(bool reverse_depth) -> glm::mat4;
 };
 
 } // namespace erhe::scene

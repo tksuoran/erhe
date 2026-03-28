@@ -46,11 +46,12 @@ float sample_light_visibility(vec4 position, uint light_index, float N_dot_L) {
     //  - "What if the det is zero?" - I don't know. If you do, please let me know.
     //      - I can only hope dz_dUV being left to zero is ok.
     //  - HLSL code has been converted to GLSL
-    //  - erhe uses reverse Z
-    //      - so min() was replaced with max() in a couple of places
-    //      - lessThan() was replaced with greaterThan
+    //  - clip_depth_direction: -1.0 for reverse Z, 1.0 for forward Z
+    //      - bias and comparisons are adjusted accordingly
     //  - For reasons I do not fully yet understand, I had to scale the bias
     //      - Code uses 2.0 at the moment, but smaller values seem to also work.
+
+    float cdd = camera.cameras[0].clip_depth_direction; // -1.0 reverse Z, 1.0 forward Z
 
     // First, a common part:
     vec2  dU_dXY = vec2(dFdxFine(position_in_light_texture.x), dFdyFine(position_in_light_texture.x));
@@ -91,16 +92,16 @@ float sample_light_visibility(vec4 position, uint light_index, float N_dot_L) {
 
         vec4 surfaceZ = vec4(0.0);
 
-        // Apply biases
-        surfaceZ[0] += 2.0 * max(0.0, dot(offsets[0] * (1.0 / shadowmap_resolution) * vec2(      fracCoords.x, 1.0 - fracCoords.y), dz_dUV));
-        surfaceZ[1] += 2.0 * max(0.0, dot(offsets[1] * (1.0 / shadowmap_resolution) * vec2(1.0 - fracCoords.x, 1.0 - fracCoords.y), dz_dUV));
-        surfaceZ[2] += 2.0 * max(0.0, dot(offsets[2] * (1.0 / shadowmap_resolution) * vec2(1.0 - fracCoords.x,       fracCoords.y), dz_dUV));
-        surfaceZ[3] += 2.0 * max(0.0, dot(offsets[3] * (1.0 / shadowmap_resolution) * vec2(      fracCoords.x,       fracCoords.y), dz_dUV));
+        // Apply biases (direction-aware: reverse-Z biases positive, forward-Z biases negative)
+        surfaceZ[0] += 2.0 * (-cdd) * max(0.0, (-cdd) * dot(offsets[0] * (1.0 / shadowmap_resolution) * vec2(      fracCoords.x, 1.0 - fracCoords.y), dz_dUV));
+        surfaceZ[1] += 2.0 * (-cdd) * max(0.0, (-cdd) * dot(offsets[1] * (1.0 / shadowmap_resolution) * vec2(1.0 - fracCoords.x, 1.0 - fracCoords.y), dz_dUV));
+        surfaceZ[2] += 2.0 * (-cdd) * max(0.0, (-cdd) * dot(offsets[2] * (1.0 / shadowmap_resolution) * vec2(1.0 - fracCoords.x,       fracCoords.y), dz_dUV));
+        surfaceZ[3] += 2.0 * (-cdd) * max(0.0, (-cdd) * dot(offsets[3] * (1.0 / shadowmap_resolution) * vec2(      fracCoords.x,       fracCoords.y), dz_dUV));
 
         surfaceZ += position_in_light_texture.z;
 
-        // Compare the four surface depths with shadow map depths
-        bvec4 attenuationMask = greaterThan(surfaceZ, shadowDepths);
+        // Compare the four surface depths with shadow map depths (direction-aware)
+        bvec4 attenuationMask = greaterThan((-cdd) * surfaceZ, (-cdd) * shadowDepths);
         vec4 attenuation4 = vec4(attenuationMask); // convert bools to floats (0.0/1.0)
 
         // Bilinear interpolation between the four samples
@@ -116,24 +117,25 @@ float sample_light_visibility(vec4 position, uint light_index, float N_dot_L) {
     {
         vec2 distanceToTexelCenterUV = vec2(0.5) - fract(position_in_light_texture.xy * shadowmap_resolution);
         distanceToTexelCenterUV *= 1.0 / shadowmap_resolution;
-        //float slopeBias = dot(distanceToTexelCenterUV, dz_dUV);
-        //float slopeBias = min(0, dot(distanceToTexelCenterUV, dz_dUV));
-        float slopeBias = max(0, dot(distanceToTexelCenterUV, dz_dUV));
+        // Direction-aware slope bias: reverse-Z keeps positive, forward-Z keeps negative
+        float slopeBias = (-cdd) * max(0.0, (-cdd) * dot(distanceToTexelCenterUV, dz_dUV));
 
 #       if 1 // Path 2: Hardware depth texture comparison with nearest filter
         {
             float D_ref_       = position_in_light_texture.z + 2.0 * slopeBias;
-            float D_ref        = ceil(D_ref_ * 65535.0) / 65535.0;
+            // Direction-aware rounding: reverse-Z uses ceil (toward near=1), forward-Z uses floor (toward near=0)
+            float D_ref        = (-cdd) * ceil((-cdd) * D_ref_ * 65535.0) / 65535.0;
             vec4  uv_ref_layer = vec4(position_in_light_texture.xy, array_layer, D_ref);
             float hw_compare   = texture(s_shadow_compare, uv_ref_layer);
             return hw_compare;
         }
 #       else // Path 3: Shader depth texture comparison
-        {   // Shader comparison - NOTE: Using reverse Z
+        {   // Shader comparison - direction-aware
             float D_ref        = position_in_light_texture.z + 2.0 * slopeBias;
             vec3  uv_layer     = vec3(position_in_light_texture.xy, array_layer);
             float depth_sample = texture(s_shadow_no_compare, uv_layer).r;
-            return ceil(D_ref * 65535.0) / 65535.0 > depth_sample ? 1.0 : 0.0;
+            float D_ref_rounded = (-cdd) * ceil((-cdd) * D_ref * 65535.0) / 65535.0;
+            return ((-cdd) * D_ref_rounded) > ((-cdd) * depth_sample) ? 1.0 : 0.0;
         }
 #       endif
     }

@@ -31,36 +31,6 @@ Forward_renderer::Forward_renderer(erhe::graphics::Device& graphics_device, Prog
     , m_light_buffer        {graphics_device, program_interface.light_interface}
     , m_material_buffer     {graphics_device, program_interface.material_interface}
     , m_primitive_buffer    {graphics_device, program_interface.primitive_interface}
-    , m_shadow_sampler_compare{
-        graphics_device,
-        erhe::graphics::Sampler_create_info{
-            .min_filter        = erhe::graphics::Filter::nearest,
-            .mag_filter        = erhe::graphics::Filter::nearest,
-            .mipmap_mode       = erhe::graphics::Sampler_mipmap_mode::not_mipmapped,
-            .address_mode      = { erhe::graphics::Sampler_address_mode::clamp_to_edge, erhe::graphics::Sampler_address_mode::clamp_to_edge, erhe::graphics::Sampler_address_mode::clamp_to_edge },
-            .compare_enable    = true,
-            .compare_operation = erhe::graphics::Compare_operation::greater_or_equal,
-            .lod_bias          = 0.0f,
-            .max_lod           = 0.0f,
-            .min_lod           = 0.0f,
-            .debug_label       = "Forward_renderer::m_shadow_sampler_compare"
-        }
-    }
-    , m_shadow_sampler_no_compare{
-        graphics_device,
-        erhe::graphics::Sampler_create_info{
-            .min_filter        = erhe::graphics::Filter::nearest,
-            .mag_filter        = erhe::graphics::Filter::nearest,
-            .mipmap_mode       = erhe::graphics::Sampler_mipmap_mode::not_mipmapped,
-            .address_mode      = { erhe::graphics::Sampler_address_mode::clamp_to_edge, erhe::graphics::Sampler_address_mode::clamp_to_edge, erhe::graphics::Sampler_address_mode::clamp_to_edge },
-            .compare_enable    = false,
-            .compare_operation = erhe::graphics::Compare_operation::always,
-            .lod_bias          = 0.0f,
-            .max_lod           = 0.0f,
-            .min_lod           = 0.0f,
-            .debug_label       = "Forward_renderer::m_shadow_sampler_no_compare"
-        }
-    }
     , m_fallback_sampler{
         graphics_device,
         erhe::graphics::Sampler_create_info{
@@ -124,7 +94,8 @@ void Forward_renderer::render(const Render_parameters& parameters)
             camera->get_exposure(),
             parameters.grid_size,
             parameters.grid_line_width,
-            parameters.frame_number
+            parameters.frame_number,
+            parameters.reverse_depth
         );
         m_camera_buffer.bind(parameters.render_encoder, camera_buffer_range.value());
     }
@@ -245,7 +216,8 @@ void Forward_renderer::draw_primitives(const Render_parameters& parameters, cons
             camera->get_exposure(),
             parameters.grid_size,
             parameters.grid_line_width,
-            parameters.frame_number
+            parameters.frame_number,
+            parameters.reverse_depth
         );
         m_camera_buffer.bind(parameters.render_encoder, camera_range.value());
     }
