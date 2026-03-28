@@ -101,6 +101,8 @@ if (ERHE_GRAPHICS_API_OPENGL)
         erhe_graphics/gl/gl_device.hpp
         erhe_graphics/gl/gl_helpers.cpp
         erhe_graphics/gl/gl_helpers.hpp
+        erhe_graphics/gl/gl_binding_state.cpp
+        erhe_graphics/gl/gl_binding_state.hpp
         erhe_graphics/gl/gl_objects.cpp
         erhe_graphics/gl/gl_objects.hpp
         erhe_graphics/gl/gl_gpu_timer.cpp

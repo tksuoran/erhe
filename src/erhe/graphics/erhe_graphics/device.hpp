@@ -83,6 +83,7 @@ public:
     uint32_t vulkan_api_version {0};
 #endif
 
+    bool use_direct_state_access     {false};
     bool use_binary_shaders          {false};
     bool use_integer_polygon_ids     {false};
     bool use_bindless_texture        {false};
@@ -92,7 +93,12 @@ public:
     bool use_multi_draw_indirect_arb {false};
     bool emulate_multi_draw_indirect {false};
     bool use_compute_shader          {false};
+    bool use_shader_storage_buffers  {false};
+    bool use_base_instance           {false};
     bool use_clear_texture           {false};
+    bool use_texture_view            {false};
+    bool use_debug_output            {false}; // GL 4.3 or ARB_debug_output — debug callback
+    bool use_debug_groups            {false}; // GL 4.3 — push/pop debug group (not in ARB_debug_output)
 
     // limits
     int max_compute_workgroup_count[3] = { 1, 1, 1 };
@@ -197,22 +203,30 @@ private:
 class Scoped_debug_group final
 {
 public:
+    static bool s_enabled; // set by Device_impl during init
+
     template<std::size_t N>
     explicit Scoped_debug_group(const char (&debug_label)[N])
         : m_debug_label{std::string_view{debug_label, N - 1}}
     {
-        begin();
+        if (s_enabled) {
+            begin();
+        }
     }
 
     explicit Scoped_debug_group(erhe::utility::Debug_label debug_label)
         : m_debug_label{debug_label}
     {
-        begin();
+        if (s_enabled) {
+            begin();
+        }
     }
 
     ~Scoped_debug_group() noexcept
     {
-        end();
+        if (s_enabled) {
+            end();
+        }
     }
 
     void begin();

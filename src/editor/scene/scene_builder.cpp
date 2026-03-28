@@ -14,6 +14,7 @@
 #include "SkylineBinPack.h" // RectangleBinPack
 
 #include "config/generated/scene_config.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_graphics/generated/graphics_config.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_rendergraph/rendergraph.hpp"
@@ -183,7 +184,7 @@ void Scene_builder::setup_cameras(
         return;
     }
 
-    const bool enable_post_processing = m_graphics_config.post_processing;
+    const bool enable_post_processing = m_graphics_config.post_processing && graphics_device.get_info().use_texture_view;
 
     bool imgui_window_scene_view = m_scene_config.imgui_window_scene_view;
     if (!imgui_window_scene_view) {

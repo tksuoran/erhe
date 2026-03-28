@@ -2,7 +2,9 @@
 
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/device.hpp"
+#include "erhe_graphics/gl/gl_binding_state.hpp"
 #include "erhe_graphics/gl/gl_context_provider.hpp"
+#include "erhe_graphics/gl/gl_objects.hpp"
 #include "erhe_graphics/gl/gl_state_tracker.hpp"
 #include "erhe_graphics/shader_monitor.hpp"
 
@@ -73,6 +75,19 @@ public:
 
     void reset_shader_stages_state_tracker();
     [[nodiscard]] auto get_draw_id_uniform_location() const -> GLint;
+    [[nodiscard]] auto get_binding_state() -> Gl_binding_state&;
+
+    // GL object creation
+    [[nodiscard]] auto create_texture     (gl::Texture_target target) -> Gl_texture;
+    [[nodiscard]] auto create_texture_view(gl::Texture_target target) -> Gl_texture;
+    [[nodiscard]] auto create_buffer      () -> Gl_buffer;
+    [[nodiscard]] auto create_framebuffer () -> Gl_framebuffer;
+    [[nodiscard]] auto create_renderbuffer() -> Gl_renderbuffer;
+    [[nodiscard]] auto create_sampler     () -> Gl_sampler;
+    [[nodiscard]] auto create_vertex_array() -> Gl_vertex_array;
+    [[nodiscard]] auto create_query       (gl::Query_target target) -> Gl_query;
+    [[nodiscard]] auto create_program     () -> Gl_program;
+    [[nodiscard]] auto create_shader      (gl::Shader_type type) -> Gl_shader;
 
 private:
     void frame_completed(uint64_t frame);
@@ -89,6 +104,7 @@ private:
     std::unique_ptr<Surface>  m_surface{};
     Shader_monitor            m_shader_monitor;
     OpenGL_state_tracker      m_gl_state_tracker;
+    Gl_binding_state          m_gl_binding_state;
     Gl_context_provider       m_gl_context_provider;
     Device_info               m_info;
 

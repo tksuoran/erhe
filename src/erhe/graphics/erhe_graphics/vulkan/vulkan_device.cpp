@@ -774,6 +774,7 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
     m_info.use_multi_draw_indirect_arb  = false;
     m_info.emulate_multi_draw_indirect  = false;
     m_info.use_compute_shader           = true;
+    m_info.use_shader_storage_buffers   = true;
     m_info.use_clear_texture            = true;
     m_info.use_persistent_buffers       = true;
 

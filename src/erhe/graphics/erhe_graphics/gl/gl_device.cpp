@@ -252,7 +252,17 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
     int shader_storage_buffer_offset_alignment{0};
     int uniform_buffer_offset_alignment       {0};
 
-    if (m_info.gl_version >= 430) {
+    // GL 4.3 core has debug_message_callback and push/pop_debug_group.
+    // ARB_debug_output has glDebugMessageCallbackARB but not push/pop_debug_group,
+    // and the ARB-suffixed functions are not in the generated GL wrapper.
+    // For now, only use debug output when GL >= 4.3 (core functions available).
+    // TODO: Add ARB_debug_output support for macOS GL 4.1
+    m_info.use_debug_output = (m_info.gl_version >= 430);
+    m_info.use_debug_groups = (m_info.gl_version >= 430);
+    Scoped_debug_group::s_enabled = m_info.use_debug_groups;
+    log_startup->info("Debug output supported: {} (groups: {})", m_info.use_debug_output, m_info.use_debug_groups);
+
+    if (m_info.use_debug_output) {
         ERHE_PROFILE_SCOPE("Debug Callback");
         gl::debug_message_callback(erhe_opengl_callback, nullptr);
         gl::debug_message_control(
@@ -265,7 +275,9 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         );
         gl::enable(gl::Enable_cap::debug_output);
         gl::enable(gl::Enable_cap::debug_output_synchronous);
+    }
 
+    if (m_info.gl_version >= 430) {
         for (GLuint i = 0; i < 3; ++i) {
             gl::get_integer_iv(gl::Get_p_name::max_compute_work_group_count, i, &m_info.max_compute_workgroup_count[i]);
             gl::get_integer_iv(gl::Get_p_name::max_compute_work_group_size,  i, &m_info.max_compute_workgroup_size[i]);
@@ -302,9 +314,11 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         gl::get_integer_v(gl::Get_p_name::max_geometry_shader_storage_blocks,        &m_info.max_geometry_shader_storage_blocks);
         gl::get_integer_v(gl::Get_p_name::max_tess_control_shader_storage_blocks,    &m_info.max_tess_control_shader_storage_blocks);
         gl::get_integer_v(gl::Get_p_name::max_tess_evaluation_shader_storage_blocks, &m_info.max_tess_evaluation_shader_storage_blocks);
-        m_info.use_compute_shader = true;
+        m_info.use_compute_shader         = true;
+        m_info.use_shader_storage_buffers = true;
     } else {
-        m_info.use_compute_shader = false;
+        m_info.use_compute_shader         = false;
+        m_info.use_shader_storage_buffers = false;
         for (GLuint i = 0; i < 3; ++i) {
             m_info.max_compute_workgroup_count[i] = 0;
             m_info.max_compute_workgroup_size [i] = 0;
@@ -367,7 +381,8 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
 
     const bool force_bindless_textures_off       = graphics_config.force_bindless_textures_off;
     const bool force_no_persistent_buffers       = graphics_config.force_no_persistent_buffers;
-    //const bool force_no_direct_state_access      = graphics_config.force_no_direct_state_access;
+    const bool force_no_direct_state_access      = graphics_config.force_no_direct_state_access;
+    const bool force_no_clip_control             = graphics_config.force_no_clip_control;
     const bool force_emulate_multi_draw_indirect = graphics_config.force_emulate_multi_draw_indirect;
     const int  force_gl_version                  = graphics_config.force_gl_version;
     const int  force_glsl_version                = graphics_config.force_glsl_version;
@@ -401,15 +416,16 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
     m_info.use_clear_texture = (m_info.gl_version >= 440) || gl::is_extension_supported(gl::Extension::Extension_GL_ARB_clear_texture);
     log_startup->info("GL_ARB_clear_texture supported : {}", m_info.use_clear_texture);
 
-    const bool use_direct_state_access =
+    m_info.use_texture_view = (m_info.gl_version >= 430) || gl::is_extension_supported(gl::Extension::Extension_GL_ARB_texture_view);
+    log_startup->info("Texture View supported: {}", m_info.use_texture_view);
+
+    m_info.use_direct_state_access =
         (m_info.gl_version >= 450) || gl::is_extension_supported(gl::Extension::Extension_GL_ARB_direct_state_access);
-    if (!use_direct_state_access) {
-        log_startup->error(
-            "Your graphics driver does not support OpenGL direct state access. "
-            "OpenGL version 4.5 or GL_ARB_direct_state_access is required. "
-            "This is a fatal error."
-        );
-    }
+    log_startup->info("Direct State Access supported: {}", m_info.use_direct_state_access);
+
+    m_info.use_clip_control =
+        (m_info.gl_version >= 450) || gl::is_extension_supported(gl::Extension::Extension_GL_ARB_clip_control);
+    log_startup->info("Clip Control supported: {}", m_info.use_clip_control);
 
     const bool use_shader_storage_buffer_object =
         (m_info.gl_version >= 430) || gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shader_storage_buffer_object);
@@ -442,7 +458,7 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         m_info.emulate_multi_draw_indirect = false;
         log_startup->info("Multi Draw Indirect: GL_ARB_multi_draw_indirect");
     } else {
-        m_info.emulate_multi_draw_indirect = false;
+        m_info.emulate_multi_draw_indirect = true;
         log_startup->info("Multi Draw Indirect: emulation");
     }
     log_startup->info("Persistent Buffers supported: {}", m_info.use_persistent_buffers);
@@ -453,6 +469,9 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         log_startup->warn("Forced emulation for Draw Indirect due to config setting");
     }
 
+    m_info.use_base_instance = (m_info.gl_version >= 420) || gl::is_extension_supported(gl::Extension::Extension_GL_ARB_base_instance);
+    log_startup->info("Base Instance supported: {}", m_info.use_base_instance);
+
     if (force_gl_version > 0) {
         m_info.gl_version = force_gl_version;
         log_startup->warn("Forced GL version to be {} due to config setting", force_gl_version);
@@ -462,12 +481,47 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         log_startup->warn("Forced GLSL version to be {} due to config setting", force_glsl_version);
     }
 
+    // Re-check capabilities that depend on GLSL version.
+    // When GLSL version is forced lower, shader features requiring higher versions must be disabled.
+    if (m_info.glsl_version < 430) {
+        if (m_info.use_compute_shader) {
+            m_info.use_compute_shader = false;
+            log_startup->warn("Force disabled compute shaders: GLSL version {} < 430", m_info.glsl_version);
+        }
+        if (m_info.use_shader_storage_buffers) {
+            m_info.use_shader_storage_buffers = false;
+            log_startup->warn("Force disabled shader storage buffers: GLSL version {} < 430", m_info.glsl_version);
+        }
+    }
+
     if (force_no_persistent_buffers) {
         if (m_info.use_persistent_buffers) {
             m_info.use_persistent_buffers = false;
             log_startup->warn("Force disabled persistently mapped buffers due to config setting");
         }
     }
+
+    if (force_no_direct_state_access) {
+        if (m_info.use_direct_state_access) {
+            m_info.use_direct_state_access = false;
+            log_startup->warn("Force disabled direct state access due to erhe.toml setting");
+        }
+        // Persistent buffers require glBufferStorage (GL 4.4), which is not available
+        // when DSA is disabled (pre-DSA path uses glBufferData instead)
+        if (m_info.use_persistent_buffers) {
+            m_info.use_persistent_buffers = false;
+            log_startup->warn("Force disabled persistent buffers because direct state access is disabled (glBufferStorage not available)");
+        }
+    }
+
+    if (force_no_clip_control) {
+        if (m_info.use_clip_control) {
+            m_info.use_clip_control = false;
+            log_startup->warn("Force disabled clip control due to config setting");
+        }
+    }
+
+    m_gl_state_tracker.vertex_input.set_use_dsa(m_info.use_direct_state_access);
 
     if (surface_create_info.context_window != nullptr) {
         if (initial_clear) {
@@ -621,9 +675,11 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         m_shader_monitor.begin(graphics_config.shader_monitor_enabled);
     }
 
-    gl::enable      (gl::Enable_cap::primitive_restart_fixed_index);
-    gl::enable      (gl::Enable_cap::scissor_test);
-    gl::clip_control(gl::Clip_control_origin::lower_left, gl::Clip_control_depth::zero_to_one);
+    gl::enable(gl::Enable_cap::primitive_restart_fixed_index);
+    gl::enable(gl::Enable_cap::scissor_test);
+    if (m_info.use_clip_control) {
+        gl::clip_control(gl::Clip_control_origin::lower_left, gl::Clip_control_depth::zero_to_one);
+    }
 
     if (
         (surface_create_info.context_window != nullptr) &&
@@ -908,13 +964,25 @@ void Device_impl::upload_to_buffer(const Buffer& buffer, size_t offset, const vo
     staging_buffer_range.bytes_written(length);
     staging_buffer_range.close();
 
-    gl::copy_named_buffer_sub_data(
-        staging_buffer_range.get_buffer()->get_buffer()->get_impl().gl_name(),  // GLuint   readBuffer
-        buffer.get_impl().gl_name(),                                            // GLuint   writeBuffer
-        staging_buffer_range.get_byte_start_offset_in_buffer(),                 // GLintptr readOffset
-        offset,                                                                 // GLintptr writeOffset
-        length                                                                  // GLsizeiptr size
-    );
+    if (m_info.use_direct_state_access) {
+        gl::copy_named_buffer_sub_data(
+            staging_buffer_range.get_buffer()->get_buffer()->get_impl().gl_name(),  // GLuint   readBuffer
+            buffer.get_impl().gl_name(),                                            // GLuint   writeBuffer
+            staging_buffer_range.get_byte_start_offset_in_buffer(),                 // GLintptr readOffset
+            offset,                                                                 // GLintptr writeOffset
+            length                                                                  // GLsizeiptr size
+        );
+    } else {
+        auto guard_read  = m_gl_binding_state.push_buffer(gl::Buffer_target::copy_read_buffer,  staging_buffer_range.get_buffer()->get_buffer()->get_impl().gl_name());
+        auto guard_write = m_gl_binding_state.push_buffer(gl::Buffer_target::copy_write_buffer, buffer.get_impl().gl_name());
+        gl::copy_buffer_sub_data(
+            gl::Copy_buffer_sub_data_target::copy_read_buffer,   // GLenum   readTarget
+            gl::Copy_buffer_sub_data_target::copy_write_buffer,   // GLenum   writeTarget
+            staging_buffer_range.get_byte_start_offset_in_buffer(),  // GLintptr readOffset
+            offset,                                                  // GLintptr writeOffset
+            length                                                   // GLsizeiptr size
+        );
+    }
 
     staging_buffer_range.release();
 }
@@ -1237,6 +1305,146 @@ void Device_impl::reset_shader_stages_state_tracker()
 auto Device_impl::get_draw_id_uniform_location() const -> GLint
 {
     return m_gl_state_tracker.shader_stages.get_draw_id_uniform_location();
+}
+
+auto Device_impl::get_binding_state() -> Gl_binding_state&
+{
+    return m_gl_binding_state;
+}
+
+// GL object creation
+// GL object creation
+//
+// DSA path: gl::create_* creates the object immediately (no bind needed).
+// Pre-DSA path (GL 4.1): gl::gen_* + push_* to temporarily bind (creating
+// the object). RAII guards restore previous bindings on scope exit.
+
+auto Device_impl::create_texture(gl::Texture_target target) -> Gl_texture
+{
+    GLuint name{0};
+    if (m_info.use_direct_state_access) {
+        gl::create_textures(target, 1, &name);
+    } else {
+        gl::gen_textures(1, &name);
+        ERHE_VERIFY(name != 0);
+        // Bind to a scratch texture unit to create the texture object.
+        constexpr GLuint scratch_unit = Gl_binding_state::s_max_texture_units - 1;
+        auto guard = m_gl_binding_state.push_texture(scratch_unit, target, name);
+    }
+    ERHE_VERIFY(name != 0);
+    return Gl_texture{name};
+}
+
+auto Device_impl::create_texture_view(gl::Texture_target target) -> Gl_texture
+{
+    // Texture views use gen_textures (name only, no object created yet).
+    // The object is created later by glTextureView.
+    static_cast<void>(target);
+    GLuint name{0};
+    gl::gen_textures(1, &name);
+    ERHE_VERIFY(name != 0);
+    return Gl_texture{name};
+}
+
+auto Device_impl::create_buffer() -> Gl_buffer
+{
+    GLuint name{0};
+    if (m_info.use_direct_state_access) {
+        gl::create_buffers(1, &name);
+    } else {
+        gl::gen_buffers(1, &name);
+        ERHE_VERIFY(name != 0);
+        auto guard = m_gl_binding_state.push_buffer(gl::Buffer_target::copy_write_buffer, name);
+    }
+    ERHE_VERIFY(name != 0);
+    return Gl_buffer{name};
+}
+
+auto Device_impl::create_framebuffer() -> Gl_framebuffer
+{
+    GLuint name{0};
+    if (m_info.use_direct_state_access) {
+        gl::create_framebuffers(1, &name);
+    } else {
+        gl::gen_framebuffers(1, &name);
+        ERHE_VERIFY(name != 0);
+        auto guard = m_gl_binding_state.push_framebuffer(gl::Framebuffer_target::draw_framebuffer, name);
+    }
+    ERHE_VERIFY(name != 0);
+    return Gl_framebuffer{name};
+}
+
+auto Device_impl::create_renderbuffer() -> Gl_renderbuffer
+{
+    GLuint name{0};
+    if (m_info.use_direct_state_access) {
+        gl::create_renderbuffers(1, &name);
+    } else {
+        gl::gen_renderbuffers(1, &name);
+        ERHE_VERIFY(name != 0);
+        auto guard = m_gl_binding_state.push_renderbuffer(name);
+    }
+    ERHE_VERIFY(name != 0);
+    return Gl_renderbuffer{name};
+}
+
+auto Device_impl::create_sampler() -> Gl_sampler
+{
+    // glGenSamplers creates the sampler object immediately (no bind needed).
+    // Same call works for both DSA and pre-DSA.
+    GLuint name{0};
+    if (m_info.use_direct_state_access) {
+        gl::create_samplers(1, &name);
+    } else {
+        gl::gen_samplers(1, &name);
+    }
+    ERHE_VERIFY(name != 0);
+    return Gl_sampler{name};
+}
+
+auto Device_impl::create_vertex_array() -> Gl_vertex_array
+{
+    GLuint name{0};
+    if (m_info.use_direct_state_access) {
+        gl::create_vertex_arrays(1, &name);
+    } else {
+        gl::gen_vertex_arrays(1, &name);
+        ERHE_VERIFY(name != 0);
+        auto guard = m_gl_binding_state.push_vertex_array(name);
+    }
+    ERHE_VERIFY(name != 0);
+    return Gl_vertex_array{name};
+}
+
+auto Device_impl::create_query(gl::Query_target target) -> Gl_query
+{
+    // Queries are created on first use (glBeginQuery). glGenQueries is
+    // sufficient for both DSA and pre-DSA.
+    GLuint name{0};
+    if (m_info.use_direct_state_access) {
+        gl::create_queries(target, 1, &name);
+    } else {
+        static_cast<void>(target);
+        gl::gen_queries(1, &name);
+    }
+    ERHE_VERIFY(name != 0);
+    return Gl_query{name};
+}
+
+auto Device_impl::create_program() -> Gl_program
+{
+    // glCreateProgram is not DSA — available since GL 2.0.
+    GLuint name = gl::create_program();
+    ERHE_VERIFY(name != 0);
+    return Gl_program{name};
+}
+
+auto Device_impl::create_shader(gl::Shader_type type) -> Gl_shader
+{
+    // glCreateShader is not DSA — available since GL 2.0.
+    GLuint name = gl::create_shader(type);
+    ERHE_VERIFY(name != 0);
+    return Gl_shader{name};
 }
 
 } // namespace erhe::graphics

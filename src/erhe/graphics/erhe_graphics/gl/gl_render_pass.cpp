@@ -1,4 +1,5 @@
 #include "erhe_graphics/gl/gl_render_pass.hpp"
+#include "erhe_graphics/gl/gl_binding_state.hpp"
 #include "erhe_graphics/gl/gl_debug.hpp"
 #include "erhe_graphics/gl/gl_device.hpp"
 #include "erhe_graphics/gl/gl_texture.hpp"
@@ -10,50 +11,97 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
+#include <optional>
 #include <thread>
 
 namespace erhe::graphics {
 
-void dump_fbo_attachment(const int fbo_name, const gl::Framebuffer_attachment attachment)
+void dump_fbo_attachment(Device& device, const int fbo_name, const gl::Framebuffer_attachment attachment)
 {
     ERHE_PROFILE_FUNCTION();
 
+    const bool use_dsa = device.get_info().use_direct_state_access;
+
+    // For non-DSA, push the framebuffer so get_framebuffer_attachment_parameter_iv works
+    std::optional<Framebuffer_binding_guard> fb_guard;
+    if (!use_dsa) {
+        fb_guard.emplace(
+            device.get_impl().get_binding_state().push_framebuffer(gl::Framebuffer_target::draw_framebuffer, fbo_name)
+        );
+    }
+
     int type{0};
-    gl::get_named_framebuffer_attachment_parameter_iv(fbo_name, attachment, gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_object_type, &type);
+    if (use_dsa) {
+        gl::get_named_framebuffer_attachment_parameter_iv(fbo_name, attachment, gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_object_type, &type);
+    } else {
+        gl::get_framebuffer_attachment_parameter_iv(gl::Framebuffer_target::draw_framebuffer, attachment, gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_object_type, &type);
+    }
     if (type != GL_NONE) {
         int name{0};
-        gl::get_named_framebuffer_attachment_parameter_iv(fbo_name, attachment, gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_object_name, &name);
+        if (use_dsa) {
+            gl::get_named_framebuffer_attachment_parameter_iv(fbo_name, attachment, gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_object_name, &name);
+        } else {
+            gl::get_framebuffer_attachment_parameter_iv(gl::Framebuffer_target::draw_framebuffer, attachment, gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_object_name, &name);
+        }
         int samples        {0};
         int width          {0};
         int height         {0};
         int internal_format{0};
         std::string debug_label{};
-        GLsizei length{0};
-        gl::Object_identifier gl_type = static_cast<gl::Object_identifier>(type);
-        gl::get_object_label(gl_type, name, 0, &length, nullptr);
-        if (length > 0) {
-            debug_label.resize(length + 1);
-            gl::get_object_label(gl_type, name, length + 1, nullptr, debug_label.data());
-            debug_label.resize(length);
+        if (device.get_info().use_debug_output) {
+            GLsizei length{0};
+            gl::Object_identifier gl_type = static_cast<gl::Object_identifier>(type);
+            gl::get_object_label(gl_type, name, 0, &length, nullptr);
+            if (length > 0) {
+                debug_label.resize(length + 1);
+                gl::get_object_label(gl_type, name, length + 1, nullptr, debug_label.data());
+                debug_label.resize(length);
+            }
         }
         if (type == GL_RENDERBUFFER) {
-            gl::get_named_renderbuffer_parameter_iv(name, gl::Renderbuffer_parameter_name::renderbuffer_samples,         &samples);
-            gl::get_named_renderbuffer_parameter_iv(name, gl::Renderbuffer_parameter_name::renderbuffer_width,           &width);
-            gl::get_named_renderbuffer_parameter_iv(name, gl::Renderbuffer_parameter_name::renderbuffer_height,          &height);
-            gl::get_named_renderbuffer_parameter_iv(name, gl::Renderbuffer_parameter_name::renderbuffer_internal_format, &internal_format);
+            if (use_dsa) {
+                gl::get_named_renderbuffer_parameter_iv(name, gl::Renderbuffer_parameter_name::renderbuffer_samples,         &samples);
+                gl::get_named_renderbuffer_parameter_iv(name, gl::Renderbuffer_parameter_name::renderbuffer_width,           &width);
+                gl::get_named_renderbuffer_parameter_iv(name, gl::Renderbuffer_parameter_name::renderbuffer_height,          &height);
+                gl::get_named_renderbuffer_parameter_iv(name, gl::Renderbuffer_parameter_name::renderbuffer_internal_format, &internal_format);
+            } else {
+                auto rb_guard = device.get_impl().get_binding_state().push_renderbuffer(name);
+                gl::get_renderbuffer_parameter_iv(gl::Renderbuffer_target::renderbuffer, gl::Renderbuffer_parameter_name::renderbuffer_samples,         &samples);
+                gl::get_renderbuffer_parameter_iv(gl::Renderbuffer_target::renderbuffer, gl::Renderbuffer_parameter_name::renderbuffer_width,           &width);
+                gl::get_renderbuffer_parameter_iv(gl::Renderbuffer_target::renderbuffer, gl::Renderbuffer_parameter_name::renderbuffer_height,          &height);
+                gl::get_renderbuffer_parameter_iv(gl::Renderbuffer_target::renderbuffer, gl::Renderbuffer_parameter_name::renderbuffer_internal_format, &internal_format);
+            }
         }
         if (type == GL_TEXTURE) {
             int level{0};
-            gl::get_named_framebuffer_attachment_parameter_iv(fbo_name, attachment, gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_texture_level, &level);
-            gl::get_texture_level_parameter_iv(name, level, gl::Get_texture_parameter::texture_width,           &width);
-            gl::get_texture_level_parameter_iv(name, level, gl::Get_texture_parameter::texture_height,          &height);
-            gl::get_texture_level_parameter_iv(name, level, gl::Get_texture_parameter::texture_internal_format, &internal_format);
-            gl::get_texture_level_parameter_iv(
-                name,
-                level,
-                static_cast<gl::Get_texture_parameter>(GL_TEXTURE_SAMPLES), // TODO gl_extra
-                &samples
-            );
+            if (use_dsa) {
+                gl::get_named_framebuffer_attachment_parameter_iv(fbo_name, attachment, gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_texture_level, &level);
+                gl::get_texture_level_parameter_iv(name, level, gl::Get_texture_parameter::texture_width,           &width);
+                gl::get_texture_level_parameter_iv(name, level, gl::Get_texture_parameter::texture_height,          &height);
+                gl::get_texture_level_parameter_iv(name, level, gl::Get_texture_parameter::texture_internal_format, &internal_format);
+                gl::get_texture_level_parameter_iv(
+                    name,
+                    level,
+                    static_cast<gl::Get_texture_parameter>(GL_TEXTURE_SAMPLES), // TODO gl_extra
+                    &samples
+                );
+            } else {
+                gl::get_framebuffer_attachment_parameter_iv(gl::Framebuffer_target::draw_framebuffer, attachment, gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_texture_level, &level);
+                // For non-DSA get_tex_level_parameter_iv, we need to bind the texture.
+                // We need to know the texture target — query it from the texture object if possible.
+                // For diagnostic purposes, use texture_2d as a reasonable default.
+                constexpr GLuint scratch_unit = Gl_binding_state::s_max_texture_units - 1;
+                auto tex_guard = device.get_impl().get_binding_state().push_texture(scratch_unit, gl::Texture_target::texture_2d, name);
+                gl::get_tex_level_parameter_iv(gl::Texture_target::texture_2d, level, gl::Get_texture_parameter::texture_width,           &width);
+                gl::get_tex_level_parameter_iv(gl::Texture_target::texture_2d, level, gl::Get_texture_parameter::texture_height,          &height);
+                gl::get_tex_level_parameter_iv(gl::Texture_target::texture_2d, level, gl::Get_texture_parameter::texture_internal_format, &internal_format);
+                gl::get_tex_level_parameter_iv(
+                    gl::Texture_target::texture_2d,
+                    level,
+                    static_cast<gl::Get_texture_parameter>(GL_TEXTURE_SAMPLES), // TODO gl_extra
+                    &samples
+                );
+            }
         }
 
         int component_type{0};
@@ -63,20 +111,37 @@ void dump_fbo_attachment(const int fbo_name, const gl::Framebuffer_attachment at
         int alpha_size{0};
         int depth_size{0};
         int stencil_size{0};
-        gl::get_named_framebuffer_attachment_parameter_iv(fbo_name, attachment,
-            gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_component_type, &component_type);
-        gl::get_named_framebuffer_attachment_parameter_iv(fbo_name, attachment,
-            gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_red_size, &red_size);
-        gl::get_named_framebuffer_attachment_parameter_iv(fbo_name, attachment,
-            gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_green_size, &green_size);
-        gl::get_named_framebuffer_attachment_parameter_iv(fbo_name, attachment,
-            gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_blue_size, &blue_size);
-        gl::get_named_framebuffer_attachment_parameter_iv(fbo_name, attachment,
-            gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_alpha_size, &alpha_size);
-        gl::get_named_framebuffer_attachment_parameter_iv(fbo_name, attachment,
-            gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_depth_size, &depth_size);
-        gl::get_named_framebuffer_attachment_parameter_iv(fbo_name, attachment,
-            gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_stencil_size, &stencil_size);
+        if (use_dsa) {
+            gl::get_named_framebuffer_attachment_parameter_iv(fbo_name, attachment,
+                gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_component_type, &component_type);
+            gl::get_named_framebuffer_attachment_parameter_iv(fbo_name, attachment,
+                gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_red_size, &red_size);
+            gl::get_named_framebuffer_attachment_parameter_iv(fbo_name, attachment,
+                gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_green_size, &green_size);
+            gl::get_named_framebuffer_attachment_parameter_iv(fbo_name, attachment,
+                gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_blue_size, &blue_size);
+            gl::get_named_framebuffer_attachment_parameter_iv(fbo_name, attachment,
+                gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_alpha_size, &alpha_size);
+            gl::get_named_framebuffer_attachment_parameter_iv(fbo_name, attachment,
+                gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_depth_size, &depth_size);
+            gl::get_named_framebuffer_attachment_parameter_iv(fbo_name, attachment,
+                gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_stencil_size, &stencil_size);
+        } else {
+            gl::get_framebuffer_attachment_parameter_iv(gl::Framebuffer_target::draw_framebuffer, attachment,
+                gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_component_type, &component_type);
+            gl::get_framebuffer_attachment_parameter_iv(gl::Framebuffer_target::draw_framebuffer, attachment,
+                gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_red_size, &red_size);
+            gl::get_framebuffer_attachment_parameter_iv(gl::Framebuffer_target::draw_framebuffer, attachment,
+                gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_green_size, &green_size);
+            gl::get_framebuffer_attachment_parameter_iv(gl::Framebuffer_target::draw_framebuffer, attachment,
+                gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_blue_size, &blue_size);
+            gl::get_framebuffer_attachment_parameter_iv(gl::Framebuffer_target::draw_framebuffer, attachment,
+                gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_alpha_size, &alpha_size);
+            gl::get_framebuffer_attachment_parameter_iv(gl::Framebuffer_target::draw_framebuffer, attachment,
+                gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_depth_size, &depth_size);
+            gl::get_framebuffer_attachment_parameter_iv(gl::Framebuffer_target::draw_framebuffer, attachment,
+                gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_stencil_size, &stencil_size);
+        }
 
         log_render_pass->info(
             "\t{} {} attachment {} {} samples = {} size = {} x {} format = {} component_type = {}, RGBA size = {}.{}.{}.{}, DS size = {}.{}",
@@ -95,12 +160,19 @@ void dump_fbo_attachment(const int fbo_name, const gl::Framebuffer_attachment at
     }
 }
 
-void dump_fbo(const int fbo_name)
+void dump_fbo(Device& device, const int fbo_name)
 {
+    const bool use_dsa = device.get_info().use_direct_state_access;
+
     int samples       {0};
     int sample_buffers{0};
-    gl::get_named_framebuffer_parameter_iv(fbo_name, gl::Get_framebuffer_parameter::samples, &samples);
-    gl::get_named_framebuffer_parameter_iv(fbo_name, gl::Get_framebuffer_parameter::sample_buffers, &sample_buffers);
+    if (use_dsa) {
+        gl::get_named_framebuffer_parameter_iv(fbo_name, gl::Get_framebuffer_parameter::samples, &samples);
+        gl::get_named_framebuffer_parameter_iv(fbo_name, gl::Get_framebuffer_parameter::sample_buffers, &sample_buffers);
+    } else {
+        // get_framebuffer_parameter_iv is GL 4.3 — skip on pre-DSA
+        // The information is diagnostic only, so we can log without it
+    }
 
     log_render_pass->info(
         "FBO {} uses {} samples {} sample buffers",
@@ -109,9 +181,9 @@ void dump_fbo(const int fbo_name)
         sample_buffers
     );
 
-    dump_fbo_attachment(fbo_name, gl::Framebuffer_attachment::color_attachment0);
-    dump_fbo_attachment(fbo_name, gl::Framebuffer_attachment::depth_attachment);
-    dump_fbo_attachment(fbo_name, gl::Framebuffer_attachment::stencil_attachment);
+    dump_fbo_attachment(device, fbo_name, gl::Framebuffer_attachment::color_attachment0);
+    dump_fbo_attachment(device, fbo_name, gl::Framebuffer_attachment::depth_attachment);
+    dump_fbo_attachment(device, fbo_name, gl::Framebuffer_attachment::stencil_attachment);
 }
 
 
@@ -226,13 +298,24 @@ void Render_pass_impl::create()
     }
 
     m_owner_thread = std::this_thread::get_id();
-    m_gl_framebuffer.emplace(Gl_framebuffer{});
+    m_gl_framebuffer.emplace(m_device.get_impl().create_framebuffer());
 
     if (m_uses_multisample_resolve) {
-        m_gl_multisample_resolve_framebuffer.emplace(Gl_framebuffer{});
+        m_gl_multisample_resolve_framebuffer.emplace(m_device.get_impl().create_framebuffer());
     }
 
-    auto process_attachment = [this](
+    const bool use_dsa = m_device.get_info().use_direct_state_access;
+
+    // For non-DSA, push the framebuffer so framebuffer_texture / framebuffer_texture_layer work
+    std::optional<Framebuffer_binding_guard> fb_guard;
+    if (!use_dsa) {
+        fb_guard.emplace(
+            m_device.get_impl().get_binding_state().push_framebuffer(gl::Framebuffer_target::draw_framebuffer, gl_name())
+        );
+    }
+
+    auto process_attachment = [this, use_dsa](
+        const GLuint                       fbo_name,
         const gl::Framebuffer_attachment   attachment_point,
         Render_pass_attachment_descriptor& attachment
     ) -> bool {
@@ -240,37 +323,47 @@ void Render_pass_impl::create()
             ERHE_VERIFY(attachment.texture->get_width() >= 1);
             ERHE_VERIFY(attachment.texture->get_height() >= 1);
             if (attachment.texture->is_layered()) {
-                gl::named_framebuffer_texture_layer(
-                    gl_name(),
-                    attachment_point,
-                    attachment.texture->get_impl().gl_name(),
-                    attachment.texture_level,
-                    attachment.texture_layer
-                );
+                if (use_dsa) {
+                    gl::named_framebuffer_texture_layer(
+                        fbo_name,
+                        attachment_point,
+                        attachment.texture->get_impl().gl_name(),
+                        attachment.texture_level,
+                        attachment.texture_layer
+                    );
+                } else {
+                    gl::framebuffer_texture_layer(
+                        gl::Framebuffer_target::draw_framebuffer,
+                        attachment_point,
+                        attachment.texture->get_impl().gl_name(),
+                        attachment.texture_level,
+                        attachment.texture_layer
+                    );
+                }
             } else {
-                gl::named_framebuffer_texture(
-                    gl_name(),
-                    attachment_point,
-                    attachment.texture->get_impl().gl_name(),
-                    attachment.texture_level
-                );
+                if (use_dsa) {
+                    gl::named_framebuffer_texture(
+                        fbo_name,
+                        attachment_point,
+                        attachment.texture->get_impl().gl_name(),
+                        attachment.texture_level
+                    );
+                } else {
+                    gl::framebuffer_texture(
+                        gl::Framebuffer_target::draw_framebuffer,
+                        attachment_point,
+                        attachment.texture->get_impl().gl_name(),
+                        attachment.texture_level
+                    );
+                }
             }
             return true;
-        //// } else if (attachment.renderbuffer != nullptr) {
-        ////     ERHE_VERIFY(attachment.renderbuffer->get_width() >= 1);
-        ////     ERHE_VERIFY(attachment.renderbuffer->get_height() >= 1);
-        ////     gl::named_framebuffer_renderbuffer(
-        ////         gl_name(),
-        ////         attachment_point,
-        ////         gl::Renderbuffer_target::renderbuffer,
-        ////         attachment.renderbuffer->gl_name()
-        ////     );
-        ////     return true;
         }
         return false;
     };
 
-    auto process_multisample_resolve_attachment = [this](
+    auto process_multisample_resolve_attachment = [this, use_dsa](
+        const GLuint                       fbo_name,
         const gl::Framebuffer_attachment   attachment_point,
         Render_pass_attachment_descriptor& attachment
     ) {
@@ -279,20 +372,39 @@ void Render_pass_impl::create()
             ERHE_VERIFY(attachment.resolve_texture->get_height() >= 1);
             ERHE_VERIFY(attachment.resolve_texture->get_sample_count() <= 1);
             if (attachment.resolve_texture->is_layered()) {
-                gl::named_framebuffer_texture_layer(
-                    gl_multisample_resolve_name(),
-                    attachment_point,
-                    attachment.resolve_texture->get_impl().gl_name(),
-                    attachment.resolve_level,
-                    attachment.resolve_layer
-                );
+                if (use_dsa) {
+                    gl::named_framebuffer_texture_layer(
+                        fbo_name,
+                        attachment_point,
+                        attachment.resolve_texture->get_impl().gl_name(),
+                        attachment.resolve_level,
+                        attachment.resolve_layer
+                    );
+                } else {
+                    gl::framebuffer_texture_layer(
+                        gl::Framebuffer_target::draw_framebuffer,
+                        attachment_point,
+                        attachment.resolve_texture->get_impl().gl_name(),
+                        attachment.resolve_level,
+                        attachment.resolve_layer
+                    );
+                }
             } else {
-                gl::named_framebuffer_texture(
-                    gl_multisample_resolve_name(),
-                    attachment_point,
-                    attachment.resolve_texture->get_impl().gl_name(),
-                    attachment.resolve_level
-                );
+                if (use_dsa) {
+                    gl::named_framebuffer_texture(
+                        fbo_name,
+                        attachment_point,
+                        attachment.resolve_texture->get_impl().gl_name(),
+                        attachment.resolve_level
+                    );
+                } else {
+                    gl::framebuffer_texture(
+                        gl::Framebuffer_target::draw_framebuffer,
+                        attachment_point,
+                        attachment.resolve_texture->get_impl().gl_name(),
+                        attachment.resolve_level
+                    );
+                }
             }
         }
     };
@@ -304,7 +416,7 @@ void Render_pass_impl::create()
             const gl::Framebuffer_attachment attachment_point = static_cast<gl::Framebuffer_attachment>(
                 static_cast<unsigned int>(gl::Framebuffer_attachment::color_attachment0) + color_index
             );
-            bool has_attachment = process_attachment(attachment_point, attachment);
+            bool has_attachment = process_attachment(gl_name(), attachment_point, attachment);
             if (has_attachment) {
                 const gl::Color_buffer color_buffer = static_cast<gl::Color_buffer>(
                     static_cast<unsigned int>(gl::Color_buffer::color_attachment0) + color_index
@@ -314,33 +426,55 @@ void Render_pass_impl::create()
             ++color_index;
         }
     }
-    process_attachment(gl::Framebuffer_attachment::depth_attachment,   m_depth_attachment);
-    process_attachment(gl::Framebuffer_attachment::stencil_attachment, m_stencil_attachment);
+    process_attachment(gl_name(), gl::Framebuffer_attachment::depth_attachment,   m_depth_attachment);
+    process_attachment(gl_name(), gl::Framebuffer_attachment::stencil_attachment, m_stencil_attachment);
     
     if (!m_draw_buffers.empty()) {
-        gl::named_framebuffer_draw_buffers(gl_name(), static_cast<GLsizei>(m_draw_buffers.size()), m_draw_buffers.data());
-        gl::named_framebuffer_read_buffer(gl_name(), m_draw_buffers.front());
+        if (use_dsa) {
+            gl::named_framebuffer_draw_buffers(gl_name(), static_cast<GLsizei>(m_draw_buffers.size()), m_draw_buffers.data());
+            gl::named_framebuffer_read_buffer(gl_name(), m_draw_buffers.front());
+        } else {
+            gl::draw_buffers(static_cast<GLsizei>(m_draw_buffers.size()), reinterpret_cast<const gl::Draw_buffer_mode*>(m_draw_buffers.data()));
+            // read_buffer operates on GL_READ_FRAMEBUFFER, so temporarily bind there too
+            auto read_fb_guard = m_device.get_impl().get_binding_state().push_framebuffer(gl::Framebuffer_target::read_framebuffer, gl_name());
+            gl::read_buffer(static_cast<gl::Read_buffer_mode>(m_draw_buffers.front()));
+        }
     }
 
-    erhe::utility::Debug_label debug_label{ fmt::format("(F:{}) {}", gl_name(), m_debug_label.string_view()) };
-    gl::object_label(gl::Object_identifier::framebuffer, gl_name(), -1, debug_label.data());
+    if (m_device.get_info().use_debug_output) {
+        erhe::utility::Debug_label debug_label{ fmt::format("(F:{}) {}", gl_name(), m_debug_label.string_view()) };
+        gl::object_label(gl::Object_identifier::framebuffer, gl_name(), -1, debug_label.data());
+    }
+
+    // Release the main framebuffer guard before binding the resolve framebuffer
+    fb_guard.reset();
 
     if (m_uses_multisample_resolve) {
+        // For non-DSA, bind the resolve framebuffer
+        std::optional<Framebuffer_binding_guard> resolve_fb_guard;
+        if (!use_dsa) {
+            resolve_fb_guard.emplace(
+                m_device.get_impl().get_binding_state().push_framebuffer(gl::Framebuffer_target::draw_framebuffer, gl_multisample_resolve_name())
+            );
+        }
+
         unsigned int color_index = 0;
         for (auto& attachment : m_color_attachments) {
             const gl::Framebuffer_attachment attachment_point = static_cast<gl::Framebuffer_attachment>(static_cast<unsigned int>(
                 gl::Framebuffer_attachment::color_attachment0) + color_index
             );
-            process_multisample_resolve_attachment(attachment_point, attachment);
+            process_multisample_resolve_attachment(gl_multisample_resolve_name(), attachment_point, attachment);
         }
-        process_multisample_resolve_attachment(gl::Framebuffer_attachment::depth_attachment,   m_depth_attachment);
-        process_multisample_resolve_attachment(gl::Framebuffer_attachment::stencil_attachment, m_stencil_attachment);
+        process_multisample_resolve_attachment(gl_multisample_resolve_name(), gl::Framebuffer_attachment::depth_attachment,   m_depth_attachment);
+        process_multisample_resolve_attachment(gl_multisample_resolve_name(), gl::Framebuffer_attachment::stencil_attachment, m_stencil_attachment);
 
         const std::string multisample_resolve_debug_label = fmt::format(
             "(F:{}) {} Multisample Resolve",
             gl_multisample_resolve_name(), m_debug_label.string_view()
         );
-        gl::object_label(gl::Object_identifier::framebuffer, gl_multisample_resolve_name(), -1, multisample_resolve_debug_label.c_str());
+        if (m_device.get_info().use_debug_output) {
+            gl::object_label(gl::Object_identifier::framebuffer, gl_multisample_resolve_name(), -1, multisample_resolve_debug_label.c_str());
+        }
     }
 
     ERHE_VERIFY(check_status());
@@ -377,30 +511,37 @@ auto Render_pass_impl::get_sample_count() const -> unsigned int
 auto Render_pass_impl::check_status() const -> bool
 {
 #if !defined(NDEBUG)
-    gl::Framebuffer_status status = gl::check_named_framebuffer_status(gl_name(), gl::Framebuffer_target::draw_framebuffer);
+    const bool use_dsa = m_device.get_info().use_direct_state_access;
+
+    gl::Framebuffer_status status;
+    if (use_dsa) {
+        status = gl::check_named_framebuffer_status(gl_name(), gl::Framebuffer_target::draw_framebuffer);
+    } else {
+        auto fb_guard = m_device.get_impl().get_binding_state().push_framebuffer(gl::Framebuffer_target::draw_framebuffer, gl_name());
+        status = gl::check_framebuffer_status(gl::Framebuffer_target::draw_framebuffer);
+    }
     if (status != gl::Framebuffer_status::framebuffer_complete) {
         log_render_pass->warn(
             "Render_pass_impl {} FBO {} not complete: {}",
             get_debug_label().string_view(), gl_name(), gl::c_str(status)
         );
-        dump_fbo(gl_name());
-        return false;
-    }
-    if (status != gl::Framebuffer_status::framebuffer_complete) {
+        dump_fbo(m_device, gl_name());
         return false;
     }
 
     if (m_uses_multisample_resolve) {
-        status = gl::check_named_framebuffer_status(gl_multisample_resolve_name(), gl::Framebuffer_target::draw_framebuffer);
+        if (use_dsa) {
+            status = gl::check_named_framebuffer_status(gl_multisample_resolve_name(), gl::Framebuffer_target::draw_framebuffer);
+        } else {
+            auto fb_guard = m_device.get_impl().get_binding_state().push_framebuffer(gl::Framebuffer_target::draw_framebuffer, gl_multisample_resolve_name());
+            status = gl::check_framebuffer_status(gl::Framebuffer_target::draw_framebuffer);
+        }
         if (status != gl::Framebuffer_status::framebuffer_complete) {
             log_render_pass->warn(
                 "Render_pass_impl {} multisample resolve FBO {} not complete: {}",
                 get_debug_label().string_view(), gl_multisample_resolve_name(), gl::c_str(status)
             );
-            dump_fbo(gl_multisample_resolve_name());
-            return false;
-        }
-        if (status != gl::Framebuffer_status::framebuffer_complete) {
+            dump_fbo(m_device, gl_multisample_resolve_name());
             return false;
         }
     }
@@ -511,9 +652,17 @@ void Render_pass_impl::start_render_pass()
         }
     );
 
+    const bool use_dsa = m_device.get_info().use_direct_state_access;
+
 #if !defined(NDEBUG)
     if (m_swapchain == nullptr) {
-        const auto status = gl::check_named_framebuffer_status(gl_name(), gl::Framebuffer_target::draw_framebuffer);
+        // Draw framebuffer is already bound above
+        gl::Framebuffer_status status;
+        if (use_dsa) {
+            status = gl::check_named_framebuffer_status(gl_name(), gl::Framebuffer_target::draw_framebuffer);
+        } else {
+            status = gl::check_framebuffer_status(gl::Framebuffer_target::draw_framebuffer);
+        }
         ERHE_VERIFY(status == gl::Framebuffer_status::framebuffer_complete);
     }
 #endif
@@ -557,7 +706,11 @@ void Render_pass_impl::start_render_pass()
                         static_cast<GLfloat>(attachment.clear_value[3])
                     };
 
-                    gl::clear_named_framebuffer_fv(name, gl::Buffer::color, static_cast<GLint>(color_index), &f[0]);
+                    if (use_dsa) {
+                        gl::clear_named_framebuffer_fv(name, gl::Buffer::color, static_cast<GLint>(color_index), &f[0]);
+                    } else {
+                        gl::clear_buffer_fv(gl::Buffer::color, static_cast<GLint>(color_index), &f[0]);
+                    }
                     break;
                 }
                 case erhe::dataformat::Format_kind::format_kind_signed_integer: {
@@ -567,7 +720,11 @@ void Render_pass_impl::start_render_pass()
                         static_cast<GLint>(attachment.clear_value[2]),
                         static_cast<GLint>(attachment.clear_value[3])
                     };
-                    gl::clear_named_framebuffer_iv(name, gl::Buffer::color, static_cast<GLint>(color_index), &i[0]);
+                    if (use_dsa) {
+                        gl::clear_named_framebuffer_iv(name, gl::Buffer::color, static_cast<GLint>(color_index), &i[0]);
+                    } else {
+                        gl::clear_buffer_iv(gl::Buffer::color, static_cast<GLint>(color_index), &i[0]);
+                    }
                     break;
                 }
                 case erhe::dataformat::Format_kind::format_kind_unsigned_integer: {
@@ -577,7 +734,11 @@ void Render_pass_impl::start_render_pass()
                         static_cast<GLuint>(attachment.clear_value[2]),
                         static_cast<GLuint>(attachment.clear_value[3])
                     };
-                    gl::clear_named_framebuffer_uiv(name, gl::Buffer::color, static_cast<GLint>(color_index), &ui[0]);
+                    if (use_dsa) {
+                        gl::clear_named_framebuffer_uiv(name, gl::Buffer::color, static_cast<GLint>(color_index), &ui[0]);
+                    } else {
+                        gl::clear_buffer_uiv(gl::Buffer::color, static_cast<GLint>(color_index), &ui[0]);
+                    }
                     break;
                 }
                 default: {
@@ -589,13 +750,22 @@ void Render_pass_impl::start_render_pass()
     const bool clear_depth   = ((m_swapchain != nullptr) && m_swapchain->has_depth  ()) || (m_depth_attachment  .is_defined() && (m_depth_attachment  .load_action == Load_action::Clear));
     const bool clear_stencil = ((m_swapchain != nullptr) && m_swapchain->has_stencil()) || (m_stencil_attachment.is_defined() && (m_stencil_attachment.load_action == Load_action::Clear));
     if (clear_depth && clear_stencil) {
-        gl::clear_named_framebufferf_i(
-            name,
-            gl::Buffer::depth_stencil,
-            0,
-            static_cast<float>(m_depth_attachment.clear_value[0]),
-            static_cast<GLint>(m_stencil_attachment.clear_value[0])
-        );
+        if (use_dsa) {
+            gl::clear_named_framebufferf_i(
+                name,
+                gl::Buffer::depth_stencil,
+                0,
+                static_cast<float>(m_depth_attachment.clear_value[0]),
+                static_cast<GLint>(m_stencil_attachment.clear_value[0])
+            );
+        } else {
+            gl::clear_bufferf_i(
+                gl::Buffer::depth_stencil,
+                0,
+                static_cast<float>(m_depth_attachment.clear_value[0]),
+                static_cast<GLint>(m_stencil_attachment.clear_value[0])
+            );
+        }
     } else {
         if (clear_depth) {
             const GLfloat f[4] = {
@@ -604,7 +774,11 @@ void Render_pass_impl::start_render_pass()
                 static_cast<GLfloat>(m_depth_attachment.clear_value[2]),
                 static_cast<GLfloat>(m_depth_attachment.clear_value[3])
             };
-            gl::clear_named_framebuffer_fv(name, gl::Buffer::depth, 0, &f[0]);
+            if (use_dsa) {
+                gl::clear_named_framebuffer_fv(name, gl::Buffer::depth, 0, &f[0]);
+            } else {
+                gl::clear_buffer_fv(gl::Buffer::depth, 0, &f[0]);
+            }
         }
         if (clear_stencil) {
             const GLuint ui[4] = {
@@ -613,7 +787,11 @@ void Render_pass_impl::start_render_pass()
                 static_cast<GLuint>(m_stencil_attachment.clear_value[2]),
                 static_cast<GLuint>(m_stencil_attachment.clear_value[3])
             };
-            gl::clear_named_framebuffer_uiv(name, gl::Buffer::stencil, 0, &ui[0]);
+            if (use_dsa) {
+                gl::clear_named_framebuffer_uiv(name, gl::Buffer::stencil, 0, &ui[0]);
+            } else {
+                gl::clear_buffer_uiv(gl::Buffer::stencil, 0, &ui[0]);
+            }
         }
     }
 
@@ -666,11 +844,18 @@ void Render_pass_impl::end_render_pass()
         return (blit_width > 0) && (blit_height > 0);
     };
 
+    const bool use_dsa = m_device.get_info().use_direct_state_access;
+
     if (m_uses_multisample_resolve) {
         gl::bind_framebuffer(gl::Framebuffer_target::read_framebuffer, gl_name());
 #if !defined(NDEBUG)
         {
-            const auto status = gl::check_named_framebuffer_status(gl_name(), gl::Framebuffer_target::read_framebuffer);
+            gl::Framebuffer_status status;
+            if (use_dsa) {
+                status = gl::check_named_framebuffer_status(gl_name(), gl::Framebuffer_target::read_framebuffer);
+            } else {
+                status = gl::check_framebuffer_status(gl::Framebuffer_target::read_framebuffer);
+            }
             if (status != gl::Framebuffer_status::framebuffer_complete) {
                 log_render_pass->error(
                     "{} multisample resolve source BlitFramebuffer read framebuffer status = {}",
@@ -685,7 +870,12 @@ void Render_pass_impl::end_render_pass()
         gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, gl_multisample_resolve_name());
 #if !defined(NDEBUG)
         {
-            const auto status = gl::check_named_framebuffer_status(gl_multisample_resolve_name(), gl::Framebuffer_target::draw_framebuffer);
+            gl::Framebuffer_status status;
+            if (use_dsa) {
+                status = gl::check_named_framebuffer_status(gl_multisample_resolve_name(), gl::Framebuffer_target::draw_framebuffer);
+            } else {
+                status = gl::check_framebuffer_status(gl::Framebuffer_target::draw_framebuffer);
+            }
             if (status != gl::Framebuffer_status::framebuffer_complete) {
                 log_render_pass->error(
                     "{} multisample resolve destination BlitFramebuffer draw framebuffer status = {}",
@@ -705,62 +895,89 @@ void Render_pass_impl::end_render_pass()
             const Render_pass_attachment_descriptor& attachment = m_color_attachments[color_index];
             if (check_multisample_resolve(attachment, blit_width, blit_height)) {
                 const gl::Color_buffer color_buffer = static_cast<gl::Color_buffer>(static_cast<unsigned int>(gl::Color_buffer::color_attachment0) + color_index);
-                gl::named_framebuffer_read_buffer(gl_name(), color_buffer);
-                gl::named_framebuffer_draw_buffers(gl_multisample_resolve_name(), 1, &color_buffer);
-                gl::blit_named_framebuffer(
-                    gl_name(), // read framebuffer
-                    gl_multisample_resolve_name(), // draw framebuffer
-                    0,                                        // src X0
-                    0,                                        // src Y1
-                    blit_width,                               // src X0
-                    blit_height,                              // src Y1
-                    0,                                        // dst X0
-                    0,                                        // dst Y1
-                    blit_width,                               // dst X0
-                    blit_height,                              // dst Y1
-                    gl::Clear_buffer_mask::color_buffer_bit,  // mask
-                    gl::Blit_framebuffer_filter::linear       // filter
-                );
+                // Read and draw FBOs are already bound above
+                if (use_dsa) {
+                    gl::named_framebuffer_read_buffer(gl_name(), color_buffer);
+                    gl::named_framebuffer_draw_buffers(gl_multisample_resolve_name(), 1, &color_buffer);
+                    gl::blit_named_framebuffer(
+                        gl_name(),
+                        gl_multisample_resolve_name(),
+                        0, 0, blit_width, blit_height,
+                        0, 0, blit_width, blit_height,
+                        gl::Clear_buffer_mask::color_buffer_bit,
+                        gl::Blit_framebuffer_filter::linear
+                    );
+                } else {
+                    gl::read_buffer(static_cast<gl::Read_buffer_mode>(color_buffer));
+                    const gl::Draw_buffer_mode draw_buf = static_cast<gl::Draw_buffer_mode>(color_buffer);
+                    gl::draw_buffers(1, &draw_buf);
+                    gl::blit_framebuffer(
+                        0, 0, blit_width, blit_height,
+                        0, 0, blit_width, blit_height,
+                        gl::Clear_buffer_mask::color_buffer_bit,
+                        gl::Blit_framebuffer_filter::linear
+                    );
+                }
             }
         }
         // Restore draw buffer state
-        gl::named_framebuffer_draw_buffers(gl_name(), static_cast<GLsizei>(m_draw_buffers.size()), m_draw_buffers.data());
-        gl::named_framebuffer_read_buffer (gl_name(), gl::Color_buffer::color_attachment0);
-        gl::named_framebuffer_draw_buffers(gl_multisample_resolve_name(), static_cast<GLsizei>(m_draw_buffers.size()), m_draw_buffers.data());
-        gl::named_framebuffer_read_buffer (gl_multisample_resolve_name(), gl::Color_buffer::color_attachment0);
+        if (use_dsa) {
+            gl::named_framebuffer_draw_buffers(gl_name(), static_cast<GLsizei>(m_draw_buffers.size()), m_draw_buffers.data());
+            gl::named_framebuffer_read_buffer (gl_name(), gl::Color_buffer::color_attachment0);
+            gl::named_framebuffer_draw_buffers(gl_multisample_resolve_name(), static_cast<GLsizei>(m_draw_buffers.size()), m_draw_buffers.data());
+            gl::named_framebuffer_read_buffer (gl_multisample_resolve_name(), gl::Color_buffer::color_attachment0);
+        } else {
+            // Bind the main FBO to draw, restore its draw buffers
+            gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, gl_name());
+            gl::draw_buffers(static_cast<GLsizei>(m_draw_buffers.size()), reinterpret_cast<const gl::Draw_buffer_mode*>(m_draw_buffers.data()));
+            gl::read_buffer(static_cast<gl::Read_buffer_mode>(gl::Color_buffer::color_attachment0));
+            // Bind the resolve FBO to draw, restore its draw buffers
+            gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, gl_multisample_resolve_name());
+            gl::draw_buffers(static_cast<GLsizei>(m_draw_buffers.size()), reinterpret_cast<const gl::Draw_buffer_mode*>(m_draw_buffers.data()));
+            gl::read_buffer(static_cast<gl::Read_buffer_mode>(gl::Color_buffer::color_attachment0));
+            // Re-bind for depth/stencil blit: read=main, draw=resolve
+            gl::bind_framebuffer(gl::Framebuffer_target::read_framebuffer, gl_name());
+            gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, gl_multisample_resolve_name());
+        }
 
         // NOTE: Depth/stencil blit does not involve draw buffers
         if (check_multisample_resolve(m_depth_attachment, blit_width, blit_height)) {
-            gl::blit_named_framebuffer(
-                gl_name(),
-                gl_multisample_resolve_name(),
-                0,                                        // src X0
-                0,                                        // src Y1
-                blit_width,                               // src X0
-                blit_width,                               // src Y1
-                0,                                        // dst X0
-                0,                                        // dst Y1
-                blit_width,                               // dst X0
-                blit_height,                              // dst Y1
-                gl::Clear_buffer_mask::depth_buffer_bit,  // mask
-                gl::Blit_framebuffer_filter::linear       // filter
-            );
+            if (use_dsa) {
+                gl::blit_named_framebuffer(
+                    gl_name(),
+                    gl_multisample_resolve_name(),
+                    0, 0, blit_width, blit_width,
+                    0, 0, blit_width, blit_height,
+                    gl::Clear_buffer_mask::depth_buffer_bit,
+                    gl::Blit_framebuffer_filter::linear
+                );
+            } else {
+                gl::blit_framebuffer(
+                    0, 0, blit_width, blit_width,
+                    0, 0, blit_width, blit_height,
+                    gl::Clear_buffer_mask::depth_buffer_bit,
+                    gl::Blit_framebuffer_filter::linear
+                );
+            }
         }
         if (check_multisample_resolve(m_stencil_attachment, blit_width, blit_height)) {
-            gl::blit_named_framebuffer(
-                gl_name(),
-                gl_multisample_resolve_name(),
-                0,                                          // src X0
-                0,                                          // src Y1
-                blit_width,                                 // src X0
-                blit_width,                                 // src Y1
-                0,                                          // dst X0
-                0,                                          // dst Y1
-                blit_width,                                 // dst X0
-                blit_height,                                // dst Y1
-                gl::Clear_buffer_mask::stencil_buffer_bit,  // mask
-                gl::Blit_framebuffer_filter::linear         // filter
-            );
+            if (use_dsa) {
+                gl::blit_named_framebuffer(
+                    gl_name(),
+                    gl_multisample_resolve_name(),
+                    0, 0, blit_width, blit_width,
+                    0, 0, blit_width, blit_height,
+                    gl::Clear_buffer_mask::stencil_buffer_bit,
+                    gl::Blit_framebuffer_filter::linear
+                );
+            } else {
+                gl::blit_framebuffer(
+                    0, 0, blit_width, blit_width,
+                    0, 0, blit_width, blit_height,
+                    gl::Clear_buffer_mask::stencil_buffer_bit,
+                    gl::Blit_framebuffer_filter::linear
+                );
+            }
         }
     }
 

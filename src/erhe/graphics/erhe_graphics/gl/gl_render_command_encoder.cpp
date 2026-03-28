@@ -207,15 +207,26 @@ void Render_command_encoder_impl::multi_draw_indexed_primitives_indirect(
                 );
 
                 gl::uniform_1i(draw_id_location, static_cast<GLint>(draw_id));
-                gl::draw_elements_instanced_base_vertex_base_instance(
-                    gl_primitive_type,
-                    draw_indirect_record.index_count,
-                    gl_index_type,
-                    gl_indices,
-                    draw_indirect_record.instance_count,
-                    draw_indirect_record.base_vertex,
-                    draw_indirect_record.base_instance
-                );
+                if (info.use_base_instance) {
+                    gl::draw_elements_instanced_base_vertex_base_instance(
+                        gl_primitive_type,
+                        draw_indirect_record.index_count,
+                        gl_index_type,
+                        gl_indices,
+                        draw_indirect_record.instance_count,
+                        draw_indirect_record.base_vertex,
+                        draw_indirect_record.base_instance
+                    );
+                } else {
+                    gl::draw_elements_instanced_base_vertex(
+                        gl_primitive_type,
+                        draw_indirect_record.index_count,
+                        gl_index_type,
+                        gl_indices,
+                        draw_indirect_record.instance_count,
+                        draw_indirect_record.base_vertex
+                    );
+                }
                 gl_offset += stride ? stride : sizeof(Draw_indexed_primitives_indirect_command);
             }
         }

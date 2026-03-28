@@ -53,20 +53,22 @@ Thumbnails::Thumbnails(const Thumbnails_config& thumbnails_config, erhe::graphic
         }
     );
 
-    for (int i = 0; i < capacity; ++i) {
-        Thumbnail& t = m_thumbnails[i];
+    if (graphics_device.get_info().use_texture_view) {
+        for (int i = 0; i < capacity; ++i) {
+            Thumbnail& t = m_thumbnails[i];
 
-        erhe::graphics::Texture_create_info texture_create_info = erhe::graphics::Texture_create_info::make_view(m_graphics_device, m_color_texture);
-        texture_create_info.usage_mask            =
-            erhe::graphics::Image_usage_flag_bit_mask::color_attachment |
-            erhe::graphics::Image_usage_flag_bit_mask::sampled,
-        texture_create_info.view_base_level       = 0;
-        texture_create_info.array_layer_count     = 0;
-        texture_create_info.use_mipmaps           = true;
-        texture_create_info.level_count           = m_color_texture->get_level_count();
-        texture_create_info.view_base_array_layer = i;
-        texture_create_info.debug_label           = erhe::utility::Debug_label{fmt::format("Thumbnail layer {}", i)};
-        t.texture_view = std::make_shared<erhe::graphics::Texture>(m_graphics_device, texture_create_info);
+            erhe::graphics::Texture_create_info texture_create_info = erhe::graphics::Texture_create_info::make_view(m_graphics_device, m_color_texture);
+            texture_create_info.usage_mask            =
+                erhe::graphics::Image_usage_flag_bit_mask::color_attachment |
+                erhe::graphics::Image_usage_flag_bit_mask::sampled,
+            texture_create_info.view_base_level       = 0;
+            texture_create_info.array_layer_count     = 0;
+            texture_create_info.use_mipmaps           = true;
+            texture_create_info.level_count           = m_color_texture->get_level_count();
+            texture_create_info.view_base_array_layer = i;
+            texture_create_info.debug_label           = erhe::utility::Debug_label{fmt::format("Thumbnail layer {}", i)};
+            t.texture_view = std::make_shared<erhe::graphics::Texture>(m_graphics_device, texture_create_info);
+        }
     }
 }
 

@@ -323,19 +323,14 @@ Shader_resource::Shader_resource(
     , m_array_size   {array_size}
     , m_binding_point{binding_point}
 {
-    //// Would be nice to be able to verify this at the time of construction,
-    //// but Instance might not be ready yet.
-    ////
-    //// if (type == Type::uniform_block) {
-    ////     ERHE_VERIFY(binding_point < g_instance->limits.max_uniform_buffer_bindings);
-    //// }
-    //// if (type == Type::shader_storage_block) {
-    ////     ERHE_VERIFY(binding_point < g_instance->limits.max_shader_storage_buffer_bindings);
-    //// }
-    //// if (type == Type::sampler) {
-    ////     // TODO Which limit to use?
-    ////     ERHE_VERIFY(binding_point < g_instance->limits.max_combined_texture_image_units);
-    //// }
+    const auto& info = device.get_info();
+    if (type == Type::uniform_block) {
+        ERHE_VERIFY(binding_point < info.max_uniform_buffer_bindings);
+    }
+    if (type == Type::shader_storage_block) {
+        ERHE_VERIFY(info.use_shader_storage_buffers);
+        ERHE_VERIFY(binding_point < info.max_shader_storage_buffer_bindings);
+    }
 }
 
 // Basic type
@@ -380,6 +375,9 @@ Shader_resource::Shader_resource(
             : -1
     }
 {
+    if (dedicated_texture_unit.has_value()) {
+        ERHE_VERIFY(dedicated_texture_unit.value() < device.get_info().max_combined_texture_image_units);
+    }
 }
 
 // Constructor with no arguments creates default uniform block
@@ -467,6 +465,11 @@ auto Shader_resource::get_member(const std::string_view name) const -> Shader_re
     }
 
     return {};
+}
+
+auto Shader_resource::get_members() const -> const Member_collection&
+{
+    return m_members;
 }
 
 auto Shader_resource::get_binding_point() const -> unsigned int

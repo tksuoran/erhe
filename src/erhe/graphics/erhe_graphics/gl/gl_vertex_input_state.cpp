@@ -2,12 +2,16 @@
 #include <fmt/ostream.h>
 
 #include "erhe_graphics/gl/gl_vertex_input_state.hpp"
+#include "erhe_graphics/gl/gl_binding_state.hpp"
+#include "erhe_graphics/gl/gl_device.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_dataformat/vertex_format.hpp"
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_verify/verify.hpp"
+
+#include <optional>
 
 #include <memory>
 #include <sstream>
@@ -373,7 +377,7 @@ void Vertex_input_state_impl::create()
     }
 
     m_owner_thread = std::this_thread::get_id();
-    m_gl_vertex_array.emplace(Gl_vertex_array{});
+    m_gl_vertex_array.emplace(m_device.get_impl().create_vertex_array());
 
     update();
 
@@ -386,90 +390,121 @@ void Vertex_input_state_impl::update()
     ERHE_VERIFY(m_gl_vertex_array.has_value());
     ERHE_VERIFY(gl_name() > 0);
 
-    for (const auto& attribute : m_data.attributes) {
-        switch (get_gl_attribute_type(attribute.format)) {
-            //using enum gl::Attribute_type;
-            case gl::Attribute_type::bool_:
-            case gl::Attribute_type::bool_vec2:
-            case gl::Attribute_type::bool_vec3:
-            case gl::Attribute_type::bool_vec4:
-            case gl::Attribute_type::int_:
-            case gl::Attribute_type::int_vec2:
-            case gl::Attribute_type::int_vec3:
-            case gl::Attribute_type::int_vec4:
-            case gl::Attribute_type::unsigned_int:
-            case gl::Attribute_type::unsigned_int_vec2:
-            case gl::Attribute_type::unsigned_int_vec3:
-            case gl::Attribute_type::unsigned_int_vec4: {
-                gl::vertex_array_attrib_i_format(
-                    gl_name(),
-                    attribute.layout_location,
-                    static_cast<GLint>(erhe::dataformat::get_component_count(attribute.format)),
-                    static_cast<gl::Vertex_attrib_i_type>(get_gl_vertex_attrib_type(attribute.format)),
-                    static_cast<GLuint>(attribute.offset)
-                );
-                break;
-            }
+    const bool use_dsa = m_device.get_info().use_direct_state_access;
 
-            case gl::Attribute_type::float_:
-            case gl::Attribute_type::float_vec2:
-            case gl::Attribute_type::float_vec3:
-            case gl::Attribute_type::float_vec4:
-            case gl::Attribute_type::float_mat2:
-            case gl::Attribute_type::float_mat2x3:
-            case gl::Attribute_type::float_mat2x4:
-            case gl::Attribute_type::float_mat3:
-            case gl::Attribute_type::float_mat3x2:
-            case gl::Attribute_type::float_mat3x4:
-            case gl::Attribute_type::float_mat4:
-            case gl::Attribute_type::float_mat4x2:
-            case gl::Attribute_type::float_mat4x3: {
-                gl::vertex_array_attrib_format(
-                    gl_name(),
-                    attribute.layout_location,
-                    static_cast<GLint>(erhe::dataformat::get_component_count(attribute.format)),
-                    get_gl_vertex_attrib_type(attribute.format),
-                    get_gl_normalized(attribute.format) ? GL_TRUE : GL_FALSE,
-                    static_cast<GLuint>(attribute.offset)
-                );
-                break;
-            }
-
-            case gl::Attribute_type::unsigned_int64_arb:
-            case gl::Attribute_type::double_:
-            case gl::Attribute_type::double_vec2:
-            case gl::Attribute_type::double_vec3:
-            case gl::Attribute_type::double_vec4:
-            case gl::Attribute_type::double_mat2:
-            case gl::Attribute_type::double_mat2x3:
-            case gl::Attribute_type::double_mat2x4:
-            case gl::Attribute_type::double_mat3:
-            case gl::Attribute_type::double_mat3x2:
-            case gl::Attribute_type::double_mat3x4:
-            case gl::Attribute_type::double_mat4:
-            case gl::Attribute_type::double_mat4x2:
-            case gl::Attribute_type::double_mat4x3: {
-                gl::vertex_array_attrib_l_format(
-                    gl_name(),
-                    attribute.layout_location,
-                    static_cast<GLint>(erhe::dataformat::get_component_count(attribute.format)),
-                    static_cast<gl::Vertex_attrib_l_type>(get_gl_vertex_attrib_type(attribute.format)),
-                    0
-                );
-                break;
-            }
-
-            default: {
-                ERHE_FATAL("Bad vertex attrib pointer type");
-            }
-        }
-
-        gl::vertex_array_attrib_binding(gl_name(), attribute.layout_location, static_cast<GLuint>(attribute.binding));
-        gl::enable_vertex_array_attrib(gl_name(), attribute.layout_location);
+    // Pre-DSA: bind the VAO temporarily. Format setup is deferred to
+    // set_vertex_buffer() because vertex_attrib_pointer combines format
+    // and buffer binding. Here we only enable attributes and set divisors.
+    std::optional<Vertex_array_binding_guard> vao_guard;
+    if (!use_dsa) {
+        vao_guard.emplace(m_device.get_impl().get_binding_state().push_vertex_array(gl_name()));
     }
 
-    for (const Vertex_input_binding& binding : m_data.bindings) {
-        gl::vertex_array_binding_divisor(gl_name(), static_cast<GLuint>(binding.binding), binding.divisor);
+    for (const auto& attribute : m_data.attributes) {
+        if (use_dsa) {
+            switch (get_gl_attribute_type(attribute.format)) {
+                //using enum gl::Attribute_type;
+                case gl::Attribute_type::bool_:
+                case gl::Attribute_type::bool_vec2:
+                case gl::Attribute_type::bool_vec3:
+                case gl::Attribute_type::bool_vec4:
+                case gl::Attribute_type::int_:
+                case gl::Attribute_type::int_vec2:
+                case gl::Attribute_type::int_vec3:
+                case gl::Attribute_type::int_vec4:
+                case gl::Attribute_type::unsigned_int:
+                case gl::Attribute_type::unsigned_int_vec2:
+                case gl::Attribute_type::unsigned_int_vec3:
+                case gl::Attribute_type::unsigned_int_vec4: {
+                    gl::vertex_array_attrib_i_format(
+                        gl_name(),
+                        attribute.layout_location,
+                        static_cast<GLint>(erhe::dataformat::get_component_count(attribute.format)),
+                        static_cast<gl::Vertex_attrib_i_type>(get_gl_vertex_attrib_type(attribute.format)),
+                        static_cast<GLuint>(attribute.offset)
+                    );
+                    break;
+                }
+
+                case gl::Attribute_type::float_:
+                case gl::Attribute_type::float_vec2:
+                case gl::Attribute_type::float_vec3:
+                case gl::Attribute_type::float_vec4:
+                case gl::Attribute_type::float_mat2:
+                case gl::Attribute_type::float_mat2x3:
+                case gl::Attribute_type::float_mat2x4:
+                case gl::Attribute_type::float_mat3:
+                case gl::Attribute_type::float_mat3x2:
+                case gl::Attribute_type::float_mat3x4:
+                case gl::Attribute_type::float_mat4:
+                case gl::Attribute_type::float_mat4x2:
+                case gl::Attribute_type::float_mat4x3: {
+                    gl::vertex_array_attrib_format(
+                        gl_name(),
+                        attribute.layout_location,
+                        static_cast<GLint>(erhe::dataformat::get_component_count(attribute.format)),
+                        get_gl_vertex_attrib_type(attribute.format),
+                        get_gl_normalized(attribute.format) ? GL_TRUE : GL_FALSE,
+                        static_cast<GLuint>(attribute.offset)
+                    );
+                    break;
+                }
+
+                case gl::Attribute_type::unsigned_int64_arb:
+                case gl::Attribute_type::double_:
+                case gl::Attribute_type::double_vec2:
+                case gl::Attribute_type::double_vec3:
+                case gl::Attribute_type::double_vec4:
+                case gl::Attribute_type::double_mat2:
+                case gl::Attribute_type::double_mat2x3:
+                case gl::Attribute_type::double_mat2x4:
+                case gl::Attribute_type::double_mat3:
+                case gl::Attribute_type::double_mat3x2:
+                case gl::Attribute_type::double_mat3x4:
+                case gl::Attribute_type::double_mat4:
+                case gl::Attribute_type::double_mat4x2:
+                case gl::Attribute_type::double_mat4x3: {
+                    gl::vertex_array_attrib_l_format(
+                        gl_name(),
+                        attribute.layout_location,
+                        static_cast<GLint>(erhe::dataformat::get_component_count(attribute.format)),
+                        static_cast<gl::Vertex_attrib_l_type>(get_gl_vertex_attrib_type(attribute.format)),
+                        0
+                    );
+                    break;
+                }
+
+                default: {
+                    ERHE_FATAL("Bad vertex attrib pointer type");
+                }
+            }
+
+            gl::vertex_array_attrib_binding(gl_name(), attribute.layout_location, static_cast<GLuint>(attribute.binding));
+            gl::enable_vertex_array_attrib(gl_name(), attribute.layout_location);
+        } else {
+            // Pre-DSA: only enable attributes here. Format + buffer binding
+            // will be set together via vertex_attrib_pointer in set_vertex_buffer().
+            gl::enable_vertex_attrib_array(attribute.layout_location);
+        }
+    }
+
+    if (use_dsa) {
+        for (const Vertex_input_binding& binding : m_data.bindings) {
+            gl::vertex_array_binding_divisor(gl_name(), static_cast<GLuint>(binding.binding), binding.divisor);
+        }
+    } else {
+        // Pre-DSA: vertex_attrib_divisor is per-attribute, not per-binding.
+        // Set divisor for each attribute that uses a binding with non-zero divisor.
+        for (const Vertex_input_binding& binding : m_data.bindings) {
+            if (binding.divisor == 0) {
+                continue;
+            }
+            for (const auto& attribute : m_data.attributes) {
+                if (attribute.binding == binding.binding) {
+                    gl::vertex_attrib_divisor(attribute.layout_location, binding.divisor);
+                }
+            }
+        }
     }
 }
 

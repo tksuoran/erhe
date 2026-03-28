@@ -9,7 +9,10 @@ namespace erhe::graphics {
 class Gl_texture final
 {
 public:
-    explicit Gl_texture(GLuint gl_name, bool owned = true);
+    static constexpr bool not_texture_view = false;
+    static constexpr bool texture_view     = true;
+    Gl_texture    (gl::Texture_target target, bool for_texture_view = not_texture_view);
+    Gl_texture    (gl::Texture_target target, GLuint wrap_name, bool for_texture_view = not_texture_view);
     ~Gl_texture   () noexcept;
     Gl_texture    (const Gl_texture&) = delete;
     void operator=(const Gl_texture&) = delete;
@@ -26,8 +29,7 @@ private:
 class Gl_program final
 {
 public:
-    Gl_program() = default;
-    explicit Gl_program(GLuint gl_name);
+    Gl_program    ();
     ~Gl_program   () noexcept;
     Gl_program    (const Gl_program&) = delete;
     void operator=(const Gl_program&) = delete;
@@ -43,7 +45,7 @@ private:
 class Gl_shader final
 {
 public:
-    explicit Gl_shader(GLuint gl_name);
+    explicit Gl_shader(gl::Shader_type shader_type);
     ~Gl_shader    () noexcept;
     Gl_shader     (const Gl_shader&) = delete;
     void operator=(const Gl_shader&) = delete;
@@ -59,8 +61,7 @@ private:
 class Gl_sampler final
 {
 public:
-    Gl_sampler() = default;
-    explicit Gl_sampler(GLuint gl_name);
+    Gl_sampler    ();
     ~Gl_sampler   () noexcept;
     Gl_sampler    (const Gl_sampler&) = delete;
     void operator=(const Gl_sampler&) = delete;
@@ -76,7 +77,7 @@ private:
 class Gl_framebuffer final
 {
 public:
-    explicit Gl_framebuffer(GLuint gl_name);
+    Gl_framebuffer ();
     ~Gl_framebuffer() noexcept;
     Gl_framebuffer (const Gl_framebuffer&) = delete;
     void operator= (const Gl_framebuffer&) = delete;
@@ -92,7 +93,7 @@ private:
 class Gl_renderbuffer final
 {
 public:
-    explicit Gl_renderbuffer(GLuint gl_name);
+    Gl_renderbuffer ();
     ~Gl_renderbuffer() noexcept;
     Gl_renderbuffer (const Gl_renderbuffer&) = delete;
     void operator=  (const Gl_renderbuffer&) = delete;
@@ -108,8 +109,7 @@ private:
 class Gl_buffer final
 {
 public:
-    Gl_buffer() = default;
-    explicit Gl_buffer(GLuint gl_name);
+    Gl_buffer     ();
     ~Gl_buffer    () noexcept;
     Gl_buffer     (const Gl_buffer&) = delete;
     void operator=(const Gl_buffer&) = delete;
@@ -125,7 +125,7 @@ private:
 class Gl_query final
 {
 public:
-    explicit Gl_query(GLuint gl_name);
+    explicit Gl_query(gl::Query_target target);
     ~Gl_query     () noexcept;
     Gl_query      (const Gl_query&) = delete;
     void operator=(const Gl_query&) = delete;
@@ -141,7 +141,7 @@ private:
 class Gl_vertex_array final
 {
 public:
-    explicit Gl_vertex_array(GLuint gl_name);
+    Gl_vertex_array ();
     ~Gl_vertex_array() noexcept;
     Gl_vertex_array (const Gl_vertex_array&) = delete;
     void operator=  (const Gl_vertex_array&) = delete;

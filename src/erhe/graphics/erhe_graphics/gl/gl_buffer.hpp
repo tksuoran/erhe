@@ -25,6 +25,7 @@ public:
     void invalidate           (std::size_t byte_offset, std::size_t byte_count) noexcept;
     void flush_bytes          (std::size_t byte_offset, std::size_t byte_count) noexcept;
     void flush_and_unmap_bytes(std::size_t byte_count) noexcept;
+    void upload_sub_data      (std::size_t byte_offset, std::size_t byte_count, const void* data) noexcept;
     void dump                 () const noexcept;
     auto begin_write          (std::size_t byte_offset, std::size_t byte_count) noexcept -> std::span<std::byte>;
     void end_write            (std::size_t byte_offset, std::size_t byte_count) noexcept;

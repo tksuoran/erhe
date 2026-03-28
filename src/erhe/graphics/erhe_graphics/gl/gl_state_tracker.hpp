@@ -95,9 +95,13 @@ public:
     void set_index_buffer (const Buffer* buffer) const;
     void set_vertex_buffer(std::uintptr_t binding, const Buffer* buffer, std::uintptr_t offset);
 
+    void set_use_dsa(bool use_dsa);
+
 private:
-    std::vector<Vertex_input_binding> m_bindings;
-    unsigned int                      m_last{0};
+    std::vector<Vertex_input_attribute> m_attributes;
+    std::vector<Vertex_input_binding>   m_bindings;
+    unsigned int                        m_last{0};
+    bool                                m_use_dsa{true};
 };
 
 class Viewport_rect_state_tracker

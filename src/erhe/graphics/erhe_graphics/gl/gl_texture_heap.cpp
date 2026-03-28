@@ -222,8 +222,17 @@ void Texture_heap_impl::unbind()
             }
         }
     } else {
-        gl::bind_textures(0, m_device.get_info().max_per_stage_descriptor_samplers, m_zero_vector.data());
-        gl::bind_samplers(0, m_device.get_info().max_per_stage_descriptor_samplers, m_zero_vector.data());
+        const uint32_t count = m_device.get_info().max_per_stage_descriptor_samplers;
+        if (m_device.get_info().use_direct_state_access) {
+            gl::bind_textures(0, count, m_zero_vector.data());
+            gl::bind_samplers(0, count, m_zero_vector.data());
+        } else {
+            for (uint32_t i = 0; i < count; ++i) {
+                const gl::Texture_target gl_target = m_textures.at(i)->get_impl().get_gl_texture_target();
+                m_device.get_impl().get_binding_state().bind_texture(i, gl_target, 0);
+                m_device.get_impl().get_binding_state().bind_sampler(i, 0);
+            }
+        }
     }
 }
 
@@ -273,14 +282,23 @@ auto Texture_heap_impl::bind() -> std::size_t
         }
         return m_used_slot_count;
 
-    } else {   
-        gl::bind_textures(0, m_device.get_info().max_per_stage_descriptor_samplers, m_gl_textures.data());
-        gl::bind_samplers(0, m_device.get_info().max_per_stage_descriptor_samplers, m_gl_samplers.data());
+    } else {
+        const uint32_t count = m_device.get_info().max_per_stage_descriptor_samplers;
+        if (m_device.get_info().use_direct_state_access) {
+            gl::bind_textures(0, count, m_gl_textures.data());
+            gl::bind_samplers(0, count, m_gl_samplers.data());
+        } else {
+            for (uint32_t i = 0; i < count; ++i) {
+                const gl::Texture_target gl_target = m_textures.at(i)->get_impl().get_gl_texture_target();
+                m_device.get_impl().get_binding_state().bind_texture(i, gl_target, m_gl_textures.at(i));
+                m_device.get_impl().get_binding_state().bind_sampler(i, m_gl_samplers.at(i));
+            }
+        }
 
 #if 0 // PARANOID SANITY CHECKS
         bool ok = true;
         std::stringstream ss;
-        for (uint32_t i = 0, end = m_device.get_info().max_per_stage_descriptor_samplers; i < end; ++i) {
+        for (uint32_t i = 0, end = count; i < end; ++i) {
             if (i != 0) {
                 ss << ", ";
             }
@@ -302,8 +320,13 @@ auto Texture_heap_impl::bind() -> std::size_t
         log_texture_heap->trace("bind {}", ss.str());
 
         if (!ok) {
-            for (uint32_t i = 0, end = m_device.get_info().max_per_stage_descriptor_samplers; i < end; ++i) {
-                gl::bind_texture_unit(i, m_gl_textures.at(i));
+            for (uint32_t i = 0, end = count; i < end; ++i) {
+                if (m_device.get_info().use_direct_state_access) {
+                    gl::bind_texture_unit(i, m_gl_textures.at(i));
+                } else {
+                    const gl::Texture_target gl_target2 = m_textures.at(i)->get_impl().get_gl_texture_target();
+                    m_device.get_impl().get_binding_state().bind_texture(i, gl_target2, m_gl_textures.at(i));
+                }
                 const gl::Texture_target gl_target         = m_textures.at(i)->get_impl().get_gl_texture_target();
                 const gl::Get_p_name     gl_binding_p_name = get_binding_p_name(gl_target);
                 GLint bound_texture{0};
