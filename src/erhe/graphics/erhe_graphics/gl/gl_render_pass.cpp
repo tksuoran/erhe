@@ -1002,7 +1002,7 @@ void Render_pass_impl::end_render_pass()
 
     if (invalidate_attachments_count > 0) {
         gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, gl_name());
-        gl::invalidate_framebuffer(gl::Framebuffer_target::draw_framebuffer, invalidate_attachments_count, invalidate_attachments.data());
+        //gl::invalidate_framebuffer(gl::Framebuffer_target::draw_framebuffer, invalidate_attachments_count, invalidate_attachments.data());
     }
 
     // TODO Strictly speaking this is redundant, but might be useful for debugging
