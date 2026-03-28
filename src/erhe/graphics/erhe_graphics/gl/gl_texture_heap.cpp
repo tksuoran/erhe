@@ -1,11 +1,13 @@
-// #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
-
 #include "erhe_graphics/gl/gl_texture_heap.hpp"
 #include "erhe_graphics/gl/gl_device.hpp"
 #include "erhe_graphics/gl/gl_sampler.hpp"
 #include "erhe_graphics/gl/gl_texture.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
+
+// Uncomment the next two lines to enable extra logging and checking.
+// #define ERHE_TEXTURE_HEAP_LOG 1
+// #define ERHE_TEXTURE_HEAP_PARANOID_SANITY_CHECKS 1
 
 namespace erhe::graphics {
 
@@ -21,7 +23,9 @@ Texture_heap_impl::Texture_heap_impl(
     , m_reserved_slot_count{reserved_slot_count}
     , m_used_slot_count    {0}
 {
-    // log_texture_heap->trace("Texture_heap_impl::Texture_heap_impl()");
+#if ERHE_TEXTURE_HEAP_LOG
+    log_texture_heap->trace("Texture_heap_impl::Texture_heap_impl()");
+#endif
 
     if (m_device.get_info().use_bindless_texture) {
         reset_heap();
@@ -43,12 +47,16 @@ Texture_heap_impl::Texture_heap_impl(
 
 Texture_heap_impl::~Texture_heap_impl() noexcept
 {
-    // log_texture_heap->trace("Texture_heap_impl::~Texture_heap_impl()");
+#if ERHE_TEXTURE_HEAP_LOG
+    log_texture_heap->trace("Texture_heap_impl::~Texture_heap_impl()");
+#endif
 }
 
 void Texture_heap_impl::reset_heap()
 {
-    // log_texture_heap->trace("Texture_heap_impl::reset_heap()");
+#if ERHE_TEXTURE_HEAP_LOG
+    log_texture_heap->trace("Texture_heap_impl::reset_heap()");
+#endif
 
     if (m_device.get_info().use_bindless_texture) {
         m_textures.resize(m_reserved_slot_count);
@@ -82,11 +90,13 @@ auto Texture_heap_impl::get_shader_handle(const Texture* texture, const Sampler*
             }
         }
     }
-    // log_texture_heap->error(
-    //     "texture {} {} sampler {} {} not found in texture heap",
-    //     texture->get_impl().gl_name(), texture->get_debug_label().string_view(),
-    //     sampler->get_impl().gl_name(), sampler->get_debug_label().string_view()
-    // );
+#if ERHE_TEXTURE_HEAP_LOG
+    log_texture_heap->error(
+        "texture {} {} sampler {} {} not found in texture heap",
+        texture->get_impl().gl_name(), texture->get_debug_label().string_view(),
+        sampler->get_impl().gl_name(), sampler->get_debug_label().string_view()
+    );
+#endif
     ERHE_FATAL("texture %u sampler %u not found in texture heap", texture->get_impl().gl_name(), sampler->get_impl().gl_name());
 }
 
@@ -106,15 +116,17 @@ auto Texture_heap_impl::assign(std::size_t slot, const Texture* texture, const S
         m_gl_bindless_texture_resident[slot] = false;
         m_textures                    [slot] = texture;
         m_samplers                    [slot] = sampler;
-        // log_texture_heap->trace(
-        //     "assigned texture heap slot {} for texture {} {}, sampler {} {} bindless handle {}",
-        //     slot,
-        //     texture->get_impl().gl_name(),
-        //     texture->get_debug_label().string_view(),
-        //     sampler->get_impl().gl_name(),
-        //     sampler->get_debug_label().string_view(),
-        //     format_texture_handle(gl_bindless_texture_handle)
-        // );
+#if ERHE_TEXTURE_HEAP_LOG
+        log_texture_heap->trace(
+            "assigned texture heap slot {} for texture {} {}, sampler {} {} bindless handle {}",
+            slot,
+            texture->get_impl().gl_name(),
+            texture->get_debug_label().string_view(),
+            sampler->get_impl().gl_name(),
+            sampler->get_debug_label().string_view(),
+            format_texture_handle(gl_bindless_texture_handle)
+        );
+#endif
         return gl_bindless_texture_handle;
 
     } else {
@@ -123,14 +135,16 @@ auto Texture_heap_impl::assign(std::size_t slot, const Texture* texture, const S
         m_samplers   [slot] = sampler;
         m_gl_textures[slot] = texture->get_impl().gl_name();
         m_gl_samplers[slot] = sampler->get_impl().gl_name();
-        // log_texture_heap->trace(
-        //     "assigned texture heap slot {} for texture {} {}, sampler {} {}",
-        //     slot,
-        //     texture->get_impl().gl_name(),
-        //     texture->get_debug_label().string_view(),
-        //     sampler->get_impl().gl_name(),
-        //     sampler->get_debug_label().string_view()
-        // );
+#if ERHE_TEXTURE_HEAP_LOG
+        log_texture_heap->trace(
+            "assigned texture heap slot {} for texture {} {}, sampler {} {}",
+            slot,
+            texture->get_impl().gl_name(),
+            texture->get_debug_label().string_view(),
+            sampler->get_impl().gl_name(),
+            sampler->get_debug_label().string_view()
+        );
+#endif
         return slot;
     }
 }
@@ -141,12 +155,16 @@ auto Texture_heap_impl::allocate(const Texture* texture, const Sampler* sampler)
         return invalid_texture_handle;
     }
 
-    // const GLuint texture_name = texture->get_impl().gl_name(); // get_texture_from_handle(handle);
-    // const GLuint sampler_name = sampler->get_impl().gl_name(); // get_sampler_from_handle(handle);
+#if ERHE_TEXTURE_HEAP_LOG
+    const GLuint texture_name = texture->get_impl().gl_name(); // get_texture_from_handle(handle);
+    const GLuint sampler_name = sampler->get_impl().gl_name(); // get_sampler_from_handle(handle);
+#endif
 
     for (std::size_t slot = 0; slot < m_reserved_slot_count + m_used_slot_count; ++slot) {
         if ((m_textures[slot] == texture) && (m_samplers[slot] == sampler)) {
-            // log_texture_heap->trace("cache hit texture heap slot {} for texture {}, sampler {}", slot, texture_name, sampler_name);
+#if ERHE_TEXTURE_HEAP_LOG
+            log_texture_heap->trace("cache hit texture heap slot {} for texture {}, sampler {}", slot, texture_name, sampler_name);
+#endif
             if (m_device.get_info().use_bindless_texture) {
                 return m_gl_bindless_texture_handles[slot];
             } else {
@@ -156,19 +174,23 @@ auto Texture_heap_impl::allocate(const Texture* texture, const Sampler* sampler)
     }
 
     if (m_device.get_info().use_bindless_texture) {
-        // const std::size_t slot = m_reserved_slot_count + m_used_slot_count;
+#if ERHE_TEXTURE_HEAP_LOG
+        const std::size_t slot = m_reserved_slot_count + m_used_slot_count;
+#endif
         const uint64_t gl_bindless_texture_handle = m_device.get_handle(*texture, *sampler);
         m_gl_bindless_texture_handles .push_back(gl_bindless_texture_handle);
         m_gl_bindless_texture_resident.push_back(false);
         m_textures                    .push_back(texture);
         m_samplers                    .push_back(sampler);
-        // log_texture_heap->trace(
-        //     "allocated texture heap slot {} for texture {} {}, sampler {} {} bindless handle = {}",
-        //     slot,
-        //     texture_name, texture->get_debug_label().string_view(),
-        //     sampler_name, sampler->get_debug_label().string_view(),
-        //     format_texture_handle(gl_bindless_texture_handle)
-        // );
+#if ERHE_TEXTURE_HEAP_LOG
+        log_texture_heap->trace(
+            "allocated texture heap slot {} for texture {} {}, sampler {} {} bindless handle = {}",
+            slot,
+            texture_name, texture->get_debug_label().string_view(),
+            sampler_name, sampler->get_debug_label().string_view(),
+            format_texture_handle(gl_bindless_texture_handle)
+        );
+#endif
         ++m_used_slot_count;
         return gl_bindless_texture_handle;
 
@@ -181,20 +203,24 @@ auto Texture_heap_impl::allocate(const Texture* texture, const Sampler* sampler)
             m_gl_textures[slot] = texture->get_impl().gl_name();
             m_gl_samplers[slot] = sampler->get_impl().gl_name();
             ++m_used_slot_count;
-            // log_texture_heap->trace(
-            //     "allocated texture heap slot {} for texture {} {}, sampler {} {}",
-            //     slot,
-            //     texture_name, texture->get_debug_label().string_view(),
-            //     sampler_name, sampler->get_debug_label().string_view()
-            // );
+#if ERHE_TEXTURE_HEAP_LOG
+            log_texture_heap->trace(
+                "allocated texture heap slot {} for texture {} {}, sampler {} {}",
+                slot,
+                texture_name, texture->get_debug_label().string_view(),
+                sampler_name, sampler->get_debug_label().string_view()
+            );
+#endif
             return static_cast<uint64_t>(slot - m_reserved_slot_count);
         }
 
-        // log_texture_heap->trace(
-        //     "texture heap is full, unable to allocate slot for texture {} {}, sampler {} {}",
-        //     texture_name, texture->get_debug_label().string_view(),
-        //     sampler_name, sampler->get_debug_label().string_view()
-        // );
+#if ERHE_TEXTURE_HEAP_LOG
+        log_texture_heap->trace(
+            "texture heap is full, unable to allocate slot for texture {} {}, sampler {} {}",
+            texture_name, texture->get_debug_label().string_view(),
+            sampler_name, sampler->get_debug_label().string_view()
+        );
+#endif
         return {};
     }
 }
@@ -202,7 +228,9 @@ auto Texture_heap_impl::allocate(const Texture* texture, const Sampler* sampler)
 // TODO Maybe this should use Render_command_encoder?
 void Texture_heap_impl::unbind()
 {
-    // log_texture_heap->trace("Texture_heap_impl::unbind()");
+#if ERHE_TEXTURE_HEAP_LOG
+    log_texture_heap->trace("Texture_heap_impl::unbind()");
+#endif
 
     if (m_device.get_info().use_bindless_texture) {
         for (std::size_t slot = 0; slot < m_reserved_slot_count + m_used_slot_count; ++slot) {
@@ -211,12 +239,14 @@ void Texture_heap_impl::unbind()
             }
             if (m_gl_bindless_texture_resident[slot]) {
                 const uint64_t gl_bindless_texture_handle = m_gl_bindless_texture_handles[slot];
-                // log_texture_heap->trace(
-                //     "making texture handle {} non-resident / texture {}, sampler {}",
-                //     format_texture_handle(gl_bindless_texture_handle),
-                //     m_textures[slot]->get_impl().gl_name(),
-                //     m_samplers[slot]->get_impl().gl_name()
-                // );
+#if ERHE_TEXTURE_HEAP_LOG
+                log_texture_heap->trace(
+                    "making texture handle {} non-resident / texture {}, sampler {}",
+                    format_texture_handle(gl_bindless_texture_handle),
+                    m_textures[slot]->get_impl().gl_name(),
+                    m_samplers[slot]->get_impl().gl_name()
+                );
+#endif
                 gl::make_texture_handle_non_resident_arb(gl_bindless_texture_handle);
                 m_gl_bindless_texture_resident[slot] = false;
             }
@@ -256,12 +286,14 @@ auto get_binding_p_name(const gl::Texture_target gl_target) -> gl::Get_p_name
 // TODO Maybe this should use Render_command_encoder?
 auto Texture_heap_impl::bind() -> std::size_t
 {
-    // log_texture_heap->trace(
-    //     "Texture_heap_impl::bind() {}",
-    //     m_device.get_info().use_bindless_texture
-    //         ? "bindless"
-    //         : "not bindless"
-    // );
+#if ERHE_TEXTURE_HEAP_LOG
+    log_texture_heap->trace(
+        "Texture_heap_impl::bind() {}",
+        m_device.get_info().use_bindless_texture
+            ? "bindless"
+            : "not bindless"
+    );
+#endif
 
     if (m_device.get_info().use_bindless_texture) {
         for (std::size_t slot = 0; slot < m_reserved_slot_count + m_used_slot_count; ++slot) {
@@ -270,12 +302,14 @@ auto Texture_heap_impl::bind() -> std::size_t
             }
             if (!m_gl_bindless_texture_resident[slot]) {
                 const uint64_t gl_bindless_texture_handle = m_gl_bindless_texture_handles[slot];
-                // log_texture_heap->trace(
-                //     "making texture handle {} resident / texture {}, sampler {}",
-                //     format_texture_handle(gl_bindless_texture_handle),
-                //     m_textures[slot]->get_impl().gl_name(),
-                //     m_samplers[slot]->get_impl().gl_name()
-                // );
+#if ERHE_TEXTURE_HEAP_LOG
+                log_texture_heap->trace(
+                    "making texture handle {} resident / texture {}, sampler {}",
+                    format_texture_handle(gl_bindless_texture_handle),
+                    m_textures[slot]->get_impl().gl_name(),
+                    m_samplers[slot]->get_impl().gl_name()
+                );
+#endif
                 gl::make_texture_handle_resident_arb(gl_bindless_texture_handle);
                 m_gl_bindless_texture_resident[slot] = true;
             }
@@ -295,7 +329,7 @@ auto Texture_heap_impl::bind() -> std::size_t
             }
         }
 
-#if 0 // PARANOID SANITY CHECKS
+#if ERHE_TEXTURE_HEAP_PARANOID_SANITY_CHECKS
         bool ok = true;
         std::stringstream ss;
         for (uint32_t i = 0, end = count; i < end; ++i) {
