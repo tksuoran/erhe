@@ -162,10 +162,12 @@ public:
         // - Install / repair latest VC redistributable from
         //   https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170
         // - See also: https://github.com/gabime/spdlog/issues/3145
-        m_sink_log_file->set_pattern("[%H:%M:%S %z] [%n] [%L] [%t] %v");
+        //m_sink_log_file->set_pattern("[%H:%M:%S %z] [%n] [%L] [%t] %v");
+        m_sink_log_file->set_pattern("[%n] [%L] %v");
 
 #if defined _WIN32
         m_sink_msvc = std::make_shared<spdlog::sinks::msvc_sink_mt>();
+        m_sink_msvc->set_pattern("[%n] [%L] %v");
 #endif
         m_sink_console = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
         m_tail_store_log = std::make_shared<Store_log_sink>();
