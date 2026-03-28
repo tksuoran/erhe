@@ -531,10 +531,11 @@ class GLGenerator:
             'WRAPPER_ARG_TYPE_LIST':     ', '.join(wrapper_arg_type_list),
             'WRAPPER_RETURN_STATEMENT':  wrapper_return_statement,
 
-            'LOG_FORMAT_STRING':         ', '.join(format_strings),
-            'LOG_FORMAT_ENTRIES':        log_format_entries,
-            'CAPTURE_RESULT':            capture_result,
-            'ARGUMENT_LIST':             ', '.join(argument_list),
+            'LOG_FORMAT_STRING':           ', '.join(format_strings),
+            'LOG_FORMAT_ENTRY_SEPARATOR':  ',' if len(format_entries) > 0 else '',
+            'LOG_FORMAT_ENTRIES':          log_format_entries,
+            'CAPTURE_RESULT':              capture_result,
+            'ARGUMENT_LIST':               ', '.join(argument_list),
         }
 
         wrapper_function_declaration = templates.WRAPPER_FUNCTION_DECLARATION.format(**formatting)
