@@ -4,7 +4,6 @@ set(_target "editor")
 add_executable(${_target})
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
-    erhe.toml
     graphics_presets.toml
     logging.toml
     openxr_windows.toml
@@ -488,7 +487,6 @@ erhe_codegen_generate(
         "${_config_defs}/mesh_memory_config.py"
         "${_config_defs}/network_config.py"
         "${_config_defs}/physics_config.py"
-        "${_config_defs}/renderdoc_config.py"
         "${_config_defs}/renderer_config.py"
         "${_config_defs}/scene_config.py"
         "${_config_defs}/shader_monitor_config.py"
@@ -537,9 +535,6 @@ set(_config_sources
     ${_config_out}/physics_config.hpp
     ${_config_out}/physics_config_serialization.hpp
     ${_config_out}/physics_config.cpp
-    ${_config_out}/renderdoc_config.hpp
-    ${_config_out}/renderdoc_config_serialization.hpp
-    ${_config_out}/renderdoc_config.cpp
     ${_config_out}/renderer_config.hpp
     ${_config_out}/renderer_config_serialization.hpp
     ${_config_out}/renderer_config.cpp

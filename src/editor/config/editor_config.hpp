@@ -13,7 +13,6 @@
 #include "config/generated/mesh_memory_config.hpp"
 #include "config/generated/network_config.hpp"
 #include "config/generated/physics_config.hpp"
-#include "config/generated/renderdoc_config.hpp"
 #include "config/generated/renderer_config.hpp"
 #include "config/generated/scene_config.hpp"
 #include "config/generated/shader_monitor_config.hpp"
@@ -40,7 +39,6 @@ struct Editor_config
     Mesh_memory_config     mesh_memory;
     Network_config         network;
     Physics_config         physics;
-    Renderdoc_config       renderdoc;
     Renderer_config        renderer;
     Scene_config           scene;
     Shader_monitor_config  shader_monitor;
