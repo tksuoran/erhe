@@ -151,8 +151,10 @@ void Viewport_scene_view::execute_rendergraph_node()
         m_context.tools         ->render_viewport_tools(context);
         m_context.app_rendering ->render_viewport_renderables(context);
 
-        erhe::graphics::Compute_command_encoder compute_encoder = graphics_device.make_compute_command_encoder();
-        m_context.debug_renderer->compute(compute_encoder);
+        if (m_context.debug_renderer->use_compute()) {
+            erhe::graphics::Compute_command_encoder compute_encoder = graphics_device.make_compute_command_encoder();
+            m_context.debug_renderer->compute(compute_encoder);
+        }
     }
 
     update_render_pass(m_projection_viewport.width, m_projection_viewport.height, nullptr);

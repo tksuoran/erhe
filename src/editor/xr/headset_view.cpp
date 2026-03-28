@@ -477,7 +477,7 @@ auto Headset_view::render_headset() -> bool
             m_context.tools         ->render_viewport_tools(render_context);
             m_context.app_rendering ->render_viewport_renderables(render_context);
 
-            {
+            if (m_context.debug_renderer->use_compute()) {
                 erhe::graphics::Compute_command_encoder compute_encoder = graphics_device.make_compute_command_encoder();
                 m_context.debug_renderer->compute(compute_encoder);
             }
