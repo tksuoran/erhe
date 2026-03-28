@@ -189,6 +189,31 @@ auto Shader_stages_create_info::final_source(
     if (gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shading_language_packing)) {
         sb << "#extension GL_ARB_shading_language_packing : enable\n";
         sb << "#define ERHE_HAS_ARB_SHADING_LANGUAGE_PACKING 1\n";
+    } else {
+        // Provide polyfill implementations for pack/unpack functions
+        // when GL_ARB_shading_language_packing is not available
+        // (e.g. macOS OpenGL 4.1 where these are missing despite being GLSL 4.00 core)
+        sb << "vec2 unpackSnorm2x16(uint p) {\n"
+              "    uvec2 u = uvec2(p & 0xFFFFu, (p >> 16) & 0xFFFFu);\n"
+              "    ivec2 s = ivec2(u);\n"
+              "    if (s.x >= 0x8000) s.x -= 0x10000;\n"
+              "    if (s.y >= 0x8000) s.y -= 0x10000;\n"
+              "    return clamp(vec2(s) / 32767.0, -1.0, 1.0);\n"
+              "}\n"
+              "vec2 unpackUnorm2x16(uint p) {\n"
+              "    return vec2(\n"
+              "        float(p & 0xFFFFu) / 65535.0,\n"
+              "        float((p >> 16) & 0xFFFFu) / 65535.0\n"
+              "    );\n"
+              "}\n"
+              "vec4 unpackUnorm4x8(uint p) {\n"
+              "    return vec4(\n"
+              "        float(p & 0xFFu) / 255.0,\n"
+              "        float((p >> 8) & 0xFFu) / 255.0,\n"
+              "        float((p >> 16) & 0xFFu) / 255.0,\n"
+              "        float((p >> 24) & 0xFFu) / 255.0\n"
+              "    );\n"
+              "}\n";
     }
     if (graphics_device.get_info().use_multi_draw_indirect_core) {
         sb << "#define ERHE_DRAW_ID gl_DrawID\n";

@@ -17,6 +17,7 @@ erhe targets OpenGL 4.5 with DSA (Direct State Access) but includes a runtime co
 | glTextureView | 4.3 | sampler2DArray + layer index; post-processing disabled |
 | glClearTexImage | 4.4 | FBO clear fallback |
 | BaseInstance draw calls | 4.2 | draw_elements_instanced_base_vertex (base_instance always 0) |
+| glTexStorage2DMultisample | 4.3 | `glTexImage2DMultisample` (GL 3.2, immutable vs mutable) |
 | glInvalidateBufferSubData | 4.3 | No-op (hint only) |
 | glInvalidateFramebuffer | 4.3 | Disabled |
 | layout(binding=N) in GLSL | 4.20/4.30 | glUniformBlockBinding / glUniform1i after link |
@@ -211,7 +212,7 @@ Without compute shaders, the debug renderer writes line vertices directly to a v
 | DSA function | Non-DSA equivalent | Bind via |
 |---|---|---|
 | `texture_storage_1d/2d/3d` | `tex_storage_1d/2d/3d` | scratch unit |
-| `texture_storage_2d_multisample` | `tex_storage_2d_multisample` | scratch unit |
+| `texture_storage_2d_multisample` | `tex_image_2d_multisample` (GL < 4.3) | scratch unit |
 | `texture_sub_image_1d/2d/3d` | `tex_sub_image_1d/2d/3d` | scratch unit |
 | `texture_parameter_i` | `tex_parameter_i` | scratch unit |
 | `texture_buffer` | `tex_buffer` | scratch unit |

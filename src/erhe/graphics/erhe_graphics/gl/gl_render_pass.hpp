@@ -4,6 +4,7 @@
 #include "erhe_graphics/gl/gl_objects.hpp"
 #include "erhe_profile/profile.hpp"
 
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <thread>
@@ -12,6 +13,7 @@
 namespace erhe::graphics {
 
 class Render_pipeline_state;
+class Scoped_debug_group;
 
 class Render_pass_impl final
 {
@@ -60,9 +62,10 @@ private:
     std::thread::id                                  m_owner_thread;
     bool                                             m_is_active{false};
 
-    erhe::utility::Debug_label m_debug_group_name;
-    erhe::utility::Debug_label m_end_debug_group_name;
-    erhe::utility::Debug_label m_begin_debug_group_name;
+    erhe::utility::Debug_label                   m_debug_group_name;
+    erhe::utility::Debug_label                   m_end_debug_group_name;
+    erhe::utility::Debug_label                   m_begin_debug_group_name;
+    std::unique_ptr<Scoped_debug_group>          m_outer_debug_group;
 
     static ERHE_PROFILE_MUTEX_DECLARATION(std::mutex, s_mutex);
     static std::vector<Render_pass_impl*>             s_all_framebuffers;

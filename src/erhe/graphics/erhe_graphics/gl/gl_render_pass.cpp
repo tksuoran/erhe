@@ -586,21 +586,8 @@ void Render_pass_impl::start_render_pass()
     ERHE_VERIFY(!m_is_active);
     m_is_active = true;
 
-    log_debug->trace("---- push m_debug_group_name = {}", m_debug_group_name.string_view());
-    gl::push_debug_group(
-        gl::Debug_source::debug_source_application,
-        0,
-        static_cast<GLsizei>(m_debug_group_name.size() + 1),
-        m_debug_group_name.data()
-    );
-
-    log_debug->trace("---- push m_begin_debug_group_name = {}", m_begin_debug_group_name.string_view());
-    gl::push_debug_group(
-        gl::Debug_source::debug_source_application,
-        0,
-        static_cast<GLsizei>(m_begin_debug_group_name.size() + 1),
-        m_begin_debug_group_name.data()
-    );
+    m_outer_debug_group = std::make_unique<Scoped_debug_group>(m_debug_group_name);
+    Scoped_debug_group begin_debug_group{m_begin_debug_group_name};
 
     if (m_device.get_info().vendor == Vendor::Nvidia) {
         // Workaround for https://developer.nvidia.com/bugs/5799090
@@ -795,8 +782,6 @@ void Render_pass_impl::start_render_pass()
         }
     }
 
-    log_debug->trace("---- pop m_begin_debug_group_name = {}", m_begin_debug_group_name.string_view());
-    gl::pop_debug_group();
 }
 
 void Render_pass_impl::end_render_pass()
@@ -807,13 +792,7 @@ void Render_pass_impl::end_render_pass()
     ERHE_VERIFY(m_is_active);
     m_is_active = false;
 
-    log_debug->trace("---- push m_end_debug_group_name = {}", m_end_debug_group_name.string_view());
-    gl::push_debug_group(
-        gl::Debug_source::debug_source_application,
-        0,
-        static_cast<GLsizei>(m_end_debug_group_name.size() + 1),
-        m_end_debug_group_name.data()
-    );
+    auto end_debug_group = std::make_unique<Scoped_debug_group>(m_end_debug_group_name);
 
     std::array<gl::Framebuffer_attachment, 4> color_attachment_points = {
         gl::Framebuffer_attachment::color_attachment0,
@@ -1008,10 +987,8 @@ void Render_pass_impl::end_render_pass()
     // TODO Strictly speaking this is redundant, but might be useful for debugging
     gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);
 
-    log_debug->trace("---- pop m_end_debug_group_name = {}", m_end_debug_group_name.string_view());
-    gl::pop_debug_group();
-    log_debug->trace("---- pop m_debug_group_name = {}", m_debug_group_name.string_view());
-    gl::pop_debug_group();
+    end_debug_group.reset();
+    m_outer_debug_group.reset();
 }
 
 } // namespace erhe::graphics

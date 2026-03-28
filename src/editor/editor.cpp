@@ -429,6 +429,10 @@ public:
 #if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
         configuration.gl_major                 = editor_config.window.gl_major;
         configuration.gl_minor                 = editor_config.window.gl_minor;
+# if defined(ERHE_OS_OSX)
+        configuration.gl_major                 = 4;
+        configuration.gl_minor                 = 1;
+# endif
 #endif
         configuration.size                     = editor_config.window.size;
         configuration.swap_interval            = editor_config.window.swap_interval;

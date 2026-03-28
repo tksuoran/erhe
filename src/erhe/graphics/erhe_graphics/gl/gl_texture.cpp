@@ -893,8 +893,14 @@ Texture_impl::Texture_impl(Device& device, const Texture_create_info& create_inf
                 case 2: {
                     if (m_sample_count == 0) {
                         gl::tex_storage_2d(gl_texture_target, m_level_count, internal_format, gl_width, gl_height);
-                    } else {
+                    } else if (device.get_info().gl_version >= 430) {
                         gl::tex_storage_2d_multisample(
+                            gl_texture_target, m_sample_count, internal_format,
+                            gl_width, gl_height,
+                            m_fixed_sample_locations ? GL_TRUE : GL_FALSE
+                        );
+                    } else {
+                        gl::tex_image_2d_multisample(
                             gl_texture_target, m_sample_count, internal_format,
                             gl_width, gl_height,
                             m_fixed_sample_locations ? GL_TRUE : GL_FALSE
