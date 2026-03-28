@@ -8,6 +8,9 @@
 #include "editor_log.hpp"
 
 #include "erhe_defer/defer.hpp"
+#include "erhe_graph/link.hpp"
+#include "erhe_graph/node.hpp"
+#include "erhe_graph/pin.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_imgui/imgui_node_editor.h"
@@ -159,8 +162,8 @@ void Rendergraph_window::imgui()
         bool         selected = start_selected;
         const std::string shortLabel = node->get_name().substr(0, 12);
         const std::string fullLabel = fmt::format("{}: {} ", node->get_depth(), node->get_name());
-        const auto& inputs  = node->get_inputs();
-        const auto& outputs = node->get_outputs();
+        const etl::vector<erhe::graph::Pin, erhe::graph::max_pin_count>& inputs  = node->get_input_pins();
+        const etl::vector<erhe::graph::Pin, erhe::graph::max_pin_count>& outputs = node->get_output_pins();
 
         const ax::NodeEditor::NodeId node_id{node->get_id()};
         ImGui::PushID(static_cast<int>(node->get_id()));
@@ -174,9 +177,9 @@ void Rendergraph_window::imgui()
         ImGui::BeginTable("##InputPin", 2, ImGuiTableFlags_None, pin_table_size);
         ImGui::TableSetupColumn("InputPin",   ImGuiTableColumnFlags_WidthFixed, 20.0f);
         ImGui::TableSetupColumn("InputLabel", ImGuiTableColumnFlags_None);
-        for (const auto& input : inputs) {
-            log_graph_editor->trace("  Input {} {}", input.id.get_id(), input.label.string_view());
-            const ax::NodeEditor::PinId pin_id{input.id.get_id()};
+        for (const erhe::graph::Pin& input : inputs) {
+            log_graph_editor->trace("  Input {} {}", input.get_id(), input.get_name());
+            const ax::NodeEditor::PinId pin_id{static_cast<uintptr_t>(input.get_id())};
             ImGui::TableNextRow();
 
             ImGui::TableSetColumnIndex(0);
@@ -185,7 +188,7 @@ void Rendergraph_window::imgui()
             m_node_editor->EndPin();
 
             ImGui::TableSetColumnIndex(1);
-            ImGui::TextUnformatted(input.label.data());
+            ImGui::TextUnformatted(input.get_name().data());
         }
         ImGui::EndTable();
 
@@ -193,8 +196,9 @@ void Rendergraph_window::imgui()
 
         // Content
         ImGui::SameLine();
-        for (const auto& output : outputs) {
-            const auto& texture = node->get_producer_output_texture(output.key);
+        for (const erhe::graph::Pin& output : outputs) {
+            const int key = static_cast<int>(output.get_key());
+            const std::shared_ptr<erhe::graphics::Texture>& texture = node->get_producer_output_texture(key);
             if (
                 texture &&
                 (texture->get_texture_type() == erhe::graphics::Texture_type::texture_2d) &&
@@ -211,22 +215,6 @@ void Rendergraph_window::imgui()
                         .debug_label       = erhe::utility::Debug_label{"Rendergraph_window::imgui()"}
                     }
                 );
-                //std::string text = fmt::format(
-                //    "O: {} Size: {} x {} Format: {}",
-                //    texture->debug_label(),
-                //    texture->width(), texture->height(),
-                //    gl::c_str(texture->internal_format())
-                //);
-                //ImGui::TextUnformatted(text.c_str());
-                //if (ImGui::IsItemHovered()) {
-                //    ImGui::Text("%s @ depth %d", output.label.c_str(), node->get_depth());
-                //    std::string size = fmt::format("Size: {} x {}", texture->width(), texture->height(), gl::c_str(texture->internal_format()));
-                //    std::string format = fmt::format("Format: {}", gl::c_str(texture->internal_format()));
-                //    ImGui::BeginTooltipEx(ImGuiTooltipFlags_OverridePrevious, ImGuiWindowFlags_None);
-                //    ImGui::TextUnformatted(size.c_str());
-                //    ImGui::TextUnformatted(format.c_str());
-                //    ImGui::EndTooltip();
-                //}
             }
         }
 
@@ -236,12 +224,12 @@ void Rendergraph_window::imgui()
         ImGui::BeginTable("##Outputs", 2, ImGuiTableFlags_None, pin_table_size);
         ImGui::TableSetupColumn("OutputLabel", ImGuiTableColumnFlags_None);
         ImGui::TableSetupColumn("OutputPin",   ImGuiTableColumnFlags_WidthFixed, 20.0f);
-        for (const auto& output : outputs) {
-            log_graph_editor->trace("  Output {} {}", output.id.get_id(), output.label.string_view());
-            const ax::NodeEditor::PinId pin_id{output.id.get_id()};
+        for (const erhe::graph::Pin& output : outputs) {
+            log_graph_editor->trace("  Output {} {}", output.get_id(), output.get_name());
+            const ax::NodeEditor::PinId pin_id{static_cast<uintptr_t>(output.get_id())};
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
-            ImGui::TextUnformatted(output.label.data());
+            ImGui::TextUnformatted(output.get_name().data());
 
             ImGui::TableSetColumnIndex(1);
             m_node_editor->BeginPin(pin_id, ax::NodeEditor::PinKind::Output);
@@ -260,23 +248,20 @@ void Rendergraph_window::imgui()
         }
     }
 
-    // Links
+    // Links - iterate all links from the graph
     for (auto* node : render_graph_nodes) {
-        // Render output connections of this node
-        const auto& outputs = node->get_outputs();
-        for (const auto& output : outputs) {
-            const ax::NodeEditor::PinId pin_id{output.id.get_id()};
-            for (auto* consumer : output.consumer_nodes) {
-                if (consumer == nullptr) {
+        for (const erhe::graph::Pin& output : node->get_output_pins()) {
+            for (erhe::graph::Link* link : output.get_links()) {
+                erhe::graph::Pin* sink_pin = link->get_sink();
+                if (sink_pin == nullptr) {
                     continue;
                 }
-                const erhe::rendergraph::Rendergraph_consumer_connector* consumer_input = consumer->get_input(output.key);
 
-                const ax::NodeEditor::LinkId link_id{consumer_input};
-                const ax::NodeEditor::PinId input_pin_id{consumer_input->id.get_id()};
-                const ax::NodeEditor::PinId output_pin_id{output.id.get_id()};
+                const ax::NodeEditor::LinkId  link_id      {static_cast<uintptr_t>(link->get_id())};
+                const ax::NodeEditor::PinId   output_pin_id{static_cast<uintptr_t>(output.get_id())};
+                const ax::NodeEditor::PinId   input_pin_id {static_cast<uintptr_t>(sink_pin->get_id())};
 
-                log_graph_editor->trace("  Link {} to {}", output.id.get_id(), consumer_input->id.get_id());
+                log_graph_editor->trace("  Link {} to {}", output.get_id(), sink_pin->get_id());
 
                 const bool connection_ok = m_node_editor->Link(link_id, output_pin_id, input_pin_id);
                 if (!connection_ok) {

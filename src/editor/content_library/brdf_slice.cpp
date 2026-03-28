@@ -50,7 +50,6 @@ Brdf_slice_rendergraph_node::Brdf_slice_rendergraph_node(
     }
     , m_render_pipeline_states{&m_render_pipeline_state}
 {
-    register_output("brdf_slice", erhe::rendergraph::Rendergraph_node_key::texture_for_gui);
 }
 
 void Brdf_slice_rendergraph_node::set_material(const std::shared_ptr<erhe::primitive::Material>& material)
@@ -68,7 +67,7 @@ void Brdf_slice_rendergraph_node::execute_rendergraph_node()
 {
     SPDLOG_LOGGER_TRACE(log_render, "Brdf_slice_rendergraph_node::execute_rendergraph_node()");
 
-    if (!m_render_pass) {
+    if (m_render_target.get_render_pass() == nullptr) {
         // Likely because output ImGui window has no viewport size yet.
         return;
     }
@@ -79,7 +78,8 @@ void Brdf_slice_rendergraph_node::execute_rendergraph_node()
 
     ERHE_PROFILE_FUNCTION();
 
-    erhe::graphics::Scoped_render_pass scoped_render_pass{*m_render_pass.get()};
+    erhe::graphics::Render_pass* render_pass = m_render_target.get_render_pass();
+    erhe::graphics::Scoped_render_pass scoped_render_pass{*render_pass};
     erhe::graphics::Scoped_debug_group pass_scope{"Brdf_slice_rendergraph_node::execute_rendergraph_node()"};
     erhe::scene_renderer::Light_projections light_projections;
     light_projections.brdf_phi          = m_brdf_slice.phi;
@@ -120,7 +120,7 @@ void Brdf_slice_rendergraph_node::execute_rendergraph_node()
 void Brdf_slice_rendergraph_node::set_area_size(const int size)
 {
     m_area_size = size;
-    update_render_pass(size, size, nullptr);
+    m_render_target.update(size, size, nullptr);
 }
 
 Brdf_slice::Brdf_slice(

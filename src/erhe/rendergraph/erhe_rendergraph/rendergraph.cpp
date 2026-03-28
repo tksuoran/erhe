@@ -3,6 +3,10 @@
 #include "erhe_rendergraph/rendergraph.hpp"
 #include "erhe_rendergraph/rendergraph_node.hpp"
 #include "erhe_rendergraph/rendergraph_log.hpp"
+#include "erhe_graph/graph.hpp"
+#include "erhe_graph/node.hpp"
+#include "erhe_graph/pin.hpp"
+#include "erhe_graph/link.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
@@ -11,14 +15,20 @@ namespace erhe::rendergraph {
 
 Rendergraph::Rendergraph(erhe::graphics::Device& graphics_device)
     : m_graphics_device{graphics_device}
+    , m_graph          {std::make_unique<erhe::graph::Graph>()}
 {
-    m_nodes         .reserve(128);
-    m_unsorted_nodes.reserve(128);
-    m_sorted_nodes  .reserve(128);
+    m_nodes.reserve(128);
 }
 
 Rendergraph::~Rendergraph() noexcept
 {
+    // Mark all nodes as unregistered so their destructors (which may run
+    // later if held by shared_ptr elsewhere) don't try to access this
+    // destroyed Rendergraph.
+    for (Rendergraph_node* node : m_nodes) {
+        node->m_is_registered = false;
+    }
+    m_nodes.clear();
 }
 
 auto Rendergraph::get_nodes() const -> const std::vector<Rendergraph_node*>&
@@ -28,96 +38,40 @@ auto Rendergraph::get_nodes() const -> const std::vector<Rendergraph_node*>&
 
 void Rendergraph::sort()
 {
-    //std::lock_guard<std::mutex> lock{m_mutex};
+    if (m_is_sorted) {
+        return;
+    }
 
-    m_unsorted_nodes = m_nodes;
-    m_sorted_nodes.clear();
+    m_graph->sort();
 
-    while (!m_unsorted_nodes.empty()) {
-        bool found_node{false};
-        for (const auto& node : m_unsorted_nodes) {
-            SPDLOG_LOGGER_TRACE(log_frame, "Sort: Considering node '{}'", node->get_name());
-            {
-                bool any_missing_dependency{false};
-                for (const Rendergraph_consumer_connector& input : node->get_inputs()) {
-                    for (auto* producer_node : input.producer_nodes) {
-                        // See if dependency is in already sorted nodes
-                        const auto i = std::find_if(
-                            m_sorted_nodes.begin(),
-                            m_sorted_nodes.end(),
-                            [&producer_node](Rendergraph_node* entry) {
-                                return entry == producer_node;
-                            }
-                        );
-                        if (i == m_sorted_nodes.end()) {
-                            //// const auto& producer = producer_node.lock();
-                            SPDLOG_LOGGER_TRACE(
-                                log_frame,
-                                "Sort: Considering node '{}' failed - has unmet dependency key '{}' node '{}'",
-                                node->get_name(),
-                                input.key,
-                                producer ? producer->get_name() : std::string{"(empty)"}
-                            );
-                            any_missing_dependency = true;
-                            break;
+    if (!m_graph->m_is_sorted) {
+        // Sort failed (cycle detected). Log detailed diagnostics.
+        log_frame->error("Rendergraph sort failed - graph is not acyclic:");
+        for (Rendergraph_node* node : m_nodes) {
+            log_frame->info("    Node: {}", node->get_name());
+            for (const erhe::graph::Pin& pin : node->get_input_pins()) {
+                log_frame->info("        Input key: {}", pin.get_key());
+                for (erhe::graph::Link* link : pin.get_links()) {
+                    erhe::graph::Pin* source_pin = link->get_source();
+                    if (source_pin != nullptr) {
+                        Rendergraph_node* producer = static_cast<Rendergraph_node*>(source_pin->get_owner_node());
+                        if (producer != nullptr) {
+                            log_frame->info("          producer: {}", producer->get_name());
                         }
                     }
                 }
-                if (any_missing_dependency) {
-                    continue;
-                }
             }
-
-            SPDLOG_LOGGER_TRACE(log_frame, "Sort: Selected node '{}' - all dependencies are met", node->get_name());
-            found_node = true;
-
-            // Add selected node to sorted nodes
-            m_sorted_nodes.push_back(node);
-
-            // Remove from unsorted nodes
-            const auto i = std::remove(m_unsorted_nodes.begin(), m_unsorted_nodes.end(), node);
-            if (i == m_unsorted_nodes.end()) {
-                // log_frame->error("Sort: Node '{}' is not in graph nodes", node->get_name());
-            } else {
-                m_unsorted_nodes.erase(i, m_unsorted_nodes.end());
-            }
-
-            // restart loop
-            break;
         }
-
-        if (!found_node) {
-            log_frame->error("No render graph node with met dependencies found. Graph is not acyclic:");
-            for (auto* node : m_nodes) {
-                log_frame->info("    Node: {}", node->get_name());
-                for (const Rendergraph_consumer_connector& input : node->get_inputs()) {
-                    log_frame->info("        Input key: {}", input.key);
-                    for (auto* producer_node : input.producer_nodes) {
-                        log_frame->info("          producer: {}", producer_node->get_name());
-                    }
-                }
-            }
-
-            log_frame->info("sorted nodes:");
-            for (auto* node : m_sorted_nodes) {
-                log_frame->info("    Node: {}", node->get_name());
-            }
-
-            log_frame->info("unsorted nodes:");
-            for (auto* node : m_unsorted_nodes) {
-                log_frame->info("    Node: {}", node->get_name());
-                for (const auto& input : node->get_inputs()) {
-                    log_frame->info("        Input key: {}", input.key);
-                    for (auto* producer_node : input.producer_nodes) {
-                        log_frame->info("          producer: {}", producer_node->get_name());
-                    }
-                }
-            }
-            return;
-        }
+        return;
     }
 
-    std::swap(m_nodes, m_sorted_nodes);
+    // Map sorted graph nodes back to Rendergraph_node pointers
+    m_nodes.clear();
+    for (erhe::graph::Node* graph_node : m_graph->get_nodes()) {
+        m_nodes.push_back(static_cast<Rendergraph_node*>(graph_node));
+    }
+
+    m_is_sorted = true;
 }
 
 void Rendergraph::execute()
@@ -141,6 +95,16 @@ void Rendergraph::execute()
             node->execute_rendergraph_node();
         }
     }
+
+    // Release deferred resources now that all nodes have completed execution.
+    // Nodes may defer resource destruction during execute when old resources
+    // are still referenced by nodes that execute later in the same frame.
+    m_deferred_resources.clear();
+}
+
+void Rendergraph::defer_resource(std::shared_ptr<void> resource)
+{
+    m_deferred_resources.push_back(std::move(resource));
 }
 
 void Rendergraph::register_node(Rendergraph_node* node)
@@ -161,6 +125,12 @@ void Rendergraph::register_node(Rendergraph_node* node)
     }
 #endif
     m_nodes.push_back(node);
+    m_is_sorted = false;
+
+    // Register directly with erhe::graph for topological sort
+    m_graph->register_node(node);
+    node->m_is_registered = true;
+
     float x = static_cast<float>(m_nodes.size()) * 250.0f;
     float y = 0.0f;
     node->set_position(glm::vec2{x, y});
@@ -188,22 +158,12 @@ void Rendergraph::unregister_node(Rendergraph_node* node)
         return;
     }
 
-    auto& inputs = node->get_inputs();
-    for (auto& input : inputs) {
-        for (auto* producer_node : input.producer_nodes) {
-            disconnect(input.key, producer_node, node);
-        }
-        input.producer_nodes.clear();
-    }
-    auto& outputs = node->get_outputs();
-    for (auto& output : outputs) {
-        for (auto* consumer_node : output.consumer_nodes) {
-            disconnect(output.key, node, consumer_node);
-        }
-        output.consumer_nodes.clear();
-    }
+    // Unregister from erhe::graph (this also disconnects all its links)
+    m_graph->unregister_node(node);
+    node->m_is_registered = false;
 
     m_nodes.erase(i);
+    m_is_sorted = false;
 
     log_tail->trace("Unregistered Rendergraph_node {}", node->get_name());
 }
@@ -285,38 +245,7 @@ void Rendergraph::automatic_layout(const float image_size)
         x_offset += column_width + x_gap;
     }
 
-#if 0
-    auto average_source_position = [](Rendergraph_node* node) -> std::optional<glm::vec2>
-    {
-        std::vector<Rendergraph_consumer_connector>& inputs = node->get_inputs();
-        glm::vec2 cumulative_position{0.0f, 0.0f};
-        size_t source_count = 0;
-        for (const Rendergraph_consumer_connector& connector : inputs) {
-            for (Rendergraph_node* source_node : connector.producer_nodes) {
-                if (source_node != nullptr) {
-                    glm::vec2 source_pos = source_node->get_position();
-                    cumulative_position += source_pos;
-                    source_count++;
-                }
-            }
-        }
-        if (source_count == 0) {
-            return {};
-        }
-        return cumulative_position / static_cast<float>(source_count):
-    };
-
-    std::sort(
-        column_nodes.begin(), column_nodes.end(), [&](Rendergraph_node* lhs, Rendergraph_node* rhs) {
-            const std::optional<glm::vec2> lhs_pos = average_source_position(lhs);
-            const std::optional<glm::vec2> rhs_pos = average_source_position(rhs);
-            if (lhs_pos.has_value() && rhs_pos.has_value()) {
-                return lhs_pos.value().y < rhs_pos.value().y;
-            }
-            return lhs_pos.has_value();
-        }
-    );
-#endif
+    // TODO: Sort column_nodes by average source Y position to reduce link crossings
 }
 
 auto Rendergraph::connect(const int key, Rendergraph_node* source, Rendergraph_node* sink) -> bool
@@ -324,17 +253,41 @@ auto Rendergraph::connect(const int key, Rendergraph_node* source, Rendergraph_n
     ERHE_VERIFY(source != nullptr);
     ERHE_VERIFY(sink != nullptr);
 
-    const bool sink_connected = sink->connect_input(key, source);
-    if (!sink_connected) {
-        return false;
+    // Find output pin on source with matching key
+    erhe::graph::Pin* source_pin = nullptr;
+    for (erhe::graph::Pin& pin : source->get_output_pins()) {
+        if (pin.get_key() == static_cast<std::size_t>(key)) {
+            source_pin = &pin;
+            break;
+        }
     }
-    const bool source_connected = source->connect_output(key, sink);
-    if (!source_connected) {
+    if (source_pin == nullptr) {
+        log_tail->error("Rendergraph::connect(): source '{}' has no output pin for key {}", source->get_name(), key);
         return false;
     }
 
+    // Find input pin on sink with matching key
+    erhe::graph::Pin* sink_pin = nullptr;
+    for (erhe::graph::Pin& pin : sink->get_input_pins()) {
+        if (pin.get_key() == static_cast<std::size_t>(key)) {
+            sink_pin = &pin;
+            break;
+        }
+    }
+    if (sink_pin == nullptr) {
+        log_tail->error("Rendergraph::connect(): sink '{}' has no input pin for key {}", sink->get_name(), key);
+        return false;
+    }
+
+    erhe::graph::Link* link = m_graph->connect(source_pin, sink_pin);
+    if (link == nullptr) {
+        return false;
+    }
+
+    sink->set_depth(source->get_depth() + 1);
+
+    m_is_sorted = false;
     log_tail->trace("Rendergraph: Connected key: {} from: {} to: {}", key, source->get_name(), sink->get_name());
-    //// automatic_layout();
     return true;
 }
 
@@ -343,9 +296,25 @@ auto Rendergraph::disconnect(const int key, Rendergraph_node* source, Rendergrap
     ERHE_VERIFY(source != nullptr);
     ERHE_VERIFY(sink != nullptr);
 
-    /*const bool sink_disconnected   =*/ sink  ->disconnect_input(key, source);
-    /*const bool source_disconnected =*/ source->disconnect_output(key, sink);
+    erhe::graph::Link* link_to_remove = nullptr;
+    for (erhe::graph::Pin& pin : source->get_output_pins()) {
+        if (pin.get_key() == static_cast<std::size_t>(key)) {
+            for (erhe::graph::Link* link : pin.get_links()) {
+                if (link->get_sink() != nullptr && link->get_sink()->get_owner_node() == sink) {
+                    link_to_remove = link;
+                    break;
+                }
+            }
+            if (link_to_remove != nullptr) {
+                break;
+            }
+        }
+    }
+    if (link_to_remove != nullptr) {
+        m_graph->disconnect(link_to_remove);
+    }
 
+    m_is_sorted = false;
     log_tail->trace("Rendergraph: disconnected key: {} from: {} to: {}", key, source->get_name(), sink->get_name());
 
     return true;

@@ -84,7 +84,6 @@ Viewport_scene_view::Viewport_scene_view(
         erhe::rendergraph::Texture_rendergraph_node_create_info{
             .rendergraph          = rendergraph,
             .debug_label          = erhe::utility::Debug_label{fmt::format("Texture_rendergraph_node for Viewport_scene_view {}", name)},
-            .input_key            = erhe::rendergraph::Rendergraph_node_key::none,
             .output_key           = erhe::rendergraph::Rendergraph_node_key::viewport_texture,
             .color_format         = erhe::dataformat::Format::format_16_vec4_float,
             .depth_stencil_format = erhe::dataformat::Format::format_d32_sfloat_s8_uint,
@@ -157,14 +156,12 @@ void Viewport_scene_view::execute_rendergraph_node()
         }
     }
 
-    update_render_pass(m_projection_viewport.width, m_projection_viewport.height, nullptr);
-    // TODO If we ever have non-ImGui viewport, this might be an option:
-    // update_render_pass(m_projection_viewport.width, m_projection_viewport.height, true);
+    m_render_target.update(m_projection_viewport.width, m_projection_viewport.height, nullptr);
 
-    ERHE_VERIFY(m_render_pass);
+    ERHE_VERIFY(m_render_target.get_render_pass());
 
     erhe::graphics::Render_command_encoder encoder = graphics_device.make_render_command_encoder();
-    erhe::graphics::Scoped_render_pass scoped_render_pass{*m_render_pass.get()};
+    erhe::graphics::Scoped_render_pass scoped_render_pass{*m_render_target.get_render_pass()};
     context.encoder = &encoder;
 
     // Starting render encoder clears render target texture(s)
@@ -215,7 +212,7 @@ void Viewport_scene_view::set_camera(const std::shared_ptr<erhe::scene::Camera>&
 void Viewport_scene_view::set_reverse_depth(const bool reverse_depth)
 {
     Scene_view::set_reverse_depth(reverse_depth);
-    Texture_rendergraph_node::set_reverse_depth(reverse_depth);
+    m_render_target.set_reverse_depth(reverse_depth);
 }
 
 auto Viewport_scene_view::is_scene_view_hovered() const -> bool

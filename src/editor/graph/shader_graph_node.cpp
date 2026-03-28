@@ -218,7 +218,7 @@ void Shader_graph_node::text_unformatted_edge(int edge, const char* text)
     }
 }
 
-void Shader_graph_node::show_pins(Node_context& context, std::vector<erhe::graph::Pin>& pins)
+void Shader_graph_node::show_pins(Node_context& context, etl::vector<erhe::graph::Pin, erhe::graph::max_pin_count>& pins)
 {
     float half_extent = 10.0f;
     for (const erhe::graph::Pin& pin : pins) {

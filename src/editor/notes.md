@@ -89,7 +89,6 @@ Editor-specific render graph nodes:
 - `Viewport_scene_view` -- renders scene content (also a `Texture_rendergraph_node`)
 - `Shadow_render_node` -- renders shadow maps
 - `Post_processing_node` -- bloom/tonemap post-processing
-- `Basic_scene_view_node` -- sink node connecting viewport to output
 
 ### Renderers (`renderers/`)
 

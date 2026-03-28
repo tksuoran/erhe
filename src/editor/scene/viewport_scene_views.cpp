@@ -116,7 +116,7 @@ void Scene_views::handle_graphics_settings_changed(Graphics_preset* graphics_pre
     const int  msaa_sample_count = (graphics_preset != nullptr) ? graphics_preset->msaa_sample_count : 0;
     const bool reverse_depth     = (graphics_preset != nullptr) ? (graphics_preset->reverse_depth && use_clip_control) : use_clip_control;
     for (const std::shared_ptr<Viewport_scene_view>& viewport_scene_view : m_viewport_scene_views) {
-        viewport_scene_view->reconfigure(msaa_sample_count); // in Texture_rendergraph_node
+        viewport_scene_view->get_render_target().reconfigure(msaa_sample_count);
         viewport_scene_view->set_reverse_depth(reverse_depth); // in Scene_view + Texture_rendergraph_node
     }
 }
@@ -197,7 +197,7 @@ auto Scene_views::create_viewport_scene_view(
     }
 
     rendergraph.connect(
-        erhe::rendergraph::Rendergraph_node_key::dependency,
+        erhe::rendergraph::Rendergraph_node_key::viewport_texture,
         out_rendergraph_output_node.get(),
         imgui_windows.get_window_imgui_host().get()
     );

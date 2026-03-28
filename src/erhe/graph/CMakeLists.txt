@@ -19,6 +19,8 @@ erhe_target_sources_grouped(
 target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_link_libraries(${_target}
+    PUBLIC
+        etl::etl
     PRIVATE
         erhe::defer
         erhe::log

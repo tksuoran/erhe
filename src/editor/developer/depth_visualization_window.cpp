@@ -37,7 +37,6 @@ Depth_to_color_rendergraph_node::Depth_to_color_rendergraph_node(
         erhe::rendergraph::Texture_rendergraph_node_create_info{
             .rendergraph          = rendergraph,
             .debug_label          = erhe::utility::Debug_label{"Depth_to_color_rendergraph_node"},
-            .input_key            = erhe::rendergraph::Rendergraph_node_key::shadow_maps,
             .output_key           = erhe::rendergraph::Rendergraph_node_key::depth_visualization,
             .color_format         = erhe::dataformat::Format::format_8_vec4_srgb,
             .depth_stencil_format = erhe::dataformat::Format::format_undefined
@@ -59,9 +58,7 @@ Depth_to_color_rendergraph_node::Depth_to_color_rendergraph_node(
     }
     ,m_render_pipeline_states{&m_render_pipeline_state}
 {
-    // Registered in Texture_rendergraph_node constructor:
-    register_input ("shadow_maps",         erhe::rendergraph::Rendergraph_node_key::shadow_maps);
-    register_output("depth_visualization", erhe::rendergraph::Rendergraph_node_key::depth_visualization);
+    register_input("shadow_maps", erhe::rendergraph::Rendergraph_node_key::shadow_maps);
 }
 
 // Implements erhe::rendergraph::Rendergraph_node
@@ -69,7 +66,7 @@ void Depth_to_color_rendergraph_node::execute_rendergraph_node()
 {
     SPDLOG_LOGGER_TRACE(log_render, "Depth_to_color_rendergraph_node::execute_rendergraph_node()");
 
-    if (!m_render_pass) {
+    if (m_render_target.get_render_pass() == nullptr) {
         // Likely because output ImGui window has no viewport size yet.
         return;
     }
@@ -116,11 +113,12 @@ void Depth_to_color_rendergraph_node::execute_rendergraph_node()
 
     erhe::graphics::Scoped_debug_group pass_scope{"Depth_to_color_rendergraph_node::execute_rendergraph_node()"};
 
+    erhe::graphics::Render_pass* render_pass = m_render_target.get_render_pass();
     erhe::math::Viewport viewport{
         .x      = 0,
         .y      = 0,
-        .width  = m_render_pass->get_render_target_width(),
-        .height = m_render_pass->get_render_target_height()
+        .width  = render_pass->get_render_target_width(),
+        .height = render_pass->get_render_target_height()
     };
     ERHE_VERIFY(viewport.width >= 0);
     ERHE_VERIFY(viewport.height >= 0);
@@ -132,7 +130,7 @@ void Depth_to_color_rendergraph_node::execute_rendergraph_node()
 
     erhe::graphics::Device& graphics_device = m_rendergraph.get_graphics_device();
     erhe::graphics::Render_command_encoder render_encoder = graphics_device.make_render_command_encoder();
-    erhe::graphics::Scoped_render_pass scoped_render_pass{*m_render_pass.get()};
+    erhe::graphics::Scoped_render_pass scoped_render_pass{*render_pass};
 
     const auto& light_projection_transforms = light_projections.light_projection_transforms.at(m_light_index);
     const auto& layers = scene_root->layers();
@@ -245,23 +243,10 @@ void Depth_visualization_window::imgui()
         }
     }
 
-    const auto* input = m_depth_to_color_node->get_input(erhe::rendergraph::Rendergraph_node_key::shadow_maps);
-    if (input == nullptr) {
-        log_render->error("Depth_visualization_window has no input pin registered.");
-        return;
-    }
-
-    if (input->producer_nodes.empty()) {
-        log_render->error("Depth_visualization_window input producer is not connected.");
-        return;
-    }
-
-    // TODO add safety?
     auto* shadow_render_node = static_cast<Shadow_render_node*>(
         m_depth_to_color_node->get_consumer_input_node(erhe::rendergraph::Rendergraph_node_key::shadow_maps)
     );
     if (shadow_render_node == nullptr) {
-        log_render->error("Depth_visualization_window input producer is expired or not set.");
         return;
     }
 
@@ -300,7 +285,7 @@ void Depth_visualization_window::imgui()
     if (area_size <= 0) {
         return; // Not visible
     }
-    m_depth_to_color_node->update_render_pass(area_size, area_size, nullptr);
+    m_depth_to_color_node->get_render_target().update(area_size, area_size, nullptr);
 
     if (!texture) {
         log_render->warn("Depth_visualization_window has no input render graph node");

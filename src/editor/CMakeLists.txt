@@ -204,8 +204,6 @@ erhe_target_sources_grouped(
     renderers/render_style.hpp
     renderers/viewport_config.cpp
     renderers/viewport_config.hpp
-    rendergraph/basic_scene_view_node.cpp
-    rendergraph/basic_scene_view_node.hpp
     rendergraph/post_processing.cpp
     rendergraph/post_processing.hpp
     rendergraph/shadow_render_node.cpp

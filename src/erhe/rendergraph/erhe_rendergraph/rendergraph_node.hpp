@@ -2,7 +2,7 @@
 
 #include "erhe_graphics/texture.hpp"
 #include "erhe_rendergraph/resource_routing.hpp"
-#include "erhe_item/item.hpp"
+#include "erhe_graph/node.hpp"
 #include "erhe_math/viewport.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_utility/debug_label.hpp"
@@ -25,88 +25,46 @@ namespace erhe::rendergraph {
 class Rendergraph;
 class Rendergraph_node;
 
-class Rendergraph_id
-{
-public:
-    Unique_id<Rendergraph_id> id{};
-};
-
-class Rendergraph_producer_connector : public Rendergraph_id
-{
-public:
-    Rendergraph_producer_connector(erhe::utility::Debug_label label, int key)
-        : label{label}
-        , key  {key}
-    {
-    }
-
-    erhe::utility::Debug_label     label           {};
-    int                            key             {0};
-    std::vector<Rendergraph_node*> consumer_nodes  {};
-};
-
-class Rendergraph_consumer_connector : public Rendergraph_id
-{
-public:
-    Rendergraph_consumer_connector(erhe::utility::Debug_label label, int key)
-        : label{label}
-        , key  {key}
-    {
-    }
-
-    erhe::utility::Debug_label     label         {};
-    int                            key           {0};
-    std::vector<Rendergraph_node*> producer_nodes{};
-};
-
 constexpr int rendergraph_max_depth = 10;
 
 // Node for rendergraph
 //
-// Rendergraph nodes have inputs and outputs (often both, but at least either input(s) or output(s).
-// Rendergraph nodes have named input and output slots.
-// Rendergraph nodes must have their inputs and outputs connected to other rendergraph nodes.
-class Rendergraph_node 
-    : public erhe::Item<erhe::Item_base, erhe::Item_base, Rendergraph_node, erhe::Item_kind::not_clonable>
+// Inherits from erhe::graph::Node to participate directly in
+// erhe::graph topological sort and pin/link connectivity.
+class Rendergraph_node
+    : public erhe::graph::Node
     , public erhe::graphics::Texture_reference
 {
 public:
     Rendergraph_node(Rendergraph& rendergraph, erhe::utility::Debug_label name);
-    virtual ~Rendergraph_node() noexcept;
+    ~Rendergraph_node() noexcept override;
 
-    // Implements Item_base
+    // Overrides Item virtuals from erhe::graph::Node
     static constexpr std::string_view static_type_name{"Rendergraph_node"};
-    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::texture; }
+    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::rendergraph_node; }
+    auto get_type     () const -> uint64_t                        override { return get_static_type(); }
+    auto get_type_name() const -> std::string_view                override { return static_type_name; }
+    auto clone        () const -> std::shared_ptr<erhe::Item_base> override { return {}; }
 
     // Implements Texture_reference
     auto get_referenced_texture() const -> const erhe::graphics::Texture* override;
 
-    [[nodiscard]] auto get_rendergraph() -> Rendergraph&;
-    [[nodiscard]] auto get_rendergraph() const -> const Rendergraph&;
-    [[nodiscard]] auto get_debug_label() const -> erhe::utility::Debug_label;
-    [[nodiscard]] auto get_inputs     () const -> const std::vector<Rendergraph_consumer_connector>&;
-    [[nodiscard]] auto get_inputs     ()       ->       std::vector<Rendergraph_consumer_connector>&;
-    [[nodiscard]] auto get_outputs    () const -> const std::vector<Rendergraph_producer_connector>&;
-    [[nodiscard]] auto get_outputs    ()       ->       std::vector<Rendergraph_producer_connector>&;
-    [[nodiscard]] auto get_size       () const -> std::optional<glm::vec2>;
-    [[nodiscard]] auto is_enabled     () const -> bool;
+    [[nodiscard]] auto get_rendergraph () -> Rendergraph&;
+    [[nodiscard]] auto get_rendergraph () const -> const Rendergraph&;
+    [[nodiscard]] auto get_debug_label () const -> erhe::utility::Debug_label;
+    [[nodiscard]] auto get_size        () const -> std::optional<glm::vec2>;
+    [[nodiscard]] auto is_enabled      () const -> bool;
 
-    [[nodiscard]] auto get_input   (int key, int depth = 0) const -> const Rendergraph_consumer_connector*;
-    [[nodiscard]] auto get_output  (int key, int depth = 0) const -> const Rendergraph_producer_connector*;
     [[nodiscard]] auto get_depth   () const -> int;
     [[nodiscard]] auto get_position() const -> glm::vec2;
     [[nodiscard]] auto get_selected() const -> bool;
 
     void set_depth        (int depth);
     void set_position     (glm::vec2 position);
-    void set_selected     (bool selected); // TODO XXX FIX
+    void set_selected     (bool selected);
     void set_enabled      (bool value);
-    auto register_input   (erhe::utility::Debug_label, int key) -> bool;
-    auto register_output  (erhe::utility::Debug_label, int key) -> bool;
-    auto connect_input    (int key, Rendergraph_node* producer_node) -> bool;
-    auto connect_output   (int key, Rendergraph_node* consumer_node) -> bool;
-    auto disconnect_input (int key, Rendergraph_node* producer_node) -> bool;
-    auto disconnect_output(int key, Rendergraph_node* consumer_node) -> bool;
+    auto register_input   (erhe::utility::Debug_label label, int key) -> bool;
+    auto register_output  (erhe::utility::Debug_label label, int key) -> bool;
 
     virtual void execute_rendergraph_node() = 0;
 
@@ -120,12 +78,13 @@ protected:
     virtual auto inputs_allowed () const -> bool;
     virtual auto outputs_allowed() const -> bool;
 
+    friend class Rendergraph;
+
     Rendergraph&                                m_rendergraph;
     ERHE_PROFILE_MUTEX(std::mutex,              m_mutex);
     erhe::utility::Debug_label                  m_debug_label;
+    bool                                        m_is_registered{false};
     bool                                        m_enabled {true};
-    std::vector<Rendergraph_consumer_connector> m_inputs;
-    std::vector<Rendergraph_producer_connector> m_outputs;
     int                                         m_depth   {0};
 
     // For GUI

@@ -6,8 +6,6 @@ Editor-specific render graph nodes that extend `erhe::rendergraph` for shadow ma
 
 ## Key Types
 
-- **`Basic_scene_view_node`** -- A `Sink_rendergraph_node` that connects a `Viewport_scene_view` to an output (e.g., an ImGui window). Provides viewport bounds and hovered state.
-
 - **`Shadow_render_node`** -- Rendergraph node that renders shadow maps for a `Scene_view`. Owns a depth texture and `Light_projections`. Called during rendergraph execution to render shadow passes via `erhe::scene_renderer::Shadow_renderer`. Can be reconfigured at runtime (resolution, light count, depth bits).
 
 - **`Post_processing`** -- Manages the post-processing pipeline (bloom with downsample/upsample passes and tonemapping). Creates shader programs and render pipeline states. Factory method `create_node()` creates `Post_processing_node` instances.

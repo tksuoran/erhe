@@ -939,7 +939,15 @@ void Imgui_renderer::render_draw_data(erhe::graphics::Render_command_encoder& re
 
     ERHE_PROFILE_FUNCTION();
 
-    ERHE_DEFER( m_draw_texture_references.clear(); );
+    // Move texture references to the retained set instead of clearing them.
+    // Multiple ImGui hosts share m_draw_texture_references but render_draw_data()
+    // is called per-host. The retained set keeps references alive until the next
+    // frame's first render_draw_data() replaces them.
+    ERHE_DEFER(
+        if (!m_draw_texture_references.empty()) {
+            m_retained_texture_references = std::move(m_draw_texture_references);
+        }
+    );
 
     const ImDrawData* draw_data = ImGui::GetDrawData();
     if (draw_data == nullptr) {
