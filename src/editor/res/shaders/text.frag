@@ -2,17 +2,17 @@ layout(location = 0) in vec2 v_texcoord;
 layout(location = 1) in vec4 v_color;
 
 #if defined(ERHE_HAS_ARB_BINDLESS_TEXTURE)
-layout(location = 2) in flat uvec2 v_texture;
+layout(location = 2) flat in uvec2 v_texture;
 #endif
 
-// layout(location =  3) in flat uint  v_vertex_id;
-// layout(location =  4) in flat uint  v_glyph_index;
-// layout(location =  5) in flat uint  v_quad_corner;
-// layout(location =  6) in flat uint  v_vertex_index;
-// layout(location =  7) in flat uvec4 v_data;
-// layout(location =  8) in flat int   v_x;
-// layout(location =  9) in flat int   v_y;
-// layout(location = 10) in flat vec2  v_zw;
+// layout(location =  3) flat in uint  v_vertex_id;
+// layout(location =  4) flat in uint  v_glyph_index;
+// layout(location =  5) flat in uint  v_quad_corner;
+// layout(location =  6) flat in uint  v_vertex_index;
+// layout(location =  7) flat in uvec4 v_data;
+// layout(location =  8) flat in int   v_x;
+// layout(location =  9) flat in int   v_y;
+// layout(location = 10) flat in vec2  v_zw;
 
 void main(void)
 {

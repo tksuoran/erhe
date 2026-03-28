@@ -1,16 +1,8 @@
 layout(location = 0) out vec2 v_texcoord;
 layout(location = 1) out vec4 v_color;
 #if defined(ERHE_HAS_ARB_BINDLESS_TEXTURE)
-layout(location = 2) out flat uvec2 v_texture;
+layout(location = 2) flat out uvec2 v_texture;
 #endif
-// layout(location =  3) out flat uint  v_vertex_id;
-// layout(location =  4) out flat uint  v_glyph_index;
-// layout(location =  5) out flat uint  v_quad_corner;
-// layout(location =  6) out flat uint  v_vertex_index;
-// layout(location =  7) out flat uvec4 v_data;
-// layout(location =  8) out flat int   v_x;
-// layout(location =  9) out flat int   v_y;
-// layout(location = 10) out flat vec2  v_zw;
 
 void main()
 {
@@ -24,7 +16,13 @@ void main()
     uint  glyph_index  = gl_VertexID / 6;
     uint  quad_corner  = indices[gl_VertexID % 6];
     uint  vertex_index = glyph_index * 4 + quad_corner;
+
+#if defined(ERHE_VERTEX_DATA_TEXTURE_BUFFER)
+    uvec4 packed_data  = texelFetch(s_vertex_data, int(vertex_index) + int(projection.vertex_data_offset));
+#else
     uvec4 packed_data  = vertex_ssbo.data[vertex_index];
+#endif
+
     int x = int( packed_data[0]        & 0xffffu);
     int y = int((packed_data[0] >> 16) & 0xffffu);
     if (x >= 0x8000) x -= 0x10000;
@@ -38,15 +36,6 @@ void main()
 #if defined(ERHE_HAS_ARB_BINDLESS_TEXTURE)
     v_texture  = projection.texture;
 #endif
-
-    // v_vertex_id     = gl_VertexID;
-    // v_glyph_index   = glyph_index;
-    // v_quad_corner   = quad_corner;
-    // v_vertex_index  = vertex_index;
-    // v_data = packed;
-    // v_x  = x;
-    // v_y  = y;
-    // v_zw = zw;
 
 }
 

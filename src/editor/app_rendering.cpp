@@ -8,6 +8,7 @@
 #include "renderable.hpp"
 #include "renderers/composer.hpp"
 #include "renderers/id_renderer.hpp"
+#include "erhe_renderer/text_renderer.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "renderers/programs.hpp"
 #include "renderers/render_context.hpp"
@@ -360,6 +361,9 @@ void App_rendering::handle_graphics_settings_changed(Graphics_preset* graphics_p
         m_pipeline_passes.rebuild_depth_state(reverse_depth);
         m_context.id_renderer->rebuild_depth_state(reverse_depth);
         m_context.tools->rebuild_depth_state(reverse_depth);
+        if (m_context.text_renderer != nullptr) {
+            m_context.text_renderer->rebuild_depth_state(reverse_depth);
+        }
     }
 }
 

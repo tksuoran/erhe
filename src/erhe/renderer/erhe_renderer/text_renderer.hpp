@@ -6,6 +6,7 @@
 #include "erhe_graphics/ring_buffer_client.hpp"
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_graphics/shader_resource.hpp"
+#include "erhe_graphics/texture.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_ui/rectangle.hpp"
@@ -57,6 +58,7 @@ public:
     [[nodiscard]] auto measure  (std::string_view text) const -> erhe::ui::Rectangle;
 
     void render(erhe::graphics::Render_command_encoder& encoder, erhe::math::Viewport viewport);
+    void rebuild_depth_state(bool reverse_depth);
 
 private:
     auto build_shader_stages() -> erhe::graphics::Shader_stages_prototype;
@@ -77,13 +79,17 @@ private:
     erhe::graphics::Shader_resource        m_vertex_ssbo_block;
     erhe::graphics::Shader_resource*       m_clip_from_window_resource;
     erhe::graphics::Shader_resource*       m_texture_resource;
+    erhe::graphics::Shader_resource*       m_vertex_data_offset_resource;
     erhe::graphics::Shader_resource*       m_vertex_data_resource;
-    std::size_t                            m_u_clip_from_window_size  {0};
-    std::size_t                            m_u_clip_from_window_offset{0};
-    std::size_t                            m_u_texture_size           {0};
-    std::size_t                            m_u_texture_offset         {0};
-    std::size_t                            m_u_vertex_data_size       {0};
-    std::size_t                            m_u_vertex_data_offset     {0};
+    std::size_t                            m_u_clip_from_window_size        {0};
+    std::size_t                            m_u_clip_from_window_offset      {0};
+    std::size_t                            m_u_texture_size                 {0};
+    std::size_t                            m_u_texture_offset               {0};
+    std::size_t                            m_u_vertex_data_offset_size      {0};
+    std::size_t                            m_u_vertex_data_offset_offset    {0};
+    std::size_t                            m_u_vertex_data_size             {0};
+    std::size_t                            m_u_vertex_data_offset           {0};
+    bool                                   m_use_buffer_texture             {false};
     erhe::graphics::Fragment_outputs       m_fragment_outputs;
     erhe::graphics::Sampler                m_nearest_sampler;
     erhe::graphics::Shader_stages          m_shader_stages;
@@ -95,6 +101,8 @@ private:
 
     std::vector<erhe::graphics::Ring_buffer_range> m_vertex_buffer_ranges;
     std::unique_ptr<erhe::graphics::Texture_heap>  m_texture_heap;
+    std::shared_ptr<erhe::graphics::Texture>       m_vertex_buffer_texture;
+    erhe::graphics::Buffer*                        m_last_vertex_buffer{nullptr};
 };
 
 } // namespace erhe::renderer
