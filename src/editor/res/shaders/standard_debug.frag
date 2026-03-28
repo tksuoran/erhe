@@ -10,11 +10,11 @@ layout(location =  3) in vec2       v_aniso_control;
 layout(location =  4) in vec3       v_T;
 layout(location =  5) in vec3       v_B;
 layout(location =  6) in vec3       v_N;
-layout(location =  7) in flat uint  v_material_index;
+layout(location =  7) flat in uint  v_material_index;
 layout(location =  8) in float      v_tangent_scale;
 layout(location =  9) in float      v_line_width;
 layout(location = 10) in vec4       v_bone_color;
-layout(location = 11) in flat uvec2 v_valency_edge_count;
+layout(location = 11) flat in uvec2 v_valency_edge_count;
 
 const vec3 palette[24] = vec3[24](
     vec3(0.0, 0.0, 0.0), //  0

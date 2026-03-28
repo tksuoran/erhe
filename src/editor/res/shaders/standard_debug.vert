@@ -7,11 +7,11 @@ layout(location =  3) out vec2       v_aniso_control;
 layout(location =  4) out vec3       v_T;
 layout(location =  5) out vec3       v_B;
 layout(location =  6) out vec3       v_N;
-layout(location =  7) out flat uint  v_material_index;
+layout(location =  7) flat out uint  v_material_index;
 layout(location =  8) out float      v_tangent_scale;
 layout(location =  9) out float      v_line_width;
 layout(location = 10) out vec4       v_bone_color;
-layout(location = 11) out flat uvec2 v_valency_edge_count;
+layout(location = 11) flat out uvec2 v_valency_edge_count;
 
 void main() {
     mat4 world_from_node;

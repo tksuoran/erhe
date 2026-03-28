@@ -5,7 +5,7 @@ layout(location = 3) out vec2      v_aniso_control;
 layout(location = 4) out vec3      v_T;
 layout(location = 5) out vec3      v_B;
 layout(location = 6) out vec3      v_N;
-layout(location = 7) out flat uint v_material_index;
+layout(location = 7) flat out uint v_material_index;
 
 void main()
 {

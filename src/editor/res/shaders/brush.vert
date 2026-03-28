@@ -2,7 +2,7 @@
  layout(location = 1) out vec4      v_position;
  layout(location = 2) out vec4      v_color;
  layout(location = 3) out mat3      v_TBN;
- layout(location = 6) out flat uint v_material_index;
+ layout(location = 6) flat out uint v_material_index;
  layout(location = 7) out float     v_tangent_scale;
 
 void main()

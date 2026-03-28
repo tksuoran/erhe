@@ -1,6 +1,6 @@
 #define a_id a_custom_0
 
-layout(location = 0) out flat int v_draw_id;
+layout(location = 0) flat out int v_draw_id;
 
 vec3 vec3_from_uint(uint i)
 {

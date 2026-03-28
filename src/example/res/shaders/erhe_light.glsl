@@ -2,7 +2,14 @@
 #define ERHE_LIGHT_GLSL
 
 #include "erhe_texture.glsl"
-//#extension GL_ARB_derivative_control : enable
+
+#if __VERSION__ >= 450
+#   define ERHE_DFDX dFdxFine
+#   define ERHE_DFDY dFdyFine
+#else
+#   define ERHE_DFDX dFdx
+#   define ERHE_DFDY dFdy
+#endif
 
 float get_range_attenuation(float range, float distance) {
     if (range <= 0.0) {
@@ -54,9 +61,9 @@ float sample_light_visibility(vec4 position, uint light_index, float N_dot_L) {
     float cdd = camera.cameras[0].clip_depth_direction; // -1.0 reverse Z, 1.0 forward Z
 
     // First, a common part:
-    vec2  dU_dXY = vec2(dFdxFine(position_in_light_texture.x), dFdyFine(position_in_light_texture.x));
-    vec2  dV_dXY = vec2(dFdxFine(position_in_light_texture.y), dFdyFine(position_in_light_texture.y));
-    vec2  dz_dXY = vec2(dFdxFine(position_in_light_texture.z), dFdyFine(position_in_light_texture.z));
+    vec2  dU_dXY = vec2(ERHE_DFDX(position_in_light_texture.x), ERHE_DFDY(position_in_light_texture.x));
+    vec2  dV_dXY = vec2(ERHE_DFDX(position_in_light_texture.y), ERHE_DFDY(position_in_light_texture.y));
+    vec2  dz_dXY = vec2(ERHE_DFDX(position_in_light_texture.z), ERHE_DFDY(position_in_light_texture.z));
     float detJ   = dU_dXY.x * dV_dXY.y - dV_dXY.x * dU_dXY.y;
     vec2  dz_dUV = vec2(0.0);
     if (detJ != 0.0) {

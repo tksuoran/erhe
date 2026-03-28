@@ -4,7 +4,7 @@ layout(location = 0) in vec2      v_texcoord;
 layout(location = 1) in vec4      v_position;
 layout(location = 2) in vec4      v_color;
 layout(location = 3) in mat3      v_TBN;
-layout(location = 6) in flat uint v_material_index;
+layout(location = 6) flat in uint v_material_index;
 layout(location = 7) in float     v_tangent_scale;
 
 void main() {
