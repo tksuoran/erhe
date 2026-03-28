@@ -17,7 +17,14 @@
 namespace erhe::scene_renderer {
 
 Material_interface::Material_interface(erhe::graphics::Device& graphics_device, const int max_material_count)
-    : material_block {graphics_device, "material", material_buffer_binding_point, erhe::graphics::Shader_resource::Type::shader_storage_block}
+    : material_block{
+        graphics_device,
+        "material",
+        material_buffer_binding_point,
+        graphics_device.get_info().use_shader_storage_buffers
+            ? erhe::graphics::Shader_resource::Type::shader_storage_block
+            : erhe::graphics::Shader_resource::Type::uniform_block
+    }
     , material_struct{graphics_device, "Material"}
     , offsets        {
         .roughness                  = material_struct.add_vec2 ("roughness"                 )->get_offset_in_parent(),
@@ -53,14 +60,17 @@ Material_interface::Material_interface(erhe::graphics::Device& graphics_device, 
     }
     , max_material_count{static_cast<std::size_t>(max_material_count)}
 {
-    material_block.add_struct("materials", &material_struct, erhe::graphics::Shader_resource::unsized_array);
+    const std::optional<std::size_t> array_size = graphics_device.get_info().use_shader_storage_buffers
+        ? erhe::graphics::Shader_resource::unsized_array
+        : std::optional<std::size_t>{static_cast<std::size_t>(graphics_device.get_info().max_uniform_block_size) / material_struct.get_size_bytes()};
+    material_block.add_struct("materials", &material_struct, array_size);
     material_block.set_readonly(true);
 }
 
 Material_buffer::Material_buffer(erhe::graphics::Device& graphics_device, Material_interface& material_interface)
     : Ring_buffer_client{
         graphics_device,
-        erhe::graphics::Buffer_target::storage,
+        material_interface.material_block.get_binding_target(),
         "Material_buffer",
         material_interface.material_block.get_binding_point()
     }
