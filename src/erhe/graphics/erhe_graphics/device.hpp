@@ -150,6 +150,8 @@ public:
     unsigned int uniform_buffer_offset_alignment       {256};
 };
 
+using Shader_error_callback = std::function<void(const std::string& error_log, const std::string& shader_source)>;
+
 class Frame_state;
 class Frame_begin_info;
 class Frame_end_info;
@@ -193,9 +195,12 @@ public:
     [[nodiscard]] auto get_info                           () const -> const Device_info&;
     [[nodiscard]] auto get_impl                           () -> Device_impl&;
     [[nodiscard]] auto get_impl                           () const -> const Device_impl&;
+    void               set_shader_error_callback         (Shader_error_callback callback);
+    void               shader_error                      (const std::string& error_log, const std::string& shader_source);
 
 private:
     std::unique_ptr<Device_impl> m_impl;
+    Shader_error_callback        m_shader_error_callback;
 };
 
 [[nodiscard]] auto get_depth_clear_value_pointer(bool reverse_depth = true) -> const float *; // reverse_depth ? 0.0f : 1.0f;

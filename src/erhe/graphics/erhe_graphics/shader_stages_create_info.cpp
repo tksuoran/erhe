@@ -65,7 +65,6 @@ auto Shader_stages_create_info::attributes_source() const -> std::string
         }
         for (const auto& attribute : vertex_input.attributes) {
             sb << "#define ERHE_ATTRIBUTE_" << attribute.name << " 1\n";
-            sb << ";\n";
         }
         sb << "\n";
     }
@@ -178,7 +177,7 @@ auto Shader_stages_create_info::final_source(
     sb << "#define ERHE_GLSL_VERSION " << graphics_device.get_info().glsl_version << "\n";
 
 #if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
-    if (graphics_device.get_info().gl_version < 430) {
+    if (graphics_device.get_info().use_shader_storage_buffers && (graphics_device.get_info().gl_version < 430)) {
         ERHE_VERIFY(gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shader_storage_buffer_object));
         sb << "#extension GL_ARB_shader_storage_buffer_object : enable\n";
         sb << "#define ERHE_HAS_ARB_SHADER_STORAGE_BUFFER_OBJECT 1\n";

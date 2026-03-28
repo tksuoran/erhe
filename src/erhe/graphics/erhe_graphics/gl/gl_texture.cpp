@@ -271,7 +271,8 @@ void convert_texture_dimensions_to_gl(const gl::Texture_target target, int& widt
     switch (target) {
         //using enum gl::Texture_target;
         case gl::Texture_target::texture_buffer: {
-            ERHE_VERIFY(width == 0);
+            ERHE_VERIFY(width == 
+                0);
             ERHE_VERIFY(height == 0);
             ERHE_VERIFY(depth == 0);
             ERHE_VERIFY(array_layer_count == 0);
@@ -844,9 +845,10 @@ Texture_impl::Texture_impl(Device& device, const Texture_create_info& create_inf
         if (use_dsa) {
             switch (dimensions) {
                 case 0: {
-                    ERHE_VERIFY(m_buffer != nullptr);
                     ERHE_VERIFY(m_sample_count == 0);
-                    gl::texture_buffer(gl_name(), internal_format, m_buffer->get_impl().gl_name());
+                    if (m_buffer != nullptr) {
+                        gl::texture_buffer(gl_name(), internal_format, m_buffer->get_impl().gl_name());
+                    }
                     break;
                 }
                 case 1: {
@@ -877,9 +879,10 @@ Texture_impl::Texture_impl(Device& device, const Texture_create_info& create_inf
         } else {
             switch (dimensions) {
                 case 0: {
-                    ERHE_VERIFY(m_buffer != nullptr);
                     ERHE_VERIFY(m_sample_count == 0);
-                    gl::tex_buffer(gl_texture_target, internal_format, m_buffer->get_impl().gl_name());
+                    if (m_buffer != nullptr) {
+                        gl::tex_buffer(gl_texture_target, internal_format, m_buffer->get_impl().gl_name());
+                    }
                     break;
                 }
                 case 1: {
@@ -955,6 +958,27 @@ void Texture_impl::clear()
     std::array<uint64_t, 4> zero_data = { 0, 0, 0, 0};
     if (ok) {
         gl::clear_tex_image(gl_name(), 0, gl_format, gl_type, zero_data.data());
+    }
+}
+
+void Texture_impl::set_buffer(Buffer& buffer)
+{
+    ERHE_VERIFY(m_type == Texture_type::texture_buffer);
+    m_buffer = &buffer;
+    std::optional<gl::Internal_format> internal_format_opt = gl_helpers::convert_to_gl(m_pixelformat);
+    ERHE_VERIFY(internal_format_opt.has_value());
+    const gl::Internal_format internal_format = internal_format_opt.value();
+    const auto gl_texture_target = get_gl_texture_target();
+    const bool use_dsa = m_device.get_info().use_direct_state_access;
+    if (use_dsa) {
+        gl::texture_buffer(gl_name(), internal_format, m_buffer->get_impl().gl_name());
+    } else {
+        auto guard = m_device.get_impl().get_binding_state().push_texture(
+            31, // scratch texture unit
+            gl_texture_target,
+            gl_name()
+        );
+        gl::tex_buffer(gl_texture_target, internal_format, m_buffer->get_impl().gl_name());
     }
 }
 

@@ -1,8 +1,11 @@
 #include "erhe_renderer/text_renderer.hpp"
 #include "erhe_renderer/renderer_log.hpp"
 
+#include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
+#include "erhe_graphics/ring_buffer.hpp"
+#include "erhe_graphics/ring_buffer_range.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_graphics/span.hpp"
@@ -26,7 +29,9 @@ auto Text_renderer::build_shader_stages() -> erhe::graphics::Shader_stages_proto
     const std::filesystem::path fs_path = shader_path / std::filesystem::path("text.frag");
     Shader_stages_create_info create_info{
         .name             = "text",
-        .interface_blocks = { &m_projection_block, &m_vertex_ssbo_block },
+        .interface_blocks = m_use_buffer_texture
+            ? std::vector<const Shader_resource*>{ &m_projection_block }
+            : std::vector<const Shader_resource*>{ &m_projection_block, &m_vertex_ssbo_block },
         .fragment_outputs = &m_fragment_outputs,
         .vertex_format    = nullptr,
         .shaders = {
@@ -35,8 +40,15 @@ auto Text_renderer::build_shader_stages() -> erhe::graphics::Shader_stages_proto
         }
     };
 
+    if (m_use_buffer_texture) {
+        create_info.defines.emplace_back("ERHE_VERTEX_DATA_TEXTURE_BUFFER", "1");
+    }
+
     if (!m_graphics_device.get_info().use_bindless_texture) {
         m_default_uniform_block.add_sampler("s_texture", erhe::graphics::Glsl_type::sampler_2d, 0);
+        if (m_use_buffer_texture) {
+            m_default_uniform_block.add_sampler("s_vertex_data", erhe::graphics::Glsl_type::unsigned_int_sampler_buffer, 1);
+        }
         create_info.default_uniform_block = &m_default_uniform_block;
     }
 
@@ -53,14 +65,32 @@ Text_renderer::Text_renderer(erhe::graphics::Device& graphics_device, const bool
     : m_graphics_device          {graphics_device}
     , m_default_uniform_block    {graphics_device}
     , m_projection_block         {graphics_device, "projection", 0, erhe::graphics::Shader_resource::Type::uniform_block}
-    , m_vertex_ssbo_block        {graphics_device, "vertex_ssbo", 1, erhe::graphics::Shader_resource::Type::shader_storage_block}
+    , m_vertex_ssbo_block{
+        graphics_device,
+        "vertex_ssbo",
+        1,
+        graphics_device.get_info().use_shader_storage_buffers
+            ? erhe::graphics::Shader_resource::Type::shader_storage_block
+            : erhe::graphics::Shader_resource::Type::uniform_block
+    }
     , m_clip_from_window_resource{m_projection_block.add_mat4 ("clip_from_window")}
     , m_texture_resource         {m_projection_block.add_uvec2("texture")}
-    , m_vertex_data_resource     {m_vertex_ssbo_block.add_uvec4("data", erhe::graphics::Shader_resource::unsized_array)} // x,y | z,w | color | u,v
-    , m_u_clip_from_window_size  {m_clip_from_window_resource->get_size_bytes()}
-    , m_u_clip_from_window_offset{m_clip_from_window_resource->get_offset_in_parent()}
-    , m_u_texture_size           {m_texture_resource         ->get_size_bytes()}
-    , m_u_texture_offset         {m_texture_resource         ->get_offset_in_parent()}
+    , m_vertex_data_offset_resource{m_projection_block.add_uint("vertex_data_offset")}
+    , m_vertex_data_resource{
+        m_vertex_ssbo_block.add_uvec4(
+            "data",
+            graphics_device.get_info().use_shader_storage_buffers
+                ? erhe::graphics::Shader_resource::unsized_array
+                : std::optional<std::size_t>{static_cast<std::size_t>(graphics_device.get_info().max_uniform_block_size) / sizeof(glm::uvec4)}
+        )
+    } // x,y | z,w | color | u,v
+    , m_u_clip_from_window_size        {m_clip_from_window_resource    ->get_size_bytes()}
+    , m_u_clip_from_window_offset      {m_clip_from_window_resource    ->get_offset_in_parent()}
+    , m_u_texture_size                 {m_texture_resource             ->get_size_bytes()}
+    , m_u_texture_offset               {m_texture_resource             ->get_offset_in_parent()}
+    , m_u_vertex_data_offset_size      {m_vertex_data_offset_resource  ->get_size_bytes()}
+    , m_u_vertex_data_offset_offset    {m_vertex_data_offset_resource  ->get_offset_in_parent()}
+    , m_use_buffer_texture             {!graphics_device.get_info().use_shader_storage_buffers}
     , m_u_vertex_data_size       {m_vertex_data_resource     ->get_size_bytes()}
     , m_u_vertex_data_offset     {m_vertex_data_resource     ->get_offset_in_parent()}
     , m_fragment_outputs{
@@ -82,7 +112,7 @@ Text_renderer::Text_renderer(erhe::graphics::Device& graphics_device, const bool
     , m_shader_stages     {graphics_device, build_shader_stages()}
     , m_vertex_ssbo_buffer{
         graphics_device,
-        erhe::graphics::Buffer_target::storage,
+        m_vertex_ssbo_block.get_binding_target(),
         "Text_renderer::m_vertex_buffer",
         m_vertex_ssbo_block.get_binding_point()
     }
@@ -123,17 +153,31 @@ Text_renderer::Text_renderer(erhe::graphics::Device& graphics_device, const bool
         0.0f // TODO reimplement outline better 1.0f
     );
 
+    if (m_use_buffer_texture) {
+        erhe::graphics::Texture_create_info buffer_tex_create_info{
+            .device       = m_graphics_device,
+            .usage_mask   = erhe::graphics::Image_usage_flag_bit_mask::sampled,
+            .type         = erhe::graphics::Texture_type::texture_buffer,
+            .pixelformat  = erhe::dataformat::Format::format_32_vec4_uint,
+            .sample_count = 0,
+            .width        = 0,
+            .height       = 0,
+            .depth        = 0,
+            .debug_label  = erhe::utility::Debug_label{"Text_renderer vertex buffer texture"}
+        };
+        m_vertex_buffer_texture = std::make_shared<erhe::graphics::Texture>(m_graphics_device, buffer_tex_create_info);
+        log_startup->info("Text renderer: using buffer texture for vertex data");
+    }
+
     m_texture_heap = std::make_unique<erhe::graphics::Texture_heap>(
         m_graphics_device,
         *m_font->texture(),
         m_nearest_sampler,
-        0
+        m_use_buffer_texture ? 2u : 0u // slots 0,1 reserved: font at unit 0, buffer texture at unit 1
     );
 }
 
-Text_renderer::~Text_renderer() noexcept
-{
-}
+Text_renderer::~Text_renderer() noexcept = default;
 
 void Text_renderer::print(const glm::vec3 text_position, const uint32_t text_color, const std::string_view text)
 {
@@ -215,25 +259,21 @@ void Text_renderer::render(erhe::graphics::Render_command_encoder& encoder, erhe
 
     m_texture_heap->reset_heap();
 
-    erhe::graphics::Ring_buffer_range projection_buffer_range = m_projection_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, m_projection_block.get_size_bytes());
-    {
-        const std::span<std::byte> gpu_data = projection_buffer_range.get_span();
-        const glm::mat4 clip_from_window = erhe::math::create_orthographic(
-            static_cast<float>(viewport.x), static_cast<float>(viewport.width),
-            static_cast<float>(viewport.y), static_cast<float>(viewport.height),
-            0.0f,
-            1.0f
-        );
+    const glm::mat4 clip_from_window = erhe::math::create_orthographic(
+        static_cast<float>(viewport.x), static_cast<float>(viewport.width),
+        static_cast<float>(viewport.y), static_cast<float>(viewport.height),
+        0.0f,
+        1.0f
+    );
 
-        const uint64_t shader_handle = m_texture_heap->allocate(m_font->texture(), &m_nearest_sampler);
-
-        using erhe::graphics::as_span;
-        using erhe::graphics::write;
-        write(gpu_data, m_u_clip_from_window_offset, as_span(clip_from_window));
-        write(gpu_data, m_u_texture_offset,          as_span(shader_handle));
-        projection_buffer_range.bytes_written(m_projection_block.get_size_bytes());
-        projection_buffer_range.close();
-        m_projection_buffer.bind(encoder, projection_buffer_range);
+    // When using buffer texture: assign font to slot 0 (unit 0 = s_texture),
+    // buffer texture to slot 1 (unit 1 = s_vertex_data).
+    // Otherwise: allocate font texture normally.
+    const uint64_t shader_handle = m_use_buffer_texture
+        ? m_texture_heap->assign(0, m_font->texture(), &m_nearest_sampler)
+        : m_texture_heap->allocate(m_font->texture(), &m_nearest_sampler);
+    if (m_use_buffer_texture) {
+        m_texture_heap->assign(1, m_vertex_buffer_texture.get(), &m_nearest_sampler);
     }
 
     encoder.set_viewport_rect(viewport.x, viewport.y, viewport.width, viewport.height);
@@ -249,7 +289,41 @@ void Text_renderer::render(erhe::graphics::Render_command_encoder& encoder, erhe
         const std::size_t byte_count = vertex_buffer_range.get_written_byte_count();
         const std::size_t quad_count = byte_count / bytes_per_quad;
 
-        m_vertex_ssbo_buffer.bind(encoder, vertex_buffer_range);
+        // Write projection UBO per draw (vertex_data_offset differs per range)
+        const uint32_t vertex_data_offset = m_use_buffer_texture
+            ? static_cast<uint32_t>(vertex_buffer_range.get_byte_start_offset_in_buffer() / sizeof(glm::uvec4))
+            : 0u;
+        {
+            using erhe::graphics::as_span;
+            using erhe::graphics::write;
+            erhe::graphics::Ring_buffer_range projection_buffer_range = m_projection_buffer.acquire(
+                erhe::graphics::Ring_buffer_usage::CPU_write,
+                m_projection_block.get_size_bytes()
+            );
+            const std::span<std::byte> gpu_data = projection_buffer_range.get_span();
+            write(gpu_data, m_u_clip_from_window_offset,      as_span(clip_from_window));
+            write(gpu_data, m_u_texture_offset,               as_span(shader_handle));
+            write(gpu_data, m_u_vertex_data_offset_offset,    as_span(vertex_data_offset));
+            projection_buffer_range.bytes_written(m_projection_block.get_size_bytes());
+            projection_buffer_range.close();
+            m_projection_buffer.bind(encoder, projection_buffer_range);
+            projection_buffer_range.release();
+        }
+
+        if (m_use_buffer_texture) {
+            erhe::graphics::Ring_buffer* ring_buffer = vertex_buffer_range.get_buffer();
+            ERHE_VERIFY(ring_buffer != nullptr);
+            erhe::graphics::Buffer* buffer = ring_buffer->get_buffer();
+            ERHE_VERIFY(buffer != nullptr);
+
+            // Re-associate buffer texture if the underlying buffer changed
+            if (buffer != m_last_vertex_buffer) {
+                m_vertex_buffer_texture->set_buffer(*buffer);
+                m_last_vertex_buffer = buffer;
+            }
+        } else {
+            m_vertex_ssbo_buffer.bind(encoder, vertex_buffer_range);
+        }
 
         encoder.draw_primitives(
             m_pipeline.data.input_assembly.primitive_topology,
@@ -260,11 +334,14 @@ void Text_renderer::render(erhe::graphics::Render_command_encoder& encoder, erhe
         vertex_buffer_range.release();
     }
 
-    projection_buffer_range.release();
-
     m_texture_heap->unbind();
 
     m_vertex_buffer_ranges.clear();
+}
+
+void Text_renderer::rebuild_depth_state(const bool reverse_depth)
+{
+    m_pipeline.data.depth_stencil = erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth);
 }
 
 } // namespace erhe::renderer

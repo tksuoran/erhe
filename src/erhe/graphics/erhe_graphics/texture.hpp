@@ -93,6 +93,10 @@ public:
 
     void clear() const;
 
+    // For texture_buffer textures: (re)associate with a buffer.
+    // Can be called multiple times to change the associated buffer.
+    void set_buffer(Buffer& buffer);
+
 private:
     std::unique_ptr<Texture_impl> m_impl;
 };

@@ -42,6 +42,7 @@ public:
 
 
     void clear();
+    void set_buffer(Buffer& buffer);
 
 private:
     static constexpr const char* s_pool_name = "glTexture";
