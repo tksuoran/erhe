@@ -41,11 +41,12 @@ public:
     [[nodiscard]] auto get_gl_texture_target() const -> gl::Texture_target;
 
 
-    void clear() const;
+    void clear();
 
 private:
     static constexpr const char* s_pool_name = "glTexture";
 
+    Device&                    m_device;
     Gl_texture                 m_handle;
     Texture_type               m_type                  {Texture_type::texture_2d};
     erhe::dataformat::Format   m_pixelformat           {erhe::dataformat::Format::format_8_vec4_srgb};

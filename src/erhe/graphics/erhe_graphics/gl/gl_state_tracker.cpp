@@ -3,7 +3,9 @@
 #include "erhe_graphics/gl/gl_helpers.hpp"
 #include "erhe_graphics/gl/gl_render_pass.hpp"
 #include "erhe_graphics/gl/gl_gpu_timer.hpp"
+#include "erhe_graphics/gl/gl_vertex_input_state.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
+#include "erhe_dataformat/vertex_format.hpp"
 #include "erhe_graphics/compute_pipeline_state.hpp"
 #include "erhe_graphics/render_pipeline_state.hpp"
 #include "erhe_profile/profile.hpp"
@@ -472,8 +474,10 @@ void Vertex_input_state_tracker::execute(const Vertex_input_state* const state)
 
     // For set_vertex_buffer()
     if (state != nullptr) {
-        m_bindings = state->get_data().bindings;
+        m_attributes = state->get_data().attributes;
+        m_bindings   = state->get_data().bindings;
     } else {
+        m_attributes.clear();
         m_bindings.clear();
     }
 }
@@ -481,12 +485,13 @@ void Vertex_input_state_tracker::execute(const Vertex_input_state* const state)
 void Vertex_input_state_tracker::set_index_buffer(const Buffer* buffer) const
 {
     ERHE_VERIFY(m_last != 0); // Must have VAO bound
-    gl::vertex_array_element_buffer(
-        m_last,
-        (buffer != nullptr) 
-            ? buffer->get_impl().gl_name()
-            : 0
-    );
+    const unsigned int buffer_name = (buffer != nullptr) ? buffer->get_impl().gl_name() : 0;
+    if (m_use_dsa) {
+        gl::vertex_array_element_buffer(m_last, buffer_name);
+    } else {
+        // VAO is already bound by execute(), element_array_buffer is part of VAO state
+        gl::bind_buffer(gl::Buffer_target::element_array_buffer, buffer_name);
+    }
 }
 
 void Vertex_input_state_tracker::set_vertex_buffer(
@@ -497,18 +502,125 @@ void Vertex_input_state_tracker::set_vertex_buffer(
 {
     ERHE_VERIFY(m_last != 0); // Must have VAO bound
     ERHE_VERIFY((binding_index != 0) || (buffer != nullptr));
-    for (const Vertex_input_binding& binding : m_bindings) {
-        if (binding.binding == binding_index) {
-            gl::vertex_array_vertex_buffer(
-                m_last,
-                static_cast<GLuint>(binding_index),
-                (buffer != nullptr) ? buffer->get_impl().gl_name() : 0,
-                static_cast<GLintptr>(offset),
-                static_cast<GLsizei>(binding.stride)
-            );
-            break;
+    const unsigned int buffer_name = (buffer != nullptr) ? buffer->get_impl().gl_name() : 0;
+
+    if (m_use_dsa) {
+        for (const Vertex_input_binding& binding : m_bindings) {
+            if (binding.binding == binding_index) {
+                gl::vertex_array_vertex_buffer(
+                    m_last,
+                    static_cast<GLuint>(binding_index),
+                    buffer_name,
+                    static_cast<GLintptr>(offset),
+                    static_cast<GLsizei>(binding.stride)
+                );
+                break;
+            }
+        }
+    } else {
+        // Pre-DSA: bind buffer to GL_ARRAY_BUFFER, then call vertex_attrib_pointer
+        // for each attribute that uses this binding. vertex_attrib_pointer combines
+        // format + buffer + stride + offset into one call.
+        gl::bind_buffer(gl::Buffer_target::array_buffer, buffer_name);
+
+        GLsizei stride = 0;
+        for (const Vertex_input_binding& binding : m_bindings) {
+            if (binding.binding == binding_index) {
+                stride = static_cast<GLsizei>(binding.stride);
+                break;
+            }
+        }
+
+        for (const Vertex_input_attribute& attribute : m_attributes) {
+            if (attribute.binding != binding_index) {
+                continue;
+            }
+            const auto* pointer = reinterpret_cast<const void*>(offset + attribute.offset);
+            const auto  count   = static_cast<GLint>(erhe::dataformat::get_component_count(attribute.format));
+            const auto  type    = get_gl_vertex_attrib_type(attribute.format);
+
+            switch (get_gl_attribute_type(attribute.format)) {
+                case gl::Attribute_type::bool_:
+                case gl::Attribute_type::bool_vec2:
+                case gl::Attribute_type::bool_vec3:
+                case gl::Attribute_type::bool_vec4:
+                case gl::Attribute_type::int_:
+                case gl::Attribute_type::int_vec2:
+                case gl::Attribute_type::int_vec3:
+                case gl::Attribute_type::int_vec4:
+                case gl::Attribute_type::unsigned_int:
+                case gl::Attribute_type::unsigned_int_vec2:
+                case gl::Attribute_type::unsigned_int_vec3:
+                case gl::Attribute_type::unsigned_int_vec4: {
+                    gl::vertex_attrib_i_pointer(
+                        attribute.layout_location,
+                        count,
+                        static_cast<gl::Vertex_attrib_i_type>(type),
+                        stride,
+                        pointer
+                    );
+                    break;
+                }
+
+                case gl::Attribute_type::float_:
+                case gl::Attribute_type::float_vec2:
+                case gl::Attribute_type::float_vec3:
+                case gl::Attribute_type::float_vec4:
+                case gl::Attribute_type::float_mat2:
+                case gl::Attribute_type::float_mat2x3:
+                case gl::Attribute_type::float_mat2x4:
+                case gl::Attribute_type::float_mat3:
+                case gl::Attribute_type::float_mat3x2:
+                case gl::Attribute_type::float_mat3x4:
+                case gl::Attribute_type::float_mat4:
+                case gl::Attribute_type::float_mat4x2:
+                case gl::Attribute_type::float_mat4x3: {
+                    gl::vertex_attrib_pointer(
+                        attribute.layout_location,
+                        count,
+                        static_cast<gl::Vertex_attrib_pointer_type>(type),
+                        get_gl_normalized(attribute.format) ? GL_TRUE : GL_FALSE,
+                        stride,
+                        pointer
+                    );
+                    break;
+                }
+
+                case gl::Attribute_type::unsigned_int64_arb:
+                case gl::Attribute_type::double_:
+                case gl::Attribute_type::double_vec2:
+                case gl::Attribute_type::double_vec3:
+                case gl::Attribute_type::double_vec4:
+                case gl::Attribute_type::double_mat2:
+                case gl::Attribute_type::double_mat2x3:
+                case gl::Attribute_type::double_mat2x4:
+                case gl::Attribute_type::double_mat3:
+                case gl::Attribute_type::double_mat3x2:
+                case gl::Attribute_type::double_mat3x4:
+                case gl::Attribute_type::double_mat4:
+                case gl::Attribute_type::double_mat4x2:
+                case gl::Attribute_type::double_mat4x3: {
+                    gl::vertex_attrib_l_pointer(
+                        attribute.layout_location,
+                        count,
+                        static_cast<gl::Vertex_attrib_l_type>(type),
+                        stride,
+                        pointer
+                    );
+                    break;
+                }
+
+                default: {
+                    ERHE_FATAL("Bad vertex attrib pointer type");
+                }
+            }
         }
     }
+}
+
+void Vertex_input_state_tracker::set_use_dsa(const bool use_dsa)
+{
+    m_use_dsa = use_dsa;
 }
 
 void Viewport_rect_state_tracker::reset()

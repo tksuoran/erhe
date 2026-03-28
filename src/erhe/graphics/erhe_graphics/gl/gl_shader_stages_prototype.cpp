@@ -3,6 +3,7 @@
 #include "erhe_graphics/gl/gl_shader_stages.hpp"
 #include "erhe_graphics/glsl_format_source.hpp"
 #include "erhe_graphics/device.hpp"
+#include "erhe_graphics/gl/gl_device.hpp"
 #include "erhe_graphics/gl/gl_debug.hpp"
 #include "erhe_graphics/gl/gl_helpers.hpp"
 #include "erhe_gl/enum_string_functions.hpp"
@@ -330,7 +331,7 @@ auto Shader_stages_prototype_impl::compile(const Shader_stage& shader) -> Gl_sha
 {
     ERHE_PROFILE_FUNCTION();
 
-    Gl_shader gl_shader{to_gl(shader.type)};
+    Gl_shader gl_shader{m_device.get_impl().create_shader(to_gl(shader.type))};
 
     if (m_state == state_fail) {
         return gl_shader;
@@ -421,6 +422,7 @@ auto Shader_stages_prototype_impl::post_compile(const Shader_stage& shader, Gl_s
 
 Shader_stages_prototype_impl::Shader_stages_prototype_impl(Device& device, Shader_stages_create_info&& create_info)
     : m_device               {device}
+    , m_handle               {device.get_impl().create_program()}
     , m_create_info          {create_info}
     , m_default_uniform_block{device}
 #if defined(ERHE_SPIRV)
@@ -436,6 +438,7 @@ Shader_stages_prototype_impl::Shader_stages_prototype_impl(Device& device, Shade
 }
 Shader_stages_prototype_impl::Shader_stages_prototype_impl(Device& device, const Shader_stages_create_info& create_info)
     : m_device               {device}
+    , m_handle               {device.get_impl().create_program()}
     , m_create_info          {create_info}
     , m_default_uniform_block{device}
 #if defined(ERHE_SPIRV)
@@ -584,7 +587,43 @@ void Shader_stages_prototype_impl::post_link()
             const std::string f_source = format_source(source);
             log_glsl->trace("\n{}", f_source);
         }
-        if (m_create_info.dump_reflection) {
+
+        // When GLSL < 4.20, layout(binding = N) is not available in the shader.
+        // Set uniform block bindings programmatically.
+        if (m_device.get_info().glsl_version < 420) {
+            for (const Shader_resource* block : m_create_info.interface_blocks) {
+                if (block->get_type() == Shader_resource::Type::uniform_block ||
+                    block->get_type() == Shader_resource::Type::shader_storage_block)
+                {
+                    const std::string block_name = block->get_name() + "_block";
+                    const GLuint block_index = gl::get_uniform_block_index(gl_name, block_name.c_str());
+                    if (block_index != GL_INVALID_INDEX) {
+                        gl::uniform_block_binding(gl_name, block_index, block->get_binding_point());
+                        log_program->trace("Set uniform block '{}' binding to {}", block_name, block->get_binding_point());
+                    }
+                }
+            }
+        }
+        // Sampler layout(binding = N) requires GLSL 4.30 (see shader_resource.cpp).
+        // Set sampler texture unit bindings programmatically when not in shader.
+        if (m_device.get_info().glsl_version < 430) {
+            if (m_create_info.default_uniform_block != nullptr) {
+                gl::use_program(gl_name);
+                for (const auto& member : m_create_info.default_uniform_block->get_members()) {
+                    if (member->get_type() == Shader_resource::Type::sampler) {
+                        const GLint location = gl::get_uniform_location(gl_name, member->get_name().c_str());
+                        if (location >= 0) {
+                            const int texture_unit = member->get_texture_unit();
+                            gl::uniform_1i(location, texture_unit);
+                            log_program->trace("Set sampler '{}' texture unit to {}", member->get_name(), texture_unit);
+                        }
+                    }
+                }
+                gl::use_program(0);
+            }
+        }
+
+        if (m_create_info.dump_reflection && m_device.get_info().gl_version >= 430) {
             dump_reflection();
         }
         if (m_create_info.dump_interface) {

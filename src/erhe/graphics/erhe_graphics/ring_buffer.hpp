@@ -60,6 +60,7 @@ private:
     Ring_buffer_usage       m_ring_buffer_usage;
 
     std::unique_ptr<Buffer> m_buffer;
+    std::vector<std::byte>  m_cpu_buffer; // Shadow buffer for non-persistent mode
 
     std::size_t             m_map_offset           {0};
     std::size_t             m_write_position       {0};

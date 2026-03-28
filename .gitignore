@@ -1,3 +1,4 @@
+.claude
 .idea/*
 !.idea/runConfigurations
 !.idea/runConfigurations/**
@@ -30,6 +31,7 @@ build_test_raytrace_none
 build_test_raytrace_tinybvh
 build_vs2026_headless
 build_tests_asan
+build_opengl
 cmake-build-*
 vscode-cmake-*
 log.txt

@@ -1,4 +1,5 @@
 #include "erhe_graphics/gl/gl_shader_stages.hpp"
+#include "erhe_graphics/gl/gl_device.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
@@ -11,11 +12,14 @@ using std::string;
 
 Shader_stages_impl::Shader_stages_impl(Device& device, const std::string& failed_name)
     : m_device{device}
+    , m_handle{device.get_impl().create_program()}
     , m_name  {failed_name}
 {
     const std::string label = fmt::format("(P:{}) {} - compilation failed", gl_name(), failed_name);
     ERHE_VERIFY(!failed_name.empty());
-    gl::object_label(gl::Object_identifier::program, gl_name(), -1, label.c_str());
+    if (m_device.get_info().use_debug_output) {
+        gl::object_label(gl::Object_identifier::program, gl_name(), -1, label.c_str());
+    }
 }
 
 Shader_stages_impl::Shader_stages_impl(Shader_stages_impl&& from) noexcept
@@ -78,8 +82,10 @@ void Shader_stages_impl::reload(Shader_stages_prototype&& prototype)
     m_handle   = std::move(prototype.get_impl().m_handle);
     m_is_valid = true;
 
-    const std::string label = fmt::format("(P:{}) {}{}", gl_name(), m_name, prototype.is_valid() ? "" : " (Failed)");
-    gl::object_label(gl::Object_identifier::program, gl_name(), -1, label.c_str());
+    if (m_device.get_info().use_debug_output) {
+        const std::string label = fmt::format("(P:{}) {}{}", gl_name(), m_name, prototype.is_valid() ? "" : " (Failed)");
+        gl::object_label(gl::Object_identifier::program, gl_name(), -1, label.c_str());
+    }
 }
 
 auto operator==(const Shader_stages_impl& lhs, const Shader_stages_impl& rhs) noexcept -> bool

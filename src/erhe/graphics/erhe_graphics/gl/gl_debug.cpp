@@ -1,5 +1,6 @@
 #include "erhe_graphics/gl/gl_debug.hpp"
 #include "erhe_graphics/gl/gl_device.hpp"
+#include "erhe_graphics/device.hpp"
 
 #include "erhe_gl/enum_string_functions.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
@@ -19,6 +20,8 @@ namespace gl {
 
 namespace erhe::graphics {
 
+bool Scoped_debug_group::s_enabled{false};
+
 thread_local std::string t_current_shader_source{};
 
 void set_shader_source(const std::string& shader_source) {
@@ -35,10 +38,13 @@ void erhe_opengl_callback(
     const void*   /*userParam*/
 )
 {
-    if (
-        (id == 0x020052) || // Pixel transfer is synchronized with 3D rendering
+    if (        
+        (id == 0x020052) || // Pixel transfer is synchronized with 3D rendering        
+        (id == 0x020074) || // Analysis of buffer object Mesh_memory position vertex buffer (bound to GL_COPY_WRITE_BUFFER_BINDING_EXT) usage indicates that the GPU is the primary producer and consumer of data for this buffer object.  The usage hint supplied with this buffer object, GL_STATIC_DRAW, is inconsistent with this usage pattern.  Try using GL_STREAM_COPY_ARB, GL_STATIC_COPY_ARB, or GL_DYNAMIC_COPY_ARB instead.
         (id == 0x020072) || // Buffer performance warning: Buffer object Mesh_memory position vertex buffer (bound to GL_VERTEX_ATTRIB_ARRAY_BUFFER_BINDING_ARB (0), usage hint is GL_DYNAMIC_DRAW) is being copied/moved from VIDEO memory to HOST memory.
-        (id == 0x020071)    // Buffer detailed info: Buffer object Ring_buffer (bound to NONE, usage hint is GL_DYNAMIC_DRAW) will use SYSTEM HEAP memory as the source for buffer object operations.
+        (id == 0x020071) || // Buffer detailed info: Buffer object Ring_buffer (bound to NONE, usage hint is GL_DYNAMIC_DRAW) will use SYSTEM HEAP memory as the source for buffer object operations.
+        (id == 0x020092) || // Program/shader state performance warning: Fragment shader in program 16 is being recompiled based on GL state.
+        false
     ) {
         return;
     }

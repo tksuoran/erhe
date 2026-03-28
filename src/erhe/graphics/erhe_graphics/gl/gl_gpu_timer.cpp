@@ -3,6 +3,7 @@
 
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_graphics/gl/gl_gpu_timer.hpp"
+#include "erhe_graphics/gl/gl_device.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -120,7 +121,7 @@ void Gpu_timer_impl::create()
             ERHE_VERIFY(m_owner_thread == std::this_thread::get_id());
         } else {
             query.query_object.emplace(
-                Gl_query{gl::Query_target::time_elapsed}
+                m_device.get_impl().create_query(gl::Query_target::time_elapsed)
             );
         }
     }

@@ -1,9 +1,12 @@
 #include "erhe_graphics/gl/gl_blit_command_encoder.hpp"
 #include "erhe_graphics/gl/gl_buffer.hpp"
+#include "erhe_graphics/gl/gl_device.hpp"
 #include "erhe_graphics/gl/gl_render_pass.hpp"
 #include "erhe_graphics/gl/gl_texture.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_verify/verify.hpp"
+
+#include <optional>
 
 namespace erhe::graphics {
 
@@ -28,22 +31,42 @@ void Blit_command_encoder_impl::blit_framebuffer(
     const gl::Color_buffer src_buffer = src_name != 0 ? gl::Color_buffer::color_attachment0 : gl::Color_buffer::back;
     const gl::Color_buffer dst_buffer = dst_name != 0 ? gl::Color_buffer::color_attachment0 : gl::Color_buffer::back;
 
-    gl::named_framebuffer_read_buffer (src_name, src_buffer);
-    gl::named_framebuffer_draw_buffers(dst_name, 1, &dst_buffer);
-    gl::blit_named_framebuffer(
-        src_name,                                // read framebuffer
-        dst_name,                                // draw framebuffer
-        source_origin.x,                         // src X0
-        source_origin.y,                         // src Y1
-        source_size.x,                           // src X0
-        source_size.y,                           // src Y1
-        destination_origin.x,                    // dst X0
-        destination_origin.y,                    // dst Y1
-        source_size.x,                           // dst X0
-        source_size.y,                           // dst Y1
-        gl::Clear_buffer_mask::color_buffer_bit, // mask
-        gl::Blit_framebuffer_filter::nearest     // filter
-    );
+    if (m_device.get_info().use_direct_state_access) {
+        gl::named_framebuffer_read_buffer (src_name, src_buffer);
+        gl::named_framebuffer_draw_buffers(dst_name, 1, &dst_buffer);
+        gl::blit_named_framebuffer(
+            src_name,                                // read framebuffer
+            dst_name,                                // draw framebuffer
+            source_origin.x,                         // src X0
+            source_origin.y,                         // src Y0
+            source_size.x,                           // src X1
+            source_size.y,                           // src Y1
+            destination_origin.x,                    // dst X0
+            destination_origin.y,                    // dst Y0
+            source_size.x,                           // dst X1
+            source_size.y,                           // dst Y1
+            gl::Clear_buffer_mask::color_buffer_bit, // mask
+            gl::Blit_framebuffer_filter::nearest     // filter
+        );
+    } else {
+        gl::bind_framebuffer(gl::Framebuffer_target::read_framebuffer, src_name);
+        gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, dst_name);
+        gl::read_buffer(static_cast<gl::Read_buffer_mode>(src_buffer));
+        const gl::Draw_buffer_mode draw_buf = static_cast<gl::Draw_buffer_mode>(dst_buffer);
+        gl::draw_buffers(1, &draw_buf);
+        gl::blit_framebuffer(
+            source_origin.x,                         // src X0
+            source_origin.y,                         // src Y0
+            source_size.x,                           // src X1
+            source_size.y,                           // src Y1
+            destination_origin.x,                    // dst X0
+            destination_origin.y,                    // dst Y0
+            source_size.x,                           // dst X1
+            source_size.y,                           // dst Y1
+            gl::Clear_buffer_mask::color_buffer_bit, // mask
+            gl::Blit_framebuffer_filter::nearest     // filter
+        );
+    }
 }
 
 // Texture to texture copy, single level, single array slice
@@ -163,49 +186,70 @@ void Blit_command_encoder_impl::copy_from_buffer(
     }
     const char* data_pointer = reinterpret_cast<const char*>(source_offset);
 
+    const bool use_dsa = m_device.get_info().use_direct_state_access;
+    std::optional<Texture_binding_guard> texture_guard;
+    if (!use_dsa) {
+        constexpr GLuint scratch_unit = Gl_binding_state::s_max_texture_units - 1;
+        texture_guard.emplace(
+            m_device.get_impl().get_binding_state().push_texture(
+                scratch_unit, gl_destination_texture_target, destination_texture->get_impl().gl_name()
+            )
+        );
+    }
+
     switch (destination_texture->get_impl().get_storage_dimensions(gl_destination_texture_target)) {
         case 1: {
-            gl::texture_sub_image_1d(
-                destination_texture->get_impl().gl_name(),
-                static_cast<GLint>(destination_level),
-                gl_destination_x,
-                gl_width,
-                gl_format,
-                gl_type,
-                data_pointer
-            );
+            if (use_dsa) {
+                gl::texture_sub_image_1d(
+                    destination_texture->get_impl().gl_name(),
+                    static_cast<GLint>(destination_level),
+                    gl_destination_x, gl_width, gl_format, gl_type, data_pointer
+                );
+            } else {
+                gl::tex_sub_image_1d(
+                    gl_destination_texture_target,
+                    static_cast<GLint>(destination_level),
+                    gl_destination_x, gl_width, gl_format, gl_type, data_pointer
+                );
+            }
             break;
         }
 
         case 2: {
-            gl::texture_sub_image_2d(
-                destination_texture->get_impl().gl_name(),
-                static_cast<GLint>(destination_level),
-                gl_destination_x,
-                gl_destination_y,
-                gl_width,
-                gl_height,
-                gl_format,
-                gl_type,
-                data_pointer
-            );
+            if (use_dsa) {
+                gl::texture_sub_image_2d(
+                    destination_texture->get_impl().gl_name(),
+                    static_cast<GLint>(destination_level),
+                    gl_destination_x, gl_destination_y,
+                    gl_width, gl_height, gl_format, gl_type, data_pointer
+                );
+            } else {
+                gl::tex_sub_image_2d(
+                    gl_destination_texture_target,
+                    static_cast<GLint>(destination_level),
+                    gl_destination_x, gl_destination_y,
+                    gl_width, gl_height, gl_format, gl_type, data_pointer
+                );
+            }
             break;
         }
 
         case 3: {
-            gl::texture_sub_image_3d(
-                destination_texture->get_impl().gl_name(),
-                static_cast<GLint>(destination_level),
-                gl_destination_x,
-                gl_destination_y,
-                gl_destination_z,
-                gl_width,
-                gl_height,
-                gl_depth,
-                gl_format,
-                gl_type,
-                data_pointer
-            );
+            if (use_dsa) {
+                gl::texture_sub_image_3d(
+                    destination_texture->get_impl().gl_name(),
+                    static_cast<GLint>(destination_level),
+                    gl_destination_x, gl_destination_y, gl_destination_z,
+                    gl_width, gl_height, gl_depth, gl_format, gl_type, data_pointer
+                );
+            } else {
+                gl::tex_sub_image_3d(
+                    gl_destination_texture_target,
+                    static_cast<GLint>(destination_level),
+                    gl_destination_x, gl_destination_y, gl_destination_z,
+                    gl_width, gl_height, gl_depth, gl_format, gl_type, data_pointer
+                );
+            }
             break;
         }
 
@@ -300,25 +344,43 @@ void Blit_command_encoder_impl::copy_from_texture(
     if (!format_type_ok) {
         return;
     }
-    gl::get_texture_sub_image(
-        source_texture->get_impl().gl_name(),
-        static_cast<GLint>(source_level),
-        gl_source_x,
-        gl_source_y,
-        gl_source_z,
-        gl_width,
-        gl_height,
-        gl_depth,
-        gl_format,
-        gl_type,
-        static_cast<GLsizei>(destination_size),
-        reinterpret_cast<void *>(destination_offset)
-    );
+    if (m_device.get_info().use_direct_state_access) {
+        gl::get_texture_sub_image(
+            source_texture->get_impl().gl_name(),
+            static_cast<GLint>(source_level),
+            gl_source_x, gl_source_y, gl_source_z,
+            gl_width, gl_height, gl_depth,
+            gl_format, gl_type,
+            static_cast<GLsizei>(destination_size),
+            reinterpret_cast<void *>(destination_offset)
+        );
+    } else {
+        // Pre-DSA: bind and use glGetTexImage (reads entire mip level)
+        constexpr GLuint scratch_unit = Gl_binding_state::s_max_texture_units - 1;
+        auto guard = m_device.get_impl().get_binding_state().push_texture(
+            scratch_unit, gl_source_texture_target, source_texture->get_impl().gl_name()
+        );
+        gl::get_tex_image(
+            gl_source_texture_target,
+            static_cast<GLint>(source_level),
+            gl_format, gl_type,
+            reinterpret_cast<void *>(destination_offset)
+        );
+    }
 }
 
 void Blit_command_encoder_impl::generate_mipmaps(const Texture* texture)
 {
-    gl::generate_texture_mipmap(texture->get_impl().gl_name());
+    if (m_device.get_info().use_direct_state_access) {
+        gl::generate_texture_mipmap(texture->get_impl().gl_name());
+    } else {
+        const gl::Texture_target target = texture->get_impl().get_gl_texture_target();
+        constexpr GLuint scratch_unit = Gl_binding_state::s_max_texture_units - 1;
+        auto guard = m_device.get_impl().get_binding_state().push_texture(
+            scratch_unit, target, texture->get_impl().gl_name()
+        );
+        gl::generate_mipmap(target);
+    }
 }
 
 void Blit_command_encoder_impl::fill_buffer(
@@ -328,15 +390,28 @@ void Blit_command_encoder_impl::fill_buffer(
     const uint8_t        value
 )
 {
-    gl::clear_named_buffer_sub_data(
-        buffer->get_impl().gl_name(),
-        gl::Internal_format::r8ui,
-        offset,
-        length,
-        gl::Pixel_format::red_integer,
-        gl::Pixel_type::unsigned_byte,
-        &value
-    );
+    if (m_device.get_info().use_direct_state_access) {
+        gl::clear_named_buffer_sub_data(
+            buffer->get_impl().gl_name(),
+            gl::Internal_format::r8ui,
+            offset,
+            length,
+            gl::Pixel_format::red_integer,
+            gl::Pixel_type::unsigned_byte,
+            &value
+        );
+    } else {
+        auto guard = m_device.get_impl().get_binding_state().push_buffer(gl::Buffer_target::copy_write_buffer, buffer->get_impl().gl_name());
+        gl::clear_buffer_sub_data(
+            gl::Buffer_target::copy_write_buffer,
+            gl::Internal_format::r8ui,
+            offset,
+            length,
+            gl::Pixel_format::red_integer,
+            gl::Pixel_type::unsigned_byte,
+            &value
+        );
+    }
 }
 
 // Texture to texture copy, multiple array slices and/or mipmap levels
@@ -427,13 +502,25 @@ void Blit_command_encoder_impl::copy_from_buffer(
 )
 {
     // Buffer to buffer copy
-    gl::copy_named_buffer_sub_data(
-        source_buffer->get_impl().gl_name(),
-        destination_buffer->get_impl().gl_name(),
-        source_offset,
-        destination_offset,
-        size
-    );
+    if (m_device.get_info().use_direct_state_access) {
+        gl::copy_named_buffer_sub_data(
+            source_buffer->get_impl().gl_name(),
+            destination_buffer->get_impl().gl_name(),
+            source_offset,
+            destination_offset,
+            size
+        );
+    } else {
+        auto guard_read  = m_device.get_impl().get_binding_state().push_buffer(gl::Buffer_target::copy_read_buffer,  source_buffer->get_impl().gl_name());
+        auto guard_write = m_device.get_impl().get_binding_state().push_buffer(gl::Buffer_target::copy_write_buffer, destination_buffer->get_impl().gl_name());
+        gl::copy_buffer_sub_data(
+            gl::Copy_buffer_sub_data_target::copy_read_buffer,
+            gl::Copy_buffer_sub_data_target::copy_write_buffer,
+            source_offset,
+            destination_offset,
+            size
+        );
+    }
 }
 
 } // namespace erhe::graphics

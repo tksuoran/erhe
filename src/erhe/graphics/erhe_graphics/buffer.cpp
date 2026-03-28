@@ -82,6 +82,10 @@ void Buffer::flush_and_unmap_bytes(std::size_t byte_count) noexcept
 {
     m_impl->flush_and_unmap_bytes(byte_count);
 }
+void Buffer::upload_sub_data(std::size_t byte_offset, std::size_t byte_count, const void* data) noexcept
+{
+    m_impl->upload_sub_data(byte_offset, byte_count, data);
+}
 void Buffer::dump() const noexcept
 {
     m_impl->dump();

@@ -69,8 +69,11 @@ Ring_buffer::Ring_buffer(
     , m_read_wrap_count{0}
     , m_read_offset    {m_buffer->get_capacity_byte_count()}
 {
-    // CPU read/write buffers are persistently mapped
-    // GPU only buffers are not mappable
+    // CPU read/write buffers are persistently mapped when persistent buffers are available.
+    // Otherwise, use a CPU shadow buffer and upload via glBufferSubData.
+    if (!m_device.get_info().use_persistent_buffers && create_info.ring_buffer_usage == Ring_buffer_usage::CPU_write) {
+        m_cpu_buffer.resize(create_info.size);
+    }
 }
 
 Ring_buffer::~Ring_buffer() noexcept
@@ -175,14 +178,13 @@ auto Ring_buffer::acquire(std::size_t required_alignment, Ring_buffer_usage ring
     sanity_check();
 
     if (!m_device.get_info().use_persistent_buffers) {
-        if (ring_buffer_usage == Ring_buffer_usage::CPU_write) {
-            m_buffer->begin_write(m_write_position, byte_count); // maps requested range
-        }
+        // Non-persistent mode: hand out spans from CPU shadow buffer.
+        // Data is uploaded to GPU via glBufferSubData in close().
         Ring_buffer_range result{
             *this,
             ring_buffer_usage,
             (ring_buffer_usage != Ring_buffer_usage::GPU_access)
-                ? m_buffer->get_map()
+                ? std::span<std::byte>{m_cpu_buffer.data() + m_write_position, byte_count}
                 : std::span<std::byte>{},
             m_write_wrap_count,
             m_write_position
@@ -220,10 +222,13 @@ void Ring_buffer::flush(const std::size_t byte_offset, const std::size_t byte_co
     sanity_check();
 
     ERHE_VERIFY(m_ring_buffer_usage == Ring_buffer_usage::CPU_write);
-    if (
-        !m_device.get_info().use_persistent_buffers &&
-        (m_ring_buffer_usage != Ring_buffer_usage::GPU_access)
-    ) {
+    if (!m_device.get_info().use_persistent_buffers) {
+        // Non-persistent: upload from CPU shadow buffer to GPU
+        if (byte_count > 0) {
+            m_buffer->upload_sub_data(byte_offset, byte_count, m_cpu_buffer.data() + byte_offset);
+        }
+    } else {
+        // Persistent: flush the mapped range
         m_buffer->flush_bytes(byte_offset, byte_count);
     }
 }
@@ -235,7 +240,14 @@ void Ring_buffer::close(std::size_t byte_offset, std::size_t byte_write_count)
     sanity_check();
 
     if (m_ring_buffer_usage == Ring_buffer_usage::CPU_write) {
-        m_buffer->end_write(byte_offset, byte_write_count); // flush and unmap
+        if (!m_device.get_info().use_persistent_buffers) {
+            // Non-persistent: upload from CPU shadow buffer to GPU
+            if (byte_write_count > 0) {
+                m_buffer->upload_sub_data(byte_offset, byte_write_count, m_cpu_buffer.data() + byte_offset);
+            }
+        } else {
+            m_buffer->end_write(byte_offset, byte_write_count); // flush and unmap
+        }
     }
 }
 

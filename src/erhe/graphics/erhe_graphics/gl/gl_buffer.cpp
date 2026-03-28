@@ -1,4 +1,5 @@
 #include "erhe_graphics/gl/gl_buffer.hpp"
+#include "erhe_graphics/gl/gl_device.hpp"
 #include "erhe_utility/bit_helpers.hpp"
 #include "erhe_gl/command_info.hpp"
 #include "erhe_gl/enum_string_functions.hpp"
@@ -251,7 +252,15 @@ void Buffer_impl::allocate_storage(const void* init_data)
         gl_name(), m_debug_label.string_view(), m_capacity_byte_count, gl::to_string(gl_storage_mask)
     );
 
-    gl::named_buffer_storage(gl_name(), static_cast<GLintptr>(m_capacity_byte_count), init_data, gl_storage_mask);
+    if (m_device.get_info().use_direct_state_access) {
+        gl::named_buffer_storage(gl_name(), static_cast<GLintptr>(m_capacity_byte_count), init_data, gl_storage_mask);
+    } else {
+        auto guard = m_device.get_impl().get_binding_state().push_buffer(gl::Buffer_target::copy_write_buffer, gl_name());
+        const auto gl_usage = erhe::utility::test_bit_set(
+            m_preferred_memory_property_bit_mask, Memory_property_flag_bit_mask::host_persistent
+        ) ? gl::Buffer_usage::stream_draw : gl::Buffer_usage::static_draw;
+        gl::buffer_data(gl::Buffer_target::copy_write_buffer, static_cast<GLintptr>(m_capacity_byte_count), init_data, gl_usage);
+    }
     {
 #if TRACY_ENABLE
         TracyCZoneCtx zone{};
@@ -282,6 +291,7 @@ void Buffer_impl::allocate_storage(const void* init_data)
 
 Buffer_impl::Buffer_impl(Device& device, const Buffer_create_info& create_info) noexcept
     : m_device                                {device}
+    , m_handle                                {device.get_impl().create_buffer()}
     , m_capacity_byte_count                   {create_info.capacity_byte_count}
     , m_usage                                 {create_info.usage}
     , m_memory_allocation_create_flag_bit_mask{create_info.memory_allocation_create_flag_bit_mask}
@@ -301,7 +311,7 @@ Buffer_impl::Buffer_impl(Device& device, const Buffer_create_info& create_info) 
         gl_name(),
         m_debug_label.string_view()
     );
-    if (!m_debug_label.empty()) {
+    if (!m_debug_label.empty() && m_device.get_info().use_debug_output) {
         gl::object_label(gl::Object_identifier::buffer, gl_name(), -1, m_debug_label.data());
     }
     allocate_storage(create_info.init_data);
@@ -374,9 +384,14 @@ auto Buffer_impl::begin_write(const std::size_t byte_offset, std::size_t byte_co
         m_map_byte_offset = byte_offset;
         const gl::Map_buffer_access_mask gl_access_mask = get_gl_access_mask();
 
-        auto* const map_pointer = static_cast<std::byte*>(
-            gl::map_named_buffer_range(gl_name(), byte_offset, byte_count, gl_access_mask)
-        );
+        void* raw_pointer{nullptr};
+        if (m_device.get_info().use_direct_state_access) {
+            raw_pointer = gl::map_named_buffer_range(gl_name(), byte_offset, byte_count, gl_access_mask);
+        } else {
+            auto guard = m_device.get_impl().get_binding_state().push_buffer(gl::Buffer_target::copy_write_buffer, gl_name());
+            raw_pointer = gl::map_buffer_range(gl::Buffer_target::copy_write_buffer, byte_offset, byte_count, gl_access_mask);
+        }
+        auto* const map_pointer = static_cast<std::byte*>(raw_pointer);
         ERHE_VERIFY(map_pointer != nullptr);
 
         log_buffer->trace(
@@ -428,14 +443,24 @@ auto Buffer_impl::map_all_bytes() noexcept -> std::span<std::byte>
 
     const gl::Map_buffer_access_mask gl_access_mask = get_gl_access_mask();
 
-    auto* const map_pointer = static_cast<std::byte*>(
-        gl::map_named_buffer_range(
+    void* raw_pointer{nullptr};
+    if (m_device.get_info().use_direct_state_access) {
+        raw_pointer = gl::map_named_buffer_range(
             gl_name(),
             m_map_byte_offset,
             static_cast<GLsizeiptr>(byte_count),
             gl_access_mask
-        )
-    );
+        );
+    } else {
+        auto guard = m_device.get_impl().get_binding_state().push_buffer(gl::Buffer_target::copy_write_buffer, gl_name());
+        raw_pointer = gl::map_buffer_range(
+            gl::Buffer_target::copy_write_buffer,
+            m_map_byte_offset,
+            static_cast<GLsizeiptr>(byte_count),
+            gl_access_mask
+        );
+    }
+    auto* const map_pointer = static_cast<std::byte*>(raw_pointer);
     ERHE_VERIFY(map_pointer != nullptr);
 
     log_buffer->trace(
@@ -479,14 +504,24 @@ auto Buffer_impl::map_bytes(const std::size_t byte_offset, const std::size_t byt
         gl_name(), m_map_byte_offset, byte_count, gl::to_string(gl_access_mask)
     );
 
-    auto* const map_pointer = static_cast<std::byte*>(
-        gl::map_named_buffer_range(
+    void* raw_pointer{nullptr};
+    if (m_device.get_info().use_direct_state_access) {
+        raw_pointer = gl::map_named_buffer_range(
             gl_name(),
             m_map_byte_offset,
             static_cast<GLsizeiptr>(byte_count),
             gl_access_mask
-        )
-    );
+        );
+    } else {
+        auto guard = m_device.get_impl().get_binding_state().push_buffer(gl::Buffer_target::copy_write_buffer, gl_name());
+        raw_pointer = gl::map_buffer_range(
+            gl::Buffer_target::copy_write_buffer,
+            m_map_byte_offset,
+            static_cast<GLsizeiptr>(byte_count),
+            gl_access_mask
+        );
+    }
+    auto* const map_pointer = static_cast<std::byte*>(raw_pointer);
     if (map_pointer == nullptr) {
         log_buffer->warn("glMapNamedBufferRange() returned nullptr");
         GLint is_buffer = gl::is_buffer(gl_name());
@@ -500,15 +535,28 @@ auto Buffer_impl::map_bytes(const std::size_t byte_offset, const std::size_t byt
         GLint int_size             {0};
         GLint int_storage_flags    {0};
         GLint int_usage            {0};
-        gl::get_named_buffer_parameter_iv(gl_name(), gl::Buffer_p_name::buffer_access           , &int_access           );
-        gl::get_named_buffer_parameter_iv(gl_name(), gl::Buffer_p_name::buffer_access_flags     , &int_access_flags     );
-        gl::get_named_buffer_parameter_iv(gl_name(), gl::Buffer_p_name::buffer_immutable_storage, &int_immutable_storage);
-        gl::get_named_buffer_parameter_iv(gl_name(), gl::Buffer_p_name::buffer_map_length       , &int_map_length       );
-        gl::get_named_buffer_parameter_iv(gl_name(), gl::Buffer_p_name::buffer_map_offset       , &int_map_offset       );
-        gl::get_named_buffer_parameter_iv(gl_name(), gl::Buffer_p_name::buffer_mapped           , &int_mapped           );
-        gl::get_named_buffer_parameter_iv(gl_name(), gl::Buffer_p_name::buffer_size             , &int_size             );
-        gl::get_named_buffer_parameter_iv(gl_name(), gl::Buffer_p_name::buffer_storage_flags    , &int_storage_flags    );
-        gl::get_named_buffer_parameter_iv(gl_name(), gl::Buffer_p_name::buffer_usage            , &int_usage            );
+        if (m_device.get_info().use_direct_state_access) {
+            gl::get_named_buffer_parameter_iv(gl_name(), gl::Buffer_p_name::buffer_access           , &int_access           );
+            gl::get_named_buffer_parameter_iv(gl_name(), gl::Buffer_p_name::buffer_access_flags     , &int_access_flags     );
+            gl::get_named_buffer_parameter_iv(gl_name(), gl::Buffer_p_name::buffer_immutable_storage, &int_immutable_storage);
+            gl::get_named_buffer_parameter_iv(gl_name(), gl::Buffer_p_name::buffer_map_length       , &int_map_length       );
+            gl::get_named_buffer_parameter_iv(gl_name(), gl::Buffer_p_name::buffer_map_offset       , &int_map_offset       );
+            gl::get_named_buffer_parameter_iv(gl_name(), gl::Buffer_p_name::buffer_mapped           , &int_mapped           );
+            gl::get_named_buffer_parameter_iv(gl_name(), gl::Buffer_p_name::buffer_size             , &int_size             );
+            gl::get_named_buffer_parameter_iv(gl_name(), gl::Buffer_p_name::buffer_storage_flags    , &int_storage_flags    );
+            gl::get_named_buffer_parameter_iv(gl_name(), gl::Buffer_p_name::buffer_usage            , &int_usage            );
+        } else {
+            auto guard = m_device.get_impl().get_binding_state().push_buffer(gl::Buffer_target::copy_write_buffer, gl_name());
+            gl::get_buffer_parameter_iv(gl::Buffer_target::copy_write_buffer, gl::Buffer_p_name::buffer_access           , &int_access           );
+            gl::get_buffer_parameter_iv(gl::Buffer_target::copy_write_buffer, gl::Buffer_p_name::buffer_access_flags     , &int_access_flags     );
+            gl::get_buffer_parameter_iv(gl::Buffer_target::copy_write_buffer, gl::Buffer_p_name::buffer_immutable_storage, &int_immutable_storage);
+            gl::get_buffer_parameter_iv(gl::Buffer_target::copy_write_buffer, gl::Buffer_p_name::buffer_map_length       , &int_map_length       );
+            gl::get_buffer_parameter_iv(gl::Buffer_target::copy_write_buffer, gl::Buffer_p_name::buffer_map_offset       , &int_map_offset       );
+            gl::get_buffer_parameter_iv(gl::Buffer_target::copy_write_buffer, gl::Buffer_p_name::buffer_mapped           , &int_mapped           );
+            gl::get_buffer_parameter_iv(gl::Buffer_target::copy_write_buffer, gl::Buffer_p_name::buffer_size             , &int_size             );
+            gl::get_buffer_parameter_iv(gl::Buffer_target::copy_write_buffer, gl::Buffer_p_name::buffer_storage_flags    , &int_storage_flags    );
+            gl::get_buffer_parameter_iv(gl::Buffer_target::copy_write_buffer, gl::Buffer_p_name::buffer_usage            , &int_usage            );
+        }
         const auto access        = static_cast<gl::Buffer_access         >(int_access       );
         const auto access_flags  = static_cast<gl::Map_buffer_access_mask>(int_access_flags );
         const auto storage_flags = static_cast<gl::Buffer_storage_mask   >(int_storage_flags);
@@ -523,7 +571,12 @@ auto Buffer_impl::map_bytes(const std::size_t byte_offset, const std::size_t byt
         log_buffer->trace("storage flags     = {} ({:04x})", gl::to_string(storage_flags), int_storage_flags);
         log_buffer->trace("usage             = {}",          (int_usage == 0) ? "0" : gl::c_str(usage), int_usage);
         void* get_map_pointer{nullptr};
-        gl::get_named_buffer_pointer_v(gl_name(), gl::Buffer_pointer_name::buffer_map_pointer, &get_map_pointer);
+        if (m_device.get_info().use_direct_state_access) {
+            gl::get_named_buffer_pointer_v(gl_name(), gl::Buffer_pointer_name::buffer_map_pointer, &get_map_pointer);
+        } else {
+            auto guard = m_device.get_impl().get_binding_state().push_buffer(gl::Buffer_target::copy_write_buffer, gl_name());
+            gl::get_buffer_pointer_v(gl::Buffer_target::copy_write_buffer, gl::Buffer_pointer_name::buffer_map_pointer, &get_map_pointer);
+        }
         log_buffer->trace("map pointer       = {}", fmt::ptr(map_pointer));
     }
     ERHE_VERIFY(map_pointer != nullptr);
@@ -560,7 +613,13 @@ void Buffer_impl::unmap() noexcept
     //const log::Indenter indented;
     //Log::set_text_color(erhe::log::Console_color::GREY);
 
-    const auto res = gl::unmap_named_buffer(gl_name());
+    GLboolean res{GL_FALSE};
+    if (m_device.get_info().use_direct_state_access) {
+        res = gl::unmap_named_buffer(gl_name());
+    } else {
+        auto guard = m_device.get_impl().get_binding_state().push_buffer(gl::Buffer_target::copy_write_buffer, gl_name());
+        res = gl::unmap_buffer(gl::Buffer_target::copy_write_buffer);
+    }
     ERHE_VERIFY(res == GL_TRUE);
 
     m_map_byte_offset = std::numeric_limits<std::size_t>::max();
@@ -570,9 +629,23 @@ void Buffer_impl::unmap() noexcept
     ERHE_VERIFY(m_map.empty());
 }
 
+void Buffer_impl::upload_sub_data(const std::size_t byte_offset, const std::size_t byte_count, const void* data) noexcept
+{
+    ERHE_VERIFY(gl_name() != 0);
+    if (m_device.get_info().use_direct_state_access) {
+        gl::named_buffer_sub_data(gl_name(), static_cast<GLintptr>(byte_offset), static_cast<GLsizeiptr>(byte_count), data);
+    } else {
+        auto guard = m_device.get_impl().get_binding_state().push_buffer(gl::Buffer_target::copy_write_buffer, gl_name());
+        gl::buffer_sub_data(gl::Buffer_target::copy_write_buffer, static_cast<GLintptr>(byte_offset), static_cast<GLsizeiptr>(byte_count), data);
+    }
+}
+
 void Buffer_impl::invalidate(const std::size_t byte_offset, const std::size_t byte_count) noexcept
 {
-    gl::invalidate_buffer_sub_data(gl_name(), byte_offset, byte_count);
+    if (m_device.get_info().use_direct_state_access) {
+        gl::invalidate_buffer_sub_data(gl_name(), byte_offset, byte_count);
+    }
+    // Pre-DSA: invalidate_buffer_sub_data is GL 4.3, just skip it (it's only a hint).
 }
 
 void Buffer_impl::flush_bytes(const std::size_t byte_offset, const std::size_t byte_count) noexcept
@@ -599,11 +672,20 @@ void Buffer_impl::flush_bytes(const std::size_t byte_offset, const std::size_t b
         m_debug_label.string_view()
     );
 
-    gl::flush_mapped_named_buffer_range(
-        gl_name(),
-        static_cast<GLintptr>(byte_offset - m_map_byte_offset),
-        static_cast<GLsizeiptr>(byte_count)
-    );
+    if (m_device.get_info().use_direct_state_access) {
+        gl::flush_mapped_named_buffer_range(
+            gl_name(),
+            static_cast<GLintptr>(byte_offset - m_map_byte_offset),
+            static_cast<GLsizeiptr>(byte_count)
+        );
+    } else {
+        auto guard = m_device.get_impl().get_binding_state().push_buffer(gl::Buffer_target::copy_write_buffer, gl_name());
+        gl::flush_mapped_buffer_range(
+            gl::Buffer_target::copy_write_buffer,
+            static_cast<GLintptr>(byte_offset - m_map_byte_offset),
+            static_cast<GLsizeiptr>(byte_count)
+        );
+    }
 }
 
 void Buffer_impl::dump() const noexcept
@@ -614,14 +696,26 @@ void Buffer_impl::dump() const noexcept
     const std::size_t word_count{byte_count / sizeof(uint32_t)};
 
     int mapped{GL_FALSE};
-    gl::get_named_buffer_parameter_iv(gl_name(), gl::Buffer_p_name::buffer_mapped, &mapped);
+    if (m_device.get_info().use_direct_state_access) {
+        gl::get_named_buffer_parameter_iv(gl_name(), gl::Buffer_p_name::buffer_mapped, &mapped);
+    } else {
+        auto guard = m_device.get_impl().get_binding_state().push_buffer(gl::Buffer_target::copy_write_buffer, gl_name());
+        gl::get_buffer_parameter_iv(gl::Buffer_target::copy_write_buffer, gl::Buffer_p_name::buffer_mapped, &mapped);
+    }
 
     uint32_t* data {nullptr};
     bool      unmap{false};
     if (mapped == GL_FALSE) {
-        data = static_cast<uint32_t*>(
-            gl::map_named_buffer_range(gl_name(), 0, byte_count, gl::Map_buffer_access_mask::map_read_bit)
-        );
+        if (m_device.get_info().use_direct_state_access) {
+            data = static_cast<uint32_t*>(
+                gl::map_named_buffer_range(gl_name(), 0, byte_count, gl::Map_buffer_access_mask::map_read_bit)
+            );
+        } else {
+            auto guard = m_device.get_impl().get_binding_state().push_buffer(gl::Buffer_target::copy_write_buffer, gl_name());
+            data = static_cast<uint32_t*>(
+                gl::map_buffer_range(gl::Buffer_target::copy_write_buffer, 0, byte_count, gl::Map_buffer_access_mask::map_read_bit)
+            );
+        }
         unmap = (data != nullptr);
     }
 
@@ -630,7 +724,12 @@ void Buffer_impl::dump() const noexcept
         // This happens if we already had buffer mapped
         storage.resize(word_count + 1);
         data = storage.data();
-        gl::get_named_buffer_sub_data(gl_name(), 0, word_count * sizeof(uint32_t), data);
+        if (m_device.get_info().use_direct_state_access) {
+            gl::get_named_buffer_sub_data(gl_name(), 0, word_count * sizeof(uint32_t), data);
+        } else {
+            auto guard = m_device.get_impl().get_binding_state().push_buffer(gl::Buffer_target::copy_write_buffer, gl_name());
+            gl::get_buffer_sub_data(gl::Buffer_target::copy_write_buffer, 0, word_count * sizeof(uint32_t), data);
+        }
     }
 
     std::stringstream ss;
@@ -648,7 +747,12 @@ void Buffer_impl::dump() const noexcept
     log_buffer->trace("\n{}", ss.str());
 
     if (unmap) {
-        gl::unmap_named_buffer(gl_name());
+        if (m_device.get_info().use_direct_state_access) {
+            gl::unmap_named_buffer(gl_name());
+        } else {
+            auto guard = m_device.get_impl().get_binding_state().push_buffer(gl::Buffer_target::copy_write_buffer, gl_name());
+            gl::unmap_buffer(gl::Buffer_target::copy_write_buffer);
+        }
     }
 }
 

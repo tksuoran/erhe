@@ -1,4 +1,5 @@
 #include "erhe_graphics/gl/gl_sampler.hpp"
+#include "erhe_graphics/gl/gl_device.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_verify/verify.hpp"
@@ -8,7 +9,8 @@
 namespace erhe::graphics {
 
 Sampler_impl::Sampler_impl(Device& device, const Sampler_create_info& create_info)
-    : m_min_filter       {create_info.min_filter       }
+    : m_handle           {device.get_impl().create_sampler()}
+    , m_min_filter       {create_info.min_filter       }
     , m_mag_filter       {create_info.mag_filter       }
     , m_mipmap_mode      {create_info.mipmap_mode      }
     , m_address_mode     {create_info.address_mode     }
@@ -19,16 +21,17 @@ Sampler_impl::Sampler_impl(Device& device, const Sampler_create_info& create_inf
     , m_min_lod          {create_info.min_lod          }
     , m_max_anisotropy   {create_info.max_anisotropy   }
 {
-    static_cast<void>(device);
     ERHE_VERIFY(m_handle.gl_name() != 0);
     apply();
     m_debug_label = erhe::utility::Debug_label{fmt::format("(S:{}) {}", gl_name(), create_info.debug_label.string_view())};
-    gl::object_label(
-        gl::Object_identifier::sampler,
-        gl_name(),
-        static_cast<GLsizei>(m_debug_label.size() + 1),
-        m_debug_label.data()
-    );
+    if (device.get_info().use_debug_output) {
+        gl::object_label(
+            gl::Object_identifier::sampler,
+            gl_name(),
+            static_cast<GLsizei>(m_debug_label.size() + 1),
+            m_debug_label.data()
+        );
+    }
     log_texture->trace("Created sampler '{}'", get_debug_label().string_view());
 }
 

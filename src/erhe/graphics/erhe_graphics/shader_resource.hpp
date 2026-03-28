@@ -127,6 +127,7 @@ public:
     [[nodiscard]] auto get_parent          () const -> Shader_resource*;
     [[nodiscard]] auto get_member_count    () const -> std::size_t;
     [[nodiscard]] auto get_member          (std::string_view name) const -> Shader_resource*;
+    [[nodiscard]] auto get_members         () const -> const Member_collection&;
     [[nodiscard]] auto get_binding_point   () const -> unsigned int;
     [[nodiscard]] auto get_binding_target  () const -> Buffer_target;
     [[nodiscard]] auto get_texture_unit    () const -> int;
