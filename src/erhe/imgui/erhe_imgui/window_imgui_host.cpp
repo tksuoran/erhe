@@ -28,6 +28,10 @@ Window_imgui_host::Window_imgui_host(
     , m_context_window {context_window}
     , m_graphics_device{graphics_device}
 {
+    // Viewport rendering nodes connect their viewport_texture output to this
+    // input to ensure they execute before ImGui compositing samples their textures
+    register_input("viewport texture", erhe::rendergraph::Rendergraph_node_key::viewport_texture);
+
     imgui_renderer.use_as_backend_renderer_on_context(m_imgui_context);
 
     ImGuiIO& io     = m_imgui_context->IO;

@@ -19,6 +19,7 @@ void Graph::register_node(Node* node)
     }
 #endif
     m_nodes.push_back(node);
+    m_is_sorted = false;
     log_graph->trace("Registered Node {} {}", node->get_name(), node->get_id());
 }
 
@@ -34,20 +35,24 @@ void Graph::unregister_node(Node* node)
         return;
     }
 
-    std::vector<Pin>& input_pins = node->get_input_pins();
+    // Copy link vectors before iterating, since disconnect modifies them
+    etl::vector<Pin, max_pin_count>& input_pins = node->get_input_pins();
     for (Pin& pin : input_pins) {
-        for (Link* link : pin.get_links()) {
+        std::vector<Link*> links = pin.get_links();
+        for (Link* link : links) {
             disconnect(link);
         }
     }
-    std::vector<Pin>& output_pins = node->get_output_pins();
+    etl::vector<Pin, max_pin_count>& output_pins = node->get_output_pins();
     for (Pin& pin : output_pins) {
-        for (Link* link : pin.get_links()) {
+        std::vector<Link*> links = pin.get_links();
+        for (Link* link : links) {
             disconnect(link);
         }
     }
 
     m_nodes.erase(i);
+    m_is_sorted = false;
 
     log_graph->trace("Unregistered Node {} {}", node->get_name(), node->get_id());
 }
@@ -65,6 +70,7 @@ auto Graph::connect(Pin* source_pin, Pin* sink_pin) -> Link*
     Link* link = m_links.back().get();
     sink_pin  ->add_link(link);
     source_pin->add_link(link);
+    m_is_sorted = false;
 
     log_graph->trace("Connected {} {} to {} {} ", source_pin->get_name(), source_pin->get_id(), sink_pin->get_name(), sink_pin->get_id());
     return link;
@@ -81,6 +87,7 @@ void Graph::disconnect(Link* link)
     }
     link->disconnect();
     m_links.erase(i);
+    m_is_sorted = false;
 }
 
 auto Graph::get_host_name() const -> const char*

@@ -192,6 +192,7 @@ private:
 
     std::vector<std::shared_ptr<erhe::graphics::Texture>> m_imgui_textures;
     std::vector<std::shared_ptr<erhe::graphics::Texture_reference>> m_draw_texture_references;
+    std::vector<std::shared_ptr<erhe::graphics::Texture_reference>> m_retained_texture_references;
 
     Imgui_host* m_ime_host{nullptr};
 };

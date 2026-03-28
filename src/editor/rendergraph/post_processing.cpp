@@ -3,6 +3,7 @@
 #include "app_context.hpp"
 #include "editor_log.hpp"
 
+#include "erhe_rendergraph/rendergraph.hpp"
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
@@ -83,8 +84,8 @@ Post_processing_node::Post_processing_node(
     , m_graphics_device{graphics_device}
     , m_post_processing{post_processing}
 {
-    register_input ("texture", erhe::rendergraph::Rendergraph_node_key::viewport_texture);
-    register_output("texture", erhe::rendergraph::Rendergraph_node_key::viewport_texture);
+    register_input ("texture",    erhe::rendergraph::Rendergraph_node_key::viewport_texture);
+    register_output("texture",    erhe::rendergraph::Rendergraph_node_key::viewport_texture);
 }
 
 Post_processing_node::~Post_processing_node() noexcept
@@ -106,10 +107,31 @@ auto Post_processing_node::update_size() -> bool
         return (width > 0) && (height > 0);
     }
 
-    downsample_texture.reset();
-    upsample_texture.reset();
-    downsample_render_passes.clear();
-    upsample_render_passes.clear();
+    // Defer destruction of old resources until after Rendergraph::execute()
+    // completes. Nodes executing later in this frame (Window_imgui_host
+    // calling render_draw_data) may still reference these textures via
+    // Texture_reference::get_referenced_texture().
+    class Old_resources
+    {
+    public:
+        // Destruction order is reverse of declaration: render passes first
+        // (they hold raw Texture* to parent textures), then views, then parents.
+        std::shared_ptr<erhe::graphics::Texture>                  downsample_texture;
+        std::shared_ptr<erhe::graphics::Texture>                  upsample_texture;
+        std::vector<std::shared_ptr<erhe::graphics::Texture>>     downsample_texture_views;
+        std::vector<std::shared_ptr<erhe::graphics::Texture>>     upsample_texture_views;
+        std::vector<std::unique_ptr<erhe::graphics::Render_pass>> downsample_render_passes;
+        std::vector<std::unique_ptr<erhe::graphics::Render_pass>> upsample_render_passes;
+    };
+    auto old = std::make_shared<Old_resources>();
+    old->downsample_texture       = std::move(downsample_texture);
+    old->upsample_texture         = std::move(upsample_texture);
+    old->downsample_texture_views = std::move(downsample_texture_views);
+    old->upsample_texture_views   = std::move(upsample_texture_views);
+    old->downsample_render_passes = std::move(downsample_render_passes);
+    old->upsample_render_passes   = std::move(upsample_render_passes);
+    get_rendergraph().defer_resource(std::move(old));
+
     level0_width  = width;
     level0_height = height;
     if (level0_width < 1 || level0_height < 1) {

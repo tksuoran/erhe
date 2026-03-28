@@ -34,22 +34,22 @@ auto Node::get_graph_id() const -> int
     return m_graph_node_id;
 }
 
-auto Node::get_input_pins() const -> const std::vector<Pin>&
+auto Node::get_input_pins() const -> const etl::vector<Pin, max_pin_count>&
 {
     return m_input_pins;
 }
 
-auto Node::get_input_pins() -> std::vector<Pin>&
+auto Node::get_input_pins() -> etl::vector<Pin, max_pin_count>&
 {
     return m_input_pins;
 }
 
-auto Node::get_output_pins() const -> const std::vector<Pin>&
+auto Node::get_output_pins() const -> const etl::vector<Pin, max_pin_count>&
 {
     return m_output_pins;
 }
 
-auto Node::get_output_pins() -> std::vector<Pin>&
+auto Node::get_output_pins() -> etl::vector<Pin, max_pin_count>&
 {
     return m_output_pins;
 }

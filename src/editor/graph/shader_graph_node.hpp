@@ -63,7 +63,7 @@ protected:
         int                            pin_edge       {0};
         float                          edge_x         {0.0f};
     };
-    void show_pins(Node_context& context, std::vector<erhe::graph::Pin>& pins);
+    void show_pins(Node_context& context, etl::vector<erhe::graph::Pin, erhe::graph::max_pin_count>& pins);
 
     void text_unformatted_edge(int edge, const char* text);
 
