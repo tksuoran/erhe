@@ -8,7 +8,7 @@ layout(location = 2) in vec4      v_color;
 layout(location = 4) in vec3      v_T;
 layout(location = 5) in vec3      v_B;
 layout(location = 6) in vec3      v_N;
-layout(location = 7) in flat uint v_material_index;
+layout(location = 7) flat in uint v_material_index;
 
 void main()
 {

@@ -3,7 +3,7 @@ layout(location = 1) out vec4      v_position;
 layout(location = 2) out vec4      v_color;
 layout(location = 3) out vec2      v_aniso_control;
 layout(location = 4) out mat3      v_TBN;
-layout(location = 7) out flat uint v_draw_id;
+layout(location = 7) flat out uint v_draw_id;
 
 void main()
 {

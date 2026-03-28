@@ -1,5 +1,5 @@
 // Used by Shadow_renderer
-layout(location = 0) out flat uint v_material_index;
+layout(location = 0) flat out uint v_material_index;
 
 void main() {
     mat4 world_from_node;

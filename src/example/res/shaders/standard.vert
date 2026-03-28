@@ -2,7 +2,7 @@ layout(location = 0) out vec4      v_position;
 layout(location = 1) out vec2      v_texcoord;
 
 layout(location = 6) out vec3      v_N;
-layout(location = 7) out flat uint v_material_index;
+layout(location = 7) flat out uint v_material_index;
 
 void main()
 {
