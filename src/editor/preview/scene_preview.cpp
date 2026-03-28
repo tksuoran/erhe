@@ -106,6 +106,14 @@ void Scene_preview::set_color_texture(const std::shared_ptr<erhe::graphics::Text
     m_color_texture = color_texture;
 }
 
+void Scene_preview::set_color_texture_layer(unsigned int layer)
+{
+    if (m_color_texture_layer != layer) {
+        m_render_pass.reset();
+    }
+    m_color_texture_layer = layer;
+}
+
 void Scene_preview::set_clear_color(glm::vec4 clear_color)
 {
     m_clear_color = clear_color;
@@ -174,9 +182,10 @@ void Scene_preview::update_rendertarget(erhe::graphics::Device& graphics_device)
     }
 
     m_render_pass.reset();
-    erhe::graphics::Render_pass_descriptor render_pass_descriptor; 
-    render_pass_descriptor.color_attachments[0].texture      = m_color_texture.get();
-    render_pass_descriptor.color_attachments[0].load_action  = erhe::graphics::Load_action::Clear;
+    erhe::graphics::Render_pass_descriptor render_pass_descriptor;
+    render_pass_descriptor.color_attachments[0].texture       = m_color_texture.get();
+    render_pass_descriptor.color_attachments[0].texture_layer = m_color_texture_layer;
+    render_pass_descriptor.color_attachments[0].load_action   = erhe::graphics::Load_action::Clear;
     render_pass_descriptor.color_attachments[0].store_action = erhe::graphics::Store_action::Store;
     render_pass_descriptor.color_attachments[0].clear_value  = { m_clear_color.x, m_clear_color.y, m_clear_color.z, m_clear_color.w };
     render_pass_descriptor.depth_attachment.texture          = m_depth_texture.get();

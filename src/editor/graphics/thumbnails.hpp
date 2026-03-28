@@ -37,8 +37,9 @@ public:
     uint64_t                                 last_use_frame_number{0};
     int64_t                                  time{0};
     std::shared_ptr<erhe::graphics::Texture> texture_view{};
+    unsigned int                             texture_layer{0};
     std::optional<
-        std::function<void(const std::shared_ptr<erhe::graphics::Texture>&, int64_t)>
+        std::function<void(const std::shared_ptr<erhe::graphics::Texture>&, unsigned int, int64_t)>
     >                                        callback{};
 };
 
@@ -54,7 +55,9 @@ public:
     auto draw(
         const std::shared_ptr<erhe::Item_base>& item,
         std::function<void(
-            const std::shared_ptr<erhe::graphics::Texture>&, int64_t
+            const std::shared_ptr<erhe::graphics::Texture>&,
+            unsigned int,
+            int64_t
         )> callback,
         float display_size = 0.0f // 0 = use text line height
     ) -> bool;

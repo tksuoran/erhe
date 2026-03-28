@@ -730,8 +730,8 @@ void Hotbar::slot_button(const uint32_t id, Slot_entry& entry)
         std::shared_ptr<Brush> brush = entry.brush;
         const bool thumbnail_drawn = m_context.thumbnails->draw(
             brush,
-            [this, brush](const std::shared_ptr<erhe::graphics::Texture>& texture, int64_t time) {
-                m_context.brush_preview->render_preview(texture, brush, time);
+            [this, brush](const std::shared_ptr<erhe::graphics::Texture>& texture, unsigned int texture_layer, int64_t time) {
+                m_context.brush_preview->render_preview(texture, texture_layer, brush, time);
             },
             icon_size
         );
@@ -761,7 +761,7 @@ void Hotbar::slot_button(const uint32_t id, Slot_entry& entry)
         std::shared_ptr<erhe::primitive::Material> material = entry.material;
         const bool thumbnail_drawn = m_context.thumbnails->draw(
             material,
-            [this, material](const std::shared_ptr<erhe::graphics::Texture>& texture, int64_t) {
+            [this, material](const std::shared_ptr<erhe::graphics::Texture>& texture, unsigned int /*texture_layer*/, int64_t) {
                 m_context.material_preview->render_preview(texture, material);
             },
             icon_size

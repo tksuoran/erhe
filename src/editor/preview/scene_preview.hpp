@@ -57,10 +57,11 @@ public:
     // Public API
     [[nodiscard]] auto get_content_library() -> std::shared_ptr<Content_library>;
 
-    void resize             (int width, int height);
-    void set_color_texture  (const std::shared_ptr<erhe::graphics::Texture>& color_texture);
-    void set_clear_color    (glm::vec4 clear_color);
-    void update_rendertarget(erhe::graphics::Device& graphics_device);
+    void resize                 (int width, int height);
+    void set_color_texture      (const std::shared_ptr<erhe::graphics::Texture>& color_texture);
+    void set_color_texture_layer(unsigned int layer);
+    void set_clear_color        (glm::vec4 clear_color);
+    void update_rendertarget    (erhe::graphics::Device& graphics_device);
 
 protected:
     erhe::graphics::Device&                             m_graphics_device;
@@ -70,6 +71,7 @@ protected:
     bool                                                m_use_external_color_texture{false};
     erhe::dataformat::Format                            m_color_format;
     std::shared_ptr<erhe::graphics::Texture>            m_color_texture;
+    unsigned int                                        m_color_texture_layer{0};
     erhe::dataformat::Format                            m_depth_format;
     std::unique_ptr<erhe::graphics::Texture>            m_depth_texture;
     std::shared_ptr<erhe::graphics::Render_pass>        m_render_pass;

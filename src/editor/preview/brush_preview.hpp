@@ -19,6 +19,7 @@ public:
 
     void render_preview(
         const std::shared_ptr<erhe::graphics::Texture>& texture,
+        unsigned int                                    texture_layer,
         const std::shared_ptr<Brush>&                   brush,
         int64_t                                         time
     );

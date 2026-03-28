@@ -408,6 +408,7 @@ auto Shader_stages_prototype_impl::post_compile(const Shader_stage& shader, Gl_s
         gl::get_shader_iv(gl_name, gl::Shader_parameter_name::info_log_length, &length);
         std::string log(static_cast<std::string::size_type>(length) + 1, '\0');
         gl::get_shader_info_log(gl_name, length, nullptr, &log[0]);
+        log.erase(std::find(log.begin(), log.end(), '\0'), log.end());
         const std::string source = get_final_source(shader, gl_name);
         const std::string f_source = format_source(source);
         log_program->error("Shader_stage compilation failed:");
@@ -415,6 +416,7 @@ auto Shader_stages_prototype_impl::post_compile(const Shader_stage& shader, Gl_s
         log_glsl->error("\n{}", f_source);
         log_program->error("Shader_stage compilation failed:");
         log_program->error("{}", log);
+        m_device.shader_error(log, f_source);
         return false;
     }
     return true;
@@ -566,17 +568,22 @@ void Shader_stages_prototype_impl::post_link()
         m_state = state_fail;
         std::string log(static_cast<std::size_t>(info_log_length) + 1, 0);
         gl::get_program_info_log(gl_name, info_log_length, nullptr, &log[0]);
+        log.erase(std::find(log.begin(), log.end(), '\0'), log.end());
         log_program->error("Shader_stages linking failed:");
         log_program->error("{}", log);
+        std::string all_sources;
         ERHE_VERIFY(m_prelink_shaders.size() == m_create_info.shaders.size());
         for (size_t i = 0, end = m_prelink_shaders.size(); i < end; ++i) {
             log_program->error("Shader_stages linking failed:");
             const std::string source = get_final_source(m_create_info.shaders[i], m_prelink_shaders[i].gl_name());
             const std::string f_source = format_source(source);
             log_glsl->error("\n{}", f_source);
+            all_sources += f_source;
+            all_sources += "\n\n";
         }
         log_program->error("Shader_stages linking failed:");
         log_program->error("{}", log);
+        m_device.shader_error(log, all_sources);
         return;
     } else {
         m_state = state_ready;
@@ -614,8 +621,19 @@ void Shader_stages_prototype_impl::post_link()
                         const GLint location = gl::get_uniform_location(gl_name, member->get_name().c_str());
                         if (location >= 0) {
                             const int texture_unit = member->get_texture_unit();
-                            gl::uniform_1i(location, texture_unit);
-                            log_program->trace("Set sampler '{}' texture unit to {}", member->get_name(), texture_unit);
+                            const auto array_size = member->get_array_size();
+                            if (array_size.has_value() && array_size.value() > 1) {
+                                // Set all array elements to consecutive texture units
+                                std::vector<GLint> units(array_size.value());
+                                for (std::size_t i = 0; i < array_size.value(); ++i) {
+                                    units[i] = texture_unit + static_cast<GLint>(i);
+                                }
+                                gl::uniform_1iv(location, static_cast<GLsizei>(array_size.value()), units.data());
+                                log_program->trace("Set sampler array '{}' texture units to {}..{}", member->get_name(), texture_unit, texture_unit + static_cast<int>(array_size.value()) - 1);
+                            } else {
+                                gl::uniform_1i(location, texture_unit);
+                                log_program->trace("Set sampler '{}' texture unit to {}", member->get_name(), texture_unit);
+                            }
                         }
                     }
                 }
