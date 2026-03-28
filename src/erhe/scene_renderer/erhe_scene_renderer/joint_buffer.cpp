@@ -15,7 +15,14 @@
 namespace erhe::scene_renderer {
 
 Joint_interface::Joint_interface(erhe::graphics::Device& graphics_device, const int max_joint_count)
-    : joint_block {erhe::graphics::Shader_resource{graphics_device, "joint", joint_buffer_binding_point, erhe::graphics::Shader_resource::Type::shader_storage_block}}
+    : joint_block{erhe::graphics::Shader_resource{
+        graphics_device,
+        "joint",
+        joint_buffer_binding_point,
+        graphics_device.get_info().use_shader_storage_buffers
+            ? erhe::graphics::Shader_resource::Type::shader_storage_block
+            : erhe::graphics::Shader_resource::Type::uniform_block
+    }}
     , joint_struct{erhe::graphics::Shader_resource{graphics_device, "Joint"}}
     , max_joint_count{static_cast<std::size_t>(max_joint_count)}
 {
@@ -31,14 +38,16 @@ Joint_interface::Joint_interface(erhe::graphics::Device& graphics_device, const 
         .normal_transform = joint_struct.add_mat4("world_from_bind_normal")->get_offset_in_parent()
     };
 
-    // TODO Unsized arrays require GLSL 430
-    offsets.joint_struct = joint_block.add_struct("joints", &joint_struct, erhe::graphics::Shader_resource::unsized_array)->get_offset_in_parent();
+    const std::optional<std::size_t> array_size = graphics_device.get_info().use_shader_storage_buffers
+        ? erhe::graphics::Shader_resource::unsized_array
+        : std::optional<std::size_t>{(static_cast<std::size_t>(graphics_device.get_info().max_uniform_block_size) - joint_block.get_size_bytes()) / joint_struct.get_size_bytes()};
+    offsets.joint_struct = joint_block.add_struct("joints", &joint_struct, array_size)->get_offset_in_parent();
 }
 
 Joint_buffer::Joint_buffer(erhe::graphics::Device& graphics_device, Joint_interface& joint_interface)
     : Ring_buffer_client{
         graphics_device,
-        erhe::graphics::Buffer_target::storage,
+        joint_interface.joint_block.get_binding_target(),
         "Joint_buffer",
         joint_interface.joint_block.get_binding_point()
     }

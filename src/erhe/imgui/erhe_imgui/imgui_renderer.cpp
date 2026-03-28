@@ -136,7 +136,14 @@ auto get_shader_default_uniform_block(erhe::graphics::Device& graphics_device, c
 }
 
 Imgui_program_interface::Imgui_program_interface(erhe::graphics::Device& graphics_device)
-    : draw_parameter_block{graphics_device, "draw", 0, erhe::graphics::Shader_resource::Type::shader_storage_block}
+    : draw_parameter_block{
+        graphics_device,
+        "draw",
+        0,
+        graphics_device.get_info().use_shader_storage_buffers
+            ? erhe::graphics::Shader_resource::Type::shader_storage_block
+            : erhe::graphics::Shader_resource::Type::uniform_block
+    }
     , draw_parameter_struct{graphics_device, "Draw_parameters"}
     , draw_parameter_struct_offsets{
         .clip_rect = draw_parameter_struct.add_vec4 ("clip_rect")->get_offset_in_parent(),
@@ -146,7 +153,13 @@ Imgui_program_interface::Imgui_program_interface(erhe::graphics::Device& graphic
     , block_offsets{
         .scale                       = draw_parameter_block.add_vec4  ("scale"    )->get_offset_in_parent(),
         .translate                   = draw_parameter_block.add_vec4  ("translate")->get_offset_in_parent(),
-        .draw_parameter_struct_array = draw_parameter_block.add_struct("draw_parameters", &draw_parameter_struct, 0 /* unsized array*/ )->get_offset_in_parent()
+        .draw_parameter_struct_array = draw_parameter_block.add_struct(
+            "draw_parameters",
+            &draw_parameter_struct,
+            graphics_device.get_info().use_shader_storage_buffers
+                ? erhe::graphics::Shader_resource::unsized_array
+                : std::optional<std::size_t>{(static_cast<std::size_t>(graphics_device.get_info().max_uniform_block_size) - 2 * sizeof(glm::vec4)) / draw_parameter_struct.get_size_bytes()}
+        )->get_offset_in_parent()
     }
     , fragment_outputs{
         erhe::graphics::Fragment_output{
@@ -210,7 +223,7 @@ Imgui_renderer::Imgui_renderer(erhe::graphics::Device& graphics_device, Imgui_se
     }
     , m_draw_parameter_buffer{
         graphics_device,
-        erhe::graphics::Buffer_target::storage,
+        m_imgui_program_interface.draw_parameter_block.get_binding_target(),
         "ImGui Draw Parameter Buffer",
         m_imgui_program_interface.draw_parameter_block.get_binding_point(),
     }

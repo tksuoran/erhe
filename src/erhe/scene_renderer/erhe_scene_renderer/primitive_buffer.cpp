@@ -20,7 +20,14 @@
 namespace erhe::scene_renderer {
 
 Primitive_interface::Primitive_interface(erhe::graphics::Device& graphics_device, const int max_primitive_count)
-    : primitive_block {graphics_device, "primitive", primitive_buffer_binding_point, erhe::graphics::Shader_resource::Type::shader_storage_block}
+    : primitive_block{
+        graphics_device,
+        "primitive",
+        primitive_buffer_binding_point,
+        graphics_device.get_info().use_shader_storage_buffers
+            ? erhe::graphics::Shader_resource::Type::shader_storage_block
+            : erhe::graphics::Shader_resource::Type::uniform_block
+    }
     , primitive_struct{graphics_device, "Primitive"}
     , offsets{
         .world_from_node  = primitive_struct.add_mat4 ("world_from_node"       )->get_offset_in_parent(),
@@ -33,14 +40,17 @@ Primitive_interface::Primitive_interface(erhe::graphics::Device& graphics_device
     }
     , max_primitive_count{static_cast<std::size_t>(max_primitive_count)}
 {
-    primitive_block.add_struct("primitives", &primitive_struct, erhe::graphics::Shader_resource::unsized_array);
+    const std::optional<std::size_t> array_size = graphics_device.get_info().use_shader_storage_buffers
+        ? erhe::graphics::Shader_resource::unsized_array
+        : std::optional<std::size_t>{static_cast<std::size_t>(graphics_device.get_info().max_uniform_block_size) / primitive_struct.get_size_bytes()};
+    primitive_block.add_struct("primitives", &primitive_struct, array_size);
     primitive_block.set_readonly(true);
 }
 
 Primitive_buffer::Primitive_buffer(erhe::graphics::Device& graphics_device, Primitive_interface& primitive_interface)
     : Ring_buffer_client{
         graphics_device,
-        erhe::graphics::Buffer_target::storage,
+        primitive_interface.primitive_block.get_binding_target(),
         "Primitive_buffer",
         primitive_interface.primitive_block.get_binding_point()
     }

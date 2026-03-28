@@ -6,13 +6,27 @@
 namespace erhe::scene_renderer {
 
 Cube_interface::Cube_interface(erhe::graphics::Device& graphics_device)
-    : cube_instance_block  {graphics_device, "instance", cube_instance_buffer_binding_point, erhe::graphics::Shader_resource::Type::shader_storage_block}
+    : cube_instance_block{
+        graphics_device,
+        "instance",
+        cube_instance_buffer_binding_point,
+        graphics_device.get_info().use_shader_storage_buffers
+            ? erhe::graphics::Shader_resource::Type::shader_storage_block
+            : erhe::graphics::Shader_resource::Type::uniform_block
+    }
     , cube_instance_struct {graphics_device, "Instance"}
     , cube_instance_offsets{
         .packed_position = cube_instance_struct.add_uint("packed_position")->get_offset_in_parent(),
     }
 
-    , cube_control_block  {graphics_device, "cube_control", cube_control_buffer_binding_point, erhe::graphics::Shader_resource::Type::shader_storage_block}
+    , cube_control_block{
+        graphics_device,
+        "cube_control",
+        cube_control_buffer_binding_point,
+        graphics_device.get_info().use_shader_storage_buffers
+            ? erhe::graphics::Shader_resource::Type::shader_storage_block
+            : erhe::graphics::Shader_resource::Type::uniform_block
+    }
     , cube_control_struct {graphics_device, "Cube_control"}
     , cube_control_offsets{
         .cube_size   = cube_control_struct.add_vec4("cube_size"  )->get_offset_in_parent(),
@@ -22,11 +36,21 @@ Cube_interface::Cube_interface(erhe::graphics::Device& graphics_device)
         .color_end   = cube_control_struct.add_vec4("color_end"  )->get_offset_in_parent(),
     }
 {
-    cube_instance_block.add_struct("instances", &cube_instance_struct, erhe::graphics::Shader_resource::unsized_array);
-    cube_instance_block.set_readonly(true);
+    {
+        const std::optional<std::size_t> array_size = graphics_device.get_info().use_shader_storage_buffers
+            ? erhe::graphics::Shader_resource::unsized_array
+            : std::optional<std::size_t>{static_cast<std::size_t>(graphics_device.get_info().max_uniform_block_size) / cube_instance_struct.get_size_bytes()};
+        cube_instance_block.add_struct("instances", &cube_instance_struct, array_size);
+        cube_instance_block.set_readonly(true);
+    }
 
-    cube_control_block.add_struct("cube_control", &cube_control_struct, erhe::graphics::Shader_resource::unsized_array);
-    cube_control_block.set_readonly(true);
+    {
+        const std::optional<std::size_t> array_size = graphics_device.get_info().use_shader_storage_buffers
+            ? erhe::graphics::Shader_resource::unsized_array
+            : std::optional<std::size_t>{static_cast<std::size_t>(graphics_device.get_info().max_uniform_block_size) / cube_control_struct.get_size_bytes()};
+        cube_control_block.add_struct("cube_control", &cube_control_struct, array_size);
+        cube_control_block.set_readonly(true);
+    }
 }
 
 Cube_instance_buffer::Cube_instance_buffer(
@@ -72,7 +96,7 @@ auto Cube_instance_buffer::bind(erhe::graphics::Render_command_encoder& encoder)
 Cube_control_buffer::Cube_control_buffer(erhe::graphics::Device& graphics_device, Cube_interface& cube_interface)
     : Ring_buffer_client{
         graphics_device,
-        erhe::graphics::Buffer_target::storage,
+        cube_interface.cube_control_block.get_binding_target(),
         "cube_control",
         cube_interface.cube_control_block.get_binding_point()
     }
