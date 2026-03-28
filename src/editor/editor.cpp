@@ -130,6 +130,7 @@
 #include "erhe_window/window_event_handler.hpp"
 #include "erhe_ui/ui_log.hpp"
 
+#include <SDL3/SDL.h>
 #include <taskflow/taskflow.hpp>
 
 #if defined(ERHE_PROFILE_LIBRARY_NVTX)
@@ -401,7 +402,7 @@ public:
 
         m_app_context.developer_mode = editor_config.developer.enable;
 
-        m_app_context.renderdoc = editor_config.renderdoc.capture_support;
+        m_app_context.renderdoc = editor_config.graphics.renderdoc_capture_support;
         if (m_app_context.renderdoc) {
             m_app_context.developer_mode = true;
         }
@@ -499,10 +500,17 @@ public:
                 },
                 [this]() {
                     Graphics_config config = m_editor_config.graphics;
-                    config.renderdoc_capture_support = m_editor_config.renderdoc.capture_support;
-                    config.shader_monitor_enabled    = m_editor_config.shader_monitor.enabled;
+                    config.shader_monitor_enabled = m_editor_config.shader_monitor.enabled;
                     return config;
                 }()
+            );
+
+            m_graphics_device->set_shader_error_callback(
+                [](const std::string& error_log, const std::string& shader_source) {
+                    std::string clipboard_text = "=== Shader Error ===\n" + error_log + "\n=== Shader Source ===\n" + shader_source;
+                    SDL_SetClipboardText(clipboard_text.c_str());
+                    ERHE_FATAL("Shader compilation/linking failed (error and source copied to clipboard)");
+                }
             );
 
             m_app_settings->apply_limits(
@@ -586,17 +594,18 @@ public:
             m_selection            = std::make_unique<Selection     >(commands, m_app_context, app_message_bus);
             m_scene_commands       = std::make_unique<Scene_commands>(commands, m_app_context);
             m_debug_draw           = std::make_unique<Debug_draw    >(m_app_context);
+            erhe::scene_renderer::Program_interface_config program_interface_config{
+                .max_camera_count    = m_editor_config.renderer.max_camera_count,
+                .max_joint_count     = m_editor_config.renderer.max_joint_count,
+                .max_light_count     = m_editor_config.renderer.max_light_count,
+                .max_material_count  = m_editor_config.renderer.max_material_count,
+                .max_primitive_count = m_editor_config.renderer.max_primitive_count,
+                .max_draw_count      = m_editor_config.renderer.max_draw_count
+            };
             m_program_interface    = std::make_unique<erhe::scene_renderer::Program_interface>(
                 *m_graphics_device.get(),
                 m_vertex_format,
-                erhe::scene_renderer::Program_interface_config{
-                    .max_camera_count    = m_editor_config.renderer.max_camera_count,
-                    .max_joint_count     = m_editor_config.renderer.max_joint_count,
-                    .max_light_count     = m_editor_config.renderer.max_light_count,
-                    .max_material_count  = m_editor_config.renderer.max_material_count,
-                    .max_primitive_count = m_editor_config.renderer.max_primitive_count,
-                    .max_draw_count      = m_editor_config.renderer.max_draw_count
-                }
+                program_interface_config
             );
             m_programs             = std::make_unique<Programs>(*m_graphics_device.get());
 
@@ -1683,7 +1692,7 @@ void run_editor()
     {
         ERHE_PROFILE_SCOPE("init renderdoc");
         const Editor_config early_config = load_editor_config("erhe.json");
-        if (early_config.renderdoc.capture_support) {
+        if (early_config.graphics.renderdoc_capture_support) {
             erhe::window::initialize_frame_capture();
         }
     }

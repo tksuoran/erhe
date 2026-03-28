@@ -30,7 +30,7 @@ public:
     Program_interface(
         erhe::graphics::Device&            graphics_device,
         erhe::dataformat::Vertex_format&   vertex_format,
-        const Program_interface_config&    config = {}
+        Program_interface_config&          config
     );
 
     Program_interface(const Program_interface&) = delete;

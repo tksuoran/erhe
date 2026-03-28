@@ -15,7 +15,7 @@ using erhe::graphics::Vertex_attribute;
 Program_interface::Program_interface(
     erhe::graphics::Device&          graphics_device,
     erhe::dataformat::Vertex_format& vertex_format,
-    const Program_interface_config&  config
+    Program_interface_config&        config
 )
     : graphics_device{graphics_device}
     , fragment_outputs{
@@ -34,6 +34,12 @@ Program_interface::Program_interface(
     , material_interface {graphics_device, config.max_material_count}
     , primitive_interface{graphics_device, config.max_primitive_count}
 {
+    // Write clamped values back to config so callers see actual UBO limits
+    config.max_camera_count    = static_cast<int>(camera_interface.max_camera_count);
+    config.max_joint_count     = static_cast<int>(joint_interface.max_joint_count);
+    config.max_light_count     = static_cast<int>(light_interface.max_light_count);
+    config.max_material_count  = static_cast<int>(material_interface.max_material_count);
+    config.max_primitive_count = static_cast<int>(primitive_interface.max_primitive_count);
 }
 
 auto Program_interface::make_prototype(
