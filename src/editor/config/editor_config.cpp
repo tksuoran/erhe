@@ -12,7 +12,6 @@
 #include "config/generated/mesh_memory_config_serialization.hpp"
 #include "config/generated/network_config_serialization.hpp"
 #include "config/generated/physics_config_serialization.hpp"
-#include "config/generated/renderdoc_config_serialization.hpp"
 #include "config/generated/renderer_config_serialization.hpp"
 #include "config/generated/scene_config_serialization.hpp"
 #include "config/generated/shader_monitor_config_serialization.hpp"
@@ -85,7 +84,6 @@ auto load_editor_config(std::string_view path) -> Editor_config
     deserialize_section(root, "mesh_memory",     config.mesh_memory);
     deserialize_section(root, "network",         config.network);
     deserialize_section(root, "physics",         config.physics);
-    deserialize_section(root, "renderdoc",       config.renderdoc);
     deserialize_section(root, "renderer",        config.renderer);
     deserialize_section(root, "scene",           config.scene);
     deserialize_section(root, "shader_monitor",  config.shader_monitor);
@@ -115,7 +113,6 @@ void save_editor_config(const Editor_config& config, std::string_view path)
     out += "    \"mesh_memory\": ";     out += serialize(config.mesh_memory,     1); out += ",\n";
     out += "    \"network\": ";         out += serialize(config.network,         1); out += ",\n";
     out += "    \"physics\": ";         out += serialize(config.physics,         1); out += ",\n";
-    out += "    \"renderdoc\": ";       out += serialize(config.renderdoc,       1); out += ",\n";
     out += "    \"renderer\": ";        out += serialize(config.renderer,        1); out += ",\n";
     out += "    \"scene\": ";           out += serialize(config.scene,           1); out += ",\n";
     out += "    \"shader_monitor\": ";  out += serialize(config.shader_monitor,  1); out += ",\n";

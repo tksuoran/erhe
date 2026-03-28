@@ -95,10 +95,6 @@
         "static_enable": true,
         "dynamic_enable": true
     },
-    "renderdoc": {
-        "_version": 1,
-        "capture_support": false
-    },
     "renderer": {
         "_version": 1,
         "max_material_count": 1000,

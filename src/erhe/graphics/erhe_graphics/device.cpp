@@ -135,6 +135,16 @@ auto Device::get_impl() const -> const Device_impl&
 {
     return *m_impl.get();
 }
+void Device::set_shader_error_callback(Shader_error_callback callback)
+{
+    m_shader_error_callback = std::move(callback);
+}
+void Device::shader_error(const std::string& error_log, const std::string& shader_source)
+{
+    if (m_shader_error_callback) {
+        m_shader_error_callback(error_log, shader_source);
+    }
+}
 
 // // // // //
 

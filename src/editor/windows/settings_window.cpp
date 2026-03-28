@@ -17,7 +17,6 @@
 #include "config/generated/mesh_memory_config_serialization.hpp"
 #include "config/generated/network_config_serialization.hpp"
 #include "config/generated/physics_config_serialization.hpp"
-#include "config/generated/renderdoc_config_serialization.hpp"
 #include "config/generated/renderer_config_serialization.hpp"
 #include "config/generated/scene_config_serialization.hpp"
 #include "config/generated/shader_monitor_config_serialization.hpp"
@@ -422,7 +421,6 @@ void Settings_window::imgui()
         add_config_section(config.mesh_memory);
         add_config_section(config.network);
         add_config_section(config.physics);
-        add_config_section(config.renderdoc);
         add_config_section(config.renderer);
         add_config_section(config.scene);
         add_config_section(config.shader_monitor);
