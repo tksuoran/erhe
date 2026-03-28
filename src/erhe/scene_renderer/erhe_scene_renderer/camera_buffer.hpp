@@ -56,7 +56,8 @@ public:
         float                          exposure,
         glm::vec4                      grid_size,
         glm::vec4                      grid_line_width,
-        uint64_t                       frame_number
+        uint64_t                       frame_number,
+        bool                           reverse_depth = true
     ) -> erhe::graphics::Ring_buffer_range;
 
 private:

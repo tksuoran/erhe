@@ -1140,7 +1140,9 @@ public:
         m_imgui_renderer->on_font_config_changed(m_app_settings->imgui);
 
 #if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
-        gl::clip_control(gl::Clip_control_origin::lower_left, gl::Clip_control_depth::zero_to_one);
+        if (m_graphics_device->get_info().use_clip_control) {
+            gl::clip_control(gl::Clip_control_origin::lower_left, gl::Clip_control_depth::zero_to_one);
+        }
         if (m_window->get_window_configuration().color_bit_depth <= 8) {
             gl::enable(gl::Enable_cap::framebuffer_srgb);
         }

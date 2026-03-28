@@ -72,6 +72,7 @@ public:
         const std::span<const std::shared_ptr<erhe::scene::Skin>>&         skins{};
         const std::span<const std::shared_ptr<erhe::primitive::Material>>& materials{};
         Light_projections&                                                 light_projections;
+        bool                                                               reverse_depth{true};
     };
 
     auto render(const Render_parameters& parameters) -> bool;
@@ -80,11 +81,12 @@ private:
     class Pipeline_cache_entry
     {
     public:
-        uint64_t                              serial  {0};
-        erhe::graphics::Render_pipeline_state pipeline{};
+        uint64_t                              serial       {0};
+        bool                                  reverse_depth{true};
+        erhe::graphics::Render_pipeline_state pipeline     {};
     };
 
-    [[nodiscard]] auto get_pipeline(const erhe::graphics::Vertex_input_state* vertex_input_state) -> erhe::graphics::Render_pipeline_state&;
+    [[nodiscard]] auto get_pipeline(const erhe::graphics::Vertex_input_state* vertex_input_state, bool reverse_depth) -> erhe::graphics::Render_pipeline_state&;
 
     erhe::graphics::Device&                       m_graphics_device;
     uint64_t                                      m_pipeline_cache_serial{0};

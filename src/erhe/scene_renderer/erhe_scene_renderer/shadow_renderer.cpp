@@ -78,7 +78,7 @@ Shadow_renderer::Shadow_renderer(erhe::graphics::Device& graphics_device, Progra
 
 Shadow_renderer::~Shadow_renderer() noexcept = default;
 
-auto Shadow_renderer::get_pipeline(const Vertex_input_state* vertex_input_state) -> erhe::graphics::Render_pipeline_state&
+auto Shadow_renderer::get_pipeline(const Vertex_input_state* vertex_input_state, const bool reverse_depth) -> erhe::graphics::Render_pipeline_state&
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -86,7 +86,7 @@ auto Shadow_renderer::get_pipeline(const Vertex_input_state* vertex_input_state)
     uint64_t              lru_serial{m_pipeline_cache_serial};
     Pipeline_cache_entry* lru_entry {nullptr};
     for (auto& entry : m_pipeline_cache_entries) {
-        if (entry.pipeline.data.vertex_input == vertex_input_state) {
+        if ((entry.pipeline.data.vertex_input == vertex_input_state) && (entry.reverse_depth == reverse_depth)) {
             entry.serial = m_pipeline_cache_serial;
             return entry.pipeline;
         }
@@ -96,7 +96,8 @@ auto Shadow_renderer::get_pipeline(const Vertex_input_state* vertex_input_state)
         }
     }
     ERHE_VERIFY(lru_entry != nullptr);
-    lru_entry->serial = m_pipeline_cache_serial;
+    lru_entry->serial        = m_pipeline_cache_serial;
+    lru_entry->reverse_depth = reverse_depth;
     lru_entry->pipeline = erhe::graphics::Render_pipeline_state{
         erhe::graphics::Render_pipeline_data{
             .debug_label    = erhe::utility::Debug_label{"Shadow Renderer"},
@@ -104,7 +105,7 @@ auto Shadow_renderer::get_pipeline(const Vertex_input_state* vertex_input_state)
             .vertex_input   = vertex_input_state,
             .input_assembly = Input_assembly_state::triangle,
             .rasterization  = Rasterization_state::cull_mode_none,
-            .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(),
+            .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
             .color_blend    = Color_blend_state::color_writes_disabled
         }
     };
@@ -127,7 +128,8 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
         parameters.view_camera,
         parameters.view_camera_viewport,
         parameters.light_camera_viewport,
-        parameters.texture
+        parameters.texture,
+        parameters.reverse_depth
     );
 
     erhe::graphics::Scoped_debug_group debug_group{"Shadow_renderer::render()"};
@@ -136,7 +138,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
     const auto& mesh_spans = parameters.mesh_spans;
     const auto& lights     = parameters.lights;
 
-    auto& pipeline = get_pipeline(parameters.vertex_input_state);
+    auto& pipeline = get_pipeline(parameters.vertex_input_state, parameters.reverse_depth);
 
     erhe::Item_filter shadow_filter{
         .require_all_bits_set           = erhe::Item_flags::visible | erhe::Item_flags::shadow_cast,

@@ -172,7 +172,8 @@ void Material_preview::render_preview(const std::shared_ptr<erhe::primitive::Mat
         m_camera.get(),
         viewport,
         erhe::math::Viewport{},
-        m_shadow_texture
+        m_shadow_texture,
+        get_reverse_depth()
     );
 
     erhe::graphics::Render_command_encoder render_encoder = m_graphics_device.make_render_command_encoder();

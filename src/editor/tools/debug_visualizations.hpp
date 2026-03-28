@@ -68,6 +68,8 @@ public:
     // Implements Renderable
     void render(const Render_context& context) override;
 
+    void rebuild_depth_state(bool reverse_depth);
+
     // Implements Imgui_window
     void imgui() override;
 
@@ -116,7 +118,8 @@ private:
 
     void make_combo(const char* label, Visualization_mode& visualization);
 
-    erhe::message_bus::Subscription<Hover_scene_view_message> m_hover_scene_view_subscription;
+    erhe::message_bus::Subscription<Hover_scene_view_message>    m_hover_scene_view_subscription;
+    erhe::message_bus::Subscription<Graphics_settings_message> m_graphics_settings_subscription;
     App_context&                         m_context;
     Scene_view*                          m_hover_scene_view{nullptr};
     erhe::math::Bounding_volume_combiner m_selection_bounding_volume;

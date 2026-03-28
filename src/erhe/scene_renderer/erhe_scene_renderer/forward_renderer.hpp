@@ -78,6 +78,7 @@ public:
         const glm::vec4                                                    grid_line_width{ 0.006, 0.02f, 0.02f, 0.02f};
 
         uint64_t                                                           frame_number{0};
+        bool                                                               reverse_depth{true};
     };
 
     void render(const Render_parameters& parameters);
@@ -94,8 +95,6 @@ private:
     Light_buffer                                  m_light_buffer;
     Material_buffer                               m_material_buffer;
     Primitive_buffer                              m_primitive_buffer;
-    erhe::graphics::Sampler                       m_shadow_sampler_compare;
-    erhe::graphics::Sampler                       m_shadow_sampler_no_compare;
     erhe::graphics::Sampler                       m_fallback_sampler;
     std::shared_ptr<erhe::graphics::Texture>      m_dummy_texture;
     std::unique_ptr<erhe::graphics::Texture_heap> m_texture_heap;

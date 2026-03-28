@@ -21,7 +21,12 @@
 
 #include "erhe_commands/command.hpp"
 #include "erhe_commands/commands.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_graphics/gpu_timer.hpp"
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#   include "erhe_gl/wrapper_functions.hpp"
+#   include "erhe_gl/enum_bit_mask_operators.hpp"
+#endif
 #include "erhe_graphics/swapchain.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_rendergraph/rendergraph.hpp"
@@ -338,6 +343,24 @@ void App_rendering::handle_graphics_settings_changed(Graphics_preset* graphics_p
     for (const auto& node : m_all_shadow_render_nodes) {
         node->reconfigure(*m_context.graphics_device, resolution, light_count, graphics_preset->shadow_depth_bits);
     }
+
+    if (graphics_preset != nullptr) {
+        // Reverse depth requires glClipControl (GL 4.5 / ARB_clip_control) for zero-to-one depth range.
+        // Clamp to forward depth when clip control is not available.
+        const bool use_clip_control = m_context.graphics_device->get_info().use_clip_control;
+        const bool reverse_depth = graphics_preset->reverse_depth && use_clip_control;
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+        if (use_clip_control) {
+            gl::clip_control(
+                gl::Clip_control_origin::lower_left,
+                reverse_depth ? gl::Clip_control_depth::zero_to_one : gl::Clip_control_depth::negative_one_to_one
+            );
+        }
+#endif
+        m_pipeline_passes.rebuild_depth_state(reverse_depth);
+        m_context.id_renderer->rebuild_depth_state(reverse_depth);
+        m_context.tools->rebuild_depth_state(reverse_depth);
+    }
 }
 
 auto App_rendering::get_shadow_node_for_view(const Scene_view& scene_view) -> std::shared_ptr<Shadow_render_node>
@@ -414,7 +437,7 @@ using Rasterization_state        = erhe::graphics::Rasterization_state;
 using Depth_stencil_state        = erhe::graphics::Depth_stencil_state;
 using Color_blend_state          = erhe::graphics::Color_blend_state;
 
-Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_device, Mesh_memory&mesh_memory, Programs& programs)
+Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_device, Mesh_memory&mesh_memory, Programs& programs, const bool reverse_depth)
     : m_empty_vertex_input{graphics_device}
     , polygon_fill_standard_opaque_positive_determinant{erhe::graphics::Render_pipeline_state{{
         .debug_label    = erhe::utility::Debug_label{"Polygon Fill Opaque Positive Determinant"},
@@ -422,7 +445,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangle,
         .rasterization  = Rasterization_state::cull_mode_back_ccw,
-        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(),
+        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
         .color_blend    = Color_blend_state::color_blend_disabled
     }}}
     , polygon_fill_standard_opaque_negative_determinant{erhe::graphics::Render_pipeline_state{{
@@ -431,7 +454,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangle,
         .rasterization  = Rasterization_state::cull_mode_back_cw,
-        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(),
+        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
         .color_blend    = Color_blend_state::color_blend_disabled
     }}}
     , polygon_fill_standard_opaque_selected_positive_determinant{erhe::graphics::Render_pipeline_state{{
@@ -443,7 +466,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .depth_stencil  = {
             .depth_test_enable   = true,
             .depth_write_enable  = true,
-            .depth_compare_op    = erhe::graphics::get_depth_function(erhe::graphics::Compare_operation::less, true),
+            .depth_compare_op    = erhe::graphics::get_depth_function(erhe::graphics::Compare_operation::less, reverse_depth),
             .stencil_test_enable = true,
             .stencil_front = {
                 .stencil_fail_op = erhe::graphics::Stencil_op::replace,
@@ -475,7 +498,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .depth_stencil  = {
             .depth_test_enable   = true,
             .depth_write_enable  = true,
-            .depth_compare_op    = erhe::graphics::get_depth_function(erhe::graphics::Compare_operation::less, true),
+            .depth_compare_op    = erhe::graphics::get_depth_function(erhe::graphics::Compare_operation::less, reverse_depth),
             .stencil_test_enable = true,
             .stencil_front = {
                 .stencil_fail_op = erhe::graphics::Stencil_op::replace,
@@ -504,7 +527,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangle,
         .rasterization  = Rasterization_state::cull_mode_none,
-        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(),
+        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
         .color_blend    = Color_blend_state::color_blend_premultiplied
     }}}
     , line_hidden_blend{erhe::graphics::Render_pipeline_state{{
@@ -519,7 +542,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .depth_stencil  = {
             .depth_test_enable   = true,
             .depth_write_enable  = false,
-            .depth_compare_op    = erhe::graphics::get_depth_function(erhe::graphics::Compare_operation::greater, true),
+            .depth_compare_op    = erhe::graphics::get_depth_function(erhe::graphics::Compare_operation::greater, reverse_depth),
             .stencil_test_enable = true,
             .stencil_front = {
                 .stencil_fail_op = erhe::graphics::Stencil_op::keep,
@@ -561,7 +584,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangle,
         .rasterization  = Rasterization_state::cull_mode_front_ccw,
-        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(),
+        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
         .color_blend    = Color_blend_state::color_blend_premultiplied
     }}}
     , brush_front{erhe::graphics::Render_pipeline_state{{
@@ -570,7 +593,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangle,
         .rasterization  = Rasterization_state::cull_mode_back_ccw,
-        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(),
+        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
         .color_blend    = Color_blend_state::color_blend_premultiplied
     }}}
     , edge_lines{erhe::graphics::Render_pipeline_state{{
@@ -582,7 +605,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .depth_stencil = {
             .depth_test_enable   = true,
             .depth_write_enable  = true,
-            .depth_compare_op    = erhe::graphics::get_depth_function(erhe::graphics::Compare_operation::less_or_equal, true),
+            .depth_compare_op    = erhe::graphics::get_depth_function(erhe::graphics::Compare_operation::less_or_equal, reverse_depth),
             .stencil_test_enable = true,
             .stencil_front = {
                 .stencil_fail_op = erhe::graphics::Stencil_op::keep,
@@ -646,7 +669,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::point,
         .rasterization  = Rasterization_state::cull_mode_back_ccw,
-        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(),
+        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
         .color_blend    = Color_blend_state::color_blend_disabled
     }}}
     , polygon_centroids{erhe::graphics::Render_pipeline_state{{
@@ -655,7 +678,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::point,
         .rasterization  = Rasterization_state::cull_mode_back_ccw,
-        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(),
+        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
         .color_blend    = Color_blend_state::color_blend_disabled
     }}}
     , rendertarget_meshes{erhe::graphics::Render_pipeline_state{{
@@ -666,7 +689,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .rasterization  = Rasterization_state::cull_mode_back_ccw, 
         // Useful for debugging rendertarget meshes
         // .rasterization  = Rasterization_state::cull_mode_none,
-        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(),
+        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
         .color_blend    = Color_blend_state::color_blend_premultiplied
     }}}
     , sky{
@@ -720,7 +743,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
                 .depth_stencil = {
                     .depth_test_enable   = true,
                     .depth_write_enable  = true,
-                    .depth_compare_op    = erhe::graphics::get_depth_function(erhe::graphics::Compare_operation::less_or_equal, true),
+                    .depth_compare_op    = erhe::graphics::get_depth_function(erhe::graphics::Compare_operation::less_or_equal, reverse_depth),
                     .stencil_test_enable = true, // Conditionally render fragments where bit 7 is not set, without modifying the stencil buffer
                     .stencil_front = {
                         .stencil_fail_op = erhe::graphics::Stencil_op::keep,
@@ -747,6 +770,32 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         }
     }
 {
+}
+
+void Pipeline_renderpasses::rebuild_depth_state(const bool reverse_depth)
+{
+    using erhe::graphics::Compare_operation;
+    const auto depth_less          = erhe::graphics::get_depth_function(Compare_operation::less,             reverse_depth);
+    const auto depth_less_or_equal = erhe::graphics::get_depth_function(Compare_operation::less_or_equal,    reverse_depth);
+    const auto depth_greater       = erhe::graphics::get_depth_function(Compare_operation::greater,          reverse_depth);
+    const auto depth_default       = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth);
+
+    polygon_fill_standard_opaque_positive_determinant         .data.depth_stencil = depth_default;
+    polygon_fill_standard_opaque_negative_determinant         .data.depth_stencil = depth_default;
+    polygon_fill_standard_opaque_selected_positive_determinant.data.depth_stencil.depth_compare_op = depth_less;
+    polygon_fill_standard_opaque_selected_negative_determinant.data.depth_stencil.depth_compare_op = depth_less;
+    polygon_fill_standard_translucent                         .data.depth_stencil = depth_default;
+    line_hidden_blend                                         .data.depth_stencil.depth_compare_op = depth_greater;
+    brush_back                                                .data.depth_stencil = depth_default;
+    brush_front                                               .data.depth_stencil = depth_default;
+    edge_lines                                                .data.depth_stencil.depth_compare_op = depth_less_or_equal;
+    rendertarget_meshes                                       .data.depth_stencil = depth_default;
+    const float far_depth = reverse_depth ? 0.0f : 1.0f;
+    sky.data.viewport_depth_range = erhe::graphics::Viewport_depth_range_state{ .min_depth = far_depth, .max_depth = far_depth };
+    outline                                                   .data.depth_stencil.depth_compare_op = depth_less_or_equal;
+    corner_points                                             .data.depth_stencil = depth_default;
+    polygon_centroids                                         .data.depth_stencil = depth_default;
+    grid                                                      .data.depth_stencil.depth_compare_op = depth_less_or_equal;
 }
 
 void App_rendering::trigger_capture()
@@ -947,7 +996,8 @@ void App_rendering::render_id(const Render_context& context)
             .content_mesh_spans = { layers.content()->meshes, layers.rendertarget()->meshes },
             .tool_mesh_spans    = { tool_layers.tool()->meshes },
             .x                  = static_cast<int>(position.x),
-            .y                  = static_cast<int>(position.y)
+            .y                  = static_cast<int>(position.y),
+            .reverse_depth      = context.scene_view.get_reverse_depth()
         }
     );
 }

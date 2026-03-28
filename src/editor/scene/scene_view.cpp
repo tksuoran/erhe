@@ -67,6 +67,16 @@ auto Scene_view::get_scene_root() const -> std::shared_ptr<Scene_root>
     return m_scene_root.lock();
 }
 
+void Scene_view::set_reverse_depth(const bool reverse_depth)
+{
+    m_reverse_depth = reverse_depth;
+}
+
+auto Scene_view::get_reverse_depth() const -> bool
+{
+    return m_reverse_depth;
+}
+
 void Scene_view::set_hover(const std::size_t slot, const Hover_entry& entry)
 {
     std::shared_ptr<erhe::scene::Mesh> hover_scene_mesh = m_hover_entries[slot].scene_mesh_weak.lock();

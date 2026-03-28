@@ -170,9 +170,10 @@ void Texture_rendergraph_node::update_render_pass(int width, int height, erhe::g
             }
             if (m_depth_stencil_texture) {
                 if (erhe::dataformat::get_depth_size_bits(m_depth_stencil_format) > 0) {
-                    render_pass_descriptor.depth_attachment.texture      = m_depth_stencil_texture.get();
-                    render_pass_descriptor.depth_attachment.load_action  = erhe::graphics::Load_action::Clear;
-                    render_pass_descriptor.depth_attachment.store_action = erhe::graphics::Store_action::Dont_care;
+                    render_pass_descriptor.depth_attachment.texture         = m_depth_stencil_texture.get();
+                    render_pass_descriptor.depth_attachment.load_action     = erhe::graphics::Load_action::Clear;
+                    render_pass_descriptor.depth_attachment.store_action    = erhe::graphics::Store_action::Dont_care;
+                    render_pass_descriptor.depth_attachment.clear_value[0]  = m_reverse_depth ? 0.0 : 1.0;
                 }
                 if (erhe::dataformat::get_stencil_size_bits(m_depth_stencil_format) > 0) {
                     render_pass_descriptor.stencil_attachment.texture      = m_depth_stencil_texture.get();
@@ -198,6 +199,17 @@ void Texture_rendergraph_node::update_render_pass(int width, int height, erhe::g
         //    &clear_value[0]
         //);
     }
+}
+
+void Texture_rendergraph_node::set_reverse_depth(const bool reverse_depth)
+{
+    if (m_reverse_depth == reverse_depth) {
+        return;
+    }
+    m_reverse_depth = reverse_depth;
+    // Force render pass recreation to update depth clear value
+    m_color_texture.reset();
+    m_render_pass.reset();
 }
 
 } // namespace erhe::rendergraph

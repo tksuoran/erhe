@@ -51,6 +51,7 @@ public:
 private:
     App_context&                                              m_context;
     Scene_view&                                               m_scene_view;
+    bool                                                      m_reverse_depth{true};
     std::shared_ptr<erhe::graphics::Texture>                  m_texture;
     std::vector<std::unique_ptr<erhe::graphics::Render_pass>> m_render_passes;
     erhe::math::Viewport                                      m_viewport{0, 0, 0, 0};

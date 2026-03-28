@@ -57,6 +57,16 @@ struct("Graphics_config",
             developer=False
         ),
         field(
+            "force_no_clip_control",
+            Bool,
+            added_in=1,
+            default="false",
+            short_desc="Force Disable OpenGL Clip Control",
+            long_desc="Prevent use of glClipControl. Disables zero-to-one depth range and reverse-Z. Only meaningful for debugging.",
+            visible=True,
+            developer=False
+        ),
+        field(
             "force_emulate_multi_draw_indirect",
             Bool,
             added_in=1,

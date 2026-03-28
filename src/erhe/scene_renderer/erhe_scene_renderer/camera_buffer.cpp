@@ -54,7 +54,8 @@ auto Camera_buffer::update(
     float                          exposure,
     glm::vec4                      grid_size,
     glm::vec4                      grid_line_width,
-    uint64_t                       frame_number
+    uint64_t                       frame_number,
+    const bool                     reverse_depth
 ) -> erhe::graphics::Ring_buffer_range
 {
     ERHE_PROFILE_FUNCTION();
@@ -63,7 +64,7 @@ auto Camera_buffer::update(
 
     const auto  entry_size       = m_camera_interface.camera_struct.get_size_bytes();
     const auto& offsets          = m_camera_interface.offsets;
-    const auto  clip_from_camera = camera_projection.clip_from_node_transform(viewport);
+    const auto  clip_from_camera = camera_projection.clip_from_node_transform(viewport, reverse_depth);
 
     erhe::graphics::Ring_buffer_range buffer_range = acquire(erhe::graphics::Ring_buffer_usage::CPU_write, entry_size);
     std::span<std::byte>              gpu_data     = buffer_range.get_span();
@@ -86,7 +87,7 @@ auto Camera_buffer::update(
         fov_sides.up,
         fov_sides.down
     };
-    const float clip_depth_direction = -1.0f; // Reverse Z
+    const float clip_depth_direction = reverse_depth ? -1.0f : 1.0f;
     const float view_depth_near      = camera_projection.z_near;
     const float view_depth_far       = camera_projection.z_far;
     using erhe::graphics::as_span;

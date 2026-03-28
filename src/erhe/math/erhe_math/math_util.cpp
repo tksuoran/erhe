@@ -33,12 +33,13 @@ namespace {
 }
 
 auto create_frustum(
-    const float left,
-    const float right,
-    const float bottom,
-    const float top,
-    const float z_near,
-    const float z_far
+    const float       left,
+    const float       right,
+    const float       bottom,
+    const float       top,
+    const float       z_near,
+    const float       z_far,
+    const Depth_range depth_range
 ) -> mat4
 {
     const float width          = right  - left;
@@ -48,14 +49,16 @@ auto create_frustum(
     if ((width == 0.0) || (height == 0.0f) || (near_minus_far == 0.0f) || (far_minus_near == 0.0f)) {
         return glm::mat4{1.0f}; // TODO Log warning
     }
-    const float x =  (2.0f  * z_near        ) / width;
-    const float y =  (2.0f  * z_near        ) / height;
-    const float a =  (right + left          ) / width;
-    const float b =  (top   + bottom        ) / height;
-  //const float c = -(z_far + z_near        ) / (z_far  - z_near); -- negative one to one
-    const float c =   z_far                   / (z_near - z_far ); // zero to one
-  //const float d = -(2.0f  * z_far * z_near) / (z_far  - z_near); -- negative one to one
-    const float d = -(z_far * z_near        ) / (z_far  - z_near); // zero to one
+    const float x =  (2.0f  * z_near) / width;
+    const float y =  (2.0f  * z_near) / height;
+    const float a =  (right + left   ) / width;
+    const float b =  (top   + bottom ) / height;
+    const float c = (depth_range == Depth_range::zero_to_one)
+        ?   z_far                   / (z_near - z_far )   // zero to one
+        : -(z_far + z_near        ) / (z_far  - z_near);  // negative one to one
+    const float d = (depth_range == Depth_range::zero_to_one)
+        ? -(z_far * z_near        ) / (z_far  - z_near)   // zero to one
+        : -(2.0f  * z_far * z_near) / (z_far  - z_near);  // negative one to one
 
     return mat4{
         x, 0, 0, 0,
@@ -66,11 +69,12 @@ auto create_frustum(
 }
 
 auto create_frustum_infinite_far(
-    const float left,
-    const float right,
-    const float bottom,
-    const float top,
-    const float z_near
+    const float       left,
+    const float       right,
+    const float       bottom,
+    const float       top,
+    const float       z_near,
+    const Depth_range depth_range
 ) -> mat4
 {
     const float width  = right  - left;
@@ -84,10 +88,10 @@ auto create_frustum_infinite_far(
     const float y =  (2.0f  * z_near) / height;
     const float a =  (right + left  ) / width;
     const float b =  (top   + bottom) / height;
-  //const float c = -1.0f;           -- negative one to one
-    const float c = -1.0f;           // zero to one
-  //const float d = -2.0f * z_near;  -- negative one to one
-    const float d = -z_near;         // zero to one
+    const float c = -1.0f; // same for both depth ranges
+    const float d = (depth_range == Depth_range::zero_to_one)
+        ? -z_near          // zero to one
+        : -2.0f * z_near;  // negative one to one
 
     return mat4{
         x, 0, 0, 0,
@@ -98,20 +102,22 @@ auto create_frustum_infinite_far(
 }
 
 auto create_frustum_simple(
-    const float width,
-    const float height,
-    const float z_near,
-    const float z_far
+    const float       width,
+    const float       height,
+    const float       z_near,
+    const float       z_far,
+    const Depth_range depth_range
 ) -> mat4
 {
-    return create_frustum(-width / 2.0f, width / 2.0f, -height / 2.0f, height / 2.0f, z_near, z_far);
+    return create_frustum(-width / 2.0f, width / 2.0f, -height / 2.0f, height / 2.0f, z_near, z_far, depth_range);
 }
 
 auto create_perspective(
-    const float fov_x,
-    const float fov_y,
-    const float z_near,
-    const float z_far
+    const float       fov_x,
+    const float       fov_y,
+    const float       z_near,
+    const float       z_far,
+    const Depth_range depth_range
 ) -> mat4
 {
     const auto fov_y_clamped    = std::min(std::max(fov_y, epsilon), pi_minus_epsilon);
@@ -120,16 +126,17 @@ auto create_perspective(
     const auto tan_y_half_angle = std::tan(fov_y_clamped * 0.5f);
     const auto width            = 2.0f * z_near * tan_x_half_angle;
     const auto height           = 2.0f * z_near * tan_y_half_angle;
-    return create_frustum_simple(width, height, z_near, z_far);
+    return create_frustum_simple(width, height, z_near, z_far, depth_range);
 }
 
 auto create_perspective_xr(
-    const float fov_left,
-    const float fov_right,
-    const float fov_up,
-    const float fov_down,
-    const float z_near,
-    const float z_far
+    const float       fov_left,
+    const float       fov_right,
+    const float       fov_up,
+    const float       fov_down,
+    const float       z_near,
+    const float       z_far,
+    const Depth_range depth_range
 ) -> glm::mat4
 {
     const auto fov_left_clamped  = std::min(std::max(fov_left,  -pi_minus_epsilon), pi_minus_epsilon);
@@ -144,45 +151,33 @@ auto create_perspective_xr(
     const auto right             = z_near * tan_right;
     const auto up                = z_near * tan_up;
     const auto down              = z_near * tan_down;
-    return create_frustum(left, right, down, up, z_near, z_far);
+    return create_frustum(left, right, down, up, z_near, z_far, depth_range);
 }
 
 auto create_perspective_vertical(
-    const float fov_y,
-    const float aspect_ratio,
-    const float z_near,
-    const float z_far
+    const float       fov_y,
+    const float       aspect_ratio,
+    const float       z_near,
+    const float       z_far,
+    const Depth_range depth_range
 ) -> mat4
 {
-    const float near_minus_far = z_near - z_far;
-    const float far_minus_near = z_far  - z_near;
-    if ((aspect_ratio == 0.0f) || (near_minus_far == 0.0f) || (far_minus_near == 0.0f)) {
+    if (aspect_ratio == 0.0f) {
         return glm::mat4{1.0f}; // TODO log warning
     }
-    const float fov_y_clamped  = std::min(std::max(fov_y, epsilon), pi_minus_epsilon);
-    return glm::perspective(fov_y_clamped, aspect_ratio, z_near, z_far);
-
-    // See glm::perspectiveRH_ZO():
-
-    // const float tan_half_angle = std::tan(fov_y_clamped * 0.5f);
-    // const float x = 1.0f / (aspect_ratio * tan_half_angle);
-    // const float y = 1.0f / (tan_half_angle);
-    // const float c = z_far / (z_near - z_far);
-    // const float d = -(z_far * z_near) / (z_far - z_near);
-    // 
-    // return mat4{
-    //     x, 0, 0, 0,
-    //     0, y, 0, 0,
-    //     0, 0, c, -1.0f,
-    //     0, 0, d, 0,
-    // };
+    const float fov_y_clamped    = std::min(std::max(fov_y, epsilon), pi_minus_epsilon);
+    const auto  tan_half_angle   = std::tan(fov_y_clamped * 0.5f);
+    const auto  height           = 2.0f * z_near * tan_half_angle;
+    const auto  width            = height * aspect_ratio;
+    return create_frustum_simple(width, height, z_near, z_far, depth_range);
 }
 
 auto create_perspective_horizontal(
-    const float fov_x,
-    const float aspect_ratio,
-    const float z_near,
-    const float z_far
+    const float       fov_x,
+    const float       aspect_ratio,
+    const float       z_near,
+    const float       z_far,
+    const Depth_range depth_range
 ) -> mat4
 {
     if (aspect_ratio == 0.0f) {
@@ -192,7 +187,7 @@ auto create_perspective_horizontal(
     const auto tan_half_angle = std::tan(fov_x_clamped * 0.5f);
     const auto width          = 2.0f * z_near * tan_half_angle;
     const auto height         = width / aspect_ratio;
-    return create_frustum_simple(width, height, z_near, z_far);
+    return create_frustum_simple(width, height, z_near, z_far, depth_range);
 }
 
 // http://and-what-happened.blogspot.com/p/just-formulas.html
@@ -235,12 +230,13 @@ auto create_projection(
 }
 
 auto create_orthographic(
-    const float left,
-    const float right,
-    const float bottom,
-    const float top,
-    const float z_near,
-    const float z_far
+    const float       left,
+    const float       right,
+    const float       bottom,
+    const float       top,
+    const float       z_near,
+    const float       z_far,
+    const Depth_range depth_range
 ) -> mat4
 {
     const float width          = right  - left;
@@ -249,6 +245,12 @@ auto create_orthographic(
     if ((width == 0.0) || (height == 0.0f) || (far_minus_near == 0.0f)) {
         return glm::mat4{1.0f}; // TODO Log warning
     }
+    const float c_diag  = (depth_range == Depth_range::zero_to_one)
+        ? -1.0f / far_minus_near                // zero to one
+        : -2.0f / far_minus_near;               // negative one to one
+    const float c_trans = (depth_range == Depth_range::zero_to_one)
+        ? -z_near / far_minus_near              // zero to one
+        : -(z_far + z_near) / far_minus_near;   // negative one to one
     return mat4{
         {
             2.0f / width,
@@ -265,30 +267,31 @@ auto create_orthographic(
         {
             0.0f,
             0.0f,
-            -1.0f / far_minus_near,
+            c_diag,
             0.0f
         },
         {
             -(right + left) / width,
             -(top + bottom) / height,
-            -z_near / far_minus_near,
+            c_trans,
             1.0f
         }
     };
 }
 
 auto create_orthographic_centered(
-    const float width,
-    const float height,
-    const float z_near,
-    const float z_far
+    const float       width,
+    const float       height,
+    const float       z_near,
+    const float       z_far,
+    const Depth_range depth_range
 ) -> mat4
 {
     // TODO Check bottom and top
     return create_orthographic(
         -width  / 2.0f,  width  / 2.0f,
          height / 2.0f, -height / 2.0f,
-        z_near, z_far
+        z_near, z_far, depth_range
     );
 }
 

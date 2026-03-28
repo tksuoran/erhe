@@ -83,6 +83,7 @@ public:
     uint32_t vulkan_api_version {0};
 #endif
 
+    bool use_clip_control            {false};
     bool use_direct_state_access     {false};
     bool use_binary_shaders          {false};
     bool use_integer_polygon_ids     {false};

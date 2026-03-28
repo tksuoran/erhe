@@ -82,6 +82,7 @@ void Graphics_settings::read_presets()
                 Graphics_preset graphics_preset;
                 parse<std::string>(table, "name"              , graphics_preset.name              );
                 parse<int        >(table, "msaa_sample_count" , graphics_preset.msaa_sample_count );
+                parse<bool       >(table, "reverse_depth"     , graphics_preset.reverse_depth     );
                 parse<bool       >(table, "shadow_enable"     , graphics_preset.shadow_enable     );
                 parse<int        >(table, "shadow_resolution" , graphics_preset.shadow_resolution );
                 parse<int        >(table, "shadow_light_count", graphics_preset.shadow_light_count);
@@ -110,6 +111,7 @@ void Graphics_settings::write_presets()
         toml::table preset{};
         preset.insert("name"              , graphics_preset.name              );
         preset.insert("msaa_sample_count" , graphics_preset.msaa_sample_count );
+        preset.insert("reverse_depth"     , graphics_preset.reverse_depth     );
         preset.insert("shadow_enable"     , graphics_preset.shadow_enable     );
         preset.insert("shadow_resolution" , graphics_preset.shadow_resolution );
         preset.insert("shadow_light_count", graphics_preset.shadow_light_count);

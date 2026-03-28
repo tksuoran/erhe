@@ -63,7 +63,7 @@ class Light_interface
 public:
     Light_interface(erhe::graphics::Device& graphics_device, int max_light_count);
 
-    [[nodiscard]] auto get_sampler(bool compare) const -> const erhe::graphics::Sampler*;
+    [[nodiscard]] auto get_sampler(bool compare, bool reverse_depth = true) const -> const erhe::graphics::Sampler*;
 
     std::size_t                     max_light_count;
     erhe::graphics::Shader_resource light_block;
@@ -72,6 +72,7 @@ public:
     Light_block                     offsets;
     std::size_t                     light_index_offset;
     erhe::graphics::Sampler         shadow_sampler_compare;
+    erhe::graphics::Sampler         shadow_sampler_compare_forward;
     erhe::graphics::Sampler         shadow_sampler_no_compare;
 };
 
@@ -84,7 +85,8 @@ public:
         const erhe::scene::Camera*                                  main_camera,
         const erhe::math::Viewport&                                 main_camera_viewport,
         const erhe::math::Viewport&                                 light_texture_viewport,
-        const std::shared_ptr<erhe::graphics::Texture>&             in_shadow_map_texture
+        const std::shared_ptr<erhe::graphics::Texture>&             in_shadow_map_texture,
+        bool                                                        reverse_depth = true
     );
 
     // Warning: Returns pointer to element of member vector. That pointer

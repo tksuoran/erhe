@@ -27,7 +27,7 @@ using Rasterization_state        = erhe::graphics::Rasterization_state;
 using Depth_stencil_state        = erhe::graphics::Depth_stencil_state;
 using Color_blend_state          = erhe::graphics::Color_blend_state;
 
-Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(Mesh_memory& mesh_memory, Programs& programs)
+Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(Mesh_memory& mesh_memory, Programs& programs, const bool reverse_depth)
     // Tool pass one: For hidden tool parts, set stencil to s_stencil_tool_mesh_hidden.
     // Only reads depth buffer, only writes stencil buffer.
     : tool1_hidden_stencil{erhe::graphics::Render_pipeline_state{{
@@ -39,7 +39,7 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(Mesh_memory& mesh_memor
         .depth_stencil = {
             .depth_test_enable   = true,
             .depth_write_enable  = false,
-            .depth_compare_op    = erhe::graphics::get_depth_function(erhe::graphics::Compare_operation::greater),
+            .depth_compare_op    = erhe::graphics::get_depth_function(erhe::graphics::Compare_operation::greater, reverse_depth),
             .stencil_test_enable = true,
             .stencil_front = {
                 .stencil_fail_op = erhe::graphics::Stencil_op::keep,
@@ -74,7 +74,7 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(Mesh_memory& mesh_memor
         .depth_stencil = {
             .depth_test_enable   = true,
             .depth_write_enable  = false,
-            .depth_compare_op    = erhe::graphics::get_depth_function(erhe::graphics::Compare_operation::less_or_equal),
+            .depth_compare_op    = erhe::graphics::get_depth_function(erhe::graphics::Compare_operation::less_or_equal, reverse_depth),
             .stencil_test_enable = true,
             .stencil_front = {
                 .stencil_fail_op = erhe::graphics::Stencil_op::keep,
@@ -126,7 +126,7 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(Mesh_memory& mesh_memor
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangle,
         .rasterization  = Rasterization_state::cull_mode_back_ccw,
-        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(),
+        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
         .color_blend    = Color_blend_state::color_writes_disabled
     }}}
 
@@ -141,7 +141,7 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(Mesh_memory& mesh_memor
         .depth_stencil = {
             .depth_test_enable   = true,
             .depth_write_enable  = true,
-            .depth_compare_op    = erhe::graphics::get_depth_function(erhe::graphics::Compare_operation::less_or_equal),
+            .depth_compare_op    = erhe::graphics::get_depth_function(erhe::graphics::Compare_operation::less_or_equal, reverse_depth),
             .stencil_test_enable = true,
             .stencil_front = {
                 .stencil_fail_op = erhe::graphics::Stencil_op::keep,
@@ -176,7 +176,7 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(Mesh_memory& mesh_memor
         .depth_stencil = {
             .depth_test_enable      = true,
             .depth_write_enable     = true,
-            .depth_compare_op       = erhe::graphics::get_depth_function(erhe::graphics::Compare_operation::less_or_equal),
+            .depth_compare_op       = erhe::graphics::get_depth_function(erhe::graphics::Compare_operation::less_or_equal, reverse_depth),
             .stencil_test_enable    = true,
             .stencil_front = {
                 .stencil_fail_op    = erhe::graphics::Stencil_op::keep,
@@ -213,6 +213,22 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(Mesh_memory& mesh_memor
         }
     }}}
 {
+}
+
+void Tools_pipeline_renderpasses::rebuild_depth_state(const bool reverse_depth)
+{
+    using erhe::graphics::Compare_operation;
+    const auto depth_greater       = erhe::graphics::get_depth_function(Compare_operation::greater,       reverse_depth);
+    const auto depth_less_or_equal = erhe::graphics::get_depth_function(Compare_operation::less_or_equal, reverse_depth);
+    const auto depth_default       = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth);
+
+    tool1_hidden_stencil .data.depth_stencil.depth_compare_op = depth_greater;
+    tool2_visible_stencil.data.depth_stencil.depth_compare_op = depth_less_or_equal;
+    const float far_depth = reverse_depth ? 0.0f : 1.0f;
+    tool3_depth_clear    .data.viewport_depth_range = Viewport_depth_range_state{ .min_depth = far_depth, .max_depth = far_depth };
+    tool4_depth          .data.depth_stencil                  = depth_default;
+    tool5_visible_color  .data.depth_stencil.depth_compare_op = depth_less_or_equal;
+    tool6_hidden_color   .data.depth_stencil.depth_compare_op = depth_less_or_equal;
 }
 
 Tools::Tools(
@@ -381,6 +397,11 @@ void Tools::set_priority_tool(Tool* priority_tool)
 auto Tools::get_priority_tool() const -> Tool*
 {
     return m_priority_tool;
+}
+
+void Tools::rebuild_depth_state(const bool reverse_depth)
+{
+    m_pipeline_renderpasses.rebuild_depth_state(reverse_depth);
 }
 
 auto Tools::get_tools() const -> const std::vector<Tool*>&
