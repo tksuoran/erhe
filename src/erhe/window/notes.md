@@ -23,9 +23,11 @@ Platform windowing abstraction over SDL and GLFW. Provides window creation, Open
 ## Dependencies
 - SDL3 (when `ERHE_WINDOW_LIBRARY_SDL`)
 - GLFW (when `ERHE_WINDOW_LIBRARY_GLFW`)
-- erhe::xr (Xr_action types for XR event definitions)
+- erhe::time
 - glm
 - Windows API (on Windows, for HWND/HGLRC access)
+
+XR event types (`Xr_action_boolean`, etc.) are forward-declared in `window_event_handler.hpp` but erhe::xr is not a build dependency.
 
 ## Notes
 - Input events are double-buffered: one queue is written by callbacks while the other is read by the application.

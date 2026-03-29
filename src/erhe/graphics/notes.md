@@ -37,7 +37,8 @@ hides the underlying graphics API behind a pimpl pattern.
 - **External:** glm, OpenGL or Vulkan (selected at CMake time)
 
 ## Notes
-- All major types use the pimpl pattern (`*_impl` classes) to isolate backend-specific code. The OpenGL implementations live in `gl/` and Vulkan in `vulkan/`.
+- All major types use the pimpl pattern (`*_impl` classes) to isolate backend-specific code. Backend implementations live in `gl/` (OpenGL), `vulkan/` (Vulkan, WIP), and `null/` (headless).
+- The OpenGL backend includes a runtime compatibility layer for OpenGL 4.1 (macOS). DSA, SSBOs, compute shaders, persistent mapping, and texture views are emulated or gracefully degraded based on `Device_info` capability flags. See `doc/opengl41_compatibility.md`.
 - `Shader_resource` is used to programmatically build GLSL interface declarations from C++, keeping shader sources and C++ code in sync without reflection.
 - `Reloadable_shader_stages` combines `Shader_stages_create_info` with a live `Shader_stages` for hot-reload via `Shader_monitor`.
 - Enums in `enums.hpp` mirror Vulkan concepts (Buffer_target, Texture_type, Memory_usage, etc.) to keep the API backend-neutral.

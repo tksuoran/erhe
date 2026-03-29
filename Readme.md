@@ -3,318 +3,117 @@
 
 # erhe
 
-erhe is a C++ library for modern OpenGL experiments.
+erhe is a C++ library and editor for 3D graphics, built on modern OpenGL with a Vulkan-style abstraction layer. It runs on Windows, Linux, and macOS. Minimum required OpenGL version is 4.1, OpenGL 4.6 is recommended.
 
--   Uses direct state access (DSA)
--   Uses bindless textures (when supported by driver)
--   Uses persistently mapped buffers (can be disabled)
--   Uses multi draw indirect
--   Uses latest OpenGL and GLSL versions
--   Uses multiple threads and OpenGL contexts (disabled by default due to issues with some drivers)
--   Uses abstraction for OpenGL pipeline state a bit similar to Vulkan (see `erhe::graphics`)
--   Uses render pass abstraction for eventual support for vulkan and metal
--   Simple type safe(r) wrapper for GL API (see `erhe::gl`)
--   Supports Windows and Linux
-
-erhe is evolution of RenderStack <https://github.com/tksuoran/RenderStack>
-
-![screenshot](https://github.com/tksuoran/erhe/wiki/images/13.png)
-
-## Building
-
-### Dependencies
-
-All dependencies of erhe are either included directly in `src/` for
-small libraries, or git pulled from their repositories using CMake
-CPM during CMake configure step.
-
-### Windows Requirements
-
--   C++ compiler. Visual Studio 2022 with msbuild has been tested.
-    Ninjabuild GCC and clang may also work, and some older versions
-    of Visual Studio.
-
--   Python 3
-
--   CMake
-
--   Optional: ninja from https://github.com/ninja-build/ninja/releases
-
-### Linux Requirements
-
--   Recent enough CMake
-    -   Ubuntu 24.04 and 22.04 have been tested
-    -   https://apt.kitware.com/ may help to get recent CMake
--   New enough C++ compiler
-    -   clang and GCC which is not older than couple of years should be ok
--   python 3
--   packages such `libwayland-dev libxkbcommon-dev xorg-dev`
--   arch packages: `gcc ninja cmake git less openssh libx11 libxrandr libxi libxinerama libxcursor mesa wayland wayland-protocols python`
-
-
-For IDE:
-
--  Visual Studio Code with CMake and C++ extensions is supported
--  CLion has been tested at some point in the past
-
-### Build steps for Visual Studio (Windows)
-
--   `git clone https://github.com/tksuoran/erhe`
--   In *x64 native tools command prompt for vs 2022*, cd to the *erhe* directory
--   `scripts\configure_vs2022.bat`
--   Open solution from the *build* directory with Visual Studio
--   Build solution, or editor executable
-
-### Build steps for CLion (Windows and Linux)
-
-erhe has initial CLion support. Caustion: These instructions have not been tested for a while.
-
-At the time of writing, CLion did not fully support CMake presets. Enable `Debug` profile only.
-If you want to make a release build, edit settings for that profile, instead of trying
-to use the other CMake preset profiles.
-
--  Get from VCS: URL: `https://github.com/tksuoran/erhe`
--  Clone
--  Keep `Debug` CMake profile enabled, do not enable other profiles
--  Either default toolchain `MinGW` or `Visual Studio`
--  Wait for CMake configure to complete. It will say `[Finished]` in CMake tab
--  Build Project or Build 'editor'
--  Run `editor`
-
-For IDE:
-
--  Visual Studio Code with CMake and C++ extensions is supported
--  CLion is supported
-
-#### Build steps for Visual Studio Code (Windows and Linux)
-
--   `git clone https://github.com/tksuoran/erhe`
--   Open erhe folder in Visual Studio code
--   Execute command: *CMake: Select Configure Preset*
--   Execute command: *CMake: Configure*
--   Execute command: *CMake: Build*
-
-## Configuration
-
-There are several configuration options that can be set when configuring
-erhe with CMake:
-
-| Option                          | Description                | Recognized values               |
-| :---                            | :---                       | :---                            |
-| ERHE_AUDIO_LIBRARY              | Audio library              | miniaudio, none                 |
-| ERHE_FONT_RASTERIZATION_LIBRARY | Font rasterization library | freetype, none                  |
-| ERHE_GLTF_LIBRARY               | glTF library               | fastgltf, none                  |
-| ERHE_GUI_LIBRARY                | GUI library                | imgui, none                     |
-| ERHE_PHYSICS_LIBRARY            | Physics library            | jolt, none                      |
-| ERHE_PROFILE_LIBRARY            | Profile library            | nvtx, superluminal, tracy, none |
-| ERHE_RAYTRACE_LIBRARY           | Raytrace library           | embree, bvh, none               |
-| ERHE_SVG_LIBRARY                | SVG loading library        | plutosvg, none                  |
-| ERHE_TEXT_LAYOUT_LIBRARY        | Text layout library        | harfbuzz, freetype, none        |
-| ERHE_WINDOW_LIBRARY             | Window library             | sdl, glfw                       |
-| ERHE_XR_LIBRARY                 | XR library                 | OpenXR, none                    |
-
-Main purposes of these configuration options are
-
--   Allow faster build times by disabling features that are not used (during development)
--   Allow to choose different physics and raytrace backends
-
-### ERHE_PHYSICS_LIBRARY
-
-The main physics backend is currently `jolt`.
-
-### ERHE_RAYTRACE_LIBRARY
-
-The main raytrace backend is currently `bvh`. Even the `bvh` backend is incomplete,
-causing performance issues when creating larger scenes. The `embree` raytrace backend
-has been rotting for a while, it would require some work to get it back to working.
-
-By default erhe (editor) uses raytrace for mouse picking models from 3D viewports.
-Alternatively, when raytrace backend is set to `none`, mouse picking uses GPU rendering
-based, where GPU renders ID buffer (unique color per object and triangle) and the image
-is read back to the CPU.
-
-### ERHE_PROFILE_LIBRARY
-
-The main profile library is Tracy.
-
-Superluminal was briefly tested, but support for it is likely rotten.
-
-### ERHE_WINDOW_LIBRARY
-
-'SDL' and `glfw` are currently supported as window library in erhe.
-
-### ERHE_XR_LIBRARY
-
-Only `openxr` is currently supported as XR library in erhe.
-
-Disabling xr library removes ability to enable headset rendering in erhe editor.
-
-### ERHE_SVG_LIBRARY
-
-Only `plutosvg` is current supported as SVG loading library in erhe.
-Disabling SVG library removes erhe editor scene node icons.
-
-### ERHE_GLTF_LIBRARY
-
-Disabling glTF library removes capability to parse glTF files in erhe editor.
-erhe uses fastgltf for importing and exporting glTF files.
-
-### ERHE_AUDIO_LIBRARY
-
-Currently, audio library is only used with some code (VR theremin) that is currently not functional.
-`miniaudio` can be enabled, but at the moment it is best to use `none`.
-
-### ERHE_FONT_RASTERIZATION_LIBRARY
-
-Currently, only `freetype` is supported. Disabling font rasterization library removes
-native text rendering in erhe. ImGui content is not affected.
-
-### ERHE_TEXT_LAYOUT_LIBRARY
-
-Currently, only `harfbuzz` is supported. Freetype as text layout support is rotten
-but might be resurrected.
-
-Disabling font layout library removes native text rendering in erhe. ImGui content is not affected.
-
-# erhe executables
-
-## editor
-
-Editor is a sandbox like experimentation executable with a random set of functionality
-
--   Scene is (mostly) procedurally generated
--   A primitive glTF parser can load glTF file content
--   A primitive obj parser can load OBJ file content
--   ImGui is used extensively for user interface
--   Content can be viewed with OpenXR compatible headset (if enabled from `erhe.ini`)
--   Scene nodes can be manipulated with a basic translation / rotation gizmo
--   When physics backend is enabled, scene models can interact physically
--   Scene model geometries can be manipulated with operations such as Catmull-Clark
--   Scene models can be created using a brush tool (must have selected brush *and* material)
+erhe is the evolution of [RenderStack](https://github.com/tksuoran/RenderStack).
 
 [![erhe summer 2024](https://img.youtube.com/vi/8hnKr348qt8/0.jpg)](https://www.youtube.com/watch?v=8hnKr348qt8)
 
-# erhe libraries
+![screenshot](https://github.com/tksuoran/erhe/wiki/images/13.png)
 
-Major libraries
+## Editor
 
-## erhe::geometry
+The editor is a sandbox application for 3D scene creation and manipulation.
 
-`erhe::geometry` provides classes manipulating geometric, polygon based 3D objects.
+### Scene and Viewport
 
-[Geogram](https://github.com/BrunoLevy/geogram) library is used as backend for geometry
-data structures. Geogram `Mesh` uses facets, facet corners, vertices and edges, and
-attributes can be associated to each of them. Geogram classes are designed for manipulating
-3D objects, not for rendering them.
+-   Multiple 3D viewports with independent camera and rendering settings
+-   Hierarchical scene graph with node parenting
+-   glTF import and export
+-   Scene serialization to JSON with companion binary glTF
+-   Multi-scene support
+-   Post-processing pipeline (bloom, tonemapping)
+-   Shadow mapping
+-   PBR material system with metallic/roughness workflow
+-   Material library with preview rendering
 
-See `erhe::scene` and `erhe::scene_renderer` how to render geometry objects.
+### Tools
 
-Some features:
+-   **Fly camera** -- 6DOF camera navigation with WASD, orbit, tumble, track, zoom
+-   **Selection** -- click-to-select with shift/ctrl multi-select, GPU ID buffer or raytrace picking
+-   **Transform gizmo** -- translate, rotate, scale with axis/plane constraints and snapping
+-   **Brush placement** -- place shapes on surfaces with snap-to-face, rotation, and scale-to-match
+-   **Vertex painting** -- paint vertex colors directly on meshes
+-   **Material painting** -- assign materials to individual mesh faces
+-   **Physics interaction** -- drag, push, and pull rigid bodies in the scene
+-   **Grid** -- configurable grid display and snap-to-grid
 
--  Catmull-Clark subdivision operation
--  Sqrt3 subdivision operation
--  Conway operators:
-    -   Ambo
-    -   Chamfer (experimental)
-    -   Dual
-    -   Gyro
-    -   Join
-    -   Kis
-    -   Meta
-    -   Truncate
--  CSG / boolean operations using Geogram are experimental, they need more work to be more usable.
+### Geometry Operations
 
-## erhe::gl
+-   **Subdivision**: Catmull-Clark, sqrt3
+-   **Conway operators**: ambo, chamfer, dual, gyro, join, kis, meta, truncate, chamfer/bevel
+-   **CSG / boolean**: union, intersection, difference (experimental, via Geogram)
+-   **Utilities**: triangulate, normalize, reverse, weld, repair, generate tangents, bake transform
+-   Full undo/redo for all operations
 
-`erhe::gl` provides python generated low level C++ wrappers for OpenGL API.
+### Mesh Creation
 
-Some features:
+-   Parametric shapes: sphere, box, cone, torus, disc, cylinder
+-   Brush system with reusable shape templates
+-   180+ built-in polyhedra (Platonic solids, Johnson solids, geodesic domes, etc.)
+-   Procedural scene generation
 
--  Strongly typed C++ enums
--  Optional API call logging, with enum and bitfield values shown as human readable strings
--  Queries for checking GL extension and command support
--  Helper functions to map enum values to/from zero based integers (to help with ImGui, hashing, serialization)
+### File Format Support
 
-## erhe::graphics
+-   glTF 2.0 import and export (via fastgltf)
+-   Partial suppor for Wavefront OBJ import
 
-`erhe::graphics` provides classes basic 3D rendering with modern OpenGL.
+### VR / OpenXR
 
-Currently, erhe uses OpenGL as graphics API. The `erhe::graphics` builds a Vulkan-like
-abstraction on top of OpenGL:
+-   Headset rendering with OpenXR
+-   Hand and controller tracking with visualization
+-   Floating HUD and hotbar UI in VR
+-   Passthrough support
 
--  `erhe::graphics::Pipeline` capsulates all relevant GL state.
+### Input
 
-## erhe::imgui
+-   Keyboard and mouse with configurable bindings
+-   SpaceMouse 6DOF input
+-   OpenXR controllers
 
-`erhe::imgui` provides custom ImGui backend and helper classes to manage
-and implement ImGui Windows.
+### Debug and Development
 
-## erhe::log
+-   Debug line and text rendering in 3D viewports
+-   Physics shape visualization
+-   Render graph visualization window
+-   Shader hot-reload via shader monitor
+-   GL state dump to clipboard
+-   Tracy profiler integration
 
-`erhe::log` provides helpers / wrappers for spdlog logging.
+## Libraries
 
-## erhe::primitive
+erhe is organized as a set of independent libraries under `src/erhe/`. Each has a `notes.md` with details on purpose, API, and design.
 
-`erhe::primitive` provides classes to convert `erhe::geometry::Geometry`
-to renderable (or raytraceable) vertex and index buffers.
+| Library | Description |
+| :--- | :--- |
+| `erhe::graphics` | Vulkan-style abstraction over OpenGL: pipelines, buffers, textures, shaders, ring buffers, shader monitor |
+| `erhe::rendergraph` | DAG of render nodes with typed inputs/outputs, executed in dependency order |
+| `erhe::scene` | glTF-like scene graph: nodes, meshes, cameras, lights, animations, skins |
+| `erhe::scene_renderer` | Forward renderer, shadow renderer, ID picking, camera/light/material/joint GPU buffers |
+| `erhe::renderer` | Debug line renderer (compute, geometry shader, or GL_LINES), text renderer, texture blit |
+| `erhe::geometry` | Polygon mesh manipulation via Geogram: subdivision, Conway operators, CSG, shape generators |
+| `erhe::primitive` | Converts geometry meshes to GPU vertex/index buffers; PBR material definitions |
+| `erhe::physics` | Thin abstraction over Jolt physics: rigid bodies, collision shapes, constraints |
+| `erhe::imgui` | Custom ImGui backend with per-host ImGui contexts and window management |
+| `erhe::commands` | Input command system with state machine, priority dispatch, and bindings for all input types |
+| `erhe::window` | SDL / GLFW windowing abstraction with input event handling |
+| `erhe::item` | Base `Item` (name, id, flags) and `Hierarchy` (parent/child tree) classes |
+| `erhe::gl` | Generated type-safe OpenGL wrappers with call logging and extension queries |
+| `erhe::log` | spdlog wrappers |
+| `erhe::verify` | `VERIFY(condition)` and `FATAL(format, ...)` macros |
+| `erhe::codegen` | Python code generator for C++ structs with versioned JSON serialization via simdjson |
 
-## erhe::renderer
+### OpenGL Compatibility
 
-`erhe::renderer` provides classes to assist rendering generic 3D content.
+erhe targets OpenGL 4.5 with DSA but includes a runtime compatibility layer for OpenGL 4.1 (the maximum version on macOS). Features like DSA, SSBOs, compute shaders, persistent mapping, and texture views are emulated or gracefully degraded at runtime. See [doc/opengl41_compatibility.md](doc/opengl41_compatibility.md) for details.
 
--  `GPU_ring_buffer` provides recycled memory that is filled by the CPU for each use.
--  `Line_renderer` can be used to draw debug lines
--  `Text_renderer` can be used to draw 2D text (labels) into 3D viewport
+## Building
 
+See [doc/building.md](doc/building.md) for build instructions, requirements, and CMake configuration options.
 
-## erhe::item
+## License
 
-`erhe::item` provides base object classes for "entities".
-
--  `Item` has name, source asset path, flags, unique id
--  `Hierarchy` extends `Item` by adding pointer to parent, and vector of children
-
-## erhe::scene
-
-`erhe::scene` provides classes for basic 3D scene graph.
-
--  `Node` extends `Item` by adding 3D transformation and glTF-like attachment points for Camera, Light, Mesh
--  `Camera` is like glTF Camera, which can be attached to `Node`
--  `Light` is like glTF Light, which can be attached to `Node`
--  `Mesh` is like glTF Mesh (containing a number of `Primitive`s), which can be attached to Node
--  `Scene` is collection of `Node`s
-
-## erhe::rendergraph
-
-`erhe::rendergraph` provides classes for arranging rendering passes into a graph
-
--   `Rendergraph_node` lists a number of inputs (dependencies) and outputs.
-    A `Rendergraph_node` can be executed as part of `Rendergraph`.
-
--   `Rendergraph` is a collection of `Rendergraph_node`s.
-    `Rendergraph` can be executed, this will execute rendergraph nodes in order
-    that is based on connections between nodes in the graph.
-
-## erhe::scene_renderer
-
-`erhe::scene_renderer` provides classes for rendering `erhe::scene` content.
-It uses and extends functionality from `erhe::renderer`.
-
-## erhe::window namespace
-
-`erhe::window` provides windowing system abstraction, currently
-using SDL or GLFW.
-
-## erhe::verify
-
-`erhe::verify` provides a simple `VERIFY(condition)` and `FATAL(format, ...)` macros,
-which can be used in place of `assert()` and unrecoverable error.
-
-## erhe::physics
-
-`erhe::physics` provides minimal abstraction / wrappers for Jolt physics library.
-
-## erhe
+MIT -- see [LICENSE](src/erhe/LICENSE).
 
 ## SAST Tools
 

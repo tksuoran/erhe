@@ -9,7 +9,7 @@ OpenXR integration for VR/AR headset support. Wraps the OpenXR API to provide in
 - `Xr_session` -- Manages the OpenXR session lifecycle, reference spaces (local/stage/view), swapchains (color + depth), frame timing, hand tracker creation, and per-frame view pose updates.
 - `Xr_action` / `Xr_action_boolean` / `Xr_action_float` / `Xr_action_vector2f` / `Xr_action_pose` -- Typed OpenXR action wrappers. Each resolves its path from the instance and queries state from the session.
 - `Xr_actions` -- Aggregates all left/right hand actions (select, menu, squeeze, trigger, thumbstick, grip/aim pose, etc.).
-- `Xr_configuration` -- Configuration flags: debug, validation, quad view, depth, hand tracking, passthrough, mirror mode.
+- `Xr_configuration` -- Configuration flags: debug, validation, quad view, depth, hand tracking, passthrough_fb, visibility_mask, api_dump, mirror mode.
 - `Render_view` -- Per-eye render target info: pose, FOV, texture handles, dimensions, format.
 - `Swapchain` / `Swapchain_image` -- OpenXR swapchain wrappers for acquiring/releasing/waiting on swapchain images.
 - `Pose` / `Hand_tracking_joint` -- GLM-compatible pose and hand joint data.
@@ -32,6 +32,6 @@ OpenXR integration for VR/AR headset support. Wraps the OpenXR API to provide in
 
 ## Notes
 - Profile-specific bindings are collected and suggested for KHR Simple, Oculus Touch, Valve Index, and HTC Vive controllers.
-- Hand tracking and FB passthrough are optional extensions enabled via `Xr_configuration`.
+- Hand tracking, FB passthrough, and visibility mask are optional extensions enabled via `Xr_configuration`.
 - The `Xr_action` header includes full OpenXR type stubs when `ERHE_XR_LIBRARY_OPENXR` is not defined, allowing compilation without the OpenXR SDK.
 - Max 50 actions per type (boolean, float, vector2f, pose) using `etl::vector`.

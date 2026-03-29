@@ -6,7 +6,7 @@
 
 namespace erhe::window {
 
-class Context_widdow;
+class Context_window;
 
 class Window_configuration
 {

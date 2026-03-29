@@ -8,13 +8,13 @@ erhe targets OpenGL 4.5 with DSA (Direct State Access) but includes a runtime co
 |---|---|---|
 | Direct State Access (DSA) | 4.5 | Bind-to-edit wrappers with RAII guards |
 | Shader Storage Buffers (SSBO) | 4.3 | UBOs for data blocks; buffer textures for text renderer |
-| Compute shaders | 4.3 | Disabled; CPU/GL_LINES fallback for debug renderer |
+| Compute shaders | 4.3 | Disabled; geometry shader wide lines or GL_LINES fallback for debug renderer |
 | Multi-draw indirect | 4.3 | Loop of individual draw calls |
 | glBufferStorage / persistent mapping | 4.4 | glBufferData + CPU shadow buffer + glBufferSubData |
 | glBindTextureUnit | 4.5 | glActiveTexture + glBindTexture |
 | glBindTextures / glBindSamplers | 4.4 | Loop of individual binds |
 | glClipControl | 4.5 | Forward depth with [-1,1] range (no reverse-Z) |
-| glTextureView | 4.3 | sampler2DArray + layer index; post-processing disabled |
+| glTextureView | 4.3 | sampler2DArray + layer index; post-processing fully functional (FBO mip level rendering) |
 | glClearTexImage | 4.4 | FBO clear fallback |
 | BaseInstance draw calls | 4.2 | draw_elements_instanced_base_vertex (base_instance always 0) |
 | glTexStorage2DMultisample | 4.3 | `glTexImage2DMultisample` (GL 3.2, immutable vs mutable) |
@@ -173,14 +173,19 @@ When `use_clip_control` is true:
 ## Texture View Fallback
 
 Without `glTextureView` (GL 4.3):
-- Post-processing (bloom) is disabled (requires mip level views)
+- Post-processing (bloom) is fully functional: renders to individual mip levels via FBO `texture_level` and samples with explicit LOD (`textureLod`). The output exposes the full mipmapped texture rather than a level-0-only view
 - Thumbnails use `sampler2DArray` + layer index instead of per-layer `texture_2d` views
 - ImGui renderer supports both `sampler2D` and `sampler2DArray` via `array_layer` field in `Erhe_ImTextureID`
 - `Texture_heap` reserves slot 0 for the array texture; fragment shader branches on `v_array_layer` sentinel value
 
 ## Debug Renderer
 
-Without compute shaders, the debug renderer writes line vertices directly to a vertex buffer and draws as `GL_LINES` (1-pixel wide). The compute shader pipeline (CPU → SSBO → compute expand → triangles) is only created when `use_compute_shader` is true.
+Without compute shaders, the debug renderer has two fallback paths:
+
+1. **Geometry shader wide lines** (preferred): Line vertices are written to a vertex buffer and drawn as `GL_LINES` with a geometry shader (`debug_line.geom`) that expands each line segment into a triangle strip for configurable line width. This is attempted first when compute is unavailable.
+2. **Simple GL_LINES** (final fallback): If the geometry shader also fails to compile, lines are drawn as plain `GL_LINES` (1-pixel wide).
+
+The compute shader pipeline (CPU -> SSBO -> compute expand -> triangles) is only created when `use_compute_shader` is true.
 
 ## GLSL 4.10 Compatibility
 

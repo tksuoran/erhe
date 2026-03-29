@@ -1,7 +1,7 @@
 # erhe_renderer
 
 ## Purpose
-GPU rendering utilities for debug visualization and text overlay in 3D viewports. Provides a debug line/shape renderer that converts lines to triangles via compute shaders, a 2D text renderer for in-viewport labels, a texture fullscreen renderer, and draw indirect buffer management for batched mesh rendering.
+GPU rendering utilities for debug visualization and text overlay in 3D viewports. Provides a debug line/shape renderer with three rendering paths (compute shader, geometry shader, or plain GL_LINES), a 2D text renderer for in-viewport labels, a texture fullscreen renderer, and draw indirect buffer management for batched mesh rendering.
 
 ## Key Types
 - `Debug_renderer` -- Central coordinator for debug line/shape rendering. Manages a stack of views, dispatches compute shaders to expand lines into triangles, and renders the results.
@@ -32,6 +32,9 @@ GPU rendering utilities for debug visualization and text overlay in 3D viewports
 - glm, etl
 
 ## Notes
-- Debug lines are stored as per-vertex SSBO data and expanded to triangles by a compute shader before rasterization.
+- Debug lines have three rendering paths, selected at startup based on GPU capabilities:
+  1. **Compute shader** (GL 4.3+): lines stored as SSBO data, expanded to triangles by compute shader.
+  2. **Geometry shader** (GL 4.1+): lines drawn as GL_LINES, expanded to triangle strips by geometry shader for configurable width.
+  3. **Simple GL_LINES** (fallback): 1-pixel wide lines when neither compute nor geometry shader is available.
 - Buckets use `etl::vector` (fixed capacity) so that element addresses remain stable.
 - `Primitive_renderer` is move-only; obtain one per frame per config.
