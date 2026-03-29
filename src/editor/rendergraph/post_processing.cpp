@@ -202,17 +202,19 @@ auto Post_processing_node::update_size() -> bool
             std::unique_ptr<erhe::graphics::Render_pass> render_pass = std::make_unique<erhe::graphics::Render_pass>(m_graphics_device, render_pass_descriptor);
             downsample_render_passes.push_back(std::move(render_pass));
 
-            erhe::graphics::Texture_create_info texture_create_info = erhe::graphics::Texture_create_info::make_view(m_graphics_device, downsample_texture);
-            texture_create_info.usage_mask            =
-                erhe::graphics::Image_usage_flag_bit_mask::color_attachment |
-                erhe::graphics::Image_usage_flag_bit_mask::sampled,
-            texture_create_info.view_base_level       = level;
-            texture_create_info.level_count           = 1;
-            texture_create_info.view_base_array_layer = 0;
-            texture_create_info.width                 = level_width;
-            texture_create_info.height                = level_height;
-            texture_create_info.debug_label           = erhe::utility::Debug_label{fmt::format("Downsample level {}", level)};
-            downsample_texture_views.push_back(std::make_shared<erhe::graphics::Texture>(m_graphics_device, texture_create_info));
+            if (m_graphics_device.get_info().use_texture_view) {
+                erhe::graphics::Texture_create_info texture_create_info = erhe::graphics::Texture_create_info::make_view(m_graphics_device, downsample_texture);
+                texture_create_info.usage_mask            =
+                    erhe::graphics::Image_usage_flag_bit_mask::color_attachment |
+                    erhe::graphics::Image_usage_flag_bit_mask::sampled,
+                texture_create_info.view_base_level       = level;
+                texture_create_info.level_count           = 1;
+                texture_create_info.view_base_array_layer = 0;
+                texture_create_info.width                 = level_width;
+                texture_create_info.height                = level_height;
+                texture_create_info.debug_label           = erhe::utility::Debug_label{fmt::format("Downsample level {}", level)};
+                downsample_texture_views.push_back(std::make_shared<erhe::graphics::Texture>(m_graphics_device, texture_create_info));
+            }
         }
         {
             erhe::graphics::Render_pass_descriptor render_pass_descriptor{};
@@ -232,17 +234,19 @@ auto Post_processing_node::update_size() -> bool
                 upsample_render_passes.push_back(std::move(render_pass));
             }
 
-            erhe::graphics::Texture_create_info texture_create_info = erhe::graphics::Texture_create_info::make_view(m_graphics_device, upsample_texture);
-            texture_create_info.usage_mask            =
-                erhe::graphics::Image_usage_flag_bit_mask::color_attachment |
-                erhe::graphics::Image_usage_flag_bit_mask::sampled,
-            texture_create_info.view_base_level       = level;
-            texture_create_info.level_count           = 1;
-            texture_create_info.view_base_array_layer = 0;
-            texture_create_info.width                 = level_width;
-            texture_create_info.height                = level_height;
-            texture_create_info.debug_label           = erhe::utility::Debug_label{fmt::format("Upsample level {}", level)};
-            upsample_texture_views.push_back(std::make_shared<erhe::graphics::Texture>(m_graphics_device, texture_create_info));
+            if (m_graphics_device.get_info().use_texture_view) {
+                erhe::graphics::Texture_create_info texture_create_info = erhe::graphics::Texture_create_info::make_view(m_graphics_device, upsample_texture);
+                texture_create_info.usage_mask            =
+                    erhe::graphics::Image_usage_flag_bit_mask::color_attachment |
+                    erhe::graphics::Image_usage_flag_bit_mask::sampled,
+                texture_create_info.view_base_level       = level;
+                texture_create_info.level_count           = 1;
+                texture_create_info.view_base_array_layer = 0;
+                texture_create_info.width                 = level_width;
+                texture_create_info.height                = level_height;
+                texture_create_info.debug_label           = erhe::utility::Debug_label{fmt::format("Upsample level {}", level)};
+                upsample_texture_views.push_back(std::make_shared<erhe::graphics::Texture>(m_graphics_device, texture_create_info));
+            }
         }
         if ((level_width == 1) && (level_height == 1)) {
             break;
@@ -367,11 +371,10 @@ auto Post_processing_node::get_producer_output_texture(const int key, int) const
         (key == erhe::rendergraph::Rendergraph_node_key::viewport_texture) ||
         (key == erhe::rendergraph::Rendergraph_node_key::wildcard)
     ) {
-        if (upsample_texture_views.empty()) {
-            return {};
-        } else {
+        if (!upsample_texture_views.empty()) {
             return upsample_texture_views.at(0);
         }
+        return upsample_texture;
     }
 
     return {};

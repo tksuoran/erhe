@@ -184,7 +184,7 @@ void Scene_builder::setup_cameras(
         return;
     }
 
-    const bool enable_post_processing = m_graphics_config.post_processing && graphics_device.get_info().use_texture_view;
+    const bool enable_post_processing = m_graphics_config.post_processing;
 
     bool imgui_window_scene_view = m_scene_config.imgui_window_scene_view;
     if (!imgui_window_scene_view) {
