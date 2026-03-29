@@ -1,0 +1,32 @@
+{
+    "_version": 1,
+    "presets": [
+        {
+            "_version": 1,
+            "name": "Low",
+            "msaa_sample_count": 2,
+            "shadow_enable": true,
+            "shadow_resolution": 1024,
+            "shadow_light_count": 16,
+            "shadow_depth_bits": 16
+        },
+        {
+            "_version": 1,
+            "name": "Medium",
+            "msaa_sample_count": 4,
+            "shadow_enable": true,
+            "shadow_resolution": 2048,
+            "shadow_light_count": 16,
+            "shadow_depth_bits": 16
+        },
+        {
+            "_version": 1,
+            "name": "High",
+            "msaa_sample_count": 8,
+            "shadow_enable": true,
+            "shadow_resolution": 4096,
+            "shadow_light_count": 32,
+            "shadow_depth_bits": 32
+        }
+    ]
+}

@@ -335,13 +335,6 @@ CPMAddPackage(
     GITHUB_REPOSITORY simdjson/simdjson
 )
 
-CPMAddPackage(
-    NAME              tomlplusplus
-    GIT_SHALLOW       TRUE
-    VERSION           3.4.0
-    GITHUB_REPOSITORY marzer/tomlplusplus
-)
-
 # CPMAddPackage(
 #     NAME              reflect-cpp
 #     GIT_SHALLOW       TRUE

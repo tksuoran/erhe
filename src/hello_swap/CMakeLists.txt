@@ -8,8 +8,8 @@ erhe_target_sources_grouped(
     hello_swap_log.cpp
     hello_swap_log.hpp
     main.cpp
-    erhe.toml
-    logging.toml
+    erhe.json
+    logging.json
 )
 
 # Required for log init
@@ -24,7 +24,6 @@ endif ()
 target_link_libraries(
     ${_target}
     PRIVATE
-        erhe::configuration
         erhe::file
         erhe::graphics
         erhe::log

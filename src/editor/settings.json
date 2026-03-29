@@ -1,0 +1,19 @@
+{
+    "_version": 1,
+    "graphics_preset_name": "Low",
+    "imgui": {
+        "_version": 1,
+        "primary_font": "res/fonts/SourceSansPro-Regular.otf",
+        "mono_font": "res/fonts/SourceCodePro-Semibold.otf",
+        "font_size": 16.0,
+        "vr_font_size": 24.0,
+        "material_design_font_size": 16.0,
+        "icon_font_size": 16.0
+    },
+    "icons": {
+        "_version": 1,
+        "small_icon_size": 16,
+        "large_icon_size": 32,
+        "hotbar_icon_size": 80
+    }
+}

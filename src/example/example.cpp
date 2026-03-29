@@ -6,7 +6,6 @@
 #include "programs.hpp"
 
 #include "erhe_dataformat/dataformat_log.hpp"
-#include "erhe_configuration/configuration.hpp"
 #include "erhe_file/file.hpp"
 #if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
 # include "erhe_gl/gl_log.hpp"
@@ -495,7 +494,7 @@ void run_example()
 {
     // Workaround for
     // https://intellij-support.jetbrains.com/hc/en-us/community/posts/27792220824466-CMake-C-git-project-How-to-share-working-directory-in-git
-    erhe::file::ensure_working_directory_contains("example", erhe::c_erhe_config_file_path);
+    erhe::file::ensure_working_directory_contains("example", "example_mesh_memory.json");
 
     erhe::log::initialize_log_sinks();
 

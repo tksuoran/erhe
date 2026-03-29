@@ -8,14 +8,17 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace erhe::log {
 
-static constexpr const char* const c_logging_configuration_file_path = "logging.toml";
+static constexpr const char* const c_logging_configuration_file_path = "logging.json";
 
 void console_init();
 void initialize_log_sinks();
 void log_to_console();
+void configure_log_levels(const std::vector<std::pair<std::string, std::string>>& name_level_pairs);
 
 // creates and configures logger
 auto make_logger(const std::string& name, bool tail = true) -> std::shared_ptr<spdlog::logger>;

@@ -18,7 +18,7 @@ int main(int argc, char** argv)
     //    log_file->warn() while log_file is still nullptr (circular dependency).
     erhe::file::log_file = spdlog::stdout_color_mt("erhe.file.bootstrap");
 
-    // 3. Now safe to initialize item logging (make_logger reads logging.toml
+    // 3. Now safe to initialize item logging (make_logger reads logging config
     //    via erhe::file, which now has a valid logger)
     erhe::item::initialize_logging();
 

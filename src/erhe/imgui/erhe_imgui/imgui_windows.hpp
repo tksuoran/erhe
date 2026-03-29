@@ -22,6 +22,8 @@ namespace erhe::window {
     class Input_event;
 }
 
+struct Windows_visibility_config;
+
 namespace erhe::imgui {
 
 class Imgui_window;
@@ -39,6 +41,8 @@ public:
         erhe::window::Context_window*   context_window,
         std::string_view                windows_ini_path
     );
+
+    ~Imgui_windows();
 
     // Public API
     void lock_mutex             ();
@@ -75,6 +79,8 @@ public:
     void debug_imgui();
 
 private:
+    auto get_windows_config() const -> const Windows_visibility_config&;
+
     Imgui_renderer&                    m_imgui_renderer;
     erhe::window::Context_window*      m_context_window{nullptr};
     std::recursive_mutex               m_mutex;
@@ -85,7 +91,8 @@ private:
     erhe::rendergraph::Rendergraph&    m_rendergraph;
     std::string                        m_windows_ini_path;
 
-    std::shared_ptr<Window_imgui_host> m_window_imgui_host;
+    mutable std::unique_ptr<Windows_visibility_config> m_windows_config;
+    std::shared_ptr<Window_imgui_host>                m_window_imgui_host;
 };
 
 } // namespace erhe::imgui

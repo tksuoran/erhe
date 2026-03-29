@@ -26,8 +26,8 @@ erhe_target_sources_grouped(
     res/shaders/depth.frag
     res/shaders/standard.vert
     res/shaders/standard.frag
-    erhe.toml
-    logging.toml
+    example_mesh_memory.json
+    logging.json
 )
 
 # Required for log init
@@ -43,6 +43,7 @@ target_link_libraries(
     ${_target}
     PRIVATE
         Taskflow
+        erhe::codegen
         erhe::utility
         erhe::dataformat
         erhe::file
@@ -66,7 +67,28 @@ if (DEFINED ERHE_PROFILE_TARGET)
     target_link_libraries(${_target} PRIVATE ${ERHE_PROFILE_TARGET})
 endif ()
 
-target_include_directories(${_target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+# Codegen for example config
+set(_example_defs "${CMAKE_CURRENT_SOURCE_DIR}/definitions")
+set(_example_gen  "${CMAKE_CURRENT_BINARY_DIR}/generated")
+
+erhe_codegen_generate(
+    TARGET          ${_target}
+    DEFINITIONS_DIR "${_example_defs}"
+    OUTPUT_DIR      "${_example_gen}"
+    DEFINITIONS
+        "${_example_defs}/example_mesh_memory.py"
+)
+
+set(_example_codegen_sources
+    ${_example_gen}/example_mesh_memory.hpp
+    ${_example_gen}/example_mesh_memory_serialization.hpp
+    ${_example_gen}/example_mesh_memory.cpp
+)
+set_source_files_properties(${_example_codegen_sources} PROPERTIES GENERATED TRUE)
+target_sources(${_target} PRIVATE ${_example_codegen_sources})
+source_group("codegen generated" FILES ${_example_codegen_sources})
+
+target_include_directories(${_target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
 
 set_target_properties(
     ${_target} PROPERTIES

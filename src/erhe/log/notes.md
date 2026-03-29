@@ -2,7 +2,7 @@
 
 ## Purpose
 Logging infrastructure built on spdlog. Provides logger creation with
-configurable levels (via `logging.toml`), an in-memory log store sink for
+configurable levels (via `logging.json`), an in-memory log store sink for
 displaying log entries in the editor UI, and fmt formatters for glm and
 Geogram vector types.
 
@@ -28,7 +28,7 @@ erhe::log::get_tail_store_log().access_entries([](auto& entries){ ... });
 - No erhe library dependencies (leaf library)
 
 ## Notes
-- Log levels are read from `logging.toml` at startup.
+- Log levels are read from `logging.json` at startup via erhe_codegen-generated deserialization.
 - `log_glm.hpp` provides `fmt::formatter` specializations for all glm vec/dvec/ivec types (2/3/4).
 - `log_geogram.hpp` provides `fmt::formatter` specializations for all Geogram vector types.
 - Two store sinks exist: a "tail" store (persistent) and a "frame" store (per-frame).

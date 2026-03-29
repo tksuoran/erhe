@@ -3,8 +3,8 @@ set(_target "hextiles")
 add_executable(${_target})
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
-    erhe.toml
-    logging.toml
+    erhe.json
+    logging.json
     windows.ini
     hextiles.cpp
     hextiles.hpp

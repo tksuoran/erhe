@@ -1,24 +1,28 @@
 #include "mesh_memory.hpp"
 
-#include "erhe_configuration/configuration.hpp"
+#include "generated/example_mesh_memory.hpp"
+#include "generated/example_mesh_memory_serialization.hpp"
+#include "erhe_codegen/config_io.hpp"
 #include "erhe_scene_renderer/program_interface.hpp"
 
 namespace example {
 
+static Example_mesh_memory& get_mesh_memory_config()
+{
+    static Example_mesh_memory config = erhe::codegen::load_config<Example_mesh_memory>("example_mesh_memory.json");
+    return config;
+}
+
 auto Mesh_memory::get_vertex_buffer_size(std::size_t) const -> std::size_t
 {
-    int vertex_buffer_size{32}; // in megabytes
-    const auto& ini = erhe::configuration::get_ini_file_section(erhe::c_erhe_config_file_path, "mesh_memory");
-    ini.get("vertex_buffer_size", vertex_buffer_size);
-    return vertex_buffer_size * 1024 * 1024;
+    const Example_mesh_memory& config = get_mesh_memory_config();
+    return static_cast<std::size_t>(config.vertex_buffer_size) * 1024 * 1024;
 }
 
 auto Mesh_memory::get_index_buffer_size() const -> std::size_t
 {
-    int index_buffer_size{8}; // in megabytes
-    const auto& ini = erhe::configuration::get_ini_file_section(erhe::c_erhe_config_file_path, "mesh_memory");
-    ini.get("index_buffer_size",  index_buffer_size);
-    return index_buffer_size * 1024 * 1024;
+    const Example_mesh_memory& config = get_mesh_memory_config();
+    return static_cast<std::size_t>(config.index_buffer_size) * 1024 * 1024;
 }
 
 Mesh_memory::Mesh_memory(erhe::graphics::Device& graphics_device)

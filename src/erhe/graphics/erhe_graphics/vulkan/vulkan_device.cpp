@@ -9,7 +9,6 @@
 #include "erhe_graphics/swapchain.hpp"
 
 #include "erhe_utility/bit_helpers.hpp"
-#include "erhe_configuration/configuration.hpp"
 #include "erhe_graphics/blit_command_encoder.hpp"
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/vulkan/vulkan_compute_command_encoder.hpp"
@@ -293,7 +292,7 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         }
     };
 
-    // TODO Add config to erhe.toml
+    // TODO Add config to erhe.json
     check_layer("VK_LAYER_KHRONOS_validation",      m_instance_layers.m_VK_LAYER_KHRONOS_validation);
     //check_layer("VK_LAYER_LUNARG_crash_diagnostic", m_instance_layers.m_VK_LAYER_LUNARG_crash_diagnostic);
 

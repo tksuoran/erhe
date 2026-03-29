@@ -1,5 +1,4 @@
 #include "erhe_log/log.hpp"
-#include "erhe_configuration/configuration.hpp"
 #include "erhe_log/timestamp.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -17,9 +16,49 @@
 #   include <unistd.h>
 #endif
 
+#include <unordered_map>
 #include <vector>
 
 namespace erhe::log {
+
+static auto get_log_level_map() -> std::unordered_map<std::string, std::string>&
+{
+    static std::unordered_map<std::string, std::string> map;
+    return map;
+}
+
+void configure_log_levels(
+    const std::vector<std::pair<std::string, std::string>>& name_level_pairs
+)
+{
+    std::unordered_map<std::string, std::string>& map = get_log_level_map();
+    for (const auto& pair : name_level_pairs) {
+        map[pair.first] = pair.second;
+    }
+
+    // Update any loggers that were already created
+    for (const auto& pair : name_level_pairs) {
+        std::shared_ptr<spdlog::logger> logger = spdlog::get(pair.first);
+        if (logger) {
+            auto from_str = [](const std::string& name) -> spdlog::level::level_enum {
+                auto it = std::find(
+                    std::begin(spdlog::level::level_string_views),
+                    std::end(spdlog::level::level_string_views),
+                    name
+                );
+                if (it != std::end(spdlog::level::level_string_views)) {
+                    return static_cast<spdlog::level::level_enum>(
+                        std::distance(std::begin(spdlog::level::level_string_views), it)
+                    );
+                }
+                if (name == "warn") return spdlog::level::warn;
+                if (name == "err")  return spdlog::level::err;
+                return spdlog::level::err;
+            };
+            logger->set_level(from_str(pair.second));
+        }
+    }
+}
 
 void console_init()
 {
@@ -109,12 +148,15 @@ public:
     auto make_logger(const std::string& name, const bool tail) -> std::shared_ptr<spdlog::logger>
     {
         ERHE_VERIFY(!name.empty());
-        const std::string groupname = get_groupname(name);
-        const std::string basename  = get_basename(name);
-        const erhe::configuration::Ini_section& ini = erhe::configuration::get_ini_file_section(c_logging_configuration_file_path, groupname);
 
         std::string levelname;
-        ini.get(basename.c_str(), levelname);
+        {
+            const std::unordered_map<std::string, std::string>& levels = get_log_level_map();
+            const auto it = levels.find(name);
+            if (it != levels.end()) {
+                levelname = it->second;
+            }
+        }
 
         // Forked from spdlog::level::from_str(levelname) because it defaults to off if parse fails,
         // while we want to set the default to err.

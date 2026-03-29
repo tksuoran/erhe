@@ -14,8 +14,9 @@
 #include "erhe_commands/input_arguments.hpp"
 #include "erhe_commands/commands.hpp"
 #include "config/generated/camera_controls_config.hpp"
-#include "erhe_configuration/configuration.hpp"
-#include "erhe_file/file.hpp"
+#include "config/generated/fly_camera_config.hpp"
+#include "config/generated/fly_camera_config_serialization.hpp"
+#include "erhe_codegen/config_io.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_primitive/primitive.hpp"
 #include "erhe_profile/profile.hpp"
@@ -31,7 +32,6 @@
 #include <glm/gtx/euler_angles.hpp>
 
 #include <imgui/imgui.h>
-#include <toml++/toml.hpp>
 
 #include <cmath>
 #include <numeric>
@@ -649,24 +649,14 @@ void Fly_camera_tool::serialize_transform(bool store)
         glm::vec3 translation = world_from_node.get_translation();
         glm::quat rotation    = world_from_node.get_rotation();
 
-        toml::table table;
-        table.insert("translation", toml::array{ translation.x, translation.y, translation.z });
-        table.insert("rotation",    toml::array{ rotation.x, rotation.y, rotation.z, rotation.w });
-        std::ostringstream ss; ss << table;
-        erhe::file::write_file("fly_camera.toml", ss.str());
+        Fly_camera_config fly_camera_config;
+        fly_camera_config.translation = translation;
+        fly_camera_config.rotation    = glm::vec4{rotation.x, rotation.y, rotation.z, rotation.w};
+        erhe::codegen::save_config(fly_camera_config, "fly_camera.json");
     } else {
-        auto& settings_ini = erhe::configuration::get_ini_file("fly_camera.toml");
-        glm::vec3 translation{};
-        const auto& translation_section = settings_ini.get_section("translation");
-        translation_section.get("x", translation.x); // TODO
-        translation_section.get("y", translation.y);
-        translation_section.get("z", translation.z);
-        glm::quat rotation{};
-        const auto& rotation_section = settings_ini.get_section("rotation");
-        rotation_section.get("x", rotation.x);
-        rotation_section.get("y", rotation.y);
-        rotation_section.get("z", rotation.z);
-        rotation_section.get("w", rotation.w);
+        Fly_camera_config fly_camera_config = erhe::codegen::load_config<Fly_camera_config>("fly_camera.json");
+        glm::vec3 translation = fly_camera_config.translation;
+        glm::quat rotation{fly_camera_config.rotation.w, fly_camera_config.rotation.x, fly_camera_config.rotation.y, fly_camera_config.rotation.z};
         const erhe::scene::Trs_transform& world_from_node{translation, rotation};
         m_node->set_world_from_node(world_from_node);
     }

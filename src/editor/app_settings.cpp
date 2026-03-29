@@ -2,11 +2,16 @@
 #include "app_message_bus.hpp"
 #include "editor_log.hpp"
 
-#include "erhe_configuration/configuration.hpp"
-#include "erhe_file/file.hpp"
+#include "config/generated/app_settings_config.hpp"
+#include "config/generated/app_settings_config_serialization.hpp"
+#include "config/generated/graphics_preset_entry.hpp"
+#include "config/generated/graphics_preset_entry_serialization.hpp"
+#include "config/generated/graphics_presets_config.hpp"
+#include "config/generated/graphics_presets_config_serialization.hpp"
+
+#include "erhe_codegen/config_io.hpp"
 
 #include <fmt/format.h>
-#include <toml++/toml.hpp>
 
 namespace editor {
 
@@ -56,69 +61,44 @@ void Graphics_settings::get_limits(const erhe::graphics::Device& instance, erhe:
     max_depth_layers = std::min(32, format_properties.texture_2d_array_max_layers);
 }
 
-template <typename T>
-void parse(toml::table& table, std::string_view key, T& destination)
-{
-    if (toml::node* node = table.get(key)) {
-        if (std::optional<T> value = node->value<T>()) {
-            destination = value.value();
-        }
-    }
-}
-
 void Graphics_settings::read_presets()
 {
     graphics_presets.clear();
-    toml::table presets_table;
-    const bool parse_ok = erhe::configuration::parse_toml(presets_table, c_graphics_presets_file_path);
-    if (!parse_ok) {
-        log_startup->warn("Could not read graphics presets from {}", c_graphics_presets_file_path);
-        return;
+    Graphics_presets_config presets_config = erhe::codegen::load_config<Graphics_presets_config>(c_graphics_presets_file_path);
+    for (const Graphics_preset_entry& entry : presets_config.presets) {
+        Graphics_preset graphics_preset;
+        graphics_preset.name               = entry.name;
+        graphics_preset.msaa_sample_count  = entry.msaa_sample_count;
+        graphics_preset.bindless_textures  = entry.bindless_textures;
+        graphics_preset.reverse_depth      = entry.reverse_depth;
+        graphics_preset.shadow_enable      = entry.shadow_enable;
+        graphics_preset.shadow_resolution  = entry.shadow_resolution;
+        graphics_preset.shadow_light_count = entry.shadow_light_count;
+        graphics_preset.shadow_depth_bits  = entry.shadow_depth_bits;
+        graphics_presets.push_back(graphics_preset);
     }
-    try {
-        presets_table.for_each(
-            [this](auto&, toml::table& table)
-            {
-                Graphics_preset graphics_preset;
-                parse<std::string>(table, "name"              , graphics_preset.name              );
-                parse<int        >(table, "msaa_sample_count" , graphics_preset.msaa_sample_count );
-                parse<bool       >(table, "reverse_depth"     , graphics_preset.reverse_depth     );
-                parse<bool       >(table, "shadow_enable"     , graphics_preset.shadow_enable     );
-                parse<int        >(table, "shadow_resolution" , graphics_preset.shadow_resolution );
-                parse<int        >(table, "shadow_light_count", graphics_preset.shadow_light_count);
-                parse<int        >(table, "shadow_depth_bits",  graphics_preset.shadow_depth_bits );
-                graphics_presets.push_back(graphics_preset);
-            }
-        );
-    } catch (toml::parse_error e) {
-        char const* what        = e.what();
-        char const* description = e.description().data();
-        printf("what = %s\n", what);
-        printf("description = %s\n", description);
-        printf("file = %s\n", e.source().path ? e.source().path->c_str() : "");
-        printf("line = %u\n", e.source().begin.line);
-        printf("column = %u\n", e.source().begin.column);
-    } catch (...) {
-        printf("?!\n");
+    if (graphics_presets.empty()) {
+        log_startup->warn("Could not read graphics presets from {}", c_graphics_presets_file_path);
     }
 }
 
 void Graphics_settings::write_presets()
 {
     log_startup->debug("Graphics_settings::write_presets()");
-    toml::table presets_table{};
-    for (const auto& graphics_preset : graphics_presets) {
-        toml::table preset{};
-        preset.insert("name"              , graphics_preset.name              );
-        preset.insert("msaa_sample_count" , graphics_preset.msaa_sample_count );
-        preset.insert("reverse_depth"     , graphics_preset.reverse_depth     );
-        preset.insert("shadow_enable"     , graphics_preset.shadow_enable     );
-        preset.insert("shadow_resolution" , graphics_preset.shadow_resolution );
-        preset.insert("shadow_light_count", graphics_preset.shadow_light_count);
-        preset.insert("shadow_depth_bits",  graphics_preset.shadow_depth_bits );
-        presets_table.insert(graphics_preset.name, preset);
+    Graphics_presets_config presets_config;
+    for (const Graphics_preset& graphics_preset : graphics_presets) {
+        Graphics_preset_entry entry;
+        entry.name               = graphics_preset.name;
+        entry.msaa_sample_count  = graphics_preset.msaa_sample_count;
+        entry.bindless_textures  = graphics_preset.bindless_textures;
+        entry.reverse_depth      = graphics_preset.reverse_depth;
+        entry.shadow_enable      = graphics_preset.shadow_enable;
+        entry.shadow_resolution  = graphics_preset.shadow_resolution;
+        entry.shadow_light_count = graphics_preset.shadow_light_count;
+        entry.shadow_depth_bits  = graphics_preset.shadow_depth_bits;
+        presets_config.presets.push_back(entry);
     }
-    erhe::configuration::write_toml(presets_table, c_graphics_presets_file_path);
+    erhe::codegen::save_config(presets_config, c_graphics_presets_file_path);
 }
 
 void Graphics_settings::apply_limits(Graphics_preset& graphics_preset)
@@ -140,7 +120,7 @@ void Graphics_settings::select_active_graphics_preset(App_message_bus& app_messa
 
     // Override configuration
     for (std::size_t i = 0, end = graphics_presets.size(); i < end; ++i) {
-        const auto& graphics_preset = graphics_presets.at(i);
+        const Graphics_preset& graphics_preset = graphics_presets.at(i);
         if (graphics_preset.name == current_graphics_preset.name) {
             current_graphics_preset = graphics_preset;
             log_startup->info("Using graphics preset {}", graphics_preset.name);
@@ -161,22 +141,19 @@ void App_settings::read()
 
     graphics.read_presets();
 
-    auto& settings_ini = erhe::configuration::get_ini_file(c_settings_file_path);
-    const auto& graphics_section = settings_ini.get_section("graphics");
-    graphics_section.get("preset", graphics.current_graphics_preset.name);
+    App_settings_config config = erhe::codegen::load_config<App_settings_config>(c_settings_file_path);
+    graphics.current_graphics_preset.name = config.graphics_preset_name;
 
-    const auto& imgui_section = settings_ini.get_section("imgui");
-    imgui_section.get("primary_font",              imgui.primary_font);
-    imgui_section.get("mono_font",                 imgui.mono_font);
-    imgui_section.get("font_size",                 imgui.font_size);
-    imgui_section.get("vr_font_size",              imgui.vr_font_size);
-    imgui_section.get("material_design_font_size", imgui.material_design_font_size);
-    imgui_section.get("icon_font_size",            imgui.icon_font_size);
+    imgui.primary_font              = config.imgui.primary_font;
+    imgui.mono_font                 = config.imgui.mono_font;
+    imgui.font_size                 = config.imgui.font_size;
+    imgui.vr_font_size              = config.imgui.vr_font_size;
+    imgui.material_design_font_size = config.imgui.material_design_font_size;
+    imgui.icon_font_size            = config.imgui.icon_font_size;
 
-    const auto& icons_section = settings_ini.get_section("icons");
-    icons_section.get("small_icon_size",  icon_settings.small_icon_size);
-    icons_section.get("large_icon_size",  icon_settings.large_icon_size);
-    icons_section.get("hotbar_icon_size", icon_settings.hotbar_icon_size);
+    icon_settings.small_icon_size  = config.icons.small_icon_size;
+    icon_settings.large_icon_size  = config.icons.large_icon_size;
+    icon_settings.hotbar_icon_size = config.icons.hotbar_icon_size;
 }
 
 void App_settings::write()
@@ -185,26 +162,21 @@ void App_settings::write()
 
     graphics.write_presets();
 
-    toml::table table;
-    toml::table graphics_;
-    graphics_.insert("preset", graphics.current_graphics_preset.name);
-    table.insert("graphics", graphics_);
+    App_settings_config config;
+    config.graphics_preset_name = graphics.current_graphics_preset.name;
 
-    toml::table imgui_;
-    imgui_.insert("primary_font"             , imgui.primary_font);
-    imgui_.insert("mono_font"                , imgui.mono_font);
-    imgui_.insert("font_size"                , imgui.font_size);
-    imgui_.insert("vr_font_size"             , imgui.vr_font_size);
-    imgui_.insert("material_design_font_size", imgui.material_design_font_size);
-    imgui_.insert("icon_font_size"           , imgui.icon_font_size);
-    table.insert("imgui", imgui_);
+    config.imgui.primary_font              = imgui.primary_font;
+    config.imgui.mono_font                 = imgui.mono_font;
+    config.imgui.font_size                 = imgui.font_size;
+    config.imgui.vr_font_size              = imgui.vr_font_size;
+    config.imgui.material_design_font_size = imgui.material_design_font_size;
+    config.imgui.icon_font_size            = imgui.icon_font_size;
 
-    toml::table icons_;
-    icons_.insert("small_icon_size" , icon_settings.small_icon_size);
-    icons_.insert("large_icon_size" , icon_settings.large_icon_size);
-    icons_.insert("hotbar_icon_size", icon_settings.hotbar_icon_size);
-    table.insert("icons", icons_);
-    erhe::configuration::write_toml(table, c_settings_file_path);
+    config.icons.small_icon_size  = icon_settings.small_icon_size;
+    config.icons.large_icon_size  = icon_settings.large_icon_size;
+    config.icons.hotbar_icon_size = icon_settings.hotbar_icon_size;
+
+    erhe::codegen::save_config(config, c_settings_file_path);
 }
 
 }

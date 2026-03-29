@@ -42,8 +42,8 @@ public:
     int         shadow_depth_bits {16};
 };
 
-static const char* const c_settings_file_path         = "settings.toml";
-static const char* const c_graphics_presets_file_path = "graphics_presets.toml";
+static const char* const c_settings_file_path         = "settings.json";
+static const char* const c_graphics_presets_file_path = "graphics_presets.json";
 
 class Graphics_settings
 {

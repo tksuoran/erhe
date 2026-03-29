@@ -4,11 +4,11 @@ set(_target "editor")
 add_executable(${_target})
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
-    graphics_presets.toml
-    logging.toml
-    openxr_windows.toml
-    settings.toml
-    windows.toml
+    graphics_presets.json
+    logging.json
+    openxr_windows.json
+    settings.json
+    windows.json
 
     config/editor_config.hpp
     config/editor_config.cpp
@@ -496,6 +496,12 @@ erhe_codegen_generate(
         "${_config_defs}/transform_tool_config.py"
         "${_config_defs}/viewport_config_data.py"
         "${_config_defs}/window_config.py"
+        "${_config_defs}/app_settings_config.py"
+        "${_config_defs}/imgui_settings_config.py"
+        "${_config_defs}/icon_settings_config.py"
+        "${_config_defs}/graphics_preset_entry.py"
+        "${_config_defs}/graphics_presets_config.py"
+        "${_config_defs}/fly_camera_config.py"
 )
 
 set(_config_sources
@@ -562,6 +568,24 @@ set(_config_sources
     ${_config_out}/window_config.hpp
     ${_config_out}/window_config_serialization.hpp
     ${_config_out}/window_config.cpp
+    ${_config_out}/app_settings_config.hpp
+    ${_config_out}/app_settings_config_serialization.hpp
+    ${_config_out}/app_settings_config.cpp
+    ${_config_out}/imgui_settings_config.hpp
+    ${_config_out}/imgui_settings_config_serialization.hpp
+    ${_config_out}/imgui_settings_config.cpp
+    ${_config_out}/icon_settings_config.hpp
+    ${_config_out}/icon_settings_config_serialization.hpp
+    ${_config_out}/icon_settings_config.cpp
+    ${_config_out}/graphics_preset_entry.hpp
+    ${_config_out}/graphics_preset_entry_serialization.hpp
+    ${_config_out}/graphics_preset_entry.cpp
+    ${_config_out}/graphics_presets_config.hpp
+    ${_config_out}/graphics_presets_config_serialization.hpp
+    ${_config_out}/graphics_presets_config.cpp
+    ${_config_out}/fly_camera_config.hpp
+    ${_config_out}/fly_camera_config_serialization.hpp
+    ${_config_out}/fly_camera_config.cpp
 )
 set_source_files_properties(${_config_sources} PROPERTIES GENERATED TRUE)
 target_sources(${_target} PRIVATE ${_config_sources})
@@ -586,7 +610,6 @@ target_link_libraries(
         erhe::commands
         httplib::httplib
         nlohmann_json::nlohmann_json
-        erhe::configuration
         erhe::defer
         erhe::dataformat
         erhe::file
@@ -620,7 +643,6 @@ target_link_libraries(
         # reflectcpp::reflectcpp
         Taskflow
         tinyexpr
-        tomlplusplus::tomlplusplus
 )
 
 # Icon font download and process

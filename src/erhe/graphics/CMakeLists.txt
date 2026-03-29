@@ -271,7 +271,6 @@ target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE
 target_link_libraries(${_target}
     PUBLIC
         concurrentqueue
-        erhe::configuration
         erhe::dataformat
         erhe::item
         erhe::window

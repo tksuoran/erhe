@@ -76,9 +76,13 @@
 #   include "erhe_xr/xr_instance.hpp"
 #endif
 
+#include "erhe_imgui/generated/logger_entry.hpp"
+#include "erhe_imgui/generated/logger_entry_serialization.hpp"
+#include "erhe_imgui/generated/logging_config.hpp"
+#include "erhe_imgui/generated/logging_config_serialization.hpp"
+#include "erhe_codegen/config_io.hpp"
 #include "erhe_commands/commands.hpp"
 #include "erhe_commands/commands_log.hpp"
-#include "erhe_configuration/configuration.hpp"
 #include "erhe_dataformat/dataformat_log.hpp"
 #include "erhe_file/file.hpp"
 #include "erhe_file/file_log.hpp"
@@ -387,7 +391,7 @@ public:
 
     [[nodiscard]] static auto get_windows_ini_path(bool openxr) -> std::string
     {
-        return openxr ? "openxr_windows.toml" : "windows.toml";
+        return openxr ? "openxr_windows.json" : "windows.json";
     }
 
     [[nodiscard]] static auto conditionally_enable_window_imgui_host(erhe::window::Context_window* context_window, bool openxr)
@@ -1648,6 +1652,16 @@ void run_editor()
     // Workaround for
     // https://intellij-support.jetbrains.com/hc/en-us/community/posts/27792220824466-CMake-C-git-project-How-to-share-working-directory-in-git
     erhe::file::ensure_working_directory_contains("editor", "erhe.json");
+
+    {
+        Logging_config log_config = erhe::codegen::load_config<Logging_config>(erhe::log::c_logging_configuration_file_path);
+        std::vector<std::pair<std::string, std::string>> levels;
+        levels.reserve(log_config.loggers.size());
+        for (const Logger_entry& entry : log_config.loggers) {
+            levels.emplace_back(entry.name, entry.level);
+        }
+        erhe::log::configure_log_levels(levels);
+    }
 
     {
         ERHE_PROFILE_SCOPE("initialize logging");

@@ -502,7 +502,7 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
     if (force_no_direct_state_access) {
         if (m_info.use_direct_state_access) {
             m_info.use_direct_state_access = false;
-            log_startup->warn("Force disabled direct state access due to erhe.toml setting");
+            log_startup->warn("Force disabled direct state access due to erhe.json setting");
         }
         // Persistent buffers require glBufferStorage (GL 4.4), which is not available
         // when DSA is disabled (pre-DSA path uses glBufferData instead)

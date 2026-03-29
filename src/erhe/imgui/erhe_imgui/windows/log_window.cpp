@@ -4,14 +4,17 @@
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_commands/commands.hpp"
-#include "erhe_configuration/configuration.hpp"
 
+#include "erhe_codegen/config_io.hpp"
+#include "erhe_imgui/generated/logger_entry.hpp"
+#include "erhe_imgui/generated/logger_entry_serialization.hpp"
+#include "erhe_imgui/generated/logging_config.hpp"
+#include "erhe_imgui/generated/logging_config_serialization.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_time/timestamp.hpp"
 
 #include <imgui/imgui.h>
 #include <imgui/misc/cpp/imgui_stdlib.h>
-#include <toml++/toml.hpp>
 
 #include <algorithm>
 
@@ -138,26 +141,20 @@ void Logs::log_entry(erhe::log::Entry& entry)
 
 void Logs::save_settings()
 {
-    toml::table root_table{};
+    Logging_config config;
     spdlog::apply_all(
-        [&root_table](std::shared_ptr<spdlog::logger> logger) {
+        [&config](std::shared_ptr<spdlog::logger> logger) {
             const std::string& name = logger->name();
             if (name.empty()) {
                 return;
             }
-            const std::string group_name = erhe::log::get_groupname(name);
-            const std::string basename   = erhe::log::get_basename (name);
-            toml::impl::wrap_node<toml::table>* old_group_table = root_table.get_as<toml::table>(group_name);
-            if (old_group_table != nullptr) {
-                old_group_table->insert(basename, erhe::log::get_levelname(logger->level()));
-            } else {
-                toml::table new_group_table;
-                new_group_table.insert(basename, erhe::log::get_levelname(logger->level()));
-                root_table.insert(group_name, new_group_table);
-            }
+            Logger_entry entry;
+            entry.name  = name;
+            entry.level = erhe::log::get_levelname(logger->level());
+            config.loggers.push_back(entry);
         }
     );
-    erhe::configuration::write_toml(root_table, erhe::log::c_logging_configuration_file_path);
+    erhe::codegen::save_config(config, erhe::log::c_logging_configuration_file_path);
 }
 
 auto log_level_combo(const char* label, spdlog::level::level_enum& level) -> bool
