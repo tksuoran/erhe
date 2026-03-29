@@ -27,6 +27,7 @@ public:
     unsigned int                   stencil_reference{0};
     bool                           draw_visible     {true};
     bool                           draw_hidden      {false};
+    bool                           thin_lines       {false};
 };
 
 auto operator==(const Debug_renderer_config& lhs, const Debug_renderer_config& rhs) -> bool;
@@ -62,12 +63,13 @@ public:
     void start_view      (const View& view);
 
 private:
-    [[nodiscard]] auto make_pipeline     (bool visible, bool reverse_depth = true) -> erhe::graphics::Render_pipeline_state;
+    [[nodiscard]] auto make_pipeline     (bool visible) -> erhe::graphics::Render_pipeline_state;
     [[nodiscard]] auto update_view_buffer(const View& view) -> erhe::graphics::Ring_buffer_range;
 
     erhe::graphics::Device&               m_graphics_device;
     Debug_renderer&                       m_debug_renderer;
     bool                                  m_use_compute;
+    bool                                  m_use_geometry_shader;
     erhe::graphics::Ring_buffer_client    m_view_buffer;
 
     // Compute path: line vertices → compute shader → triangle vertices → render triangles

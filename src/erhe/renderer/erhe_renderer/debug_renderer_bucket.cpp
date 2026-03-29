@@ -21,19 +21,35 @@ bool operator==(const Debug_renderer_config& lhs, const Debug_renderer_config& r
         (lhs.primitive_type    == rhs.primitive_type   ) &&
         (lhs.stencil_reference == rhs.stencil_reference) &&
         (lhs.draw_visible      == rhs.draw_visible     ) &&
-        (lhs.draw_hidden       == rhs.draw_hidden      );
+        (lhs.draw_hidden       == rhs.draw_hidden      ) &&
+        (lhs.thin_lines        == rhs.thin_lines       );
 }
 
-auto Debug_renderer_bucket::Debug_renderer_bucket::make_pipeline(const bool visible, const bool reverse_depth) -> erhe::graphics::Render_pipeline_state
+auto Debug_renderer_bucket::Debug_renderer_bucket::make_pipeline(const bool visible) -> erhe::graphics::Render_pipeline_state
 {
+    const bool reverse_depth = m_graphics_device.get_info().use_clip_control;
     using namespace erhe::graphics;
 
     const auto& program_interface = m_debug_renderer.get_program_interface();
 
-    // Compute path renders triangles from compute-generated vertices; non-compute path renders GL_LINES
-    Shader_stages*     shader_stages = m_use_compute ? program_interface.graphics_shader_stages.get() : program_interface.line_shader_stages.get();
-    Vertex_input_state* vertex_input = m_use_compute ? m_debug_renderer.get_vertex_input()            : m_debug_renderer.get_line_vertex_input();
-    Input_assembly_state input_assembly = m_use_compute ? Input_assembly_state::triangle               : Input_assembly_state::line;
+    // Three tiers: compute (triangles) > geometry shader (GL_LINES + geom expand) > simple (GL_LINES)
+    // thin_lines config forces simple path regardless of capability
+    Shader_stages*       shader_stages;
+    Vertex_input_state*  vertex_input;
+    Input_assembly_state input_assembly;
+    if (m_use_compute && !m_config.thin_lines) {
+        shader_stages  = program_interface.graphics_shader_stages.get();
+        vertex_input   = m_debug_renderer.get_vertex_input();
+        input_assembly = Input_assembly_state::triangle;
+    } else if (m_use_geometry_shader && !m_config.thin_lines) {
+        shader_stages  = program_interface.geometry_shader_stages.get();
+        vertex_input   = m_debug_renderer.get_line_vertex_input();
+        input_assembly = Input_assembly_state::line;
+    } else {
+        shader_stages  = program_interface.line_shader_stages.get();
+        vertex_input   = m_debug_renderer.get_line_vertex_input();
+        input_assembly = Input_assembly_state::line;
+    }
 
     const Compare_operation depth_compare_op0 = visible ? Compare_operation::less : Compare_operation::greater_or_equal;
     const Compare_operation depth_compare_op  = reverse_depth ? reverse(depth_compare_op0) : depth_compare_op0;
@@ -97,6 +113,7 @@ Debug_renderer_bucket::Debug_renderer_bucket(
     : m_graphics_device   {graphics_device}
     , m_debug_renderer    {debug_renderer}
     , m_use_compute       {debug_renderer.use_compute()}
+    , m_use_geometry_shader{debug_renderer.use_geometry_shader()}
     , m_view_buffer{
         graphics_device,
         erhe::graphics::Buffer_target::uniform,

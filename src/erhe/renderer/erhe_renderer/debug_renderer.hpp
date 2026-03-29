@@ -37,6 +37,7 @@ public:
     explicit Debug_renderer_program_interface(erhe::graphics::Device& graphics_device);
 
     bool                                             use_compute{false};
+    bool                                             use_geometry_shader{false};
 
     erhe::graphics::Fragment_outputs                 fragment_outputs;
 
@@ -49,7 +50,10 @@ public:
     std::unique_ptr<erhe::graphics::Shader_stages>   compute_shader_stages;
     std::unique_ptr<erhe::graphics::Shader_stages>   graphics_shader_stages;
 
-    // Simple line path (no compute): vertex buffer → GL_LINES
+    // Geometry shader path (wide lines without compute): GL_LINES -> geometry shader -> triangle strip
+    std::unique_ptr<erhe::graphics::Shader_stages>   geometry_shader_stages;
+
+    // Simple line path (no compute, no geometry shader): vertex buffer → GL_LINES
     erhe::dataformat::Vertex_format                  line_vertex_format;
     std::unique_ptr<erhe::graphics::Shader_stages>   line_shader_stages;
 
@@ -99,6 +103,7 @@ public:
     auto get_vertex_input     () -> erhe::graphics::Vertex_input_state* { return &m_vertex_input; }
     auto get_line_vertex_input() -> erhe::graphics::Vertex_input_state* { return &m_line_vertex_input; }
     auto use_compute          () const -> bool { return m_program_interface.use_compute; }
+    auto use_geometry_shader  () const -> bool { return m_program_interface.use_geometry_shader; }
 
 private:
     erhe::graphics::Device&                              m_graphics_device;

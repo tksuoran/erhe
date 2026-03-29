@@ -248,6 +248,8 @@ erhe_target_sources_grouped(
     res/shaders/grid.vert
     res/shaders/id.frag
     res/shaders/id.vert
+    res/shaders/debug_line.geom
+    res/shaders/debug_line.vert
     res/shaders/line_after_compute.frag
     res/shaders/line_after_compute.vert
     res/shaders/points.frag

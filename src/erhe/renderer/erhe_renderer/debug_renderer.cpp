@@ -161,6 +161,37 @@ Debug_renderer_program_interface::Debug_renderer_program_interface(erhe::graphic
             log_startup->error("Unable to load line_simple shader - check working directory '{}'", std::filesystem::current_path().string());
         }
     }
+
+    // Geometry shader path: wide lines without compute (GL_LINES -> geometry shader -> triangle strip)
+    if (!use_compute) {
+        using namespace erhe::graphics;
+
+        const std::filesystem::path vert_path = shader_path / std::filesystem::path("debug_line.vert");
+        const std::filesystem::path geom_path = shader_path / std::filesystem::path("debug_line.geom");
+        const std::filesystem::path frag_path = shader_path / std::filesystem::path("line_after_compute.frag");
+        Shader_stages_create_info create_info{
+            .name             = "debug_line_geometry",
+            .interface_blocks = { view_block.get() },
+            .fragment_outputs = &fragment_outputs,
+            .vertex_format    = &line_vertex_format,
+            .shaders = {
+                { Shader_type::vertex_shader,   vert_path },
+                { Shader_type::geometry_shader, geom_path },
+                { Shader_type::fragment_shader, frag_path }
+            }
+        };
+
+        Shader_stages_prototype prototype{graphics_device, create_info};
+        if (prototype.is_valid()) {
+            geometry_shader_stages = std::make_unique<Shader_stages>(graphics_device, std::move(prototype));
+            graphics_device.get_shader_monitor().add(create_info, geometry_shader_stages.get());
+            use_geometry_shader = true;
+            log_startup->info("Geometry shader wide lines enabled");
+        } else {
+            log_startup->warn("Unable to load debug_line geometry shader, falling back to simple lines");
+            use_geometry_shader = false;
+        }
+    }
 }
 
 Debug_renderer::Debug_renderer(erhe::graphics::Device& graphics_device)
