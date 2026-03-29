@@ -439,6 +439,18 @@ void Render_pass_impl::create()
             auto read_fb_guard = m_device.get_impl().get_binding_state().push_framebuffer(gl::Framebuffer_target::read_framebuffer, gl_name());
             gl::read_buffer(static_cast<gl::Read_buffer_mode>(m_draw_buffers.front()));
         }
+    } else {
+        // No color attachments (e.g. depth-only shadow maps): set draw/read
+        // buffer to GL_NONE so the framebuffer is complete.
+        if (use_dsa) {
+            gl::named_framebuffer_draw_buffers(gl_name(), 0, nullptr);
+            gl::named_framebuffer_read_buffer(gl_name(), gl::Color_buffer::none);
+        } else {
+            gl::Draw_buffer_mode none_buf = gl::Draw_buffer_mode::none;
+            gl::draw_buffers(1, &none_buf);
+            auto read_fb_guard = m_device.get_impl().get_binding_state().push_framebuffer(gl::Framebuffer_target::read_framebuffer, gl_name());
+            gl::read_buffer(gl::Read_buffer_mode::none);
+        }
     }
 
     if (m_device.get_info().use_debug_output) {

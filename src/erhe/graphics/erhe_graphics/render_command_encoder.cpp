@@ -96,4 +96,9 @@ void Render_command_encoder::multi_draw_indexed_primitives_indirect(
     );
 }
 
+void Render_command_encoder::dump_state(const char* label) const
+{
+    m_impl->dump_state(label);
+}
+
 } // namespace erhe::graphics

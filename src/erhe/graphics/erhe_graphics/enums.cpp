@@ -309,6 +309,50 @@ auto c_str(const Compare_operation compare_operation) -> const char*
     }
 }
 
+auto c_str(const Cull_face_mode cull_face_mode) -> const char*
+{
+    switch (cull_face_mode) {
+        case Cull_face_mode::back:           return "back";
+        case Cull_face_mode::front:          return "front";
+        case Cull_face_mode::front_and_back: return "front_and_back";
+        default: return "?";
+    }
+}
+
+auto c_str(const Front_face_direction front_face_direction) -> const char*
+{
+    switch (front_face_direction) {
+        case Front_face_direction::ccw: return "ccw";
+        case Front_face_direction::cw:  return "cw";
+        default: return "?";
+    }
+}
+
+auto c_str(const Polygon_mode polygon_mode) -> const char*
+{
+    switch (polygon_mode) {
+        case Polygon_mode::fill:  return "fill";
+        case Polygon_mode::line:  return "line";
+        case Polygon_mode::point: return "point";
+        default: return "?";
+    }
+}
+
+auto c_str(const Stencil_op stencil_op) -> const char*
+{
+    switch (stencil_op) {
+        case Stencil_op::zero:      return "zero";
+        case Stencil_op::decr:      return "decr";
+        case Stencil_op::decr_wrap: return "decr_wrap";
+        case Stencil_op::incr:      return "incr";
+        case Stencil_op::incr_wrap: return "incr_wrap";
+        case Stencil_op::invert:    return "invert";
+        case Stencil_op::keep:      return "keep";
+        case Stencil_op::replace:   return "replace";
+        default: return "?";
+    }
+}
+
 auto c_str(const Shader_type shader_type) -> const char*
 {
     switch (shader_type) {

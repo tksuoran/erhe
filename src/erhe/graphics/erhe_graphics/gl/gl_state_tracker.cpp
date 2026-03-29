@@ -1,4 +1,5 @@
 #include "erhe_graphics/gl/gl_state_tracker.hpp"
+#include "erhe_graphics/gl/gl_binding_state.hpp"
 #include "erhe_graphics/gl/gl_buffer.hpp"
 #include "erhe_graphics/gl/gl_helpers.hpp"
 #include "erhe_graphics/gl/gl_render_pass.hpp"
@@ -728,6 +729,130 @@ void OpenGL_state_tracker::execute_(const Render_pipeline_state& pipeline, const
 void OpenGL_state_tracker::execute_(const Compute_pipeline_state& pipeline)
 {
     shader_stages.execute(pipeline.data.shader_stages);
+}
+
+static void dump_stencil_op(std::string& s, const char* label, const Stencil_op_state& op)
+{
+    s += fmt::format("  {} fail={} zfail={} zpass={} func={} ref=0x{:02X} test_mask=0x{:02X} write_mask=0x{:02X}\n",
+        label,
+        c_str(op.stencil_fail_op), c_str(op.z_fail_op), c_str(op.z_pass_op),
+        c_str(op.function), op.reference, op.test_mask, op.write_mask
+    );
+}
+
+auto OpenGL_state_tracker::dump_state(const char* label, const Gl_binding_state& bs) const -> std::string
+{
+    std::string s;
+    s.reserve(4096);
+    s += fmt::format("=== GL State Dump: {} ===\n", label);
+
+    // GL-queried state (not tracked by state tracker or binding state)
+    {
+        GLint program              = 0;
+        GLint draw_fbo             = 0;
+        GLint read_fbo             = 0;
+        GLint vao                  = 0;
+        GLint element_array_buffer = 0;
+        GLint draw_indirect_buffer = 0;
+        gl::get_integer_v(gl::Get_p_name::current_program,              &program);
+        gl::get_integer_v(gl::Get_p_name::draw_framebuffer_binding,     &draw_fbo);
+        gl::get_integer_v(gl::Get_p_name::read_framebuffer_binding,     &read_fbo);
+        gl::get_integer_v(gl::Get_p_name::vertex_array_binding,         &vao);
+        gl::get_integer_v(gl::Get_p_name::element_array_buffer_binding, &element_array_buffer);
+        gl::get_integer_v(gl::Get_p_name::draw_indirect_buffer_binding, &draw_indirect_buffer);
+        s += fmt::format("Program: {}\n", program);
+        s += fmt::format("Draw framebuffer: {}\n", draw_fbo);
+        s += fmt::format("Read framebuffer: {}\n", read_fbo);
+        s += fmt::format("Vertex array: {}\n", vao);
+        s += fmt::format("Element array buffer: {}\n", element_array_buffer);
+        s += fmt::format("Draw indirect buffer: {}\n", draw_indirect_buffer);
+    }
+
+    // Viewport
+    {
+        const Viewport_rect_state& vp = viewport_rect.get_cache();
+        const Viewport_depth_range_state& dr = viewport_depth_range.get_cache();
+        s += fmt::format("Viewport: x={} y={} w={} h={}\n", vp.x, vp.y, vp.width, vp.height);
+        s += fmt::format("Depth range: near={} far={}\n", dr.min_depth, dr.max_depth);
+    }
+
+    // Scissor
+    {
+        const Scissor_state& sc = scissor.get_cache();
+        s += fmt::format("Scissor: x={} y={} w={} h={}\n", sc.x, sc.y, sc.width, sc.height);
+    }
+
+    // Rasterization
+    {
+        const Rasterization_state& rs = rasterization.get_cache();
+        s += fmt::format("Cull face: {}", rs.face_cull_enable ? "enabled" : "disabled");
+        if (rs.face_cull_enable) {
+            s += fmt::format(" mode={}", c_str(rs.cull_face_mode));
+        }
+        s += "\n";
+        s += fmt::format("Front face: {}\n", c_str(rs.front_face_direction));
+        s += fmt::format("Polygon mode: {}\n", c_str(rs.polygon_mode));
+        if (rs.depth_clamp_enable) {
+            s += "Depth clamp: enabled\n";
+        }
+    }
+
+    // Depth / Stencil
+    {
+        const Depth_stencil_state& ds = depth_stencil.get_cache();
+        s += fmt::format("Depth test: {}\n", ds.depth_test_enable ? "enabled" : "disabled");
+        s += fmt::format("Depth write: {}\n", ds.depth_write_enable ? "true" : "false");
+        s += fmt::format("Depth func: {}\n", c_str(ds.depth_compare_op));
+        s += fmt::format("Stencil test: {}\n", ds.stencil_test_enable ? "enabled" : "disabled");
+        if (ds.stencil_test_enable) {
+            dump_stencil_op(s, "Front:", ds.stencil_front);
+            dump_stencil_op(s, "Back: ", ds.stencil_back);
+        }
+    }
+
+    // Color Blend
+    {
+        const Color_blend_state& cb = color_blend.get_cache();
+        s += fmt::format("Blend: {}\n", cb.enabled ? "enabled" : "disabled");
+        if (cb.enabled) {
+            s += fmt::format("  RGB: eq={} src={} dst={}\n",
+                static_cast<int>(cb.rgb.equation_mode),
+                static_cast<int>(cb.rgb.source_factor),
+                static_cast<int>(cb.rgb.destination_factor));
+            s += fmt::format("  Alpha: eq={} src={} dst={}\n",
+                static_cast<int>(cb.alpha.equation_mode),
+                static_cast<int>(cb.alpha.source_factor),
+                static_cast<int>(cb.alpha.destination_factor));
+        }
+        s += fmt::format("Color write: R={} G={} B={} A={}\n",
+            cb.write_mask.red   ? "true" : "false",
+            cb.write_mask.green ? "true" : "false",
+            cb.write_mask.blue  ? "true" : "false",
+            cb.write_mask.alpha ? "true" : "false");
+    }
+
+    // Uniform buffer indexed bindings (from GL)
+    {
+        bool any_ubo = false;
+        for (GLint i = 0; i < 16; ++i) {
+            GLint buf = 0;
+            gl::get_integer_iv(gl::Get_p_name::uniform_buffer_binding, i, &buf);
+            if (buf != 0) {
+                GLint64 offset = 0;
+                GLint64 size   = 0;
+                gl::get_integer_64_iv(gl::Get_p_name::uniform_buffer_start, i, &offset);
+                gl::get_integer_64_iv(gl::Get_p_name::uniform_buffer_size,  i, &size);
+                s += fmt::format("UBO[{}]: buffer={} offset={} size={}\n", i, buf, offset, size);
+                any_ubo = true;
+            }
+        }
+        if (!any_ubo) {
+            s += "UBO: none bound\n";
+        }
+    }
+
+    s += "=== End State Dump ===\n";
+    return s;
 }
 
 } // namespace erhe::graphics

@@ -151,6 +151,7 @@ public:
 };
 
 using Shader_error_callback = std::function<void(const std::string& error_log, const std::string& shader_source)>;
+using State_dump_callback   = std::function<void(const std::string& state_dump)>;
 
 class Frame_state;
 class Frame_begin_info;
@@ -174,6 +175,7 @@ public:
     void memory_barrier        (Memory_barrier_mask barriers);
     void clear_texture         (const Texture& texture, std::array<double, 4> clear_value);
     void upload_to_buffer      (const Buffer& buffer, size_t offset, const void* data, size_t length);
+    void upload_to_texture     (const Texture& texture, int level, int x, int y, int width, int height, erhe::dataformat::Format pixelformat, const void* data, int row_stride);
     void add_completion_handler(std::function<void()> callback);
     void on_thread_enter       ();
 
@@ -196,11 +198,14 @@ public:
     [[nodiscard]] auto get_impl                           () -> Device_impl&;
     [[nodiscard]] auto get_impl                           () const -> const Device_impl&;
     void               set_shader_error_callback         (Shader_error_callback callback);
+    void               set_state_dump_callback           (State_dump_callback callback);
     void               shader_error                      (const std::string& error_log, const std::string& shader_source);
+    void               state_dump                        (const std::string& dump);
 
 private:
     std::unique_ptr<Device_impl> m_impl;
     Shader_error_callback        m_shader_error_callback;
+    State_dump_callback          m_state_dump_callback;
 };
 
 [[nodiscard]] auto get_depth_clear_value_pointer(bool reverse_depth = true) -> const float *; // reverse_depth ? 0.0f : 1.0f;

@@ -11,7 +11,8 @@ public:
         erhe::graphics::Device&         graphics_device,
         App_context&                    app_context,
         Mesh_memory&                    mesh_memory,
-        Programs&                       programs
+        Programs&                       programs,
+        bool                            reverse_depth
     );
     ~Material_preview() noexcept;
 

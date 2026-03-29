@@ -34,9 +34,10 @@ Brush_preview::Brush_preview(
     erhe::graphics::Device&         graphics_device,
     App_context&                    app_context,
     Mesh_memory&                    mesh_memory,
-    Programs&                       programs
+    Programs&                       programs,
+    const bool                      reverse_depth
 )
-    : Scene_preview{graphics_device, app_context, mesh_memory, programs}
+    : Scene_preview{graphics_device, app_context, mesh_memory, programs, reverse_depth}
 {
     make_preview_scene();
 }
@@ -136,7 +137,7 @@ void Brush_preview::render_preview(
     set_color_texture_layer(texture_layer);
     resize(texture->get_width(), texture->get_height());
     set_clear_color(glm::vec4{0.0f, 0.0f, 0.0f, 0.0f});
-    update_rendertarget(m_graphics_device);
+    update_rendertarget(m_graphics_device, get_reverse_depth());
 
     if (m_mesh) {
         m_node->detach(m_mesh.get());

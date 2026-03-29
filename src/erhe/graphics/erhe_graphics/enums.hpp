@@ -363,6 +363,10 @@ template<> struct Enable_bit_mask_operators<Memory_barrier_mask> { static const 
 [[nodiscard]] auto c_str          (Sampler_mipmap_mode  sampler_mipmap_mode) -> const char*;
 [[nodiscard]] auto c_str          (Sampler_address_mode sampler_address_mode) -> const char*;
 [[nodiscard]] auto c_str          (Compare_operation    compare_operation) -> const char*;
+[[nodiscard]] auto c_str          (Cull_face_mode       cull_face_mode) -> const char*;
+[[nodiscard]] auto c_str          (Front_face_direction front_face_direction) -> const char*;
+[[nodiscard]] auto c_str          (Polygon_mode         polygon_mode) -> const char*;
+[[nodiscard]] auto c_str          (Stencil_op           stencil_op) -> const char*;
 [[nodiscard]] auto c_str          (Shader_type          shader_type) -> const char*;
 
 class Image_usage_flag_bit

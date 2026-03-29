@@ -106,6 +106,7 @@ public:
     [[nodiscard]] auto get_device_pointer() const -> void*; // This would be an ID3D11Device, HGLRC/GLXContext, ID3D12Device, etc
     [[nodiscard]] auto get_window_handle () const -> void*; // This would be an HWND, GLXDrawable, etc
     [[nodiscard]] auto get_scale_factor  () const -> float;
+    [[nodiscard]] auto get_pixel_density () const -> float;
 
 #if defined(ERHE_OS_WINDOWS)
     [[nodiscard]] auto get_hwnd() const -> HWND;
@@ -139,8 +140,9 @@ private:
     bool                       m_is_window_visible             {false};
     bool                       m_use_raw_mouse                 {false};
     Window_configuration       m_configuration;
-    float                      m_last_mouse_x              {0.0f};
-    float                      m_last_mouse_y            {0.0f};
+    float                      m_pixel_density             {1.0f};
+    float                      m_last_mouse_x             {0.0f};
+    float                      m_last_mouse_y             {0.0f};
     float                      m_mouse_relative_hold_xpos{0.0f};
     float                      m_mouse_relative_hold_ypos{0.0f};
     float                      m_mouse_virtual_xpos      {0.0f};

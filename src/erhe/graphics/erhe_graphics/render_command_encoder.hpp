@@ -49,6 +49,8 @@ public:
         std::uintptr_t           stride
     ) const;
 
+    void dump_state(const char* label) const;
+
 private:
     erhe::utility::pimpl_ptr<Render_command_encoder_impl, 64, 16> m_impl;
 };

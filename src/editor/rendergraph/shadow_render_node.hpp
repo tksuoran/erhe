@@ -28,7 +28,8 @@ public:
         Scene_view&                     scene_view,
         int                             resolution,
         int                             light_count,
-        int                             depth_bits
+        int                             depth_bits,
+        bool                            reverse_depth
     );
     ~Shadow_render_node() noexcept override;
 
@@ -40,7 +41,7 @@ public:
     auto inputs_allowed() const -> bool override;
 
     // Public API
-    void reconfigure(erhe::graphics::Device& graphics_device, int resolution, int light_count, int depth_bits);
+    void reconfigure(erhe::graphics::Device& graphics_device, int resolution, int light_count, int depth_bits, bool reverse_depth);
 
     [[nodiscard]] auto get_scene_view       () -> Scene_view&;
     [[nodiscard]] auto get_scene_view       () const -> const Scene_view&;

@@ -3,7 +3,10 @@
 #include "scene/scene_view.hpp"
 
 #include "app_context.hpp"
+#include "app_settings.hpp"
 #include "editor_log.hpp"
+
+#include "erhe_graphics/device.hpp"
 
 #include "app_message_bus.hpp"
 #include "scene/scene_root.hpp"
@@ -67,14 +70,10 @@ auto Scene_view::get_scene_root() const -> std::shared_ptr<Scene_root>
     return m_scene_root.lock();
 }
 
-void Scene_view::set_reverse_depth(const bool reverse_depth)
-{
-    m_reverse_depth = reverse_depth;
-}
-
 auto Scene_view::get_reverse_depth() const -> bool
 {
-    return m_reverse_depth;
+    return m_context.app_settings->graphics.current_graphics_preset.reverse_depth &&
+           m_context.graphics_device->get_info().use_clip_control;
 }
 
 void Scene_view::set_hover(const std::size_t slot, const Hover_entry& entry)

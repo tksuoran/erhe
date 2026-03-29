@@ -480,10 +480,10 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
     SDL_GL_GetAttribute(SDL_GL_RED_SIZE,   &red_size);
     SDL_GL_GetAttribute(SDL_GL_GREEN_SIZE, &green_size);
     SDL_GL_GetAttribute(SDL_GL_BLUE_SIZE,  &blue_size);
-    const float pixel_density = SDL_GetWindowPixelDensity(sdl_window);
+    m_pixel_density = SDL_GetWindowPixelDensity(sdl_window);
     const float display_scale = SDL_GetWindowDisplayScale(sdl_window);
     log_window->info("Window color depth red = {}, green = {}, blue = {}", red_size, green_size, blue_size);
-    log_window->info("Window pixel density = {}, display scale = {}", pixel_density, display_scale);
+    log_window->info("Window pixel density = {}, display scale = {}", m_pixel_density, display_scale);
 
 #if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
     Uint32 vulkan_instance_extension_count = 0;
@@ -569,7 +569,8 @@ void Context_window::poll_events(float wait_time)
     }
 
     if (m_is_mouse_relative_hold_enabled) {
-        SDL_WarpMouseInWindow(window, m_mouse_relative_hold_xpos, m_mouse_relative_hold_ypos);
+        // WarpMouseInWindow takes window coordinates (logical points), convert from pixel coords
+        SDL_WarpMouseInWindow(window, m_mouse_relative_hold_xpos / m_pixel_density, m_mouse_relative_hold_ypos / m_pixel_density);
     }
     static_cast<void>(wait_time);
 
@@ -717,6 +718,8 @@ void Context_window::set_input_event_synthesizer_callback(std::function<void(Con
 void Context_window::get_cursor_position(float& xpos, float& ypos)
 {
     SDL_GetMouseState(&xpos, &ypos);
+    xpos *= m_pixel_density;
+    ypos *= m_pixel_density;
 }
 
 void Context_window::get_cursor_relative_hold_position(float& xpos, float& ypos)
@@ -754,6 +757,8 @@ void Context_window::set_cursor_relative_hold(const bool relative_hold_enabled)
             SDL_SetWindowRelativeMouseMode(window, relative_hold_enabled);
             if (relative_hold_enabled) {
                 SDL_GetMouseState(&m_mouse_relative_hold_xpos, &m_mouse_relative_hold_ypos);
+                m_mouse_relative_hold_xpos *= m_pixel_density;
+                m_mouse_relative_hold_ypos *= m_pixel_density;
                 m_mouse_virtual_xpos = m_mouse_relative_hold_xpos;
                 m_mouse_virtual_ypos = m_mouse_relative_hold_ypos;
             }
@@ -837,6 +842,10 @@ void Context_window::handle_text_event(int64_t timestamp, const char* utf8_text)
 
 void Context_window::handle_window_resize_event(int64_t timestamp, int width, int height)
 {
+    auto* window = static_cast<SDL_Window*>(m_sdl_window);
+    if (window != nullptr) {
+        m_pixel_density = SDL_GetWindowPixelDensity(window);
+    }
     m_input_events[m_input_event_queue_write].push_back(
         Input_event{
             .type = Input_event_type::window_resize_event,
@@ -945,6 +954,13 @@ void Context_window::handle_mouse_wheel_event(int64_t timestamp, float x, float 
 
 void Context_window::handle_mouse_move(int64_t timestamp, float x, float y, float dx, float dy)
 {
+    // SDL3 mouse events are in window coordinates (logical points).
+    // Scale to pixel coordinates to match get_width()/get_height() and GL framebuffer.
+    const float px  = x  * m_pixel_density;
+    const float py  = y  * m_pixel_density;
+    const float pdx = dx * m_pixel_density;
+    const float pdy = dy * m_pixel_density;
+
     if (m_is_mouse_relative_hold_enabled) {
         m_input_events[m_input_event_queue_write].push_back(
             Input_event{
@@ -954,26 +970,26 @@ void Context_window::handle_mouse_move(int64_t timestamp, float x, float y, floa
                     .mouse_move_event = {
                         .x             = m_mouse_relative_hold_xpos,
                         .y             = m_mouse_relative_hold_ypos,
-                        .dx            = dx,
-                        .dy            = dy,
+                        .dx            = pdx,
+                        .dy            = pdy,
                         .modifier_mask = get_modifier_mask()
                     }
                 }
             }
         );
     } else {
-        m_last_mouse_x = x;
-        m_last_mouse_y = y;
+        m_last_mouse_x = px;
+        m_last_mouse_y = py;
         m_input_events[m_input_event_queue_write].push_back(
             Input_event{
                 .type = Input_event_type::mouse_move_event,
                 .timestamp_ns = timestamp,
                 .u = {
                     .mouse_move_event = {
-                        .x             = x,
-                        .y             = y,
-                        .dx            = dx,
-                        .dy            = dy,
+                        .x             = px,
+                        .y             = py,
+                        .dx            = pdx,
+                        .dy            = pdy,
                         .modifier_mask = get_modifier_mask()
                     }
                 }
@@ -1199,6 +1215,11 @@ auto Context_window::get_scale_factor() const -> float
 {
     auto* window = static_cast<SDL_Window*>(m_sdl_window);
     return window != nullptr ? SDL_GetWindowDisplayScale(window) : 1.0f;
+}
+
+auto Context_window::get_pixel_density() const -> float
+{
+    return m_pixel_density;
 }
 
 }

@@ -53,6 +53,7 @@ public:
     void memory_barrier            (Memory_barrier_mask barriers);
     void clear_texture             (const Texture& texture, std::array<double, 4> clear_value);
     void upload_to_buffer          (const Buffer& buffer, size_t offset, const void* data, size_t length);
+    void upload_to_texture         (const Texture& texture, int level, int x, int y, int width, int height, erhe::dataformat::Format pixelformat, const void* data, int row_stride);
     void add_completion_handler    (std::function<void()> callback);
     void on_thread_enter           ();
 

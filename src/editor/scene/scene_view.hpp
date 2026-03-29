@@ -100,8 +100,7 @@ public:
     [[nodiscard]] virtual auto as_viewport_scene_view() -> Viewport_scene_view*;
     [[nodiscard]] virtual auto as_viewport_scene_view() const -> const Viewport_scene_view*;
 
-    void set_scene_root  (const std::shared_ptr<Scene_root>& scene_root);
-    void set_reverse_depth(bool reverse_depth);
+    void set_scene_root    (const std::shared_ptr<Scene_root>& scene_root);
     [[nodiscard]] auto get_scene_root  () const -> std::shared_ptr<Scene_root>;
     [[nodiscard]] auto get_reverse_depth() const -> bool;
 
@@ -134,7 +133,6 @@ protected:
     std::optional<glm::mat4>    m_world_from_control;
     std::optional<glm::mat4>    m_control_from_world;
     Viewport_config             m_viewport_config;
-    bool                        m_reverse_depth       {true};
     bool                        m_hover_update_pending{true};
     std::weak_ptr<Scene_root>   m_scene_root;
 

@@ -34,6 +34,8 @@ public:
         std::uintptr_t           drawcount,
         std::uintptr_t           stride
     ) const;
+
+    void dump_state(const char* label) const;
 };
 
 } // namespace erhe::graphics

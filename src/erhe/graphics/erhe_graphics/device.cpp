@@ -47,6 +47,10 @@ void Device::upload_to_buffer(const Buffer& buffer, size_t offset, const void* d
 {
     m_impl->upload_to_buffer(buffer, offset, data, length);
 }
+void Device::upload_to_texture(const Texture& texture, int level, int x, int y, int width, int height, erhe::dataformat::Format pixelformat, const void* data, int row_stride)
+{
+    m_impl->upload_to_texture(texture, level, x, y, width, height, pixelformat, data, row_stride);
+}
 void Device::add_completion_handler(std::function<void()> callback)
 {
     m_impl->add_completion_handler(callback);
@@ -143,6 +147,16 @@ void Device::shader_error(const std::string& error_log, const std::string& shade
 {
     if (m_shader_error_callback) {
         m_shader_error_callback(error_log, shader_source);
+    }
+}
+void Device::set_state_dump_callback(State_dump_callback callback)
+{
+    m_state_dump_callback = std::move(callback);
+}
+void Device::state_dump(const std::string& dump)
+{
+    if (m_state_dump_callback) {
+        m_state_dump_callback(dump);
     }
 }
 

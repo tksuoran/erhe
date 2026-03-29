@@ -43,7 +43,8 @@ public:
         erhe::graphics::Device&         graphics_device,
         App_context&                    app_context,
         Mesh_memory&                    mesh_memory,
-        Programs&                       programs
+        Programs&                       programs,
+        bool                            reverse_depth
     );
     ~Scene_preview() noexcept;
 
@@ -61,7 +62,7 @@ public:
     void set_color_texture      (const std::shared_ptr<erhe::graphics::Texture>& color_texture);
     void set_color_texture_layer(unsigned int layer);
     void set_clear_color        (glm::vec4 clear_color);
-    void update_rendertarget    (erhe::graphics::Device& graphics_device);
+    void update_rendertarget    (erhe::graphics::Device& graphics_device, bool reverse_depth);
 
 protected:
     erhe::graphics::Device&                             m_graphics_device;

@@ -195,11 +195,15 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
             gl::command_info_init(m_info.glsl_version, extensions);
         }
 
-        gl::get_float_v  (gl::Get_p_name::max_texture_max_anisotropy, &m_info.max_texture_max_anisotropy);
+        if (gl::is_extension_supported(gl::Extension::Extension_GL_EXT_texture_filter_anisotropic) || (m_info.gl_version >= 460)) {
+            gl::get_float_v(gl::Get_p_name::max_texture_max_anisotropy, &m_info.max_texture_max_anisotropy);
+        }
         gl::get_integer_v(gl::Get_p_name::max_samples,                &m_info.max_samples);
         gl::get_integer_v(gl::Get_p_name::max_color_texture_samples,  &m_info.max_color_texture_samples);
         gl::get_integer_v(gl::Get_p_name::max_depth_texture_samples,  &m_info.max_depth_texture_samples);
-        gl::get_integer_v(gl::Get_p_name::max_framebuffer_samples,    &m_info.max_framebuffer_samples);
+        if (m_info.gl_version >= 430) {
+            gl::get_integer_v(gl::Get_p_name::max_framebuffer_samples, &m_info.max_framebuffer_samples);
+        }
         gl::get_integer_v(gl::Get_p_name::max_integer_samples,        &m_info.max_integer_samples);
 
         log_startup->info(
@@ -278,7 +282,9 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         gl::enable(gl::Enable_cap::debug_output_synchronous);
     }
 
-    if (m_info.gl_version >= 430) {
+    m_info.use_compute_shader = m_info.gl_version >= 430;
+    if (m_info.use_compute_shader) {
+        log_startup->info("Compute shaders supported: true");
         for (GLuint i = 0; i < 3; ++i) {
             gl::get_integer_iv(gl::Get_p_name::max_compute_work_group_count, i, &m_info.max_compute_workgroup_count[i]);
             gl::get_integer_iv(gl::Get_p_name::max_compute_work_group_size,  i, &m_info.max_compute_workgroup_size[i]);
@@ -315,11 +321,8 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         gl::get_integer_v(gl::Get_p_name::max_geometry_shader_storage_blocks,        &m_info.max_geometry_shader_storage_blocks);
         gl::get_integer_v(gl::Get_p_name::max_tess_control_shader_storage_blocks,    &m_info.max_tess_control_shader_storage_blocks);
         gl::get_integer_v(gl::Get_p_name::max_tess_evaluation_shader_storage_blocks, &m_info.max_tess_evaluation_shader_storage_blocks);
-        m_info.use_compute_shader         = true;
-        m_info.use_shader_storage_buffers = true;
     } else {
-        m_info.use_compute_shader         = false;
-        m_info.use_shader_storage_buffers = false;
+        log_startup->info("Compute shaders supported: false");
         for (GLuint i = 0; i < 3; ++i) {
             m_info.max_compute_workgroup_count[i] = 0;
             m_info.max_compute_workgroup_size [i] = 0;
@@ -428,16 +431,10 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         (m_info.gl_version >= 450) || gl::is_extension_supported(gl::Extension::Extension_GL_ARB_clip_control);
     log_startup->info("Clip Control supported: {}", m_info.use_clip_control);
 
-    const bool use_shader_storage_buffer_object =
+    m_info.use_shader_storage_buffers =
         (m_info.gl_version >= 430) || gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shader_storage_buffer_object);
-    if (!use_shader_storage_buffer_object) {
-        log_startup->error(
-            "Your graphics driver does not support OpenGL shader storage buffer object. "
-            "OpenGL version 4.3 or GL_ARB_shader_storage_buffer_object is required. "
-            "This is a fatal error."
-        );
-    }
-
+    log_startup->info("SSBO supported: {}", m_info.use_shader_storage_buffers);
+ 
     if (gl::is_extension_supported(gl::Extension::Extension_GL_ARB_sparse_texture)) {
         ERHE_PROFILE_SCOPE("Sparse texture");
 
@@ -682,6 +679,10 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
             while (gl::get_error() != gl::Error_code::no_error) {}
         };
 
+        // Query global texture array limits (GL 3.0) - applied to all probed formats
+        const int global_max_texture_size       = m_info.max_texture_size;
+        const int global_max_array_texture_layers = m_info.max_array_texture_layers;
+
         // Determine pixel format and type for tex_image_2d probing of color formats
         struct Color_format_info
         {
@@ -799,6 +800,9 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
             }
             log_startup->info(ss.str());
 
+            properties.texture_2d_array_max_width  = global_max_texture_size;
+            properties.texture_2d_array_max_height = global_max_texture_size;
+            properties.texture_2d_array_max_layers = global_max_array_texture_layers;
             format_properties.insert({info.internal_format, properties});
         }
 
@@ -904,6 +908,9 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
             }
             log_startup->info(ss.str());
 
+            properties.texture_2d_array_max_width  = global_max_texture_size;
+            properties.texture_2d_array_max_height = global_max_texture_size;
+            properties.texture_2d_array_max_layers = global_max_array_texture_layers;
             format_properties.insert({format, properties});
         }
     }
@@ -913,7 +920,12 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         m_shader_monitor.begin(graphics_config.shader_monitor_enabled);
     }
 
-    gl::enable(gl::Enable_cap::primitive_restart_fixed_index);
+    if (m_info.gl_version >= 430) {
+        gl::enable(gl::Enable_cap::primitive_restart_fixed_index);
+    } else {
+        gl::enable(gl::Enable_cap::primitive_restart);
+        gl::primitive_restart_index(0xFFFFFFFFu);
+    }
     gl::enable(gl::Enable_cap::scissor_test);
     if (m_info.use_clip_control) {
         gl::clip_control(gl::Clip_control_origin::lower_left, gl::Clip_control_depth::zero_to_one);
@@ -1224,6 +1236,55 @@ void Device_impl::upload_to_buffer(const Buffer& buffer, size_t offset, const vo
     }
 
     staging_buffer_range.release();
+}
+
+void Device_impl::upload_to_texture(
+    const Texture&               texture,
+    const int                    level,
+    const int                    x,
+    const int                    y,
+    const int                    width,
+    const int                    height,
+    const erhe::dataformat::Format pixelformat,
+    const void*                  data,
+    const int                    row_stride
+)
+{
+    gl::Pixel_format gl_format{};
+    gl::Pixel_type   gl_type{};
+    const bool format_ok = get_format_and_type(pixelformat, gl_format, gl_type);
+    ERHE_VERIFY(format_ok);
+
+    const std::size_t bytes_per_pixel = get_gl_pixel_byte_count(pixelformat);
+    const int         row_length      = (row_stride != 0) ? static_cast<int>(row_stride / bytes_per_pixel) : 0;
+
+    // Ensure no PBO is bound so GL reads from the CPU pointer
+    gl::bind_buffer(gl::Buffer_target::pixel_unpack_buffer, 0);
+    gl::pixel_store_i(gl::Pixel_store_parameter::unpack_alignment, 1);
+    gl::pixel_store_i(gl::Pixel_store_parameter::unpack_row_length, row_length);
+    gl::pixel_store_i(gl::Pixel_store_parameter::unpack_image_height, 0);
+
+    const gl::Texture_target gl_target = convert_to_gl_texture_target(
+        texture.get_texture_type(), texture.get_sample_count() != 0, texture.get_array_layer_count() != 0
+    );
+
+    if (m_info.use_direct_state_access) {
+        gl::texture_sub_image_2d(
+            texture.get_impl().gl_name(),
+            level, x, y, width, height,
+            gl_format, gl_type, data
+        );
+    } else {
+        constexpr GLuint scratch_unit = Gl_binding_state::s_max_texture_units - 1;
+        auto guard = m_gl_binding_state.push_texture(
+            scratch_unit, gl_target, texture.get_impl().gl_name()
+        );
+        gl::tex_sub_image_2d(
+            gl_target,
+            level, x, y, width, height,
+            gl_format, gl_type, data
+        );
+    }
 }
 
 void Device_impl::add_completion_handler(std::function<void()> callback)

@@ -233,4 +233,13 @@ void Render_command_encoder_impl::multi_draw_indexed_primitives_indirect(
     }
 }
 
+void Render_command_encoder_impl::dump_state(const char* label) const
+{
+    std::string dump = m_device.get_impl().m_gl_state_tracker.dump_state(
+        label,
+        m_device.get_impl().get_binding_state()
+    );
+    m_device.state_dump(dump);
+}
+
 } // namespace erhe::graphics

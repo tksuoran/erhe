@@ -13,8 +13,19 @@
 
 namespace gl {{
 
-//#define ERHE_CHECK_GL_ERRORS gl_helpers::check_error();
-#define ERHE_CHECK_GL_ERRORS
+// To enable GL error checking after every GL call, define ERHE_GL_CHECK_ERRORS
+// before including this file, or pass it via CMake. Enabled by default on macOS
+// debug builds.
+#if !defined(ERHE_GL_CHECK_ERRORS) && defined(ERHE_OS_OSX) && !defined(NDEBUG)
+#   define ERHE_GL_CHECK_ERRORS
+#endif
+
+#if defined(ERHE_GL_CHECK_ERRORS)
+#   define ERHE_CHECK_GL_ERRORS gl_helpers::check_error();
+#else
+#   define ERHE_CHECK_GL_ERRORS
+#endif
+
 //#define ERHE_LOG_GL_FUNCTIONS
 
 auto glbitfield(const ::GLbitfield value) -> ::GLbitfield

@@ -31,23 +31,24 @@ Shadow_render_node::Shadow_render_node(
     Scene_view&                     scene_view,
     const int                       resolution,
     const int                       light_count,
-    const int                       depth_bits
+    const int                       depth_bits,
+    const bool                      reverse_depth
 )
     // TODO fmt::format("Shadow render {}", viewport_scene_view->name())
-    : erhe::rendergraph::Rendergraph_node{rendergraph, "shadow_maps"} 
+    : erhe::rendergraph::Rendergraph_node{rendergraph, "shadow_maps"}
     , m_context   {context}
     , m_scene_view{scene_view}
 {
     register_output("shadow_maps", erhe::rendergraph::Rendergraph_node_key::shadow_maps);
 
-    reconfigure(graphics_device, resolution, light_count, depth_bits);
+    reconfigure(graphics_device, resolution, light_count, depth_bits, reverse_depth);
 }
 
 Shadow_render_node::~Shadow_render_node() noexcept
 {
 }
 
-void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, const int resolution, const int light_count, const int requested_depth_bits)
+void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, const int resolution, const int light_count, const int requested_depth_bits, const bool reverse_depth)
 {
     std::vector<erhe::dataformat::Format> formats = graphics_device.get_supported_depth_stencil_formats();
     std::stable_sort(
@@ -90,7 +91,6 @@ void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, co
         return;
     }
 
-    const bool reverse_depth = m_scene_view.get_reverse_depth();
     if (
         m_texture &&
         (m_texture->get_width()             == resolution) &&
@@ -132,7 +132,7 @@ void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, co
         );
 
         if (resolution <= 1) {
-            const double depth_clear_value = m_scene_view.get_reverse_depth() ? 0.0 : 1.0;
+            const double depth_clear_value = reverse_depth ? 0.0 : 1.0;
             graphics_device.clear_texture(*m_texture.get(), { depth_clear_value, 0.0, 0.0, 0.0 });
         }
     }
@@ -146,7 +146,7 @@ void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, co
         render_pass_descriptor.depth_attachment.texture_layer  = static_cast<unsigned int>(i);
         render_pass_descriptor.depth_attachment.load_action    = erhe::graphics::Load_action::Clear;
         render_pass_descriptor.depth_attachment.store_action   = erhe::graphics::Store_action::Store;
-        render_pass_descriptor.depth_attachment.clear_value[0] = m_scene_view.get_reverse_depth() ? 0.0 : 1.0;
+        render_pass_descriptor.depth_attachment.clear_value[0] = reverse_depth ? 0.0 : 1.0;
         render_pass_descriptor.render_target_width             = resolution;
         render_pass_descriptor.render_target_height            = resolution;
         render_pass_descriptor.debug_label                     = erhe::utility::Debug_label{fmt::format("Shadow {}", i)};

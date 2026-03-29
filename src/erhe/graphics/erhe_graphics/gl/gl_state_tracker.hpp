@@ -18,6 +18,7 @@
 
 namespace erhe::graphics {
 
+class Gl_binding_state;
 class Render_pipeline_state;
 class Compute_pipeline_state;
 
@@ -28,6 +29,7 @@ class Color_blend_state_tracker
 public:
     void reset  ();
     void execute(const Color_blend_state& state) noexcept;
+    [[nodiscard]] auto get_cache() const -> const Color_blend_state& { return m_cache; }
 
 private:
     Color_blend_state m_cache;
@@ -38,6 +40,7 @@ class Depth_stencil_state_tracker
 public:
     void reset  ();
     void execute(const Depth_stencil_state& state);
+    [[nodiscard]] auto get_cache() const -> const Depth_stencil_state& { return m_cache; }
 
 private:
     static void execute_component(
@@ -70,6 +73,7 @@ class Rasterization_state_tracker
 public:
     void reset  ();
     void execute(const Rasterization_state& state);
+    [[nodiscard]] auto get_cache() const -> const Rasterization_state& { return m_cache; }
 
 private:
     Rasterization_state m_cache;
@@ -79,8 +83,8 @@ class Scissor_state_tracker
 {
 public:
     void reset();
-
     void execute(const Scissor_state& state);
+    [[nodiscard]] auto get_cache() const -> const Scissor_state& { return m_cache; }
 
 private:
     Scissor_state m_cache;
@@ -108,8 +112,8 @@ class Viewport_rect_state_tracker
 {
 public:
     void reset();
-
     void execute(const Viewport_rect_state& state);
+    [[nodiscard]] auto get_cache() const -> const Viewport_rect_state& { return m_cache; }
 
 private:
     Viewport_rect_state m_cache;
@@ -119,8 +123,8 @@ class Viewport_depth_range_state_tracker
 {
 public:
     void reset();
-
     void execute(const Viewport_depth_range_state& state);
+    [[nodiscard]] auto get_cache() const -> const Viewport_depth_range_state& { return m_cache; }
 
 private:
     Viewport_depth_range_state m_cache;
@@ -138,6 +142,7 @@ public:
     void reset          ();
     void execute_       (const Render_pipeline_state& pipeline, bool skip_shader_stages = false);
     void execute_       (const Compute_pipeline_state& pipeline);
+    auto dump_state     (const char* label, const Gl_binding_state& binding_state) const -> std::string;
 
     Shader_stages_tracker              shader_stages;
     Vertex_input_state_tracker         vertex_input;

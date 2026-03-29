@@ -23,6 +23,7 @@
       <enum name="GL_MAX_COMPUTE_SHARED_MEMORY_SIZE"/>
       <enum name="GL_MAX_COLOR_ATTACHMENTS"/>
       <enum name="GL_TEXTURE_BINDING_CUBE_MAP_ARRAY"/>
+      <enum name="GL_DRAW_INDIRECT_BUFFER_BINDING"/>
     </group>
     <group name="GetMultisamplePNameNV">
       <enum name="GL_SAMPLE_POSITION"/>

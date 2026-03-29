@@ -24,6 +24,11 @@ erhe targets OpenGL 4.5 with DSA (Direct State Access) but includes a runtime co
 | std430 layout | 4.30 | std140 (existing fallback) |
 | glVertexAttribFormat / glBindVertexBuffer | 4.3 | glVertexAttribPointer combined model |
 | glDebugMessageCallback | 4.3 | Disabled (TODO: GL_ARB_debug_output) |
+| glGetInternalformativ (query2) | 4.3 | Probe formats by creating textures/renderbuffers and checking GL errors |
+| GL_PRIMITIVE_RESTART_FIXED_INDEX | 4.3 | GL_PRIMITIVE_RESTART + glPrimitiveRestartIndex(0xFFFFFFFF) |
+| GL_MAX_FRAMEBUFFER_SAMPLES | 4.3 | Skipped (ARB_framebuffer_no_attachments) |
+| GL_MAX_TEXTURE_MAX_ANISOTROPY | 4.6/EXT | Queried only when EXT_texture_filter_anisotropic is available |
+| glCopyBufferSubData | 3.1 | **Unimplemented on macOS** (silently fails); use glBufferSubData directly |
 
 ## Runtime Capability Detection
 
@@ -183,14 +188,40 @@ Without compute shaders, the debug renderer writes line vertices directly to a v
 - After program link: `glUniformBlockBinding()` sets block bindings, `glUniform1i()` sets sampler texture units
 - Sampler arrays use `glUniform1iv` to initialize all elements (prevents uninitialised elements defaulting to unit 0)
 - Qualifier ordering: `flat out` (not `out flat`)
+- `unpackSnorm2x16`, `unpackUnorm2x16`, `unpackUnorm4x8` may be missing despite being GLSL 4.00 core; polyfill implementations are injected into the shader preamble when `GL_ARB_shading_language_packing` is not available
+- `gl_SampleID` is guarded by `ERHE_GLSL_VERSION >= 420` in `depth_only.frag`
+
+## macOS Driver Bugs
+
+- **`glCopyBufferSubData` is unimplemented** (driver logs "gldCopyBufferSubData: NEEDS IMPLEMENTATION" once, then silently fails). Any code using staging buffer + buffer-to-buffer copy produces corrupted data. `Device::upload_to_texture()` was added as a direct CPU-to-texture upload path that bypasses this. `Device::upload_to_buffer()` uses a staging buffer + `glCopyBufferSubData` and is affected; callers uploading texture data should use `upload_to_texture()` instead.
+- Depth-only framebuffers (no color attachment) require explicit `glDrawBuffer(GL_NONE)` / `glReadBuffer(GL_NONE)` to be complete. The GL 4.5 DSA path handles this implicitly.
+
+## Format Probing (GL < 4.3)
+
+`glGetInternalformativ` (`GL_ARB_internalformat_query2`) requires GL 4.3. On GL < 4.3, format support is probed by:
+- **Color formats**: Create texture with `glTexImage2D`, check for GL errors. Query component sizes with `glGetTexLevelParameteriv`. Probe renderability by attaching to FBO and checking `glCheckFramebufferStatus`.
+- **Depth/stencil formats**: Create renderbuffer with `glRenderbufferStorage`, check for GL errors. Sizes from `erhe::dataformat`. Probe renderability via FBO with dummy color attachment.
+- **Texture array limits**: `GL_MAX_TEXTURE_SIZE` and `GL_MAX_ARRAY_TEXTURE_LAYERS` (GL 3.0) are applied to all probed formats for `texture_2d_array_max_width/height/layers`.
 
 ## GL Debug Output
 
 `glDebugMessageCallback`, `glObjectLabel`, `glPushDebugGroup`/`glPopDebugGroup` require GL 4.3. When unavailable:
-- `Scoped_debug_group` becomes a no-op
+- `Scoped_debug_group` becomes a no-op; render pass uses `unique_ptr<Scoped_debug_group>` members instead of direct push/pop calls
 - Object labels are not set
 - Debug callback is not installed
 - `glGetProgramResourceiv` SSBO introspection is skipped
+
+## GL Error Checking
+
+The GL wrapper template (`templates/wrapper_functions.cpp`) supports per-call error checking via the `ERHE_CHECK_GL_ERRORS` macro. Enabled automatically on macOS debug builds (`ERHE_OS_OSX && !NDEBUG`). Can be forced on/off via `-DERHE_GL_CHECK_ERRORS` CMake define. Runtime toggle via `gl_helpers::set_error_checking(bool)`.
+
+## High-DPI (macOS Retina)
+
+SDL3 mouse events use window coordinates (logical points), but erhe uses pixel coordinates for GL framebuffers and ImGui. `Context_window` scales mouse coordinates by `SDL_GetWindowPixelDensity()` at input time. `get_width()`/`get_height()` return pixel dimensions via `SDL_GetWindowSizeInPixels()`.
+
+## GL State Dump
+
+`Render_command_encoder::dump_state(label)` queries both the `OpenGL_state_tracker` cache and actual GL state (program, FBO, VAO, UBOs) and calls a callback registered via `Device::set_state_dump_callback()`. The editor registers a callback that copies the dump to the system clipboard and logs it.
 
 ## DSA Function Reference
 
@@ -246,7 +277,7 @@ Without compute shaders, the debug renderer writes line vertices directly to a v
 
 ## Key Files
 
-- `gl_device.cpp` — capability detection, factory methods, forced version re-checks
+- `gl_device.cpp` — capability detection, factory methods, format probing, `upload_to_texture()`
 - `gl_binding_state.cpp/hpp` — binding state shadow tracker with push/pop RAII guards
 - `gl_buffer.cpp` — buffer DSA emulation, persistent buffer fallback
 - `gl_texture.cpp` — texture DSA emulation, buffer textures
@@ -259,4 +290,5 @@ Without compute shaders, the debug renderer writes line vertices directly to a v
 - `gl_shader_stages_prototype.cpp` — post-link binding, sampler array init
 - `shader_resource.cpp` — SSBO/UBO block generation
 - `text_renderer.cpp` — buffer texture fallback
-- `imgui_renderer.cpp` — sampler2DArray support
+- `imgui_renderer.cpp` — sampler2DArray support, `upload_to_texture()` for font atlas
+- `sdl_window.cpp` — high-DPI pixel density scaling for mouse coordinates

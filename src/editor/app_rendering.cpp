@@ -320,9 +320,11 @@ auto App_rendering::create_shadow_node_for_scene_view(
     Scene_view&                     scene_view
 ) -> std::shared_ptr<Shadow_render_node>
 {
-    const auto& preset      = app_settings.graphics.current_graphics_preset;
-    const int   resolution  = preset.shadow_enable ? preset.shadow_resolution  : 1;
-    const int   light_count = preset.shadow_enable ? preset.shadow_light_count : 1;
+    const auto& preset        = app_settings.graphics.current_graphics_preset;
+    const bool  use_clip_ctrl = graphics_device.get_info().use_clip_control;
+    const int   resolution    = preset.shadow_enable ? preset.shadow_resolution  : 1;
+    const int   light_count   = preset.shadow_enable ? preset.shadow_light_count : 1;
+    const bool  reverse_depth = preset.reverse_depth && use_clip_ctrl;
     auto shadow_render_node = std::make_shared<Shadow_render_node>(
         graphics_device,
         rendergraph,
@@ -330,7 +332,8 @@ auto App_rendering::create_shadow_node_for_scene_view(
         scene_view,
         resolution,
         light_count,
-        preset.shadow_depth_bits
+        preset.shadow_depth_bits,
+        reverse_depth
     );
     m_all_shadow_render_nodes.push_back(shadow_render_node);
     return shadow_render_node;
@@ -338,18 +341,16 @@ auto App_rendering::create_shadow_node_for_scene_view(
 
 void App_rendering::handle_graphics_settings_changed(Graphics_preset* graphics_preset)
 {
-    const int resolution  = (graphics_preset != nullptr) && graphics_preset->shadow_enable ? graphics_preset->shadow_resolution  : 1;
-    const int light_count = (graphics_preset != nullptr) && graphics_preset->shadow_enable ? graphics_preset->shadow_light_count : 1;
+    const bool use_clip_control = m_context.graphics_device->get_info().use_clip_control;
+    const int  resolution      = (graphics_preset != nullptr) && graphics_preset->shadow_enable ? graphics_preset->shadow_resolution  : 1;
+    const int  light_count     = (graphics_preset != nullptr) && graphics_preset->shadow_enable ? graphics_preset->shadow_light_count : 1;
+    const bool reverse_depth   = (graphics_preset != nullptr) && (graphics_preset->reverse_depth && use_clip_control);
 
     for (const auto& node : m_all_shadow_render_nodes) {
-        node->reconfigure(*m_context.graphics_device, resolution, light_count, graphics_preset->shadow_depth_bits);
+        node->reconfigure(*m_context.graphics_device, resolution, light_count, graphics_preset->shadow_depth_bits, reverse_depth);
     }
 
     if (graphics_preset != nullptr) {
-        // Reverse depth requires glClipControl (GL 4.5 / ARB_clip_control) for zero-to-one depth range.
-        // Clamp to forward depth when clip control is not available.
-        const bool use_clip_control = m_context.graphics_device->get_info().use_clip_control;
-        const bool reverse_depth = graphics_preset->reverse_depth && use_clip_control;
 #if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
         if (use_clip_control) {
             gl::clip_control(

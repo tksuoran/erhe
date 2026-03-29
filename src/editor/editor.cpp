@@ -516,6 +516,12 @@ public:
                     ERHE_FATAL("Shader compilation/linking failed (error and source copied to clipboard)");
                 }
             );
+            m_graphics_device->set_state_dump_callback(
+                [](const std::string& state_dump) {
+                    SDL_SetClipboardText(state_dump.c_str());
+                    log_render->info("{}", state_dump);
+                }
+            );
 
             m_app_settings->apply_limits(
                 *m_graphics_device.get(),
@@ -1023,13 +1029,17 @@ public:
                     *m_graphics_device.get(),
                     m_app_context,
                     *m_mesh_memory.get(),
-                    *m_programs.get()
+                    *m_programs.get(),
+                    m_app_settings->graphics.current_graphics_preset.reverse_depth &&
+                        m_graphics_device->get_info().use_clip_control
                 );
                 m_brush_preview = std::make_unique<Brush_preview>(
                     *m_graphics_device.get(),
                     m_app_context,
                     *m_mesh_memory.get(),
-                    *m_programs.get()
+                    *m_programs.get(),
+                    m_app_settings->graphics.current_graphics_preset.reverse_depth &&
+                        m_graphics_device->get_info().use_clip_control
                 );
             }
             ERHE_TASK_FOOTER(
