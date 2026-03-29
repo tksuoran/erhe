@@ -787,8 +787,9 @@ void Brush_tool::tool_properties(erhe::imgui::Imgui_window& /*imgui_window*/)
     //ImGui::Text("Hover mesh: %s", m_hover.mesh ? m_hover.mesh->get_name().c_str() : "");
     //ImGui::Text("Hover grid: %s", m_hover.grid ? m_hover.grid->get_name().c_str() : "");
 
-    const auto brush = m_context.selection->get_last_selected<Brush>();
-    if (brush && ImGui::TreeNodeEx(brush->get_name().c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
+    const auto brush = m_drag_and_drop_brush ? m_drag_and_drop_brush : (m_active_brush ? m_active_brush : m_context.selection->get_last_selected<Brush>());
+    const std::string brush_label = (brush && !brush->get_name().empty()) ? brush->get_name() : "(unnamed brush)";
+    if (brush && ImGui::TreeNodeEx(brush_label.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
         std::shared_ptr<erhe::geometry::Geometry> geometry = brush->get_geometry();
         if (geometry) {
             const std::map<GEO::index_t, std::vector<GEO::index_t>>& facets = brush->get_corner_count_to_facets();

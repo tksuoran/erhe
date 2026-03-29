@@ -994,7 +994,20 @@ void Operations::create_material()
 
 void Operations::create_brush()
 {
+    // Find mesh: check directly selected meshes, then check selected nodes for mesh attachments
     std::shared_ptr<erhe::scene::Mesh> mesh = m_context.selection->get_last_selected<erhe::scene::Mesh>();
+    if (!mesh) {
+        const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items = m_context.selection->get_selected_items();
+        for (const std::shared_ptr<erhe::Item_base>& item : selected_items) {
+            std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
+            if (node) {
+                mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
+                if (mesh) {
+                    break;
+                }
+            }
+        }
+    }
     if (!mesh) {
         return;
     }
@@ -1037,10 +1050,26 @@ void Operations::create_brush()
             },
             .buffer_info = m_context.mesh_memory->buffer_info
         };
+        // Derive brush name from mesh, owner node, or geometry
+        std::string brush_name;
+        if (!mesh->get_name().empty()) {
+            brush_name = mesh->get_name();
+        } else {
+            erhe::scene::Node* owner_node = mesh->get_node();
+            if ((owner_node != nullptr) && !owner_node->get_name().empty()) {
+                brush_name = owner_node->get_name();
+            } else if (!geometry->get_name().empty()) {
+                brush_name = geometry->get_name();
+            } else {
+                brush_name = "Brush";
+            }
+        }
+
         std::shared_ptr<Brush> new_brush = brushes->make<Brush>(
             Brush_data{
                 .context      = m_context,
                 .app_settings = *m_context.app_settings,
+                .name         = brush_name,
                 .build_info   = brush_build_info,
                 .normal_style = erhe::primitive::Normal_style::polygon_normals,
                 .geometry     = geometry
