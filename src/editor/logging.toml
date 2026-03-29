@@ -35,13 +35,13 @@ file = "info"
 graph = "warning"
 
 ["erhe.raytrace"]
-device = "info"
-buffer = "info"
-geometry = "info"
-instance = "info"
-scene = "info"
-embree = "info"
-frame = "info"
+device = "warn"
+buffer = "warn"
+geometry = "warn"
+instance = "warn"
+scene = "warn"
+embree = "warn"
+frame = "warn"
 
 ["erhe.net"]
 server = "info"

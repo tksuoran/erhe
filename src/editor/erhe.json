@@ -21,6 +21,7 @@
         "force_bindless_textures_off": false,
         "force_no_persistent_buffers": false,
         "force_no_direct_state_access": false,
+        "force_no_clip_control": false,
         "force_emulate_multi_draw_indirect": false,
         "force_gl_version": 0,
         "force_glsl_version": 0,

@@ -16,9 +16,9 @@ cmake \
     -DERHE_GLTF_LIBRARY=fastgltf \
     -DERHE_GUI_LIBRARY=imgui \
     -DERHE_GRAPHICS_LIBRARY=opengl \
-    -DERHE_PHYSICS_LIBRARY=none \
+    -DERHE_PHYSICS_LIBRARY=jolt \
     -DERHE_PROFILE_LIBRARY=none \
-    -DERHE_RAYTRACE_LIBRARY=none \
+    -DERHE_RAYTRACE_LIBRARY=tinybvh \
     -DERHE_SVG_LIBRARY=plutosvg \
     -DERHE_TEXT_LAYOUT_LIBRARY=harfbuzz \
     -DERHE_WINDOW_LIBRARY=sdl \
