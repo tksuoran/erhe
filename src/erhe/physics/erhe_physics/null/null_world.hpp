@@ -15,17 +15,8 @@ public:
     ~Null_world() noexcept override;
 
     // Implements IWorld
-    // Implements IWorld
-    auto create_rigid_body(
-        const IRigid_body_create_info& create_info,
-        glm::vec3                      position    = glm::vec3{0.0f, 0.0f, 0.0f},
-        glm::quat                      orientation = glm::quat{1.0f, 0.0f, 0.0f, 0.0f}
-    ) -> IRigid_body*                 override;
-    auto create_rigid_body_shared(
-        const IRigid_body_create_info& create_info,
-        glm::vec3                      position    = glm::vec3{0.0f, 0.0f, 0.0f},
-        glm::quat                      orientation = glm::quat{1.0f, 0.0f, 0.0f, 0.0f}
-    ) -> std::shared_ptr<IRigid_body> override;
+    auto create_rigid_body       (const IRigid_body_create_info& create_info) -> IRigid_body*                 override;
+    auto create_rigid_body_shared(const IRigid_body_create_info& create_info) -> std::shared_ptr<IRigid_body> override;
 
     auto get_gravity         () const -> glm::vec3                override;
     auto get_rigid_body_count() const -> std::size_t              override;
@@ -37,7 +28,7 @@ public:
     void remove_rigid_body   (IRigid_body* rigid_body)            override;
     void add_constraint      (IConstraint* constraint)            override;
     void remove_constraint   (IConstraint* constraint)            override;
-    void debug_draw          (erhe::renderer::Debug_renderer& debug_renderer)    override;
+    void debug_draw          (erhe::renderer::Jolt_debug_renderer& debug_renderer) override;
     void sanity_check        ()                                   override;
 
     void set_on_body_activated  (std::function<void(IRigid_body*)> callback) override;

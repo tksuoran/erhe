@@ -9,21 +9,17 @@ void initialize_physics_system()
 }
 
 auto Null_world::create_rigid_body(
-    const IRigid_body_create_info& create_info,
-    glm::vec3                      position,
-    glm::quat                      orientation
+    const IRigid_body_create_info& create_info
 ) -> IRigid_body*
 {
-    return new Null_rigid_body(*this, create_info, position, orientation);
+    return new Null_rigid_body(*this, create_info);
 }
 
 auto Null_world::create_rigid_body_shared(
-    const IRigid_body_create_info& create_info,
-    glm::vec3                      position,
-    glm::quat                      orientation
+    const IRigid_body_create_info& create_info
 ) -> std::shared_ptr<IRigid_body>
 {
-    return std::make_shared<Null_rigid_body>(*this, create_info, position, orientation);
+    return std::make_shared<Null_rigid_body>(*this, create_info);
 }
 
 auto IWorld::create() -> IWorld*
@@ -113,7 +109,7 @@ auto Null_world::describe() const -> std::vector<std::string>
     return {};
 }
 
-void Null_world::debug_draw(erhe::renderer::Debug_renderer&)
+void Null_world::debug_draw(erhe::renderer::Jolt_debug_renderer&)
 {
 }
 
