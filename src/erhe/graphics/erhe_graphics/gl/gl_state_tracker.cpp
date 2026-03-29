@@ -740,7 +740,7 @@ static void dump_stencil_op(std::string& s, const char* label, const Stencil_op_
     );
 }
 
-auto OpenGL_state_tracker::dump_state(const char* label, const Gl_binding_state& bs) const -> std::string
+auto OpenGL_state_tracker::dump_state(const char* label, const Gl_binding_state& /*bs*/) const -> std::string
 {
     std::string s;
     s.reserve(4096);
