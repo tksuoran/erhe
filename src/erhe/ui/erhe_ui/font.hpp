@@ -41,7 +41,8 @@ public:
         std::string_view    text,
         glm::vec3           text_position,
         uint32_t            text_color,
-        Rectangle&          out_bounds
+        Rectangle&          out_bounds,
+        float               y_scale = 1.0f
     ) const -> size_t;
 
     [[nodiscard]] auto get_glyph_count(std::string_view text) const -> size_t;

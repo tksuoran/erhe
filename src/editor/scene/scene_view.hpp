@@ -3,6 +3,8 @@
 #include "renderers/viewport_config.hpp"
 #include "scene/node_raytrace_mask.hpp"
 
+#include "erhe_math/math_util.hpp"
+
 #include <geogram/mesh/mesh.h>
 
 #include <glm/glm.hpp>
@@ -101,8 +103,11 @@ public:
     [[nodiscard]] virtual auto as_viewport_scene_view() const -> const Viewport_scene_view*;
 
     void set_scene_root    (const std::shared_ptr<Scene_root>& scene_root);
-    [[nodiscard]] auto get_scene_root  () const -> std::shared_ptr<Scene_root>;
-    [[nodiscard]] auto get_reverse_depth() const -> bool;
+    [[nodiscard]] auto get_scene_root        () const -> std::shared_ptr<Scene_root>;
+    [[nodiscard]] auto get_reverse_depth     () const -> bool;
+    [[nodiscard]] auto get_depth_range       () const -> erhe::math::Depth_range;
+    [[nodiscard]] auto get_framebuffer_origin() const -> erhe::math::Framebuffer_origin;
+    [[nodiscard]] auto get_ndc_y_direction   () const -> erhe::math::Ndc_y_direction;
 
     // "Pointing"
     void set_world_from_control(glm::vec3 near_position_in_world, glm::vec3 far_position_in_world);

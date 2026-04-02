@@ -32,6 +32,9 @@ build_test_raytrace_tinybvh
 build_vs2026_headless
 build_tests_asan
 build_opengl
+build_xcode_metal
+build_xcode_opengl
+build_xcode_opengl_asan
 cmake-build-*
 vscode-cmake-*
 log.txt

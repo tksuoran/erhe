@@ -72,8 +72,24 @@ auto Scene_view::get_scene_root() const -> std::shared_ptr<Scene_root>
 
 auto Scene_view::get_reverse_depth() const -> bool
 {
-    return m_context.app_settings->graphics.current_graphics_preset.reverse_depth &&
-           m_context.graphics_device->get_info().use_clip_control;
+    const auto& conventions = m_context.graphics_device->get_info().coordinate_conventions;
+    const bool can_reverse = (conventions.native_depth_range == erhe::math::Depth_range::zero_to_one);
+    return m_context.app_settings->graphics.current_graphics_preset.reverse_depth && can_reverse;
+}
+
+auto Scene_view::get_depth_range() const -> erhe::math::Depth_range
+{
+    return m_context.graphics_device->get_info().coordinate_conventions.native_depth_range;
+}
+
+auto Scene_view::get_framebuffer_origin() const -> erhe::math::Framebuffer_origin
+{
+    return m_context.graphics_device->get_info().coordinate_conventions.framebuffer_origin;
+}
+
+auto Scene_view::get_ndc_y_direction() const -> erhe::math::Ndc_y_direction
+{
+    return m_context.graphics_device->get_info().coordinate_conventions.ndc_y_direction;
 }
 
 void Scene_view::set_hover(const std::size_t slot, const Hover_entry& entry)

@@ -5,6 +5,8 @@ erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
     erhe_scene_renderer/camera_buffer.cpp
     erhe_scene_renderer/camera_buffer.hpp
+    erhe_scene_renderer/content_wide_line_renderer.cpp
+    erhe_scene_renderer/content_wide_line_renderer.hpp
     erhe_scene_renderer/cube_instance_buffer.cpp
     erhe_scene_renderer/cube_instance_buffer.hpp
     erhe_scene_renderer/cube_renderer.cpp

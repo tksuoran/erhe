@@ -18,10 +18,8 @@ struct Thumbnails_config;
 namespace editor {
 
 class App_context;
-class Icon_settings;
 class Programs;
 
-class Icon_settings;
 
 class Thumbnail
 {

@@ -111,6 +111,8 @@ auto Thumbnails::draw(
                     .texture_reference = thumbnail.texture_view,
                     .width             = static_cast<int>(height),
                     .height            = static_cast<int>(height),
+                    .uv0               = m_context.imgui_renderer->get_rtt_uv0(),
+                    .uv1               = m_context.imgui_renderer->get_rtt_uv1(),
                     .filter            = erhe::graphics::Filter::linear,
                     .mipmap_mode       = erhe::graphics::Sampler_mipmap_mode::linear,
                     .array_layer       = array_layer,
@@ -127,6 +129,8 @@ auto Thumbnails::draw(
                         .texture_reference = thumbnail.texture_view,
                         .width             = static_cast<int>(m_size_pixels),
                         .height            = static_cast<int>(m_size_pixels),
+                        .uv0               = m_context.imgui_renderer->get_rtt_uv0(),
+                        .uv1               = m_context.imgui_renderer->get_rtt_uv1(),
                         .array_layer       = array_layer,
                         .debug_label       = "Thumbnails::draw()"
                     }

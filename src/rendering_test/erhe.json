@@ -1,0 +1,18 @@
+{
+    "developer": {
+        "_version": 1,
+        "enable": true
+    },
+    "graphics": {
+        "_version": 1,
+        "initial_clear": false
+    },
+    "renderdoc": {
+        "_version": 1,
+        "capture_support": false
+    },
+    "shader_monitor": {
+        "_version": 1,
+        "enabled": false
+    }
+}

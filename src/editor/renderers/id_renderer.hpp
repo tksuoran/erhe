@@ -76,6 +76,9 @@ public:
         const int                    x;
         const int                    y;
         bool                         reverse_depth{true};
+        erhe::math::Depth_range      depth_range{erhe::math::Depth_range::zero_to_one};
+        erhe::math::Framebuffer_origin framebuffer_origin{erhe::math::Framebuffer_origin::bottom_left};
+        erhe::math::Ndc_y_direction    ndc_y_direction   {erhe::math::Ndc_y_direction::up};
     };
     void render            (const Render_parameters& parameters);
     void next_frame        ();

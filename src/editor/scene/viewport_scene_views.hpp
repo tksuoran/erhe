@@ -21,13 +21,14 @@ namespace erhe::scene_renderer {
 
 struct Viewport_config_data;
 
+struct Graphics_preset_entry;
+
 namespace editor {
 
 class App_context;
 class App_message_bus;
 class App_rendering;
 class App_settings;
-class Graphics_preset;
 class Post_processing;
 class Post_processing_node;
 class Scene_root;
@@ -113,7 +114,7 @@ public:
     [[nodiscard]] auto get_post_processing_nodes() const -> const std::vector<std::shared_ptr<Post_processing_node>>&;
 
 private:
-    void handle_graphics_settings_changed(Graphics_preset* graphics_preset);
+    void handle_graphics_settings_changed(Graphics_preset_entry* graphics_preset);
 
     void update_pointer_from_imgui_viewport_windows(erhe::imgui::Imgui_host* imgui_host);
 

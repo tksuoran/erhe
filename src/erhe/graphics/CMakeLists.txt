@@ -273,6 +273,7 @@ target_link_libraries(${_target}
         concurrentqueue
         erhe::dataformat
         erhe::item
+        erhe::math
         erhe::window
         fmt::fmt
         glm::glm-header-only

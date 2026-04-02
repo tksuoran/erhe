@@ -11,44 +11,51 @@
 
 namespace erhe::scene {
 
-auto Light::get_texture_from_clip(const bool reverse_depth) -> glm::mat4
+auto Light::get_texture_from_clip(const erhe::math::Depth_range depth_range, const erhe::math::Framebuffer_origin framebuffer_origin) -> glm::mat4
 {
-    if (reverse_depth) {
-        // zero_to_one: z already in [0,1], identity for z
+    // Metal (top-left origin): y needs to be flipped: y_tex = -0.5 * y_ndc + 0.5
+    // OpenGL (bottom-left origin): y_tex = 0.5 * y_ndc + 0.5
+    const float y_scale = (framebuffer_origin == erhe::math::Framebuffer_origin::top_left) ? -0.5f : 0.5f;
+
+    if (depth_range == erhe::math::Depth_range::zero_to_one) {
+        // z already in [0,1], identity for z
         return glm::mat4{
-            0.5f, 0.0f, 0.0f, 0.0f,
-            0.0f, 0.5f, 0.0f, 0.0f,
-            0.0f, 0.0f, 1.0f, 0.0f,
-            0.5f, 0.5f, 0.0f, 1.0f
+            0.5f,    0.0f, 0.0f, 0.0f,
+            0.0f, y_scale, 0.0f, 0.0f,
+            0.0f,    0.0f, 1.0f, 0.0f,
+            0.5f,    0.5f, 0.0f, 1.0f
         };
     } else {
         // negative_one_to_one: z in [-1,1], needs scale+bias to [0,1]
         return glm::mat4{
-            0.5f, 0.0f, 0.0f, 0.0f,
-            0.0f, 0.5f, 0.0f, 0.0f,
-            0.0f, 0.0f, 0.5f, 0.0f,
-            0.5f, 0.5f, 0.5f, 1.0f
+            0.5f,    0.0f, 0.0f, 0.0f,
+            0.0f, y_scale, 0.0f, 0.0f,
+            0.0f,    0.0f, 0.5f, 0.0f,
+            0.5f,    0.5f, 0.5f, 1.0f
         };
     }
 }
 
-auto Light::get_clip_from_texture(const bool reverse_depth) -> glm::mat4
+auto Light::get_clip_from_texture(const erhe::math::Depth_range depth_range, const erhe::math::Framebuffer_origin framebuffer_origin) -> glm::mat4
 {
-    if (reverse_depth) {
+    const float y_scale = (framebuffer_origin == erhe::math::Framebuffer_origin::top_left) ? -2.0f : 2.0f;
+    const float y_bias  = (framebuffer_origin == erhe::math::Framebuffer_origin::top_left) ?  1.0f : -1.0f;
+
+    if (depth_range == erhe::math::Depth_range::zero_to_one) {
         // Inverse of zero_to_one texture_from_clip
         return glm::mat4{
-             2.0f, 0.0f, 0.0f, 0.0f,
-             0.0f, 2.0f, 0.0f, 0.0f,
-             0.0f, 0.0f, 1.0f, 0.0f,
-            -1.0f,-1.0f, 0.0f, 1.0f
+             2.0f,    0.0f, 0.0f, 0.0f,
+             0.0f, y_scale, 0.0f, 0.0f,
+             0.0f,    0.0f, 1.0f, 0.0f,
+            -1.0f,  y_bias, 0.0f, 1.0f
         };
     } else {
         // Inverse of negative_one_to_one texture_from_clip
         return glm::mat4{
-             2.0f, 0.0f, 0.0f, 0.0f,
-             0.0f, 2.0f, 0.0f, 0.0f,
-             0.0f, 0.0f, 2.0f, 0.0f,
-            -1.0f,-1.0f,-1.0f, 1.0f
+             2.0f,    0.0f, 0.0f, 0.0f,
+             0.0f, y_scale, 0.0f, 0.0f,
+             0.0f,    0.0f, 2.0f, 0.0f,
+            -1.0f,  y_bias,-1.0f, 1.0f
         };
     }
 }
@@ -217,7 +224,7 @@ auto Light::stable_directional_light_projection_transforms(
     // Calculate and return projection matrices for light projection camera:
     //  - clip from node   (for light as node)
     //  - clip from world
-    const auto clip_from_light = light_projection.clip_from_node_transform(parameters.shadow_map_viewport, parameters.reverse_depth);
+    const auto clip_from_light = light_projection.clip_from_node_transform(parameters.shadow_map_viewport, parameters.reverse_depth, parameters.depth_range);
 
     SPDLOG_LOGGER_TRACE(log, "view camera position in world {}", view_camera_position);
     SPDLOG_LOGGER_TRACE(log, "view camera position in light {}", view_camera_position_in_light);
@@ -234,8 +241,8 @@ auto Light::stable_directional_light_projection_transforms(
         clip_from_light.get_matrix() * snapped_light_from_world,
         snapped_world_from_light * clip_from_light.get_inverse_matrix()
     };
-    const glm::mat4 tex_from_clip = get_texture_from_clip(parameters.reverse_depth);
-    const glm::mat4 clip_from_tex = get_clip_from_texture(parameters.reverse_depth);
+    const glm::mat4 tex_from_clip = get_texture_from_clip(parameters.depth_range, parameters.framebuffer_origin);
+    const glm::mat4 clip_from_tex = get_clip_from_texture(parameters.depth_range, parameters.framebuffer_origin);
     const Transform texture_from_world{
         tex_from_clip * clip_from_world.get_matrix(),
         clip_from_world.get_inverse_matrix() * clip_from_tex
@@ -262,7 +269,7 @@ auto Light::stable_directional_light_projection_transforms(
 
     const erhe::scene::Camera* main_view_camera                       = parameters.view_camera;
     const erhe::scene::Node*   main_view_camera_node                  = main_view_camera->get_node();
-    const auto                 main_view_camera_projection_transforms = main_view_camera->projection_transforms(parameters.main_camera_viewport);
+    const auto                 main_view_camera_projection_transforms = main_view_camera->projection_transforms(parameters.main_camera_viewport, parameters.reverse_depth, parameters.depth_range, parameters.framebuffer_origin, parameters.ndc_y_direction);
     const glm::mat4            main_view_clip_from_world              = main_view_camera_projection_transforms.clip_from_world.get_matrix();
     const glm::mat4            world_from_main_view_camera_clip       = main_view_camera_projection_transforms.clip_from_world.get_inverse_matrix();
     //const glm::mat4            main_view_clip_from_node               = main_view_camera_projection_transforms.clip_from_camera.get_matrix();
@@ -399,8 +406,8 @@ auto Light::stable_directional_light_projection_transforms(
         clip_from_light.matrix() * snapped_light_from_world,
         snapped_world_from_light * clip_from_light.inverse_matrix()
     };
-    const glm::mat4 tex_from_clip = get_texture_from_clip(parameters.reverse_depth);
-    const glm::mat4 clip_from_tex = get_clip_from_texture(parameters.reverse_depth);
+    const glm::mat4 tex_from_clip = get_texture_from_clip(parameters.depth_range, parameters.framebuffer_origin);
+    const glm::mat4 clip_from_tex = get_clip_from_texture(parameters.depth_range, parameters.framebuffer_origin);
     const Transform texture_from_world{
         tex_from_clip * clip_from_world.matrix(),
         clip_from_world.inverse_matrix() * clip_from_tex
@@ -419,7 +426,7 @@ auto Light::stable_directional_light_projection_transforms(
 auto Light::spot_light_projection_transforms(const Light_projection_parameters& parameters) const -> Light_projection_transforms
 {
     const Projection light_projection = projection(parameters);
-    const auto clip_from_light_camera = light_projection.clip_from_node_transform(parameters.shadow_map_viewport, parameters.reverse_depth);
+    const auto clip_from_light_camera = light_projection.clip_from_node_transform(parameters.shadow_map_viewport, parameters.reverse_depth, parameters.depth_range);
     const Node* const node = get_node();
     ERHE_VERIFY(node != nullptr);
 
@@ -427,8 +434,8 @@ auto Light::spot_light_projection_transforms(const Light_projection_parameters& 
         clip_from_light_camera.get_matrix() * node->node_from_world(),
         node->world_from_node() * clip_from_light_camera.get_inverse_matrix()
     };
-    const glm::mat4 tex_from_clip = get_texture_from_clip(parameters.reverse_depth);
-    const glm::mat4 clip_from_tex = get_clip_from_texture(parameters.reverse_depth);
+    const glm::mat4 tex_from_clip = get_texture_from_clip(parameters.depth_range, parameters.framebuffer_origin);
+    const glm::mat4 clip_from_tex = get_clip_from_texture(parameters.depth_range, parameters.framebuffer_origin);
     const Transform texture_from_world{
         tex_from_clip * clip_from_world.get_matrix(),
         clip_from_world.get_inverse_matrix() * clip_from_tex

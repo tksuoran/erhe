@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 """erhe_codegen generator entry point.
 
-Usage: python generate.py <definitions_dir> <output_dir>
+Usage: python generate.py <definitions_dir> <output_dir> [extra_dir1 extra_dir2 ...]
 
 Loads all .py definition files from <definitions_dir>, validates them,
 and generates C++ headers/sources into <output_dir>.
+
+Optional extra directories are loaded for reference resolution only --
+their structs are registered but NOT generated. This allows StructRef
+to reference types defined in other libraries.
 """
 
 import sys
@@ -44,12 +48,20 @@ def write_if_changed(path: Path, content: str) -> bool:
 
 
 def main() -> None:
-    if len(sys.argv) != 3:
-        print(f"Usage: {sys.argv[0]} <definitions_dir> <output_dir>", file=sys.stderr)
+    if len(sys.argv) < 3:
+        print(f"Usage: {sys.argv[0]} <definitions_dir> <output_dir> [extra_dir1 ...]", file=sys.stderr)
         sys.exit(1)
 
     definitions_dir = Path(sys.argv[1])
     output_dir = Path(sys.argv[2])
+    # Extra args are "dir:include_prefix" pairs for reference-only definitions
+    extra_entries: list[tuple[Path, str]] = []
+    for arg in sys.argv[3:]:
+        if ':' in arg:
+            dir_str, prefix = arg.split(':', 1)
+            extra_entries.append((Path(dir_str), prefix))
+        else:
+            extra_entries.append((Path(arg), ""))
 
     if not definitions_dir.is_dir():
         print(f"Error: definitions directory not found: {definitions_dir}", file=sys.stderr)
@@ -71,7 +83,25 @@ def main() -> None:
     from erhe_codegen.emit_cpp import emit_struct_cpp
     from erhe_codegen.emit_enum import emit_enum_hpp, emit_enum_cpp
 
-    # Load all definition files
+    # Load extra definition directories first (for reference resolution only).
+    # Their structs get an include_prefix so generated #includes use the right path.
+    external_struct_names: set[str] = set()
+    external_enum_names: set[str] = set()
+    for extra_dir, include_prefix in extra_entries:
+        if not extra_dir.is_dir():
+            continue
+        before_structs = set(get_struct_registry().keys())
+        before_enums = set(get_enum_registry().keys())
+        load_definitions(extra_dir)
+        new_structs = set(get_struct_registry().keys()) - before_structs
+        new_enums = set(get_enum_registry().keys()) - before_enums
+        external_struct_names |= new_structs
+        external_enum_names |= new_enums
+        if include_prefix:
+            for name in new_structs:
+                get_struct_registry()[name].include_prefix = include_prefix
+
+    # Load primary definition files
     load_definitions(definitions_dir)
 
     # Validate cross-references
@@ -84,8 +114,10 @@ def main() -> None:
 
     files_written = 0
 
-    # Generate struct headers and sources
+    # Generate struct headers and sources (skip externally-defined structs)
     for name, s in structs.items():
+        if name in external_struct_names:
+            continue
         snake = _to_snake_case(name)
 
         hpp_content = emit_struct_hpp(s)
@@ -104,8 +136,10 @@ def main() -> None:
             files_written += 1
             print(f"  wrote {snake}.cpp")
 
-    # Generate enum headers and sources
+    # Generate enum headers and sources (skip externally-defined enums)
     for name, e in enums.items():
+        if name in external_enum_names:
+            continue
         snake = _to_snake_case(name)
 
         hpp_content = emit_enum_hpp(e)

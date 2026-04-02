@@ -2,8 +2,7 @@
 #include "app_message_bus.hpp"
 #include "editor_log.hpp"
 
-#include "config/generated/app_settings_config.hpp"
-#include "config/generated/app_settings_config_serialization.hpp"
+#include "config/generated/editor_settings_config.hpp"
 #include "config/generated/graphics_preset_entry.hpp"
 #include "config/generated/graphics_preset_entry_serialization.hpp"
 #include "config/generated/graphics_presets_config.hpp"
@@ -16,10 +15,7 @@
 namespace editor {
 
 
-App_settings::App_settings()
-{
-    read();
-}
+App_settings::App_settings() = default;
 
 void App_settings::apply_limits(erhe::graphics::Device& instance, App_message_bus& app_message_bus, const float window_scale_factor)
 {
@@ -63,20 +59,8 @@ void Graphics_settings::get_limits(const erhe::graphics::Device& instance, erhe:
 
 void Graphics_settings::read_presets()
 {
-    graphics_presets.clear();
     Graphics_presets_config presets_config = erhe::codegen::load_config<Graphics_presets_config>(c_graphics_presets_file_path);
-    for (const Graphics_preset_entry& entry : presets_config.presets) {
-        Graphics_preset graphics_preset;
-        graphics_preset.name               = entry.name;
-        graphics_preset.msaa_sample_count  = entry.msaa_sample_count;
-        graphics_preset.bindless_textures  = entry.bindless_textures;
-        graphics_preset.reverse_depth      = entry.reverse_depth;
-        graphics_preset.shadow_enable      = entry.shadow_enable;
-        graphics_preset.shadow_resolution  = entry.shadow_resolution;
-        graphics_preset.shadow_light_count = entry.shadow_light_count;
-        graphics_preset.shadow_depth_bits  = entry.shadow_depth_bits;
-        graphics_presets.push_back(graphics_preset);
-    }
+    graphics_presets = std::move(presets_config.presets);
     if (graphics_presets.empty()) {
         log_startup->warn("Could not read graphics presets from {}", c_graphics_presets_file_path);
     }
@@ -86,22 +70,11 @@ void Graphics_settings::write_presets()
 {
     log_startup->debug("Graphics_settings::write_presets()");
     Graphics_presets_config presets_config;
-    for (const Graphics_preset& graphics_preset : graphics_presets) {
-        Graphics_preset_entry entry;
-        entry.name               = graphics_preset.name;
-        entry.msaa_sample_count  = graphics_preset.msaa_sample_count;
-        entry.bindless_textures  = graphics_preset.bindless_textures;
-        entry.reverse_depth      = graphics_preset.reverse_depth;
-        entry.shadow_enable      = graphics_preset.shadow_enable;
-        entry.shadow_resolution  = graphics_preset.shadow_resolution;
-        entry.shadow_light_count = graphics_preset.shadow_light_count;
-        entry.shadow_depth_bits  = graphics_preset.shadow_depth_bits;
-        presets_config.presets.push_back(entry);
-    }
+    presets_config.presets = graphics_presets;
     erhe::codegen::save_config(presets_config, c_graphics_presets_file_path);
 }
 
-void Graphics_settings::apply_limits(Graphics_preset& graphics_preset)
+void Graphics_settings::apply_limits(Graphics_preset_entry& graphics_preset)
 {
     graphics_preset.shadow_resolution  = std::min(graphics_preset.shadow_resolution,  max_shadow_resolution);
     graphics_preset.shadow_light_count = std::min(graphics_preset.shadow_light_count, max_depth_layers);
@@ -120,7 +93,7 @@ void Graphics_settings::select_active_graphics_preset(App_message_bus& app_messa
 
     // Override configuration
     for (std::size_t i = 0, end = graphics_presets.size(); i < end; ++i) {
-        const Graphics_preset& graphics_preset = graphics_presets.at(i);
+        const Graphics_preset_entry& graphics_preset = graphics_presets.at(i);
         if (graphics_preset.name == current_graphics_preset.name) {
             current_graphics_preset = graphics_preset;
             log_startup->info("Using graphics preset {}", graphics_preset.name);
@@ -135,48 +108,38 @@ void Graphics_settings::select_active_graphics_preset(App_message_bus& app_messa
     }
 }
 
-void App_settings::read()
+void App_settings::read(const Editor_settings_config& editor_settings)
 {
     log_startup->debug("App_settings::read()");
 
     graphics.read_presets();
+    graphics.current_graphics_preset.name = editor_settings.graphics_preset_name;
 
-    App_settings_config config = erhe::codegen::load_config<App_settings_config>(c_settings_file_path);
-    graphics.current_graphics_preset.name = config.graphics_preset_name;
+    imgui.primary_font              = editor_settings.imgui.primary_font;
+    imgui.mono_font                 = editor_settings.imgui.mono_font;
+    imgui.font_size                 = editor_settings.imgui.font_size;
+    imgui.vr_font_size              = editor_settings.imgui.vr_font_size;
+    imgui.material_design_font_size = editor_settings.imgui.material_design_font_size;
+    imgui.icon_font_size            = editor_settings.imgui.icon_font_size;
 
-    imgui.primary_font              = config.imgui.primary_font;
-    imgui.mono_font                 = config.imgui.mono_font;
-    imgui.font_size                 = config.imgui.font_size;
-    imgui.vr_font_size              = config.imgui.vr_font_size;
-    imgui.material_design_font_size = config.imgui.material_design_font_size;
-    imgui.icon_font_size            = config.imgui.icon_font_size;
-
-    icon_settings.small_icon_size  = config.icons.small_icon_size;
-    icon_settings.large_icon_size  = config.icons.large_icon_size;
-    icon_settings.hotbar_icon_size = config.icons.hotbar_icon_size;
+    icon_settings = editor_settings.icons;
 }
 
-void App_settings::write()
+void App_settings::write(Editor_settings_config& editor_settings)
 {
     log_startup->debug("App_settings::write()");
 
     graphics.write_presets();
+    editor_settings.graphics_preset_name = graphics.current_graphics_preset.name;
 
-    App_settings_config config;
-    config.graphics_preset_name = graphics.current_graphics_preset.name;
+    editor_settings.imgui.primary_font              = imgui.primary_font;
+    editor_settings.imgui.mono_font                 = imgui.mono_font;
+    editor_settings.imgui.font_size                 = imgui.font_size;
+    editor_settings.imgui.vr_font_size              = imgui.vr_font_size;
+    editor_settings.imgui.material_design_font_size = imgui.material_design_font_size;
+    editor_settings.imgui.icon_font_size            = imgui.icon_font_size;
 
-    config.imgui.primary_font              = imgui.primary_font;
-    config.imgui.mono_font                 = imgui.mono_font;
-    config.imgui.font_size                 = imgui.font_size;
-    config.imgui.vr_font_size              = imgui.vr_font_size;
-    config.imgui.material_design_font_size = imgui.material_design_font_size;
-    config.imgui.icon_font_size            = imgui.icon_font_size;
-
-    config.icons.small_icon_size  = icon_settings.small_icon_size;
-    config.icons.large_icon_size  = icon_settings.large_icon_size;
-    config.icons.hotbar_icon_size = icon_settings.hotbar_icon_size;
-
-    erhe::codegen::save_config(config, c_settings_file_path);
+    editor_settings.icons = icon_settings;
 }
 
 }

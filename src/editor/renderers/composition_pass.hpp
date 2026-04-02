@@ -35,6 +35,8 @@ public:
     [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::composition_pass; }
 
     bool                                                enabled{true}; // TODO consider using Item visibility flag
+    bool                                                use_content_wide_line_renderer{false};
+    uint32_t                                            content_wide_line_group{0};
     std::vector<erhe::scene::Layer_id>                  mesh_layers;
     std::size_t                                         non_mesh_vertex_count{0};
     std::vector<erhe::graphics::Render_pipeline_state*> render_pipeline_states;

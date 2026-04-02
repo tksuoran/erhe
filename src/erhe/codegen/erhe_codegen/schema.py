@@ -96,6 +96,7 @@ class EnumSchema:
         self.name = name
         self.values = values
         self.underlying_type = underlying_type if underlying_type is not None else Int
+        self.include_prefix = ""  # set for external enums
 
     def __repr__(self) -> str:
         return f"EnumSchema({self.name!r}, {len(self.values)} values)"
@@ -120,6 +121,7 @@ class StructSchema:
         self.short_desc = short_desc
         self.long_desc = long_desc
         self.developer = developer
+        self.include_prefix = ""  # set for external structs, e.g. "erhe_graphics/generated/"
 
     def active_fields(self, version: Optional[int] = None) -> list[FieldSchema]:
         """Return fields active in the given version (default: current)."""

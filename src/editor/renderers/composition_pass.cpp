@@ -4,6 +4,7 @@
 #include "app_rendering.hpp"
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
+#include "erhe_scene_renderer/content_wide_line_renderer.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "renderers/programs.hpp"
 #include "renderers/render_context.hpp"
@@ -13,8 +14,10 @@
 #include "time.hpp"
 
 #include "erhe_imgui/windows/pipelines.hpp"
+#include "erhe_item/item.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_scene/mesh.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene_renderer/forward_renderer.hpp"
 
@@ -140,7 +143,10 @@ void Composition_pass::render(const Render_context& context)
                 .override_shader_stages = this->allow_shader_stages_override ? context.override_shader_stages : nullptr,
                 .error_shader_stages    = &context.app_context.programs->error.shader_stages,
                 .debug_label            = get_debug_label().string_view(),
-                .reverse_depth          = context.scene_view.get_reverse_depth()
+                .reverse_depth          = context.scene_view.get_reverse_depth(),
+                .depth_range            = context.scene_view.get_depth_range(),
+                .framebuffer_origin     = context.scene_view.get_framebuffer_origin(),
+                .ndc_y_direction        = context.scene_view.get_ndc_y_direction()
             },
             nullptr
         );
@@ -161,45 +167,53 @@ void Composition_pass::render(const Render_context& context)
         }
 
         log_composer->debug("calling render with {} render pipeline states", render_pipeline_states.size());
-        // for (const auto& pass : render_pipeline_states) {
-        //     log_composer->trace("pass using pipeline = {}", pass->pipeline.data.debug_label.string_view());
-        // }
-        // log_composer->trace("primitive_mode = {}", c_str(primitive_mode));
-        // log_composer->trace("filter = {}", filter.describe());
 
-        context.app_context.forward_renderer->render(
-            erhe::scene_renderer::Forward_renderer::Render_parameters{
-                .render_encoder         = *context.encoder,
-                .index_type             = context.app_context.mesh_memory->buffer_info.index_type,
-                .index_buffer           = &context.app_context.mesh_memory->index_buffer,
-                .vertex_buffer0         = &context.app_context.mesh_memory->vertex_buffer_position,
-                .vertex_buffer1         = &context.app_context.mesh_memory->vertex_buffer_non_position,
-                .vertex_buffer2         = &context.app_context.mesh_memory->vertex_buffer_custom,
-                .ambient_light          = layers.light()->ambient_light,
-                .camera                 = context.camera,
-                .light_projections      = context.scene_view.get_light_projections(),
-                .lights                 = layers.light()->lights,
-                .skins                  = scene->get_skins(),
-                .materials              = materials,
-                .mesh_spans             = m_mesh_spans,
-                .render_pipeline_states = this->render_pipeline_states,
-                .primitive_mode         = this->primitive_mode,
-                .primitive_settings     = 
-                    primitive_settings.has_value()
-                        ? primitive_settings.value()
-                        : (render_style != nullptr)
-                            ? render_style->get_primitive_settings(this->primitive_mode)
-                            : erhe::scene_renderer::Primitive_interface_settings{},
-                .viewport               = context.viewport,
-                .filter                 = this->filter,
-                .override_shader_stages = this->allow_shader_stages_override ? context.override_shader_stages : nullptr,
-                .error_shader_stages    = &context.app_context.programs->error.shader_stages,
-                .debug_joint_indices    = context.app_context.app_rendering->debug_joint_indices,
-                .debug_joint_colors     = context.app_context.app_rendering->debug_joint_colors,
-                .debug_label            = get_name(),
-                .reverse_depth          = context.scene_view.get_reverse_depth()
+        // Use content wide line renderer (compute path) when geometry shaders are unavailable.
+        // Meshes were already added and compute dispatched in viewport_scene_view.cpp before the render pass.
+        erhe::scene_renderer::Content_wide_line_renderer* content_wide_line_renderer = context.app_context.content_wide_line_renderer;
+        if (use_content_wide_line_renderer && (content_wide_line_renderer != nullptr) && content_wide_line_renderer->is_enabled()) {
+            // Render the compute-expanded triangles with the outline pipeline state
+            for (auto* render_pipeline_state : render_pipeline_states) {
+                content_wide_line_renderer->render(*context.encoder, *render_pipeline_state, content_wide_line_group);
             }
-        );
+        } else {
+            context.app_context.forward_renderer->render(
+                erhe::scene_renderer::Forward_renderer::Render_parameters{
+                    .render_encoder         = *context.encoder,
+                    .index_type             = context.app_context.mesh_memory->buffer_info.index_type,
+                    .index_buffer           = &context.app_context.mesh_memory->index_buffer,
+                    .vertex_buffer0         = &context.app_context.mesh_memory->vertex_buffer_position,
+                    .vertex_buffer1         = &context.app_context.mesh_memory->vertex_buffer_non_position,
+                    .vertex_buffer2         = &context.app_context.mesh_memory->vertex_buffer_custom,
+                    .ambient_light          = layers.light()->ambient_light,
+                    .camera                 = context.camera,
+                    .light_projections      = context.scene_view.get_light_projections(),
+                    .lights                 = layers.light()->lights,
+                    .skins                  = scene->get_skins(),
+                    .materials              = materials,
+                    .mesh_spans             = m_mesh_spans,
+                    .render_pipeline_states = this->render_pipeline_states,
+                    .primitive_mode         = this->primitive_mode,
+                    .primitive_settings     =
+                        primitive_settings.has_value()
+                            ? primitive_settings.value()
+                            : (render_style != nullptr)
+                                ? render_style->get_primitive_settings(this->primitive_mode)
+                                : erhe::scene_renderer::Primitive_interface_settings{},
+                    .viewport               = context.viewport,
+                    .filter                 = this->filter,
+                    .override_shader_stages = this->allow_shader_stages_override ? context.override_shader_stages : nullptr,
+                    .error_shader_stages    = &context.app_context.programs->error.shader_stages,
+                    .debug_joint_indices    = context.app_context.app_rendering->debug_joint_indices,
+                    .debug_joint_colors     = context.app_context.app_rendering->debug_joint_colors,
+                    .debug_label            = get_name(),
+                    .reverse_depth          = context.scene_view.get_reverse_depth(),
+                    .depth_range            = context.scene_view.get_depth_range(),
+                    .framebuffer_origin     = context.scene_view.get_framebuffer_origin(),
+                    .ndc_y_direction        = context.scene_view.get_ndc_y_direction()
+                }
+            );
+        }
     }
 }
 

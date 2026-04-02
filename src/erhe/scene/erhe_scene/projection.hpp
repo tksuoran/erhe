@@ -1,5 +1,6 @@
 #pragma once
 
+#include "erhe_math/math_util.hpp"
 #include "erhe_math/viewport.hpp"
 
 #include <glm/glm.hpp>
@@ -37,9 +38,21 @@ public:
         "Generic Frustum"
     };
 
-    [[nodiscard]] auto clip_from_node_transform(erhe::math::Viewport viewport, bool reverse_depth = true) const -> Transform;
+    [[nodiscard]] auto clip_from_node_transform(
+        erhe::math::Viewport           viewport,
+        bool                           reverse_depth,
+        erhe::math::Depth_range        depth_range,
+        erhe::math::Framebuffer_origin framebuffer_origin = erhe::math::Framebuffer_origin::bottom_left,
+        erhe::math::Ndc_y_direction    ndc_y_direction    = erhe::math::Ndc_y_direction::up
+    ) const -> Transform;
 
-    [[nodiscard]] auto get_projection_matrix(float viewport_aspect_ration, bool reverse_depth = true) const -> glm::mat4;
+    [[nodiscard]] auto get_projection_matrix(
+        float                          viewport_aspect_ratio,
+        bool                           reverse_depth,
+        erhe::math::Depth_range        depth_range,
+        erhe::math::Framebuffer_origin framebuffer_origin = erhe::math::Framebuffer_origin::bottom_left,
+        erhe::math::Ndc_y_direction    ndc_y_direction    = erhe::math::Ndc_y_direction::up
+    ) const -> glm::mat4;
 
     class Fov_sides
     {

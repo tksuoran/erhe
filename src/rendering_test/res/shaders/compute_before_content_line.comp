@@ -1,0 +1,211 @@
+
+layout(local_size_x = 32) in;
+
+float get_line_width(vec4 position, float thickness)
+{
+    // Negative thickness = fixed screen-space pixel width (no distance scaling)
+    if (thickness < 0.0) {
+        return -thickness;
+    }
+    // Positive thickness = distance-scaled width
+    // Match wide_lines.vert: min(4.0 * size, 20.0) and max(..., 1.0)
+    float fov_left         = view.fov[0];
+    float fov_right        = view.fov[1];
+    float fov_width        = fov_right - fov_left;
+    float viewport_width   = view.viewport[2];
+    float max_size         = 4.0 * thickness;
+    float scaled_thickness = max(max_size / position.w, 1.0);
+    return (1.0 / 1024.0) * viewport_width * scaled_thickness / fov_width;
+}
+
+bool clip_line(
+    in  vec4  v0,
+    in  vec4  v1,
+    out vec4  clipped_v0,
+    out vec4  clipped_v1,
+    out float tmin,
+    out float tmax
+)
+{
+    vec4  l      = v1 - v0;
+    float denom4 =  l.z + l.w; float num4 = -v0.z - v0.w; float t4 = num4 / denom4;
+    float denom5 = -l.z + l.w; float num5 =  v0.z - v0.w; float t5 = num5 / denom5;
+    tmin = 0.0;
+    tmax = 1.0;
+    if (denom4 > 0) {
+        if (t4 > tmax) return false;
+        if (t4 > tmin) tmin = t4;
+    } else if (denom4 < 0) {
+        if (t4 < tmin) return false;
+        if (t4 < tmax) tmax = t4;
+    } else if (num4 > 0) {
+        return false;
+    }
+    if (denom5 > 0) {
+        if (t5 > tmax) return false;
+        if (t5 > tmin) tmin = t5;
+    } else if (denom5 < 0) {
+        if (t5 < tmin) return false;
+        if (t5 < tmax) tmax = t5;
+    } else if (num5 > 0) {
+        return false;
+    }
+    clipped_v0 = mix(v0, v1, tmin);
+    clipped_v1 = mix(v0, v1, tmax);
+    return true;
+}
+
+vec2 screen_from_ndc(vec2 ndc, vec2 vp_size) {
+    return (ndc * 0.5 + 0.5) * vp_size;
+}
+
+vec2 ndc_from_screen_direction(vec2 screen, vec2 vp_size) {
+    return screen / vp_size;
+}
+
+float plane_z(vec2 xy, vec3 ref_ndc, vec3 plane_n) {
+    if (abs(plane_n.z) < 1e-6) return ref_ndc.z;
+    return ref_ndc.z - (plane_n.x * (xy.x - ref_ndc.x) + plane_n.y * (xy.y - ref_ndc.y)) / plane_n.z;
+}
+
+void do_wide_line(uint in_line_index, uint out_triangle_index)
+{
+    uint in_i0           = 2 * in_line_index;
+    uint in_i1           = 2 * in_line_index + 1;
+    uint out_i0          = 3 * out_triangle_index;
+
+    // Read object-local positions and per-vertex normals from edge line vertex buffer
+    vec3 local_position0 = edge_line_vertex_buffer.vertices[in_i0].position.xyz;
+    vec3 local_position1 = edge_line_vertex_buffer.vertices[in_i1].position.xyz;
+    vec3 local_normal0   = edge_line_vertex_buffer.vertices[in_i0].normal.xyz;
+    vec3 local_normal1   = edge_line_vertex_buffer.vertices[in_i1].normal.xyz;
+
+    // Transform to world space using per-primitive transform
+    mat4 world_from_node = view.world_from_node;
+    mat4 clip_from_world = view.clip_from_world;
+    vec4 world_pos0      = world_from_node * vec4(local_position0, 1.0);
+    vec4 world_pos1      = world_from_node * vec4(local_position1, 1.0);
+    mat3 normal_matrix   = mat3(world_from_node);
+    vec3 world_normal0   = normalize(normal_matrix * local_normal0);
+    vec3 world_normal1   = normalize(normal_matrix * local_normal1);
+    vec3 world_normal    = normalize(world_normal0 + world_normal1);
+
+    // Transform to clip space
+    vec4 v0 = clip_from_world * world_pos0;
+    vec4 v1 = clip_from_world * world_pos1;
+
+    // Normal-based depth bias to avoid z-fighting with the surface
+    // Same approach as wide_lines.vert: bias = 0.0005 * NdotV^2 * clip_depth_direction
+    // Clamp NdotV to [0,1] so back-facing edges get zero bias instead of wrong-direction bias
+    vec3  view_dir0 = normalize(view.view_position_in_world.xyz - world_pos0.xyz);
+    vec3  view_dir1 = normalize(view.view_position_in_world.xyz - world_pos1.xyz);
+    float NdotV0    = clamp(dot(world_normal0, view_dir0), 0.0, 1.0);
+    float NdotV1    = clamp(dot(world_normal1, view_dir1), 0.0, 1.0);
+    float cdd       = view.clip_depth_direction;
+    float bias0     = 0.0005 * NdotV0 * NdotV0 * cdd;
+    float bias1     = 0.0005 * NdotV1 * NdotV1 * cdd;
+    v0.z -= bias0;
+    v1.z -= bias1;
+
+    float line_thickness = view.line_color.w; // line width stored in color.w
+
+    //  a - ^ - - - - - -^- - b
+    //  |   |            |    |
+    //  | - v0 - - - - ->v1 ->|
+    //  |   |            |    |
+    //  d - - - - - - - - - - c
+
+    vec4 v0_clipped, v1_clipped; float tmin, tmax;
+
+    if (clip_line(v0, v1, v0_clipped, v1_clipped, tmin, tmax) == false) {
+        triangle_vertex_buffer.vertices[out_i0    ].position_0 = vec4(0.0, 0.0, 0.0, 1.0);
+        triangle_vertex_buffer.vertices[out_i0 + 1].position_0 = vec4(0.0, 0.0, 0.0, 1.0);
+        triangle_vertex_buffer.vertices[out_i0 + 2].position_0 = vec4(0.0, 0.0, 0.0, 1.0);
+        triangle_vertex_buffer.vertices[out_i0 + 3].position_0 = vec4(0.0, 0.0, 0.0, 1.0);
+        triangle_vertex_buffer.vertices[out_i0 + 4].position_0 = vec4(0.0, 0.0, 0.0, 1.0);
+        triangle_vertex_buffer.vertices[out_i0 + 5].position_0 = vec4(0.0, 0.0, 0.0, 1.0);
+        return;
+    }
+
+    vec4  color = vec4(view.line_color.xyz, 1.0);
+
+    float width0 = get_line_width(v0_clipped, line_thickness);
+    float width1 = get_line_width(v1_clipped, line_thickness);
+
+    vec2 vp_size         = view.viewport.zw;
+
+    vec3 v0_in_ndc       = v0_clipped.xyz / v0_clipped.w;
+    vec3 v1_in_ndc       = v1_clipped.xyz / v1_clipped.w;
+
+    // Compute NDC plane from edge normal for Z alignment
+    vec3  edge_dir_world  = normalize(world_pos1.xyz - world_pos0.xyz);
+    vec3  side_dir_world  = normalize(cross(world_normal, edge_dir_world));
+    float edge_len        = length(world_pos1.xyz - world_pos0.xyz);
+    vec4  world_pos_side  = vec4(world_pos0.xyz + side_dir_world * edge_len, 1.0);
+    vec4  clip_side       = clip_from_world * world_pos_side;
+    vec3  ndc_side        = clip_side.xyz / clip_side.w;
+    vec3  plane_n         = cross(v1_in_ndc - v0_in_ndc, ndc_side - v0_in_ndc);
+
+    vec2 v0_in_screen    = screen_from_ndc(v0_in_ndc.xy, vp_size);
+    vec2 v1_in_screen    = screen_from_ndc(v1_in_ndc.xy, vp_size);
+    vec2 line_in_screen  = v1_in_screen - v0_in_screen;
+    vec2 axis_in_screen  = normalize(line_in_screen);
+    vec2 side_in_screen  = vec2(-axis_in_screen.y, axis_in_screen.x);
+    vec2 axis_in_ndc     = ndc_from_screen_direction(axis_in_screen, vp_size);
+    vec2 side_in_ndc     = ndc_from_screen_direction(side_in_screen, vp_size);
+    vec2 offset_a_in_ndc = ( side_in_ndc - axis_in_ndc) * width0;
+    vec2 offset_b_in_ndc = ( side_in_ndc + axis_in_ndc) * width1;
+    vec2 offset_c_in_ndc = (-side_in_ndc + axis_in_ndc) * width1;
+    vec2 offset_d_in_ndc = (-side_in_ndc - axis_in_ndc) * width0;
+
+    vec2 a_xy = v0_in_ndc.xy + offset_a_in_ndc;
+    vec2 b_xy = v1_in_ndc.xy + offset_b_in_ndc;
+    vec2 c_xy = v1_in_ndc.xy + offset_c_in_ndc;
+    vec2 d_xy = v0_in_ndc.xy + offset_d_in_ndc;
+    vec4 a = vec4(a_xy, plane_z(a_xy, v0_in_ndc, plane_n), width0);
+    vec4 b = vec4(b_xy, plane_z(b_xy, v0_in_ndc, plane_n), width1);
+    vec4 c = vec4(c_xy, plane_z(c_xy, v0_in_ndc, plane_n), width1);
+    vec4 d = vec4(d_xy, plane_z(d_xy, v0_in_ndc, plane_n), width0);
+
+    // Adjust screen coordinates for fragment shader gl_FragCoord matching.
+    // On Metal (top-left origin), gl_FragCoord.y = 0 is at the top,
+    // but screen_from_ndc maps y=+1 to vp_height. Flip y to match.
+    vec2 v0_frag_screen = vec2(v0_in_screen.x, mix(v0_in_screen.y, vp_size.y - v0_in_screen.y, step(view.vp_y_sign, 0.0)));
+    vec2 v1_frag_screen = vec2(v1_in_screen.x, mix(v1_in_screen.y, vp_size.y - v1_in_screen.y, step(view.vp_y_sign, 0.0)));
+    vec4 l_in_screen = vec4(v0_frag_screen, v1_frag_screen);
+
+    // CCW Triangles: adb, bdc
+    triangle_vertex_buffer.vertices[out_i0 + 0].position_0 = a;
+    triangle_vertex_buffer.vertices[out_i0 + 0].color_0    = color;
+    triangle_vertex_buffer.vertices[out_i0 + 0].custom_0   = l_in_screen;
+
+    triangle_vertex_buffer.vertices[out_i0 + 1].position_0 = d;
+    triangle_vertex_buffer.vertices[out_i0 + 1].color_0    = color;
+    triangle_vertex_buffer.vertices[out_i0 + 1].custom_0   = l_in_screen;
+
+    triangle_vertex_buffer.vertices[out_i0 + 2].position_0 = b;
+    triangle_vertex_buffer.vertices[out_i0 + 2].color_0    = color;
+    triangle_vertex_buffer.vertices[out_i0 + 2].custom_0   = l_in_screen;
+
+    triangle_vertex_buffer.vertices[out_i0 + 3].position_0 = b;
+    triangle_vertex_buffer.vertices[out_i0 + 3].color_0    = color;
+    triangle_vertex_buffer.vertices[out_i0 + 3].custom_0   = l_in_screen;
+
+    triangle_vertex_buffer.vertices[out_i0 + 4].position_0 = d;
+    triangle_vertex_buffer.vertices[out_i0 + 4].color_0    = color;
+    triangle_vertex_buffer.vertices[out_i0 + 4].custom_0   = l_in_screen;
+
+    triangle_vertex_buffer.vertices[out_i0 + 5].position_0 = c;
+    triangle_vertex_buffer.vertices[out_i0 + 5].color_0    = color;
+    triangle_vertex_buffer.vertices[out_i0 + 5].custom_0   = l_in_screen;
+}
+
+void main(void)
+{
+    uint in_line_index = gl_GlobalInvocationID.x;
+    if (in_line_index >= view.edge_count) {
+        return;
+    }
+    uint out_triangle_index = 2 * in_line_index;
+    do_wide_line(in_line_index, out_triangle_index);
+}

@@ -244,7 +244,7 @@ void Id_renderer::render(const Render_parameters& parameters)
     Scoped_debug_group debug_group{"Id_renderer::render()"};
     Scoped_gpu_timer   timer      {m_gpu_timer};
 
-    const auto projection_transforms = camera.projection_transforms(viewport, parameters.reverse_depth);
+    const auto projection_transforms = camera.projection_transforms(viewport, parameters.reverse_depth, parameters.depth_range, parameters.framebuffer_origin, parameters.ndc_y_direction);
     const mat4 clip_from_world       = projection_transforms.clip_from_world.get_matrix();
 
     Transfer_entry& entry = get_current_transfer_entry();
@@ -264,7 +264,8 @@ void Id_renderer::render(const Render_parameters& parameters)
         glm::vec4{0.0f},
         glm::vec4{0.0f},
         0,
-        parameters.reverse_depth
+        parameters.reverse_depth,
+        parameters.depth_range
     );
 
     // Render

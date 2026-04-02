@@ -235,7 +235,8 @@ void Brush_preview::render_preview(
         viewport,
         erhe::math::Viewport{},
         m_shadow_texture,
-        get_reverse_depth()
+        get_reverse_depth(),
+        get_depth_range()
     );
 
     {

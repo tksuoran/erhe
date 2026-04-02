@@ -3,7 +3,7 @@
 from __future__ import annotations
 from typing import Optional
 
-from erhe_codegen.schema import StructSchema, FieldSchema
+from erhe_codegen.schema import StructSchema, FieldSchema, get_struct_registry, get_enum_registry
 from erhe_codegen.types import (
     TypeBase, ScalarType, GlmType, VectorType, ArrayType, OptionalType,
     StructRefType, EnumRefType, String,
@@ -213,13 +213,17 @@ def emit_struct_hpp(s: StructSchema) -> str:
         lines.append("#include <glm/glm.hpp>")
         lines.append("")
 
-    # StructRef includes
+    # StructRef includes (with include_prefix for external types)
     struct_refs = _collect_struct_refs(s)
     enum_refs = _collect_enum_refs(s)
+    struct_registry = get_struct_registry()
+    enum_registry = get_enum_registry()
     for ref in struct_refs:
-        lines.append(f'#include "{_to_snake_case(ref)}.hpp"')
+        prefix = struct_registry[ref].include_prefix if ref in struct_registry else ""
+        lines.append(f'#include "{prefix}{_to_snake_case(ref)}.hpp"')
     for ref in enum_refs:
-        lines.append(f'#include "{_to_snake_case(ref)}.hpp"')
+        prefix = enum_registry[ref].include_prefix if ref in enum_registry else ""
+        lines.append(f'#include "{prefix}{_to_snake_case(ref)}.hpp"')
     if struct_refs or enum_refs:
         lines.append("")
 

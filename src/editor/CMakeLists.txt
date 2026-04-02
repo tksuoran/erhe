@@ -10,8 +10,7 @@ erhe_target_sources_grouped(
     settings.json
     windows.json
 
-    config/editor_config.hpp
-    config/editor_config.cpp
+    # config/editor_config.hpp and .cpp removed -- replaced by codegen'd Erhe_config and Editor_settings_config
 
     animation/animation_curve.cpp
     animation/animation_curve.hpp
@@ -224,6 +223,7 @@ erhe_target_sources_grouped(
     res/shaders/circular_brushed_metal.vert
     res/shaders/compose.frag
     res/shaders/compute_before_line.comp
+    res/shaders/compute_before_content_line.comp
     res/shaders/depth_only.frag
     res/shaders/depth_only.vert
     res/shaders/downsample.frag
@@ -241,9 +241,6 @@ erhe_target_sources_grouped(
     res/shaders/erhe_tonemap.glsl
     res/shaders/error.frag
     res/shaders/error.vert
-    res/shaders/fat_triangle.frag
-    res/shaders/fat_triangle.geom
-    res/shaders/fat_triangle.vert
     res/shaders/grid.frag
     res/shaders/grid.vert
     res/shaders/id.frag
@@ -471,13 +468,18 @@ source_group("codegen generated/scene" FILES ${_codegen_sources})
 set(_config_defs "${CMAKE_CURRENT_SOURCE_DIR}/config/definitions")
 set(_config_out  "${CMAKE_CURRENT_BINARY_DIR}/config/generated")
 
+set(_gfx_config_defs "${CMAKE_SOURCE_DIR}/src/erhe/graphics/definitions")
+
 erhe_codegen_generate(
     TARGET          ${_target}
     DEFINITIONS_DIR "${_config_defs}"
     OUTPUT_DIR      "${_config_out}"
+    EXTRA_DEFINITIONS_DIRS "${_gfx_config_defs}:erhe_graphics/generated/"
     DEFINITIONS
         "${_config_defs}/camera_controls_config.py"
         "${_config_defs}/developer_config.py"
+        "${_config_defs}/erhe_config.py"
+        "${_config_defs}/editor_settings_config.py"
         "${_config_defs}/grid_config.py"
         "${_config_defs}/headset_config.py"
         "${_config_defs}/hotbar_config.py"
@@ -586,6 +588,12 @@ set(_config_sources
     ${_config_out}/fly_camera_config.hpp
     ${_config_out}/fly_camera_config_serialization.hpp
     ${_config_out}/fly_camera_config.cpp
+    ${_config_out}/erhe_config.hpp
+    ${_config_out}/erhe_config_serialization.hpp
+    ${_config_out}/erhe_config.cpp
+    ${_config_out}/editor_settings_config.hpp
+    ${_config_out}/editor_settings_config_serialization.hpp
+    ${_config_out}/editor_settings_config.cpp
 )
 set_source_files_properties(${_config_sources} PROPERTIES GENERATED TRUE)
 target_sources(${_target} PRIVATE ${_config_sources})

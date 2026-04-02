@@ -7,7 +7,7 @@
 mkdir -p build/ninja
 cmake \
     -G "Xcode" \
-    -B build/xcode \
+    -B build_xcode_opengl_asan \
     -S . \
     -DCMAKE_EXPORT_COMPILE_COMMANDS=1 \
     -Wno-dev \
@@ -18,11 +18,11 @@ cmake \
     -DERHE_GRAPHICS_LIBRARY=opengl \
     -DERHE_PHYSICS_LIBRARY=jolt \
     -DERHE_PROFILE_LIBRARY=none \
-    -DERHE_RAYTRACE_LIBRARY=tinybvh \
+    -DERHE_RAYTRACE_LIBRARY=bvh \
     -DERHE_SVG_LIBRARY=plutosvg \
     -DERHE_TEXT_LAYOUT_LIBRARY=harfbuzz \
     -DERHE_WINDOW_LIBRARY=sdl \
     -DERHE_XR_LIBRARY=none \
-    -DERHE_USE_ASAN:BOOL=OFF \
+    -DERHE_USE_ASAN:BOOL=ON \
     -DERHE_SPIRV=OFF \
     -DERHE_BUILD_TESTS=ON

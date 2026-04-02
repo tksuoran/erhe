@@ -72,7 +72,6 @@ Programs::Programs(erhe::graphics::Device& graphics_device)
     , textured                {graphics_device, "textured-not_loaded"}
     , sky                     {graphics_device, "sky-not_loaded"}
     , grid                    {graphics_device, "grid-not_loaded"}
-    , fat_triangle            {graphics_device, "fat_triangle-not_loaded"}
     , wide_lines_draw_color   {graphics_device, "wide_lines_draw_color-not_loaded"}
     , wide_lines_vertex_color {graphics_device, "wide_lines_vertex_color-not_loaded"}
     , points                  {graphics_device, "points-not_loaded"}
@@ -143,12 +142,11 @@ void Programs::load_programs(
     add_shader(textured                , CI{ .name = "textured"                , .default_uniform_block = &default_uniform_block } );
     add_shader(sky                     , CI{ .name = "sky"                     , .default_uniform_block = &default_uniform_block } );
     add_shader(grid                    , CI{ .name = "grid"                    , .default_uniform_block = &default_uniform_block } );
-    add_shader(fat_triangle            , CI{ .name = "fat_triangle"            , .defines = {
-        { "ERHE_LINE_SHADER_SHOW_DEBUG_LINES",        "0"},
-        { "ERHE_LINE_SHADER_PASSTHROUGH_BASIC_LINES", "0"},
-        { "ERHE_LINE_SHADER_STRIP",                   "1"}}});
-    add_shader(wide_lines_draw_color   , CI{ .name = "wide_lines"              , .defines = {{"ERHE_USE_DRAW_COLOR",   "1"}}});
-    add_shader(wide_lines_vertex_color , CI{ .name = "wide_lines"              , .defines = {{"ERHE_USE_VERTEX_COLOR", "1"}}});
+    // wide_lines shaders use geometry shaders which are not supported on Metal
+    if (!graphics_device.get_info().use_compute_shader) {
+        add_shader(wide_lines_draw_color   , CI{ .name = "wide_lines"              , .defines = {{"ERHE_USE_DRAW_COLOR",   "1"}}});
+        add_shader(wide_lines_vertex_color , CI{ .name = "wide_lines"              , .defines = {{"ERHE_USE_VERTEX_COLOR", "1"}}});
+    }
     add_shader(points                  , CI{ .name = "points" } );
     add_shader(id                      , CI{ .name = "id"     } );
     add_shader(tool                    , CI{ .name = "tool"   } );

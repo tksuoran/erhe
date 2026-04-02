@@ -61,9 +61,13 @@ Debug_renderer_program_interface::Debug_renderer_program_interface(erhe::graphic
         erhe::graphics::Shader_resource::Type::uniform_block
     );
 
-    clip_from_world_offset = view_block->add_mat4("clip_from_world")->get_offset_in_parent();
-    viewport_offset        = view_block->add_vec4("viewport"       )->get_offset_in_parent();
-    fov_offset             = view_block->add_vec4("fov"            )->get_offset_in_parent();
+    clip_from_world_offset = view_block->add_mat4 ("clip_from_world")->get_offset_in_parent();
+    viewport_offset        = view_block->add_vec4 ("viewport"      )->get_offset_in_parent();
+    fov_offset             = view_block->add_vec4 ("fov"           )->get_offset_in_parent();
+    vp_y_sign_offset       = view_block->add_float("vp_y_sign"    )->get_offset_in_parent();
+    padding0_offset        = view_block->add_float("_padding0"    )->get_offset_in_parent();
+    padding1_offset        = view_block->add_float("_padding1"    )->get_offset_in_parent();
+    padding2_offset        = view_block->add_float("_padding2"    )->get_offset_in_parent();
 
     const auto shader_path = std::filesystem::path("res") / std::filesystem::path("shaders");
 
@@ -242,7 +246,7 @@ void Debug_renderer::begin_frame(const erhe::math::Viewport viewport, const erhe
     const auto* camera_node = camera.get_node();
     ERHE_VERIFY(camera_node != nullptr);
 
-    const erhe::scene::Camera_projection_transforms projection_transforms = camera.projection_transforms(viewport);
+    const erhe::scene::Camera_projection_transforms projection_transforms = camera.projection_transforms(viewport, true, erhe::math::Depth_range::zero_to_one);
     const glm::mat4                                 clip_from_world       = projection_transforms.clip_from_world.get_matrix();
     const erhe::scene::Projection::Fov_sides        fov_sides             = camera.projection()->get_fov_sides(viewport);
 

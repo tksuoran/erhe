@@ -10,11 +10,12 @@
 
 namespace erhe::imgui { class Imgui_windows; }
 
+struct Graphics_preset_entry;
+
 namespace editor {
 
 class App_context;
 class App_message_bus;
-class Graphics_preset;
 
 class Settings_window : public erhe::imgui::Imgui_window, public Property_editor
 {
@@ -30,7 +31,7 @@ public:
     void imgui() override;
 
 private:
-    [[nodiscard]] auto get_graphics_preset() -> Graphics_preset&;
+    [[nodiscard]] auto get_graphics_preset() -> Graphics_preset_entry&;
     void update_preset_names();
 
     erhe::message_bus::Subscription<Graphics_settings_message> m_graphics_settings_subscription;

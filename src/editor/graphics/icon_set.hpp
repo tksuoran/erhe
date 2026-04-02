@@ -15,7 +15,6 @@ namespace erhe::scene { enum class Light_type : unsigned int; }
 namespace editor {
 
 class App_context;
-class Icon_settings;
 
 class Icons
 {

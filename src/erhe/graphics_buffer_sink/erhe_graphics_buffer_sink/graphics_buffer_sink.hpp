@@ -4,6 +4,7 @@
 #include "erhe_primitive/buffer_sink.hpp"
 #include "erhe_profile/profile.hpp"
 
+#include <memory>
 #include <mutex>
 #include <vector>
 
@@ -27,30 +28,37 @@ public:
     Graphics_buffer_sink(
         erhe::graphics::Buffer_transfer_queue&         buffer_transfer_queue,
         std::initializer_list<erhe::graphics::Buffer*> vertex_buffers,
-        erhe::graphics::Buffer*                        index_buffer
+        erhe::graphics::Buffer*                        index_buffer,
+        erhe::graphics::Buffer*                        edge_line_vertex_buffer = nullptr
     );
 
-    [[nodiscard]] auto allocate_vertex_buffer(std::size_t stream, std::size_t vertex_count, std::size_t vertex_element_size) -> erhe::primitive::Buffer_sink_allocation override;
-    [[nodiscard]] auto allocate_index_buffer (std::size_t index_count, std::size_t index_element_size) -> erhe::primitive::Buffer_sink_allocation override;
+    [[nodiscard]] auto allocate_vertex_buffer          (std::size_t stream, std::size_t vertex_count, std::size_t vertex_element_size) -> erhe::primitive::Buffer_sink_allocation override;
+    [[nodiscard]] auto allocate_index_buffer            (std::size_t index_count, std::size_t index_element_size) -> erhe::primitive::Buffer_sink_allocation override;
+    [[nodiscard]] auto allocate_edge_line_vertex_buffer (std::size_t vertex_count, std::size_t vertex_element_size) -> erhe::primitive::Buffer_sink_allocation override;
 
-    void enqueue_vertex_data            (std::size_t stream, std::size_t offset, std::vector<uint8_t>&& data) const override;
-    void enqueue_index_data             (std::size_t offset, std::vector<uint8_t>&& data)                     const override;
-    void buffer_ready                   (erhe::primitive::Vertex_buffer_writer& writer)                       const override;
-    void buffer_ready                   (erhe::primitive::Index_buffer_writer&  writer)                       const override;
-    auto get_used_vertex_byte_count     (std::size_t stream) const -> std::size_t                                   override;
-    auto get_available_vertex_byte_count(std::size_t stream, std::size_t alignment) const -> std::size_t            override;
-    auto get_used_index_byte_count      () const -> std::size_t                                                     override;
-    auto get_available_index_byte_count (std::size_t alignment) const -> std::size_t                                override;
+    void enqueue_vertex_data                     (std::size_t stream, std::size_t offset, std::vector<uint8_t>&& data) const override;
+    void enqueue_index_data                      (std::size_t offset, std::vector<uint8_t>&& data)                     const override;
+    void enqueue_edge_line_vertex_data           (std::size_t offset, std::vector<uint8_t>&& data)                     const override;
+    void buffer_ready                            (erhe::primitive::Vertex_buffer_writer& writer)                       const override;
+    void buffer_ready                            (erhe::primitive::Index_buffer_writer&  writer)                       const override;
+    auto get_used_vertex_byte_count              (std::size_t stream) const -> std::size_t                                   override;
+    auto get_available_vertex_byte_count         (std::size_t stream, std::size_t alignment) const -> std::size_t            override;
+    auto get_used_index_byte_count               () const -> std::size_t                                                     override;
+    auto get_available_index_byte_count          (std::size_t alignment) const -> std::size_t                                override;
+    auto get_available_edge_line_vertex_byte_count(std::size_t alignment) const -> std::size_t                               override;
 
-    [[nodiscard]] auto get_vertex_allocator(std::size_t stream) -> erhe::buffer::Free_list_allocator&;
-    [[nodiscard]] auto get_index_allocator ()                   -> erhe::buffer::Free_list_allocator&;
+    [[nodiscard]] auto get_vertex_allocator          (std::size_t stream) -> erhe::buffer::Free_list_allocator&;
+    [[nodiscard]] auto get_index_allocator            ()                  -> erhe::buffer::Free_list_allocator&;
+    [[nodiscard]] auto get_edge_line_vertex_allocator () -> erhe::buffer::Free_list_allocator*;
 
 private:
-    mutable ERHE_PROFILE_MUTEX(std::mutex,        m_mutex);
-    erhe::graphics::Buffer_transfer_queue&        m_buffer_transfer_queue;
-    erhe::graphics::Buffer*                       m_index_buffer;
-    erhe::buffer::Free_list_allocator             m_index_allocator;
-    std::vector<Vertex_buffer_entry>              m_vertex_entries;
+    mutable ERHE_PROFILE_MUTEX(std::mutex,                  m_mutex);
+    erhe::graphics::Buffer_transfer_queue&                  m_buffer_transfer_queue;
+    erhe::graphics::Buffer*                                 m_index_buffer;
+    erhe::buffer::Free_list_allocator                       m_index_allocator;
+    std::vector<Vertex_buffer_entry>                        m_vertex_entries;
+    erhe::graphics::Buffer*                                 m_edge_line_vertex_buffer{nullptr};
+    std::unique_ptr<erhe::buffer::Free_list_allocator>      m_edge_line_vertex_allocator;
 };
 
 } // namespace erhe::graphics_buffer_sink

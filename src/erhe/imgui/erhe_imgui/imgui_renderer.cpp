@@ -85,7 +85,6 @@ void main()
     vec2 translate     = draw.translate.xy;
     vec4 clip_rect     = draw.draw_parameters[ERHE_DRAW_ID].clip_rect;
     gl_Position        = vec4(a_position * scale + translate, 0, 1);
-    gl_Position.y      = -gl_Position.y;
     gl_ClipDistance[0] = a_position.x - clip_rect[0];
     gl_ClipDistance[1] = a_position.y - clip_rect[1];
     gl_ClipDistance[2] = clip_rect[2] - a_position.x;
@@ -208,6 +207,7 @@ Imgui_renderer::Imgui_renderer(erhe::graphics::Device& graphics_device, Imgui_se
             graphics_device,
             erhe::graphics::Shader_stages_create_info{
                 .name                  = "ImGui Renderer",
+                .defines               = {},
                 .struct_types          = { &m_imgui_program_interface.draw_parameter_struct },
                 .interface_blocks      = { &m_imgui_program_interface.draw_parameter_block },
                 .fragment_outputs      = &m_imgui_program_interface.fragment_outputs,
@@ -654,6 +654,22 @@ void Imgui_renderer::use_as_backend_renderer_on_context(ImGuiContext* imgui_cont
     colors[ImGuiCol_ModalWindowDimBg]       = ImVec4(0.80f, 0.80f, 0.80f, 0.35f);
 }
 
+auto Imgui_renderer::get_rtt_uv0() const -> glm::vec2
+{
+    // On OpenGL (bottom-left texture origin): V-flip needed because NDC Y-up
+    //   stores content bottom-up in texture, but ImGui widget top should show content top.
+    // On Metal (top-left texture origin): standard UVs because the Metal viewport
+    //   transform (1-y_ndc) places NDC Y=+1 at texture row 0, so content is stored top-down.
+    const bool bottom_left = (m_graphics_device.get_info().coordinate_conventions.texture_origin == erhe::math::Texture_origin::bottom_left);
+    return bottom_left ? glm::vec2{0.0f, 1.0f} : glm::vec2{0.0f, 0.0f};
+}
+
+auto Imgui_renderer::get_rtt_uv1() const -> glm::vec2
+{
+    const bool bottom_left = (m_graphics_device.get_info().coordinate_conventions.texture_origin == erhe::math::Texture_origin::bottom_left);
+    return bottom_left ? glm::vec2{1.0f, 0.0f} : glm::vec2{1.0f, 1.0f};
+}
+
 auto Imgui_renderer::get_font_atlas() -> ImFontAtlas*
 {
     return &m_font_atlas;
@@ -814,6 +830,8 @@ void Imgui_renderer::update_texture(ImTextureData* tex)
         log_imgui->trace("created texture {}", fmt::ptr(texture.get()));
 
         // Upload pixel data
+#if defined(ERHE_OS_OSX) && defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+        // macOS GL driver has broken glCopyBufferSubData; use direct upload
         m_graphics_device.upload_to_texture(
             *texture.get(),
             0,                    // level
@@ -824,6 +842,35 @@ void Imgui_renderer::update_texture(ImTextureData* tex)
             tex->GetPixels(),
             tex->GetPitch()       // row_stride
         );
+#else
+        {
+            const std::span<const std::uint8_t> src_span{
+                static_cast<const std::uint8_t*>(tex->GetPixels()),
+                static_cast<size_t>(tex->GetSizeInBytes())
+            };
+            std::size_t                        byte_count = src_span.size_bytes();
+            erhe::graphics::Ring_buffer_client texture_upload_buffer{m_graphics_device, erhe::graphics::Buffer_target::transfer_src, "font upload"};
+            erhe::graphics::Ring_buffer_range  buffer_range = texture_upload_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, byte_count);
+            std::span<std::byte>               dst_span     = buffer_range.get_span();
+            memcpy(dst_span.data(), src_span.data(), byte_count);
+            buffer_range.bytes_written(byte_count);
+            buffer_range.close();
+
+            erhe::graphics::Blit_command_encoder encoder{m_graphics_device};
+            encoder.copy_from_buffer(
+                buffer_range.get_buffer()->get_buffer(),          // source_buffer
+                buffer_range.get_byte_start_offset_in_buffer(),   // source_offset
+                tex->GetPitch(),                                  // source_bytes_per_row
+                tex->GetSizeInBytes(),                            // source_bytes_per_image
+                glm::ivec3{tex->Width, tex->Height, 1},           // source_size
+                texture.get(),                                    // destination_texture
+                0,                                                // destination_slice
+                0,                                                // destination_level
+                glm::ivec3{0, 0, 0}                               // destination_origin
+            );
+            buffer_range.release();
+        }
+#endif
 
         tex->SetTexID(
             Erhe_ImTextureID{
@@ -845,6 +892,7 @@ void Imgui_renderer::update_texture(ImTextureData* tex)
         ERHE_VERIFY(texture != nullptr);
         log_imgui->trace("updating texture {}", fmt::ptr(texture));
 
+#if defined(ERHE_OS_OSX) && defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
         auto update_rect = [this, texture, tex](ImTextureRect& r) -> void
         {
             const std::size_t  src_offset = r.x * tex->BytesPerPixel + r.y * tex->GetPitch();
@@ -859,6 +907,38 @@ void Imgui_renderer::update_texture(ImTextureData* tex)
                 tex->GetPitch()       // row_stride
             );
         };
+#else
+        erhe::graphics::Blit_command_encoder encoder{m_graphics_device};
+        auto update_rect = [this, &encoder, texture, tex](ImTextureRect& r) -> void
+        {
+            const std::span<const std::uint8_t> src_span{
+                static_cast<const std::uint8_t*>(tex->GetPixels()),
+                static_cast<size_t>(tex->GetSizeInBytes())
+            };
+            const std::size_t buffer_offset = r.x * tex->BytesPerPixel + r.y * tex->GetPitch();
+            const std::size_t byte_count    = src_span.size_bytes();
+
+            erhe::graphics::Ring_buffer_client texture_upload_buffer{m_graphics_device, erhe::graphics::Buffer_target::transfer_src, "ImGui Draw Texture Update"};
+            erhe::graphics::Ring_buffer_range  buffer_range = texture_upload_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, byte_count);
+            std::span<std::byte>               dst_span     = buffer_range.get_span();
+            memcpy(dst_span.data(), src_span.data(), byte_count);
+            buffer_range.bytes_written(byte_count);
+            buffer_range.close();
+
+            encoder.copy_from_buffer(
+                buffer_range.get_buffer()->get_buffer(),                        // source_buffer
+                buffer_range.get_byte_start_offset_in_buffer() + buffer_offset, // source_offset
+                tex->GetPitch(),                                                // source_bytes_per_row
+                tex->GetSizeInBytes(),                                          // source_bytes_per_image
+                glm::ivec3{r.w, r.h, 1},                                        // source_size
+                texture,                                                        // destination_texture
+                0,                                                              // destination_slice
+                0,                                                              // destination_level
+                glm::ivec3{r.x, r.y, 0}                                         // destination_origin
+            );
+            buffer_range.release();
+        };
+#endif
 
         if (tex->Updates.Size < 20) {
             for (ImTextureRect& r : tex->Updates) {
@@ -934,13 +1014,15 @@ void Imgui_renderer::render_draw_data(erhe::graphics::Render_command_encoder& re
     const auto& draw_parameter_struct_offsets = program.draw_parameter_struct_offsets;
     const auto  draw_parameter_entry_size     = program.draw_parameter_struct.get_size_bytes();
 
+    // Negate Y scale and translate to map ImGui Y-down to NDC Y-up.
+    // This replaces the shader-side gl_Position.y negate.
     const float scale[2] = {
-        2.0f / draw_data->DisplaySize.x,
-        2.0f / draw_data->DisplaySize.y
+         2.0f / draw_data->DisplaySize.x,
+        -2.0f / draw_data->DisplaySize.y
     };
     const float translate[2] = {
         -1.0f - draw_data->DisplayPos.x * scale[0],
-        -1.0f - draw_data->DisplayPos.y * scale[1]
+         1.0f - draw_data->DisplayPos.y * scale[1]
     };
 
     using Ring_buffer_range = erhe::graphics::Ring_buffer_range;

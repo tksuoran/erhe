@@ -37,9 +37,13 @@ public:
     std::vector<Buffer_range> vertex_buffer_ranges{};
     Buffer_range              index_buffer_range  {};
 
+    // Edge line vertex pairs (consecutive pairs of vec4 positions in object-local space)
+    Buffer_range              edge_line_vertex_buffer_range{};
+
     // RAII allocation handles - freed back to allocator on destruction
     std::vector<erhe::buffer::Buffer_allocation> vertex_allocations{};
     erhe::buffer::Buffer_allocation              index_allocation  {};
+    erhe::buffer::Buffer_allocation              edge_line_vertex_allocation{};
 };
 
 } // namespace erhe::primitive

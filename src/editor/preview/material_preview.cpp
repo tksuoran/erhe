@@ -174,7 +174,8 @@ void Material_preview::render_preview(const std::shared_ptr<erhe::primitive::Mat
         viewport,
         erhe::math::Viewport{},
         m_shadow_texture,
-        get_reverse_depth()
+        get_reverse_depth(),
+        get_depth_range()
     );
 
     erhe::graphics::Render_command_encoder render_encoder = m_graphics_device.make_render_command_encoder();
@@ -213,9 +214,11 @@ void Material_preview::show_preview()
 {
     m_context.imgui_renderer->image(
         erhe::imgui::Draw_texture_parameters{
-            .texture_reference = m_color_texture, //std::static_pointer_cast<erhe::graphics::Texture_reference>(m_color_texture),
+            .texture_reference = m_color_texture,
             .width             = m_width,
             .height            = m_height,
+            .uv0               = m_context.imgui_renderer->get_rtt_uv0(),
+            .uv1               = m_context.imgui_renderer->get_rtt_uv1(),
             .debug_label       = "Material_preview::show_preview()"
         }
     );

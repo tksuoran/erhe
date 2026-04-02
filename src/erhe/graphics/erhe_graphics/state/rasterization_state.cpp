@@ -19,6 +19,15 @@ Rasterization_state Rasterization_state::cull_mode_front_ccw       {false, true,
 Rasterization_state Rasterization_state::cull_mode_back_cw         {false, true,  Cull_face_mode::back,  Front_face_direction::cw,  Polygon_mode::fill};
 Rasterization_state Rasterization_state::cull_mode_back_ccw        {false, true,  Cull_face_mode::back,  Front_face_direction::ccw, Polygon_mode::fill};
 
+auto Rasterization_state::with_winding_flip() const -> Rasterization_state
+{
+    Rasterization_state result = *this;
+    result.front_face_direction = (front_face_direction == Front_face_direction::ccw)
+        ? Front_face_direction::cw
+        : Front_face_direction::ccw;
+    return result;
+}
+
 auto operator==(const Rasterization_state& lhs, const Rasterization_state& rhs) noexcept -> bool
 {
     return

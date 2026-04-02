@@ -433,8 +433,10 @@ void Font::trace_info() const
     log_font->trace("patents       {}", (FT_Face_CheckTrueTypePatents(face) == 1) ? "yes" : "no");
 }
 #else
-Font::Font(const std::filesystem::path&, const unsigned int, const float) {}
-void Font::render(){}
+Font::Font(erhe::graphics::Device& graphics_device, const std::filesystem::path&, const unsigned int, const float)
+    : m_graphics_device{graphics_device}
+{}
+auto Font::render() -> bool { return false; }
 void Font::trace_info() const {}
 #endif
 
@@ -519,7 +521,8 @@ auto Font::print(
     std::string_view    text,
     glm::vec3           text_position,
     const uint32_t      text_color,
-    Rectangle&          out_bounds
+    Rectangle&          out_bounds,
+    const float         y_scale
 ) const -> size_t
 {
     if ((text_position.z < -1.0f) || (text_position.z >  1.0f))
@@ -584,11 +587,11 @@ auto Font::print(
                 const int w  = font_char.width;
                 const int h  = font_char.height;
                 const int ox = font_char.b_left;
-                const int oy = font_char.b_bottom + t + b;
+                const int oy = static_cast<int>(static_cast<float>(font_char.b_bottom + t + b) * y_scale);
                 const int x0 = static_cast<int>(text_position.x) + x_offset + ox;
                 const int y0 = static_cast<int>(text_position.y) + y_offset + oy;
                 const int x1 = x0 + w;
-                const int y1 = y0 + h;
+                const int y1 = y0 + static_cast<int>(static_cast<float>(h) * y_scale);
 
                 //  3---2
                 //  |  /|
@@ -723,13 +726,16 @@ auto Font::measure(const std::string_view text) const -> Rectangle
 }
 #else
 auto Font::print(
-    std::span<float>    ,
     std::span<uint32_t> ,
     std::string_view    ,
     glm::vec3           ,
-    const uint32_t      ,
+    uint32_t            ,
     Rectangle&
 ) const -> size_t
+{
+    return 0;
+}
+auto Font::get_glyph_count(const std::string_view) const -> size_t
 {
     return 0;
 }

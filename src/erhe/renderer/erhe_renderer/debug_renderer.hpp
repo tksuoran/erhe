@@ -61,6 +61,10 @@ public:
     std::size_t                                      clip_from_world_offset{0};
     std::size_t                                      viewport_offset       {0};
     std::size_t                                      fov_offset            {0};
+    std::size_t                                      vp_y_sign_offset      {0};
+    std::size_t                                      padding0_offset       {0};
+    std::size_t                                      padding1_offset       {0};
+    std::size_t                                      padding2_offset       {0};
 };
 
 class Primitive_renderer;

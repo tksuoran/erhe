@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from erhe_codegen.schema import StructSchema, FieldSchema
+from erhe_codegen.schema import StructSchema, FieldSchema, get_struct_registry
 from erhe_codegen.types import (
     TypeBase, ScalarType, GlmType, VectorType, ArrayType, OptionalType,
     StructRefType, EnumRefType,
@@ -246,8 +246,10 @@ def emit_struct_cpp(s: StructSchema) -> str:
 
     # Include serialization headers for referenced structs (needed for their serialize/deserialize)
     struct_refs = _collect_struct_refs(s)
+    struct_registry = get_struct_registry()
     for ref in struct_refs:
-        lines.append(f'#include "{_to_snake_case(ref)}_serialization.hpp"')
+        prefix = struct_registry[ref].include_prefix if ref in struct_registry else ""
+        lines.append(f'#include "{prefix}{_to_snake_case(ref)}_serialization.hpp"')
 
     lines.append("")
     lines.append("#include <cstddef>")

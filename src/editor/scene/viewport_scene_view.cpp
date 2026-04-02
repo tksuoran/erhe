@@ -8,12 +8,15 @@
 #include "app_message_bus.hpp"
 #include "app_rendering.hpp"
 #include "app_scenes.hpp"
+#include "renderers/composition_pass.hpp"
 #include "renderers/id_renderer.hpp"
 #include "renderers/programs.hpp"
+#include "renderers/render_style.hpp"
 #include "renderers/render_context.hpp"
 #include "rendergraph/shadow_render_node.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/viewport_scene_views.hpp"
+#include "time.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
 #include "transform/transform_tool.hpp"
@@ -39,6 +42,8 @@
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/scene.hpp"
+#include "erhe_scene_renderer/content_wide_line_renderer.hpp"
+#include "erhe_scene_renderer/primitive_buffer.hpp"
 #include "erhe_utility/bit_helpers.hpp"
 
 #include <glm/gtx/matrix_operation.hpp>
@@ -146,6 +151,9 @@ void Viewport_scene_view::execute_rendergraph_node()
 
     if (do_render) {
         m_context.debug_renderer->begin_frame(context.viewport, *context.camera);
+        if (m_context.content_wide_line_renderer != nullptr && m_context.content_wide_line_renderer->is_enabled()) {
+            m_context.content_wide_line_renderer->begin_frame();
+        }
 
         m_context.tools         ->render_viewport_tools(context);
         m_context.app_rendering ->render_viewport_renderables(context);
@@ -153,6 +161,72 @@ void Viewport_scene_view::execute_rendergraph_node()
         if (m_context.debug_renderer->use_compute()) {
             erhe::graphics::Compute_command_encoder compute_encoder = graphics_device.make_compute_command_encoder();
             m_context.debug_renderer->compute(compute_encoder);
+        }
+
+        // Content wide line compute (for Metal - all edge line passes)
+        if (m_context.content_wide_line_renderer != nullptr && m_context.content_wide_line_renderer->is_enabled()) {
+            const auto scene_root = context.scene_view.get_scene_root();
+            if (scene_root) {
+                erhe::scene::Scene* scene = scene_root->get_hosted_scene();
+                if (scene != nullptr) {
+                    // Helper to feed meshes from a composition pass to the content wide line renderer
+                    auto feed_pass = [&](const Composition_pass* pass) {
+                        if ((pass == nullptr) || !pass->use_content_wide_line_renderer || !pass->enabled) {
+                            return;
+                        }
+                        erhe::scene_renderer::Primitive_interface_settings settings;
+                        if (pass->primitive_settings.has_value()) {
+                            settings = pass->primitive_settings.value();
+                        } else if (pass->get_render_style) {
+                            const Render_style_data& style = pass->get_render_style(context);
+                            settings = style.get_primitive_settings(pass->primitive_mode);
+                        }
+                        const glm::vec4 color      = settings.constant_color0;
+                        const float     line_width = settings.constant_size;
+                        const auto&     filter     = pass->filter;
+                        const uint32_t  group      = pass->content_wide_line_group;
+
+                        for (const auto layer_id : pass->mesh_layers) {
+                            const auto mesh_layer = scene->get_mesh_layer_by_id(layer_id);
+                            if (mesh_layer) {
+                                for (const auto& mesh : mesh_layer->meshes) {
+                                    if (filter(mesh->get_flag_bits())) {
+                                        m_context.content_wide_line_renderer->add_mesh(*mesh, color, line_width, group);
+                                    }
+                                }
+                            }
+                        }
+                    };
+
+                    // Feed selection outline with animated color/width
+                    if (m_context.app_rendering->selection_outline) {
+                        const int64_t t0_ns  = m_context.time->get_host_system_time_ns();
+                        const double  t0     = static_cast<double>(t0_ns) / 1'000'000'000.0;
+                        const float   period = 1.0f / m_viewport_config.selection_highlight_frequency;
+                        const float   t1     = static_cast<float>(::fmod(t0, period));
+                        const float   t2     = static_cast<float>(0.5f + (2.0f * std::abs(2.0f * (t1 / period - std::floor(t1 / period + 0.5f))) - 1.0f) * 0.5f);
+                        const glm::vec4 outline_color = glm::mix(m_viewport_config.selection_highlight_low, m_viewport_config.selection_highlight_high, t2);
+                        const float     outline_width = m_viewport_config.selection_highlight_width_low * (1.0f - t2) + m_viewport_config.selection_highlight_width_high * t2;
+
+                        // Temporarily override primitive_settings for the animated outline
+                        m_context.app_rendering->selection_outline->primitive_settings = erhe::scene_renderer::Primitive_interface_settings{
+                            .color_source    = erhe::scene_renderer::Primitive_color_source::constant_color,
+                            .constant_color0 = outline_color,
+                            .size_source     = erhe::scene_renderer::Primitive_size_source::constant_size,
+                            .constant_size   = outline_width
+                        };
+                        feed_pass(m_context.app_rendering->selection_outline.get());
+                    }
+
+                    // Feed regular edge line passes
+                    feed_pass(m_context.app_rendering->opaque_edge_lines_not_selected.get());
+                    feed_pass(m_context.app_rendering->opaque_edge_lines_selected.get());
+                    feed_pass(m_context.app_rendering->translucent_outline.get());
+                }
+            }
+
+            erhe::graphics::Compute_command_encoder compute_encoder = graphics_device.make_compute_command_encoder();
+            m_context.content_wide_line_renderer->compute(compute_encoder, context.viewport, *context.camera);
         }
     }
 
@@ -184,6 +258,9 @@ void Viewport_scene_view::execute_rendergraph_node()
     m_context.app_rendering ->render_viewport_renderables(context); // This time with render encoder set
     m_context.debug_renderer->render(encoder, context.viewport);
     m_context.debug_renderer->end_frame();
+    if (m_context.content_wide_line_renderer != nullptr && m_context.content_wide_line_renderer->is_enabled()) {
+        m_context.content_wide_line_renderer->end_frame();
+    }
     m_context.text_renderer ->render(encoder, context.viewport);
 }
 
@@ -241,7 +318,7 @@ auto Viewport_scene_view::get_perspective_scale() const -> float
     if (!camera) {
         return 1.0f;
     }
-    const erhe::scene::Camera_projection_transforms camera_projection_transforms_ = camera->projection_transforms(m_projection_viewport, get_reverse_depth());
+    const erhe::scene::Camera_projection_transforms camera_projection_transforms_ = camera->projection_transforms(m_projection_viewport, get_reverse_depth(), get_depth_range(), get_framebuffer_origin(), get_ndc_y_direction());
     const glm::mat4 clip_from_view = camera_projection_transforms_.clip_from_camera.get_matrix();
     const glm::mat2 projection_top_left_2x2{clip_from_view};
     const glm::mat2 inverted_top_left_2x2 = glm::inverse(projection_top_left_2x2);
@@ -270,10 +347,15 @@ auto Viewport_scene_view::as_viewport_scene_view() const -> const Viewport_scene
 
 auto Viewport_scene_view::get_viewport_from_window(const glm::vec2 window_position) const -> glm::vec2
 {
-    const float content_x      = static_cast<float>(window_position.x) - m_window_viewport.x;
-    const float content_y      = static_cast<float>(window_position.y) - m_window_viewport.y;
-    const float content_flip_y = m_window_viewport.height - content_y;
-    return glm::vec2{content_x, content_flip_y};
+    const float content_x   = static_cast<float>(window_position.x) - m_window_viewport.x;
+    const float content_y   = static_cast<float>(window_position.y) - m_window_viewport.y;
+    const auto& conventions = m_context.graphics_device->get_info().coordinate_conventions;
+    // Window coordinates are top-left origin. OpenGL viewport is bottom-left, so Y must be flipped.
+    // Metal/Vulkan viewports are top-left, so no flip is needed.
+    const float viewport_y = (conventions.framebuffer_origin == erhe::math::Framebuffer_origin::bottom_left)
+        ? (m_window_viewport.height - content_y)
+        : content_y;
+    return glm::vec2{content_x, viewport_y};
 }
 
 auto Viewport_scene_view::project_to_viewport(const glm::vec3 position_in_world) const -> std::optional<glm::vec3>
@@ -282,7 +364,7 @@ auto Viewport_scene_view::project_to_viewport(const glm::vec3 position_in_world)
     if (!camera) {
         return {};
     }
-    const auto camera_projection_transforms = camera->projection_transforms(m_projection_viewport, get_reverse_depth());
+    const auto camera_projection_transforms = camera->projection_transforms(m_projection_viewport, get_reverse_depth(), get_depth_range(), get_framebuffer_origin(), get_ndc_y_direction());
     constexpr float depth_range_near = 0.0f;
     constexpr float depth_range_far  = 1.0f;
     return erhe::math::project_to_screen_space<float>(
@@ -303,7 +385,7 @@ auto Viewport_scene_view::unproject_to_world(const glm::vec3 position_in_window)
     if (!camera) {
         return {};
     }
-    const auto camera_projection_transforms = camera->projection_transforms(m_projection_viewport, get_reverse_depth());
+    const auto camera_projection_transforms = camera->projection_transforms(m_projection_viewport, get_reverse_depth(), get_depth_range(), get_framebuffer_origin(), get_ndc_y_direction());
     constexpr float depth_range_near = 0.0f;
     constexpr float depth_range_far  = 1.0f;
     return erhe::math::unproject<float>(
@@ -483,7 +565,7 @@ auto Viewport_scene_view::get_position_in_world_viewport_depth(const float viewp
         viewport_depth
     };
     const erhe::math::Viewport&                     vp                    = get_projection_viewport();
-    const erhe::scene::Camera_projection_transforms projection_transforms = camera->projection_transforms(vp, get_reverse_depth());
+    const erhe::scene::Camera_projection_transforms projection_transforms = camera->projection_transforms(vp, get_reverse_depth(), get_depth_range(), get_framebuffer_origin(), get_ndc_y_direction());
     const glm::mat4                                 world_from_clip       = projection_transforms.clip_from_world.get_inverse_matrix();
 
     return erhe::math::unproject<float>(

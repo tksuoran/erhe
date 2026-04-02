@@ -43,13 +43,15 @@ public:
     erhe::graphics::Buffer                           vertex_buffer_non_position;
     erhe::graphics::Buffer                           vertex_buffer_custom;
     erhe::graphics::Buffer                           index_buffer;
+    erhe::graphics::Buffer                           edge_line_vertex_buffer;
     erhe::graphics_buffer_sink::Graphics_buffer_sink graphics_buffer_sink;
     erhe::primitive::Buffer_info                     buffer_info;
     erhe::graphics::Vertex_input_state               vertex_input;
 
 private:
-    [[nodiscard]] auto get_vertex_buffer_size(const Mesh_memory_config& mesh_memory_config, std::size_t stream) const -> std::size_t;
-    [[nodiscard]] auto get_index_buffer_size(const Mesh_memory_config& mesh_memory_config) const -> std::size_t;
+    [[nodiscard]] auto get_vertex_buffer_size          (const Mesh_memory_config& mesh_memory_config, std::size_t stream) const -> std::size_t;
+    [[nodiscard]] auto get_index_buffer_size           (const Mesh_memory_config& mesh_memory_config) const -> std::size_t;
+    [[nodiscard]] auto get_edge_line_vertex_buffer_size(const Mesh_memory_config& mesh_memory_config) const -> std::size_t;
 };
 
 }

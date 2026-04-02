@@ -1,0 +1,17 @@
+{
+    "_version": 1,
+    "loggers": [
+        { "_version": 1, "name": "erhe.gl.trace",              "level": "off"     },
+        { "_version": 1, "name": "erhe.gl.debug",              "level": "warning" },
+        { "_version": 1, "name": "erhe.dataformat",            "level": "warning" },
+        { "_version": 1, "name": "erhe.file",                  "level": "info"    },
+        { "_version": 1, "name": "erhe.graphics.startup",      "level": "info"    },
+        { "_version": 1, "name": "erhe.graphics.program",      "level": "info"    },
+        { "_version": 1, "name": "erhe.renderer.render",       "level": "info"    },
+        { "_version": 1, "name": "erhe.renderer.startup",      "level": "info"    },
+        { "_version": 1, "name": "erhe.scene",                 "level": "warning" },
+        { "_version": 1, "name": "erhe.scene_renderer.render", "level": "info"    },
+        { "_version": 1, "name": "erhe.scene_renderer.startup","level": "info"    },
+        { "_version": 1, "name": "rendering_test",             "level": "trace"   }
+    ]
+}

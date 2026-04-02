@@ -7,9 +7,10 @@
 namespace erhe        { class Item_base; }
 namespace erhe::scene { class Node; }
 
+struct Graphics_preset_entry;
+
 namespace editor {
 
-class Graphics_preset;
 class Scene_root;
 class Scene_view;
 
@@ -46,7 +47,7 @@ struct Selection_message
 
 struct Graphics_settings_message
 {
-    Graphics_preset* graphics_preset{nullptr};
+    Graphics_preset_entry* graphics_preset{nullptr};
 };
 
 enum class Node_touch_source : int {

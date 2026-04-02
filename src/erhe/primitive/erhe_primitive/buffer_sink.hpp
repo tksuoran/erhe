@@ -35,17 +35,20 @@ class Buffer_sink
 public:
     virtual ~Buffer_sink() noexcept;
 
-    [[nodiscard]] virtual auto allocate_vertex_buffer(std::size_t stream, std::size_t vertex_count, std::size_t vertex_element_size) -> Buffer_sink_allocation = 0;
-    [[nodiscard]] virtual auto allocate_index_buffer (std::size_t index_count, std::size_t index_element_size) -> Buffer_sink_allocation = 0;
+    [[nodiscard]] virtual auto allocate_vertex_buffer          (std::size_t stream, std::size_t vertex_count, std::size_t vertex_element_size) -> Buffer_sink_allocation = 0;
+    [[nodiscard]] virtual auto allocate_index_buffer           (std::size_t index_count, std::size_t index_element_size) -> Buffer_sink_allocation = 0;
+    [[nodiscard]] virtual auto allocate_edge_line_vertex_buffer(std::size_t vertex_count, std::size_t vertex_element_size) -> Buffer_sink_allocation = 0;
 
-    virtual void enqueue_vertex_data            (std::size_t stream, std::size_t offset, std::vector<uint8_t>&& data) const = 0;
-    virtual void enqueue_index_data             (std::size_t offset, std::vector<uint8_t>&& data)                     const = 0;
-    virtual void buffer_ready                   (Vertex_buffer_writer& writer)                                        const = 0;
-    virtual void buffer_ready                   (Index_buffer_writer&  writer)                                        const = 0;
-    virtual auto get_used_vertex_byte_count     (std::size_t stream) const -> std::size_t                                   = 0;
-    virtual auto get_available_vertex_byte_count(std::size_t stream, std::size_t alignment) const -> std::size_t            = 0;
-    virtual auto get_used_index_byte_count      () const -> std::size_t                                                     = 0;
-    virtual auto get_available_index_byte_count (std::size_t alignment) const -> std::size_t                                = 0;
+    virtual void enqueue_vertex_data                     (std::size_t stream, std::size_t offset, std::vector<uint8_t>&& data) const = 0;
+    virtual void enqueue_index_data                      (std::size_t offset, std::vector<uint8_t>&& data)                     const = 0;
+    virtual void enqueue_edge_line_vertex_data           (std::size_t offset, std::vector<uint8_t>&& data)                     const = 0;
+    virtual void buffer_ready                            (Vertex_buffer_writer& writer)                                        const = 0;
+    virtual void buffer_ready                            (Index_buffer_writer&  writer)                                        const = 0;
+    virtual auto get_used_vertex_byte_count              (std::size_t stream) const -> std::size_t                                   = 0;
+    virtual auto get_available_vertex_byte_count         (std::size_t stream, std::size_t alignment) const -> std::size_t            = 0;
+    virtual auto get_used_index_byte_count               () const -> std::size_t                                                     = 0;
+    virtual auto get_available_index_byte_count          (std::size_t alignment) const -> std::size_t                                = 0;
+    virtual auto get_available_edge_line_vertex_byte_count(std::size_t alignment) const -> std::size_t                               = 0;
 };
 
 class Cpu_buffer_sink : public Buffer_sink
@@ -53,17 +56,20 @@ class Cpu_buffer_sink : public Buffer_sink
 public:
     Cpu_buffer_sink(std::initializer_list<erhe::buffer::Cpu_buffer*> vertex_buffers, erhe::buffer::Cpu_buffer& index_buffer);
 
-    auto allocate_vertex_buffer(std::size_t stream, std::size_t vertex_count, std::size_t vertex_element_size) -> Buffer_sink_allocation override;
-    auto allocate_index_buffer (std::size_t index_count, std::size_t index_element_size) -> Buffer_sink_allocation override;
+    auto allocate_vertex_buffer          (std::size_t stream, std::size_t vertex_count, std::size_t vertex_element_size) -> Buffer_sink_allocation override;
+    auto allocate_index_buffer           (std::size_t index_count, std::size_t index_element_size) -> Buffer_sink_allocation override;
+    auto allocate_edge_line_vertex_buffer(std::size_t vertex_count, std::size_t vertex_element_size) -> Buffer_sink_allocation override;
 
-    void enqueue_vertex_data            (std::size_t stream, std::size_t offset, std::vector<uint8_t>&& data) const override;
-    void enqueue_index_data             (std::size_t offset, std::vector<uint8_t>&& data)                     const override;
-    void buffer_ready                   (Vertex_buffer_writer& writer)                                        const override;
-    void buffer_ready                   (Index_buffer_writer&  writer)                                        const override;
-    auto get_used_vertex_byte_count     (std::size_t stream) const -> std::size_t                                   override;
-    auto get_available_vertex_byte_count(std::size_t stream, std::size_t alignment) const -> std::size_t            override;
-    auto get_used_index_byte_count      () const -> std::size_t                                                     override;
-    auto get_available_index_byte_count (std::size_t alignment) const -> std::size_t                                override;
+    void enqueue_vertex_data                     (std::size_t stream, std::size_t offset, std::vector<uint8_t>&& data) const override;
+    void enqueue_index_data                      (std::size_t offset, std::vector<uint8_t>&& data)                     const override;
+    void enqueue_edge_line_vertex_data           (std::size_t offset, std::vector<uint8_t>&& data)                     const override;
+    void buffer_ready                            (Vertex_buffer_writer& writer)                                        const override;
+    void buffer_ready                            (Index_buffer_writer&  writer)                                        const override;
+    auto get_used_vertex_byte_count              (std::size_t stream) const -> std::size_t                                   override;
+    auto get_available_vertex_byte_count         (std::size_t stream, std::size_t alignment) const -> std::size_t            override;
+    auto get_used_index_byte_count               () const -> std::size_t                                                     override;
+    auto get_available_index_byte_count          (std::size_t alignment) const -> std::size_t                                override;
+    auto get_available_edge_line_vertex_byte_count(std::size_t alignment) const -> std::size_t                               override;
 
 private:
     mutable ERHE_PROFILE_MUTEX(std::mutex, m_mutex);

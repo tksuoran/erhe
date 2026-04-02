@@ -931,6 +931,14 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         gl::clip_control(gl::Clip_control_origin::lower_left, gl::Clip_control_depth::zero_to_one);
     }
 
+    // Populate coordinate conventions for OpenGL
+    m_info.coordinate_conventions.framebuffer_origin = erhe::math::Framebuffer_origin::bottom_left;
+    m_info.coordinate_conventions.ndc_y_direction    = erhe::math::Ndc_y_direction::up;
+    m_info.coordinate_conventions.texture_origin     = erhe::math::Texture_origin::bottom_left;
+    m_info.coordinate_conventions.native_depth_range = m_info.use_clip_control
+        ? erhe::math::Depth_range::zero_to_one
+        : erhe::math::Depth_range::negative_one_to_one;
+
     if (
         (surface_create_info.context_window != nullptr) &&
         (surface_create_info.context_window->get_window_configuration().color_bit_depth <= 8)
