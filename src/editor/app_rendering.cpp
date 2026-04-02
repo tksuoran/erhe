@@ -9,6 +9,7 @@
 #include "renderers/composer.hpp"
 #include "renderers/id_renderer.hpp"
 #include "erhe_renderer/text_renderer.hpp"
+#include "erhe_scene_renderer/content_wide_line_renderer.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "renderers/programs.hpp"
 #include "renderers/render_context.hpp"
@@ -181,7 +182,9 @@ App_rendering::App_rendering(
         get_render_pipeline_state(*opaque_fill_selected_negative_determinant.get(), Blend_mode::opaque, true, true)
     );
 
-    auto opaque_edge_lines_not_selected = make_composition_pass("Content edge lines opaque not selected");
+    const bool use_compute_wide_lines = graphics_device.get_info().use_compute_shader;
+
+    opaque_edge_lines_not_selected = make_composition_pass("Content edge lines opaque not selected");
     opaque_edge_lines_not_selected->mesh_layers      = { Mesh_layer_id::content };
     opaque_edge_lines_not_selected->primitive_mode   = Primitive_mode::edge_lines;
     opaque_edge_lines_not_selected->filter           = opaque_not_selected_filter;
@@ -190,8 +193,10 @@ App_rendering::App_rendering(
         get_render_pipeline_state(*opaque_edge_lines_not_selected.get(), Blend_mode::opaque, false, false)
     );
     opaque_edge_lines_not_selected->allow_shader_stages_override = false;
+    opaque_edge_lines_not_selected->use_content_wide_line_renderer = use_compute_wide_lines;
+    opaque_edge_lines_not_selected->content_wide_line_group = 0;
 
-    auto opaque_edge_lines_selected = make_composition_pass("Content edge lines opaque selected");
+    opaque_edge_lines_selected = make_composition_pass("Content edge lines opaque selected");
     opaque_edge_lines_selected->mesh_layers      = { Mesh_layer_id::content };
     opaque_edge_lines_selected->primitive_mode   = Primitive_mode::edge_lines;
     opaque_edge_lines_selected->filter           = opaque_selected_filter;
@@ -200,13 +205,17 @@ App_rendering::App_rendering(
         get_render_pipeline_state(*opaque_edge_lines_selected.get(), Blend_mode::opaque, true, false)
     );
     opaque_edge_lines_selected->allow_shader_stages_override = false;
+    opaque_edge_lines_selected->use_content_wide_line_renderer = use_compute_wide_lines;
+    opaque_edge_lines_selected->content_wide_line_group = 1;
 
     selection_outline = make_composition_pass("Content outline opaque selected");
     selection_outline->mesh_layers      = { Mesh_layer_id::content };
-    selection_outline->primitive_mode   = Primitive_mode::polygon_fill;
+    selection_outline->primitive_mode   = Primitive_mode::edge_lines;
     selection_outline->filter           = opaque_selected_or_hovered_filter;
     selection_outline->render_pipeline_states.push_back(&m_pipeline_passes.outline);
     selection_outline->allow_shader_stages_override = false;
+    selection_outline->use_content_wide_line_renderer = use_compute_wide_lines;
+    selection_outline->content_wide_line_group = 2;
 
     // This gets overridden in Composition_pass::render()
     // TODO Figure out a good way to route the settings
@@ -250,13 +259,15 @@ App_rendering::App_rendering(
         get_render_pipeline_state(*translucent_fill.get(), Blend_mode::translucent, false, false)
     );
 
-    auto translucent_outline = make_composition_pass("Content outline translucent");
+    translucent_outline = make_composition_pass("Content outline translucent");
     translucent_outline->mesh_layers    = { Mesh_layer_id::content };
     translucent_outline->primitive_mode = Primitive_mode::edge_lines;
     translucent_outline->filter         = translucent_filter;
     translucent_outline->render_pipeline_states.push_back(
         get_render_pipeline_state(*translucent_outline.get(), Blend_mode::translucent, false, false)
     );
+    translucent_outline->use_content_wide_line_renderer = use_compute_wide_lines;
+    translucent_outline->content_wide_line_group = 3;
 
     auto brush = make_composition_pass("Brush");
     brush->mesh_layers    = { Mesh_layer_id::brush };
@@ -321,10 +332,11 @@ auto App_rendering::create_shadow_node_for_scene_view(
 ) -> std::shared_ptr<Shadow_render_node>
 {
     const auto& preset        = app_settings.graphics.current_graphics_preset;
-    const bool  use_clip_ctrl = graphics_device.get_info().use_clip_control;
+    const auto& conventions   = graphics_device.get_info().coordinate_conventions;
+    const bool  can_reverse   = (conventions.native_depth_range == erhe::math::Depth_range::zero_to_one);
     const int   resolution    = preset.shadow_enable ? preset.shadow_resolution  : 1;
     const int   light_count   = preset.shadow_enable ? preset.shadow_light_count : 1;
-    const bool  reverse_depth = preset.reverse_depth && use_clip_ctrl;
+    const bool  reverse_depth = preset.reverse_depth && can_reverse;
     auto shadow_render_node = std::make_shared<Shadow_render_node>(
         graphics_device,
         rendergraph,
@@ -339,12 +351,13 @@ auto App_rendering::create_shadow_node_for_scene_view(
     return shadow_render_node;
 }
 
-void App_rendering::handle_graphics_settings_changed(Graphics_preset* graphics_preset)
+void App_rendering::handle_graphics_settings_changed(Graphics_preset_entry* graphics_preset)
 {
-    const bool use_clip_control = m_context.graphics_device->get_info().use_clip_control;
-    const int  resolution      = (graphics_preset != nullptr) && graphics_preset->shadow_enable ? graphics_preset->shadow_resolution  : 1;
-    const int  light_count     = (graphics_preset != nullptr) && graphics_preset->shadow_enable ? graphics_preset->shadow_light_count : 1;
-    const bool reverse_depth   = (graphics_preset != nullptr) && (graphics_preset->reverse_depth && use_clip_control);
+    const auto& conventions   = m_context.graphics_device->get_info().coordinate_conventions;
+    const bool  can_reverse   = (conventions.native_depth_range == erhe::math::Depth_range::zero_to_one);
+    const int   resolution    = (graphics_preset != nullptr) && graphics_preset->shadow_enable ? graphics_preset->shadow_resolution  : 1;
+    const int   light_count   = (graphics_preset != nullptr) && graphics_preset->shadow_enable ? graphics_preset->shadow_light_count : 1;
+    const bool  reverse_depth = (graphics_preset != nullptr) && (graphics_preset->reverse_depth && can_reverse);
 
     for (const auto& node : m_all_shadow_render_nodes) {
         node->reconfigure(*m_context.graphics_device, resolution, light_count, graphics_preset->shadow_depth_bits, reverse_depth);
@@ -352,7 +365,7 @@ void App_rendering::handle_graphics_settings_changed(Graphics_preset* graphics_p
 
     if (graphics_preset != nullptr) {
 #if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
-        if (use_clip_control) {
+        if (m_context.graphics_device->get_info().use_clip_control) {
             gl::clip_control(
                 gl::Clip_control_origin::lower_left,
                 reverse_depth ? gl::Clip_control_depth::zero_to_one : gl::Clip_control_depth::negative_one_to_one
@@ -635,9 +648,9 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
     }}}
     , outline{erhe::graphics::Render_pipeline_state{{
         .debug_label    = erhe::utility::Debug_label{"Outline (selection/hover)"},
-        .shader_stages  = &programs.fat_triangle.shader_stages,
+        .shader_stages  = &programs.wide_lines_draw_color.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
-        .input_assembly = Input_assembly_state::triangle,
+        .input_assembly = Input_assembly_state::line,
         .multisample    = Multisample_state{
             .alpha_to_coverage_enable = true
         },
@@ -936,6 +949,47 @@ void App_rendering::remove(Renderable* renderable)
     m_renderables.erase(i);
 }
 
+void App_rendering::update_content_wide_line_pipeline_states(erhe::scene_renderer::Content_wide_line_renderer& renderer)
+{
+    erhe::graphics::Shader_stages*      shader_stages = renderer.get_graphics_shader_stages();
+    erhe::graphics::Vertex_input_state* vertex_input  = renderer.get_vertex_input();
+    if ((shader_stages == nullptr) || (vertex_input == nullptr)) {
+        return;
+    }
+
+    // For each composition pass that uses content_wide_line_renderer,
+    // create a new pipeline state with the renderer's shader stages and vertex input
+    // but keep the original depth/stencil/blend settings.
+    auto update_pass = [&](Composition_pass* pass) {
+        if ((pass == nullptr) || !pass->use_content_wide_line_renderer) {
+            return;
+        }
+        std::vector<erhe::graphics::Render_pipeline_state*> new_states;
+        for (erhe::graphics::Render_pipeline_state* original : pass->render_pipeline_states) {
+            auto pipeline = std::make_unique<erhe::graphics::Render_pipeline_state>(
+                erhe::graphics::Render_pipeline_data{
+                    .debug_label    = original->data.debug_label,
+                    .shader_stages  = shader_stages,
+                    .vertex_input   = vertex_input,
+                    .input_assembly = erhe::graphics::Input_assembly_state::triangle,
+                    .multisample    = original->data.multisample,
+                    .rasterization  = original->data.rasterization,
+                    .depth_stencil  = original->data.depth_stencil,
+                    .color_blend    = original->data.color_blend
+                }
+            );
+            new_states.push_back(pipeline.get());
+            m_compute_wide_line_pipeline_states.push_back(std::move(pipeline));
+        }
+        pass->render_pipeline_states = new_states;
+    };
+
+    update_pass(opaque_edge_lines_not_selected.get());
+    update_pass(opaque_edge_lines_selected.get());
+    update_pass(selection_outline.get());
+    update_pass(translucent_outline.get());
+}
+
 void App_rendering::render_viewport_main(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION();
@@ -1002,7 +1056,10 @@ void App_rendering::render_id(const Render_context& context)
             .tool_mesh_spans    = { tool_layers.tool()->meshes },
             .x                  = static_cast<int>(position.x),
             .y                  = static_cast<int>(position.y),
-            .reverse_depth      = context.scene_view.get_reverse_depth()
+            .reverse_depth      = context.scene_view.get_reverse_depth(),
+            .depth_range        = context.scene_view.get_depth_range(),
+            .framebuffer_origin = context.scene_view.get_framebuffer_origin(),
+            .ndc_y_direction    = context.scene_view.get_ndc_y_direction()
         }
     );
 }

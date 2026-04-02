@@ -1,6 +1,7 @@
 ﻿#include "rendertarget_mesh.hpp"
 
 #include "app_context.hpp"
+#include "erhe_graphics/device.hpp"
 #include "editor_log.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "scene/scene_view.hpp"

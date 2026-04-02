@@ -7,6 +7,6 @@ erhe_target_sources_grouped(
     erhe_verify/verify.hpp
 )
 
-target_include_directories(${_target} INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 erhe_target_settings(${_target} "erhe")

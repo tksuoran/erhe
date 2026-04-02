@@ -19,10 +19,13 @@ enum class Light_type : unsigned int {
 class Light_projection_parameters
 {
 public:
-    const Camera*        view_camera{nullptr};
-    erhe::math::Viewport main_camera_viewport{};
-    erhe::math::Viewport shadow_map_viewport{};
-    bool                 reverse_depth{true};
+    const Camera*                  view_camera{nullptr};
+    erhe::math::Viewport           main_camera_viewport{};
+    erhe::math::Viewport           shadow_map_viewport{};
+    bool                           reverse_depth{true};
+    erhe::math::Depth_range        depth_range       {erhe::math::Depth_range::zero_to_one};
+    erhe::math::Framebuffer_origin framebuffer_origin{erhe::math::Framebuffer_origin::bottom_left};
+    erhe::math::Ndc_y_direction    ndc_y_direction   {erhe::math::Ndc_y_direction::up};
 };
 
 class Light;
@@ -88,10 +91,10 @@ private:
     [[nodiscard]] auto spot_light_projection_transforms(const Light_projection_parameters& parameters) const -> Light_projection_transforms;
 
     // Maps clip space to [0,1] texture space.
-    // For zero_to_one (reverse_depth=true):  z is already in [0,1], identity for z
-    // For negative_one_to_one (reverse_depth=false): z is in [-1,1], needs scale+bias
-    [[nodiscard]] static auto get_texture_from_clip(bool reverse_depth) -> glm::mat4;
-    [[nodiscard]] static auto get_clip_from_texture(bool reverse_depth) -> glm::mat4;
+    // For zero_to_one:          z is already in [0,1], identity for z
+    // For negative_one_to_one:  z is in [-1,1], needs scale+bias
+    [[nodiscard]] static auto get_texture_from_clip(erhe::math::Depth_range depth_range, erhe::math::Framebuffer_origin framebuffer_origin = erhe::math::Framebuffer_origin::bottom_left) -> glm::mat4;
+    [[nodiscard]] static auto get_clip_from_texture(erhe::math::Depth_range depth_range, erhe::math::Framebuffer_origin framebuffer_origin = erhe::math::Framebuffer_origin::bottom_left) -> glm::mat4;
 };
 
 } // namespace erhe::scene

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "erhe_renderer/generated/visualization_mode.hpp"
+
 namespace erhe::renderer
 {
 
@@ -22,13 +24,6 @@ enum class Blend_mode : int
 //    any          = 2
 //};
 
-// TODO This does not? belong to erhe::renderer?
-enum class Visualization_mode : unsigned int
-{
-    off = 0,
-    selected,
-    all
-};
-
+using ::Visualization_mode;
 
 } // namespace erhe::renderer

@@ -1,0 +1,26 @@
+from erhe_codegen import *
+
+struct("Editor_settings_config",
+    version=1,
+    short_desc="Editor settings",
+    long_desc="Runtime-editable settings saved to editor_settings.json.",
+    developer=False,
+    fields=[
+        field("camera_controls",      StructRef("Camera_controls_config"), added_in=1),
+        field("grid",                 StructRef("Grid_config"),            added_in=1),
+        field("headset",              StructRef("Headset_config"),         added_in=1),
+        field("hotbar",               StructRef("Hotbar_config"),          added_in=1),
+        field("hud",                  StructRef("Hud_config"),             added_in=1),
+        field("id_renderer",          StructRef("Id_renderer_config"),     added_in=1),
+        field("inventory",            StructRef("Inventory_config"),       added_in=1),
+        field("network",              StructRef("Network_config"),         added_in=1),
+        field("physics",              StructRef("Physics_config"),         added_in=1),
+        field("scene",                StructRef("Scene_config"),           added_in=1),
+        field("thumbnails",           StructRef("Thumbnails_config"),      added_in=1),
+        field("transform_tool",       StructRef("Transform_tool_config"), added_in=1),
+        field("viewport",             StructRef("Viewport_config_data"),  added_in=1),
+        field("graphics_preset_name", String, added_in=1, default='"Medium"'),
+        field("imgui",                StructRef("Imgui_settings_config"), added_in=1),
+        field("icons",                StructRef("Icon_settings_config"),  added_in=1),
+    ],
+)

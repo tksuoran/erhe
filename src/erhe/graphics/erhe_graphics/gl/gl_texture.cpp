@@ -151,6 +151,9 @@ auto get_gl_pixel_byte_count(const erhe::dataformat::Format pixelformat)-> size_
         }
     }
 
+    if (pixelformat == erhe::dataformat::Format::format_x8_d24_unorm_pack32) {
+        return 4;
+    }
     if (pixelformat == erhe::dataformat::Format::format_d32_sfloat_s8_uint) {
         return 8;
     }

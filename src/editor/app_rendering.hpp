@@ -14,9 +14,12 @@
 
 #include <memory>
 
-namespace erhe::commands { class Commands; }
-namespace erhe::imgui    { class Imgui_windows; }
-namespace erhe::window   { class Context_window; }
+namespace erhe::commands       { class Commands; }
+namespace erhe::imgui          { class Imgui_windows; }
+namespace erhe::scene_renderer { class Content_wide_line_renderer; }
+namespace erhe::window         { class Context_window; }
+
+struct Graphics_preset_entry;
 
 namespace editor {
 
@@ -24,7 +27,6 @@ class App_context;
 class App_message_bus;
 class App_rendering;
 class App_settings;
-class Graphics_preset;
 class Mesh_memory;
 class Programs;
 class Render_context;
@@ -106,13 +108,18 @@ public:
     void imgui();
     void request_renderdoc_capture();
 
+    void update_content_wide_line_pipeline_states(erhe::scene_renderer::Content_wide_line_renderer& renderer);
+
     glm::uvec4                        debug_joint_indices{0, 0, 0, 0};
     std::vector<glm::vec4>            debug_joint_colors;
     std::shared_ptr<Composition_pass> selection_outline;
     std::shared_ptr<Composition_pass> hover_outline;
+    std::shared_ptr<Composition_pass> opaque_edge_lines_not_selected;
+    std::shared_ptr<Composition_pass> opaque_edge_lines_selected;
+    std::shared_ptr<Composition_pass> translucent_outline;
 
 private:
-    void handle_graphics_settings_changed(Graphics_preset* graphics_preset);
+    void handle_graphics_settings_changed(Graphics_preset_entry* graphics_preset);
 
     [[nodiscard]] auto get_render_pipeline_state(
         const Composition_pass&    renderpass,
@@ -133,6 +140,9 @@ private:
     Pipeline_renderpasses             m_pipeline_passes;
     Composer                          m_composer;
     std::shared_ptr<Composition_pass> m_grid_composition_pass;
+
+    // Compute wide line pipeline states (created when Content_wide_line_renderer is ready)
+    std::vector<std::unique_ptr<erhe::graphics::Render_pipeline_state>> m_compute_wide_line_pipeline_states;
 
     erhe::graphics::Gpu_timer m_content_timer;
     erhe::graphics::Gpu_timer m_selection_timer;

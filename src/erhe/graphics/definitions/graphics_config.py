@@ -77,6 +77,16 @@ struct("Graphics_config",
             developer=False
         ),
         field(
+            "force_no_compute_shader",
+            Bool,
+            added_in=1,
+            default="false",
+            short_desc="Force Disable Compute Shaders",
+            long_desc="Prevent any use of compute shaders. Only meaningful for debugging.",
+            visible=True,
+            developer=False
+        ),
+        field(
             "force_gl_version",
             Int,
             added_in=1,

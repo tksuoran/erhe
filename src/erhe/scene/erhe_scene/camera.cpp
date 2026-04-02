@@ -43,9 +43,15 @@ void Camera::handle_item_host_update(Item_host* const old_item_host, Item_host* 
     }
 }
 
-auto Camera::projection_transforms(const erhe::math::Viewport& viewport, const bool reverse_depth) const -> Camera_projection_transforms
+auto Camera::projection_transforms(
+    const erhe::math::Viewport&          viewport,
+    const bool                           reverse_depth,
+    const erhe::math::Depth_range        depth_range,
+    const erhe::math::Framebuffer_origin framebuffer_origin,
+    const erhe::math::Ndc_y_direction    ndc_y_direction
+) const -> Camera_projection_transforms
 {
-    const auto clip_from_node = m_projection.clip_from_node_transform(viewport, reverse_depth);
+    const auto clip_from_node = m_projection.clip_from_node_transform(viewport, reverse_depth, depth_range, framebuffer_origin, ndc_y_direction);
     const Node* node = get_node();
     ERHE_VERIFY(node != nullptr);
     return Camera_projection_transforms{

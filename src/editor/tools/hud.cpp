@@ -152,7 +152,7 @@ Hud::Hud(
         erhe::Item_flags::rendertarget |
         erhe::Item_flags::visible      |
         erhe::Item_flags::translucent  |
-        (app_context.developer_mode ? erhe::Item_flags::show_in_ui : 0)
+        erhe::Item_flags::show_in_developer_ui
     );
 
     m_rendertarget_node = std::make_shared<erhe::scene::Node>("Hud RT node");
@@ -161,7 +161,7 @@ Hud::Hud(
     m_rendertarget_node->enable_flag_bits(
         erhe::Item_flags::rendertarget |
         erhe::Item_flags::visible      |
-        (app_context.developer_mode ? erhe::Item_flags::show_in_ui : 0)
+        erhe::Item_flags::show_in_developer_ui
     );
 
     m_rendertarget_imgui_viewport = std::make_shared<editor::Rendertarget_imgui_host>(

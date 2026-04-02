@@ -176,7 +176,9 @@ auto Content_library_node::combo(
                 if (!node_item_shared) {
                     return true; // in for_each() lambda - continue to children
                 }
-                if (!node.item->is_shown_in_ui()) {
+                const bool shown = node.item->is_shown_in_ui() ||
+                    (context.developer_mode && ((node.item->get_flag_bits() & erhe::Item_flags::show_in_developer_ui) != 0));
+                if (!shown) {
                     return true; // in for_each() lambda - continue to children
                 }
                 bool is_selected = (in_out_selected_entry == node.item);

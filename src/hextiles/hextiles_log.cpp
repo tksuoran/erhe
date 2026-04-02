@@ -14,6 +14,7 @@ std::shared_ptr<spdlog::logger> log_file;
 std::shared_ptr<spdlog::logger> log_stream;
 std::shared_ptr<spdlog::logger> log_image;
 std::shared_ptr<spdlog::logger> log_pixel_lookup;
+std::shared_ptr<spdlog::logger> log_tile_renderer;
 
 void initialize_logging()
 {
@@ -29,6 +30,7 @@ void initialize_logging()
     log_stream        = make_logger      ("hextiles.stream"       );
     log_image         = make_logger      ("hextiles.image"        );
     log_pixel_lookup  = make_logger      ("hextiles.pixel_lookup" );
+    log_tile_renderer = make_logger      ("hextiles.tile_renderer");
 }
 
 }

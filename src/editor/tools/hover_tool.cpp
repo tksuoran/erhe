@@ -426,7 +426,13 @@ void Hover_tool::tool_render(const Render_context& context)
     erhe::renderer::Primitive_renderer line_renderer = context.get({erhe::graphics::Primitive_type::line, 2, true, true});
 
     const erhe::scene::Camera* camera                = context.camera;
-    const auto                 projection_transforms = camera->projection_transforms(context.viewport, context.scene_view.get_reverse_depth());
+    const auto                 projection_transforms = camera->projection_transforms(
+        context.viewport,
+        context.scene_view.get_reverse_depth(),
+        context.scene_view.get_depth_range(),
+        context.scene_view.get_framebuffer_origin(),
+        context.scene_view.get_ndc_y_direction()
+    );
     const glm::mat4            clip_from_world       = projection_transforms.clip_from_world.get_matrix();
 
     const GEO::index_t facet_filter = m_geometry_debug_hover_facet_only ? hover.facet : GEO::NO_INDEX;

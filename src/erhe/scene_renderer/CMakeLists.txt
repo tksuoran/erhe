@@ -5,6 +5,8 @@ erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
     erhe_scene_renderer/camera_buffer.cpp
     erhe_scene_renderer/camera_buffer.hpp
+    erhe_scene_renderer/content_wide_line_renderer.cpp
+    erhe_scene_renderer/content_wide_line_renderer.hpp
     erhe_scene_renderer/cube_instance_buffer.cpp
     erhe_scene_renderer/cube_instance_buffer.hpp
     erhe_scene_renderer/cube_renderer.cpp
@@ -31,6 +33,7 @@ erhe_target_sources_grouped(
 target_link_libraries(
     ${_target}
     PUBLIC
+        erhe::codegen
         erhe::dataformat
         erhe::graphics
         erhe::math
@@ -44,6 +47,23 @@ target_link_libraries(
         erhe::profile
 )
 
-target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+# Primitive_color_source enum codegen
+set(_scene_renderer_defs "${CMAKE_CURRENT_SOURCE_DIR}/definitions")
+set(_scene_renderer_gen  "${CMAKE_CURRENT_BINARY_DIR}/erhe_scene_renderer/generated")
+
+erhe_codegen_generate(
+    TARGET          ${_target}
+    DEFINITIONS_DIR "${_scene_renderer_defs}"
+    OUTPUT_DIR      "${_scene_renderer_gen}"
+    DEFINITIONS
+        "${_scene_renderer_defs}/primitive_color_source.py"
+)
+
+# Only the enum header -- serialize/deserialize .cpp compiles in the editor
+set_source_files_properties(${_scene_renderer_gen}/primitive_color_source.hpp PROPERTIES GENERATED TRUE)
+target_sources(${_target} PRIVATE ${_scene_renderer_gen}/primitive_color_source.hpp)
+source_group("codegen generated" FILES ${_scene_renderer_gen}/primitive_color_source.hpp)
+
+target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
 
 erhe_target_settings(${_target} "erhe")

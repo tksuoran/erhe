@@ -1,8 +1,8 @@
 from erhe_codegen import *
 
 struct("Physics_config",
-    version=1,
-    short_desc="",
+    version=2,
+    short_desc="Physics",
     long_desc="",
     developer=False,
     fields=[
@@ -23,6 +23,16 @@ struct("Physics_config",
             default="true",
             short_desc="Dynamic Enable",
             long_desc="Value can be changed at runtime",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "debug_draw",
+            Bool,
+            added_in=2,
+            default="false",
+            short_desc="Debug Draw",
+            long_desc="Enable physics debug visualization",
             visible=True,
             developer=False
         ),

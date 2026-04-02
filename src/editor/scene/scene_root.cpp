@@ -432,8 +432,8 @@ auto Scene_root::make_browser_window(
                 .require_at_least_one_bit_clear = 0
             }
             : erhe::Item_filter{
-                .require_all_bits_set           = erhe::Item_flags::show_in_ui,
-                .require_at_least_one_bit_set   = 0,
+                .require_all_bits_set           = 0,
+                .require_at_least_one_bit_set   = erhe::Item_flags::show_in_ui,
                 .require_all_bits_clear         = 0, //erhe::Item_flags::tool | erhe::Item_flags::brush,
                 .require_at_least_one_bit_clear = 0
             }

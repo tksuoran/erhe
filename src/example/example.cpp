@@ -10,7 +10,10 @@
 #if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
 # include "erhe_gl/gl_log.hpp"
 #endif
+#include "erhe_verify/verify.hpp"
 #include "erhe_gltf/gltf.hpp"
+
+#include <SDL3/SDL.h>
 #include "erhe_gltf/gltf_log.hpp"
 #include "erhe_gltf/image_transfer.hpp"
 #include "erhe_graphics/buffer_transfer_queue.hpp"
@@ -60,7 +63,6 @@ public:
                 .title     = "erhe example"
             }
         }
-        , m_scene            {"example scene", nullptr}
         , m_graphics_device{
             erhe::graphics::Surface_create_info{
                 .context_window            = &m_window,
@@ -68,11 +70,33 @@ public:
                 .prefer_high_dynamic_range = false
             }
         }
+        , m_shader_error_callback_set{(
+            m_graphics_device.set_shader_error_callback(
+                [](const std::string& error_log, const std::string& shader_source, const std::string& callstack) {
+                    std::string clipboard_text = "=== Shader Error ===\n" + error_log + "\n=== Shader Source ===\n" + shader_source + "\n=== Callstack ===\n" + callstack;
+                    SDL_SetClipboardText(clipboard_text.c_str());
+                    ERHE_FATAL("Shader compilation/linking failed (error and source copied to clipboard)");
+                }
+            ),
+            m_graphics_device.set_device_error_callback(
+                [](const std::string& error_message, const std::string& callstack) {
+                    std::string clipboard_text = error_message + "\n=== Callstack ===\n" + callstack;
+                    SDL_SetClipboardText(clipboard_text.c_str());
+                    ERHE_FATAL("Device error (copied to clipboard): %s", error_message.c_str());
+                }
+            ),
+            m_graphics_device.set_trace_callback(
+                [](const std::string& message) {
+                    SDL_SetClipboardText(message.c_str());
+                }
+            ),
+        true)}
         , m_image_transfer   {m_graphics_device}
         , m_mesh_memory      {m_graphics_device}
         , m_program_interface{m_graphics_device, m_mesh_memory.vertex_format, m_program_interface_config}
         , m_forward_renderer {m_graphics_device, m_program_interface}
         , m_programs         {m_graphics_device, m_program_interface}
+        , m_scene            {"example scene", nullptr}
     {
         const unsigned int thread_count = std::thread::hardware_concurrency();
         tf::Executor executor{thread_count};
@@ -123,6 +147,7 @@ public:
         m_last_window_width  = m_window.get_width();
         m_last_window_height = m_window.get_height();
 
+#if !defined(ERHE_GRAPHICS_LIBRARY_METAL)
         m_window.register_redraw_callback(
             [this](){
                 if (
@@ -136,6 +161,9 @@ public:
                 tick();
             }
         );
+#endif
+
+        make_render_pipeline_states();
     }
 
     std::optional<erhe::window::Input_event> m_window_resize_event{};
@@ -289,12 +317,15 @@ public:
         }
         lights.push_back(m_light);
 
+        const auto& conventions = m_graphics_device.get_info().coordinate_conventions;
         m_light_projections.apply(
             lights,
             m_camera.get(),
             viewport,
             erhe::math::Viewport{},
-            std::shared_ptr<erhe::graphics::Texture>{}
+            std::shared_ptr<erhe::graphics::Texture>{},
+            (conventions.native_depth_range == erhe::math::Depth_range::zero_to_one), // reverse_depth
+            conventions.native_depth_range
         );
 
         std::vector<std::shared_ptr<erhe::scene::Mesh>> meshes;
@@ -463,8 +494,8 @@ private:
     }
 
     erhe::window::Context_window                 m_window;
-    erhe::scene::Scene                           m_scene;
     erhe::graphics::Device                       m_graphics_device;
+    bool                                         m_shader_error_callback_set{false};
     erhe::gltf::Image_transfer                   m_image_transfer;
     Mesh_memory                                  m_mesh_memory;
     erhe::scene_renderer::Program_interface_config m_program_interface_config;
@@ -479,6 +510,12 @@ private:
     erhe::scene_renderer::Light_projections m_light_projections;
 
     erhe::gltf::Gltf_data                   m_gltf_data;
+
+    // m_scene must be declared after m_mesh_memory and m_gltf_data so that
+    // it is destroyed first. Scene teardown frees Buffer_allocations back to
+    // the Free_list_allocators owned by m_mesh_memory.
+    erhe::scene::Scene                      m_scene;
+
     bool                                    m_close_requested{false};
     std::shared_ptr<erhe::scene::Camera>    m_camera;
     std::shared_ptr<erhe::scene::Light>     m_light;

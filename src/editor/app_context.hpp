@@ -24,6 +24,7 @@ namespace erhe::rendergraph {
     class Rendergraph;
 }
 namespace erhe::scene_renderer {
+    class Content_wide_line_renderer;
     class Forward_renderer;
     class Shadow_renderer;
 }
@@ -35,7 +36,8 @@ namespace tf {
     class Executor;
 }
 
-struct Editor_config;
+struct Erhe_config;
+struct Editor_settings_config;
 
 namespace editor {
 
@@ -101,7 +103,8 @@ public:
     bool  use_sleep     {false};
     float sleep_margin  {0.0f}; // TODO
 
-    Editor_config* editor_config{nullptr};
+    Erhe_config*             erhe_config{nullptr};
+    Editor_settings_config*  editor_settings{nullptr};
 
     tf::Executor*                           executor              {nullptr};
     std::atomic_int                         pending_async_ops     {};
@@ -116,6 +119,7 @@ public:
 #endif
     erhe::renderer::Debug_renderer*         debug_renderer        {nullptr};
     erhe::renderer::Text_renderer*          text_renderer         {nullptr};
+    erhe::scene_renderer::Content_wide_line_renderer* content_wide_line_renderer{nullptr};
     erhe::rendergraph::Rendergraph*         rendergraph           {nullptr};
     erhe::scene_renderer::Forward_renderer* forward_renderer      {nullptr};
     erhe::scene_renderer::Shadow_renderer*  shadow_renderer       {nullptr};

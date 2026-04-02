@@ -11,16 +11,20 @@ set(ERHE_PYTHON3_EXECUTABLE "${Python3_EXECUTABLE}" CACHE INTERNAL "Python3 inte
 
 # Usage:
 #   erhe_codegen_generate(
-#       TARGET          <target>           # CMake target that depends on generated code
-#       DEFINITIONS_DIR <path>             # Directory containing .py definition files
-#       OUTPUT_DIR      <path>             # Directory where .hpp/.cpp files are generated
-#       DEFINITIONS     <file1> <file2>... # Python definition files (listed explicitly)
+#       TARGET               <target>           # CMake target that depends on generated code
+#       DEFINITIONS_DIR      <path>             # Directory containing .py definition files
+#       OUTPUT_DIR           <path>             # Directory where .hpp/.cpp files are generated
+#       DEFINITIONS          <file1> <file2>... # Python definition files (listed explicitly)
+#       EXTRA_DEFINITIONS_DIRS <dir1:prefix1> ... # Optional extra dirs for reference resolution only
+#                                                  # Format: "path:include_prefix" or just "path"
 #   )
 #
 # Runs the generator at configure time so files exist for the build system,
 # AND adds a build-time custom command that re-runs when .py files change.
+# Extra definition directories are loaded for StructRef/EnumRef resolution
+# but their types are NOT generated into the output directory.
 function(erhe_codegen_generate)
-    cmake_parse_arguments(ARG "" "TARGET;DEFINITIONS_DIR;OUTPUT_DIR" "DEFINITIONS" ${ARGN})
+    cmake_parse_arguments(ARG "" "TARGET;DEFINITIONS_DIR;OUTPUT_DIR" "DEFINITIONS;EXTRA_DEFINITIONS_DIRS" ${ARGN})
 
     set(_codegen_dir "${CMAKE_CURRENT_FUNCTION_LIST_DIR}")
     set(GENERATOR_SCRIPT "${_codegen_dir}/generate.py")
@@ -31,6 +35,7 @@ function(erhe_codegen_generate)
         COMMAND "${ERHE_PYTHON3_EXECUTABLE}" "${GENERATOR_SCRIPT}"
             "${ARG_DEFINITIONS_DIR}"
             "${ARG_OUTPUT_DIR}"
+            ${ARG_EXTRA_DEFINITIONS_DIRS}
         RESULT_VARIABLE _codegen_result
         OUTPUT_VARIABLE _codegen_output
         ERROR_VARIABLE  _codegen_error
@@ -58,6 +63,7 @@ function(erhe_codegen_generate)
         COMMAND "${ERHE_PYTHON3_EXECUTABLE}" "${GENERATOR_SCRIPT}"
                 "${ARG_DEFINITIONS_DIR}"
                 "${ARG_OUTPUT_DIR}"
+                ${ARG_EXTRA_DEFINITIONS_DIRS}
         COMMAND "${CMAKE_COMMAND}" -E touch "${_stamp}"
         DEPENDS ${ARG_DEFINITIONS} ${_gen_files}
         COMMENT "erhe_codegen: regenerating from ${ARG_DEFINITIONS_DIR}"

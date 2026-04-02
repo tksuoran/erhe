@@ -29,6 +29,7 @@ target_link_libraries(
     ${_target}
     PUBLIC
         etl::etl
+        erhe::codegen
         erhe::graphics
         erhe::math
         erhe::primitive
@@ -42,6 +43,23 @@ target_link_libraries(
         erhe::verify
 )
 
-target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+# Visualization_mode enum codegen
+set(_renderer_defs "${CMAKE_CURRENT_SOURCE_DIR}/definitions")
+set(_renderer_gen  "${CMAKE_CURRENT_BINARY_DIR}/erhe_renderer/generated")
+
+erhe_codegen_generate(
+    TARGET          ${_target}
+    DEFINITIONS_DIR "${_renderer_defs}"
+    OUTPUT_DIR      "${_renderer_gen}"
+    DEFINITIONS
+        "${_renderer_defs}/visualization_mode.py"
+)
+
+# Only the enum header -- serialize/deserialize .cpp compiles in the editor
+set_source_files_properties(${_renderer_gen}/visualization_mode.hpp PROPERTIES GENERATED TRUE)
+target_sources(${_target} PRIVATE ${_renderer_gen}/visualization_mode.hpp)
+source_group("codegen generated" FILES ${_renderer_gen}/visualization_mode.hpp)
+
+target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
 
 erhe_target_settings(${_target} "erhe")

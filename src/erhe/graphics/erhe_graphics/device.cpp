@@ -3,6 +3,7 @@
 #include "erhe_graphics/device.hpp"
 
 #include "erhe_graphics/blit_command_encoder.hpp"
+#include "erhe_verify/verify.hpp"
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/compute_command_encoder.hpp"
 
@@ -146,7 +147,17 @@ void Device::set_shader_error_callback(Shader_error_callback callback)
 void Device::shader_error(const std::string& error_log, const std::string& shader_source)
 {
     if (m_shader_error_callback) {
-        m_shader_error_callback(error_log, shader_source);
+        m_shader_error_callback(error_log, shader_source, erhe_get_callstack());
+    }
+}
+void Device::set_device_error_callback(Device_error_callback callback)
+{
+    m_device_error_callback = std::move(callback);
+}
+void Device::device_error(const std::string& error_message)
+{
+    if (m_device_error_callback) {
+        m_device_error_callback(error_message, erhe_get_callstack());
     }
 }
 void Device::set_state_dump_callback(State_dump_callback callback)
@@ -157,6 +168,16 @@ void Device::state_dump(const std::string& dump)
 {
     if (m_state_dump_callback) {
         m_state_dump_callback(dump);
+    }
+}
+void Device::set_trace_callback(Trace_callback callback)
+{
+    m_trace_callback = std::move(callback);
+}
+void Device::trace(const std::string& message)
+{
+    if (m_trace_callback) {
+        m_trace_callback(message);
     }
 }
 

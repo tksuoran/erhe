@@ -1,5 +1,9 @@
 #include "windows/viewport_config_window.hpp"
 #include "app_context.hpp"
+#include "config/generated/viewport_config_serialization.hpp"
+#include "scene/viewport_scene_views.hpp"
+#include "scene/viewport_scene_view.hpp"
+#include "erhe_codegen/config_io.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_imgui/imgui_helpers.hpp"
 #include "erhe_scene_renderer/primitive_buffer.hpp"
@@ -93,6 +97,17 @@ void Viewport_config_window::imgui()
 {
     ERHE_PROFILE_FUNCTION();
 
+    // Auto-lookup viewport when not yet associated
+    if ((m_edit_data == nullptr) && (m_context.scene_views != nullptr)) {
+        std::shared_ptr<Viewport_scene_view> view = m_context.scene_views->hover_scene_view();
+        if (!view) {
+            view = m_context.scene_views->last_scene_view();
+        }
+        if (view) {
+            m_edit_data = &view->get_config();
+        }
+    }
+
     const ImGuiTreeNodeFlags flags{
         ImGuiTreeNodeFlags_Framed            |
         ImGuiTreeNodeFlags_OpenOnArrow       |
@@ -102,6 +117,8 @@ void Viewport_config_window::imgui()
     };
 
     if (m_edit_data != nullptr) {
+        const std::string before = serialize(*m_edit_data);
+
         ImGui::SliderFloat("Gizmo Scale", &m_edit_data->gizmo_scale, 1.0f, 20.0f, "%.2f");
         ImGui::ColorEdit4("Clear Color", &m_edit_data->clear_color.x, ImGuiColorEditFlags_Float);
 
@@ -128,6 +145,11 @@ void Viewport_config_window::imgui()
             erhe::imgui::make_combo("Light",  m_edit_data->debug_visualizations.light,  c_visualization_mode_strings, IM_ARRAYSIZE(c_visualization_mode_strings));
             erhe::imgui::make_combo("Camera", m_edit_data->debug_visualizations.camera, c_visualization_mode_strings, IM_ARRAYSIZE(c_visualization_mode_strings));
             ImGui::TreePop();
+        }
+
+        const std::string after = serialize(*m_edit_data);
+        if (before != after) {
+            erhe::codegen::save_config(*m_edit_data, "default_viewport_config.json");
         }
     }
 }

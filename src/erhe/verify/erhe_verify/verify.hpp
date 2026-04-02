@@ -22,17 +22,21 @@
 #include <cstdio>
 #include <cstdlib>
 #include <source_location>
+#include <string>
 
-#define ERHE_FATAL(format, ...) do { printf("%s:%u " format "\n", std::source_location::current().file_name(), std::source_location::current().line(), ##__VA_ARGS__); DebugBreak(); abort(); } while (1)
+#define ERHE_FATAL(format, ...) do { printf("%s:%u " format "\n", std::source_location::current().file_name(), std::source_location::current().line(), ##__VA_ARGS__); erhe_dump_callstack(); DebugBreak(); abort(); } while (1)
 #define ERHE_VERIFY(expression) do { if (!(expression)) { ERHE_FATAL("assert %s failed in %s", #expression, __func__); } } while (0)
 
 #else
 
 #include <cstdio>
 #include <cstdlib>
+#include <string>
 
-#define ERHE_FATAL(format, ...) do { printf("%s:%d " format "\n", __FILE__, __LINE__, ##__VA_ARGS__); __builtin_trap(); __builtin_unreachable(); abort(); } while (1)
+#define ERHE_FATAL(format, ...) do { printf("%s:%d " format "\n", __FILE__, __LINE__, ##__VA_ARGS__); erhe_dump_callstack(); __builtin_trap(); __builtin_unreachable(); abort(); } while (1)
 #define ERHE_VERIFY(expression) do { if (!(expression)) { ERHE_FATAL("assert %s failed in %s", #expression, __func__); } } while (0)
 
 #endif
 
+void erhe_dump_callstack();
+auto erhe_get_callstack() -> std::string;

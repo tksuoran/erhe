@@ -73,9 +73,9 @@ Text_renderer::Text_renderer(erhe::graphics::Device& graphics_device, const bool
             ? erhe::graphics::Shader_resource::Type::shader_storage_block
             : erhe::graphics::Shader_resource::Type::uniform_block
     }
-    , m_clip_from_window_resource{m_projection_block.add_mat4 ("clip_from_window")}
-    , m_texture_resource         {m_projection_block.add_uvec2("texture")}
-    , m_vertex_data_offset_resource{m_projection_block.add_uint("vertex_data_offset")}
+    , m_clip_from_window_resource  {m_projection_block.add_mat4 ("clip_from_window")}
+    , m_texture_resource           {m_projection_block.add_uvec2("texture")}
+    , m_vertex_data_offset_resource{m_projection_block.add_uint ("vertex_data_offset")}
     , m_vertex_data_resource{
         m_vertex_ssbo_block.add_uvec4(
             "data",
@@ -144,6 +144,12 @@ Text_renderer::Text_renderer(erhe::graphics::Device& graphics_device, const bool
         log_startup->info("Text renderer disabled due to config setting");
         return;
     }
+
+#if defined(ERHE_FONT_RASTERIZATION_LIBRARY_NONE) || defined(ERHE_TEXT_LAYOUT_LIBRARY_NONE)
+    log_startup->info("Text renderer disabled: freetype and/or harfbuzz not enabled");
+    config.enabled = false;
+    return;
+#endif
 
     // Init font
     m_font = std::make_unique<erhe::ui::Font>(
@@ -226,12 +232,15 @@ void Text_renderer::print(const glm::vec3 text_position, const uint32_t text_col
         std::floor(text_position.y + 0.5f),
         text_position.z
     };
+    const bool  top_left = (m_graphics_device.get_info().coordinate_conventions.framebuffer_origin == erhe::math::Framebuffer_origin::top_left);
+    const float y_scale  = top_left ? -1.0f : 1.0f;
     const std::size_t quad_count_printed = m_font->print(
         gpu_uint_data,
         text,
         snapped_position,
         text_color,
-        bounding_box
+        bounding_box,
+        y_scale
     );
     ERHE_VERIFY(quad_count_printed <= quad_count_requested);
     vertex_buffer_range.bytes_written(quad_count_printed * 4 * vertex_stride);
@@ -259,9 +268,11 @@ void Text_renderer::render(erhe::graphics::Render_command_encoder& encoder, erhe
 
     m_texture_heap->reset_heap();
 
+    const bool top_left = (m_graphics_device.get_info().coordinate_conventions.framebuffer_origin == erhe::math::Framebuffer_origin::top_left);
     const glm::mat4 clip_from_window = erhe::math::create_orthographic(
         static_cast<float>(viewport.x), static_cast<float>(viewport.width),
-        static_cast<float>(viewport.y), static_cast<float>(viewport.height),
+        top_left ? static_cast<float>(viewport.height) : static_cast<float>(viewport.y),
+        top_left ? static_cast<float>(viewport.y)      : static_cast<float>(viewport.height),
         0.0f,
         1.0f
     );

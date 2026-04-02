@@ -85,12 +85,12 @@ public:
     ~Viewport_scene_view() noexcept override;
 
     // Implements Scene_view
-    auto get_camera                () const -> std::shared_ptr<erhe::scene::Camera>                     override;
-    auto get_perspective_scale     () const -> float                                                    override;
-    auto get_rendergraph_node      () -> erhe::rendergraph::Rendergraph_node*                           override;
-    auto get_shadow_render_node    () const -> Shadow_render_node*                                      override;
-    auto as_viewport_scene_view    () -> Viewport_scene_view*                                           override;
-    auto as_viewport_scene_view    () const -> const Viewport_scene_view*                               override;
+    auto get_camera                () const -> std::shared_ptr<erhe::scene::Camera>         override;
+    auto get_perspective_scale     () const -> float                                        override;
+    auto get_rendergraph_node      () -> erhe::rendergraph::Rendergraph_node*               override;
+    auto get_shadow_render_node    () const -> Shadow_render_node*                          override;
+    auto as_viewport_scene_view    () -> Viewport_scene_view*                               override;
+    auto as_viewport_scene_view    () const -> const Viewport_scene_view*                   override;
     auto get_closest_point_on_line (glm::vec3 P0, glm::vec3 P1) -> std::optional<glm::vec3> override;
     auto get_closest_point_on_plane(glm::vec3 N , glm::vec3 P ) -> std::optional<glm::vec3> override;
 

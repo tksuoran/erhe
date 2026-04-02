@@ -351,10 +351,8 @@ void Hotbar::init_hotbar()
 
     m_window.set_imgui_host(m_rendertarget_imgui_host.get());
 
-    if (m_context.developer_mode) {
-        m_rendertarget_mesh->enable_flag_bits(erhe::Item_flags::show_in_ui);
-        m_rendertarget_node->enable_flag_bits(erhe::Item_flags::show_in_ui);
-    }
+    m_rendertarget_mesh->enable_flag_bits(erhe::Item_flags::show_in_developer_ui);
+    m_rendertarget_node->enable_flag_bits(erhe::Item_flags::show_in_developer_ui);
 
     set_mesh_visibility(m_show);
 }

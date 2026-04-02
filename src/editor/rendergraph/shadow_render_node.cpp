@@ -210,7 +210,10 @@ void Shadow_render_node::execute_rendergraph_node()
             .skins                        = scene_root->get_scene().get_skins(),
             .materials                    = materials,
             .light_projections            = m_light_projections,
-            .reverse_depth                = m_scene_view.get_reverse_depth()
+            .reverse_depth                = m_scene_view.get_reverse_depth(),
+            .depth_range                  = m_scene_view.get_depth_range(),
+            .framebuffer_origin           = m_scene_view.get_framebuffer_origin(),
+            .ndc_y_direction              = m_scene_view.get_ndc_y_direction()
         }
     );
 }

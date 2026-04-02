@@ -13,11 +13,12 @@ namespace erhe::scene {
     class Scene;
 }
 
+struct Viewport_config;
+
 namespace editor {
 
 class App_context;
 class Scene_view;
-class Viewport_config;
 class Viewport_scene_view;
 
 class Render_context

@@ -777,6 +777,12 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
     m_info.use_clear_texture            = true;
     m_info.use_persistent_buffers       = true;
 
+    // Vulkan coordinate conventions
+    m_info.coordinate_conventions.native_depth_range = erhe::math::Depth_range::zero_to_one;
+    m_info.coordinate_conventions.framebuffer_origin = erhe::math::Framebuffer_origin::top_left;
+    m_info.coordinate_conventions.ndc_y_direction    = erhe::math::Ndc_y_direction::down;
+    m_info.coordinate_conventions.texture_origin     = erhe::math::Texture_origin::top_left;
+
     m_info.max_per_stage_descriptor_samplers = 32; // TODO properties.limits.maxPerStageDescriptorSamplers;
 }
 

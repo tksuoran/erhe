@@ -17,6 +17,7 @@ extern std::shared_ptr<spdlog::logger> log_file;
 extern std::shared_ptr<spdlog::logger> log_stream;
 extern std::shared_ptr<spdlog::logger> log_image;
 extern std::shared_ptr<spdlog::logger> log_pixel_lookup;
+extern std::shared_ptr<spdlog::logger> log_tile_renderer;
 
 void initialize_logging();
 

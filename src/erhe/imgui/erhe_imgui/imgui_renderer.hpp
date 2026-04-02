@@ -110,6 +110,8 @@ public:
     static constexpr std::size_t s_vec4_size   = 4 * sizeof(float);
 
     // Public API
+    [[nodiscard]] auto get_rtt_uv0() const -> glm::vec2; // UV for top-left when displaying render-to-texture content
+    [[nodiscard]] auto get_rtt_uv1() const -> glm::vec2; // UV for bottom-right when displaying render-to-texture content
     [[nodiscard]] auto get_font_atlas() -> ImFontAtlas*;
     void use_as_backend_renderer_on_context(ImGuiContext* imgui_context);
 

@@ -6,141 +6,129 @@
 
 namespace erhe::scene {
 
-auto Projection::clip_from_node_transform(const erhe::math::Viewport viewport, const bool reverse_depth) const -> Transform
+auto Projection::clip_from_node_transform(
+    const erhe::math::Viewport           viewport,
+    const bool                           reverse_depth,
+    const erhe::math::Depth_range        depth_range,
+    const erhe::math::Framebuffer_origin framebuffer_origin,
+    const erhe::math::Ndc_y_direction    ndc_y_direction
+) const -> Transform
 {
     const auto aspect_ratio = viewport.aspect_ratio();
-    const auto m = get_projection_matrix(aspect_ratio, reverse_depth);
+    const auto m = get_projection_matrix(aspect_ratio, reverse_depth, depth_range, framebuffer_origin, ndc_y_direction);
     return Transform{
         m,
         glm::inverse(m)
     };
 }
 
-auto Projection::get_projection_matrix(const float aspect_ratio, const bool reverse_depth) const -> glm::mat4
+auto Projection::get_projection_matrix(
+    const float                          aspect_ratio,
+    const bool                           reverse_depth,
+    const erhe::math::Depth_range        depth_range,
+    const erhe::math::Framebuffer_origin framebuffer_origin,
+    const erhe::math::Ndc_y_direction    ndc_y_direction
+) const -> glm::mat4
 {
-    const auto clip_range  = reverse_depth ? Clip_range{z_far, z_near} : Clip_range{z_near, z_far};
-    const auto depth_range = reverse_depth ? erhe::math::Depth_range::zero_to_one : erhe::math::Depth_range::negative_one_to_one;
+    const auto clip_range = reverse_depth ? Clip_range{z_far, z_near} : Clip_range{z_near, z_far};
 
+    glm::mat4 result{1.0f};
     switch (projection_type) {
         //using enum Projection::Type;
         case Projection::Type::perspective: {
-            return erhe::math::create_perspective(
-                fov_x,
-                fov_y,
-                clip_range.z_near,
-                clip_range.z_far,
-                depth_range
+            result = erhe::math::create_perspective(
+                fov_x, fov_y, clip_range.z_near, clip_range.z_far, depth_range
             );
+            break;
         }
 
         case Projection::Type::perspective_xr: {
-            return erhe::math::create_perspective_xr(
-                fov_left,
-                fov_right,
-                fov_up,
-                fov_down,
-                clip_range.z_near,
-                clip_range.z_far,
-                depth_range
+            result = erhe::math::create_perspective_xr(
+                fov_left, fov_right, fov_up, fov_down, clip_range.z_near, clip_range.z_far, depth_range
             );
+            break;
         }
 
         case Projection::Type::perspective_horizontal: {
-            return erhe::math::create_perspective_horizontal(
-                fov_x,
-                aspect_ratio,
-                clip_range.z_near,
-                clip_range.z_far,
-                depth_range
+            result = erhe::math::create_perspective_horizontal(
+                fov_x, aspect_ratio, clip_range.z_near, clip_range.z_far, depth_range
             );
+            break;
         }
 
         case Projection::Type::perspective_vertical: {
-            return erhe::math::create_perspective_vertical(
-                fov_y,
-                aspect_ratio,
-                clip_range.z_near,
-                clip_range.z_far,
-                depth_range
+            result = erhe::math::create_perspective_vertical(
+                fov_y, aspect_ratio, clip_range.z_near, clip_range.z_far, depth_range
             );
+            break;
         }
 
         case Projection::Type::orthogonal_horizontal: {
             if (aspect_ratio == 0.0f) {
                 return glm::mat4{1.0f};
             }
-            return erhe::math::create_orthographic(
-                -0.5f * ortho_width,
-                 0.5f * ortho_width,
-                -0.5f * ortho_width / aspect_ratio,
-                 0.5f * ortho_width / aspect_ratio,
-                clip_range.z_near,
-                clip_range.z_far,
-                depth_range
+            result = erhe::math::create_orthographic(
+                -0.5f * ortho_width,             0.5f * ortho_width,
+                -0.5f * ortho_width / aspect_ratio, 0.5f * ortho_width / aspect_ratio,
+                clip_range.z_near, clip_range.z_far, depth_range
             );
+            break;
         }
 
         case Projection::Type::orthogonal_vertical: {
             if (aspect_ratio == 0.0f) {
                 return glm::mat4{1.0f};
             }
-            return erhe::math::create_orthographic(
-                -0.5f * ortho_height / aspect_ratio,
-                 0.5f * ortho_height / aspect_ratio,
-                -0.5f * ortho_height,
-                 0.5f * ortho_height,
-                clip_range.z_near,
-                clip_range.z_far,
-                depth_range
+            result = erhe::math::create_orthographic(
+                -0.5f * ortho_height / aspect_ratio, 0.5f * ortho_height / aspect_ratio,
+                -0.5f * ortho_height,                0.5f * ortho_height,
+                clip_range.z_near, clip_range.z_far, depth_range
             );
+            break;
         }
 
         case Projection::Type::orthogonal: {
-            return erhe::math::create_orthographic(
-                -0.5f * ortho_width,
-                 0.5f * ortho_width,
-                -0.5f * ortho_height,
-                 0.5f * ortho_height,
-                clip_range.z_near,
-                clip_range.z_far,
-                depth_range
+            result = erhe::math::create_orthographic(
+                -0.5f * ortho_width,  0.5f * ortho_width,
+                -0.5f * ortho_height, 0.5f * ortho_height,
+                clip_range.z_near, clip_range.z_far, depth_range
             );
+            break;
         }
 
         case Projection::Type::orthogonal_rectangle: {
-            return erhe::math::create_orthographic(
-                ortho_left,
-                ortho_left + ortho_width,
-                ortho_bottom,
-                ortho_bottom + ortho_height,
-                clip_range.z_near,
-                clip_range.z_far,
-                depth_range
+            result = erhe::math::create_orthographic(
+                ortho_left, ortho_left + ortho_width,
+                ortho_bottom, ortho_bottom + ortho_height,
+                clip_range.z_near, clip_range.z_far, depth_range
             );
+            break;
         }
 
         case Projection::Type::generic_frustum: {
-            return erhe::math::create_frustum(
-                frustum_left,
-                frustum_right,
-                frustum_bottom,
-                frustum_top,
-                clip_range.z_near,
-                clip_range.z_far,
-                depth_range
+            result = erhe::math::create_frustum(
+                frustum_left, frustum_right, frustum_bottom, frustum_top,
+                clip_range.z_near, clip_range.z_far, depth_range
             );
+            break;
         }
 
-        case Projection::Type::other: {
-            // TODO(tksuoran@gmail.com): Implement
-            return glm::mat4{1.0f};
-        }
-
+        case Projection::Type::other:
         default: {
-            // TODO(tksuoran@gmail.com): Implement
-            return glm::mat4{1.0f};
+            break;
         }
     }
+
+    // When framebuffer origin is top-left but NDC Y points up (Metal),
+    // negate Y in the projection to compensate for the viewport Y-flip.
+    if (erhe::math::needs_projection_y_flip(framebuffer_origin, ndc_y_direction)) {
+        result[1][0] = -result[1][0];
+        result[1][1] = -result[1][1];
+        result[1][2] = -result[1][2];
+        result[1][3] = -result[1][3];
+    }
+
+    return result;
 }
 
 auto Projection::get_fov_sides(const erhe::math::Viewport viewport) const -> Fov_sides

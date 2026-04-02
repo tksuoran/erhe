@@ -4,6 +4,7 @@
 #include "erhe_graphics/ring_buffer_client.hpp"
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_primitive/enums.hpp"
+#include "erhe_scene_renderer/generated/primitive_color_source.hpp"
 
 #include <glm/glm.hpp>
 
@@ -44,11 +45,7 @@ public:
     std::size_t                     max_primitive_count;
 };
 
-enum class Primitive_color_source : unsigned int {
-    id_offset = 0,
-    mesh_wireframe_color,
-    constant_color,
-};
+using ::Primitive_color_source;
 
 static constexpr std::array<std::string_view, 3> c_primitive_color_source_strings = {
     "ID Offset",
@@ -64,9 +61,6 @@ static constexpr std::array<const char*, 3> c_primitive_color_source_strings_dat
         c_primitive_color_source_strings
     )
 };
-
-// Primitive_color_source primitive_color_source  {Primitive_color_source::constant_color};
-// glm::vec4              primitive_constant_color{1.0f, 1.0f, 1.0f, 1.0f};
 
 enum class Primitive_size_source : unsigned int
 {

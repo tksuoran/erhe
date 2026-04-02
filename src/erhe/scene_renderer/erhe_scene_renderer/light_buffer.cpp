@@ -140,14 +140,20 @@ void Light_projections::apply(
     const erhe::math::Viewport&                                 view_camera_viewport,
     const erhe::math::Viewport&                                 light_texture_viewport,
     const std::shared_ptr<erhe::graphics::Texture>&             in_shadow_map_texture,
-    const bool                                                  reverse_depth
+    const bool                                                  reverse_depth,
+    const erhe::math::Depth_range                               depth_range,
+    const erhe::math::Framebuffer_origin                        framebuffer_origin,
+    const erhe::math::Ndc_y_direction                           ndc_y_direction
 )
 {
     parameters = erhe::scene::Light_projection_parameters{
         .view_camera          = view_camera,
         .main_camera_viewport = view_camera_viewport,
         .shadow_map_viewport  = light_texture_viewport,
-        .reverse_depth        = reverse_depth
+        .reverse_depth        = reverse_depth,
+        .depth_range          = depth_range,
+        .framebuffer_origin   = framebuffer_origin,
+        .ndc_y_direction      = ndc_y_direction
     };
     shadow_map_texture = in_shadow_map_texture;
 
@@ -229,6 +235,14 @@ auto Light_buffer::update(
     if (shadow_map_texture != nullptr) {
         shadow_map_texture_handle_compare    = texture_heap.assign(c_texture_heap_slot_shadow_compare,    shadow_map_texture, compare_sampler);
         shadow_map_texture_handle_no_compare = texture_heap.assign(c_texture_heap_slot_shadow_no_compare, shadow_map_texture, no_compare_sampler);
+        log_render->trace(
+            "Shadow texture assigned: texture='{}' handle_compare={} handle_no_compare={}",
+            shadow_map_texture->get_debug_label().data(),
+            shadow_map_texture_handle_compare,
+            shadow_map_texture_handle_no_compare
+        );
+    } else {
+        log_render->warn("Shadow map texture is null - no shadow texture assigned");
     }
 
     using erhe::graphics::as_span;

@@ -7,6 +7,7 @@
 #include "erhe_verify/verify.hpp"
 
 #include <optional>
+#include <vector>
 
 namespace erhe::graphics {
 
@@ -171,12 +172,6 @@ void Blit_command_encoder_impl::copy_from_buffer(
                           (source_bytes_per_row % 4 == 0) ? 4 :
                           (source_bytes_per_row % 2 == 0) ? 2 : 1;
 
-    gl::bind_buffer(gl::Buffer_target::pixel_unpack_buffer, source_buffer->get_impl().gl_name());
-
-    gl::pixel_store_i(gl::Pixel_store_parameter::unpack_alignment,    alignment);
-    gl::pixel_store_i(gl::Pixel_store_parameter::unpack_image_height, static_cast<int>(gl_unpack_image_height));
-    gl::pixel_store_i(gl::Pixel_store_parameter::unpack_row_length,   static_cast<int>(gl_unpack_row_length));
-
     gl::Pixel_format gl_format{0};
     gl::Pixel_type   gl_type  {0};
     const bool format_type_ok = get_format_and_type(destination_texture->get_pixelformat(), gl_format, gl_type);
@@ -184,6 +179,76 @@ void Blit_command_encoder_impl::copy_from_buffer(
     if (!format_type_ok) {
         return;
     }
+
+#if defined(__APPLE__)
+    // macOS OpenGL driver does not reliably support PBO-based texture uploads.
+    // Read the data from the GPU buffer back to CPU, then upload directly.
+    const std::size_t read_byte_count = source_bytes_per_image;
+    std::vector<std::byte> cpu_buffer(read_byte_count);
+    {
+        auto guard = m_device.get_impl().get_binding_state().push_buffer(
+            gl::Buffer_target::copy_read_buffer, source_buffer->get_impl().gl_name()
+        );
+        gl::get_buffer_sub_data(
+            gl::Buffer_target::copy_read_buffer,
+            static_cast<GLintptr>(source_offset),
+            static_cast<GLsizeiptr>(read_byte_count),
+            cpu_buffer.data()
+        );
+    }
+    const void* cpu_data = cpu_buffer.data();
+
+    gl::bind_buffer(gl::Buffer_target::pixel_unpack_buffer, 0);
+    gl::pixel_store_i(gl::Pixel_store_parameter::unpack_alignment,    alignment);
+    gl::pixel_store_i(gl::Pixel_store_parameter::unpack_image_height, static_cast<int>(gl_unpack_image_height));
+    gl::pixel_store_i(gl::Pixel_store_parameter::unpack_row_length,   static_cast<int>(gl_unpack_row_length));
+
+    constexpr GLuint scratch_unit = Gl_binding_state::s_max_texture_units - 1;
+    auto texture_guard = m_device.get_impl().get_binding_state().push_texture(
+        scratch_unit, gl_destination_texture_target, destination_texture->get_impl().gl_name()
+    );
+
+    switch (destination_texture->get_impl().get_storage_dimensions(gl_destination_texture_target)) {
+        case 1: {
+            gl::tex_sub_image_1d(
+                gl_destination_texture_target,
+                static_cast<GLint>(destination_level),
+                gl_destination_x, gl_width, gl_format, gl_type, cpu_data
+            );
+            break;
+        }
+
+        case 2: {
+            gl::tex_sub_image_2d(
+                gl_destination_texture_target,
+                static_cast<GLint>(destination_level),
+                gl_destination_x, gl_destination_y,
+                gl_width, gl_height, gl_format, gl_type, cpu_data
+            );
+            break;
+        }
+
+        case 3: {
+            gl::tex_sub_image_3d(
+                gl_destination_texture_target,
+                static_cast<GLint>(destination_level),
+                gl_destination_x, gl_destination_y, gl_destination_z,
+                gl_width, gl_height, gl_depth, gl_format, gl_type, cpu_data
+            );
+            break;
+        }
+
+        default: {
+            ERHE_FATAL("Bad texture target");
+        }
+    }
+#else
+    gl::bind_buffer(gl::Buffer_target::pixel_unpack_buffer, source_buffer->get_impl().gl_name());
+
+    gl::pixel_store_i(gl::Pixel_store_parameter::unpack_alignment,    alignment);
+    gl::pixel_store_i(gl::Pixel_store_parameter::unpack_image_height, static_cast<int>(gl_unpack_image_height));
+    gl::pixel_store_i(gl::Pixel_store_parameter::unpack_row_length,   static_cast<int>(gl_unpack_row_length));
+
     const char* data_pointer = reinterpret_cast<const char*>(source_offset);
 
     const bool use_dsa = m_device.get_info().use_direct_state_access;
@@ -257,6 +322,7 @@ void Blit_command_encoder_impl::copy_from_buffer(
             ERHE_FATAL("Bad texture target");
         }
     }
+#endif
 }
 
 // Copy from texture to buffer

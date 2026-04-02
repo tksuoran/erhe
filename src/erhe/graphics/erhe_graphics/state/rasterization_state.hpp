@@ -20,6 +20,10 @@ public:
     Polygon_mode         polygon_mode        {Polygon_mode::fill};
     // not implementing separate front and back polygon modes for now
 
+    // Returns a copy with front_face_direction inverted (CCW<->CW).
+    // Use when projection Y-flip reverses apparent triangle winding.
+    [[nodiscard]] auto with_winding_flip() const -> Rasterization_state;
+
     static Rasterization_state cull_mode_none_depth_clamp;
     static Rasterization_state cull_mode_none;
     static Rasterization_state cull_mode_front_cw;

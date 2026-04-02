@@ -134,5 +134,18 @@ auto Cpu_buffer_sink::get_available_index_byte_count(std::size_t alignment) cons
     return m_index_buffer.get_available_byte_count(alignment);
 }
 
+auto Cpu_buffer_sink::allocate_edge_line_vertex_buffer(std::size_t /*vertex_count*/, std::size_t /*vertex_element_size*/) -> Buffer_sink_allocation
+{
+    return {};
+}
+
+void Cpu_buffer_sink::enqueue_edge_line_vertex_data(std::size_t /*offset*/, std::vector<uint8_t>&& /*data*/) const
+{
+}
+
+auto Cpu_buffer_sink::get_available_edge_line_vertex_byte_count(std::size_t /*alignment*/) const -> std::size_t
+{
+    return 0;
+}
 
 } // namespace erhe::primitive

@@ -25,7 +25,11 @@ public:
 #if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
     bool            use_finish              {false};
     int             gl_major                {4};
+# if defined(ERHE_OS_OSX)
+    int             gl_minor                {1};
+# else
     int             gl_minor                {6};
+# endif
     Context_window* share                   {nullptr};
 #endif
     glm::ivec2      size                    {1920, 1080};

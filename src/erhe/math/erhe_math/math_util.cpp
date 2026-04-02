@@ -295,6 +295,16 @@ auto create_orthographic_centered(
     );
 }
 
+auto needs_projection_y_flip(const Framebuffer_origin origin, const Ndc_y_direction ndc_y) -> bool
+{
+    // When framebuffer origin is top-left but NDC Y points up (Metal),
+    // the viewport transform flips Y. To compensate, we negate Y in
+    // the projection matrix.
+    // When both are top-left and Y-down (Vulkan), they cancel out -- no flip needed.
+    // When origin is bottom-left and Y-up (OpenGL), they match -- no flip needed.
+    return (origin == Framebuffer_origin::top_left) && (ndc_y == Ndc_y_direction::up);
+}
+
 // Creates world_from_view matrix
 auto create_look_at(const vec3 eye, const vec3 center, const vec3 up0) -> mat4
 {

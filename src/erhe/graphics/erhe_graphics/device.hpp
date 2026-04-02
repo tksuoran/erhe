@@ -5,6 +5,7 @@
 #include "erhe_graphics/shader_monitor.hpp"
 #include "erhe_graphics/surface.hpp"
 #include "erhe_graphics/generated/graphics_config.hpp"
+#include "erhe_math/math_util.hpp"
 #include "erhe_utility/debug_label.hpp"
 
 #include <array>
@@ -66,6 +67,15 @@ static constexpr unsigned int format_flag_require_stencil   = 0x02u;
 static constexpr unsigned int format_flag_prefer_accuracy   = 0x04u;
 static constexpr unsigned int format_flag_prefer_filterable = 0x08u;
 
+class Coordinate_conventions
+{
+public:
+    erhe::math::Depth_range        native_depth_range{erhe::math::Depth_range::negative_one_to_one};
+    erhe::math::Framebuffer_origin framebuffer_origin{erhe::math::Framebuffer_origin::bottom_left};
+    erhe::math::Ndc_y_direction    ndc_y_direction   {erhe::math::Ndc_y_direction::up};
+    erhe::math::Texture_origin     texture_origin    {erhe::math::Texture_origin::bottom_left};
+};
+
 class Device_info
 {
 public:
@@ -84,6 +94,7 @@ public:
 #endif
 
     bool use_clip_control            {false};
+    Coordinate_conventions coordinate_conventions;
     bool use_direct_state_access     {false};
     bool use_binary_shaders          {false};
     bool use_integer_polygon_ids     {false};
@@ -150,8 +161,10 @@ public:
     unsigned int uniform_buffer_offset_alignment       {256};
 };
 
-using Shader_error_callback = std::function<void(const std::string& error_log, const std::string& shader_source)>;
+using Shader_error_callback = std::function<void(const std::string& error_log, const std::string& shader_source, const std::string& callstack)>;
+using Device_error_callback = std::function<void(const std::string& error_message, const std::string& callstack)>;
 using State_dump_callback   = std::function<void(const std::string& state_dump)>;
+using Trace_callback        = std::function<void(const std::string& message)>;
 
 class Frame_state;
 class Frame_begin_info;
@@ -198,14 +211,20 @@ public:
     [[nodiscard]] auto get_impl                           () -> Device_impl&;
     [[nodiscard]] auto get_impl                           () const -> const Device_impl&;
     void               set_shader_error_callback         (Shader_error_callback callback);
+    void               set_device_error_callback         (Device_error_callback callback);
     void               set_state_dump_callback           (State_dump_callback callback);
+    void               set_trace_callback                (Trace_callback callback);
     void               shader_error                      (const std::string& error_log, const std::string& shader_source);
+    void               device_error                      (const std::string& error_message);
     void               state_dump                        (const std::string& dump);
+    void               trace                             (const std::string& message);
 
 private:
     std::unique_ptr<Device_impl> m_impl;
     Shader_error_callback        m_shader_error_callback;
+    Device_error_callback        m_device_error_callback;
     State_dump_callback          m_state_dump_callback;
+    Trace_callback               m_trace_callback;
 };
 
 [[nodiscard]] auto get_depth_clear_value_pointer(bool reverse_depth = true) -> const float *; // reverse_depth ? 0.0f : 1.0f;

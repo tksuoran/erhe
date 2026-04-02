@@ -360,9 +360,28 @@ template <typename T>
 }
 
 enum class Depth_range : unsigned int {
-    zero_to_one,        // GL 4.5 with glClipControl(lower_left, zero_to_one) or Vulkan
+    zero_to_one,        // GL 4.5 with glClipControl(lower_left, zero_to_one), Metal, or Vulkan
     negative_one_to_one // Default OpenGL NDC (GL 4.1 on macOS)
 };
+
+enum class Framebuffer_origin : unsigned int {
+    bottom_left, // OpenGL
+    top_left     // Metal, Vulkan
+};
+
+enum class Ndc_y_direction : unsigned int {
+    up,   // OpenGL, Metal
+    down  // Vulkan
+};
+
+enum class Texture_origin : unsigned int {
+    bottom_left, // OpenGL
+    top_left     // Metal, Vulkan
+};
+
+// Returns true when projection matrix needs Y negation to compensate for
+// framebuffer origin vs NDC Y direction mismatch (top-left origin with Y-up NDC).
+[[nodiscard]] auto needs_projection_y_flip(Framebuffer_origin origin, Ndc_y_direction ndc_y) -> bool;
 
 [[nodiscard]] auto create_frustum(float left, float right, float bottom, float top, float z_near, float z_far, Depth_range depth_range = Depth_range::zero_to_one) -> glm::mat4;
 [[nodiscard]] auto create_frustum_infinite_far(float left, float right, float bottom, float top, float z_near, Depth_range depth_range = Depth_range::zero_to_one) -> glm::mat4;

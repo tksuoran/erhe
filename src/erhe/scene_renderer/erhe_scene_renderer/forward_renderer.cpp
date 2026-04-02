@@ -95,7 +95,8 @@ void Forward_renderer::render(const Render_parameters& parameters)
             parameters.grid_size,
             parameters.grid_line_width,
             parameters.frame_number,
-            parameters.reverse_depth
+            parameters.reverse_depth,
+            parameters.depth_range
         );
         m_camera_buffer.bind(parameters.render_encoder, camera_buffer_range.value());
     }
@@ -217,7 +218,8 @@ void Forward_renderer::draw_primitives(const Render_parameters& parameters, cons
             parameters.grid_size,
             parameters.grid_line_width,
             parameters.frame_number,
-            parameters.reverse_depth
+            parameters.reverse_depth,
+            parameters.depth_range
         );
         m_camera_buffer.bind(parameters.render_encoder, camera_range.value());
     }

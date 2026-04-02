@@ -1,18 +1,8 @@
 {
-    "camera_controls": {
-        "_version": 1,
-        "invert_x": false,
-        "invert_y": false,
-        "sensitivity": 1,
-        "velocity_damp": 0.92,
-        "velocity_max_delta": 0.004,
-        "move_power": 1000,
-        "move_speed": 2,
-        "turn_speed": 1
-    },
+    "_version": 1,
     "developer": {
         "_version": 1,
-        "enable": false
+        "enable": true
     },
     "graphics": {
         "_version": 1,
@@ -23,78 +13,16 @@
         "force_no_direct_state_access": false,
         "force_no_clip_control": false,
         "force_emulate_multi_draw_indirect": false,
+        "force_no_compute_shader": false,
         "force_gl_version": 0,
         "force_glsl_version": 0,
         "renderdoc_capture_support": false,
         "shader_monitor_enabled": true
     },
-    "grid": {
-        "_version": 1,
-        "snap_enabled": true,
-        "visible": true,
-        "major_color": [0,0,0,1],
-        "minor_color": [0,0,0,0.5],
-        "major_width": 4,
-        "minor_width": 0.75,
-        "cell_size": 1,
-        "cell_div": 2,
-        "cell_count": 100
-    },
-    "headset": {
-        "_version": 1,
-        "openxr": false,
-        "openxr_mirror": false,
-        "quad_view": false,
-        "debug": false,
-        "validation": false,
-        "api_dump": false,
-        "depth": false,
-        "visibility_mask": false,
-        "hand_tracking": false,
-        "passthrough_fb": false,
-        "composition_alpha": false
-    },
-    "hotbar": {
-        "_version": 1,
-        "enabled": true,
-        "show": true,
-        "use_radial": false,
-        "x": 0,
-        "y": -0.14,
-        "z": -0.5
-    },
-    "hud": {
-        "_version": 1,
-        "enabled": false,
-        "show": false,
-        "locked": false,
-        "width": 3072,
-        "height": 2048,
-        "ppm": 3400,
-        "x": 0,
-        "y": 0,
-        "z": -0.03
-    },
-    "id_renderer": {
-        "_version": 1,
-        "enabled": false
-    },
     "mesh_memory": {
         "_version": 1,
         "vertex_buffer_size": 1024,
         "index_buffer_size": 256
-    },
-    "network": {
-        "_version": 1,
-        "upstream_address": "127.0.0.1",
-        "upstream_port": 34567,
-        "downstream_address": "0.0.0.0",
-        "downstream_port": 34567
-    },
-    "physics": {
-        "_version": 1,
-        "static_enable": true,
-        "dynamic_enable": true
     },
     "renderer": {
         "_version": 1,
@@ -104,33 +32,6 @@
         "max_joint_count": 1000,
         "max_primitive_count": 6000,
         "max_draw_count": 6000
-    },
-    "scene": {
-        "_version": 1,
-        "imgui_window_scene_view": true,
-        "camera_exposure": 1,
-        "shadow_range": 30,
-        "directional_light_intensity": 4,
-        "directional_light_radius": 4.5,
-        "directional_light_height": 10,
-        "directional_light_count": 8,
-        "spot_light_intensity": 500,
-        "spot_light_radius": 10,
-        "spot_light_height": 5,
-        "spot_light_count": 0,
-        "floor_size": 32,
-        "floor_height": 1,
-        "floor": true,
-        "mass_scale": 8,
-        "detail": 4,
-        "camera_distance": 4,
-        "camera_elevation": 1.3,
-        "instance_count": 1,
-        "instance_gap": 0.5,
-        "object_scale": 0.25,
-        "make_johnson_solid_brushes": true,
-        "make_platonic_solid_brushes": true,
-        "make_curved_brushes": true
     },
     "shader_monitor": {
         "_version": 1,
@@ -144,31 +45,6 @@
     "threading": {
         "_version": 1,
         "thread_count": 8
-    },
-    "thumbnails": {
-        "_version": 1,
-        "capacity": 200,
-        "size_pixels": 256
-    },
-    "transform_tool": {
-        "_version": 1,
-        "show_translate": true,
-        "show_rotate": false
-    },
-    "viewport": {
-        "_version": 1,
-        "gizmo_scale": 6.5,
-        "polygon_fill": true,
-        "edge_lines": true,
-        "selection_polygon_fill": true,
-        "selection_edge_lines": true,
-        "corner_points": false,
-        "polygon_centroids": false,
-        "selection_bounding_box": false,
-        "selection_bounding_sphere": false,
-        "edge_color": [0,0,0,0.5],
-        "selection_edge_color": [0,0,0,0.5],
-        "clear_color": [0.05,0.05,0.05,1]
     },
     "window": {
         "_version": 1,

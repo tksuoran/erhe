@@ -175,7 +175,12 @@ void do_wide_line(uint in_line_index, uint out_triangle_index)
     vec4 c = vec4(v1_in_ndc.xy + offset_c_in_ndc, v1_in_ndc.z, width1);
     vec4 d = vec4(v0_in_ndc.xy + offset_d_in_ndc, v0_in_ndc.z, width0);
 
-    vec4 l_in_screen = vec4(v0_in_screen, v1_in_screen);
+    // Adjust screen coordinates for fragment shader gl_FragCoord matching.
+    // On Metal (top-left origin), gl_FragCoord.y = 0 is at the top,
+    // but screen_from_ndc maps y=+1 to vp_height. Flip y to match.
+    vec2 v0_frag_screen = vec2(v0_in_screen.x, mix(v0_in_screen.y, vp_size.y - v0_in_screen.y, step(view.vp_y_sign, 0.0)));
+    vec2 v1_frag_screen = vec2(v1_in_screen.x, mix(v1_in_screen.y, vp_size.y - v1_in_screen.y, step(view.vp_y_sign, 0.0)));
+    vec4 l_in_screen = vec4(v0_frag_screen, v1_frag_screen);
 
     // CCW Triangle strip indices: 0123 = adbc
     // CCW Triangles indices:      012, 213 = adb, bdc

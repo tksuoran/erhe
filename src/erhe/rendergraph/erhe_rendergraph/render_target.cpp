@@ -91,7 +91,7 @@ void Render_target::update(int width, int height, erhe::graphics::Swapchain* swa
 
         m_multisampled_color_texture.reset();
         m_color_texture.reset();
-        if (m_sample_count > 0) {
+        if (m_sample_count > 1) {
             m_multisampled_color_texture = std::make_shared<Texture>(
                 m_graphics_device,
                 erhe::graphics::Texture_create_info{
@@ -158,7 +158,7 @@ void Render_target::update(int width, int height, erhe::graphics::Swapchain* swa
 
         {
             erhe::graphics::Render_pass_descriptor render_pass_descriptor{};
-            if (m_sample_count > 0) {
+            if (m_sample_count > 1) {
                 render_pass_descriptor.color_attachments[0].texture         = m_multisampled_color_texture.get();
                 render_pass_descriptor.color_attachments[0].resolve_texture = m_color_texture.get();
                 render_pass_descriptor.color_attachments[0].load_action     = erhe::graphics::Load_action::Clear;

@@ -44,12 +44,13 @@ public:
         Element_mappings& element_mappings
     );
 
-    void get_mesh_info            ();
-    void get_vertex_attributes    ();
-    void calculate_bounding_volume();
-    void allocate_vertex_buffers  ();
-    void allocate_index_buffer    ();
-    void allocate_index_range     (Primitive_type primitive_type, std::size_t index_count, Index_range& out_range);
+    void get_mesh_info                   ();
+    void get_vertex_attributes           ();
+    void calculate_bounding_volume       ();
+    void allocate_vertex_buffers         ();
+    void allocate_index_buffer           ();
+    void allocate_edge_line_vertex_buffer();
+    void allocate_index_range            (Primitive_type primitive_type, std::size_t index_count, Index_range& out_range);
 
     Buffer_mesh&                           buffer_mesh;
     const GEO::Mesh&                       mesh;

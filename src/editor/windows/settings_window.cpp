@@ -4,7 +4,11 @@
 #include "app_message_bus.hpp"
 #include "app_settings.hpp"
 #include "windows/inventory_window.hpp"
-#include "config/editor_config.hpp"
+#include "config/generated/erhe_config.hpp"
+#include "config/generated/erhe_config_serialization.hpp"
+#include "config/generated/editor_settings_config.hpp"
+#include "config/generated/editor_settings_config_serialization.hpp"
+#include "erhe_codegen/config_io.hpp"
 #include "config/generated/camera_controls_config_serialization.hpp"
 #include "config/generated/developer_config_serialization.hpp"
 #include "config/generated/grid_config_serialization.hpp"
@@ -143,17 +147,23 @@ void Settings_window::update_preset_names()
 {
 }
 
-auto Settings_window::get_graphics_preset() -> Graphics_preset&
+auto Settings_window::get_graphics_preset() -> Graphics_preset_entry&
 {
-    Graphics_settings&            graphics         = m_context.app_settings->graphics;
-    std::vector<Graphics_preset>& graphics_presets = graphics.graphics_presets;
-    Graphics_preset&              graphics_preset  = graphics_presets.at(m_graphics_preset_index);
+    Graphics_settings&                  graphics         = m_context.app_settings->graphics;
+    std::vector<Graphics_preset_entry>& graphics_presets = graphics.graphics_presets;
+    Graphics_preset_entry&              graphics_preset  = graphics_presets.at(m_graphics_preset_index);
     return graphics_preset;
 }
 
 void Settings_window::imgui()
 {
     reset();
+
+    // Sync developer_mode from erhe_config each frame so toggling the
+    // checkbox in the Startup Configuration section takes effect immediately.
+    if (m_context.erhe_config != nullptr) {
+        m_context.developer_mode = m_context.erhe_config->developer.enable || m_context.renderdoc;
+    }
 
     const float ui_scale = m_context.app_settings->get_ui_scale();
     const ImVec2 button_size{110.0f * ui_scale, 0.0f};
@@ -225,14 +235,14 @@ void Settings_window::imgui()
 
     if (!graphics_presets.empty()) {
         add_entry("Preset Name", [this](){
-            Graphics_preset& graphics_preset = get_graphics_preset();
+            Graphics_preset_entry& graphics_preset = get_graphics_preset();
             ImGui::InputText("##", &graphics_preset.name);
         });
 
         add_entry("MSAA Sample Count", [this](){
-            Graphics_preset&   graphics_preset                = get_graphics_preset();
-            Graphics_settings& graphics                       = m_context.app_settings->graphics;
-            std::vector<int>&  msaa_sample_count_entry_values = graphics.msaa_sample_count_entry_values;
+            Graphics_preset_entry& graphics_preset                = get_graphics_preset();
+            Graphics_settings&     graphics                       = m_context.app_settings->graphics;
+            std::vector<int>&      msaa_sample_count_entry_values = graphics.msaa_sample_count_entry_values;
             for (
                 m_msaa_sample_count_entry_index = 0;
                 m_msaa_sample_count_entry_index < msaa_sample_count_entry_values.size();
@@ -259,16 +269,16 @@ void Settings_window::imgui()
         });
 
         add_entry("Reverse Depth", [this]() {
-            Graphics_preset& graphics_preset = get_graphics_preset();
+            Graphics_preset_entry& graphics_preset = get_graphics_preset();
             ImGui::Checkbox("##", &graphics_preset.reverse_depth);
         });
 
         add_entry("Shadows Enabled", [this]() {
-            Graphics_preset& graphics_preset = get_graphics_preset();
+            Graphics_preset_entry& graphics_preset = get_graphics_preset();
             ImGui::Checkbox("##", &graphics_preset.shadow_enable);
         });
         add_entry("Shadow Resolution", [this](){
-            Graphics_preset& graphics_preset = get_graphics_preset();
+            Graphics_preset_entry& graphics_preset = get_graphics_preset();
             const int   shadow_resolution_values[] = {  256, 512, 1024, 1024 * 2, 1024 * 3, 1024 * 4, 1024 * 5, 1024 * 6, 1024 * 7, 1024 * 8 };
             const char* shadow_resolution_items [] = { "256", "512", "1024", "2048", "3072", "4096", "5120", "6144", "7168", "8192" };
             m_shadow_resolution_index = 0;
@@ -294,7 +304,7 @@ void Settings_window::imgui()
             add_entry(
                 "Shadow Depth Bits",
                 [this]() {
-                    Graphics_preset& graphics_preset = get_graphics_preset();
+                    Graphics_preset_entry& graphics_preset = get_graphics_preset();
                     std::vector<erhe::dataformat::Format> formats = m_context.graphics_device->get_supported_depth_stencil_formats();
                     std::set<int> depth_size_set;
                     for (const erhe::dataformat::Format format : formats) {
@@ -335,18 +345,18 @@ void Settings_window::imgui()
 
         //ImGui::SliderInt  ("Shadow Resolution",  &graphics_preset.shadow_resolution,  1, graphics.max_shadow_resolution);
         add_entry("Shadow Light Count", [this](){
-            Graphics_preset&   graphics_preset = get_graphics_preset();
+            Graphics_preset_entry&   graphics_preset = get_graphics_preset();
             Graphics_settings& graphics        = m_context.app_settings->graphics;
             ImGui::SliderInt("##", &graphics_preset.shadow_light_count, 1, std::min(graphics.max_depth_layers, 32));
         });
     }
 
     add_entry("", [this, button_size](){
-        std::vector<Graphics_preset>& graphics_presets = m_context.app_settings->graphics.graphics_presets;
+        std::vector<Graphics_preset_entry>& graphics_presets = m_context.app_settings->graphics.graphics_presets;
 
         const bool add_pressed = ImGui::Button("Add", button_size);
         if (add_pressed || graphics_presets.empty()) {
-            Graphics_preset new_graphics_preset{
+            Graphics_preset_entry new_graphics_preset{
                 .name = "New preset"
             };
             graphics_presets.push_back(new_graphics_preset);
@@ -371,77 +381,93 @@ void Settings_window::imgui()
 
     add_entry("", [this, button_size](){
         if (ImGui::Button("Load", button_size)) {
-            m_context.app_settings->read();
+            if (m_context.editor_settings != nullptr) {
+                m_context.app_settings->read(*m_context.editor_settings);
+            }
         }
         ImGui::SameLine();
         if (ImGui::Button("Save", button_size)) {
-            m_context.app_settings->write();
+            if (m_context.editor_settings != nullptr) {
+                m_context.app_settings->write(*m_context.editor_settings);
+            }
         }
     });
 
-    if (m_context.editor_config != nullptr) {
-        Editor_config& config = *m_context.editor_config;
-        const bool show_developer = config.developer.enable;
+    const bool show_developer = (m_context.erhe_config != nullptr) && m_context.erhe_config->developer.enable;
 
-        auto add_config_section = [this, show_developer](auto& section) {
-            const auto& struct_info = get_struct_info(static_cast<const std::remove_reference_t<decltype(section)>*>(nullptr));
-            if (struct_info.developer && !show_developer) {
-                return;
+    auto add_config_section = [this, show_developer](auto& section) {
+        const auto& struct_info = get_struct_info(static_cast<const std::remove_reference_t<decltype(section)>*>(nullptr));
+        if (struct_info.developer && !show_developer) {
+            return;
+        }
+        const char* label = (struct_info.short_desc != nullptr && struct_info.short_desc[0] != '\0')
+            ? struct_info.short_desc
+            : struct_info.name;
+        push_group(label, ImGuiTreeNodeFlags_Framed);
+        const auto fields = get_fields(static_cast<const std::remove_reference_t<decltype(section)>*>(nullptr));
+        for (const auto& field : fields) {
+            if (field.removed_in != 0) {
+                continue;
             }
-            const char* label = (struct_info.short_desc != nullptr && struct_info.short_desc[0] != '\0')
-                ? struct_info.short_desc
-                : struct_info.name;
-            push_group(label, ImGuiTreeNodeFlags_Framed);
-            const auto fields = get_fields(static_cast<const std::remove_reference_t<decltype(section)>*>(nullptr));
-            for (const auto& field : fields) {
-                if (field.removed_in != 0) {
-                    continue;
-                }
-                if (field.developer && !show_developer) {
-                    continue;
-                }
-                const char* entry_label = (field.short_desc != nullptr && field.short_desc[0] != '\0')
-                    ? field.short_desc
-                    : field.name;
-                std::string tooltip = (field.long_desc != nullptr && field.long_desc[0] != '\0')
-                    ? std::string{field.long_desc}
-                    : std::string{};
-                add_entry(std::string{entry_label}, [&section, &field]() {
-                    imgui_field(&section, field);
-                }, std::move(tooltip));
+            if (field.developer && !show_developer) {
+                continue;
             }
-            pop_group();
-        };
+            const char* entry_label = (field.short_desc != nullptr && field.short_desc[0] != '\0')
+                ? field.short_desc
+                : field.name;
+            std::string tooltip = (field.long_desc != nullptr && field.long_desc[0] != '\0')
+                ? std::string{field.long_desc}
+                : std::string{};
+            add_entry(std::string{entry_label}, [&section, &field]() {
+                imgui_field(&section, field);
+            }, std::move(tooltip));
+        }
+        pop_group();
+    };
 
-        push_group("Editor Config", ImGuiTreeNodeFlags_Framed);
-        add_config_section(config.camera_controls);
-        add_config_section(config.developer);
-        add_config_section(config.graphics);
-        add_config_section(config.grid);
-        add_config_section(config.headset);
-        add_config_section(config.hotbar);
-        add_config_section(config.hud);
-        add_config_section(config.inventory);
-        add_config_section(config.id_renderer);
-        add_config_section(config.mesh_memory);
-        add_config_section(config.network);
-        add_config_section(config.physics);
-        add_config_section(config.renderer);
-        add_config_section(config.scene);
-        add_config_section(config.shader_monitor);
-        add_config_section(config.text_renderer);
-        add_config_section(config.threading);
-        add_config_section(config.thumbnails);
-        add_config_section(config.transform_tool);
-        add_config_section(config.viewport);
-        add_config_section(config.window);
+    if (m_context.erhe_config != nullptr) {
+        Erhe_config& erhe_config = *m_context.erhe_config;
+        push_group("Startup Configuration (erhe.json)", ImGuiTreeNodeFlags_Framed);
+        add_config_section(erhe_config.developer);
+        add_config_section(erhe_config.graphics);
+        add_config_section(erhe_config.mesh_memory);
+        add_config_section(erhe_config.renderer);
+        add_config_section(erhe_config.shader_monitor);
+        add_config_section(erhe_config.text_renderer);
+        add_config_section(erhe_config.threading);
+        add_config_section(erhe_config.window);
+        add_entry("", [this, button_size](){
+            if (ImGui::Button("Save erhe.json", button_size)) {
+                erhe::codegen::save_config(*m_context.erhe_config, "erhe.json");
+            }
+        });
+        pop_group();
+    }
 
-        add_entry("", [this, button_size, &config](){
-            if (ImGui::Button("Save Config", button_size)) {
+    if (m_context.editor_settings != nullptr) {
+        Editor_settings_config& settings = *m_context.editor_settings;
+
+        push_group("Editor Settings", ImGuiTreeNodeFlags_Framed);
+        add_config_section(settings.camera_controls);
+        add_config_section(settings.grid);
+        add_config_section(settings.headset);
+        add_config_section(settings.hotbar);
+        add_config_section(settings.hud);
+        add_config_section(settings.inventory);
+        add_config_section(settings.id_renderer);
+        add_config_section(settings.network);
+        add_config_section(settings.physics);
+        add_config_section(settings.scene);
+        add_config_section(settings.thumbnails);
+        add_config_section(settings.transform_tool);
+        add_config_section(settings.viewport);
+
+        add_entry("", [this, button_size, &settings](){
+            if (ImGui::Button("Save Settings", button_size)) {
                 if (m_context.inventory_window != nullptr) {
-                    m_context.inventory_window->write_config(config.inventory);
+                    m_context.inventory_window->write_config(settings.inventory);
                 }
-                save_editor_config(config, "erhe.json");
+                erhe::codegen::save_config(settings, "editor_settings.json");
             }
         });
         pop_group();

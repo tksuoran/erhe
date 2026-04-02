@@ -43,7 +43,8 @@ public:
     static constexpr uint64_t hovered_in_item_tree      = (1u << 23);
     static constexpr uint64_t negative_determinant      = (1u << 24);
     static constexpr uint64_t lock_edit                  = (1u << 25);
-    static constexpr uint64_t count                     = 26;
+    static constexpr uint64_t show_in_developer_ui      = (1u << 26);
+    static constexpr uint64_t count                     = 27;
 
     static constexpr const char* c_bit_labels[] =
     {
@@ -73,6 +74,7 @@ public:
         "Hovered in Item Tree",
         "Negative Determinant",
         "Lock Edit",
+        "Show In Developer UI",
     };
 
     [[nodiscard]] static auto to_string(uint64_t mask) -> std::string;

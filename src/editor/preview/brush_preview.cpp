@@ -156,7 +156,7 @@ void Brush_preview::render_preview(
             erhe::Item_flags::visible     |
             erhe::Item_flags::translucent | // redundant
             erhe::Item_flags::no_message  |
-            (m_context.developer_mode ? erhe::Item_flags::show_in_ui : 0)
+            erhe::Item_flags::show_in_developer_ui
         );
         m_mesh->layer_id = { Mesh_layer_id::brush };
     }
@@ -235,7 +235,8 @@ void Brush_preview::render_preview(
         viewport,
         erhe::math::Viewport{},
         m_shadow_texture,
-        get_reverse_depth()
+        get_reverse_depth(),
+        get_depth_range()
     );
 
     {

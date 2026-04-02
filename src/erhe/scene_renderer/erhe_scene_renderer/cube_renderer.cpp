@@ -109,7 +109,9 @@ void Cube_renderer::render(const Render_parameters& parameters)
         camera->get_exposure(),
         glm::vec4{0.0f},
         glm::vec4{0.0f},
-        parameters.frame_number
+        parameters.frame_number,
+        true, // reverse_depth
+        erhe::math::Depth_range::zero_to_one
     );
     m_camera_buffer.bind(parameters.render_encoder, camera_buffer_range.value());
 

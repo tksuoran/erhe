@@ -2,6 +2,10 @@
 #include "hextiles_log.hpp"
 #include "hextiles_settings.hpp"
 
+#include "erhe_verify/verify.hpp"
+
+#include <SDL3/SDL.h>
+
 #include "map_editor/map_editor.hpp"
 #include "map_window.hpp"
 #include "menu_window.hpp"
@@ -14,6 +18,7 @@
 #if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
 # include "erhe_gl/gl_log.hpp"
 #endif
+#include "erhe_graph/graph_log.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/swapchain.hpp"
@@ -65,6 +70,27 @@ public:
             }
         }
 
+        , m_shader_error_callback_set{(
+            m_graphics_device.set_shader_error_callback(
+                [](const std::string& error_log, const std::string& shader_source, const std::string& callstack) {
+                    std::string clipboard_text = "=== Shader Error ===\n" + error_log + "\n=== Shader Source ===\n" + shader_source + "\n=== Callstack ===\n" + callstack;
+                    SDL_SetClipboardText(clipboard_text.c_str());
+                    ERHE_FATAL("Shader compilation/linking failed (error and source copied to clipboard)");
+                }
+            ),
+            m_graphics_device.set_device_error_callback(
+                [](const std::string& error_message, const std::string& callstack) {
+                    std::string clipboard_text = error_message + "\n=== Callstack ===\n" + callstack;
+                    SDL_SetClipboardText(clipboard_text.c_str());
+                    ERHE_FATAL("Device error (copied to clipboard): %s", error_message.c_str());
+                }
+            ),
+            m_graphics_device.set_trace_callback(
+                [](const std::string& message) {
+                    SDL_SetClipboardText(message.c_str());
+                }
+            ),
+        true)}
         , m_text_renderer       {m_graphics_device}
         , m_rendergraph         {m_graphics_device}
         , m_imgui_renderer      {m_graphics_device, m_settings.imgui}
@@ -330,6 +356,7 @@ public:
     Hextiles_settings                m_settings;
     erhe::commands::Commands         m_commands;
     erhe::graphics::Device           m_graphics_device;
+    bool                             m_shader_error_callback_set{false};
     erhe::renderer::Text_renderer    m_text_renderer;
     erhe::rendergraph::Rendergraph   m_rendergraph;
     erhe::imgui::Imgui_renderer      m_imgui_renderer;
@@ -371,6 +398,7 @@ void run_hextiles()
     gl::initialize_logging();
 #endif
     erhe::commands::initialize_logging();
+    erhe::graph::initialize_logging();
     erhe::graphics::initialize_logging();
     erhe::imgui::initialize_logging();
     erhe::renderer::initialize_logging();

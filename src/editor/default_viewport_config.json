@@ -1,0 +1,47 @@
+{
+    "_version": 1,
+    "render_style_not_selected": {
+        "_version": 1,
+        "polygon_fill": true,
+        "edge_lines": true,
+        "polygon_centroids": false,
+        "corner_points": false,
+        "point_size": 4,
+        "line_width": -2,
+        "line_color": [0.22622949,0.22622949,0.22622949,0.5],
+        "corner_color": [1,0.5,0,1],
+        "centroid_color": [0,0,1,1],
+        "edge_lines_color_source": "constant_color",
+        "polygon_centroids_color_source": "mesh_wireframe_color",
+        "corner_points_color_source": "mesh_wireframe_color"
+    },
+    "render_style_selected": {
+        "_version": 1,
+        "polygon_fill": true,
+        "edge_lines": true,
+        "polygon_centroids": false,
+        "corner_points": false,
+        "point_size": 4,
+        "line_width": -1,
+        "line_color": [0,0,0,0.5],
+        "corner_color": [1,0.5,0,1],
+        "centroid_color": [0,0,1,1],
+        "edge_lines_color_source": "constant_color",
+        "polygon_centroids_color_source": "mesh_wireframe_color",
+        "corner_points_color_source": "mesh_wireframe_color"
+    },
+    "selection_highlight_low": [2,1,0,0.8],
+    "selection_highlight_high": [2,1,0,0.8],
+    "selection_highlight_width_low": -50,
+    "selection_highlight_width_high": -50,
+    "selection_highlight_frequency": 1,
+    "clear_color": [0.05,0.05,0.05,1],
+    "gizmo_scale": 6.5,
+    "debug_visualizations": {
+        "_version": 1,
+        "light": "selected",
+        "camera": "selected"
+    },
+    "selection_bounding_box": false,
+    "selection_bounding_sphere": false
+}

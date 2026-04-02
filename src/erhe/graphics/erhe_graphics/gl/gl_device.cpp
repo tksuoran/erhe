@@ -187,6 +187,26 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
     log_startup->info("glVersion:   {}", m_info.gl_version);
     log_startup->info("glslVersion: {}", m_info.glsl_version);
 
+    const bool force_bindless_textures_off       = graphics_config.force_bindless_textures_off;
+    const bool force_no_persistent_buffers       = graphics_config.force_no_persistent_buffers;
+    const bool force_no_direct_state_access      = graphics_config.force_no_direct_state_access;
+    const bool force_no_clip_control             = graphics_config.force_no_clip_control;
+    const bool force_no_compute_shader           = graphics_config.force_no_compute_shader;
+    const bool force_emulate_multi_draw_indirect = graphics_config.force_emulate_multi_draw_indirect;
+    const int  force_gl_version                  = graphics_config.force_gl_version;
+    const int  force_glsl_version                = graphics_config.force_glsl_version;
+    bool       capture_support                   = graphics_config.renderdoc_capture_support;
+    const bool initial_clear                     = graphics_config.initial_clear;
+
+    if (force_gl_version > 0) {
+        m_info.gl_version = force_gl_version;
+        log_startup->warn("Forced GL version to be {} due to config setting", force_gl_version);
+    }
+    if (force_glsl_version > 0) {
+        m_info.glsl_version = force_glsl_version;
+        log_startup->warn("Forced GLSL version to be {} due to config setting", force_glsl_version);
+    }
+
     {
         ERHE_PROFILE_SCOPE("Query GL");
 
@@ -256,6 +276,8 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
 
     int shader_storage_buffer_offset_alignment{0};
     int uniform_buffer_offset_alignment       {0};
+    gl::get_integer_v(gl::Get_p_name::shader_storage_buffer_offset_alignment, &shader_storage_buffer_offset_alignment);
+    gl::get_integer_v(gl::Get_p_name::uniform_buffer_offset_alignment,        &uniform_buffer_offset_alignment);
 
     // GL 4.3 core has debug_message_callback and push/pop_debug_group.
     // ARB_debug_output has glDebugMessageCallbackARB but not push/pop_debug_group,
@@ -282,116 +304,15 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         gl::enable(gl::Enable_cap::debug_output_synchronous);
     }
 
-    m_info.use_compute_shader = m_info.gl_version >= 430;
-    if (m_info.use_compute_shader) {
-        log_startup->info("Compute shaders supported: true");
-        for (GLuint i = 0; i < 3; ++i) {
-            gl::get_integer_iv(gl::Get_p_name::max_compute_work_group_count, i, &m_info.max_compute_workgroup_count[i]);
-            gl::get_integer_iv(gl::Get_p_name::max_compute_work_group_size,  i, &m_info.max_compute_workgroup_size[i]);
-        }
-        gl::get_integer_v(gl::Get_p_name::max_compute_work_group_invocations, &m_info.max_compute_work_group_invocations);
-        gl::get_integer_v(gl::Get_p_name::max_compute_shared_memory_size,     &m_info.max_compute_shared_memory_size);
-        log_startup->info(
-            "Max compute workgroup count = {} x {} x {}",
-            m_info.max_compute_workgroup_count[0],
-            m_info.max_compute_workgroup_count[1],
-            m_info.max_compute_workgroup_count[2]
-        );
-        log_startup->info(
-            "Max compute workgroup size = {} x {} x {}",
-            m_info.max_compute_workgroup_size[0],
-            m_info.max_compute_workgroup_size[1],
-            m_info.max_compute_workgroup_size[2]
-        );
-        log_startup->info(
-            "Max compute workgroup invocations = {}",
-            m_info.max_compute_work_group_invocations
-        );
-        log_startup->info(
-            "Max compute shared memory size = {}",
-            m_info.max_compute_shared_memory_size
-        );
-
-        gl::get_integer_v(gl::Get_p_name::shader_storage_buffer_offset_alignment,    &shader_storage_buffer_offset_alignment);
-        gl::get_integer_v(gl::Get_p_name::max_shader_storage_buffer_bindings,        &m_info.max_shader_storage_buffer_bindings);
-        gl::get_integer_v(gl::Get_p_name::max_compute_shader_storage_blocks,         &m_info.max_compute_shader_storage_blocks);
-        gl::get_integer_v(gl::Get_p_name::max_compute_uniform_blocks,                &m_info.max_compute_uniform_blocks);
-        gl::get_integer_v(gl::Get_p_name::max_vertex_shader_storage_blocks,          &m_info.max_vertex_shader_storage_blocks);
-        gl::get_integer_v(gl::Get_p_name::max_fragment_shader_storage_blocks,        &m_info.max_fragment_shader_storage_blocks);
-        gl::get_integer_v(gl::Get_p_name::max_geometry_shader_storage_blocks,        &m_info.max_geometry_shader_storage_blocks);
-        gl::get_integer_v(gl::Get_p_name::max_tess_control_shader_storage_blocks,    &m_info.max_tess_control_shader_storage_blocks);
-        gl::get_integer_v(gl::Get_p_name::max_tess_evaluation_shader_storage_blocks, &m_info.max_tess_evaluation_shader_storage_blocks);
-    } else {
-        log_startup->info("Compute shaders supported: false");
-        for (GLuint i = 0; i < 3; ++i) {
-            m_info.max_compute_workgroup_count[i] = 0;
-            m_info.max_compute_workgroup_size [i] = 0;
-        }
-        m_info.max_compute_work_group_invocations        = 0;
-        m_info.max_compute_shared_memory_size            = 0;
-        m_info.max_shader_storage_buffer_bindings        = 0;
-        m_info.max_compute_shader_storage_blocks         = 0;
-        m_info.max_compute_uniform_blocks                = 0;
-        m_info.max_vertex_shader_storage_blocks          = 0;
-        m_info.max_fragment_shader_storage_blocks        = 0;
-        m_info.max_geometry_shader_storage_blocks        = 0;
-        m_info.max_tess_control_shader_storage_blocks    = 0;
-        m_info.max_tess_evaluation_shader_storage_blocks = 0;
-    }
-
-    gl::get_integer_v(gl::Get_p_name::uniform_buffer_offset_alignment,           &uniform_buffer_offset_alignment);
-    gl::get_integer_v(gl::Get_p_name::max_uniform_block_size,                    &m_info.max_uniform_block_size);
-    gl::get_integer_v(gl::Get_p_name::max_uniform_buffer_bindings,               &m_info.max_uniform_buffer_bindings);
-    gl::get_integer_v(gl::Get_p_name::max_vertex_uniform_blocks,                 &m_info.max_vertex_uniform_blocks);
-    gl::get_integer_v(gl::Get_p_name::max_vertex_uniform_vectors,                &m_info.max_vertex_uniform_vectors);
-    gl::get_integer_v(gl::Get_p_name::max_fragment_uniform_blocks,               &m_info.max_fragment_uniform_blocks);
-    gl::get_integer_v(gl::Get_p_name::max_fragment_uniform_vectors,              &m_info.max_fragment_uniform_vectors);
-    gl::get_integer_v(gl::Get_p_name::max_geometry_uniform_blocks,               &m_info.max_geometry_uniform_blocks);
-    gl::get_integer_v(gl::Get_p_name::max_tess_control_uniform_blocks,           &m_info.max_tess_control_uniform_blocks);
-    gl::get_integer_v(gl::Get_p_name::max_tess_evaluation_uniform_blocks,        &m_info.max_tess_evaluation_uniform_blocks);
-
-    m_info.shader_storage_buffer_offset_alignment = static_cast<unsigned int>(shader_storage_buffer_offset_alignment);
-    m_info.uniform_buffer_offset_alignment        = static_cast<unsigned int>(uniform_buffer_offset_alignment);
-    log_startup->info(
-        "uniform block ("
-        "max size = {}, "
-        "offset alignment = {}. "
-        "max bindings = {}, "
-        "max compute blocks = {}, "
-        "max vertex blocks = {}, "
-        "max fragment blocks = {}"
-        ")",
-        m_info.max_uniform_block_size,
-        m_info.uniform_buffer_offset_alignment,
-        m_info.max_uniform_buffer_bindings,
-        m_info.max_compute_uniform_blocks,
-        m_info.max_vertex_uniform_blocks,
-        m_info.max_fragment_uniform_blocks
-    );
-    log_startup->info(
-        "shader storage block ("
-        "offset alignment = {}"
-        ", max bindings = {}"
-        ", max compute blocks = {}"
-        ", max vertex blocks = {}"
-        ", max fragment blocks = {}"
-        ")",
-        m_info.shader_storage_buffer_offset_alignment,
-        m_info.max_shader_storage_buffer_bindings,
-        m_info.max_compute_shader_storage_blocks,
-        m_info.max_vertex_shader_storage_blocks,
-        m_info.max_fragment_shader_storage_blocks
-    );
-
-    const bool force_bindless_textures_off       = graphics_config.force_bindless_textures_off;
-    const bool force_no_persistent_buffers       = graphics_config.force_no_persistent_buffers;
-    const bool force_no_direct_state_access      = graphics_config.force_no_direct_state_access;
-    const bool force_no_clip_control             = graphics_config.force_no_clip_control;
-    const bool force_emulate_multi_draw_indirect = graphics_config.force_emulate_multi_draw_indirect;
-    const int  force_gl_version                  = graphics_config.force_gl_version;
-    const int  force_glsl_version                = graphics_config.force_glsl_version;
-    bool       capture_support                   = graphics_config.renderdoc_capture_support;
-    const bool initial_clear                     = graphics_config.initial_clear;
+    gl::get_integer_v(gl::Get_p_name::max_uniform_block_size,             &m_info.max_uniform_block_size);
+    gl::get_integer_v(gl::Get_p_name::max_uniform_buffer_bindings,        &m_info.max_uniform_buffer_bindings);
+    gl::get_integer_v(gl::Get_p_name::max_vertex_uniform_blocks,          &m_info.max_vertex_uniform_blocks);
+    gl::get_integer_v(gl::Get_p_name::max_vertex_uniform_vectors,         &m_info.max_vertex_uniform_vectors);
+    gl::get_integer_v(gl::Get_p_name::max_fragment_uniform_blocks,        &m_info.max_fragment_uniform_blocks);
+    gl::get_integer_v(gl::Get_p_name::max_fragment_uniform_vectors,       &m_info.max_fragment_uniform_vectors);
+    gl::get_integer_v(gl::Get_p_name::max_geometry_uniform_blocks,        &m_info.max_geometry_uniform_blocks);
+    gl::get_integer_v(gl::Get_p_name::max_tess_control_uniform_blocks,    &m_info.max_tess_control_uniform_blocks);
+    gl::get_integer_v(gl::Get_p_name::max_tess_evaluation_uniform_blocks, &m_info.max_tess_evaluation_uniform_blocks);
 
     if (gl::is_extension_supported(gl::Extension::Extension_GL_ARB_bindless_texture)) {
         m_info.use_bindless_texture = true;
@@ -433,6 +354,11 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
 
     m_info.use_shader_storage_buffers =
         (m_info.gl_version >= 430) || gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shader_storage_buffer_object);
+    if (force_no_compute_shader && m_info.use_shader_storage_buffers) {
+        m_info.use_shader_storage_buffers = false;
+        shader_storage_buffer_offset_alignment = 0;
+        log_startup->warn("Force disabled shader storage buffers due to config setting force_no_compute_shader");
+    }
     log_startup->info("SSBO supported: {}", m_info.use_shader_storage_buffers);
  
     if (gl::is_extension_supported(gl::Extension::Extension_GL_ARB_sparse_texture)) {
@@ -447,13 +373,13 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
     m_info.use_persistent_buffers = gl::is_extension_supported(gl::Extension::Extension_GL_ARB_buffer_storage);
     if (m_info.gl_version >= 430) {
         m_info.use_multi_draw_indirect_core = true;
-        m_info.use_multi_draw_indirect_arb = false;
-        m_info.emulate_multi_draw_indirect = false;
+        m_info.use_multi_draw_indirect_arb  = false;
+        m_info.emulate_multi_draw_indirect  = false;
         log_startup->info("Multi Draw Indirect: OpenGL core 4.3+");
     } else if (gl::is_extension_supported(gl::Extension::Extension_GL_ARB_multi_draw_indirect)) {
         m_info.use_multi_draw_indirect_core = false;
-        m_info.use_multi_draw_indirect_arb = true;
-        m_info.emulate_multi_draw_indirect = false;
+        m_info.use_multi_draw_indirect_arb  = true;
+        m_info.emulate_multi_draw_indirect  = false;
         log_startup->info("Multi Draw Indirect: GL_ARB_multi_draw_indirect");
     } else {
         m_info.emulate_multi_draw_indirect = true;
@@ -462,35 +388,108 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
     log_startup->info("Persistent Buffers supported: {}", m_info.use_persistent_buffers);
     if (force_emulate_multi_draw_indirect) {
         m_info.use_multi_draw_indirect_core = false;
-        m_info.use_multi_draw_indirect_arb = false;
-        m_info.emulate_multi_draw_indirect = true;
+        m_info.use_multi_draw_indirect_arb  = false;
+        m_info.emulate_multi_draw_indirect  = true;
         log_startup->warn("Forced emulation for Draw Indirect due to config setting");
     }
 
     m_info.use_base_instance = (m_info.gl_version >= 420) || gl::is_extension_supported(gl::Extension::Extension_GL_ARB_base_instance);
     log_startup->info("Base Instance supported: {}", m_info.use_base_instance);
 
-    if (force_gl_version > 0) {
-        m_info.gl_version = force_gl_version;
-        log_startup->warn("Forced GL version to be {} due to config setting", force_gl_version);
-    }
-    if (force_glsl_version > 0) {
-        m_info.glsl_version = force_glsl_version;
-        log_startup->warn("Forced GLSL version to be {} due to config setting", force_glsl_version);
-    }
-
-    // Re-check capabilities that depend on GLSL version.
-    // When GLSL version is forced lower, shader features requiring higher versions must be disabled.
-    if (m_info.glsl_version < 430) {
+    m_info.use_compute_shader = m_info.gl_version >= 430;
+    if (force_no_compute_shader) {
         if (m_info.use_compute_shader) {
             m_info.use_compute_shader = false;
-            log_startup->warn("Force disabled compute shaders: GLSL version {} < 430", m_info.glsl_version);
-        }
-        if (m_info.use_shader_storage_buffers) {
-            m_info.use_shader_storage_buffers = false;
-            log_startup->warn("Force disabled shader storage buffers: GLSL version {} < 430", m_info.glsl_version);
+            log_startup->warn("Force disabled compute shaders due to config setting");
         }
     }
+    if (m_info.use_compute_shader) {
+        log_startup->info("Compute shaders supported: true");
+        for (GLuint i = 0; i < 3; ++i) {
+            gl::get_integer_iv(gl::Get_p_name::max_compute_work_group_count, i, &m_info.max_compute_workgroup_count[i]);
+            gl::get_integer_iv(gl::Get_p_name::max_compute_work_group_size,  i, &m_info.max_compute_workgroup_size[i]);
+        }
+        gl::get_integer_v(gl::Get_p_name::max_compute_work_group_invocations, &m_info.max_compute_work_group_invocations);
+        gl::get_integer_v(gl::Get_p_name::max_compute_shared_memory_size,     &m_info.max_compute_shared_memory_size);
+        log_startup->info(
+            "Max compute workgroup count = {} x {} x {}",
+            m_info.max_compute_workgroup_count[0],
+            m_info.max_compute_workgroup_count[1],
+            m_info.max_compute_workgroup_count[2]
+        );
+        log_startup->info(
+            "Max compute workgroup size = {} x {} x {}",
+            m_info.max_compute_workgroup_size[0],
+            m_info.max_compute_workgroup_size[1],
+            m_info.max_compute_workgroup_size[2]
+        );
+        log_startup->info(
+            "Max compute workgroup invocations = {}",
+            m_info.max_compute_work_group_invocations
+        );
+        log_startup->info(
+            "Max compute shared memory size = {}",
+            m_info.max_compute_shared_memory_size
+        );
+
+        gl::get_integer_v(gl::Get_p_name::max_shader_storage_buffer_bindings,        &m_info.max_shader_storage_buffer_bindings);
+        gl::get_integer_v(gl::Get_p_name::max_compute_shader_storage_blocks,         &m_info.max_compute_shader_storage_blocks);
+        gl::get_integer_v(gl::Get_p_name::max_compute_uniform_blocks,                &m_info.max_compute_uniform_blocks);
+        gl::get_integer_v(gl::Get_p_name::max_vertex_shader_storage_blocks,          &m_info.max_vertex_shader_storage_blocks);
+        gl::get_integer_v(gl::Get_p_name::max_fragment_shader_storage_blocks,        &m_info.max_fragment_shader_storage_blocks);
+        gl::get_integer_v(gl::Get_p_name::max_geometry_shader_storage_blocks,        &m_info.max_geometry_shader_storage_blocks);
+        gl::get_integer_v(gl::Get_p_name::max_tess_control_shader_storage_blocks,    &m_info.max_tess_control_shader_storage_blocks);
+        gl::get_integer_v(gl::Get_p_name::max_tess_evaluation_shader_storage_blocks, &m_info.max_tess_evaluation_shader_storage_blocks);
+    } else {
+        log_startup->info("Compute shaders supported: false");
+        for (GLuint i = 0; i < 3; ++i) {
+            m_info.max_compute_workgroup_count[i] = 0;
+            m_info.max_compute_workgroup_size [i] = 0;
+        }
+        m_info.max_compute_work_group_invocations        = 0;
+        m_info.max_compute_shared_memory_size            = 0;
+        m_info.max_shader_storage_buffer_bindings        = 0;
+        m_info.max_compute_shader_storage_blocks         = 0;
+        m_info.max_compute_uniform_blocks                = 0;
+        m_info.max_vertex_shader_storage_blocks          = 0;
+        m_info.max_fragment_shader_storage_blocks        = 0;
+        m_info.max_geometry_shader_storage_blocks        = 0;
+        m_info.max_tess_control_shader_storage_blocks    = 0;
+        m_info.max_tess_evaluation_shader_storage_blocks = 0;
+    }
+
+    m_info.shader_storage_buffer_offset_alignment = static_cast<unsigned int>(shader_storage_buffer_offset_alignment);
+    m_info.uniform_buffer_offset_alignment        = static_cast<unsigned int>(uniform_buffer_offset_alignment);
+    log_startup->info(
+        "uniform block ("
+        "max size = {}, "
+        "offset alignment = {}. "
+        "max bindings = {}, "
+        "max compute blocks = {}, "
+        "max vertex blocks = {}, "
+        "max fragment blocks = {}"
+        ")",
+        m_info.max_uniform_block_size,
+        m_info.uniform_buffer_offset_alignment,
+        m_info.max_uniform_buffer_bindings,
+        m_info.max_compute_uniform_blocks,
+        m_info.max_vertex_uniform_blocks,
+        m_info.max_fragment_uniform_blocks
+    );
+    log_startup->info(
+        "shader storage block ("
+        "offset alignment = {}"
+        ", max bindings = {}"
+        ", max compute blocks = {}"
+        ", max vertex blocks = {}"
+        ", max fragment blocks = {}"
+        ")",
+        m_info.shader_storage_buffer_offset_alignment,
+        m_info.max_shader_storage_buffer_bindings,
+        m_info.max_compute_shader_storage_blocks,
+        m_info.max_vertex_shader_storage_blocks,
+        m_info.max_fragment_shader_storage_blocks
+    );
 
     if (force_no_persistent_buffers) {
         if (m_info.use_persistent_buffers) {
@@ -930,6 +929,14 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
     if (m_info.use_clip_control) {
         gl::clip_control(gl::Clip_control_origin::lower_left, gl::Clip_control_depth::zero_to_one);
     }
+
+    // Populate coordinate conventions for OpenGL
+    m_info.coordinate_conventions.framebuffer_origin = erhe::math::Framebuffer_origin::bottom_left;
+    m_info.coordinate_conventions.ndc_y_direction    = erhe::math::Ndc_y_direction::up;
+    m_info.coordinate_conventions.texture_origin     = erhe::math::Texture_origin::bottom_left;
+    m_info.coordinate_conventions.native_depth_range = m_info.use_clip_control
+        ? erhe::math::Depth_range::zero_to_one
+        : erhe::math::Depth_range::negative_one_to_one;
 
     if (
         (surface_create_info.context_window != nullptr) &&

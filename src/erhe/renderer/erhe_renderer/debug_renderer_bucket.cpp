@@ -2,10 +2,12 @@
 #include "erhe_renderer/debug_renderer_bucket.hpp"
 
 #include "erhe_graphics/compute_command_encoder.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/ring_buffer.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/span.hpp"
+#include "erhe_math/math_util.hpp"
 #include "erhe_verify/verify.hpp"
 
 namespace erhe::renderer {
@@ -27,7 +29,7 @@ bool operator==(const Debug_renderer_config& lhs, const Debug_renderer_config& r
 
 auto Debug_renderer_bucket::Debug_renderer_bucket::make_pipeline(const bool visible) -> erhe::graphics::Render_pipeline_state
 {
-    const bool reverse_depth = m_graphics_device.get_info().use_clip_control;
+    const bool reverse_depth = (m_graphics_device.get_info().coordinate_conventions.native_depth_range == erhe::math::Depth_range::zero_to_one);
     using namespace erhe::graphics;
 
     const auto& program_interface = m_debug_renderer.get_program_interface();
@@ -166,6 +168,13 @@ auto Debug_renderer_bucket::update_view_buffer(const View& view) -> erhe::graphi
     write(view_gpu_data, program_interface.clip_from_world_offset, as_span(view.clip_from_world));
     write(view_gpu_data, program_interface.viewport_offset,        as_span(view.viewport       ));
     write(view_gpu_data, program_interface.fov_offset,             as_span(view.fov_sides      ));
+    const bool  top_left  = (m_graphics_device.get_info().coordinate_conventions.framebuffer_origin == erhe::math::Framebuffer_origin::top_left);
+    const float vp_y_sign = top_left ? -1.0f : 1.0f;
+    const float zero      = 0.0f;
+    write(view_gpu_data, program_interface.vp_y_sign_offset, as_span(vp_y_sign));
+    write(view_gpu_data, program_interface.padding0_offset,  as_span(zero));
+    write(view_gpu_data, program_interface.padding1_offset,  as_span(zero));
+    write(view_gpu_data, program_interface.padding2_offset,  as_span(zero));
 
     view_write_offset += program_interface.view_block->get_size_bytes();
     view_buffer_range.bytes_written(view_write_offset);

@@ -34,10 +34,11 @@ Build_context_root::Build_context_root(
     , mesh_info       {::get_mesh_info(mesh)}
     , vertex_format   {build_info.buffer_info.vertex_format}
 {
-    get_mesh_info          ();
-    get_vertex_attributes  ();
-    allocate_vertex_buffers();
-    allocate_index_buffer  ();
+    get_mesh_info                   ();
+    get_vertex_attributes           ();
+    allocate_vertex_buffers         ();
+    allocate_index_buffer           ();
+    allocate_edge_line_vertex_buffer();
 }
 
 void Build_context_root::get_mesh_info()
@@ -143,6 +144,32 @@ void Build_context_root::allocate_index_buffer()
     );
     buffer_mesh.index_buffer_range = sink_allocation.range;
     buffer_mesh.index_allocation   = std::move(sink_allocation.allocation);
+}
+
+void Build_context_root::allocate_edge_line_vertex_buffer()
+{
+    if (!build_info.primitive_types.edge_lines) {
+        return;
+    }
+
+    // Each edge needs 2 vertices, each vertex is vec4 position + vec4 normal (32 bytes)
+    const std::size_t edge_count          = mesh_info.edge_count;
+    const std::size_t vertex_count        = edge_count * 2;
+    const std::size_t vertex_element_size = 8 * sizeof(float); // vec4 position + vec4 normal
+
+    const std::size_t available_byte_count = build_info.buffer_info.buffer_sink.get_available_edge_line_vertex_byte_count(vertex_element_size);
+    const std::size_t allocation_byte_count = vertex_count * vertex_element_size;
+    if (available_byte_count < allocation_byte_count) {
+        // Edge line vertex buffer not available or not enough space - not fatal
+        return;
+    }
+
+    Buffer_sink_allocation sink_allocation = build_info.buffer_info.buffer_sink.allocate_edge_line_vertex_buffer(
+        vertex_count,
+        vertex_element_size
+    );
+    buffer_mesh.edge_line_vertex_buffer_range = sink_allocation.range;
+    buffer_mesh.edge_line_vertex_allocation   = std::move(sink_allocation.allocation);
 }
 
 class Mesh_point_source : public erhe::math::Bounding_volume_source
@@ -710,12 +737,52 @@ void Build_context::build_edge_lines()
         return;
     }
 
+    // Check if edge line vertex buffer is available
+    const bool has_edge_line_vertex_buffer = (root.buffer_mesh.edge_line_vertex_buffer_range.count > 0);
+    std::vector<uint8_t> edge_line_vertex_data;
+    const std::size_t    vertex_element_size = 8 * sizeof(float); // vec4 position + vec4 normal
+    if (has_edge_line_vertex_buffer) {
+        const std::size_t edge_count = root.mesh_info.edge_count;
+        edge_line_vertex_data.resize(edge_count * 2 * vertex_element_size);
+    }
+    std::size_t edge_vertex_write_offset = 0;
+
     for (GEO::index_t mesh_edge : root.mesh.edges) {
         const GEO::index_t mesh_vertex_a  = root.mesh.edges.vertex(mesh_edge, 0);
         const GEO::index_t mesh_vertex_b  = root.mesh.edges.vertex(mesh_edge, 1);
         const uint32_t     vertex_index_a = root.element_mappings.mesh_vertex_to_vertex_buffer_index[mesh_vertex_a];
         const uint32_t     vertex_index_b = root.element_mappings.mesh_vertex_to_vertex_buffer_index[mesh_vertex_b];
         index_writer.write_edge(vertex_index_a, vertex_index_b);
+
+        // Write edge vertex positions and smooth normals to edge line vertex buffer (object-local space)
+        if (has_edge_line_vertex_buffer) {
+            const GEO::vec3f pos_a = get_pointf(root.mesh.vertices, mesh_vertex_a);
+            const GEO::vec3f pos_b = get_pointf(root.mesh.vertices, mesh_vertex_b);
+
+            // Use smooth vertex normals (per-vertex, averaged from all adjacent facets)
+            const GEO::vec3f fallback_normal{0.0f, 1.0f, 0.0f};
+            const std::optional<GEO::vec3f> vertex_normal_a = mesh_attributes.vertex_normal.try_get(mesh_vertex_a);
+            const std::optional<GEO::vec3f> vertex_normal_b = mesh_attributes.vertex_normal.try_get(mesh_vertex_b);
+            const std::optional<GEO::vec3f> smooth_normal_a = mesh_attributes.vertex_normal_smooth.try_get(mesh_vertex_a);
+            const std::optional<GEO::vec3f> smooth_normal_b = mesh_attributes.vertex_normal_smooth.try_get(mesh_vertex_b);
+            const GEO::vec3f normal_a = smooth_normal_a.has_value() ? smooth_normal_a.value() : vertex_normal_a.has_value() ? vertex_normal_a.value() : fallback_normal;
+            const GEO::vec3f normal_b = smooth_normal_b.has_value() ? smooth_normal_b.value() : vertex_normal_b.has_value() ? vertex_normal_b.value() : fallback_normal;
+
+            const float data_a[8] = { pos_a.x, pos_a.y, pos_a.z, 0.0f, normal_a.x, normal_a.y, normal_a.z, 0.0f };
+            const float data_b[8] = { pos_b.x, pos_b.y, pos_b.z, 0.0f, normal_b.x, normal_b.y, normal_b.z, 0.0f };
+            memcpy(edge_line_vertex_data.data() + edge_vertex_write_offset, data_a, vertex_element_size);
+            edge_vertex_write_offset += vertex_element_size;
+            memcpy(edge_line_vertex_data.data() + edge_vertex_write_offset, data_b, vertex_element_size);
+            edge_vertex_write_offset += vertex_element_size;
+        }
+    }
+
+    // Enqueue edge line vertex data for upload 
+    if (has_edge_line_vertex_buffer && (edge_vertex_write_offset > 0)) {
+        root.build_info.buffer_info.buffer_sink.enqueue_edge_line_vertex_data(
+            root.buffer_mesh.edge_line_vertex_buffer_range.byte_offset,
+            std::move(edge_line_vertex_data)
+        );
     }
 }
 

@@ -48,6 +48,8 @@ void Imgui_window::draw_image(
             .texture_reference = texture_reference,
             .width             = width,
             .height            = height,
+            .uv0               = m_imgui_renderer.get_rtt_uv0(),
+            .uv1               = m_imgui_renderer.get_rtt_uv1(),
             .filter            = filter,
             .mipmap_mode       = mipmap_mode,
             .debug_label       = "Imgui_window::draw_image()"
