@@ -87,20 +87,19 @@ public:
 
     // Dispatch compute shader to expand lines to triangles (call before render pass)
     void compute(
-        erhe::graphics::Compute_command_encoder& command_encoder,
-        const erhe::math::Viewport&              viewport,
-        const erhe::scene::Camera&               camera,
-        bool                                     reverse_depth,
-        erhe::math::Depth_range                  depth_range,
-        erhe::math::Framebuffer_origin           framebuffer_origin = erhe::math::Framebuffer_origin::bottom_left,
-        erhe::math::Ndc_y_direction              ndc_y_direction    = erhe::math::Ndc_y_direction::up
+        erhe::graphics::Compute_command_encoder&  command_encoder,
+        const erhe::math::Viewport&               viewport,
+        const erhe::scene::Camera&                camera,
+        bool                                      reverse_depth,
+        erhe::math::Depth_range                   depth_range,
+        const erhe::math::Coordinate_conventions& conventions = erhe::math::Coordinate_conventions{}
     );
 
     // Render the expanded triangles for a specific group (call inside render pass)
     void render(
         erhe::graphics::Render_command_encoder&      render_encoder,
-        const erhe::graphics::Render_pipeline_state&  pipeline_state,
-        uint32_t                                      group = 0
+        const erhe::graphics::Render_pipeline_state& pipeline_state,
+        uint32_t                                     group = 0
     );
 
     void end_frame();

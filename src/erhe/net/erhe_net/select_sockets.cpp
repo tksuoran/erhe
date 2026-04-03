@@ -28,17 +28,17 @@ auto Select_sockets::has_except() const -> bool
 
 auto Select_sockets::has_read(const SOCKET socket) const -> bool
 {
-    return FD_ISSET(socket, &read_fds) == TRUE;
+    return FD_ISSET(socket, &read_fds) == ERHE_NET_TRUE;
 }
 
 auto Select_sockets::has_write(const SOCKET socket) const -> bool
 {
-    return FD_ISSET(socket, &write_fds) == TRUE;
+    return FD_ISSET(socket, &write_fds) == ERHE_NET_TRUE;
 }
 
 auto Select_sockets::has_except(const SOCKET socket) const -> bool
 {
-    return FD_ISSET(socket, &except_fds) == TRUE;
+    return FD_ISSET(socket, &except_fds) == ERHE_NET_TRUE;
 }
 
 void Select_sockets::set_read(const SOCKET socket)

@@ -139,7 +139,12 @@ void do_wide_line(uint in_line_index, uint out_triangle_index)
 
     // Compute NDC plane from edge normal for Z alignment
     vec3  edge_dir_world  = normalize(world_pos1.xyz - world_pos0.xyz);
-    vec3  side_dir_world  = normalize(cross(world_normal, edge_dir_world));
+    vec3  side_cross      = cross(world_normal, edge_dir_world);
+    float side_cross_len  = length(side_cross);
+    // When normal is parallel to edge direction, pick an arbitrary perpendicular
+    vec3  side_dir_world  = (side_cross_len > 1e-6)
+        ? side_cross / side_cross_len
+        : normalize(cross(edge_dir_world, abs(edge_dir_world.x) < 0.9 ? vec3(1,0,0) : vec3(0,1,0)));
     float edge_len        = length(world_pos1.xyz - world_pos0.xyz);
     vec4  world_pos_side  = vec4(world_pos0.xyz + side_dir_world * edge_len, 1.0);
     vec4  clip_side       = clip_from_world * world_pos_side;

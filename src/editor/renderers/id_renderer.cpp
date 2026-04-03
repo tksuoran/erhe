@@ -17,6 +17,7 @@
 #include "erhe_graphics/ring_buffer_range.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/texture.hpp"
+#include "erhe_math/math_util.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/mesh.hpp"
@@ -51,6 +52,7 @@ Id_renderer::Id_renderer(
 )
     : m_graphics_device      {graphics_device}
     , m_mesh_memory          {mesh_memory}
+    , m_y_flip{graphics_device.get_info().coordinate_conventions.clip_space_y_flip == erhe::math::Clip_space_y_flip::enabled}
     , m_camera_buffers       {graphics_device, program_interface.camera_interface}
     , m_draw_indirect_buffers{graphics_device, program_interface.config.max_draw_count}
     , m_primitive_buffers    {graphics_device, program_interface.primitive_interface}
@@ -59,7 +61,7 @@ Id_renderer::Id_renderer(
         .shader_stages  = &programs.id.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangle,
-        .rasterization  = Rasterization_state::cull_mode_back_ccw,
+        .rasterization  = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
         .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(),
         .color_blend    = Color_blend_state::color_blend_disabled
     }}
@@ -69,7 +71,7 @@ Id_renderer::Id_renderer(
         .shader_stages  = &programs.id.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangle,
-        .rasterization  = Rasterization_state::cull_mode_back_ccw,
+        .rasterization  = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
         .depth_stencil  = Depth_stencil_state::depth_test_always_stencil_test_disabled,
         .color_blend    = Color_blend_state::color_writes_disabled,
     }}
@@ -244,7 +246,7 @@ void Id_renderer::render(const Render_parameters& parameters)
     Scoped_debug_group debug_group{"Id_renderer::render()"};
     Scoped_gpu_timer   timer      {m_gpu_timer};
 
-    const auto projection_transforms = camera.projection_transforms(viewport, parameters.reverse_depth, parameters.depth_range, parameters.framebuffer_origin, parameters.ndc_y_direction);
+    const auto projection_transforms = camera.projection_transforms(viewport, parameters.reverse_depth, parameters.depth_range, parameters.conventions);
     const mat4 clip_from_world       = projection_transforms.clip_from_world.get_matrix();
 
     Transfer_entry& entry = get_current_transfer_entry();

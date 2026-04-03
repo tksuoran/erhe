@@ -50,6 +50,7 @@ public:
     Pipeline_renderpasses(erhe::graphics::Device& graphics_device, Mesh_memory& mesh_memory, Programs& programs, bool reverse_depth = true);
     void rebuild_depth_state(bool reverse_depth);
 
+    bool                                  m_y_flip;
     erhe::graphics::Vertex_input_state    m_empty_vertex_input;
     erhe::graphics::Render_pipeline_state polygon_fill_standard_opaque_positive_determinant;
     erhe::graphics::Render_pipeline_state polygon_fill_standard_opaque_negative_determinant;

@@ -23,6 +23,9 @@
 namespace erhe::commands {
     class Commands;
 }
+namespace erhe::graphics {
+    class Device;
+}
 namespace erhe::imgui {
     class Imgui_renderer;
     class Imgui_windows;
@@ -44,8 +47,9 @@ class Scene_views;
 class Tools_pipeline_renderpasses
 {
 public:
-    Tools_pipeline_renderpasses(Mesh_memory& mesh_memory, Programs& programs, bool reverse_depth = true);
+    Tools_pipeline_renderpasses(erhe::graphics::Device& graphics_device, Mesh_memory& mesh_memory, Programs& programs, bool reverse_depth = true);
     void rebuild_depth_state(bool reverse_depth);
+    bool                                  m_y_flip;
     erhe::graphics::Render_pipeline_state tool1_hidden_stencil;
     erhe::graphics::Render_pipeline_state tool2_visible_stencil;
     erhe::graphics::Render_pipeline_state tool3_depth_clear;
@@ -58,13 +62,14 @@ class Tools
 {
 public:
     Tools(
-        erhe::imgui::Imgui_renderer&    imgui_renderer,
-        erhe::imgui::Imgui_windows&     imgui_windows,
-        App_context&                    context,
-        App_rendering&                  app_rendering,
-        App_settings&                   app_settings,
-        Mesh_memory&                    mesh_memory,
-        Programs&                       programs
+        erhe::graphics::Device&      graphics_device,
+        erhe::imgui::Imgui_renderer& imgui_renderer,
+        erhe::imgui::Imgui_windows&  imgui_windows,
+        App_context&                 context,
+        App_rendering&               app_rendering,
+        App_settings&                app_settings,
+        Mesh_memory&                 mesh_memory,
+        Programs&                    programs
     );
 
     // Public API

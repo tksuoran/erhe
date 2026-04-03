@@ -689,19 +689,17 @@ void Debug_visualizations::camera_visualization(const Render_context& render_con
     if (view_camera_node == nullptr) {
         return;
     }
-    const erhe::math::Depth_range        depth_range        = render_context.scene_view.get_depth_range();
-    const erhe::math::Framebuffer_origin framebuffer_origin = render_context.scene_view.get_framebuffer_origin();
-    const erhe::math::Ndc_y_direction    ndc_y_direction    = render_context.scene_view.get_ndc_y_direction();
+    const erhe::math::Depth_range            depth_range = render_context.scene_view.get_depth_range();
+    const erhe::math::Coordinate_conventions conventions = render_context.scene_view.get_conventions();
     const bool  reverse_depth        = render_context.scene_view.get_reverse_depth();
     const float aspect_ratio         = render_context.viewport.aspect_ratio();
-    const mat4  view_clip_from_node  = view_camera->projection()->get_projection_matrix(aspect_ratio, reverse_depth, depth_range, framebuffer_origin, ndc_y_direction);
+    const mat4  view_clip_from_node  = view_camera->projection()->get_projection_matrix(aspect_ratio, reverse_depth, depth_range, conventions);
     const mat4  view_clip_from_world = view_clip_from_node * view_camera_node->node_from_world();
     const mat4  clip_from_node       = camera->projection()->get_projection_matrix(
         1.0f,
         reverse_depth,
         depth_range,
-        framebuffer_origin,
-        ndc_y_direction
+        conventions
     );
     const mat4 clip_from_world = clip_from_node * camera_node->node_from_world();
     const mat4 node_from_clip  = inverse(clip_from_node);
@@ -867,15 +865,14 @@ void Debug_visualizations::selection_visualization(const Render_context& context
 
     if ((m_selection_bounding_volume.get_element_count() > 1) || !m_selection_parts) {
         if (m_selection_bounding_points_visible) {
-            const erhe::scene::Camera* camera                = context.camera;
-            const auto                 projection_transforms = camera->projection_transforms(
+            const erhe::scene::Camera* camera = context.camera;
+            const auto projection_transforms = camera->projection_transforms(
                 context.viewport,
                 context.scene_view.get_reverse_depth(),
                 context.scene_view.get_depth_range(),
-                context.scene_view.get_framebuffer_origin(),
-                context.scene_view.get_ndc_y_direction()
+                context.scene_view.get_conventions()
             );
-            const glm::mat4            clip_from_world       = projection_transforms.clip_from_world.get_matrix();
+            const glm::mat4 clip_from_world = projection_transforms.clip_from_world.get_matrix();
 
             for (std::size_t i = 0, i_end = m_selection_bounding_volume.get_element_count(); i < i_end; ++i) {
                 for (std::size_t j = 0, j_end = m_selection_bounding_volume.get_element_point_count(i); j < j_end; ++j) {
@@ -1054,8 +1051,7 @@ void Debug_visualizations::selection_visualization(const Render_context& context
                 1.0f,
                 context.scene_view.get_reverse_depth(),
                 context.scene_view.get_depth_range(),
-                context.scene_view.get_framebuffer_origin(),
-                context.scene_view.get_ndc_y_direction()
+                context.scene_view.get_conventions()
             );
             const mat4         clip_from_world = clip_from_node * camera_node->node_from_world();
             const mat4         node_from_clip  = inverse(clip_from_node);
@@ -1146,8 +1142,7 @@ void Debug_visualizations::physics_nodes_visualization(const Render_context& con
         context.viewport,
         context.scene_view.get_reverse_depth(),
         context.scene_view.get_depth_range(),
-        context.scene_view.get_framebuffer_origin(),
-        context.scene_view.get_ndc_y_direction()
+        context.scene_view.get_conventions()
     );
     const glm::mat4 clip_from_world = projection_transforms.clip_from_world.get_matrix();
 
@@ -1315,8 +1310,7 @@ void Debug_visualizations::mesh_labels(const Render_context& context, erhe::scen
         context.viewport,
         context.scene_view.get_reverse_depth(),
         context.scene_view.get_depth_range(),
-        context.scene_view.get_framebuffer_origin(),
-        context.scene_view.get_ndc_y_direction()
+        context.scene_view.get_conventions()
     );
     const glm::mat4 clip_from_world       = projection_transforms.clip_from_world.get_matrix();
     const glm::mat4 world_from_node       = node->world_from_node();

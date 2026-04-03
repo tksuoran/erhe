@@ -105,17 +105,17 @@ Content_wide_line_renderer::Content_wide_line_renderer(
         3,
         erhe::graphics::Shader_resource::Type::uniform_block
     );
-    m_clip_from_world_offset = m_view_block->add_mat4("clip_from_world")->get_offset_in_parent();
-    m_world_from_node_offset = m_view_block->add_mat4("world_from_node")->get_offset_in_parent();
-    m_viewport_offset        = m_view_block->add_vec4("viewport"       )->get_offset_in_parent();
-    m_fov_offset             = m_view_block->add_vec4("fov"            )->get_offset_in_parent();
-    m_line_color_offset      = m_view_block->add_vec4("line_color"     )->get_offset_in_parent();
-    m_edge_count_offset              = m_view_block->add_uint ("edge_count"             )->get_offset_in_parent();
-    m_vp_y_sign_offset               = m_view_block->add_float("vp_y_sign"              )->get_offset_in_parent();
-    m_clip_depth_direction_offset     = m_view_block->add_float("clip_depth_direction"   )->get_offset_in_parent();
-    m_padding0_offset                 = m_view_block->add_float("_padding0"              )->get_offset_in_parent();
-    m_padding1_offset                 = m_view_block->add_float("_padding1"              )->get_offset_in_parent();
-    m_view_position_in_world_offset   = m_view_block->add_vec4 ("view_position_in_world" )->get_offset_in_parent();
+    m_clip_from_world_offset        = m_view_block->add_mat4("clip_from_world")->get_offset_in_parent();
+    m_world_from_node_offset        = m_view_block->add_mat4("world_from_node")->get_offset_in_parent();
+    m_viewport_offset               = m_view_block->add_vec4("viewport"       )->get_offset_in_parent();
+    m_fov_offset                    = m_view_block->add_vec4("fov"            )->get_offset_in_parent();
+    m_line_color_offset             = m_view_block->add_vec4("line_color"     )->get_offset_in_parent();
+    m_edge_count_offset             = m_view_block->add_uint ("edge_count"             )->get_offset_in_parent();
+    m_vp_y_sign_offset              = m_view_block->add_float("vp_y_sign"              )->get_offset_in_parent();
+    m_clip_depth_direction_offset   = m_view_block->add_float("clip_depth_direction"   )->get_offset_in_parent();
+    m_padding0_offset               = m_view_block->add_float("_padding0"              )->get_offset_in_parent();
+    m_padding1_offset               = m_view_block->add_float("_padding1"              )->get_offset_in_parent();
+    m_view_position_in_world_offset = m_view_block->add_vec4 ("view_position_in_world" )->get_offset_in_parent();
 
     if ((m_compute_shader_stages != nullptr) && m_compute_shader_stages->is_valid() &&
         (m_graphics_shader_stages != nullptr) && m_graphics_shader_stages->is_valid()) {
@@ -220,13 +220,12 @@ void Content_wide_line_renderer::add_mesh(
 }
 
 void Content_wide_line_renderer::compute(
-    erhe::graphics::Compute_command_encoder& command_encoder,
-    const erhe::math::Viewport&              viewport,
-    const erhe::scene::Camera&               camera,
-    const bool                               reverse_depth,
-    const erhe::math::Depth_range            depth_range,
-    const erhe::math::Framebuffer_origin     framebuffer_origin,
-    const erhe::math::Ndc_y_direction        ndc_y_direction
+    erhe::graphics::Compute_command_encoder&  command_encoder,
+    const erhe::math::Viewport&               viewport,
+    const erhe::scene::Camera&                camera,
+    const bool                                reverse_depth,
+    const erhe::math::Depth_range             depth_range,
+    const erhe::math::Coordinate_conventions& conventions
 )
 {
     if (!m_enabled || m_dispatches.empty()) {
@@ -240,7 +239,7 @@ void Content_wide_line_renderer::compute(
     ERHE_VERIFY(camera_node != nullptr);
 
     const erhe::scene::Camera_projection_transforms projection_transforms =
-        camera.projection_transforms(viewport, reverse_depth, depth_range, framebuffer_origin, ndc_y_direction);
+        camera.projection_transforms(viewport, reverse_depth, depth_range, conventions);
     const glm::mat4 clip_from_world = projection_transforms.clip_from_world.get_matrix();
 
     const glm::mat4 camera_world_from_node = camera_node->world_from_node();
@@ -298,8 +297,8 @@ void Content_wide_line_renderer::compute(
         );
 
         // ceil(edge_count / 32) workgroups, local_size_x = 32 threads each
-        const uint32_t    workgroup_count    = static_cast<uint32_t>((dispatch.edge_count + 31) / 32);
-        const std::size_t padded_edge_count  = static_cast<std::size_t>(workgroup_count) * 32;
+        const uint32_t    workgroup_count     = static_cast<uint32_t>((dispatch.edge_count + 31) / 32);
+        const std::size_t padded_edge_count   = static_cast<std::size_t>(workgroup_count) * 32;
         const std::size_t triangle_byte_count = 6 * padded_edge_count * triangle_vertex_stride;
         dispatch.triangle_buffer_range = m_triangle_vertex_buffer_client.acquire(
             erhe::graphics::Ring_buffer_usage::GPU_access,
@@ -318,8 +317,8 @@ void Content_wide_line_renderer::compute(
 
 void Content_wide_line_renderer::render(
     erhe::graphics::Render_command_encoder&      render_encoder,
-    const erhe::graphics::Render_pipeline_state&  pipeline_state,
-    const uint32_t                                group
+    const erhe::graphics::Render_pipeline_state& pipeline_state,
+    const uint32_t                               group
 )
 {
     if (!m_enabled || m_dispatches.empty()) {
@@ -337,7 +336,7 @@ void Content_wide_line_renderer::render(
             continue;
         }
 
-        erhe::graphics::Buffer* triangle_buffer       = dispatch.triangle_buffer_range.get_buffer()->get_buffer();
+        erhe::graphics::Buffer* triangle_buffer        = dispatch.triangle_buffer_range.get_buffer()->get_buffer();
         std::size_t             triangle_buffer_offset = dispatch.triangle_buffer_range.get_byte_start_offset_in_buffer();
         render_encoder.set_vertex_buffer(triangle_buffer, triangle_buffer_offset, 0);
         render_encoder.draw_primitives(

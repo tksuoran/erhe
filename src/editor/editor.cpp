@@ -700,7 +700,11 @@ public:
             ERHE_TASK_HEADER(forward_renderer_task)
             {
                 ERHE_GET_GL_CONTEXT
-                m_forward_renderer = std::make_unique<erhe::scene_renderer::Forward_renderer>(*m_graphics_device.get(), *m_program_interface.get());
+                m_forward_renderer = std::make_unique<erhe::scene_renderer::Forward_renderer>(
+                    *m_graphics_device.get(),
+                    *m_program_interface.get(),
+                    m_programs ? &m_programs->default_uniform_block : nullptr
+                );
             }
             ERHE_TASK_FOOTER( .name("Forward_renderer") );
 
@@ -870,6 +874,7 @@ public:
             ERHE_TASK_HEADER(tools_task)
             {
                 m_tools = std::make_unique<Tools>(
+                    *m_graphics_device,
                     *m_imgui_renderer.get(),
                     *m_imgui_windows.get(),
                     m_app_context,

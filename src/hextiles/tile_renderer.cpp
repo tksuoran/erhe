@@ -780,7 +780,7 @@ void Tile_renderer::render(erhe::graphics::Render_command_encoder& render_encode
 
     m_projection_buffer.bind(render_encoder, projection_buffer_range);
 
-    erhe::graphics::Texture_heap texture_heap{m_graphics_device, *m_tileset_texture.get(), m_nearest_sampler, 1};
+    erhe::graphics::Texture_heap texture_heap{m_graphics_device, *m_tileset_texture.get(), m_nearest_sampler, 1, &m_default_uniform_block};
     texture_heap.assign(0, m_tileset_texture.get(), &m_nearest_sampler);
     texture_heap.bind();
 

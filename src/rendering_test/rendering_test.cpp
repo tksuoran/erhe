@@ -135,8 +135,8 @@ public:
         , m_image_transfer   {m_graphics_device}
         , m_mesh_memory      {m_graphics_device}
         , m_program_interface{m_graphics_device, m_mesh_memory.vertex_format, m_program_interface_config}
-        , m_forward_renderer {m_graphics_device, m_program_interface}
         , m_programs         {m_graphics_device, m_program_interface}
+        , m_forward_renderer {m_graphics_device, m_program_interface, &m_programs.default_uniform_block}
         , m_scene            {"rendering test scene", nullptr}
     {
         print_conventions();
@@ -238,8 +238,8 @@ public:
     }
 
     void render_scene(
-        erhe::graphics::Render_command_encoder& render_encoder,
-        const erhe::math::Viewport&             viewport,
+        erhe::graphics::Render_command_encoder&                 render_encoder,
+        const erhe::math::Viewport&                             viewport,
         const std::vector<std::shared_ptr<erhe::scene::Light>>& lights,
         const std::vector<std::shared_ptr<erhe::scene::Mesh>>&  meshes
     )
@@ -271,8 +271,7 @@ public:
                 .debug_label            = "rendering test render",
                 .reverse_depth          = true,
                 .depth_range            = conventions.native_depth_range,
-                .framebuffer_origin     = conventions.framebuffer_origin,
-                .ndc_y_direction        = conventions.ndc_y_direction
+                .conventions            = conventions
             }
         );
     }
@@ -298,8 +297,7 @@ public:
             std::shared_ptr<erhe::graphics::Texture>{},
             true,
             conventions.native_depth_range,
-            conventions.framebuffer_origin,
-            conventions.ndc_y_direction
+            conventions
         );
 
         std::vector<std::shared_ptr<erhe::scene::Mesh>> meshes;
@@ -323,8 +321,7 @@ public:
                 compute_encoder, cell_00, *m_camera.get(),
                 reverse_depth,
                 conventions.native_depth_range,
-                conventions.framebuffer_origin,
-                conventions.ndc_y_direction
+                conventions
             );
         }
 
@@ -381,7 +378,7 @@ public:
                 encoder.set_scissor_rect(cell_10.x, cell_10.y, cell_10.width, cell_10.height);
                 m_quad_buffer.bind(encoder, quad_buffer_range);
 
-                erhe::graphics::Texture_heap texture_heap{m_graphics_device, *m_color_texture.get(), m_nearest_sampler, 1};
+                erhe::graphics::Texture_heap texture_heap{m_graphics_device, *m_color_texture.get(), m_nearest_sampler, 1, m_quad_default_uniform_block.get()};
                 texture_heap.assign(0, m_color_texture.get(), &m_nearest_sampler);
                 texture_heap.bind();
 
@@ -434,16 +431,16 @@ private:
     void print_conventions()
     {
         const auto& c = m_graphics_device.get_info().coordinate_conventions;
-        const char* depth_str = (c.native_depth_range == erhe::math::Depth_range::zero_to_one)          ? "[0, 1]"      : "[-1, 1]";
-        const char* fb_str    = (c.framebuffer_origin == erhe::math::Framebuffer_origin::bottom_left)    ? "bottom-left" : "top-left";
-        const char* ndc_y_str = (c.ndc_y_direction    == erhe::math::Ndc_y_direction::up)                ? "up"          : "down";
-        const char* tex_str   = (c.texture_origin     == erhe::math::Texture_origin::bottom_left)        ? "bottom-left" : "top-left";
-        const bool  y_flip    = erhe::math::needs_projection_y_flip(c.framebuffer_origin, c.ndc_y_direction);
+        const char* depth_str = (c.native_depth_range == erhe::math::Depth_range::zero_to_one)        ? "[0, 1]"      : "[-1, 1]";
+        const char* fb_str    = (c.framebuffer_origin == erhe::math::Framebuffer_origin::bottom_left) ? "bottom-left" : "top-left";
+        const char* flip_str  = (c.clip_space_y_flip  == erhe::math::Clip_space_y_flip::enabled)      ? "enabled"     : "disabled";
+        const char* tex_str   = (c.texture_origin     == erhe::math::Texture_origin::bottom_left)     ? "bottom-left" : "top-left";
+        const bool  y_flip    = (c.clip_space_y_flip  == erhe::math::Clip_space_y_flip::enabled);
 
         log_test->info("=== Coordinate Conventions ===");
         log_test->info("  Depth range:       {}", depth_str);
         log_test->info("  Framebuffer origin: {}", fb_str);
-        log_test->info("  NDC Y direction:   {}", ndc_y_str);
+        log_test->info("  Clip space Y-flip: {}", flip_str);
         log_test->info("  Texture origin:    {}", tex_str);
         log_test->info("  Projection Y-flip: {}", y_flip ? "yes" : "no");
         log_test->info("==============================");
@@ -500,7 +497,11 @@ private:
 
             auto geometry = std::make_shared<erhe::geometry::Geometry>("Orientation Cube");
             erhe::geometry::shapes::make_box(geometry->get_mesh(), 1.0f, 1.0f, 1.0f);
-            geometry->process(erhe::geometry::Geometry::process_flag_connect | erhe::geometry::Geometry::process_flag_build_edges);
+            geometry->process(
+                erhe::geometry::Geometry::process_flag_connect |
+                erhe::geometry::Geometry::process_flag_build_edges |
+                erhe::geometry::Geometry::process_flag_compute_smooth_vertex_normals
+            );
 
             erhe::primitive::Build_info build_info{
                 .primitive_types = {.fill_triangles = true, .edge_lines = true},
@@ -636,26 +637,29 @@ private:
         desc.color_attachments[0].clear_value[1] = 0.1;
         desc.color_attachments[0].clear_value[2] = 0.1;
         desc.color_attachments[0].clear_value[3] = 1.0;
-        desc.color_attachments[0].store_action = erhe::graphics::Store_action::Store;
-        desc.depth_attachment.texture          = m_depth_texture.get();
-        desc.depth_attachment.load_action      = erhe::graphics::Load_action::Clear;
-        desc.depth_attachment.store_action     = erhe::graphics::Store_action::Dont_care;
-        desc.depth_attachment.clear_value[0]   = 0.0; // reverse depth
-        desc.render_target_width               = width;
-        desc.render_target_height              = height;
-        desc.debug_label                       = erhe::utility::Debug_label{"RTT Render_pass"};
+        desc.color_attachments[0].store_action   = erhe::graphics::Store_action::Store;
+        desc.depth_attachment.texture        = m_depth_texture.get();
+        desc.depth_attachment.load_action    = erhe::graphics::Load_action::Clear;
+        desc.depth_attachment.store_action   = erhe::graphics::Store_action::Dont_care;
+        desc.depth_attachment.clear_value[0] = 0.0; // reverse depth
+        desc.render_target_width             = width;
+        desc.render_target_height            = height;
+        desc.debug_label                     = erhe::utility::Debug_label{"RTT Render_pass"};
         m_texture_render_pass = std::make_unique<erhe::graphics::Render_pass>(m_graphics_device, desc);
     }
 
     void make_render_pipeline_states()
     {
+        const auto& c = m_graphics_device.get_info().coordinate_conventions;
+        const bool  y_flip = (c.clip_space_y_flip == erhe::math::Clip_space_y_flip::enabled);
+
         m_standard_render_pipeline_state = std::make_unique<erhe::graphics::Render_pipeline_state>(
             erhe::graphics::Render_pipeline_data{
                 .debug_label    = erhe::utility::Debug_label{"Orientation Test Pipeline"},
                 .shader_stages  = &m_programs.standard,
                 .vertex_input   = &m_mesh_memory.vertex_input,
                 .input_assembly = erhe::graphics::Input_assembly_state::triangle,
-                .rasterization  = erhe::graphics::Rasterization_state::cull_mode_back_ccw,
+                .rasterization  = erhe::graphics::Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(y_flip),
                 .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled(),
                 .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled
             }
@@ -770,8 +774,8 @@ private:
     }
 
     void render_edge_lines(
-        erhe::graphics::Render_command_encoder& render_encoder,
-        const erhe::math::Viewport&             viewport,
+        erhe::graphics::Render_command_encoder&                 render_encoder,
+        const erhe::math::Viewport&                             viewport,
         const std::vector<std::shared_ptr<erhe::scene::Light>>& lights,
         const std::vector<std::shared_ptr<erhe::scene::Mesh>>&  meshes
     )
@@ -812,8 +816,7 @@ private:
                 .debug_label            = "rendering test edge lines",
                 .reverse_depth          = true,
                 .depth_range            = conventions.native_depth_range,
-                .framebuffer_origin     = conventions.framebuffer_origin,
-                .ndc_y_direction        = conventions.ndc_y_direction
+                .conventions            = conventions
             }
         );
     }
@@ -916,8 +919,8 @@ private:
                 pixels[i * 4 + 2] = b;
                 pixels[i * 4 + 3] = 255;
             }
-            const int row_stride    = tex_size * 4;
-            const int byte_count    = tex_size * row_stride;
+            const int row_stride = tex_size * 4;
+            const int byte_count = tex_size * row_stride;
             erhe::graphics::Ring_buffer_client upload_buf{
                 m_graphics_device, erhe::graphics::Buffer_target::transfer_src, "test texture upload"
             };
@@ -995,8 +998,8 @@ private:
     }
 
     void draw_multi_texture_quad(
-        erhe::graphics::Render_command_encoder& encoder,
-        const erhe::math::Viewport&             viewport,
+        erhe::graphics::Render_command_encoder&                      encoder,
+        const erhe::math::Viewport&                                  viewport,
         const std::vector<std::shared_ptr<erhe::graphics::Texture>>& textures
     )
     {
@@ -1035,7 +1038,7 @@ private:
         m_quad_buffer.bind(encoder, buffer_range);
 
         // Create texture heap with reserved slots matching texture count
-        erhe::graphics::Texture_heap texture_heap{m_graphics_device, *m_red_texture.get(), m_nearest_sampler, tex_count};
+        erhe::graphics::Texture_heap texture_heap{m_graphics_device, *m_red_texture.get(), m_nearest_sampler, tex_count, m_multi_tex_default_uniform_block.get()};
         for (uint32_t i = 0; i < tex_count; ++i) {
             texture_heap.assign(i, textures[i].get(), &m_nearest_sampler);
         }
@@ -1101,8 +1104,8 @@ private:
     }
 
     void draw_separate_samplers_quad(
-        erhe::graphics::Render_command_encoder& encoder,
-        const erhe::math::Viewport&             viewport,
+        erhe::graphics::Render_command_encoder&                      encoder,
+        const erhe::math::Viewport&                                  viewport,
         const std::vector<std::shared_ptr<erhe::graphics::Texture>>& textures
     )
     {
@@ -1141,7 +1144,7 @@ private:
         m_quad_buffer.bind(encoder, buffer_range);
 
         // Texture heap: 3 reserved slots at individual GLSL bindings 0, 1, 2
-        erhe::graphics::Texture_heap texture_heap{m_graphics_device, *m_red_texture.get(), m_nearest_sampler, tex_count};
+        erhe::graphics::Texture_heap texture_heap{m_graphics_device, *m_red_texture.get(), m_nearest_sampler, tex_count, m_sep_tex_default_uniform_block.get()};
         for (uint32_t i = 0; i < tex_count; ++i) {
             texture_heap.assign(i, textures[i].get(), &m_nearest_sampler);
         }
@@ -1158,11 +1161,11 @@ private:
     erhe::graphics::Device                                      m_graphics_device;
     bool                                                        m_error_callback_set;
     erhe::gltf::Image_transfer                                  m_image_transfer;
-    rendering_test::Mesh_memory                                        m_mesh_memory;
+    rendering_test::Mesh_memory                                 m_mesh_memory;
     erhe::scene_renderer::Program_interface_config              m_program_interface_config;
     erhe::scene_renderer::Program_interface                     m_program_interface;
+    rendering_test::Programs                                    m_programs;
     erhe::scene_renderer::Forward_renderer                      m_forward_renderer;
-    rendering_test::Programs                                           m_programs;
     erhe::scene::Scene                                          m_scene;
     std::shared_ptr<erhe::scene::Camera>                        m_camera;
     std::shared_ptr<erhe::scene::Light>                         m_light;
@@ -1216,7 +1219,7 @@ private:
     erhe::graphics::Shader_resource*                            m_quad_uv_max        {nullptr};
     erhe::graphics::Shader_resource*                            m_quad_padding       {nullptr};
     std::unique_ptr<erhe::graphics::Shader_resource>            m_quad_default_uniform_block;
-    erhe::graphics::Fragment_outputs                             m_quad_fragment_outputs{
+    erhe::graphics::Fragment_outputs                            m_quad_fragment_outputs{
         erhe::graphics::Fragment_output{
             .name     = "out_color",
             .type     = erhe::graphics::Glsl_type::float_vec4,

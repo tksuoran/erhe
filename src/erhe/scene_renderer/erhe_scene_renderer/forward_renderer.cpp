@@ -22,7 +22,11 @@ namespace erhe::scene_renderer {
 
 const std::vector<std::span<const std::shared_ptr<erhe::scene::Mesh>>> Forward_renderer::empty_mesh_spans{};
 
-Forward_renderer::Forward_renderer(erhe::graphics::Device& graphics_device, Program_interface& program_interface)
+Forward_renderer::Forward_renderer(
+    erhe::graphics::Device&                graphics_device,
+    Program_interface&                     program_interface,
+    const erhe::graphics::Shader_resource* default_uniform_block
+)
     : m_graphics_device     {graphics_device}
     , m_program_interface   {program_interface}
     , m_camera_buffer       {graphics_device, program_interface.camera_interface}
@@ -49,7 +53,8 @@ Forward_renderer::Forward_renderer(erhe::graphics::Device& graphics_device, Prog
             m_graphics_device,
             *m_dummy_texture.get(),
             m_fallback_sampler,
-            erhe::scene_renderer::c_texture_heap_slot_count_reserved
+            erhe::scene_renderer::c_texture_heap_slot_count_reserved,
+            default_uniform_block
         )
     }
 {
@@ -96,7 +101,8 @@ void Forward_renderer::render(const Render_parameters& parameters)
             parameters.grid_line_width,
             parameters.frame_number,
             parameters.reverse_depth,
-            parameters.depth_range
+            parameters.depth_range,
+            parameters.conventions
         );
         m_camera_buffer.bind(parameters.render_encoder, camera_buffer_range.value());
     }
@@ -219,7 +225,8 @@ void Forward_renderer::draw_primitives(const Render_parameters& parameters, cons
             parameters.grid_line_width,
             parameters.frame_number,
             parameters.reverse_depth,
-            parameters.depth_range
+            parameters.depth_range,
+            parameters.conventions
         );
         m_camera_buffer.bind(parameters.render_encoder, camera_range.value());
     }

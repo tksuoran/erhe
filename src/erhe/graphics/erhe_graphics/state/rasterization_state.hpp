@@ -24,6 +24,10 @@ public:
     // Use when projection Y-flip reverses apparent triangle winding.
     [[nodiscard]] auto with_winding_flip() const -> Rasterization_state;
 
+    // Returns with_winding_flip() when condition is true, otherwise returns *this.
+    // Typical usage: state.with_winding_flip_if(conventions.clip_space_y_flip == Clip_space_y_flip::enabled)
+    [[nodiscard]] auto with_winding_flip_if(bool condition) const -> Rasterization_state;
+
     static Rasterization_state cull_mode_none_depth_clamp;
     static Rasterization_state cull_mode_none;
     static Rasterization_state cull_mode_front_cw;

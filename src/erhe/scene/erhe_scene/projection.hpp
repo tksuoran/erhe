@@ -39,19 +39,17 @@ public:
     };
 
     [[nodiscard]] auto clip_from_node_transform(
-        erhe::math::Viewport           viewport,
-        bool                           reverse_depth,
-        erhe::math::Depth_range        depth_range,
-        erhe::math::Framebuffer_origin framebuffer_origin = erhe::math::Framebuffer_origin::bottom_left,
-        erhe::math::Ndc_y_direction    ndc_y_direction    = erhe::math::Ndc_y_direction::up
+        erhe::math::Viewport                      viewport,
+        bool                                      reverse_depth,
+        erhe::math::Depth_range                   depth_range,
+        const erhe::math::Coordinate_conventions& conventions = erhe::math::Coordinate_conventions{}
     ) const -> Transform;
 
     [[nodiscard]] auto get_projection_matrix(
-        float                          viewport_aspect_ratio,
-        bool                           reverse_depth,
-        erhe::math::Depth_range        depth_range,
-        erhe::math::Framebuffer_origin framebuffer_origin = erhe::math::Framebuffer_origin::bottom_left,
-        erhe::math::Ndc_y_direction    ndc_y_direction    = erhe::math::Ndc_y_direction::up
+        float                                     viewport_aspect_ratio,
+        bool                                      reverse_depth,
+        erhe::math::Depth_range                   depth_range,
+        const erhe::math::Coordinate_conventions& conventions = erhe::math::Coordinate_conventions{}
     ) const -> glm::mat4;
 
     class Fov_sides

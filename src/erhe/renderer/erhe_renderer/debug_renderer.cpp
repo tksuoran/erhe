@@ -241,12 +241,16 @@ auto Debug_renderer::get(const Debug_renderer_config& config) -> Primitive_rende
 
 static constexpr std::string_view c_line_renderer_render{"Debug_renderer::render()"};
 
-void Debug_renderer::begin_frame(const erhe::math::Viewport viewport, const erhe::scene::Camera& camera)
+void Debug_renderer::begin_frame(
+    const erhe::math::Viewport                viewport,
+    const erhe::scene::Camera&                camera,
+    const erhe::math::Coordinate_conventions& conventions
+)
 {
     const auto* camera_node = camera.get_node();
     ERHE_VERIFY(camera_node != nullptr);
 
-    const erhe::scene::Camera_projection_transforms projection_transforms = camera.projection_transforms(viewport, true, erhe::math::Depth_range::zero_to_one);
+    const erhe::scene::Camera_projection_transforms projection_transforms = camera.projection_transforms(viewport, true, erhe::math::Depth_range::zero_to_one, conventions);
     const glm::mat4                                 clip_from_world       = projection_transforms.clip_from_world.get_matrix();
     const erhe::scene::Projection::Fov_sides        fov_sides             = camera.projection()->get_fov_sides(viewport);
 

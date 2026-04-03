@@ -145,8 +145,7 @@ void Composition_pass::render(const Render_context& context)
                 .debug_label            = get_debug_label().string_view(),
                 .reverse_depth          = context.scene_view.get_reverse_depth(),
                 .depth_range            = context.scene_view.get_depth_range(),
-                .framebuffer_origin     = context.scene_view.get_framebuffer_origin(),
-                .ndc_y_direction        = context.scene_view.get_ndc_y_direction()
+                .conventions            = context.scene_view.get_conventions()
             },
             nullptr
         );
@@ -209,8 +208,7 @@ void Composition_pass::render(const Render_context& context)
                     .debug_label            = get_name(),
                     .reverse_depth          = context.scene_view.get_reverse_depth(),
                     .depth_range            = context.scene_view.get_depth_range(),
-                    .framebuffer_origin     = context.scene_view.get_framebuffer_origin(),
-                    .ndc_y_direction        = context.scene_view.get_ndc_y_direction()
+                    .conventions            = context.scene_view.get_conventions()
                 }
             );
         }

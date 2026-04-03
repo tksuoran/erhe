@@ -88,8 +88,7 @@ public:
         const std::shared_ptr<erhe::graphics::Texture>&             in_shadow_map_texture,
         bool                                                        reverse_depth,
         erhe::math::Depth_range                                     depth_range,
-        erhe::math::Framebuffer_origin                              framebuffer_origin = erhe::math::Framebuffer_origin::bottom_left,
-        erhe::math::Ndc_y_direction                                 ndc_y_direction    = erhe::math::Ndc_y_direction::up
+        const erhe::math::Coordinate_conventions&                   conventions = erhe::math::Coordinate_conventions{}
     );
 
     // Warning: Returns pointer to element of member vector. That pointer

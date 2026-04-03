@@ -48,15 +48,16 @@ Camera_buffer::Camera_buffer(erhe::graphics::Device& graphics_device, Camera_int
 }
 
 auto Camera_buffer::update(
-    const erhe::scene::Projection& camera_projection,
-    const erhe::scene::Node&       camera_node,
-    erhe::math::Viewport           viewport,
-    float                          exposure,
-    glm::vec4                      grid_size,
-    glm::vec4                      grid_line_width,
-    uint64_t                       frame_number,
-    const bool                     reverse_depth,
-    const erhe::math::Depth_range  depth_range
+    const erhe::scene::Projection&            camera_projection,
+    const erhe::scene::Node&                  camera_node,
+    erhe::math::Viewport                      viewport,
+    float                                     exposure,
+    glm::vec4                                 grid_size,
+    glm::vec4                                 grid_line_width,
+    uint64_t                                  frame_number,
+    const bool                                reverse_depth,
+    const erhe::math::Depth_range             depth_range,
+    const erhe::math::Coordinate_conventions& conventions
 ) -> erhe::graphics::Ring_buffer_range
 {
     ERHE_PROFILE_FUNCTION();
@@ -65,7 +66,7 @@ auto Camera_buffer::update(
 
     const auto  entry_size       = m_camera_interface.camera_struct.get_size_bytes();
     const auto& offsets          = m_camera_interface.offsets;
-    const auto  clip_from_camera = camera_projection.clip_from_node_transform(viewport, reverse_depth, depth_range);
+    const auto  clip_from_camera = camera_projection.clip_from_node_transform(viewport, reverse_depth, depth_range, conventions);
 
     erhe::graphics::Ring_buffer_range buffer_range = acquire(erhe::graphics::Ring_buffer_usage::CPU_write, entry_size);
     std::span<std::byte>              gpu_data     = buffer_range.get_span();

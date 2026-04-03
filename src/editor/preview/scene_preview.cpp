@@ -10,6 +10,7 @@
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/texture.hpp"
+#include "erhe_math/math_util.hpp"
 #include "erhe_scene/scene.hpp"
 
 #include <fmt/format.h>
@@ -23,21 +24,22 @@ using Depth_stencil_state  = erhe::graphics::Depth_stencil_state;
 using Color_blend_state    = erhe::graphics::Color_blend_state;
 
 Scene_preview::Scene_preview(
-    erhe::graphics::Device&         graphics_device,
-    App_context&                    context,
-    Mesh_memory&                    mesh_memory,
-    Programs&                       programs,
-    const bool                      reverse_depth
+    erhe::graphics::Device& graphics_device,
+    App_context&            context,
+    Mesh_memory&            mesh_memory,
+    Programs&               programs,
+    const bool              reverse_depth
 )
     : Scene_view       {context, Viewport_config{}}
     , m_graphics_device{graphics_device}
+    , m_y_flip{graphics_device.get_info().coordinate_conventions.clip_space_y_flip == erhe::math::Clip_space_y_flip::enabled}
     , m_render_pipeline_state{
         {
             .debug_label    = erhe::utility::Debug_label{"Polygon Fill Opaque"},
             .shader_stages  = &programs.standard.shader_stages,
             .vertex_input   = &mesh_memory.vertex_input,
             .input_assembly = Input_assembly_state::triangle,
-            .rasterization  = Rasterization_state::cull_mode_back_ccw,
+            .rasterization  = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
             .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
             .color_blend    = Color_blend_state::color_blend_disabled
         }

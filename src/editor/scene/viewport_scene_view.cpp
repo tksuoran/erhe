@@ -150,7 +150,7 @@ void Viewport_scene_view::execute_rendergraph_node()
     erhe::graphics::Device& graphics_device = m_rendergraph.get_graphics_device();
 
     if (do_render) {
-        m_context.debug_renderer->begin_frame(context.viewport, *context.camera);
+        m_context.debug_renderer->begin_frame(context.viewport, *context.camera, get_conventions());
         if (m_context.content_wide_line_renderer != nullptr && m_context.content_wide_line_renderer->is_enabled()) {
             m_context.content_wide_line_renderer->begin_frame();
         }
@@ -230,8 +230,7 @@ void Viewport_scene_view::execute_rendergraph_node()
                 compute_encoder, context.viewport, *context.camera,
                 get_reverse_depth(),
                 get_depth_range(),
-                get_framebuffer_origin(),
-                get_ndc_y_direction()
+                get_conventions()
             );
         }
     }
@@ -324,7 +323,7 @@ auto Viewport_scene_view::get_perspective_scale() const -> float
     if (!camera) {
         return 1.0f;
     }
-    const erhe::scene::Camera_projection_transforms camera_projection_transforms_ = camera->projection_transforms(m_projection_viewport, get_reverse_depth(), get_depth_range(), get_framebuffer_origin(), get_ndc_y_direction());
+    const erhe::scene::Camera_projection_transforms camera_projection_transforms_ = camera->projection_transforms(m_projection_viewport, get_reverse_depth(), get_depth_range(), get_conventions());
     const glm::mat4 clip_from_view = camera_projection_transforms_.clip_from_camera.get_matrix();
     const glm::mat2 projection_top_left_2x2{clip_from_view};
     const glm::mat2 inverted_top_left_2x2 = glm::inverse(projection_top_left_2x2);
@@ -370,7 +369,7 @@ auto Viewport_scene_view::project_to_viewport(const glm::vec3 position_in_world)
     if (!camera) {
         return {};
     }
-    const auto camera_projection_transforms = camera->projection_transforms(m_projection_viewport, get_reverse_depth(), get_depth_range(), get_framebuffer_origin(), get_ndc_y_direction());
+    const auto camera_projection_transforms = camera->projection_transforms(m_projection_viewport, get_reverse_depth(), get_depth_range(), get_conventions());
     constexpr float depth_range_near = 0.0f;
     constexpr float depth_range_far  = 1.0f;
     return erhe::math::project_to_screen_space<float>(
@@ -381,7 +380,8 @@ auto Viewport_scene_view::project_to_viewport(const glm::vec3 position_in_world)
         static_cast<float>(m_projection_viewport.x),
         static_cast<float>(m_projection_viewport.y),
         static_cast<float>(m_projection_viewport.width),
-        static_cast<float>(m_projection_viewport.height)
+        static_cast<float>(m_projection_viewport.height),
+        get_conventions()
     );
 }
 
@@ -391,7 +391,7 @@ auto Viewport_scene_view::unproject_to_world(const glm::vec3 position_in_window)
     if (!camera) {
         return {};
     }
-    const auto camera_projection_transforms = camera->projection_transforms(m_projection_viewport, get_reverse_depth(), get_depth_range(), get_framebuffer_origin(), get_ndc_y_direction());
+    const auto camera_projection_transforms = camera->projection_transforms(m_projection_viewport, get_reverse_depth(), get_depth_range(), get_conventions());
     constexpr float depth_range_near = 0.0f;
     constexpr float depth_range_far  = 1.0f;
     return erhe::math::unproject<float>(
@@ -402,7 +402,8 @@ auto Viewport_scene_view::unproject_to_world(const glm::vec3 position_in_window)
         static_cast<float>(m_projection_viewport.x),
         static_cast<float>(m_projection_viewport.y),
         static_cast<float>(m_projection_viewport.width),
-        static_cast<float>(m_projection_viewport.height)
+        static_cast<float>(m_projection_viewport.height),
+        get_conventions()
     );
 }
 
@@ -571,7 +572,7 @@ auto Viewport_scene_view::get_position_in_world_viewport_depth(const float viewp
         viewport_depth
     };
     const erhe::math::Viewport&                     vp                    = get_projection_viewport();
-    const erhe::scene::Camera_projection_transforms projection_transforms = camera->projection_transforms(vp, get_reverse_depth(), get_depth_range(), get_framebuffer_origin(), get_ndc_y_direction());
+    const erhe::scene::Camera_projection_transforms projection_transforms = camera->projection_transforms(vp, get_reverse_depth(), get_depth_range(), get_conventions());
     const glm::mat4                                 world_from_clip       = projection_transforms.clip_from_world.get_inverse_matrix();
 
     return erhe::math::unproject<float>(
@@ -582,7 +583,8 @@ auto Viewport_scene_view::get_position_in_world_viewport_depth(const float viewp
         static_cast<float>(vp.x),
         static_cast<float>(vp.y),
         static_cast<float>(vp.width),
-        static_cast<float>(vp.height)
+        static_cast<float>(vp.height),
+        get_conventions()
     );
 }
 

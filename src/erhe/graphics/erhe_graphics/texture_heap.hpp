@@ -8,6 +8,7 @@ namespace erhe::graphics {
 
 class Device;
 class Sampler;
+class Shader_resource;
 class Texture;
 
 // Unified API for bindless textures and texture unit cache emulating bindless textures
@@ -18,10 +19,11 @@ class Texture_heap final
 {
 public:
     Texture_heap(
-        Device&        device,
-        const Texture& fallback_texture,
-        const Sampler& fallback_sampler,
-        std::size_t    reserved_slot_count
+        Device&                device,
+        const Texture&         fallback_texture,
+        const Sampler&         fallback_sampler,
+        std::size_t            reserved_slot_count,
+        const Shader_resource* default_uniform_block = nullptr
     );
     ~Texture_heap() noexcept;
 

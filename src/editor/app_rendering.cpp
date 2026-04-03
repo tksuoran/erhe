@@ -24,6 +24,7 @@
 #include "erhe_commands/command.hpp"
 #include "erhe_commands/commands.hpp"
 #include "erhe_graphics/device.hpp"
+#include "erhe_math/math_util.hpp"
 #include "erhe_graphics/gpu_timer.hpp"
 #if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
 #   include "erhe_gl/wrapper_functions.hpp"
@@ -456,13 +457,14 @@ using Depth_stencil_state        = erhe::graphics::Depth_stencil_state;
 using Color_blend_state          = erhe::graphics::Color_blend_state;
 
 Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_device, Mesh_memory&mesh_memory, Programs& programs, const bool reverse_depth)
-    : m_empty_vertex_input{graphics_device}
+    : m_y_flip{graphics_device.get_info().coordinate_conventions.clip_space_y_flip == erhe::math::Clip_space_y_flip::enabled}
+    , m_empty_vertex_input{graphics_device}
     , polygon_fill_standard_opaque_positive_determinant{erhe::graphics::Render_pipeline_state{{
         .debug_label    = erhe::utility::Debug_label{"Polygon Fill Opaque Positive Determinant"},
         .shader_stages  = &programs.circular_brushed_metal.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangle,
-        .rasterization  = Rasterization_state::cull_mode_back_ccw,
+        .rasterization  = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
         .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
         .color_blend    = Color_blend_state::color_blend_disabled
     }}}
@@ -471,7 +473,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .shader_stages  = &programs.circular_brushed_metal.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangle,
-        .rasterization  = Rasterization_state::cull_mode_back_cw,
+        .rasterization  = Rasterization_state::cull_mode_back_cw.with_winding_flip_if(m_y_flip),
         .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
         .color_blend    = Color_blend_state::color_blend_disabled
     }}}
@@ -480,7 +482,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .shader_stages  = &programs.circular_brushed_metal.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangle,
-        .rasterization  = Rasterization_state::cull_mode_back_ccw,
+        .rasterization  = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
         .depth_stencil  = {
             .depth_test_enable   = true,
             .depth_write_enable  = true,
@@ -512,7 +514,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .shader_stages  = &programs.circular_brushed_metal.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangle,
-        .rasterization  = Rasterization_state::cull_mode_back_cw,
+        .rasterization  = Rasterization_state::cull_mode_back_cw.with_winding_flip_if(m_y_flip),
         .depth_stencil  = {
             .depth_test_enable   = true,
             .depth_write_enable  = true,
@@ -556,7 +558,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .multisample             = Multisample_state{
             .alpha_to_coverage_enable = true
         },
-        .rasterization           = Rasterization_state::cull_mode_back_ccw,
+        .rasterization           = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
         .depth_stencil  = {
             .depth_test_enable   = true,
             .depth_write_enable  = false,
@@ -601,7 +603,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .shader_stages  = &programs.brush.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangle,
-        .rasterization  = Rasterization_state::cull_mode_front_ccw,
+        .rasterization  = Rasterization_state::cull_mode_front_ccw.with_winding_flip_if(m_y_flip),
         .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
         .color_blend    = Color_blend_state::color_blend_premultiplied
     }}}
@@ -610,7 +612,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .shader_stages  = &programs.brush.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangle,
-        .rasterization  = Rasterization_state::cull_mode_back_ccw,
+        .rasterization  = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
         .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
         .color_blend    = Color_blend_state::color_blend_premultiplied
     }}}
@@ -619,7 +621,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .shader_stages  = &programs.wide_lines_draw_color.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::line,
-        .rasterization  = Rasterization_state::cull_mode_back_ccw,
+        .rasterization  = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
         .depth_stencil = {
             .depth_test_enable   = true,
             .depth_write_enable  = true,
@@ -654,7 +656,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .multisample    = Multisample_state{
             .alpha_to_coverage_enable = true
         },
-        .rasterization  = Rasterization_state::cull_mode_back_ccw,
+        .rasterization  = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
         .depth_stencil = {
             .depth_test_enable   = false,
             .depth_write_enable  = false,
@@ -686,7 +688,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .shader_stages  = &programs.points.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::point,
-        .rasterization  = Rasterization_state::cull_mode_back_ccw,
+        .rasterization  = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
         .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
         .color_blend    = Color_blend_state::color_blend_disabled
     }}}
@@ -695,7 +697,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .shader_stages  = &programs.points.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::point,
-        .rasterization  = Rasterization_state::cull_mode_back_ccw,
+        .rasterization  = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
         .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
         .color_blend    = Color_blend_state::color_blend_disabled
     }}}
@@ -704,7 +706,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(erhe::graphics::Device& graphics_de
         .shader_stages  = &programs.textured.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangle,
-        .rasterization  = Rasterization_state::cull_mode_back_ccw, 
+        .rasterization  = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip), 
         // Useful for debugging rendertarget meshes
         // .rasterization  = Rasterization_state::cull_mode_none,
         .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
@@ -1058,8 +1060,7 @@ void App_rendering::render_id(const Render_context& context)
             .y                  = static_cast<int>(position.y),
             .reverse_depth      = context.scene_view.get_reverse_depth(),
             .depth_range        = context.scene_view.get_depth_range(),
-            .framebuffer_origin = context.scene_view.get_framebuffer_origin(),
-            .ndc_y_direction    = context.scene_view.get_ndc_y_direction()
+            .conventions        = context.scene_view.get_conventions()
         }
     );
 }

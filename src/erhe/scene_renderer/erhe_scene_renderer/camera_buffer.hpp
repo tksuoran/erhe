@@ -3,6 +3,7 @@
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/ring_buffer_client.hpp"
 #include "erhe_graphics/shader_resource.hpp"
+#include "erhe_math/math_util.hpp"
 #include "erhe_math/viewport.hpp"
 
 namespace erhe::graphics {
@@ -50,15 +51,16 @@ public:
     Camera_buffer(erhe::graphics::Device& graphics_device, Camera_interface& camera_interface);
 
     auto update(
-        const erhe::scene::Projection& camera_projection,
-        const erhe::scene::Node&       camera_node,
-        erhe::math::Viewport           viewport,
-        float                          exposure,
-        glm::vec4                      grid_size,
-        glm::vec4                      grid_line_width,
-        uint64_t                       frame_number,
-        bool                           reverse_depth,
-        erhe::math::Depth_range        depth_range
+        const erhe::scene::Projection&            camera_projection,
+        const erhe::scene::Node&                  camera_node,
+        erhe::math::Viewport                      viewport,
+        float                                     exposure,
+        glm::vec4                                 grid_size,
+        glm::vec4                                 grid_line_width,
+        uint64_t                                  frame_number,
+        bool                                      reverse_depth,
+        erhe::math::Depth_range                   depth_range,
+        const erhe::math::Coordinate_conventions& conventions = erhe::math::Coordinate_conventions{}
     ) -> erhe::graphics::Ring_buffer_range;
 
 private:

@@ -40,11 +40,11 @@ class Scene_preview : public Scene_view
 {
 public:
     Scene_preview(
-        erhe::graphics::Device&         graphics_device,
-        App_context&                    app_context,
-        Mesh_memory&                    mesh_memory,
-        Programs&                       programs,
-        bool                            reverse_depth
+        erhe::graphics::Device& graphics_device,
+        App_context&            app_context,
+        Mesh_memory&            mesh_memory,
+        Programs&               programs,
+        bool                    reverse_depth
     );
     ~Scene_preview() noexcept;
 
@@ -66,6 +66,7 @@ public:
 
 protected:
     erhe::graphics::Device&                             m_graphics_device;
+    bool                                                m_y_flip;
     int                                                 m_width{0};
     int                                                 m_height{0};
     glm::vec4                                           m_clear_color{0.5f, 0.5f, 0.5f, 0.0f};

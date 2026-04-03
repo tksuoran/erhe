@@ -131,8 +131,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
         parameters.texture,
         parameters.reverse_depth,
         parameters.depth_range,
-        parameters.framebuffer_origin,
-        parameters.ndc_y_direction
+        parameters.conventions
     );
 
     erhe::graphics::Scoped_debug_group debug_group{"Shadow_renderer::render()"};

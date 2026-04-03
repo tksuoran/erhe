@@ -69,16 +69,15 @@ public:
     class Render_parameters
     {
     public:
-        const erhe::math::Viewport&  viewport;
-        const erhe::scene::Camera&   camera;
+        const erhe::math::Viewport&        viewport;
+        const erhe::scene::Camera&         camera;
         const std::initializer_list<const std::span<const std::shared_ptr<erhe::scene::Mesh>>>& content_mesh_spans;
         const std::initializer_list<const std::span<const std::shared_ptr<erhe::scene::Mesh>>>& tool_mesh_spans;
-        const int                    x;
-        const int                    y;
-        bool                         reverse_depth{true};
-        erhe::math::Depth_range      depth_range{erhe::math::Depth_range::zero_to_one};
-        erhe::math::Framebuffer_origin framebuffer_origin{erhe::math::Framebuffer_origin::bottom_left};
-        erhe::math::Ndc_y_direction    ndc_y_direction   {erhe::math::Ndc_y_direction::up};
+        const int                          x;
+        const int                          y;
+        bool                               reverse_depth{true};
+        erhe::math::Depth_range            depth_range{erhe::math::Depth_range::zero_to_one};
+        erhe::math::Coordinate_conventions conventions;
     };
     void render            (const Render_parameters& parameters);
     void next_frame        ();
@@ -121,6 +120,7 @@ private:
     // TODO Do not store these here?
     erhe::graphics::Device&                      m_graphics_device;
     Mesh_memory&                                 m_mesh_memory;
+    bool                                         m_y_flip;
 
     erhe::scene_renderer::Camera_buffer          m_camera_buffers;
     erhe::renderer::Draw_indirect_buffer         m_draw_indirect_buffers;

@@ -302,6 +302,12 @@ auto Headset_view::get_headset_view_resources(erhe::xr::Render_view& render_view
         return true; // TODO
     };
 #endif
+#if defined(ERHE_GRAPHICS_LIBRARY_METAL)
+    auto match_color_texture = [&render_view](const auto&) {
+        static_cast<void>(render_view);
+        return true; // TODO
+    };
+#endif
 
     const auto i = std::find_if(m_view_resources.begin(), m_view_resources.end(), match_color_texture);
     if (i == m_view_resources.end()) {
@@ -473,7 +479,10 @@ auto Headset_view::render_headset() -> bool
                 .viewport               = viewport,
                 .override_shader_stages = nullptr
             };
-            m_context.debug_renderer->begin_frame(render_context.viewport, *render_context.camera);
+            m_context.debug_renderer->begin_frame(
+                render_context.viewport, *render_context.camera,
+                m_context.graphics_device->get_info().coordinate_conventions
+            );
             m_context.tools         ->render_viewport_tools(render_context);
             m_context.app_rendering ->render_viewport_renderables(render_context);
 

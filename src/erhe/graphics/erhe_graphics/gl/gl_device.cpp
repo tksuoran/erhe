@@ -274,11 +274,6 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         gl::get_integer_v(gl::Get_p_name::max_texture_buffer_size, &m_info.max_texture_buffer_size);
     }
 
-    int shader_storage_buffer_offset_alignment{0};
-    int uniform_buffer_offset_alignment       {0};
-    gl::get_integer_v(gl::Get_p_name::shader_storage_buffer_offset_alignment, &shader_storage_buffer_offset_alignment);
-    gl::get_integer_v(gl::Get_p_name::uniform_buffer_offset_alignment,        &uniform_buffer_offset_alignment);
-
     // GL 4.3 core has debug_message_callback and push/pop_debug_group.
     // ARB_debug_output has glDebugMessageCallbackARB but not push/pop_debug_group,
     // and the ARB-suffixed functions are not in the generated GL wrapper.
@@ -356,10 +351,15 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         (m_info.gl_version >= 430) || gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shader_storage_buffer_object);
     if (force_no_compute_shader && m_info.use_shader_storage_buffers) {
         m_info.use_shader_storage_buffers = false;
-        shader_storage_buffer_offset_alignment = 0;
+        m_info.shader_storage_buffer_offset_alignment = 0;
         log_startup->warn("Force disabled shader storage buffers due to config setting force_no_compute_shader");
     }
     log_startup->info("SSBO supported: {}", m_info.use_shader_storage_buffers);
+    if (m_info.use_shader_storage_buffers) {
+        int shader_storage_buffer_offset_alignment{0};
+        gl::get_integer_v(gl::Get_p_name::shader_storage_buffer_offset_alignment, &shader_storage_buffer_offset_alignment);
+        m_info.shader_storage_buffer_offset_alignment = static_cast<unsigned int>(shader_storage_buffer_offset_alignment);
+    }
  
     if (gl::is_extension_supported(gl::Extension::Extension_GL_ARB_sparse_texture)) {
         ERHE_PROFILE_SCOPE("Sparse texture");
@@ -458,7 +458,8 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         m_info.max_tess_evaluation_shader_storage_blocks = 0;
     }
 
-    m_info.shader_storage_buffer_offset_alignment = static_cast<unsigned int>(shader_storage_buffer_offset_alignment);
+    int uniform_buffer_offset_alignment{0};
+    gl::get_integer_v(gl::Get_p_name::uniform_buffer_offset_alignment, &uniform_buffer_offset_alignment);
     m_info.uniform_buffer_offset_alignment        = static_cast<unsigned int>(uniform_buffer_offset_alignment);
     log_startup->info(
         "uniform block ("
@@ -932,7 +933,7 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
 
     // Populate coordinate conventions for OpenGL
     m_info.coordinate_conventions.framebuffer_origin = erhe::math::Framebuffer_origin::bottom_left;
-    m_info.coordinate_conventions.ndc_y_direction    = erhe::math::Ndc_y_direction::up;
+    m_info.coordinate_conventions.clip_space_y_flip  = erhe::math::Clip_space_y_flip::disabled;
     m_info.coordinate_conventions.texture_origin     = erhe::math::Texture_origin::bottom_left;
     m_info.coordinate_conventions.native_depth_range = m_info.use_clip_control
         ? erhe::math::Depth_range::zero_to_one

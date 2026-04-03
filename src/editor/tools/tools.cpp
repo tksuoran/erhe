@@ -14,6 +14,7 @@
 
 #include "erhe_commands/commands.hpp"
 #include "erhe_graphics/device.hpp"
+#include "erhe_math/math_util.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_utility/bit_helpers.hpp"
@@ -27,15 +28,16 @@ using Rasterization_state        = erhe::graphics::Rasterization_state;
 using Depth_stencil_state        = erhe::graphics::Depth_stencil_state;
 using Color_blend_state          = erhe::graphics::Color_blend_state;
 
-Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(Mesh_memory& mesh_memory, Programs& programs, const bool reverse_depth)
+Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(erhe::graphics::Device& graphics_device, Mesh_memory& mesh_memory, Programs& programs, const bool reverse_depth)
+    : m_y_flip{graphics_device.get_info().coordinate_conventions.clip_space_y_flip == erhe::math::Clip_space_y_flip::enabled}
     // Tool pass one: For hidden tool parts, set stencil to s_stencil_tool_mesh_hidden.
     // Only reads depth buffer, only writes stencil buffer.
-    : tool1_hidden_stencil{erhe::graphics::Render_pipeline_state{{
+    , tool1_hidden_stencil{erhe::graphics::Render_pipeline_state{{
         .debug_label             = erhe::utility::Debug_label{"Tool pass 1: Tag depth hidden `s_stencil_tool_mesh_hidden`"},
         .shader_stages           = &programs.tool.shader_stages,
         .vertex_input            = &mesh_memory.vertex_input,
         .input_assembly          = Input_assembly_state::triangle,
-        .rasterization           = Rasterization_state::cull_mode_back_ccw,
+        .rasterization           = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
         .depth_stencil = {
             .depth_test_enable   = true,
             .depth_write_enable  = false,
@@ -70,7 +72,7 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(Mesh_memory& mesh_memor
         .shader_stages           = &programs.tool.shader_stages,
         .vertex_input            = &mesh_memory.vertex_input,
         .input_assembly          = erhe::graphics::Input_assembly_state::triangle,
-        .rasterization           = erhe::graphics::Rasterization_state::cull_mode_back_ccw,
+        .rasterization           = erhe::graphics::Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
         .depth_stencil = {
             .depth_test_enable   = true,
             .depth_write_enable  = false,
@@ -111,7 +113,7 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(Mesh_memory& mesh_memor
                     .min_depth = 0.0f,
                     .max_depth = 0.0f
                 },
-                .rasterization        = Rasterization_state::cull_mode_back_ccw,
+                .rasterization        = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
                 .depth_stencil        = Depth_stencil_state::depth_test_always_stencil_test_disabled,
                 .color_blend          = Color_blend_state::color_writes_disabled
             }
@@ -125,7 +127,7 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(Mesh_memory& mesh_memor
         .shader_stages  = &programs.tool.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangle,
-        .rasterization  = Rasterization_state::cull_mode_back_ccw,
+        .rasterization  = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
         .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
         .color_blend    = Color_blend_state::color_writes_disabled
     }}}
@@ -137,7 +139,7 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(Mesh_memory& mesh_memor
         .shader_stages           = &programs.tool.shader_stages,
         .vertex_input            = &mesh_memory.vertex_input,
         .input_assembly          = Input_assembly_state::triangle,
-        .rasterization           = Rasterization_state::cull_mode_back_ccw,
+        .rasterization           = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
         .depth_stencil = {
             .depth_test_enable   = true,
             .depth_write_enable  = true,
@@ -172,7 +174,7 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(Mesh_memory& mesh_memor
         .shader_stages              = &programs.tool.shader_stages,
         .vertex_input               = &mesh_memory.vertex_input,
         .input_assembly             = Input_assembly_state::triangle,
-        .rasterization              = Rasterization_state::cull_mode_back_ccw,
+        .rasterization              = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
         .depth_stencil = {
             .depth_test_enable      = true,
             .depth_write_enable     = true,
@@ -232,16 +234,17 @@ void Tools_pipeline_renderpasses::rebuild_depth_state(const bool reverse_depth)
 }
 
 Tools::Tools(
-    erhe::imgui::Imgui_renderer&    imgui_renderer,
-    erhe::imgui::Imgui_windows&     imgui_windows,
-    App_context&                    app_context,
-    App_rendering&                  app_rendering,
-    App_settings&                   app_settings,
-    Mesh_memory&                    mesh_memory,
-    Programs&                       programs
+    erhe::graphics::Device&      graphics_device,
+    erhe::imgui::Imgui_renderer& imgui_renderer,
+    erhe::imgui::Imgui_windows&  imgui_windows,
+    App_context&                 app_context,
+    App_rendering&               app_rendering,
+    App_settings&                app_settings,
+    Mesh_memory&                 mesh_memory,
+    Programs&                    programs
 )
     : m_context              {app_context}
-    , m_pipeline_renderpasses{mesh_memory, programs}
+    , m_pipeline_renderpasses{graphics_device, mesh_memory, programs}
 {
     ERHE_PROFILE_FUNCTION();
 

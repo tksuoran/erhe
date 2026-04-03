@@ -67,15 +67,6 @@ static constexpr unsigned int format_flag_require_stencil   = 0x02u;
 static constexpr unsigned int format_flag_prefer_accuracy   = 0x04u;
 static constexpr unsigned int format_flag_prefer_filterable = 0x08u;
 
-class Coordinate_conventions
-{
-public:
-    erhe::math::Depth_range        native_depth_range{erhe::math::Depth_range::negative_one_to_one};
-    erhe::math::Framebuffer_origin framebuffer_origin{erhe::math::Framebuffer_origin::bottom_left};
-    erhe::math::Ndc_y_direction    ndc_y_direction   {erhe::math::Ndc_y_direction::up};
-    erhe::math::Texture_origin     texture_origin    {erhe::math::Texture_origin::bottom_left};
-};
-
 class Device_info
 {
 public:
@@ -94,7 +85,7 @@ public:
 #endif
 
     bool use_clip_control            {false};
-    Coordinate_conventions coordinate_conventions;
+    erhe::math::Coordinate_conventions coordinate_conventions;
     bool use_direct_state_access     {false};
     bool use_binary_shaders          {false};
     bool use_integer_polygon_ids     {false};

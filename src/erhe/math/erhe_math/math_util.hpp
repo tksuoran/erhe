@@ -236,6 +236,41 @@ constexpr glm::mat4 mat4_rotate_yz_180{
     0.0f,  0.0f,  0.0f, 1.0f
 };
 
+enum class Depth_range : unsigned int {
+    zero_to_one,        // GL 4.5 with glClipControl(lower_left, zero_to_one), Metal, or Vulkan
+    negative_one_to_one // Default OpenGL NDC (GL 4.1 on macOS)
+};
+
+enum class Framebuffer_origin : unsigned int {
+    bottom_left, // OpenGL
+    top_left     // Metal, Vulkan
+};
+
+enum class Texture_origin : unsigned int {
+    bottom_left, // OpenGL
+    top_left     // Metal, Vulkan
+};
+
+// Whether the projection matrix must negate clip space Y to render correctly.
+// disabled: The API's viewport transform already produces correct screen Y
+//           (OpenGL: bottom-left origin matches Y-up NDC;
+//            Metal: viewport uses (1-y_ndc) which flips Y internally).
+// enabled:  Positive clip Y maps to the bottom of the screen; the projection
+//           must negate Y to compensate (Vulkan without VK_KHR_maintenance1).
+enum class Clip_space_y_flip : unsigned int {
+    disabled,
+    enabled
+};
+
+class Coordinate_conventions
+{
+public:
+    Depth_range        native_depth_range{Depth_range::negative_one_to_one};
+    Framebuffer_origin framebuffer_origin{Framebuffer_origin::bottom_left};
+    Texture_origin     texture_origin    {Texture_origin::bottom_left};
+    Clip_space_y_flip  clip_space_y_flip {Clip_space_y_flip::disabled};
+};
+
 template <typename T>
 [[nodiscard]] auto unproject(
     const typename vector_types<T>::mat4 world_from_clip,
@@ -245,7 +280,8 @@ template <typename T>
     const T                              viewport_x,
     const T                              viewport_y,
     const T                              viewport_width,
-    const T                              viewport_height
+    const T                              viewport_height,
+    const Coordinate_conventions&        conventions = Coordinate_conventions{}
 ) -> std::optional<typename vector_types<T>::vec3>
 {
     using vec3 = typename vector_types<T>::vec3;
@@ -255,10 +291,13 @@ template <typename T>
     const T viewport_center_y = viewport_y + viewport_height * T{0.5};
     const T s                 = depth_range_far - depth_range_near;
     const T b                 = depth_range_near;
+    // OpenGL viewport:  window_y =  height/2 * ndc_y + center_y  =>  ndc_y =  (window_y - center_y) / (height/2)
+    // Metal viewport:   window_y = -height/2 * ndc_y + center_y  =>  ndc_y = -(window_y - center_y) / (height/2)
+    const T y_sign = (conventions.framebuffer_origin == Framebuffer_origin::top_left) ? T{-1.0} : T{1.0};
 
     const vec4 ndc{
         (window.x - viewport_center_x) / (viewport_width  * T{0.5}),
-        (window.y - viewport_center_y) / (viewport_height * T{0.5}),
+        y_sign * (window.y - viewport_center_y) / (viewport_height * T{0.5}),
         (window.z - b) / s,
         T{1.0}
     };
@@ -284,31 +323,20 @@ template <typename T>
     const T                              viewport_x,
     const T                              viewport_y,
     const T                              viewport_width,
-    const T                              viewport_height
+    const T                              viewport_height,
+    const Coordinate_conventions&        conventions = Coordinate_conventions{}
 ) -> typename vector_types<T>::vec3
 {
     using vec3 = typename vector_types<T>::vec3;
     using vec4 = typename vector_types<T>::vec4;
 
-    // 13.8 Coordinate Transformations
-    //
-    // Clip control: Zero to one
-    //
-    // x_window  =  viewport_width  * 0.5 * x_ndc + viewport_left
-    // y_window  =  viewport_height * 0.5 * y_ndc + viewport_height
-    // z_window  =  (depth_range_far - depth_range_near) * z_ndc + depth_range_near
-    //
-    // Clip control negative one to one
-    //
-    // x_window  =  viewport_width  * 0.5 * x_ndc + viewport_left
-    // y_window  =  viewport_height * 0.5 * y_ndc + viewport_height
-    // z_window  =  (depth_range_far - depth_range_near) * 0.5 * z_ndc + ((depth_range_near + depth_range_far) * 0.5)
+    // OpenGL viewport:  window_y =  height/2 * ndc_y + center_y
+    // Metal viewport:   window_y = -height/2 * ndc_y + center_y
     const T viewport_center_x = viewport_x + viewport_width  * T{0.5};
     const T viewport_center_y = viewport_y + viewport_height * T{0.5};
     const T s                 = depth_range_far - depth_range_near;
     const T b                 = depth_range_near;
-    //const auto s = clip_negative_one_to_one ? (depth_range_far - depth_range_near) * 0.5f : (depth_range_far - depth_range_near);
-    //const auto b = clip_negative_one_to_one ? ((depth_range_near + depth_range_far) * 0.5) : depth_range_near;
+    const T y_sign = (conventions.framebuffer_origin == Framebuffer_origin::top_left) ? T{-1.0} : T{1.0};
 
     const vec4 clip = clip_from_world * vec4{position_in_world, T{1.0}};
     vec3 ndc;
@@ -327,8 +355,8 @@ template <typename T>
     }
 
     return vec3{
-        viewport_width  * T{0.5} * ndc.x + viewport_center_x,
-        viewport_height * T{0.5} * ndc.y + viewport_center_y,
+        viewport_width  * T{0.5} * ndc.x         + viewport_center_x,
+        viewport_height * T{0.5} * ndc.y * y_sign + viewport_center_y,
         s * ndc.z + b
     };
 }
@@ -338,7 +366,8 @@ template <typename T>
     const typename vector_types<T>::mat4 clip_from_world,
     const typename vector_types<T>::vec3 position_in_world,
     const T                              viewport_width,
-    const T                              viewport_height
+    const T                              viewport_height,
+    const Coordinate_conventions&        conventions = Coordinate_conventions{}
 ) -> typename vector_types<T>::vec2
 {
     using vec2 = typename vector_types<T>::vec2;
@@ -346,6 +375,7 @@ template <typename T>
 
     const T    viewport_center_x = viewport_width  * T{0.5};
     const T    viewport_center_y = viewport_height * T{0.5};
+    const T    y_sign = (conventions.framebuffer_origin == Framebuffer_origin::top_left) ? T{-1.0} : T{1.0};
     const vec4 clip = clip_from_world * vec4{position_in_world, T{1.0}};
 
     const vec2 ndc{
@@ -354,34 +384,10 @@ template <typename T>
     };
 
     return vec2{
-        viewport_width  * T{0.5} * ndc.x + viewport_center_x,
-        viewport_height * T{0.5} * ndc.y + viewport_center_y,
+        viewport_width  * T{0.5} * ndc.x          + viewport_center_x,
+        viewport_height * T{0.5} * ndc.y * y_sign  + viewport_center_y,
     };
 }
-
-enum class Depth_range : unsigned int {
-    zero_to_one,        // GL 4.5 with glClipControl(lower_left, zero_to_one), Metal, or Vulkan
-    negative_one_to_one // Default OpenGL NDC (GL 4.1 on macOS)
-};
-
-enum class Framebuffer_origin : unsigned int {
-    bottom_left, // OpenGL
-    top_left     // Metal, Vulkan
-};
-
-enum class Ndc_y_direction : unsigned int {
-    up,   // OpenGL, Metal
-    down  // Vulkan
-};
-
-enum class Texture_origin : unsigned int {
-    bottom_left, // OpenGL
-    top_left     // Metal, Vulkan
-};
-
-// Returns true when projection matrix needs Y negation to compensate for
-// framebuffer origin vs NDC Y direction mismatch (top-left origin with Y-up NDC).
-[[nodiscard]] auto needs_projection_y_flip(Framebuffer_origin origin, Ndc_y_direction ndc_y) -> bool;
 
 [[nodiscard]] auto create_frustum(float left, float right, float bottom, float top, float z_near, float z_far, Depth_range depth_range = Depth_range::zero_to_one) -> glm::mat4;
 [[nodiscard]] auto create_frustum_infinite_far(float left, float right, float bottom, float top, float z_near, Depth_range depth_range = Depth_range::zero_to_one) -> glm::mat4;

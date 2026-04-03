@@ -9,6 +9,7 @@
 #include "erhe_graphics/ring_buffer_client.hpp"
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
+#include "erhe_math/math_util.hpp"
 #include "erhe_math/viewport.hpp"
 
 #include <etl/vector.h>
@@ -79,7 +80,11 @@ public:
 
     // Public API
     auto get        (const Debug_renderer_config& config) -> Primitive_renderer;
-    void begin_frame(erhe::math::Viewport viewport, const erhe::scene::Camera& camera);
+    void begin_frame(
+        erhe::math::Viewport                      viewport,
+        const erhe::scene::Camera&                camera,
+        const erhe::math::Coordinate_conventions& conventions = erhe::math::Coordinate_conventions{}
+    );
     void compute    (erhe::graphics::Compute_command_encoder& command_encoder);
     void render     (erhe::graphics::Render_command_encoder& encoder, erhe::math::Viewport camera_viewport);
     void end_frame  ();
@@ -110,13 +115,13 @@ public:
     auto use_geometry_shader  () const -> bool { return m_program_interface.use_geometry_shader; }
 
 private:
-    erhe::graphics::Device&                              m_graphics_device;
-    Debug_renderer_program_interface                     m_program_interface;
-    erhe::graphics::Vertex_input_state                   m_vertex_input;      // triangle path
-    erhe::graphics::Vertex_input_state                   m_line_vertex_input; // simple line path
+    erhe::graphics::Device&                               m_graphics_device;
+    Debug_renderer_program_interface                      m_program_interface;
+    erhe::graphics::Vertex_input_state                    m_vertex_input;      // triangle path
+    erhe::graphics::Vertex_input_state                    m_line_vertex_input; // simple line path
     std::optional<erhe::graphics::Compute_pipeline_state> m_lines_to_triangles_compute_pipeline;
-    std::stack<View>                       m_view_stack{};
-    View                                   m_view      {};
+    std::stack<View>                                      m_view_stack{};
+    View                                                  m_view      {};
 
     // NOTE: Elements in m_buckets must be stable, etl::vector<> works, std::vector<> does not work.
     etl::vector<Debug_renderer_bucket, 32> m_buckets;

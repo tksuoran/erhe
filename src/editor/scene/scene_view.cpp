@@ -87,9 +87,9 @@ auto Scene_view::get_framebuffer_origin() const -> erhe::math::Framebuffer_origi
     return m_context.graphics_device->get_info().coordinate_conventions.framebuffer_origin;
 }
 
-auto Scene_view::get_ndc_y_direction() const -> erhe::math::Ndc_y_direction
+auto Scene_view::get_conventions() const -> erhe::math::Coordinate_conventions
 {
-    return m_context.graphics_device->get_info().coordinate_conventions.ndc_y_direction;
+    return m_context.graphics_device->get_info().coordinate_conventions;
 }
 
 void Scene_view::set_hover(const std::size_t slot, const Hover_entry& entry)

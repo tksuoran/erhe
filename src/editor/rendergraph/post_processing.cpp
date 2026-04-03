@@ -574,7 +574,8 @@ Post_processing::Post_processing(erhe::graphics::Device& d, App_context& app_con
         d,
         *m_dummy_texture.get(),
         m_sampler_linear,
-        s_reserved_texture_slot_count
+        s_reserved_texture_slot_count,
+        &m_default_uniform_block
     );
 }
 
@@ -617,7 +618,6 @@ void Post_processing::post_process(Post_processing_node& node)
     m_texture_heap->assign(s_downsample_texture, node.downsample_texture.get(), &m_sampler_linear_mipmap_nearest);
     m_texture_heap->assign(s_upsample_texture,   node.upsample_texture.get(),   &m_sampler_linear_mipmap_nearest);
 
-    m_texture_heap->bind();
 
     // Downsample passes
     for (const size_t source_level : node.downsample_source_levels) {
@@ -642,6 +642,7 @@ void Post_processing::post_process(Post_processing_node& node)
         } else {
             encoder.set_render_pipeline_state(m_pipelines.downsample);
         }
+        m_texture_heap->bind();
         encoder.draw_primitives(erhe::graphics::Primitive_type::triangle, 0, 3);
     }
 
@@ -668,6 +669,10 @@ void Post_processing::post_process(Post_processing_node& node)
         } else {
             encoder.set_render_pipeline_state(m_pipelines.upsample);
         }
+
+        // We have new render command encoder and new render pass. We need to apply
+        // texture heap
+        m_texture_heap->bind();
 
         const int render_pass_width  = render_pass->get_render_target_width();
         const int render_pass_height = render_pass->get_render_target_height();

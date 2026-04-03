@@ -430,8 +430,7 @@ void Hover_tool::tool_render(const Render_context& context)
         context.viewport,
         context.scene_view.get_reverse_depth(),
         context.scene_view.get_depth_range(),
-        context.scene_view.get_framebuffer_origin(),
-        context.scene_view.get_ndc_y_direction()
+        context.scene_view.get_conventions()
     );
     const glm::mat4            clip_from_world       = projection_transforms.clip_from_world.get_matrix();
 

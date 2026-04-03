@@ -194,26 +194,25 @@ void Shadow_render_node::execute_rendergraph_node()
 
     m_context.shadow_renderer->render(
         erhe::scene_renderer::Shadow_renderer::Render_parameters{
-            .vertex_input_state           = &m_context.mesh_memory->vertex_input,
-            .index_type                   = m_context.mesh_memory->buffer_info.index_type,
-            .index_buffer                 = &m_context.mesh_memory->index_buffer,
-            .vertex_buffer0               = &m_context.mesh_memory->vertex_buffer_position,
-            .vertex_buffer1               = &m_context.mesh_memory->vertex_buffer_non_position,
-            .vertex_buffer2               = &m_context.mesh_memory->vertex_buffer_custom,
-            .view_camera                  = camera.get(),
-            .view_camera_viewport         = {},
-            .light_camera_viewport        = m_viewport,
-            .texture                      = m_texture,
-            .render_passes                = m_render_passes,
-            .mesh_spans                   = { layers.content()->meshes },
-            .lights                       = layers.light()->lights,
-            .skins                        = scene_root->get_scene().get_skins(),
-            .materials                    = materials,
-            .light_projections            = m_light_projections,
-            .reverse_depth                = m_scene_view.get_reverse_depth(),
-            .depth_range                  = m_scene_view.get_depth_range(),
-            .framebuffer_origin           = m_scene_view.get_framebuffer_origin(),
-            .ndc_y_direction              = m_scene_view.get_ndc_y_direction()
+            .vertex_input_state    = &m_context.mesh_memory->vertex_input,
+            .index_type            = m_context.mesh_memory->buffer_info.index_type,
+            .index_buffer          = &m_context.mesh_memory->index_buffer,
+            .vertex_buffer0        = &m_context.mesh_memory->vertex_buffer_position,
+            .vertex_buffer1        = &m_context.mesh_memory->vertex_buffer_non_position,
+            .vertex_buffer2        = &m_context.mesh_memory->vertex_buffer_custom,
+            .view_camera           = camera.get(),
+            .view_camera_viewport  = {},
+            .light_camera_viewport = m_viewport,
+            .texture               = m_texture,
+            .render_passes         = m_render_passes,
+            .mesh_spans            = { layers.content()->meshes },
+            .lights                = layers.light()->lights,
+            .skins                 = scene_root->get_scene().get_skins(),
+            .materials             = materials,
+            .light_projections     = m_light_projections,
+            .reverse_depth         = m_scene_view.get_reverse_depth(),
+            .depth_range           = m_scene_view.get_depth_range(),
+            .conventions           = m_scene_view.get_conventions()
         }
     );
 }

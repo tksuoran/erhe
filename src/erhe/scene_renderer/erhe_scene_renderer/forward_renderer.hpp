@@ -39,7 +39,11 @@ class Forward_renderer
 public:
     using Mesh_layer_collection = std::vector<const erhe::scene::Mesh_layer*>;
 
-    Forward_renderer(erhe::graphics::Device& graphics_device, Program_interface& program_interface);
+    Forward_renderer(
+        erhe::graphics::Device&                graphics_device,
+        Program_interface&                     program_interface,
+        const erhe::graphics::Shader_resource* default_uniform_block = nullptr
+    );
     ~Forward_renderer() noexcept;
 
     // Public API
@@ -80,8 +84,7 @@ public:
         uint64_t                                                           frame_number{0};
         bool                                                               reverse_depth{true};
         erhe::math::Depth_range                                            depth_range{erhe::math::Depth_range::zero_to_one};
-        erhe::math::Framebuffer_origin                                     framebuffer_origin{erhe::math::Framebuffer_origin::bottom_left};
-        erhe::math::Ndc_y_direction                                        ndc_y_direction   {erhe::math::Ndc_y_direction::up};
+        erhe::math::Coordinate_conventions                                 conventions;
     };
 
     void render(const Render_parameters& parameters);

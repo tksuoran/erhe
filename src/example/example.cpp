@@ -91,11 +91,12 @@ public:
                 }
             ),
         true)}
+        , m_y_flip{m_graphics_device.get_info().coordinate_conventions.clip_space_y_flip == erhe::math::Clip_space_y_flip::enabled}
         , m_image_transfer   {m_graphics_device}
         , m_mesh_memory      {m_graphics_device}
         , m_program_interface{m_graphics_device, m_mesh_memory.vertex_format, m_program_interface_config}
-        , m_forward_renderer {m_graphics_device, m_program_interface}
         , m_programs         {m_graphics_device, m_program_interface}
+        , m_forward_renderer {m_graphics_device, m_program_interface, &m_programs.default_uniform_block}
         , m_scene            {"example scene", nullptr}
     {
         const unsigned int thread_count = std::thread::hardware_concurrency();
@@ -402,7 +403,7 @@ private:
                 .shader_stages  = &m_programs.standard,
                 .vertex_input   = &m_mesh_memory.vertex_input,
                 .input_assembly = erhe::graphics::Input_assembly_state::triangle,
-                .rasterization  = erhe::graphics::Rasterization_state::cull_mode_back_ccw,
+                .rasterization  = erhe::graphics::Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
                 .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled(),
                 .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled
             }
@@ -493,16 +494,17 @@ private:
         return light;
     }
 
-    erhe::window::Context_window                 m_window;
-    erhe::graphics::Device                       m_graphics_device;
-    bool                                         m_shader_error_callback_set{false};
-    erhe::gltf::Image_transfer                   m_image_transfer;
-    Mesh_memory                                  m_mesh_memory;
+    erhe::window::Context_window                   m_window;
+    erhe::graphics::Device                         m_graphics_device;
+    bool                                           m_shader_error_callback_set{false};
+    bool                                           m_y_flip;
+    erhe::gltf::Image_transfer                     m_image_transfer;
+    Mesh_memory                                    m_mesh_memory;
     erhe::scene_renderer::Program_interface_config m_program_interface_config;
-    erhe::scene_renderer::Program_interface      m_program_interface;
-    erhe::scene_renderer::Forward_renderer       m_forward_renderer;
-    std::unique_ptr<erhe::graphics::Render_pass> m_render_pass;
-    Programs                                     m_programs;
+    erhe::scene_renderer::Program_interface        m_program_interface;
+    Programs                                       m_programs;
+    erhe::scene_renderer::Forward_renderer         m_forward_renderer;
+    std::unique_ptr<erhe::graphics::Render_pass>   m_render_pass;
 
     std::vector<erhe::graphics::Render_pipeline_state*>    m_render_pipeline_states;
     std::unique_ptr<erhe::graphics::Render_pipeline_state> m_standard_render_pipeline_state;

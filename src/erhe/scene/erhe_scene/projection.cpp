@@ -7,15 +7,14 @@
 namespace erhe::scene {
 
 auto Projection::clip_from_node_transform(
-    const erhe::math::Viewport           viewport,
-    const bool                           reverse_depth,
-    const erhe::math::Depth_range        depth_range,
-    const erhe::math::Framebuffer_origin framebuffer_origin,
-    const erhe::math::Ndc_y_direction    ndc_y_direction
+    const erhe::math::Viewport                viewport,
+    const bool                                reverse_depth,
+    const erhe::math::Depth_range             depth_range,
+    const erhe::math::Coordinate_conventions& conventions
 ) const -> Transform
 {
     const auto aspect_ratio = viewport.aspect_ratio();
-    const auto m = get_projection_matrix(aspect_ratio, reverse_depth, depth_range, framebuffer_origin, ndc_y_direction);
+    const auto m = get_projection_matrix(aspect_ratio, reverse_depth, depth_range, conventions);
     return Transform{
         m,
         glm::inverse(m)
@@ -23,11 +22,10 @@ auto Projection::clip_from_node_transform(
 }
 
 auto Projection::get_projection_matrix(
-    const float                          aspect_ratio,
-    const bool                           reverse_depth,
-    const erhe::math::Depth_range        depth_range,
-    const erhe::math::Framebuffer_origin framebuffer_origin,
-    const erhe::math::Ndc_y_direction    ndc_y_direction
+    const float                               aspect_ratio,
+    const bool                                reverse_depth,
+    const erhe::math::Depth_range             depth_range,
+    const erhe::math::Coordinate_conventions& conventions
 ) const -> glm::mat4
 {
     const auto clip_range = reverse_depth ? Clip_range{z_far, z_near} : Clip_range{z_near, z_far};
@@ -119,9 +117,9 @@ auto Projection::get_projection_matrix(
         }
     }
 
-    // When framebuffer origin is top-left but NDC Y points up (Metal),
-    // negate Y in the projection to compensate for the viewport Y-flip.
-    if (erhe::math::needs_projection_y_flip(framebuffer_origin, ndc_y_direction)) {
+    // When clip_space_y_flip is enabled, negate Y in the projection to
+    // compensate for the viewport coordinate convention mismatch.
+    if (conventions.clip_space_y_flip == erhe::math::Clip_space_y_flip::enabled) {
         result[1][0] = -result[1][0];
         result[1][1] = -result[1][1];
         result[1][2] = -result[1][2];

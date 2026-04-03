@@ -28,6 +28,11 @@ auto Rasterization_state::with_winding_flip() const -> Rasterization_state
     return result;
 }
 
+auto Rasterization_state::with_winding_flip_if(const bool condition) const -> Rasterization_state
+{
+    return condition ? with_winding_flip() : *this;
+}
+
 auto operator==(const Rasterization_state& lhs, const Rasterization_state& rhs) noexcept -> bool
 {
     return

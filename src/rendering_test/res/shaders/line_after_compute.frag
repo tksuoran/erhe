@@ -19,9 +19,7 @@ void main(void)
     float alpha      = mix(k, 1.0, end_weight);
 
     if (alpha < 0.5) {
-		out_color = vec4(1.0, 0.0, 1.0, 1.0);
-		return;
-        //discard;
+        discard;
     }
     out_color = vec4(v_color.rgb * v_color.a, v_color.a);
 }

@@ -107,7 +107,7 @@ public:
     [[nodiscard]] auto get_reverse_depth     () const -> bool;
     [[nodiscard]] auto get_depth_range       () const -> erhe::math::Depth_range;
     [[nodiscard]] auto get_framebuffer_origin() const -> erhe::math::Framebuffer_origin;
-    [[nodiscard]] auto get_ndc_y_direction   () const -> erhe::math::Ndc_y_direction;
+    [[nodiscard]] auto get_conventions       () const -> erhe::math::Coordinate_conventions;
 
     // "Pointing"
     void set_world_from_control(glm::vec3 near_position_in_world, glm::vec3 far_position_in_world);
@@ -134,12 +134,12 @@ public:
 protected:
     void set_hover(std::size_t slot, const Hover_entry& entry);
 
-    App_context&                m_context;
-    std::optional<glm::mat4>    m_world_from_control;
-    std::optional<glm::mat4>    m_control_from_world;
-    Viewport_config             m_viewport_config;
-    bool                        m_hover_update_pending{true};
-    std::weak_ptr<Scene_root>   m_scene_root;
+    App_context&              m_context;
+    std::optional<glm::mat4>  m_world_from_control;
+    std::optional<glm::mat4>  m_control_from_world;
+    Viewport_config           m_viewport_config;
+    bool                      m_hover_update_pending{true};
+    std::weak_ptr<Scene_root> m_scene_root;
 
 private:
     std::array<Hover_entry, Hover_entry::slot_count> m_hover_entries;
