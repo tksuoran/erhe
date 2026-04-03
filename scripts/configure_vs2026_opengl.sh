@@ -1,0 +1,21 @@
+#!/bin/bash
+cmake \
+ -G "Visual Studio 18 2026" \
+ -A x64 \
+ -B build_vs2026_opengl \
+ -S . \
+ -Wno-dev \
+ -DERHE_USE_PRECOMPILED_HEADERS=ON \
+ -DERHE_FONT_RASTERIZATION_LIBRARY=freetype \
+ -DERHE_GLTF_LIBRARY=fastgltf \
+ -DERHE_GUI_LIBRARY=imgui \
+ -DERHE_GRAPHICS_LIBRARY=opengl \
+ -DERHE_PHYSICS_LIBRARY=jolt \
+ -DERHE_PROFILE_LIBRARY=tracy \
+ -DERHE_RAYTRACE_LIBRARY=bvh \
+ -DERHE_SVG_LIBRARY=plutosvg \
+ -DERHE_TEXT_LAYOUT_LIBRARY=harfbuzz \
+ -DERHE_WINDOW_LIBRARY=sdl \
+ -DERHE_XR_LIBRARY=openxr \
+ -DERHE_USE_ASAN:BOOL=OFF \
+ -DERHE_SPIRV=OFF
