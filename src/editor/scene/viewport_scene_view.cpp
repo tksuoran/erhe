@@ -623,7 +623,7 @@ void Viewport_scene_view::viewport_toolbar()
         }
         erhe::imgui::end_button_style(mode);
         if (tooltip != nullptr && ImGui::IsItemHovered()) {
-            ImGui::SetTooltip(tooltip);
+            ImGui::SetTooltip("%s", tooltip);
         }
         if (pressed) {
             toggle = !toggle;

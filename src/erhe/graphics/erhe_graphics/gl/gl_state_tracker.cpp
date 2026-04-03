@@ -12,6 +12,8 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
+#include <fmt/format.h>
+
 #define DISABLE_CACHE 0
 
 namespace erhe::graphics {
