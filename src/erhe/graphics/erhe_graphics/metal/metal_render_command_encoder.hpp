@@ -1,34 +1,22 @@
 #pragma once
 
-#include "erhe_dataformat/dataformat.hpp"
-#include "erhe_graphics/command_encoder.hpp"
-#include "erhe_graphics/enums.hpp"
-#include "erhe_utility/pimpl_ptr.hpp"
+#include "erhe_graphics/render_command_encoder.hpp"
+#include "erhe_graphics/metal/metal_command_encoder.hpp"
 
-#include <cstdint>
-#include <memory>
+namespace MTL { class Buffer; }
 
 namespace erhe::graphics {
 
-class Buffer;
-class Device;
-class Render_pass;
-class Render_pipeline_state;
-class Shader_stages;
-class Render_command_encoder_impl;
-
-class Render_command_encoder final : public Command_encoder
+class Render_command_encoder_impl final : public Command_encoder_impl
 {
 public:
-    Render_command_encoder(Device& device);
-    Render_command_encoder(const Render_command_encoder&) = delete;
-    Render_command_encoder& operator=(const Render_command_encoder&) = delete;
-    Render_command_encoder(Render_command_encoder&&) = delete;
-    Render_command_encoder& operator=(Render_command_encoder&&) = delete;
-    ~Render_command_encoder() noexcept override;
+    Render_command_encoder_impl(Device& device);
+    Render_command_encoder_impl(const Render_command_encoder_impl&) = delete;
+    Render_command_encoder_impl& operator=(const Render_command_encoder_impl&) = delete;
+    Render_command_encoder_impl(Render_command_encoder_impl&&) = delete;
+    Render_command_encoder_impl& operator=(Render_command_encoder_impl&&) = delete;
+    ~Render_command_encoder_impl() noexcept;
 
-    void set_buffer               (Buffer_target buffer_target, const Buffer* buffer, std::uintptr_t offset, std::uintptr_t length, std::uintptr_t index) override;
-    void set_buffer               (Buffer_target buffer_target, const Buffer* buffer) override;
     void set_render_pipeline_state(const Render_pipeline_state& pipeline);
     void set_render_pipeline_state(const Render_pipeline_state& pipeline, const Shader_stages* override_shader_stages);
     void set_viewport_rect        (int x, int y, int width, int height);
@@ -41,6 +29,8 @@ public:
     void draw_indexed_primitives  (Primitive_type primitive_type, std::uintptr_t index_count, erhe::dataformat::Format index_type, std::uintptr_t index_buffer_offset, std::uintptr_t instance_count) const;
     void draw_indexed_primitives  (Primitive_type primitive_type, std::uintptr_t index_count, erhe::dataformat::Format index_type, std::uintptr_t index_buffer_offset) const;
 
+    void dump_state(const char* label) const;
+
     void multi_draw_indexed_primitives_indirect(
         Primitive_type           primitive_type,
         erhe::dataformat::Format index_type,
@@ -49,10 +39,16 @@ public:
         std::uintptr_t           stride
     ) const;
 
-    void dump_state(const char* label) const;
-
 private:
-    erhe::utility::pimpl_ptr<Render_command_encoder_impl, 128, 16> m_impl;
+    void apply_viewport();
+
+    MTL::Buffer* m_index_buffer    {nullptr};
+    int          m_viewport_x      {0};
+    int          m_viewport_y      {0};
+    int          m_viewport_width  {0};
+    int          m_viewport_height {0};
+    double       m_viewport_znear  {0.0};
+    double       m_viewport_zfar   {1.0};
 };
 
 } // namespace erhe::graphics

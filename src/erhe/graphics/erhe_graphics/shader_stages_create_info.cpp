@@ -231,6 +231,16 @@ auto Shader_stages_create_info::final_source(
 #if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
     sb << "#define ERHE_DRAW_ID gl_DrawID\n";
 #endif
+#if defined(ERHE_GRAPHICS_LIBRARY_METAL)
+    // Metal does not support multi-draw indirect / gl_DrawID; emulate with push constant.
+    // Only emit for vertex/compute -- fragment shaders receive draw ID via interpolated varying.
+    if (shader.type == Shader_type::vertex_shader || shader.type == Shader_type::compute_shader) {
+        sb << "layout(push_constant) uniform Erhe_draw_id_block { int ERHE_DRAW_ID; };\n";
+    }
+    // Vulkan SPIR-V uses gl_VertexIndex / gl_InstanceIndex instead of gl_VertexID / gl_InstanceID
+    sb << "#define gl_VertexID gl_VertexIndex\n";
+    sb << "#define gl_InstanceID gl_InstanceIndex\n";
+#endif
 
     if (shader.type == Shader_type::vertex_shader) {
         sb << attributes_source();

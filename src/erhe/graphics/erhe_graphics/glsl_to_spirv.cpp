@@ -9,6 +9,9 @@
 #if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
 # include "erhe_graphics/vulkan/vulkan_shader_stages.hpp"
 #endif
+#if defined(ERHE_GRAPHICS_LIBRARY_METAL)
+# include "erhe_graphics/metal/metal_shader_stages.hpp"
+#endif
 
 #include "erhe_verify/verify.hpp"
 
@@ -103,9 +106,13 @@ auto Glslang_shader_stages::compile_shader(Device& device, const Shader_stage& s
         glslang_shader.setStringsWithLengths(&source_string, &source_length, 1);
     }
 
-    //glslang_shader->setEnvInput(glslang::EShSource::EShSourceGlsl, language, glslang::EShClient::EShClientVulkan, 100);
+#if defined(ERHE_GRAPHICS_LIBRARY_METAL) || defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+    glslang_shader.setEnvInput(glslang::EShSource::EShSourceGlsl, language, glslang::EShClient::EShClientVulkan, 100);
+    glslang_shader.setEnvClient(glslang::EShClient::EShClientVulkan, glslang::EshTargetClientVersion::EShTargetVulkan_1_1);
+#else
     glslang_shader.setEnvInput(glslang::EShSource::EShSourceGlsl, language, glslang::EShClient::EShClientOpenGL, 100);
     glslang_shader.setEnvClient(glslang::EShClient::EShClientOpenGL, glslang::EshTargetClientVersion::EShTargetOpenGL_450);
+#endif
     glslang_shader.setEnvTarget(glslang::EShTargetLanguage::EShTargetSpv, glslang::EShTargetSpv_1_6);
 
     unsigned int messages{

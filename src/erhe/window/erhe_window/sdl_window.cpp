@@ -373,6 +373,9 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
 #if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
     window_flags |= SDL_WINDOW_VULKAN;
 #endif
+#if defined(ERHE_GRAPHICS_LIBRARY_METAL)
+    window_flags |= SDL_WINDOW_METAL;
+#endif
     if (configuration.fullscreen) { 
         window_flags |= SDL_WINDOW_FULLSCREEN;
     }

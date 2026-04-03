@@ -8,6 +8,9 @@
 #if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
 # include "erhe_graphics/vulkan/vulkan_swapchain.hpp"
 #endif
+#if defined(ERHE_GRAPHICS_LIBRARY_METAL)
+# include "erhe_graphics/metal/metal_swapchain.hpp"
+#endif
 #if defined(ERHE_GRAPHICS_LIBRARY_NONE)
 # include "erhe_graphics/null/null_swapchain.hpp"
 #endif

@@ -23,7 +23,25 @@ Alternative configurations:
 - `configure_vs2026_opengl_no_tracy.bat` - without Tracy profiler
 - `configure_vs2026_vulkan.bat` - Vulkan backend
 
-### Using CMake Presets
+### macOS (Xcode)
+
+Use the build scripts in `scripts/`:
+
+```bash
+scripts/configure_xcode_opengl.sh       # OpenGL backend -> build_xcode_opengl/
+scripts/configure_xcode_metal.sh        # Metal backend  -> build_xcode_metal/
+scripts/configure_xcode_opengl_asan.sh  # OpenGL + ASAN  -> build_xcode_opengl_asan/
+```
+
+Then build with:
+```bash
+cmake --build build_xcode_opengl --target editor --config Debug
+cmake --build build_xcode_metal  --target editor --config Debug
+```
+
+**Always use the `scripts/` build scripts on macOS.** Do not use CMake presets directly on macOS.
+
+### Using CMake Presets (Windows/Linux)
 
 ```bash
 cmake --preset OpenGL_Debug    # Debug OpenGL build
@@ -133,6 +151,19 @@ See [`doc/editor_improvements.md`](doc/editor_improvements.md) for the prioritiz
 - **Use sufficient parentheses** - do not rely on C++ operator precedence. Add parentheses so the intent is unambiguous to readers (e.g., `(a & b) != 0` not `a & b != 0`).
 - **Never use lock-free / atomic techniques** without explicitly asking the user for permission first. Prefer simple mutex-based synchronization.
 - **Multithreading debugging**: When diagnosing deadlocks or contention, ask the user for callstacks of all threads - not just the stuck thread. The root cause is usually on another thread.
+
+## Shader Interface Block Layout (UBO/SSBO)
+
+When creating or modifying shader interface blocks (uniform blocks or shader storage blocks), always respect std140/std430 alignment rules explicitly:
+
+- `vec4` and `vec3` fields must start at an offset that is a multiple of 16 bytes (vec4 size).
+- `vec2` fields must start at an offset that is a multiple of 8 bytes (vec2 size).
+- `float`, `int`, `uint` fields must start at an offset that is a multiple of 4 bytes.
+- Struct total size must be a multiple of 16 bytes (vec4). Add explicit padding fields to ensure this.
+- After a `vec3`, add a `float` padding to reach the next 16-byte boundary.
+- When a block has an odd number of `vec2`/`float` pairs, add padding `vec2` or two `float` fields to round the struct size to a multiple of 16 bytes.
+
+Example: a block with `uvec2 texture_handle`, `vec2 uv_min`, `vec2 uv_max` needs a `vec2 padding` appended to make the total size 32 bytes (2 x vec4).
 
 ## C++ Naming Conventions
 

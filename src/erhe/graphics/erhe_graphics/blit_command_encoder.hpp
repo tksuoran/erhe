@@ -56,7 +56,7 @@ public:
     // void resolve_counters                (const CounterSampleBuffer* sampleBuffer, NS::Range range, const class Buffer* destination_buffer, std::uintptr_t destination_offset);
 
 private:
-    erhe::utility::pimpl_ptr<Blit_command_encoder_impl, 64, 16> m_impl;
+    erhe::utility::pimpl_ptr<Blit_command_encoder_impl, 128, 16> m_impl;
 };
 
 } // namespace erhe::graphics

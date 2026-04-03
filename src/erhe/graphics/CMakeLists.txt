@@ -197,6 +197,57 @@ if (ERHE_GRAPHICS_API_VULKAN)
             GPUOpen::VulkanMemoryAllocator
     )
 endif ()
+if (ERHE_GRAPHICS_API_METAL)
+    erhe_target_sources_grouped(
+        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+        erhe_graphics/metal/metal_blit_command_encoder.cpp
+        erhe_graphics/metal/metal_blit_command_encoder.hpp
+        erhe_graphics/metal/metal_buffer.cpp
+        erhe_graphics/metal/metal_buffer.hpp
+        erhe_graphics/metal/metal_command_encoder.cpp
+        erhe_graphics/metal/metal_command_encoder.hpp
+        erhe_graphics/metal/metal_compute_command_encoder.cpp
+        erhe_graphics/metal/metal_compute_command_encoder.hpp
+        erhe_graphics/metal/metal_debug.cpp
+        erhe_graphics/metal/metal_device.cpp
+        erhe_graphics/metal/metal_device.hpp
+        erhe_graphics/metal/metal_gpu_timer.cpp
+        erhe_graphics/metal/metal_gpu_timer.hpp
+        erhe_graphics/metal/metal_helpers.cpp
+        erhe_graphics/metal/metal_helpers.hpp
+        erhe_graphics/metal/metal_error_handler.mm
+        erhe_graphics/metal/metal_implementation.mm
+        erhe_graphics/metal/metal_render_command_encoder.cpp
+        erhe_graphics/metal/metal_render_command_encoder.hpp
+        erhe_graphics/metal/metal_render_pass.cpp
+        erhe_graphics/metal/metal_render_pass.hpp
+        erhe_graphics/metal/metal_sampler.cpp
+        erhe_graphics/metal/metal_sampler.hpp
+        erhe_graphics/metal/metal_shader_stages.cpp
+        erhe_graphics/metal/metal_shader_stages.hpp
+        erhe_graphics/metal/metal_shader_stages_prototype.cpp
+        erhe_graphics/metal/metal_surface.mm
+        erhe_graphics/metal/metal_surface.hpp
+        erhe_graphics/metal/metal_swapchain.cpp
+        erhe_graphics/metal/metal_swapchain.hpp
+        erhe_graphics/metal/metal_texture.cpp
+        erhe_graphics/metal/metal_texture.hpp
+        erhe_graphics/metal/metal_texture_heap.cpp
+        erhe_graphics/metal/metal_texture_heap.hpp
+        erhe_graphics/metal/metal_vertex_input_state.cpp
+        erhe_graphics/metal/metal_vertex_input_state.hpp
+    )
+
+    target_link_libraries(${_target}
+        PRIVATE
+            spirv-cross-msl
+            "-framework Metal"
+            "-framework QuartzCore"
+            "-framework Foundation"
+    )
+
+    target_include_directories(${_target} PRIVATE ${metal-cpp_SOURCE_DIR})
+endif ()
 if (ERHE_GRAPHICS_API_NONE)
     erhe_target_sources_grouped(
         ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES

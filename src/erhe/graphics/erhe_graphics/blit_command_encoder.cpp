@@ -6,6 +6,9 @@
 #if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
 # include "erhe_graphics/vulkan/vulkan_blit_command_encoder.hpp"
 #endif
+#if defined(ERHE_GRAPHICS_LIBRARY_METAL)
+# include "erhe_graphics/metal/metal_blit_command_encoder.hpp"
+#endif
 #if defined(ERHE_GRAPHICS_LIBRARY_NONE)
 # include "erhe_graphics/null/null_blit_command_encoder.hpp"
 #endif
@@ -15,7 +18,7 @@ namespace erhe::graphics {
 Blit_command_encoder::Blit_command_encoder(Device& device)
     : m_impl{device}
 {
-    static_assert(sizeof(Blit_command_encoder_impl) <= 64);
+    static_assert(sizeof(Blit_command_encoder_impl) <= 128);
     static_assert(alignof(Blit_command_encoder_impl) <= 16);
 }
 Blit_command_encoder::~Blit_command_encoder() noexcept

@@ -6,6 +6,9 @@
 #if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
 # include "erhe_graphics/vulkan/vulkan_compute_command_encoder.hpp"
 #endif
+#if defined(ERHE_GRAPHICS_LIBRARY_METAL)
+# include "erhe_graphics/metal/metal_compute_command_encoder.hpp"
+#endif
 #if defined(ERHE_GRAPHICS_LIBRARY_NONE)
 # include "erhe_graphics/null/null_compute_command_encoder.hpp"
 #endif
@@ -15,7 +18,7 @@ namespace erhe::graphics {
 Compute_command_encoder::Compute_command_encoder(Device& device)
     : m_impl{device}
 {
-    static_assert(sizeof(Compute_command_encoder_impl) <= 64);
+    static_assert(sizeof(Compute_command_encoder_impl) <= 128);
     static_assert(alignof(Compute_command_encoder_impl) <= 16);
 }
 Compute_command_encoder::~Compute_command_encoder() noexcept

@@ -29,7 +29,7 @@ public:
     void dispatch_compute          (std::uintptr_t x_size, std::uintptr_t y_size, std::uintptr_t z_size);
 
 private:
-    erhe::utility::pimpl_ptr<Compute_command_encoder_impl, 64, 16> m_impl;
+    erhe::utility::pimpl_ptr<Compute_command_encoder_impl, 128, 16> m_impl;
 };
 
 } // namespace erhe::graphics

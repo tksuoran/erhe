@@ -50,7 +50,7 @@ set_option(ERHE_AUDIO_LIBRARY              "Audio library. Either miniaudio or n
 set_option(ERHE_FONT_RASTERIZATION_LIBRARY "Font rasterization library. Either freetype or none"                        "freetype" "freetype;none")
 set_option(ERHE_GLTF_LIBRARY               "GLTF library. Either fastgltf or none"                                      "fastgltf" "fastgltf;none")
 set_option(ERHE_GUI_LIBRARY                "GUI library. Either imgui or none"                                          "imgui"    "imgui;none")
-set_option(ERHE_GRAPHICS_LIBRARY           "Graphics library to use with erhe. Either opengl, vulkan or none"           "opengl"   "opengl;vulkan;none")
+set_option(ERHE_GRAPHICS_LIBRARY           "Graphics library to use with erhe. Either opengl, vulkan, metal or none"    "opengl"   "opengl;vulkan;metal;none")
 set_option(ERHE_PHYSICS_LIBRARY            "Physics library to use with erhe. Either jolt or none"                      "jolt"     "jolt;none")
 set_option(ERHE_PROFILE_LIBRARY            "Profile library to use with erhe. Either nvtx, superluminal, tracy or none" "none"     "nvtx;superluminal;tracy;none")
 set_option(ERHE_RAYTRACE_LIBRARY           "Raytrace library to use with erhe. Either embree, bvh, tinybvh or none"    "bvh"      "embree;bvh;tinybvh;none")
@@ -216,6 +216,11 @@ CPMAddPackage(
 # Enable GLM_GTX_component_wise
 add_definitions(-DGLM_ENABLE_EXPERIMENTAL)
 
+# Force ERHE_SPIRV on for Metal before the glslang fetch
+if (${ERHE_GRAPHICS_LIBRARY} STREQUAL "metal")
+    set(ERHE_SPIRV "ON" CACHE STRING "Enable SPIR-V" FORCE)
+endif ()
+
 if (ERHE_SPIRV)
     CPMAddPackage(
         NAME              glslang
@@ -264,6 +269,25 @@ elseif (${ERHE_GRAPHICS_LIBRARY} STREQUAL "vulkan")
         GIT_TAG           vulkan-sdk-1.4.335.0
         GIT_SHALLOW       TRUE
         GITHUB_REPOSITORY zeux/volk
+    )
+elseif (${ERHE_GRAPHICS_LIBRARY} STREQUAL "metal")
+    if (NOT APPLE)
+        message(FATAL_ERROR "Metal backend is only available on Apple platforms (macOS, iOS)")
+    endif()
+    message(STATUS "Erhe configured to use Metal as graphics API.")
+    set(ERHE_GRAPHICS_API_METAL TRUE)
+    add_definitions(-DERHE_GRAPHICS_LIBRARY_METAL)
+    CPMAddPackage(
+        NAME              metal-cpp
+        GITHUB_REPOSITORY bkaradzic/metal-cpp
+        GIT_TAG           metal-cpp_macOS15.2_iOS18.2
+        GIT_SHALLOW       TRUE
+    )
+    CPMAddPackage(
+        NAME              SPIRV-Cross
+        GITHUB_REPOSITORY KhronosGroup/SPIRV-Cross
+        GIT_TAG           vulkan-sdk-1.4.335.0
+        GIT_SHALLOW       TRUE
     )
 elseif (${ERHE_GRAPHICS_LIBRARY} STREQUAL "none")
     message(STATUS "Erhe configured to use null graphics backend (headless).")

@@ -85,6 +85,34 @@
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE":      "Release"
             }
+        },
+        {
+            "name":     "Metal",
+            "hidden":   true,
+            "inherits": "Base",
+            "cacheVariables": {
+                "ERHE_GRAPHICS_LIBRARY": "metal",
+                "ERHE_SPIRV":            "ON"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Darwin"
+            }
+        },
+        {
+            "name":     "Metal_Debug",
+            "inherits": "Metal",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE":      "Debug"
+            }
+        },
+        {
+            "name":     "Metal_Release",
+            "inherits": "Metal",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE":      "Release"
+            }
         }
     ]
 }
