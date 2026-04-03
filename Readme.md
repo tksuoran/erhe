@@ -3,13 +3,14 @@
 
 # erhe
 
-erhe is a C++ library and editor for 3D graphics, built on modern OpenGL with a Vulkan-style abstraction layer. It runs on Windows, Linux, and macOS. Minimum required OpenGL version is 4.1, OpenGL 4.6 is recommended.
+erhe is a C++ library and editor for 3D graphics with a graphics API abstraction loosely modeled after Vulkan and Metal, with backends for OpenGL and Metal. It runs on Windows, Linux, and macOS. The OpenGL backend requires a minimum of OpenGL 4.1; OpenGL 4.6 is recommended.
 
-erhe is the evolution of [RenderStack](https://github.com/tksuoran/RenderStack).
+![screenshot](https://github.com/tksuoran/erhe/wiki/images/13.png)
 
 [![erhe summer 2024](https://img.youtube.com/vi/8hnKr348qt8/0.jpg)](https://www.youtube.com/watch?v=8hnKr348qt8)
 
-![screenshot](https://github.com/tksuoran/erhe/wiki/images/13.png)
+erhe is the evolution of [RenderStack](https://github.com/tksuoran/RenderStack).
+
 
 ## Editor
 
@@ -56,7 +57,7 @@ The editor is a sandbox application for 3D scene creation and manipulation.
 ### File Format Support
 
 -   glTF 2.0 import and export (via fastgltf)
--   Partial suppor for Wavefront OBJ import
+-   Partial support for Wavefront OBJ import
 
 ### VR / OpenXR
 
@@ -86,7 +87,7 @@ erhe is organized as a set of independent libraries under `src/erhe/`. Each has 
 
 | Library | Description |
 | :--- | :--- |
-| `erhe::graphics` | Vulkan-style abstraction over OpenGL: pipelines, buffers, textures, shaders, ring buffers, shader monitor |
+| `erhe::graphics` | Vulkan/Metal-style graphics abstraction: pipelines, buffers, textures, shaders, ring buffers, shader monitor |
 | `erhe::rendergraph` | DAG of render nodes with typed inputs/outputs, executed in dependency order |
 | `erhe::scene` | glTF-like scene graph: nodes, meshes, cameras, lights, animations, skins |
 | `erhe::scene_renderer` | Forward renderer, shadow renderer, ID picking, camera/light/material/joint GPU buffers |

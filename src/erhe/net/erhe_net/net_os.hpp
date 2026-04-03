@@ -26,12 +26,13 @@ using SOCKET = int;          // windows uses unsigned
 using FD_SET = fd_set;
 using PCSTR  = const char*;
 static constexpr int    ERHE_NET_ERROR_CODE_CONNECTED = EISCONN;
-static constexpr int    ERHE_NET_TRUE  = 1;
 static constexpr SOCKET INVALID_SOCKET = -1;
 static constexpr int    SOCKET_ERROR   = -1;
 static constexpr int    SD_BOTH        = SHUT_RDWR;
 inline auto closesocket(const SOCKET s) -> int { return close(s); }
 #endif
+
+static constexpr int ERHE_NET_TRUE = 1;
 
 #include <optional>
 #include <string>

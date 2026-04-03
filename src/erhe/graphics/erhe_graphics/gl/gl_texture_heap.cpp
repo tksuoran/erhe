@@ -16,7 +16,7 @@ Texture_heap_impl::Texture_heap_impl(
     const Texture&         fallback_texture,
     const Sampler&         fallback_sampler,
     std::size_t            reserved_slot_count,
-    const Shader_resource* default_uniform_block
+    const Shader_resource* /*default_uniform_block*/
 )
     : m_device             {device}
     , m_fallback_texture   {fallback_texture}
