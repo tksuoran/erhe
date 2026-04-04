@@ -1274,6 +1274,9 @@ auto Device_impl::get_or_create_graphics_pipeline(const VkGraphicsPipelineCreate
         return VK_NULL_HANDLE;
     }
 
+    set_debug_label(VK_OBJECT_TYPE_PIPELINE, reinterpret_cast<uint64_t>(pipeline),
+        fmt::format("Pipeline hash={:016x}", hash).c_str());
+
     m_pipeline_map[hash] = pipeline;
     return pipeline;
 }

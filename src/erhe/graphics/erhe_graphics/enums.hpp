@@ -97,11 +97,13 @@ enum class Buffer_target : unsigned int
 
 enum class Texture_type : unsigned int
 {
-    texture_buffer   = 0,
-    texture_1d       = 1,
-    texture_2d       = 2,
-    texture_3d       = 3,
-    texture_cube_map = 4
+    texture_buffer         = 0,
+    texture_1d             = 1,
+    texture_2d             = 2,
+    texture_2d_array       = 3,
+    texture_3d             = 4,
+    texture_cube_map       = 5,
+    texture_cube_map_array = 6
 };
 
 enum class Filter : unsigned int

@@ -148,6 +148,8 @@ void Forward_renderer::render(const Render_parameters& parameters)
         } else {
             parameters.render_encoder.set_render_pipeline_state(*render_pipeline_state);
         }
+        parameters.render_encoder.set_viewport_rect(viewport.x, viewport.y, viewport.width, viewport.height);
+        parameters.render_encoder.set_scissor_rect(viewport.x, viewport.y, viewport.width, viewport.height);
         parameters.render_encoder.set_index_buffer(parameters.index_buffer);
         parameters.render_encoder.set_vertex_buffer(parameters.vertex_buffer0, 0, 0);
         parameters.render_encoder.set_vertex_buffer(parameters.vertex_buffer1, 0, 1);
@@ -260,6 +262,8 @@ void Forward_renderer::draw_primitives(const Render_parameters& parameters, cons
         erhe::graphics::Scoped_debug_group pass_scope{pipeline.debug_label};
 
         parameters.render_encoder.set_render_pipeline_state(*render_pipeline_state);
+        parameters.render_encoder.set_viewport_rect(viewport.x, viewport.y, viewport.width, viewport.height);
+        parameters.render_encoder.set_scissor_rect(viewport.x, viewport.y, viewport.width, viewport.height);
         parameters.render_encoder.draw_primitives(pipeline.input_assembly.primitive_topology, 0, parameters.non_mesh_vertex_count);
     }
 

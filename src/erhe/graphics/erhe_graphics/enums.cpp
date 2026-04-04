@@ -256,11 +256,13 @@ auto is_indexed(const Buffer_target buffer_target) -> bool
 auto c_str(const Texture_type type) -> const char*
 {
     switch (type) {
-        case Texture_type::texture_buffer  : return "texture_buffer";
-        case Texture_type::texture_1d      : return "texture_1d";
-        case Texture_type::texture_2d      : return "texture_2d";
-        case Texture_type::texture_3d      : return "texture_3d";
-        case Texture_type::texture_cube_map: return "texture_cube_map";
+        case Texture_type::texture_buffer        : return "texture_buffer";
+        case Texture_type::texture_1d            : return "texture_1d";
+        case Texture_type::texture_2d            : return "texture_2d";
+        case Texture_type::texture_2d_array      : return "texture_2d_array";
+        case Texture_type::texture_3d            : return "texture_3d";
+        case Texture_type::texture_cube_map      : return "texture_cube_map";
+        case Texture_type::texture_cube_map_array: return "texture_cube_map_array";
         default: return "?";
     }
 }

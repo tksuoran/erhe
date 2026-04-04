@@ -17,16 +17,34 @@ namespace erhe::graphics {
 auto Texture_impl::get_mipmap_dimensions(const Texture_type type) -> int
 {
     switch (type) {
-        //using enum gl::Texture_target;
-        case Texture_type::texture_1d:       return 1;
-        case Texture_type::texture_cube_map: return 2;
-        case Texture_type::texture_2d:       return 2;
-        case Texture_type::texture_3d:       return 3;
+        case Texture_type::texture_1d:             return 1;
+        case Texture_type::texture_2d:             return 2;
+        case Texture_type::texture_2d_array:       return 2;
+        case Texture_type::texture_cube_map:       return 2;
+        case Texture_type::texture_cube_map_array: return 2;
+        case Texture_type::texture_3d:             return 3;
         default: {
             ERHE_FATAL("Bad texture target");
         }
     }
 }
+
+namespace {
+
+auto to_vk_image_view_type(const Texture_type type) -> VkImageViewType
+{
+    switch (type) {
+        case Texture_type::texture_1d:             return VK_IMAGE_VIEW_TYPE_1D;
+        case Texture_type::texture_2d:             return VK_IMAGE_VIEW_TYPE_2D;
+        case Texture_type::texture_2d_array:       return VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+        case Texture_type::texture_3d:             return VK_IMAGE_VIEW_TYPE_3D;
+        case Texture_type::texture_cube_map:       return VK_IMAGE_VIEW_TYPE_CUBE;
+        case Texture_type::texture_cube_map_array: return VK_IMAGE_VIEW_TYPE_CUBE_ARRAY;
+        default:                                   return VK_IMAGE_VIEW_TYPE_2D;
+    }
+}
+
+} // anonymous namespace
 
 Texture_impl::Texture_impl(Texture_impl&& other) noexcept
     : m_device             {other.m_device}
@@ -72,11 +90,14 @@ Texture_impl::Texture_impl(Device& device, const Texture_create_info& create_inf
     , m_buffer                {create_info.buffer}
     , m_debug_label           {create_info.debug_label}
 {
+    const bool is_cube = (m_type == Texture_type::texture_cube_map) || (m_type == Texture_type::texture_cube_map_array);
     const VkImageCreateInfo image_create_info{
         .sType                 = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         .pNext                 = nullptr,
-        .flags                 = 0,
-        .imageType             = VK_IMAGE_TYPE_2D,
+        .flags                 = is_cube ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : VkImageCreateFlags{0},
+        .imageType             = (m_type == Texture_type::texture_3d) ? VK_IMAGE_TYPE_3D
+                               : (m_type == Texture_type::texture_1d) ? VK_IMAGE_TYPE_1D
+                               :                                        VK_IMAGE_TYPE_2D,
         .format                = to_vulkan(create_info.pixelformat),
         .extent                = {
             .width  = static_cast<uint32_t>(create_info.width),
@@ -123,7 +144,7 @@ Texture_impl::Texture_impl(Device& device, const Texture_create_info& create_inf
         .pNext            = nullptr,
         .flags            = 0,
         .image            = m_vk_image,
-        .viewType         = VK_IMAGE_VIEW_TYPE_2D,
+        .viewType         = to_vk_image_view_type(m_type),
         .format           = image_create_info.format,
         .components       = {
             .r = VK_COMPONENT_SWIZZLE_R,
@@ -142,6 +163,9 @@ Texture_impl::Texture_impl(Device& device, const Texture_create_info& create_inf
         log_swapchain->critical("vkCreateImageView() failed with {} {}", static_cast<int32_t>(result), c_str(result));
         abort();
     }
+    device.get_impl().set_debug_label(VK_OBJECT_TYPE_IMAGE, reinterpret_cast<uint64_t>(m_vk_image), m_debug_label.data());
+    device.get_impl().set_debug_label(VK_OBJECT_TYPE_IMAGE_VIEW, reinterpret_cast<uint64_t>(m_vk_image_view),
+        fmt::format("{} default view", m_debug_label.data()).c_str());
 }
 
 auto Texture_impl::is_sparse() const -> bool
@@ -267,7 +291,7 @@ auto Texture_impl::get_vk_image_view(
         .pNext            = nullptr,
         .flags            = 0,
         .image            = m_vk_image,
-        .viewType         = (layer_count > 1) ? VK_IMAGE_VIEW_TYPE_2D_ARRAY : VK_IMAGE_VIEW_TYPE_2D,
+        .viewType         = to_vk_image_view_type(m_type),
         .format           = vk_format,
         .components       = {
             .r = VK_COMPONENT_SWIZZLE_R,
@@ -297,6 +321,9 @@ auto Texture_impl::get_vk_image_view(
         .layer_count = layer_count,
         .image_view  = image_view
     });
+
+    m_device.get_impl().set_debug_label(VK_OBJECT_TYPE_IMAGE_VIEW, reinterpret_cast<uint64_t>(image_view),
+        fmt::format("{} view aspect={} layer={}-{}", m_debug_label.data(), aspect_mask, base_layer, base_layer + layer_count).c_str());
 
     return image_view;
 }

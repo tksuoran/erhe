@@ -90,10 +90,10 @@ auto get_type_details(const Glsl_type type) -> Type_details
         case Glsl_type::sampler_1d_shadow:                           return Type_details(type, Glsl_type::float_, Texture_type::texture_1d,        1, sampler_flags_shadow);
         case Glsl_type::sampler_2d_shadow:                           return Type_details(type, Glsl_type::float_, Texture_type::texture_2d,        2, sampler_flags_shadow);
         case Glsl_type::sampler_1d_array:                            return Type_details(type, Glsl_type::float_, Texture_type::texture_1d,        1, sampler_flags_array);
-        case Glsl_type::sampler_2d_array:                            return Type_details(type, Glsl_type::float_, Texture_type::texture_2d,        2, sampler_flags_array);
+        case Glsl_type::sampler_2d_array:                            return Type_details(type, Glsl_type::float_, Texture_type::texture_2d_array,  2, sampler_flags_array);
         case Glsl_type::sampler_buffer:                              return Type_details(type, Glsl_type::float_, Texture_type::texture_buffer,    1, 0);
         case Glsl_type::sampler_1d_array_shadow:                     return Type_details(type, Glsl_type::float_, Texture_type::texture_1d,        1, sampler_flags_array | sampler_flags_shadow);
-        case Glsl_type::sampler_2d_array_shadow:                     return Type_details(type, Glsl_type::float_, Texture_type::texture_2d,        2, sampler_flags_array | sampler_flags_shadow);
+        case Glsl_type::sampler_2d_array_shadow:                     return Type_details(type, Glsl_type::float_, Texture_type::texture_2d_array,  2, sampler_flags_array | sampler_flags_shadow);
         case Glsl_type::sampler_cube_shadow:                         return Type_details(type, Glsl_type::float_, Texture_type::texture_cube_map,  2, sampler_flags_cube | sampler_flags_shadow);
 
         case Glsl_type::int_sampler_1d:                              return Type_details(type, Glsl_type::int_,   Texture_type::texture_1d,        1, 0);
@@ -101,7 +101,7 @@ auto get_type_details(const Glsl_type type) -> Type_details
         case Glsl_type::int_sampler_3d:                              return Type_details(type, Glsl_type::int_,   Texture_type::texture_3d,        3, 0);
         case Glsl_type::int_sampler_cube:                            return Type_details(type, Glsl_type::int_,   Texture_type::texture_cube_map,  2, sampler_flags_cube);
         case Glsl_type::int_sampler_1d_array:                        return Type_details(type, Glsl_type::int_,   Texture_type::texture_1d,        1, sampler_flags_array);
-        case Glsl_type::int_sampler_2d_array:                        return Type_details(type, Glsl_type::int_,   Texture_type::texture_2d,        2, sampler_flags_array);
+        case Glsl_type::int_sampler_2d_array:                        return Type_details(type, Glsl_type::int_,   Texture_type::texture_2d_array,  2, sampler_flags_array);
         case Glsl_type::int_sampler_buffer:                          return Type_details(type, Glsl_type::int_,   Texture_type::texture_buffer,    1, 0);
 
         case Glsl_type::unsigned_int_sampler_1d:                     return Type_details(type, Glsl_type::unsigned_int, Texture_type::texture_1d,       1, 0);
@@ -109,14 +109,14 @@ auto get_type_details(const Glsl_type type) -> Type_details
         case Glsl_type::unsigned_int_sampler_3d:                     return Type_details(type, Glsl_type::unsigned_int, Texture_type::texture_3d,       3, 0);
         case Glsl_type::unsigned_int_sampler_cube:                   return Type_details(type, Glsl_type::unsigned_int, Texture_type::texture_cube_map, 2, sampler_flags_cube);
         case Glsl_type::unsigned_int_sampler_1d_array:               return Type_details(type, Glsl_type::unsigned_int, Texture_type::texture_1d,       1, sampler_flags_array);
-        case Glsl_type::unsigned_int_sampler_2d_array:               return Type_details(type, Glsl_type::unsigned_int, Texture_type::texture_2d,       2, sampler_flags_array);
+        case Glsl_type::unsigned_int_sampler_2d_array:               return Type_details(type, Glsl_type::unsigned_int, Texture_type::texture_2d_array, 2, sampler_flags_array);
         case Glsl_type::unsigned_int_sampler_buffer:                 return Type_details(type, Glsl_type::unsigned_int, Texture_type::texture_buffer,   1, 0);
 
-        case Glsl_type::sampler_cube_map_array:                      return Type_details(type, Glsl_type::float_,       Texture_type::texture_cube_map, 2, sampler_flags_cube | sampler_flags_array);
-        case Glsl_type::sampler_cube_map_array_shadow:               return Type_details(type, Glsl_type::float_,       Texture_type::texture_cube_map, 2, sampler_flags_cube | sampler_flags_array | sampler_flags_shadow);
+        case Glsl_type::sampler_cube_map_array:                      return Type_details(type, Glsl_type::float_,       Texture_type::texture_cube_map_array, 2, sampler_flags_cube | sampler_flags_array);
+        case Glsl_type::sampler_cube_map_array_shadow:               return Type_details(type, Glsl_type::float_,       Texture_type::texture_cube_map_array, 2, sampler_flags_cube | sampler_flags_array | sampler_flags_shadow);
 
-        case Glsl_type::int_sampler_cube_map_array:                  return Type_details(type, Glsl_type::int_,         Texture_type::texture_cube_map, 2, sampler_flags_cube | sampler_flags_array);
-        case Glsl_type::unsigned_int_sampler_cube_map_array:         return Type_details(type, Glsl_type::unsigned_int, Texture_type::texture_cube_map, 2, sampler_flags_cube | sampler_flags_array);
+        case Glsl_type::int_sampler_cube_map_array:                  return Type_details(type, Glsl_type::int_,         Texture_type::texture_cube_map_array, 2, sampler_flags_cube | sampler_flags_array);
+        case Glsl_type::unsigned_int_sampler_cube_map_array:         return Type_details(type, Glsl_type::unsigned_int, Texture_type::texture_cube_map_array, 2, sampler_flags_cube | sampler_flags_array);
 
         case Glsl_type::sampler_2d_multisample:                      return Type_details(type, Glsl_type::float_,       Texture_type::texture_2d, 2, sampler_flags_multisample);
         case Glsl_type::int_sampler_2d_multisample:                  return Type_details(type, Glsl_type::int_,         Texture_type::texture_2d, 2, sampler_flags_multisample);

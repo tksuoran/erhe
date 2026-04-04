@@ -121,7 +121,7 @@ Light_buffer::Light_buffer(erhe::graphics::Device& graphics_device, Light_interf
             erhe::graphics::Texture_create_info {
                 .device            = graphics_device,
                 .usage_mask        = erhe::graphics::Image_usage_flag_bit_mask::sampled,
-                .type              = erhe::graphics::Texture_type::texture_2d,
+                .type              = erhe::graphics::Texture_type::texture_2d_array,
                 .pixelformat       = graphics_device.choose_depth_stencil_format(erhe::graphics::format_flag_require_depth, 0),
                 .width             = 1,
                 .height            = 1,
