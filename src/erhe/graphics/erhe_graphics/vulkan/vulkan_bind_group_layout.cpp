@@ -56,7 +56,7 @@ Bind_group_layout_impl::Bind_group_layout_impl(
         vk_bindings.push_back(VkDescriptorSetLayoutBinding{
             .binding            = binding.binding_point,
             .descriptorType     = to_vulkan_descriptor_type(binding.type),
-            .descriptorCount    = 1,
+            .descriptorCount    = binding.descriptor_count,
             .stageFlags         = stage_flags,
             .pImmutableSamplers = nullptr
         });

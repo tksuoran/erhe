@@ -19,8 +19,9 @@ enum class Binding_type : unsigned int {
 class Bind_group_layout_binding
 {
 public:
-    uint32_t     binding_point{0};
-    Binding_type type         {Binding_type::uniform_buffer};
+    uint32_t     binding_point   {0};
+    Binding_type type            {Binding_type::uniform_buffer};
+    uint32_t     descriptor_count{1};
 };
 
 class Bind_group_layout_create_info
