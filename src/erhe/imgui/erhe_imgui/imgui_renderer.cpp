@@ -49,7 +49,7 @@ constexpr std::string_view c_vertex_shader_source = R"NUL(
 layout(location = 0) out vec4 v_color;
 layout(location = 1) out vec2 v_texcoord;
 
-#if defined(ERHE_HAS_ARB_BINDLESS_TEXTURE)
+#if defined(ERHE_OPENGL_BINDLESS_TEXTURE)
 layout(location = 2) flat out uvec2 v_texture;
 #else
 layout(location = 2) flat out uint v_texture_id;
@@ -90,7 +90,7 @@ void main()
     gl_ClipDistance[2] = clip_rect[2] - a_position.x;
     gl_ClipDistance[3] = clip_rect[3] - a_position.y;
     v_texcoord         = a_texcoord_0;
-#if defined(ERHE_HAS_ARB_BINDLESS_TEXTURE)
+#if defined(ERHE_OPENGL_BINDLESS_TEXTURE)
     v_texture          = draw.draw_parameters[ERHE_DRAW_ID].texture;
 #else
     v_texture_id       = draw.draw_parameters[ERHE_DRAW_ID].texture.x;
@@ -104,7 +104,7 @@ const std::string_view c_fragment_shader_source = R"NUL(
 layout(location = 0) in vec4 v_color;
 layout(location = 1) in vec2 v_texcoord;
 
-#if defined(ERHE_HAS_ARB_BINDLESS_TEXTURE)
+#if defined(ERHE_OPENGL_BINDLESS_TEXTURE)
 layout(location = 2) flat in uvec2 v_texture;
 #else
 layout(location = 2) flat in uint v_texture_id;
@@ -113,7 +113,7 @@ layout(location = 3) flat in uint v_array_layer;
 
 void main()
 {
-#if defined(ERHE_HAS_ARB_BINDLESS_TEXTURE)
+#if defined(ERHE_OPENGL_BINDLESS_TEXTURE)
     sampler2D s_texture = sampler2D(v_texture);
     vec4 texture_sample = texture(s_texture, v_texcoord.st);
 #else
@@ -134,7 +134,7 @@ void main()
 auto get_shader_default_uniform_block(erhe::graphics::Device& graphics_device, const int dedicated_texture_unit) -> erhe::graphics::Shader_resource
 {
     erhe::graphics::Shader_resource default_uniform_block{graphics_device};
-    if (!graphics_device.get_info().use_bindless_texture) {
+    if (!graphics_device.get_info().uses_bindless_texture()) {
         // Unit 0 reserved for sampler2DArray (array texture support for non-bindless path)
         default_uniform_block.add_sampler("s_texture_array", erhe::graphics::Glsl_type::sampler_2d_array, 0);
         // Units 1..N-1 for regular sampler2D textures
@@ -226,7 +226,7 @@ Imgui_renderer::Imgui_renderer(erhe::graphics::Device& graphics_device, Imgui_se
                 .interface_blocks      = { &m_imgui_program_interface.draw_parameter_block },
                 .fragment_outputs      = &m_imgui_program_interface.fragment_outputs,
                 .vertex_format         = &m_imgui_program_interface.vertex_format,
-                .default_uniform_block = graphics_device.get_info().use_bindless_texture ? nullptr : &m_imgui_program_interface.default_uniform_block,
+                .default_uniform_block = graphics_device.get_info().uses_bindless_texture() ? nullptr : &m_imgui_program_interface.default_uniform_block,
                 .shaders = {
                     { erhe::graphics::Shader_type::vertex_shader,   c_vertex_shader_source   },
                     { erhe::graphics::Shader_type::fragment_shader, c_fragment_shader_source }
@@ -365,7 +365,7 @@ Imgui_renderer::Imgui_renderer(erhe::graphics::Device& graphics_device, Imgui_se
     // (3) If you have multiple imgui contexts, they also need to have a matching value for ImGuiBackendFlags_RendererHasTextures.
     m_font_atlas.RendererHasTextures = true;
 
-    if (!m_graphics_device.get_info().use_bindless_texture) {
+    if (!m_graphics_device.get_info().uses_bindless_texture()) {
         // Create dummy 1x1x1 array texture for the reserved sampler2DArray slot
         const erhe::graphics::Texture_create_info array_tex_create_info{
             .device            = m_graphics_device,
@@ -386,9 +386,9 @@ Imgui_renderer::Imgui_renderer(erhe::graphics::Device& graphics_device, Imgui_se
         m_graphics_device,
         *m_dummy_texture.get(),
         m_nearest_sampler,
-        m_graphics_device.get_info().use_bindless_texture ? 0u : 1u, // slot 0 reserved for array texture
+        m_graphics_device.get_info().uses_bindless_texture() ? 0u : 1u, // slot 0 reserved for array texture
         &m_bind_group_layout,
-        m_graphics_device.get_info().use_bindless_texture ? nullptr : &m_imgui_program_interface.default_uniform_block
+        m_graphics_device.get_info().uses_bindless_texture() ? nullptr : &m_imgui_program_interface.default_uniform_block
     );
 }
 

@@ -862,7 +862,7 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
     m_info.vulkan_api_version           = application_info.apiVersion;
     m_info.use_binary_shaders           = true;
     m_info.use_integer_polygon_ids      = true;
-    m_info.use_bindless_texture         = false;
+    m_info.texture_heap_path            = Texture_heap_path::vulkan_descriptor_indexing;
     m_info.use_sparse_texture           = false;
     m_info.use_multi_draw_indirect_core = true;
     m_info.use_multi_draw_indirect_arb  = false;

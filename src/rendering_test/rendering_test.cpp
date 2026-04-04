@@ -832,7 +832,7 @@ private:
     void make_quad_pipeline()
     {
         const std::filesystem::path shader_path{"res/shaders"};
-        const bool bindless = m_graphics_device.get_info().use_bindless_texture;
+        const bool bindless = m_graphics_device.get_info().uses_bindless_texture();
 
         m_test_bind_group_layout = std::make_unique<erhe::graphics::Bind_group_layout>(
             m_graphics_device,
@@ -963,7 +963,7 @@ private:
     void make_multi_texture_pipeline()
     {
         const std::filesystem::path shader_path{"res/shaders"};
-        const bool bindless = m_graphics_device.get_info().use_bindless_texture;
+        const bool bindless = m_graphics_device.get_info().uses_bindless_texture();
 
         m_multi_tex_block = std::make_unique<erhe::graphics::Shader_resource>(
             m_graphics_device, "multi_tex", 0, erhe::graphics::Shader_resource::Type::uniform_block
@@ -1070,7 +1070,7 @@ private:
     void make_separate_samplers_pipeline()
     {
         const std::filesystem::path shader_path{"res/shaders"};
-        const bool bindless = m_graphics_device.get_info().use_bindless_texture;
+        const bool bindless = m_graphics_device.get_info().uses_bindless_texture();
 
         // Uniform block with texture handles (for bindless) and count
         m_sep_tex_block = std::make_unique<erhe::graphics::Shader_resource>(

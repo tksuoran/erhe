@@ -46,29 +46,24 @@ Bind_group_layout_impl::Bind_group_layout_impl(
     static constexpr uint32_t sampler_slot_count = 16;
 
     std::vector<VkDescriptorSetLayoutBinding> vk_bindings;
-    vk_bindings.reserve(create_info.bindings.size() + sampler_slot_count);
+    vk_bindings.reserve(create_info.bindings.size());
 
     for (const Bind_group_layout_binding& binding : create_info.bindings) {
         VkShaderStageFlags stage_flags = VK_SHADER_STAGE_ALL;
         if (binding.type == Binding_type::combined_image_sampler) {
             stage_flags = VK_SHADER_STAGE_FRAGMENT_BIT;
         }
+        // Sampler bindings are offset past buffer bindings in Vulkan
+        // (OpenGL has separate namespaces, Vulkan shares one)
+        uint32_t vk_binding_point = binding.binding_point;
+        if (binding.type == Binding_type::combined_image_sampler) {
+            vk_binding_point += m_sampler_binding_offset;
+        }
         vk_bindings.push_back(VkDescriptorSetLayoutBinding{
-            .binding            = binding.binding_point,
+            .binding            = vk_binding_point,
             .descriptorType     = to_vulkan_descriptor_type(binding.type),
             .descriptorCount    = binding.descriptor_count,
             .stageFlags         = stage_flags,
-            .pImmutableSamplers = nullptr
-        });
-    }
-
-    // Pre-allocate combined image sampler bindings at the offset
-    for (uint32_t i = 0; i < sampler_slot_count; ++i) {
-        vk_bindings.push_back(VkDescriptorSetLayoutBinding{
-            .binding            = m_sampler_binding_offset + i,
-            .descriptorType     = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            .descriptorCount    = 1,
-            .stageFlags         = VK_SHADER_STAGE_ALL,
             .pImmutableSamplers = nullptr
         });
     }

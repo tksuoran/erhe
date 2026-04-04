@@ -309,29 +309,33 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
     gl::get_integer_v(gl::Get_p_name::max_tess_control_uniform_blocks,    &m_info.max_tess_control_uniform_blocks);
     gl::get_integer_v(gl::Get_p_name::max_tess_evaluation_uniform_blocks, &m_info.max_tess_evaluation_uniform_blocks);
 
-    if (gl::is_extension_supported(gl::Extension::Extension_GL_ARB_bindless_texture)) {
-        m_info.use_bindless_texture = true;
-    }
-    if (m_info.vendor == Vendor::Intel) {
-        m_info.use_bindless_texture = false;
-    }
-    log_startup->info("GL_ARB_bindless_texture supported : {}", m_info.use_bindless_texture);
-    if (m_info.use_bindless_texture) {
+    {
+        bool bindless_supported = gl::is_extension_supported(gl::Extension::Extension_GL_ARB_bindless_texture);
+        if (m_info.vendor == Vendor::Intel) {
+            bindless_supported = false;
+        }
+        log_startup->info("GL_ARB_bindless_texture supported : {}", bindless_supported);
+        bool use_bindless = bindless_supported;
+        if (use_bindless) {
 #if defined(ERHE_SPIRV)
-        // 'GL_ARB_bindless_texture' : not allowed when using generating SPIR-V codes
-        m_info.use_bindless_texture = false;
-        log_startup->warn("Force disabled GL_ARB_bindless_texture due to ERHE_SPIRV cmake setting");
+            // 'GL_ARB_bindless_texture' : not allowed when using generating SPIR-V codes
+            use_bindless = false;
+            log_startup->warn("Force disabled GL_ARB_bindless_texture due to ERHE_SPIRV cmake setting");
 #else
-        if (force_bindless_textures_off) {
-            m_info.use_bindless_texture = false;
-            log_startup->warn("Force disabled GL_ARB_bindless_texture due to config setting force_bindless_textures_off");
-        }
-        else
-        if (capture_support) {
-            m_info.use_bindless_texture = false;
-            log_startup->warn("Force disabled GL_ARB_bindless_texture due to config enabling RenderDoc capture");
-        }
+            if (force_bindless_textures_off) {
+                use_bindless = false;
+                log_startup->warn("Force disabled GL_ARB_bindless_texture due to config setting force_bindless_textures_off");
+            }
+            else
+            if (capture_support) {
+                use_bindless = false;
+                log_startup->warn("Force disabled GL_ARB_bindless_texture due to config enabling RenderDoc capture");
+            }
 #endif
+        }
+        m_info.texture_heap_path = use_bindless
+            ? Texture_heap_path::opengl_bindless_textures
+            : Texture_heap_path::opengl_sampler_array;
     }
     m_info.use_clear_texture = (m_info.gl_version >= 440) || gl::is_extension_supported(gl::Extension::Extension_GL_ARB_clear_texture);
     log_startup->info("GL_ARB_clear_texture supported : {}", m_info.use_clear_texture);
@@ -979,7 +983,7 @@ void Device_impl::resize_swapchain_to_window()
 
 auto Device_impl::get_handle(const Texture& texture, const Sampler& sampler) const -> uint64_t
 {
-    if (m_info.use_bindless_texture) {
+    if (m_info.texture_heap_path == Texture_heap_path::opengl_bindless_textures) {
         return gl::get_texture_sampler_handle_arb(texture.get_impl().gl_name(), sampler.get_impl().gl_name());
     } else {
         const uint64_t texture_name  = static_cast<uint64_t>(texture.get_impl().gl_name());

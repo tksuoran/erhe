@@ -62,6 +62,11 @@ Program_interface::Program_interface(
         },
         .debug_label = "Scene renderer"
     };
+    // Add shadow sampler bindings (used by non-bindless paths: Vulkan descriptor indexing, OpenGL sampler array)
+    if (graphics_device.get_info().uses_default_uniform_block()) {
+        layout_create_info.bindings.push_back({c_texture_heap_slot_shadow_compare,    erhe::graphics::Binding_type::combined_image_sampler});
+        layout_create_info.bindings.push_back({c_texture_heap_slot_shadow_no_compare, erhe::graphics::Binding_type::combined_image_sampler});
+    }
     bind_group_layout = std::make_unique<erhe::graphics::Bind_group_layout>(graphics_device, layout_create_info);
 }
 

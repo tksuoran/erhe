@@ -9,27 +9,26 @@ Programs::Programs(erhe::graphics::Device& graphics_device, erhe::scene_renderer
     : shader_path{std::filesystem::path("res") / std::filesystem::path("shaders")}
     , default_uniform_block{graphics_device}
     , shadow_sampler_compare{
-        graphics_device.get_info().use_bindless_texture
-            ? nullptr
-            : default_uniform_block.add_sampler(
+        graphics_device.get_info().uses_default_uniform_block()
+            ? default_uniform_block.add_sampler(
                 "s_shadow_compare",
                 erhe::graphics::Glsl_type::sampler_2d_array_shadow,
                 erhe::scene_renderer::c_texture_heap_slot_shadow_compare
             )
+            : nullptr
     }
     , shadow_sampler_no_compare{
-        graphics_device.get_info().use_bindless_texture
-            ? nullptr
-            : default_uniform_block.add_sampler(
+        graphics_device.get_info().uses_default_uniform_block()
+            ? default_uniform_block.add_sampler(
                 "s_shadow_no_compare",
                 erhe::graphics::Glsl_type::sampler_2d_array,
                 erhe::scene_renderer::c_texture_heap_slot_shadow_no_compare
             )
+            : nullptr
     }
     , texture_sampler{
-        graphics_device.get_info().use_bindless_texture
-            ? nullptr
-            : default_uniform_block.add_sampler(
+        graphics_device.get_info().uses_sampler_array_in_set_0()
+            ? default_uniform_block.add_sampler(
                 "s_texture",
                 erhe::graphics::Glsl_type::sampler_2d,
                 erhe::scene_renderer::c_texture_heap_slot_count_reserved,
@@ -38,6 +37,7 @@ Programs::Programs(erhe::graphics::Device& graphics_device, erhe::scene_renderer
                     uint32_t{64}
                 )
             )
+            : nullptr
     }
     , nearest_sampler{
         graphics_device,
@@ -72,9 +72,9 @@ Programs::Programs(erhe::graphics::Device& graphics_device, erhe::scene_renderer
                 shader_path,
                 erhe::graphics::Shader_stages_create_info{
                     .name                  = "standard",
-                    .default_uniform_block = graphics_device.get_info().use_bindless_texture
-                        ? nullptr
-                        : &default_uniform_block,
+                    .default_uniform_block = graphics_device.get_info().uses_default_uniform_block()
+                        ? &default_uniform_block
+                        : nullptr,
                     .dump_interface    = false,
                     .dump_final_source = false
                 }

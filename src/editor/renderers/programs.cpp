@@ -31,36 +31,35 @@ Programs::Programs(erhe::graphics::Device& graphics_device)
     : shader_path{std::filesystem::path("res") / std::filesystem::path("shaders")}
     , default_uniform_block{graphics_device}
     , shadow_sampler_compare{
-        graphics_device.get_info().use_bindless_texture
-            ? nullptr
-            : default_uniform_block.add_sampler(
+        graphics_device.get_info().uses_default_uniform_block()
+            ? default_uniform_block.add_sampler(
                 "s_shadow_compare",
                 erhe::graphics::Glsl_type::sampler_2d_array_shadow,
                 erhe::scene_renderer::c_texture_heap_slot_shadow_compare
             )
+            : nullptr
     }
     , shadow_sampler_no_compare{
-        graphics_device.get_info().use_bindless_texture
-            ? nullptr
-            : default_uniform_block.add_sampler(
+        graphics_device.get_info().uses_default_uniform_block()
+            ? default_uniform_block.add_sampler(
                 "s_shadow_no_compare",
                 erhe::graphics::Glsl_type::sampler_2d_array,
                 erhe::scene_renderer::c_texture_heap_slot_shadow_no_compare
             )
+            : nullptr
     }
     , texture_sampler{
-        graphics_device.get_info().use_bindless_texture
-            ? nullptr
-            : default_uniform_block.add_sampler(
+        graphics_device.get_info().uses_sampler_array_in_set_0()
+            ? default_uniform_block.add_sampler(
                 "s_texture",
                 erhe::graphics::Glsl_type::sampler_2d,
                 erhe::scene_renderer::c_texture_heap_slot_count_reserved,
-                // TODO
                 std::min(
                     graphics_device.get_info().max_per_stage_descriptor_samplers - erhe::scene_renderer::c_texture_heap_slot_count_reserved,
                     uint32_t{64}
                 )
             )
+            : nullptr
     }
     , error                   {graphics_device, "error-not_loaded"}
     , brdf_slice              {graphics_device, "brdf_slice-not_loaded"}

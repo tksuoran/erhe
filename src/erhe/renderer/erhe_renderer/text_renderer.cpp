@@ -45,7 +45,7 @@ auto Text_renderer::build_shader_stages() -> erhe::graphics::Shader_stages_proto
         create_info.defines.emplace_back("ERHE_VERTEX_DATA_TEXTURE_BUFFER", "1");
     }
 
-    if (!m_graphics_device.get_info().use_bindless_texture) {
+    if (!m_graphics_device.get_info().uses_bindless_texture()) {
         m_default_uniform_block.add_sampler("s_texture", erhe::graphics::Glsl_type::sampler_2d, 0);
         if (m_use_buffer_texture) {
             m_default_uniform_block.add_sampler("s_vertex_data", erhe::graphics::Glsl_type::unsigned_int_sampler_buffer, 1);

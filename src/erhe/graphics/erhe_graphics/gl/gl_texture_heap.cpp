@@ -29,7 +29,7 @@ Texture_heap_impl::Texture_heap_impl(
     log_texture_heap->trace("Texture_heap_impl::Texture_heap_impl()");
 #endif
 
-    if (m_device.get_info().use_bindless_texture) {
+    if ((m_device.get_info().texture_heap_path == Texture_heap_path::opengl_bindless_textures)) {
         reset_heap();
         const uint64_t fallback_texture_handle = m_device.get_handle(m_fallback_texture, m_fallback_sampler);
         std::fill(m_assigned.begin(), m_assigned.end(), false);
@@ -60,7 +60,7 @@ void Texture_heap_impl::reset_heap()
     log_texture_heap->trace("Texture_heap_impl::reset_heap()");
 #endif
 
-    if (m_device.get_info().use_bindless_texture) {
+    if ((m_device.get_info().texture_heap_path == Texture_heap_path::opengl_bindless_textures)) {
         m_textures.resize(m_reserved_slot_count);
         m_samplers.resize(m_reserved_slot_count);
         m_assigned.resize(m_reserved_slot_count);
@@ -85,7 +85,7 @@ auto Texture_heap_impl::get_shader_handle(const Texture* texture, const Sampler*
 
     for (std::size_t slot = 0; slot < m_reserved_slot_count + m_used_slot_count; ++slot) {
         if ((m_textures[slot] == texture) && (m_samplers[slot] == sampler)) {
-            if (m_device.get_info().use_bindless_texture) {
+            if ((m_device.get_info().texture_heap_path == Texture_heap_path::opengl_bindless_textures)) {
                 return m_gl_bindless_texture_handles[slot];
             } else {
                 return static_cast<uint64_t>(slot - m_reserved_slot_count);
@@ -111,7 +111,7 @@ auto Texture_heap_impl::assign(std::size_t slot, const Texture* texture, const S
         sampler = &m_fallback_sampler;
     }
 
-    if (m_device.get_info().use_bindless_texture) {
+    if ((m_device.get_info().texture_heap_path == Texture_heap_path::opengl_bindless_textures)) {
         const uint64_t gl_bindless_texture_handle = m_device.get_handle(*texture, *sampler);
         m_assigned                    [slot] = true;
         m_gl_bindless_texture_handles [slot] = gl_bindless_texture_handle;
@@ -167,7 +167,7 @@ auto Texture_heap_impl::allocate(const Texture* texture, const Sampler* sampler)
 #if ERHE_TEXTURE_HEAP_LOG
             log_texture_heap->trace("cache hit texture heap slot {} for texture {}, sampler {}", slot, texture_name, sampler_name);
 #endif
-            if (m_device.get_info().use_bindless_texture) {
+            if ((m_device.get_info().texture_heap_path == Texture_heap_path::opengl_bindless_textures)) {
                 return m_gl_bindless_texture_handles[slot];
             } else {
                 return static_cast<uint64_t>(slot);
@@ -175,7 +175,7 @@ auto Texture_heap_impl::allocate(const Texture* texture, const Sampler* sampler)
         }
     }
 
-    if (m_device.get_info().use_bindless_texture) {
+    if ((m_device.get_info().texture_heap_path == Texture_heap_path::opengl_bindless_textures)) {
 #if ERHE_TEXTURE_HEAP_LOG
         const std::size_t slot = m_reserved_slot_count + m_used_slot_count;
 #endif
@@ -234,7 +234,7 @@ void Texture_heap_impl::unbind()
     log_texture_heap->trace("Texture_heap_impl::unbind()");
 #endif
 
-    if (m_device.get_info().use_bindless_texture) {
+    if ((m_device.get_info().texture_heap_path == Texture_heap_path::opengl_bindless_textures)) {
         for (std::size_t slot = 0; slot < m_reserved_slot_count + m_used_slot_count; ++slot) {
             if ((slot < m_reserved_slot_count) && !m_assigned[slot]) {
                 continue;
@@ -291,13 +291,13 @@ auto Texture_heap_impl::bind() -> std::size_t
 #if ERHE_TEXTURE_HEAP_LOG
     log_texture_heap->trace(
         "Texture_heap_impl::bind() {}",
-        m_device.get_info().use_bindless_texture
+        (m_device.get_info().texture_heap_path == Texture_heap_path::opengl_bindless_textures)
             ? "bindless"
             : "not bindless"
     );
 #endif
 
-    if (m_device.get_info().use_bindless_texture) {
+    if ((m_device.get_info().texture_heap_path == Texture_heap_path::opengl_bindless_textures)) {
         for (std::size_t slot = 0; slot < m_reserved_slot_count + m_used_slot_count; ++slot) {
             if ((slot < m_reserved_slot_count) && !m_assigned[slot]) {
                 continue;

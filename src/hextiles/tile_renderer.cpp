@@ -43,7 +43,7 @@ auto Tile_renderer::make_prototype(erhe::graphics::Device& graphics_device) cons
         .interface_blocks      = { &m_projection_block },
         .fragment_outputs      = &m_fragment_outputs,
         .vertex_format         = &m_vertex_format,
-        .default_uniform_block = m_graphics_device.get_info().use_bindless_texture
+        .default_uniform_block = m_graphics_device.get_info().uses_bindless_texture()
             ? nullptr
             : &m_default_uniform_block,
         .shaders = {
@@ -55,7 +55,7 @@ auto Tile_renderer::make_prototype(erhe::graphics::Device& graphics_device) cons
         .dump_final_source = true
     };
 
-    if (m_graphics_device.get_info().use_bindless_texture) {
+    if (m_graphics_device.get_info().uses_bindless_texture()) {
         create_info.defines.emplace_back("ERHE_BINDLESS_TEXTURE", "1");
         create_info.extensions.push_back({erhe::graphics::Shader_type::fragment_shader, "GL_ARB_bindless_texture"});
     }
@@ -84,7 +84,7 @@ Tile_renderer::Tile_renderer(
     , m_tiles                {tiles}
     , m_default_uniform_block{graphics_device}
     , m_texture_sampler{
-        graphics_device.get_info().use_bindless_texture
+        graphics_device.get_info().uses_bindless_texture()
             ? nullptr
             : m_default_uniform_block.add_sampler("s_texture", erhe::graphics::Glsl_type::sampler_2d, 0)
     }

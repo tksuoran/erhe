@@ -420,7 +420,7 @@ auto Post_processing::make_program(
 
     std::vector<erhe::graphics::Shader_stage_extension> extensions; 
     std::vector<std::pair<std::string, std::string>>    defines;
-    const bool bindless_textures = graphics_device.get_info().use_bindless_texture;
+    const bool bindless_textures = graphics_device.get_info().uses_bindless_texture();
     if (flags & flag_first_pass       ) { defines.push_back({"FIRST_PASS", "1"}); }
     if (flags & flag_last_pass        ) { defines.push_back({"LAST_PASS",  "1"}); }
     if (flags & flag_source_input     ) { defines.push_back({"SOURCE", "s_input"}); }
@@ -479,17 +479,17 @@ Post_processing::Post_processing(erhe::graphics::Device& d, App_context& app_con
 
     , m_default_uniform_block{d}
     , m_input_texture_resource{
-        d.get_info().use_bindless_texture
+        d.get_info().uses_bindless_texture()
             ? nullptr
             : m_default_uniform_block.add_sampler("s_input", erhe::graphics::Glsl_type::sampler_2d, s_input_texture)
     }
     , m_downsample_texture_resource{
-        d.get_info().use_bindless_texture
+        d.get_info().uses_bindless_texture()
             ? nullptr
             : m_default_uniform_block.add_sampler("s_downsample", erhe::graphics::Glsl_type::sampler_2d, s_downsample_texture)
     }
     , m_upsample_texture_resource{
-        d.get_info().use_bindless_texture
+        d.get_info().uses_bindless_texture()
             ? nullptr
             : m_default_uniform_block.add_sampler("s_upsample", erhe::graphics::Glsl_type::sampler_2d, s_upsample_texture)
     }

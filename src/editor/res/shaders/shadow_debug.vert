@@ -2,7 +2,7 @@ layout(location = 0) out float v_color;
 
 void main()
 {
-#if defined(ERHE_HAS_ARB_BINDLESS_TEXTURE)
+#if defined(ERHE_OPENGL_BINDLESS_TEXTURE)
     sampler2DArray s_shadow_no_compare = sampler2DArray(light_block.shadow_texture_no_compare);
 #endif
 

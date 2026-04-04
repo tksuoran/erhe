@@ -35,10 +35,13 @@ float sample_light_visibility(vec4 position, uint light_index, float N_dot_L) {
         return 1.0;
     }
 
-#   if defined(ERHE_HAS_ARB_BINDLESS_TEXTURE)
+#   if defined(ERHE_OPENGL_BINDLESS_TEXTURE)
     sampler2DArrayShadow s_shadow_compare    = sampler2DArrayShadow(light_block.shadow_texture_compare);
     sampler2DArray       s_shadow_no_compare = sampler2DArray      (light_block.shadow_texture_no_compare);
 #   endif
+    // For ERHE_VULKAN_DESCRIPTOR_INDEXING and ERHE_OPENGL_SAMPLER_ARRAY,
+    // s_shadow_compare and s_shadow_no_compare are declared as uniforms
+    // in the generated shader preamble (from default_uniform_block).
 
     Light light                                 = light_block.lights[light_index];
     float array_layer                           = float(light_index);

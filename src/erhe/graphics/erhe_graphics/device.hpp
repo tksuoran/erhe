@@ -67,6 +67,13 @@ static constexpr unsigned int format_flag_require_stencil   = 0x02u;
 static constexpr unsigned int format_flag_prefer_accuracy   = 0x04u;
 static constexpr unsigned int format_flag_prefer_filterable = 0x08u;
 
+enum class Texture_heap_path : unsigned int {
+    opengl_bindless_textures,   // GL_ARB_bindless_texture: sampler2D(uvec2_handle)
+    opengl_sampler_array,       // OpenGL non-bindless: s_texture[handle.x] array
+    metal_argument_buffer,      // Metal argument buffers
+    vulkan_descriptor_indexing  // Vulkan: erhe_texture_heap[] at set 1 + assigned samplers at set 0
+};
+
 class Device_info
 {
 public:
@@ -89,7 +96,12 @@ public:
     bool use_direct_state_access     {false};
     bool use_binary_shaders          {false};
     bool use_integer_polygon_ids     {false};
-    bool use_bindless_texture        {false};
+    Texture_heap_path texture_heap_path{Texture_heap_path::opengl_sampler_array};
+
+    // Helper queries
+    [[nodiscard]] auto uses_bindless_texture       () const -> bool { return texture_heap_path == Texture_heap_path::opengl_bindless_textures; }
+    [[nodiscard]] auto uses_default_uniform_block  () const -> bool { return (texture_heap_path == Texture_heap_path::opengl_sampler_array) || (texture_heap_path == Texture_heap_path::vulkan_descriptor_indexing); }
+    [[nodiscard]] auto uses_sampler_array_in_set_0 () const -> bool { return texture_heap_path == Texture_heap_path::opengl_sampler_array; }
     bool use_sparse_texture          {false};
     bool use_persistent_buffers      {false};
     bool use_multi_draw_indirect_core{false};

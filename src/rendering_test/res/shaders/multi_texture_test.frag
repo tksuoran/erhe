@@ -4,7 +4,7 @@ void main()
 {
     uint count = multi_tex.texture_count;
 
-#if defined(ERHE_HAS_ARB_BINDLESS_TEXTURE)
+#if defined(ERHE_OPENGL_BINDLESS_TEXTURE)
     vec4 result = vec4(0.0);
     if (count > 0u) { sampler2D s0 = sampler2D(multi_tex.texture_handle_0); result += texture(s0, v_texcoord); }
     if (count > 1u) { sampler2D s1 = sampler2D(multi_tex.texture_handle_1); result += texture(s1, v_texcoord); }

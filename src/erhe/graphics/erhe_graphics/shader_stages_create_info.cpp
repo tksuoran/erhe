@@ -183,9 +183,12 @@ auto Shader_stages_create_info::final_source(
         sb << "#extension GL_ARB_shader_storage_buffer_object : enable\n";
         sb << "#define ERHE_HAS_ARB_SHADER_STORAGE_BUFFER_OBJECT 1\n";
     }
-    if (graphics_device.get_info().use_bindless_texture) {
+    if (graphics_device.get_info().texture_heap_path == Texture_heap_path::opengl_bindless_textures) {
         sb << "#extension GL_ARB_bindless_texture : enable\n";
-        sb << "#define ERHE_HAS_ARB_BINDLESS_TEXTURE 1\n";
+        sb << "#define ERHE_OPENGL_BINDLESS_TEXTURE 1\n";
+    }
+    if (graphics_device.get_info().texture_heap_path == Texture_heap_path::opengl_sampler_array) {
+        sb << "#define ERHE_OPENGL_SAMPLER_ARRAY 1\n";
     }
     if (gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shading_language_packing)) {
         sb << "#extension GL_ARB_shading_language_packing : enable\n";
@@ -231,6 +234,9 @@ auto Shader_stages_create_info::final_source(
 #endif
 #if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
     sb << "#define ERHE_DRAW_ID gl_DrawID\n";
+    sb << "#define ERHE_VULKAN_DESCRIPTOR_INDEXING 1\n";
+    sb << "#extension GL_EXT_nonuniform_qualifier : enable\n";
+    sb << "layout(set = 1, binding = 0) uniform sampler2D erhe_texture_heap[];\n";
 #endif
 #if defined(ERHE_GRAPHICS_LIBRARY_METAL)
     // Metal does not support multi-draw indirect / gl_DrawID; emulate with push constant.
