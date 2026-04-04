@@ -20,15 +20,17 @@ public:
     Bind_group_layout_impl(Bind_group_layout_impl&&) = delete;
     void operator=(Bind_group_layout_impl&&) = delete;
 
-    [[nodiscard]] auto get_debug_label       () const -> erhe::utility::Debug_label;
-    [[nodiscard]] auto get_descriptor_set_layout() const -> VkDescriptorSetLayout;
-    [[nodiscard]] auto get_pipeline_layout    () const -> VkPipelineLayout;
+    [[nodiscard]] auto get_debug_label           () const -> erhe::utility::Debug_label;
+    [[nodiscard]] auto get_descriptor_set_layout () const -> VkDescriptorSetLayout;
+    [[nodiscard]] auto get_pipeline_layout       () const -> VkPipelineLayout;
+    [[nodiscard]] auto get_sampler_binding_offset() const -> uint32_t;
 
 private:
     Device_impl&               m_device_impl;
-    VkDevice                   m_vulkan_device         {VK_NULL_HANDLE};
-    VkDescriptorSetLayout      m_descriptor_set_layout {VK_NULL_HANDLE};
-    VkPipelineLayout           m_pipeline_layout       {VK_NULL_HANDLE};
+    VkDevice                   m_vulkan_device            {VK_NULL_HANDLE};
+    VkDescriptorSetLayout      m_descriptor_set_layout    {VK_NULL_HANDLE};
+    VkPipelineLayout           m_pipeline_layout          {VK_NULL_HANDLE};
+    uint32_t                   m_sampler_binding_offset   {0};
     erhe::utility::Debug_label m_debug_label;
 };
 

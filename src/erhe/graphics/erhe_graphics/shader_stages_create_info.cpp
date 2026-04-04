@@ -6,6 +6,7 @@
 # include "erhe_gl/wrapper_enums.hpp"
 #endif
 
+#include "erhe_graphics/bind_group_layout.hpp"
 #include "erhe_graphics/glsl_file_loader.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/device.hpp"
@@ -260,8 +261,15 @@ auto Shader_stages_create_info::final_source(
     sb << interface_blocks_source();
 
     if (default_uniform_block != nullptr) {
+        uint32_t sampler_offset = 0;
+        if (bind_group_layout != nullptr) {
+            sampler_offset = bind_group_layout->get_sampler_binding_offset();
+        }
+        if (sampler_offset > 0) {
+            sb << "#define ERHE_SAMPLER_BINDING_OFFSET " << sampler_offset << "\n";
+        }
         sb << "// Default uniform block\n";
-        sb << default_uniform_block->get_source();
+        sb << default_uniform_block->get_source(0, sampler_offset);
         sb << "\n";
     }
 

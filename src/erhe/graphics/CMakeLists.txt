@@ -340,6 +340,7 @@ target_link_libraries(${_target}
         glm::glm-header-only
         mango
     PRIVATE
+        etl::etl
         erhe::defer
         erhe::file
         erhe::log

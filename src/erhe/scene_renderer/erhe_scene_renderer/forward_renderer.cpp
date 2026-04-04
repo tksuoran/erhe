@@ -54,6 +54,7 @@ Forward_renderer::Forward_renderer(
             *m_dummy_texture.get(),
             m_fallback_sampler,
             erhe::scene_renderer::c_texture_heap_slot_count_reserved,
+            m_program_interface.bind_group_layout.get(),
             default_uniform_block
         )
     }

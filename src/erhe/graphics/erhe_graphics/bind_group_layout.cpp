@@ -40,4 +40,9 @@ auto Bind_group_layout::get_debug_label() const -> erhe::utility::Debug_label
     return m_impl->get_debug_label();
 }
 
+auto Bind_group_layout::get_sampler_binding_offset() const -> uint32_t
+{
+    return m_impl->get_sampler_binding_offset();
+}
+
 } // namespace erhe::graphics

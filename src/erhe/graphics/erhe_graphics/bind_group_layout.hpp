@@ -42,9 +42,10 @@ public:
     Bind_group_layout (Bind_group_layout&& other) noexcept;
     auto operator=    (Bind_group_layout&& other) noexcept -> Bind_group_layout&;
 
-    [[nodiscard]] auto get_impl      () -> Bind_group_layout_impl&;
-    [[nodiscard]] auto get_impl      () const -> const Bind_group_layout_impl&;
-    [[nodiscard]] auto get_debug_label() const -> erhe::utility::Debug_label;
+    [[nodiscard]] auto get_impl                  () -> Bind_group_layout_impl&;
+    [[nodiscard]] auto get_impl                  () const -> const Bind_group_layout_impl&;
+    [[nodiscard]] auto get_debug_label           () const -> erhe::utility::Debug_label;
+    [[nodiscard]] auto get_sampler_binding_offset() const -> uint32_t;
 
 private:
     std::unique_ptr<Bind_group_layout_impl> m_impl;

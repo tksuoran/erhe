@@ -583,6 +583,7 @@ Post_processing::Post_processing(erhe::graphics::Device& d, App_context& app_con
         *m_dummy_texture.get(),
         m_sampler_linear,
         s_reserved_texture_slot_count,
+        &m_bind_group_layout,
         &m_default_uniform_block
     );
 }

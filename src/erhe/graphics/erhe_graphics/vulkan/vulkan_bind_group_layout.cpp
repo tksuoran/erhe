@@ -30,8 +30,23 @@ Bind_group_layout_impl::Bind_group_layout_impl(
     , m_vulkan_device{m_device_impl.get_vulkan_device()}
     , m_debug_label  {create_info.debug_label}
 {
+    // Compute sampler binding offset: one past the highest buffer binding
+    uint32_t max_buffer_binding = 0;
+    bool has_buffer_binding = false;
+    for (const Bind_group_layout_binding& binding : create_info.bindings) {
+        if ((binding.type == Binding_type::uniform_buffer) || (binding.type == Binding_type::storage_buffer)) {
+            if (!has_buffer_binding || (binding.binding_point >= max_buffer_binding)) {
+                max_buffer_binding = binding.binding_point;
+                has_buffer_binding = true;
+            }
+        }
+    }
+    m_sampler_binding_offset = has_buffer_binding ? (max_buffer_binding + 1) : 0;
+
+    static constexpr uint32_t sampler_slot_count = 16;
+
     std::vector<VkDescriptorSetLayoutBinding> vk_bindings;
-    vk_bindings.reserve(create_info.bindings.size());
+    vk_bindings.reserve(create_info.bindings.size() + sampler_slot_count);
 
     for (const Bind_group_layout_binding& binding : create_info.bindings) {
         VkShaderStageFlags stage_flags = VK_SHADER_STAGE_ALL;
@@ -43,6 +58,17 @@ Bind_group_layout_impl::Bind_group_layout_impl(
             .descriptorType     = to_vulkan_descriptor_type(binding.type),
             .descriptorCount    = 1,
             .stageFlags         = stage_flags,
+            .pImmutableSamplers = nullptr
+        });
+    }
+
+    // Pre-allocate combined image sampler bindings at the offset
+    for (uint32_t i = 0; i < sampler_slot_count; ++i) {
+        vk_bindings.push_back(VkDescriptorSetLayoutBinding{
+            .binding            = m_sampler_binding_offset + i,
+            .descriptorType     = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .descriptorCount    = 1,
+            .stageFlags         = VK_SHADER_STAGE_ALL,
             .pImmutableSamplers = nullptr
         });
     }
@@ -121,6 +147,11 @@ auto Bind_group_layout_impl::get_descriptor_set_layout() const -> VkDescriptorSe
 auto Bind_group_layout_impl::get_pipeline_layout() const -> VkPipelineLayout
 {
     return m_pipeline_layout;
+}
+
+auto Bind_group_layout_impl::get_sampler_binding_offset() const -> uint32_t
+{
+    return m_sampler_binding_offset;
 }
 
 } // namespace erhe::graphics

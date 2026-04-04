@@ -1,6 +1,7 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "erhe_graphics/vulkan/vulkan_texture_heap.hpp"
+#include "erhe_graphics/vulkan/vulkan_bind_group_layout.hpp"
 #include "erhe_graphics/vulkan/vulkan_device.hpp"
 #include "erhe_graphics/vulkan/vulkan_render_pass.hpp"
 #include "erhe_graphics/vulkan/vulkan_sampler.hpp"
@@ -8,18 +9,22 @@
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_dataformat/dataformat.hpp"
 
+#include <etl/vector.h>
+
 #include <algorithm>
 
 namespace erhe::graphics {
 
 Texture_heap_impl::Texture_heap_impl(
-    Device&                device,
-    const Texture&         fallback_texture,
-    const Sampler&         fallback_sampler,
-    std::size_t            reserved_slot_count,
-    const Shader_resource* default_uniform_block
+    Device&                    device,
+    const Texture&             fallback_texture,
+    const Sampler&             fallback_sampler,
+    std::size_t                reserved_slot_count,
+    const Bind_group_layout*   bind_group_layout,
+    const Shader_resource*     default_uniform_block
 )
     : m_device              {device}
+    , m_bind_group_layout   {bind_group_layout}
     , m_fallback_texture    {fallback_texture}
     , m_fallback_sampler    {fallback_sampler}
     , m_reserved_slot_count {reserved_slot_count}
@@ -276,20 +281,90 @@ auto Texture_heap_impl::bind() -> std::size_t
         return 0;
     }
 
-    // Bind the texture descriptor set at set index 1
-    // (Set 0 is used for UBO/SSBO push descriptors)
     VkCommandBuffer command_buffer = Render_pass_impl::get_active_command_buffer();
-    if (command_buffer != VK_NULL_HANDLE) {
-        vkCmdBindDescriptorSets(
-            command_buffer,
-            VK_PIPELINE_BIND_POINT_GRAPHICS,
-            m_device.get_impl().get_pipeline_layout(),
-            1, // set index 1 for textures
-            1,
-            &m_descriptor_set,
-            0,
-            nullptr
-        );
+    if (command_buffer == VK_NULL_HANDLE) {
+        return 0;
+    }
+
+    VkPipelineLayout pipeline_layout = VK_NULL_HANDLE;
+    if (m_bind_group_layout != nullptr) {
+        pipeline_layout = m_bind_group_layout->get_impl().get_pipeline_layout();
+    }
+    if (pipeline_layout == VK_NULL_HANDLE) {
+        pipeline_layout = m_device.get_impl().get_pipeline_layout();
+    }
+
+    // Bind the texture descriptor set at set index 1
+    vkCmdBindDescriptorSets(
+        command_buffer,
+        VK_PIPELINE_BIND_POINT_GRAPHICS,
+        pipeline_layout,
+        1, // set index 1 for textures
+        1,
+        &m_descriptor_set,
+        0,
+        nullptr
+    );
+
+    // For non-bindless path: push sampler descriptors to set 0 at offset binding indices
+    // so that non-bindless sampler declarations (layout(binding = OFFSET + N)) can find them
+    if ((m_bind_group_layout != nullptr) && m_device.get_impl().has_push_descriptor()) {
+        const uint32_t sampler_offset = m_bind_group_layout->get_sampler_binding_offset();
+        if (sampler_offset > 0) {
+            static constexpr std::size_t max_reserved_slots = 8;
+            etl::vector<VkDescriptorImageInfo, max_reserved_slots> image_infos;
+            etl::vector<VkWriteDescriptorSet,  max_reserved_slots> writes;
+            for (std::size_t i = 0; i < m_reserved_slot_count; ++i) {
+                if ((m_textures[i] == nullptr) || (m_samplers[i] == nullptr)) {
+                    continue;
+                }
+                Texture_impl& texture_impl = const_cast<Texture_impl&>(m_textures[i]->get_impl());
+                const erhe::dataformat::Format pixelformat = texture_impl.get_pixelformat();
+                const bool has_depth   = erhe::dataformat::get_depth_size_bits(pixelformat) > 0;
+                const bool has_stencil = erhe::dataformat::get_stencil_size_bits(pixelformat) > 0;
+                VkImageView image_view = VK_NULL_HANDLE;
+                if (has_depth && has_stencil) {
+                    image_view = texture_impl.get_vk_image_view(
+                        VK_IMAGE_ASPECT_DEPTH_BIT,
+                        0,
+                        std::max(1, texture_impl.get_array_layer_count())
+                    );
+                } else {
+                    image_view = texture_impl.get_vk_image_view();
+                }
+                VkSampler vk_sampler = m_samplers[i]->get_impl().get_vulkan_sampler();
+                if ((image_view == VK_NULL_HANDLE) || (vk_sampler == VK_NULL_HANDLE)) {
+                    continue;
+                }
+                image_infos.push_back(VkDescriptorImageInfo{
+                    .sampler     = vk_sampler,
+                    .imageView   = image_view,
+                    .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+                });
+                writes.push_back(VkWriteDescriptorSet{
+                    .sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                    .pNext           = nullptr,
+                    .dstSet          = VK_NULL_HANDLE, // ignored for push descriptors
+                    .dstBinding      = static_cast<uint32_t>(sampler_offset + i),
+                    .dstArrayElement = 0,
+                    .descriptorCount = 1,
+                    .descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                    .pImageInfo      = &image_infos.back(),
+                    .pBufferInfo     = nullptr,
+                    .pTexelBufferView = nullptr
+                });
+            }
+            if (!writes.empty()) {
+                vkCmdPushDescriptorSetKHR(
+                    command_buffer,
+                    VK_PIPELINE_BIND_POINT_GRAPHICS,
+                    pipeline_layout,
+                    0, // set 0
+                    static_cast<uint32_t>(writes.size()),
+                    writes.data()
+                );
+            }
+        }
     }
 
     return m_used_slot_count;

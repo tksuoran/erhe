@@ -12,11 +12,12 @@ class Texture_heap_impl final
 {
 public:
     Texture_heap_impl(
-        Device&                device,
-        const Texture&         fallback_texture,
-        const Sampler&         fallback_sampler,
-        std::size_t            reserved_slot_count,
-        const Shader_resource* default_uniform_block = nullptr
+        Device&                    device,
+        const Texture&             fallback_texture,
+        const Sampler&             fallback_sampler,
+        std::size_t                reserved_slot_count,
+        const Bind_group_layout*   bind_group_layout = nullptr,
+        const Shader_resource*     default_uniform_block = nullptr
     );
     ~Texture_heap_impl() noexcept;
 

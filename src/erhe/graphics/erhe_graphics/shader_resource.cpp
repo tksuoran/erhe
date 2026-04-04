@@ -610,7 +610,7 @@ auto Shader_resource::get_type_string() const -> std::string
     }
 }
 
-auto Shader_resource::get_layout_string() const -> std::string
+auto Shader_resource::get_layout_string(const uint32_t sampler_binding_offset) const -> std::string
 {
     if ((m_location == -1) && (m_binding_point == -1)) {
         return {};
@@ -655,7 +655,11 @@ auto Shader_resource::get_layout_string() const -> std::string
             {
                 ss << ", ";
             }
-            ss << "binding = " << m_binding_point;
+            if ((m_type == Type::sampler) && (sampler_binding_offset > 0)) {
+                ss << "binding = ERHE_SAMPLER_BINDING_OFFSET + " << m_binding_point;
+            } else {
+                ss << "binding = " << m_binding_point;
+            }
             //first = false;
         }
     }
@@ -671,14 +675,14 @@ auto Shader_resource::get_layout_string() const -> std::string
     return ss.str();
 }
 
-auto Shader_resource::get_source(const int indent_level /* = 0 */) const -> std::string
+auto Shader_resource::get_source(const int indent_level /* = 0 */, const uint32_t sampler_binding_offset /* = 0 */) const -> std::string
 {
     std::stringstream ss;
 
     indent(ss, indent_level);
 
     if (should_emit_layout(m_type)) {
-        ss << get_layout_string();
+        ss << get_layout_string(sampler_binding_offset);
     }
 
     ss << get_type_string();
@@ -693,7 +697,7 @@ auto Shader_resource::get_source(const int indent_level /* = 0 */) const -> std:
         }
         for (const auto& member : m_members) {
             const int extra_indent = (m_type == Type::samplers) ? 0 : 1;
-            ss << member->get_source(indent_level + extra_indent);
+            ss << member->get_source(indent_level + extra_indent, sampler_binding_offset);
         }
         if (m_type != Type::samplers) {
             indent(ss, indent_level);

@@ -138,9 +138,9 @@ public:
     [[nodiscard]] auto get_offset            () const -> std::size_t;
     [[nodiscard]] auto get_next_member_offset() const -> std::size_t;
     [[nodiscard]] auto get_type_string       () const -> std::string;
-    [[nodiscard]] auto get_layout_string     () const -> std::string;
+    [[nodiscard]] auto get_layout_string     (uint32_t sampler_binding_offset = 0) const -> std::string;
 
-    [[nodiscard]] auto get_source(int indent_level = 0) const -> std::string;
+    [[nodiscard]] auto get_source(int indent_level = 0, uint32_t sampler_binding_offset = 0) const -> std::string;
 
     static constexpr const std::size_t unsized_array = 0;
 

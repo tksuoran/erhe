@@ -35,7 +35,8 @@ Texel_renderer::Texel_renderer(erhe::graphics::Device& graphics_device, Program_
             m_graphics_device,
             *m_dummy_texture.get(),
             m_fallback_sampler,
-            erhe::scene_renderer::c_texture_heap_slot_count_reserved
+            erhe::scene_renderer::c_texture_heap_slot_count_reserved,
+            program_interface.bind_group_layout.get()
         )
     }
 {

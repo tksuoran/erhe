@@ -387,6 +387,7 @@ Imgui_renderer::Imgui_renderer(erhe::graphics::Device& graphics_device, Imgui_se
         *m_dummy_texture.get(),
         m_nearest_sampler,
         m_graphics_device.get_info().use_bindless_texture ? 0u : 1u, // slot 0 reserved for array texture
+        &m_bind_group_layout,
         m_graphics_device.get_info().use_bindless_texture ? nullptr : &m_imgui_program_interface.default_uniform_block
     );
 }

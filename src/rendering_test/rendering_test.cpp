@@ -384,7 +384,7 @@ public:
                 encoder.set_scissor_rect(cell_10.x, cell_10.y, cell_10.width, cell_10.height);
                 m_quad_buffer.bind(encoder, quad_buffer_range);
 
-                erhe::graphics::Texture_heap texture_heap{m_graphics_device, *m_color_texture.get(), m_nearest_sampler, 1, m_quad_default_uniform_block.get()};
+                erhe::graphics::Texture_heap texture_heap{m_graphics_device, *m_color_texture.get(), m_nearest_sampler, 1, m_test_bind_group_layout.get(), m_quad_default_uniform_block.get()};
                 texture_heap.assign(0, m_color_texture.get(), &m_nearest_sampler);
                 texture_heap.bind();
 
@@ -1055,7 +1055,7 @@ private:
         m_quad_buffer.bind(encoder, buffer_range);
 
         // Create texture heap with reserved slots matching texture count
-        erhe::graphics::Texture_heap texture_heap{m_graphics_device, *m_red_texture.get(), m_nearest_sampler, tex_count, m_multi_tex_default_uniform_block.get()};
+        erhe::graphics::Texture_heap texture_heap{m_graphics_device, *m_red_texture.get(), m_nearest_sampler, tex_count, m_test_bind_group_layout.get(), m_multi_tex_default_uniform_block.get()};
         for (uint32_t i = 0; i < tex_count; ++i) {
             texture_heap.assign(i, textures[i].get(), &m_nearest_sampler);
         }
@@ -1162,7 +1162,7 @@ private:
         m_quad_buffer.bind(encoder, buffer_range);
 
         // Texture heap: 3 reserved slots at individual GLSL bindings 0, 1, 2
-        erhe::graphics::Texture_heap texture_heap{m_graphics_device, *m_red_texture.get(), m_nearest_sampler, tex_count, m_sep_tex_default_uniform_block.get()};
+        erhe::graphics::Texture_heap texture_heap{m_graphics_device, *m_red_texture.get(), m_nearest_sampler, tex_count, m_test_bind_group_layout.get(), m_sep_tex_default_uniform_block.get()};
         for (uint32_t i = 0; i < tex_count; ++i) {
             texture_heap.assign(i, textures[i].get(), &m_nearest_sampler);
         }
