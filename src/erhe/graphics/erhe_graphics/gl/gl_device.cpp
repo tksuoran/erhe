@@ -1595,6 +1595,13 @@ void Device_impl::clear_texture(const Texture& texture, const std::array<double,
     Scoped_render_pass scoped_render_pass{render_pass};
 }
 
+void Device_impl::transition_texture_layout(const Texture& texture, Image_layout new_layout)
+{
+    // No-op for OpenGL -- image layouts are implicit
+    static_cast<void>(texture);
+    static_cast<void>(new_layout);
+}
+
 auto Device_impl::make_blit_command_encoder() -> Blit_command_encoder
 {
     return Blit_command_encoder(m_device);

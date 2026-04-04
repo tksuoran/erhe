@@ -37,6 +37,7 @@ public:
     void resize_swapchain_to_window();
     void memory_barrier            (Memory_barrier_mask barriers);
     void clear_texture             (const Texture& texture, std::array<double, 4> clear_value);
+    void transition_texture_layout (const Texture& texture, Image_layout new_layout);
     void upload_to_buffer          (const Buffer& buffer, size_t offset, const void* data, size_t length);
     void add_completion_handler    (std::function<void()> callback);
     void on_thread_enter           ();

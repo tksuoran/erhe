@@ -121,6 +121,12 @@ void Device_impl::clear_texture(const Texture& texture, const std::array<double,
     // No-op for null backend
 }
 
+void Device_impl::transition_texture_layout(const Texture& texture, Image_layout new_layout)
+{
+    static_cast<void>(texture);
+    static_cast<void>(new_layout);
+}
+
 void Device_impl::upload_to_buffer(const Buffer& buffer, const size_t offset, const void* data, const size_t length)
 {
     static_cast<void>(buffer);

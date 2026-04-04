@@ -2107,6 +2107,35 @@ void Device_impl::clear_texture(const Texture& texture, std::array<double, 4> va
     m_immediate_commands->wait(submit);
 }
 
+namespace {
+auto to_vk_image_layout(Image_layout layout) -> VkImageLayout
+{
+    switch (layout) {
+        case Image_layout::undefined:                        return VK_IMAGE_LAYOUT_UNDEFINED;
+        case Image_layout::shader_read_only_optimal:         return VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        case Image_layout::transfer_dst_optimal:             return VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        case Image_layout::transfer_src_optimal:             return VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        case Image_layout::color_attachment_optimal:          return VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        case Image_layout::depth_stencil_attachment_optimal: return VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+        default:                                             return VK_IMAGE_LAYOUT_UNDEFINED;
+    }
+}
+} // anonymous namespace
+
+void Device_impl::transition_texture_layout(const Texture& texture, Image_layout new_layout)
+{
+    const Texture_impl& tex_impl = texture.get_impl();
+    VkImage image = tex_impl.get_vk_image();
+    if (image == VK_NULL_HANDLE) {
+        return;
+    }
+
+    const Vulkan_immediate_commands::Command_buffer_wrapper& cmd = m_immediate_commands->acquire();
+    tex_impl.transition_layout(cmd.m_cmd_buf, to_vk_image_layout(new_layout));
+    Submit_handle submit = m_immediate_commands->submit(cmd);
+    m_immediate_commands->wait(submit);
+}
+
 auto Device_impl::make_blit_command_encoder() -> Blit_command_encoder
 {
     return Blit_command_encoder(m_device);

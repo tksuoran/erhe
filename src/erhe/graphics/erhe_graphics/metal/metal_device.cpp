@@ -546,6 +546,13 @@ auto Device_impl::allocate_ring_buffer_entry(
     return m_ring_buffers.back()->acquire(required_alignment, usage, byte_count);
 }
 
+void Device_impl::transition_texture_layout(const Texture& texture, Image_layout new_layout)
+{
+    // No-op for Metal -- image layouts are managed by the runtime
+    static_cast<void>(texture);
+    static_cast<void>(new_layout);
+}
+
 auto Device_impl::make_blit_command_encoder() -> Blit_command_encoder
 {
     return Blit_command_encoder{m_device};

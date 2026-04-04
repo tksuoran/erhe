@@ -115,6 +115,10 @@ void Device::clear_texture(const Texture& texture, std::array<double, 4> value)
 {
     m_impl->clear_texture(texture, value);
 }
+void Device::transition_texture_layout(const Texture& texture, Image_layout new_layout)
+{
+    m_impl->transition_texture_layout(texture, new_layout);
+}
 auto Device::make_render_command_encoder() -> Render_command_encoder
 {
     return m_impl->make_render_command_encoder();

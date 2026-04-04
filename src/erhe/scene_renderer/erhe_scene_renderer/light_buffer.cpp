@@ -120,7 +120,7 @@ Light_buffer::Light_buffer(erhe::graphics::Device& graphics_device, Light_interf
             graphics_device,
             erhe::graphics::Texture_create_info {
                 .device            = graphics_device,
-                .usage_mask        = erhe::graphics::Image_usage_flag_bit_mask::sampled,
+                .usage_mask        = erhe::graphics::Image_usage_flag_bit_mask::sampled | erhe::graphics::Image_usage_flag_bit_mask::transfer_dst,
                 .type              = erhe::graphics::Texture_type::texture_2d_array,
                 .pixelformat       = graphics_device.choose_depth_stencil_format(erhe::graphics::format_flag_require_depth, 0),
                 .width             = 1,
@@ -132,6 +132,8 @@ Light_buffer::Light_buffer(erhe::graphics::Device& graphics_device, Light_interf
         )
     }
 {
+    // Transition fallback shadow texture from UNDEFINED to SHADER_READ_ONLY_OPTIMAL
+    graphics_device.transition_texture_layout(*m_fallback_shadow_texture.get(), erhe::graphics::Image_layout::shader_read_only_optimal);
 }
 
 void Light_projections::apply(
