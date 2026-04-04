@@ -1,0 +1,16 @@
+{
+    "_version": 1,
+    "initial_clear": true,
+    "post_processing": true,
+    "force_bindless_textures_off": true,
+    "force_no_persistent_buffers": false,
+    "force_no_direct_state_access": false,
+    "force_no_clip_control": false,
+    "force_emulate_multi_draw_indirect": false,
+    "force_no_compute_shader": false,
+    "force_gl_version": 0,
+    "force_glsl_version": 0,
+    "renderdoc_capture_support": false,
+    "vulkan_validation_layers": true,
+    "shader_monitor_enabled": true
+}

@@ -147,5 +147,9 @@
         "small_icon_size": 16,
         "large_icon_size": 32,
         "hotbar_icon_size": 80
+    },
+    "threading": {
+        "_version": 1,
+        "thread_count": 8
     }
 }

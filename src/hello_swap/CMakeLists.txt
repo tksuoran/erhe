@@ -8,9 +8,19 @@ erhe_target_sources_grouped(
     hello_swap_log.cpp
     hello_swap_log.hpp
     main.cpp
-    erhe.json
     logging.json
 )
+
+# Graphics_config serialize/deserialize must compile here (same target as
+# other simdjson users) to avoid ABI mismatch from differing arch flags.
+set(_gfx_gen "${CMAKE_BINARY_DIR}/src/erhe/graphics/erhe_graphics/generated")
+set(_gfx_ser_sources
+    ${_gfx_gen}/graphics_config_serialization.hpp
+    ${_gfx_gen}/graphics_config.cpp
+)
+set_source_files_properties(${_gfx_ser_sources} PROPERTIES GENERATED TRUE)
+target_sources(${_target} PRIVATE ${_gfx_ser_sources})
+source_group("codegen generated/graphics" FILES ${_gfx_ser_sources})
 
 # Required for log init
 if (ERHE_GRAPHICS_API_OPENGL)
@@ -24,6 +34,7 @@ endif ()
 target_link_libraries(
     ${_target}
     PRIVATE
+        erhe::codegen
         erhe::file
         erhe::graphics
         erhe::log

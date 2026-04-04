@@ -64,7 +64,7 @@ public:
                 .title     = "erhe example"
             }
         }
-        , m_graphics_config{erhe::codegen::load_config<Graphics_config>("erhe.json")}
+        , m_graphics_config{erhe::codegen::load_config<Graphics_config>("config/erhe_graphics.json")}
         , m_graphics_device{
             erhe::graphics::Surface_create_info{
                 .context_window            = &m_window,
@@ -544,7 +544,7 @@ void run_example()
 {
     // Workaround for
     // https://intellij-support.jetbrains.com/hc/en-us/community/posts/27792220824466-CMake-C-git-project-How-to-share-working-directory-in-git
-    erhe::file::ensure_working_directory_contains("example", "erhe.json");
+    erhe::file::ensure_working_directory_contains("example", "config");
 
     erhe::log::initialize_log_sinks();
 

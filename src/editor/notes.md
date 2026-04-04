@@ -15,7 +15,7 @@ The editor is the main application built on the erhe C++ graphics engine. It pro
   5. Calls `editor.run()` to enter the main loop.
 
 - **`Editor` constructor**:
-  1. Loads `Editor_config` from `erhe.json`.
+  1. Loads per-library configs from `config/` directory (e.g. `config/erhe_graphics.json`).
   2. Creates a `tf::Executor` for task parallelism.
   3. Creates no-dependency subsystems: `Commands`, `App_message_bus`, `App_settings`, `Input_state`, `Time`.
   4. Creates the OS window and `erhe::graphics::Device`.
@@ -112,7 +112,7 @@ ImGui window implementations:
 
 ### Config (`config/`)
 
-`Editor_config` aggregates all configuration structs (loaded from `erhe.json`). Configuration structs are code-generated (via `erhe_codegen`) into `config/generated/`.
+Per-library configuration structs are loaded from individual JSON files in `config/` (e.g. `config/erhe_graphics.json`, `config/window.json`). Configuration structs are code-generated (via `erhe_codegen`) into `config/generated/`.
 
 ### Additional Subsystems
 

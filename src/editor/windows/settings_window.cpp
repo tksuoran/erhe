@@ -4,9 +4,14 @@
 #include "app_message_bus.hpp"
 #include "app_settings.hpp"
 #include "windows/inventory_window.hpp"
-#include "config/generated/erhe_config.hpp"
-#include "config/generated/erhe_config_serialization.hpp"
+#include "config/generated/developer_config.hpp"
 #include "config/generated/editor_settings_config.hpp"
+#include "config/generated/mesh_memory_config.hpp"
+#include "config/generated/renderer_config.hpp"
+#include "config/generated/text_renderer_config.hpp"
+#include "config/generated/threading_config.hpp"
+#include "config/generated/window_config.hpp"
+#include "erhe_graphics/generated/graphics_config.hpp"
 #include "config/generated/editor_settings_config_serialization.hpp"
 #include "erhe_codegen/config_io.hpp"
 #include "config/generated/camera_controls_config_serialization.hpp"
@@ -23,7 +28,6 @@
 #include "config/generated/physics_config_serialization.hpp"
 #include "config/generated/renderer_config_serialization.hpp"
 #include "config/generated/scene_config_serialization.hpp"
-#include "config/generated/shader_monitor_config_serialization.hpp"
 #include "config/generated/text_renderer_config_serialization.hpp"
 #include "config/generated/threading_config_serialization.hpp"
 #include "config/generated/thumbnails_config_serialization.hpp"
@@ -159,10 +163,10 @@ void Settings_window::imgui()
 {
     reset();
 
-    // Sync developer_mode from erhe_config each frame so toggling the
+    // Sync developer_mode from developer_config each frame so toggling the
     // checkbox in the Startup Configuration section takes effect immediately.
-    if (m_context.erhe_config != nullptr) {
-        m_context.developer_mode = m_context.erhe_config->developer.enable || m_context.renderdoc;
+    if (m_context.developer_config != nullptr) {
+        m_context.developer_mode = m_context.developer_config->enable || m_context.renderdoc;
     }
 
     const float ui_scale = m_context.app_settings->get_ui_scale();
@@ -393,7 +397,7 @@ void Settings_window::imgui()
         }
     });
 
-    const bool show_developer = (m_context.erhe_config != nullptr) && m_context.erhe_config->developer.enable;
+    const bool show_developer = (m_context.developer_config != nullptr) && m_context.developer_config->enable;
 
     auto add_config_section = [this, show_developer](auto& section) {
         const auto& struct_info = get_struct_info(static_cast<const std::remove_reference_t<decltype(section)>*>(nullptr));
@@ -425,24 +429,48 @@ void Settings_window::imgui()
         pop_group();
     };
 
-    if (m_context.erhe_config != nullptr) {
-        Erhe_config& erhe_config = *m_context.erhe_config;
-        push_group("Startup Configuration (erhe.json)", ImGuiTreeNodeFlags_Framed);
-        add_config_section(erhe_config.developer);
-        add_config_section(erhe_config.graphics);
-        add_config_section(erhe_config.mesh_memory);
-        add_config_section(erhe_config.renderer);
-        add_config_section(erhe_config.shader_monitor);
-        add_config_section(erhe_config.text_renderer);
-        add_config_section(erhe_config.threading);
-        add_config_section(erhe_config.window);
-        add_entry("", [this, button_size](){
-            if (ImGui::Button("Save erhe.json", button_size)) {
-                erhe::codegen::save_config(*m_context.erhe_config, "erhe.json");
-            }
-        });
-        pop_group();
+    push_group("Startup Configuration", ImGuiTreeNodeFlags_Framed);
+    if (m_context.developer_config != nullptr) {
+        add_config_section(*m_context.developer_config);
     }
+    if (m_context.graphics_config != nullptr) {
+        add_config_section(*m_context.graphics_config);
+    }
+    if (m_context.mesh_memory_config != nullptr) {
+        add_config_section(*m_context.mesh_memory_config);
+    }
+    if (m_context.renderer_config != nullptr) {
+        add_config_section(*m_context.renderer_config);
+    }
+    if (m_context.text_renderer_config != nullptr) {
+        add_config_section(*m_context.text_renderer_config);
+    }
+    if (m_context.window_config != nullptr) {
+        add_config_section(*m_context.window_config);
+    }
+    add_entry("", [this, button_size](){
+        if (ImGui::Button("Save Config", button_size)) {
+            if (m_context.developer_config != nullptr) {
+                erhe::codegen::save_config(*m_context.developer_config, "config/developer.json");
+            }
+            if (m_context.graphics_config != nullptr) {
+                erhe::codegen::save_config(*m_context.graphics_config, "config/erhe_graphics.json");
+            }
+            if (m_context.mesh_memory_config != nullptr) {
+                erhe::codegen::save_config(*m_context.mesh_memory_config, "config/mesh_memory.json");
+            }
+            if (m_context.renderer_config != nullptr) {
+                erhe::codegen::save_config(*m_context.renderer_config, "config/renderer.json");
+            }
+            if (m_context.text_renderer_config != nullptr) {
+                erhe::codegen::save_config(*m_context.text_renderer_config, "config/text_renderer.json");
+            }
+            if (m_context.window_config != nullptr) {
+                erhe::codegen::save_config(*m_context.window_config, "config/window.json");
+            }
+        }
+    });
+    pop_group();
 
     if (m_context.editor_settings != nullptr) {
         Editor_settings_config& settings = *m_context.editor_settings;

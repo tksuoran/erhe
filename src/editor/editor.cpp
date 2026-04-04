@@ -8,11 +8,21 @@
 #include "editor.hpp"
 
 #include "app_context.hpp"
-#include "config/generated/erhe_config.hpp"
-#include "config/generated/erhe_config_serialization.hpp"
+#include "config/generated/developer_config.hpp"
+#include "config/generated/developer_config_serialization.hpp"
 #include "config/generated/editor_settings_config.hpp"
 #include "config/generated/editor_settings_config_serialization.hpp"
+#include "config/generated/mesh_memory_config.hpp"
+#include "config/generated/mesh_memory_config_serialization.hpp"
+#include "config/generated/renderer_config.hpp"
+#include "config/generated/renderer_config_serialization.hpp"
+#include "config/generated/text_renderer_config.hpp"
+#include "config/generated/text_renderer_config_serialization.hpp"
+#include "config/generated/window_config.hpp"
+#include "config/generated/window_config_serialization.hpp"
 #include "erhe_codegen/config_io.hpp"
+#include "erhe_graphics/generated/graphics_config.hpp"
+#include "erhe_graphics/generated/graphics_config_serialization.hpp"
 #include "items.hpp"
 #include "editor_log.hpp"
 #include "app_message_bus.hpp"
@@ -84,7 +94,6 @@
 #include "erhe_imgui/generated/logger_entry_serialization.hpp"
 #include "erhe_imgui/generated/logging_config.hpp"
 #include "erhe_imgui/generated/logging_config_serialization.hpp"
-#include "erhe_codegen/config_io.hpp"
 #include "erhe_commands/commands.hpp"
 #include "erhe_commands/commands_log.hpp"
 #include "erhe_dataformat/dataformat_log.hpp"
@@ -405,20 +414,25 @@ public:
         return openxr ? nullptr : context_window;
     }
 
-    [[nodiscard]] auto create_window(const Erhe_config& erhe_config, const Editor_settings_config& editor_settings) -> std::unique_ptr<erhe::window::Context_window>
+    [[nodiscard]] auto create_window(
+        const Developer_config&       developer_config,
+        const Graphics_config&        graphics_config,
+        const Window_config&          window_config,
+        const Editor_settings_config& editor_settings
+    ) -> std::unique_ptr<erhe::window::Context_window>
     {
         m_app_context.OpenXR        = editor_settings.headset.openxr;
         m_app_context.OpenXR_mirror = editor_settings.headset.openxr_mirror;
 
-        m_app_context.developer_mode = erhe_config.developer.enable;
+        m_app_context.developer_mode = developer_config.enable;
 
-        m_app_context.renderdoc = erhe_config.graphics.renderdoc_capture_support;
+        m_app_context.renderdoc = graphics_config.renderdoc_capture_support;
         if (m_app_context.renderdoc) {
             m_app_context.developer_mode = true;
         }
 
-        m_app_context.use_sleep    = erhe_config.window.use_sleep;
-        m_app_context.sleep_margin = erhe_config.window.sleep_margin;
+        m_app_context.use_sleep    = window_config.use_sleep;
+        m_app_context.sleep_margin = window_config.sleep_margin;
 
         if (m_app_context.OpenXR) {
             m_app_context.sleep_margin = 0.0f;
@@ -432,22 +446,22 @@ public:
             .title             = erhe::window::format_window_title("erhe editor by Timo Suoranta")
         };
 
-        configuration.show                     = erhe_config.window.show;
-        configuration.fullscreen               = erhe_config.window.fullscreen;
-        configuration.high_pixel_density       = erhe_config.window.high_pixel_density;
-        configuration.framebuffer_transparency = erhe_config.window.use_transparency;
+        configuration.show                     = window_config.show;
+        configuration.fullscreen               = window_config.fullscreen;
+        configuration.high_pixel_density       = window_config.high_pixel_density;
+        configuration.framebuffer_transparency = window_config.use_transparency;
 #if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
-        configuration.gl_major                 = erhe_config.window.gl_major;
-        configuration.gl_minor                 = erhe_config.window.gl_minor;
+        configuration.gl_major                 = window_config.gl_major;
+        configuration.gl_minor                 = window_config.gl_minor;
 # if defined(ERHE_OS_OSX)
         configuration.gl_major                 = 4;
         configuration.gl_minor                 = 1;
 # endif
 #endif
-        configuration.size                     = erhe_config.window.size;
-        configuration.swap_interval            = erhe_config.window.swap_interval;
-        configuration.enable_joystick          = erhe_config.window.enable_joystick;
-        configuration.color_bit_depth          = erhe_config.window.color_bit_depth;
+        configuration.size                     = window_config.size;
+        configuration.swap_interval            = window_config.swap_interval;
+        configuration.enable_joystick          = window_config.enable_joystick;
+        configuration.color_bit_depth          = window_config.color_bit_depth;
 
         if (m_app_context.OpenXR) {
             configuration.swap_interval = 0;
@@ -464,10 +478,15 @@ public:
     }
 
     Editor()
-        : m_erhe_config     {erhe::codegen::load_config<Erhe_config>("erhe.json")}
-        , m_editor_settings {erhe::codegen::load_config<Editor_settings_config>("editor_settings.json")}
+        : m_developer_config     {erhe::codegen::load_config<Developer_config>    ("config/developer.json")}
+        , m_graphics_config      {erhe::codegen::load_config<Graphics_config>     ("config/erhe_graphics.json")}
+        , m_mesh_memory_config   {erhe::codegen::load_config<Mesh_memory_config>  ("config/mesh_memory.json")}
+        , m_renderer_config      {erhe::codegen::load_config<Renderer_config>     ("config/renderer.json")}
+        , m_text_renderer_config {erhe::codegen::load_config<Text_renderer_config>("config/text_renderer.json")}
+        , m_window_config        {erhe::codegen::load_config<Window_config>       ("config/window.json")}
+        , m_editor_settings      {erhe::codegen::load_config<Editor_settings_config>("editor_settings.json")}
     {
-        const int thread_count = m_erhe_config.threading.thread_count;
+        const int thread_count = m_editor_settings.threading.thread_count;
 
         // Note: m_executor is also used at runtime, so it cannot be
         //       skipped even if parallel init is not used.
@@ -505,7 +524,7 @@ public:
 #endif
 
             // Window and graphics context creation - in main thread
-            m_window = create_window(m_erhe_config, m_editor_settings);
+            m_window = create_window(m_developer_config, m_graphics_config, m_window_config, m_editor_settings);
 
             // Graphics context state init after window - in main thread
             m_graphics_device = std::make_unique<erhe::graphics::Device>(
@@ -514,11 +533,7 @@ public:
                     .prefer_low_bandwidth      = false,
                     .prefer_high_dynamic_range = false
                 },
-                [this]() {
-                    Graphics_config config = m_erhe_config.graphics;
-                    config.shader_monitor_enabled = m_erhe_config.shader_monitor.enabled;
-                    return config;
-                }()
+                m_graphics_config
             );
 
             // RenderDoc capture is auto-initialized by Device based on Graphics_config
@@ -631,12 +646,12 @@ public:
             m_scene_commands       = std::make_unique<Scene_commands>(commands, m_app_context);
             m_debug_draw           = std::make_unique<Debug_draw    >(m_app_context);
             erhe::scene_renderer::Program_interface_config program_interface_config{
-                .max_camera_count    = m_erhe_config.renderer.max_camera_count,
-                .max_joint_count     = m_erhe_config.renderer.max_joint_count,
-                .max_light_count     = m_erhe_config.renderer.max_light_count,
-                .max_material_count  = m_erhe_config.renderer.max_material_count,
-                .max_primitive_count = m_erhe_config.renderer.max_primitive_count,
-                .max_draw_count      = m_erhe_config.renderer.max_draw_count
+                .max_camera_count    = m_renderer_config.max_camera_count,
+                .max_joint_count     = m_renderer_config.max_joint_count,
+                .max_light_count     = m_renderer_config.max_light_count,
+                .max_material_count  = m_renderer_config.max_material_count,
+                .max_primitive_count = m_renderer_config.max_primitive_count,
+                .max_draw_count      = m_renderer_config.max_draw_count
             };
             m_program_interface    = std::make_unique<erhe::scene_renderer::Program_interface>(
                 *m_graphics_device.get(),
@@ -694,8 +709,8 @@ public:
                 ERHE_GET_GL_CONTEXT
                 m_text_renderer = std::make_unique<erhe::renderer::Text_renderer>(
                     *m_graphics_device.get(),
-                    m_erhe_config.text_renderer.enabled,
-                    m_erhe_config.text_renderer.font_size
+                    m_text_renderer_config.enabled,
+                    m_text_renderer_config.font_size
                 );
             }
             ERHE_TASK_FOOTER( .name("Text_renderer") );
@@ -721,7 +736,7 @@ public:
             ERHE_TASK_HEADER(mesh_memory_task)
             {
                 ERHE_GET_GL_CONTEXT
-                m_mesh_memory = std::make_unique<Mesh_memory>(m_erhe_config.mesh_memory, *m_graphics_device.get(), m_vertex_format);
+                m_mesh_memory = std::make_unique<Mesh_memory>(m_mesh_memory_config, *m_graphics_device.get(), m_vertex_format);
             }
             ERHE_TASK_FOOTER( .name("Mesh_memory") );
 
@@ -934,7 +949,7 @@ public:
                 ERHE_GET_GL_CONTEXT
                 m_scene_builder = std::make_unique<Scene_builder>(
                     m_editor_settings.scene,          //const Scene_config&             scene_config
-                    m_erhe_config.graphics,       //const Graphics_config&          graphics_config
+                    m_graphics_config,            //const Graphics_config&          graphics_config
                     m_default_scene,                //std::shared_ptr<Scene_root>     scene
                     *m_executor.get(),              //tf::Executor&                   executor
                     *m_graphics_device.get(),       //erhe::graphics::Device&         graphics_device
@@ -1493,7 +1508,12 @@ public:
         m_app_context.app_rendering            = m_app_rendering         .get();
         m_app_context.app_scenes               = m_app_scenes            .get();
         m_app_context.app_settings             = m_app_settings          .get();
-        m_app_context.erhe_config              = &m_erhe_config;
+        m_app_context.developer_config         = &m_developer_config;
+        m_app_context.graphics_config          = &m_graphics_config;
+        m_app_context.mesh_memory_config       = &m_mesh_memory_config;
+        m_app_context.renderer_config          = &m_renderer_config;
+        m_app_context.text_renderer_config     = &m_text_renderer_config;
+        m_app_context.window_config            = &m_window_config;
         m_app_context.editor_settings          = &m_editor_settings;
         m_app_context.app_windows              = m_app_windows           .get();
         m_app_context.fly_camera_tool          = m_fly_camera_tool       .get();
@@ -1613,7 +1633,12 @@ public:
     bool m_run_stopped    {false};
 
 
-    Erhe_config                         m_erhe_config;
+    Developer_config                    m_developer_config;
+    Graphics_config                     m_graphics_config;
+    Mesh_memory_config                  m_mesh_memory_config;
+    Renderer_config                     m_renderer_config;
+    Text_renderer_config                m_text_renderer_config;
+    Window_config                       m_window_config;
     Editor_settings_config              m_editor_settings;
 
     std::unique_ptr<tf::Executor>       m_executor;
@@ -1752,7 +1777,7 @@ void run_editor()
 
     // Workaround for
     // https://intellij-support.jetbrains.com/hc/en-us/community/posts/27792220824466-CMake-C-git-project-How-to-share-working-directory-in-git
-    erhe::file::ensure_working_directory_contains("editor", "erhe.json");
+    erhe::file::ensure_working_directory_contains("editor", "config");
 
     {
         Logging_config log_config = erhe::codegen::load_config<Logging_config>(erhe::log::c_logging_configuration_file_path);

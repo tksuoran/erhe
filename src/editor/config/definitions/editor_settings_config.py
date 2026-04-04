@@ -22,5 +22,6 @@ struct("Editor_settings_config",
         field("graphics_preset_name", String, added_in=1, default='"Medium"'),
         field("imgui",                StructRef("Imgui_settings_config"), added_in=1),
         field("icons",                StructRef("Icon_settings_config"),  added_in=1),
+        field("threading",            StructRef("Threading_config"),     added_in=1),
     ],
 )

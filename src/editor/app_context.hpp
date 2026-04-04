@@ -36,8 +36,13 @@ namespace tf {
     class Executor;
 }
 
-struct Erhe_config;
+struct Developer_config;
 struct Editor_settings_config;
+struct Graphics_config;
+struct Mesh_memory_config;
+struct Renderer_config;
+struct Text_renderer_config;
+struct Window_config;
 
 namespace editor {
 
@@ -103,7 +108,12 @@ public:
     bool  use_sleep     {false};
     float sleep_margin  {0.0f}; // TODO
 
-    Erhe_config*             erhe_config{nullptr};
+    Developer_config*        developer_config{nullptr};
+    Graphics_config*         graphics_config{nullptr};
+    Mesh_memory_config*      mesh_memory_config{nullptr};
+    Renderer_config*         renderer_config{nullptr};
+    Text_renderer_config*    text_renderer_config{nullptr};
+    Window_config*           window_config{nullptr};
     Editor_settings_config*  editor_settings{nullptr};
 
     tf::Executor*                           executor              {nullptr};

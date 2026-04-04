@@ -1,6 +1,7 @@
 #include "rendering_test.hpp"
 #include "rendering_test_log.hpp"
 
+#include "erhe_codegen/config_io.hpp"
 #include "erhe_file/file.hpp"
 #include "erhe_graphics/generated/graphics_config_serialization.hpp"
 #include "erhe_file/file_log.hpp"
@@ -73,31 +74,6 @@
 
 namespace rendering_test {
 
-[[nodiscard]] auto load_graphics_config() -> Graphics_config
-{
-    Graphics_config config{};
-    std::optional<std::string> contents = erhe::file::read("load_graphics_config", "erhe.json");
-    if (!contents.has_value()) {
-        return config;
-    }
-    simdjson::ondemand::parser parser;
-    simdjson::padded_string padded{contents.value()};
-    simdjson::ondemand::document doc;
-    if (parser.iterate(padded).get(doc)) {
-        return config;
-    }
-    simdjson::ondemand::object root;
-    if (doc.get_object().get(root)) {
-        return config;
-    }
-    simdjson::ondemand::object graphics_obj;
-    if (root["graphics"].get_object().get(graphics_obj)) {
-        return config;
-    }
-    deserialize(graphics_obj, config);
-    return config;
-}
-
 class Rendering_test : public erhe::window::Input_event_handler
 {
 public:
@@ -115,7 +91,7 @@ public:
                 .prefer_low_bandwidth      = false,
                 .prefer_high_dynamic_range = false
             },
-            load_graphics_config()
+            erhe::codegen::load_config<Graphics_config>("config/erhe_graphics.json")
         }
         , m_error_callback_set{(
             m_graphics_device.set_shader_error_callback(
@@ -1282,7 +1258,7 @@ private:
 
 void run_rendering_test()
 {
-    erhe::file::ensure_working_directory_contains("rendering_test", "erhe.json");
+    erhe::file::ensure_working_directory_contains("rendering_test", "config");
 
     erhe::log::initialize_log_sinks();
 

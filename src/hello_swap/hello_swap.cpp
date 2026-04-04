@@ -2,10 +2,13 @@
 
 #include "hello_swap_log.hpp"
 
+#include "erhe_codegen/config_io.hpp"
 #include "erhe_file/file.hpp"
 #if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
 #   include "erhe_gl/gl_log.hpp"
 #endif
+#include "erhe_graphics/generated/graphics_config.hpp"
+#include "erhe_graphics/generated/graphics_config_serialization.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
@@ -40,7 +43,8 @@ public:
                 .context_window            = &m_window,
                 .prefer_low_bandwidth      = false,
                 .prefer_high_dynamic_range = false
-            }
+            },
+            erhe::codegen::load_config<Graphics_config>("config/erhe_graphics.json")
         }
     {
         m_last_window_width  = m_window.get_width();
@@ -224,7 +228,7 @@ void run()
 {
     // Workaround for
     // https://intellij-support.jetbrains.com/hc/en-us/community/posts/27792220824466-CMake-C-git-project-How-to-share-working-directory-in-git
-    erhe::file::ensure_working_directory_contains("hello_swap", "erhe.json");
+    erhe::file::ensure_working_directory_contains("hello_swap", "config");
 
     erhe::log::initialize_log_sinks();
 

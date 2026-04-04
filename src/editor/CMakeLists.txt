@@ -10,7 +10,7 @@ erhe_target_sources_grouped(
     settings.json
     windows.json
 
-    # config/editor_config.hpp and .cpp removed -- replaced by codegen'd Erhe_config and Editor_settings_config
+    # config/editor_config.hpp and .cpp removed -- replaced by codegen'd per-library configs and Editor_settings_config
 
     animation/animation_curve.cpp
     animation/animation_curve.hpp
@@ -483,7 +483,6 @@ erhe_codegen_generate(
     DEFINITIONS
         "${_config_defs}/camera_controls_config.py"
         "${_config_defs}/developer_config.py"
-        "${_config_defs}/erhe_config.py"
         "${_config_defs}/editor_settings_config.py"
         "${_config_defs}/grid_config.py"
         "${_config_defs}/headset_config.py"
@@ -496,7 +495,6 @@ erhe_codegen_generate(
         "${_config_defs}/physics_config.py"
         "${_config_defs}/renderer_config.py"
         "${_config_defs}/scene_config.py"
-        "${_config_defs}/shader_monitor_config.py"
         "${_config_defs}/text_renderer_config.py"
         "${_config_defs}/threading_config.py"
         "${_config_defs}/thumbnails_config.py"
@@ -557,9 +555,6 @@ set(_config_sources
     ${_config_out}/scene_config.hpp
     ${_config_out}/scene_config_serialization.hpp
     ${_config_out}/scene_config.cpp
-    ${_config_out}/shader_monitor_config.hpp
-    ${_config_out}/shader_monitor_config_serialization.hpp
-    ${_config_out}/shader_monitor_config.cpp
     ${_config_out}/text_renderer_config.hpp
     ${_config_out}/text_renderer_config_serialization.hpp
     ${_config_out}/text_renderer_config.cpp
@@ -596,9 +591,6 @@ set(_config_sources
     ${_config_out}/fly_camera_config.hpp
     ${_config_out}/fly_camera_config_serialization.hpp
     ${_config_out}/fly_camera_config.cpp
-    ${_config_out}/erhe_config.hpp
-    ${_config_out}/erhe_config_serialization.hpp
-    ${_config_out}/erhe_config.cpp
     ${_config_out}/editor_settings_config.hpp
     ${_config_out}/editor_settings_config_serialization.hpp
     ${_config_out}/editor_settings_config.cpp

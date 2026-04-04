@@ -12,6 +12,7 @@
 #include "tile_renderer.hpp"
 #include "tiles.hpp"
 
+#include "erhe_codegen/config_io.hpp"
 #include "erhe_commands/commands.hpp"
 #include "erhe_commands/commands_log.hpp"
 #include "erhe_file/file.hpp"
@@ -19,6 +20,8 @@
 # include "erhe_gl/gl_log.hpp"
 #endif
 #include "erhe_graph/graph_log.hpp"
+#include "erhe_graphics/generated/graphics_config.hpp"
+#include "erhe_graphics/generated/graphics_config_serialization.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/swapchain.hpp"
@@ -67,7 +70,7 @@ public:
                 .prefer_low_bandwidth      = false,
                 .prefer_high_dynamic_range = false
             },
-            Graphics_config{} // TODO
+            erhe::codegen::load_config<Graphics_config>("config/erhe_graphics.json")
         }
 
         , m_shader_error_callback_set{(
@@ -397,7 +400,7 @@ void run_hextiles()
 {
     // Workaround for
     // https://intellij-support.jetbrains.com/hc/en-us/community/posts/27792220824466-CMake-C-git-project-How-to-share-working-directory-in-git
-    erhe::file::ensure_working_directory_contains("hextiles", "erhe.json");
+    erhe::file::ensure_working_directory_contains("hextiles", "config");
 
     erhe::log::initialize_log_sinks();
 #if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)

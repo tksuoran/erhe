@@ -1,6 +1,0 @@
-{
-    "graphics": {
-        "renderdoc_capture_support": true,
-        "vulkan_validation_layers": true
-    }
-}

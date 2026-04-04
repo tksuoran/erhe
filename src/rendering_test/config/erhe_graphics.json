@@ -1,0 +1,7 @@
+{
+    "_version": 1,
+    "initial_clear": false,
+    "renderdoc_capture_support": false,
+    "vulkan_validation_layers": true,
+    "shader_monitor_enabled": false
+}

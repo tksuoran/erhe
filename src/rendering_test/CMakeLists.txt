@@ -25,7 +25,6 @@ erhe_target_sources_grouped(
     res/shaders/compute_before_content_line.comp
     res/shaders/line_after_compute.vert
     res/shaders/line_after_compute.frag
-    erhe.json
     logging.json
     rendering_test_mesh_memory.json
 )

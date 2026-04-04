@@ -1,0 +1,16 @@
+{
+    "_version": 1,
+    "show": true,
+    "fullscreen": false,
+    "use_transparency": false,
+    "gl_major": 4,
+    "gl_minor": 6,
+    "size": [1920, 1080],
+    "color_bit_depth": 8,
+    "high_pixel_density": true,
+    "use_finish": false,
+    "use_sleep": false,
+    "sleep_margin": 0,
+    "swap_interval": 0,
+    "enable_joystick": true
+}

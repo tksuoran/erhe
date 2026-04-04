@@ -1,0 +1,9 @@
+{
+    "_version": 1,
+    "max_material_count": 1000,
+    "max_light_count": 32,
+    "max_camera_count": 256,
+    "max_joint_count": 1000,
+    "max_primitive_count": 6000,
+    "max_draw_count": 6000
+}
