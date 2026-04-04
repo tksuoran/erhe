@@ -186,7 +186,7 @@ class Device_impl;
 class Device final
 {
 public:
-    Device(const Surface_create_info& surface_create_info, const Graphics_config& graphics_config = {});
+    Device(const Surface_create_info& surface_create_info, const Graphics_config& graphics_config);
     Device         (const Device&) = delete;
     void operator= (const Device&) = delete;
     Device         (Device&&)      = delete;
@@ -196,6 +196,10 @@ public:
     [[nodiscard]] auto wait_frame (Frame_state& out_frame_state) -> bool;
     [[nodiscard]] auto begin_frame(const Frame_begin_info& frame_begin_info) -> bool;
     [[nodiscard]] auto end_frame  (const Frame_end_info& frame_end_info) -> bool;
+
+    void initialize_frame_capture  ();
+    void start_frame_capture       ();
+    void end_frame_capture         ();
 
     void memory_barrier            (Memory_barrier_mask barriers);
     void clear_texture             (const Texture& texture, std::array<double, 4> clear_value);

@@ -78,7 +78,7 @@ class Device;
 class Device_impl final
 {
 public:
-    Device_impl   (Device& device, const Surface_create_info& surface_create_info, const Graphics_config& graphics_config = {});
+    Device_impl   (Device& device, const Surface_create_info& surface_create_info, const Graphics_config& graphics_config);
     Device_impl   (const Device_impl&) = delete;
     void operator=(const Device_impl&) = delete;
     Device_impl   (Device_impl&&)      = delete;
@@ -88,6 +88,10 @@ public:
     [[nodiscard]] auto wait_frame (Frame_state& out_frame_state) -> bool;
     [[nodiscard]] auto begin_frame(const Frame_begin_info& frame_begin_info) -> bool;
     [[nodiscard]] auto end_frame  (const Frame_end_info& frame_end_info) -> bool;
+
+    void initialize_frame_capture  ();
+    void start_frame_capture       ();
+    void end_frame_capture         ();
 
     void memory_barrier            (Memory_barrier_mask barriers);
     void clear_texture             (const Texture& texture, std::array<double, 4> clear_value);
@@ -234,6 +238,8 @@ private:
     std::vector<std::unique_ptr<Ring_buffer>> m_ring_buffers;
     std::size_t                               m_min_buffer_size = 2 * 1024 * 1024; // TODO
 
+    // RenderDoc
+    void* m_renderdoc_api{nullptr};
 };
 
 } // namespace erhe::graphics

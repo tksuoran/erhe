@@ -42,6 +42,9 @@ public:
     [[nodiscard]] auto end_frame  (const Frame_end_info& frame_end_info) -> bool;
 
     void resize_swapchain_to_window();
+    void initialize_frame_capture  ();
+    void start_frame_capture       ();
+    void end_frame_capture         ();
     void memory_barrier            (Memory_barrier_mask barriers);
     void clear_texture             (const Texture& texture, std::array<double, 4> clear_value);
     void transition_texture_layout (const Texture& texture, Image_layout new_layout);

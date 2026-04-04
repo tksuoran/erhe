@@ -133,7 +133,6 @@
 #include "erhe_scene_renderer/texel_renderer.hpp"
 #include "erhe_time/sleep.hpp"
 #include "erhe_profile/profile.hpp"
-#include "erhe_window/renderdoc_capture.hpp"
 #include "erhe_window/window_log.hpp"
 #include "erhe_window/window.hpp"
 #include "erhe_window/window_event_handler.hpp"
@@ -521,6 +520,8 @@ public:
                     return config;
                 }()
             );
+
+            // RenderDoc capture is auto-initialized by Device based on Graphics_config
 
             m_graphics_device->set_shader_error_callback(
                 [](const std::string& error_log, const std::string& shader_source, const std::string& callstack) {
@@ -1817,13 +1818,8 @@ void run_editor()
         // GEO::Logger::register_client(s_geogram_logger_client.get());
     }
 
-    {
-        ERHE_PROFILE_SCOPE("init renderdoc");
-        const Erhe_config early_config = erhe::codegen::load_config<Erhe_config>("erhe.json");
-        if (early_config.graphics.renderdoc_capture_support) {
-            erhe::window::initialize_frame_capture();
-        }
-    }
+    // RenderDoc capture is now initialized via Device::initialize_frame_capture()
+    // after the graphics device is created (see Editor constructor)
 
     {
         ERHE_PROFILE_SCOPE("Construct and run Editor");

@@ -1595,6 +1595,19 @@ void Device_impl::clear_texture(const Texture& texture, const std::array<double,
     Scoped_render_pass scoped_render_pass{render_pass};
 }
 
+void Device_impl::initialize_frame_capture()
+{
+    // TODO Implement GL renderdoc capture via erhe_graphics
+}
+void Device_impl::start_frame_capture()
+{
+    // TODO Implement GL renderdoc capture via erhe_graphics
+}
+void Device_impl::end_frame_capture()
+{
+    // TODO Implement GL renderdoc capture via erhe_graphics
+}
+
 void Device_impl::transition_texture_layout(const Texture& texture, Image_layout new_layout)
 {
     // No-op for OpenGL -- image layouts are implicit

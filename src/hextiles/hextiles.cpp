@@ -34,7 +34,6 @@
 #include "erhe_renderer/text_renderer.hpp"
 #include "erhe_rendergraph/rendergraph.hpp"
 #include "erhe_rendergraph/rendergraph_log.hpp"
-#include "erhe_window/renderdoc_capture.hpp"
 #include "erhe_window/window_log.hpp"
 #include "erhe_window/window.hpp"
 #include "erhe_window/window_event_handler.hpp"
@@ -67,7 +66,8 @@ public:
                 .context_window            = &m_window,
                 .prefer_low_bandwidth      = false,
                 .prefer_high_dynamic_range = false
-            }
+            },
+            Graphics_config{} // TODO
         }
 
         , m_shader_error_callback_set{(
@@ -411,7 +411,6 @@ void run_hextiles()
     erhe::rendergraph::initialize_logging();
     erhe::window::initialize_logging();
     erhe::ui::initialize_logging();
-    erhe::window::initialize_frame_capture();
     hextiles::initialize_logging();
 
     std::unique_ptr<Hextiles> hextiles = std::make_unique<Hextiles>();

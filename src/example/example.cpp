@@ -16,7 +16,9 @@
 #include <SDL3/SDL.h>
 #include "erhe_gltf/gltf_log.hpp"
 #include "erhe_gltf/image_transfer.hpp"
+#include "erhe_codegen/config_io.hpp"
 #include "erhe_graphics/buffer_transfer_queue.hpp"
+#include "erhe_graphics/generated/graphics_config_serialization.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
@@ -40,7 +42,6 @@
 #include "erhe_scene_renderer/scene_renderer_log.hpp"
 #include "erhe_ui/ui_log.hpp"
 #include "erhe_verify/verify.hpp"
-#include "erhe_window/renderdoc_capture.hpp"
 #include "erhe_window/window.hpp"
 #include "erhe_window/window_event_handler.hpp"
 #include "erhe_window/window_log.hpp"
@@ -63,12 +64,14 @@ public:
                 .title     = "erhe example"
             }
         }
+        , m_graphics_config{erhe::codegen::load_config<Graphics_config>("erhe.json")}
         , m_graphics_device{
             erhe::graphics::Surface_create_info{
                 .context_window            = &m_window,
                 .prefer_low_bandwidth      = false,
                 .prefer_high_dynamic_range = false
-            }
+            },
+            m_graphics_config
         }
         , m_shader_error_callback_set{(
             m_graphics_device.set_shader_error_callback(
@@ -500,6 +503,7 @@ private:
     }
 
     erhe::window::Context_window                   m_window;
+    Graphics_config                                m_graphics_config;
     erhe::graphics::Device                         m_graphics_device;
     bool                                           m_shader_error_callback_set{false};
     bool                                           m_y_flip;
@@ -540,7 +544,7 @@ void run_example()
 {
     // Workaround for
     // https://intellij-support.jetbrains.com/hc/en-us/community/posts/27792220824466-CMake-C-git-project-How-to-share-working-directory-in-git
-    erhe::file::ensure_working_directory_contains("example", "example_mesh_memory.json");
+    erhe::file::ensure_working_directory_contains("example", "erhe.json");
 
     erhe::log::initialize_log_sinks();
 
@@ -560,8 +564,6 @@ void run_example()
     erhe::scene_renderer::initialize_logging();
     erhe::window::initialize_logging();
     erhe::ui::initialize_logging();
-
-    //erhe::window::initialize_frame_capture();
 
     Example example{};
     example.run();

@@ -34,7 +34,7 @@
 #include "erhe_rendergraph/rendergraph.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/scene.hpp"
-#include "erhe_window/renderdoc_capture.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_xr/headset.hpp"
 #include "erhe_xr/xr_instance.hpp"
 #include "erhe_xr/xr_session.hpp"
@@ -395,7 +395,7 @@ auto Headset_view::render_headset() -> bool
     }
 
     if (m_request_renderdoc_capture) {
-        erhe::window::start_frame_capture(m_context_window);
+        m_app_context.graphics_device->start_frame_capture();
         m_renderdoc_capture_started = true;
         m_request_renderdoc_capture = false;
     }
@@ -593,7 +593,7 @@ auto Headset_view::render_headset() -> bool
     }
 
     if (m_renderdoc_capture_started) {
-        erhe::window::end_frame_capture(m_context_window);
+        m_app_context.graphics_device->end_frame_capture();
         m_renderdoc_capture_started = false;
     }
 

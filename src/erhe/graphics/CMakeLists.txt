@@ -36,6 +36,7 @@ erhe_target_sources_grouped(
     erhe_graphics/image_loader.hpp
     erhe_graphics/image_loader_wuffs.cpp
     erhe_graphics/image_loader_wuffs.hpp
+    erhe_graphics/renderdoc_app.h
     erhe_graphics/render_command_encoder.cpp
     erhe_graphics/render_command_encoder.hpp
     erhe_graphics/render_pass.cpp

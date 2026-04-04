@@ -31,6 +31,8 @@
 #   include <csignal>
 #endif
 
+#include "erhe_graphics/renderdoc_app.h"
+
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
@@ -235,14 +237,26 @@ void set_env(const char* key, const char* value)
     }
 }
 
-Device_impl::Device_impl(Device& device, const Surface_create_info& surface_create_info, const Graphics_config& /*graphics_config*/)
+Device_impl::Device_impl(
+    Device&                    device,
+    const Surface_create_info& surface_create_info,
+    const Graphics_config&     graphics_config
+)
     : m_context_window{surface_create_info.context_window}
     , m_device        {device}
     , m_shader_monitor{device}
 {
-    if (true) {
-        // For now, avoid extra layers as they might cause validation or other issues
-        set_env("VK_LOADER_LAYERS_DISABLE", "~implicit~");
+    if (graphics_config.renderdoc_capture_support) {
+        initialize_frame_capture();
+    }
+
+    {
+        // Disable nuisance implicit layers, but not when RenderDoc is attached
+        // (RenderDoc uses an implicit layer for Vulkan capture)
+        const bool renderdoc_attached = (GetModuleHandleA("renderdoc.dll") != nullptr);
+        if (!renderdoc_attached) {
+            set_env("VK_LOADER_LAYERS_DISABLE", "~implicit~");
+        }
         set_env("DISABLE_LAYER_NV_OPTIMUS_1", "1");
         set_env("DISABLE_LAYER_NV_GR2608_1", "1");
         set_env("DISABLE_VULKAN_OBS_CAPTURE", "1");
@@ -293,8 +307,10 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         }
     };
 
-    // TODO Add config to erhe.json
-    check_layer("VK_LAYER_KHRONOS_validation",      m_instance_layers.m_VK_LAYER_KHRONOS_validation);
+    if (graphics_config.vulkan_validation_layers && !graphics_config.renderdoc_capture_support) {
+        check_layer("VK_LAYER_KHRONOS_validation", m_instance_layers.m_VK_LAYER_KHRONOS_validation);
+    }
+
     //check_layer("VK_LAYER_LUNARG_crash_diagnostic", m_instance_layers.m_VK_LAYER_LUNARG_crash_diagnostic);
 
     uint32_t instance_extension_count{0};
@@ -2134,6 +2150,79 @@ void Device_impl::transition_texture_layout(const Texture& texture, Image_layout
     tex_impl.transition_layout(cmd.m_cmd_buf, to_vk_image_layout(new_layout));
     Submit_handle submit = m_immediate_commands->submit(cmd);
     m_immediate_commands->wait(submit);
+}
+
+void Device_impl::initialize_frame_capture()
+{
+#if defined(_WIN32)
+    // Try to get renderdoc API from already-loaded DLL (launched from RenderDoc)
+    HMODULE renderdoc_module = GetModuleHandleA("renderdoc.dll");
+    if (renderdoc_module == nullptr) {
+        // Try to load it explicitly
+        renderdoc_module = LoadLibraryExA("C:\\Program Files\\RenderDoc\\renderdoc.dll", NULL, 0);
+    }
+    if (renderdoc_module != nullptr) {
+        auto RENDERDOC_GetAPI = reinterpret_cast<pRENDERDOC_GetAPI>(
+            GetProcAddress(renderdoc_module, "RENDERDOC_GetAPI")
+        );
+        if (RENDERDOC_GetAPI != nullptr) {
+            RENDERDOC_API_1_6_0* api = nullptr;
+            int ret = RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_6_0, reinterpret_cast<void**>(&api));
+            if (ret == 1) {
+                m_renderdoc_api = api;
+                api->MaskOverlayBits(eRENDERDOC_Overlay_None, eRENDERDOC_Overlay_None);
+                api->SetCaptureOptionU32(eRENDERDOC_Option_CaptureCallstacks, 1);
+                log_context->info("RenderDoc frame capture initialized");
+            }
+        }
+    }
+#elif __unix__
+    void* renderdoc_so = dlopen("librenderdoc.so", RTLD_NOW | RTLD_NOLOAD);
+    if (renderdoc_so == nullptr) {
+        renderdoc_so = dlopen("librenderdoc.so", RTLD_NOW);
+    }
+    if (renderdoc_so != nullptr) {
+        pRENDERDOC_GetAPI RENDERDOC_GetAPI = reinterpret_cast<pRENDERDOC_GetAPI>(dlsym(renderdoc_so, "RENDERDOC_GetAPI"));
+        if (RENDERDOC_GetAPI != nullptr) {
+            RENDERDOC_API_1_6_0* api = nullptr;
+            int ret = RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_6_0, reinterpret_cast<void**>(&api));
+            if (ret == 1) {
+                m_renderdoc_api = api;
+                log_context->info("RenderDoc frame capture initialized");
+            }
+        }
+    }
+#endif
+}
+
+void Device_impl::start_frame_capture()
+{
+    if (m_renderdoc_api == nullptr) {
+        return;
+    }
+    RENDERDOC_API_1_6_0* api = static_cast<RENDERDOC_API_1_6_0*>(m_renderdoc_api);
+    RENDERDOC_DevicePointer device = RENDERDOC_DEVICEPOINTER_FROM_VKINSTANCE(m_vulkan_instance);
+    api->StartFrameCapture(device, nullptr);
+    log_context->info("RenderDoc: StartFrameCapture()");
+}
+
+void Device_impl::end_frame_capture()
+{
+    if (m_renderdoc_api == nullptr) {
+        return;
+    }
+    RENDERDOC_API_1_6_0* api = static_cast<RENDERDOC_API_1_6_0*>(m_renderdoc_api);
+    RENDERDOC_DevicePointer device = RENDERDOC_DEVICEPOINTER_FROM_VKINSTANCE(m_vulkan_instance);
+    uint32_t result = api->EndFrameCapture(device, nullptr);
+    if (result == 0) {
+        log_context->warn("RenderDoc: EndFrameCapture() failed");
+        return;
+    }
+    if (api->IsTargetControlConnected()) {
+        api->ShowReplayUI();
+    } else {
+        api->LaunchReplayUI(1, nullptr);
+    }
 }
 
 auto Device_impl::make_blit_command_encoder() -> Blit_command_encoder

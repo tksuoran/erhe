@@ -34,7 +34,7 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_rendergraph/rendergraph.hpp"
 #include "erhe_scene/scene.hpp"
-#include "erhe_window/renderdoc_capture.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_verify/verify.hpp"
 #include "erhe_window/window.hpp"
 #include "erhe_window/window_event_handler.hpp"
@@ -873,7 +873,7 @@ void App_rendering::begin_frame()
     // log_frame->trace("App_rendering::begin_frame() (check for renderdoc frame capture)");
 
     if (m_trigger_capture) {
-        erhe::window::start_frame_capture(*m_context.context_window);
+        m_context.graphics_device->start_frame_capture();
     }
 }
 
@@ -905,7 +905,7 @@ void App_rendering::end_frame()
     m_context.id_renderer->next_frame();
 
     if (m_trigger_capture) {
-        erhe::window::end_frame_capture(*m_context.context_window);
+        m_context.graphics_device->end_frame_capture();
         m_trigger_capture = false;
     }
 }

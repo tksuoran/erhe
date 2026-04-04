@@ -79,10 +79,13 @@ erhe_codegen_generate(
         "${_example_defs}/example_mesh_memory.py"
 )
 
+set(_gfx_gen "${CMAKE_BINARY_DIR}/src/erhe/graphics/erhe_graphics/generated")
 set(_example_codegen_sources
     ${_example_gen}/example_mesh_memory.hpp
     ${_example_gen}/example_mesh_memory_serialization.hpp
     ${_example_gen}/example_mesh_memory.cpp
+    ${_gfx_gen}/graphics_config_serialization.hpp
+    ${_gfx_gen}/graphics_config.cpp
 )
 set_source_files_properties(${_example_codegen_sources} PROPERTIES GENERATED TRUE)
 target_sources(${_target} PRIVATE ${_example_codegen_sources})

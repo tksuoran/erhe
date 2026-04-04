@@ -121,6 +121,10 @@ void Device_impl::clear_texture(const Texture& texture, const std::array<double,
     // No-op for null backend
 }
 
+void Device_impl::initialize_frame_capture() {}
+void Device_impl::start_frame_capture() {}
+void Device_impl::end_frame_capture() {}
+
 void Device_impl::transition_texture_layout(const Texture& texture, Image_layout new_layout)
 {
     static_cast<void>(texture);

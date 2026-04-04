@@ -117,6 +117,16 @@ struct("Graphics_config",
             developer=False
         ),
         field(
+            "vulkan_validation_layers",
+            Bool,
+            added_in=1,
+            default="true",
+            short_desc="Enable Vulkan Validation Layers",
+            long_desc="Enables Vulkan validation layers (VK_LAYER_KHRONOS_validation). Only meaningful for Vulkan backend.",
+            visible=True,
+            developer=False
+        ),
+        field(
             "shader_monitor_enabled",
             Bool,
             added_in=1,

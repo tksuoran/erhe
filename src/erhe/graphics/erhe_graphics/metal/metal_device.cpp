@@ -546,6 +546,10 @@ auto Device_impl::allocate_ring_buffer_entry(
     return m_ring_buffers.back()->acquire(required_alignment, usage, byte_count);
 }
 
+void Device_impl::initialize_frame_capture() {}
+void Device_impl::start_frame_capture() {}
+void Device_impl::end_frame_capture() {}
+
 void Device_impl::transition_texture_layout(const Texture& texture, Image_layout new_layout)
 {
     // No-op for Metal -- image layouts are managed by the runtime

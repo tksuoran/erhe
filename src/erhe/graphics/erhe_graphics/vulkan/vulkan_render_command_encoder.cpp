@@ -549,11 +549,13 @@ void Render_command_encoder_impl::set_viewport_rect(const int x, const int y, co
     if (command_buffer == VK_NULL_HANDLE) {
         return;
     }
+    // Negative height flips Y axis to match OpenGL convention (VK_KHR_maintenance1)
+    // Y offset is shifted to y + height to compensate
     const VkViewport viewport{
         .x        = static_cast<float>(x),
-        .y        = static_cast<float>(y),
+        .y        = static_cast<float>(y + height),
         .width    = static_cast<float>(width),
-        .height   = static_cast<float>(height),
+        .height   = static_cast<float>(-height),
         .minDepth = m_viewport_znear,
         .maxDepth = m_viewport_zfar
     };

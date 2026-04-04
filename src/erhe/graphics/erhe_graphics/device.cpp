@@ -111,6 +111,18 @@ auto Device::choose_depth_stencil_format(const unsigned int sort_flags, const in
 {
     return m_impl->choose_depth_stencil_format(sort_flags, requested_sample_count);
 }
+void Device::initialize_frame_capture()
+{
+    m_impl->initialize_frame_capture();
+}
+void Device::start_frame_capture()
+{
+    m_impl->start_frame_capture();
+}
+void Device::end_frame_capture()
+{
+    m_impl->end_frame_capture();
+}
 void Device::clear_texture(const Texture& texture, std::array<double, 4> value)
 {
     m_impl->clear_texture(texture, value);
