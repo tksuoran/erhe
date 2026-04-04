@@ -1664,14 +1664,50 @@ void Device_impl::upload_to_buffer(const Buffer& buffer, const size_t offset, co
     // For host-visible buffers, map and copy directly
     // const_cast is needed because map_bytes is non-const (it modifies internal map state)
     Buffer_impl& impl = const_cast<Buffer_impl&>(buffer.get_impl());
-    std::span<std::byte> map = impl.map_bytes(offset, length);
-    if (!map.empty()) {
-        std::memcpy(map.data(), data, length);
-        impl.flush_bytes(offset, length);
+    if (impl.is_host_visible()) {
+        std::span<std::byte> map = impl.map_bytes(offset, length);
+        if (!map.empty()) {
+            std::memcpy(map.data(), data, length);
+            impl.flush_bytes(offset, length);
+            return;
+        }
+    }
+
+    // Staging buffer upload for non-host-visible (device-local) buffers
+    VkBufferCreateInfo staging_buffer_create_info{
+        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = 0,
+        .size  = length,
+        .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        .sharingMode = VK_SHARING_MODE_EXCLUSIVE
+    };
+    VmaAllocationCreateInfo staging_alloc_info{
+        .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
+        .usage = VMA_MEMORY_USAGE_AUTO
+    };
+    VkBuffer staging_buffer = VK_NULL_HANDLE;
+    VmaAllocation staging_allocation = VK_NULL_HANDLE;
+    VmaAllocationInfo staging_allocation_info{};
+    VkResult result = vmaCreateBuffer(m_vma_allocator, &staging_buffer_create_info, &staging_alloc_info, &staging_buffer, &staging_allocation, &staging_allocation_info);
+    if (result != VK_SUCCESS) {
+        log_buffer->error("upload_to_buffer: staging buffer creation failed with {}", static_cast<int32_t>(result));
         return;
     }
-    // TODO Implement staging buffer upload for non-host-visible buffers
-    log_buffer->warn("upload_to_buffer: buffer not mappable, staging upload not yet implemented");
+    std::memcpy(staging_allocation_info.pMappedData, data, length);
+    vmaFlushAllocation(m_vma_allocator, staging_allocation, 0, length);
+
+    const Vulkan_immediate_commands::Command_buffer_wrapper& cmd = m_immediate_commands->acquire();
+    const VkBufferCopy copy_region{
+        .srcOffset = 0,
+        .dstOffset = offset,
+        .size      = length
+    };
+    vkCmdCopyBuffer(cmd.m_cmd_buf, staging_buffer, impl.get_vk_buffer(), 1, &copy_region);
+    Submit_handle submit = m_immediate_commands->submit(cmd);
+    m_immediate_commands->wait(submit);
+
+    vmaDestroyBuffer(m_vma_allocator, staging_buffer, staging_allocation);
 }
 
 void Device_impl::upload_to_texture(

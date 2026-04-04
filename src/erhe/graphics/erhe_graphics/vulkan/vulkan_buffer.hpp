@@ -53,6 +53,7 @@ public:
 
     [[nodiscard]] auto get_vma_allocation() const -> VmaAllocation;
     [[nodiscard]] auto get_vk_buffer     () const -> VkBuffer;
+    [[nodiscard]] auto is_host_visible   () const -> bool;
 
 private:
     friend bool operator==(const Buffer_impl& lhs, const Buffer_impl& rhs) noexcept;

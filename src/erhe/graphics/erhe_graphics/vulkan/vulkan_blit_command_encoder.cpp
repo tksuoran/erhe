@@ -259,6 +259,12 @@ void Blit_command_encoder_impl::copy_from_buffer(
         VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
         0, 0, nullptr, 0, nullptr, 1, &post_barrier
     );
+
+    Submit_handle submit = m_device.get_impl().get_immediate_commands().submit(command_buffer_wrapper);
+    m_device.get_impl().get_immediate_commands().wait(submit);
+
+    // Update tracked layout
+    const_cast<Texture*>(destination_texture)->get_impl().set_layout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 }
 
 // Copy from texture to buffer
@@ -344,21 +350,26 @@ void Blit_command_encoder_impl::generate_mipmaps(const Texture* texture)
 
     const Vulkan_immediate_commands::Command_buffer_wrapper& cmd = m_device.get_impl().get_immediate_commands().acquire();
 
-    // Transition mip level 0 to transfer src (assume it was just written as color attachment or transfer dst)
+    // Transition mip level 0 to transfer src
+    const VkImageLayout current_layout = texture->get_impl().get_current_layout();
+    const bool from_shader_read = (current_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     {
         const VkImageMemoryBarrier barrier{
             .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
             .pNext               = nullptr,
-            .srcAccessMask       = VK_ACCESS_TRANSFER_WRITE_BIT,
+            .srcAccessMask       = static_cast<VkAccessFlags>(from_shader_read ? VK_ACCESS_SHADER_READ_BIT : VK_ACCESS_TRANSFER_WRITE_BIT),
             .dstAccessMask       = VK_ACCESS_TRANSFER_READ_BIT,
-            .oldLayout           = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            .oldLayout           = current_layout,
             .newLayout           = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
             .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
             .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
             .image               = image,
             .subresourceRange    = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1}
         };
-        vkCmdPipelineBarrier(cmd.m_cmd_buf, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+        const VkPipelineStageFlags src_stage = from_shader_read
+            ? VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
+            : VK_PIPELINE_STAGE_TRANSFER_BIT;
+        vkCmdPipelineBarrier(cmd.m_cmd_buf, src_stage, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier);
     }
 
     int mip_width  = width;
@@ -440,6 +451,9 @@ void Blit_command_encoder_impl::generate_mipmaps(const Texture* texture)
 
     Submit_handle submit = m_device.get_impl().get_immediate_commands().submit(cmd);
     m_device.get_impl().get_immediate_commands().wait(submit);
+
+    // Update tracked layout
+    const_cast<Texture*>(texture)->get_impl().set_layout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 }
 
 void Blit_command_encoder_impl::fill_buffer(

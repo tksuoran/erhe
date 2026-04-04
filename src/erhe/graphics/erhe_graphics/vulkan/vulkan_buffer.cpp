@@ -46,7 +46,7 @@ Buffer_impl::Buffer_impl(Device& device, const Buffer_create_info& create_info) 
         .pNext                 = nullptr,
         .flags                 = 0,
         .size                  = create_info.capacity_byte_count,
-        .usage                 = to_vulkan_buffer_usage(create_info.usage),
+        .usage                 = to_vulkan_buffer_usage(create_info.usage) | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
         .sharingMode           = VK_SHARING_MODE_EXCLUSIVE,
         .queueFamilyIndexCount = 0,
         .pQueueFamilyIndices   = nullptr
@@ -389,6 +389,11 @@ auto Buffer_impl::get_vma_allocation() const -> VmaAllocation
 auto Buffer_impl::get_vk_buffer() const -> VkBuffer
 {
     return m_vk_buffer;
+}
+
+auto Buffer_impl::is_host_visible() const -> bool
+{
+    return (m_vk_memory_type.propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) != 0;
 }
 
 auto operator==(const Buffer_impl& lhs, const Buffer_impl& rhs) noexcept -> bool

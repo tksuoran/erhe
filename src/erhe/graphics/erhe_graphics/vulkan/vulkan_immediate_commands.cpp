@@ -196,9 +196,10 @@ void Vulkan_immediate_commands::wait(const Submit_handle handle)
         return;
     }
 
-    if (!m_buffers[handle.m_buffer_index].m_is_encoding) {
-        // we are waiting for a buffer which has not been submitted - this is probably a logic error somewhere in the calling code
-        m_erhe_device.device_error("waiting for a buffer which has not been submitted");
+    if (m_buffers[handle.m_buffer_index].m_is_encoding) {
+        // buffer is still being encoded (not yet submitted) - this is a logic error in the calling code
+        m_erhe_device.device_error("waiting for a buffer which has not been submitted (still encoding)");
+        return;
     }
 
     VkResult result = vkWaitForFences(m_device, 1, &m_buffers[handle.m_buffer_index].m_fence, VK_TRUE, UINT64_MAX);
