@@ -15,7 +15,7 @@ namespace erhe::graphics {
 }
 namespace erhe::primitive {
     class Buffer_sink;
-    class Geometry_primitive;
+    class Primitive;
     class Material;
 }
 namespace erhe::scene {
@@ -29,6 +29,8 @@ namespace erhe::scene {
     using Layer_id = uint64_t;
 }
 
+namespace tf { class Executor; }
+
 namespace erhe::gltf {
 
 class Image_transfer;
@@ -36,17 +38,16 @@ class Image_transfer;
 class Gltf_data
 {
 public:
-    std::vector<std::shared_ptr<erhe::scene::Animation>>              animations;
-    std::vector<std::shared_ptr<erhe::scene::Camera>>                 cameras;
-    std::vector<std::shared_ptr<erhe::scene::Light>>                  lights;
-    std::vector<std::shared_ptr<erhe::scene::Mesh>>                   meshes;
-    std::vector<std::shared_ptr<erhe::scene::Skin>>                   skins;
-    std::vector<std::shared_ptr<erhe::scene::Node>>                   nodes;
-    std::vector<std::shared_ptr<erhe::geometry::Geometry>>            geometries;
-    std::vector<std::shared_ptr<erhe::primitive::Geometry_primitive>> geometry_primitives;
-    std::vector<std::shared_ptr<erhe::primitive::Material>>           materials;
-    std::vector<std::shared_ptr<erhe::graphics::Texture>>             images;
-    std::vector<std::shared_ptr<erhe::graphics::Sampler>>             samplers;
+    std::vector<std::shared_ptr<erhe::scene::Animation>>    animations;
+    std::vector<std::shared_ptr<erhe::scene::Camera>>       cameras;
+    std::vector<std::shared_ptr<erhe::scene::Light>>        lights;
+    std::vector<std::shared_ptr<erhe::scene::Mesh>>         meshes;
+    std::vector<std::shared_ptr<erhe::scene::Skin>>         skins;
+    std::vector<std::shared_ptr<erhe::scene::Node>>         nodes;
+    std::vector<std::shared_ptr<erhe::primitive::Material>> materials;
+    std::vector<std::shared_ptr<erhe::graphics::Texture>>   images;
+    std::vector<std::shared_ptr<erhe::graphics::Sampler>>   samplers;
+    std::vector<std::string>                                extensions;
 };
 
 class Gltf_scan
@@ -54,7 +55,9 @@ class Gltf_scan
 public:
     std::vector<std::string> animations;
     std::vector<std::string> cameras;
-    std::vector<std::string> lights;
+    std::vector<std::string> directional_lights;
+    std::vector<std::string> point_lights;
+    std::vector<std::string> spot_lights;
     std::vector<std::string> meshes;
     std::vector<std::string> skins;
     std::vector<std::string> nodes;
@@ -62,25 +65,25 @@ public:
     std::vector<std::string> images;
     std::vector<std::string> samplers;
     std::vector<std::string> scenes;
-};
-
-enum class Coordinate_system : unsigned int {
-    Y_up = 0,
-    Z_up = 1
+    std::vector<std::string> extensions_used;
+    std::vector<std::string> extensions_required;
+    std::vector<std::string> errors;
 };
 
 struct Gltf_parse_arguments
 {
     erhe::graphics::Device&                   graphics_device;
+    ::tf::Executor&                           executor;
     Image_transfer&                           image_transfer;
     const std::shared_ptr<erhe::scene::Node>& root_node;
-    erhe::scene::Layer_id                     mesh_layer_id;
+    erhe::scene::Layer_id                     mesh_layer_id{};
     std::filesystem::path                     path;
-    Coordinate_system                         coordinate_system{Coordinate_system::Y_up};
 };
 
 [[nodiscard]] auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data;
 
 [[nodiscard]] auto scan_gltf(std::filesystem::path path) -> Gltf_scan;
+
+[[nodiscard]] auto export_gltf(const erhe::scene::Node& root_node, bool binary) -> std::string;
 
 }

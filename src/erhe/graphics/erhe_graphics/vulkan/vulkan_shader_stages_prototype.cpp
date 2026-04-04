@@ -17,6 +17,10 @@ Shader_stages_prototype_impl::Shader_stages_prototype_impl(Device& device, Shade
     , m_default_uniform_block{device}
     , m_glslang_shader_stages{*this}
 {
+    compile_shaders();
+    if (m_state != Shader_build_state::fail) {
+        link_program();
+    }
 }
 
 Shader_stages_prototype_impl::Shader_stages_prototype_impl(Device& device, const Shader_stages_create_info& create_info)
@@ -25,6 +29,10 @@ Shader_stages_prototype_impl::Shader_stages_prototype_impl(Device& device, const
     , m_default_uniform_block{device}
     , m_glslang_shader_stages{*this}
 {
+    compile_shaders();
+    if (m_state != Shader_build_state::fail) {
+        link_program();
+    }
 }
 
 void Shader_stages_prototype_impl::compile_shaders()
@@ -33,7 +41,16 @@ void Shader_stages_prototype_impl::compile_shaders()
 
     ERHE_VERIFY(m_state == Shader_build_state::init);
     for (const auto& shader : m_create_info.shaders) {
+        if (shader.type == Shader_type::geometry_shader) {
+            log_program->warn("Vulkan backend does not support geometry shaders: {}", m_create_info.name);
+            m_state = Shader_build_state::fail;
+            return;
+        }
         if (!m_glslang_shader_stages.compile_shader(m_device, shader)) {
+            std::string error_msg = fmt::format("GLSL compilation failed for shader: {}", m_create_info.name);
+            log_program->error("{}", error_msg);
+            std::string source = m_create_info.final_source(m_device, shader, nullptr);
+            m_device.shader_error(error_msg, source);
             m_state = Shader_build_state::fail;
             return;
         }
@@ -60,10 +77,12 @@ auto Shader_stages_prototype_impl::link_program() -> bool
     ERHE_VERIFY(m_state == Shader_build_state::shader_compilation_started);
 
     if (!m_glslang_shader_stages.link_program()) {
+        log_program->error("GLSL -> SPIR-V link failed for: {}", m_create_info.name);
         m_state = Shader_build_state::fail;
         return false;
     }
 
+    m_state = Shader_build_state::ready;
     return true;
 }
 
@@ -77,49 +96,12 @@ auto Shader_stages_prototype_impl::get_final_source(
 
 auto Shader_stages_prototype_impl::is_valid() -> bool
 {
-    if (m_state == Shader_build_state::ready) {
-        return true;
-    }
-    //if (m_state == Shader_build_state::fail)
-    {
-        return false;
-    }
+    return m_state == Shader_build_state::ready;
 }
 
-auto is_array_and_nonzero(const std::string& name)
+auto Shader_stages_prototype_impl::get_spirv_binary(Shader_type type) const -> std::span<const unsigned int>
 {
-    const std::size_t open_bracket_pos = name.find_first_of('[');
-    if (open_bracket_pos == std::string::npos) {
-        return false;
-    }
-
-    const std::size_t digit_pos = name.find_first_of("0123456789", open_bracket_pos + 1);
-    if (digit_pos != open_bracket_pos + 1) {
-        return false;
-    }
-
-    const std::size_t non_digit_pos = name.find_first_not_of("0123456789", digit_pos + 1);
-    if (non_digit_pos == std::string::npos) {
-        return false;
-    }
-
-    if (name.at(non_digit_pos) != ']') {
-        return false;
-    }
-
-    const std::size_t close_bracket_pos = non_digit_pos;
-    const char        digit             = name.at(digit_pos);
-
-    if (
-        (close_bracket_pos == (open_bracket_pos + 2)) &&
-        (
-            (digit == '0') || (digit == '1')
-        )
-    ) {
-        return false;
-    }
-
-    return true;
+    return m_glslang_shader_stages.get_spirv_binary(type);
 }
 
 auto Shader_stages_prototype_impl::create_info() const -> const Shader_stages_create_info&

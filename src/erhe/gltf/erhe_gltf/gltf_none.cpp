@@ -1,11 +1,20 @@
-#include "gltf.hpp"
+#include "gltf_none.hpp"
 
-[[nodiscard]] auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
+namespace erhe::gltf {
+
+auto parse_gltf(const Gltf_parse_arguments&) -> Gltf_data
 {
-    static_cast<void>(arguments):
+    return {};
 }
 
-[[nodiscard]] auto scan_gltf(std::filesystem::path path) -> Gltf_scan
+auto scan_gltf(std::filesystem::path) -> Gltf_scan
 {
-    static_cast<void>(path):
+    return {};
+}
+
+auto export_gltf(const erhe::scene::Node&, bool) -> std::string
+{
+    return {};
+}
+
 }

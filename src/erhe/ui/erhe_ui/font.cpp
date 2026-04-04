@@ -730,7 +730,8 @@ auto Font::print(
     std::string_view    ,
     glm::vec3           ,
     uint32_t            ,
-    Rectangle&
+    Rectangle&          ,
+    float
 ) const -> size_t
 {
     return 0;

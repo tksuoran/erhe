@@ -38,10 +38,15 @@ public:
     [[nodiscard]] auto get_handle                () const -> uint64_t;
     [[nodiscard]] auto is_sparse                 () const -> bool;
 
-    [[nodiscard]] auto get_vma_allocation() const -> VmaAllocation;
+    [[nodiscard]] auto get_vma_allocation () const -> VmaAllocation;
     [[nodiscard]] auto get_vk_image      () const -> VkImage;
+    [[nodiscard]] auto get_vk_image_view () const -> VkImageView;
+    [[nodiscard]] auto get_current_layout() const -> VkImageLayout;
 
     void clear() const;
+    void set_buffer       (Buffer& buffer);
+    void transition_layout(VkCommandBuffer command_buffer, VkImageLayout new_layout) const;
+    void set_layout       (VkImageLayout layout) const; // Update tracked layout without inserting barrier
 
 private:
     friend bool operator==(const Texture_impl& lhs, const Texture_impl& rhs) noexcept;
@@ -63,6 +68,7 @@ private:
     int                        m_level_count           {0};
     Buffer*                    m_buffer                {nullptr};
     erhe::utility::Debug_label m_debug_label;
+    mutable VkImageLayout      m_current_layout        {VK_IMAGE_LAYOUT_UNDEFINED};
 };
 
 

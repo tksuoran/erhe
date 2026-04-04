@@ -28,9 +28,17 @@ auto Texture_impl::get_mipmap_dimensions(const Texture_type type) -> int
     }
 }
 
-Texture_impl::Texture_impl(Texture_impl&&) noexcept
+Texture_impl::Texture_impl(Texture_impl&& other) noexcept
+    : m_vma_allocation {other.m_vma_allocation}
+    , m_vk_image       {other.m_vk_image}
+    , m_vk_image_view  {other.m_vk_image_view}
+    , m_sample_count   {other.m_sample_count}
+    , m_current_layout {other.m_current_layout}
 {
-    ERHE_FATAL("Not implemented");
+    other.m_vk_image       = VK_NULL_HANDLE;
+    other.m_vk_image_view  = VK_NULL_HANDLE;
+    other.m_vma_allocation = VK_NULL_HANDLE;
+    other.m_current_layout = VK_IMAGE_LAYOUT_UNDEFINED;
 }
 
 Texture_impl::~Texture_impl() noexcept
@@ -198,9 +206,15 @@ auto Texture_impl::get_sample_count() const -> int
     return m_sample_count;
 }
 
+void Texture_impl::set_buffer(Buffer& buffer)
+{
+    // TODO Implement texture buffer view for Vulkan (VkBufferView)
+    m_buffer = &buffer;
+}
+
 void Texture_impl::clear() const
 {
-    ERHE_FATAL("not implemented");
+    // TODO Implement using vkCmdClearColorImage via immediate commands
 }
 
 auto Texture_impl::get_vma_allocation() const -> VmaAllocation
@@ -211,6 +225,135 @@ auto Texture_impl::get_vma_allocation() const -> VmaAllocation
 auto Texture_impl::get_vk_image() const -> VkImage
 {
     return m_vk_image;
+}
+
+auto Texture_impl::get_vk_image_view() const -> VkImageView
+{
+    return m_vk_image_view;
+}
+
+auto Texture_impl::get_current_layout() const -> VkImageLayout
+{
+    return m_current_layout;
+}
+
+void Texture_impl::set_layout(VkImageLayout layout) const
+{
+    m_current_layout = layout;
+}
+
+void Texture_impl::transition_layout(VkCommandBuffer command_buffer, VkImageLayout new_layout) const
+{
+    if (m_vk_image == VK_NULL_HANDLE) {
+        return;
+    }
+    if (m_current_layout == new_layout) {
+        return;
+    }
+
+    // Determine access masks and pipeline stages based on old and new layouts
+    VkAccessFlags src_access = 0;
+    VkAccessFlags dst_access = 0;
+    VkPipelineStageFlags src_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+    VkPipelineStageFlags dst_stage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+
+    switch (m_current_layout) {
+        case VK_IMAGE_LAYOUT_UNDEFINED:
+            src_access = 0;
+            src_stage  = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+            break;
+        case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
+            src_access = VK_ACCESS_TRANSFER_WRITE_BIT;
+            src_stage  = VK_PIPELINE_STAGE_TRANSFER_BIT;
+            break;
+        case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL:
+            src_access = VK_ACCESS_TRANSFER_READ_BIT;
+            src_stage  = VK_PIPELINE_STAGE_TRANSFER_BIT;
+            break;
+        case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
+            src_access = VK_ACCESS_SHADER_READ_BIT;
+            src_stage  = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+            break;
+        case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
+            src_access = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+            src_stage  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+            break;
+        case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:
+            src_access = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+            src_stage  = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+            break;
+        default:
+            src_access = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
+            src_stage  = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+            break;
+    }
+
+    switch (new_layout) {
+        case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
+            dst_access = VK_ACCESS_TRANSFER_WRITE_BIT;
+            dst_stage  = VK_PIPELINE_STAGE_TRANSFER_BIT;
+            break;
+        case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL:
+            dst_access = VK_ACCESS_TRANSFER_READ_BIT;
+            dst_stage  = VK_PIPELINE_STAGE_TRANSFER_BIT;
+            break;
+        case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
+            dst_access = VK_ACCESS_SHADER_READ_BIT;
+            dst_stage  = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+            break;
+        case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
+            dst_access = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+            dst_stage  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+            break;
+        case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:
+            dst_access = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+            dst_stage  = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+            break;
+        case VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL:
+            dst_access = VK_ACCESS_SHADER_READ_BIT;
+            dst_stage  = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+            break;
+        case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR:
+            dst_access = 0;
+            dst_stage  = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+            break;
+        default:
+            dst_access = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
+            dst_stage  = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+            break;
+    }
+
+    // Determine aspect mask from format
+    VkImageAspectFlags aspect_mask = VK_IMAGE_ASPECT_COLOR_BIT;
+    if (erhe::dataformat::get_depth_size_bits(m_pixelformat) > 0) {
+        aspect_mask = VK_IMAGE_ASPECT_DEPTH_BIT;
+        if (erhe::dataformat::get_stencil_size_bits(m_pixelformat) > 0) {
+            aspect_mask |= VK_IMAGE_ASPECT_STENCIL_BIT;
+        }
+    }
+
+    const VkImageMemoryBarrier barrier{
+        .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        .pNext               = nullptr,
+        .srcAccessMask       = src_access,
+        .dstAccessMask       = dst_access,
+        .oldLayout           = m_current_layout,
+        .newLayout           = new_layout,
+        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .image               = m_vk_image,
+        .subresourceRange    = {
+            .aspectMask     = aspect_mask,
+            .baseMipLevel   = 0,
+            .levelCount     = VK_REMAINING_MIP_LEVELS,
+            .baseArrayLayer = 0,
+            .layerCount     = VK_REMAINING_ARRAY_LAYERS
+        }
+    };
+
+    vkCmdPipelineBarrier(command_buffer, src_stage, dst_stage, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+
+    m_current_layout = new_layout;
 }
 
 auto operator==(const Texture_impl& lhs, const Texture_impl& rhs) noexcept -> bool

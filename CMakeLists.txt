@@ -216,8 +216,8 @@ CPMAddPackage(
 # Enable GLM_GTX_component_wise
 add_definitions(-DGLM_ENABLE_EXPERIMENTAL)
 
-# Force ERHE_SPIRV on for Metal before the glslang fetch
-if (${ERHE_GRAPHICS_LIBRARY} STREQUAL "metal")
+# Force ERHE_SPIRV on for Metal and Vulkan before the glslang fetch
+if (${ERHE_GRAPHICS_LIBRARY} STREQUAL "metal" OR ${ERHE_GRAPHICS_LIBRARY} STREQUAL "vulkan")
     set(ERHE_SPIRV "ON" CACHE STRING "Enable SPIR-V" FORCE)
 endif ()
 

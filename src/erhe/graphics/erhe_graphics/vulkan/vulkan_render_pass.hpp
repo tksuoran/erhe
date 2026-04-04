@@ -34,11 +34,18 @@ public:
     [[nodiscard]] auto get_swapchain           () const -> Swapchain*;
     [[nodiscard]] auto get_debug_label         () const -> erhe::utility::Debug_label;
 
-    // For Render_command_encoder;
+    // Active render pass tracking (matching Metal pattern)
+    [[nodiscard]] static auto get_active_command_buffer () -> VkCommandBuffer;
+    [[nodiscard]] static auto get_active_render_pass    () -> VkRenderPass;
+    [[nodiscard]] static auto get_active_render_pass_impl() -> Render_pass_impl*;
+
+    // For Render_command_encoder
     void start_render_pass();
     void end_render_pass();
 
 private:
+    static Render_pass_impl* s_active_render_pass;
+
     Device&                                          m_device;
     Swapchain*                                       m_swapchain{nullptr};
     std::array<Render_pass_attachment_descriptor, 4> m_color_attachments;
@@ -53,7 +60,9 @@ private:
 
     Device_impl&              m_device_impl;
     VkRenderPass              m_render_pass   {VK_NULL_HANDLE};
+    VkFramebuffer             m_framebuffer   {VK_NULL_HANDLE};
     VkCommandBuffer           m_command_buffer{VK_NULL_HANDLE};
+    VkCommandPool             m_command_pool  {VK_NULL_HANDLE};
     VkRenderPassBeginInfo     m_begin_info{};
     std::vector<VkClearValue> m_clear_values;
 };

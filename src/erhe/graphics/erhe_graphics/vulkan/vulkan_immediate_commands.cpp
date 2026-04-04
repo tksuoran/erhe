@@ -55,7 +55,7 @@ Vulkan_immediate_commands::Vulkan_immediate_commands(
         }
         device_impl.set_debug_label(
             VK_OBJECT_TYPE_SEMAPHORE,
-            reinterpret_cast<uint64_t>(buf.m_fence),
+            reinterpret_cast<uint64_t>(buf.m_semaphore),
             fmt::format("Semaphore: {} (cmdbuf {})", i, debug_name)
         );
 

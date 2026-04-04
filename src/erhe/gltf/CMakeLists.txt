@@ -24,7 +24,6 @@ else ()
         erhe_gltf/gltf_none.cpp
         erhe_gltf/gltf_none.hpp
     )
-    target_link_libraries(${_target} PRIVATE fastgltf)
 endif ()
 
 target_link_libraries(${_target}

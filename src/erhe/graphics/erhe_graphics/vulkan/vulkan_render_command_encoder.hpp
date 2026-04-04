@@ -1,4 +1,6 @@
-#include "erhe_graphics/Render_command_encoder.hpp"
+#pragma once
+
+#include "erhe_graphics/render_command_encoder.hpp"
 
 #include "volk.h"
 
@@ -34,10 +36,15 @@ public:
         std::uintptr_t           drawcount,
         std::uintptr_t           stride
     ) const;
+    void dump_state(const char* label) const;
 
 private:
-    Device&         m_device;
-    VkCommandBuffer m_command_buffer{VK_NULL_HANDLE};
+    Device&    m_device;
+    VkBuffer   m_index_buffer     {VK_NULL_HANDLE};
+    VkBuffer   m_indirect_buffer  {VK_NULL_HANDLE};
+    VkIndexType m_index_type      {VK_INDEX_TYPE_UINT32};
+    float      m_viewport_znear   {0.0};
+    float      m_viewport_zfar    {1.0};
 };
 
-}
+} // namespace erhe::graphics

@@ -14,6 +14,7 @@
 
 #include <fmt/format.h>
 
+#include <cstring>
 #include <sstream>
 #include <vector>
 
@@ -355,9 +356,21 @@ void Buffer_impl::flush_bytes(const std::size_t byte_offset, const std::size_t b
     }
 }
 
+void Buffer_impl::upload_sub_data(const std::size_t byte_offset, const std::size_t byte_count, const void* data) noexcept
+{
+    if ((data == nullptr) || (byte_count == 0)) {
+        return;
+    }
+    std::span<std::byte> mapped = map_bytes(byte_offset, byte_count);
+    if (!mapped.empty()) {
+        std::memcpy(mapped.data(), data, byte_count);
+        flush_bytes(byte_offset, byte_count);
+    }
+}
+
 void Buffer_impl::dump() const noexcept
 {
-    ERHE_FATAL("not implemented");
+    // TODO Implement buffer dump for debugging
 }
 
 void Buffer_impl::flush_and_unmap_bytes(const std::size_t byte_count) noexcept
