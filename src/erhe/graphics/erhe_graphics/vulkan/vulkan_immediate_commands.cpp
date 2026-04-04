@@ -1,7 +1,10 @@
 #include "erhe_graphics/vulkan/vulkan_immediate_commands.hpp"
 #include "erhe_graphics/vulkan/vulkan_device.hpp"
 #include "erhe_graphics/vulkan/vulkan_helpers.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_graphics/graphics_log.hpp"
+
+#include <fmt/format.h>
 
 namespace erhe::graphics {
 
@@ -11,7 +14,8 @@ Vulkan_immediate_commands::Vulkan_immediate_commands(
     const bool        has_EXT_device_fault,
     const char* const debug_name
 )
-    : m_device              {device_impl.get_vulkan_device()}
+    : m_erhe_device         {device_impl.get_device()}
+    , m_device              {device_impl.get_vulkan_device()}
     , m_queue_family_index  {queue_family_index}
     , m_has_EXT_device_fault{has_EXT_device_fault}
     , m_debug_name          {debug_name}
@@ -119,22 +123,19 @@ void Vulkan_immediate_commands::purge()
             VkResult result = VK_SUCCESS;
             result = vkResetCommandBuffer(buf.m_cmd_buf, VkCommandBufferResetFlags{0});
             if (result != VK_SUCCESS) {
-                log_context->critical("vkResetCommandBuffer() failed with {} {}", static_cast<int32_t>(result), c_str(result));
-                abort();
+                m_erhe_device.device_error(fmt::format("vkResetCommandBuffer() failed with {} {}", static_cast<int32_t>(result), c_str(result)));
             }
 
             result = vkResetFences(m_device, 1, &buf.m_fence);
             if (result != VK_SUCCESS) {
-                log_context->critical("vkResetFences() failed with {} {}", static_cast<int32_t>(result), c_str(result));
-                abort();
+                m_erhe_device.device_error(fmt::format("vkResetFences() failed with {} {}", static_cast<int32_t>(result), c_str(result)));
             }
 
             buf.m_cmd_buf = VK_NULL_HANDLE;
             m_num_available_command_buffers++;
         } else {
             if (wait_result != VK_TIMEOUT) {
-                log_context->critical("vkWaitForFences() failed with {} {}", static_cast<int32_t>(wait_result), c_str(wait_result));
-                abort();
+                m_erhe_device.device_error(fmt::format("vkWaitForFences() failed with {} {}", static_cast<int32_t>(wait_result), c_str(wait_result)));
             }
         }
     }
@@ -157,8 +158,8 @@ auto Vulkan_immediate_commands::acquire() -> const Vulkan_immediate_commands::Co
         }
     }
     if (current == nullptr) {
-        log_context->critical("No available command buffers");
-        abort();
+        m_erhe_device.device_error("No available command buffers");
+        return m_buffers[0]; // fallback - will likely fail downstream
     }
     ERHE_VERIFY(current->m_cmd_buf_allocated != VK_NULL_HANDLE);
 
@@ -176,8 +177,7 @@ auto Vulkan_immediate_commands::acquire() -> const Vulkan_immediate_commands::Co
 
     VkResult result = vkBeginCommandBuffer(current->m_cmd_buf, &command_buffer_begin_info);
     if (result != VK_SUCCESS) {
-        log_context->critical("vkBeginCommandBuffer() failed with {} {}", static_cast<int32_t>(result), c_str(result));
-        abort();
+        m_erhe_device.device_error(fmt::format("vkBeginCommandBuffer() failed with {} {}", static_cast<int32_t>(result), c_str(result)));
     }
 
     m_next_submit_handle = current->m_handle;
@@ -198,14 +198,12 @@ void Vulkan_immediate_commands::wait(const Submit_handle handle)
 
     if (!m_buffers[handle.m_buffer_index].m_is_encoding) {
         // we are waiting for a buffer which has not been submitted - this is probably a logic error somewhere in the calling code
-        log_context->critical("waiting for a buffer which has not been submitted");
-        abort();
+        m_erhe_device.device_error("waiting for a buffer which has not been submitted");
     }
 
     VkResult result = vkWaitForFences(m_device, 1, &m_buffers[handle.m_buffer_index].m_fence, VK_TRUE, UINT64_MAX);
     if (result != VK_SUCCESS) {
-        log_context->critical("vkWaitForFences() failed with {} {}", static_cast<int32_t>(result), c_str(result));
-        abort();
+        m_erhe_device.device_error(fmt::format("vkWaitForFences() failed with {} {}", static_cast<int32_t>(result), c_str(result)));
     }
 
     purge();
@@ -226,8 +224,7 @@ void Vulkan_immediate_commands::wait_all()
         VkResult result = VK_SUCCESS;
         result = vkWaitForFences(m_device, num_fences, fences, VK_TRUE, UINT64_MAX);
         if (result != VK_SUCCESS) {
-            log_context->critical("vkWaitForFences() failed with {} {}", static_cast<int32_t>(result), c_str(result));
-            abort();
+            m_erhe_device.device_error(fmt::format("vkWaitForFences() failed with {} {}", static_cast<int32_t>(result), c_str(result)));
         }
     }
 
@@ -269,8 +266,7 @@ auto Vulkan_immediate_commands::submit(const Command_buffer_wrapper& wrapper) ->
     VkResult result = VK_SUCCESS;
     result = vkEndCommandBuffer(wrapper.m_cmd_buf);
     if (result != VK_SUCCESS) {
-        log_context->critical("vkEndCommandBuffer() failed with {} {}", static_cast<int32_t>(result), c_str(result));
-        abort();
+        m_erhe_device.device_error(fmt::format("vkEndCommandBuffer() failed with {} {}", static_cast<int32_t>(result), c_str(result)));
     }
 
     VkSemaphoreSubmitInfo wait_semaphores[] = {{}, {}};
@@ -325,8 +321,7 @@ auto Vulkan_immediate_commands::submit(const Command_buffer_wrapper& wrapper) ->
         };
         result = vkGetDeviceFaultInfoEXT(m_device, &count, nullptr);
         if (result != VK_SUCCESS) {
-            log_context->critical("vkGetDeviceFaultInfoEXT() failed with {} {}", static_cast<int32_t>(result), c_str(result));
-            abort();
+            m_erhe_device.device_error(fmt::format("vkGetDeviceFaultInfoEXT() failed with {} {}", static_cast<int32_t>(result), c_str(result)));
         }
 
         std::vector<VkDeviceFaultAddressInfoEXT> addressInfo(count.addressInfoCount);
@@ -340,8 +335,7 @@ auto Vulkan_immediate_commands::submit(const Command_buffer_wrapper& wrapper) ->
         };
         result = vkGetDeviceFaultInfoEXT(m_device, &count, &info);
         if (result != VK_SUCCESS) {
-            log_context->critical("vkGetDeviceFaultInfoEXT() failed with {} {}", static_cast<int32_t>(result), c_str(result));
-            abort();
+            m_erhe_device.device_error(fmt::format("vkGetDeviceFaultInfoEXT() failed with {} {}", static_cast<int32_t>(result), c_str(result)));
         }
 
         log_context->error("VK_ERROR_DEVICE_LOST: %s\n", info.description);
@@ -407,7 +401,7 @@ auto Vulkan_immediate_commands::submit(const Command_buffer_wrapper& wrapper) ->
             );
         }
     }
-    ERHE_VERIFY(result);
+    ERHE_VERIFY(result == VK_SUCCESS);
 
     m_last_submit_semaphore.semaphore = wrapper.m_semaphore;
     m_last_submit_handle = wrapper.m_handle;

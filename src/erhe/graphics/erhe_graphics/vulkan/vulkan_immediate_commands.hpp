@@ -50,6 +50,7 @@ public:
 private:
     void purge();
 
+    Device&                                                m_erhe_device;
     VkDevice                                               m_device               {VK_NULL_HANDLE};
     VkQueue                                                m_queue                {VK_NULL_HANDLE};
     VkCommandPool                                          m_command_pool         {VK_NULL_HANDLE};

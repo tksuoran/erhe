@@ -209,8 +209,7 @@ auto Device_impl::debug_utils_messenger_callback(
         const bool is_warning = (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) != 0;
         const bool is_error   = (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT  ) != 0;
         if (is_error) {
-            static int counter = 0;
-            ++counter;
+            m_device.device_error(ss.str());
         }
         return (is_warning || is_error) ? VK_TRUE : VK_FALSE;
     }
@@ -593,6 +592,17 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         query_features_chain_last        = query_features_chain_last->pNext;
     }
 
+    VkPhysicalDeviceVulkan13Features query_vulkan_13_features{
+        .sType            = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
+        .pNext            = nullptr,
+        .synchronization2 = VK_FALSE,
+        .dynamicRendering = VK_FALSE,
+    };
+    {
+        query_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&query_vulkan_13_features);
+        query_features_chain_last        = query_features_chain_last->pNext;
+    }
+
     vkGetPhysicalDeviceFeatures2(m_vulkan_physical_device, &query_device_features);
 
     bool debug_callback_registered = false;
@@ -661,8 +671,12 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
     };
 
     VkPhysicalDeviceFeatures2 set_device_features{
-        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
-        .pNext = nullptr
+        .sType    = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+        .pNext    = nullptr,
+        .features = {
+            .samplerAnisotropy = query_device_features.features.samplerAnisotropy,
+            .shaderInt64       = query_device_features.features.shaderInt64,
+        }
     };
     VkBaseOutStructure* set_features_chain_last = reinterpret_cast<VkBaseOutStructure*>(&set_device_features);
 
@@ -752,6 +766,23 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         set_features_chain_last        = set_features_chain_last->pNext;
         if (set_vulkan_11_features.shaderDrawParameters == VK_TRUE) {
             log_debug->debug("Enabled feature shaderDrawParameters");
+        }
+    }
+
+    VkPhysicalDeviceVulkan13Features set_vulkan_13_features{
+        .sType            = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
+        .pNext            = nullptr,
+        .synchronization2 = query_vulkan_13_features.synchronization2,
+        .dynamicRendering = query_vulkan_13_features.dynamicRendering,
+    };
+    {
+        set_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&set_vulkan_13_features);
+        set_features_chain_last        = set_features_chain_last->pNext;
+        if (set_vulkan_13_features.synchronization2 == VK_TRUE) {
+            log_debug->debug("Enabled feature synchronization2");
+        }
+        if (set_vulkan_13_features.dynamicRendering == VK_TRUE) {
+            log_debug->debug("Enabled feature dynamicRendering");
         }
     }
 
@@ -1463,6 +1494,11 @@ auto Device_impl::query_device_extensions(
         check_device_extension(VK_EXT_PRESENT_MODE_FIFO_LATEST_READY_EXTENSION_NAME, device_extensions_out.m_VK_EXT_present_mode_fifo_latest_ready, 3.0f);
     }
     return total_score;
+}
+
+auto Device_impl::get_device() -> Device&
+{
+    return m_device;
 }
 
 auto Device_impl::get_surface() -> Surface*

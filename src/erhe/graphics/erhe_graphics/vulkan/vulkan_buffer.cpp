@@ -249,8 +249,7 @@ auto Buffer_impl::map_all_bytes() noexcept -> std::span<std::byte>
     void* map_pointer = nullptr;
     result = vmaMapMemory(allocator, m_vma_allocation, &map_pointer);
     if (result != VK_SUCCESS) {
-        log_swapchain->critical("vmaMapMemory() failed with {} {}", static_cast<int32_t>(result), c_str(result));
-        abort();
+        m_device.device_error(fmt::format("vmaMapMemory() failed with {} {}", static_cast<int32_t>(result), c_str(result)));
     }
     m_map_all = std::span<std::byte>{
         static_cast<std::byte*>(map_pointer),
@@ -319,8 +318,7 @@ void Buffer_impl::invalidate(const std::size_t byte_offset, const std::size_t by
     };
     result = vkInvalidateMappedMemoryRanges(vulkan_device, 1, &memory_range);
     if (result != VK_SUCCESS) {
-        log_context->critical("vkInvalidateMappedMemoryRanges() failed with {} {}", static_cast<int32_t>(result), c_str(result));
-        abort();
+        m_device.device_error(fmt::format("vkInvalidateMappedMemoryRanges() failed with {} {}", static_cast<int32_t>(result), c_str(result)));
     }
 }
 
@@ -351,8 +349,7 @@ void Buffer_impl::flush_bytes(const std::size_t byte_offset, const std::size_t b
     };
     result = vkFlushMappedMemoryRanges(vulkan_device, 1, &memory_range);
     if (result != VK_SUCCESS) {
-        log_context->critical("vkFlushMappedMemoryRanges() failed with {} {}", static_cast<int32_t>(result), c_str(result));
-        abort();
+        m_device.device_error(fmt::format("vkFlushMappedMemoryRanges() failed with {} {}", static_cast<int32_t>(result), c_str(result)));
     }
 }
 

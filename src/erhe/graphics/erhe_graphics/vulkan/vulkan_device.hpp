@@ -117,6 +117,7 @@ public:
     void set_debug_label(VkObjectType object_type, uint64_t object_handle, const char* label);
     void set_debug_label(VkObjectType object_type, uint64_t object_handle, const std::string& label);
 
+    [[nodiscard]] auto get_device                      () -> Device&;
     [[nodiscard]] auto get_surface                    () -> Surface*;
     [[nodiscard]] auto get_vulkan_instance            () -> VkInstance;
     [[nodiscard]] auto get_vulkan_physical_device     () -> VkPhysicalDevice;

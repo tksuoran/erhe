@@ -8,6 +8,8 @@
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_verify/verify.hpp"
 
+#include <fmt/format.h>
+
 namespace erhe::graphics {
 
 Swapchain_impl::Swapchain_impl(
@@ -32,8 +34,7 @@ Swapchain_impl::~Swapchain_impl() noexcept
     // TODO Queue thread safety
 	result = vkDeviceWaitIdle(vulkan_device);
     if (result != VK_SUCCESS) {
-        log_swapchain->critical("vkDeviceWaitIdle() failed with {} {}", static_cast<int32_t>(result), c_str(result));
-        abort();
+        m_device_impl.get_device().device_error(fmt::format("vkDeviceWaitIdle() failed with {} {}", static_cast<int32_t>(result), c_str(result)));
     }
 
     for (Swapchain_frame_in_flight& frame : m_submit_history) {
@@ -51,8 +52,7 @@ Swapchain_impl::~Swapchain_impl() noexcept
         if (present_history_entry.cleanup_fence != VK_NULL_HANDLE) {
             result = vkWaitForFences(vulkan_device, 1, &present_history_entry.cleanup_fence, true, UINT64_MAX);
             if (result != VK_SUCCESS) {
-                log_swapchain->critical("vkWaitForFences() failed with {} {}", static_cast<int32_t>(result), c_str(result));
-                abort();
+                m_device_impl.get_device().device_error(fmt::format("vkWaitForFences() failed with {} {}", static_cast<int32_t>(result), c_str(result)));
             }
         }
         cleanup_present_info(present_history_entry);
@@ -110,8 +110,7 @@ auto Swapchain_impl::submit_command_buffer() -> bool
     log_swapchain->trace("vkQueueSubmit()");
     result = vkQueueSubmit(vulkan_graphics_queue, 1, &submit_info, frame.submit_fence);
     if (result != VK_SUCCESS) {
-        log_swapchain->critical("vkQueueSubmit() failed with {} {}", static_cast<int32_t>(result), c_str(result));
-        abort();
+        m_device_impl.get_device().device_error(fmt::format("vkQueueSubmit() failed with {} {}", static_cast<int32_t>(result), c_str(result)));
     }
 
     m_state = Swapchain_frame_state::command_buffer_submit;
@@ -207,8 +206,7 @@ auto Swapchain_impl::begin_render_pass(VkRenderPassBeginInfo& render_pass_begin_
     log_swapchain->trace("vkBeginCommandBuffer()");
     result = vkBeginCommandBuffer(vulkan_command_buffer, &command_buffer_begin_info);
     if (result != VK_SUCCESS) {
-        log_swapchain->critical("vkBeginCommandBuffer() failed with {} {}", static_cast<int32_t>(result), c_str(result));
-        abort();
+        m_device_impl.get_device().device_error(fmt::format("vkBeginCommandBuffer() failed with {} {}", static_cast<int32_t>(result), c_str(result)));
     }
 
     if (
@@ -249,8 +247,7 @@ auto Swapchain_impl::end_render_pass() -> bool
     log_swapchain->trace("vkEndCommandBuffer()");
     result = vkEndCommandBuffer(vulkan_command_buffer);
     if (result != VK_SUCCESS) {
-        log_swapchain->critical("vkEndCommandBuffer() failed with {} {}", static_cast<int32_t>(result), c_str(result));
-        abort();
+        m_device_impl.get_device().device_error(fmt::format("vkEndCommandBuffer() failed with {} {}", static_cast<int32_t>(result), c_str(result)));
     }
 
     m_state = Swapchain_frame_state::render_pass_end;
@@ -279,9 +276,8 @@ auto Swapchain_impl::end_frame(const Frame_end_info& frame_end_info) -> bool
         //    return;
         //}
     } else if (result != VK_SUCCESS) {
-        log_context->critical("presenting frame failed with {} {}", static_cast<int32_t>(result), c_str(result));
+        m_device_impl.get_device().device_error(fmt::format("presenting frame failed with {} {}", static_cast<int32_t>(result), c_str(result)));
         m_state = Swapchain_frame_state::idle; // Should we try to continue?
-        abort();
     }
     m_state = Swapchain_frame_state::image_present;
     return is_valid();
