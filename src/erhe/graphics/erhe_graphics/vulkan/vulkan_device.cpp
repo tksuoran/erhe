@@ -31,7 +31,9 @@
 #   include <csignal>
 #endif
 
+#include <algorithm>
 #include <cstdlib>
+#include <cstring>
 #include <sstream>
 #include <vector>
 
@@ -234,7 +236,7 @@ void set_env(const char* key, const char* value)
     }
 }
 
-Device_impl::Device_impl(Device& device, const Surface_create_info& surface_create_info, const Graphics_config& graphics_config)
+Device_impl::Device_impl(Device& device, const Surface_create_info& surface_create_info, const Graphics_config& /*graphics_config*/)
     : m_context_window{surface_create_info.context_window}
     , m_device        {device}
     , m_shader_monitor{device}
@@ -552,6 +554,45 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         query_features_chain_last        = query_features_chain_last->pNext;
     }
 
+    VkPhysicalDeviceDescriptorIndexingFeatures query_descriptor_indexing_features{
+        .sType                                         = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES,
+        .pNext                                         = nullptr,
+        .shaderInputAttachmentArrayDynamicIndexing     = VK_FALSE,
+        .shaderUniformTexelBufferArrayDynamicIndexing  = VK_FALSE,
+        .shaderStorageTexelBufferArrayDynamicIndexing  = VK_FALSE,
+        .shaderUniformBufferArrayNonUniformIndexing    = VK_FALSE,
+        .shaderSampledImageArrayNonUniformIndexing     = VK_FALSE,
+        .shaderStorageBufferArrayNonUniformIndexing    = VK_FALSE,
+        .shaderStorageImageArrayNonUniformIndexing     = VK_FALSE,
+        .shaderInputAttachmentArrayNonUniformIndexing  = VK_FALSE,
+        .shaderUniformTexelBufferArrayNonUniformIndexing = VK_FALSE,
+        .shaderStorageTexelBufferArrayNonUniformIndexing = VK_FALSE,
+        .descriptorBindingUniformBufferUpdateAfterBind   = VK_FALSE,
+        .descriptorBindingSampledImageUpdateAfterBind    = VK_FALSE,
+        .descriptorBindingStorageImageUpdateAfterBind    = VK_FALSE,
+        .descriptorBindingStorageBufferUpdateAfterBind   = VK_FALSE,
+        .descriptorBindingUniformTexelBufferUpdateAfterBind = VK_FALSE,
+        .descriptorBindingStorageTexelBufferUpdateAfterBind = VK_FALSE,
+        .descriptorBindingUpdateUnusedWhilePending         = VK_FALSE,
+        .descriptorBindingPartiallyBound                   = VK_FALSE,
+        .descriptorBindingVariableDescriptorCount          = VK_FALSE,
+        .runtimeDescriptorArray                            = VK_FALSE,
+    };
+    {
+        query_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&query_descriptor_indexing_features);
+        query_features_chain_last        = query_features_chain_last->pNext;
+    }
+
+    VkPhysicalDeviceVulkan11Features query_vulkan_11_features{
+        .sType            = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES,
+        .pNext            = nullptr,
+        .shaderDrawParameters = VK_FALSE,
+    };
+    {
+        query_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&query_vulkan_11_features);
+        query_features_chain_last        = query_features_chain_last->pNext;
+    }
+
     vkGetPhysicalDeviceFeatures2(m_vulkan_physical_device, &query_device_features);
 
     bool debug_callback_registered = false;
@@ -657,6 +698,60 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         set_features_chain_last = set_features_chain_last->pNext;
         if (query_present_mode_fifo_latest_ready_features.presentModeFifoLatestReady == VK_TRUE) {
             log_debug->debug("Enabled feature present mode fifo latest ready");
+        }
+    }
+
+    VkPhysicalDeviceDescriptorIndexingFeatures set_descriptor_indexing_features{
+        .sType                                         = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES,
+        .pNext                                         = nullptr,
+        .shaderInputAttachmentArrayDynamicIndexing     = query_descriptor_indexing_features.shaderInputAttachmentArrayDynamicIndexing,
+        .shaderUniformTexelBufferArrayDynamicIndexing  = query_descriptor_indexing_features.shaderUniformTexelBufferArrayDynamicIndexing,
+        .shaderStorageTexelBufferArrayDynamicIndexing  = query_descriptor_indexing_features.shaderStorageTexelBufferArrayDynamicIndexing,
+        .shaderUniformBufferArrayNonUniformIndexing    = query_descriptor_indexing_features.shaderUniformBufferArrayNonUniformIndexing,
+        .shaderSampledImageArrayNonUniformIndexing     = query_descriptor_indexing_features.shaderSampledImageArrayNonUniformIndexing,
+        .shaderStorageBufferArrayNonUniformIndexing    = query_descriptor_indexing_features.shaderStorageBufferArrayNonUniformIndexing,
+        .shaderStorageImageArrayNonUniformIndexing     = query_descriptor_indexing_features.shaderStorageImageArrayNonUniformIndexing,
+        .shaderInputAttachmentArrayNonUniformIndexing  = query_descriptor_indexing_features.shaderInputAttachmentArrayNonUniformIndexing,
+        .shaderUniformTexelBufferArrayNonUniformIndexing = query_descriptor_indexing_features.shaderUniformTexelBufferArrayNonUniformIndexing,
+        .shaderStorageTexelBufferArrayNonUniformIndexing = query_descriptor_indexing_features.shaderStorageTexelBufferArrayNonUniformIndexing,
+        .descriptorBindingUniformBufferUpdateAfterBind   = query_descriptor_indexing_features.descriptorBindingUniformBufferUpdateAfterBind,
+        .descriptorBindingSampledImageUpdateAfterBind    = query_descriptor_indexing_features.descriptorBindingSampledImageUpdateAfterBind,
+        .descriptorBindingStorageImageUpdateAfterBind    = query_descriptor_indexing_features.descriptorBindingStorageImageUpdateAfterBind,
+        .descriptorBindingStorageBufferUpdateAfterBind   = query_descriptor_indexing_features.descriptorBindingStorageBufferUpdateAfterBind,
+        .descriptorBindingUniformTexelBufferUpdateAfterBind = query_descriptor_indexing_features.descriptorBindingUniformTexelBufferUpdateAfterBind,
+        .descriptorBindingStorageTexelBufferUpdateAfterBind = query_descriptor_indexing_features.descriptorBindingStorageTexelBufferUpdateAfterBind,
+        .descriptorBindingUpdateUnusedWhilePending         = query_descriptor_indexing_features.descriptorBindingUpdateUnusedWhilePending,
+        .descriptorBindingPartiallyBound                   = query_descriptor_indexing_features.descriptorBindingPartiallyBound,
+        .descriptorBindingVariableDescriptorCount          = query_descriptor_indexing_features.descriptorBindingVariableDescriptorCount,
+        .runtimeDescriptorArray                            = query_descriptor_indexing_features.runtimeDescriptorArray,
+    };
+    {
+        set_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&set_descriptor_indexing_features);
+        set_features_chain_last        = set_features_chain_last->pNext;
+        if (set_descriptor_indexing_features.descriptorBindingSampledImageUpdateAfterBind == VK_TRUE) {
+            log_debug->debug("Enabled feature descriptorBindingSampledImageUpdateAfterBind");
+        }
+        if (set_descriptor_indexing_features.descriptorBindingPartiallyBound == VK_TRUE) {
+            log_debug->debug("Enabled feature descriptorBindingPartiallyBound");
+        }
+        if (set_descriptor_indexing_features.descriptorBindingVariableDescriptorCount == VK_TRUE) {
+            log_debug->debug("Enabled feature descriptorBindingVariableDescriptorCount");
+        }
+        if (set_descriptor_indexing_features.runtimeDescriptorArray == VK_TRUE) {
+            log_debug->debug("Enabled feature runtimeDescriptorArray");
+        }
+    }
+
+    VkPhysicalDeviceVulkan11Features set_vulkan_11_features{
+        .sType            = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES,
+        .pNext            = nullptr,
+        .shaderDrawParameters = query_vulkan_11_features.shaderDrawParameters,
+    };
+    {
+        set_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&set_vulkan_11_features);
+        set_features_chain_last        = set_features_chain_last->pNext;
+        if (set_vulkan_11_features.shaderDrawParameters == VK_TRUE) {
+            log_debug->debug("Enabled feature shaderDrawParameters");
         }
     }
 
@@ -783,7 +878,219 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
     m_info.coordinate_conventions.clip_space_y_flip  = erhe::math::Clip_space_y_flip::disabled;
     m_info.coordinate_conventions.texture_origin     = erhe::math::Texture_origin::top_left;
 
-    m_info.max_per_stage_descriptor_samplers = 32; // TODO properties.limits.maxPerStageDescriptorSamplers;
+    const VkPhysicalDeviceLimits& limits = properties.limits;
+
+    // Vulkan drivers may report UINT32_MAX for "unlimited" limits;
+    // cap to INT_MAX so the int fields in Device_info stay positive.
+    auto cap = [](uint32_t value) -> int {
+        return static_cast<int>(std::min(value, static_cast<uint32_t>(INT_MAX)));
+    };
+
+    m_info.max_per_stage_descriptor_samplers        = limits.maxPerStageDescriptorSamplers;
+    m_info.max_combined_texture_image_units          = cap(limits.maxDescriptorSetSampledImages);
+    m_info.max_uniform_block_size                    = cap(limits.maxUniformBufferRange);
+    m_info.max_shader_storage_buffer_bindings        = cap(limits.maxPerStageDescriptorStorageBuffers);
+    m_info.max_uniform_buffer_bindings               = cap(limits.maxPerStageDescriptorUniformBuffers);
+    m_info.max_compute_shader_storage_blocks         = cap(limits.maxPerStageDescriptorStorageBuffers);
+    m_info.max_compute_uniform_blocks                = cap(limits.maxPerStageDescriptorUniformBuffers);
+    m_info.max_compute_shared_memory_size            = cap(limits.maxComputeSharedMemorySize);
+    m_info.max_vertex_shader_storage_blocks          = cap(limits.maxPerStageDescriptorStorageBuffers);
+    m_info.max_vertex_uniform_blocks                 = cap(limits.maxPerStageDescriptorUniformBuffers);
+    m_info.max_fragment_shader_storage_blocks        = cap(limits.maxPerStageDescriptorStorageBuffers);
+    m_info.max_fragment_uniform_blocks               = cap(limits.maxPerStageDescriptorUniformBuffers);
+    m_info.max_geometry_shader_storage_blocks        = cap(limits.maxPerStageDescriptorStorageBuffers);
+    m_info.max_geometry_uniform_blocks               = cap(limits.maxPerStageDescriptorUniformBuffers);
+    m_info.max_tess_control_shader_storage_blocks    = cap(limits.maxPerStageDescriptorStorageBuffers);
+    m_info.max_tess_control_uniform_blocks           = cap(limits.maxPerStageDescriptorUniformBuffers);
+    m_info.max_tess_evaluation_shader_storage_blocks = cap(limits.maxPerStageDescriptorStorageBuffers);
+    m_info.max_tess_evaluation_uniform_blocks        = cap(limits.maxPerStageDescriptorUniformBuffers);
+    m_info.max_vertex_attribs                        = cap(limits.maxVertexInputAttributes);
+    m_info.max_samples                               = cap(limits.framebufferColorSampleCounts & limits.framebufferDepthSampleCounts);
+    m_info.max_color_texture_samples                 = cap(limits.framebufferColorSampleCounts);
+    m_info.max_depth_texture_samples                 = cap(limits.framebufferDepthSampleCounts);
+    m_info.max_framebuffer_samples                   = cap(limits.framebufferColorSampleCounts);
+    m_info.max_integer_samples                       = cap(limits.framebufferColorSampleCounts);
+    m_info.max_texture_size                          = cap(limits.maxImageDimension2D);
+    m_info.max_3d_texture_size                       = cap(limits.maxImageDimension3D);
+    m_info.max_cube_map_texture_size                 = cap(limits.maxImageDimensionCube);
+    m_info.max_texture_buffer_size                   = cap(limits.maxTexelBufferElements);
+    m_info.max_array_texture_layers                  = cap(limits.maxImageArrayLayers);
+    m_info.max_texture_max_anisotropy                = limits.maxSamplerAnisotropy;
+    m_info.shader_storage_buffer_offset_alignment    = static_cast<unsigned int>(limits.minStorageBufferOffsetAlignment);
+    m_info.uniform_buffer_offset_alignment           = static_cast<unsigned int>(limits.minUniformBufferOffsetAlignment);
+
+    // Create pipeline cache
+    {
+        const VkPipelineCacheCreateInfo pipeline_cache_create_info{
+            .sType           = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO,
+            .pNext           = nullptr,
+            .flags           = 0,
+            .initialDataSize = 0,
+            .pInitialData    = nullptr
+        };
+        result = vkCreatePipelineCache(m_vulkan_device, &pipeline_cache_create_info, nullptr, &m_pipeline_cache);
+        if (result != VK_SUCCESS) {
+            log_context->error("vkCreatePipelineCache() failed with {} {}", static_cast<int32_t>(result), c_str(result));
+        }
+    }
+
+    // Create descriptor set layout and pipeline layout.
+    // Use a single set (set 0) with bindings for UBOs, SSBOs, and combined image samplers.
+    // GLSL layout(binding = N) maps to set = 0, binding = N.
+    {
+        static constexpr uint32_t max_bindings = 16;
+        std::vector<VkDescriptorSetLayoutBinding> bindings;
+        bindings.reserve(max_bindings);
+
+        // Bindings 0..7 for uniform buffers
+        for (uint32_t i = 0; i < 8; ++i) {
+            bindings.push_back(VkDescriptorSetLayoutBinding{
+                .binding            = i,
+                .descriptorType     = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                .descriptorCount    = 1,
+                .stageFlags         = VK_SHADER_STAGE_ALL,
+                .pImmutableSamplers = nullptr
+            });
+        }
+
+        // Bindings 8..11 for storage buffers
+        for (uint32_t i = 8; i < 12; ++i) {
+            bindings.push_back(VkDescriptorSetLayoutBinding{
+                .binding            = i,
+                .descriptorType     = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                .descriptorCount    = 1,
+                .stageFlags         = VK_SHADER_STAGE_ALL,
+                .pImmutableSamplers = nullptr
+            });
+        }
+
+        // Bindings 12..15 for combined image samplers
+        for (uint32_t i = 12; i < 16; ++i) {
+            bindings.push_back(VkDescriptorSetLayoutBinding{
+                .binding            = i,
+                .descriptorType     = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                .descriptorCount    = 1,
+                .stageFlags         = VK_SHADER_STAGE_FRAGMENT_BIT,
+                .pImmutableSamplers = nullptr
+            });
+        }
+
+        VkDescriptorSetLayoutCreateFlags layout_flags = 0;
+        if (m_device_extensions.m_VK_KHR_push_descriptor) {
+            layout_flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR;
+        }
+
+        const VkDescriptorSetLayoutCreateInfo descriptor_set_layout_create_info{
+            .sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+            .pNext        = nullptr,
+            .flags        = layout_flags,
+            .bindingCount = static_cast<uint32_t>(bindings.size()),
+            .pBindings    = bindings.data()
+        };
+
+        result = vkCreateDescriptorSetLayout(m_vulkan_device, &descriptor_set_layout_create_info, nullptr, &m_descriptor_set_layout);
+        if (result != VK_SUCCESS) {
+            log_context->critical("vkCreateDescriptorSetLayout() failed with {} {}", static_cast<int32_t>(result), c_str(result));
+            abort();
+        }
+
+        // Create a second descriptor set layout for texture heap (set 1)
+        // This uses descriptor indexing for a large array of combined image samplers
+        {
+            static constexpr uint32_t max_texture_heap_size = 256;
+            const VkDescriptorBindingFlags texture_binding_flags =
+                VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT |
+                VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT |
+                VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT;
+
+            const VkDescriptorSetLayoutBindingFlagsCreateInfo texture_binding_flags_info{
+                .sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
+                .pNext         = nullptr,
+                .bindingCount  = 1,
+                .pBindingFlags = &texture_binding_flags
+            };
+
+            const VkDescriptorSetLayoutBinding texture_binding{
+                .binding            = 0,
+                .descriptorType     = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                .descriptorCount    = max_texture_heap_size,
+                .stageFlags         = VK_SHADER_STAGE_FRAGMENT_BIT,
+                .pImmutableSamplers = nullptr
+            };
+
+            const VkDescriptorSetLayoutCreateInfo texture_layout_create_info{
+                .sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+                .pNext        = &texture_binding_flags_info,
+                .flags        = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT,
+                .bindingCount = 1,
+                .pBindings    = &texture_binding
+            };
+
+            result = vkCreateDescriptorSetLayout(m_vulkan_device, &texture_layout_create_info, nullptr, &m_texture_set_layout);
+            if (result != VK_SUCCESS) {
+                log_context->warn("Texture heap descriptor set layout creation failed with {} - textures may not work", static_cast<int32_t>(result));
+                m_texture_set_layout = VK_NULL_HANDLE;
+            }
+        }
+
+        // Push constant range for draw ID
+        const VkPushConstantRange push_constant_range{
+            .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+            .offset     = 0,
+            .size       = sizeof(int32_t) // ERHE_DRAW_ID
+        };
+
+        // Pipeline layout with set 0 (UBO/SSBO) and optionally set 1 (texture heap)
+        std::vector<VkDescriptorSetLayout> set_layouts;
+        set_layouts.push_back(m_descriptor_set_layout);
+        if (m_texture_set_layout != VK_NULL_HANDLE) {
+            set_layouts.push_back(m_texture_set_layout);
+        }
+
+        const VkPipelineLayoutCreateInfo pipeline_layout_create_info{
+            .sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+            .pNext                  = nullptr,
+            .flags                  = 0,
+            .setLayoutCount         = static_cast<uint32_t>(set_layouts.size()),
+            .pSetLayouts            = set_layouts.data(),
+            .pushConstantRangeCount = 1,
+            .pPushConstantRanges    = &push_constant_range
+        };
+
+        result = vkCreatePipelineLayout(m_vulkan_device, &pipeline_layout_create_info, nullptr, &m_pipeline_layout);
+        if (result != VK_SUCCESS) {
+            log_context->critical("vkCreatePipelineLayout() failed with {} {}", static_cast<int32_t>(result), c_str(result));
+            abort();
+        }
+
+        // Create per-frame descriptor pool for fallback binding (when push descriptors unavailable)
+        if (!m_device_extensions.m_VK_KHR_push_descriptor) {
+            const VkDescriptorPoolSize pool_sizes[] = {
+                {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         256},
+                {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,         256},
+                {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 256}
+            };
+
+            const VkDescriptorPoolCreateInfo pool_create_info{
+                .sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+                .pNext         = nullptr,
+                .flags         = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT,
+                .maxSets       = 256,
+                .poolSizeCount = 3,
+                .pPoolSizes    = pool_sizes
+            };
+
+            result = vkCreateDescriptorPool(m_vulkan_device, &pool_create_info, nullptr, &m_per_frame_descriptor_pool);
+            if (result != VK_SUCCESS) {
+                log_context->error("vkCreateDescriptorPool() for fallback pool failed with {}", static_cast<int32_t>(result));
+            }
+        }
+
+        log_context->info(
+            "Pipeline infrastructure created: push_descriptors={}",
+            m_device_extensions.m_VK_KHR_push_descriptor ? "yes" : "no"
+        );
+    }
 }
 
 auto Device_impl::allocate_command_buffer() -> VkCommandBuffer
@@ -809,9 +1116,34 @@ Device_impl::~Device_impl() noexcept
 {
     vkDeviceWaitIdle(m_vulkan_device);
 
+    for (auto& [hash, pipeline] : m_pipeline_map) {
+        if (pipeline != VK_NULL_HANDLE) {
+            vkDestroyPipeline(m_vulkan_device, pipeline, nullptr);
+        }
+    }
+    m_pipeline_map.clear();
+    if (m_per_frame_descriptor_pool != VK_NULL_HANDLE) {
+        vkDestroyDescriptorPool(m_vulkan_device, m_per_frame_descriptor_pool, nullptr);
+    }
+    if (m_pipeline_layout != VK_NULL_HANDLE) {
+        vkDestroyPipelineLayout(m_vulkan_device, m_pipeline_layout, nullptr);
+    }
+    if (m_texture_set_layout != VK_NULL_HANDLE) {
+        vkDestroyDescriptorSetLayout(m_vulkan_device, m_texture_set_layout, nullptr);
+    }
+    if (m_descriptor_set_layout != VK_NULL_HANDLE) {
+        vkDestroyDescriptorSetLayout(m_vulkan_device, m_descriptor_set_layout, nullptr);
+    }
+    if (m_pipeline_cache != VK_NULL_HANDLE) {
+        vkDestroyPipelineCache(m_vulkan_device, m_pipeline_cache, nullptr);
+    }
     if (m_vulkan_command_pool != VK_NULL_HANDLE) {
         vkDestroyCommandPool(m_vulkan_device, m_vulkan_command_pool, nullptr);
     }
+    // Destroy immediate commands before the device - it owns a command pool,
+    // command buffers, fences, and semaphores
+    m_immediate_commands.reset();
+
     // NOTE: This adds completion handlers for destroying related vulkan objects
     m_surface.reset();
 
@@ -819,6 +1151,13 @@ Device_impl::~Device_impl() noexcept
 
     for (const Completion_handler& entry : m_completion_handlers) {
         entry.callback();
+    }
+
+    // Destroy ring buffers before VMA allocator - they hold VMA allocations
+    m_ring_buffers.clear();
+
+    if (m_vulkan_frame_end_semaphore != VK_NULL_HANDLE) {
+        vkDestroySemaphore(m_vulkan_device, m_vulkan_frame_end_semaphore, nullptr);
     }
 
     vmaDestroyAllocator(m_vma_allocator);
@@ -830,6 +1169,77 @@ Device_impl::~Device_impl() noexcept
     }
     vkDestroyInstance(m_vulkan_instance, nullptr);
     volkFinalize();
+}
+
+auto Device_impl::get_pipeline_cache() const -> VkPipelineCache
+{
+    return m_pipeline_cache;
+}
+
+auto Device_impl::get_pipeline_layout() const -> VkPipelineLayout
+{
+    return m_pipeline_layout;
+}
+
+auto Device_impl::get_descriptor_set_layout() const -> VkDescriptorSetLayout
+{
+    return m_descriptor_set_layout;
+}
+
+auto Device_impl::has_push_descriptor() const -> bool
+{
+    return m_device_extensions.m_VK_KHR_push_descriptor;
+}
+
+auto Device_impl::allocate_descriptor_set() -> VkDescriptorSet
+{
+    if (m_per_frame_descriptor_pool == VK_NULL_HANDLE) {
+        return VK_NULL_HANDLE;
+    }
+
+    const VkDescriptorSetAllocateInfo allocate_info{
+        .sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+        .pNext              = nullptr,
+        .descriptorPool     = m_per_frame_descriptor_pool,
+        .descriptorSetCount = 1,
+        .pSetLayouts        = &m_descriptor_set_layout
+    };
+
+    VkDescriptorSet descriptor_set = VK_NULL_HANDLE;
+    VkResult result = vkAllocateDescriptorSets(m_vulkan_device, &allocate_info, &descriptor_set);
+    if (result != VK_SUCCESS) {
+        log_context->warn("vkAllocateDescriptorSets() failed with {}", static_cast<int32_t>(result));
+        return VK_NULL_HANDLE;
+    }
+
+    return descriptor_set;
+}
+
+void Device_impl::reset_descriptor_pool()
+{
+    if (m_per_frame_descriptor_pool != VK_NULL_HANDLE) {
+        vkResetDescriptorPool(m_vulkan_device, m_per_frame_descriptor_pool, 0);
+    }
+}
+
+auto Device_impl::get_or_create_graphics_pipeline(const VkGraphicsPipelineCreateInfo& create_info, std::size_t hash) -> VkPipeline
+{
+    std::lock_guard<std::mutex> lock{m_pipeline_map_mutex};
+
+    auto it = m_pipeline_map.find(hash);
+    if (it != m_pipeline_map.end()) {
+        return it->second;
+    }
+
+    VkPipeline pipeline = VK_NULL_HANDLE;
+    VkResult result = vkCreateGraphicsPipelines(m_vulkan_device, m_pipeline_cache, 1, &create_info, nullptr, &pipeline);
+    if (result != VK_SUCCESS) {
+        log_program->error("vkCreateGraphicsPipelines() failed with {}", static_cast<int32_t>(result));
+        return VK_NULL_HANDLE;
+    }
+
+    m_pipeline_map[hash] = pipeline;
+    return pipeline;
 }
 
 auto Device_impl::choose_physical_device(
@@ -1117,7 +1527,7 @@ auto Device_impl::get_immediate_commands() -> Vulkan_immediate_commands&
 
 auto Device_impl::get_handle(const Texture& texture, const Sampler& sampler) const -> uint64_t
 {
-    ERHE_FATAL("Not implemented");
+    // TODO Implement bindless texture handles via descriptor indexing
     static_cast<void>(texture);
     static_cast<void>(sampler);
     return 0;
@@ -1128,7 +1538,7 @@ auto Device_impl::create_dummy_texture(const erhe::dataformat::Format format) ->
     // TODO Move function to Device instead of Device_impl?
     const Texture_create_info create_info{
         .device      = m_device,
-        .usage_mask  = Image_usage_flag_bit_mask::sampled, // TODO Is sampled all that is needed here?
+        .usage_mask  = Image_usage_flag_bit_mask::sampled | Image_usage_flag_bit_mask::transfer_dst,
         .type        = Texture_type::texture_2d,
         .pixelformat = format,
         .width       = 2,
@@ -1210,11 +1620,106 @@ auto Device_impl::get_buffer_alignment(const Buffer_target target) -> std::size_
 
 void Device_impl::upload_to_buffer(const Buffer& buffer, const size_t offset, const void* data, const size_t length)
 {
-    ERHE_FATAL("Not implemented");
-    static_cast<void>(buffer);
-    static_cast<void>(offset);
-    static_cast<void>(data);
-    static_cast<void>(length);
+    // For host-visible buffers, map and copy directly
+    // const_cast is needed because map_bytes is non-const (it modifies internal map state)
+    Buffer_impl& impl = const_cast<Buffer_impl&>(buffer.get_impl());
+    std::span<std::byte> map = impl.map_bytes(offset, length);
+    if (!map.empty()) {
+        std::memcpy(map.data(), data, length);
+        impl.flush_bytes(offset, length);
+        return;
+    }
+    // TODO Implement staging buffer upload for non-host-visible buffers
+    log_buffer->warn("upload_to_buffer: buffer not mappable, staging upload not yet implemented");
+}
+
+void Device_impl::upload_to_texture(
+    const Texture&               texture,
+    int                          level,
+    int                          x,
+    int                          y,
+    int                          width,
+    int                          height,
+    erhe::dataformat::Format     pixelformat,
+    const void*                  data,
+    int                          row_stride
+)
+{
+    if ((data == nullptr) || (width <= 0) || (height <= 0)) {
+        return;
+    }
+
+    const std::size_t pixel_size  = erhe::dataformat::get_format_size_bytes(pixelformat);
+    const std::size_t src_stride  = (row_stride > 0) ? static_cast<std::size_t>(row_stride) : (static_cast<std::size_t>(width) * pixel_size);
+    const std::size_t data_size   = src_stride * static_cast<std::size_t>(height);
+
+    // Create staging buffer
+    VmaAllocationCreateInfo staging_alloc_info{};
+    staging_alloc_info.usage = VMA_MEMORY_USAGE_CPU_ONLY;
+    staging_alloc_info.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT;
+
+    const VkBufferCreateInfo staging_buffer_info{
+        .sType                 = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .pNext                 = nullptr,
+        .flags                 = 0,
+        .size                  = data_size,
+        .usage                 = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        .sharingMode           = VK_SHARING_MODE_EXCLUSIVE,
+        .queueFamilyIndexCount = 0,
+        .pQueueFamilyIndices   = nullptr
+    };
+
+    VkBuffer       staging_buffer     = VK_NULL_HANDLE;
+    VmaAllocation  staging_allocation = VK_NULL_HANDLE;
+    VmaAllocationInfo staging_alloc_result{};
+
+    VkResult result = vmaCreateBuffer(m_vma_allocator, &staging_buffer_info, &staging_alloc_info, &staging_buffer, &staging_allocation, &staging_alloc_result);
+    if (result != VK_SUCCESS) {
+        log_texture->error("upload_to_texture: staging buffer creation failed with {}", static_cast<int32_t>(result));
+        return;
+    }
+
+    // Copy data to staging buffer
+    std::memcpy(staging_alloc_result.pMappedData, data, data_size);
+    vmaFlushAllocation(m_vma_allocator, staging_allocation, 0, data_size);
+
+    // Record copy command
+    const Vulkan_immediate_commands::Command_buffer_wrapper& cmd = m_immediate_commands->acquire();
+
+    const Texture_impl& tex_impl = texture.get_impl();
+    VkImage destination_image = tex_impl.get_vk_image();
+
+    // Transition to transfer dst using tracked layout
+    tex_impl.transition_layout(cmd.m_cmd_buf, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+    const VkBufferImageCopy region{
+        .bufferOffset      = 0,
+        .bufferRowLength   = (row_stride > 0) ? static_cast<uint32_t>(row_stride / pixel_size) : 0,
+        .bufferImageHeight = 0,
+        .imageSubresource  = {
+            .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
+            .mipLevel       = static_cast<uint32_t>(level),
+            .baseArrayLayer = 0,
+            .layerCount     = 1
+        },
+        .imageOffset = {x, y, 0},
+        .imageExtent = {
+            static_cast<uint32_t>(width),
+            static_cast<uint32_t>(height),
+            1
+        }
+    };
+    vkCmdCopyBufferToImage(cmd.m_cmd_buf, staging_buffer, destination_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+
+    // Transition to shader read using tracked layout
+    tex_impl.transition_layout(cmd.m_cmd_buf, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+    // Submit and wait (staging buffer must survive until copy completes)
+    Submit_handle submit = m_immediate_commands->submit(cmd);
+    m_immediate_commands->wait(submit);
+
+    // Destroy staging buffer
+    vmaDestroyBuffer(m_vma_allocator, staging_buffer, staging_allocation);
 }
 
 void Device_impl::add_completion_handler(std::function<void()> callback)
@@ -1262,12 +1767,15 @@ auto Device_impl::wait_frame(Frame_state& out_frame_state) -> bool
 
 auto Device_impl::begin_frame(const Frame_begin_info& frame_begin_info) -> bool
 {
+    // Reset per-frame descriptor pool at the start of each frame
+    reset_descriptor_pool();
+
     if (m_surface) {
         Swapchain* swapchain = m_surface->get_swapchain();
         if (swapchain != nullptr) {
             return swapchain->begin_frame(frame_begin_info);
         }
-    } 
+    }
     return false;
 }
 
@@ -1387,7 +1895,8 @@ auto Device_impl::allocate_ring_buffer_entry(
 
 void Device_impl::memory_barrier(Memory_barrier_mask barriers)
 {
-    ERHE_FATAL("Not implemented");
+    // TODO Implement using vkCmdPipelineBarrier on the active command buffer
+    // For now, this is a no-op since Vulkan barriers are per-command-buffer
     static_cast<void>(barriers);
 }
 
@@ -1441,38 +1950,81 @@ auto Device_impl::get_format_properties(erhe::dataformat::Format format) const -
 
 auto Device_impl::get_supported_depth_stencil_formats() const -> std::vector<erhe::dataformat::Format>
 {
-    ERHE_FATAL("Not implemented");
-    return {};
+    std::vector<erhe::dataformat::Format> result;
+    // Query common depth/stencil formats for support
+    const std::vector<erhe::dataformat::Format> candidates = {
+        erhe::dataformat::Format::format_d32_sfloat,
+        erhe::dataformat::Format::format_d32_sfloat_s8_uint,
+        erhe::dataformat::Format::format_d24_unorm_s8_uint,
+        erhe::dataformat::Format::format_d16_unorm,
+    };
+    for (erhe::dataformat::Format candidate : candidates) {
+        Format_properties properties = get_format_properties(candidate);
+        if (properties.depth_renderable || properties.stencil_renderable) {
+            result.push_back(candidate);
+        }
+    }
+    return result;
 }
 
 void Device_impl::sort_depth_stencil_formats(std::vector<erhe::dataformat::Format>& formats, unsigned int sort_flags, int requested_sample_count) const
 {
-    ERHE_FATAL("Not implemented");
-    static_cast<void>(formats);
+    // Simple sort: prefer depth+stencil over depth-only, prefer higher precision
     static_cast<void>(sort_flags);
     static_cast<void>(requested_sample_count);
+    std::sort(formats.begin(), formats.end(), [](erhe::dataformat::Format a, erhe::dataformat::Format b) {
+        int a_depth   = static_cast<int>(erhe::dataformat::get_depth_size_bits(a));
+        int b_depth   = static_cast<int>(erhe::dataformat::get_depth_size_bits(b));
+        int a_stencil = static_cast<int>(erhe::dataformat::get_stencil_size_bits(a));
+        int b_stencil = static_cast<int>(erhe::dataformat::get_stencil_size_bits(b));
+        int a_score   = a_depth + a_stencil;
+        int b_score   = b_depth + b_stencil;
+        return a_score > b_score;
+    });
 }
 
 auto Device_impl::choose_depth_stencil_format(const std::vector<erhe::dataformat::Format>& formats) const -> erhe::dataformat::Format
 {
-    ERHE_FATAL("Not implemented");
-    static_cast<void>(formats);
-    return erhe::dataformat::Format::format_undefined;
+    if (formats.empty()) {
+        return erhe::dataformat::Format::format_d32_sfloat;
+    }
+    return formats.front();
 }
 
 auto Device_impl::choose_depth_stencil_format(unsigned int sort_flags, int requested_sample_count) const -> erhe::dataformat::Format
 {
-    ERHE_FATAL("Not implemented");
-    static_cast<void>(sort_flags);
-    static_cast<void>(requested_sample_count);
-    return erhe::dataformat::Format::format_undefined;
+    std::vector<erhe::dataformat::Format> formats = get_supported_depth_stencil_formats();
+    sort_depth_stencil_formats(formats, sort_flags, requested_sample_count);
+    return choose_depth_stencil_format(formats);
 }
 
 void Device_impl::clear_texture(const Texture& texture, std::array<double, 4> value)
 {
-    ERHE_FATAL("Not implemented");
-    static_cast<void>(texture);
-    static_cast<void>(value);
+    const Texture_impl& tex_impl = texture.get_impl();
+    VkImage image = tex_impl.get_vk_image();
+    if (image == VK_NULL_HANDLE) {
+        return;
+    }
+
+    const Vulkan_immediate_commands::Command_buffer_wrapper& cmd = m_immediate_commands->acquire();
+
+    tex_impl.transition_layout(cmd.m_cmd_buf, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+    const VkClearColorValue clear_color{
+        .float32 = {
+            static_cast<float>(value[0]),
+            static_cast<float>(value[1]),
+            static_cast<float>(value[2]),
+            static_cast<float>(value[3])
+        }
+    };
+    const VkImageSubresourceRange range{VK_IMAGE_ASPECT_COLOR_BIT, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS};
+    vkCmdClearColorImage(cmd.m_cmd_buf, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clear_color, 1, &range);
+
+    tex_impl.transition_layout(cmd.m_cmd_buf, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+    Submit_handle submit = m_immediate_commands->submit(cmd);
+    m_immediate_commands->wait(submit);
 }
 
 auto Device_impl::make_blit_command_encoder() -> Blit_command_encoder

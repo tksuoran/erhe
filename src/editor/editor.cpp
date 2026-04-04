@@ -223,6 +223,7 @@ public:
     std::mutex m_mutex;
     void tick()
     {
+        m_in_tick.store(true);
         std::lock_guard<std::mutex> lock{m_mutex};
 
         ERHE_PROFILE_FUNCTION();
@@ -392,6 +393,7 @@ public:
 #endif // TODO
         // log_frame->trace("tick() end");
         m_frame_log_window->on_frame_end();
+        m_in_tick.store(false);
     }
 
     [[nodiscard]] static auto get_windows_ini_path(bool openxr) -> std::string
@@ -1422,7 +1424,7 @@ public:
 
         m_window->register_redraw_callback(
             [this](){
-                if (!m_run_started) {
+                if (!m_run_started || m_in_tick.load()) {
                     return;
                 }
                 if (
@@ -1603,7 +1605,8 @@ public:
     }
 
     bool m_close_requested{false};
-    bool m_run_started    {false};
+    bool                                    m_run_started{false};
+    std::atomic<bool>                       m_in_tick    {false};
     bool m_run_stopped    {false};
 
 

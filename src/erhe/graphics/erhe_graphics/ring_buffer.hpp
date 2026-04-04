@@ -12,7 +12,7 @@ class Ring_buffer_create_info
 public:
     std::size_t                size             {0};
     Ring_buffer_usage          ring_buffer_usage{Ring_buffer_usage::None};
-    Buffer_usage               buffer_usage     {0xff}; // TODO
+    Buffer_usage               buffer_usage     {static_cast<Buffer_usage>(0x03ffu)}; // all usage bits including transfer_src/transfer_dst
     erhe::utility::Debug_label debug_label      {};
 };
 

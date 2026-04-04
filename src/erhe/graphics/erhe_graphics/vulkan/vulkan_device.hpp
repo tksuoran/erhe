@@ -10,6 +10,7 @@ VK_DEFINE_HANDLE(VmaAllocator)
 
 #include <array>
 #include <memory>
+#include <mutex>
 #include <unordered_map>
 #include <vector>
 
@@ -91,6 +92,7 @@ public:
     void memory_barrier        (Memory_barrier_mask barriers);
     void clear_texture         (const Texture& texture, std::array<double, 4> clear_value);
     void upload_to_buffer      (const Buffer& buffer, size_t offset, const void* data, size_t length);
+    void upload_to_texture     (const Texture& texture, int level, int x, int y, int width, int height, erhe::dataformat::Format pixelformat, const void* data, int row_stride);
     void add_completion_handler(std::function<void()> callback);
     void on_thread_enter       ();
 
@@ -128,6 +130,13 @@ public:
     [[nodiscard]] auto get_memory_type                (uint32_t memory_type_index) const -> const VkMemoryType&;
     [[nodiscard]] auto get_memory_heap                (uint32_t memory_heap_index) const -> const VkMemoryHeap&;
     [[nodiscard]] auto get_immediate_commands         () -> Vulkan_immediate_commands&;
+    [[nodiscard]] auto get_pipeline_cache              () const -> VkPipelineCache;
+    [[nodiscard]] auto get_pipeline_layout              () const -> VkPipelineLayout;
+    [[nodiscard]] auto get_descriptor_set_layout        () const -> VkDescriptorSetLayout;
+    [[nodiscard]] auto has_push_descriptor              () const -> bool;
+    [[nodiscard]] auto get_or_create_graphics_pipeline  (const VkGraphicsPipelineCreateInfo& create_info, std::size_t hash) -> VkPipeline;
+    [[nodiscard]] auto allocate_descriptor_set          () -> VkDescriptorSet;
+    void               reset_descriptor_pool            ();
 
     [[nodiscard]] auto debug_report_callback(
         VkDebugReportFlagsEXT      flags,
@@ -207,6 +216,15 @@ private:
 
     VkPhysicalDeviceDriverProperties  m_driver_properties{};
     VkPhysicalDeviceMemoryProperties2 m_memory_properties{};
+
+    // Pipeline infrastructure
+    VkPipelineCache                              m_pipeline_cache              {VK_NULL_HANDLE};
+    VkDescriptorSetLayout                        m_descriptor_set_layout       {VK_NULL_HANDLE};
+    VkDescriptorSetLayout                        m_texture_set_layout          {VK_NULL_HANDLE};
+    VkPipelineLayout                             m_pipeline_layout             {VK_NULL_HANDLE};
+    VkDescriptorPool                             m_per_frame_descriptor_pool   {VK_NULL_HANDLE};
+    std::mutex                                   m_pipeline_map_mutex;
+    std::unordered_map<std::size_t, VkPipeline>  m_pipeline_map;
 
     // For ring buffer:
     bool                                      m_need_sync{false};

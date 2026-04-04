@@ -148,6 +148,9 @@ public:
 #if !defined(ERHE_GRAPHICS_LIBRARY_METAL)
         m_window.register_redraw_callback(
             [this](){
+                if (!m_first_frame_rendered || m_in_tick.load()) {
+                    return;
+                }
                 if (
                     (m_last_window_width  != m_window.get_width ()) ||
                     (m_last_window_height != m_window.get_height())
@@ -156,7 +159,6 @@ public:
                     m_last_window_width  = m_window.get_width();
                     m_last_window_height = m_window.get_height();
                 }
-                tick();
             }
         );
 #endif
@@ -227,7 +229,10 @@ public:
             const bool begin_frame_ok = m_graphics_device.begin_frame(frame_begin_info);
             ERHE_VERIFY(begin_frame_ok);
 
+            m_in_tick.store(true);
             tick();
+            m_in_tick.store(false);
+            m_first_frame_rendered = true;
 
             const erhe::graphics::Frame_end_info frame_end_info{
                 .requested_display_time = 0
@@ -1257,6 +1262,8 @@ private:
     erhe::graphics::Render_pipeline_state                       m_multi_tex_pipeline;
 
     bool                                                        m_close_requested{false};
+    bool                                                        m_first_frame_rendered{false};
+    std::atomic<bool>                                           m_in_tick{false};
 };
 
 void run_rendering_test()

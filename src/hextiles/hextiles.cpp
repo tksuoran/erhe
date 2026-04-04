@@ -113,6 +113,9 @@ public:
 
         m_window.register_redraw_callback(
             [this](){
+                if (m_in_tick.load()) {
+                    return;
+                }
                 if (
                     (m_last_window_width  != m_window.get_width()) ||
                     (m_last_window_height != m_window.get_height())
@@ -133,6 +136,7 @@ public:
     uint32_t          m_swapchain_width       {0};
     uint32_t          m_swapchain_height      {0};
     std::atomic<bool> m_request_resize_pending{false};
+    std::atomic<bool> m_in_tick              {false};
 
     auto on_window_resize_event(const erhe::window::Input_event& input_event) -> bool override
     {
@@ -305,6 +309,7 @@ public:
 
     void tick(float dt_s, int64_t timestamp_ns)
     {
+        m_in_tick.store(true);
         std::lock_guard<std::mutex> lock{m_mutex};
 
         erhe::graphics::Frame_state frame_state{};
@@ -344,6 +349,7 @@ public:
 
         const bool end_frame_ok = m_graphics_device.end_frame(frame_end_info);
         ERHE_VERIFY(end_frame_ok);
+        m_in_tick.store(false);
     }
 
     auto on_window_close_event(const erhe::window::Input_event&) -> bool override
