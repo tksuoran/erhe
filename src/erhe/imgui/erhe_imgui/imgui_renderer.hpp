@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_dataformat/vertex_format.hpp"
+#include "erhe_graphics/bind_group_layout.hpp"
 #include "erhe_graphics/fragment_outputs.hpp"
 #include "erhe_graphics/gpu_timer.hpp"
 #include "erhe_graphics/device.hpp"
@@ -159,6 +160,7 @@ private:
 
     erhe::graphics::Device&                       m_graphics_device;
     Imgui_program_interface                       m_imgui_program_interface;
+    erhe::graphics::Bind_group_layout             m_bind_group_layout;
     erhe::graphics::Shader_stages                 m_shader_stages;
     erhe::graphics::Ring_buffer_client            m_vertex_buffer;
     erhe::graphics::Ring_buffer_client            m_index_buffer;

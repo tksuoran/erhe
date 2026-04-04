@@ -6,6 +6,9 @@
 #include "erhe_graphics/vulkan/vulkan_sampler.hpp"
 #include "erhe_graphics/vulkan/vulkan_texture.hpp"
 #include "erhe_graphics/graphics_log.hpp"
+#include "erhe_dataformat/dataformat.hpp"
+
+#include <algorithm>
 
 namespace erhe::graphics {
 
@@ -191,8 +194,24 @@ auto Texture_heap_impl::assign(std::size_t slot, const Texture* texture, const S
         return static_cast<uint64_t>(slot);
     }
 
-    VkImageView image_view = texture->get_impl().get_vk_image_view();
-    VkSampler   vk_sampler = sampler->get_impl().get_vulkan_sampler();
+    // For depth/stencil textures, use a depth-only image view for sampling
+    Texture_impl& texture_impl = const_cast<Texture_impl&>(texture->get_impl());
+    VkImageView image_view = VK_NULL_HANDLE;
+    {
+        const erhe::dataformat::Format pixelformat = texture_impl.get_pixelformat();
+        const bool has_depth   = erhe::dataformat::get_depth_size_bits(pixelformat) > 0;
+        const bool has_stencil = erhe::dataformat::get_stencil_size_bits(pixelformat) > 0;
+        if (has_depth && has_stencil) {
+            image_view = texture_impl.get_vk_image_view(
+                VK_IMAGE_ASPECT_DEPTH_BIT,
+                0,
+                std::max(1, texture_impl.get_array_layer_count())
+            );
+        } else {
+            image_view = texture_impl.get_vk_image_view();
+        }
+    }
+    VkSampler vk_sampler = sampler->get_impl().get_vulkan_sampler();
     if ((image_view == VK_NULL_HANDLE) || (vk_sampler == VK_NULL_HANDLE)) {
         return static_cast<uint64_t>(slot);
     }

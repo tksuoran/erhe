@@ -7,6 +7,8 @@
 #include "volk.h"
 #include "vk_mem_alloc.h"
 
+#include <vector>
+
 namespace erhe::graphics {
 
 class Texture_impl final
@@ -40,7 +42,8 @@ public:
 
     [[nodiscard]] auto get_vma_allocation () const -> VmaAllocation;
     [[nodiscard]] auto get_vk_image      () const -> VkImage;
-    [[nodiscard]] auto get_vk_image_view () const -> VkImageView;
+    [[nodiscard]] auto get_vk_image_view () const -> VkImageView; // default view (all aspects, all layers)
+    [[nodiscard]] auto get_vk_image_view (VkImageAspectFlags aspect_mask, uint32_t base_layer, uint32_t layer_count) -> VkImageView;
     [[nodiscard]] auto get_current_layout() const -> VkImageLayout;
 
     void clear() const;
@@ -51,10 +54,21 @@ public:
 private:
     friend bool operator==(const Texture_impl& lhs, const Texture_impl& rhs) noexcept;
 
+    class Cached_image_view
+    {
+    public:
+        VkImageAspectFlags aspect_mask{0};
+        uint32_t           base_layer {0};
+        uint32_t           layer_count{0};
+        VkImageView        image_view {VK_NULL_HANDLE};
+    };
+
+    Device&       m_device;
     VmaAllocation m_vma_allocation{VK_NULL_HANDLE};
-    VkImage       m_vk_image      {VK_NULL_HANDLE};	
+    VkImage       m_vk_image      {VK_NULL_HANDLE};
     VkImageView   m_vk_image_view {VK_NULL_HANDLE};
     VkSampler     m_vk_sampler    {VK_NULL_HANDLE};
+    std::vector<Cached_image_view> m_cached_image_views;
 
     Texture_type               m_type                  {Texture_type::texture_2d};
     erhe::dataformat::Format   m_pixelformat           {erhe::dataformat::Format::format_8_vec4_srgb};

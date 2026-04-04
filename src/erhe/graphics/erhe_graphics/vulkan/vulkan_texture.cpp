@@ -29,11 +29,13 @@ auto Texture_impl::get_mipmap_dimensions(const Texture_type type) -> int
 }
 
 Texture_impl::Texture_impl(Texture_impl&& other) noexcept
-    : m_vma_allocation {other.m_vma_allocation}
-    , m_vk_image       {other.m_vk_image}
-    , m_vk_image_view  {other.m_vk_image_view}
-    , m_sample_count   {other.m_sample_count}
-    , m_current_layout {other.m_current_layout}
+    : m_device             {other.m_device}
+    , m_vma_allocation     {other.m_vma_allocation}
+    , m_vk_image           {other.m_vk_image}
+    , m_vk_image_view      {other.m_vk_image_view}
+    , m_cached_image_views {std::move(other.m_cached_image_views)}
+    , m_sample_count       {other.m_sample_count}
+    , m_current_layout     {other.m_current_layout}
 {
     other.m_vk_image       = VK_NULL_HANDLE;
     other.m_vk_image_view  = VK_NULL_HANDLE;
@@ -43,10 +45,18 @@ Texture_impl::Texture_impl(Texture_impl&& other) noexcept
 
 Texture_impl::~Texture_impl() noexcept
 {
+    VkDevice vulkan_device = m_device.get_impl().get_vulkan_device();
+    for (const Cached_image_view& cached : m_cached_image_views) {
+        if (cached.image_view != VK_NULL_HANDLE) {
+            vkDestroyImageView(vulkan_device, cached.image_view, nullptr);
+        }
+    }
+    m_cached_image_views.clear();
 }
 
 Texture_impl::Texture_impl(Device& device, const Texture_create_info& create_info)
-    : m_type                  {create_info.type}
+    : m_device                {device}
+    , m_type                  {create_info.type}
     , m_pixelformat           {create_info.pixelformat}
     , m_fixed_sample_locations{create_info.fixed_sample_locations}
     , m_sample_count          {create_info.sample_count}
@@ -230,6 +240,65 @@ auto Texture_impl::get_vk_image() const -> VkImage
 auto Texture_impl::get_vk_image_view() const -> VkImageView
 {
     return m_vk_image_view;
+}
+
+auto Texture_impl::get_vk_image_view(
+    const VkImageAspectFlags aspect_mask,
+    const uint32_t           base_layer,
+    const uint32_t           layer_count
+) -> VkImageView
+{
+    // Check cache
+    for (const Cached_image_view& cached : m_cached_image_views) {
+        if ((cached.aspect_mask == aspect_mask) &&
+            (cached.base_layer  == base_layer) &&
+            (cached.layer_count == layer_count))
+        {
+            return cached.image_view;
+        }
+    }
+
+    // Create new view
+    VkDevice vulkan_device = m_device.get_impl().get_vulkan_device();
+    VkFormat vk_format = to_vulkan(m_pixelformat);
+
+    const VkImageViewCreateInfo image_view_create_info{
+        .sType            = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        .pNext            = nullptr,
+        .flags            = 0,
+        .image            = m_vk_image,
+        .viewType         = (layer_count > 1) ? VK_IMAGE_VIEW_TYPE_2D_ARRAY : VK_IMAGE_VIEW_TYPE_2D,
+        .format           = vk_format,
+        .components       = {
+            .r = VK_COMPONENT_SWIZZLE_R,
+            .g = VK_COMPONENT_SWIZZLE_G,
+            .b = VK_COMPONENT_SWIZZLE_B,
+            .a = VK_COMPONENT_SWIZZLE_A
+        },
+        .subresourceRange = {
+            .aspectMask     = aspect_mask,
+            .baseMipLevel   = 0,
+            .levelCount     = static_cast<uint32_t>(m_level_count),
+            .baseArrayLayer = base_layer,
+            .layerCount     = layer_count
+        }
+    };
+
+    VkImageView image_view = VK_NULL_HANDLE;
+    VkResult result = vkCreateImageView(vulkan_device, &image_view_create_info, nullptr, &image_view);
+    if (result != VK_SUCCESS) {
+        log_texture->error("vkCreateImageView() for cached view failed with {}", static_cast<int32_t>(result));
+        return VK_NULL_HANDLE;
+    }
+
+    m_cached_image_views.push_back(Cached_image_view{
+        .aspect_mask = aspect_mask,
+        .base_layer  = base_layer,
+        .layer_count = layer_count,
+        .image_view  = image_view
+    });
+
+    return image_view;
 }
 
 auto Texture_impl::get_current_layout() const -> VkImageLayout

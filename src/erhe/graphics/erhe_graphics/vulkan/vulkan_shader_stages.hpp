@@ -77,8 +77,9 @@ public:
     // Reloads program by consuming prototype
     void reload    (Shader_stages_prototype&& prototype);
     void invalidate();
-    [[nodiscard]] auto name    () const -> const std::string&;
-    [[nodiscard]] auto is_valid() const -> bool;
+    [[nodiscard]] auto name                () const -> const std::string&;
+    [[nodiscard]] auto is_valid            () const -> bool;
+    [[nodiscard]] auto get_bind_group_layout() const -> const Bind_group_layout*;
 
     [[nodiscard]] auto get_vertex_module  () const -> VkShaderModule;
     [[nodiscard]] auto get_fragment_module() const -> VkShaderModule;
@@ -87,12 +88,13 @@ public:
 private:
     void destroy_modules();
 
-    Device&        m_device;
-    std::string    m_name;
-    bool           m_is_valid{false};
-    VkShaderModule m_vertex_module  {VK_NULL_HANDLE};
-    VkShaderModule m_fragment_module{VK_NULL_HANDLE};
-    VkShaderModule m_compute_module {VK_NULL_HANDLE};
+    Device&            m_device;
+    std::string        m_name;
+    const Bind_group_layout* m_bind_group_layout{nullptr};
+    bool               m_is_valid{false};
+    VkShaderModule     m_vertex_module  {VK_NULL_HANDLE};
+    VkShaderModule     m_fragment_module{VK_NULL_HANDLE};
+    VkShaderModule     m_compute_module {VK_NULL_HANDLE};
 };
 
 class Shader_stages_impl_hash

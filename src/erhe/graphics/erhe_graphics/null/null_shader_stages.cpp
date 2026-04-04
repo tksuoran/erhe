@@ -47,6 +47,11 @@ void Shader_stages_impl::invalidate()
     m_is_valid = false;
 }
 
+auto Shader_stages_impl::get_bind_group_layout() const -> const Bind_group_layout*
+{
+    return nullptr;
+}
+
 auto Shader_stages_impl::name() const -> const std::string&
 {
     return m_name;

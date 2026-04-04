@@ -24,6 +24,10 @@ Render_command_encoder::Render_command_encoder(Device& device)
 }
 
 Render_command_encoder::~Render_command_encoder() noexcept = default;
+void Render_command_encoder::set_bind_group_layout(const Bind_group_layout* bind_group_layout)
+{
+    m_impl->set_bind_group_layout(bind_group_layout);
+}
 void Render_command_encoder::set_buffer(Buffer_target buffer_target, const Buffer* buffer, std::uintptr_t offset,
     std::uintptr_t length, std::uintptr_t index)
 {

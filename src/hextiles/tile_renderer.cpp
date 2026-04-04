@@ -50,6 +50,7 @@ auto Tile_renderer::make_prototype(erhe::graphics::Device& graphics_device) cons
             { erhe::graphics::Shader_type::vertex_shader,   m_shader_path / std::filesystem::path{"tile.vert"} },
             { erhe::graphics::Shader_type::fragment_shader, m_shader_path / std::filesystem::path{"tile.frag"} }
         },
+        .bind_group_layout = &m_bind_group_layout,
         .dump_interface    = true,
         .dump_final_source = true
     };
@@ -133,6 +134,13 @@ Tile_renderer::Tile_renderer(
     }
     , m_clip_from_window         {m_projection_block.add_mat4 ("clip_from_window")}
     , m_texture_handle           {m_projection_block.add_uvec2("texture")}
+    , m_bind_group_layout{
+        graphics_device,
+        erhe::graphics::Bind_group_layout_create_info{
+            .bindings = {{0, erhe::graphics::Binding_type::uniform_buffer}},
+            .debug_label = "Tile renderer"
+        }
+    }
     , m_u_clip_from_window_size  {m_clip_from_window->get_size_bytes()}
     , m_u_clip_from_window_offset{m_clip_from_window->get_offset_in_parent()}
     , m_u_texture_size           {m_texture_handle  ->get_size_bytes()}

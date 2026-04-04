@@ -3,6 +3,7 @@
 #include "erhe_dataformat/vertex_format.hpp"
 #include "erhe_renderer/debug_renderer_bucket.hpp"
 #include "erhe_renderer/view.hpp"
+#include "erhe_graphics/bind_group_layout.hpp"
 #include "erhe_graphics/compute_pipeline_state.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/fragment_outputs.hpp"
@@ -59,6 +60,7 @@ public:
     std::unique_ptr<erhe::graphics::Shader_stages>   line_shader_stages;
 
     std::unique_ptr<erhe::graphics::Shader_resource> view_block;
+    std::unique_ptr<erhe::graphics::Bind_group_layout> bind_group_layout;
     std::size_t                                      clip_from_world_offset{0};
     std::size_t                                      viewport_offset       {0};
     std::size_t                                      fov_offset            {0};

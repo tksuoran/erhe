@@ -3,6 +3,8 @@ add_library(${_target})
 add_library(erhe::graphics ALIAS ${_target})
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+    erhe_graphics/bind_group_layout.cpp
+    erhe_graphics/bind_group_layout.hpp
     erhe_graphics/blit_command_encoder.cpp
     erhe_graphics/blit_command_encoder.hpp
     erhe_graphics/buffer.cpp
@@ -85,6 +87,8 @@ erhe_target_sources_grouped(
 if (ERHE_GRAPHICS_API_OPENGL)
     erhe_target_sources_grouped(
         ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+        erhe_graphics/gl/gl_bind_group_layout.cpp
+        erhe_graphics/gl/gl_bind_group_layout.hpp
         erhe_graphics/gl/gl_blit_command_encoder.cpp
         erhe_graphics/gl/gl_blit_command_encoder.hpp
         erhe_graphics/gl/gl_buffer.cpp
@@ -137,6 +141,8 @@ endif ()
 if (ERHE_GRAPHICS_API_VULKAN)
     erhe_target_sources_grouped(
         ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+        erhe_graphics/vulkan/vulkan_bind_group_layout.cpp
+        erhe_graphics/vulkan/vulkan_bind_group_layout.hpp
         erhe_graphics/vulkan/vulkan_blit_command_encoder.cpp
         erhe_graphics/vulkan/vulkan_blit_command_encoder.hpp
         erhe_graphics/vulkan/vulkan_buffer.cpp
@@ -200,6 +206,8 @@ endif ()
 if (ERHE_GRAPHICS_API_METAL)
     erhe_target_sources_grouped(
         ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+        erhe_graphics/metal/metal_bind_group_layout.cpp
+        erhe_graphics/metal/metal_bind_group_layout.hpp
         erhe_graphics/metal/metal_blit_command_encoder.cpp
         erhe_graphics/metal/metal_blit_command_encoder.hpp
         erhe_graphics/metal/metal_buffer.cpp
@@ -251,6 +259,8 @@ endif ()
 if (ERHE_GRAPHICS_API_NONE)
     erhe_target_sources_grouped(
         ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+        erhe_graphics/null/null_bind_group_layout.cpp
+        erhe_graphics/null/null_bind_group_layout.hpp
         erhe_graphics/null/null_blit_command_encoder.cpp
         erhe_graphics/null/null_blit_command_encoder.hpp
         erhe_graphics/null/null_buffer.cpp

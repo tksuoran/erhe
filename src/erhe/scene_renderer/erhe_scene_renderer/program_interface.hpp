@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_dataformat/vertex_format.hpp"
+#include "erhe_graphics/bind_group_layout.hpp"
 #include "erhe_graphics/fragment_outputs.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_scene_renderer/camera_buffer.hpp"
@@ -9,6 +10,8 @@
 #include "erhe_scene_renderer/light_buffer.hpp"
 #include "erhe_scene_renderer/material_buffer.hpp"
 #include "erhe_scene_renderer/primitive_buffer.hpp"
+
+#include <memory>
 
 namespace erhe::graphics { class Device; }
 
@@ -50,16 +53,17 @@ public:
 
     [[nodiscard]] auto make_program(erhe::graphics::Shader_stages_prototype&& prototype) -> erhe::graphics::Shader_stages;
 
-    erhe::graphics::Device&          graphics_device;
-    erhe::graphics::Fragment_outputs fragment_outputs;
-    erhe::dataformat::Vertex_format& vertex_format;
-    Program_interface_config         config;
-    Camera_interface                 camera_interface;
-    Cube_interface                   cube_interface;
-    Joint_interface                  joint_interface;
-    Light_interface                  light_interface;
-    Material_interface               material_interface;
-    Primitive_interface              primitive_interface;
+    erhe::graphics::Device&                            graphics_device;
+    erhe::graphics::Fragment_outputs                   fragment_outputs;
+    erhe::dataformat::Vertex_format&                   vertex_format;
+    Program_interface_config                           config;
+    Camera_interface                                   camera_interface;
+    Cube_interface                                     cube_interface;
+    Joint_interface                                    joint_interface;
+    Light_interface                                    light_interface;
+    Material_interface                                 material_interface;
+    Primitive_interface                                primitive_interface;
+    std::unique_ptr<erhe::graphics::Bind_group_layout> bind_group_layout;
 };
 
 } // namespace erhe::scene_renderer

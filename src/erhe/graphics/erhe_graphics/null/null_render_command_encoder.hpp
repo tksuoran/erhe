@@ -15,6 +15,7 @@ public:
     Render_command_encoder_impl& operator=(Render_command_encoder_impl&&) = delete;
     ~Render_command_encoder_impl() noexcept;
 
+    void set_bind_group_layout    (const Bind_group_layout* bind_group_layout);
     void set_render_pipeline_state(const Render_pipeline_state& pipeline);
     void set_render_pipeline_state(const Render_pipeline_state& pipeline, const Shader_stages* override_shader_stages);
     void set_viewport_rect        (int x, int y, int width, int height);

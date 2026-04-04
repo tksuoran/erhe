@@ -439,6 +439,7 @@ auto Post_processing::make_program(
                 { erhe::graphics::Shader_type::vertex_shader,   m_shader_path / std::filesystem::path("post_processing.vert")},
                 { erhe::graphics::Shader_type::fragment_shader, m_shader_path / fs_path }
             },
+            .bind_group_layout     = &m_bind_group_layout,
             .build                 = true
         };
 }
@@ -466,6 +467,13 @@ Post_processing::Post_processing(erhe::graphics::Device& d, App_context& app_con
         }
     }
     , m_parameter_block   {d, "post_processing", 0, erhe::graphics::Shader_resource::Type::uniform_block}
+    , m_bind_group_layout{
+        d,
+        erhe::graphics::Bind_group_layout_create_info{
+            .bindings = {{0, erhe::graphics::Binding_type::uniform_buffer}},
+            .debug_label = "Post processing"
+        }
+    }
     , m_offsets           {m_parameter_block}
     , m_empty_vertex_input{d}
 

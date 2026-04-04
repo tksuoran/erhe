@@ -13,6 +13,7 @@
 #include "erhe_dataformat/dataformat_log.hpp"
 #include "erhe_gltf/gltf_log.hpp"
 #include "erhe_gltf/image_transfer.hpp"
+#include "erhe_graphics/bind_group_layout.hpp"
 #include "erhe_graphics/buffer_transfer_queue.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/device.hpp"
@@ -724,7 +725,8 @@ private:
                     m_content_wide_line_renderer->get_triangle_vertex_buffer_block(),
                     m_content_wide_line_renderer->get_view_block()
                 },
-                .shaders = { { Shader_type::compute_shader, shader_path / "compute_before_content_line.comp" } }
+                .shaders = { { Shader_type::compute_shader, shader_path / "compute_before_content_line.comp" } },
+                .bind_group_layout = m_content_wide_line_renderer->get_bind_group_layout(),
             };
             Shader_stages_prototype prototype{m_graphics_device, create_info};
             if (prototype.is_valid()) {
@@ -744,7 +746,8 @@ private:
                 .shaders = {
                     { Shader_type::vertex_shader,   shader_path / "line_after_compute.vert" },
                     { Shader_type::fragment_shader, shader_path / "line_after_compute.frag" }
-                }
+                },
+                .bind_group_layout = m_content_wide_line_renderer->get_bind_group_layout(),
             };
             Shader_stages_prototype prototype{m_graphics_device, create_info};
             if (prototype.is_valid()) {
@@ -831,6 +834,13 @@ private:
         const std::filesystem::path shader_path{"res/shaders"};
         const bool bindless = m_graphics_device.get_info().use_bindless_texture;
 
+        m_test_bind_group_layout = std::make_unique<erhe::graphics::Bind_group_layout>(
+            m_graphics_device,
+            erhe::graphics::Bind_group_layout_create_info{
+                .bindings = {{0, erhe::graphics::Binding_type::uniform_buffer}},
+                .debug_label = "Rendering test"
+            }
+        );
         m_quad_block = std::make_unique<erhe::graphics::Shader_resource>(
             m_graphics_device, "quad", 0, erhe::graphics::Shader_resource::Type::uniform_block
         );
@@ -857,6 +867,7 @@ private:
                 { erhe::graphics::Shader_type::vertex_shader,   shader_path / "textured_quad.vert" },
                 { erhe::graphics::Shader_type::fragment_shader, shader_path / "textured_quad.frag" }
             },
+            .bind_group_layout = m_test_bind_group_layout.get(),
             .build = true
         };
         m_quad_shader_stages = std::make_unique<erhe::graphics::Shader_stages>(
@@ -982,6 +993,7 @@ private:
                 { erhe::graphics::Shader_type::vertex_shader,   shader_path / "multi_texture_test.vert" },
                 { erhe::graphics::Shader_type::fragment_shader, shader_path / "multi_texture_test.frag" }
             },
+            .bind_group_layout = m_test_bind_group_layout.get(),
             .build = true
         };
         m_multi_tex_shader_stages = std::make_unique<erhe::graphics::Shader_stages>(
@@ -1088,6 +1100,7 @@ private:
                 { erhe::graphics::Shader_type::vertex_shader,   shader_path / "multi_texture_test.vert" },
                 { erhe::graphics::Shader_type::fragment_shader, shader_path / "separate_samplers_test.frag" }
             },
+            .bind_group_layout = m_test_bind_group_layout.get(),
             .build = true
         };
         m_sep_tex_shader_stages = std::make_unique<erhe::graphics::Shader_stages>(
@@ -1218,6 +1231,7 @@ private:
         "Quad uniform buffer",
         0 // binding point, matches quad block binding = 0
     };
+    std::unique_ptr<erhe::graphics::Bind_group_layout>           m_test_bind_group_layout;
     std::unique_ptr<erhe::graphics::Shader_resource>            m_quad_block;
     erhe::graphics::Shader_resource*                            m_quad_texture_handle{nullptr};
     erhe::graphics::Shader_resource*                            m_quad_uv_min        {nullptr};

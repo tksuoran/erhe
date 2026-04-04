@@ -139,6 +139,11 @@ auto Shader_stages_impl::name() const -> const std::string&
     return m_name;
 }
 
+auto Shader_stages_impl::get_bind_group_layout() const -> const Bind_group_layout*
+{
+    return m_bind_group_layout;
+}
+
 void Shader_stages_impl::reload(Shader_stages_prototype&& prototype)
 {
     if (!prototype.is_valid()) {
@@ -150,6 +155,7 @@ void Shader_stages_impl::reload(Shader_stages_prototype&& prototype)
     destroy_modules();
 
     m_name = prototype.name();
+    m_bind_group_layout = prototype.create_info().bind_group_layout;
 
     Shader_stages_prototype_impl& proto_impl = prototype.get_impl();
 

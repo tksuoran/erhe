@@ -1,9 +1,11 @@
 #include "erhe_graphics/vulkan/vulkan_render_command_encoder.hpp"
+#include "erhe_graphics/vulkan/vulkan_bind_group_layout.hpp"
 #include "erhe_graphics/vulkan/vulkan_buffer.hpp"
 #include "erhe_graphics/vulkan/vulkan_device.hpp"
 #include "erhe_graphics/vulkan/vulkan_helpers.hpp"
 #include "erhe_graphics/vulkan/vulkan_render_pass.hpp"
 #include "erhe_graphics/vulkan/vulkan_shader_stages.hpp"
+#include "erhe_graphics/bind_group_layout.hpp"
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/draw_indirect.hpp"
@@ -218,6 +220,16 @@ Render_command_encoder_impl::~Render_command_encoder_impl() noexcept
 {
 }
 
+void Render_command_encoder_impl::set_bind_group_layout(const Bind_group_layout* bind_group_layout)
+{
+    m_bind_group_layout = bind_group_layout;
+    if (bind_group_layout != nullptr) {
+        m_pipeline_layout = bind_group_layout->get_impl().get_pipeline_layout();
+    } else {
+        m_pipeline_layout = VK_NULL_HANDLE;
+    }
+}
+
 void Render_command_encoder_impl::set_render_pipeline_state(const Render_pipeline_state& pipeline)
 {
     set_render_pipeline_state(pipeline, nullptr);
@@ -252,6 +264,20 @@ void Render_command_encoder_impl::set_render_pipeline_state(
     }
 
     Device_impl& device_impl = m_device.get_impl();
+
+#if !defined(NDEBUG)
+    ERHE_VERIFY(m_bind_group_layout != nullptr); // set_bind_group_layout() must be called before set_render_pipeline_state()
+    const Bind_group_layout* shader_bind_group_layout = shader_stages->get_bind_group_layout();
+    ERHE_VERIFY(shader_bind_group_layout == nullptr || shader_bind_group_layout == m_bind_group_layout); // shader bind_group_layout must match the active one
+#endif
+
+    // Determine pipeline layout: prefer bind_group_layout from shader, fall back to global
+    const Bind_group_layout* bind_group_layout = shader_stages->get_bind_group_layout();
+    if (bind_group_layout != nullptr) {
+        m_pipeline_layout = bind_group_layout->get_impl().get_pipeline_layout();
+    } else {
+        m_pipeline_layout = device_impl.get_pipeline_layout();
+    }
 
     // Shader stages
     std::vector<VkPipelineShaderStageCreateInfo> shader_stage_infos;
@@ -427,7 +453,7 @@ void Render_command_encoder_impl::set_render_pipeline_state(
         .pDepthStencilState  = &depth_stencil_state,
         .pColorBlendState    = &color_blend_state,
         .pDynamicState       = &dynamic_state,
-        .layout              = device_impl.get_pipeline_layout(),
+        .layout              = m_pipeline_layout,
         .renderPass          = Render_pass_impl::get_active_render_pass(),
         .subpass             = 0,
         .basePipelineHandle  = VK_NULL_HANDLE,
@@ -440,6 +466,7 @@ void Render_command_encoder_impl::set_render_pipeline_state(
         auto hash_combine = [](std::size_t& seed, std::size_t value) {
             seed ^= value + 0x9e3779b9 + (seed << 6) + (seed >> 2);
         };
+        hash_combine(hash, reinterpret_cast<std::size_t>(m_pipeline_layout));
         hash_combine(hash, reinterpret_cast<std::size_t>(vertex_module));
         hash_combine(hash, reinterpret_cast<std::size_t>(fragment_module));
         hash_combine(hash, static_cast<std::size_t>(data.input_assembly.primitive_topology));
@@ -496,7 +523,7 @@ void Render_command_encoder_impl::set_render_pipeline_state(
     int32_t draw_id = 0;
     vkCmdPushConstants(
         command_buffer,
-        device_impl.get_pipeline_layout(),
+        m_pipeline_layout,
         VK_SHADER_STAGE_VERTEX_BIT,
         0,
         sizeof(int32_t),
@@ -589,6 +616,10 @@ void Render_command_encoder_impl::set_buffer(
         return;
     }
 
+#if !defined(NDEBUG)
+    ERHE_VERIFY(m_bind_group_layout != nullptr); // set_bind_group_layout() must be called before set_buffer()
+#endif
+
     VkCommandBuffer command_buffer = Render_pass_impl::get_active_command_buffer();
     if (command_buffer == VK_NULL_HANDLE) {
         return;
@@ -624,7 +655,7 @@ void Render_command_encoder_impl::set_buffer(
         vkCmdPushDescriptorSetKHR(
             command_buffer,
             VK_PIPELINE_BIND_POINT_GRAPHICS,
-            device_impl.get_pipeline_layout(),
+            (m_pipeline_layout != VK_NULL_HANDLE) ? m_pipeline_layout : device_impl.get_pipeline_layout(),
             0, // set index
             1,
             &write
@@ -666,7 +697,7 @@ void Render_command_encoder_impl::set_buffer(
         vkCmdBindDescriptorSets(
             command_buffer,
             VK_PIPELINE_BIND_POINT_GRAPHICS,
-            device_impl.get_pipeline_layout(),
+            (m_pipeline_layout != VK_NULL_HANDLE) ? m_pipeline_layout : device_impl.get_pipeline_layout(),
             0, // set index
             1,
             &descriptor_set,
@@ -785,7 +816,7 @@ void Render_command_encoder_impl::multi_draw_indexed_primitives_indirect(
         int32_t draw_id = static_cast<int32_t>(i);
         vkCmdPushConstants(
             command_buffer,
-            device_impl.get_pipeline_layout(),
+            (m_pipeline_layout != VK_NULL_HANDLE) ? m_pipeline_layout : device_impl.get_pipeline_layout(),
             VK_SHADER_STAGE_VERTEX_BIT,
             0,
             sizeof(int32_t),

@@ -749,7 +749,8 @@ public:
                                 m_content_wide_line_renderer->get_triangle_vertex_buffer_block(),
                                 m_content_wide_line_renderer->get_view_block()
                             },
-                            .shaders = { { Shader_type::compute_shader, shader_path / "compute_before_content_line.comp" } }
+                            .shaders = { { Shader_type::compute_shader, shader_path / "compute_before_content_line.comp" } },
+                            .bind_group_layout = m_content_wide_line_renderer->get_bind_group_layout(),
                         };
                         Shader_stages_prototype prototype{*m_graphics_device, create_info};
                         if (prototype.is_valid()) {
@@ -766,7 +767,8 @@ public:
                             .shaders = {
                                 { Shader_type::vertex_shader,   shader_path / "line_after_compute.vert" },
                                 { Shader_type::fragment_shader, shader_path / "line_after_compute.frag" }
-                            }
+                            },
+                            .bind_group_layout = m_content_wide_line_renderer->get_bind_group_layout(),
                         };
                         Shader_stages_prototype prototype{*m_graphics_device, create_info};
                         if (prototype.is_valid()) {

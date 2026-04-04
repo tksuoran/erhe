@@ -197,6 +197,11 @@ Render_command_encoder_impl::Render_command_encoder_impl(Device& device)
 
 Render_command_encoder_impl::~Render_command_encoder_impl() noexcept = default;
 
+void Render_command_encoder_impl::set_bind_group_layout(const Bind_group_layout* bind_group_layout)
+{
+    static_cast<void>(bind_group_layout);
+}
+
 void Render_command_encoder_impl::set_render_pipeline_state(const Render_pipeline_state& pipeline)
 {
     set_render_pipeline_state(pipeline, nullptr);

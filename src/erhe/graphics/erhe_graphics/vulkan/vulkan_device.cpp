@@ -1191,6 +1191,11 @@ auto Device_impl::has_push_descriptor() const -> bool
     return m_device_extensions.m_VK_KHR_push_descriptor;
 }
 
+auto Device_impl::get_texture_set_layout() const -> VkDescriptorSetLayout
+{
+    return m_texture_set_layout;
+}
+
 auto Device_impl::allocate_descriptor_set() -> VkDescriptorSet
 {
     if (m_per_frame_descriptor_pool == VK_NULL_HANDLE) {

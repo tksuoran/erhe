@@ -117,6 +117,21 @@ Content_wide_line_renderer::Content_wide_line_renderer(
     m_padding1_offset               = m_view_block->add_float("_padding1"              )->get_offset_in_parent();
     m_view_position_in_world_offset = m_view_block->add_vec4 ("view_position_in_world" )->get_offset_in_parent();
 
+    m_bind_group_layout = std::make_unique<erhe::graphics::Bind_group_layout>(
+        graphics_device,
+        erhe::graphics::Bind_group_layout_create_info{
+            .bindings = {
+                {m_edge_line_vertex_buffer_block->get_binding_point(), erhe::graphics::Binding_type::storage_buffer},
+                {m_triangle_vertex_buffer_block->get_binding_point(),  erhe::graphics::Binding_type::storage_buffer},
+                {m_view_block->get_binding_point(),
+                    (m_view_block->get_type() == erhe::graphics::Shader_resource::Type::shader_storage_block)
+                        ? erhe::graphics::Binding_type::storage_buffer
+                        : erhe::graphics::Binding_type::uniform_buffer},
+            },
+            .debug_label = "Content wide line"
+        }
+    );
+
     if ((m_compute_shader_stages != nullptr) && m_compute_shader_stages->is_valid() &&
         (m_graphics_shader_stages != nullptr) && m_graphics_shader_stages->is_valid()) {
         m_compute_pipeline.emplace(
@@ -161,6 +176,7 @@ auto Content_wide_line_renderer::get_edge_line_vertex_buffer_block() const -> er
 auto Content_wide_line_renderer::get_triangle_vertex_struct       () const -> erhe::graphics::Shader_resource* { return m_triangle_vertex_struct.get(); }
 auto Content_wide_line_renderer::get_triangle_vertex_buffer_block () const -> erhe::graphics::Shader_resource* { return m_triangle_vertex_buffer_block.get(); }
 auto Content_wide_line_renderer::get_view_block                   () const -> erhe::graphics::Shader_resource* { return m_view_block.get(); }
+auto Content_wide_line_renderer::get_bind_group_layout            () const -> erhe::graphics::Bind_group_layout* { return m_bind_group_layout.get(); }
 auto Content_wide_line_renderer::get_fragment_outputs             () -> erhe::graphics::Fragment_outputs&       { return m_fragment_outputs; }
 auto Content_wide_line_renderer::get_triangle_vertex_format       () -> erhe::dataformat::Vertex_format&       { return m_triangle_vertex_format; }
 auto Content_wide_line_renderer::get_vertex_input                 () -> erhe::graphics::Vertex_input_state*    { return &m_vertex_input; }

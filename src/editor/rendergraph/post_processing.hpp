@@ -1,5 +1,6 @@
 #pragma once
 
+#include "erhe_graphics/bind_group_layout.hpp"
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/enums.hpp"
 #include "erhe_graphics/fragment_outputs.hpp"
@@ -177,6 +178,7 @@ private:
     erhe::graphics::Sampler                            m_sampler_linear;
     erhe::graphics::Sampler                            m_sampler_linear_mipmap_nearest;
     erhe::graphics::Shader_resource                    m_parameter_block;
+    erhe::graphics::Bind_group_layout                  m_bind_group_layout;
     Offsets                                            m_offsets;
     erhe::graphics::Vertex_input_state                 m_empty_vertex_input;
     erhe::graphics::Shader_resource                    m_default_uniform_block;       // containing sampler uniforms for non bindless textures

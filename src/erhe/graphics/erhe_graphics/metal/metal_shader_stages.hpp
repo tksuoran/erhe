@@ -64,9 +64,10 @@ public:
 
     void reload    (Shader_stages_prototype&& prototype);
     void invalidate();
-    [[nodiscard]] auto name    () const -> const std::string&;
-    [[nodiscard]] auto gl_name () const -> unsigned int;
-    [[nodiscard]] auto is_valid() const -> bool;
+    [[nodiscard]] auto name                () const -> const std::string&;
+    [[nodiscard]] auto gl_name             () const -> unsigned int;
+    [[nodiscard]] auto is_valid            () const -> bool;
+    [[nodiscard]] auto get_bind_group_layout() const -> const Bind_group_layout*;
 
     [[nodiscard]] auto get_vertex_function  () const -> MTL::Function*;
     [[nodiscard]] auto get_fragment_function() const -> MTL::Function*;

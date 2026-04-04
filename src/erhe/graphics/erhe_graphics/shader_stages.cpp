@@ -118,6 +118,10 @@ auto Shader_stages::is_valid() const -> bool
 {
     return m_impl->is_valid();
 }
+auto Shader_stages::get_bind_group_layout() const -> const Bind_group_layout*
+{
+    return m_impl->get_bind_group_layout();
+}
 void Shader_stages::invalidate() const
 {
     m_impl->invalidate();

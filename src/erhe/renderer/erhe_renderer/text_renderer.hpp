@@ -1,5 +1,6 @@
 #pragma once
 
+#include "erhe_graphics/bind_group_layout.hpp"
 #include "erhe_graphics/fragment_outputs.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/render_pipeline_state.hpp"
@@ -92,6 +93,7 @@ private:
     bool                                   m_use_buffer_texture             {false};
     erhe::graphics::Fragment_outputs       m_fragment_outputs;
     erhe::graphics::Sampler                m_nearest_sampler;
+    erhe::graphics::Bind_group_layout      m_bind_group_layout;
     erhe::graphics::Shader_stages          m_shader_stages;
     std::unique_ptr<erhe::ui::Font>        m_font;
     erhe::graphics::Ring_buffer_client     m_vertex_ssbo_buffer;

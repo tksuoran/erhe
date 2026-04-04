@@ -7,6 +7,7 @@
 #include "unit_type.hpp"
 
 #include "erhe_dataformat/vertex_format.hpp"
+#include "erhe_graphics/bind_group_layout.hpp"
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/fragment_outputs.hpp"
 #include "erhe_graphics/device.hpp"
@@ -126,6 +127,7 @@ private:
     erhe::graphics::Shader_resource           m_projection_block;
     erhe::graphics::Shader_resource*          m_clip_from_window;
     erhe::graphics::Shader_resource*          m_texture_handle;
+    erhe::graphics::Bind_group_layout         m_bind_group_layout;
 
     size_t                                    m_u_clip_from_window_size  {0};
     size_t                                    m_u_clip_from_window_offset{0};

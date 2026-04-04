@@ -89,6 +89,8 @@ void Forward_renderer::render(const Render_parameters& parameters)
     const auto& filter                 = parameters.filter;
     const auto  primitive_mode         = parameters.primitive_mode;
 
+    parameters.render_encoder.set_bind_group_layout(m_program_interface.bind_group_layout.get());
+
     using Ring_buffer_range = erhe::graphics::Ring_buffer_range;
     std::optional<Ring_buffer_range> camera_buffer_range{};
     if (camera != nullptr) {
@@ -205,6 +207,8 @@ void Forward_renderer::draw_primitives(const Render_parameters& parameters, cons
     const auto* camera                 = parameters.camera;
     const auto& lights                 = parameters.lights;
     const auto& render_pipeline_states = parameters.render_pipeline_states;
+
+    parameters.render_encoder.set_bind_group_layout(m_program_interface.bind_group_layout.get());
 
     m_texture_heap->reset_heap();
 

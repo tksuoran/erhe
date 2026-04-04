@@ -16,6 +16,7 @@ public:
     Render_command_encoder_impl& operator=(Render_command_encoder_impl&&) = delete;
     ~Render_command_encoder_impl() noexcept;
 
+    void set_bind_group_layout    (const Bind_group_layout* bind_group_layout);
     void set_buffer               (Buffer_target buffer_target, const Buffer* buffer, std::uintptr_t offset, std::uintptr_t length, std::uintptr_t index);
     void set_buffer               (Buffer_target buffer_target, const Buffer* buffer);
     void set_render_pipeline_state(const Render_pipeline_state& pipeline);
@@ -39,12 +40,14 @@ public:
     void dump_state(const char* label) const;
 
 private:
-    Device&    m_device;
-    VkBuffer   m_index_buffer     {VK_NULL_HANDLE};
-    VkBuffer   m_indirect_buffer  {VK_NULL_HANDLE};
-    VkIndexType m_index_type      {VK_INDEX_TYPE_UINT32};
-    float      m_viewport_znear   {0.0};
-    float      m_viewport_zfar    {1.0};
+    Device&                  m_device;
+    const Bind_group_layout* m_bind_group_layout{nullptr};
+    VkPipelineLayout         m_pipeline_layout  {VK_NULL_HANDLE};
+    VkBuffer                 m_index_buffer     {VK_NULL_HANDLE};
+    VkBuffer                 m_indirect_buffer  {VK_NULL_HANDLE};
+    VkIndexType              m_index_type       {VK_INDEX_TYPE_UINT32};
+    float                    m_viewport_znear   {0.0};
+    float                    m_viewport_zfar    {1.0};
 };
 
 } // namespace erhe::graphics

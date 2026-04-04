@@ -2,6 +2,7 @@
 #include "erhe_renderer/debug_renderer_bucket.hpp"
 #include "erhe_renderer/primitive_renderer.hpp"
 
+#include "erhe_graphics/bind_group_layout.hpp"
 #include "erhe_renderer/renderer_log.hpp"
 
 #include "erhe_graphics/device.hpp"
@@ -71,6 +72,24 @@ Debug_renderer_program_interface::Debug_renderer_program_interface(erhe::graphic
 
     const auto shader_path = std::filesystem::path("res") / std::filesystem::path("shaders");
 
+    // Bind group layout will be created after all blocks are known
+    auto make_bind_group_layout = [&]() {
+        erhe::graphics::Bind_group_layout_create_info layout_info{.debug_label = "Debug renderer"};
+        if (line_vertex_buffer_block) {
+            layout_info.bindings.push_back({line_vertex_buffer_block->get_binding_point(), erhe::graphics::Binding_type::storage_buffer});
+        }
+        if (triangle_vertex_buffer_block) {
+            layout_info.bindings.push_back({triangle_vertex_buffer_block->get_binding_point(), erhe::graphics::Binding_type::storage_buffer});
+        }
+        layout_info.bindings.push_back({
+            view_block->get_binding_point(),
+            (view_block->get_type() == erhe::graphics::Shader_resource::Type::shader_storage_block)
+                ? erhe::graphics::Binding_type::storage_buffer
+                : erhe::graphics::Binding_type::uniform_buffer
+        });
+        return std::make_unique<erhe::graphics::Bind_group_layout>(graphics_device, layout_info);
+    };
+
     if (use_compute) {
         // Compute path: SSBO line vertices → compute shader → SSBO triangle vertices → render triangles
         line_vertex_buffer_block = std::make_unique<erhe::graphics::Shader_resource>(
@@ -96,6 +115,8 @@ Debug_renderer_program_interface::Debug_renderer_program_interface(erhe::graphic
             *triangle_vertex_buffer_block.get()
         );
 
+        bind_group_layout = make_bind_group_layout();
+
         using namespace erhe::graphics;
         // Compute shader
         {
@@ -104,7 +125,8 @@ Debug_renderer_program_interface::Debug_renderer_program_interface(erhe::graphic
                 .name             = "compute_before_line",
                 .struct_types     = { line_vertex_struct.get(), triangle_vertex_struct.get() },
                 .interface_blocks = { line_vertex_buffer_block.get(), triangle_vertex_buffer_block.get(), view_block.get() },
-                .shaders          = { { Shader_type::compute_shader, comp_path }, }
+                .shaders          = { { Shader_type::compute_shader, comp_path }, },
+                .bind_group_layout = bind_group_layout.get(),
             };
 
             Shader_stages_prototype prototype{graphics_device, create_info};
@@ -127,7 +149,8 @@ Debug_renderer_program_interface::Debug_renderer_program_interface(erhe::graphic
                 .shaders = {
                     { Shader_type::vertex_shader,   vert_path },
                     { Shader_type::fragment_shader, frag_path }
-                }
+                },
+                .bind_group_layout = bind_group_layout.get(),
             };
 
             Shader_stages_prototype prototype{graphics_device, create_info};
@@ -142,6 +165,9 @@ Debug_renderer_program_interface::Debug_renderer_program_interface(erhe::graphic
 
     // Simple line shader (used when compute shaders unavailable, or as fallback)
     {
+        if (!bind_group_layout) {
+            bind_group_layout = make_bind_group_layout();
+        }
         using namespace erhe::graphics;
 
         const std::filesystem::path vert_path = shader_path / std::filesystem::path("line_simple.vert");
@@ -154,7 +180,8 @@ Debug_renderer_program_interface::Debug_renderer_program_interface(erhe::graphic
             .shaders = {
                 { Shader_type::vertex_shader,   vert_path },
                 { Shader_type::fragment_shader, frag_path }
-            }
+            },
+            .bind_group_layout = bind_group_layout.get(),
         };
 
         Shader_stages_prototype prototype{graphics_device, create_info};
@@ -182,7 +209,8 @@ Debug_renderer_program_interface::Debug_renderer_program_interface(erhe::graphic
                 { Shader_type::vertex_shader,   vert_path },
                 { Shader_type::geometry_shader, geom_path },
                 { Shader_type::fragment_shader, frag_path }
-            }
+            },
+            .bind_group_layout = bind_group_layout.get(),
         };
 
         Shader_stages_prototype prototype{graphics_device, create_info};

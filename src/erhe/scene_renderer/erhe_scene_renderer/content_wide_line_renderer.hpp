@@ -1,5 +1,6 @@
 #pragma once
 
+#include "erhe_graphics/bind_group_layout.hpp"
 #include "erhe_graphics/compute_pipeline_state.hpp"
 #include "erhe_graphics/fragment_outputs.hpp"
 #include "erhe_graphics/render_pipeline_state.hpp"
@@ -68,6 +69,7 @@ public:
     [[nodiscard]] auto get_triangle_vertex_struct       () const -> erhe::graphics::Shader_resource*;
     [[nodiscard]] auto get_triangle_vertex_buffer_block () const -> erhe::graphics::Shader_resource*;
     [[nodiscard]] auto get_view_block                   () const -> erhe::graphics::Shader_resource*;
+    [[nodiscard]] auto get_bind_group_layout            () const -> erhe::graphics::Bind_group_layout*;
     [[nodiscard]] auto get_fragment_outputs             () -> erhe::graphics::Fragment_outputs&;
     [[nodiscard]] auto get_triangle_vertex_format       () -> erhe::dataformat::Vertex_format&;
     [[nodiscard]] auto get_vertex_input                 () -> erhe::graphics::Vertex_input_state*;
@@ -129,6 +131,7 @@ private:
     std::unique_ptr<erhe::graphics::Shader_resource>       m_triangle_vertex_struct;
     std::unique_ptr<erhe::graphics::Shader_resource>       m_triangle_vertex_buffer_block;
     std::unique_ptr<erhe::graphics::Shader_resource>       m_view_block;
+    std::unique_ptr<erhe::graphics::Bind_group_layout>    m_bind_group_layout;
     erhe::dataformat::Vertex_format                        m_triangle_vertex_format;
 
     // Offsets within view UBO

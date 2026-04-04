@@ -1,6 +1,8 @@
 #include "erhe_scene_renderer/program_interface.hpp"
+#include "erhe_scene_renderer/buffer_binding_points.hpp"
 #include "erhe_scene_renderer/scene_renderer_log.hpp"
 
+#include "erhe_graphics/bind_group_layout.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_file/file.hpp"
 #include "erhe_profile/profile.hpp"
@@ -40,6 +42,27 @@ Program_interface::Program_interface(
     config.max_light_count     = static_cast<int>(light_interface.max_light_count);
     config.max_material_count  = static_cast<int>(material_interface.max_material_count);
     config.max_primitive_count = static_cast<int>(primitive_interface.max_primitive_count);
+
+    // Create bind group layout describing the descriptor types for all interface blocks
+    auto to_binding_type = [](const erhe::graphics::Shader_resource& block) -> erhe::graphics::Binding_type {
+        return (block.get_type() == erhe::graphics::Shader_resource::Type::shader_storage_block)
+            ? erhe::graphics::Binding_type::storage_buffer
+            : erhe::graphics::Binding_type::uniform_buffer;
+    };
+    erhe::graphics::Bind_group_layout_create_info layout_create_info{
+        .bindings = {
+            {material_buffer_binding_point,      to_binding_type(material_interface.material_block)},
+            {light_buffer_binding_point,         to_binding_type(light_interface.light_block)},
+            {light_control_buffer_binding_point, to_binding_type(light_interface.light_control_block)},
+            {primitive_buffer_binding_point,     to_binding_type(primitive_interface.primitive_block)},
+            {camera_buffer_binding_point,        to_binding_type(camera_interface.camera_block)},
+            {cube_instance_buffer_binding_point, to_binding_type(cube_interface.cube_instance_block)},
+            {cube_control_buffer_binding_point,  to_binding_type(cube_interface.cube_control_block)},
+            {joint_buffer_binding_point,         to_binding_type(joint_interface.joint_block)},
+        },
+        .debug_label = "Scene renderer"
+    };
+    bind_group_layout = std::make_unique<erhe::graphics::Bind_group_layout>(graphics_device, layout_create_info);
 }
 
 auto Program_interface::make_prototype(
@@ -86,6 +109,7 @@ auto Program_interface::make_prototype(
     create_info.add_interface_block(&cube_interface.cube_control_block);
     create_info.add_interface_block(&primitive_interface.primitive_block);
     create_info.add_interface_block(&joint_interface.joint_block);
+    create_info.bind_group_layout = bind_group_layout.get();
     create_info.defines.emplace_back("ERHE_SHADOW_MAPS", "1");
 
     bool found = false;

@@ -201,6 +201,20 @@ Imgui_program_interface::Imgui_program_interface(erhe::graphics::Device& graphic
 Imgui_renderer::Imgui_renderer(erhe::graphics::Device& graphics_device, Imgui_settings& settings)
     : m_graphics_device{graphics_device}
     , m_imgui_program_interface{graphics_device}
+    , m_bind_group_layout{
+        graphics_device,
+        erhe::graphics::Bind_group_layout_create_info{
+            .bindings = {
+                {
+                    m_imgui_program_interface.draw_parameter_block.get_binding_point(),
+                    (m_imgui_program_interface.draw_parameter_block.get_type() == erhe::graphics::Shader_resource::Type::shader_storage_block)
+                        ? erhe::graphics::Binding_type::storage_buffer
+                        : erhe::graphics::Binding_type::uniform_buffer
+                }
+            },
+            .debug_label = "ImGui"
+        }
+    }
     , m_shader_stages{
         graphics_device,
         erhe::graphics::Shader_stages_prototype{
@@ -217,6 +231,7 @@ Imgui_renderer::Imgui_renderer(erhe::graphics::Device& graphics_device, Imgui_se
                     { erhe::graphics::Shader_type::vertex_shader,   c_vertex_shader_source   },
                     { erhe::graphics::Shader_type::fragment_shader, c_fragment_shader_source }
                 },
+                .bind_group_layout     = &m_bind_group_layout,
                 .build = true
             }
         }

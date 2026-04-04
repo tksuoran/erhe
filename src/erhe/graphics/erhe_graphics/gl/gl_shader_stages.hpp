@@ -76,9 +76,10 @@ public:
     // Reloads program by consuming prototype
     void reload    (Shader_stages_prototype&& prototype);
     void invalidate();
-    [[nodiscard]] auto name    () const -> const std::string&;
-    [[nodiscard]] auto gl_name () const -> unsigned int;
-    [[nodiscard]] auto is_valid() const -> bool;
+    [[nodiscard]] auto name                () const -> const std::string&;
+    [[nodiscard]] auto gl_name             () const -> unsigned int;
+    [[nodiscard]] auto is_valid            () const -> bool;
+    [[nodiscard]] auto get_bind_group_layout() const -> const Bind_group_layout*;
 
 private:
     Device&                m_device;

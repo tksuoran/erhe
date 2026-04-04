@@ -134,6 +134,7 @@ public:
     [[nodiscard]] auto get_pipeline_layout              () const -> VkPipelineLayout;
     [[nodiscard]] auto get_descriptor_set_layout        () const -> VkDescriptorSetLayout;
     [[nodiscard]] auto has_push_descriptor              () const -> bool;
+    [[nodiscard]] auto get_texture_set_layout           () const -> VkDescriptorSetLayout;
     [[nodiscard]] auto get_or_create_graphics_pipeline  (const VkGraphicsPipelineCreateInfo& create_info, std::size_t hash) -> VkPipeline;
     [[nodiscard]] auto allocate_descriptor_set          () -> VkDescriptorSet;
     void               reset_descriptor_pool            ();

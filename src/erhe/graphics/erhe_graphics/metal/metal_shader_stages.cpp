@@ -120,6 +120,7 @@ void Shader_stages_impl::invalidate()
 auto Shader_stages_impl::name() const -> const std::string& { return m_name; }
 auto Shader_stages_impl::gl_name() const -> unsigned int { return 0; }
 auto Shader_stages_impl::is_valid() const -> bool { return m_is_valid; }
+auto Shader_stages_impl::get_bind_group_layout() const -> const Bind_group_layout* { return nullptr; }
 
 auto Shader_stages_impl::get_vertex_function() const -> MTL::Function*
 {

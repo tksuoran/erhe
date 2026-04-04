@@ -37,7 +37,8 @@ auto Text_renderer::build_shader_stages() -> erhe::graphics::Shader_stages_proto
         .shaders = {
             { Shader_type::vertex_shader,   vs_path },
             { Shader_type::fragment_shader, fs_path }
-        }
+        },
+        .bind_group_layout = &m_bind_group_layout,
     };
 
     if (m_use_buffer_texture) {
@@ -107,6 +108,22 @@ Text_renderer::Text_renderer(erhe::graphics::Device& graphics_device, const bool
             .mag_filter  = erhe::graphics::Filter::nearest,
             .mipmap_mode = erhe::graphics::Sampler_mipmap_mode::nearest,
             .debug_label = "Text_renderer::m_nearest_sampler"
+        }
+    }
+    , m_bind_group_layout{
+        graphics_device,
+        erhe::graphics::Bind_group_layout_create_info{
+            .bindings = {
+                {m_projection_block.get_binding_point(),
+                    (m_projection_block.get_type() == erhe::graphics::Shader_resource::Type::shader_storage_block)
+                        ? erhe::graphics::Binding_type::storage_buffer
+                        : erhe::graphics::Binding_type::uniform_buffer},
+                {m_vertex_ssbo_block.get_binding_point(),
+                    (m_vertex_ssbo_block.get_type() == erhe::graphics::Shader_resource::Type::shader_storage_block)
+                        ? erhe::graphics::Binding_type::storage_buffer
+                        : erhe::graphics::Binding_type::uniform_buffer},
+            },
+            .debug_label = "Text renderer"
         }
     }
     , m_shader_stages     {graphics_device, build_shader_stages()}

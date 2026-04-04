@@ -12,6 +12,7 @@ namespace erhe::dataformat { class Vertex_format; }
 
 namespace erhe::graphics {
 
+class Bind_group_layout;
 class Device_impl;
 class Fragment_outputs;
 class Shader_resource;
@@ -71,6 +72,7 @@ public:
     const erhe::dataformat::Vertex_format*           vertex_format        {nullptr};
     const Shader_resource*                           default_uniform_block{nullptr}; // contains sampler uniforms
     std::vector<Shader_stage>                        shaders              {};
+    const Bind_group_layout*                           bind_group_layout    {nullptr};
     bool                                             dump_reflection      {false};
     bool                                             dump_interface       {false};
     bool                                             dump_final_source    {false};
@@ -121,10 +123,11 @@ public:
     void reload    (Shader_stages_prototype&& prototype) const;
     void invalidate() const;
 
-    [[nodiscard]] auto name    () const -> const std::string&;
-    [[nodiscard]] auto is_valid() const -> bool;
-    [[nodiscard]] auto get_impl() -> Shader_stages_impl&;
-    [[nodiscard]] auto get_impl() const -> const Shader_stages_impl&;
+    [[nodiscard]] auto name                () const -> const std::string&;
+    [[nodiscard]] auto is_valid            () const -> bool;
+    [[nodiscard]] auto get_bind_group_layout() const -> const Bind_group_layout*;
+    [[nodiscard]] auto get_impl            () -> Shader_stages_impl&;
+    [[nodiscard]] auto get_impl            () const -> const Shader_stages_impl&;
 
 private:
     std::unique_ptr<Shader_stages_impl> m_impl;
