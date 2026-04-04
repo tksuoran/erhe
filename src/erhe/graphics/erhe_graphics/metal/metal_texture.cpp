@@ -132,11 +132,13 @@ Texture_impl::Texture_impl(Device& device, const Texture_create_info& create_inf
 auto Texture_impl::get_mipmap_dimensions(const Texture_type type) -> int
 {
     switch (type) {
-        case Texture_type::texture_1d:       return 1;
-        case Texture_type::texture_cube_map: return 2;
-        case Texture_type::texture_2d:       return 2;
-        case Texture_type::texture_3d:       return 3;
-        default:                             return 0;
+        case Texture_type::texture_1d:             return 1;
+        case Texture_type::texture_2d:             return 2;
+        case Texture_type::texture_2d_array:       return 2;
+        case Texture_type::texture_3d:             return 3;
+        case Texture_type::texture_cube_map:       return 2;
+        case Texture_type::texture_cube_map_array: return 2;
+        default:                                   return 0;
     }
 }
 

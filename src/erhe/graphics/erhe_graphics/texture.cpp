@@ -28,12 +28,13 @@ Texture_reference::~Texture_reference() noexcept = default;
 auto Texture::get_mipmap_dimensions(const Texture_type type) -> int
 {
     switch (type) {
-        //using enum gl::Texture_target;
-        case Texture_type::texture_buffer:   return 0;
-        case Texture_type::texture_1d:       return 1;
-        case Texture_type::texture_cube_map: return 2;
-        case Texture_type::texture_2d:       return 2;
-        case Texture_type::texture_3d:       return 3;
+        case Texture_type::texture_buffer:         return 0;
+        case Texture_type::texture_1d:             return 1;
+        case Texture_type::texture_2d:             return 2;
+        case Texture_type::texture_2d_array:       return 2;
+        case Texture_type::texture_3d:             return 3;
+        case Texture_type::texture_cube_map:       return 2;
+        case Texture_type::texture_cube_map_array: return 2;
         default: {
             ERHE_FATAL("Bad texture target");
         }
