@@ -335,12 +335,24 @@ void Render_command_encoder_impl::set_render_pipeline_state(
         .pVertexAttributeDescriptions    = vertex_attributes.empty() ? nullptr : vertex_attributes.data()
     };
 
+    // Primitive restart is only valid for strip/fan topologies in Vulkan
+    // unless the primitiveTopologyListRestart feature is enabled
+    const VkPrimitiveTopology vk_topology = to_vk_primitive_topology(data.input_assembly.primitive_topology);
+    const bool is_strip_or_fan =
+        (vk_topology == VK_PRIMITIVE_TOPOLOGY_LINE_STRIP) ||
+        (vk_topology == VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP) ||
+        (vk_topology == VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN) ||
+        (vk_topology == VK_PRIMITIVE_TOPOLOGY_LINE_STRIP_WITH_ADJACENCY) ||
+        (vk_topology == VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP_WITH_ADJACENCY);
+    const VkBool32 primitive_restart_enable =
+        (data.input_assembly.primitive_restart && is_strip_or_fan) ? VK_TRUE : VK_FALSE;
+
     const VkPipelineInputAssemblyStateCreateInfo input_assembly_state{
         .sType                  = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
         .pNext                  = nullptr,
         .flags                  = 0,
-        .topology               = to_vk_primitive_topology(data.input_assembly.primitive_topology),
-        .primitiveRestartEnable = data.input_assembly.primitive_restart ? VK_TRUE : VK_FALSE
+        .topology               = vk_topology,
+        .primitiveRestartEnable = primitive_restart_enable
     };
 
     // Viewport and scissor are dynamic state
