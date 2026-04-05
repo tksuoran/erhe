@@ -467,6 +467,7 @@ Device_impl::Device_impl(
         );
         if (result == VK_SUCCESS) {
             debug_callback_registered = true;
+            Scoped_debug_group::s_enabled = true;
         } else {
             log_context->warn("vkCreateDebugUtilsMessengerEXT() failed with {} {}", static_cast<int32_t>(result), c_str(result));
         }
