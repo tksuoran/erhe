@@ -87,32 +87,65 @@ Render_pass_impl::Render_pass_impl(Device& device, const Render_pass_descriptor&
 
         const erhe::window::Window_configuration& window_configuration = context_window->get_window_configuration();
 
-        const VkAttachmentDescription color_attachment_description{
+        Swapchain_impl& swapchain_impl = m_swapchain->get_impl();
+        const VkSampleCountFlagBits sample_count = get_vulkan_sample_count(window_configuration.msaa_sample_count);
+
+        std::vector<VkAttachmentDescription> attachment_descriptions;
+        attachment_descriptions.push_back(VkAttachmentDescription{
             .flags          = 0,
             .format         = surface_impl.get_surface_format().format,
-            .samples        = get_vulkan_sample_count(window_configuration.msaa_sample_count),
+            .samples        = sample_count,
             .loadOp         = VK_ATTACHMENT_LOAD_OP_CLEAR,
             .storeOp        = VK_ATTACHMENT_STORE_OP_STORE,
             .stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
             .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
             .initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED,
             .finalLayout    = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
-        };
+        });
 
         const VkAttachmentReference color_attachment_reference{
             .attachment = 0,
             .layout     = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
         };
 
-        m_clear_values.resize(1);
-        m_clear_values.front().color = VkClearColorValue{
-            .float32 = {
-                static_cast<float>(descriptor.color_attachments[0].clear_value[0]),
-                static_cast<float>(descriptor.color_attachments[0].clear_value[1]),
-                static_cast<float>(descriptor.color_attachments[0].clear_value[2]),
-                static_cast<float>(descriptor.color_attachments[0].clear_value[3])
+        m_clear_values.push_back(VkClearValue{
+            .color = VkClearColorValue{
+                .float32 = {
+                    static_cast<float>(descriptor.color_attachments[0].clear_value[0]),
+                    static_cast<float>(descriptor.color_attachments[0].clear_value[1]),
+                    static_cast<float>(descriptor.color_attachments[0].clear_value[2]),
+                    static_cast<float>(descriptor.color_attachments[0].clear_value[3])
+                }
             }
-        };
+        });
+
+        // Depth attachment
+        const bool has_depth = m_depth_attachment.load_action != Load_action::Dont_care ||
+                               swapchain_impl.get_depth_image_view() != VK_NULL_HANDLE;
+        VkAttachmentReference depth_attachment_reference{};
+        if (has_depth) {
+            attachment_descriptions.push_back(VkAttachmentDescription{
+                .flags          = 0,
+                .format         = swapchain_impl.get_depth_format(),
+                .samples        = sample_count,
+                .loadOp         = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                .storeOp        = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+                .stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+                .initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED,
+                .finalLayout    = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+            });
+            depth_attachment_reference = VkAttachmentReference{
+                .attachment = 1,
+                .layout     = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+            };
+            VkClearValue depth_clear{};
+            depth_clear.depthStencil = VkClearDepthStencilValue{
+                .depth   = static_cast<float>(m_depth_attachment.clear_value[0]),
+                .stencil = 0
+            };
+            m_clear_values.push_back(depth_clear);
+        }
 
         const VkSubpassDescription subpass_description{
             .flags                   = 0,
@@ -122,7 +155,7 @@ Render_pass_impl::Render_pass_impl(Device& device, const Render_pass_descriptor&
             .colorAttachmentCount    = 1,
             .pColorAttachments       = &color_attachment_reference,
             .pResolveAttachments     = nullptr,
-            .pDepthStencilAttachment = nullptr,
+            .pDepthStencilAttachment = has_depth ? &depth_attachment_reference : nullptr,
             .preserveAttachmentCount = 0,
             .pPreserveAttachments    = nullptr
         };
@@ -130,10 +163,10 @@ Render_pass_impl::Render_pass_impl(Device& device, const Render_pass_descriptor&
         const VkSubpassDependency subpass_dependency{
             .srcSubpass      = VK_SUBPASS_EXTERNAL,
             .dstSubpass      = 0,
-            .srcStageMask    = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-            .dstStageMask    = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            .srcStageMask    = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+            .dstStageMask    = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
             .srcAccessMask   = 0,
-            .dstAccessMask   = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+            .dstAccessMask   = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
             .dependencyFlags = 0
         };
 
@@ -141,8 +174,8 @@ Render_pass_impl::Render_pass_impl(Device& device, const Render_pass_descriptor&
             .sType           = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
             .pNext           = nullptr,
             .flags           = 0,
-            .attachmentCount = 1,
-            .pAttachments    = &color_attachment_description,
+            .attachmentCount = static_cast<uint32_t>(attachment_descriptions.size()),
+            .pAttachments    = attachment_descriptions.data(),
             .subpassCount    = 1,
             .pSubpasses      = &subpass_description,
             .dependencyCount = 1,

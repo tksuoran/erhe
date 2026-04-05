@@ -385,6 +385,7 @@ void Swapchain_impl::cleanup_swapchain_objects(Swapchain_objects& garbage)
     for (const VkFramebuffer framebuffer : garbage.framebuffers) {
         vkDestroyFramebuffer(vulkan_device, framebuffer, nullptr);
     }
+    destroy_depth_image(garbage);
 
     garbage.images      .clear();
     garbage.views       .clear();
@@ -661,13 +662,19 @@ void Swapchain_impl::init_swapchain_framebuffer(const uint32_t index, VkRenderPa
         m_swapchain_objects.framebuffers[index] = VK_NULL_HANDLE;
     }
 
+    std::array<VkImageView, 2> attachments = {
+        m_swapchain_objects.views[index],
+        m_swapchain_objects.depth_view
+    };
+    const uint32_t attachment_count = (m_swapchain_objects.depth_view != VK_NULL_HANDLE) ? 2u : 1u;
+
     const VkFramebufferCreateInfo framebuffer_create_info{
         .sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
         .pNext           = 0,
         .flags           = 0,
         .renderPass      = render_pass,
-        .attachmentCount = 1,
-        .pAttachments    = &m_swapchain_objects.views[index],
+        .attachmentCount = attachment_count,
+        .pAttachments    = attachments.data(),
         .width           = m_swapchain_extent.width,
         .height          = m_swapchain_extent.height,
         .layers          = 1
@@ -772,6 +779,8 @@ void Swapchain_impl::init_swapchain(Vulkan_swapchain_create_info& swapchain_crea
 
     m_swapchain_extent = swapchain_create_info.swapchain_create_info.imageExtent;
     m_swapchain_format = swapchain_create_info.swapchain_create_info.imageFormat;
+
+    create_depth_image(m_swapchain_extent.width, m_swapchain_extent.height);
 }
 
 auto Swapchain_impl::get_surface_impl() -> Surface_impl&
@@ -979,7 +988,106 @@ auto Swapchain_impl::present_image(uint32_t index) -> VkResult
 
 auto Swapchain_impl::has_depth() const -> bool
 {
-    return false; // TODO
+    return m_swapchain_objects.depth_image != VK_NULL_HANDLE;
+}
+
+auto Swapchain_impl::get_depth_image_view() const -> VkImageView
+{
+    return m_swapchain_objects.depth_view;
+}
+
+auto Swapchain_impl::get_depth_format() const -> VkFormat
+{
+    return m_depth_format;
+}
+
+void Swapchain_impl::create_depth_image(const uint32_t width, const uint32_t height)
+{
+    const VkImageCreateInfo image_create_info{
+        .sType                 = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        .pNext                 = nullptr,
+        .flags                 = 0,
+        .imageType             = VK_IMAGE_TYPE_2D,
+        .format                = m_depth_format,
+        .extent                = {width, height, 1},
+        .mipLevels             = 1,
+        .arrayLayers           = 1,
+        .samples               = VK_SAMPLE_COUNT_1_BIT,
+        .tiling                = VK_IMAGE_TILING_OPTIMAL,
+        .usage                 = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+        .sharingMode           = VK_SHARING_MODE_EXCLUSIVE,
+        .queueFamilyIndexCount = 0,
+        .pQueueFamilyIndices   = nullptr,
+        .initialLayout         = VK_IMAGE_LAYOUT_UNDEFINED
+    };
+
+    const VmaAllocationCreateInfo allocation_create_info{
+        .flags          = 0,
+        .usage          = VMA_MEMORY_USAGE_AUTO,
+        .requiredFlags  = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        .preferredFlags = 0,
+        .memoryTypeBits = 0,
+        .pool           = VK_NULL_HANDLE,
+        .pUserData      = nullptr,
+        .priority       = 0.0f
+    };
+
+    VmaAllocator& allocator = m_device_impl.get_allocator();
+    VkResult result = vmaCreateImage(
+        allocator,
+        &image_create_info,
+        &allocation_create_info,
+        &m_swapchain_objects.depth_image,
+        &m_swapchain_objects.depth_allocation,
+        nullptr
+    );
+    if (result != VK_SUCCESS) {
+        log_swapchain->critical("vmaCreateImage() for swapchain depth failed with {} {}", static_cast<int32_t>(result), c_str(result));
+        abort();
+    }
+
+    m_device_impl.set_debug_label(VK_OBJECT_TYPE_IMAGE, reinterpret_cast<uint64_t>(m_swapchain_objects.depth_image), "Swapchain depth image");
+
+    const VkImageViewCreateInfo view_create_info{
+        .sType            = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        .pNext            = nullptr,
+        .flags            = 0,
+        .image            = m_swapchain_objects.depth_image,
+        .viewType         = VK_IMAGE_VIEW_TYPE_2D,
+        .format           = m_depth_format,
+        .components       = {VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY},
+        .subresourceRange = {
+            .aspectMask     = VK_IMAGE_ASPECT_DEPTH_BIT,
+            .baseMipLevel   = 0,
+            .levelCount     = 1,
+            .baseArrayLayer = 0,
+            .layerCount     = 1
+        }
+    };
+
+    const VkDevice vulkan_device = m_device_impl.get_vulkan_device();
+    result = vkCreateImageView(vulkan_device, &view_create_info, nullptr, &m_swapchain_objects.depth_view);
+    if (result != VK_SUCCESS) {
+        log_swapchain->critical("vkCreateImageView() for swapchain depth failed with {} {}", static_cast<int32_t>(result), c_str(result));
+        abort();
+    }
+
+    m_device_impl.set_debug_label(VK_OBJECT_TYPE_IMAGE_VIEW, reinterpret_cast<uint64_t>(m_swapchain_objects.depth_view), "Swapchain depth image view");
+}
+
+void Swapchain_impl::destroy_depth_image(Swapchain_objects& objects)
+{
+    const VkDevice vulkan_device = m_device_impl.get_vulkan_device();
+    if (objects.depth_view != VK_NULL_HANDLE) {
+        vkDestroyImageView(vulkan_device, objects.depth_view, nullptr);
+        objects.depth_view = VK_NULL_HANDLE;
+    }
+    if (objects.depth_image != VK_NULL_HANDLE) {
+        VmaAllocator& allocator = m_device_impl.get_allocator();
+        vmaDestroyImage(allocator, objects.depth_image, objects.depth_allocation);
+        objects.depth_image      = VK_NULL_HANDLE;
+        objects.depth_allocation = VK_NULL_HANDLE;
+    }
 }
 
 auto Swapchain_impl::has_stencil() const -> bool

@@ -4,6 +4,7 @@
 #include "erhe_verify/verify.hpp"
 
 #include "volk.h"
+#include "vk_mem_alloc.h"
 
 #include <array>
 #include <deque>
@@ -32,6 +33,9 @@ public:
     std::vector<VkImageView>   views;
     std::vector<VkRenderPass>  render_pass;
     std::vector<VkFramebuffer> framebuffers;
+    VkImage                    depth_image     {VK_NULL_HANDLE};
+    VkImageView                depth_view      {VK_NULL_HANDLE};
+    VmaAllocation              depth_allocation{VK_NULL_HANDLE};
 };
 
 class Swapchain_frame_in_flight // PerFrame 
@@ -100,6 +104,8 @@ public:
     [[nodiscard]] auto get_command_buffer   () -> VkCommandBuffer;
     [[nodiscard]] auto has_depth            () const -> bool;
     [[nodiscard]] auto has_stencil          () const -> bool;
+    [[nodiscard]] auto get_depth_image_view () const -> VkImageView;
+    [[nodiscard]] auto get_depth_format     () const -> VkFormat;
 
 private:
     static constexpr uint32_t INVALID_IMAGE_INDEX = std::numeric_limits<uint32_t>::max();
@@ -121,6 +127,8 @@ private:
     void init_swapchain                        (Vulkan_swapchain_create_info& swapchain_create_info);
     void init_swapchain_image                  (uint32_t index);
     void init_swapchain_framebuffer            (uint32_t index, VkRenderPass render_pass);
+    void create_depth_image                    (uint32_t width, uint32_t height);
+    void destroy_depth_image                   (Swapchain_objects& objects);
     void add_present_to_history                (uint32_t index, VkFence present_fence);
     void associate_fence_with_present_history  (uint32_t index, VkFence acquire_fence);
     void schedule_old_swapchain_for_destruction(VkSwapchainKHR old_swapchain);
@@ -129,6 +137,7 @@ private:
     Surface_impl&         m_surface_impl;
     VkExtent2D            m_swapchain_extent    {0, 0};
     VkFormat              m_swapchain_format    {VK_FORMAT_UNDEFINED};
+    VkFormat              m_depth_format        {VK_FORMAT_D32_SFLOAT};
     bool                  m_is_valid            {false};
     uint32_t              m_acquired_image_index{0};
     VkSwapchainKHR        m_vulkan_swapchain    {VK_NULL_HANDLE};

@@ -396,7 +396,7 @@ private:
         render_pass_descriptor.color_attachments[0].clear_value[2] = 0.02;
         render_pass_descriptor.color_attachments[0].clear_value[3] = 1.0;
         render_pass_descriptor.depth_attachment    .load_action    = erhe::graphics::Load_action::Clear;
-        render_pass_descriptor.stencil_attachment  .load_action    = erhe::graphics::Load_action::Clear;
+        render_pass_descriptor.depth_attachment    .clear_value[0] = 0.0; // reverse depth
         render_pass_descriptor.render_target_width  = width;
         render_pass_descriptor.render_target_height = height;
         render_pass_descriptor.debug_label          = erhe::utility::Debug_label{"Example Render_pass"};
