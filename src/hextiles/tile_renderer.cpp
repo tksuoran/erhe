@@ -43,9 +43,9 @@ auto Tile_renderer::make_prototype(erhe::graphics::Device& graphics_device) cons
         .interface_blocks      = { &m_projection_block },
         .fragment_outputs      = &m_fragment_outputs,
         .vertex_format         = &m_vertex_format,
-        .default_uniform_block = m_graphics_device.get_info().uses_bindless_texture()
-            ? nullptr
-            : &m_default_uniform_block,
+        .default_uniform_block = m_graphics_device.get_info().uses_sampler_array_in_set_0()
+            ? &m_default_uniform_block
+            : nullptr,
         .shaders = {
             { erhe::graphics::Shader_type::vertex_shader,   m_shader_path / std::filesystem::path{"tile.vert"} },
             { erhe::graphics::Shader_type::fragment_shader, m_shader_path / std::filesystem::path{"tile.frag"} }
@@ -59,6 +59,7 @@ auto Tile_renderer::make_prototype(erhe::graphics::Device& graphics_device) cons
         create_info.defines.emplace_back("ERHE_BINDLESS_TEXTURE", "1");
         create_info.extensions.push_back({erhe::graphics::Shader_type::fragment_shader, "GL_ARB_bindless_texture"});
     }
+    // Vulkan descriptor indexing uses erhe_texture_heap[] from the preamble -- no defines needed
 
     return erhe::graphics::Shader_stages_prototype{graphics_device, create_info};
 }
@@ -84,9 +85,9 @@ Tile_renderer::Tile_renderer(
     , m_tiles                {tiles}
     , m_default_uniform_block{graphics_device}
     , m_texture_sampler{
-        graphics_device.get_info().uses_bindless_texture()
-            ? nullptr
-            : m_default_uniform_block.add_sampler("s_texture", erhe::graphics::Glsl_type::sampler_2d, 0)
+        graphics_device.get_info().uses_sampler_array_in_set_0()
+            ? m_default_uniform_block.add_sampler("s_texture", erhe::graphics::Glsl_type::sampler_2d, 0)
+            : nullptr
     }
     , m_fragment_outputs{
         erhe::graphics::Fragment_output{
@@ -791,7 +792,15 @@ void Tile_renderer::render(erhe::graphics::Render_command_encoder& render_encode
 
     m_projection_buffer.bind(render_encoder, projection_buffer_range);
 
-    erhe::graphics::Texture_heap texture_heap{m_graphics_device, *m_tileset_texture.get(), m_nearest_sampler, 1, &m_bind_group_layout, &m_default_uniform_block};
+    const bool uses_sampler_array = m_graphics_device.get_info().uses_sampler_array_in_set_0();
+    erhe::graphics::Texture_heap texture_heap{
+        m_graphics_device,
+        *m_tileset_texture.get(),
+        m_nearest_sampler,
+        uses_sampler_array ? 1u : 0u,
+        &m_bind_group_layout,
+        uses_sampler_array ? &m_default_uniform_block : nullptr
+    };
     texture_heap.assign(0, m_tileset_texture.get(), &m_nearest_sampler);
     texture_heap.bind();
 
