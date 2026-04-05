@@ -74,6 +74,7 @@ Shadow_renderer::Shadow_renderer(erhe::graphics::Device& graphics_device, Progra
         )
     }
 {
+    m_bind_group_layout = program_interface.bind_group_layout.get();
     m_pipeline_cache_entries.resize(8);
 }
 
@@ -181,7 +182,14 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
         erhe::graphics::Scoped_render_pass scoped_render_pass{*parameters.render_passes[light_index].get()};
 
         // TODO Multiple vertex buffer bindings
+        encoder.set_bind_group_layout(m_bind_group_layout);
         encoder.set_render_pipeline_state(pipeline);
+        encoder.set_viewport_rect(
+            parameters.light_camera_viewport.x,
+            parameters.light_camera_viewport.y,
+            parameters.light_camera_viewport.width,
+            parameters.light_camera_viewport.height
+        );
         encoder.set_index_buffer(parameters.index_buffer);
         encoder.set_vertex_buffer(parameters.vertex_buffer0, 0, 0);
         encoder.set_vertex_buffer(parameters.vertex_buffer1, 0, 1);
