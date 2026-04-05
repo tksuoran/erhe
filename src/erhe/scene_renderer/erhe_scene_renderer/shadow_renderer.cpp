@@ -175,7 +175,12 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
         }
         const std::size_t light_index  = light_projection_transform->index;
         const std::size_t shadow_index = light_projection_transform->shadow_index;
+        log_shadow_renderer->info(
+            "Light cast_shadow={} light_index={} shadow_index={} render_passes.size()={}",
+            light->cast_shadow, light_index, shadow_index, parameters.render_passes.size()
+        );
         if (shadow_index >= parameters.render_passes.size()) {
+            log_shadow_renderer->warn("shadow_index {} >= render_passes.size() {}, skipping", shadow_index, parameters.render_passes.size());
             continue;
         }
 
