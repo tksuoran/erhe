@@ -75,7 +75,8 @@ Scene_preview::Scene_preview(
             .device            = graphics_device,
             .usage_mask        =
                 erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment |
-                erhe::graphics::Image_usage_flag_bit_mask::sampled,
+                erhe::graphics::Image_usage_flag_bit_mask::sampled |
+                erhe::graphics::Image_usage_flag_bit_mask::transfer_dst,
             .type              = erhe::graphics::Texture_type::texture_2d,
             .pixelformat       = graphics_device.choose_depth_stencil_format(erhe::graphics::format_flag_require_depth, 0),
             .width             = 1,
@@ -143,7 +144,8 @@ void Scene_preview::update_rendertarget(erhe::graphics::Device& graphics_device,
                 .device      = graphics_device,
                 .usage_mask   =
                     erhe::graphics::Image_usage_flag_bit_mask::color_attachment |
-                    erhe::graphics::Image_usage_flag_bit_mask::sampled,
+                    erhe::graphics::Image_usage_flag_bit_mask::sampled |
+                    erhe::graphics::Image_usage_flag_bit_mask::transfer_dst,
                 .type        = erhe::graphics::Texture_type::texture_2d,
                 .pixelformat = m_color_format,
                 .width       = m_width,
