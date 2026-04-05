@@ -1,5 +1,5 @@
 {
     "_version": 1,
-    "renderdoc_capture_support": true,
+    "renderdoc_capture_support": false,
     "vulkan_validation_layers": true
 }

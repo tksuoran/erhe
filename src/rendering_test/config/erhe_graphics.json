@@ -2,6 +2,6 @@
     "_version": 1,
     "initial_clear": false,
     "renderdoc_capture_support": false,
-    "vulkan_validation_layers": true,
+    "vulkan_validation_layers": false,
     "shader_monitor_enabled": false
 }

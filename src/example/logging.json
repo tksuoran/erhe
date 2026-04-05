@@ -1,42 +1,7 @@
 {
     "_version": 1,
     "loggers": [
-        {
-            "_version": 1,
-            "name": "erhe.commands.input_event_consumed",
-            "level": "info"
-        },
-        {
-            "_version": 1,
-            "name": "erhe.commands.command_state_transition",
-            "level": "info"
-        },
-        {
-            "_version": 1,
-            "name": "erhe.commands.input_event_filtered",
-            "level": "info"
-        },
-        {
-            "_version": 1,
-            "name": "erhe.commands.input",
-            "level": "info"
-        },
-        {
-            "_version": 1,
-            "name": "erhe.commands.input_event",
-            "level": "info"
-        },
-        {
-            "_version": 1,
-            "name": "erhe.commands.input_events",
-            "level": "info"
-        },
-        {
-            "_version": 1,
-            "name": "erhe.commands.input_frame",
-            "level": "info"
-        },
-        {
+                {
             "_version": 1,
             "name": "erhe.gl.trace",
             "level": "off"
@@ -45,86 +10,6 @@
             "_version": 1,
             "name": "erhe.gl.debug",
             "level": "warn"
-        },
-        {
-            "_version": 1,
-            "name": "erhe.geometry.triangulate",
-            "level": "info"
-        },
-        {
-            "_version": 1,
-            "name": "erhe.geometry.subdivide",
-            "level": "info"
-        },
-        {
-            "_version": 1,
-            "name": "erhe.geometry.weld",
-            "level": "info"
-        },
-        {
-            "_version": 1,
-            "name": "erhe.geometry.geometry",
-            "level": "info"
-        },
-        {
-            "_version": 1,
-            "name": "erhe.geometry.geogram",
-            "level": "info"
-        },
-        {
-            "_version": 1,
-            "name": "erhe.geometry.build_edges",
-            "level": "info"
-        },
-        {
-            "_version": 1,
-            "name": "erhe.geometry.tangent_gen",
-            "level": "info"
-        },
-        {
-            "_version": 1,
-            "name": "erhe.geometry.cone",
-            "level": "info"
-        },
-        {
-            "_version": 1,
-            "name": "erhe.geometry.torus",
-            "level": "info"
-        },
-        {
-            "_version": 1,
-            "name": "erhe.geometry.sphere",
-            "level": "info"
-        },
-        {
-            "_version": 1,
-            "name": "erhe.geometry.polygon_texcoords",
-            "level": "info"
-        },
-        {
-            "_version": 1,
-            "name": "erhe.geometry.interpolate",
-            "level": "info"
-        },
-        {
-            "_version": 1,
-            "name": "erhe.geometry.operation",
-            "level": "info"
-        },
-        {
-            "_version": 1,
-            "name": "erhe.geometry.catmull_clark",
-            "level": "info"
-        },
-        {
-            "_version": 1,
-            "name": "erhe.geometry.attribute_maps",
-            "level": "info"
-        },
-        {
-            "_version": 1,
-            "name": "erhe.geometry.merge",
-            "level": "info"
         },
         {
             "_version": 1,
@@ -243,16 +128,6 @@
         },
         {
             "_version": 1,
-            "name": "erhe.rendergraph.frame",
-            "level": "info"
-        },
-        {
-            "_version": 1,
-            "name": "erhe.rendergraph.tail",
-            "level": "info"
-        },
-        {
-            "_version": 1,
             "name": "erhe.item.log",
             "level": "info"
         },
@@ -349,16 +224,6 @@
         {
             "_version": 1,
             "name": "erhe.scene_renderer.primitive_buffer",
-            "level": "info"
-        },
-        {
-            "_version": 1,
-            "name": "erhe.ui.text_buffer",
-            "level": "info"
-        },
-        {
-            "_version": 1,
-            "name": "erhe.ui.font",
             "level": "info"
         }
     ]
