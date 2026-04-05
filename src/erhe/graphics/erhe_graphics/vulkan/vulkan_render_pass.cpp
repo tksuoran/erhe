@@ -226,7 +226,14 @@ Render_pass_impl::Render_pass_impl(Device& device, const Render_pass_descriptor&
                 .layout     = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
             });
 
-            VkImageView view = att.texture->get_impl().get_vk_image_view();
+            // Framebuffer attachments require single mip level views
+            VkImageView view = const_cast<Texture_impl&>(att.texture->get_impl()).get_vk_image_view(
+                VK_IMAGE_ASPECT_COLOR_BIT,
+                static_cast<uint32_t>(att.texture_layer),
+                1,
+                static_cast<uint32_t>(att.texture_level),
+                1
+            );
             image_views.push_back(view);
 
             // Clear values
@@ -266,7 +273,19 @@ Render_pass_impl::Render_pass_impl(Device& device, const Render_pass_descriptor&
             };
             has_depth_stencil = true;
 
-            VkImageView view = m_depth_attachment.texture->get_impl().get_vk_image_view();
+            // Framebuffer attachments require single mip level views
+            const erhe::dataformat::Format depth_pixelformat = m_depth_attachment.texture->get_pixelformat();
+            VkImageAspectFlags depth_aspect = VK_IMAGE_ASPECT_DEPTH_BIT;
+            if (erhe::dataformat::get_stencil_size_bits(depth_pixelformat) > 0) {
+                depth_aspect |= VK_IMAGE_ASPECT_STENCIL_BIT;
+            }
+            VkImageView view = const_cast<Texture_impl&>(m_depth_attachment.texture->get_impl()).get_vk_image_view(
+                depth_aspect,
+                static_cast<uint32_t>(m_depth_attachment.texture_layer),
+                1,
+                static_cast<uint32_t>(m_depth_attachment.texture_level),
+                1
+            );
             image_views.push_back(view);
 
             VkClearValue clear_value{};

@@ -42,8 +42,9 @@ public:
 
     [[nodiscard]] auto get_vma_allocation () const -> VmaAllocation;
     [[nodiscard]] auto get_vk_image      () const -> VkImage;
-    [[nodiscard]] auto get_vk_image_view () const -> VkImageView; // default view (all aspects, all layers)
+    [[nodiscard]] auto get_vk_image_view () const -> VkImageView; // default view (all aspects, all layers, all levels)
     [[nodiscard]] auto get_vk_image_view (VkImageAspectFlags aspect_mask, uint32_t base_layer, uint32_t layer_count) -> VkImageView;
+    [[nodiscard]] auto get_vk_image_view (VkImageAspectFlags aspect_mask, uint32_t base_layer, uint32_t layer_count, uint32_t base_level, uint32_t level_count) -> VkImageView;
     [[nodiscard]] auto get_current_layout() const -> VkImageLayout;
 
     void clear() const;
@@ -60,6 +61,8 @@ private:
         VkImageAspectFlags aspect_mask{0};
         uint32_t           base_layer {0};
         uint32_t           layer_count{0};
+        uint32_t           base_level {0};
+        uint32_t           level_count{0};
         VkImageView        image_view {VK_NULL_HANDLE};
     };
 

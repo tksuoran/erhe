@@ -299,11 +299,24 @@ auto Texture_impl::get_vk_image_view(
     const uint32_t           layer_count
 ) -> VkImageView
 {
+    return get_vk_image_view(aspect_mask, base_layer, layer_count, 0, static_cast<uint32_t>(m_level_count));
+}
+
+auto Texture_impl::get_vk_image_view(
+    const VkImageAspectFlags aspect_mask,
+    const uint32_t           base_layer,
+    const uint32_t           layer_count,
+    const uint32_t           base_level,
+    const uint32_t           level_count
+) -> VkImageView
+{
     // Check cache
     for (const Cached_image_view& cached : m_cached_image_views) {
         if ((cached.aspect_mask == aspect_mask) &&
             (cached.base_layer  == base_layer) &&
-            (cached.layer_count == layer_count))
+            (cached.layer_count == layer_count) &&
+            (cached.base_level  == base_level) &&
+            (cached.level_count == level_count))
         {
             return cached.image_view;
         }
@@ -328,8 +341,8 @@ auto Texture_impl::get_vk_image_view(
         },
         .subresourceRange = {
             .aspectMask     = aspect_mask,
-            .baseMipLevel   = 0,
-            .levelCount     = static_cast<uint32_t>(m_level_count),
+            .baseMipLevel   = base_level,
+            .levelCount     = level_count,
             .baseArrayLayer = base_layer,
             .layerCount     = layer_count
         }
@@ -346,11 +359,13 @@ auto Texture_impl::get_vk_image_view(
         .aspect_mask = aspect_mask,
         .base_layer  = base_layer,
         .layer_count = layer_count,
+        .base_level  = base_level,
+        .level_count = level_count,
         .image_view  = image_view
     });
 
     m_device.get_impl().set_debug_label(VK_OBJECT_TYPE_IMAGE_VIEW, reinterpret_cast<uint64_t>(image_view),
-        fmt::format("{} view aspect={} layer={}-{}", m_debug_label.data(), aspect_mask, base_layer, base_layer + layer_count).c_str());
+        fmt::format("{} view aspect={} layer={}-{} level={}-{}", m_debug_label.data(), aspect_mask, base_layer, base_layer + layer_count, base_level, base_level + level_count).c_str());
 
     return image_view;
 }
