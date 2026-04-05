@@ -439,7 +439,15 @@ public:
             .use_stencil       = m_app_context.OpenXR_mirror,
             .msaa_sample_count = m_app_context.OpenXR_mirror ? 0 : 0,
             .size              = glm::ivec2{1920, 1080},
+#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+            .title             = erhe::window::format_window_title("erhe editor by Timo Suoranta - OpenGL")
+#elif defined(ERHE_GRAPHICS_LIBRARY_METAL)
+            .title             = erhe::window::format_window_title("erhe editor by Timo Suoranta - Metal")
+#elif defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+            .title             = erhe::window::format_window_title("erhe editor by Timo Suoranta - Vulkan")
+#else
             .title             = erhe::window::format_window_title("erhe editor by Timo Suoranta")
+#endif
         };
 
         configuration.show                     = window_config.show;

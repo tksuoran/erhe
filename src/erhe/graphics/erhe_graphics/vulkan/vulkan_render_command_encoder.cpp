@@ -428,14 +428,22 @@ void Render_command_encoder_impl::set_render_pipeline_state(
         .colorWriteMask      = color_write_mask
     };
 
+    uint32_t color_attachment_count = 1;
+    {
+        const Render_pass_impl* active_render_pass = Render_pass_impl::get_active_render_pass_impl();
+        if (active_render_pass != nullptr) {
+            color_attachment_count = active_render_pass->get_color_attachment_count();
+        }
+    }
+
     const VkPipelineColorBlendStateCreateInfo color_blend_state{
         .sType           = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
         .pNext           = nullptr,
         .flags           = 0,
         .logicOpEnable   = VK_FALSE,
         .logicOp         = VK_LOGIC_OP_COPY,
-        .attachmentCount = 1,
-        .pAttachments    = &color_blend_attachment,
+        .attachmentCount = color_attachment_count,
+        .pAttachments    = (color_attachment_count > 0) ? &color_blend_attachment : nullptr,
         .blendConstants  = {0.0f, 0.0f, 0.0f, 0.0f}
     };
 

@@ -359,6 +359,9 @@ void Blit_command_encoder_impl::generate_mipmaps(const Texture* texture)
         return;
     }
 
+    // For texture views, use the view's base array layer offset
+    const uint32_t base_layer = static_cast<uint32_t>(texture->get_impl().get_view_base_array_layer());
+
     const Vulkan_immediate_commands::Command_buffer_wrapper& cmd = m_device.get_impl().get_immediate_commands().acquire();
 
     // Transition mip level 0 to transfer src
@@ -375,7 +378,7 @@ void Blit_command_encoder_impl::generate_mipmaps(const Texture* texture)
             .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
             .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
             .image               = image,
-            .subresourceRange    = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1}
+            .subresourceRange    = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, base_layer, 1}
         };
         const VkPipelineStageFlags src_stage = from_shader_read
             ? VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
@@ -402,16 +405,16 @@ void Blit_command_encoder_impl::generate_mipmaps(const Texture* texture)
                 .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
                 .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
                 .image               = image,
-                .subresourceRange    = {VK_IMAGE_ASPECT_COLOR_BIT, static_cast<uint32_t>(i), 1, 0, 1}
+                .subresourceRange    = {VK_IMAGE_ASPECT_COLOR_BIT, static_cast<uint32_t>(i), 1, base_layer, 1}
             };
             vkCmdPipelineBarrier(cmd.m_cmd_buf, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier);
         }
 
         // Blit from mip level i-1 to mip level i
         const VkImageBlit blit_region{
-            .srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, static_cast<uint32_t>(i - 1), 0, 1},
+            .srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, static_cast<uint32_t>(i - 1), base_layer, 1},
             .srcOffsets     = {{0, 0, 0}, {mip_width, mip_height, 1}},
-            .dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, static_cast<uint32_t>(i), 0, 1},
+            .dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, static_cast<uint32_t>(i), base_layer, 1},
             .dstOffsets     = {{0, 0, 0}, {next_width, next_height, 1}}
         };
         vkCmdBlitImage(
@@ -434,7 +437,7 @@ void Blit_command_encoder_impl::generate_mipmaps(const Texture* texture)
                 .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
                 .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
                 .image               = image,
-                .subresourceRange    = {VK_IMAGE_ASPECT_COLOR_BIT, static_cast<uint32_t>(i), 1, 0, 1}
+                .subresourceRange    = {VK_IMAGE_ASPECT_COLOR_BIT, static_cast<uint32_t>(i), 1, base_layer, 1}
             };
             vkCmdPipelineBarrier(cmd.m_cmd_buf, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier);
         }
@@ -455,7 +458,7 @@ void Blit_command_encoder_impl::generate_mipmaps(const Texture* texture)
             .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
             .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
             .image               = image,
-            .subresourceRange    = {VK_IMAGE_ASPECT_COLOR_BIT, 0, static_cast<uint32_t>(level_count), 0, 1}
+            .subresourceRange    = {VK_IMAGE_ASPECT_COLOR_BIT, 0, static_cast<uint32_t>(level_count), base_layer, 1}
         };
         vkCmdPipelineBarrier(cmd.m_cmd_buf, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier);
     }

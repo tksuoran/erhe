@@ -31,6 +31,7 @@ public:
     [[nodiscard]] auto get_render_target_width () const -> int;
     [[nodiscard]] auto get_render_target_height() const -> int;
     [[nodiscard]] auto get_sample_count        () const -> unsigned int;
+    [[nodiscard]] auto get_color_attachment_count() const -> unsigned int;
     [[nodiscard]] auto get_swapchain           () const -> Swapchain*;
     [[nodiscard]] auto get_debug_label         () const -> erhe::utility::Debug_label;
 

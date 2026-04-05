@@ -40,9 +40,10 @@ public:
     [[nodiscard]] auto get_handle                () const -> uint64_t;
     [[nodiscard]] auto is_sparse                 () const -> bool;
 
-    [[nodiscard]] auto get_vma_allocation () const -> VmaAllocation;
-    [[nodiscard]] auto get_vk_image      () const -> VkImage;
-    [[nodiscard]] auto get_vk_image_view () const -> VkImageView; // default view (all aspects, all layers, all levels)
+    [[nodiscard]] auto get_vma_allocation        () const -> VmaAllocation;
+    [[nodiscard]] auto get_vk_image             () const -> VkImage;
+    [[nodiscard]] auto get_vk_image_view        () const -> VkImageView; // default view (all aspects, all layers, all levels)
+    [[nodiscard]] auto get_view_base_array_layer() const -> int;
     [[nodiscard]] auto get_vk_image_view (VkImageAspectFlags aspect_mask, uint32_t base_layer, uint32_t layer_count) -> VkImageView;
     [[nodiscard]] auto get_vk_image_view (VkImageAspectFlags aspect_mask, uint32_t base_layer, uint32_t layer_count, uint32_t base_level, uint32_t level_count) -> VkImageView;
     [[nodiscard]] auto get_current_layout() const -> VkImageLayout;
@@ -78,6 +79,8 @@ private:
     bool                       m_fixed_sample_locations{true};
     bool                       m_is_sparse             {false};
     bool                       m_is_view               {false};
+    int                        m_view_base_array_layer {0};
+    int                        m_view_base_level       {0};
     int                        m_sample_count          {0};
     int                        m_width                 {0};
     int                        m_height                {0};

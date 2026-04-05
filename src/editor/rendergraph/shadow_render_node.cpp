@@ -132,7 +132,7 @@ void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, co
             }
         );
 
-        if (resolution <= 1) {
+        {
             const double depth_clear_value = reverse_depth ? 0.0 : 1.0;
             graphics_device.clear_texture(*m_texture.get(), { depth_clear_value, 0.0, 0.0, 0.0 });
         }

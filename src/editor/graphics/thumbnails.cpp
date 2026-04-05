@@ -60,6 +60,7 @@ Thumbnails::Thumbnails(const Thumbnails_config& thumbnails_config, erhe::graphic
             Thumbnail& t = m_thumbnails[i];
 
             erhe::graphics::Texture_create_info texture_create_info = erhe::graphics::Texture_create_info::make_view(m_graphics_device, m_color_texture);
+            texture_create_info.type                  = erhe::graphics::Texture_type::texture_2d; // Single-layer view sampled as sampler2D
             texture_create_info.usage_mask            =
                 erhe::graphics::Image_usage_flag_bit_mask::color_attachment |
                 erhe::graphics::Image_usage_flag_bit_mask::sampled,

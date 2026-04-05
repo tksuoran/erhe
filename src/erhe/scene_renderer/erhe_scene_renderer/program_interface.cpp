@@ -94,7 +94,9 @@ auto Program_interface::make_prototype(
     const std::filesystem::path gs_path = shader_path / std::filesystem::path(create_info.name + ".geom");
     const std::filesystem::path vs_path = shader_path / std::filesystem::path(create_info.name + ".vert");
 
-    create_info.fragment_outputs = &fragment_outputs;
+    if (create_info.fragment_outputs == nullptr) {
+        create_info.fragment_outputs = &fragment_outputs;
+    }
     if (!create_info.no_vertex_input) {
         create_info.vertex_format = &vertex_format;
     }

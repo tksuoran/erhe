@@ -463,6 +463,20 @@ void Render_pass_impl::create()
 {
 }
 
+auto Render_pass_impl::get_color_attachment_count() const -> unsigned int
+{
+    if (m_swapchain != nullptr) {
+        return 1;
+    }
+    unsigned int count = 0;
+    for (const Render_pass_attachment_descriptor& att : m_color_attachments) {
+        if (att.is_defined()) {
+            ++count;
+        }
+    }
+    return count;
+}
+
 auto Render_pass_impl::get_sample_count() const -> unsigned int
 {
     for (const Render_pass_attachment_descriptor& att : m_color_attachments) {
@@ -612,6 +626,19 @@ void Render_pass_impl::end_render_pass()
 
             // Reset command pool for reuse
             vkResetCommandPool(m_device_impl.get_vulkan_device(), m_command_pool, 0);
+        }
+
+        // Update tracked layout to match the render pass finalLayout
+        for (const Render_pass_attachment_descriptor& att : m_color_attachments) {
+            if (att.is_defined() && (att.texture != nullptr)) {
+                const VkImageLayout final_layout = (att.resolve_texture != nullptr)
+                    ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+                    : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                const_cast<Texture_impl&>(att.texture->get_impl()).set_layout(final_layout);
+            }
+        }
+        if (m_depth_attachment.is_defined() && (m_depth_attachment.texture != nullptr)) {
+            const_cast<Texture_impl&>(m_depth_attachment.texture->get_impl()).set_layout(VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);
         }
     }
 

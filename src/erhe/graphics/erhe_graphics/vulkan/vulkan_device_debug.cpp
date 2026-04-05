@@ -163,7 +163,7 @@ auto Device_impl::debug_utils_messenger_callback(
     if (is_validation) {
         const bool is_warning = (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) != 0;
         const bool is_error   = (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT  ) != 0;
-        if (is_error) {
+        if (is_warning || is_error) {
             m_device.device_error(ss.str());
         }
         return (is_warning || is_error) ? VK_TRUE : VK_FALSE;

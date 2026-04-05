@@ -1,5 +1,6 @@
 #pragma once
 
+#include "erhe_graphics/fragment_outputs.hpp"
 #include "erhe_graphics/render_pipeline_state.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/sampler.hpp"
@@ -91,6 +92,7 @@ private:
     [[nodiscard]] auto get_pipeline(const erhe::graphics::Vertex_input_state* vertex_input_state, bool reverse_depth) -> erhe::graphics::Render_pipeline_state&;
 
     erhe::graphics::Device&                       m_graphics_device;
+    erhe::graphics::Fragment_outputs              m_empty_fragment_outputs;
     erhe::graphics::Bind_group_layout*            m_bind_group_layout{nullptr};
     uint64_t                                      m_pipeline_cache_serial{0};
     std::vector<Pipeline_cache_entry>             m_pipeline_cache_entries;

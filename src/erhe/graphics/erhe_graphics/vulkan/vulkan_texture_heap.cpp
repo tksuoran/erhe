@@ -214,10 +214,14 @@ auto Texture_heap_impl::assign(std::size_t slot, const Texture* texture, const S
     // For depth/stencil textures, use a depth-only image view for sampling
     Texture_impl& texture_impl = const_cast<Texture_impl&>(texture->get_impl());
     VkImageView image_view = VK_NULL_HANDLE;
+    VkImageLayout image_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     {
         const erhe::dataformat::Format pixelformat = texture_impl.get_pixelformat();
         const bool has_depth   = erhe::dataformat::get_depth_size_bits(pixelformat) > 0;
         const bool has_stencil = erhe::dataformat::get_stencil_size_bits(pixelformat) > 0;
+        if (has_depth) {
+            image_layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+        }
         if (has_depth && has_stencil) {
             image_view = texture_impl.get_vk_image_view(
                 VK_IMAGE_ASPECT_DEPTH_BIT,
@@ -236,7 +240,7 @@ auto Texture_heap_impl::assign(std::size_t slot, const Texture* texture, const S
     const VkDescriptorImageInfo image_info{
         .sampler     = vk_sampler,
         .imageView   = image_view,
-        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+        .imageLayout = image_layout
     };
 
     const VkWriteDescriptorSet write{
@@ -330,6 +334,10 @@ auto Texture_heap_impl::bind() -> std::size_t
                 const bool has_depth   = erhe::dataformat::get_depth_size_bits(pixelformat) > 0;
                 const bool has_stencil = erhe::dataformat::get_stencil_size_bits(pixelformat) > 0;
                 VkImageView image_view = VK_NULL_HANDLE;
+                VkImageLayout push_image_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                if (has_depth) {
+                    push_image_layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+                }
                 if (has_depth && has_stencil) {
                     image_view = texture_impl.get_vk_image_view(
                         VK_IMAGE_ASPECT_DEPTH_BIT,
@@ -346,7 +354,7 @@ auto Texture_heap_impl::bind() -> std::size_t
                 image_infos.push_back(VkDescriptorImageInfo{
                     .sampler     = vk_sampler,
                     .imageView   = image_view,
-                    .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+                    .imageLayout = push_image_layout
                 });
                 writes.push_back(VkWriteDescriptorSet{
                     .sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,

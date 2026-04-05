@@ -1079,7 +1079,10 @@ void Device_impl::clear_texture(const Texture& texture, std::array<double, 4> va
         vkCmdClearColorImage(cmd.m_cmd_buf, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clear_color, 1, &range);
     }
 
-    tex_impl.transition_layout(cmd.m_cmd_buf, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    const VkImageLayout final_layout = (is_depth || is_stencil)
+        ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL
+        : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    tex_impl.transition_layout(cmd.m_cmd_buf, final_layout);
 
     Submit_handle submit = m_immediate_commands->submit(cmd);
     m_immediate_commands->wait(submit);

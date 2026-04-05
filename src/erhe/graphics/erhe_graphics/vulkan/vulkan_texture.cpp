@@ -47,13 +47,15 @@ auto to_vk_image_view_type(const Texture_type type) -> VkImageViewType
 } // anonymous namespace
 
 Texture_impl::Texture_impl(Texture_impl&& other) noexcept
-    : m_device             {other.m_device}
-    , m_vma_allocation     {other.m_vma_allocation}
-    , m_vk_image           {other.m_vk_image}
-    , m_vk_image_view      {other.m_vk_image_view}
-    , m_cached_image_views {std::move(other.m_cached_image_views)}
-    , m_is_view            {other.m_is_view}
-    , m_sample_count       {other.m_sample_count}
+    : m_device                {other.m_device}
+    , m_vma_allocation        {other.m_vma_allocation}
+    , m_vk_image              {other.m_vk_image}
+    , m_vk_image_view         {other.m_vk_image_view}
+    , m_cached_image_views    {std::move(other.m_cached_image_views)}
+    , m_is_view               {other.m_is_view}
+    , m_view_base_array_layer {other.m_view_base_array_layer}
+    , m_view_base_level       {other.m_view_base_level}
+    , m_sample_count          {other.m_sample_count}
     , m_current_layout     {other.m_current_layout}
 {
     other.m_vk_image       = VK_NULL_HANDLE;
@@ -105,6 +107,8 @@ Texture_impl::Texture_impl(Device& device, const Texture_create_info& create_inf
     , m_type                  {create_info.type}
     , m_pixelformat           {create_info.pixelformat}
     , m_fixed_sample_locations{create_info.fixed_sample_locations}
+    , m_view_base_array_layer {create_info.view_base_array_layer}
+    , m_view_base_level       {create_info.view_base_level}
     , m_sample_count          {create_info.sample_count}
     , m_width                 {create_info.width}
     , m_height                {create_info.height}
@@ -339,6 +343,11 @@ auto Texture_impl::get_vk_image_view() const -> VkImageView
     return m_vk_image_view;
 }
 
+auto Texture_impl::get_view_base_array_layer() const -> int
+{
+    return m_view_base_array_layer;
+}
+
 auto Texture_impl::get_vk_image_view(
     const VkImageAspectFlags aspect_mask,
     const uint32_t           base_layer,
@@ -368,7 +377,10 @@ auto Texture_impl::get_vk_image_view(
         }
     }
 
-    // Create new view
+    // Create new view - offset by view's own base layer/level for texture views
+    const uint32_t actual_base_layer = base_layer + static_cast<uint32_t>(m_view_base_array_layer);
+    const uint32_t actual_base_level = base_level + static_cast<uint32_t>(m_view_base_level);
+
     VkDevice vulkan_device = m_device.get_impl().get_vulkan_device();
     VkFormat vk_format = to_vulkan(m_pixelformat);
 
@@ -387,9 +399,9 @@ auto Texture_impl::get_vk_image_view(
         },
         .subresourceRange = {
             .aspectMask     = aspect_mask,
-            .baseMipLevel   = base_level,
+            .baseMipLevel   = actual_base_level,
             .levelCount     = level_count,
-            .baseArrayLayer = base_layer,
+            .baseArrayLayer = actual_base_layer,
             .layerCount     = layer_count
         }
     };
@@ -411,7 +423,7 @@ auto Texture_impl::get_vk_image_view(
     });
 
     m_device.get_impl().set_debug_label(VK_OBJECT_TYPE_IMAGE_VIEW, reinterpret_cast<uint64_t>(image_view),
-        fmt::format("{} view aspect={} layer={}-{} level={}-{}", m_debug_label.data(), aspect_mask, base_layer, base_layer + layer_count, base_level, base_level + level_count).c_str());
+        fmt::format("{} view aspect={} layer={}-{} level={}-{}", m_debug_label.data(), aspect_mask, actual_base_layer, actual_base_layer + layer_count, actual_base_level, actual_base_level + level_count).c_str());
 
     return image_view;
 }
