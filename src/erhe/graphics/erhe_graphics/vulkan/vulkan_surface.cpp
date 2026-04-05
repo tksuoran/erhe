@@ -235,11 +235,11 @@ auto Surface_impl::get_surface_format_score(const VkSurfaceFormatKHR surface_for
 {
     float format_score = 1.0f;
     switch (surface_format.format) {
-        case VK_FORMAT_R8G8B8A8_UNORM:           format_score = 1.0f; break;
-        case VK_FORMAT_B8G8R8A8_UNORM:           format_score = 1.0f; break;
-        case VK_FORMAT_R8G8B8A8_SRGB:            format_score = 4.0f; break;
-        case VK_FORMAT_B8G8R8A8_SRGB:            format_score = 4.0f; break;
-        case VK_FORMAT_A2R10G10B10_UNORM_PACK32: format_score = 2.0f; break;
+        case VK_FORMAT_R8G8B8A8_UNORM:           format_score = 2.0f; break;
+        case VK_FORMAT_B8G8R8A8_UNORM:           format_score = 2.0f; break;
+        case VK_FORMAT_R8G8B8A8_SRGB:            format_score = 3.0f; break;
+        case VK_FORMAT_B8G8R8A8_SRGB:            format_score = 3.0f; break;
+        case VK_FORMAT_A2R10G10B10_UNORM_PACK32: format_score = 4.0f; break;
         default:
             break;
     }
