@@ -350,6 +350,7 @@ void Content_wide_line_renderer::render(
 
     erhe::graphics::Scoped_debug_group debug_scope{"Content_wide_line_renderer::render"};
 
+    render_encoder.set_bind_group_layout(m_bind_group_layout.get());
     render_encoder.set_render_pipeline_state(pipeline_state);
 
     for (const Dispatch_entry& dispatch : m_dispatches) {
