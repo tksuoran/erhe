@@ -120,7 +120,8 @@ void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, co
                 .device            = graphics_device,
                 .usage_mask        =
                     erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment |
-                    erhe::graphics::Image_usage_flag_bit_mask::sampled,
+                    erhe::graphics::Image_usage_flag_bit_mask::sampled |
+                    erhe::graphics::Image_usage_flag_bit_mask::transfer_dst,
                 .type              = erhe::graphics::Texture_type::texture_2d,
                 .pixelformat       = depth_format,
                 .width             = std::max(1, resolution),
