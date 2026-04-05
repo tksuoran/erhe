@@ -76,22 +76,26 @@ Content_wide_line_renderer::Content_wide_line_renderer(
 
     m_edge_line_vertex_buffer_block = std::make_unique<erhe::graphics::Shader_resource>(
         graphics_device,
-        "edge_line_vertex_buffer",
-        0,
-        erhe::graphics::Shader_resource::Type::shader_storage_block
+        erhe::graphics::Shader_resource::Block_create_info{
+            .name          = "edge_line_vertex_buffer",
+            .binding_point = 0,
+            .type          = erhe::graphics::Shader_resource::Type::shader_storage_block,
+            .readonly      = true
+        }
     );
-    m_edge_line_vertex_buffer_block->set_readonly(true);
     m_edge_line_vertex_buffer_block->add_struct("vertices", m_edge_line_vertex_struct.get(), erhe::graphics::Shader_resource::unsized_array);
 
     // Triangle output SSBO
     m_triangle_vertex_struct = std::make_unique<erhe::graphics::Shader_resource>(graphics_device, "triangle_vertex");
     m_triangle_vertex_buffer_block = std::make_unique<erhe::graphics::Shader_resource>(
         graphics_device,
-        "triangle_vertex_buffer",
-        1,
-        erhe::graphics::Shader_resource::Type::shader_storage_block
+        erhe::graphics::Shader_resource::Block_create_info{
+            .name          = "triangle_vertex_buffer",
+            .binding_point = 1,
+            .type          = erhe::graphics::Shader_resource::Type::shader_storage_block,
+            .writeonly     = true
+        }
     );
-    m_triangle_vertex_buffer_block->set_writeonly(true);
     erhe::graphics::add_vertex_stream(
         m_triangle_vertex_format.streams.front(),
         *m_triangle_vertex_struct.get(),

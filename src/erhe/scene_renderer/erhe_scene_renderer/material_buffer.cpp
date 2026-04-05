@@ -19,11 +19,14 @@ namespace erhe::scene_renderer {
 Material_interface::Material_interface(erhe::graphics::Device& graphics_device, const int max_material_count)
     : material_block{
         graphics_device,
-        "material",
-        material_buffer_binding_point,
-        graphics_device.get_info().use_shader_storage_buffers
-            ? erhe::graphics::Shader_resource::Type::shader_storage_block
-            : erhe::graphics::Shader_resource::Type::uniform_block
+        {
+            .name          = "material",
+            .binding_point = material_buffer_binding_point,
+            .type          = graphics_device.get_info().use_shader_storage_buffers
+                ? erhe::graphics::Shader_resource::Type::shader_storage_block
+                : erhe::graphics::Shader_resource::Type::uniform_block,
+            .readonly      = true
+        }
     }
     , material_struct{graphics_device, "Material"}
     , offsets        {
@@ -71,7 +74,6 @@ Material_interface::Material_interface(erhe::graphics::Device& graphics_device, 
         array_size = this->max_material_count;
     }
     material_block.add_struct("materials", &material_struct, array_size);
-    material_block.set_readonly(true);
 }
 
 Material_buffer::Material_buffer(erhe::graphics::Device& graphics_device, Material_interface& material_interface)

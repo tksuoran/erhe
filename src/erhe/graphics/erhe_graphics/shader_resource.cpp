@@ -309,7 +309,27 @@ Shader_resource::Shader_resource(
 {
 }
 
-// Block (uniform block or shader storage block)
+// Block (uniform block or shader storage block) -- designated initializer version
+Shader_resource::Shader_resource(Device& device, const Block_create_info& create_info)
+    : m_device       {device}
+    , m_type         {create_info.type}
+    , m_name         {create_info.name}
+    , m_array_size   {create_info.array_size}
+    , m_binding_point{create_info.binding_point}
+    , m_readonly     {create_info.readonly}
+    , m_writeonly    {create_info.writeonly}
+{
+    const auto& info = device.get_info();
+    if (create_info.type == Type::uniform_block) {
+        ERHE_VERIFY(create_info.binding_point < info.max_uniform_buffer_bindings);
+    }
+    if (create_info.type == Type::shader_storage_block) {
+        ERHE_VERIFY(info.use_shader_storage_buffers);
+        ERHE_VERIFY(create_info.binding_point < info.max_shader_storage_buffer_bindings);
+    }
+}
+
+// Block (uniform block or shader storage block) -- legacy positional arguments
 Shader_resource::Shader_resource(
     Device&                          device,
     const std::string_view           name,

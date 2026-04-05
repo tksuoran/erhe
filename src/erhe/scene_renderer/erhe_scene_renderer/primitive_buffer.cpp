@@ -22,11 +22,14 @@ namespace erhe::scene_renderer {
 Primitive_interface::Primitive_interface(erhe::graphics::Device& graphics_device, const int max_primitive_count)
     : primitive_block{
         graphics_device,
-        "primitive",
-        primitive_buffer_binding_point,
-        graphics_device.get_info().use_shader_storage_buffers
-            ? erhe::graphics::Shader_resource::Type::shader_storage_block
-            : erhe::graphics::Shader_resource::Type::uniform_block
+        {
+            .name          = "primitive",
+            .binding_point = primitive_buffer_binding_point,
+            .type          = graphics_device.get_info().use_shader_storage_buffers
+                ? erhe::graphics::Shader_resource::Type::shader_storage_block
+                : erhe::graphics::Shader_resource::Type::uniform_block,
+            .readonly      = true
+        }
     }
     , primitive_struct{graphics_device, "Primitive"}
     , offsets{
@@ -51,7 +54,6 @@ Primitive_interface::Primitive_interface(erhe::graphics::Device& graphics_device
         array_size = this->max_primitive_count;
     }
     primitive_block.add_struct("primitives", &primitive_struct, array_size);
-    primitive_block.set_readonly(true);
 }
 
 Primitive_buffer::Primitive_buffer(erhe::graphics::Device& graphics_device, Primitive_interface& primitive_interface)

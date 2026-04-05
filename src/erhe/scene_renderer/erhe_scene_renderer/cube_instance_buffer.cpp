@@ -8,11 +8,14 @@ namespace erhe::scene_renderer {
 Cube_interface::Cube_interface(erhe::graphics::Device& graphics_device)
     : cube_instance_block{
         graphics_device,
-        "instance",
-        cube_instance_buffer_binding_point,
-        graphics_device.get_info().use_shader_storage_buffers
-            ? erhe::graphics::Shader_resource::Type::shader_storage_block
-            : erhe::graphics::Shader_resource::Type::uniform_block
+        {
+            .name          = "instance",
+            .binding_point = cube_instance_buffer_binding_point,
+            .type          = graphics_device.get_info().use_shader_storage_buffers
+                ? erhe::graphics::Shader_resource::Type::shader_storage_block
+                : erhe::graphics::Shader_resource::Type::uniform_block,
+            .readonly      = true
+        }
     }
     , cube_instance_struct {graphics_device, "Instance"}
     , cube_instance_offsets{
@@ -21,11 +24,14 @@ Cube_interface::Cube_interface(erhe::graphics::Device& graphics_device)
 
     , cube_control_block{
         graphics_device,
-        "cube_control",
-        cube_control_buffer_binding_point,
-        graphics_device.get_info().use_shader_storage_buffers
-            ? erhe::graphics::Shader_resource::Type::shader_storage_block
-            : erhe::graphics::Shader_resource::Type::uniform_block
+        {
+            .name          = "cube_control",
+            .binding_point = cube_control_buffer_binding_point,
+            .type          = graphics_device.get_info().use_shader_storage_buffers
+                ? erhe::graphics::Shader_resource::Type::shader_storage_block
+                : erhe::graphics::Shader_resource::Type::uniform_block,
+            .readonly      = true
+        }
     }
     , cube_control_struct {graphics_device, "Cube_control"}
     , cube_control_offsets{
@@ -46,7 +52,6 @@ Cube_interface::Cube_interface(erhe::graphics::Device& graphics_device)
             array_size = static_cast<std::size_t>(graphics_device.get_info().max_uniform_block_size) / element_size;
         }
         cube_instance_block.add_struct("instances", &cube_instance_struct, array_size);
-        cube_instance_block.set_readonly(true);
     }
 
     {
@@ -59,7 +64,6 @@ Cube_interface::Cube_interface(erhe::graphics::Device& graphics_device)
             array_size = static_cast<std::size_t>(graphics_device.get_info().max_uniform_block_size) / element_size;
         }
         cube_control_block.add_struct("cube_control", &cube_control_struct, array_size);
-        cube_control_block.set_readonly(true);
     }
 }
 

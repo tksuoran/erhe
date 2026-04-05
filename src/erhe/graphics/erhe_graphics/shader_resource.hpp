@@ -79,6 +79,19 @@ public:
     );
 
     // Block (uniform block or shader storage block)
+    class Block_create_info
+    {
+    public:
+        std::string_view           name;
+        int                        binding_point;
+        Type                       type;
+        std::optional<std::size_t> array_size{};
+        bool                       readonly {false};
+        bool                       writeonly{false};
+    };
+    Shader_resource(Device& device, const Block_create_info& create_info);
+
+    // Block (uniform block or shader storage block) -- legacy positional arguments
     Shader_resource(
         Device&                    device,
         std::string_view           block_name,

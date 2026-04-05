@@ -68,11 +68,14 @@ Text_renderer::Text_renderer(erhe::graphics::Device& graphics_device, const bool
     , m_projection_block         {graphics_device, "projection", 0, erhe::graphics::Shader_resource::Type::uniform_block}
     , m_vertex_ssbo_block{
         graphics_device,
-        "vertex_ssbo",
-        1,
-        graphics_device.get_info().use_shader_storage_buffers
-            ? erhe::graphics::Shader_resource::Type::shader_storage_block
-            : erhe::graphics::Shader_resource::Type::uniform_block
+        {
+            .name          = "vertex_ssbo",
+            .binding_point = 1,
+            .type          = graphics_device.get_info().use_shader_storage_buffers
+                ? erhe::graphics::Shader_resource::Type::shader_storage_block
+                : erhe::graphics::Shader_resource::Type::uniform_block,
+            .readonly      = true
+        }
     }
     , m_clip_from_window_resource  {m_projection_block.add_mat4 ("clip_from_window")}
     , m_texture_resource           {m_projection_block.add_uvec2("texture")}

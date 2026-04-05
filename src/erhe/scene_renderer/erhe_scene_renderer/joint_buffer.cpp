@@ -17,11 +17,14 @@ namespace erhe::scene_renderer {
 Joint_interface::Joint_interface(erhe::graphics::Device& graphics_device, const int max_joint_count)
     : joint_block{erhe::graphics::Shader_resource{
         graphics_device,
-        "joint",
-        joint_buffer_binding_point,
-        graphics_device.get_info().use_shader_storage_buffers
-            ? erhe::graphics::Shader_resource::Type::shader_storage_block
-            : erhe::graphics::Shader_resource::Type::uniform_block
+        {
+            .name          = "joint",
+            .binding_point = joint_buffer_binding_point,
+            .type          = graphics_device.get_info().use_shader_storage_buffers
+                ? erhe::graphics::Shader_resource::Type::shader_storage_block
+                : erhe::graphics::Shader_resource::Type::uniform_block,
+            .readonly      = true
+        }
     }}
     , joint_struct{erhe::graphics::Shader_resource{graphics_device, "Joint"}}
     , max_joint_count{static_cast<std::size_t>(max_joint_count)}

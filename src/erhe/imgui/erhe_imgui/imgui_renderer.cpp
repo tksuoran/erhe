@@ -148,11 +148,14 @@ auto get_shader_default_uniform_block(erhe::graphics::Device& graphics_device, c
 Imgui_program_interface::Imgui_program_interface(erhe::graphics::Device& graphics_device)
     : draw_parameter_block{
         graphics_device,
-        "draw",
-        0,
-        graphics_device.get_info().use_shader_storage_buffers
-            ? erhe::graphics::Shader_resource::Type::shader_storage_block
-            : erhe::graphics::Shader_resource::Type::uniform_block
+        {
+            .name          = "draw",
+            .binding_point = 0,
+            .type          = graphics_device.get_info().use_shader_storage_buffers
+                ? erhe::graphics::Shader_resource::Type::shader_storage_block
+                : erhe::graphics::Shader_resource::Type::uniform_block,
+            .readonly      = true
+        }
     }
     , draw_parameter_struct{graphics_device, "Draw_parameters"}
     , draw_parameter_struct_offsets{
