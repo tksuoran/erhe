@@ -420,12 +420,18 @@ auto Post_processing::make_program(
 
     std::vector<erhe::graphics::Shader_stage_extension> extensions; 
     std::vector<std::pair<std::string, std::string>>    defines;
-    const bool bindless_textures = graphics_device.get_info().uses_bindless_texture();
+    const bool bindless_textures = !graphics_device.get_info().uses_sampler_array_in_set_0();
     if (flags & flag_first_pass       ) { defines.push_back({"FIRST_PASS", "1"}); }
     if (flags & flag_last_pass        ) { defines.push_back({"LAST_PASS",  "1"}); }
-    if (flags & flag_source_input     ) { defines.push_back({"SOURCE", "s_input"}); }
-    if (flags & flag_source_downsample) { defines.push_back({"SOURCE", "s_downsample"}); }
-    if (flags & flag_source_upsample  ) { defines.push_back({"SOURCE", "s_upsample"}); }
+    if (graphics_device.get_info().texture_heap_path == erhe::graphics::Texture_heap_path::vulkan_descriptor_indexing) {
+        if (flags & flag_source_input     ) { defines.push_back({"SOURCE", "erhe_texture_heap[post_processing.input_texture.x]"}); }
+        if (flags & flag_source_downsample) { defines.push_back({"SOURCE", "erhe_texture_heap[post_processing.downsample_texture.x]"}); }
+        if (flags & flag_source_upsample  ) { defines.push_back({"SOURCE", "erhe_texture_heap[post_processing.upsample_texture.x]"}); }
+    } else {
+        if (flags & flag_source_input     ) { defines.push_back({"SOURCE", "s_input"}); }
+        if (flags & flag_source_downsample) { defines.push_back({"SOURCE", "s_downsample"}); }
+        if (flags & flag_source_upsample  ) { defines.push_back({"SOURCE", "s_upsample"}); }
+    }
 
     return
         erhe::graphics::Shader_stages_create_info{
@@ -479,19 +485,19 @@ Post_processing::Post_processing(erhe::graphics::Device& d, App_context& app_con
 
     , m_default_uniform_block{d}
     , m_input_texture_resource{
-        d.get_info().uses_bindless_texture()
-            ? nullptr
-            : m_default_uniform_block.add_sampler("s_input", erhe::graphics::Glsl_type::sampler_2d, s_input_texture)
+        d.get_info().uses_sampler_array_in_set_0()
+            ? m_default_uniform_block.add_sampler("s_input", erhe::graphics::Glsl_type::sampler_2d, s_input_texture)
+            : nullptr
     }
     , m_downsample_texture_resource{
-        d.get_info().uses_bindless_texture()
-            ? nullptr
-            : m_default_uniform_block.add_sampler("s_downsample", erhe::graphics::Glsl_type::sampler_2d, s_downsample_texture)
+        d.get_info().uses_sampler_array_in_set_0()
+            ? m_default_uniform_block.add_sampler("s_downsample", erhe::graphics::Glsl_type::sampler_2d, s_downsample_texture)
+            : nullptr
     }
     , m_upsample_texture_resource{
-        d.get_info().uses_bindless_texture()
-            ? nullptr
-            : m_default_uniform_block.add_sampler("s_upsample", erhe::graphics::Glsl_type::sampler_2d, s_upsample_texture)
+        d.get_info().uses_sampler_array_in_set_0()
+            ? m_default_uniform_block.add_sampler("s_upsample", erhe::graphics::Glsl_type::sampler_2d, s_upsample_texture)
+            : nullptr
     }
     , m_shader_path{std::filesystem::path("res") / std::filesystem::path("shaders")}
     , m_shader_stages{
