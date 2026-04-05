@@ -70,6 +70,7 @@ public:
     std::vector<const Shader_resource*>              interface_blocks     {};
     const Fragment_outputs*                          fragment_outputs     {nullptr};
     const erhe::dataformat::Vertex_format*           vertex_format        {nullptr};
+    bool                                             no_vertex_input      {false};   // fullscreen passes: don't inject vertex attributes
     const Shader_resource*                           default_uniform_block{nullptr}; // contains sampler uniforms
     std::vector<Shader_stage>                        shaders              {};
     const Bind_group_layout*                           bind_group_layout    {nullptr};

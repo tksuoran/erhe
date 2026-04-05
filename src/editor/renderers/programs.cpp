@@ -149,7 +149,7 @@ void Programs::load_programs(
     add_shader(points                  , CI{ .name = "points" } );
     add_shader(id                      , CI{ .name = "id"     } );
     add_shader(tool                    , CI{ .name = "tool"   } );
-    add_shader(debug_depth             , CI{ .name = "visualize_depth", .default_uniform_block = &default_uniform_block } );
+    add_shader(debug_depth             , CI{ .name = "visualize_depth", .no_vertex_input = true, .default_uniform_block = &default_uniform_block } );
     add_shader(debug_vertex_normal     , CI{ .name = "standard_debug", .defines = {{"ERHE_DEBUG_VERTEX_NORMAL",      "1"}}, .default_uniform_block = &default_uniform_block } );
     add_shader(debug_fragment_normal   , CI{ .name = "standard_debug", .defines = {{"ERHE_DEBUG_FRAGMENT_NORMAL",    "1"}}, .default_uniform_block = &default_uniform_block } );
     add_shader(debug_normal_texture    , CI{ .name = "standard_debug", .defines = {{"ERHE_DEBUG_NORMAL_TEXTURE",     "1"}}, .default_uniform_block = &default_uniform_block } );
