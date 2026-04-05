@@ -5,6 +5,8 @@ void main()
 #if defined(ERHE_OPENGL_BINDLESS_TEXTURE)
     sampler2D s = sampler2D(quad.texture_handle);
     out_color = texture(s, v_texcoord);
+#elif defined(ERHE_VULKAN_DESCRIPTOR_INDEXING)
+    out_color = texture(erhe_texture_heap[quad.texture_handle.x], v_texcoord);
 #else
     out_color = texture(s_textures[0], v_texcoord);
 #endif

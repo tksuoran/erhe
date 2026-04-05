@@ -10,6 +10,12 @@ void main()
     if (count > 1u) { sampler2D s1 = sampler2D(multi_tex.texture_handle_1); result += texture(s1, v_texcoord); }
     if (count > 2u) { sampler2D s2 = sampler2D(multi_tex.texture_handle_2); result += texture(s2, v_texcoord); }
     out_color = vec4(result.rgb / float(count), 1.0);
+#elif defined(ERHE_VULKAN_DESCRIPTOR_INDEXING)
+    vec4 result = vec4(0.0);
+    if (count > 0u) { result += texture(erhe_texture_heap[multi_tex.texture_handle_0.x], v_texcoord); }
+    if (count > 1u) { result += texture(erhe_texture_heap[multi_tex.texture_handle_1.x], v_texcoord); }
+    if (count > 2u) { result += texture(erhe_texture_heap[multi_tex.texture_handle_2.x], v_texcoord); }
+    out_color = vec4(result.rgb / float(count), 1.0);
 #else
     vec4 result = vec4(0.0);
     if (count > 0u) { result += texture(s_textures[0], v_texcoord); }
