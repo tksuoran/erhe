@@ -659,6 +659,12 @@ void Post_processing::post_process(Post_processing_node& node)
             encoder.set_render_pipeline_state(m_pipelines.downsample);
         }
         m_texture_heap->bind();
+        {
+            const int w = render_pass->get_render_target_width();
+            const int h = render_pass->get_render_target_height();
+            encoder.set_viewport_rect(0, 0, w, h);
+            encoder.set_scissor_rect(0, 0, w, h);
+        }
         encoder.draw_primitives(erhe::graphics::Primitive_type::triangle, 0, 3);
     }
 
@@ -702,6 +708,8 @@ void Post_processing::post_process(Post_processing_node& node)
             m_parameter_block.get_size_bytes(),
             binding_point
         );
+        encoder.set_viewport_rect(0, 0, render_pass_width, render_pass_height);
+        encoder.set_scissor_rect(0, 0, render_pass_width, render_pass_height);
         encoder.draw_primitives(erhe::graphics::Primitive_type::triangle, 0, 3);
     }
 
