@@ -510,24 +510,30 @@ Device_impl::Device_impl(
         log_startup->critical("Required Vulkan feature shaderClipDistance is not supported");
         abort();
     }
+    if (qf.vertexPipelineStoresAndAtomics == VK_FALSE) {
+        log_startup->critical("Required Vulkan feature vertexPipelineStoresAndAtomics is not supported");
+        abort();
+    }
 
     // Log optional feature availability
     log_startup->info("Vulkan device features:");
-    log_startup->info("  multiDrawIndirect  = {}", qf.multiDrawIndirect  == VK_TRUE);
-    log_startup->info("  samplerAnisotropy  = {}", qf.samplerAnisotropy  == VK_TRUE);
-    log_startup->info("  shaderClipDistance = {}", qf.shaderClipDistance  == VK_TRUE);
-    log_startup->info("  shaderCullDistance = {}", qf.shaderCullDistance  == VK_TRUE);
-    log_startup->info("  shaderInt64        = {}", qf.shaderInt64         == VK_TRUE);
+    log_startup->info("  vertexPipelineStoresAndAtomics = {}", qf.vertexPipelineStoresAndAtomics == VK_TRUE);
+    log_startup->info("  multiDrawIndirect              = {}", qf.multiDrawIndirect  == VK_TRUE);
+    log_startup->info("  samplerAnisotropy              = {}", qf.samplerAnisotropy  == VK_TRUE);
+    log_startup->info("  shaderClipDistance             = {}", qf.shaderClipDistance  == VK_TRUE);
+    log_startup->info("  shaderCullDistance             = {}", qf.shaderCullDistance  == VK_TRUE);
+    log_startup->info("  shaderInt64                    = {}", qf.shaderInt64         == VK_TRUE);
 
     VkPhysicalDeviceFeatures2 set_device_features{
         .sType    = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
         .pNext    = nullptr,
         .features = {
-            .multiDrawIndirect  = qf.multiDrawIndirect,
-            .samplerAnisotropy  = qf.samplerAnisotropy,
-            .shaderClipDistance  = qf.shaderClipDistance,
-            .shaderCullDistance  = qf.shaderCullDistance,
-            .shaderInt64         = qf.shaderInt64,
+            .vertexPipelineStoresAndAtomics = qf.vertexPipelineStoresAndAtomics,
+            .multiDrawIndirect              = qf.multiDrawIndirect,
+            .samplerAnisotropy              = qf.samplerAnisotropy,
+            .shaderClipDistance              = qf.shaderClipDistance,
+            .shaderCullDistance              = qf.shaderCullDistance,
+            .shaderInt64                     = qf.shaderInt64,
         }
     };
     VkBaseOutStructure* set_features_chain_last = reinterpret_cast<VkBaseOutStructure*>(&set_device_features);
