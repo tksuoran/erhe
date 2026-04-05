@@ -7,6 +7,7 @@
 #include "erhe_graphics/vulkan/vulkan_submit_handle.hpp"
 #include "erhe_graphics/vulkan/vulkan_texture.hpp"
 #include "erhe_graphics/graphics_log.hpp"
+#include "erhe_dataformat/dataformat.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include "volk.h"
@@ -175,10 +176,15 @@ void Blit_command_encoder_impl::copy_from_buffer(
     const VkBuffer vk_source_buffer     = source_buffer->get_impl().get_vk_buffer();
     const VkImage  vk_destination_image = destination_texture->get_impl().get_vk_image();
 
+    // bufferRowLength is in texels, not bytes; bufferImageHeight is in rows, not bytes
+    const std::size_t bytes_per_pixel    = erhe::dataformat::get_format_size_bytes(destination_texture->get_pixelformat());
+    const uint32_t    buffer_row_length  = (bytes_per_pixel > 0) ? static_cast<uint32_t>(source_bytes_per_row / bytes_per_pixel) : 0;
+    const uint32_t    buffer_image_height = (source_bytes_per_row > 0) ? static_cast<uint32_t>(source_bytes_per_image / source_bytes_per_row) : 0;
+
     const VkBufferImageCopy region{
         .bufferOffset      = source_offset,
-        .bufferRowLength   = static_cast<uint32_t>(source_bytes_per_row),
-        .bufferImageHeight = static_cast<uint32_t>(source_bytes_per_image),
+        .bufferRowLength   = buffer_row_length,
+        .bufferImageHeight = buffer_image_height,
         .imageSubresource  = {
             .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
             .mipLevel       = static_cast<uint32_t>(destination_level),
@@ -304,10 +310,15 @@ void Blit_command_encoder_impl::copy_from_texture(
     };
     vkCmdPipelineBarrier(cmd.m_cmd_buf, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &pre_barrier);
 
+    // bufferRowLength is in texels, not bytes; bufferImageHeight is in rows, not bytes
+    const std::size_t bytes_per_pixel     = erhe::dataformat::get_format_size_bytes(source_texture->get_pixelformat());
+    const uint32_t    buffer_row_length   = (bytes_per_pixel > 0) ? static_cast<uint32_t>(destination_bytes_per_row / bytes_per_pixel) : 0;
+    const uint32_t    buffer_image_height = (destination_bytes_per_row > 0) ? static_cast<uint32_t>(destination_bytes_per_image / destination_bytes_per_row) : 0;
+
     const VkBufferImageCopy region{
         .bufferOffset      = static_cast<VkDeviceSize>(destination_offset),
-        .bufferRowLength   = static_cast<uint32_t>(destination_bytes_per_row),
-        .bufferImageHeight = static_cast<uint32_t>(destination_bytes_per_image),
+        .bufferRowLength   = buffer_row_length,
+        .bufferImageHeight = buffer_image_height,
         .imageSubresource  = {VK_IMAGE_ASPECT_COLOR_BIT, static_cast<uint32_t>(source_level), static_cast<uint32_t>(source_slice), 1},
         .imageOffset       = {source_origin.x, source_origin.y, source_origin.z},
         .imageExtent       = {static_cast<uint32_t>(source_size.x), static_cast<uint32_t>(source_size.y), static_cast<uint32_t>(source_size.z)}
