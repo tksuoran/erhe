@@ -344,7 +344,13 @@ public:
                 using erhe::graphics::as_span;
                 using erhe::graphics::write;
 
-                const uint64_t handle = m_graphics_device.get_handle(*m_color_texture.get(), m_nearest_sampler);
+                const bool uses_sampler_array = m_graphics_device.get_info().uses_sampler_array_in_set_0();
+                erhe::graphics::Texture_heap texture_heap{
+                    m_graphics_device, *m_color_texture.get(), m_nearest_sampler, 1,
+                    m_test_bind_group_layout.get(),
+                    uses_sampler_array ? m_quad_default_uniform_block.get() : nullptr
+                };
+                const uint64_t handle = texture_heap.assign(0, m_color_texture.get(), &m_nearest_sampler);
                 const uint32_t texture_handle[2] = {
                     static_cast<uint32_t>(handle & 0xffffffffu),
                     static_cast<uint32_t>(handle >> 32u)
@@ -360,9 +366,6 @@ public:
                 encoder.set_viewport_rect(cell_10.x, cell_10.y, cell_10.width, cell_10.height);
                 encoder.set_scissor_rect(cell_10.x, cell_10.y, cell_10.width, cell_10.height);
                 m_quad_buffer.bind(encoder, quad_buffer_range);
-
-                erhe::graphics::Texture_heap texture_heap{m_graphics_device, *m_color_texture.get(), m_nearest_sampler, 1, m_test_bind_group_layout.get(), m_quad_default_uniform_block.get()};
-                texture_heap.assign(0, m_color_texture.get(), &m_nearest_sampler);
                 texture_heap.bind();
 
                 encoder.draw_primitives(erhe::graphics::Primitive_type::triangle, 0, 3);
@@ -1001,6 +1004,18 @@ private:
         using erhe::graphics::write;
 
         const uint32_t tex_count = static_cast<uint32_t>(textures.size());
+        const bool uses_sampler_array = m_graphics_device.get_info().uses_sampler_array_in_set_0();
+
+        // Create texture heap first so we can get descriptor indices for the UBO
+        erhe::graphics::Texture_heap texture_heap{
+            m_graphics_device, *m_red_texture.get(), m_nearest_sampler, tex_count,
+            m_test_bind_group_layout.get(),
+            uses_sampler_array ? m_multi_tex_default_uniform_block.get() : nullptr
+        };
+        uint64_t handles[3] = {0, 0, 0};
+        for (uint32_t i = 0; i < tex_count; ++i) {
+            handles[i] = texture_heap.assign(i, textures[i].get(), &m_nearest_sampler);
+        }
 
         erhe::graphics::Ring_buffer_range buffer_range = m_quad_buffer.acquire(
             erhe::graphics::Ring_buffer_usage::CPU_write,
@@ -1009,8 +1024,7 @@ private:
         const std::span<std::byte> gpu_data   = buffer_range.get_span();
         const std::span<uint32_t>  uint_data  {reinterpret_cast<uint32_t*>(gpu_data.data()), gpu_data.size_bytes() / sizeof(uint32_t)};
 
-        auto write_handle = [&](erhe::graphics::Shader_resource* field, const erhe::graphics::Texture& tex) {
-            const uint64_t handle = m_graphics_device.get_handle(tex, m_nearest_sampler);
+        auto write_handle = [&](erhe::graphics::Shader_resource* field, uint64_t handle) {
             const uint32_t h[2] = {
                 static_cast<uint32_t>(handle & 0xffffffffu),
                 static_cast<uint32_t>(handle >> 32u)
@@ -1018,9 +1032,9 @@ private:
             write(uint_data, field->get_offset_in_parent(), std::span<const uint32_t>{&h[0], 2});
         };
 
-        if (tex_count > 0) write_handle(m_multi_tex_handle_0, *textures[0]);
-        if (tex_count > 1) write_handle(m_multi_tex_handle_1, *textures[1]);
-        if (tex_count > 2) write_handle(m_multi_tex_handle_2, *textures[2]);
+        if (tex_count > 0) write_handle(m_multi_tex_handle_0, handles[0]);
+        if (tex_count > 1) write_handle(m_multi_tex_handle_1, handles[1]);
+        if (tex_count > 2) write_handle(m_multi_tex_handle_2, handles[2]);
         write(uint_data, m_multi_tex_count->get_offset_in_parent(), std::span<const uint32_t>{&tex_count, 1});
 
         buffer_range.bytes_written(m_multi_tex_block->get_size_bytes());
@@ -1031,12 +1045,6 @@ private:
         encoder.set_viewport_rect(viewport.x, viewport.y, viewport.width, viewport.height);
         encoder.set_scissor_rect(viewport.x, viewport.y, viewport.width, viewport.height);
         m_quad_buffer.bind(encoder, buffer_range);
-
-        // Create texture heap with reserved slots matching texture count
-        erhe::graphics::Texture_heap texture_heap{m_graphics_device, *m_red_texture.get(), m_nearest_sampler, tex_count, m_test_bind_group_layout.get(), m_multi_tex_default_uniform_block.get()};
-        for (uint32_t i = 0; i < tex_count; ++i) {
-            texture_heap.assign(i, textures[i].get(), &m_nearest_sampler);
-        }
         texture_heap.bind();
 
         encoder.draw_primitives(erhe::graphics::Primitive_type::triangle, 0, 3);
@@ -1109,6 +1117,18 @@ private:
         using erhe::graphics::write;
 
         const uint32_t tex_count = static_cast<uint32_t>(textures.size());
+        const bool uses_sampler_array = m_graphics_device.get_info().uses_sampler_array_in_set_0();
+
+        // Create texture heap first so we can get descriptor indices for the UBO
+        erhe::graphics::Texture_heap texture_heap{
+            m_graphics_device, *m_red_texture.get(), m_nearest_sampler, tex_count,
+            m_test_bind_group_layout.get(),
+            uses_sampler_array ? m_sep_tex_default_uniform_block.get() : nullptr
+        };
+        uint64_t handles[3] = {0, 0, 0};
+        for (uint32_t i = 0; i < tex_count; ++i) {
+            handles[i] = texture_heap.assign(i, textures[i].get(), &m_nearest_sampler);
+        }
 
         erhe::graphics::Ring_buffer_range buffer_range = m_quad_buffer.acquire(
             erhe::graphics::Ring_buffer_usage::CPU_write,
@@ -1117,8 +1137,7 @@ private:
         const std::span<std::byte> gpu_data  = buffer_range.get_span();
         const std::span<uint32_t>  uint_data{reinterpret_cast<uint32_t*>(gpu_data.data()), gpu_data.size_bytes() / sizeof(uint32_t)};
 
-        auto write_handle = [&](erhe::graphics::Shader_resource* field, const erhe::graphics::Texture& tex) {
-            const uint64_t handle = m_graphics_device.get_handle(tex, m_nearest_sampler);
+        auto write_handle = [&](erhe::graphics::Shader_resource* field, uint64_t handle) {
             const uint32_t h[2] = {
                 static_cast<uint32_t>(handle & 0xffffffffu),
                 static_cast<uint32_t>(handle >> 32u)
@@ -1126,9 +1145,9 @@ private:
             write(uint_data, field->get_offset_in_parent(), std::span<const uint32_t>{&h[0], 2});
         };
 
-        if (tex_count > 0) write_handle(m_sep_tex_handle_0, *textures[0]);
-        if (tex_count > 1) write_handle(m_sep_tex_handle_1, *textures[1]);
-        if (tex_count > 2) write_handle(m_sep_tex_handle_2, *textures[2]);
+        if (tex_count > 0) write_handle(m_sep_tex_handle_0, handles[0]);
+        if (tex_count > 1) write_handle(m_sep_tex_handle_1, handles[1]);
+        if (tex_count > 2) write_handle(m_sep_tex_handle_2, handles[2]);
         write(uint_data, m_sep_tex_count->get_offset_in_parent(), std::span<const uint32_t>{&tex_count, 1});
 
         buffer_range.bytes_written(m_sep_tex_block->get_size_bytes());
@@ -1139,12 +1158,6 @@ private:
         encoder.set_viewport_rect(viewport.x, viewport.y, viewport.width, viewport.height);
         encoder.set_scissor_rect(viewport.x, viewport.y, viewport.width, viewport.height);
         m_quad_buffer.bind(encoder, buffer_range);
-
-        // Texture heap: 3 reserved slots at individual GLSL bindings 0, 1, 2
-        erhe::graphics::Texture_heap texture_heap{m_graphics_device, *m_red_texture.get(), m_nearest_sampler, tex_count, m_test_bind_group_layout.get(), m_sep_tex_default_uniform_block.get()};
-        for (uint32_t i = 0; i < tex_count; ++i) {
-            texture_heap.assign(i, textures[i].get(), &m_nearest_sampler);
-        }
         texture_heap.bind();
 
         encoder.draw_primitives(erhe::graphics::Primitive_type::triangle, 0, 3);
