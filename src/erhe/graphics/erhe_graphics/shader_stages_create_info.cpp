@@ -233,10 +233,14 @@ auto Shader_stages_create_info::final_source(
     sb << "\n";
 #endif
 #if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
-    // Vulkan emulates multi-draw indirect with per-draw push constants.
-    // Only emit for vertex/compute -- fragment shaders receive draw ID via interpolated varying.
-    if (shader.type == Shader_type::vertex_shader || shader.type == Shader_type::compute_shader) {
-        sb << "layout(push_constant) uniform Erhe_draw_id_block { int ERHE_DRAW_ID; };\n";
+    if (graphics_device.get_info().use_multi_draw_indirect_core) {
+        sb << "#define ERHE_DRAW_ID gl_DrawID\n";
+    } else {
+        // Emulate multi-draw indirect with per-draw push constants.
+        // Only emit for vertex/compute -- fragment shaders receive draw ID via interpolated varying.
+        if (shader.type == Shader_type::vertex_shader || shader.type == Shader_type::compute_shader) {
+            sb << "layout(push_constant) uniform Erhe_draw_id_block { int ERHE_DRAW_ID; };\n";
+        }
     }
     sb << "#define ERHE_VULKAN_DESCRIPTOR_INDEXING 1\n";
     sb << "#extension GL_EXT_nonuniform_qualifier : enable\n";

@@ -690,6 +690,7 @@ Device_impl::Device_impl(
         .sType    = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
         .pNext    = nullptr,
         .features = {
+            .multiDrawIndirect = query_device_features.features.multiDrawIndirect,
             .samplerAnisotropy = query_device_features.features.samplerAnisotropy,
             .shaderInt64       = query_device_features.features.shaderInt64,
         }
@@ -911,9 +912,21 @@ Device_impl::Device_impl(
     m_info.use_integer_polygon_ids      = true;
     m_info.texture_heap_path            = Texture_heap_path::vulkan_descriptor_indexing;
     m_info.use_sparse_texture           = false;
-    m_info.use_multi_draw_indirect_core = true;
+    const bool has_multi_draw_indirect = (query_device_features.features.multiDrawIndirect == VK_TRUE);
+    const bool has_shader_draw_parameters = (query_vulkan_11_features.shaderDrawParameters == VK_TRUE);
+    if (has_multi_draw_indirect && has_shader_draw_parameters) {
+        m_info.use_multi_draw_indirect_core = true;
+        m_info.emulate_multi_draw_indirect  = false;
+        log_startup->info("Multi Draw Indirect: native Vulkan (multiDrawIndirect + shaderDrawParameters)");
+    } else {
+        m_info.use_multi_draw_indirect_core = false;
+        m_info.emulate_multi_draw_indirect  = true;
+        log_startup->info(
+            "Multi Draw Indirect: emulation via push constants (multiDrawIndirect={}, shaderDrawParameters={})",
+            has_multi_draw_indirect, has_shader_draw_parameters
+        );
+    }
     m_info.use_multi_draw_indirect_arb  = false;
-    m_info.emulate_multi_draw_indirect  = false;
     m_info.use_compute_shader           = true;
     m_info.use_shader_storage_buffers   = true;
     m_info.use_clear_texture            = true;

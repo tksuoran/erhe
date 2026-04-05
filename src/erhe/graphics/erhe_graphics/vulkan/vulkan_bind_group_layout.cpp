@@ -87,12 +87,13 @@ Bind_group_layout_impl::Bind_group_layout_impl(
         abort();
     }
 
-    // Push constant range for draw ID
+    // Push constant range for draw ID (only needed when emulating multi-draw indirect)
     const VkPushConstantRange push_constant_range{
         .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
         .offset     = 0,
         .size       = sizeof(int32_t)
     };
+    const bool emulate_multi_draw = m_device_impl.get_device().get_info().emulate_multi_draw_indirect;
 
     // Pipeline layout with set 0 (this layout) and optionally set 1 (texture heap from device)
     std::vector<VkDescriptorSetLayout> set_layouts;
@@ -108,8 +109,8 @@ Bind_group_layout_impl::Bind_group_layout_impl(
         .flags                  = 0,
         .setLayoutCount         = static_cast<uint32_t>(set_layouts.size()),
         .pSetLayouts            = set_layouts.data(),
-        .pushConstantRangeCount = 1,
-        .pPushConstantRanges    = &push_constant_range
+        .pushConstantRangeCount = emulate_multi_draw ? 1u : 0u,
+        .pPushConstantRanges    = emulate_multi_draw ? &push_constant_range : nullptr
     };
 
     result = vkCreatePipelineLayout(m_vulkan_device, &pipeline_layout_create_info, nullptr, &m_pipeline_layout);

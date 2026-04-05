@@ -531,16 +531,18 @@ void Render_command_encoder_impl::set_render_pipeline_state(
 
     vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_pipeline);
 
-    // Set initial draw ID push constant to 0
-    int32_t draw_id = 0;
-    vkCmdPushConstants(
-        command_buffer,
-        m_pipeline_layout,
-        VK_SHADER_STAGE_VERTEX_BIT,
-        0,
-        sizeof(int32_t),
-        &draw_id
-    );
+    // Set initial draw ID push constant to 0 (only needed for emulated multi-draw)
+    if (m_device.get_info().emulate_multi_draw_indirect) {
+        int32_t draw_id = 0;
+        vkCmdPushConstants(
+            command_buffer,
+            m_pipeline_layout,
+            VK_SHADER_STAGE_VERTEX_BIT,
+            0,
+            sizeof(int32_t),
+            &draw_id
+        );
+    }
 }
 
 void Render_command_encoder_impl::set_viewport_rect(const int x, const int y, const int width, const int height)
@@ -825,20 +827,35 @@ void Render_command_encoder_impl::multi_draw_indexed_primitives_indirect(
         ? static_cast<uint32_t>(stride)
         : static_cast<uint32_t>(sizeof(Draw_indexed_primitives_indirect_command));
 
-    // Loop over draws, updating draw ID push constant per draw (matching Metal pattern)
-    for (std::uintptr_t i = 0; i < drawcount; ++i) {
-        int32_t draw_id = static_cast<int32_t>(i);
-        vkCmdPushConstants(
+    const Device_info& info = m_device.get_info();
+    if (info.use_multi_draw_indirect_core) {
+        // Native multi-draw: single call, gl_DrawID built-in provides draw index
+        vkCmdDrawIndexedIndirect(
             command_buffer,
-            (m_pipeline_layout != VK_NULL_HANDLE) ? m_pipeline_layout : device_impl.get_pipeline_layout(),
-            VK_SHADER_STAGE_VERTEX_BIT,
-            0,
-            sizeof(int32_t),
-            &draw_id
+            m_indirect_buffer,
+            static_cast<VkDeviceSize>(indirect_offset),
+            static_cast<uint32_t>(drawcount),
+            actual_stride
         );
+    } else {
+        // Emulated multi-draw: loop with per-draw push constant
+        VkPipelineLayout layout = (m_pipeline_layout != VK_NULL_HANDLE)
+            ? m_pipeline_layout
+            : device_impl.get_pipeline_layout();
+        for (std::uintptr_t i = 0; i < drawcount; ++i) {
+            int32_t draw_id = static_cast<int32_t>(i);
+            vkCmdPushConstants(
+                command_buffer,
+                layout,
+                VK_SHADER_STAGE_VERTEX_BIT,
+                0,
+                sizeof(int32_t),
+                &draw_id
+            );
 
-        VkDeviceSize offset = static_cast<VkDeviceSize>(indirect_offset) + i * actual_stride;
-        vkCmdDrawIndexedIndirect(command_buffer, m_indirect_buffer, offset, 1, actual_stride);
+            VkDeviceSize offset = static_cast<VkDeviceSize>(indirect_offset) + i * actual_stride;
+            vkCmdDrawIndexedIndirect(command_buffer, m_indirect_buffer, offset, 1, actual_stride);
+        }
     }
 }
 
