@@ -1,4 +1,5 @@
 #include "erhe_graphics/vulkan/vulkan_compute_command_encoder.hpp"
+#include "erhe_graphics/vulkan/vulkan_bind_group_layout.hpp"
 #include "erhe_graphics/vulkan/vulkan_buffer.hpp"
 #include "erhe_graphics/vulkan/vulkan_device.hpp"
 #include "erhe_graphics/vulkan/vulkan_immediate_commands.hpp"
@@ -45,6 +46,16 @@ void Compute_command_encoder_impl::set_buffer(Buffer_target buffer_target, const
     static_cast<void>(buffer);
 }
 
+void Compute_command_encoder_impl::set_bind_group_layout(const Bind_group_layout* bind_group_layout)
+{
+    m_bind_group_layout = bind_group_layout;
+    if (bind_group_layout != nullptr) {
+        m_pipeline_layout = bind_group_layout->get_impl().get_pipeline_layout();
+    } else {
+        m_pipeline_layout = VK_NULL_HANDLE;
+    }
+}
+
 void Compute_command_encoder_impl::set_compute_pipeline_state(const Compute_pipeline_state& pipeline)
 {
     const Compute_pipeline_data& data = pipeline.data;
@@ -73,12 +84,16 @@ void Compute_command_encoder_impl::set_compute_pipeline_state(const Compute_pipe
         .pSpecializationInfo = nullptr
     };
 
+    VkPipelineLayout layout = (m_pipeline_layout != VK_NULL_HANDLE)
+        ? m_pipeline_layout
+        : device_impl.get_pipeline_layout();
+
     const VkComputePipelineCreateInfo pipeline_create_info{
         .sType  = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
         .pNext  = nullptr,
         .flags  = 0,
         .stage  = shader_stage_info,
-        .layout = device_impl.get_pipeline_layout(),
+        .layout = layout,
         .basePipelineHandle = VK_NULL_HANDLE,
         .basePipelineIndex  = -1
     };

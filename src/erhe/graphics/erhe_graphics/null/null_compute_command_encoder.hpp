@@ -15,6 +15,7 @@ public:
     Compute_command_encoder_impl& operator=(Compute_command_encoder_impl&&) = delete;
     ~Compute_command_encoder_impl() noexcept;
 
+    void set_bind_group_layout     (const Bind_group_layout* bind_group_layout);
     void set_compute_pipeline_state(const Compute_pipeline_state& pipeline);
     void dispatch_compute          (std::uintptr_t x_size, std::uintptr_t y_size, std::uintptr_t z_size);
 };

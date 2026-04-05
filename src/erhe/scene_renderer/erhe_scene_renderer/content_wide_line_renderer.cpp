@@ -253,6 +253,7 @@ void Content_wide_line_renderer::compute(
     }
 
     ERHE_VERIFY(m_compute_pipeline.has_value());
+    command_encoder.set_bind_group_layout(m_bind_group_layout.get());
     command_encoder.set_compute_pipeline_state(m_compute_pipeline.value());
 
     const erhe::scene::Node* camera_node = camera.get_node();

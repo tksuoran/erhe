@@ -78,6 +78,11 @@ void Compute_command_encoder_impl::set_buffer(const Buffer_target buffer_target,
     m_encoder->setBuffer(mtl_buffer, 0, 0);
 }
 
+void Compute_command_encoder_impl::set_bind_group_layout(const Bind_group_layout* bind_group_layout)
+{
+    static_cast<void>(bind_group_layout);
+}
+
 void Compute_command_encoder_impl::set_compute_pipeline_state(const Compute_pipeline_state& pipeline)
 {
     const Compute_pipeline_data& data = pipeline.data;

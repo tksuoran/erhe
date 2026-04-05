@@ -316,6 +316,7 @@ void Debug_renderer::compute(erhe::graphics::Compute_command_encoder& command_en
     }
 
     ERHE_VERIFY(m_lines_to_triangles_compute_pipeline.has_value());
+    command_encoder.set_bind_group_layout(m_program_interface.bind_group_layout.get());
     command_encoder.set_compute_pipeline_state(m_lines_to_triangles_compute_pipeline.value());
 
     for (Debug_renderer_bucket& bucket : m_buckets) {
