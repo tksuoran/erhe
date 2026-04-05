@@ -2,6 +2,8 @@ layout(location = 0) out vec2 v_texcoord;
 layout(location = 1) out vec4 v_color;
 #if defined(ERHE_OPENGL_BINDLESS_TEXTURE)
 layout(location = 2) flat out uvec2 v_texture;
+#elif defined(ERHE_VULKAN_DESCRIPTOR_INDEXING)
+layout(location = 2) flat out uint v_texture_index;
 #endif
 
 void main()
@@ -34,6 +36,8 @@ void main()
 
 #if defined(ERHE_OPENGL_BINDLESS_TEXTURE)
     v_texture  = projection.texture;
+#elif defined(ERHE_VULKAN_DESCRIPTOR_INDEXING)
+    v_texture_index = projection.texture.x;
 #endif
 }
 
