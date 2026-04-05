@@ -29,9 +29,20 @@ Vertex_stream::Vertex_stream(std::size_t in_binding, std::initializer_list<Verte
     : binding{in_binding}
 {
     for (auto& in_attribute : in_attributes) {
+        const std::size_t alignment = get_component_byte_size(in_attribute.format);
+        if (alignment > 1) {
+            stride = ((stride + alignment - 1) / alignment) * alignment;
+        }
+        if (alignment > max_alignment) {
+            max_alignment = alignment;
+        }
         attributes.push_back(in_attribute);
         attributes.back().offset = stride;
         stride += get_format_size_bytes(in_attribute.format);
+    }
+    // Pad stride so that the next vertex's first attribute is aligned
+    if (max_alignment > 1) {
+        stride = ((stride + max_alignment - 1) / max_alignment) * max_alignment;
     }
 }
 
@@ -48,9 +59,23 @@ auto Vertex_stream::find_attribute(Vertex_attribute_usage usage_type, std::size_
 
 auto Vertex_stream::emplace_back(erhe::dataformat::Format format, Vertex_attribute_usage usage_type, std::size_t usage_index) -> Vertex_attribute&
 {
+    const std::size_t alignment = get_component_byte_size(format);
+    if (alignment > 1) {
+        stride = ((stride + alignment - 1) / alignment) * alignment;
+    }
+    if (alignment > max_alignment) {
+        max_alignment = alignment;
+    }
     Vertex_attribute& result = attributes.emplace_back(format, usage_type, usage_index, stride);
     stride += get_format_size_bytes(format);
     return result;
+}
+
+void Vertex_stream::finalize_stride()
+{
+    if (max_alignment > 1) {
+        stride = ((stride + max_alignment - 1) / max_alignment) * max_alignment;
+    }
 }
 
 Vertex_format::Vertex_format()

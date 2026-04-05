@@ -58,10 +58,14 @@ public:
         std::size_t              usage_index = 0
     ) -> Vertex_attribute&;
 
+    // Call after all emplace_back() calls to pad stride for Vulkan alignment
+    void finalize_stride();
+
     std::vector<Vertex_attribute> attributes;
-    std::size_t                   binding{0};
-    std::size_t                   stride {0};
-    Vertex_step                   step   {Vertex_step::Step_per_vertex};
+    std::size_t                   binding      {0};
+    std::size_t                   stride       {0};
+    std::size_t                   max_alignment{1};
+    Vertex_step                   step         {Vertex_step::Step_per_vertex};
 };
 
 struct Attribute_stream

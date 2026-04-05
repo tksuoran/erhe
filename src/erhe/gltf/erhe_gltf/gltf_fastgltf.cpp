@@ -1477,6 +1477,7 @@ private:
                 0
             );
         }
+        triangle_soup.vertex_format.streams.front().finalize_stride();
         std::size_t vertex_stride = triangle_soup.vertex_format.streams.front().stride;
 
         ERHE_VERIFY(triangle_soup.vertex_format.streams.size() == 1);
