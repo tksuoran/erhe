@@ -521,23 +521,38 @@ auto Device_impl::create_dummy_texture(const erhe::dataformat::Format format) ->
     };
 
     auto texture = std::make_shared<Texture>(m_device, create_info);
-    const std::array<uint8_t, 16> dummy_pixel{
-        0xee, 0x11, 0xdd, 0xff,  0xcc, 0x11, 0xbb, 0xff,
-        0xcc, 0x11, 0xbb, 0xff,  0xee, 0x11, 0xdd, 0xff,
-    };
-    const std::span<const std::uint8_t> image_data{&dummy_pixel[0], dummy_pixel.size()};
 
-    std::span<const std::uint8_t> src_span{dummy_pixel.data(), dummy_pixel.size()};
-    std::size_t                   byte_count   = src_span.size_bytes();
-    Ring_buffer_client            texture_upload_buffer{m_device, erhe::graphics::Buffer_target::transfer_src, "dummy texture upload"};
-    Ring_buffer_range             buffer_range = texture_upload_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, byte_count);
-    std::span<std::byte>          dst_span     = buffer_range.get_span();
-    memcpy(dst_span.data(), src_span.data(), byte_count);
+    const std::size_t bytes_per_pixel   = erhe::dataformat::get_format_size_bytes(format);
+    const std::size_t width             = 2;
+    const std::size_t height            = 2;
+    const std::size_t src_bytes_per_row = width * bytes_per_pixel;
+    const std::size_t byte_count        = height * src_bytes_per_row;
+
+    // Fill with a simple pattern -- content doesn't matter much for a dummy texture
+    std::vector<uint8_t> dummy_pixels(byte_count, 0);
+    for (std::size_t y = 0; y < height; ++y) {
+        for (std::size_t x = 0; x < width; ++x) {
+            std::size_t offset = (y * width + x) * bytes_per_pixel;
+            // Fill first 4 bytes with a visible pattern, rest with 0
+            std::size_t fill = std::min(bytes_per_pixel, std::size_t{4});
+            const uint8_t pattern[4] = {
+                static_cast<uint8_t>(((x + y) & 1) ? 0xee : 0xcc),
+                0x11,
+                static_cast<uint8_t>(((x + y) & 1) ? 0xdd : 0xbb),
+                0xff
+            };
+            memcpy(&dummy_pixels[offset], pattern, fill);
+        }
+    }
+
+    Ring_buffer_client   texture_upload_buffer{m_device, erhe::graphics::Buffer_target::transfer_src, "dummy texture upload"};
+    Ring_buffer_range    buffer_range = texture_upload_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, byte_count);
+    std::span<std::byte> dst_span     = buffer_range.get_span();
+    memcpy(dst_span.data(), dummy_pixels.data(), byte_count);
     buffer_range.bytes_written(byte_count);
     buffer_range.close();
 
-    const int src_bytes_per_row   = 2 * 4;
-    const int src_bytes_per_image = 2 * src_bytes_per_row;
+    const std::size_t src_bytes_per_image = height * src_bytes_per_row;
     Blit_command_encoder encoder{m_device};
     encoder.copy_from_buffer(
         buffer_range.get_buffer()->get_buffer(),         // source_buffer
