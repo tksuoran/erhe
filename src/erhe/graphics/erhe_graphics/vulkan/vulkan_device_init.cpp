@@ -533,6 +533,7 @@ Device_impl::Device_impl(
             .geometryShader                 = qf.geometryShader,
             .sampleRateShading              = qf.sampleRateShading,
             .multiDrawIndirect              = qf.multiDrawIndirect,
+            .depthClamp                     = qf.depthClamp,
             .samplerAnisotropy              = qf.samplerAnisotropy,
             .vertexPipelineStoresAndAtomics = qf.vertexPipelineStoresAndAtomics,
             .shaderClipDistance              = qf.shaderClipDistance,
