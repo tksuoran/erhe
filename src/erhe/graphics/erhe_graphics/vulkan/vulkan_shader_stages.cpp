@@ -36,6 +36,8 @@ auto create_shader_module(
         .pCode    = spirv.data()
     };
 
+    log_program->info("Creating shader module: {} {}", shader_name, stage_name);
+
     VkShaderModule shader_module = VK_NULL_HANDLE;
     VkResult result = vkCreateShaderModule(vulkan_device, &create_info, nullptr, &shader_module);
     if (result != VK_SUCCESS) {
