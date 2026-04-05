@@ -97,14 +97,15 @@ Device_impl::~Device_impl() noexcept
     // NOTE: This adds completion handlers for destroying related vulkan objects
     m_surface.reset();
 
+    // Destroy ring buffers before running completion handlers -- their destructors
+    // add completion handlers for VMA deallocation
+    m_ring_buffers.clear();
+
     vkDeviceWaitIdle(m_vulkan_device);
 
     for (const Completion_handler& entry : m_completion_handlers) {
         entry.callback();
     }
-
-    // Destroy ring buffers before VMA allocator - they hold VMA allocations
-    m_ring_buffers.clear();
 
     if (m_vulkan_frame_end_semaphore != VK_NULL_HANDLE) {
         vkDestroySemaphore(m_vulkan_device, m_vulkan_frame_end_semaphore, nullptr);
