@@ -637,6 +637,7 @@ void Post_processing::post_process(Post_processing_node& node)
         erhe::graphics::Render_command_encoder encoder = m_context.graphics_device->make_render_command_encoder();
         erhe::graphics::Scoped_render_pass scoped_render_pass{*render_pass};
 
+        encoder.set_bind_group_layout(&m_bind_group_layout);
         encoder.set_buffer(
             m_parameter_block.get_binding_target(),
             &node.parameter_buffer,
@@ -671,6 +672,7 @@ void Post_processing::post_process(Post_processing_node& node)
         erhe::graphics::Render_command_encoder encoder = m_context.graphics_device->make_render_command_encoder();
         erhe::graphics::Scoped_render_pass scoped_render_pass{*render_pass};
 
+        encoder.set_bind_group_layout(&m_bind_group_layout);
         if (source_level == node.upsample_source_levels.front()) {
             encoder.set_render_pipeline_state(m_pipelines.upsample_first);
         } else if (source_level == node.upsample_source_levels.back()) {
