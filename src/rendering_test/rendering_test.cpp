@@ -355,6 +355,7 @@ public:
                 quad_buffer_range.bytes_written(m_quad_block->get_size_bytes());
                 quad_buffer_range.close();
 
+                encoder.set_bind_group_layout(m_test_bind_group_layout.get());
                 encoder.set_render_pipeline_state(m_quad_pipeline);
                 encoder.set_viewport_rect(cell_10.x, cell_10.y, cell_10.width, cell_10.height);
                 encoder.set_scissor_rect(cell_10.x, cell_10.y, cell_10.width, cell_10.height);
@@ -1025,6 +1026,7 @@ private:
         buffer_range.bytes_written(m_multi_tex_block->get_size_bytes());
         buffer_range.close();
 
+        encoder.set_bind_group_layout(m_test_bind_group_layout.get());
         encoder.set_render_pipeline_state(m_multi_tex_pipeline);
         encoder.set_viewport_rect(viewport.x, viewport.y, viewport.width, viewport.height);
         encoder.set_scissor_rect(viewport.x, viewport.y, viewport.width, viewport.height);
@@ -1132,6 +1134,7 @@ private:
         buffer_range.bytes_written(m_sep_tex_block->get_size_bytes());
         buffer_range.close();
 
+        encoder.set_bind_group_layout(m_test_bind_group_layout.get());
         encoder.set_render_pipeline_state(m_sep_tex_pipeline);
         encoder.set_viewport_rect(viewport.x, viewport.y, viewport.width, viewport.height);
         encoder.set_scissor_rect(viewport.x, viewport.y, viewport.width, viewport.height);
