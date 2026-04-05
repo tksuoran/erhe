@@ -155,6 +155,8 @@ if (ERHE_GRAPHICS_API_VULKAN)
         erhe_graphics/vulkan/vulkan_debug.cpp
         erhe_graphics/vulkan/vulkan_debug.hpp
         erhe_graphics/vulkan/vulkan_device.cpp
+        erhe_graphics/vulkan/vulkan_device_debug.cpp
+        erhe_graphics/vulkan/vulkan_device_init.cpp
         erhe_graphics/vulkan/vulkan_device.hpp
         erhe_graphics/vulkan/vulkan_helpers.cpp
         erhe_graphics/vulkan/vulkan_helpers.hpp
