@@ -39,7 +39,9 @@ void Shader_stages_prototype_impl::compile_shaders()
 {
     ERHE_PROFILE_FUNCTION();
 
-    ERHE_VERIFY(m_state == Shader_build_state::init);
+    if (m_state != Shader_build_state::init) {
+        return; // Already compiled (constructor compiles eagerly)
+    }
     for (const auto& shader : m_create_info.shaders) {
         if (shader.type == Shader_type::geometry_shader) {
             log_program->warn("Vulkan backend does not support geometry shaders: {}", m_create_info.name);
@@ -72,6 +74,10 @@ auto Shader_stages_prototype_impl::link_program() -> bool
 
     if (m_state == Shader_build_state::fail) {
         return false;
+    }
+
+    if (m_state == Shader_build_state::ready) {
+        return true; // Already linked (constructor links eagerly)
     }
 
     ERHE_VERIFY(m_state == Shader_build_state::shader_compilation_started);
