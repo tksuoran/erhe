@@ -322,6 +322,7 @@ void Debug_renderer_bucket::render(erhe::graphics::Render_command_encoder& rende
     if (m_use_compute) {
         // Compute path: render triangles from compute-generated triangle vertex buffer
         auto render_compute_draws = [&](erhe::graphics::Render_pipeline_state& pipeline) {
+            render_encoder.set_bind_group_layout(m_debug_renderer.get_program_interface().bind_group_layout.get());
             render_encoder.set_render_pipeline_state(pipeline);
             for (const Debug_draw_entry& draw : m_draws) {
                 if (!draw.compute_dispatched) {
@@ -354,6 +355,7 @@ void Debug_renderer_bucket::render(erhe::graphics::Render_command_encoder& rende
         }
 
         auto render_line_draws = [&](erhe::graphics::Render_pipeline_state& pipeline) {
+            render_encoder.set_bind_group_layout(m_debug_renderer.get_program_interface().bind_group_layout.get());
             render_encoder.set_render_pipeline_state(pipeline);
             for (Debug_draw_view_span& view_span : m_view_spans) {
                 erhe::graphics::Ring_buffer_range view_buffer_range = update_view_buffer(view_span.view);
