@@ -134,7 +134,7 @@ void main()
 auto get_shader_default_uniform_block(erhe::graphics::Device& graphics_device, const int dedicated_texture_unit) -> erhe::graphics::Shader_resource
 {
     erhe::graphics::Shader_resource default_uniform_block{graphics_device};
-    if (!graphics_device.get_info().uses_bindless_texture()) {
+    if (graphics_device.get_info().uses_sampler_array_in_set_0()) {
         // Unit 0 reserved for sampler2DArray (array texture support for non-bindless path)
         default_uniform_block.add_sampler("s_texture_array", erhe::graphics::Glsl_type::sampler_2d_array, 0);
         // Units 1..N-1 for regular sampler2D textures
@@ -226,7 +226,7 @@ Imgui_renderer::Imgui_renderer(erhe::graphics::Device& graphics_device, Imgui_se
                 .interface_blocks      = { &m_imgui_program_interface.draw_parameter_block },
                 .fragment_outputs      = &m_imgui_program_interface.fragment_outputs,
                 .vertex_format         = &m_imgui_program_interface.vertex_format,
-                .default_uniform_block = graphics_device.get_info().uses_bindless_texture() ? nullptr : &m_imgui_program_interface.default_uniform_block,
+                .default_uniform_block = graphics_device.get_info().uses_sampler_array_in_set_0() ? &m_imgui_program_interface.default_uniform_block : nullptr,
                 .shaders = {
                     { erhe::graphics::Shader_type::vertex_shader,   c_vertex_shader_source   },
                     { erhe::graphics::Shader_type::fragment_shader, c_fragment_shader_source }
@@ -365,7 +365,8 @@ Imgui_renderer::Imgui_renderer(erhe::graphics::Device& graphics_device, Imgui_se
     // (3) If you have multiple imgui contexts, they also need to have a matching value for ImGuiBackendFlags_RendererHasTextures.
     m_font_atlas.RendererHasTextures = true;
 
-    if (!m_graphics_device.get_info().uses_bindless_texture()) {
+    const bool uses_sampler_array = m_graphics_device.get_info().uses_sampler_array_in_set_0();
+    if (uses_sampler_array) {
         // Create dummy 1x1x1 array texture for the reserved sampler2DArray slot
         const erhe::graphics::Texture_create_info array_tex_create_info{
             .device            = m_graphics_device,
@@ -386,9 +387,9 @@ Imgui_renderer::Imgui_renderer(erhe::graphics::Device& graphics_device, Imgui_se
         m_graphics_device,
         *m_dummy_texture.get(),
         m_nearest_sampler,
-        m_graphics_device.get_info().uses_bindless_texture() ? 0u : 1u, // slot 0 reserved for array texture
+        uses_sampler_array ? 1u : 0u, // slot 0 reserved for array texture in sampler array path
         &m_bind_group_layout,
-        m_graphics_device.get_info().uses_bindless_texture() ? nullptr : &m_imgui_program_interface.default_uniform_block
+        uses_sampler_array ? &m_imgui_program_interface.default_uniform_block : nullptr
     );
 }
 
