@@ -122,12 +122,22 @@ Bind_group_layout_impl::Bind_group_layout_impl(
 
 Bind_group_layout_impl::~Bind_group_layout_impl() noexcept
 {
-    if (m_pipeline_layout != VK_NULL_HANDLE) {
-        vkDestroyPipelineLayout(m_vulkan_device, m_pipeline_layout, nullptr);
-    }
-    if (m_descriptor_set_layout != VK_NULL_HANDLE) {
-        vkDestroyDescriptorSetLayout(m_vulkan_device, m_descriptor_set_layout, nullptr);
-    }
+    const VkDevice              vulkan_device        = m_vulkan_device;
+    const VkPipelineLayout      pipeline_layout      = m_pipeline_layout;
+    const VkDescriptorSetLayout descriptor_set_layout = m_descriptor_set_layout;
+    m_pipeline_layout      = VK_NULL_HANDLE;
+    m_descriptor_set_layout = VK_NULL_HANDLE;
+
+    m_device_impl.add_completion_handler(
+        [vulkan_device, pipeline_layout, descriptor_set_layout]() {
+            if (pipeline_layout != VK_NULL_HANDLE) {
+                vkDestroyPipelineLayout(vulkan_device, pipeline_layout, nullptr);
+            }
+            if (descriptor_set_layout != VK_NULL_HANDLE) {
+                vkDestroyDescriptorSetLayout(vulkan_device, descriptor_set_layout, nullptr);
+            }
+        }
+    );
 }
 
 auto Bind_group_layout_impl::get_debug_label() const -> erhe::utility::Debug_label

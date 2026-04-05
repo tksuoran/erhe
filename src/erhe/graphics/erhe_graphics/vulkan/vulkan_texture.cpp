@@ -63,33 +63,39 @@ Texture_impl::Texture_impl(Texture_impl&& other) noexcept
 
 Texture_impl::~Texture_impl() noexcept
 {
-    Device_impl& device_impl   = m_device.get_impl();
-    VkDevice     vulkan_device = device_impl.get_vulkan_device();
+    Device_impl& device_impl = m_device.get_impl();
 
+    // Collect all image views to destroy
+    std::vector<VkImageView> image_views_to_destroy;
     for (const Cached_image_view& cached : m_cached_image_views) {
         if (cached.image_view != VK_NULL_HANDLE) {
-            vkDestroyImageView(vulkan_device, cached.image_view, nullptr);
+            image_views_to_destroy.push_back(cached.image_view);
         }
     }
     m_cached_image_views.clear();
 
     if (m_vk_image_view != VK_NULL_HANDLE) {
-        vkDestroyImageView(vulkan_device, m_vk_image_view, nullptr);
+        image_views_to_destroy.push_back(m_vk_image_view);
         m_vk_image_view = VK_NULL_HANDLE;
     }
 
-    if (m_vk_image != VK_NULL_HANDLE && m_vma_allocation != VK_NULL_HANDLE) {
-        const VkImage       vk_image       = m_vk_image;
-        const VmaAllocation vma_allocation = m_vma_allocation;
-        device_impl.add_completion_handler(
-            [&device_impl, vk_image, vma_allocation]() {
+    const VkImage       vk_image       = m_vk_image;
+    const VmaAllocation vma_allocation = m_vma_allocation;
+    m_vk_image       = VK_NULL_HANDLE;
+    m_vma_allocation = VK_NULL_HANDLE;
+
+    device_impl.add_completion_handler(
+        [&device_impl, image_views_to_destroy = std::move(image_views_to_destroy), vk_image, vma_allocation]() {
+            VkDevice vulkan_device = device_impl.get_vulkan_device();
+            for (VkImageView view : image_views_to_destroy) {
+                vkDestroyImageView(vulkan_device, view, nullptr);
+            }
+            if (vk_image != VK_NULL_HANDLE && vma_allocation != VK_NULL_HANDLE) {
                 VmaAllocator& allocator = device_impl.get_allocator();
                 vmaDestroyImage(allocator, vk_image, vma_allocation);
             }
-        );
-        m_vk_image       = VK_NULL_HANDLE;
-        m_vma_allocation = VK_NULL_HANDLE;
-    }
+        }
+    );
 }
 
 Texture_impl::Texture_impl(Device& device, const Texture_create_info& create_info)

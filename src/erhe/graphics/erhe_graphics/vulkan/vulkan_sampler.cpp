@@ -113,8 +113,16 @@ Sampler_impl::Sampler_impl(Device& device, const Sampler_create_info& create_inf
 Sampler_impl::~Sampler_impl() noexcept
 {
     if (m_vulkan_sampler != VK_NULL_HANDLE) {
-        VkDevice vulkan_device = m_device.get_impl().get_vulkan_device();
-        vkDestroySampler(vulkan_device, m_vulkan_sampler, nullptr);
+        Device_impl&   device_impl    = m_device.get_impl();
+        const VkSampler vulkan_sampler = m_vulkan_sampler;
+        m_vulkan_sampler = VK_NULL_HANDLE;
+
+        device_impl.add_completion_handler(
+            [&device_impl, vulkan_sampler]() {
+                VkDevice vulkan_device = device_impl.get_vulkan_device();
+                vkDestroySampler(vulkan_device, vulkan_sampler, nullptr);
+            }
+        );
     }
 }
 
