@@ -116,6 +116,8 @@ void main()
 #if defined(ERHE_OPENGL_BINDLESS_TEXTURE)
     sampler2D s_texture = sampler2D(v_texture);
     vec4 texture_sample = texture(s_texture, v_texcoord.st);
+#elif defined(ERHE_VULKAN_DESCRIPTOR_INDEXING)
+    vec4 texture_sample = texture(erhe_texture_heap[v_texture_id], v_texcoord.st);
 #else
     vec4 texture_sample;
     if (v_array_layer != 0xFFFFFFFFu) {
