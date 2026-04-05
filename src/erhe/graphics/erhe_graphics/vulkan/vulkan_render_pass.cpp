@@ -288,14 +288,16 @@ Render_pass_impl::Render_pass_impl(Device& device, const Render_pass_descriptor&
         if (m_depth_attachment.is_defined() && (m_depth_attachment.texture != nullptr)) {
             VkFormat depth_format = to_vulkan(m_depth_attachment.texture->get_pixelformat());
 
+            // Use stencil load/store from stencil_attachment if it references the same texture
+            const bool has_stencil = (m_stencil_attachment.texture == m_depth_attachment.texture) && m_stencil_attachment.is_defined();
             attachment_descriptions.push_back(VkAttachmentDescription{
                 .flags          = 0,
                 .format         = depth_format,
                 .samples        = get_vulkan_sample_count(m_depth_attachment.texture->get_sample_count()),
                 .loadOp         = to_vk_load_op(m_depth_attachment.load_action),
                 .storeOp        = to_vk_store_op(m_depth_attachment.store_action),
-                .stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-                .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+                .stencilLoadOp  = has_stencil ? to_vk_load_op(m_stencil_attachment.load_action) : VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                .stencilStoreOp = has_stencil ? to_vk_store_op(m_stencil_attachment.store_action) : VK_ATTACHMENT_STORE_OP_DONT_CARE,
                 .initialLayout  = (m_depth_attachment.load_action == Load_action::Load) ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL : VK_IMAGE_LAYOUT_UNDEFINED,
                 .finalLayout    = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL
             });
