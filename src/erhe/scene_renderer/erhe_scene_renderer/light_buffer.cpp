@@ -159,11 +159,15 @@ void Light_projections::apply(
 
     light_projection_transforms.clear();
 
+    std::size_t shadow_index_counter = 0;
     for (const auto& light : lights) {
         const std::size_t light_index = light_projection_transforms.size();
-        //log_render->info("update light projection for {} index {}", light->describe(), light_index);
         auto transforms = light->projection_transforms(parameters);
         transforms.index = light_index;
+        if (light->cast_shadow) {
+            transforms.shadow_index = shadow_index_counter;
+            ++shadow_index_counter;
+        }
         light_projection_transforms.push_back(transforms);
     }
 

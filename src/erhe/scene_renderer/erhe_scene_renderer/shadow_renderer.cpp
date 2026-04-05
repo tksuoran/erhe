@@ -173,13 +173,14 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
             //// log_render->warn("Light {} has no light projection transforms", light->name());
             continue;
         }
-        const std::size_t light_index = light_projection_transform->index;
-        if (light_index >= parameters.render_passes.size()) {
+        const std::size_t light_index  = light_projection_transform->index;
+        const std::size_t shadow_index = light_projection_transform->shadow_index;
+        if (shadow_index >= parameters.render_passes.size()) {
             continue;
         }
 
         erhe::graphics::Render_command_encoder encoder = m_graphics_device.make_render_command_encoder();
-        erhe::graphics::Scoped_render_pass scoped_render_pass{*parameters.render_passes[light_index].get()};
+        erhe::graphics::Scoped_render_pass scoped_render_pass{*parameters.render_passes[shadow_index].get()};
 
         // TODO Multiple vertex buffer bindings
         encoder.set_bind_group_layout(m_bind_group_layout);
