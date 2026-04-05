@@ -110,6 +110,49 @@ incrementally adding full feature parity.
 | Image layout transitions | Explicit at render pass boundaries, tracked per-texture | Simple initial approach; refinable later |
 | Multi-draw indirect | `vkCmdDrawIndexedIndirect` in loop with push constant draw ID | Same approach as Metal backend |
 | Active render pass | Static pointer pattern | Matches Metal; enables command encoder to find the active command buffer |
+| Resource destruction | Deferred via completion handler | GPU may still reference resources after C++ destructor runs |
+
+### Vulkan Resource Destruction Pattern
+
+Vulkan resources (buffers, textures, samplers, descriptor sets, pipeline layouts, etc.)
+may still be referenced by in-flight command buffers when the owning C++ object is
+destroyed. Immediate destruction causes validation errors or crashes.
+
+**Rule:** In `~Impl()` destructors, capture Vulkan handles by value into a lambda and
+defer destruction via `Device_impl::add_completion_handler()`. The handlers run during
+`~Device_impl()` after `vkDeviceWaitIdle()`, guaranteeing the GPU is idle.
+
+```cpp
+Foo_impl::~Foo_impl() noexcept
+{
+    // 1. Capture handles by value
+    const VkFoo    vk_foo    = m_vk_foo;
+    const VkBar    vk_bar    = m_vk_bar;
+    m_vk_foo = VK_NULL_HANDLE;
+    m_vk_bar = VK_NULL_HANDLE;
+
+    // 2. Defer destruction -- device_impl is captured by reference
+    //    (it outlives all completion handlers)
+    m_device_impl.add_completion_handler(
+        [&device_impl = m_device_impl, vk_foo, vk_bar]() {
+            VkDevice device = device_impl.get_vulkan_device();
+            if (vk_foo != VK_NULL_HANDLE) vkDestroyFoo(device, vk_foo, nullptr);
+            if (vk_bar != VK_NULL_HANDLE) vkDestroyBar(device, vk_bar, nullptr);
+        }
+    );
+}
+```
+
+**Exceptions** (immediate destruction is safe):
+- `~Device_impl()` itself -- calls `vkDeviceWaitIdle()` before destroying device-level resources
+- `~Render_pass_impl()` -- calls `vkDeviceWaitIdle()` before destroying framebuffer/render pass
+- `~Swapchain_impl()` -- uses fence-based frame-in-flight lifecycle tracking
+- Staging buffers -- destroyed after `m_immediate_commands->wait(submit)` completes
+- `VkShaderModule` -- only needed during `vkCreateGraphicsPipelines()`, not referenced after
+
+**Currently using completion handlers:**
+`Buffer_impl`, `Texture_impl`, `Sampler_impl`, `Bind_group_layout_impl`,
+`Texture_heap_impl`, `Surface_impl`, compute pipelines.
 
 ### 2.1 Shader Stages: VkShaderModule Creation [DONE]
 
@@ -513,3 +556,4 @@ Fixes applied while running executables and eliminating Vulkan validation layer 
 | 24 | 2026-04-05 | hextiles | (assert) m_bind_group_layout nullptr | ImGui renderer and hextiles tile renderer did not call `set_bind_group_layout()` before `set_render_pipeline_state()`. Added missing calls, plus `set_viewport_rect`/`set_scissor_rect` for Vulkan dynamic state. | `imgui_renderer.cpp`, `tile_renderer.cpp` |
 | 25 | 2026-04-05 | hextiles | VUID-VkGraphicsPipelineCreateInfo-layout-07988 | Tile shader `s_texture` sampler declared in set 0 but not in pipeline layout. Same `uses_bindless_texture()` issue as #21. Replaced with `uses_sampler_array_in_set_0()` in tile renderer. Added `ERHE_VULKAN_DESCRIPTOR_INDEXING` paths to tile.vert/tile.frag for `erhe_texture_heap[]` sampling. | `tile_renderer.cpp`, `tile.vert`, `tile.frag` |
 | 26 | 2026-04-05 | hextiles | VUID-vkCmdEndRenderPass-commandBuffer-recording | Tile renderer created a local `Texture_heap` on the stack whose descriptor set was destroyed before `vkCmdEndRenderPass`. Deferred `Texture_heap_impl` descriptor pool and set layout destruction via `Device_impl::add_completion_handler()`, matching `Texture_impl` and `Buffer_impl` patterns. | `vulkan_texture_heap.cpp` |
+| 27 | 2026-04-05 | all | (safety) deferred Vulkan resource destruction audit | Audited all `vkDestroy*`/`vmaDestroy*` calls across the Vulkan backend. `Bind_group_layout_impl` (pipeline layout + descriptor set layout), `Sampler_impl` (VkSampler), and `Texture_impl` image views were destroyed immediately but may be referenced by in-flight command buffers. Deferred all via `Device_impl::add_completion_handler()`. Texture image views consolidated into single handler with VkImage/VmaAllocation. Shader modules left immediate (only needed at pipeline creation). | `vulkan_bind_group_layout.cpp`, `vulkan_sampler.cpp`, `vulkan_texture.cpp` |
