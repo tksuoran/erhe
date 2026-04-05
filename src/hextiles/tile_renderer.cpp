@@ -782,7 +782,10 @@ void Tile_renderer::render(erhe::graphics::Render_command_encoder& render_encode
     //gl::invalidate_tex_image()
     erhe::graphics::Buffer* vertex_buffer = vertex_buffer_range.get_buffer()->get_buffer();
 
+    render_encoder.set_bind_group_layout(&m_bind_group_layout);
     render_encoder.set_render_pipeline_state(m_pipeline);
+    render_encoder.set_viewport_rect(viewport.x, viewport.y, viewport.width, viewport.height);
+    render_encoder.set_scissor_rect(viewport.x, viewport.y, viewport.width, viewport.height);
     render_encoder.set_index_buffer(&m_index_buffer);
     render_encoder.set_vertex_buffer(vertex_buffer, vertex_buffer_range.get_byte_start_offset_in_buffer(), 0);
 
