@@ -1033,20 +1033,36 @@ void Device_impl::clear_texture(const Texture& texture, std::array<double, 4> va
         return;
     }
 
+    const erhe::dataformat::Format pixelformat = tex_impl.get_pixelformat();
+    const bool is_depth   = erhe::dataformat::get_depth_size_bits(pixelformat) > 0;
+    const bool is_stencil = erhe::dataformat::get_stencil_size_bits(pixelformat) > 0;
+
     const Vulkan_immediate_commands::Command_buffer_wrapper& cmd = m_immediate_commands->acquire();
 
     tex_impl.transition_layout(cmd.m_cmd_buf, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
-    const VkClearColorValue clear_color{
-        .float32 = {
-            static_cast<float>(value[0]),
-            static_cast<float>(value[1]),
-            static_cast<float>(value[2]),
-            static_cast<float>(value[3])
-        }
-    };
-    const VkImageSubresourceRange range{VK_IMAGE_ASPECT_COLOR_BIT, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS};
-    vkCmdClearColorImage(cmd.m_cmd_buf, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clear_color, 1, &range);
+    if (is_depth || is_stencil) {
+        const VkClearDepthStencilValue clear_depth_stencil{
+            .depth   = static_cast<float>(value[0]),
+            .stencil = static_cast<uint32_t>(value[1])
+        };
+        VkImageAspectFlags aspect_mask = 0;
+        if (is_depth)   aspect_mask |= VK_IMAGE_ASPECT_DEPTH_BIT;
+        if (is_stencil) aspect_mask |= VK_IMAGE_ASPECT_STENCIL_BIT;
+        const VkImageSubresourceRange range{aspect_mask, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS};
+        vkCmdClearDepthStencilImage(cmd.m_cmd_buf, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clear_depth_stencil, 1, &range);
+    } else {
+        const VkClearColorValue clear_color{
+            .float32 = {
+                static_cast<float>(value[0]),
+                static_cast<float>(value[1]),
+                static_cast<float>(value[2]),
+                static_cast<float>(value[3])
+            }
+        };
+        const VkImageSubresourceRange range{VK_IMAGE_ASPECT_COLOR_BIT, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS};
+        vkCmdClearColorImage(cmd.m_cmd_buf, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clear_color, 1, &range);
+    }
 
     tex_impl.transition_layout(cmd.m_cmd_buf, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
