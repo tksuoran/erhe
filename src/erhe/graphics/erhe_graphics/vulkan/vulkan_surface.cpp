@@ -233,40 +233,75 @@ void Surface_impl::fail()
 
 auto Surface_impl::get_surface_format_score(const VkSurfaceFormatKHR surface_format) const -> float
 {
-    float format_score = 1.0f;
+    const int requested_bit_depth = (m_surface_create_info.context_window != nullptr)
+        ? m_surface_create_info.context_window->get_window_configuration().color_bit_depth
+        : 8;
+    const bool prefer_hdr = m_surface_create_info.prefer_high_dynamic_range;
+
+    // Classify the format
+    bool is_srgb_format  = false; // format applies linear-to-sRGB OETF on write
+    bool is_float_format = false;
+    int  bit_depth       = 0;
     switch (surface_format.format) {
-        case VK_FORMAT_R8G8B8A8_UNORM:           format_score = 2.0f; break;
-        case VK_FORMAT_B8G8R8A8_UNORM:           format_score = 2.0f; break;
-        case VK_FORMAT_R8G8B8A8_SRGB:            format_score = 3.0f; break;
-        case VK_FORMAT_B8G8R8A8_SRGB:            format_score = 3.0f; break;
-        case VK_FORMAT_A2R10G10B10_UNORM_PACK32: format_score = 4.0f; break;
+        case VK_FORMAT_R8G8B8A8_SRGB:            is_srgb_format = true;  bit_depth = 8;  break;
+        case VK_FORMAT_B8G8R8A8_SRGB:            is_srgb_format = true;  bit_depth = 8;  break;
+        case VK_FORMAT_R8G8B8A8_UNORM:           is_srgb_format = false; bit_depth = 8;  break;
+        case VK_FORMAT_B8G8R8A8_UNORM:           is_srgb_format = false; bit_depth = 8;  break;
+        case VK_FORMAT_A2R10G10B10_UNORM_PACK32: is_srgb_format = false; bit_depth = 10; break;
+        case VK_FORMAT_A2B10G10R10_UNORM_PACK32: is_srgb_format = false; bit_depth = 10; break;
+        case VK_FORMAT_R16G16B16A16_SFLOAT:      is_float_format = true; bit_depth = 16; break;
         default:
-            break;
+            return 0.0f;
     }
 
-    float color_space_score = 10.0f;
-    switch (surface_format.colorSpace) {
-        case VK_COLOR_SPACE_SRGB_NONLINEAR_KHR:       color_space_score = 2.0f; break;
-        case VK_COLOR_SPACE_DISPLAY_P3_NONLINEAR_EXT:
-        case VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT:
-        case VK_COLOR_SPACE_DISPLAY_P3_LINEAR_EXT:
-        case VK_COLOR_SPACE_DCI_P3_NONLINEAR_EXT:
-        case VK_COLOR_SPACE_BT709_LINEAR_EXT:
-        case VK_COLOR_SPACE_BT709_NONLINEAR_EXT:
-        case VK_COLOR_SPACE_BT2020_LINEAR_EXT:
-        case VK_COLOR_SPACE_HDR10_ST2084_EXT:
-        case VK_COLOR_SPACE_DOLBYVISION_EXT:
-        case VK_COLOR_SPACE_HDR10_HLG_EXT:
-        case VK_COLOR_SPACE_ADOBERGB_LINEAR_EXT:
-        case VK_COLOR_SPACE_ADOBERGB_NONLINEAR_EXT:
-        case VK_COLOR_SPACE_PASS_THROUGH_EXT:
-        case VK_COLOR_SPACE_EXTENDED_SRGB_NONLINEAR_EXT:
-        case VK_COLOR_SPACE_DISPLAY_NATIVE_AMD:
-        default:
-            break;
+    // Score format + colorSpace as a pair.
+    //
+    // erhe shaders output linear color. The format+colorSpace combination must
+    // ensure correct display:
+    //
+    //   _SRGB format + SRGB_NONLINEAR:        HW encodes sRGB, display expects sRGB.  Correct.
+    //   _UNORM format + SRGB_NONLINEAR:        Linear stored as-is, display expects sRGB. Dark.
+    //   _SFLOAT format + EXTENDED_SRGB_LINEAR:  Linear stored, compositor converts. Correct (HDR).
+    //   _UNORM 10-bit + HDR10_ST2084:           Needs PQ encoding in shader. Not supported.
+    //
+    // Reject mismatched pairs that would produce incorrect output.
+
+    const VkColorSpaceKHR color_space = surface_format.colorSpace;
+
+    if (color_space == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
+        // Standard SDR path. Only correct when the format has sRGB OETF.
+        if (!is_srgb_format) {
+            // UNORM + SRGB_NONLINEAR = linear values displayed as sRGB = dark.
+            // Give a low but non-zero score as a last-resort fallback.
+            return 1.0f;
+        }
+        // sRGB format + SRGB_NONLINEAR: the correct SDR combination.
+        float score = 100.0f;
+        if (bit_depth == requested_bit_depth) {
+            score += 40.0f;
+        }
+        if (!prefer_hdr) {
+            score += 20.0f; // SDR preference bonus
+        }
+        return score;
     }
 
-    return format_score * color_space_score;
+    if (color_space == VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT) {
+        // scRGB linear HDR path. Only makes sense with float formats.
+        if (!is_float_format) {
+            return 0.0f;
+        }
+        float score = 80.0f;
+        if (prefer_hdr) {
+            score += 40.0f; // HDR preference bonus
+        }
+        return score;
+    }
+
+    // Other color spaces (HDR10_ST2084, Display P3, BT2020, etc.)
+    // require shader-side transfer functions erhe does not currently implement.
+    // Score low so they are only selected if nothing else is available.
+    return 0.5f;
 }
 
 auto Surface_impl::get_present_scaling_capabilities() const -> VkSurfacePresentScalingCapabilitiesKHR
