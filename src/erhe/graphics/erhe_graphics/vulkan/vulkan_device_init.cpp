@@ -530,6 +530,7 @@ Device_impl::Device_impl(
         .sType    = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
         .pNext    = nullptr,
         .features = {
+            .geometryShader                 = qf.geometryShader,
             .sampleRateShading              = qf.sampleRateShading,
             .multiDrawIndirect              = qf.multiDrawIndirect,
             .samplerAnisotropy              = qf.samplerAnisotropy,
