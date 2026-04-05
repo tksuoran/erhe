@@ -63,13 +63,33 @@ Texture_impl::Texture_impl(Texture_impl&& other) noexcept
 
 Texture_impl::~Texture_impl() noexcept
 {
-    VkDevice vulkan_device = m_device.get_impl().get_vulkan_device();
+    Device_impl& device_impl   = m_device.get_impl();
+    VkDevice     vulkan_device = device_impl.get_vulkan_device();
+
     for (const Cached_image_view& cached : m_cached_image_views) {
         if (cached.image_view != VK_NULL_HANDLE) {
             vkDestroyImageView(vulkan_device, cached.image_view, nullptr);
         }
     }
     m_cached_image_views.clear();
+
+    if (m_vk_image_view != VK_NULL_HANDLE) {
+        vkDestroyImageView(vulkan_device, m_vk_image_view, nullptr);
+        m_vk_image_view = VK_NULL_HANDLE;
+    }
+
+    if (m_vk_image != VK_NULL_HANDLE && m_vma_allocation != VK_NULL_HANDLE) {
+        const VkImage       vk_image       = m_vk_image;
+        const VmaAllocation vma_allocation = m_vma_allocation;
+        device_impl.add_completion_handler(
+            [&device_impl, vk_image, vma_allocation]() {
+                VmaAllocator& allocator = device_impl.get_allocator();
+                vmaDestroyImage(allocator, vk_image, vma_allocation);
+            }
+        );
+        m_vk_image       = VK_NULL_HANDLE;
+        m_vma_allocation = VK_NULL_HANDLE;
+    }
 }
 
 Texture_impl::Texture_impl(Device& device, const Texture_create_info& create_info)
