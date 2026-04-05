@@ -528,9 +528,9 @@ Device_impl::Device_impl(
         .sType    = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
         .pNext    = nullptr,
         .features = {
-            .vertexPipelineStoresAndAtomics = qf.vertexPipelineStoresAndAtomics,
             .multiDrawIndirect              = qf.multiDrawIndirect,
             .samplerAnisotropy              = qf.samplerAnisotropy,
+            .vertexPipelineStoresAndAtomics = qf.vertexPipelineStoresAndAtomics,
             .shaderClipDistance              = qf.shaderClipDistance,
             .shaderCullDistance              = qf.shaderCullDistance,
             .shaderInt64                     = qf.shaderInt64,
