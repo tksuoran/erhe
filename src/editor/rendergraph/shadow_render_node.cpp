@@ -138,7 +138,7 @@ void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, co
         }
     }
 
-    log_render->info("updating render passes, light_count = {}", light_count);
+    log_render->debug("updating render passes, light_count = {}", light_count);
     m_render_passes.clear();
     for (int i = 0; i < light_count; ++i) {
         erhe::graphics::Render_pass_descriptor render_pass_descriptor;
@@ -153,7 +153,6 @@ void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, co
         render_pass_descriptor.debug_label                     = erhe::utility::Debug_label{fmt::format("Shadow {}", i)};
         std::unique_ptr<erhe::graphics::Render_pass> render_pass = std::make_unique<Render_pass>(graphics_device, render_pass_descriptor);
         m_render_passes.emplace_back(std::move(render_pass));
-        log_render->info("  created shadow render pass {}, m_render_passes.size() = {}", i, m_render_passes.size());
     }
 
     m_viewport = {
