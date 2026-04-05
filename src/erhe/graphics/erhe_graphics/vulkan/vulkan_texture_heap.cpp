@@ -298,13 +298,8 @@ auto Texture_heap_impl::bind() -> std::size_t
         return 0;
     }
 
-    VkPipelineLayout pipeline_layout = VK_NULL_HANDLE;
-    if (m_bind_group_layout != nullptr) {
-        pipeline_layout = m_bind_group_layout->get_impl().get_pipeline_layout();
-    }
-    if (pipeline_layout == VK_NULL_HANDLE) {
-        pipeline_layout = m_device.get_impl().get_pipeline_layout();
-    }
+    ERHE_VERIFY(m_bind_group_layout != nullptr);
+    VkPipelineLayout pipeline_layout = m_bind_group_layout->get_impl().get_pipeline_layout();
 
     // Bind the texture descriptor set at set index 1
     vkCmdBindDescriptorSets(

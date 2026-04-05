@@ -199,7 +199,8 @@ Text_renderer::Text_renderer(erhe::graphics::Device& graphics_device, const bool
         m_graphics_device,
         *m_font->texture(),
         m_nearest_sampler,
-        m_use_buffer_texture ? 2u : 0u // slots 0,1 reserved: font at unit 0, buffer texture at unit 1
+        m_use_buffer_texture ? 2u : 0u, // slots 0,1 reserved: font at unit 0, buffer texture at unit 1
+        &m_bind_group_layout
     );
 }
 

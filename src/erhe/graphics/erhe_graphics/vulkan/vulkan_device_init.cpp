@@ -948,36 +948,6 @@ Device_impl::Device_impl(
             }
         }
 
-        // Push constant range for draw ID
-        const VkPushConstantRange push_constant_range{
-            .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
-            .offset     = 0,
-            .size       = sizeof(int32_t) // ERHE_DRAW_ID
-        };
-
-        // Pipeline layout with set 0 (UBO/SSBO) and optionally set 1 (texture heap)
-        std::vector<VkDescriptorSetLayout> set_layouts;
-        set_layouts.push_back(m_descriptor_set_layout);
-        if (m_texture_set_layout != VK_NULL_HANDLE) {
-            set_layouts.push_back(m_texture_set_layout);
-        }
-
-        const VkPipelineLayoutCreateInfo pipeline_layout_create_info{
-            .sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-            .pNext                  = nullptr,
-            .flags                  = 0,
-            .setLayoutCount         = static_cast<uint32_t>(set_layouts.size()),
-            .pSetLayouts            = set_layouts.data(),
-            .pushConstantRangeCount = 1,
-            .pPushConstantRanges    = &push_constant_range
-        };
-
-        result = vkCreatePipelineLayout(m_vulkan_device, &pipeline_layout_create_info, nullptr, &m_pipeline_layout);
-        if (result != VK_SUCCESS) {
-            log_context->critical("vkCreatePipelineLayout() failed with {} {}", static_cast<int32_t>(result), c_str(result));
-            abort();
-        }
-
         // Create per-frame descriptor pool for fallback binding (when push descriptors unavailable)
         if (!m_device_extensions.m_VK_KHR_push_descriptor) {
             const VkDescriptorPoolSize pool_sizes[] = {

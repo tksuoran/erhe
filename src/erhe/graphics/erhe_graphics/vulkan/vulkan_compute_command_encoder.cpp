@@ -87,9 +87,8 @@ void Compute_command_encoder_impl::set_buffer(Buffer_target buffer_target, const
             .pTexelBufferView = nullptr
         };
 
-        VkPipelineLayout layout = (m_pipeline_layout != VK_NULL_HANDLE)
-            ? m_pipeline_layout
-            : device_impl.get_pipeline_layout();
+        ERHE_VERIFY(m_pipeline_layout != VK_NULL_HANDLE);
+        VkPipelineLayout layout = m_pipeline_layout;
 
         vkCmdPushDescriptorSetKHR(
             command_buffer,
@@ -152,9 +151,8 @@ void Compute_command_encoder_impl::set_compute_pipeline_state(const Compute_pipe
         .pSpecializationInfo = nullptr
     };
 
-    VkPipelineLayout layout = (m_pipeline_layout != VK_NULL_HANDLE)
-        ? m_pipeline_layout
-        : device_impl.get_pipeline_layout();
+    ERHE_VERIFY(m_pipeline_layout != VK_NULL_HANDLE);
+    VkPipelineLayout layout = m_pipeline_layout;
 
     const VkComputePipelineCreateInfo pipeline_create_info{
         .sType  = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,

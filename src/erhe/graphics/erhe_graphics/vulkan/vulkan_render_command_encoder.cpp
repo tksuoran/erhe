@@ -271,13 +271,8 @@ void Render_command_encoder_impl::set_render_pipeline_state(
     ERHE_VERIFY(shader_bind_group_layout == nullptr || shader_bind_group_layout == m_bind_group_layout); // shader bind_group_layout must match the active one
 #endif
 
-    // Determine pipeline layout: prefer bind_group_layout from shader, fall back to global
-    const Bind_group_layout* bind_group_layout = shader_stages->get_bind_group_layout();
-    if (bind_group_layout != nullptr) {
-        m_pipeline_layout = bind_group_layout->get_impl().get_pipeline_layout();
-    } else {
-        m_pipeline_layout = device_impl.get_pipeline_layout();
-    }
+    // Use pipeline layout from the active bind group layout (must be set before pipeline state)
+    ERHE_VERIFY(m_pipeline_layout != VK_NULL_HANDLE);
 
     // Shader stages
     std::vector<VkPipelineShaderStageCreateInfo> shader_stage_infos;
@@ -679,7 +674,7 @@ void Render_command_encoder_impl::set_buffer(
         vkCmdPushDescriptorSetKHR(
             command_buffer,
             VK_PIPELINE_BIND_POINT_GRAPHICS,
-            (m_pipeline_layout != VK_NULL_HANDLE) ? m_pipeline_layout : device_impl.get_pipeline_layout(),
+            m_pipeline_layout,
             0, // set index
             1,
             &write
@@ -721,7 +716,7 @@ void Render_command_encoder_impl::set_buffer(
         vkCmdBindDescriptorSets(
             command_buffer,
             VK_PIPELINE_BIND_POINT_GRAPHICS,
-            (m_pipeline_layout != VK_NULL_HANDLE) ? m_pipeline_layout : device_impl.get_pipeline_layout(),
+            m_pipeline_layout,
             0, // set index
             1,
             &descriptor_set,
@@ -830,7 +825,6 @@ void Render_command_encoder_impl::multi_draw_indexed_primitives_indirect(
     // Bind the index buffer
     vkCmdBindIndexBuffer(command_buffer, m_index_buffer, 0, to_vk_index_type(index_type));
 
-    Device_impl& device_impl = m_device.get_impl();
     const uint32_t actual_stride = (stride != 0)
         ? static_cast<uint32_t>(stride)
         : static_cast<uint32_t>(sizeof(Draw_indexed_primitives_indirect_command));
@@ -847,9 +841,7 @@ void Render_command_encoder_impl::multi_draw_indexed_primitives_indirect(
         );
     } else {
         // Emulated multi-draw: loop with per-draw push constant
-        VkPipelineLayout layout = (m_pipeline_layout != VK_NULL_HANDLE)
-            ? m_pipeline_layout
-            : device_impl.get_pipeline_layout();
+        VkPipelineLayout layout = m_pipeline_layout;
         for (std::uintptr_t i = 0; i < drawcount; ++i) {
             int32_t draw_id = static_cast<int32_t>(i);
             vkCmdPushConstants(

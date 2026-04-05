@@ -137,7 +137,6 @@ public:
     [[nodiscard]] auto get_memory_heap                (uint32_t memory_heap_index) const -> const VkMemoryHeap&;
     [[nodiscard]] auto get_immediate_commands         () -> Vulkan_immediate_commands&;
     [[nodiscard]] auto get_pipeline_cache              () const -> VkPipelineCache;
-    [[nodiscard]] auto get_pipeline_layout              () const -> VkPipelineLayout;
     [[nodiscard]] auto get_descriptor_set_layout        () const -> VkDescriptorSetLayout;
     [[nodiscard]] auto has_push_descriptor              () const -> bool;
     [[nodiscard]] auto get_texture_set_layout           () const -> VkDescriptorSetLayout;
@@ -228,7 +227,6 @@ private:
     VkPipelineCache                              m_pipeline_cache              {VK_NULL_HANDLE};
     VkDescriptorSetLayout                        m_descriptor_set_layout       {VK_NULL_HANDLE};
     VkDescriptorSetLayout                        m_texture_set_layout          {VK_NULL_HANDLE};
-    VkPipelineLayout                             m_pipeline_layout             {VK_NULL_HANDLE};
     VkDescriptorPool                             m_per_frame_descriptor_pool   {VK_NULL_HANDLE};
     std::mutex                                   m_pipeline_map_mutex;
     std::unordered_map<std::size_t, VkPipeline>  m_pipeline_map;

@@ -75,9 +75,6 @@ Device_impl::~Device_impl() noexcept
     if (m_per_frame_descriptor_pool != VK_NULL_HANDLE) {
         vkDestroyDescriptorPool(m_vulkan_device, m_per_frame_descriptor_pool, nullptr);
     }
-    if (m_pipeline_layout != VK_NULL_HANDLE) {
-        vkDestroyPipelineLayout(m_vulkan_device, m_pipeline_layout, nullptr);
-    }
     if (m_texture_set_layout != VK_NULL_HANDLE) {
         vkDestroyDescriptorSetLayout(m_vulkan_device, m_texture_set_layout, nullptr);
     }
@@ -135,11 +132,6 @@ Device_impl::~Device_impl() noexcept
 auto Device_impl::get_pipeline_cache() const -> VkPipelineCache
 {
     return m_pipeline_cache;
-}
-
-auto Device_impl::get_pipeline_layout() const -> VkPipelineLayout
-{
-    return m_pipeline_layout;
 }
 
 auto Device_impl::get_descriptor_set_layout() const -> VkDescriptorSetLayout
