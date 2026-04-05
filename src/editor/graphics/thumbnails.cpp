@@ -45,7 +45,7 @@ Thumbnails::Thumbnails(const Thumbnails_config& thumbnails_config, erhe::graphic
                 erhe::graphics::Image_usage_flag_bit_mask::sampled |
                 erhe::graphics::Image_usage_flag_bit_mask::transfer_src |
                 erhe::graphics::Image_usage_flag_bit_mask::transfer_dst,
-            .type              = erhe::graphics::Texture_type::texture_2d,
+            .type              = erhe::graphics::Texture_type::texture_2d_array,
             .pixelformat       = erhe::dataformat::Format::format_8_vec4_unorm, // TODO sRGB?
             .use_mipmaps       = true,
             .width             = m_size_pixels,
