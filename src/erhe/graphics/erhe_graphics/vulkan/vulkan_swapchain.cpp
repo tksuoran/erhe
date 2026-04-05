@@ -1046,6 +1046,7 @@ void Swapchain_impl::create_depth_image(const uint32_t width, const uint32_t hei
         abort();
     }
 
+    vmaSetAllocationName(allocator, m_swapchain_objects.depth_allocation, "Swapchain depth image");
     m_device_impl.set_debug_label(VK_OBJECT_TYPE_IMAGE, reinterpret_cast<uint64_t>(m_swapchain_objects.depth_image), "Swapchain depth image");
 
     const VkImageViewCreateInfo view_create_info{

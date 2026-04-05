@@ -138,6 +138,7 @@ Texture_impl::Texture_impl(Device& device, const Texture_create_info& create_inf
         log_swapchain->critical("vmaCreateImage() failed with {} {}", static_cast<int32_t>(result), c_str(result));
         abort();
     }
+    vmaSetAllocationName(allocator, m_vma_allocation, create_info.debug_label.data());
 
     const VkImageViewCreateInfo image_view_create_info{
         .sType            = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,

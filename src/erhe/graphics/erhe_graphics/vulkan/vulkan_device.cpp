@@ -110,6 +110,16 @@ Device_impl::~Device_impl() noexcept
         vkDestroySemaphore(m_vulkan_device, m_vulkan_frame_end_semaphore, nullptr);
     }
 
+    // Dump live VMA allocations to help diagnose leaks
+    {
+        char* stats_string = nullptr;
+        vmaBuildStatsString(m_vma_allocator, &stats_string, VK_TRUE);
+        if (stats_string != nullptr) {
+            log_context->info("VMA stats before destroy:\n{}", stats_string);
+            vmaFreeStatsString(m_vma_allocator, stats_string);
+        }
+    }
+
     vmaDestroyAllocator(m_vma_allocator);
     if (m_vulkan_device != VK_NULL_HANDLE) {
         vkDestroyDevice(m_vulkan_device, nullptr);
@@ -616,6 +626,7 @@ void Device_impl::upload_to_buffer(const Buffer& buffer, const size_t offset, co
         log_buffer->error("upload_to_buffer: staging buffer creation failed with {}", static_cast<int32_t>(result));
         return;
     }
+    vmaSetAllocationName(m_vma_allocator, staging_allocation, "upload_to_buffer staging");
     std::memcpy(staging_allocation_info.pMappedData, data, length);
     vmaFlushAllocation(m_vma_allocator, staging_allocation, 0, length);
 
@@ -677,6 +688,7 @@ void Device_impl::upload_to_texture(
         log_texture->error("upload_to_texture: staging buffer creation failed with {}", static_cast<int32_t>(result));
         return;
     }
+    vmaSetAllocationName(m_vma_allocator, staging_allocation, "upload_to_texture staging");
 
     // Copy data to staging buffer
     std::memcpy(staging_alloc_result.pMappedData, data, data_size);

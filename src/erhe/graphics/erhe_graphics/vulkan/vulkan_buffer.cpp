@@ -75,6 +75,8 @@ Buffer_impl::Buffer_impl(Device& device, const Buffer_create_info& create_info) 
     ERHE_VERIFY(m_vk_buffer != VK_NULL_HANDLE);
     ERHE_VERIFY(m_vma_allocation != VK_NULL_HANDLE);
 
+    vmaSetAllocationName(allocator, m_vma_allocation, create_info.debug_label.data());
+
     if (!create_info.debug_label.empty()) {
         m_debug_label = create_info.debug_label;
         device_impl.set_debug_label(
