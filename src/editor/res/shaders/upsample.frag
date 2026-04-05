@@ -22,9 +22,17 @@ void main()
     vec2 texel_scale = vec2(1.0) / vec2(texture_size) * post_processing.upsample_radius;
 
 #if defined(LAST_PASS)
+#   if defined(ERHE_VULKAN_DESCRIPTOR_INDEXING)
+    vec3 curr = textureLod(erhe_texture_heap[post_processing.input_texture.x], v_texcoord, destination_lod).rgb;
+#   else
     vec3 curr = textureLod(s_input, v_texcoord, destination_lod).rgb;
+#   endif
 #else
+#   if defined(ERHE_VULKAN_DESCRIPTOR_INDEXING)
+    vec3 curr = textureLod(erhe_texture_heap[post_processing.downsample_texture.x], v_texcoord, destination_lod).rgb;
+#   else
     vec3 curr = textureLod(s_downsample, v_texcoord, destination_lod).rgb;
+#   endif
 #endif
 
     // SOURCE is wired to either downsample (first pass)
