@@ -151,13 +151,25 @@ Texture_heap_impl::Texture_heap_impl(
 
 Texture_heap_impl::~Texture_heap_impl() noexcept
 {
-    VkDevice vulkan_device = m_device.get_impl().get_vulkan_device();
-    if (m_descriptor_set_layout != VK_NULL_HANDLE) {
-        vkDestroyDescriptorSetLayout(vulkan_device, m_descriptor_set_layout, nullptr);
-    }
-    if (m_descriptor_pool != VK_NULL_HANDLE) {
-        vkDestroyDescriptorPool(vulkan_device, m_descriptor_pool, nullptr);
-    }
+    Device_impl&          device_impl          = m_device.get_impl();
+    const VkDescriptorSetLayout descriptor_set_layout = m_descriptor_set_layout;
+    const VkDescriptorPool      descriptor_pool       = m_descriptor_pool;
+    m_descriptor_set_layout = VK_NULL_HANDLE;
+    m_descriptor_pool       = VK_NULL_HANDLE;
+    m_descriptor_set        = VK_NULL_HANDLE;
+
+    device_impl.add_completion_handler(
+        [&device_impl, descriptor_set_layout, descriptor_pool]() {
+            VkDevice vulkan_device = device_impl.get_vulkan_device();
+            if (descriptor_set_layout != VK_NULL_HANDLE) {
+                vkDestroyDescriptorSetLayout(vulkan_device, descriptor_set_layout, nullptr);
+            }
+            if (descriptor_pool != VK_NULL_HANDLE) {
+                // Destroying the pool also frees all descriptor sets allocated from it
+                vkDestroyDescriptorPool(vulkan_device, descriptor_pool, nullptr);
+            }
+        }
+    );
 }
 
 void Texture_heap_impl::reset_heap()
