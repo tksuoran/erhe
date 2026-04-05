@@ -310,6 +310,7 @@ void Text_renderer::render(erhe::graphics::Render_command_encoder& encoder, erhe
     encoder.set_viewport_rect(viewport.x, viewport.y, viewport.width, viewport.height);
     encoder.set_bind_group_layout(&m_bind_group_layout);
     encoder.set_render_pipeline_state(m_pipeline);
+    m_texture_heap->bind();
 
     const std::size_t vertex_ssbo_stride = m_u_vertex_data_size;
     const std::size_t bytes_per_quad     = 4 * vertex_ssbo_stride;
@@ -356,7 +357,6 @@ void Text_renderer::render(erhe::graphics::Render_command_encoder& encoder, erhe
             m_vertex_ssbo_buffer.bind(encoder, vertex_buffer_range);
         }
 
-        m_texture_heap->bind();
         encoder.draw_primitives(
             m_pipeline.data.input_assembly.primitive_topology,
             0,
