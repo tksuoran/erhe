@@ -31,11 +31,11 @@ auto Texture_impl::get_mipmap_dimensions(const Texture_type type) -> int
 
 namespace {
 
-auto to_vk_image_view_type(const Texture_type type) -> VkImageViewType
+auto to_vk_image_view_type(const Texture_type type, const int array_layer_count) -> VkImageViewType
 {
     switch (type) {
-        case Texture_type::texture_1d:             return VK_IMAGE_VIEW_TYPE_1D;
-        case Texture_type::texture_2d:             return VK_IMAGE_VIEW_TYPE_2D;
+        case Texture_type::texture_1d:             return (array_layer_count > 1) ? VK_IMAGE_VIEW_TYPE_1D_ARRAY : VK_IMAGE_VIEW_TYPE_1D;
+        case Texture_type::texture_2d:             return (array_layer_count > 1) ? VK_IMAGE_VIEW_TYPE_2D_ARRAY : VK_IMAGE_VIEW_TYPE_2D;
         case Texture_type::texture_2d_array:       return VK_IMAGE_VIEW_TYPE_2D_ARRAY;
         case Texture_type::texture_3d:             return VK_IMAGE_VIEW_TYPE_3D;
         case Texture_type::texture_cube_map:       return VK_IMAGE_VIEW_TYPE_CUBE;
@@ -171,7 +171,7 @@ Texture_impl::Texture_impl(Device& device, const Texture_create_info& create_inf
         .pNext            = nullptr,
         .flags            = 0,
         .image            = m_vk_image,
-        .viewType         = to_vk_image_view_type(m_type),
+        .viewType         = to_vk_image_view_type(m_type, m_array_layer_count),
         .format           = image_create_info.format,
         .components       = {
             .r = VK_COMPONENT_SWIZZLE_R,
@@ -318,7 +318,7 @@ auto Texture_impl::get_vk_image_view(
         .pNext            = nullptr,
         .flags            = 0,
         .image            = m_vk_image,
-        .viewType         = to_vk_image_view_type(m_type),
+        .viewType         = to_vk_image_view_type(m_type, m_array_layer_count),
         .format           = vk_format,
         .components       = {
             .r = VK_COMPONENT_SWIZZLE_R,
