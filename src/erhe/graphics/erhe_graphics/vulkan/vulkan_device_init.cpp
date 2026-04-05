@@ -784,6 +784,7 @@ Device_impl::Device_impl(
     m_info.use_compute_shader           = true;
     m_info.use_shader_storage_buffers   = true;
     m_info.use_clear_texture            = true;
+    m_info.use_texture_view             = true;
     m_info.use_persistent_buffers       = true;
 
     // Vulkan coordinate conventions

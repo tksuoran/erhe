@@ -52,12 +52,14 @@ Texture_impl::Texture_impl(Texture_impl&& other) noexcept
     , m_vk_image           {other.m_vk_image}
     , m_vk_image_view      {other.m_vk_image_view}
     , m_cached_image_views {std::move(other.m_cached_image_views)}
+    , m_is_view            {other.m_is_view}
     , m_sample_count       {other.m_sample_count}
     , m_current_layout     {other.m_current_layout}
 {
     other.m_vk_image       = VK_NULL_HANDLE;
     other.m_vk_image_view  = VK_NULL_HANDLE;
     other.m_vma_allocation = VK_NULL_HANDLE;
+    other.m_is_view        = false;
     other.m_current_layout = VK_IMAGE_LAYOUT_UNDEFINED;
 }
 
@@ -116,6 +118,50 @@ Texture_impl::Texture_impl(Device& device, const Texture_create_info& create_inf
     , m_buffer                {create_info.buffer}
     , m_debug_label           {create_info.debug_label}
 {
+    // Texture view: share the source texture's VkImage, create a new VkImageView
+    if (create_info.view_source) {
+        Texture_impl& source_impl = create_info.view_source->get_impl();
+        m_vk_image       = source_impl.get_vk_image();
+        m_vma_allocation = VK_NULL_HANDLE; // no separate allocation for views
+        m_is_view        = true;
+
+        Device_impl& device_impl   = device.get_impl();
+        VkDevice     vulkan_device = device_impl.get_vulkan_device();
+
+        VkImageAspectFlags aspect_mask = get_vulkan_image_aspect_flags(create_info.pixelformat);
+
+        const VkImageViewCreateInfo view_create_info{
+            .sType            = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+            .pNext            = nullptr,
+            .flags            = 0,
+            .image            = m_vk_image,
+            .viewType         = to_vk_image_view_type(m_type),
+            .format           = to_vulkan(create_info.pixelformat),
+            .components       = {VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A},
+            .subresourceRange = {
+                .aspectMask     = aspect_mask,
+                .baseMipLevel   = static_cast<uint32_t>(create_info.view_base_level),
+                .levelCount     = static_cast<uint32_t>(m_level_count),
+                .baseArrayLayer = static_cast<uint32_t>(create_info.view_base_array_layer),
+                .layerCount     = std::max(uint32_t{1}, static_cast<uint32_t>(m_array_layer_count))
+            }
+        };
+
+        VkResult result = vkCreateImageView(vulkan_device, &view_create_info, nullptr, &m_vk_image_view);
+        if (result != VK_SUCCESS) {
+            log_texture->critical("vkCreateImageView() for texture view failed with {} {}", static_cast<int32_t>(result), c_str(result));
+            abort();
+        }
+
+        device_impl.set_debug_label(
+            VK_OBJECT_TYPE_IMAGE_VIEW,
+            reinterpret_cast<uint64_t>(m_vk_image_view),
+            fmt::format("{} default view", create_info.debug_label.data())
+        );
+
+        return;
+    }
+
     const bool is_cube = (m_type == Texture_type::texture_cube_map) || (m_type == Texture_type::texture_cube_map_array);
     const VkImageCreateInfo image_create_info{
         .sType                 = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
