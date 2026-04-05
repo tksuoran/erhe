@@ -298,7 +298,7 @@ Render_pass_impl::Render_pass_impl(Device& device, const Render_pass_descriptor&
             .srcSubpass      = VK_SUBPASS_EXTERNAL,
             .dstSubpass      = 0,
             .srcStageMask    = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-            .dstStageMask    = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+            .dstStageMask    = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
             .srcAccessMask   = VK_ACCESS_SHADER_READ_BIT,
             .dstAccessMask   = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
             .dependencyFlags = 0
@@ -306,7 +306,7 @@ Render_pass_impl::Render_pass_impl(Device& device, const Render_pass_descriptor&
         dependencies.push_back(VkSubpassDependency{
             .srcSubpass      = 0,
             .dstSubpass      = VK_SUBPASS_EXTERNAL,
-            .srcStageMask    = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+            .srcStageMask    = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
             .dstStageMask    = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
             .srcAccessMask   = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
             .dstAccessMask   = VK_ACCESS_SHADER_READ_BIT,
