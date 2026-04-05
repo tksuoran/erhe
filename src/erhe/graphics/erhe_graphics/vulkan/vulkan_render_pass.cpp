@@ -119,9 +119,8 @@ Render_pass_impl::Render_pass_impl(Device& device, const Render_pass_descriptor&
             }
         });
 
-        // Depth attachment
-        const bool has_depth = m_depth_attachment.load_action != Load_action::Dont_care ||
-                               swapchain_impl.get_depth_image_view() != VK_NULL_HANDLE;
+        // Depth attachment -- only if swapchain has a depth image
+        const bool has_depth = swapchain_impl.get_depth_image_view() != VK_NULL_HANDLE;
         VkAttachmentReference depth_attachment_reference{};
         if (has_depth) {
             attachment_descriptions.push_back(VkAttachmentDescription{

@@ -6,6 +6,7 @@
 #include "erhe_graphics/vulkan/vulkan_render_pass.hpp"
 #include "erhe_graphics/vulkan/vulkan_surface.hpp"
 #include "erhe_graphics/graphics_log.hpp"
+#include "erhe_window/window.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <fmt/format.h>
@@ -780,7 +781,11 @@ void Swapchain_impl::init_swapchain(Vulkan_swapchain_create_info& swapchain_crea
     m_swapchain_extent = swapchain_create_info.swapchain_create_info.imageExtent;
     m_swapchain_format = swapchain_create_info.swapchain_create_info.imageFormat;
 
-    create_depth_image(m_swapchain_extent.width, m_swapchain_extent.height);
+    const Surface_create_info& surface_create_info = m_surface_impl.get_surface_create_info();
+    if ((surface_create_info.context_window != nullptr) &&
+        surface_create_info.context_window->get_window_configuration().use_depth) {
+        create_depth_image(m_swapchain_extent.width, m_swapchain_extent.height);
+    }
 }
 
 auto Swapchain_impl::get_surface_impl() -> Surface_impl&
