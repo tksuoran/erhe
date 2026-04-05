@@ -1058,6 +1058,7 @@ void Imgui_renderer::render_draw_data(erhe::graphics::Render_command_encoder& re
 
     // This binds vertex input states (VAO) and shader stages (shader program)
     // and most other state
+    render_encoder.set_bind_group_layout(&m_bind_group_layout);
     render_encoder.set_render_pipeline_state(m_pipeline);
 
     m_texture_heap->reset_heap();
