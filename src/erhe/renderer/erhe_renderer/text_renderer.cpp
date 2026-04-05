@@ -308,6 +308,7 @@ void Text_renderer::render(erhe::graphics::Render_command_encoder& encoder, erhe
     }
 
     encoder.set_viewport_rect(viewport.x, viewport.y, viewport.width, viewport.height);
+    encoder.set_bind_group_layout(&m_bind_group_layout);
     encoder.set_render_pipeline_state(m_pipeline);
     m_texture_heap->bind();
 
