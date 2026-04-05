@@ -1063,6 +1063,8 @@ void Imgui_renderer::render_draw_data(erhe::graphics::Render_command_encoder& re
     // and most other state
     render_encoder.set_bind_group_layout(&m_bind_group_layout);
     render_encoder.set_render_pipeline_state(m_pipeline);
+    render_encoder.set_viewport_rect(0, 0, fb_width, fb_height);
+    render_encoder.set_scissor_rect(0, 0, fb_width, fb_height);
 
     m_texture_heap->reset_heap();
     if (m_dummy_array_texture) {
