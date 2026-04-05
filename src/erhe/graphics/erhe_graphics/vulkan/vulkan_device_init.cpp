@@ -427,10 +427,11 @@ Device_impl::Device_impl(
     }
 
     VkPhysicalDeviceVulkan13Features query_vulkan_13_features{
-        .sType            = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
-        .pNext            = nullptr,
-        .synchronization2 = VK_FALSE,
-        .dynamicRendering = VK_FALSE,
+        .sType                            = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
+        .pNext                            = nullptr,
+        .shaderDemoteToHelperInvocation = VK_FALSE,
+        .synchronization2                 = VK_FALSE,
+        .dynamicRendering                 = VK_FALSE,
     };
     {
         query_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&query_vulkan_13_features);
@@ -635,10 +636,11 @@ Device_impl::Device_impl(
     }
 
     VkPhysicalDeviceVulkan13Features set_vulkan_13_features{
-        .sType            = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
-        .pNext            = nullptr,
-        .synchronization2 = query_vulkan_13_features.synchronization2,
-        .dynamicRendering = query_vulkan_13_features.dynamicRendering,
+        .sType                            = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
+        .pNext                            = nullptr,
+        .shaderDemoteToHelperInvocation = query_vulkan_13_features.shaderDemoteToHelperInvocation,
+        .synchronization2                 = query_vulkan_13_features.synchronization2,
+        .dynamicRendering                 = query_vulkan_13_features.dynamicRendering,
     };
     {
         set_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&set_vulkan_13_features);
