@@ -24,6 +24,7 @@ public:
     [[nodiscard]] auto get_descriptor_set_layout () const -> VkDescriptorSetLayout;
     [[nodiscard]] auto get_pipeline_layout       () const -> VkPipelineLayout;
     [[nodiscard]] auto get_sampler_binding_offset() const -> uint32_t;
+    [[nodiscard]] auto has_sampler_bindings      () const -> bool;
 
 private:
     Device_impl&               m_device_impl;
@@ -31,6 +32,7 @@ private:
     VkDescriptorSetLayout      m_descriptor_set_layout    {VK_NULL_HANDLE};
     VkPipelineLayout           m_pipeline_layout          {VK_NULL_HANDLE};
     uint32_t                   m_sampler_binding_offset   {0};
+    bool                       m_has_sampler_bindings     {false};
     erhe::utility::Debug_label m_debug_label;
 };
 

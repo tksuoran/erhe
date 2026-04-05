@@ -52,6 +52,7 @@ Bind_group_layout_impl::Bind_group_layout_impl(
         VkShaderStageFlags stage_flags = VK_SHADER_STAGE_ALL;
         if (binding.type == Binding_type::combined_image_sampler) {
             stage_flags = VK_SHADER_STAGE_FRAGMENT_BIT;
+            m_has_sampler_bindings = true;
         }
         // Sampler bindings are offset past buffer bindings in Vulkan
         // (OpenGL has separate namespaces, Vulkan shares one)
@@ -158,6 +159,11 @@ auto Bind_group_layout_impl::get_pipeline_layout() const -> VkPipelineLayout
 auto Bind_group_layout_impl::get_sampler_binding_offset() const -> uint32_t
 {
     return m_sampler_binding_offset;
+}
+
+auto Bind_group_layout_impl::has_sampler_bindings() const -> bool
+{
+    return m_has_sampler_bindings;
 }
 
 } // namespace erhe::graphics

@@ -318,9 +318,9 @@ auto Texture_heap_impl::bind() -> std::size_t
         nullptr
     );
 
-    // For non-bindless path: push sampler descriptors to set 0 at offset binding indices
-    // so that non-bindless sampler declarations (layout(binding = OFFSET + N)) can find them
-    if ((m_bind_group_layout != nullptr) && m_device.get_impl().has_push_descriptor()) {
+    // Push assigned sampler descriptors (e.g. shadow samplers) to set 0 at offset binding indices.
+    // Only applies when the bind group layout actually declares sampler bindings.
+    if ((m_bind_group_layout != nullptr) && m_bind_group_layout->get_impl().has_sampler_bindings() && m_device.get_impl().has_push_descriptor()) {
         const uint32_t sampler_offset = m_bind_group_layout->get_sampler_binding_offset();
         if (sampler_offset > 0) {
             static constexpr std::size_t max_reserved_slots = 8;
