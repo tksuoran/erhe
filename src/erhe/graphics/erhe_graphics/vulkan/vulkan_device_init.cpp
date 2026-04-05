@@ -504,13 +504,30 @@ Device_impl::Device_impl(
         .pQueuePriorities = &queue_priority,
     };
 
+    // Validate required features
+    const VkPhysicalDeviceFeatures& qf = query_device_features.features;
+    if (qf.shaderClipDistance == VK_FALSE) {
+        log_startup->critical("Required Vulkan feature shaderClipDistance is not supported");
+        abort();
+    }
+
+    // Log optional feature availability
+    log_startup->info("Vulkan device features:");
+    log_startup->info("  multiDrawIndirect  = {}", qf.multiDrawIndirect  == VK_TRUE);
+    log_startup->info("  samplerAnisotropy  = {}", qf.samplerAnisotropy  == VK_TRUE);
+    log_startup->info("  shaderClipDistance = {}", qf.shaderClipDistance  == VK_TRUE);
+    log_startup->info("  shaderCullDistance = {}", qf.shaderCullDistance  == VK_TRUE);
+    log_startup->info("  shaderInt64        = {}", qf.shaderInt64         == VK_TRUE);
+
     VkPhysicalDeviceFeatures2 set_device_features{
         .sType    = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
         .pNext    = nullptr,
         .features = {
-            .multiDrawIndirect = query_device_features.features.multiDrawIndirect,
-            .samplerAnisotropy = query_device_features.features.samplerAnisotropy,
-            .shaderInt64       = query_device_features.features.shaderInt64,
+            .multiDrawIndirect  = qf.multiDrawIndirect,
+            .samplerAnisotropy  = qf.samplerAnisotropy,
+            .shaderClipDistance  = qf.shaderClipDistance,
+            .shaderCullDistance  = qf.shaderCullDistance,
+            .shaderInt64         = qf.shaderInt64,
         }
     };
     VkBaseOutStructure* set_features_chain_last = reinterpret_cast<VkBaseOutStructure*>(&set_device_features);
@@ -575,20 +592,27 @@ Device_impl::Device_impl(
         .runtimeDescriptorArray                            = query_descriptor_indexing_features.runtimeDescriptorArray,
     };
     {
+        // Validate required descriptor indexing features for texture heap
+        const VkPhysicalDeviceDescriptorIndexingFeatures& di = query_descriptor_indexing_features;
+        if (di.runtimeDescriptorArray == VK_FALSE) {
+            log_startup->critical("Required Vulkan feature runtimeDescriptorArray is not supported");
+            abort();
+        }
+        if (di.descriptorBindingPartiallyBound == VK_FALSE) {
+            log_startup->critical("Required Vulkan feature descriptorBindingPartiallyBound is not supported");
+            abort();
+        }
+        if (di.descriptorBindingVariableDescriptorCount == VK_FALSE) {
+            log_startup->critical("Required Vulkan feature descriptorBindingVariableDescriptorCount is not supported");
+            abort();
+        }
+
         set_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&set_descriptor_indexing_features);
         set_features_chain_last        = set_features_chain_last->pNext;
-        if (set_descriptor_indexing_features.descriptorBindingSampledImageUpdateAfterBind == VK_TRUE) {
-            log_debug->debug("Enabled feature descriptorBindingSampledImageUpdateAfterBind");
-        }
-        if (set_descriptor_indexing_features.descriptorBindingPartiallyBound == VK_TRUE) {
-            log_debug->debug("Enabled feature descriptorBindingPartiallyBound");
-        }
-        if (set_descriptor_indexing_features.descriptorBindingVariableDescriptorCount == VK_TRUE) {
-            log_debug->debug("Enabled feature descriptorBindingVariableDescriptorCount");
-        }
-        if (set_descriptor_indexing_features.runtimeDescriptorArray == VK_TRUE) {
-            log_debug->debug("Enabled feature runtimeDescriptorArray");
-        }
+        log_startup->info("  runtimeDescriptorArray                      = {}", di.runtimeDescriptorArray == VK_TRUE);
+        log_startup->info("  descriptorBindingPartiallyBound             = {}", di.descriptorBindingPartiallyBound == VK_TRUE);
+        log_startup->info("  descriptorBindingVariableDescriptorCount    = {}", di.descriptorBindingVariableDescriptorCount == VK_TRUE);
+        log_startup->info("  descriptorBindingSampledImageUpdateAfterBind = {}", di.descriptorBindingSampledImageUpdateAfterBind == VK_TRUE);
     }
 
     VkPhysicalDeviceVulkan11Features set_vulkan_11_features{
