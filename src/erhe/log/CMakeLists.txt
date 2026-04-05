@@ -22,6 +22,7 @@ target_link_libraries(${_target}
     PRIVATE
         erhe::hash
         erhe::verify
+        simdjson
 )
 
 erhe_target_settings(${_target} "erhe")

@@ -403,6 +403,12 @@ void run_hextiles()
     erhe::file::ensure_working_directory_contains("hextiles", "config");
 
     erhe::log::initialize_log_sinks();
+    {
+        std::optional<std::string> contents = erhe::file::read("logging config", erhe::log::c_logging_configuration_file_path);
+        if (contents.has_value()) {
+            erhe::log::load_log_configuration(contents.value());
+        }
+    }
 #if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
     gl::initialize_logging();
 #endif

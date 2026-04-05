@@ -90,10 +90,6 @@
 #   include "erhe_xr/xr_instance.hpp"
 #endif
 
-#include "erhe_imgui/generated/logger_entry.hpp"
-#include "erhe_imgui/generated/logger_entry_serialization.hpp"
-#include "erhe_imgui/generated/logging_config.hpp"
-#include "erhe_imgui/generated/logging_config_serialization.hpp"
 #include "erhe_commands/commands.hpp"
 #include "erhe_commands/commands_log.hpp"
 #include "erhe_dataformat/dataformat_log.hpp"
@@ -1780,13 +1776,10 @@ void run_editor()
     erhe::file::ensure_working_directory_contains("editor", "config");
 
     {
-        Logging_config log_config = erhe::codegen::load_config<Logging_config>(erhe::log::c_logging_configuration_file_path);
-        std::vector<std::pair<std::string, std::string>> levels;
-        levels.reserve(log_config.loggers.size());
-        for (const Logger_entry& entry : log_config.loggers) {
-            levels.emplace_back(entry.name, entry.level);
+        std::optional<std::string> contents = erhe::file::read("logging config", erhe::log::c_logging_configuration_file_path);
+        if (contents.has_value()) {
+            erhe::log::load_log_configuration(contents.value());
         }
-        erhe::log::configure_log_levels(levels);
     }
 
     {

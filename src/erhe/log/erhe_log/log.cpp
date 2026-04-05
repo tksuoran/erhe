@@ -2,6 +2,8 @@
 #include "erhe_log/timestamp.hpp"
 #include "erhe_verify/verify.hpp"
 
+#include <simdjson.h>
+
 #include <spdlog/sinks/base_sink.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/sinks/basic_file_sink.h>
@@ -58,6 +60,40 @@ void configure_log_levels(
             logger->set_level(from_str(pair.second));
         }
     }
+}
+
+void load_log_configuration(const std::string& json_contents)
+{
+    simdjson::ondemand::parser parser;
+    simdjson::padded_string padded{json_contents};
+    simdjson::ondemand::document doc;
+    simdjson::error_code error = parser.iterate(padded).get(doc);
+    if (error) {
+        return;
+    }
+    simdjson::ondemand::object obj;
+    error = doc.get_object().get(obj);
+    if (error) {
+        return;
+    }
+    simdjson::ondemand::array loggers;
+    error = obj["loggers"].get_array().get(loggers);
+    if (error) {
+        return;
+    }
+    std::vector<std::pair<std::string, std::string>> levels;
+    for (simdjson::ondemand::value logger_val : loggers) {
+        simdjson::ondemand::object logger_obj;
+        if (logger_val.get_object().get(logger_obj) == simdjson::SUCCESS) {
+            std::string_view name;
+            std::string_view level;
+            if (logger_obj["name"].get_string().get(name) == simdjson::SUCCESS &&
+                logger_obj["level"].get_string().get(level) == simdjson::SUCCESS) {
+                levels.emplace_back(std::string{name}, std::string{level});
+            }
+        }
+    }
+    configure_log_levels(levels);
 }
 
 void console_init()

@@ -20,6 +20,10 @@ void initialize_log_sinks();
 void log_to_console();
 void configure_log_levels(const std::vector<std::pair<std::string, std::string>>& name_level_pairs);
 
+// Parse JSON string with {"loggers":[{"name":"...","level":"..."},...]} and apply log levels.
+// The caller is responsible for reading the file contents (e.g. via erhe::file::read()).
+void load_log_configuration(const std::string& json_contents);
+
 // creates and configures logger
 auto make_logger(const std::string& name, bool tail = true) -> std::shared_ptr<spdlog::logger>;
 auto make_frame_logger(const std::string& name) -> std::shared_ptr<spdlog::logger>;

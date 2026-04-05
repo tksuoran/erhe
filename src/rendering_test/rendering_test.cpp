@@ -67,7 +67,7 @@
 #include "erhe_scene_renderer/content_wide_line_renderer.hpp"
 
 #include <fmt/format.h>
-#include <simdjson.h>
+
 
 #include <atomic>
 #include <thread>
@@ -1261,38 +1261,10 @@ void run_rendering_test()
     erhe::file::ensure_working_directory_contains("rendering_test", "config");
 
     erhe::log::initialize_log_sinks();
-
-    // Load logging configuration from logging.json
     {
-        std::optional<std::string> contents = erhe::file::read("logging config", "logging.json");
+        std::optional<std::string> contents = erhe::file::read("logging config", erhe::log::c_logging_configuration_file_path);
         if (contents.has_value()) {
-            simdjson::ondemand::parser parser;
-            simdjson::padded_string padded{contents.value()};
-            simdjson::ondemand::document doc;
-            simdjson::error_code error = parser.iterate(padded).get(doc);
-            if (!error) {
-                simdjson::ondemand::object obj;
-                error = doc.get_object().get(obj);
-                if (!error) {
-                    simdjson::ondemand::array loggers;
-                    error = obj["loggers"].get_array().get(loggers);
-                    if (!error) {
-                        std::vector<std::pair<std::string, std::string>> levels;
-                        for (simdjson::ondemand::value logger_val : loggers) {
-                            simdjson::ondemand::object logger_obj;
-                            if (logger_val.get_object().get(logger_obj) == simdjson::SUCCESS) {
-                                std::string_view name;
-                                std::string_view level;
-                                if (logger_obj["name"].get_string().get(name) == simdjson::SUCCESS &&
-                                    logger_obj["level"].get_string().get(level) == simdjson::SUCCESS) {
-                                    levels.emplace_back(std::string{name}, std::string{level});
-                                }
-                            }
-                        }
-                        erhe::log::configure_log_levels(levels);
-                    }
-                }
-            }
+            erhe::log::load_log_configuration(contents.value());
         }
     }
 

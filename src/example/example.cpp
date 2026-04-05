@@ -547,6 +547,12 @@ void run_example()
     erhe::file::ensure_working_directory_contains("example", "config");
 
     erhe::log::initialize_log_sinks();
+    {
+        std::optional<std::string> contents = erhe::file::read("logging config", erhe::log::c_logging_configuration_file_path);
+        if (contents.has_value()) {
+            erhe::log::load_log_configuration(contents.value());
+        }
+    }
 
     example::initialize_logging();
 #if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
