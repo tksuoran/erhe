@@ -200,7 +200,10 @@ Render_pass_impl::Render_pass_impl(Device& device, const Render_pass_descriptor&
         bool                                 has_depth_stencil = false;
         uint32_t                             attachment_index  = 0;
 
-        // Color attachments
+        // Color attachments (and resolve attachments)
+        std::vector<VkAttachmentReference> resolve_attachment_references;
+        bool has_resolve = false;
+
         for (std::size_t i = 0; i < m_color_attachments.size(); ++i) {
             const Render_pass_attachment_descriptor& att = m_color_attachments[i];
             if (!att.is_defined()) {
@@ -218,7 +221,7 @@ Render_pass_impl::Render_pass_impl(Device& device, const Render_pass_descriptor&
                 .stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
                 .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
                 .initialLayout  = (att.load_action == Load_action::Load) ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL : VK_IMAGE_LAYOUT_UNDEFINED,
-                .finalLayout    = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+                .finalLayout    = (att.resolve_texture != nullptr) ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
             });
 
             color_attachment_references.push_back(VkAttachmentReference{
@@ -226,7 +229,6 @@ Render_pass_impl::Render_pass_impl(Device& device, const Render_pass_descriptor&
                 .layout     = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
             });
 
-            // Framebuffer attachments require single mip level views
             VkImageView view = const_cast<Texture_impl&>(att.texture->get_impl()).get_vk_image_view(
                 VK_IMAGE_ASPECT_COLOR_BIT,
                 static_cast<uint32_t>(att.texture_layer),
@@ -236,7 +238,6 @@ Render_pass_impl::Render_pass_impl(Device& device, const Render_pass_descriptor&
             );
             image_views.push_back(view);
 
-            // Clear values
             VkClearValue clear_value{};
             clear_value.color = VkClearColorValue{
                 .float32 = {
@@ -249,6 +250,38 @@ Render_pass_impl::Render_pass_impl(Device& device, const Render_pass_descriptor&
             m_clear_values.push_back(clear_value);
 
             ++attachment_index;
+
+            // Resolve attachment
+            if (att.resolve_texture != nullptr) {
+                has_resolve = true;
+                VkFormat resolve_format = to_vulkan(att.resolve_texture->get_pixelformat());
+                attachment_descriptions.push_back(VkAttachmentDescription{
+                    .flags          = 0,
+                    .format         = resolve_format,
+                    .samples        = VK_SAMPLE_COUNT_1_BIT,
+                    .loadOp         = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                    .storeOp        = VK_ATTACHMENT_STORE_OP_STORE,
+                    .stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                    .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+                    .initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED,
+                    .finalLayout    = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+                });
+                resolve_attachment_references.push_back(VkAttachmentReference{
+                    .attachment = attachment_index,
+                    .layout     = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+                });
+                VkImageView resolve_view = const_cast<Texture_impl&>(att.resolve_texture->get_impl()).get_vk_image_view(
+                    VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1
+                );
+                image_views.push_back(resolve_view);
+                m_clear_values.push_back(VkClearValue{}); // resolve doesn't use clear
+                ++attachment_index;
+            } else {
+                resolve_attachment_references.push_back(VkAttachmentReference{
+                    .attachment = VK_ATTACHMENT_UNUSED,
+                    .layout     = VK_IMAGE_LAYOUT_UNDEFINED
+                });
+            }
         }
 
         // Depth attachment
@@ -305,7 +338,7 @@ Render_pass_impl::Render_pass_impl(Device& device, const Render_pass_descriptor&
             .pInputAttachments       = nullptr,
             .colorAttachmentCount    = static_cast<uint32_t>(color_attachment_references.size()),
             .pColorAttachments       = color_attachment_references.empty() ? nullptr : color_attachment_references.data(),
-            .pResolveAttachments     = nullptr,
+            .pResolveAttachments     = has_resolve ? resolve_attachment_references.data() : nullptr,
             .pDepthStencilAttachment = has_depth_stencil ? &depth_stencil_reference : nullptr,
             .preserveAttachmentCount = 0,
             .pPreserveAttachments    = nullptr
