@@ -1,4 +1,5 @@
 #include "erhe_graphics/compute_command_encoder.hpp"
+#include "erhe_graphics/vulkan/vulkan_immediate_commands.hpp"
 
 #include "volk.h"
 
@@ -23,9 +24,14 @@ public:
     void dispatch_compute          (std::uintptr_t x_size, std::uintptr_t y_size, std::uintptr_t z_size);
 
 private:
-    Device&                      m_device;
-    const Bind_group_layout*     m_bind_group_layout{nullptr};
-    VkPipelineLayout             m_pipeline_layout  {VK_NULL_HANDLE};
+    auto get_command_buffer() -> VkCommandBuffer;
+
+    Device&                                                    m_device;
+    const Bind_group_layout*                                   m_bind_group_layout       {nullptr};
+    VkPipelineLayout                                           m_pipeline_layout         {VK_NULL_HANDLE};
+    bool                                                       m_owns_command_buffer     {false};
+    VkCommandBuffer                                            m_command_buffer          {VK_NULL_HANDLE};
+    const Vulkan_immediate_commands::Command_buffer_wrapper*   m_command_buffer_wrapper  {nullptr};
 };
 
 } // namespace erhe::graphics
