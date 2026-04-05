@@ -382,15 +382,22 @@ void Render_command_encoder_impl::set_render_pipeline_state(
         .lineWidth               = 1.0f
     };
 
+    VkSampleCountFlagBits sample_count_flags = VK_SAMPLE_COUNT_1_BIT;
+    {
+        const Render_pass_impl* active_render_pass = Render_pass_impl::get_active_render_pass_impl();
+        if (active_render_pass != nullptr) {
+            sample_count_flags = get_vulkan_sample_count(active_render_pass->get_sample_count());
+        }
+    }
     const VkPipelineMultisampleStateCreateInfo multisample_state{
         .sType                 = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
         .pNext                 = nullptr,
         .flags                 = 0,
-        .rasterizationSamples  = VK_SAMPLE_COUNT_1_BIT,
+        .rasterizationSamples  = sample_count_flags,
         .sampleShadingEnable   = data.multisample.sample_shading_enable ? VK_TRUE : VK_FALSE,
         .minSampleShading      = data.multisample.min_sample_shading,
         .pSampleMask           = nullptr,
-        .alphaToCoverageEnable = VK_FALSE,
+        .alphaToCoverageEnable = data.multisample.alpha_to_coverage_enable ? VK_TRUE : VK_FALSE,
         .alphaToOneEnable      = VK_FALSE
     };
 
@@ -499,6 +506,7 @@ void Render_command_encoder_impl::set_render_pipeline_state(
         hash_combine(hash, static_cast<std::size_t>(color_write_mask));
         hash_combine(hash, static_cast<std::size_t>(data.multisample.sample_shading_enable));
         hash_combine(hash, static_cast<std::size_t>(data.multisample.alpha_to_coverage_enable));
+        hash_combine(hash, static_cast<std::size_t>(sample_count_flags));
         hash_combine(hash, reinterpret_cast<std::size_t>(Render_pass_impl::get_active_render_pass()));
         // Include vertex input in hash
         if (data.vertex_input != nullptr) {

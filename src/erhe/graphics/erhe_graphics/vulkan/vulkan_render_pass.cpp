@@ -430,7 +430,20 @@ void Render_pass_impl::create()
 
 auto Render_pass_impl::get_sample_count() const -> unsigned int
 {
-    // TODO Read sample count from attachment textures or swapchain
+    for (const Render_pass_attachment_descriptor& att : m_color_attachments) {
+        if (att.is_defined() && (att.texture != nullptr)) {
+            const int sample_count = att.texture->get_sample_count();
+            if (sample_count > 0) {
+                return static_cast<unsigned int>(sample_count);
+            }
+        }
+    }
+    if (m_depth_attachment.is_defined() && (m_depth_attachment.texture != nullptr)) {
+        const int sample_count = m_depth_attachment.texture->get_sample_count();
+        if (sample_count > 0) {
+            return static_cast<unsigned int>(sample_count);
+        }
+    }
     return 1;
 }
 
