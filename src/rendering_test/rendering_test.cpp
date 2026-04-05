@@ -809,7 +809,7 @@ private:
     void make_quad_pipeline()
     {
         const std::filesystem::path shader_path{"res/shaders"};
-        const bool bindless = m_graphics_device.get_info().uses_bindless_texture();
+        const bool uses_sampler_array = m_graphics_device.get_info().uses_sampler_array_in_set_0();
 
         m_test_bind_group_layout = std::make_unique<erhe::graphics::Bind_group_layout>(
             m_graphics_device,
@@ -826,7 +826,7 @@ private:
         m_quad_uv_max         = m_quad_block->add_vec2("uv_max");       // offset 16, size 8
         m_quad_padding        = m_quad_block->add_vec2("padding");      // offset 24, size 8 -> total 32 = 2 x vec4
 
-        if (!bindless) {
+        if (uses_sampler_array) {
             m_quad_default_uniform_block = std::make_unique<erhe::graphics::Shader_resource>(m_graphics_device);
             m_quad_default_uniform_block->add_sampler(
                 "s_textures",
@@ -839,7 +839,7 @@ private:
             .name                  = "textured_quad",
             .interface_blocks      = { m_quad_block.get() },
             .fragment_outputs      = &m_quad_fragment_outputs,
-            .default_uniform_block = bindless ? nullptr : m_quad_default_uniform_block.get(),
+            .default_uniform_block = uses_sampler_array ? m_quad_default_uniform_block.get() : nullptr,
             .shaders = {
                 { erhe::graphics::Shader_type::vertex_shader,   shader_path / "textured_quad.vert" },
                 { erhe::graphics::Shader_type::fragment_shader, shader_path / "textured_quad.frag" }
@@ -940,7 +940,7 @@ private:
     void make_multi_texture_pipeline()
     {
         const std::filesystem::path shader_path{"res/shaders"};
-        const bool bindless = m_graphics_device.get_info().uses_bindless_texture();
+        const bool uses_sampler_array = m_graphics_device.get_info().uses_sampler_array_in_set_0();
 
         m_multi_tex_block = std::make_unique<erhe::graphics::Shader_resource>(
             m_graphics_device, "multi_tex", 0, erhe::graphics::Shader_resource::Type::uniform_block
@@ -952,7 +952,7 @@ private:
         m_multi_tex_padding0 = m_multi_tex_block->add_uint ("padding0");         // offset 28, size  4
                                                                                   // total  32 = 2 x vec4
 
-        if (!bindless) {
+        if (uses_sampler_array) {
             m_multi_tex_default_uniform_block = std::make_unique<erhe::graphics::Shader_resource>(m_graphics_device);
             m_multi_tex_default_uniform_block->add_sampler(
                 "s_textures",
@@ -965,7 +965,7 @@ private:
             .name                  = "multi_texture_test",
             .interface_blocks      = { m_multi_tex_block.get() },
             .fragment_outputs      = &m_quad_fragment_outputs,
-            .default_uniform_block = bindless ? nullptr : m_multi_tex_default_uniform_block.get(),
+            .default_uniform_block = uses_sampler_array ? m_multi_tex_default_uniform_block.get() : nullptr,
             .shaders = {
                 { erhe::graphics::Shader_type::vertex_shader,   shader_path / "multi_texture_test.vert" },
                 { erhe::graphics::Shader_type::fragment_shader, shader_path / "multi_texture_test.frag" }
@@ -1048,9 +1048,9 @@ private:
     void make_separate_samplers_pipeline()
     {
         const std::filesystem::path shader_path{"res/shaders"};
-        const bool bindless = m_graphics_device.get_info().uses_bindless_texture();
+        const bool uses_sampler_array = m_graphics_device.get_info().uses_sampler_array_in_set_0();
 
-        // Uniform block with texture handles (for bindless) and count
+        // Uniform block with texture handles and count
         m_sep_tex_block = std::make_unique<erhe::graphics::Shader_resource>(
             m_graphics_device, "separate_tex", 0, erhe::graphics::Shader_resource::Type::uniform_block
         );
@@ -1061,8 +1061,8 @@ private:
         m_sep_tex_padding0 = m_sep_tex_block->add_uint ("padding0");         // offset 28, size  4
                                                                               // total  32 = 2 x vec4
 
-        // Non-bindless: 3 SEPARATE samplers at different bindings (like post-processing)
-        if (!bindless) {
+        // Sampler array path: 3 SEPARATE samplers at different bindings (like post-processing)
+        if (uses_sampler_array) {
             m_sep_tex_default_uniform_block = std::make_unique<erhe::graphics::Shader_resource>(m_graphics_device);
             m_sep_tex_default_uniform_block->add_sampler("s_tex0", erhe::graphics::Glsl_type::sampler_2d, 0);
             m_sep_tex_default_uniform_block->add_sampler("s_tex1", erhe::graphics::Glsl_type::sampler_2d, 1);
@@ -1073,7 +1073,7 @@ private:
             .name                  = "separate_samplers_test",
             .interface_blocks      = { m_sep_tex_block.get() },
             .fragment_outputs      = &m_quad_fragment_outputs,
-            .default_uniform_block = bindless ? nullptr : m_sep_tex_default_uniform_block.get(),
+            .default_uniform_block = uses_sampler_array ? m_sep_tex_default_uniform_block.get() : nullptr,
             .shaders = {
                 { erhe::graphics::Shader_type::vertex_shader,   shader_path / "multi_texture_test.vert" },
                 { erhe::graphics::Shader_type::fragment_shader, shader_path / "separate_samplers_test.frag" }
