@@ -2,8 +2,8 @@
 
 namespace erhe::graphics {
 
-Blit_command_encoder_impl::Blit_command_encoder_impl(Device& device)
-    : Command_encoder_impl{device}
+Blit_command_encoder_impl::Blit_command_encoder_impl(Device& device, Command_buffer& command_buffer)
+    : Command_encoder_impl{device, command_buffer}
 {
 }
 

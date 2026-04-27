@@ -23,6 +23,7 @@
 
 #include "erhe_commands/command.hpp"
 #include "erhe_commands/commands.hpp"
+#include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/render_pipeline.hpp"
 #include "erhe_graphics/scoped_debug_group.hpp"
@@ -343,8 +344,10 @@ auto App_rendering::create_shadow_node_for_scene_view(
     const int   resolution    = preset.shadow_enable ? preset.shadow_resolution  : 1;
     const int   light_count   = preset.shadow_enable ? preset.shadow_light_count : 1;
     const bool  reverse_depth = preset.reverse_depth && can_reverse;
+    ERHE_VERIFY(m_context.current_command_buffer != nullptr);
     auto shadow_render_node = std::make_shared<Shadow_render_node>(
         graphics_device,
+        *m_context.current_command_buffer,
         rendergraph,
         m_context,
         scene_view,
@@ -365,8 +368,9 @@ void App_rendering::handle_graphics_settings_changed(Graphics_preset_entry* grap
     const int   light_count   = (graphics_preset != nullptr) && graphics_preset->shadow_enable ? graphics_preset->shadow_light_count : 1;
     const bool  reverse_depth = (graphics_preset != nullptr) && (graphics_preset->reverse_depth && can_reverse);
 
+    ERHE_VERIFY(m_context.current_command_buffer != nullptr);
     for (const auto& node : m_all_shadow_render_nodes) {
-        node->reconfigure(*m_context.graphics_device, resolution, light_count, graphics_preset->shadow_depth_bits, reverse_depth);
+        node->reconfigure(*m_context.graphics_device, *m_context.current_command_buffer, resolution, light_count, graphics_preset->shadow_depth_bits, reverse_depth);
     }
 
     if (graphics_preset != nullptr) {
@@ -1052,8 +1056,10 @@ void App_rendering::render_id(const Render_context& context)
     const Scene_layers& tool_layers = tool_scene_root->layers();
 
     // TODO listen to viewport changes in msg bus?
+    ERHE_VERIFY(context.command_buffer != nullptr);
     m_context.id_renderer->render(
         Id_renderer::Render_parameters{
+            .command_buffer     = *context.command_buffer,
             .viewport           = context.viewport,
             .camera             = *context.camera,
             .content_mesh_spans = { layers.content()->meshes, layers.rendertarget()->meshes },

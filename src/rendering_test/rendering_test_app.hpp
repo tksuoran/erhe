@@ -7,6 +7,7 @@
 #include "erhe_dataformat/vertex_format.hpp"
 #include "erhe_gltf/image_transfer.hpp"
 #include "erhe_graphics/bind_group_layout.hpp"
+#include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/compute_pipeline_state.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/fragment_outputs.hpp"
@@ -67,12 +68,12 @@ public:
     auto on_key_event          (const erhe::window::Input_event& input_event) -> bool override;
 
     // Per-frame orchestration (rendering_test.cpp)
-    void tick();
+    void tick(erhe::graphics::Command_buffer& command_buffer);
 
     // Setup helpers (rendering_test_setup.cpp)
     void print_conventions();
-    void create_test_scene();
-    void create_test_textures();
+    void create_test_scene    (erhe::graphics::Command_buffer& init_command_buffer);
+    void create_test_textures (erhe::graphics::Command_buffer& init_command_buffer);
     void update_swapchain_render_pass(int width, int height);
     void update_msaa_depth_render_pass(int width, int height);
     void update_texture_render_pass(int width, int height);
@@ -83,6 +84,7 @@ public:
     [[nodiscard]] auto has_subtest        (std::string_view name) const -> bool;
     void               dispatch_subtest(
         std::string_view                                        name,
+        erhe::graphics::Command_buffer&                         command_buffer,
         erhe::graphics::Render_command_encoder&                 encoder,
         const erhe::math::Viewport&                             viewport,
         const std::vector<std::shared_ptr<erhe::scene::Light>>& lights,
@@ -175,6 +177,7 @@ public:
     erhe::window::Context_window                                m_window;
     erhe::graphics::Device                                      m_graphics_device;
     bool                                                        m_error_callback_set;
+    erhe::graphics::Command_buffer&                             m_init_command_buffer;
     erhe::gltf::Image_transfer                                  m_image_transfer;
     erhe::dataformat::Vertex_format                             m_vertex_format;
     erhe::scene_renderer::Mesh_memory                           m_mesh_memory;

@@ -75,7 +75,7 @@ void Rendergraph::sort()
     m_is_sorted = true;
 }
 
-void Rendergraph::execute()
+void Rendergraph::execute(erhe::graphics::Command_buffer& command_buffer)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -93,7 +93,7 @@ void Rendergraph::execute()
         if (node->is_enabled()) {
             SPDLOG_LOGGER_TRACE(log_frame, "Execute render graph node '{}'", node->get_name());
             erhe::graphics::Scoped_debug_group node_scope{node->get_debug_label()};
-            node->execute_rendergraph_node();
+            node->execute_rendergraph_node(command_buffer);
         }
     }
 

@@ -19,6 +19,7 @@
 #include <memory>
 
 namespace erhe::graphics {
+    class Command_buffer;
     class Gl_context_provider;
     class Device;
     class OpenGL_state_tracker;
@@ -46,7 +47,12 @@ public:
     };
     Config config;
 
-    Text_renderer(erhe::graphics::Device& graphics_device, bool enabled = true, int font_size = 14);
+    Text_renderer(
+        erhe::graphics::Device&         graphics_device,
+        erhe::graphics::Command_buffer& init_command_buffer,
+        bool                            enabled   = true,
+        int                             font_size = 14
+    );
     ~Text_renderer() noexcept;
 
     Text_renderer (const Text_renderer&) = delete;

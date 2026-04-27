@@ -5,6 +5,7 @@
 #include "erhe_renderer/primitive_renderer.hpp"
 
 namespace erhe::graphics {
+    class Command_buffer;
     class Render_pass;
     class Shader_stages;
 }
@@ -29,6 +30,7 @@ public:
     [[nodiscard]] auto get_scene      () const -> const erhe::scene::Scene*;
     [[nodiscard]] auto get            (const erhe::renderer::Debug_renderer_config& config) const -> erhe::renderer::Primitive_renderer;
 
+    erhe::graphics::Command_buffer*         command_buffer{nullptr};
     erhe::graphics::Render_command_encoder* encoder{nullptr};
     erhe::graphics::Render_pass*            render_pass{nullptr};
     App_context&                            app_context;

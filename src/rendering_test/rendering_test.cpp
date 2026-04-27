@@ -12,8 +12,11 @@
 #include "erhe_graphics/generated/graphics_config_serialization.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
+#include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/scoped_debug_group.hpp"
 #include "erhe_graphics/swapchain.hpp"
+
+#include <span>
 #include "erhe_item/item_log.hpp"
 #include "erhe_log/log.hpp"
 #include "erhe_math/math_log.hpp"
@@ -76,7 +79,14 @@ Rendering_test::Rendering_test(std::string_view config_path)
             }
         ),
     true)}
-    , m_image_transfer   {m_graphics_device}
+    , m_init_command_buffer{[this]() -> erhe::graphics::Command_buffer& {
+        const bool init_wait_frame_ok = m_graphics_device.wait_frame();
+        ERHE_VERIFY(init_wait_frame_ok);
+        erhe::graphics::Command_buffer& cb = m_graphics_device.get_command_buffer(0);
+        cb.begin();
+        return cb;
+    }()}
+    , m_image_transfer   {m_graphics_device, m_init_command_buffer}
     , m_vertex_format{
         {
             0,
@@ -111,20 +121,12 @@ Rendering_test::Rendering_test(std::string_view config_path)
 
     print_conventions();
 
-    // Init-time GPU work (mesh buffer uploads in create_test_scene,
-    // Forward_renderer construction, and create_test_textures) must
-    // record into the device frame command buffer instead of falling
-    // back to immediate commands. Mirror the editor's init pattern
-    // (src/editor/editor.cpp:696-700).
-    const bool init_wait_frame_ok = m_graphics_device.wait_frame();
-    ERHE_VERIFY(init_wait_frame_ok);
-    m_graphics_device.prime_device_frame_slot();
-    const bool init_begin_frame_ok = m_graphics_device.begin_frame();
-    ERHE_VERIFY(init_begin_frame_ok);
-
-    create_test_scene();
+    // Init-time GPU work batches into m_init_command_buffer (opened in
+    // the member init list). Submit + wait happens at the bottom of
+    // the constructor body before the run loop starts.
+    create_test_scene(m_init_command_buffer);
     m_forward_renderer = std::make_unique<erhe::scene_renderer::Forward_renderer>(
-        m_graphics_device, m_program_interface
+        m_graphics_device, m_init_command_buffer, m_program_interface
     );
 
     m_last_window_width  = m_window.get_width();
@@ -157,7 +159,15 @@ Rendering_test::Rendering_test(std::string_view config_path)
     make_multi_texture_pipeline();
     make_separate_samplers_pipeline();
     make_depth_visualize_pipeline();
-    create_test_textures();
+    create_test_textures(m_init_command_buffer);
+
+    // Close + submit the init cb and block until the GPU is done so
+    // every recorded upload / clear / pipeline barrier is visible
+    // before the main render loop starts.
+    m_init_command_buffer.end();
+    erhe::graphics::Command_buffer* init_cbs[] = { &m_init_command_buffer };
+    m_graphics_device.submit_command_buffers(std::span<erhe::graphics::Command_buffer* const>{init_cbs});
+    m_graphics_device.wait_idle();
 
     const bool init_end_frame_ok = m_graphics_device.end_frame();
     ERHE_VERIFY(init_end_frame_ok);
@@ -187,11 +197,8 @@ auto Rendering_test::on_key_event(const erhe::window::Input_event& input_event) 
 void Rendering_test::run()
 {
     while (!m_close_requested) {
-        erhe::graphics::Frame_state frame_state{};
         const bool wait_ok = m_graphics_device.wait_frame();
         ERHE_VERIFY(wait_ok);
-        const bool wait_swap_ok = m_graphics_device.wait_swapchain_frame(frame_state);
-        ERHE_VERIFY(wait_swap_ok);
 
         m_window.poll_events();
 
@@ -214,18 +221,30 @@ void Rendering_test::run()
         };
         m_request_resize_pending.store(false);
 
-        const bool begin_frame_ok = m_graphics_device.begin_frame(frame_begin_info);
-        ERHE_VERIFY(begin_frame_ok);
+        // hello_swap-style cb-driven tick.
+        erhe::graphics::Command_buffer& command_buffer = m_graphics_device.get_command_buffer(0);
+        erhe::graphics::Frame_state frame_state{};
+        const bool wait_swap_ok  = command_buffer.wait_for_swapchain(frame_state);
+        const bool should_render = wait_swap_ok && command_buffer.begin_swapchain(frame_begin_info, frame_state);
 
-        m_in_tick.store(true);
-        tick();
-        m_in_tick.store(false);
-        m_first_frame_rendered = true;
+        if (should_render) {
+            command_buffer.begin();
+            m_in_tick.store(true);
+            tick(command_buffer);
+            m_in_tick.store(false);
+            m_first_frame_rendered = true;
+            command_buffer.end();
 
-        const erhe::graphics::Frame_end_info frame_end_info{
-            .requested_display_time = 0
-        };
-        const bool end_frame_ok = m_graphics_device.end_frame(frame_end_info);
+            const erhe::graphics::Frame_end_info frame_end_info{
+                .requested_display_time = 0
+            };
+            command_buffer.end_swapchain(frame_end_info);
+
+            erhe::graphics::Command_buffer* cbs[] = { &command_buffer };
+            m_graphics_device.submit_command_buffers(std::span<erhe::graphics::Command_buffer* const>{cbs});
+        }
+
+        const bool end_frame_ok = m_graphics_device.end_frame();
         ERHE_VERIFY(end_frame_ok);
     }
 }
@@ -236,12 +255,14 @@ void Rendering_test::run()
 // definitions/rendering_test_settings.py.
 void Rendering_test::dispatch_subtest(
     std::string_view                                        name,
+    erhe::graphics::Command_buffer&                         command_buffer,
     erhe::graphics::Render_command_encoder&                 encoder,
     const erhe::math::Viewport&                             viewport,
     const std::vector<std::shared_ptr<erhe::scene::Light>>& lights,
     const std::vector<std::shared_ptr<erhe::scene::Mesh>>&  meshes
 )
 {
+    static_cast<void>(command_buffer);
     if (name.empty()) {
         return;
     }
@@ -624,7 +645,7 @@ void Rendering_test::dispatch_subtest(
     }
 }
 
-void Rendering_test::tick()
+void Rendering_test::tick(erhe::graphics::Command_buffer& command_buffer)
 {
     const int full_width  = m_window.get_width();
     const int full_height = m_window.get_height();
@@ -658,16 +679,16 @@ void Rendering_test::tick()
     // --- Pass 1: render 3D scene to texture (consumed by "rtt" subtest) ---
     if (has_subtest("rtt")) {
         update_texture_render_pass(ref_tile.width, ref_tile.height);
-        erhe::graphics::Render_command_encoder encoder = m_graphics_device.make_render_command_encoder();
-        erhe::graphics::Scoped_render_pass scoped_render_pass{*m_texture_render_pass.get()};
+        erhe::graphics::Render_command_encoder encoder = m_graphics_device.make_render_command_encoder(command_buffer);
+        erhe::graphics::Scoped_render_pass scoped_render_pass{*m_texture_render_pass.get(), command_buffer};
         render_scene(encoder, erhe::math::Viewport{0, 0, ref_tile.width, ref_tile.height}, lights, meshes, m_texture_render_pass.get());
     }
 
     // --- Pass 1b: MSAA depth resolve prepass (consumed by "msaa_depth" subtest) ---
     if (has_subtest("msaa_depth")) {
         update_msaa_depth_render_pass(ref_tile.width, ref_tile.height);
-        erhe::graphics::Render_command_encoder encoder = m_graphics_device.make_render_command_encoder();
-        erhe::graphics::Scoped_render_pass scoped_render_pass{*m_msaa_depth_render_pass.get()};
+        erhe::graphics::Render_command_encoder encoder = m_graphics_device.make_render_command_encoder(command_buffer);
+        erhe::graphics::Scoped_render_pass scoped_render_pass{*m_msaa_depth_render_pass.get(), command_buffer};
         render_scene(encoder, erhe::math::Viewport{0, 0, ref_tile.width, ref_tile.height}, lights, meshes, m_msaa_depth_render_pass.get());
     }
 
@@ -692,7 +713,7 @@ void Rendering_test::tick()
     // Minimal-compute-triangle dispatch. Independent of the wide-line
     // renderer; runs in its own compute encoder scope.
     if (compute_minimal_triangle) {
-        erhe::graphics::Compute_command_encoder compute_encoder = m_graphics_device.make_compute_command_encoder();
+        erhe::graphics::Compute_command_encoder compute_encoder = m_graphics_device.make_compute_command_encoder(command_buffer);
         dispatch_minimal_compute_triangle(compute_encoder);
     }
 
@@ -710,7 +731,7 @@ void Rendering_test::tick()
             );
         }
         {
-            erhe::graphics::Compute_command_encoder compute_encoder = m_graphics_device.make_compute_command_encoder();
+            erhe::graphics::Compute_command_encoder compute_encoder = m_graphics_device.make_compute_command_encoder(command_buffer);
             const bool reverse_depth = (conventions.native_depth_range == erhe::math::Depth_range::zero_to_one);
             m_content_wide_line_renderer->compute(
                 compute_encoder, ref_tile, *m_camera.get(),
@@ -721,7 +742,7 @@ void Rendering_test::tick()
         }
         // Compute -> vertex-attribute barrier; must be emitted after the
         // compute encoder scope ends.
-        m_graphics_device.memory_barrier(
+        command_buffer.memory_barrier(
             erhe::graphics::Memory_barrier_mask::vertex_attrib_array_barrier_bit
         );
     }
@@ -729,7 +750,7 @@ void Rendering_test::tick()
     // Minimal-compute-triangle uses its own compute encoder (above);
     // emit its compute -> vertex-attribute barrier here too.
     if (compute_minimal_triangle) {
-        m_graphics_device.memory_barrier(
+        command_buffer.memory_barrier(
             erhe::graphics::Memory_barrier_mask::vertex_attrib_array_barrier_bit
         );
     }
@@ -737,14 +758,14 @@ void Rendering_test::tick()
     // --- Pass 2: swapchain pass (drive subtests via the cells[] layout) ---
     update_swapchain_render_pass(full_width, full_height);
     {
-        erhe::graphics::Render_command_encoder encoder = m_graphics_device.make_render_command_encoder();
-        erhe::graphics::Scoped_render_pass scoped_render_pass{*m_swapchain_render_pass.get()};
+        erhe::graphics::Render_command_encoder encoder = m_graphics_device.make_render_command_encoder(command_buffer);
+        erhe::graphics::Scoped_render_pass scoped_render_pass{*m_swapchain_render_pass.get(), command_buffer};
 
         if (is_fullscreen_mode()) {
             const std::string_view name = get_subtest_at(m_settings.fullscreen_cell_col, m_settings.fullscreen_cell_row);
             const erhe::math::Viewport fw{0, 0, full_width, full_height};
             erhe::graphics::Scoped_debug_group scope{"Fullscreen subtest"};
-            dispatch_subtest(name, encoder, fw, lights, meshes);
+            dispatch_subtest(name, command_buffer, encoder, fw, lights, meshes);
         } else if (is_replicate_mode()) {
             const std::string_view name = get_subtest_at(m_settings.replicate_cell_col, m_settings.replicate_cell_row);
             const int cols = m_settings.cols;
@@ -753,7 +774,7 @@ void Rendering_test::tick()
                 for (int c = 0; c < cols; ++c) {
                     const erhe::math::Viewport tile = get_grid_tile_viewport(c, r);
                     erhe::graphics::Scoped_debug_group scope{"Replicated subtest"};
-                    dispatch_subtest(name, encoder, tile, lights, meshes);
+                    dispatch_subtest(name, command_buffer, encoder, tile, lights, meshes);
                 }
             }
         } else {
@@ -767,7 +788,7 @@ void Rendering_test::tick()
                     }
                     const erhe::math::Viewport tile = get_grid_tile_viewport(c, r);
                     erhe::graphics::Scoped_debug_group scope{"Grid subtest"};
-                    dispatch_subtest(name, encoder, tile, lights, meshes);
+                    dispatch_subtest(name, command_buffer, encoder, tile, lights, meshes);
                 }
             }
         }

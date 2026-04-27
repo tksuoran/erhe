@@ -61,7 +61,12 @@ auto Text_renderer::build_shader_stages() -> erhe::graphics::Shader_stages_proto
     return prototype;
 }
 
-Text_renderer::Text_renderer(erhe::graphics::Device& graphics_device, const bool enabled, const int font_size)
+Text_renderer::Text_renderer(
+    erhe::graphics::Device&         graphics_device,
+    erhe::graphics::Command_buffer& init_command_buffer,
+    const bool                      enabled,
+    const int                       font_size
+)
     : m_graphics_device          {graphics_device}
     , m_projection_block         {graphics_device, "projection", 0, erhe::graphics::Shader_resource::Type::uniform_block}
     , m_vertex_ssbo_block{
@@ -201,6 +206,7 @@ Text_renderer::Text_renderer(erhe::graphics::Device& graphics_device, const bool
     // Init font
     m_font = std::make_unique<erhe::ui::Font>(
         m_graphics_device,
+        init_command_buffer,
         "res/fonts/SourceSansPro-Regular.otf",
         config.font_size,
         0.0f // TODO reimplement outline better 1.0f
@@ -340,7 +346,7 @@ void Text_renderer::render(erhe::graphics::Render_command_encoder& encoder, cons
         return;
     }
     encoder.set_render_pipeline(*pipeline);
-    m_texture_heap->bind();
+    m_texture_heap->bind(encoder);
     // Bind the named scalar samplers explicitly. On Metal these are direct
     // [[texture(N)]] bindings; on Vulkan they are pushed via push descriptors.
     // The texture heap above still populates the bindless slots used by the

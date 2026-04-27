@@ -2,6 +2,9 @@
 
 #include "erhe_imgui/imgui_host.hpp"
 
+namespace erhe::graphics {
+    class Command_buffer;
+}
 namespace erhe::imgui {
     class Imgui_renderer;
     class Imgui_window;
@@ -43,7 +46,7 @@ public:
     void stop_text_input    ()                            override;
 
     // Implements Rendergraph_node
-    void execute_rendergraph_node() override;
+    void execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer) override;
 
     // Implements Input_event_handler
 #if defined(ERHE_XR_LIBRARY_OPENXR)

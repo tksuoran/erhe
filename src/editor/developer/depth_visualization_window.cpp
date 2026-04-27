@@ -16,6 +16,8 @@
 #include "erhe_imgui/window_imgui_host.hpp"
 #include "erhe_rendergraph/rendergraph.hpp"
 #include "erhe_rendergraph/texture_rendergraph_node.hpp"
+#include "erhe_graphics/command_buffer.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/scoped_debug_group.hpp"
@@ -65,7 +67,7 @@ Depth_to_color_rendergraph_node::Depth_to_color_rendergraph_node(
 }
 
 // Implements erhe::rendergraph::Rendergraph_node
-void Depth_to_color_rendergraph_node::execute_rendergraph_node()
+void Depth_to_color_rendergraph_node::execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer)
 {
     SPDLOG_LOGGER_TRACE(log_render, "Depth_to_color_rendergraph_node::execute_rendergraph_node()");
 
@@ -132,8 +134,8 @@ void Depth_to_color_rendergraph_node::execute_rendergraph_node()
     }
 
     erhe::graphics::Device& graphics_device = m_rendergraph.get_graphics_device();
-    erhe::graphics::Render_command_encoder render_encoder = graphics_device.make_render_command_encoder();
-    erhe::graphics::Scoped_render_pass scoped_render_pass{*render_pass};
+    erhe::graphics::Render_command_encoder render_encoder = graphics_device.make_render_command_encoder(command_buffer);
+    erhe::graphics::Scoped_render_pass scoped_render_pass{*render_pass, command_buffer};
 
     const auto& light_projection_transforms = light_projections.light_projection_transforms.at(m_light_index);
     const auto& layers = scene_root->layers();

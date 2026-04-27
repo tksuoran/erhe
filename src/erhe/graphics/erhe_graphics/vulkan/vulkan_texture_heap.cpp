@@ -2,11 +2,15 @@
 
 #include "erhe_graphics/vulkan/vulkan_texture_heap.hpp"
 #include "erhe_graphics/vulkan/vulkan_bind_group_layout.hpp"
+#include "erhe_graphics/vulkan/vulkan_command_buffer.hpp"
 #include "erhe_graphics/vulkan/vulkan_device.hpp"
+#include "erhe_graphics/vulkan/vulkan_render_command_encoder.hpp"
 #include "erhe_graphics/vulkan/vulkan_render_pass.hpp"
 #include "erhe_graphics/vulkan/vulkan_sampler.hpp"
 #include "erhe_graphics/vulkan/vulkan_texture.hpp"
+#include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/graphics_log.hpp"
+#include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_dataformat/dataformat.hpp"
 #include "erhe_verify/verify.hpp"
@@ -285,13 +289,13 @@ void Texture_heap_impl::unbind()
     // No-op for descriptor sets
 }
 
-auto Texture_heap_impl::bind() -> std::size_t
+auto Texture_heap_impl::bind(Render_command_encoder& encoder) -> std::size_t
 {
     if (m_descriptor_set == VK_NULL_HANDLE) {
         return 0;
     }
 
-    VkCommandBuffer command_buffer = Device_impl::get_device_impl()->get_active_command_buffer();
+    const VkCommandBuffer command_buffer = encoder.get_command_buffer().get_impl().get_vulkan_command_buffer();
     if (command_buffer == VK_NULL_HANDLE) {
         return 0;
     }

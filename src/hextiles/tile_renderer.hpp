@@ -27,6 +27,7 @@
 
 namespace erhe::graphics{
     class Buffer;
+    class Command_buffer;
     class Render_pass;
     class Sampler;
     class Shader_resource;
@@ -46,9 +47,10 @@ class Tile_renderer
 {
 public:
     Tile_renderer(
-        erhe::graphics::Device&      graphics_device,
-        erhe::imgui::Imgui_renderer& imgui_renderer,
-        Tiles&                       tiles
+        erhe::graphics::Device&         graphics_device,
+        erhe::graphics::Command_buffer& init_command_buffer,
+        erhe::imgui::Imgui_renderer&    imgui_renderer,
+        Tiles&                          tiles
     );
 
     // Public API
@@ -110,7 +112,7 @@ private:
     };
     //std::vector<Player_unit_colors> players_colors;
 
-    void compose_tileset_texture();
+    void compose_tileset_texture(erhe::graphics::Command_buffer& command_buffer);
     void compose_multiple_unit_tile
     (
         Image&                                  scratch,

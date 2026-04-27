@@ -593,10 +593,12 @@ auto Render_pass_impl::get_debug_label() const -> erhe::utility::Debug_label
     return m_debug_label;
 }
 
-void Render_pass_impl::start_render_pass(Render_pass* const render_pass_before, Render_pass* const render_pass_after)
+void Render_pass_impl::start_render_pass(Command_buffer& command_buffer, Render_pass* const render_pass_before, Render_pass* const render_pass_after)
 {
     // The OpenGL driver handles all cross-pass synchronization implicitly,
-    // so these hints are ignored here.
+    // so these hints are ignored here. command_buffer is unused on GL --
+    // there is no native command buffer to record into.
+    static_cast<void>(command_buffer);
     static_cast<void>(render_pass_before);
     static_cast<void>(render_pass_after);
 

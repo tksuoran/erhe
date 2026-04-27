@@ -13,8 +13,8 @@
 
 namespace erhe::graphics {
 
-Compute_command_encoder_impl::Compute_command_encoder_impl(Device& device)
-    : Command_encoder_impl{device}
+Compute_command_encoder_impl::Compute_command_encoder_impl(Device& device, Command_buffer& command_buffer)
+    : Command_encoder_impl{device, command_buffer}
 {
     // Create command buffer and compute encoder up front so that
     // set_buffer() can be called before set_compute_pipeline_state().

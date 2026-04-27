@@ -9,6 +9,7 @@
 #include <glm/glm.hpp>
 
 namespace erhe::graphics {
+    class Command_buffer;
     class Render_pass;
     class Device;
     class Texture;
@@ -41,6 +42,7 @@ class Scene_preview : public Scene_view
 public:
     Scene_preview(
         erhe::graphics::Device&            graphics_device,
+        erhe::graphics::Command_buffer&    init_command_buffer,
         App_context&                       app_context,
         erhe::scene_renderer::Mesh_memory& mesh_memory,
         Programs&                          programs,

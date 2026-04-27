@@ -3,6 +3,7 @@
 #include <atomic>
 
 namespace erhe::graphics {
+    class Command_buffer;
     class Device;
     class Swapchain;
 }
@@ -115,6 +116,11 @@ public:
     std::atomic_int                         running_async_ops     {};
 
     erhe::commands::Commands*               commands              {nullptr};
+    // Set by Editor::tick() to the cb being recorded for the current frame.
+    // Runtime-triggered code paths (e.g. Scene_commands::create_new_rendertarget,
+    // Hotbar / Hud rendertarget construction) read this to record GPU work into
+    // the same cb. Null outside of tick().
+    erhe::graphics::Command_buffer*         current_command_buffer{nullptr};
     erhe::graphics::Device*                 graphics_device       {nullptr};
     erhe::imgui::Imgui_renderer*            imgui_renderer        {nullptr};
     erhe::imgui::Imgui_windows*             imgui_windows         {nullptr};

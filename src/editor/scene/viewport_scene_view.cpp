@@ -25,6 +25,7 @@
 
 #include "erhe_defer/defer.hpp"
 #include "erhe_geometry/geometry.hpp"
+#include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/compute_command_encoder.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/render_pass.hpp"
@@ -115,7 +116,7 @@ Viewport_scene_view::~Viewport_scene_view() noexcept
     m_context.scene_views->erase(this);
 }
 
-void Viewport_scene_view::execute_rendergraph_node()
+void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -134,6 +135,7 @@ void Viewport_scene_view::execute_rendergraph_node()
     }
 
     Render_context context{
+        .command_buffer         = &command_buffer,
         .encoder                = nullptr, // filled in later once we start render pass
         .app_context            = m_context,
         .scene_view             = *this,
@@ -162,7 +164,7 @@ void Viewport_scene_view::execute_rendergraph_node()
         if (m_context.debug_renderer->use_compute()) {
             {
                 erhe::graphics::Scoped_debug_group debug_group{"debug_renderer->compute()"};
-                erhe::graphics::Compute_command_encoder compute_encoder = graphics_device.make_compute_command_encoder();
+                erhe::graphics::Compute_command_encoder compute_encoder = graphics_device.make_compute_command_encoder(command_buffer);
                 m_context.debug_renderer->compute(compute_encoder);
             }
             // Compute -> vertex-attribute barrier paired with the
@@ -170,7 +172,7 @@ void Viewport_scene_view::execute_rendergraph_node()
             // emitted after the compute encoder scope ends; on Metal
             // the cb cannot be split while the compute encoder is
             // open.
-            graphics_device.memory_barrier(
+            command_buffer.memory_barrier(
                 erhe::graphics::Memory_barrier_mask::vertex_attrib_array_barrier_bit
             );
         }
@@ -250,7 +252,7 @@ void Viewport_scene_view::execute_rendergraph_node()
             }
 
             {
-                erhe::graphics::Compute_command_encoder compute_encoder = graphics_device.make_compute_command_encoder();
+                erhe::graphics::Compute_command_encoder compute_encoder = graphics_device.make_compute_command_encoder(command_buffer);
                 m_context.content_wide_line_renderer->compute(
                     compute_encoder, context.viewport, *context.camera,
                     get_reverse_depth(),
@@ -260,7 +262,7 @@ void Viewport_scene_view::execute_rendergraph_node()
             }
             // Compute -> vertex-attribute barrier; must be emitted
             // after the compute encoder scope ends.
-            graphics_device.memory_barrier(
+            command_buffer.memory_barrier(
                 erhe::graphics::Memory_barrier_mask::vertex_attrib_array_barrier_bit
             );
         }
@@ -270,8 +272,8 @@ void Viewport_scene_view::execute_rendergraph_node()
 
     ERHE_VERIFY(m_render_target.get_render_pass());
 
-    erhe::graphics::Render_command_encoder encoder = graphics_device.make_render_command_encoder();
-    erhe::graphics::Scoped_render_pass scoped_render_pass{*m_render_target.get_render_pass()};
+    erhe::graphics::Render_command_encoder encoder = graphics_device.make_render_command_encoder(command_buffer);
+    erhe::graphics::Scoped_render_pass scoped_render_pass{*m_render_target.get_render_pass(), command_buffer};
     context.encoder     = &encoder;
     context.render_pass = m_render_target.get_render_pass();
 

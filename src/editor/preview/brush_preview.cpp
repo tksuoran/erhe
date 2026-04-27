@@ -11,6 +11,7 @@
 #include "renderers/viewport_config.hpp"
 #include "scene/scene_root.hpp"
 
+#include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_geometry/shapes/sphere.hpp"
@@ -32,12 +33,13 @@ namespace editor {
 
 Brush_preview::Brush_preview(
     erhe::graphics::Device&            graphics_device,
+    erhe::graphics::Command_buffer&    init_command_buffer,
     App_context&                       app_context,
     erhe::scene_renderer::Mesh_memory& mesh_memory,
     Programs&                          programs,
     const bool                         reverse_depth
 )
-    : Scene_preview{graphics_device, app_context, mesh_memory, programs, reverse_depth}
+    : Scene_preview{graphics_device, init_command_buffer, app_context, mesh_memory, programs, reverse_depth}
 {
     make_preview_scene();
 }
@@ -144,8 +146,10 @@ void Brush_preview::render_preview(
         m_mesh.reset();
     }
 
+    ERHE_VERIFY(m_context.current_command_buffer != nullptr);
+    erhe::graphics::Command_buffer& command_buffer = *m_context.current_command_buffer;
     const Brush::Scaled& brush_scaled = brush->get_scaled(1.0);
-    m_context.mesh_memory->buffer_transfer_queue.flush();
+    m_context.mesh_memory->buffer_transfer_queue.flush(command_buffer);
 
     if (m_mesh) {
         m_mesh->clear_primitives();
@@ -240,9 +244,10 @@ void Brush_preview::render_preview(
     );
 
     {
-        erhe::graphics::Render_command_encoder render_encoder = m_graphics_device.make_render_command_encoder();
-        erhe::graphics::Scoped_render_pass scoped_render_pass{*m_render_pass.get()};
+        erhe::graphics::Render_command_encoder render_encoder = m_graphics_device.make_render_command_encoder(command_buffer);
+        erhe::graphics::Scoped_render_pass scoped_render_pass{*m_render_pass.get(), command_buffer};
         const Render_context context{
+            .command_buffer         = &command_buffer,
             .encoder                = &render_encoder,
             .app_context            = m_context,
             .scene_view             = *this,
@@ -256,7 +261,7 @@ void Brush_preview::render_preview(
     }
 
     {
-        erhe::graphics::Blit_command_encoder blit_encoder = m_graphics_device.make_blit_command_encoder();
+        erhe::graphics::Blit_command_encoder blit_encoder = m_graphics_device.make_blit_command_encoder(command_buffer);
         blit_encoder.generate_mipmaps(texture.get());
     }
 }

@@ -7,6 +7,7 @@
 #include "scene/scene_root.hpp"
 #include "content_library/content_library.hpp"
 
+#include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/texture.hpp"
@@ -25,6 +26,7 @@ using Color_blend_state    = erhe::graphics::Color_blend_state;
 
 Scene_preview::Scene_preview(
     erhe::graphics::Device&            graphics_device,
+    erhe::graphics::Command_buffer&    init_command_buffer,
     App_context&                       context,
     erhe::scene_renderer::Mesh_memory& mesh_memory,
     Programs&                          programs,
@@ -88,8 +90,13 @@ Scene_preview::Scene_preview(
         }
     );
 
-    const double depth_clear_value = reverse_depth ? 0.0 : 1.0;
-    graphics_device.clear_texture(*m_shadow_texture.get(), { depth_clear_value, 0.0, 0.0, 0.0 });
+    static_cast<void>(reverse_depth);
+    // The dummy shadowmap is sampled by Forward_renderer's standard shaders
+    // even though Scene_preview never renders into it. Without an explicit
+    // transition it stays in VK_IMAGE_LAYOUT_UNDEFINED, and binding it as a
+    // sampled descriptor trips VUID-vkCmdDraw-None-09600. Forward_renderer
+    // expects shadowmaps in shader_read_only_optimal.
+    init_command_buffer.transition_texture_layout(*m_shadow_texture.get(), erhe::graphics::Image_layout::depth_stencil_read_only_optimal);
 }
 
 Scene_preview::~Scene_preview() noexcept
@@ -154,7 +161,7 @@ void Scene_preview::update_rendertarget(erhe::graphics::Device& graphics_device,
                 .debug_label = erhe::utility::Debug_label{"Preview Color Texture"}
             }
         );
-        graphics_device.clear_texture(*m_color_texture.get(), { 1.0, 0.0, 0.5, 0.0 });
+        // Initial clear performed by the first render pass via Load_action::Clear.
         attachment_changed = true;
     }
 

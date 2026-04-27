@@ -16,6 +16,9 @@ VK_DEFINE_HANDLE(VmaAllocator)
 
 namespace erhe::graphics {
 
+class Command_buffer;
+class Command_buffer_impl;
+
 class Instance_layers
 {
 public:
@@ -75,14 +78,29 @@ class Render_pass_impl;
 class Ring_buffer;
 class Surface_impl;
 class Swapchain;
-class Vulkan_immediate_commands;
 
 class Device_frame_in_flight
 {
 public:
     VkFence         submit_fence  {VK_NULL_HANDLE};
+    // Legacy single-pool fields used by the existing begin_frame/end_frame
+    // single-cb-per-frame path. To be removed once that path is migrated
+    // off Device_frame_in_flight onto the new per-thread pool model.
     VkCommandPool   command_pool  {VK_NULL_HANDLE};
     VkCommandBuffer command_buffer{VK_NULL_HANDLE};
+};
+
+// One Vulkan VkCommandPool plus the list of Command_buffer instances
+// allocated from it. Owned by Device_impl (one Per_thread_command_pool
+// per (frame_in_flight, thread_slot) pair). The pool is created with
+// VK_COMMAND_POOL_CREATE_TRANSIENT_BIT and reset wholesale (with all
+// allocated cbs freed) when the owning frame-in-flight slot's submit
+// fence reports completion.
+class Per_thread_command_pool
+{
+public:
+    VkCommandPool                                command_pool{VK_NULL_HANDLE};
+    std::vector<std::unique_ptr<Command_buffer>> allocated_command_buffers;
 };
 
 // Device-frame lifecycle state (OpenXR-style three phases, plus an
@@ -128,55 +146,46 @@ public:
     [[nodiscard]] auto begin_frame(const Frame_begin_info& frame_begin_info) -> bool;
     [[nodiscard]] auto end_frame  (const Frame_end_info& frame_end_info) -> bool;
 
-    [[nodiscard]] auto wait_swapchain_frame (Frame_state& out_frame_state) -> bool;
-    [[nodiscard]] auto begin_swapchain_frame(const Frame_begin_info& frame_begin_info, Frame_state& out_frame_state) -> bool;
-    void               end_swapchain_frame  (const Frame_end_info& frame_end_info);
-
-    // Prime the current frame's device-frame slot: wait on its prior submit
-    // fence (if any), recycle the fence + command pool, allocate a fresh fence,
-    // ensure its command buffer is allocated. Alternative to wait_swapchain_frame
-    // when the caller does not engage the desktop swapchain (e.g. OpenXR).
-    // Call after wait_frame() and before begin_frame(). Calling both this and
-    // wait_swapchain_frame in the same frame is a misuse (double-prime).
-    void               prime_device_frame_slot();
     void               wait_idle            ();
-    [[nodiscard]] auto is_in_device_frame   () const -> bool;
     [[nodiscard]] auto is_in_swapchain_frame() const -> bool;
+
+    // Transitional: Command_buffer_impl took over wait_for_swapchain /
+    // begin_swapchain / end_swapchain (was wait/begin/end_swapchain_frame
+    // here). It still needs to flip m_had_swapchain_frame so the legacy
+    // end_frame submit branch picks the swapchain path. Goes away with
+    // the legacy single-cb-per-frame path.
+    friend class Command_buffer_impl;
 
     void start_frame_capture();
     void end_frame_capture  ();
 
     // Active render pass tracking
     [[nodiscard]] static auto get_device_impl            () -> Device_impl*;
-    [[nodiscard]] auto get_active_command_buffer         () const -> VkCommandBuffer;
-
-    // Returns the command buffer of the device frame currently being
-    // recorded. VK_NULL_HANDLE if no device frame is active or the slot
-    // doesn't have a cb yet. Use this (not get_active_command_buffer)
-    // when you want to append commands to the whole device frame rather
-    // than to the innermost active render pass.
-    [[nodiscard]] auto get_device_frame_command_buffer   () const -> VkCommandBuffer;
+    // Allocate a fresh primary VkCommandBuffer from the pool owned by
+    // (current_frame_in_flight_slot, thread_slot), wrap it in a new
+    // Command_buffer that lives in the pool, and return that
+    // Command_buffer by reference. The returned cb is in the initial
+    // state -- the caller must call begin() on it before recording. Its
+    // lifetime is tied to the pool: vkResetCommandPool runs when the
+    // frame-in-flight slot's submit fence reports completion, freeing
+    // every cb that was allocated from the pool that cycle.
+    [[nodiscard]] auto get_command_buffer                (unsigned int thread_slot) -> Command_buffer&;
 
     [[nodiscard]] auto get_active_render_pass            () const -> VkRenderPass;
     [[nodiscard]] auto get_active_render_pass_impl       () const -> Render_pass_impl*;
                   void set_active_render_pass_impl       (Render_pass_impl* render_pass_impl);
 
-    void memory_barrier           (Memory_barrier_mask barriers);
-    void clear_texture            (const Texture& texture, std::array<double, 4> clear_value);
-    void transition_texture_layout(const Texture& texture, Image_layout new_layout);
-    void cmd_texture_barrier      (uint64_t usage_before, uint64_t usage_after);
-    void upload_to_buffer         (const Buffer& buffer, size_t offset, const void* data, size_t length);
-    void upload_to_texture        (const Texture& texture, int level, int x, int y, int width, int height, erhe::dataformat::Format pixelformat, const void* data, int row_stride);
+    void submit_command_buffers   (std::span<Command_buffer* const> command_buffers);
     void add_completion_handler   (std::function<void(Device_impl&)> callback);
     void on_thread_enter          ();
 
     [[nodiscard]] auto get_handle                         (const Texture& texture, const Sampler& sampler) const -> uint64_t;
-    [[nodiscard]] auto create_dummy_texture               (const erhe::dataformat::Format format) -> std::shared_ptr<Texture>;
+    [[nodiscard]] auto create_dummy_texture               (Command_buffer& init_command_buffer, const erhe::dataformat::Format format) -> std::shared_ptr<Texture>;
     [[nodiscard]] auto get_buffer_alignment               (Buffer_target target) -> std::size_t;
     [[nodiscard]] auto allocate_ring_buffer_entry         (Buffer_target buffer_target, Ring_buffer_usage usage, std::size_t byte_count) -> Ring_buffer_range;
-    [[nodiscard]] auto make_blit_command_encoder          () -> Blit_command_encoder;
-    [[nodiscard]] auto make_compute_command_encoder       () -> Compute_command_encoder;
-    [[nodiscard]] auto make_render_command_encoder        () -> Render_command_encoder;
+    [[nodiscard]] auto make_blit_command_encoder          (Command_buffer& command_buffer) -> Blit_command_encoder;
+    [[nodiscard]] auto make_compute_command_encoder       (Command_buffer& command_buffer) -> Compute_command_encoder;
+    [[nodiscard]] auto make_render_command_encoder        (Command_buffer& command_buffer) -> Render_command_encoder;
     [[nodiscard]] auto get_format_properties              (erhe::dataformat::Format format) const -> Format_properties;
     [[nodiscard]] auto probe_image_format_support         (erhe::dataformat::Format format, uint64_t usage_mask) const -> bool;
     [[nodiscard]] auto get_supported_depth_stencil_formats() const -> std::vector<erhe::dataformat::Format>;
@@ -187,13 +196,6 @@ public:
     [[nodiscard]] auto get_info                           () const -> const Device_info&;
     [[nodiscard]] auto get_graphics_config                () const -> const Graphics_config&;
     [[nodiscard]] auto get_allocator                      () -> VmaAllocator&;
-
-    // Return the current device-frame command buffer. All non-swapchain
-    // Render_pass_impl instances in a single frame record into this one
-    // cb alongside the swapchain render pass and per-frame transfers.
-    // The caller must NOT begin, end or submit it -- Device_impl::begin_frame
-    // and Device_impl::end_frame handle that.
-    [[nodiscard]] auto acquire_shared_command_buffer() -> VkCommandBuffer;
 
     void set_debug_label(VkObjectType object_type, uint64_t object_handle, const char* label);
     void set_debug_label(VkObjectType object_type, uint64_t object_handle, const std::string& label);
@@ -216,7 +218,6 @@ public:
     [[nodiscard]] auto get_portability_subset_properties() const -> const VkPhysicalDevicePortabilitySubsetPropertiesKHR&;
     [[nodiscard]] auto get_memory_type                  (uint32_t memory_type_index) const -> const VkMemoryType&;
     [[nodiscard]] auto get_memory_heap                  (uint32_t memory_heap_index) const -> const VkMemoryHeap&;
-    [[nodiscard]] auto get_immediate_commands           () -> Vulkan_immediate_commands&;
     [[nodiscard]] auto get_pipeline_cache               () const -> VkPipelineCache;
     [[nodiscard]] auto get_descriptor_set_layout        () const -> VkDescriptorSetLayout;
     [[nodiscard]] auto has_push_descriptor              () const -> bool;
@@ -280,7 +281,8 @@ public:
     uint32_t m_desc_draw_count      {0};
 
 private:
-    static constexpr size_t s_number_of_frames_in_flight = 2;
+    static constexpr size_t       s_number_of_frames_in_flight = 2;
+    static constexpr unsigned int s_number_of_thread_slots     = 8;
 
     void update_frame_completion();
 
@@ -322,7 +324,6 @@ private:
     };
     std::vector<Completion_handler> m_completion_handlers;
 
-    std::unique_ptr<Vulkan_immediate_commands> m_immediate_commands;
     std::unique_ptr<Device_sync_pool>          m_sync_pool;
 
     VkInstance               m_vulkan_instance            {VK_NULL_HANDLE};
@@ -342,6 +343,18 @@ private:
     // populates/recycles submit_fence from its own fence pool.
     std::array<Device_frame_in_flight, s_number_of_frames_in_flight> m_device_submit_history{};
 
+    // [frame_in_flight_slot][thread_slot] command pools + their
+    // currently-allocated Command_buffers. Pools are created once at
+    // Device_impl construction with VK_COMMAND_POOL_CREATE_TRANSIENT_BIT
+    // and torn down at destruction. Each frame the per-slot pools are
+    // wholesale-reset (vkResetCommandPool + clear the
+    // allocated_command_buffers vector) once the slot's submit fence
+    // reports GPU completion.
+    std::array<
+        std::array<Per_thread_command_pool, s_number_of_thread_slots>,
+        s_number_of_frames_in_flight
+    > m_command_pools{};
+
     VkSemaphore              m_vulkan_frame_end_semaphore {VK_NULL_HANDLE};
     uint64_t                 m_latest_completed_frame     {0}; // GPU
     uint64_t                 m_frame_index                {1}; // CPU
@@ -350,9 +363,11 @@ private:
     // wait_frame / begin_frame / begin_swapchain_frame / end_swapchain_frame
     // / end_frame and backs is_in_device_frame / is_in_swapchain_frame.
     Device_frame_state       m_state{Device_frame_state::idle};
-    // Set by begin_swapchain_frame on success; read by end_frame to decide
-    // whether to drive Swapchain::end_frame (submit+present). Reset after
-    // that call and at begin_frame().
+    // Set by Command_buffer_impl::begin_swapchain on success. Originally
+    // read by the legacy end_frame() submit branch to pick
+    // Swapchain_impl::end_frame; that branch is gone now (presentation
+    // moved to submit_command_buffers). Kept as a debug breadcrumb and
+    // cleared at end_frame() so the next frame starts fresh.
     bool                     m_had_swapchain_frame{false};
 
 public:
@@ -402,12 +417,6 @@ private:
     // Active render pass tracking
     static Device_impl*  s_device_impl;
     Render_pass_impl*    m_active_render_pass{nullptr};
-
-    // The command buffer currently open for recording between begin_frame()
-    // and end_frame(). Mirrors m_device_submit_history[slot].command_buffer
-    // for the active slot while a device frame is in progress; cleared when
-    // the device frame ends.
-    VkCommandBuffer      m_active_device_frame_command_buffer{VK_NULL_HANDLE};
 
     // Optional hooks used when erhe::xr wraps Vulkan creation via
     // XR_KHR_vulkan_enable2. Stored as a raw pointer; lifetime is managed by

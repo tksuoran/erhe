@@ -71,11 +71,15 @@ using erhe::graphics::Color_blend_state;
 // to be able to use bit shift instead of integer divide (which is slow).
 // GPU's do index dedup. Extra "slot" doesn't cost anything, 
 
-Cube_renderer::Cube_renderer(erhe::graphics::Device& graphics_device, Program_interface& program_interface)
+Cube_renderer::Cube_renderer(
+    erhe::graphics::Device&         graphics_device,
+    erhe::graphics::Command_buffer& init_command_buffer,
+    Program_interface&              program_interface
+)
     : m_graphics_device    {graphics_device}
     , m_program_interface  {program_interface}
     , m_camera_buffer      {graphics_device, program_interface.camera_interface}
-    , m_light_buffer       {graphics_device, program_interface.light_interface}
+    , m_light_buffer       {graphics_device, init_command_buffer, program_interface.light_interface}
     , m_primitive_buffer   {graphics_device, program_interface.primitive_interface}
     , m_cube_control_buffer{graphics_device, program_interface.cube_interface}
 {

@@ -158,7 +158,7 @@ void Rendering_test::draw_separate_samplers_quad(
     encoder.set_viewport_rect(viewport.x, viewport.y, viewport.width, viewport.height);
     encoder.set_scissor_rect(viewport.x, viewport.y, viewport.width, viewport.height);
     m_quad_buffer.bind(encoder, buffer_range);
-    texture_heap.bind();
+    texture_heap.bind(encoder);
 
     // Bind the named scalar samplers via the explicit per-call API. On
     // Metal these become direct [[texture(N)]]/[[sampler(N)]] bindings;

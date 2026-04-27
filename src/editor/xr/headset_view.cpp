@@ -16,6 +16,7 @@
 
 #include "erhe_utility/bit_helpers.hpp"
 #include "erhe_graphics/blit_command_encoder.hpp"
+#include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/compute_command_encoder.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/render_pass.hpp"
@@ -65,11 +66,11 @@ Headset_view_node::~Headset_view_node()
 {
 }
 
-void Headset_view_node::execute_rendergraph_node()
+void Headset_view_node::execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer)
 {
     ERHE_PROFILE_FUNCTION();
 
-    m_headset_view.render_headset();
+    m_headset_view.render_headset(command_buffer);
 }
 
 Headset_view::Headset_view(
@@ -357,7 +358,7 @@ auto Headset_view::begin_frame() -> bool
     return m_frame_timing.begin_ok;
 }
 
-auto Headset_view::render_headset() -> bool
+auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer) -> bool
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -383,7 +384,7 @@ auto Headset_view::render_headset() -> bool
 
     if (m_frame_timing.should_render) {
         bool first_view = true;
-        auto callback = [this, &first_view](erhe::xr::Render_view& render_view) -> bool {
+        auto callback = [this, &first_view](erhe::xr::Render_view& render_view, erhe::graphics::Command_buffer& view_cb) -> bool {
             const std::shared_ptr<Headset_view_resources>& view_resources = get_headset_view_resources(render_view);
             if (!view_resources->is_valid()) {
                 return false;
@@ -451,6 +452,7 @@ auto Headset_view::render_headset() -> bool
             };
 
             Render_context render_context {
+                .command_buffer         = &view_cb,
                 .encoder                = nullptr, // filled in later once we start render pass
                 .app_context            = m_context,
                 .scene_view             = *this,
@@ -469,19 +471,19 @@ auto Headset_view::render_headset() -> bool
 
             if (m_context.debug_renderer->use_compute()) {
                 {
-                    erhe::graphics::Compute_command_encoder compute_encoder = graphics_device.make_compute_command_encoder();
+                    erhe::graphics::Compute_command_encoder compute_encoder = graphics_device.make_compute_command_encoder(view_cb);
                     m_context.debug_renderer->compute(compute_encoder);
                 }
                 // Compute -> vertex-attribute barrier; must be emitted
                 // after the compute encoder scope ends.
-                graphics_device.memory_barrier(
+                view_cb.memory_barrier(
                     erhe::graphics::Memory_barrier_mask::vertex_attrib_array_barrier_bit
                 );
             }
 
             {
-                erhe::graphics::Render_command_encoder encoder = graphics_device.make_render_command_encoder();
-                erhe::graphics::Scoped_render_pass scoped_render_pass{*render_pass};
+                erhe::graphics::Render_command_encoder encoder = graphics_device.make_render_command_encoder(view_cb);
+                erhe::graphics::Scoped_render_pass scoped_render_pass{*render_pass, view_cb};
                 render_context.encoder     = &encoder;
                 render_context.render_pass = render_pass;
                 ERHE_VERIFY(render_view.width  == static_cast<uint32_t>(render_pass->get_render_target_width()));
@@ -534,7 +536,7 @@ auto Headset_view::render_headset() -> bool
                 //int dst_y1 = (src_height > dst_height) ? dst_height          : src_y0 + src_height;
 
                 {
-                    erhe::graphics::Blit_command_encoder blit_encoder = graphics_device.make_blit_command_encoder();
+                    erhe::graphics::Blit_command_encoder blit_encoder = graphics_device.make_blit_command_encoder(view_cb);
                     blit_encoder.blit_framebuffer(
                         *view_render_pass,
                         glm::ivec2{src_x0, src_y0},
@@ -577,7 +579,7 @@ auto Headset_view::render_headset() -> bool
 
             return true;
         };
-        m_headset->render(callback);
+        m_headset->render(command_buffer, callback);
         ++m_frame_number;
     }
 

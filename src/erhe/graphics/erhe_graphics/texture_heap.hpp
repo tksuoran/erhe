@@ -8,6 +8,7 @@ namespace erhe::graphics {
 
 class Bind_group_layout;
 class Device;
+class Render_command_encoder;
 class Sampler;
 class Shader_resource;
 class Texture;
@@ -30,7 +31,7 @@ public:
     void reset_heap       ();
     auto allocate         (const Texture* texture, const Sampler* sample) -> uint64_t;
     auto get_shader_handle(const Texture* texture, const Sampler* sample) -> uint64_t; // bindless ? handle : slot
-    auto bind             () -> std::size_t;
+    auto bind             (Render_command_encoder& encoder) -> std::size_t;
     void unbind           ();
 
 private:

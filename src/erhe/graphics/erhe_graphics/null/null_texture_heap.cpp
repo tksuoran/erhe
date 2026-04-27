@@ -36,7 +36,7 @@ auto Texture_heap_impl::get_shader_handle(const Texture* texture, const Sampler*
     return 0;
 }
 
-auto Texture_heap_impl::bind() -> std::size_t
+auto Texture_heap_impl::bind(Render_command_encoder& /*encoder*/) -> std::size_t
 {
     return m_used_slot_count;
 }

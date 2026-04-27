@@ -106,7 +106,6 @@ void Framebuffer_window::update_render_pass()
             .debug_label  = m_debug_label
         }
     );
-    m_graphics_device.clear_texture(*m_texture.get(), { 1.0, 0.0, 1.0, 1.0 });
 
     erhe::graphics::Render_pass_descriptor render_pass_descriptor{};
     render_pass_descriptor.color_attachments[0].texture      = m_texture.get();

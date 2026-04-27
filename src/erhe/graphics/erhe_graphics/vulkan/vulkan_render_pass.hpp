@@ -38,7 +38,7 @@ public:
     [[nodiscard]] auto get_render_pass           () const -> VkRenderPass;
 
     // For Render_command_encoder
-    void start_render_pass(Render_pass* render_pass_before, Render_pass* render_pass_after);
+    void start_render_pass(Command_buffer& command_buffer, Render_pass* render_pass_before, Render_pass* render_pass_after);
     void end_render_pass  (Render_pass* render_pass_after);
 
 private:

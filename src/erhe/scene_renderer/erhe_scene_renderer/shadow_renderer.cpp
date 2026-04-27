@@ -31,7 +31,11 @@ using erhe::graphics::Color_blend_state;
 
 static constexpr std::string_view c_shadow_renderer_initialize_component{"Shadow_renderer::initialize_component()"};
 
-Shadow_renderer::Shadow_renderer(erhe::graphics::Device& graphics_device, Program_interface& program_interface)
+Shadow_renderer::Shadow_renderer(
+    erhe::graphics::Device&         graphics_device,
+    erhe::graphics::Command_buffer& init_command_buffer,
+    Program_interface&              program_interface
+)
     : m_graphics_device{graphics_device}
     , m_empty_fragment_outputs{}
     , m_shader_stages{
@@ -46,7 +50,7 @@ Shadow_renderer::Shadow_renderer(erhe::graphics::Device& graphics_device, Progra
             )
         )
     }
-    , m_dummy_texture{graphics_device.create_dummy_texture(erhe::dataformat::Format::format_8_vec4_srgb)}
+    , m_dummy_texture{graphics_device.create_dummy_texture(init_command_buffer, erhe::dataformat::Format::format_8_vec4_srgb)}
     , m_fallback_sampler{
         graphics_device,
         erhe::graphics::Sampler_create_info{
@@ -62,7 +66,7 @@ Shadow_renderer::Shadow_renderer(erhe::graphics::Device& graphics_device, Progra
     , m_vertex_input        {graphics_device}
     , m_draw_indirect_buffer{graphics_device, program_interface.config.max_draw_count}
     , m_joint_buffer        {graphics_device, program_interface.joint_interface}
-    , m_light_buffer        {graphics_device, program_interface.light_interface}
+    , m_light_buffer        {graphics_device, init_command_buffer, program_interface.light_interface}
     , m_primitive_buffer    {graphics_device, program_interface.primitive_interface}
     , m_material_buffer     {graphics_device, program_interface.material_interface}
     , m_gpu_timer           {graphics_device, "Shadow_renderer"}
@@ -184,8 +188,8 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
             continue;
         }
 
-        erhe::graphics::Render_command_encoder encoder = m_graphics_device.make_render_command_encoder();
-        erhe::graphics::Scoped_render_pass scoped_render_pass{*parameters.render_passes[shadow_index].get(), previous_render_pass, nullptr};
+        erhe::graphics::Render_command_encoder encoder = m_graphics_device.make_render_command_encoder(parameters.command_buffer);
+        erhe::graphics::Scoped_render_pass scoped_render_pass{*parameters.render_passes[shadow_index].get(), parameters.command_buffer, previous_render_pass, nullptr};
         previous_render_pass = parameters.render_passes[shadow_index].get();
 
         erhe::graphics::Render_pipeline* render_pipeline = pipeline.get_pipeline_for(parameters.render_passes[shadow_index]->get_descriptor());
@@ -222,7 +226,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
         Ring_buffer_range control_range = m_light_buffer.update_control(light_index);
         m_light_buffer.bind_control_buffer(encoder, control_range);
 
-        m_texture_heap->bind();
+        m_texture_heap->bind(encoder);
 
         for (const auto& meshes : mesh_spans) {
             std::size_t primitive_count{0};

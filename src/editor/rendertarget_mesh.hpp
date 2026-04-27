@@ -12,6 +12,7 @@
 
 namespace erhe { class Item_host; }
 namespace erhe::graphics {
+    class Command_buffer;
     class Render_pass;
     class Device;
     class Render_command_encoder;
@@ -38,6 +39,7 @@ class Rendertarget_mesh : public erhe::scene::Mesh
 public:
     Rendertarget_mesh(
         erhe::graphics::Device&            graphics_device,
+        erhe::graphics::Command_buffer&    command_buffer,
         erhe::scene_renderer::Mesh_memory& mesh_memory,
         int                                width,
         int                                height,
@@ -64,9 +66,10 @@ public:
 #endif
 
     auto update_pointer(Scene_view* scene_view) -> bool;
-    void render_done   (App_context& context); // generates mipmaps, updates lod bias
+    void render_done   (erhe::graphics::Command_buffer& command_buffer, App_context& context); // generates mipmaps, updates lod bias
 
     void resize_rendertarget(
+        erhe::graphics::Command_buffer&    command_buffer,
         erhe::graphics::Device&            graphics_device,
         erhe::scene_renderer::Mesh_memory& mesh_memory,
         int                                width,

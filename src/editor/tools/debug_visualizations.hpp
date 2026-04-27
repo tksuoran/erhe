@@ -12,6 +12,9 @@
 
 #include <memory>
 
+namespace erhe::graphics {
+    class Command_buffer;
+}
 namespace erhe::imgui {
     class Imgui_windows;
 }
@@ -56,6 +59,7 @@ class Debug_visualizations
 public:
     Debug_visualizations(
         erhe::graphics::Device&                  graphics_device,
+        erhe::graphics::Command_buffer&          init_command_buffer,
         erhe::imgui::Imgui_renderer&             imgui_renderer,
         erhe::imgui::Imgui_windows&              imgui_windows,
         erhe::scene_renderer::Program_interface& program_interface,

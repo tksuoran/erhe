@@ -5,7 +5,7 @@
 
 #include <memory>
 
-namespace erhe::graphics       { class Device; }
+namespace erhe::graphics       { class Command_buffer; class Device; }
 namespace erhe::scene_renderer { class Light_projections; }
 
 namespace editor {
@@ -23,6 +23,7 @@ class Shadow_render_node : public erhe::rendergraph::Rendergraph_node
 public:
     Shadow_render_node(
         erhe::graphics::Device&         graphics_device,
+        erhe::graphics::Command_buffer& init_command_buffer,
         erhe::rendergraph::Rendergraph& rendergraph,
         App_context&                    context,
         Scene_view&                     scene_view,
@@ -35,13 +36,13 @@ public:
 
     // Implements Rendergraph_node
     auto get_type_name() const -> std::string_view override { return "Shadow_render_node"; }
-    void execute_rendergraph_node() override;
+    void execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer) override;
 
     auto get_producer_output_texture (int key, int depth = 0) const -> std::shared_ptr<erhe::graphics::Texture> override;
     auto inputs_allowed() const -> bool override;
 
     // Public API
-    void reconfigure(erhe::graphics::Device& graphics_device, int resolution, int light_count, int depth_bits, bool reverse_depth);
+    void reconfigure(erhe::graphics::Device& graphics_device, erhe::graphics::Command_buffer& command_buffer, int resolution, int light_count, int depth_bits, bool reverse_depth);
 
     [[nodiscard]] auto get_scene_view       () -> Scene_view&;
     [[nodiscard]] auto get_scene_view       () const -> const Scene_view&;

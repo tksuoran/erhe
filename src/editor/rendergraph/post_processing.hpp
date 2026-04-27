@@ -19,7 +19,7 @@
 #include <string>
 #include <string_view>
 
-namespace erhe::graphics       { class Texture; class Texture_heap; }
+namespace erhe::graphics       { class Command_buffer; class Texture; class Texture_heap; }
 namespace erhe::scene_renderer { class Program_interface; }
 
 namespace editor {
@@ -59,7 +59,7 @@ public:
 
     // Implements Rendergraph_node
     auto get_type_name() const -> std::string_view override { return "Post_processing_node"; }
-    void execute_rendergraph_node() override;
+    void execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer) override;
 
     // Override so that we return post processing output
     auto get_producer_output_texture(int key, int depth = 0) const -> std::shared_ptr<erhe::graphics::Texture> override;
@@ -120,7 +120,7 @@ public:
         std::size_t tonemap_alpha        {0}; // float
     };
 
-    Post_processing(erhe::graphics::Device& graphics_device, App_context& context);
+    Post_processing(erhe::graphics::Device& graphics_device, erhe::graphics::Command_buffer& init_command_buffer, App_context& context);
     ~Post_processing() noexcept;
 
     // Public API
@@ -131,7 +131,7 @@ public:
     ) -> std::shared_ptr<Post_processing_node>;
 
     [[nodiscard]] auto get_nodes() -> const std::vector<std::shared_ptr<Post_processing_node>>&;
-    void post_process(Post_processing_node& node);
+    void post_process(Post_processing_node& node, erhe::graphics::Command_buffer& command_buffer);
 
     auto get_offsets                      () const -> const Offsets&                         { return m_offsets; }
     auto get_parameter_block              () const -> const erhe::graphics::Shader_resource& { return m_parameter_block; }

@@ -10,6 +10,7 @@ namespace erhe::graphics {
 
 class Bind_group_layout;
 class Buffer;
+class Command_buffer;
 class Compute_pipeline;
 class Compute_pipeline_state;
 class Compute_command_encoder_impl;
@@ -18,7 +19,7 @@ class Device;
 class Compute_command_encoder final : public Command_encoder
 {
 public:
-    explicit Compute_command_encoder(Device& device);
+    Compute_command_encoder(Device& device, Command_buffer& command_buffer);
     Compute_command_encoder(const Compute_command_encoder&) = delete;
     Compute_command_encoder& operator=(const Compute_command_encoder&) = delete;
     Compute_command_encoder(Compute_command_encoder&&) = delete;

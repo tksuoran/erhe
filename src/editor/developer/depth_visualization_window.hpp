@@ -5,7 +5,7 @@
 #include "erhe_graphics/render_pipeline.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
 
-namespace erhe::graphics       { class Device; }
+namespace erhe::graphics       { class Command_buffer; class Device; }
 namespace erhe::imgui          { class Imgui_windows; }
 namespace erhe::rendergraph    { class Rendergraph; }
 namespace erhe::scene_renderer { class Forward_renderer; }
@@ -32,7 +32,7 @@ public:
     );
 
     // Implements erhe::rendergraph::Rendergraph_node
-    void execute_rendergraph_node() override;
+    void execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer) override;
 
     // Public API
     [[nodiscard]] auto get_light_index() -> int&;

@@ -1,7 +1,9 @@
 #include "erhe_graphics/vulkan/vulkan_render_command_encoder.hpp"
 #include "erhe_graphics/vulkan/vulkan_bind_group_layout.hpp"
 #include "erhe_graphics/vulkan/vulkan_buffer.hpp"
+#include "erhe_graphics/vulkan/vulkan_command_buffer.hpp"
 #include "erhe_graphics/vulkan/vulkan_device.hpp"
+#include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/vulkan/vulkan_helpers.hpp"
 #include "erhe_graphics/vulkan/vulkan_render_pass.hpp"
 #include "erhe_graphics/vulkan/vulkan_sampler.hpp"
@@ -29,8 +31,9 @@ namespace erhe::graphics {
 
 // Pipeline-related helpers are now in vulkan_helpers.cpp
 
-Render_command_encoder_impl::Render_command_encoder_impl(Device& device)
-    : m_device{device}
+Render_command_encoder_impl::Render_command_encoder_impl(Device& device, Command_buffer& command_buffer)
+    : m_device        {device}
+    , m_command_buffer{command_buffer}
 {
 }
 
@@ -50,7 +53,7 @@ void Render_command_encoder_impl::set_bind_group_layout(const Bind_group_layout*
 
 void Render_command_encoder_impl::set_render_pipeline(const Render_pipeline& pipeline)
 {
-    VkCommandBuffer command_buffer = Device_impl::get_device_impl()->get_active_command_buffer();
+    VkCommandBuffer command_buffer = m_command_buffer.get_impl().get_vulkan_command_buffer();
     if (command_buffer == VK_NULL_HANDLE) {
         return;
     }
@@ -86,7 +89,7 @@ void Render_command_encoder_impl::set_render_pipeline_state(
     const Shader_stages* const   override_shader_stages
 )
 {
-    VkCommandBuffer command_buffer = Device_impl::get_device_impl()->get_active_command_buffer();
+    VkCommandBuffer command_buffer = m_command_buffer.get_impl().get_vulkan_command_buffer();
     if (command_buffer == VK_NULL_HANDLE) {
         return;
     }
@@ -436,7 +439,7 @@ void Render_command_encoder_impl::set_render_pipeline_state(
 
 void Render_command_encoder_impl::set_viewport_rect(const int x, const int y, const int width, const int height)
 {
-    VkCommandBuffer command_buffer = Device_impl::get_device_impl()->get_active_command_buffer();
+    VkCommandBuffer command_buffer = m_command_buffer.get_impl().get_vulkan_command_buffer();
     if (command_buffer == VK_NULL_HANDLE) {
         return;
     }
@@ -462,7 +465,7 @@ void Render_command_encoder_impl::set_viewport_depth_range(const float min_depth
 
 void Render_command_encoder_impl::set_scissor_rect(const int x, const int y, const int width, const int height)
 {
-    VkCommandBuffer command_buffer = Device_impl::get_device_impl()->get_active_command_buffer();
+    VkCommandBuffer command_buffer = m_command_buffer.get_impl().get_vulkan_command_buffer();
     if (command_buffer == VK_NULL_HANDLE) {
         return;
     }
@@ -494,7 +497,7 @@ void Render_command_encoder_impl::set_vertex_buffer(
     const std::uintptr_t index
 )
 {
-    VkCommandBuffer command_buffer = Device_impl::get_device_impl()->get_active_command_buffer();
+    VkCommandBuffer command_buffer = m_command_buffer.get_impl().get_vulkan_command_buffer();
     if ((command_buffer == VK_NULL_HANDLE) || (buffer == nullptr)) {
         return;
     }
@@ -525,7 +528,7 @@ void Render_command_encoder_impl::set_buffer(
     ERHE_VERIFY(m_bind_group_layout != nullptr); // set_bind_group_layout() must be called before set_buffer()
 #endif
 
-    VkCommandBuffer command_buffer = Device_impl::get_device_impl()->get_active_command_buffer();
+    VkCommandBuffer command_buffer = m_command_buffer.get_impl().get_vulkan_command_buffer();
     if (command_buffer == VK_NULL_HANDLE) {
         return;
     }
@@ -632,7 +635,7 @@ void Render_command_encoder_impl::set_sampled_image(
     Device_impl& device_impl = m_device.get_impl();
     ERHE_VERIFY(device_impl.has_push_descriptor()); // todo: descriptor-set fallback
 
-    VkCommandBuffer command_buffer = Device_impl::get_device_impl()->get_active_command_buffer();
+    VkCommandBuffer command_buffer = m_command_buffer.get_impl().get_vulkan_command_buffer();
     if (command_buffer == VK_NULL_HANDLE) {
         return;
     }
@@ -718,7 +721,7 @@ void Render_command_encoder_impl::draw_primitives(
 ) const
 {
     // primitive_type is baked into the pipeline via input assembly state
-    VkCommandBuffer command_buffer = Device_impl::get_device_impl()->get_active_command_buffer();
+    VkCommandBuffer command_buffer = m_command_buffer.get_impl().get_vulkan_command_buffer();
     if (command_buffer == VK_NULL_HANDLE) {
         return;
     }
@@ -751,7 +754,7 @@ void Render_command_encoder_impl::draw_indexed_primitives(
 ) const
 {
     // primitive_type is baked into the pipeline via input assembly state
-    VkCommandBuffer command_buffer = Device_impl::get_device_impl()->get_active_command_buffer();
+    VkCommandBuffer command_buffer = m_command_buffer.get_impl().get_vulkan_command_buffer();
     if ((command_buffer == VK_NULL_HANDLE) || (m_index_buffer == VK_NULL_HANDLE)) {
         return;
     }
@@ -791,7 +794,7 @@ void Render_command_encoder_impl::multi_draw_indexed_primitives_indirect(
     const std::uintptr_t           stride
 ) const
 {
-    VkCommandBuffer command_buffer = Device_impl::get_device_impl()->get_active_command_buffer();
+    VkCommandBuffer command_buffer = m_command_buffer.get_impl().get_vulkan_command_buffer();
     if (command_buffer == VK_NULL_HANDLE) {
         return;
     }

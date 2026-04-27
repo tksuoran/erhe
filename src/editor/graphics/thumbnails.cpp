@@ -6,6 +6,7 @@
 #include "time.hpp"
 
 #include "config/generated/thumbnails_config.hpp"
+#include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/scoped_debug_group.hpp"
 #include "erhe_graphics/texture.hpp"
@@ -19,7 +20,7 @@ Thumbnail::Thumbnail(Thumbnail&&) noexcept = default;
 auto Thumbnail::operator=(Thumbnail&&) noexcept -> Thumbnail& = default;
 Thumbnail::~Thumbnail() noexcept = default;
 
-Thumbnails::Thumbnails(const Thumbnails_config& thumbnails_config, erhe::graphics::Device& graphics_device, App_context& context)
+Thumbnails::Thumbnails(const Thumbnails_config& thumbnails_config, erhe::graphics::Device& graphics_device, erhe::graphics::Command_buffer& init_command_buffer, App_context& context)
     : m_context{context}
     , m_graphics_device{graphics_device}
     , m_color_sampler{
@@ -55,7 +56,16 @@ Thumbnails::Thumbnails(const Thumbnails_config& thumbnails_config, erhe::graphic
             .debug_label       = "Thumbnails color texture"
         }
     );
-    graphics_device.clear_texture(*m_color_texture, {0.0, 0.0, 0.0, 0.0});
+    // Defensive: Thumbnails::draw never records an image() referencing an
+    // unrendered slot (fresh allocations return false without calling
+    // image(); see Thumbnails::draw), and on Vulkan each used slot has its
+    // own per-layer view so unused layers never bind to a descriptor. So
+    // strictly speaking this transition is not required to keep validation
+    // happy. Kept as a precaution: if a future change ever samples the
+    // whole array as a single descriptor (e.g. dropping use_texture_view)
+    // the unused layers would otherwise stay in UNDEFINED and trip
+    // VUID-vkCmdDraw-None-09600.
+    init_command_buffer.transition_texture_layout(*m_color_texture.get(), erhe::graphics::Image_layout::shader_read_only_optimal);
 
     if (graphics_device.get_info().use_texture_view) {
         for (int i = 0; i < capacity; ++i) {

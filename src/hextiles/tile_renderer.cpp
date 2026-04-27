@@ -6,6 +6,7 @@
 #include "erhe_dataformat/vertex_format.hpp"
 #include "erhe_graphics/blit_command_encoder.hpp"
 #include "erhe_graphics/buffer.hpp"
+#include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/render_pass.hpp"
@@ -79,9 +80,10 @@ auto Tile_renderer::make_program(erhe::graphics::Shader_stages_prototype&& proto
 }
 
 Tile_renderer::Tile_renderer(
-    erhe::graphics::Device&      graphics_device,
-    erhe::imgui::Imgui_renderer& imgui_renderer,
-    Tiles&                       tiles
+    erhe::graphics::Device&         graphics_device,
+    erhe::graphics::Command_buffer& init_command_buffer,
+    erhe::imgui::Imgui_renderer&    imgui_renderer,
+    Tiles&                          tiles
 )
     : m_graphics_device      {graphics_device}
     , m_imgui_renderer       {imgui_renderer}
@@ -185,15 +187,15 @@ Tile_renderer::Tile_renderer(
             offset += 5;
         }
 
-        m_graphics_device.upload_to_buffer(m_index_buffer, 0, index_buffer_data.data(), index_count * sizeof(uint32_t));
+        init_command_buffer.upload_to_buffer(m_index_buffer, 0, index_buffer_data.data(), index_count * sizeof(uint32_t));
     }
 
-    compose_tileset_texture();
+    compose_tileset_texture(init_command_buffer);
 }
 
 static constexpr std::string_view c_text_renderer_initialize_component{"Tile_renderer::initialize_component()"};
 
-void Tile_renderer::compose_tileset_texture()
+void Tile_renderer::compose_tileset_texture(erhe::graphics::Command_buffer& command_buffer)
 {
     const auto texture_path =
         std::filesystem::path{"res"} /
@@ -328,10 +330,9 @@ void Tile_renderer::compose_tileset_texture()
     };
 
     m_tileset_texture = std::make_shared<erhe::graphics::Texture>(m_graphics_device, texture_create_info);
-    m_graphics_device.clear_texture(*m_tileset_texture.get(), { 0.0, 1.0, 1.0, 1.0 });
 
     // Upload everything before single unit tiles
-    erhe::graphics::Blit_command_encoder encoder{m_graphics_device};
+    erhe::graphics::Blit_command_encoder encoder = m_graphics_device.make_blit_command_encoder(command_buffer);
     erhe::graphics::Ring_buffer_client texture_upload_buffer{
         m_graphics_device,
         erhe::graphics::Buffer_target::transfer_src,
@@ -801,7 +802,7 @@ void Tile_renderer::render(erhe::graphics::Render_command_encoder& render_encode
         &m_bind_group_layout
     };
     texture_heap.allocate(m_tileset_texture.get(), &m_nearest_sampler);
-    texture_heap.bind();
+    texture_heap.bind(render_encoder);
 
     render_encoder.draw_indexed_primitives(
         m_pipeline.data.input_assembly.primitive_topology,

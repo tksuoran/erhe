@@ -3,10 +3,12 @@
 
 namespace erhe::graphics {
 
+class Command_buffer;
+
 class Blit_command_encoder_impl final
 {
 public:
-    explicit Blit_command_encoder_impl(Device& device);
+    Blit_command_encoder_impl(Device& device, Command_buffer& command_buffer);
     Blit_command_encoder_impl(const Blit_command_encoder_impl&) = delete;
     Blit_command_encoder_impl& operator=(const Blit_command_encoder_impl&) = delete;
     Blit_command_encoder_impl(Blit_command_encoder_impl&&) = delete;
@@ -26,7 +28,8 @@ public:
     void copy_from_buffer (const Buffer*  source_buffer,  std::uintptr_t source_offset, const Buffer* destination_buffer, std::uintptr_t destination_offset, std::uintptr_t size);
 
 private:
-    Device& m_device;
+    Device&         m_device;
+    Command_buffer& m_command_buffer;
 };
 
 } // namespace erhe::graphics

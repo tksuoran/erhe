@@ -324,8 +324,10 @@ void Hotbar::init_hotbar()
     m_rendertarget_node.reset();
     m_rendertarget_imgui_host.reset();
 
+    ERHE_VERIFY(m_context.current_command_buffer != nullptr);
     m_rendertarget_mesh = std::make_shared<Rendertarget_mesh>(
         *m_context.graphics_device,
+        *m_context.current_command_buffer,
         *m_context.mesh_memory,
         width,
         icon_size,

@@ -20,6 +20,7 @@
 # include "erhe_gl/gl_log.hpp"
 #endif
 #include "erhe_graph/graph_log.hpp"
+#include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/generated/graphics_config.hpp"
 #include "erhe_graphics/generated/graphics_config_serialization.hpp"
 #include "erhe_graphics/device.hpp"
@@ -100,26 +101,24 @@ public:
             ),
         true)}
 
-        // Init-time command buffer. No desktop swapchain is engaged here,
-        // so the slot must be primed explicitly between wait_frame and
-        // begin_frame -- fence wait, recycle, fresh fence, ensure cb -- so
-        // begin_frame has a valid cb to open and end_frame's device-only
-        // submit branch actually submits. Subsequent members (Tile_renderer
-        // etc.) may record GPU commands (texture uploads, buffer copies)
-        // during construction and need an open init cb. end_frame() is
-        // called at the bottom of the constructor body.
-        , m_init_frame_started{[this]{
+        // Init-time command buffer. The constructor records all
+        // construction-time GPU work (Tile_renderer index buffer upload,
+        // tileset texture composition, Imgui_renderer font texture upload,
+        // Text_renderer font texture upload) into this single cb. The
+        // constructor body ends + submits the cb and wait_idles before
+        // returning so every uploaded resource is GPU-ready by the time
+        // the main loop starts.
+        , m_init_command_buffer{[this]() -> erhe::graphics::Command_buffer& {
             const bool init_wait_frame_ok = m_graphics_device.wait_frame();
             ERHE_VERIFY(init_wait_frame_ok);
-            m_graphics_device.prime_device_frame_slot();
-            const bool init_begin_frame_ok = m_graphics_device.begin_frame();
-            ERHE_VERIFY(init_begin_frame_ok);
-            return true;
+            erhe::graphics::Command_buffer& cb = m_graphics_device.get_command_buffer(0);
+            cb.begin();
+            return cb;
         }()}
 
-        , m_text_renderer       {m_graphics_device}
+        , m_text_renderer       {m_graphics_device, m_init_command_buffer}
         , m_rendergraph         {m_graphics_device}
-        , m_imgui_renderer      {m_graphics_device, m_settings.imgui}
+        , m_imgui_renderer      {m_graphics_device, m_init_command_buffer, m_settings.imgui}
         , m_imgui_windows       {m_imgui_renderer, m_graphics_device, m_rendergraph, &m_window, "config/hextiles/"}
         , m_logs                {m_commands, m_imgui_renderer, "config/hextiles/logging.json"}
         , m_log_settings_window {m_imgui_renderer, m_imgui_windows, m_logs}
@@ -127,7 +126,7 @@ public:
         , m_frame_log_window    {m_imgui_renderer, m_imgui_windows, m_logs}
         , m_performance_window  {m_imgui_renderer, m_imgui_windows}
         , m_tiles               {}
-        , m_tile_renderer       {m_graphics_device, m_imgui_renderer, m_tiles}
+        , m_tile_renderer       {m_graphics_device, m_init_command_buffer, m_imgui_renderer, m_tiles}
         , m_map_window          {m_commands, m_graphics_device, m_imgui_renderer, m_imgui_windows, m_text_renderer, m_tile_renderer}
         , m_menu_window         {m_commands, m_imgui_renderer, m_imgui_windows, *this, m_map_window, m_tiles, m_tile_renderer}
     {
@@ -165,7 +164,17 @@ public:
             }
         );
 
-        // Close the init-time command buffer opened in the member init list.
+        // Close the init-time command buffer opened in the member init
+        // list, submit, and block until the GPU has consumed every
+        // recorded upload + clear so the resources are ready for the
+        // main render loop.
+        m_init_command_buffer.end();
+        erhe::graphics::Command_buffer* init_cbs[] = { &m_init_command_buffer };
+        m_graphics_device.submit_command_buffers(std::span<erhe::graphics::Command_buffer* const>{init_cbs});
+        m_graphics_device.wait_idle();
+
+        // Advance the frame index so subsequent frames are paced on the
+        // device timeline.
         const bool init_end_frame_ok = m_graphics_device.end_frame();
         ERHE_VERIFY(init_end_frame_ok);
     }
@@ -352,28 +361,8 @@ public:
         m_in_tick.store(true);
         std::lock_guard<std::mutex> lock{m_mutex};
 
-        erhe::graphics::Frame_state frame_state{};
         const bool wait_ok = m_graphics_device.wait_frame();
         ERHE_VERIFY(wait_ok);
-        const bool wait_swap_ok = m_graphics_device.wait_swapchain_frame(frame_state);
-        ERHE_VERIFY(wait_swap_ok);
-        // Open the device-level command buffer before any imgui work: the
-        // imgui code path calls Map_window::render() which starts a render
-        // pass and records GPU commands. Under Vulkan the command buffer
-        // must be in the recording state, so begin_frame() must happen
-        // before draw_imgui_windows().
-        const bool begin_device_frame_ok = m_graphics_device.begin_frame();
-        ERHE_VERIFY(begin_device_frame_ok);
-
-        std::vector<erhe::window::Input_event>& input_events = m_window.get_input_events();
-
-        m_imgui_windows .process_events(dt_s, timestamp_ns);
-        m_commands.tick(timestamp_ns, input_events);
-
-        m_imgui_windows .begin_frame();
-        viewport_menu();
-        m_imgui_windows .draw_imgui_windows();
-        m_imgui_windows .end_frame();
 
         const erhe::graphics::Frame_begin_info frame_begin_info{
             .resize_width   = static_cast<uint32_t>(m_last_window_width),
@@ -382,21 +371,44 @@ public:
         };
         m_request_resize_pending.store(false);
 
-        erhe::graphics::Frame_state swapchain_frame_state{};
-        const bool begin_swap_ok = m_graphics_device.begin_swapchain_frame(frame_begin_info, swapchain_frame_state);
-        ERHE_VERIFY(begin_swap_ok);
+        // Allocate this frame's command buffer + drive the swapchain through
+        // it (acquire + per-slot acquire/present semaphore setup).
+        erhe::graphics::Command_buffer& command_buffer = m_graphics_device.get_command_buffer(0);
+        erhe::graphics::Frame_state frame_state{};
+        const bool wait_swap_ok  = command_buffer.wait_for_swapchain(frame_state);
+        const bool should_render = wait_swap_ok && command_buffer.begin_swapchain(frame_begin_info, frame_state);
 
-        if (m_map_window.is_window_visible()) {
-            m_map_window.render();
+        if (should_render) {
+            command_buffer.begin();
+
+            std::vector<erhe::window::Input_event>& input_events = m_window.get_input_events();
+
+            m_imgui_windows .process_events(dt_s, timestamp_ns);
+            m_commands.tick(timestamp_ns, input_events);
+
+            m_imgui_windows .begin_frame();
+            viewport_menu();
+            m_imgui_windows .draw_imgui_windows();
+            m_imgui_windows .end_frame();
+
+            if (m_map_window.is_window_visible()) {
+                m_map_window.render(command_buffer);
+            }
+            m_rendergraph   .execute(command_buffer);
+            m_imgui_renderer.next_frame();
+
+            command_buffer.end();
+
+            const erhe::graphics::Frame_end_info frame_end_info{
+                .requested_display_time = 0 // TODO
+            };
+            command_buffer.end_swapchain(frame_end_info);
+
+            // Submit + implicit present.
+            erhe::graphics::Command_buffer* cbs[] = { &command_buffer };
+            m_graphics_device.submit_command_buffers(std::span<erhe::graphics::Command_buffer* const>{cbs});
         }
-        m_rendergraph   .execute();
-        m_imgui_renderer.next_frame();
 
-        const erhe::graphics::Frame_end_info frame_end_info{
-            .requested_display_time = 0 // TODO
-        };
-
-        m_graphics_device.end_swapchain_frame(frame_end_info);
         const bool end_frame_ok = m_graphics_device.end_frame();
         ERHE_VERIFY(end_frame_ok);
         m_in_tick.store(false);
@@ -414,7 +426,7 @@ public:
     erhe::commands::Commands         m_commands;
     erhe::graphics::Device           m_graphics_device;
     bool                             m_shader_error_callback_set{false};
-    bool                             m_init_frame_started       {false};
+    erhe::graphics::Command_buffer&  m_init_command_buffer;
     erhe::renderer::Text_renderer    m_text_renderer;
     erhe::rendergraph::Rendergraph   m_rendergraph;
     erhe::imgui::Imgui_renderer      m_imgui_renderer;

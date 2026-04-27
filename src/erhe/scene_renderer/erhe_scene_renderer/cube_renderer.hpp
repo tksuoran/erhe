@@ -6,6 +6,7 @@
 #include "erhe_scene_renderer/primitive_buffer.hpp"
 
 namespace erhe::graphics {
+    class Command_buffer;
     class Device;
     class Lazy_render_pipeline;
     class Render_command_encoder;
@@ -21,7 +22,11 @@ class Program_interface;
 class Cube_renderer
 {
 public:
-    Cube_renderer(erhe::graphics::Device& graphics_device, Program_interface& program_interface);
+    Cube_renderer(
+        erhe::graphics::Device&         graphics_device,
+        erhe::graphics::Command_buffer& init_command_buffer,
+        Program_interface&              program_interface
+    );
 
     [[nodiscard]] auto make_buffer(const std::vector<uint32_t>& cubes) -> std::shared_ptr<Cube_instance_buffer>;
 

@@ -69,6 +69,7 @@ public:
     erhe::utility::Debug_label                       debug_label;
 };
 
+class Command_buffer;
 class Render_pass_impl;
 class Render_pass final
 {
@@ -91,6 +92,11 @@ public:
 
 private:
     friend class Scoped_render_pass;
+    // command_buffer    : the explicit Command_buffer that this render
+    //                     pass should record into. Iteration target:
+    //                     once the per-backend Command_buffer_impl wraps
+    //                     a real command buffer, the impl will record
+    //                     vkCmdBeginRenderPass2 / GL state into it.
     // render_pass_before: the immediately preceding render pass whose output
     //                     this pass consumes (or nullptr if none). Used by
     //                     the graphics backend to infer cross-submission
@@ -99,7 +105,7 @@ private:
     //                     consume this pass's output (or nullptr if none).
     //                     Used for debug-time validation of usage
     //                     continuity and potential future sync optimization.
-    void start_render_pass(Render_pass* render_pass_before, Render_pass* render_pass_after);
+    void start_render_pass(Command_buffer& command_buffer, Render_pass* render_pass_before, Render_pass* render_pass_after);
     void end_render_pass  (Render_pass* render_pass_after);
 
 private:
@@ -111,14 +117,18 @@ private:
 class Scoped_render_pass final
 {
 public:
-    // render_pass_before / render_pass_after let the graphics backend provide
-    // precise synchronization between render passes without having to guess
-    // at the rendergraph topology. See Render_pass::start_render_pass for
-    // details. nullptr means "no known predecessor / successor".
+    // command_buffer is the explicit Command_buffer the render pass
+    // records into.
+    // render_pass_before / render_pass_after let the graphics backend
+    // provide precise synchronization between render passes without
+    // having to guess at the rendergraph topology. See
+    // Render_pass::start_render_pass for details. nullptr means
+    // "no known predecessor / successor".
     Scoped_render_pass(
-        Render_pass& render_pass,
-        Render_pass* render_pass_before = nullptr,
-        Render_pass* render_pass_after  = nullptr
+        Render_pass&    render_pass,
+        Command_buffer& command_buffer,
+        Render_pass*    render_pass_before = nullptr,
+        Render_pass*    render_pass_after  = nullptr
     );
     ~Scoped_render_pass() noexcept;
     Scoped_render_pass (const Scoped_render_pass&) = delete;

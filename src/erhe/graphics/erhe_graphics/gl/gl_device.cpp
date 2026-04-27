@@ -2,10 +2,12 @@
 
 #include "erhe_graphics/gl/gl_device.hpp"
 #include "erhe_graphics/gl/gl_buffer.hpp"
+#include "erhe_graphics/gl/gl_command_buffer.hpp"
 #include "erhe_graphics/gl/gl_sampler.hpp"
 #include "erhe_graphics/gl/gl_surface.hpp"
 #include "erhe_graphics/gl/gl_swapchain.hpp"
 #include "erhe_graphics/gl/gl_texture.hpp"
+#include "erhe_graphics/command_buffer.hpp"
 
 #include "erhe_dataformat/dataformat.hpp"
 #include "erhe_gl/command_info.hpp"
@@ -1202,7 +1204,7 @@ auto Device_impl::choose_depth_stencil_format(const unsigned int sort_flags, con
     return result;
 }
 
-auto Device_impl::create_dummy_texture(const erhe::dataformat::Format format) -> std::shared_ptr<Texture>
+auto Device_impl::create_dummy_texture(Command_buffer& init_command_buffer, const erhe::dataformat::Format format) -> std::shared_ptr<Texture>
 {
     const Texture_create_info create_info{
         .device       = m_device,
@@ -1238,7 +1240,7 @@ auto Device_impl::create_dummy_texture(const erhe::dataformat::Format format) ->
 
         const int src_bytes_per_row   = 2 * 4;
         const int src_bytes_per_image = 2 * src_bytes_per_row;
-        Blit_command_encoder encoder{m_device};
+        Blit_command_encoder encoder{m_device, init_command_buffer};
         encoder.copy_from_buffer(
             buffer_range.get_buffer()->get_buffer(),         // source_buffer
             buffer_range.get_byte_start_offset_in_buffer(),  // source_offset
@@ -1445,27 +1447,12 @@ void Device_impl::frame_completed(const uint64_t completed_frame)
 auto Device_impl::wait_frame() -> bool
 {
     ERHE_VERIFY(m_state == Device_frame_state::idle);
+    // Drop the previous frame's Command_buffer wrappers. GL serializes
+    // through the driver context and submit_command_buffers is a
+    // (mostly) no-op, so by the time we get back here the cbs from the
+    // last frame are no longer referenced by anything.
+    m_command_buffers.clear();
     m_state = Device_frame_state::waited;
-    return true;
-}
-
-auto Device_impl::wait_swapchain_frame(Frame_state& out_frame_state) -> bool
-{
-    ERHE_VERIFY(m_state == Device_frame_state::waited);
-
-    bool result = false;
-    if (m_surface) {
-        Swapchain* swapchain = m_surface->get_swapchain();
-        if (swapchain != nullptr) {
-            result = swapchain->get_impl().wait_frame(out_frame_state);
-        }
-    }
-    if (!result) {
-        out_frame_state.predicted_display_time   = 0;
-        out_frame_state.predicted_display_period = 0;
-        out_frame_state.should_render            = false;
-        return false;
-    }
     return true;
 }
 
@@ -1479,32 +1466,26 @@ auto Device_impl::begin_frame() -> bool
 
 auto Device_impl::begin_frame(const Frame_begin_info& frame_begin_info) -> bool
 {
-    const bool device_ok = begin_frame();
-    if (!device_ok) {
-        return false;
-    }
-    Frame_state dummy_state{};
-    return begin_swapchain_frame(frame_begin_info, dummy_state);
+    // Legacy compat: swapchain part moved to Command_buffer::begin_swapchain.
+    static_cast<void>(frame_begin_info);
+    return begin_frame();
 }
 
-auto Device_impl::end_frame(const Frame_end_info& frame_end_info) -> bool
+auto Device_impl::end_frame() -> bool
 {
+    // CONTRACT: end_frame advances the frame index. That is its ONLY
+    // job. It does not submit, it does not present (presentation is
+    // implicit in Device::submit_command_buffers when a cb engaged a
+    // swapchain via begin_swapchain). On GL the only extra work here
+    // is the frame-sync bookkeeping that drives ring-buffer
+    // completion notifications -- that's not a submit, just GL-fence
+    // polling that pairs with m_need_sync from earlier in the frame.
     ERHE_VERIFY(
         (m_state == Device_frame_state::in_swapchain_frame) ||
-        (m_state == Device_frame_state::recording)
+        (m_state == Device_frame_state::recording) ||
+        (m_state == Device_frame_state::waited)
     );
 
-    if (m_state == Device_frame_state::in_swapchain_frame) {
-        end_swapchain_frame(frame_end_info);
-    }
-
-    bool result = true;
-    if (m_had_swapchain_frame && m_surface) {
-        Swapchain* swapchain = m_surface->get_swapchain();
-        if (swapchain != nullptr) {
-            result = swapchain->get_impl().end_frame(frame_end_info);
-        }
-    }
     m_had_swapchain_frame = false;
 
     // Check previous frame fences for completion
@@ -1573,48 +1554,16 @@ auto Device_impl::end_frame(const Frame_end_info& frame_end_info) -> bool
     ++m_frame_index;
 
     m_state = Device_frame_state::idle;
-    return result;
+    return true;
 }
 
-auto Device_impl::end_frame() -> bool
+auto Device_impl::end_frame(const Frame_end_info& frame_end_info) -> bool
 {
-    return end_frame(Frame_end_info{});
+    // Legacy compat overload; Frame_end_info is no longer used.
+    static_cast<void>(frame_end_info);
+    return end_frame();
 }
 
-auto Device_impl::begin_swapchain_frame(const Frame_begin_info& frame_begin_info, Frame_state& out_frame_state) -> bool
-{
-    ERHE_VERIFY(m_state == Device_frame_state::recording);
-
-    if (!m_surface) {
-        out_frame_state.should_render = false;
-        return false;
-    }
-    Swapchain* swapchain = m_surface->get_swapchain();
-    if (swapchain == nullptr) {
-        out_frame_state.should_render = false;
-        return false;
-    }
-
-    const bool ok = swapchain->get_impl().begin_frame(frame_begin_info);
-    out_frame_state.should_render = ok;
-    if (ok) {
-        m_state = Device_frame_state::in_swapchain_frame;
-        m_had_swapchain_frame = true;
-    }
-    return ok;
-}
-
-void Device_impl::end_swapchain_frame(const Frame_end_info& /*frame_end_info*/)
-{
-    ERHE_VERIFY(m_state == Device_frame_state::in_swapchain_frame);
-    m_state = Device_frame_state::recording;
-}
-
-void Device_impl::prime_device_frame_slot()
-{
-    // GL has no per-slot command-buffer / fence infrastructure to prime; no-op.
-    ERHE_VERIFY(m_state == Device_frame_state::waited);
-}
 
 void Device_impl::wait_idle()
 {
@@ -1644,12 +1593,6 @@ void Device_impl::wait_idle()
         entry.callback(*this);
     }
     m_completion_handlers.clear();
-}
-
-auto Device_impl::is_in_device_frame() const -> bool
-{
-    return (m_state == Device_frame_state::recording) ||
-           (m_state == Device_frame_state::in_swapchain_frame);
 }
 
 auto Device_impl::is_in_swapchain_frame() const -> bool
@@ -1844,8 +1787,13 @@ void Device_impl::clear_texture(const Texture& texture, const std::array<double,
     render_pass_descriptor.render_target_height = texture.get_height();
     Render_pass render_pass{m_device, render_pass_descriptor};
 
-    Render_command_encoder clear_render_encoder = make_render_command_encoder();
-    Scoped_render_pass scoped_render_pass{render_pass};
+    // clear_texture has no Command_buffer parameter, but the encoder /
+    // Scoped_render_pass APIs require one. Allocate a transient cb out
+    // of the current slot's pool; on GL the cb is just a typed handle
+    // (no native command buffer), so this is essentially free.
+    Command_buffer& transient_cb = get_command_buffer(0);
+    Render_command_encoder clear_render_encoder = make_render_command_encoder(transient_cb);
+    Scoped_render_pass scoped_render_pass{render_pass, transient_cb};
 }
 
 void Device_impl::start_frame_capture()
@@ -1895,18 +1843,50 @@ void Device_impl::cmd_texture_barrier(uint64_t usage_before, uint64_t usage_afte
     static_cast<void>(usage_after);
 }
 
-auto Device_impl::make_blit_command_encoder() -> Blit_command_encoder
+auto Device_impl::get_command_buffer(unsigned int thread_slot) -> Command_buffer&
 {
-    return Blit_command_encoder(m_device);
+    // GL has no native command buffer object; a Command_buffer here
+    // is a thin recording handle. Allocate a fresh wrapper, keep it
+    // alive in m_command_buffers until the next wait_frame(), and
+    // return a reference. Begin/end on the cb are no-ops on GL.
+    auto label = erhe::utility::Debug_label{
+        fmt::format("GL cb (thread_slot={}, allocation_index={})", thread_slot, m_command_buffers.size())
+    };
+    auto cb = std::make_unique<Command_buffer>(m_device, label);
+    Command_buffer& ref = *cb;
+    m_command_buffers.push_back(std::move(cb));
+    return ref;
 }
 
-auto Device_impl::make_compute_command_encoder() -> Compute_command_encoder
+void Device_impl::submit_command_buffers(std::span<Command_buffer* const> command_buffers)
 {
-    return Compute_command_encoder{m_device};
+    // GL records straight into the driver context, so there's no
+    // command-buffer submit work here. The only thing that matters is
+    // the implicit-present hook: any cb that engaged a swapchain via
+    // begin_swapchain has its Swapchain_impl pointer cached, and we
+    // drive swap_buffers on it now.
+    for (Command_buffer* command_buffer : command_buffers) {
+        ERHE_VERIFY(command_buffer != nullptr);
+        Swapchain_impl* swapchain = command_buffer->get_impl().take_swapchain_used();
+        if (swapchain != nullptr) {
+            const bool present_ok = swapchain->present();
+            static_cast<void>(present_ok);
+        }
+    }
 }
-auto Device_impl::make_render_command_encoder() -> Render_command_encoder
+
+auto Device_impl::make_blit_command_encoder(Command_buffer& command_buffer) -> Blit_command_encoder
 {
-    return Render_command_encoder{m_device};
+    return Blit_command_encoder{m_device, command_buffer};
+}
+
+auto Device_impl::make_compute_command_encoder(Command_buffer& command_buffer) -> Compute_command_encoder
+{
+    return Compute_command_encoder{m_device, command_buffer};
+}
+auto Device_impl::make_render_command_encoder(Command_buffer& command_buffer) -> Render_command_encoder
+{
+    return Render_command_encoder{m_device, command_buffer};
 }
 
 void Device_impl::reset_shader_stages_state_tracker()

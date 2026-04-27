@@ -164,10 +164,12 @@ void configure_color_attachment(
 
 } // anonymous namespace
 
-void Render_pass_impl::start_render_pass(Render_pass* const render_pass_before, Render_pass* const render_pass_after)
+void Render_pass_impl::start_render_pass(Command_buffer& command_buffer, Render_pass* const render_pass_before, Render_pass* const render_pass_after)
 {
     // Metal handles cross-pass synchronization automatically via MTLFences /
-    // MTLHazardTracking, so these hints are ignored here.
+    // MTLHazardTracking, so these hints are ignored here. command_buffer
+    // is unused on Metal until we wire MTLCommandBuffer through it.
+    static_cast<void>(command_buffer);
     static_cast<void>(render_pass_before);
     static_cast<void>(render_pass_after);
 

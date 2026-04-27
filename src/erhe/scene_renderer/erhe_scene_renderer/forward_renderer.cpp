@@ -26,15 +26,16 @@ namespace erhe::scene_renderer {
 const std::vector<std::span<const std::shared_ptr<erhe::scene::Mesh>>> Forward_renderer::empty_mesh_spans{};
 
 Forward_renderer::Forward_renderer(
-    erhe::graphics::Device& graphics_device,
-    Program_interface&      program_interface
+    erhe::graphics::Device&         graphics_device,
+    erhe::graphics::Command_buffer& init_command_buffer,
+    Program_interface&              program_interface
 )
     : m_graphics_device     {graphics_device}
     , m_program_interface   {program_interface}
     , m_camera_buffer       {graphics_device, program_interface.camera_interface}
     , m_draw_indirect_buffer{graphics_device, program_interface.config.max_draw_count}
     , m_joint_buffer        {graphics_device, program_interface.joint_interface}
-    , m_light_buffer        {graphics_device, program_interface.light_interface}
+    , m_light_buffer        {graphics_device, init_command_buffer, program_interface.light_interface}
     , m_material_buffer     {graphics_device, program_interface.material_interface}
     , m_primitive_buffer    {graphics_device, program_interface.primitive_interface}
     , m_fallback_sampler{
@@ -49,7 +50,7 @@ Forward_renderer::Forward_renderer(
             .debug_label       = "Forward_renderer::m_fallback_sampler"
         }
     }
-    , m_dummy_texture{graphics_device.create_dummy_texture(erhe::dataformat::Format::format_8_vec4_srgb)}
+    , m_dummy_texture{graphics_device.create_dummy_texture(init_command_buffer, erhe::dataformat::Format::format_8_vec4_srgb)}
     , m_texture_heap{
         std::make_unique<erhe::graphics::Texture_heap>(
             m_graphics_device,
@@ -151,7 +152,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
     m_light_buffer.bind_light_buffer(parameters.render_encoder, light_range);
     m_light_buffer.bind_shadow_samplers(parameters.render_encoder, parameters.light_projections);
 
-    m_texture_heap->bind();
+    m_texture_heap->bind(parameters.render_encoder);
 
     for (auto* render_pipeline_state : render_pipeline_states) {
         const erhe::graphics::Render_pipeline_create_info& pipeline = render_pipeline_state->data;
@@ -287,7 +288,7 @@ void Forward_renderer::draw_primitives(const Render_parameters& parameters, cons
     m_light_buffer.bind_light_buffer(parameters.render_encoder, light_range);
     m_light_buffer.bind_shadow_samplers(parameters.render_encoder, parameters.light_projections);
 
-    m_texture_heap->bind();
+    m_texture_heap->bind(parameters.render_encoder);
 
     for (auto* render_pipeline_state : render_pipeline_states) {
         const erhe::graphics::Render_pipeline_create_info& pipeline = render_pipeline_state->data;

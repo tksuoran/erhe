@@ -14,11 +14,15 @@
 
 namespace erhe::scene_renderer {
 
-Texel_renderer::Texel_renderer(erhe::graphics::Device& graphics_device, Program_interface& program_interface)
+Texel_renderer::Texel_renderer(
+    erhe::graphics::Device&         graphics_device,
+    erhe::graphics::Command_buffer& init_command_buffer,
+    Program_interface&              program_interface
+)
     : m_graphics_device  {graphics_device}
     , m_program_interface{program_interface}
     , m_camera_buffer    {graphics_device, program_interface.camera_interface}
-    , m_light_buffer     {graphics_device, program_interface.light_interface}
+    , m_light_buffer     {graphics_device, init_command_buffer, program_interface.light_interface}
     , m_fallback_sampler{
         graphics_device,
         erhe::graphics::Sampler_create_info{
@@ -31,7 +35,7 @@ Texel_renderer::Texel_renderer(erhe::graphics::Device& graphics_device, Program_
             .debug_label       = "Texel_renderer::m_fallback_sampler"
         }
     }
-    , m_dummy_texture{graphics_device.create_dummy_texture(erhe::dataformat::Format::format_8_vec4_snorm)}
+    , m_dummy_texture{graphics_device.create_dummy_texture(init_command_buffer, erhe::dataformat::Format::format_8_vec4_snorm)}
     , m_texture_heap{
         std::make_unique<erhe::graphics::Texture_heap>(
             m_graphics_device,
@@ -77,7 +81,7 @@ void Texel_renderer::render(const Render_parameters& parameters)
     m_light_buffer.bind_light_buffer(parameters.render_encoder, light_range);
     m_light_buffer.bind_shadow_samplers(parameters.render_encoder, parameters.light_projections);
 
-    m_texture_heap->bind();
+    m_texture_heap->bind(parameters.render_encoder);
 
     erhe::graphics::Lazy_render_pipeline& pipeline = parameters.pipeline;
 

@@ -109,7 +109,7 @@ void Rendering_test::draw_multi_texture_quad(
     encoder.set_viewport_rect(viewport.x, viewport.y, viewport.width, viewport.height);
     encoder.set_scissor_rect(viewport.x, viewport.y, viewport.width, viewport.height);
     m_quad_buffer.bind(encoder, buffer_range);
-    texture_heap.bind();
+    texture_heap.bind(encoder);
 
     encoder.draw_primitives(erhe::graphics::Primitive_type::triangle, 0, 3);
 

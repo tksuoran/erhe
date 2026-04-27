@@ -10,6 +10,7 @@
 #include "erhe_graphics/generated/graphics_config.hpp"
 #include "erhe_graphics/generated/graphics_config_serialization.hpp"
 #include "erhe_graphics/graphics_log.hpp"
+#include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/render_pass.hpp"
@@ -138,10 +139,11 @@ public:
 
         std::lock_guard<std::mutex> lock{m_mutex};
 
-        erhe::graphics::Frame_state frame_state{};
+        log_swap->trace("tick: wait_frame");
+        // Pace the device: wait for the slot we're about to enter to
+        // be retired on the timeline, recycle its per-thread cb pools.
         const bool wait_ok = m_graphics_device.wait_frame();
         ERHE_VERIFY(wait_ok);
-        const bool use_swapchain = m_graphics_device.wait_swapchain_frame(frame_state);
 
         // TODO use predicted display time
         const auto tick_end_time = std::chrono::steady_clock::now();
@@ -175,18 +177,65 @@ public:
         };
         m_request_resize_pending.store(false);
 
-        const bool should_render = use_swapchain && m_graphics_device.begin_frame(frame_begin_info);
+        log_swap->trace("tick: get_command_buffer");
+        // Allocate a fresh command buffer for this frame's render pass.
+        // Single-threaded example, so thread_slot is always 0; the
+        // backend chooses the matching pool from the current
+        // frame-in-flight slot. The cb's lifetime is owned by that
+        // pool -- it gets released back when the pool is reset on the
+        // next cycle of this frame-in-flight slot.
+        constexpr unsigned int thread_slot = 0;
+        erhe::graphics::Command_buffer& command_buffer = m_graphics_device.get_command_buffer(thread_slot);
+
+        // Drive the swapchain through this cb. wait_for_swapchain pumps
+        // per-frame-in-flight pacing on the swapchain side (acquire-
+        // semaphore allocation, swapchain-garbage cleanup); begin_swapchain
+        // acquires the next image and binds the slot's acquire / present
+        // semaphores to the cb so submit_command_buffers can splice them
+        // into the submit and drive the implicit present.
+        log_swap->trace("tick: cb.wait_for_swapchain");
+        erhe::graphics::Frame_state frame_state{};
+        const bool wait_swap_ok = command_buffer.wait_for_swapchain(frame_state);
+        log_swap->trace("tick: cb.begin_swapchain (wait_swap_ok={})", wait_swap_ok);
+        const bool should_render = wait_swap_ok && command_buffer.begin_swapchain(frame_begin_info, frame_state);
+        log_swap->trace("tick: should_render={}", should_render);
 
         if (should_render) {
             update_render_pass(width, height);
-            erhe::graphics::Render_command_encoder render_encoder = m_graphics_device.make_render_command_encoder();
-            erhe::graphics::Scoped_render_pass scoped_render_pass{*m_render_pass.get()};
+
+            log_swap->trace("tick: cb.begin");
+            command_buffer.begin();
+            {
+                log_swap->trace("tick: make_render_command_encoder");
+                erhe::graphics::Render_command_encoder render_encoder = m_graphics_device.make_render_command_encoder(command_buffer);
+                log_swap->trace("tick: Scoped_render_pass begin");
+                erhe::graphics::Scoped_render_pass     scoped_render_pass{*m_render_pass.get(), command_buffer};
+                // No draw calls in this minimal example -- the render
+                // pass's load_action::Clear paints the swapchain image.
+                log_swap->trace("tick: Scoped_render_pass end (will run dtor)");
+            }
+            log_swap->trace("tick: cb.end");
+            command_buffer.end();
+
+            const erhe::graphics::Frame_end_info frame_end_info{
+                .requested_display_time = 0 // TODO
+            };
+            command_buffer.end_swapchain(frame_end_info);
+
+            // Submit the recorded cb. Because begin_swapchain ran
+            // successfully, the swapchain's per-slot acquire / present
+            // semaphores ride on this submit and vkQueuePresentKHR /
+            // swap_buffers / presentDrawable happens implicitly right
+            // after. There is no separate present call.
+            log_swap->trace("tick: submit_command_buffers");
+            erhe::graphics::Command_buffer* cbs[] = { &command_buffer };
+            m_graphics_device.submit_command_buffers(cbs);
         }
 
-        const erhe::graphics::Frame_end_info frame_end_info{
-            .requested_display_time = 0 // TODO
-        };
-        const bool end_frame_ok = m_graphics_device.end_frame(frame_end_info);
+        log_swap->trace("tick: end_frame");
+        // Advance the device frame index. No submits, no presents -- both
+        // already happened above (or were skipped if !should_render).
+        const bool end_frame_ok = m_graphics_device.end_frame();
         ERHE_VERIFY(end_frame_ok);
 
         m_in_tick.store(false);

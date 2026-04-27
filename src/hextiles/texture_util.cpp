@@ -1,8 +1,9 @@
 #include "texture_util.hpp"
 #include "hextiles_log.hpp"
 
-#include "erhe_graphics/device.hpp"
 #include "erhe_graphics/blit_command_encoder.hpp"
+#include "erhe_graphics/command_buffer.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_graphics/ring_buffer.hpp"
 #include "erhe_graphics/ring_buffer_client.hpp"
 #include "erhe_graphics/texture.hpp"
@@ -78,7 +79,7 @@ auto load_png(const std::filesystem::path& path) -> Image
     return image;
 }
 
-auto load_texture(erhe::graphics::Device& graphics_device, const std::filesystem::path& path) -> std::shared_ptr<erhe::graphics::Texture>
+auto load_texture(erhe::graphics::Device& graphics_device, erhe::graphics::Command_buffer& command_buffer, const std::filesystem::path& path) -> std::shared_ptr<erhe::graphics::Texture>
 {
     const Image image = load_png(path);
     if (image.data.size() == 0) {
@@ -118,7 +119,7 @@ auto load_texture(erhe::graphics::Device& graphics_device, const std::filesystem
     buffer_range.bytes_written(byte_count);
     buffer_range.close();
 
-    erhe::graphics::Blit_command_encoder encoder{graphics_device};
+    erhe::graphics::Blit_command_encoder encoder = graphics_device.make_blit_command_encoder(command_buffer);
     encoder.copy_from_buffer(
         buffer_range.get_buffer()->get_buffer(),         // source_buffer
         buffer_range.get_byte_start_offset_in_buffer(),  // source_offset

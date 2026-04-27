@@ -41,7 +41,7 @@ void Rendering_test::print_conventions()
     log_test->info("==============================");
 }
 
-void Rendering_test::create_test_scene()
+void Rendering_test::create_test_scene(erhe::graphics::Command_buffer& init_command_buffer)
 {
     // Camera at (1.5, 1.2, 2.4) looking at origin - close enough for cube to fill cell
     {
@@ -110,7 +110,7 @@ void Rendering_test::create_test_scene()
         auto primitive = std::make_shared<erhe::primitive::Primitive>(
             geometry, build_info, erhe::primitive::Normal_style::corner_normals
         );
-        m_mesh_memory.buffer_transfer_queue.flush();
+        m_mesh_memory.buffer_transfer_queue.flush(init_command_buffer);
 
         const erhe::primitive::Buffer_mesh* buffer_mesh = primitive->get_renderable_mesh();
         if (buffer_mesh != nullptr) {
@@ -195,7 +195,7 @@ void Rendering_test::create_test_scene()
         auto primitive = std::make_shared<erhe::primitive::Primitive>(
             geometry, stencil_build_info, erhe::primitive::Normal_style::point_normals
         );
-        m_mesh_memory.buffer_transfer_queue.flush();
+        m_mesh_memory.buffer_transfer_queue.flush(init_command_buffer);
 
         auto node = std::make_shared<erhe::scene::Node>("Stencil Sphere");
         auto mesh = std::make_shared<erhe::scene::Mesh>("Stencil Sphere");
@@ -511,7 +511,7 @@ auto Rendering_test::has_subtest(std::string_view name) const -> bool
     return false;
 }
 
-void Rendering_test::create_test_textures()
+void Rendering_test::create_test_textures(erhe::graphics::Command_buffer& init_command_buffer)
 {
     // Create small solid-color textures for texture heap testing
     constexpr int tex_size = 4;
@@ -547,7 +547,7 @@ void Rendering_test::create_test_textures()
         std::memcpy(range.get_span().data(), pixels, byte_count);
         range.bytes_written(byte_count);
         range.close();
-        erhe::graphics::Blit_command_encoder blit{m_graphics_device};
+        erhe::graphics::Blit_command_encoder blit{m_graphics_device, init_command_buffer};
         blit.copy_from_buffer(
             range.get_buffer()->get_buffer(), range.get_byte_start_offset_in_buffer(),
             row_stride, byte_count,

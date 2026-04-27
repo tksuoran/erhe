@@ -10,7 +10,7 @@ namespace erhe::graphics {
 class Render_command_encoder_impl final : public Command_encoder_impl
 {
 public:
-    Render_command_encoder_impl(Device& device);
+    Render_command_encoder_impl(Device& device, Command_buffer& command_buffer);
     Render_command_encoder_impl(const Render_command_encoder_impl&) = delete;
     Render_command_encoder_impl& operator=(const Render_command_encoder_impl&) = delete;
     Render_command_encoder_impl(Render_command_encoder_impl&&) = delete;

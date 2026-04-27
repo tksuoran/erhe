@@ -28,6 +28,7 @@ public:
     gl::Sync_status result      {gl::Sync_status::timeout_expired};
 };
 
+class Command_buffer;
 class Frame_state;
 class Frame_end_info;
 class Render_pass_impl;
@@ -63,13 +64,13 @@ public:
     [[nodiscard]] auto begin_frame(const Frame_begin_info& frame_begin_info) -> bool;
     [[nodiscard]] auto end_frame  (const Frame_end_info& frame_end_info) -> bool;
 
-    [[nodiscard]] auto wait_swapchain_frame (Frame_state& out_frame_state) -> bool;
-    [[nodiscard]] auto begin_swapchain_frame(const Frame_begin_info& frame_begin_info, Frame_state& out_frame_state) -> bool;
-    void               end_swapchain_frame  (const Frame_end_info& frame_end_info);
-    void               prime_device_frame_slot();
     void               wait_idle            ();
-    [[nodiscard]] auto is_in_device_frame   () const -> bool;
     [[nodiscard]] auto is_in_swapchain_frame() const -> bool;
+
+    // Transitional: see Vulkan Device_impl. Command_buffer_impl took
+    // over the swapchain-frame entry points and still needs to flip
+    // m_had_swapchain_frame for the legacy end_frame path.
+    friend class Command_buffer_impl;
 
     void resize_swapchain_to_window();
     void start_frame_capture       ();
@@ -81,6 +82,8 @@ public:
     void clear_texture             (const Texture& texture, std::array<double, 4> clear_value);
     void transition_texture_layout (const Texture& texture, Image_layout new_layout);
     void cmd_texture_barrier       (uint64_t usage_before, uint64_t usage_after);
+    [[nodiscard]] auto get_command_buffer(unsigned int thread_slot) -> Command_buffer&;
+    void submit_command_buffers    (std::span<Command_buffer* const> command_buffers);
     void upload_to_buffer          (const Buffer& buffer, size_t offset, const void* data, size_t length);
     void upload_to_texture         (const Texture& texture, int level, int x, int y, int width, int height, erhe::dataformat::Format pixelformat, const void* data, int row_stride);
     void add_completion_handler    (std::function<void(Device_impl&)> callback);
@@ -89,13 +92,13 @@ public:
     [[nodiscard]] auto get_surface                        () -> Surface*;
     [[nodiscard]] auto get_native_handles                 () const -> Native_device_handles;
     [[nodiscard]] auto get_handle                         (const Texture& texture, const Sampler& sampler) const -> uint64_t;
-    [[nodiscard]] auto create_dummy_texture               (erhe::dataformat::Format format) -> std::shared_ptr<Texture>;
+    [[nodiscard]] auto create_dummy_texture               (Command_buffer& init_command_buffer, erhe::dataformat::Format format) -> std::shared_ptr<Texture>;
     [[nodiscard]] auto get_buffer_alignment               (Buffer_target target) -> std::size_t;
     [[nodiscard]] auto get_frame_index                    () const -> uint64_t;
     [[nodiscard]] auto allocate_ring_buffer_entry         (Buffer_target buffer_target, Ring_buffer_usage usage, std::size_t byte_count) -> Ring_buffer_range;
-    [[nodiscard]] auto make_blit_command_encoder          () -> Blit_command_encoder;
-    [[nodiscard]] auto make_compute_command_encoder       () -> Compute_command_encoder;
-    [[nodiscard]] auto make_render_command_encoder        () -> Render_command_encoder;
+    [[nodiscard]] auto make_blit_command_encoder          (Command_buffer& command_buffer) -> Blit_command_encoder;
+    [[nodiscard]] auto make_compute_command_encoder       (Command_buffer& command_buffer) -> Compute_command_encoder;
+    [[nodiscard]] auto make_render_command_encoder        (Command_buffer& command_buffer) -> Render_command_encoder;
     [[nodiscard]] auto get_format_properties              (erhe::dataformat::Format format) const -> Format_properties;
     [[nodiscard]] auto probe_image_format_support         (erhe::dataformat::Format format, uint64_t usage_mask) const -> bool;
     [[nodiscard]] auto get_supported_depth_stencil_formats() const -> std::vector<erhe::dataformat::Format>;
@@ -158,6 +161,14 @@ private:
     bool                                  m_need_sync{false};
 
     std::unique_ptr<Ring_buffer_client>   m_staging_buffer;
+
+    // GL has no native command buffer object. Each call to
+    // get_command_buffer() allocates a fresh wrapper here; the
+    // wrappers are kept alive until the next wait_frame() so anything
+    // submit_command_buffers / start_render_pass / encoders captured
+    // by reference stays valid for the duration of a frame's recording.
+    // wait_frame() clears the vector at the start of each frame.
+    std::vector<std::unique_ptr<Command_buffer>> m_command_buffers;
 
     // RenderDoc
     //erhe::window::Context_window* m_context_window           {nullptr};

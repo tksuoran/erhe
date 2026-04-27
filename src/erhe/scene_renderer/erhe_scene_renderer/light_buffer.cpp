@@ -5,6 +5,7 @@
 #include "erhe_scene_renderer/shadow_renderer.hpp"
 #include "erhe_renderer/renderer_config.hpp"
 
+#include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/span.hpp"
@@ -91,7 +92,11 @@ auto Light_interface::get_sampler(const bool compare) const -> const erhe::graph
     return compare ? &shadow_sampler_compare : &shadow_sampler_no_compare;
 }
 
-Light_buffer::Light_buffer(erhe::graphics::Device& graphics_device, Light_interface& light_interface)
+Light_buffer::Light_buffer(
+    erhe::graphics::Device&         graphics_device,
+    erhe::graphics::Command_buffer& init_command_buffer,
+    Light_interface&                light_interface
+)
     : m_graphics_device{graphics_device}
     , m_light_interface{light_interface}
     , m_light_buffer{
@@ -127,7 +132,7 @@ Light_buffer::Light_buffer(erhe::graphics::Device& graphics_device, Light_interf
     // leave it in DEPTH_STENCIL_READ_ONLY_OPTIMAL. A bare UNDEFINED -> READ_ONLY
     // transition would discard contents and is flagged by the validation layer
     // as a best-practices error.
-    graphics_device.clear_texture(*m_fallback_shadow_texture.get(), {1.0, 0.0, 0.0, 0.0});
+    init_command_buffer.clear_texture(*m_fallback_shadow_texture.get(), {1.0, 0.0, 0.0, 0.0});
 }
 
 void Light_projections::apply(

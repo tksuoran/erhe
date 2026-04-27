@@ -115,7 +115,14 @@ public:
 class Light_buffer
 {
 public:
-    Light_buffer(erhe::graphics::Device& graphics_device, Light_interface& light_interface);
+    // init_command_buffer must be in recording state. Light_buffer
+    // records the fallback-shadow-texture clear into it; the caller
+    // must end + submit the cb (and wait) before the texture is sampled.
+    Light_buffer(
+        erhe::graphics::Device&         graphics_device,
+        erhe::graphics::Command_buffer& init_command_buffer,
+        Light_interface&                light_interface
+    );
 
     auto update(
         const std::span<const std::shared_ptr<erhe::scene::Light>>& lights,

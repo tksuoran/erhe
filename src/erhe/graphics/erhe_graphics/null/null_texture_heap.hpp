@@ -22,7 +22,7 @@ public:
     void reset_heap       ();
     auto allocate         (const Texture* texture, const Sampler* sampler) -> uint64_t;
     auto get_shader_handle(const Texture* texture, const Sampler* sampler) -> uint64_t;
-    auto bind             () -> std::size_t;
+    auto bind             (Render_command_encoder& encoder) -> std::size_t;
     void unbind           ();
 
 protected:

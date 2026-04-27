@@ -145,7 +145,8 @@ Hud::Hud(
     static_cast<void>(headset_view);
 #endif
 
-    m_rendertarget_mesh = std::make_shared<Rendertarget_mesh>(graphics_device, mesh_memory, width, height, ppm);
+    ERHE_VERIFY(app_context.current_command_buffer != nullptr);
+    m_rendertarget_mesh = std::make_shared<Rendertarget_mesh>(graphics_device, *app_context.current_command_buffer, mesh_memory, width, height, ppm);
     auto scene_root = scene_builder.get_scene_root();
     m_rendertarget_mesh->layer_id = scene_root->layers().rendertarget()->id;
     m_rendertarget_mesh->enable_flag_bits(

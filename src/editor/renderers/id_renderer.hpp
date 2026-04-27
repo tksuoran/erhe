@@ -19,6 +19,7 @@
 typedef struct __GLsync *GLsync;
 
 namespace erhe::graphics {
+    class Command_buffer;
     class Render_pass;
     class Gpu_timer;
     class Device;
@@ -69,6 +70,7 @@ public:
     class Render_parameters
     {
     public:
+        erhe::graphics::Command_buffer&    command_buffer;
         const erhe::math::Viewport&        viewport;
         const erhe::scene::Camera&         camera;
         const std::initializer_list<const std::span<const std::shared_ptr<erhe::scene::Mesh>>>& content_mesh_spans;

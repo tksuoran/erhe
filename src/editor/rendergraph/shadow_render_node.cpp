@@ -9,6 +9,7 @@
 
 #include "erhe_dataformat/dataformat.hpp"
 #include "erhe_rendergraph/rendergraph.hpp"
+#include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/texture.hpp"
@@ -26,6 +27,7 @@ using erhe::graphics::Texture;
 
 Shadow_render_node::Shadow_render_node(
     erhe::graphics::Device&         graphics_device,
+    erhe::graphics::Command_buffer& init_command_buffer,
     erhe::rendergraph::Rendergraph& rendergraph,
     App_context&                    context,
     Scene_view&                     scene_view,
@@ -41,14 +43,14 @@ Shadow_render_node::Shadow_render_node(
 {
     register_output("shadow_maps", erhe::rendergraph::Rendergraph_node_key::shadow_maps);
 
-    reconfigure(graphics_device, resolution, light_count, depth_bits, reverse_depth);
+    reconfigure(graphics_device, init_command_buffer, resolution, light_count, depth_bits, reverse_depth);
 }
 
 Shadow_render_node::~Shadow_render_node() noexcept
 {
 }
 
-void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, const int resolution, const int light_count, const int requested_depth_bits, const bool reverse_depth)
+void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, erhe::graphics::Command_buffer& command_buffer, const int resolution, const int light_count, const int requested_depth_bits, const bool reverse_depth)
 {
     std::vector<erhe::dataformat::Format> formats = graphics_device.get_supported_depth_stencil_formats();
     std::stable_sort(
@@ -132,10 +134,12 @@ void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, co
             }
         );
 
-        {
-            const double depth_clear_value = reverse_depth ? 0.0 : 1.0;
-            graphics_device.clear_texture(*m_texture.get(), { depth_clear_value, 0.0, 0.0, 0.0 });
-        }
+        // Transition all array layers from UNDEFINED to depth_stencil_read_only_optimal.
+        // Render passes only transition the layers they target -- without this, layers
+        // that no light renders into stay in UNDEFINED, and binding the whole array as
+        // a sampled descriptor (Vulkan validation VUID-vkCmdDraw-None-09600) trips on
+        // them.
+        command_buffer.transition_texture_layout(*m_texture.get(), erhe::graphics::Image_layout::depth_stencil_read_only_optimal);
     }
 
     log_render->debug("updating render passes, light_count = {}", light_count);
@@ -170,7 +174,7 @@ void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, co
     m_light_projections = erhe::scene_renderer::Light_projections{};
 }
 
-void Shadow_render_node::execute_rendergraph_node()
+void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -199,6 +203,7 @@ void Shadow_render_node::execute_rendergraph_node()
 
     m_context.shadow_renderer->render(
         erhe::scene_renderer::Shadow_renderer::Render_parameters{
+            .command_buffer        = command_buffer,
             .vertex_input_state    = &m_context.mesh_memory->vertex_input,
             .index_type            = m_context.mesh_memory->buffer_info.index_type,
             .index_buffer          = &m_context.mesh_memory->index_buffer,

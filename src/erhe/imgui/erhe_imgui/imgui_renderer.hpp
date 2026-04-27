@@ -23,6 +23,7 @@
 #include <vector>
 
 namespace erhe::graphics {
+    class Command_buffer;
     class Device;
     class Render_command_encoder;
     class Render_pass;
@@ -106,7 +107,11 @@ public:
 class Imgui_renderer final
 {
 public:
-    Imgui_renderer(erhe::graphics::Device& graphics_device, Imgui_settings& settings);
+    Imgui_renderer(
+        erhe::graphics::Device&         graphics_device,
+        erhe::graphics::Command_buffer& init_command_buffer,
+        Imgui_settings&                 settings
+    );
     ~Imgui_renderer() noexcept;
 
     static constexpr std::size_t s_uivec4_size = 4 * sizeof(uint32_t); // for non bindless textures
@@ -129,7 +134,7 @@ public:
     // current (Scoped_imgui_context), AFTER ImGui::Render(), and BEFORE any
     // render pass begins - uploads use Blit_command_encoder which Vulkan
     // does not permit inside a render pass.
-    void update_draw_data_textures();
+    void update_draw_data_textures(erhe::graphics::Command_buffer& command_buffer);
 
     void render_draw_data(
         erhe::graphics::Render_command_encoder& encoder,
@@ -159,7 +164,7 @@ public:
     void unlock_mutex();
 
 private:
-    void update_texture(ImTextureData* tex);
+    void update_texture(ImTextureData* tex, erhe::graphics::Command_buffer& command_buffer);
 
     [[nodiscard]] auto get_sampler(const Erhe_ImTextureID& texture_id) const -> const erhe::graphics::Sampler&;
     [[nodiscard]] auto get_sampler(

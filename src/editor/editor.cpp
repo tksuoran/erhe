@@ -108,6 +108,7 @@
 #include "erhe_gltf/gltf_log.hpp"
 #include "erhe_graph/graph_log.hpp"
 #include "erhe_graphics/buffer_transfer_queue.hpp"
+#include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/swapchain.hpp"
@@ -255,26 +256,28 @@ public:
         m_frame_log_window->on_frame_begin();
 
         // log_frame->trace("tick() begin");
-        erhe::graphics::Frame_state frame_state{};
         const bool wait_ok = m_graphics_device->wait_frame();
         ERHE_VERIFY(wait_ok);
 
+        // Allocate this frame's command buffer.
+        erhe::graphics::Command_buffer& command_buffer = m_graphics_device->get_command_buffer(0);
+        m_app_context.current_command_buffer = &command_buffer;
+
+        erhe::graphics::Frame_state frame_state{};
+        bool should_render = true;
+
         // Under OpenXR the headset owns display, so the desktop swapchain
-        // is not engaged (begin/end_swapchain_frame skipped below too).
-        // Still need to prime the device-frame slot -- fence wait, recycle,
-        // fresh fence, ensure cb -- so begin_frame has a valid cb to open
-        // and end_frame's device-only submit branch actually submits.
-        // Non-XR path gets the same priming as a side effect of
-        // wait_swapchain_frame -> Swapchain_impl::setup_frame.
-        if (m_app_context.OpenXR) {
-            m_graphics_device->prime_device_frame_slot();
-            const bool begin_device_frame_ok = m_graphics_device->begin_frame();
-            ERHE_VERIFY(begin_device_frame_ok);
-        } else {
-            const bool wait_swap_ok = m_graphics_device->wait_swapchain_frame(frame_state);
-            ERHE_VERIFY(wait_swap_ok);
-            const bool begin_device_frame_ok = m_graphics_device->begin_frame();
-            ERHE_VERIFY(begin_device_frame_ok);
+        // is not engaged. The cb is opened with cb.begin() but no swapchain
+        // is bound to it.
+        // Non-XR path drives the swapchain through cb.wait_for_swapchain
+        // and cb.begin_swapchain.
+        if (!m_app_context.OpenXR) {
+            const bool wait_swap_ok = command_buffer.wait_for_swapchain(frame_state);
+            should_render = wait_swap_ok;
+        }
+
+        if (should_render) {
+            command_buffer.begin();
         }
 
         // log_input_frame->trace("----------------------- Editor::tick() -----------------------");
@@ -375,7 +378,9 @@ public:
         m_app_rendering->process_start_capture();
         m_graphics_device->get_shader_monitor().update_once_per_frame();
 
-        m_mesh_memory->buffer_transfer_queue.flush();
+        if (should_render) {
+            m_mesh_memory->buffer_transfer_queue.flush(command_buffer);
+        }
 
         const erhe::graphics::Frame_begin_info frame_begin_info{
             .resize_width   = static_cast<uint32_t>(m_last_window_width),
@@ -384,14 +389,12 @@ public:
         };
         m_request_resize_pending.store(false);
 
-        erhe::graphics::Frame_state swapchain_frame_state{};
         // Under OpenXR the headset owns display: the desktop window swapchain
         // is not rendered into, so do not acquire/present it (otherwise the
         // Vulkan Swapchain_impl::end_frame assert would fire because no
         // render pass ever ran against the acquired image).
-        bool should_render = true;
-        if (!m_app_context.OpenXR) {
-            should_render = m_graphics_device->begin_swapchain_frame(frame_begin_info, swapchain_frame_state);
+        if (should_render && !m_app_context.OpenXR) {
+            should_render = command_buffer.begin_swapchain(frame_begin_info, frame_state);
         }
 
         if (should_render) {
@@ -407,7 +410,7 @@ public:
 
         // Execute rendergraph
         if (should_render) {
-            m_rendergraph->execute();
+            m_rendergraph->execute(command_buffer);
         }
 
         if (should_render) {
@@ -422,20 +425,29 @@ public:
         const erhe::graphics::Frame_end_info frame_end_info{
             .requested_display_time = 0
         };
-        if (should_render) {
+        // Under OpenXR, Xr_session::render_frame ends + submits the cb
+        // before the per-view Swapchain_image destructors run
+        // xrReleaseSwapchainImage (XR_KHR_vulkan_enable2 requires the
+        // submit to land before release). So when OpenXR rendering ran,
+        // the cb is already ended and submitted by the time we get here;
+        // is_recording() detects that and lets us skip the local end +
+        // submit. If render_frame did not run (headset disconnected,
+        // shouldRender == false, etc.) the cb is still recording and we
+        // submit here as for the non-XR case.
+        if (should_render && command_buffer.is_recording()) {
+            command_buffer.end();
             if (!m_app_context.OpenXR) {
-                m_graphics_device->end_swapchain_frame(frame_end_info);
+                command_buffer.end_swapchain(frame_end_info);
             }
+            // Submit + implicit present (when a swapchain was engaged).
+            erhe::graphics::Command_buffer* cbs[] = { &command_buffer };
+            m_graphics_device->submit_command_buffers(std::span<erhe::graphics::Command_buffer* const>{cbs});
         }
-        // Under OpenXR, Xr_session::render_frame already calls
-        // Device::end_frame so vkQueueSubmit2 lands BEFORE
-        // xrReleaseSwapchainImage and xrEndFrame. Skip the redundant
-        // call here in that case; still fire if render_frame did not
-        // run (e.g. shouldRender==false) so the slot fence stays paced.
-        if (m_graphics_device->is_in_device_frame()) {
-            const bool end_frame_ok = m_graphics_device->end_frame();
-            ERHE_VERIFY(end_frame_ok);
-        }
+        m_app_context.current_command_buffer = nullptr;
+
+        // Advance the frame index.
+        const bool end_frame_ok = m_graphics_device->end_frame();
+        ERHE_VERIFY(end_frame_ok);
 
 #if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
         //if (!m_app_context.OpenXR) {
@@ -703,18 +715,20 @@ public:
                 )
             );
 
-            // Init-time command buffer. No desktop swapchain is engaged
-            // here, so the slot must be primed explicitly between
-            // wait_frame and begin_frame -- fence wait, recycle, fresh
-            // fence, ensure cb -- so begin_frame has a valid cb to open
-            // and end_frame's device-only submit branch actually submits.
-            // Non-init frames get the same priming as a side effect of
-            // wait_swapchain_frame -> Swapchain_impl::setup_frame.
+            // Init-time command buffer. The constructor body below records
+            // every init-time GPU operation (texture uploads, buffer
+            // transfers, dummy-texture clears, etc.) into this single cb,
+            // accessed via m_app_context.current_command_buffer.
+            // Init_status_display::set_line ends + submits the cb when it
+            // needs to display loading progress on the desktop swapchain,
+            // then opens a fresh init cb and reseats
+            // m_app_context.current_command_buffer to it. The constructor
+            // body's final wait_idle waits for all submitted init work to
+            // complete on the GPU before the main render loop starts.
             const bool init_wait_frame_ok = m_graphics_device->wait_frame();
             ERHE_VERIFY(init_wait_frame_ok);
-            m_graphics_device->prime_device_frame_slot();
-            const bool init_begin_frame_ok = m_graphics_device->begin_frame();
-            ERHE_VERIFY(init_begin_frame_ok);
+            m_app_context.current_command_buffer = &m_graphics_device->get_command_buffer(0);
+            m_app_context.current_command_buffer->begin();
 
             m_app_settings->apply_limits(
                 *m_graphics_device.get(),
@@ -813,14 +827,20 @@ public:
 
             m_text_renderer = std::make_unique<erhe::renderer::Text_renderer>(
                 *m_graphics_device.get(),
+                *m_app_context.current_command_buffer,
                 m_text_renderer_config.enabled,
                 m_text_renderer_config.font_size
             );
 
             // Stack-local: the status display is only useful during init,
             // and Editor::Editor() is the only scope that drives it.
+            // Init_status_display takes a reference to
+            // m_app_context.current_command_buffer so its render_present()
+            // can reseat the pointer after driving a swapchain frame for
+            // the loading screen.
             Init_status_display init_status_display{
                 *m_graphics_device.get(),
+                m_app_context.current_command_buffer,
                 *m_window.get(),
                 *m_text_renderer.get(),
                 !m_app_context.OpenXR
@@ -849,7 +869,7 @@ public:
             ERHE_TASK_HEADER(imgui_renderer_task)
             {
                 ERHE_GET_GL_CONTEXT
-                m_imgui_renderer = std::make_unique<erhe::imgui::Imgui_renderer>(*m_graphics_device.get(), m_app_settings->imgui);
+                m_imgui_renderer = std::make_unique<erhe::imgui::Imgui_renderer>(*m_graphics_device.get(), *m_app_context.current_command_buffer, m_app_settings->imgui);
             }
             ERHE_TASK_FOOTER( .name("Imgui_renderer") );
 
@@ -863,7 +883,7 @@ public:
             ERHE_TASK_HEADER(thumbnails_task)
             {
                 ERHE_GET_GL_CONTEXT
-                m_thumbnails = std::make_unique<Thumbnails>(m_editor_settings.thumbnails, *m_graphics_device.get(), m_app_context);
+                m_thumbnails = std::make_unique<Thumbnails>(m_editor_settings.thumbnails, *m_graphics_device.get(), *m_app_context.current_command_buffer, m_app_context);
             }
             ERHE_TASK_FOOTER( .name("Thumbnails") );
 
@@ -888,6 +908,7 @@ public:
                 ERHE_GET_GL_CONTEXT
                 m_forward_renderer = std::make_unique<erhe::scene_renderer::Forward_renderer>(
                     *m_graphics_device.get(),
+                    *m_app_context.current_command_buffer,
                     *m_program_interface.get()
                 );
             }
@@ -896,7 +917,7 @@ public:
             ERHE_TASK_HEADER(shadow_renderer_task)
             {
                 ERHE_GET_GL_CONTEXT
-                m_shadow_renderer = std::make_unique<erhe::scene_renderer::Shadow_renderer >(*m_graphics_device.get(), *m_program_interface.get());
+                m_shadow_renderer = std::make_unique<erhe::scene_renderer::Shadow_renderer >(*m_graphics_device.get(), *m_app_context.current_command_buffer, *m_program_interface.get());
             }
             ERHE_TASK_FOOTER( .name("Shadow_renderer") );
 
@@ -1003,7 +1024,7 @@ public:
             ERHE_TASK_HEADER(post_processing_task)
             {
                 ERHE_GET_GL_CONTEXT
-                m_post_processing = std::make_unique<Post_processing>(*m_graphics_device.get(), m_app_context);
+                m_post_processing = std::make_unique<Post_processing>(*m_graphics_device.get(), *m_app_context.current_command_buffer, m_app_context);
             }
             ERHE_TASK_FOOTER( .name("Post_processing") );
 
@@ -1285,6 +1306,7 @@ public:
                 );
                 m_debug_visualizations = std::make_unique<Debug_visualizations>(
                     *m_graphics_device.get(),
+                    *m_app_context.current_command_buffer,
                     *m_imgui_renderer.get(),
                     *m_imgui_windows.get(),
                     *m_program_interface.get(),
@@ -1318,6 +1340,7 @@ public:
                     const bool  reverse_depth = m_app_settings->graphics.current_graphics_preset.reverse_depth && can_reverse;
                     m_material_preview = std::make_unique<Material_preview>(
                         *m_graphics_device.get(),
+                        *m_app_context.current_command_buffer,
                         m_app_context,
                         *m_mesh_memory.get(),
                         *m_programs.get(),
@@ -1325,6 +1348,7 @@ public:
                     );
                     m_brush_preview = std::make_unique<Brush_preview>(
                         *m_graphics_device.get(),
+                        *m_app_context.current_command_buffer,
                         m_app_context,
                         *m_mesh_memory.get(),
                         *m_programs.get(),
@@ -1413,30 +1437,13 @@ public:
             std::string graph_dump = taskflow.dump();
             erhe::file::write_file("erhe_init_graph.dot", graph_dump);
 
-            // Wrap the parallel-init taskflow in a device frame so every
-            // upload_to_buffer / upload_to_texture / clear_texture / blit
-            // encoder call from worker threads records into the device
-            // command buffer and shares a single submit. Staging buffer
-            // destruction is deferred to the frame-completion handler.
-            // wait_idle at the end flushes the init-frame completion
-            // handlers before rendering starts.
-            // Init frame does not engage the desktop swapchain -- just the
-            // device-level wait so begin_frame / end_frame are valid.
-            const bool init_wait_ok = m_graphics_device->wait_frame();
-            if (init_wait_ok) {
-                m_graphics_device->prime_device_frame_slot();
-                const bool init_begin_ok = m_graphics_device->begin_frame();
-                ERHE_VERIFY(init_begin_ok);
-                m_executor->run(taskflow).wait();
-                const bool init_end_ok = m_graphics_device->end_frame();
-                ERHE_VERIFY(init_end_ok);
-                m_graphics_device->wait_idle();
-            } else {
-                // No swapchain available (e.g. headless backend): run the
-                // taskflow without a device-frame wrap; upload paths fall
-                // back to the immediate-commands path.
-                m_executor->run(taskflow).wait();
-            }
+            // Run the parallel-init taskflow with the editor's init cb
+            // already open (opened above before Init_status_display was
+            // constructed). Worker tasks record GPU work via
+            // m_app_context.current_command_buffer. Submission +
+            // wait_idle happens below.
+            ERHE_VERIFY(m_app_context.current_command_buffer != nullptr);
+            m_executor->run(taskflow).wait();
 #endif
         } catch (std::runtime_error& e) {
             log_startup->error("exception: {}", e.what());
@@ -1643,6 +1650,20 @@ public:
 #endif
         m_tools->set_priority_tool(m_physics_tool.get());
 
+        // Close the init-time command buffer opened in the member init
+        // list (or reseated by Init_status_display::render_present),
+        // submit, and block until the GPU has consumed every recorded
+        // upload + clear so the resources are ready for the main render
+        // loop.
+        ERHE_VERIFY(m_app_context.current_command_buffer != nullptr);
+        m_app_context.current_command_buffer->end();
+        erhe::graphics::Command_buffer* init_cbs[] = { m_app_context.current_command_buffer };
+        m_graphics_device->submit_command_buffers(std::span<erhe::graphics::Command_buffer* const>{init_cbs});
+        m_graphics_device->wait_idle();
+        m_app_context.current_command_buffer = nullptr;
+
+        // Advance the frame index so subsequent frames are paced on the
+        // device timeline.
         const bool init_end_frame_ok = m_graphics_device->end_frame();
         ERHE_VERIFY(init_end_frame_ok);
 

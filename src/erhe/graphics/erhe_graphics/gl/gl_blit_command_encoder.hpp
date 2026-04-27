@@ -9,7 +9,7 @@ namespace erhe::graphics {
 class Blit_command_encoder_impl final : public Command_encoder_impl
 {
 public:
-    explicit Blit_command_encoder_impl(Device& device);
+    Blit_command_encoder_impl(Device& device, Command_buffer& command_buffer);
     Blit_command_encoder_impl(const Blit_command_encoder_impl&) = delete;
     Blit_command_encoder_impl& operator=(const Blit_command_encoder_impl&) = delete;
     Blit_command_encoder_impl(Blit_command_encoder_impl&&) = delete;

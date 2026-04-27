@@ -1,10 +1,11 @@
 #include "erhe_graphics/vulkan/vulkan_render_pass.hpp"
+#include "erhe_graphics/vulkan/vulkan_command_buffer.hpp"
 #include "erhe_graphics/vulkan/vulkan_device.hpp"
 #include "erhe_graphics/vulkan/vulkan_helpers.hpp"
-#include "erhe_graphics/vulkan/vulkan_immediate_commands.hpp"
 #include "erhe_graphics/vulkan/vulkan_surface.hpp"
 #include "erhe_graphics/vulkan/vulkan_swapchain.hpp"
 #include "erhe_graphics/vulkan/vulkan_texture.hpp"
+#include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/enums.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/texture.hpp"
@@ -966,56 +967,13 @@ Render_pass_impl::Render_pass_impl(Device& device, const Render_pass_descriptor&
             fmt::format("Render_pass_impl off-screen: {}", descriptor.debug_label.string_view())
         );
 
-        // Transition attachment textures to their usage_before layout so the
-        // render pass initialLayout matches the actual image layout. Textures
-        // that are still in VK_IMAGE_LAYOUT_UNDEFINED are skipped: their
-        // attachment description was already authored with initialLayout
-        // = UNDEFINED above, so the render pass drives the discarding
-        // transition itself and there is no need (and indeed it would be a
-        // best-practices error) to transition them via an UNDEFINED -> read-
-        // only barrier here.
-        auto needs_transition = [](const Render_pass_attachment_descriptor& att, const VkImageLayout target) {
-            const VkImageLayout current = att.texture->get_impl().get_current_layout();
-            return (current != VK_IMAGE_LAYOUT_UNDEFINED) && (current != target);
-        };
-        {
-            bool need_transitions = false;
-            for (const Render_pass_attachment_descriptor& att : m_color_attachments) {
-                if (!att.is_defined() || (att.texture == nullptr)) {
-                    continue;
-                }
-                if (needs_transition(att, to_vk_image_layout(att.layout_before))) {
-                    need_transitions = true;
-                    break;
-                }
-            }
-            if (!need_transitions && m_depth_attachment.is_defined() && (m_depth_attachment.texture != nullptr)) {
-                if (needs_transition(m_depth_attachment, to_vk_image_layout(m_depth_attachment.layout_before))) {
-                    need_transitions = true;
-                }
-            }
-
-            if (need_transitions) {
-                const Vulkan_immediate_commands::Command_buffer_wrapper& cmd = m_device_impl.get_immediate_commands().acquire();
-                for (const Render_pass_attachment_descriptor& att : m_color_attachments) {
-                    if (!att.is_defined() || (att.texture == nullptr)) {
-                        continue;
-                    }
-                    const VkImageLayout target_layout = to_vk_image_layout(att.layout_before);
-                    if (needs_transition(att, target_layout)) {
-                        att.texture->get_impl().transition_layout(cmd.m_cmd_buf, target_layout);
-                    }
-                }
-                if (m_depth_attachment.is_defined() && (m_depth_attachment.texture != nullptr)) {
-                    const VkImageLayout target_layout = to_vk_image_layout(m_depth_attachment.layout_before);
-                    if (needs_transition(m_depth_attachment, target_layout)) {
-                        m_depth_attachment.texture->get_impl().transition_layout(cmd.m_cmd_buf, target_layout);
-                    }
-                }
-                Submit_handle submit = m_device_impl.get_immediate_commands().submit(cmd);
-                m_device_impl.get_immediate_commands().wait(submit);
-            }
-        }
+        // Pre-transition of attachment textures to their layout_before is
+        // deferred to the first start_render_pass(). Doing it here would
+        // require an immediate-command submit (no Command_buffer is
+        // available at construction); start_render_pass already has the
+        // caller-supplied cb to record into and is the natural place to
+        // emit any one-shot UNDEFINED -> layout_before barrier the render
+        // pass machinery itself can't drive.
 
         log_render_pass->debug(
             "Off-screen render pass created: {}x{}, {} color attachments, depth={}",
@@ -1118,8 +1076,14 @@ auto Render_pass_impl::get_debug_label() const -> erhe::utility::Debug_label
     return m_debug_label;
 }
 
-void Render_pass_impl::start_render_pass(Render_pass* const render_pass_before, Render_pass* const render_pass_after)
+void Render_pass_impl::start_render_pass(Command_buffer& command_buffer, Render_pass* const render_pass_before, Render_pass* const render_pass_after)
 {
+    // command_buffer is the explicit Command_buffer this pass should
+    // record into. Iteration target: pull the underlying VkCommandBuffer
+    // out of command_buffer.get_impl().get_vulkan_command_buffer() and use
+    // that for vkCmdBeginRenderPass2 below instead of the device-frame
+    // active cb.
+    //
     // render_pass_before: used to narrow the source side of the inter-pass
     // memory barrier when the predecessor is known (e.g. post-processing
     // chains). When nullptr, the barrier uses a conservative source mask.
@@ -1128,6 +1092,47 @@ void Render_pass_impl::start_render_pass(Render_pass* const render_pass_before, 
     // end_render_pass).
     static_cast<void>(render_pass_before);
     static_cast<void>(render_pass_after);
+
+    // Deferred pre-transitions: if any attachment texture is in a
+    // layout other than its layout_before (and not still UNDEFINED,
+    // since the render pass machinery handles UNDEFINED itself), emit
+    // the transitions into the caller-supplied cb before the render
+    // pass begins. Used to live in the constructor as an immediate-
+    // commands submit; moved here so all GPU recording goes through
+    // an explicit cb.
+    {
+        const VkCommandBuffer pre_cb = command_buffer.get_impl().get_vulkan_command_buffer();
+        if (pre_cb != VK_NULL_HANDLE) {
+            auto needs_transition = [](const Render_pass_attachment_descriptor& att, const VkImageLayout target) {
+                const VkImageLayout current = att.texture->get_impl().get_current_layout();
+                // Skip transitioning when:
+                //  - texture is still UNDEFINED (the render pass machinery
+                //    handles UNDEFINED initialLayout itself),
+                //  - target is UNDEFINED (descriptor expressed "don't care
+                //    about prior contents" -- transitioning to UNDEFINED
+                //    is invalid per VUID-VkImageMemoryBarrier2-newLayout-01198),
+                //  - we are already in the target layout.
+                return (current != VK_IMAGE_LAYOUT_UNDEFINED) &&
+                       (target  != VK_IMAGE_LAYOUT_UNDEFINED) &&
+                       (current != target);
+            };
+            for (const Render_pass_attachment_descriptor& att : m_color_attachments) {
+                if (!att.is_defined() || (att.texture == nullptr)) {
+                    continue;
+                }
+                const VkImageLayout target_layout = to_vk_image_layout(att.layout_before);
+                if (needs_transition(att, target_layout)) {
+                    att.texture->get_impl().transition_layout(pre_cb, target_layout);
+                }
+            }
+            if (m_depth_attachment.is_defined() && (m_depth_attachment.texture != nullptr)) {
+                const VkImageLayout target_layout = to_vk_image_layout(m_depth_attachment.layout_before);
+                if (needs_transition(m_depth_attachment, target_layout)) {
+                    m_depth_attachment.texture->get_impl().transition_layout(pre_cb, target_layout);
+                }
+            }
+        }
+    }
 
     m_device_impl.set_active_render_pass_impl(this);
 
@@ -1164,28 +1169,55 @@ void Render_pass_impl::start_render_pass(Render_pass* const render_pass_before, 
     }
 
     if (m_swapchain != nullptr) {
-        // Swapchain render pass. Command buffer and submission are
-        // owned by Swapchain_impl (wait on acquire semaphore, signal
-        // present semaphore).
-        VkRenderPassBeginInfo render_pass_begin_info{
+        // Swapchain render pass. Record into the user-supplied cb;
+        // Swapchain_impl just supplies the framebuffer for the
+        // currently-acquired image and the swapchain extent.
+        m_command_buffer = command_buffer.get_impl().get_vulkan_command_buffer();
+        if (m_command_buffer == VK_NULL_HANDLE) {
+            log_render_pass->error("Command_buffer has no VkCommandBuffer bound (swapchain pass)");
+            m_device_impl.set_active_render_pass_impl(nullptr);
+            return;
+        }
+
+        Swapchain_impl& swapchain_impl = m_swapchain->get_impl();
+        VkFramebuffer   framebuffer    = swapchain_impl.acquire_swapchain_framebuffer(m_render_pass);
+        if (framebuffer == VK_NULL_HANDLE) {
+            log_render_pass->error("acquire_swapchain_framebuffer() returned VK_NULL_HANDLE");
+            m_device_impl.set_active_render_pass_impl(nullptr);
+            return;
+        }
+
+        const VkRenderPassBeginInfo render_pass_begin_info{
             .sType           = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
             .pNext           = nullptr,
             .renderPass      = m_render_pass,
-            .framebuffer     = VK_NULL_HANDLE,         // filled in by Swapchain_impl
-            .renderArea      = VkRect2D{{0,0}, {0,0}}, // filled in by Swapchain_impl
+            .framebuffer     = framebuffer,
+            .renderArea      = VkRect2D{{0, 0}, swapchain_impl.get_swapchain_extent()},
             .clearValueCount = m_any_load_op_clear ? static_cast<uint32_t>(m_clear_values.size()) : 0u,
             .pClearValues    = m_any_load_op_clear ? m_clear_values.data() : nullptr
         };
-        m_command_buffer = m_swapchain->get_impl().begin_render_pass(render_pass_begin_info);
+        const VkSubpassBeginInfo subpass_begin_info{
+            .sType    = VK_STRUCTURE_TYPE_SUBPASS_BEGIN_INFO,
+            .pNext    = nullptr,
+            .contents = VK_SUBPASS_CONTENTS_INLINE
+        };
+        log_render_pass->trace(
+            "start_render_pass swapchain branch: vkCmdBeginRenderPass2 cb=0x{:x} fb=0x{:x} extent={}x{}",
+            reinterpret_cast<std::uintptr_t>(m_command_buffer),
+            reinterpret_cast<std::uintptr_t>(framebuffer),
+            render_pass_begin_info.renderArea.extent.width,
+            render_pass_begin_info.renderArea.extent.height
+        );
+        vkCmdBeginRenderPass2(m_command_buffer, &render_pass_begin_info, &subpass_begin_info);
+        swapchain_impl.mark_render_pass_recorded();
     } else {
-        // Non-swapchain render pass. Use the device-frame cb opened by
-        // Device_impl::begin_frame. Emit the barrier, begin the render
-        // pass, and leave the cb open for Device_impl::end_frame to
-        // close and submit (together with the swapchain render pass
-        // and per-frame transfers).
-        m_command_buffer = m_device_impl.acquire_shared_command_buffer();
+        // Non-swapchain render pass. Record into the explicit
+        // Command_buffer the caller handed to start_render_pass. The
+        // cb must already be in recording state (caller has called
+        // begin()); we just pull its underlying VkCommandBuffer here.
+        m_command_buffer = command_buffer.get_impl().get_vulkan_command_buffer();
         if (m_command_buffer == VK_NULL_HANDLE) {
-            log_render_pass->error("acquire_shared_command_buffer() returned VK_NULL_HANDLE");
+            log_render_pass->error("Command_buffer has no VkCommandBuffer bound");
             m_device_impl.set_active_render_pass_impl(nullptr);
             return;
         }
@@ -1362,13 +1394,20 @@ void Render_pass_impl::end_render_pass(Render_pass* const render_pass_after)
 #endif
 
     if (m_swapchain != nullptr) {
-        const bool end_ok = m_swapchain->get_impl().end_render_pass();
-        ERHE_VERIFY(end_ok);
-
-        // Do NOT submit the swapchain command buffer here. The submit
-        // is deferred to Swapchain_impl::end_frame() (called from
-        // Device_impl::end_frame()) so the unified device-frame cb
-        // lands in a single vkQueueSubmit2 call.
+        // Mirror of the swapchain branch in start_render_pass: record
+        // vkCmdEndRenderPass2 directly into the user cb. Submit
+        // remains the responsibility of Device::submit_command_buffers.
+        if (m_command_buffer != VK_NULL_HANDLE) {
+            const VkSubpassEndInfo subpass_end_info{
+                .sType = VK_STRUCTURE_TYPE_SUBPASS_END_INFO,
+                .pNext = nullptr
+            };
+            log_render_pass->trace(
+                "end_render_pass swapchain branch: vkCmdEndRenderPass2 cb=0x{:x}",
+                reinterpret_cast<std::uintptr_t>(m_command_buffer)
+            );
+            vkCmdEndRenderPass2(m_command_buffer, &subpass_end_info);
+        }
     } else {
         // End the render pass. The device-frame command buffer stays
         // open and is finalized by Device_impl::end_frame.

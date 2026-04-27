@@ -15,8 +15,8 @@
 
 namespace erhe::graphics {
 
-Compute_command_encoder::Compute_command_encoder(Device& device)
-    : m_impl{device}
+Compute_command_encoder::Compute_command_encoder(Device& device, Command_buffer& command_buffer)
+    : m_impl{device, command_buffer}
 {
     static_assert(sizeof(Compute_command_encoder_impl) <= 128);
     static_assert(alignof(Compute_command_encoder_impl) <= 16);

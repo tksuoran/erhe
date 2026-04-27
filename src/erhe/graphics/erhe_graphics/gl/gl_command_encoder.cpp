@@ -7,8 +7,9 @@
 
 namespace erhe::graphics {
 
-Command_encoder_impl::Command_encoder_impl(Device& device)
-    : m_device{device}
+Command_encoder_impl::Command_encoder_impl(Device& device, Command_buffer& command_buffer)
+    : m_device        {device}
+    , m_command_buffer{command_buffer}
 {
 }
 

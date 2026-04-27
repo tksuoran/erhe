@@ -31,7 +31,7 @@ public:
     ~Window_imgui_host() noexcept override;
 
     // Implements Rendergraph_node
-    void execute_rendergraph_node() override;
+    void execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer) override;
 
     // Called each frame before ImGui::DockSpace(). The callback is responsible for
     // deciding whether the layout needs to be (re)built, for any multi-frame

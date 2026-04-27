@@ -259,7 +259,7 @@ void Texture_heap_impl::encode_argument_buffer()
     m_argument_buffer_range.close();
 }
 
-auto Texture_heap_impl::bind() -> std::size_t
+auto Texture_heap_impl::bind(Render_command_encoder& /*encoder*/) -> std::size_t
 {
     if (m_argument_encoder == nullptr) {
         log_texture_heap->trace("Texture_heap::bind() skipped: no argument encoder (default_uniform_block not provided?)");

@@ -38,6 +38,57 @@ hides the underlying graphics API behind a pimpl pattern.
 - `Scoped_render_pass(render_pass)` -- RAII render pass begin/end.
 - `Render_command_encoder::set_render_pipeline()` / `set_bind_group_layout()` / `set_sampled_image(binding_point, texture, sampler)` / `draw_indexed_primitives()` -- Issue draw calls.
 
+## Frame lifecycle
+
+A device frame is bracketed by `Device::wait_frame()` and
+`Device::end_frame()`. In between, callers obtain one or more
+`Command_buffer` instances from `Device::get_command_buffer(thread_slot)`,
+optionally engage the window swapchain via
+`Command_buffer::wait_for_swapchain` + `Command_buffer::begin_swapchain`,
+record into them, and submit through `Device::submit_command_buffers`.
+
+The contract for each entry point:
+
+- `wait_frame()` -- pace the per-(frame_in_flight, thread_slot) command
+  pools on the device's timeline semaphore. For frames that re-enter
+  a slot (frame index `> N`) we wait until the timeline reports value
+  `frame_index - N`, then `vkResetCommandPool` every per-thread pool
+  for that slot. Each freed `Command_buffer` recycles its implicit
+  fence + binary semaphore back into `Device_sync_pool`.
+- `get_command_buffer(thread_slot)` -- allocate a fresh primary cb
+  from the slot's per-thread pool. The wrapper carries an implicit
+  fence + binary semaphore (used by `Command_buffer::wait_for_fence`
+  / `wait_for_semaphore` / `signal_*`). Lifetime is tied to the next
+  pool reset for this slot.
+- `Command_buffer::wait_for_swapchain(out_frame_state)` /
+  `begin_swapchain(info, out_frame_state)` -- wait on the next
+  swapchain image to be acquirable, then acquire it and bind the
+  per-slot acquire / present semaphores to this cb. The cb tracks
+  the swapchain it engaged so the submit can attach the right
+  semaphores and drive the implicit present.
+- `Command_buffer::begin()` / `end()` -- bracket recording
+  (`vkBeginCommandBuffer` / `vkEndCommandBuffer` on Vulkan). One cb
+  per render pass is the recommended pattern.
+- `submit_command_buffers(span)` -- submit. Walks each cb,
+  performs CPU-side `vkWaitForFences` for any
+  `wait_for_fence(other)` registered, splices the wait/signal
+  semaphores into a single `VkSubmitInfo2`, runs `vkQueueSubmit2`,
+  and finally drives `vkQueuePresentKHR` / `swap_buffers` /
+  `presentDrawable` on every swapchain whose cb engaged it via
+  `begin_swapchain`. Implicit present is the rule: there is no
+  separate `Device::present` call.
+- `end_frame()` -- **advance the frame index. That is the entire
+  contract.** Does not submit, does not present. Mechanically it
+  signals the device timeline semaphore at the current frame index
+  via an empty `vkQueueSubmit2` (so `wait_frame` on the next visit
+  to a slot can consume that value) and increments
+  `m_frame_index`. The legacy `end_frame(Frame_end_info)` overload
+  is identical -- the argument is ignored, kept only for migration.
+
+There is no `Device::present()`. Present is implicit in
+`submit_command_buffers`; if you didn't run `begin_swapchain` on a
+cb, no swapchain was engaged and nothing is presented.
+
 ## Bind group layout
 
 `Bind_group_layout` is the single source of truth for the descriptor / binding

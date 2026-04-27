@@ -345,21 +345,28 @@ auto Swapchain_impl::end_frame(const Frame_end_info& frame_end_info) -> bool
 
     static_cast<void>(frame_end_info);
 
-    VkResult result = present_image(m_acquired_image_index);
+    return present();
+}
 
-    // Handle Outdated error in present.
+auto Swapchain_impl::present() -> bool
+{
+    // Drive vkQueuePresentKHR for the currently acquired image. Caller
+    // is responsible for having submitted a cb that signals this
+    // swapchain's present_semaphore. No state assertion: the legacy
+    // end_frame path arrives here at command_buffer_submit (after its
+    // own submit_command_buffer ran), while the new implicit-present
+    // path (Device_impl::submit_command_buffers) arrives here at
+    // render_pass_end -- both are valid entry points.
+    const VkResult result = present_image(m_acquired_image_index);
+
     if ((result == VK_SUBOPTIMAL_KHR) || (result == VK_ERROR_OUT_OF_DATE_KHR)) {
         init_swapchain();
-        //if (!m_is_valid) {
-        //    m_state = Swapchain_frame_state::image_present;
-        //    return;
-        //}
     } else if (result != VK_SUCCESS) {
         m_device_impl.get_device().device_message(
             Message_severity::error,
             fmt::format("presenting frame failed with {} {}", static_cast<int32_t>(result), c_str(result))
         );
-        m_state = Swapchain_frame_state::idle; // Should we try to continue?
+        m_state = Swapchain_frame_state::idle;
     }
     m_state = Swapchain_frame_state::image_present;
     ERHE_VULKAN_SYNC_TRACE(
@@ -846,6 +853,48 @@ auto Swapchain_impl::get_command_buffer() -> VkCommandBuffer
     return device_frame.command_buffer;
 }
 
+auto Swapchain_impl::get_active_acquire_semaphore() const -> VkSemaphore
+{
+    return m_submit_history[current_slot()].acquire_semaphore;
+}
+
+auto Swapchain_impl::acquire_swapchain_framebuffer(VkRenderPass render_pass) -> VkFramebuffer
+{
+    if (!is_valid()) {
+        return VK_NULL_HANDLE;
+    }
+    if (
+        (m_swapchain_objects.framebuffers[m_acquired_image_index] == VK_NULL_HANDLE) ||
+        (m_swapchain_objects.render_pass [m_acquired_image_index] != render_pass)
+    ) {
+        init_swapchain_framebuffer(m_acquired_image_index, render_pass);
+    }
+    return m_swapchain_objects.framebuffers[m_acquired_image_index];
+}
+
+auto Swapchain_impl::get_swapchain_extent() const -> VkExtent2D
+{
+    return m_swapchain_extent;
+}
+
+void Swapchain_impl::mark_render_pass_recorded()
+{
+    // The user-cb model records vkCmdBeginRenderPass2 / vkCmdEndRenderPass2
+    // directly into the user's Command_buffer instead of going through
+    // Swapchain_impl::begin_render_pass / end_render_pass. The state
+    // machine still expects the image_acquired -> render_pass_begin ->
+    // render_pass_end -> command_buffer_submit chain, so flip it forward
+    // explicitly to satisfy the asserts on present.
+    if (m_state == Swapchain_frame_state::image_ackquired) {
+        m_state = Swapchain_frame_state::render_pass_end;
+    }
+}
+
+auto Swapchain_impl::get_active_present_semaphore() const -> VkSemaphore
+{
+    return m_submit_history[current_slot()].present_semaphore;
+}
+
 void Swapchain_impl::setup_frame()
 {
     VkDevice vulkan_device = m_device_impl.get_vulkan_device();
@@ -1010,7 +1059,14 @@ auto Swapchain_impl::present_image(uint32_t index) -> VkResult
         //}
     }
 
+    log_swapchain->trace(
+        "vkQueuePresentKHR image_index={} present_sem=0x{:x} swapchain=0x{:x}",
+        index,
+        reinterpret_cast<std::uintptr_t>(frame.present_semaphore),
+        reinterpret_cast<std::uintptr_t>(m_vulkan_swapchain)
+    );
     VkResult result = vkQueuePresentKHR(vulkan_present_queue, &present_info);
+    log_swapchain->trace("vkQueuePresentKHR returned {}", static_cast<int32_t>(result));
     if ((result != VK_SUCCESS) && (result != VK_ERROR_OUT_OF_DATE_KHR) && (result != VK_SUBOPTIMAL_KHR)) {
         log_swapchain->critical("vkQueuePresentKHR() failed with {} {}", static_cast<int32_t>(result), c_str(result));
         abort();

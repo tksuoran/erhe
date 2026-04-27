@@ -14,8 +14,11 @@
 #include "SkylineBinPack.h" // RectangleBinPack
 
 #include "config/generated/scene_config.hpp"
+#include "app_context.hpp"
+#include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_verify/verify.hpp"
 #include "erhe_rendergraph/rendergraph.hpp"
 #include "erhe_geometry/shapes/cone.hpp"
 #include "erhe_geometry/shapes/sphere.hpp"
@@ -106,7 +109,8 @@ Scene_builder::Scene_builder(
     setup_lights();
     make_brushes(app_settings, mesh_memory, executor);
     add_room    ();
-    mesh_memory.buffer_transfer_queue.flush();
+    ERHE_VERIFY(context.current_command_buffer != nullptr);
+    mesh_memory.buffer_transfer_queue.flush(*context.current_command_buffer);
 }
 
 Scene_builder::~Scene_builder() noexcept
@@ -703,7 +707,8 @@ void Scene_builder::make_brushes(
         m_johnson_solids_folder->disable_flag_bits(erhe::Item_flags::expand);
     }
 
-    mesh_memory.buffer_transfer_queue.flush();
+    ERHE_VERIFY(m_context.current_command_buffer != nullptr);
+    mesh_memory.buffer_transfer_queue.flush(*m_context.current_command_buffer);
 }
 
 void Scene_builder::add_room()

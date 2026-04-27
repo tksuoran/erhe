@@ -12,6 +12,7 @@ namespace erhe::graphics {
 
 class Bind_group_layout;
 class Buffer;
+class Command_buffer;
 class Device;
 class Render_pass;
 class Render_pipeline;
@@ -24,7 +25,7 @@ class Render_command_encoder_impl;
 class Render_command_encoder final : public Command_encoder
 {
 public:
-    Render_command_encoder(Device& device);
+    Render_command_encoder(Device& device, Command_buffer& command_buffer);
     Render_command_encoder(const Render_command_encoder&) = delete;
     Render_command_encoder& operator=(const Render_command_encoder&) = delete;
     Render_command_encoder(Render_command_encoder&&) = delete;
@@ -64,6 +65,11 @@ public:
     ) const;
 
     void dump_state(const char* label) const;
+
+    // The Command_buffer this encoder records into. Used by APIs that
+    // need to record into the same cb but aren't fully encoder-shaped
+    // yet (Texture_heap::bind for vkCmdBindDescriptorSets).
+    [[nodiscard]] auto get_command_buffer() -> Command_buffer&;
 
 private:
     erhe::utility::pimpl_ptr<Render_command_encoder_impl, 128, 16> m_impl;

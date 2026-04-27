@@ -9,6 +9,7 @@
 #include "erhe_geometry/shapes/regular_polygon.hpp"
 #include "erhe_graphics/blit_command_encoder.hpp"
 #include "erhe_graphics/buffer_transfer_queue.hpp"
+#include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/sampler.hpp"
@@ -24,6 +25,7 @@ namespace editor {
 
 Rendertarget_mesh::Rendertarget_mesh(
     erhe::graphics::Device&            graphics_device,
+    erhe::graphics::Command_buffer&    command_buffer,
     erhe::scene_renderer::Mesh_memory& mesh_memory,
     const int                          width,
     const int                          height,
@@ -34,7 +36,7 @@ Rendertarget_mesh::Rendertarget_mesh(
 {
     enable_flag_bits(erhe::Item_flags::rendertarget | erhe::Item_flags::translucent);
 
-    resize_rendertarget(graphics_device, mesh_memory, width, height);
+    resize_rendertarget(command_buffer, graphics_device, mesh_memory, width, height);
 }
 
 auto Rendertarget_mesh::get_type() const -> uint64_t
@@ -48,6 +50,7 @@ auto Rendertarget_mesh::get_type_name() const -> std::string_view
 }
 
 void Rendertarget_mesh::resize_rendertarget(
+    erhe::graphics::Command_buffer&    command_buffer,
     erhe::graphics::Device&            graphics_device,
     erhe::scene_renderer::Mesh_memory& mesh_memory,
     const int                          width,
@@ -79,7 +82,14 @@ void Rendertarget_mesh::resize_rendertarget(
             .debug_label  = "Rendertarget_mesh::m_texture"
         }
     );
-    graphics_device.clear_texture(*m_texture.get(), { 0.0, 0.0, 0.0, 0.0 });
+    // Render pass below uses layout_before=shader_read_only_optimal. Texture
+    // starts in UNDEFINED layout, so transition it up front to match what
+    // start_render_pass expects on first use; subsequent frames already end
+    // in shader_read_only_optimal via layout_after, so this is a one-shot.
+    // Also, the texture may be sampled by ImGui before it has been rendered
+    // into (rendertarget_mesh is referenced as a sampled texture by
+    // rendertarget_imgui_host's draw data).
+    command_buffer.transition_texture_layout(*m_texture.get(), erhe::graphics::Image_layout::shader_read_only_optimal);
 
     m_sampler = std::make_shared<erhe::graphics::Sampler>(
         graphics_device,
@@ -159,7 +169,7 @@ void Rendertarget_mesh::resize_rendertarget(
     clear_primitives();
     add_primitive(primitive, m_material);
 
-    mesh_memory.buffer_transfer_queue.flush();
+    mesh_memory.buffer_transfer_queue.flush(command_buffer);
 
     enable_flag_bits(
         erhe::Item_flags::visible      |
@@ -326,10 +336,10 @@ auto Rendertarget_mesh::get_world_to_window(const glm::vec3 position_in_world) c
     };
 }
 
-void Rendertarget_mesh::render_done(App_context& context)
+void Rendertarget_mesh::render_done(erhe::graphics::Command_buffer& command_buffer, App_context& context)
 {
     {
-        erhe::graphics::Blit_command_encoder encoder = context.graphics_device->make_blit_command_encoder();
+        erhe::graphics::Blit_command_encoder encoder = context.graphics_device->make_blit_command_encoder(command_buffer);
         encoder.generate_mipmaps(m_texture.get());
     }
 

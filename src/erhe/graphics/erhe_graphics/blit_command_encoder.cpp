@@ -15,8 +15,8 @@
 
 namespace erhe::graphics {
 
-Blit_command_encoder::Blit_command_encoder(Device& device)
-    : m_impl{device}
+Blit_command_encoder::Blit_command_encoder(Device& device, Command_buffer& command_buffer)
+    : m_impl{device, command_buffer}
 {
     static_assert(sizeof(Blit_command_encoder_impl) <= 128);
     static_assert(alignof(Blit_command_encoder_impl) <= 16);

@@ -6,6 +6,7 @@
 
 #include <memory>
 
+namespace erhe::graphics       { class Command_buffer; }
 namespace erhe::imgui          { class Imgui_windows; }
 namespace erhe::primitive      { class Material; }
 namespace erhe::rendergraph    { class Rendergraph; }
@@ -28,7 +29,7 @@ public:
     );
 
     // Implements erhe::rendergraph::Rendergraph_node
-    void execute_rendergraph_node() override;
+    void execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer) override;
 
     void set_area_size(int size);
 

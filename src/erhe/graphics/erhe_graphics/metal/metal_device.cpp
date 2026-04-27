@@ -256,15 +256,6 @@ auto Device_impl::wait_frame() -> bool
     return true;
 }
 
-auto Device_impl::wait_swapchain_frame(Frame_state& out_frame_state) -> bool
-{
-    ERHE_VERIFY(m_state == Device_frame_state::waited);
-    out_frame_state.predicted_display_time   = 0;
-    out_frame_state.predicted_display_period = 0;
-    out_frame_state.should_render            = true;
-    return true;
-}
-
 auto Device_impl::begin_frame() -> bool
 {
     ERHE_VERIFY(m_state == Device_frame_state::waited);
@@ -325,100 +316,53 @@ auto Device_impl::begin_frame() -> bool
 
 auto Device_impl::begin_frame(const Frame_begin_info& frame_begin_info) -> bool
 {
-    const bool device_ok = begin_frame();
-    if (!device_ok) {
-        return false;
-    }
-    Frame_state dummy_state{};
-    return begin_swapchain_frame(frame_begin_info, dummy_state);
+    // Legacy compat: swapchain part moved to Command_buffer::begin_swapchain.
+    static_cast<void>(frame_begin_info);
+    return begin_frame();
 }
 
-auto Device_impl::end_frame(const Frame_end_info& frame_end_info) -> bool
+auto Device_impl::end_frame() -> bool
 {
+    // CONTRACT: end_frame advances the frame index. That is its ONLY
+    // job. It does not submit, it does not present. See
+    // erhe_graphics/notes.md ("Frame lifecycle") and the Vulkan
+    // implementation for the rationale.
+    //
+    // TODO Metal still drives commit + presentDrawable on the legacy
+    // single MTL::CommandBuffer (m_active_command_buffer) elsewhere;
+    // that work needs to move into Device::submit_command_buffers
+    // (matching Vulkan / GL) once Metal's Command_buffer_impl owns a
+    // real MTL::CommandBuffer. Until then, the Metal backend is
+    // expected to be exercised only via paths that still drive the
+    // legacy commit explicitly.
     ERHE_VERIFY(
         (m_state == Device_frame_state::in_swapchain_frame) ||
-        (m_state == Device_frame_state::recording)
+        (m_state == Device_frame_state::recording) ||
+        (m_state == Device_frame_state::waited)
     );
 
-    if (m_state == Device_frame_state::in_swapchain_frame) {
-        end_swapchain_frame(frame_end_info);
-    }
-
-    // Present the swapchain drawable on the device cb (if a swapchain
-    // frame was nested this device frame), then commit the single cb.
-    if (m_active_command_buffer != nullptr) {
-        if (m_had_swapchain_frame && (m_pending_drawable != nullptr)) {
-            m_active_command_buffer->presentDrawable(m_pending_drawable);
-        }
-        // Release the per-frame fence once the GPU is done with the
-        // cb. The fence must remain alive for the duration of cb
-        // execution on the GPU.
-        if (m_frame_fence != nullptr) {
-            MTL::Fence* fence_to_release = m_frame_fence;
-            m_active_command_buffer->addCompletedHandler(
-                [fence_to_release](MTL::CommandBuffer*) {
-                    fence_to_release->release();
-                }
-            );
-            m_frame_fence = nullptr;
-        }
-        m_active_command_buffer->commit();
-        m_active_command_buffer->release();
-        m_active_command_buffer = nullptr;
-    }
-
-    // Let Swapchain_impl::end_frame run its bookkeeping (releases the
-    // cached drawable, etc.). The actual present was just done on the
-    // device cb above.
-    bool result = true;
-    if (m_had_swapchain_frame && m_surface) {
-        Swapchain* swapchain = m_surface->get_swapchain();
-        if (swapchain != nullptr) {
-            result = swapchain->get_impl().end_frame(frame_end_info);
-        }
-    }
     m_had_swapchain_frame = false;
     m_pending_drawable    = nullptr;
 
     ++m_frame_index;
     m_state = Device_frame_state::idle;
-    return result;
+    return true;
 }
 
-auto Device_impl::end_frame() -> bool
+auto Device_impl::end_frame(const Frame_end_info& frame_end_info) -> bool
 {
-    return end_frame(Frame_end_info{});
+    // Legacy compat overload; Frame_end_info is no longer used.
+    static_cast<void>(frame_end_info);
+    return end_frame();
 }
 
-auto Device_impl::begin_swapchain_frame(const Frame_begin_info& frame_begin_info, Frame_state& out_frame_state) -> bool
-{
-    ERHE_VERIFY(m_state == Device_frame_state::recording);
-
-    if (!m_surface) {
-        out_frame_state.should_render = false;
-        return false;
-    }
-    Swapchain* swapchain = m_surface->get_swapchain();
-    if (swapchain == nullptr) {
-        out_frame_state.should_render = false;
-        return false;
-    }
-
-    const bool ok = swapchain->get_impl().begin_frame(frame_begin_info);
-    out_frame_state.should_render = ok;
-    if (ok) {
-        // Latch the drawable so end_frame() can present it on the
-        // device cb after all render-pass encoding has completed.
-        m_pending_drawable    = swapchain->get_impl().get_current_drawable();
-        m_state               = Device_frame_state::in_swapchain_frame;
-        m_had_swapchain_frame = true;
-    }
-    return ok;
-}
 
 auto Device_impl::get_device_frame_command_buffer() const -> MTL::CommandBuffer*
 {
-    if (!is_in_device_frame()) {
+    const bool in_device_frame =
+        (m_state == Device_frame_state::recording) ||
+        (m_state == Device_frame_state::in_swapchain_frame);
+    if (!in_device_frame) {
         return nullptr;
     }
     // While a render pass is open on the device cb, transfer/blit ops
@@ -439,23 +383,6 @@ auto Device_impl::get_device_frame_fence() const -> MTL::Fence*
     return m_frame_fence;
 }
 
-void Device_impl::end_swapchain_frame(const Frame_end_info& /*frame_end_info*/)
-{
-    ERHE_VERIFY(m_state == Device_frame_state::in_swapchain_frame);
-    m_state = Device_frame_state::recording;
-}
-
-void Device_impl::prime_device_frame_slot()
-{
-    // Metal has no per-slot command-buffer / fence infrastructure to prime; no-op.
-    ERHE_VERIFY(m_state == Device_frame_state::waited);
-}
-
-auto Device_impl::is_in_device_frame() const -> bool
-{
-    return (m_state == Device_frame_state::recording) ||
-           (m_state == Device_frame_state::in_swapchain_frame);
-}
 
 auto Device_impl::is_in_swapchain_frame() const -> bool
 {
@@ -740,6 +667,22 @@ void Device_impl::clear_texture(const Texture& texture, const std::array<double,
     }
 }
 
+auto Device_impl::get_command_buffer(unsigned int thread_slot) -> Command_buffer&
+{
+    static_cast<void>(thread_slot);
+    // Stub: iteration target. Will eventually return a Command_buffer
+    // wrapping an MTLCommandBuffer obtained from the device's
+    // MTLCommandQueue.
+    static Command_buffer* dummy{nullptr};
+    return *dummy;
+}
+
+void Device_impl::submit_command_buffers(std::span<Command_buffer* const> command_buffers)
+{
+    static_cast<void>(command_buffers);
+    // Stub: iteration target.
+}
+
 void Device_impl::upload_to_buffer(const Buffer& buffer, const size_t offset, const void* data, const size_t length)
 {
     if ((data == nullptr) || (length == 0)) {
@@ -943,7 +886,7 @@ auto Device_impl::get_handle(const Texture& texture, const Sampler& sampler) con
     return 0; // Metal uses argument buffers instead of bindless handles
 }
 
-auto Device_impl::create_dummy_texture(const erhe::dataformat::Format format) -> std::shared_ptr<Texture>
+auto Device_impl::create_dummy_texture(Command_buffer& /*init_command_buffer*/, const erhe::dataformat::Format format) -> std::shared_ptr<Texture>
 {
     const Texture_create_info create_info{
         .device       = m_device,
@@ -1051,19 +994,19 @@ void Device_impl::cmd_texture_barrier(uint64_t usage_before, uint64_t usage_afte
     static_cast<void>(usage_after);
 }
 
-auto Device_impl::make_blit_command_encoder() -> Blit_command_encoder
+auto Device_impl::make_blit_command_encoder(Command_buffer& command_buffer) -> Blit_command_encoder
 {
-    return Blit_command_encoder{m_device};
+    return Blit_command_encoder{m_device, command_buffer};
 }
 
-auto Device_impl::make_compute_command_encoder() -> Compute_command_encoder
+auto Device_impl::make_compute_command_encoder(Command_buffer& command_buffer) -> Compute_command_encoder
 {
-    return Compute_command_encoder{m_device};
+    return Compute_command_encoder{m_device, command_buffer};
 }
 
-auto Device_impl::make_render_command_encoder() -> Render_command_encoder
+auto Device_impl::make_render_command_encoder(Command_buffer& command_buffer) -> Render_command_encoder
 {
-    return Render_command_encoder{m_device};
+    return Render_command_encoder{m_device, command_buffer};
 }
 
 auto Device_impl::get_format_properties(const erhe::dataformat::Format format) const -> Format_properties

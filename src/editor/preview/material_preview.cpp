@@ -11,11 +11,13 @@
 #include "renderers/viewport_config.hpp"
 #include "scene/scene_root.hpp"
 
+#include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_geometry/shapes/sphere.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/render_pass.hpp"
+#include "erhe_verify/verify.hpp"
 #include "erhe_graphics/scoped_debug_group.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_math/math_util.hpp"
@@ -32,12 +34,13 @@ namespace editor {
 
 Material_preview::Material_preview(
     erhe::graphics::Device&            graphics_device,
+    erhe::graphics::Command_buffer&    init_command_buffer,
     App_context&                       app_context,
     erhe::scene_renderer::Mesh_memory& mesh_memory,
     Programs&                          programs,
     const bool                         reverse_depth
 )
-    : Scene_preview{graphics_device, app_context, mesh_memory, programs, reverse_depth}
+    : Scene_preview{graphics_device, init_command_buffer, app_context, mesh_memory, programs, reverse_depth}
 {
     make_preview_scene(mesh_memory);
 
@@ -179,9 +182,12 @@ void Material_preview::render_preview(const std::shared_ptr<erhe::primitive::Mat
         get_depth_range()
     );
 
-    erhe::graphics::Render_command_encoder render_encoder = m_graphics_device.make_render_command_encoder();
-    erhe::graphics::Scoped_render_pass scoped_render_pass{*m_render_pass.get()};
+    ERHE_VERIFY(m_context.current_command_buffer != nullptr);
+    erhe::graphics::Command_buffer& command_buffer = *m_context.current_command_buffer;
+    erhe::graphics::Render_command_encoder render_encoder = m_graphics_device.make_render_command_encoder(command_buffer);
+    erhe::graphics::Scoped_render_pass scoped_render_pass{*m_render_pass.get(), command_buffer};
     const Render_context context{
+        .command_buffer      = &command_buffer,
         .encoder             = &render_encoder,
         .app_context         = m_context,
         .scene_view          = *this,

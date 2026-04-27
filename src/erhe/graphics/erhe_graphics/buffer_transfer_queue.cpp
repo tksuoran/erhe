@@ -1,8 +1,9 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "erhe_graphics/buffer_transfer_queue.hpp"
-#include "erhe_graphics/device.hpp"
 #include "erhe_graphics/buffer.hpp"
+#include "erhe_graphics/command_buffer.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_profile/profile.hpp"
 
@@ -34,7 +35,7 @@ void Buffer_transfer_queue::enqueue(const Buffer* buffer, const std::size_t offs
     m_queued.emplace_back(buffer, offset, std::move(data));
 }
 
-void Buffer_transfer_queue::flush()
+void Buffer_transfer_queue::flush(Command_buffer& command_buffer)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -49,7 +50,7 @@ void Buffer_transfer_queue::flush()
             entry.target_offset,
             entry.data.size()
         );
-        m_device.upload_to_buffer(*entry.target, entry.target_offset, entry.data.data(), entry.data.size());
+        command_buffer.upload_to_buffer(*entry.target, entry.target_offset, entry.data.data(), entry.data.size());
     }
     m_queued.clear();
 }

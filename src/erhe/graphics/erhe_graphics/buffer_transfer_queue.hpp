@@ -8,6 +8,7 @@
 namespace erhe::graphics {
 
 class Buffer;
+class Command_buffer;
 class Device;
 
 class Buffer_transfer_queue final
@@ -45,7 +46,10 @@ public:
         std::vector<uint8_t> data;
     };
 
-    void flush();
+    // Drain the queue by recording every pending upload into the given
+    // command buffer. The cb must be in recording state; the caller is
+    // responsible for submitting it.
+    void flush(Command_buffer& command_buffer);
 
     void enqueue(const Buffer* buffer, std::size_t offset, std::vector<uint8_t>&& data);
 

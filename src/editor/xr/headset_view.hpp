@@ -16,6 +16,7 @@
 #include "erhe_xr/headset.hpp"
 
 namespace erhe::graphics {
+    class Command_buffer;
     class Device;
     class Swapchain;
 }
@@ -69,7 +70,7 @@ public:
     ~Headset_view_node() override;
 
     // Implements Rendergraph_node
-    void execute_rendergraph_node() override;
+    void execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer) override;
 
 private:
     Headset_view& m_headset_view;
@@ -116,7 +117,7 @@ public:
     auto begin_frame   () -> bool;
     auto poll_events   () -> bool;
     auto update_actions() -> bool;
-    auto render_headset() -> bool;
+    auto render_headset(erhe::graphics::Command_buffer& command_buffer) -> bool;
 
     void end_frame                ();
     void request_renderdoc_capture();

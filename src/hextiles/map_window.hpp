@@ -13,6 +13,7 @@ namespace erhe::commands {
     class Commands;
 }
 namespace erhe::graphics {
+    class Command_buffer;
     class Device;
 }
 namespace erhe::imgui {
@@ -123,7 +124,7 @@ public:
 
     void scroll_to    (Tile_coordinate center_tile);
     void hover        (glm::vec2 window_position);
-    void render       ();
+    void render       (erhe::graphics::Command_buffer& command_buffer);
     void blit         (Pixel_coordinate shape, Tile_coordinate tile_location, uint32_t color = 0xffffffff) const;
     void print        (std::string_view text, Tile_coordinate tile_location, uint32_t color = 0xffffffff) const;
 

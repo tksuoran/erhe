@@ -281,8 +281,7 @@ auto get_binding_p_name(const gl::Texture_target gl_target) -> gl::Get_p_name
     }
 }
 
-// TODO Maybe this should use Render_command_encoder?
-auto Texture_heap_impl::bind() -> std::size_t
+auto Texture_heap_impl::bind(Render_command_encoder& /*encoder*/) -> std::size_t
 {
     Scoped_debug_group debug_group{"Texture_heap_impl::bind()"};
 

@@ -11,6 +11,8 @@ erhe_target_sources_grouped(
     erhe_graphics/buffer.hpp
     erhe_graphics/buffer_transfer_queue.cpp
     erhe_graphics/buffer_transfer_queue.hpp
+    erhe_graphics/command_buffer.cpp
+    erhe_graphics/command_buffer.hpp
     erhe_graphics/command_encoder.cpp
     erhe_graphics/command_encoder.hpp
     erhe_graphics/compute_command_encoder.cpp
@@ -104,6 +106,8 @@ if (ERHE_GRAPHICS_API_OPENGL)
         erhe_graphics/gl/gl_blit_command_encoder.hpp
         erhe_graphics/gl/gl_buffer.cpp
         erhe_graphics/gl/gl_buffer.hpp
+        erhe_graphics/gl/gl_command_buffer.cpp
+        erhe_graphics/gl/gl_command_buffer.hpp
         erhe_graphics/gl/gl_command_encoder.cpp
         erhe_graphics/gl/gl_command_encoder.hpp
         erhe_graphics/gl/gl_compute_command_encoder.cpp
@@ -164,6 +168,8 @@ if (ERHE_GRAPHICS_API_VULKAN)
         erhe_graphics/vulkan/vulkan_blit_command_encoder.hpp
         erhe_graphics/vulkan/vulkan_buffer.cpp
         erhe_graphics/vulkan/vulkan_buffer.hpp
+        erhe_graphics/vulkan/vulkan_command_buffer.cpp
+        erhe_graphics/vulkan/vulkan_command_buffer.hpp
         erhe_graphics/vulkan/vulkan_command_encoder.cpp
         erhe_graphics/vulkan/vulkan_command_encoder.hpp
         erhe_graphics/vulkan/vulkan_compute_command_encoder.cpp
@@ -204,9 +210,6 @@ if (ERHE_GRAPHICS_API_VULKAN)
         erhe_graphics/vulkan/vulkan_texture_heap.hpp
         erhe_graphics/vulkan/vulkan_vertex_input_state.cpp
         erhe_graphics/vulkan/vulkan_vertex_input_state.hpp
-        erhe_graphics/vulkan/vulkan_immediate_commands.cpp
-        erhe_graphics/vulkan/vulkan_immediate_commands.hpp
-        erhe_graphics/vulkan/vulkan_submit_handle.hpp
         erhe_graphics/vulkan/vma_usage.cpp
     )
 
@@ -248,6 +251,8 @@ if (ERHE_GRAPHICS_API_METAL)
         erhe_graphics/metal/metal_blit_command_encoder.hpp
         erhe_graphics/metal/metal_buffer.cpp
         erhe_graphics/metal/metal_buffer.hpp
+        erhe_graphics/metal/metal_command_buffer.cpp
+        erhe_graphics/metal/metal_command_buffer.hpp
         erhe_graphics/metal/metal_command_encoder.cpp
         erhe_graphics/metal/metal_command_encoder.hpp
         erhe_graphics/metal/metal_compute_command_encoder.cpp
@@ -307,6 +312,8 @@ if (ERHE_GRAPHICS_API_NONE)
         erhe_graphics/null/null_blit_command_encoder.hpp
         erhe_graphics/null/null_buffer.cpp
         erhe_graphics/null/null_buffer.hpp
+        erhe_graphics/null/null_command_buffer.cpp
+        erhe_graphics/null/null_command_buffer.hpp
         erhe_graphics/null/null_command_encoder.cpp
         erhe_graphics/null/null_command_encoder.hpp
         erhe_graphics/null/null_compute_command_encoder.cpp

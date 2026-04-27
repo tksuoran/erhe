@@ -250,6 +250,13 @@ auto Xr_instance::create_instance() -> bool
 #endif
 
 #if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+    if (!has_extension(XR_KHR_VULKAN_ENABLE2_EXTENSION_NAME)) {
+        log_xr->error(
+            XR_KHR_VULKAN_ENABLE2_EXTENSION_NAME
+            " not supported by OpenXR runtime. This is a fatal error."
+        );
+        abort();
+    }
     enabled_extensions.push_back(XR_KHR_VULKAN_ENABLE2_EXTENSION_NAME);
 #endif
 
@@ -313,11 +320,8 @@ auto Xr_instance::create_instance() -> bool
         enabled_layers.push_back(best_practices_validation_layer_name);
     }
 
-    uint32_t       dropped_layer_count     = 0;
-    uint32_t       dropped_extension_count = 0;
-    const uint32_t total_layer_count       = static_cast<uint32_t>(enabled_layers.size());
-    const uint32_t total_extension_count   = static_cast<uint32_t>(enabled_extensions.size());
-    for (;;) {
+
+    {
         const XrInstanceCreateInfo create_info {
             .type                   = XR_TYPE_INSTANCE_CREATE_INFO,
             .next                   = nullptr,
@@ -329,31 +333,24 @@ auto Xr_instance::create_instance() -> bool
                 .engineVersion      = 1,
                 .apiVersion         = XR_API_VERSION_1_1
             },
-            .enabledApiLayerCount   = total_layer_count - dropped_layer_count,
+            .enabledApiLayerCount   = static_cast<uint32_t>(enabled_layers.size()),
             .enabledApiLayerNames   = enabled_layers.data(),
-            .enabledExtensionCount  = total_extension_count - dropped_extension_count,
+            .enabledExtensionCount  = static_cast<uint32_t>(enabled_extensions.size()),
             .enabledExtensionNames  = enabled_extensions.data(),
         };
 
         XrResult result = xrCreateInstance(&create_info, &m_xr_instance);
         if (result == XR_SUCCESS) {
-            break;
+            log_xr->info("xrCreateInstance() succeeded.");
         }
         if (result == XR_ERROR_EXTENSION_NOT_PRESENT) {
-            if (dropped_extension_count == total_extension_count) {
-                break;
-            }
-            ++dropped_extension_count;
-            continue;
+            log_xr->error("xrCreateInstance() failed with XR_ERROR_EXTENSION_NOT_PRESENT");
+            abort();
         }
         if (result == XR_ERROR_API_LAYER_NOT_PRESENT) {
-            if (dropped_layer_count == total_layer_count) {
-                break;
-            }
-            ++dropped_layer_count;
-            continue;
+            log_xr->error("xrCreateInstance() failed with XR_ERROR_API_LAYER_NOT_PRESENT");
+            abort();
         }
-        break;
     }
 
     // m_xrSetEnvironmentDepthEstimationVARJO = nullptr;

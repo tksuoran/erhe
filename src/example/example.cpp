@@ -19,6 +19,7 @@
 #include "erhe_scene_renderer/generated/mesh_memory_config.hpp"
 #include "erhe_scene_renderer/generated/mesh_memory_config_serialization.hpp"
 #include "erhe_graphics/buffer_transfer_queue.hpp"
+#include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/generated/graphics_config_serialization.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/device.hpp"
@@ -105,25 +106,22 @@ public:
                 true
             )
         }
-        // Init-time command buffer. No desktop swapchain is engaged here,
-        // so the slot must be primed explicitly between wait_frame and
-        // begin_frame -- fence wait, recycle, fresh fence, ensure cb -- so
-        // begin_frame has a valid cb to open and end_frame's device-only
-        // submit branch actually submits. Subsequent members (Mesh_memory,
-        // Program_interface, Programs, Forward_renderer) and the constructor
-        // body (gltf parse -> texture uploads, primitive GPU buffer builds,
-        // pipeline state creation) may record GPU commands and need an open
-        // init cb. end_frame() is called at the bottom of the constructor body.
-        , m_init_frame_started{[this]{
+        // Init-time command buffer. The constructor records all init-time
+        // GPU work (gltf-driven texture uploads via Image_transfer, the
+        // mesh_memory buffer-transfer-queue flush, Forward_renderer's
+        // dummy-texture upload + Light_buffer fallback-shadow clear) into
+        // this single cb. The constructor body ends + submits the cb and
+        // wait_idles before returning so every uploaded resource is
+        // GPU-ready by the time the main loop starts.
+        , m_init_command_buffer{[this]() -> erhe::graphics::Command_buffer& {
             const bool init_wait_frame_ok = m_graphics_device.wait_frame();
             ERHE_VERIFY(init_wait_frame_ok);
-            m_graphics_device.prime_device_frame_slot();
-            const bool init_begin_frame_ok = m_graphics_device.begin_frame();
-            ERHE_VERIFY(init_begin_frame_ok);
-            return true;
+            erhe::graphics::Command_buffer& cb = m_graphics_device.get_command_buffer(0);
+            cb.begin();
+            return cb;
         }()}
         , m_y_flip{m_graphics_device.get_info().coordinate_conventions.clip_space_y_flip == erhe::math::Clip_space_y_flip::enabled}
-        , m_image_transfer   {m_graphics_device}
+        , m_image_transfer   {m_graphics_device, m_init_command_buffer}
         , m_vertex_format{
             {
                 0,
@@ -150,7 +148,7 @@ public:
         }
         , m_program_interface{m_graphics_device, m_mesh_memory.vertex_format, m_program_interface_config}
         , m_programs         {m_graphics_device, m_program_interface}
-        , m_forward_renderer {m_graphics_device, m_program_interface}
+        , m_forward_renderer {m_graphics_device, m_init_command_buffer, m_program_interface}
         , m_scene            {"example scene", nullptr}
     {
         m_window.set_title(
@@ -193,7 +191,7 @@ public:
             }
         }
 
-        m_mesh_memory.buffer_transfer_queue.flush();
+        m_mesh_memory.buffer_transfer_queue.flush(m_init_command_buffer);
 
         m_camera = make_camera("Camera", glm::vec3{0.0f, 0.0f, 10.0f}, glm::vec3{0.0f, 0.0f, -1.0f});
         m_light = make_point_light("Light",
@@ -228,7 +226,17 @@ public:
 
         make_render_pipeline_states();
 
-        // Close the init-time command buffer opened in the member init list.
+        // Close the init-time command buffer opened in the member init
+        // list, submit, and block until the GPU has consumed every
+        // recorded upload + clear so the resources are ready for the
+        // main render loop.
+        m_init_command_buffer.end();
+        erhe::graphics::Command_buffer* init_cbs[] = { &m_init_command_buffer };
+        m_graphics_device.submit_command_buffers(std::span<erhe::graphics::Command_buffer* const>{init_cbs});
+        m_graphics_device.wait_idle();
+
+        // Advance the frame index so subsequent frames are paced on the
+        // device timeline.
         const bool init_end_frame_ok = m_graphics_device.end_frame();
         ERHE_VERIFY(init_end_frame_ok);
     }
@@ -305,14 +313,8 @@ public:
     {
         m_current_time = std::chrono::steady_clock::now();
         while (!m_close_requested) {
-            erhe::graphics::Frame_state frame_state{};
             const bool wait_ok = m_graphics_device.wait_frame();
             ERHE_VERIFY(wait_ok);
-            const bool wait_swap_ok = m_graphics_device.wait_swapchain_frame(frame_state);
-            ERHE_VERIFY(wait_swap_ok);
-
-            // m_graphics_device.wait_for_idle()
-            // m_window.delay_before_swap(1.0f / 120.0f); // sleep half the frame
 
             m_window.poll_events();
             auto& input_events = m_window.get_input_events();
@@ -334,23 +336,38 @@ public:
             };
             m_request_resize_pending.store(false);
 
-            const bool begin_frame_ok = m_graphics_device.begin_frame(frame_begin_info);
-            ERHE_VERIFY(begin_frame_ok);
+            // Allocate this frame's command buffer + drive the swapchain
+            // through it (acquire + per-slot acquire/present semaphore
+            // setup). Mirrors hello_swap's tick.
+            erhe::graphics::Command_buffer& command_buffer = m_graphics_device.get_command_buffer(0);
+            erhe::graphics::Frame_state frame_state{};
+            const bool wait_swap_ok  = command_buffer.wait_for_swapchain(frame_state);
+            const bool should_render = wait_swap_ok && command_buffer.begin_swapchain(frame_begin_info, frame_state);
 
-            m_in_tick.store(true);
-            tick();
-            m_in_tick.store(false);
-            m_first_frame_rendered = true;
+            if (should_render) {
+                command_buffer.begin();
+                m_in_tick.store(true);
+                tick(command_buffer);
+                m_in_tick.store(false);
+                m_first_frame_rendered = true;
+                command_buffer.end();
 
-            const erhe::graphics::Frame_end_info frame_end_info{
-                .requested_display_time = 0 // TODO
-            };
-            const bool end_frame_ok = m_graphics_device.end_frame(frame_end_info);
+                const erhe::graphics::Frame_end_info frame_end_info{
+                    .requested_display_time = 0 // TODO
+                };
+                command_buffer.end_swapchain(frame_end_info);
+
+                // Submit + implicit present.
+                erhe::graphics::Command_buffer* cbs[] = { &command_buffer };
+                m_graphics_device.submit_command_buffers(std::span<erhe::graphics::Command_buffer* const>{cbs});
+            }
+
+            const bool end_frame_ok = m_graphics_device.end_frame();
             ERHE_VERIFY(end_frame_ok);
         }
     }
 
-    void tick()
+    void tick(erhe::graphics::Command_buffer& command_buffer)
     {
         const auto tick_end_time = std::chrono::steady_clock::now();
 
@@ -411,8 +428,8 @@ public:
 
         update_render_pass(viewport.width, viewport.height);
 
-        erhe::graphics::Render_command_encoder render_encoder = m_graphics_device.make_render_command_encoder();
-        erhe::graphics::Scoped_render_pass scoped_render_pass{*m_render_pass.get()};
+        erhe::graphics::Render_command_encoder render_encoder = m_graphics_device.make_render_command_encoder(command_buffer);
+        erhe::graphics::Scoped_render_pass scoped_render_pass{*m_render_pass.get(), command_buffer};
 
         m_forward_renderer.render(
             erhe::scene_renderer::Forward_renderer::Render_parameters{
@@ -574,7 +591,7 @@ private:
     erhe::window::Context_window                   m_window;
     erhe::graphics::Device                         m_graphics_device;
     bool                                           m_shader_error_callback_set{false};
-    bool                                           m_init_frame_started       {false};
+    erhe::graphics::Command_buffer&                m_init_command_buffer;
     bool                                           m_y_flip;
     erhe::gltf::Image_transfer                     m_image_transfer;
     erhe::dataformat::Vertex_format                m_vertex_format;

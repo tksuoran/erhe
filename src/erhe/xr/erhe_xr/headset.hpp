@@ -10,7 +10,7 @@
 
 struct XrCompositionLayerProjectionView;
 
-namespace erhe::graphics { class Device; }
+namespace erhe::graphics { class Command_buffer; class Device; }
 namespace erhe::window { class Context_window; }
 
 namespace erhe::xr {
@@ -44,7 +44,7 @@ public:
     auto poll_events   () const -> bool;
     auto update_actions() const -> bool;
     auto begin_frame_  () -> Frame_timing;
-    auto render        (std::function<bool(Render_view&)> render_view_callback) -> bool;
+    auto render        (erhe::graphics::Command_buffer& command_buffer, std::function<bool(Render_view&, erhe::graphics::Command_buffer&)> render_view_callback) -> bool;
     auto end_frame     (bool rendered) -> bool;
     [[nodiscard]] auto get_actions_left        ()       ->       Xr_actions*;
     [[nodiscard]] auto get_actions_left        () const -> const Xr_actions*;

@@ -17,16 +17,25 @@ struct FT_FaceRec_;
 struct hb_font_t;
 struct hb_buffer_t;
 
+namespace erhe::graphics {
+    class Command_buffer;
+}
+
 namespace erhe::ui {
 
 class Font final
 {
 public:
+    // init_command_buffer must be in recording state. Font records its
+    // texture upload into it; the caller is responsible for ending and
+    // submitting the cb (and waiting for completion) before sampling
+    // the font texture.
     Font(
-        erhe::graphics::Device&      graphics_device,
-        const std::filesystem::path& path,
-        unsigned int                 size,
-        float                        outline_thickness = 0.0f
+        erhe::graphics::Device&         graphics_device,
+        erhe::graphics::Command_buffer& init_command_buffer,
+        const std::filesystem::path&    path,
+        unsigned int                    size,
+        float                           outline_thickness = 0.0f
     );
 
     ~Font() noexcept;
@@ -136,9 +145,9 @@ public:
         m_outline_thickness = value;
     }
 
-    auto render() -> bool;
+    auto render(erhe::graphics::Command_buffer& init_command_buffer) -> bool;
 
-    void post_process();
+    void post_process(erhe::graphics::Command_buffer& init_command_buffer);
 
     void trace_info() const;
 

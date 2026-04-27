@@ -15,6 +15,8 @@
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_imgui/scoped_imgui_context.hpp"
 #include "erhe_math/math_util.hpp"
+#include "erhe_graphics/command_buffer.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/texture.hpp"
@@ -486,7 +488,7 @@ void Rendertarget_imgui_host::stop_text_input()
     //// m_app_context_window.stop_text_input();
 }
 
-void Rendertarget_imgui_host::execute_rendergraph_node()
+void Rendertarget_imgui_host::execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -502,19 +504,19 @@ void Rendertarget_imgui_host::execute_rendergraph_node()
     // Process pending ImGui texture create/update/destroy BEFORE opening
     // the render pass -- Blit_command_encoder (used for texture uploads)
     // cannot record inside a Vulkan render pass.
-    m_app_context.imgui_renderer->update_draw_data_textures();
+    m_app_context.imgui_renderer->update_draw_data_textures(command_buffer);
 
     erhe::graphics::Device& graphics_device = m_rendergraph.get_graphics_device();
     erhe::graphics::Render_pass* render_pass = m_rendertarget_mesh->get_render_pass();
     ERHE_VERIFY(render_pass != nullptr);
     {
-        erhe::graphics::Render_command_encoder render_encoder = graphics_device.make_render_command_encoder();
-        erhe::graphics::Scoped_render_pass scoped_render_pass{*render_pass};
+        erhe::graphics::Render_command_encoder render_encoder = graphics_device.make_render_command_encoder(command_buffer);
+        erhe::graphics::Scoped_render_pass scoped_render_pass{*render_pass, command_buffer};
         m_app_context.imgui_renderer->render_draw_data(render_encoder, *render_pass);
     }
     // render_done() issues a blit (generate_mipmaps), which cannot be recorded
     // inside an active Vulkan render pass -- must run after scoped_render_pass ends.
-    m_rendertarget_mesh->render_done(m_app_context);
+    m_rendertarget_mesh->render_done(command_buffer, m_app_context);
 }
 
 auto Rendertarget_imgui_host::get_consumer_input_texture(int, int) const -> std::shared_ptr<erhe::graphics::Texture>

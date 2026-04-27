@@ -53,6 +53,7 @@ public:
 };
 
 class Blit_command_encoder;
+class Command_buffer;
 class Command_encoder;
 class Compute_command_encoder;
 class Device;
@@ -242,101 +243,90 @@ public:
     void operator= (Device&&)      = delete;
     ~Device() noexcept;
 
-    // Device-frame lifecycle (OpenXR-style three-phase). A device frame is
-    // one command buffer + one fence, paced through the existing
-    // N-frames-in-flight ring. All GPU work (init and rendering) must be
-    // issued between begin_frame() and end_frame().
+    // Device-frame lifecycle. A frame is bracketed by wait_frame() at the
+    // top and end_frame() at the bottom, with one or more cb submits in
+    // between. All cbs are obtained from get_command_buffer() and
+    // committed via submit_command_buffers(). See notes.md
+    // ("Frame lifecycle") for the full sequence.
     //
-    //   wait_frame  -> analog of xrWaitFrame: pace the ring, recycle prior
-    //                  slot resources, fire completion handlers, allocate
-    //                  fresh fence. Fill Frame_state with timing info.
-    //   begin_frame -> analog of xrBeginFrame: open the device-frame command
-    //                  buffer for recording.
-    //   end_frame   -> analog of xrEndFrame: end the command buffer, submit,
-    //                  advance the frame index. Non-blocking. If a swapchain
-    //                  frame was nested, the submit carries acquire/present
-    //                  semaphores and vkQueuePresentKHR runs immediately
-    //                  after.
-    //
-    // The Frame_begin_info / Frame_end_info arguments on begin_frame /
-    // end_frame are temporary: they will migrate to begin_swapchain_frame /
-    // end_swapchain_frame once the editor tick is rewritten (plan step 4).
-    // Device-level wait: pace the ring, recycle prior slot resources, fire
-    // completion handlers, allocate fresh fence. Does NOT touch the window
-    // swapchain. Callers that will engage the swapchain this frame must also
-    // call wait_swapchain_frame below.
+    //   wait_frame  -- pace the ring on the device's timeline semaphore,
+    //                  recycle the per-(frame_in_flight, thread_slot)
+    //                  command pool of the slot we are about to enter,
+    //                  fire completion handlers.
+    //   begin_frame -- (legacy single-cb shim) open the slot's legacy
+    //                  command buffer for recording. New code should not
+    //                  call this; record into the cb returned from
+    //                  get_command_buffer() instead.
+    //   end_frame   -- ADVANCE THE FRAME INDEX. THAT IS ALL.
+    //                  Does NOT submit any command buffer.
+    //                  Does NOT present any swapchain image.
+    //                  Submission and presentation belong to
+    //                  submit_command_buffers (which presents
+    //                  implicitly when a cb engaged a swapchain via
+    //                  Command_buffer::begin_swapchain). end_frame
+    //                  signals the device timeline at the current
+    //                  frame index, then increments it; the next
+    //                  wait_frame() consumes that timeline value to
+    //                  unblock pool reset.
     [[nodiscard]] auto wait_frame () -> bool;
 
-    // No-args begin_frame / end_frame are the bottom-level primitives: open
-    // and close a device frame with no swapchain involvement. Use these
-    // around init-time GPU work and around the swapchain-nested rendering
-    // phase in the main loop.
     [[nodiscard]] auto begin_frame() -> bool;
     [[nodiscard]] auto end_frame  () -> bool;
 
-    // Compat wrappers: old editor tick calls begin_frame(info) / end_frame(info).
-    // begin_frame(info) = begin_frame() + begin_swapchain_frame(info, dummy).
-    // end_frame(info)   = end_swapchain_frame(info) [if active] + end_frame().
+    // Legacy compat overloads. Frame_begin_info / Frame_end_info are
+    // ignored (presentation moved to submit_command_buffers). Kept only
+    // so existing call sites compile while migrating.
     [[nodiscard]] auto begin_frame(const Frame_begin_info& frame_begin_info) -> bool;
     [[nodiscard]] auto end_frame  (const Frame_end_info& frame_end_info) -> bool;
-
-    // Optional swapchain-frame layer; nests inside a recording device frame.
-    // Owns only acquire/present semaphores and the acquired image index.
-    // wait_swapchain_frame acquires the next image slot on the Vulkan
-    // swapchain (and fills Frame_state with predicted display timing).
-    // Must be paired with begin_swapchain_frame / end_swapchain_frame each
-    // frame that engages the swapchain; skip all three when the desktop
-    // window is not being rendered into (e.g. OpenXR).
-    [[nodiscard]] auto wait_swapchain_frame (Frame_state& out_frame_state) -> bool;
-    [[nodiscard]] auto begin_swapchain_frame(const Frame_begin_info& frame_begin_info, Frame_state& out_frame_state) -> bool;
-    void               end_swapchain_frame  (const Frame_end_info& frame_end_info);
-
-    // Prime the device-frame slot without engaging the swapchain. Use this
-    // in place of wait_swapchain_frame when the caller does not render into
-    // the desktop window (e.g. OpenXR). Must be called after wait_frame()
-    // and before begin_frame(). Must NOT be combined with wait_swapchain_frame
-    // in the same tick. No-op on backends that have nothing per-frame to
-    // prepare (GL, Metal, null).
-    void               prime_device_frame_slot();
 
     // Blocks until all in-flight device frames complete; flushes pending
     // completion handlers. For init boundaries, not the steady-state loop.
     void wait_idle();
 
-    [[nodiscard]] auto is_in_device_frame   () const -> bool;
     [[nodiscard]] auto is_in_swapchain_frame() const -> bool;
 
     void start_frame_capture       ();
     void end_frame_capture         ();
 
-    void memory_barrier            (Memory_barrier_mask barriers);
-    void clear_texture             (const Texture& texture, std::array<double, 4> clear_value);
-    void transition_texture_layout (const Texture& texture, Image_layout new_layout);
+    // Allocate a fresh Command_buffer from the pool owned by
+    // (current frame-in-flight slot, thread_slot). The returned cb is
+    // in the initial state; the caller must call begin() before
+    // recording. Lifetime is owned by the per-(frame_in_flight,
+    // thread_slot) pool inside the backend Device_impl: the cb stays
+    // valid until the next time the frame-in-flight slot completes a
+    // GPU submit, at which point the pool is reset wholesale.
+    [[nodiscard]] auto get_command_buffer(unsigned int thread_slot) -> Command_buffer&;
 
-    // Option B explicit barrier: insert a pipeline barrier that
-    // transitions a texture from usage_before to usage_after. Use this
-    // between render passes when the writing pass has
-    // user_synchronized set in its attachment's usage_after, making
-    // the caller responsible for synchronization instead of the
-    // automatic end-of-renderpass barrier (Option A).
+    // Submit a list of recorded Command_buffers to the graphics queue.
+    // For each cb the backend collects the wait/signal semaphores and
+    // CPU-side fence waits registered via Command_buffer::wait_for_*
+    // / signal_*, splices them into a single VkSubmitInfo2 (Vulkan)
+    // or equivalent, then submits.
     //
-    // Must be called outside of a render pass (between
-    // Scoped_render_pass destructor and the next constructor).
-    void cmd_texture_barrier       (uint64_t usage_before, uint64_t usage_after);
-    void upload_to_buffer          (const Buffer& buffer, size_t offset, const void* data, size_t length);
-    void upload_to_texture         (const Texture& texture, int level, int x, int y, int width, int height, erhe::dataformat::Format pixelformat, const void* data, int row_stride);
+    // Implicit present: if any cb engaged a swapchain via
+    // Command_buffer::begin_swapchain, the swapchain's per-slot
+    // present semaphore is signalled by this submit and
+    // vkQueuePresentKHR / swap_buffers / presentDrawable is driven
+    // automatically right after the submit returns. Callers do not
+    // need a separate present step.
+    void submit_command_buffers    (std::span<Command_buffer* const> command_buffers);
+
     void add_completion_handler    (std::function<void()> callback);
     void on_thread_enter           ();
 
     [[nodiscard]] auto get_surface                        () -> Surface*;
     [[nodiscard]] auto get_handle                         (const Texture& texture, const Sampler& sampler) const -> uint64_t;
-    [[nodiscard]] auto create_dummy_texture               (erhe::dataformat::Format format) -> std::shared_ptr<Texture>;
+    // Creates a tiny 2x2 fallback texture, populated with a debug
+    // pattern. The pixel upload is recorded into init_command_buffer;
+    // the caller must end + submit it (and wait on the GPU) before
+    // the returned texture is sampled.
+    [[nodiscard]] auto create_dummy_texture               (Command_buffer& init_command_buffer, erhe::dataformat::Format format) -> std::shared_ptr<Texture>;
     [[nodiscard]] auto get_buffer_alignment               (Buffer_target target) -> std::size_t;
     [[nodiscard]] auto get_frame_index                    () const -> uint64_t;
     [[nodiscard]] auto allocate_ring_buffer_entry         (Buffer_target buffer_target, Ring_buffer_usage usage, std::size_t byte_count) -> Ring_buffer_range;
-    [[nodiscard]] auto make_blit_command_encoder          () -> Blit_command_encoder;
-    [[nodiscard]] auto make_compute_command_encoder       () -> Compute_command_encoder;
-    [[nodiscard]] auto make_render_command_encoder        () -> Render_command_encoder;
+    [[nodiscard]] auto make_blit_command_encoder          (Command_buffer& command_buffer) -> Blit_command_encoder;
+    [[nodiscard]] auto make_compute_command_encoder       (Command_buffer& command_buffer) -> Compute_command_encoder;
+    [[nodiscard]] auto make_render_command_encoder        (Command_buffer& command_buffer) -> Render_command_encoder;
     [[nodiscard]] auto create_render_pipeline             (const Render_pipeline_create_info& create_info) -> std::unique_ptr<Render_pipeline>;
     [[nodiscard]] auto get_format_properties              (erhe::dataformat::Format format) const -> Format_properties;
 

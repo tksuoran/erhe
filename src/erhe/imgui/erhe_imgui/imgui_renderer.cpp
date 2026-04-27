@@ -14,6 +14,7 @@
 
 #include "erhe_graphics/blit_command_encoder.hpp"
 #include "erhe_graphics/buffer.hpp"
+#include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/draw_indirect.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
@@ -249,7 +250,11 @@ namespace {
 
 } // anonymous namespace
 
-Imgui_renderer::Imgui_renderer(erhe::graphics::Device& graphics_device, Imgui_settings& settings)
+Imgui_renderer::Imgui_renderer(
+    erhe::graphics::Device&         graphics_device,
+    erhe::graphics::Command_buffer& init_command_buffer,
+    Imgui_settings&                 settings
+)
     : m_graphics_device{graphics_device}
     , m_imgui_program_interface{graphics_device}
     , m_bind_group_layout{
@@ -309,7 +314,7 @@ Imgui_renderer::Imgui_renderer(erhe::graphics::Device& graphics_device, Imgui_se
             .color_blend    = erhe::graphics::Color_blend_state::color_blend_alpha
         }
     }
-    , m_dummy_texture{graphics_device.create_dummy_texture(erhe::dataformat::Format::format_8_vec4_srgb)}
+    , m_dummy_texture{graphics_device.create_dummy_texture(init_command_buffer, erhe::dataformat::Format::format_8_vec4_srgb)}
     , m_dummy_array_texture{
         std::make_shared<erhe::graphics::Texture>(
             graphics_device,
@@ -904,7 +909,7 @@ auto Imgui_renderer::image_button(Draw_texture_parameters&& parameters) -> bool
     return ImGui::IsItemClicked();
 }
 
-void Imgui_renderer::update_texture(ImTextureData* tex)
+void Imgui_renderer::update_texture(ImTextureData* tex, erhe::graphics::Command_buffer& command_buffer)
 {
     erhe::graphics::Scoped_debug_group pass_scope{"Imgui_renderer::update_texture()"};
 
@@ -936,7 +941,7 @@ void Imgui_renderer::update_texture(ImTextureData* tex)
         // Upload pixel data
 #if defined(ERHE_OS_MACOS) && defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
         // macOS GL driver has broken glCopyBufferSubData; use direct upload
-        m_graphics_device.upload_to_texture(
+        command_buffer.upload_to_texture(
             *texture.get(),
             0,                    // level
             0, 0,                 // x, y
@@ -960,7 +965,7 @@ void Imgui_renderer::update_texture(ImTextureData* tex)
             buffer_range.bytes_written(byte_count);
             buffer_range.close();
 
-            erhe::graphics::Blit_command_encoder encoder{m_graphics_device};
+            erhe::graphics::Blit_command_encoder encoder = m_graphics_device.make_blit_command_encoder(command_buffer);
             encoder.copy_from_buffer(
                 buffer_range.get_buffer()->get_buffer(),          // source_buffer
                 buffer_range.get_byte_start_offset_in_buffer(),   // source_offset
@@ -998,11 +1003,11 @@ void Imgui_renderer::update_texture(ImTextureData* tex)
         log_imgui->trace("updating texture {}", fmt::ptr(texture));
 
 #if defined(ERHE_OS_MACOS) && defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
-        auto update_rect = [this, texture, tex](ImTextureRect& r) -> void
+        auto update_rect = [&command_buffer, texture, tex](ImTextureRect& r) -> void
         {
             const std::size_t  src_offset = r.x * tex->BytesPerPixel + r.y * tex->GetPitch();
             const void*        src_data   = static_cast<const std::uint8_t*>(tex->GetPixels()) + src_offset;
-            m_graphics_device.upload_to_texture(
+            command_buffer.upload_to_texture(
                 *texture,
                 0,                    // level
                 r.x, r.y,            // x, y
@@ -1013,7 +1018,7 @@ void Imgui_renderer::update_texture(ImTextureData* tex)
             );
         };
 #else
-        erhe::graphics::Blit_command_encoder encoder{m_graphics_device};
+        erhe::graphics::Blit_command_encoder encoder = m_graphics_device.make_blit_command_encoder(command_buffer);
         auto update_rect = [this, &encoder, texture, tex](ImTextureRect& r) -> void
         {
             const std::span<const std::uint8_t> src_span{
@@ -1077,7 +1082,7 @@ void Imgui_renderer::update_texture(ImTextureData* tex)
     }
 }
 
-void Imgui_renderer::update_draw_data_textures()
+void Imgui_renderer::update_draw_data_textures(erhe::graphics::Command_buffer& command_buffer)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -1090,7 +1095,7 @@ void Imgui_renderer::update_draw_data_textures()
     }
     for (ImTextureData* tex : *draw_data->Textures) {
         if (tex->Status != ImTextureStatus_OK) {
-            update_texture(tex);
+            update_texture(tex, command_buffer);
         }
     }
 }
@@ -1403,7 +1408,7 @@ void Imgui_renderer::render_draw_data(
                 render_encoder.set_index_buffer(index_buffer);
                 render_encoder.set_vertex_buffer(vertex_buffer, vertex_buffer_binding_offset, 0);
 
-                m_texture_heap->bind();
+                m_texture_heap->bind(render_encoder);
 
                 ERHE_VERIFY(draw_parameter_buffer_range.get_written_byte_count() > 0);
                 m_draw_parameter_buffer.bind(render_encoder, draw_parameter_buffer_range);

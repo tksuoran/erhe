@@ -11,6 +11,7 @@ class Brush_preview : public Scene_preview
 public:
     Brush_preview(
         erhe::graphics::Device&            graphics_device,
+        erhe::graphics::Command_buffer&    init_command_buffer,
         App_context&                       app_context,
         erhe::scene_renderer::Mesh_memory& mesh_memory,
         Programs&                          programs,

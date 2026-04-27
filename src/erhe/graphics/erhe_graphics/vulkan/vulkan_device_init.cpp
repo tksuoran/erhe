@@ -4,9 +4,9 @@
 #include "erhe_graphics/vulkan/vulkan_device.hpp"
 #include "erhe_graphics/vulkan/vulkan_device_sync_pool.hpp"
 #include "erhe_graphics/vulkan/vulkan_helpers.hpp"
-#include "erhe_graphics/vulkan/vulkan_immediate_commands.hpp"
 #include "erhe_graphics/vulkan/vulkan_scoped_debug_group.hpp"
 #include "erhe_graphics/vulkan/vulkan_surface.hpp"
+#include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/ring_buffer.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/vulkan_external_creators.hpp"
@@ -1077,6 +1077,36 @@ Device_impl::Device_impl(
         }
     }
 
+    // Create one VkCommandPool per (frame_in_flight_slot, thread_slot)
+    // pair, all on the graphics queue family. TRANSIENT_BIT signals the
+    // driver that buffers allocated from these pools are short-lived,
+    // and we reset each pool wholesale (not per-buffer) when the
+    // owning frame-in-flight slot's submit fence completes.
+    for (size_t frame_slot = 0; frame_slot < s_number_of_frames_in_flight; ++frame_slot) {
+        for (unsigned int thread_slot = 0; thread_slot < s_number_of_thread_slots; ++thread_slot) {
+            const VkCommandPoolCreateInfo pool_create_info{
+                .sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+                .pNext            = nullptr,
+                .flags            = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT,
+                .queueFamilyIndex = m_graphics_queue_family_index
+            };
+            Per_thread_command_pool& pool = m_command_pools[frame_slot][thread_slot];
+            const VkResult pool_result = vkCreateCommandPool(m_vulkan_device, &pool_create_info, nullptr, &pool.command_pool);
+            if (pool_result != VK_SUCCESS) {
+                log_context->critical(
+                    "vkCreateCommandPool() failed with {} {} for (frame_slot={}, thread_slot={})",
+                    static_cast<int32_t>(pool_result), c_str(pool_result), frame_slot, thread_slot
+                );
+                abort();
+            }
+            set_debug_label(
+                VK_OBJECT_TYPE_COMMAND_POOL,
+                reinterpret_cast<uint64_t>(pool.command_pool),
+                fmt::format("Device cb pool (frame_slot={}, thread_slot={})", frame_slot, thread_slot).c_str()
+            );
+        }
+    }
+
     const VkSemaphoreTypeCreateInfo semaphore_type_create_info{
         .sType         = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
         .pNext         = nullptr,
@@ -1095,10 +1125,6 @@ Device_impl::Device_impl(
         log_context->critical("vkCreateSemaphore() failed with {} {}", static_cast<int32_t>(result), c_str(result));
         abort();
     }
-
-    m_immediate_commands = std::make_unique<Vulkan_immediate_commands>(
-        *this, m_graphics_queue_family_index, false, "Device_impl::m_immediate_commands"
-    );
 
     m_sync_pool = std::make_unique<Device_sync_pool>(*this);
 

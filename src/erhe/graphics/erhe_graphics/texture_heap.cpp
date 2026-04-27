@@ -49,10 +49,9 @@ void Texture_heap::unbind()
     m_impl->unbind();
 }
 
-// TODO Maybe this should use Render_command_encoder?
-auto Texture_heap::bind() -> std::size_t
+auto Texture_heap::bind(Render_command_encoder& encoder) -> std::size_t
 {
-    return m_impl->bind();
+    return m_impl->bind(encoder);
 }
 
 

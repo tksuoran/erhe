@@ -83,14 +83,6 @@ auto Device_impl::wait_frame() -> bool
     return true;
 }
 
-auto Device_impl::wait_swapchain_frame(Frame_state& out_frame_state) -> bool
-{
-    out_frame_state.predicted_display_time   = 0;
-    out_frame_state.predicted_display_period = 0;
-    out_frame_state.should_render            = true;
-    return true;
-}
-
 auto Device_impl::begin_frame() -> bool
 {
     return true;
@@ -102,46 +94,26 @@ auto Device_impl::begin_frame(const Frame_begin_info& frame_begin_info) -> bool
     return true;
 }
 
-auto Device_impl::end_frame(const Frame_end_info& frame_end_info) -> bool
-{
-    static_cast<void>(frame_end_info);
-    ++m_frame_index;
-    return true;
-}
-
 auto Device_impl::end_frame() -> bool
 {
+    // Contract: end_frame only advances the frame index. See
+    // erhe_graphics/notes.md ("Frame lifecycle") and the matching
+    // Vulkan implementation for the rationale.
     ++m_frame_index;
     return true;
 }
 
-auto Device_impl::begin_swapchain_frame(const Frame_begin_info& frame_begin_info, Frame_state& out_frame_state) -> bool
+auto Device_impl::end_frame(const Frame_end_info& frame_end_info) -> bool
 {
-    static_cast<void>(frame_begin_info);
-    out_frame_state.predicted_display_time   = 0;
-    out_frame_state.predicted_display_period = 0;
-    out_frame_state.should_render            = false;
-    return false;
-}
-
-void Device_impl::end_swapchain_frame(const Frame_end_info& frame_end_info)
-{
+    // Legacy compat overload; Frame_end_info is no longer used.
     static_cast<void>(frame_end_info);
+    return end_frame();
 }
 
-void Device_impl::prime_device_frame_slot()
-{
-    // Null backend has nothing per-slot to prepare; no-op.
-}
 
 void Device_impl::wait_idle()
 {
     // No-op for null backend
-}
-
-auto Device_impl::is_in_device_frame() const -> bool
-{
-    return false;
 }
 
 auto Device_impl::is_in_swapchain_frame() const -> bool
@@ -219,6 +191,20 @@ void Device_impl::cmd_texture_barrier(uint64_t usage_before, uint64_t usage_afte
     static_cast<void>(usage_after);
 }
 
+auto Device_impl::get_command_buffer(unsigned int thread_slot) -> Command_buffer&
+{
+    static_cast<void>(thread_slot);
+    // Stub for null backend; iteration target.
+    static Command_buffer* dummy{nullptr};
+    return *dummy;
+}
+
+void Device_impl::submit_command_buffers(std::span<Command_buffer* const> command_buffers)
+{
+    static_cast<void>(command_buffers);
+    // No-op for null backend; iteration target.
+}
+
 void Device_impl::upload_to_buffer(const Buffer& buffer, const size_t offset, const void* data, const size_t length)
 {
     static_cast<void>(buffer);
@@ -246,7 +232,7 @@ auto Device_impl::get_handle(const Texture& texture, const Sampler& sampler) con
     return 0;
 }
 
-auto Device_impl::create_dummy_texture(const erhe::dataformat::Format format) -> std::shared_ptr<Texture>
+auto Device_impl::create_dummy_texture(Command_buffer& /*init_command_buffer*/, const erhe::dataformat::Format format) -> std::shared_ptr<Texture>
 {
     const Texture_create_info create_info{
         .device       = m_device,
@@ -297,19 +283,19 @@ auto Device_impl::allocate_ring_buffer_entry(
     return Ring_buffer_range{};
 }
 
-auto Device_impl::make_blit_command_encoder() -> Blit_command_encoder
+auto Device_impl::make_blit_command_encoder(Command_buffer& command_buffer) -> Blit_command_encoder
 {
-    return Blit_command_encoder{m_device};
+    return Blit_command_encoder{m_device, command_buffer};
 }
 
-auto Device_impl::make_compute_command_encoder() -> Compute_command_encoder
+auto Device_impl::make_compute_command_encoder(Command_buffer& command_buffer) -> Compute_command_encoder
 {
-    return Compute_command_encoder{m_device};
+    return Compute_command_encoder{m_device, command_buffer};
 }
 
-auto Device_impl::make_render_command_encoder() -> Render_command_encoder
+auto Device_impl::make_render_command_encoder(Command_buffer& command_buffer) -> Render_command_encoder
 {
-    return Render_command_encoder{m_device};
+    return Render_command_encoder{m_device, command_buffer};
 }
 
 auto Device_impl::get_format_properties(const erhe::dataformat::Format format) const -> Format_properties

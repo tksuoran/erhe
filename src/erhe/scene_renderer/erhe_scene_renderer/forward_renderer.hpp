@@ -18,6 +18,7 @@ namespace erhe {
     class Item_filter;
 }
 namespace erhe::graphics {
+    class Command_buffer;
     class Device;
     class Lazy_render_pipeline;
     class Render_command_encoder;
@@ -41,8 +42,9 @@ public:
     using Mesh_layer_collection = std::vector<const erhe::scene::Mesh_layer*>;
 
     Forward_renderer(
-        erhe::graphics::Device&                graphics_device,
-        Program_interface&                     program_interface
+        erhe::graphics::Device&         graphics_device,
+        erhe::graphics::Command_buffer& init_command_buffer,
+        Program_interface&              program_interface
     );
     ~Forward_renderer() noexcept;
 

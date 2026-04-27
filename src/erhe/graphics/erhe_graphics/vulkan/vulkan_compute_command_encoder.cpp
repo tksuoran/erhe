@@ -1,63 +1,34 @@
 #include "erhe_graphics/vulkan/vulkan_compute_command_encoder.hpp"
 #include "erhe_graphics/vulkan/vulkan_bind_group_layout.hpp"
+#include "erhe_graphics/vulkan/vulkan_command_buffer.hpp"
 #include "erhe_graphics/vulkan/vulkan_compute_pipeline.hpp"
 #include "erhe_graphics/vulkan/vulkan_buffer.hpp"
 #include "erhe_graphics/vulkan/vulkan_device.hpp"
-#include "erhe_graphics/vulkan/vulkan_immediate_commands.hpp"
 #include "erhe_graphics/vulkan/vulkan_render_pass.hpp"
 #include "erhe_graphics/vulkan/vulkan_shader_stages.hpp"
-#include "erhe_graphics/vulkan/vulkan_submit_handle.hpp"
 #include "erhe_graphics/buffer.hpp"
+#include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/compute_pipeline_state.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/shader_stages.hpp"
+#include "erhe_verify/verify.hpp"
 
 #include <fmt/format.h>
 
 namespace erhe::graphics {
 
-Compute_command_encoder_impl::Compute_command_encoder_impl(Device& device)
-    : m_device{device}
+Compute_command_encoder_impl::Compute_command_encoder_impl(Device& device, Command_buffer& command_buffer)
+    : m_device        {device}
+    , m_command_buffer{command_buffer}
 {
 }
 
-Compute_command_encoder_impl::~Compute_command_encoder_impl() noexcept
+Compute_command_encoder_impl::~Compute_command_encoder_impl() noexcept = default;
+
+auto Compute_command_encoder_impl::get_active_vk_command_buffer() -> VkCommandBuffer
 {
-    if (m_owns_command_buffer && (m_command_buffer_wrapper != nullptr)) {
-        Device_impl& device_impl = m_device.get_impl();
-        Vulkan_immediate_commands& immediate = device_impl.get_immediate_commands();
-        Submit_handle submit = immediate.submit(*m_command_buffer_wrapper);
-        immediate.wait(submit);
-    }
-}
-
-auto Compute_command_encoder_impl::get_command_buffer() -> VkCommandBuffer
-{
-    Device_impl* device_impl = Device_impl::get_device_impl();
-
-    // Prefer the active render pass command buffer, if any.
-    VkCommandBuffer active = device_impl->get_active_command_buffer();
-    if (active != VK_NULL_HANDLE) {
-        return active;
-    }
-
-    // Next, the active device frame command buffer. This lets compute
-    // work issued between render passes (but still inside a device frame)
-    // share the frame's single submit.
-    VkCommandBuffer device_cb = device_impl->get_device_frame_command_buffer();
-    if (device_cb != VK_NULL_HANDLE) {
-        return device_cb;
-    }
-
-    // No frame active: fall back to an owned immediate-commands cb that
-    // the destructor submits and waits on.
-    if (m_command_buffer == VK_NULL_HANDLE) {
-        m_command_buffer_wrapper = &device_impl->get_immediate_commands().acquire();
-        m_command_buffer = m_command_buffer_wrapper->m_cmd_buf;
-        m_owns_command_buffer = true;
-    }
-    return m_command_buffer;
+    return m_command_buffer.get_impl().get_vulkan_command_buffer();
 }
 
 void Compute_command_encoder_impl::set_buffer(Buffer_target buffer_target, const Buffer* buffer, std::uintptr_t offset, std::uintptr_t length, std::uintptr_t index)
@@ -66,7 +37,7 @@ void Compute_command_encoder_impl::set_buffer(Buffer_target buffer_target, const
         return;
     }
 
-    VkCommandBuffer command_buffer = get_command_buffer();
+    VkCommandBuffer command_buffer = get_active_vk_command_buffer();
     if (command_buffer == VK_NULL_HANDLE) {
         return;
     }
@@ -145,7 +116,7 @@ void Compute_command_encoder_impl::set_compute_pipeline_state(const Compute_pipe
         return;
     }
 
-    VkCommandBuffer command_buffer = get_command_buffer();
+    VkCommandBuffer command_buffer = get_active_vk_command_buffer();
     if (command_buffer == VK_NULL_HANDLE) {
         return;
     }
@@ -200,7 +171,7 @@ void Compute_command_encoder_impl::set_compute_pipeline_state(const Compute_pipe
 
 void Compute_command_encoder_impl::set_compute_pipeline(const Compute_pipeline& pipeline)
 {
-    VkCommandBuffer command_buffer = get_command_buffer();
+    VkCommandBuffer command_buffer = get_active_vk_command_buffer();
     if (command_buffer == VK_NULL_HANDLE) {
         return;
     }
@@ -219,7 +190,7 @@ void Compute_command_encoder_impl::dispatch_compute(
     const std::uintptr_t z_size
 )
 {
-    VkCommandBuffer command_buffer = get_command_buffer();
+    VkCommandBuffer command_buffer = get_active_vk_command_buffer();
     if (command_buffer == VK_NULL_HANDLE) {
         return;
     }

@@ -107,8 +107,30 @@ public:
     [[nodiscard]] auto end_render_pass      () -> bool;
     [[nodiscard]] auto submit_command_buffer() -> bool;
     [[nodiscard]] auto end_frame            (const Frame_end_info& frame_end_info) -> bool;
+    // Used by Render_pass_impl::start_render_pass to fill in the
+    // framebuffer + render area for a swapchain-targeted render pass
+    // recorded into the caller's Command_buffer (no longer routed
+    // through the legacy Swapchain_impl::begin_render_pass cb).
+    // Lazy-creates the per-image framebuffer if it doesn't exist or
+    // was created against a different VkRenderPass.
+    [[nodiscard]] auto acquire_swapchain_framebuffer(VkRenderPass render_pass) -> VkFramebuffer;
+    [[nodiscard]] auto get_swapchain_extent() const -> VkExtent2D;
+    void               mark_render_pass_recorded();
+    // Drive vkQueuePresentKHR for the currently acquired image. Caller
+    // must have already submitted a cb that signals this swapchain's
+    // present_semaphore (the implicit-present path: Device_impl::submit_command_buffers
+    // calls this after vkQueueSubmit2 returns). Handles VK_SUBOPTIMAL_KHR
+    // / VK_ERROR_OUT_OF_DATE_KHR by triggering swapchain recreation.
+    [[nodiscard]] auto present              () -> bool;
     [[nodiscard]] auto get_surface_impl     () -> Surface_impl&;
     [[nodiscard]] auto get_command_buffer   () -> VkCommandBuffer;
+    // Active per-frame-in-flight semaphores. acquire is signalled by
+    // vkAcquireNextImageKHR (must be waited before the cb writes the
+    // swapchain image); present is signalled by the cb's submit (must
+    // be waited by vkQueuePresentKHR). Both are valid only between
+    // setup_frame()/begin_frame() and the present in end_frame().
+    [[nodiscard]] auto get_active_acquire_semaphore() const -> VkSemaphore;
+    [[nodiscard]] auto get_active_present_semaphore() const -> VkSemaphore;
     [[nodiscard]] auto has_depth            () const -> bool;
     [[nodiscard]] auto has_stencil          () const -> bool;
     [[nodiscard]] auto get_color_format     () const -> erhe::dataformat::Format;

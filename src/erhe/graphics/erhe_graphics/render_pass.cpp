@@ -194,7 +194,7 @@ auto Render_pass::get_impl() const -> const Render_pass_impl&
 
 //
 
-void Render_pass::start_render_pass(Render_pass* const render_pass_before, Render_pass* const render_pass_after)
+void Render_pass::start_render_pass(Command_buffer& command_buffer, Render_pass* const render_pass_before, Render_pass* const render_pass_after)
 {
     Render_pass* const active = m_device.get_active_render_pass();
     if (active != nullptr) {
@@ -207,7 +207,7 @@ void Render_pass::start_render_pass(Render_pass* const render_pass_before, Rende
         );
     }
     m_device.set_active_render_pass(this);
-    m_impl->start_render_pass(render_pass_before, render_pass_after);
+    m_impl->start_render_pass(command_buffer, render_pass_before, render_pass_after);
 }
 
 void Render_pass::end_render_pass(Render_pass* const render_pass_after)
@@ -218,14 +218,15 @@ void Render_pass::end_render_pass(Render_pass* const render_pass_after)
 
 
 Scoped_render_pass::Scoped_render_pass(
-    Render_pass& render_pass,
+    Render_pass&       render_pass,
+    Command_buffer&    command_buffer,
     Render_pass* const render_pass_before,
     Render_pass* const render_pass_after
 )
     : m_render_pass      {render_pass}
     , m_render_pass_after{render_pass_after}
 {
-    m_render_pass.start_render_pass(render_pass_before, render_pass_after);
+    m_render_pass.start_render_pass(command_buffer, render_pass_before, render_pass_after);
 }
 
 Scoped_render_pass::~Scoped_render_pass()

@@ -1,4 +1,5 @@
 ﻿#include "erhe_xr/xr_session.hpp"
+#include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/enums.hpp"
 #include "erhe_graphics/native_format.hpp"
@@ -360,6 +361,7 @@ auto Xr_session::color_format_score(const erhe::dataformat::Format pixelformat) 
 
 auto Xr_session::depth_stencil_format_score(const erhe::dataformat::Format pixelformat) const -> int
 {
+#if defined(XR_USE_GRAPHICS_API_OPENGL)
     switch (pixelformat) {
         //using enum gl::Internal_format;
         case erhe::dataformat::Format::format_s8_uint:             return 0;
@@ -370,6 +372,20 @@ auto Xr_session::depth_stencil_format_score(const erhe::dataformat::Format pixel
         case erhe::dataformat::Format::format_d32_sfloat_s8_uint:  return 5;
         default:                                                   return 0;
     }
+#endif
+#if defined(XR_USE_GRAPHICS_API_VULKAN)
+    // Vulkan does not meet DS+SAMPLED+TSRC+TDST+STORAGE requirements, only DS+SAMPLED
+    switch (pixelformat) {
+        //using enum gl::Internal_format;
+        case erhe::dataformat::Format::format_s8_uint:             return 0;
+        case erhe::dataformat::Format::format_d16_unorm:           return 1;
+        case erhe::dataformat::Format::format_x8_d24_unorm_pack32: return 0; // runtime requirements not met
+        case erhe::dataformat::Format::format_d32_sfloat:          return 3;
+        case erhe::dataformat::Format::format_d24_unorm_s8_uint:   return 0; // runtime requirements not met
+        case erhe::dataformat::Format::format_d32_sfloat_s8_uint:  return 0; // runtime requirements not met
+        default:                                                   return 0;
+    }
+#endif
 }
 
 auto Xr_session::enumerate_swapchain_formats() -> bool
@@ -507,7 +523,7 @@ auto Xr_session::create_swapchains() -> bool
     // and the editor uses the resulting depth texture for the projection
     // layer's depth info.
 #if defined(XR_USE_GRAPHICS_API_VULKAN)
-    constexpr bool create_depth_stencil_swapchain = false;
+    constexpr bool create_depth_stencil_swapchain = true;
 #else
     constexpr bool create_depth_stencil_swapchain = true;
 #endif
@@ -1039,7 +1055,7 @@ auto Xr_session::wait_frame() -> XrFrameState*
     }
 }
 
-auto Xr_session::render_frame(std::function<bool(Render_view&)> render_view_callback) -> bool
+auto Xr_session::render_frame(erhe::graphics::Command_buffer& command_buffer, std::function<bool(Render_view&, erhe::graphics::Command_buffer&)> render_view_callback) -> bool
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -1086,7 +1102,7 @@ auto Xr_session::render_frame(std::function<bool(Render_view&)> render_view_call
     m_xr_composition_layer_depth_infos     .resize(view_count_output);
 
     // Acquired-image optionals live at function scope so their destructors
-    // (which call xrReleaseSwapchainImage) run AFTER m_graphics_device.end_frame()
+    // (which call xrReleaseSwapchainImage) run AFTER cb.end + submit
     // below, not at the end of each loop iteration. Submitting before
     // release is required by XR_KHR_vulkan_enable2: the runtime tracks
     // queue submissions to know when GPU work for a swapchain image is
@@ -1097,6 +1113,44 @@ auto Xr_session::render_frame(std::function<bool(Render_view&)> render_view_call
 
     static constexpr std::string_view c_id_views{"HS views"};
     static constexpr std::string_view c_id_view{"HS view"};
+
+    // Per-view command-buffer strategy:
+    //
+    // The caller-supplied `command_buffer` is the dedicated *setup* cb. It
+    // already carries the editor's pre-rendergraph work (mesh_memory.flush,
+    // thumbnails, ...) plus all rendergraph nodes that ran before
+    // Headset_view_node (shadow_render_node, rendertarget_imgui_host, ...).
+    // We allocate one fresh cb per XR view; each per-view cb only needs a
+    // memory dependency on setup, never on the other views (each view writes
+    // a different swapchain image and reads no view's output). So the sync
+    // is a fan-out from setup -- no inter-view chain.
+    //
+    // Order:
+    //   1. Allocate per-view cbs and register signal_semaphore on setup cb
+    //      for each one. After setup_cb's submit fires, every per-view
+    //      cb's implicit semaphore is signaled.
+    //   2. End + submit setup_cb. The GPU starts consuming the pre-view
+    //      work immediately.
+    //   3. Per-view loop: wait on the swapchain image (CPU-blocking, but
+    //      now overlapped with setup-cb GPU execution), begin the per-view
+    //      cb, register wait_for_semaphore on its own semaphore, run the
+    //      callback (which records the view's render passes into this cb),
+    //      end + submit. View 0's submit kicks GPU view rendering ASAP --
+    //      the CPU then records view 1 while GPU is consuming view 0, etc.
+    std::vector<erhe::graphics::Command_buffer*> view_cbs(view_count_output, nullptr);
+    for (uint32_t i = 0; i < view_count_output; ++i) {
+        view_cbs[i] = &m_graphics_device.get_command_buffer(/*thread_slot*/ 0);
+        // Make setup_cb's submit signal view_cbs[i]'s implicit semaphore.
+        // Each view gets its own semaphore signal -- binary semaphores
+        // can only be waited on once, so a single-signal/N-wait scheme
+        // would not work.
+        command_buffer.signal_semaphore(*view_cbs[i]);
+    }
+    command_buffer.end();
+    {
+        erhe::graphics::Command_buffer* cbs[] = { &command_buffer };
+        m_graphics_device.submit_command_buffers(std::span<erhe::graphics::Command_buffer* const>{cbs});
+    }
 
     for (uint32_t i = 0; i < view_count_output; ++i) {
         ERHE_PROFILE_SCOPE("view render");
@@ -1129,6 +1183,14 @@ auto Xr_session::render_frame(std::function<bool(Render_view&)> render_view_call
             }
         }
 
+        erhe::graphics::Command_buffer& view_cb = *view_cbs[i];
+        view_cb.begin();
+        // Wait on own semaphore (signaled by setup's submit registration
+        // above). Pairing: the matching signal target was view_cb itself,
+        // so the wait target is also view_cb -- "wait on the semaphore
+        // setup arranged for me".
+        view_cb.wait_for_semaphore(view_cb);
+
         Render_view render_view{
             .slot      = i,
             .view_pose = {
@@ -1150,7 +1212,7 @@ auto Xr_session::render_frame(std::function<bool(Render_view&)> render_view_call
             .far_depth             = 1.0f // TODO
         };
         {
-            const auto result = render_view_callback(render_view);
+            const auto result = render_view_callback(render_view, view_cb);
             if (result == false) {
                 log_xr->warn("render callback returned false for view {}", i);
                 return false;
@@ -1194,14 +1256,13 @@ auto Xr_session::render_frame(std::function<bool(Render_view&)> render_view_call
                 .imageArrayIndex = 0 // TODO
             }
         };
-    }
 
-    // Submit Vulkan work BEFORE the acquired_*_imgs vectors destruct
-    // (which would call xrReleaseSwapchainImage). On Vulkan this runs
-    // vkEndCommandBuffer + vkQueueSubmit2 with the slot fence; on GL it
-    // is essentially a no-op.
-    if (!m_graphics_device.end_frame()) {
-        return false;
+        // End + submit this view's cb immediately. vkQueueSubmit2 returns
+        // synchronously; the GPU starts consuming view i while the CPU
+        // proceeds to record view i+1.
+        view_cb.end();
+        erhe::graphics::Command_buffer* cbs[] = { &view_cb };
+        m_graphics_device.submit_command_buffers(std::span<erhe::graphics::Command_buffer* const>{cbs});
     }
 
     return true;

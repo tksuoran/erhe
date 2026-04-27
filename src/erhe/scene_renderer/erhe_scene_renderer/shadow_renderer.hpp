@@ -17,6 +17,7 @@
 #include <initializer_list>
 
 namespace erhe::graphics {
+    class Command_buffer;
     class Render_pass;
     class Gpu_timer;
     class Device;
@@ -43,13 +44,22 @@ public:
     static const int shadow_texture_unit_compare{0};
     static const int shadow_texture_unit_no_compare{1};
 
-    Shadow_renderer(erhe::graphics::Device& graphics_device, Program_interface& program_interface);
+    Shadow_renderer(
+        erhe::graphics::Device&         graphics_device,
+        erhe::graphics::Command_buffer& init_command_buffer,
+        Program_interface&              program_interface
+    );
     ~Shadow_renderer() noexcept;
 
     // Public API
     class Render_parameters
     {
     public:
+        // The cb is in recording state. Shadow_renderer creates a
+        // Render_command_encoder + Scoped_render_pass against this cb
+        // for each light, drawing shadow casters into the shadow map
+        // attachments.
+        erhe::graphics::Command_buffer&                  command_buffer;
         const erhe::graphics::Vertex_input_state*        vertex_input_state    {nullptr};
         erhe::dataformat::Format                         index_type            {erhe::dataformat::Format::format_undefined};
         erhe::graphics::Buffer*                          index_buffer          {nullptr};

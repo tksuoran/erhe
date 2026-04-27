@@ -2,8 +2,9 @@
 #include "erhe_ui/glyph.hpp"
 #include "erhe_ui/ui_log.hpp"
 #include "erhe_dataformat/dataformat.hpp"
-#include "erhe_graphics/device.hpp"
 #include "erhe_graphics/blit_command_encoder.hpp"
+#include "erhe_graphics/command_buffer.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_graphics/ring_buffer.hpp"
 #include "erhe_graphics/ring_buffer_client.hpp"
 #include "erhe_graphics/ring_buffer_range.hpp"
@@ -25,6 +26,7 @@
 
 #include <SkylineBinPack.h> // RectangleBinPack
 
+#include <span>
 #include <stdexcept>
 #include <string_view>
 
@@ -54,10 +56,11 @@ Font::~Font() noexcept
 
 #if defined(ERHE_FONT_RASTERIZATION_LIBRARY_FREETYPE) && defined(ERHE_TEXT_LAYOUT_LIBRARY_HARFBUZZ)
 Font::Font(
-    erhe::graphics::Device&      graphics_device,
-    const std::filesystem::path& path,
-    const unsigned int           size,
-    const float                  outline_thickness
+    erhe::graphics::Device&         graphics_device,
+    erhe::graphics::Command_buffer& init_command_buffer,
+    const std::filesystem::path&    path,
+    const unsigned int              size,
+    const float                     outline_thickness
 )
     : m_graphics_device  {graphics_device}
     , m_path             {path}
@@ -87,13 +90,13 @@ Font::Font(
 
     m_pixel_size = size;
 
-    const bool render_ok = render();
+    const bool render_ok = render(init_command_buffer);
     if (!render_ok) {
          log_font->error("Font loading failed. Check working directory '{}'", current_path.string());
     }
 }
 
-auto Font::render() -> bool
+auto Font::render(erhe::graphics::Command_buffer& init_command_buffer) -> bool
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -318,7 +321,7 @@ auto Font::render() -> bool
         m_chars_256[uc] = d;
     }
 
-    post_process();
+    post_process(init_command_buffer);
 
     return true;
     //m_bitmap->dump();
@@ -433,14 +436,21 @@ void Font::trace_info() const
     log_font->trace("patents       {}", (FT_Face_CheckTrueTypePatents(face) == 1) ? "yes" : "no");
 }
 #else
-Font::Font(erhe::graphics::Device& graphics_device, const std::filesystem::path&, const unsigned int, const float)
+Font::Font(
+    erhe::graphics::Device&         graphics_device,
+    erhe::graphics::Command_buffer& /*init_command_buffer*/,
+    const std::filesystem::path&,
+    const unsigned int,
+    const float
+)
     : m_graphics_device{graphics_device}
 {}
-auto Font::render() -> bool { return false; }
+auto Font::render(erhe::graphics::Command_buffer& /*init_command_buffer*/) -> bool { return false; }
+void Font::post_process(erhe::graphics::Command_buffer& /*init_command_buffer*/) {}
 void Font::trace_info() const {}
 #endif
 
-void Font::post_process()
+void Font::post_process(erhe::graphics::Command_buffer& init_command_buffer)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -475,7 +485,10 @@ void Font::post_process()
     buffer_range.bytes_written(byte_count);
     buffer_range.close();
 
-    erhe::graphics::Blit_command_encoder encoder{m_graphics_device};
+    // Record the upload into the caller-supplied init cb. The caller
+    // is responsible for ending and submitting the cb (and waiting on
+    // the GPU) before the font texture is sampled.
+    erhe::graphics::Blit_command_encoder encoder{m_graphics_device, init_command_buffer};
     encoder.copy_from_buffer(
         buffer_range.get_buffer()->get_buffer(),          // source_buffer
         buffer_range.get_byte_start_offset_in_buffer(),   // source_offset

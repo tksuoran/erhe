@@ -192,14 +192,14 @@ auto Headset::begin_frame_() -> Frame_timing
     return result;
 }
 
-auto Headset::render(std::function<bool(Render_view&)> render_view_callback) -> bool
+auto Headset::render(erhe::graphics::Command_buffer& command_buffer, std::function<bool(Render_view&, erhe::graphics::Command_buffer&)> render_view_callback) -> bool
 {
     ERHE_PROFILE_FUNCTION();
 
     if (!m_xr_session) {
         return false;
     }
-    if (!m_xr_session->render_frame(render_view_callback)) {
+    if (!m_xr_session->render_frame(command_buffer, render_view_callback)) {
         return false;
     }
     return true;

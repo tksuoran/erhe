@@ -5,6 +5,7 @@
 #include "erhe_scene_renderer/primitive_buffer.hpp"
 
 namespace erhe::graphics {
+    class Command_buffer;
     class Device;
     class Lazy_render_pipeline;
     class Render_command_encoder;
@@ -21,7 +22,11 @@ class Light_projections;
 class Texel_renderer
 {
 public:
-    Texel_renderer(erhe::graphics::Device& graphics_device, Program_interface& program_interface);
+    Texel_renderer(
+        erhe::graphics::Device&         graphics_device,
+        erhe::graphics::Command_buffer& init_command_buffer,
+        Program_interface&              program_interface
+    );
 
     // Public API
     class Render_parameters

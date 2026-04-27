@@ -8,7 +8,7 @@ namespace erhe::graphics {
 class Compute_command_encoder_impl final : public Command_encoder_impl
 {
 public:
-    explicit Compute_command_encoder_impl(Device& device);
+    Compute_command_encoder_impl(Device& device, Command_buffer& command_buffer);
     Compute_command_encoder_impl(const Compute_command_encoder_impl&) = delete;
     Compute_command_encoder_impl& operator=(const Compute_command_encoder_impl&) = delete;
     Compute_command_encoder_impl(Compute_command_encoder_impl&&) = delete;

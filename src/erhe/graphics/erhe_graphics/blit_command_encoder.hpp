@@ -11,6 +11,7 @@
 namespace erhe::graphics {
 
 class Buffer;
+class Command_buffer;
 class Device;
 class Render_pass;
 class Texture;
@@ -19,7 +20,7 @@ class Blit_command_encoder_impl;
 class Blit_command_encoder final : public Command_encoder
 {
 public:
-    explicit Blit_command_encoder(Device& device);
+    Blit_command_encoder(Device& device, Command_buffer& command_buffer);
     Blit_command_encoder(const Blit_command_encoder&) = delete;
     Blit_command_encoder& operator=(const Blit_command_encoder&) = delete;
     Blit_command_encoder(Blit_command_encoder&&) = delete;

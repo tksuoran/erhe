@@ -15,6 +15,7 @@ namespace erhe::geometry {
     class Geometry;
 }
 namespace erhe::graphics {
+    class Command_buffer;
     class Render_pass;
     class Renderbuffer;
 }
@@ -96,7 +97,7 @@ public:
 
     // Implements Rendergraph_node
     auto get_type_name           () const -> std::string_view override { return "Viewport_scene_view"; }
-    void execute_rendergraph_node() override;
+    void execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer) override;
 
     // Public API
     void set_window_viewport         (erhe::math::Viewport viewport);

@@ -105,6 +105,7 @@ constexpr vec3 axis_z         { 0.0f,  0.0f, 1.0f};
 
 Debug_visualizations::Debug_visualizations(
     erhe::graphics::Device&                  graphics_device,
+    erhe::graphics::Command_buffer&          init_command_buffer,
     erhe::imgui::Imgui_renderer&             imgui_renderer,
     erhe::imgui::Imgui_windows&              imgui_windows,
     erhe::scene_renderer::Program_interface& program_interface,
@@ -116,7 +117,7 @@ Debug_visualizations::Debug_visualizations(
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Debug Visualizations", "debug_visualizations"}
     , m_context{context}
     , m_empty_vertex_input{graphics_device, erhe::graphics::Vertex_input_state_data{}}
-    , m_shadow_texel_renderer{std::make_unique<erhe::scene_renderer::Texel_renderer>(graphics_device, program_interface)}
+    , m_shadow_texel_renderer{std::make_unique<erhe::scene_renderer::Texel_renderer>(graphics_device, init_command_buffer, program_interface)}
     , m_shadow_texel_pipeline{
         graphics_device,
         erhe::graphics::Render_pipeline_create_info{

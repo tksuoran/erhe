@@ -60,17 +60,17 @@ auto Device::get_handle(const Texture& texture, const Sampler& sampler) const ->
 {
     return m_impl->get_handle(texture, sampler);
 }
-auto Device::create_dummy_texture(const erhe::dataformat::Format format) -> std::shared_ptr<Texture>
+auto Device::create_dummy_texture(Command_buffer& init_command_buffer, const erhe::dataformat::Format format) -> std::shared_ptr<Texture>
 {
-    return m_impl->create_dummy_texture(format);
+    return m_impl->create_dummy_texture(init_command_buffer, format);
 }
-void Device::upload_to_buffer(const Buffer& buffer, size_t offset, const void* data, size_t length)
+auto Device::get_command_buffer(unsigned int thread_slot) -> Command_buffer&
 {
-    m_impl->upload_to_buffer(buffer, offset, data, length);
+    return m_impl->get_command_buffer(thread_slot);
 }
-void Device::upload_to_texture(const Texture& texture, int level, int x, int y, int width, int height, erhe::dataformat::Format pixelformat, const void* data, int row_stride)
+void Device::submit_command_buffers(std::span<Command_buffer* const> command_buffers)
 {
-    m_impl->upload_to_texture(texture, level, x, y, width, height, pixelformat, data, row_stride);
+    m_impl->submit_command_buffers(command_buffers);
 }
 void Device::add_completion_handler(std::function<void()> callback)
 {
@@ -92,10 +92,6 @@ auto Device::wait_frame() -> bool
 {
     return m_impl->wait_frame();
 }
-auto Device::wait_swapchain_frame(Frame_state& out_frame_state) -> bool
-{
-    return m_impl->wait_swapchain_frame(out_frame_state);
-}
 auto Device::begin_frame() -> bool
 {
     return m_impl->begin_frame();
@@ -112,25 +108,9 @@ auto Device::end_frame(const Frame_end_info& frame_end_info) -> bool
 {
     return m_impl->end_frame(frame_end_info);
 }
-auto Device::begin_swapchain_frame(const Frame_begin_info& frame_begin_info, Frame_state& out_frame_state) -> bool
-{
-    return m_impl->begin_swapchain_frame(frame_begin_info, out_frame_state);
-}
-void Device::end_swapchain_frame(const Frame_end_info& frame_end_info)
-{
-    m_impl->end_swapchain_frame(frame_end_info);
-}
-void Device::prime_device_frame_slot()
-{
-    m_impl->prime_device_frame_slot();
-}
 void Device::wait_idle()
 {
     m_impl->wait_idle();
-}
-auto Device::is_in_device_frame() const -> bool
-{
-    return m_impl->is_in_device_frame();
 }
 auto Device::is_in_swapchain_frame() const -> bool
 {
@@ -143,10 +123,6 @@ auto Device::get_frame_index() const -> uint64_t
 auto Device::allocate_ring_buffer_entry(Buffer_target buffer_target, Ring_buffer_usage usage, std::size_t byte_count) -> Ring_buffer_range
 {
     return m_impl->allocate_ring_buffer_entry(buffer_target, usage, byte_count);
-}
-void Device::memory_barrier(Memory_barrier_mask barriers)
-{
-    m_impl->memory_barrier(barriers);
 }
 auto Device::get_format_properties(erhe::dataformat::Format format) const -> Format_properties
 {
@@ -180,34 +156,22 @@ void Device::end_frame_capture()
 {
     m_impl->end_frame_capture();
 }
-void Device::clear_texture(const Texture& texture, std::array<double, 4> value)
+auto Device::make_render_command_encoder(Command_buffer& command_buffer) -> Render_command_encoder
 {
-    m_impl->clear_texture(texture, value);
-}
-void Device::transition_texture_layout(const Texture& texture, Image_layout new_layout)
-{
-    m_impl->transition_texture_layout(texture, new_layout);
-}
-void Device::cmd_texture_barrier(uint64_t usage_before, uint64_t usage_after)
-{
-    m_impl->cmd_texture_barrier(usage_before, usage_after);
-}
-auto Device::make_render_command_encoder() -> Render_command_encoder
-{
-    return m_impl->make_render_command_encoder();
+    return m_impl->make_render_command_encoder(command_buffer);
 }
 
 auto Device::create_render_pipeline(const Render_pipeline_create_info& create_info) -> std::unique_ptr<Render_pipeline>
 {
     return std::make_unique<Render_pipeline>(*this, create_info);
 }
-auto Device::make_blit_command_encoder() -> Blit_command_encoder
+auto Device::make_blit_command_encoder(Command_buffer& command_buffer) -> Blit_command_encoder
 {
-    return m_impl->make_blit_command_encoder();
+    return m_impl->make_blit_command_encoder(command_buffer);
 }
-auto Device::make_compute_command_encoder() -> Compute_command_encoder
+auto Device::make_compute_command_encoder(Command_buffer& command_buffer) -> Compute_command_encoder
 {
-    return m_impl->make_compute_command_encoder();
+    return m_impl->make_compute_command_encoder(command_buffer);
 }
 auto Device::get_shader_monitor() -> Shader_monitor&
 {

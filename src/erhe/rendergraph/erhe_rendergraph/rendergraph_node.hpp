@@ -16,6 +16,7 @@
 #include <vector>
 
 namespace erhe::graphics {
+    class Command_buffer;
     class Render_pass;
     class Texture;
 }
@@ -66,7 +67,7 @@ public:
     auto register_input   (erhe::utility::Debug_label label, int key) -> bool;
     auto register_output  (erhe::utility::Debug_label label, int key) -> bool;
 
-    virtual void execute_rendergraph_node() = 0;
+    virtual void execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer) = 0;
 
     [[nodiscard]] virtual auto get_consumer_input_node    (int key, int depth = 0) const -> Rendergraph_node*;
     [[nodiscard]] virtual auto get_producer_output_node   (int key, int depth = 0) const -> Rendergraph_node*;

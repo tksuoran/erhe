@@ -6,10 +6,12 @@
 
 namespace erhe::graphics {
 
+class Command_buffer;
+
 class Render_command_encoder_impl final
 {
 public:
-    Render_command_encoder_impl(Device& device);
+    Render_command_encoder_impl(Device& device, Command_buffer& command_buffer);
     Render_command_encoder_impl(const Render_command_encoder_impl&) = delete;
     Render_command_encoder_impl& operator=(const Render_command_encoder_impl&) = delete;
     Render_command_encoder_impl(Render_command_encoder_impl&&) = delete;
@@ -41,8 +43,11 @@ public:
     ) const;
     void dump_state(const char* label) const;
 
+    [[nodiscard]] auto get_command_buffer() -> Command_buffer& { return m_command_buffer; }
+
 private:
     Device&                  m_device;
+    Command_buffer&          m_command_buffer;
     const Bind_group_layout* m_bind_group_layout{nullptr};
     VkPipelineLayout         m_pipeline_layout  {VK_NULL_HANDLE};
     VkBuffer                 m_index_buffer     {VK_NULL_HANDLE};

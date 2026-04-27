@@ -16,8 +16,8 @@
 
 namespace erhe::graphics {
 
-Render_command_encoder::Render_command_encoder(Device& device)
-    : m_impl{device}
+Render_command_encoder::Render_command_encoder(Device& device, Command_buffer& command_buffer)
+    : m_impl{device, command_buffer}
 {
     static_assert(sizeof(Render_command_encoder_impl) <= 512);
     static_assert(alignof(Render_command_encoder_impl) <= 16);
@@ -114,6 +114,11 @@ void Render_command_encoder::multi_draw_indexed_primitives_indirect(
 void Render_command_encoder::dump_state(const char* label) const
 {
     m_impl->dump_state(label);
+}
+
+auto Render_command_encoder::get_command_buffer() -> Command_buffer&
+{
+    return m_impl->get_command_buffer();
 }
 
 } // namespace erhe::graphics

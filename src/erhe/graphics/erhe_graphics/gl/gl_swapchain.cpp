@@ -35,6 +35,11 @@ auto Swapchain_impl::begin_frame(const Frame_begin_info& frame_begin_info) -> bo
 auto Swapchain_impl::end_frame(const Frame_end_info& frame_end_info) -> bool
 {
     static_cast<void>(frame_end_info);
+    return present();
+}
+
+auto Swapchain_impl::present() -> bool
+{
     if (m_context_window) {
         m_context_window->swap_buffers();
     }

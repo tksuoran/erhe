@@ -1,14 +1,15 @@
 #include "erhe_graphics/vulkan/vulkan_device.hpp"
 #include "erhe_graphics/vulkan_external_creators.hpp"
 #include "erhe_graphics/vulkan/vulkan_buffer.hpp"
+#include "erhe_graphics/vulkan/vulkan_command_buffer.hpp"
 #include "erhe_graphics/vulkan/vulkan_device_sync_pool.hpp"
 #include "erhe_graphics/vulkan/vulkan_helpers.hpp"
-#include "erhe_graphics/vulkan/vulkan_immediate_commands.hpp"
 #include "erhe_graphics/vulkan/vulkan_render_pass.hpp"
 #include "erhe_graphics/vulkan/vulkan_sampler.hpp"
 #include "erhe_graphics/vulkan/vulkan_surface.hpp"
 #include "erhe_graphics/vulkan/vulkan_swapchain.hpp"
 #include "erhe_graphics/vulkan/vulkan_texture.hpp"
+#include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/swapchain.hpp"
 
 #include "erhe_utility/bit_helpers.hpp"
@@ -93,6 +94,26 @@ void Device_impl::ensure_device_frame_slot(size_t index)
         }
         m_sync_pool->recycle_fence(df.submit_fence);
         reset_device_frame_command_pool(index);
+        // The submit fence has signaled, so all command buffers
+        // allocated last cycle from this slot's per-thread pools have
+        // completed on the GPU. Drop the wrapper objects (which release
+        // the VkCommandBuffer handles back to the pool) and reset every
+        // pool wholesale; the TRANSIENT pool flag makes
+        // vkResetCommandPool the cheap path here.
+        auto& thread_pools = m_command_pools[index];
+        for (Per_thread_command_pool& thread_pool : thread_pools) {
+            thread_pool.allocated_command_buffers.clear();
+            if (thread_pool.command_pool != VK_NULL_HANDLE) {
+                const VkResult reset_result = vkResetCommandPool(m_vulkan_device, thread_pool.command_pool, 0);
+                if (reset_result != VK_SUCCESS) {
+                    log_context->critical(
+                        "vkResetCommandPool() failed with {} {}",
+                        static_cast<int32_t>(reset_result), c_str(reset_result)
+                    );
+                    abort();
+                }
+            }
+        }
         df.submit_fence = VK_NULL_HANDLE;
     }
     df.submit_fence = m_sync_pool->get_fence();
@@ -148,24 +169,6 @@ void Device_impl::reset_device_frame_command_pool(size_t index)
     }
 }
 
-auto Device_impl::acquire_shared_command_buffer() -> VkCommandBuffer
-{
-    // Unified command buffer: merged_into_device_frame records into the
-    // same cb that Device_impl::begin_frame opened via vkBeginCommandBuffer.
-    // This way offscreen render passes and per-frame transfers (uploads,
-    // clears, blits) land in a single submit with the swapchain render
-    // pass, in the correct execution order.
-    //
-    // Note: we bypass get_device_frame_command_buffer() because this is
-    // called from Render_pass_impl::start_render_pass BEFORE
-    // vkCmdBeginRenderPass2 runs - the Device_impl::m_active_render_pass
-    // flag is already set (for tracking), but the cb is still in
-    // recording state, not inside a Vulkan render pass instance yet.
-    ERHE_VERIFY(m_state != Device_frame_state::idle);
-    const std::size_t slot = static_cast<std::size_t>(get_frame_in_flight_index());
-    return m_device_submit_history[slot].command_buffer;
-}
-
 Device_impl::~Device_impl() noexcept
 {
     vkDeviceWaitIdle(m_vulkan_device);
@@ -194,12 +197,19 @@ Device_impl::~Device_impl() noexcept
     if (m_pipeline_cache != VK_NULL_HANDLE) {
         vkDestroyPipelineCache(m_vulkan_device, m_pipeline_cache, nullptr);
     }
-    // Destroy immediate commands before the device - it owns a command pool,
-    // command buffers, fences, and semaphores
-    m_immediate_commands.reset();
-
     // NOTE: This adds completion handlers for destroying related vulkan objects
     m_surface.reset();
+
+    // Drop the per-thread Command_buffer wrappers before m_sync_pool is
+    // released: each Command_buffer_impl destructor recycles its
+    // implicit fence + semaphore back into the pool. The VkCommandBuffer
+    // handles they reference remain valid because the pools they were
+    // allocated from are destroyed below.
+    for (auto& thread_pools : m_command_pools) {
+        for (Per_thread_command_pool& thread_pool : thread_pools) {
+            thread_pool.allocated_command_buffers.clear();
+        }
+    }
 
     // Sync pool outlives Swapchain_impl: Swapchain's dtor pushes its final
     // acquire/present semaphores back into the pool, so the pool must be
@@ -217,6 +227,18 @@ Device_impl::~Device_impl() noexcept
             vkDestroyCommandPool(m_vulkan_device, device_frame.command_pool, nullptr);
             device_frame.command_pool   = VK_NULL_HANDLE;
             device_frame.command_buffer = VK_NULL_HANDLE;
+        }
+    }
+
+    // Per-(frame_in_flight, thread_slot) pools. The cb wrappers were
+    // dropped above (so their VkCommandBuffer handles are released back
+    // to the pool); now destroy the pools themselves.
+    for (auto& thread_pools : m_command_pools) {
+        for (Per_thread_command_pool& thread_pool : thread_pools) {
+            if (thread_pool.command_pool != VK_NULL_HANDLE) {
+                vkDestroyCommandPool(m_vulkan_device, thread_pool.command_pool, nullptr);
+                thread_pool.command_pool = VK_NULL_HANDLE;
+            }
         }
     }
 
@@ -883,11 +905,6 @@ auto Device_impl::get_memory_heap(uint32_t memory_heap_index) const -> const VkM
     return m_memory_properties.memoryProperties.memoryHeaps[memory_heap_index];
 }
 
-auto Device_impl::get_immediate_commands() -> Vulkan_immediate_commands&
-{
-    return *m_immediate_commands.get();
-}
-
 auto Device_impl::get_handle(const Texture& texture, const Sampler& sampler) const -> uint64_t
 {
     // TODO Implement bindless texture handles via descriptor indexing
@@ -896,7 +913,7 @@ auto Device_impl::get_handle(const Texture& texture, const Sampler& sampler) con
     return 0;
 }
 
-auto Device_impl::create_dummy_texture(const erhe::dataformat::Format format) -> std::shared_ptr<Texture>
+auto Device_impl::create_dummy_texture(Command_buffer& init_command_buffer, const erhe::dataformat::Format format) -> std::shared_ptr<Texture>
 {
     // TODO Move function to Device instead of Device_impl?
     const Texture_create_info create_info{
@@ -934,28 +951,19 @@ auto Device_impl::create_dummy_texture(const erhe::dataformat::Format format) ->
         }
     }
 
-    Ring_buffer_client   texture_upload_buffer{m_device, erhe::graphics::Buffer_target::transfer_src, "dummy texture upload"};
-    Ring_buffer_range    buffer_range = texture_upload_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, byte_count);
-    std::span<std::byte> dst_span     = buffer_range.get_span();
-    memcpy(dst_span.data(), dummy_pixels.data(), byte_count);
-    buffer_range.bytes_written(byte_count);
-    buffer_range.close();
-
-    const std::size_t src_bytes_per_image = height * src_bytes_per_row;
-    Blit_command_encoder encoder{m_device};
-    encoder.copy_from_buffer(
-        buffer_range.get_buffer()->get_buffer(),         // source_buffer
-        buffer_range.get_byte_start_offset_in_buffer(),  // source_offset
-        src_bytes_per_row,                               // source_bytes_per_row
-        src_bytes_per_image,                             // source_bytes_per_image
-        glm::ivec3{2, 2, 1},                             // source_size
-        texture.get(),                                   // destination_texture
-        0,                                               // destination_slice
-        0,                                               // destination_level
-        glm::ivec3{0, 0, 0}                              // destination_origin
+    // Record the pixel upload into the caller-supplied init cb.
+    // Caller is responsible for ending + submitting + waiting before
+    // the texture is sampled.
+    init_command_buffer.upload_to_texture(
+        *texture.get(),
+        0,                              // level
+        0, 0,                           // x, y
+        static_cast<int>(width),
+        static_cast<int>(height),
+        format,
+        dummy_pixels.data(),
+        static_cast<int>(src_bytes_per_row)
     );
-
-    buffer_range.release();
 
     return texture;
 }
@@ -1001,226 +1009,78 @@ auto Device_impl::get_buffer_alignment(const Buffer_target target) -> std::size_
     }
 }
 
-void Device_impl::upload_to_buffer(const Buffer& buffer, const size_t offset, const void* data, const size_t length)
+void Device_impl::submit_command_buffers(std::span<Command_buffer* const> command_buffers)
 {
-    // For host-visible buffers, map and copy directly
-    // const_cast is needed because map_bytes is non-const (it modifies internal map state)
-    Buffer_impl& impl = const_cast<Buffer_impl&>(buffer.get_impl());
-    if (impl.is_host_visible()) {
-        std::span<std::byte> map = impl.map_bytes(offset, length);
-        if (!map.empty()) {
-            std::memcpy(map.data(), data, length);
-            impl.end_write(offset, length);
-            return;
-        }
-    }
-
-    // Staging buffer upload for non-host-visible (device-local) buffers
-    VkBufferCreateInfo staging_buffer_create_info{
-        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-        .pNext = nullptr,
-        .flags = 0,
-        .size  = length,
-        .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-        .sharingMode = VK_SHARING_MODE_EXCLUSIVE
-    };
-    VmaAllocationCreateInfo staging_alloc_info{
-        .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
-        .usage = VMA_MEMORY_USAGE_AUTO
-    };
-    VkBuffer staging_buffer = VK_NULL_HANDLE;
-    VmaAllocation staging_allocation = VK_NULL_HANDLE;
-    VmaAllocationInfo staging_allocation_info{};
-    VkResult result = vmaCreateBuffer(m_vma_allocator, &staging_buffer_create_info, &staging_alloc_info, &staging_buffer, &staging_allocation, &staging_allocation_info);
-    if (result != VK_SUCCESS) {
-        log_buffer->error("upload_to_buffer: staging buffer creation failed with {}", static_cast<int32_t>(result));
+    if (command_buffers.empty()) {
         return;
     }
-    vmaSetAllocationName(m_vma_allocator, staging_allocation, "upload_to_buffer staging");
-    std::memcpy(staging_allocation_info.pMappedData, data, length);
-    vmaFlushAllocation(m_vma_allocator, staging_allocation, 0, length);
 
-    const VkBufferCopy copy_region{
-        .srcOffset = 0,
-        .dstOffset = offset,
-        .size      = length
-    };
+    // CPU-side wait phase: any wait_for_fence(other) registered on the
+    // cbs in this batch is converted into a vkWaitForFences before the
+    // submit is enqueued. Done up front so a batched submit never
+    // partially blocks.
+    for (Command_buffer* command_buffer : command_buffers) {
+        ERHE_VERIFY(command_buffer != nullptr);
+        command_buffer->get_impl().pre_submit_wait();
+    }
 
-    // Chain the transfer write to the precise set of consumer stages the
-    // buffer was created for (derived from its Buffer_usage mask). This
-    // prevents RAW hazards against downstream readers that don't emit their
-    // own pre-barrier. transfer_dst in the usage mask also covers the
-    // cross-frame WAW against the next vkCmdCopyBuffer on this buffer.
-    // Range-scoped so unrelated work isn't over-synchronized.
-    const Vk_stage_access_2 dst_scope = buffer_usage_to_vk_stage_access(impl.get_usage());
-    const VkPipelineStageFlags2 dst_stage_mask =
-        (dst_scope.stage != 0) ? dst_scope.stage : VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
-    const VkAccessFlags2 dst_access_mask =
-        (dst_scope.access != 0)
-            ? dst_scope.access
-            : (VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_TRANSFER_WRITE_BIT);
-    const VkBufferMemoryBarrier2 buffer_barrier{
-        .sType               = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
-        .pNext               = nullptr,
-        .srcStageMask        = VK_PIPELINE_STAGE_2_COPY_BIT,
-        .srcAccessMask       = VK_ACCESS_2_TRANSFER_WRITE_BIT,
-        .dstStageMask        = dst_stage_mask,
-        .dstAccessMask       = dst_access_mask,
-        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .buffer              = impl.get_vk_buffer(),
-        .offset              = static_cast<VkDeviceSize>(offset),
-        .size                = static_cast<VkDeviceSize>(length)
-    };
-    const VkDependencyInfo post_copy_dep_info{
-        .sType                    = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+    Vulkan_submit_info submit_info_aggregate;
+    submit_info_aggregate.command_buffers.reserve(command_buffers.size());
+    for (Command_buffer* command_buffer : command_buffers) {
+        command_buffer->get_impl().collect_synchronization(submit_info_aggregate);
+    }
+
+    const VkSubmitInfo2 submit_info{
+        .sType                    = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
         .pNext                    = nullptr,
-        .dependencyFlags          = 0,
-        .memoryBarrierCount       = 0,
-        .pMemoryBarriers          = nullptr,
-        .bufferMemoryBarrierCount = 1,
-        .pBufferMemoryBarriers    = &buffer_barrier,
-        .imageMemoryBarrierCount  = 0,
-        .pImageMemoryBarriers     = nullptr,
+        .flags                    = 0,
+        .waitSemaphoreInfoCount   = static_cast<uint32_t>(submit_info_aggregate.wait_semaphores.size()),
+        .pWaitSemaphoreInfos      = submit_info_aggregate.wait_semaphores.data(),
+        .commandBufferInfoCount   = static_cast<uint32_t>(submit_info_aggregate.command_buffers.size()),
+        .pCommandBufferInfos      = submit_info_aggregate.command_buffers.data(),
+        .signalSemaphoreInfoCount = static_cast<uint32_t>(submit_info_aggregate.signal_semaphores.size()),
+        .pSignalSemaphoreInfos    = submit_info_aggregate.signal_semaphores.data(),
     };
 
-    VkCommandBuffer device_cb = get_device_frame_command_buffer();
-    if (device_cb != VK_NULL_HANDLE) {
-        // In-frame path: record into the active device cb and defer
-        // staging destruction to the frame-completion handler. Serialize
-        // against concurrent init-time callers.
-        std::lock_guard<std::mutex> lock{m_recording_mutex};
-        vkCmdCopyBuffer(device_cb, staging_buffer, impl.get_vk_buffer(), 1, &copy_region);
-        vkCmdPipelineBarrier2(device_cb, &post_copy_dep_info);
-        VmaAllocator allocator = m_vma_allocator;
-        add_completion_handler(
-            [allocator, staging_buffer, staging_allocation](Device_impl&) {
-                vmaDestroyBuffer(allocator, staging_buffer, staging_allocation);
-            }
-        );
-    } else {
-        // No device frame active: fall back to immediate commands (blocks).
-        log_buffer->warn(
-            "upload_to_buffer: out-of-frame fallback path (blocks CPU until GPU "
-            "finishes copy). buffer '{}' offset={} length={}",
-            impl.get_debug_label().string_view(), offset, length
-        );
-        const Vulkan_immediate_commands::Command_buffer_wrapper& cmd = m_immediate_commands->acquire();
-        vkCmdCopyBuffer(cmd.m_cmd_buf, staging_buffer, impl.get_vk_buffer(), 1, &copy_region);
-        vkCmdPipelineBarrier2(cmd.m_cmd_buf, &post_copy_dep_info);
-        Submit_handle submit = m_immediate_commands->submit(cmd);
-        m_immediate_commands->wait(submit);
-
-        vmaDestroyBuffer(m_vma_allocator, staging_buffer, staging_allocation);
-    }
-}
-
-void Device_impl::upload_to_texture(
-    const Texture&               texture,
-    int                          level,
-    int                          x,
-    int                          y,
-    int                          width,
-    int                          height,
-    erhe::dataformat::Format     pixelformat,
-    const void*                  data,
-    int                          row_stride
-)
-{
-    if ((data == nullptr) || (width <= 0) || (height <= 0)) {
-        return;
+    // Bridge: Swapchain_impl::setup_frame still allocates and waits on
+    // Device_frame_in_flight::submit_fence to gate its own per-slot
+    // bookkeeping (acquire-semaphore recycle, swapchain_garbage cleanup).
+    // The fence used to be signaled by the legacy end_frame submit; that
+    // branch is gone, so when a cb engaged the swapchain we attach the
+    // slot fence to this submit. Goes away with the legacy
+    // setup_frame/submit_fence path.
+    VkFence submit_fence = submit_info_aggregate.fence;
+    if (!submit_info_aggregate.swapchains_to_present.empty() && (submit_fence == VK_NULL_HANDLE)) {
+        const size_t slot = static_cast<size_t>(get_frame_in_flight_index());
+        submit_fence = m_device_submit_history[slot].submit_fence;
     }
 
-    const std::size_t pixel_size  = erhe::dataformat::get_format_size_bytes(pixelformat);
-    const std::size_t src_stride  = (row_stride > 0) ? static_cast<std::size_t>(row_stride) : (static_cast<std::size_t>(width) * pixel_size);
-    const std::size_t data_size   = src_stride * static_cast<std::size_t>(height);
-
-    // Create staging buffer
-    VmaAllocationCreateInfo staging_alloc_info{};
-    staging_alloc_info.usage = VMA_MEMORY_USAGE_CPU_ONLY;
-    staging_alloc_info.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT;
-
-    const VkBufferCreateInfo staging_buffer_info{
-        .sType                 = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-        .pNext                 = nullptr,
-        .flags                 = 0,
-        .size                  = data_size,
-        .usage                 = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-        .sharingMode           = VK_SHARING_MODE_EXCLUSIVE,
-        .queueFamilyIndexCount = 0,
-        .pQueueFamilyIndices   = nullptr
-    };
-
-    VkBuffer       staging_buffer     = VK_NULL_HANDLE;
-    VmaAllocation  staging_allocation = VK_NULL_HANDLE;
-    VmaAllocationInfo staging_alloc_result{};
-
-    VkResult result = vmaCreateBuffer(m_vma_allocator, &staging_buffer_info, &staging_alloc_info, &staging_buffer, &staging_allocation, &staging_alloc_result);
+    log_swapchain->trace(
+        "submit_command_buffers: vkQueueSubmit2 cb_count={} wait_sem_count={} signal_sem_count={} fence=0x{:x} swapchains_to_present={}",
+        submit_info_aggregate.command_buffers.size(),
+        submit_info_aggregate.wait_semaphores.size(),
+        submit_info_aggregate.signal_semaphores.size(),
+        reinterpret_cast<std::uintptr_t>(submit_fence),
+        submit_info_aggregate.swapchains_to_present.size()
+    );
+    const VkResult result = vkQueueSubmit2(m_vulkan_graphics_queue, 1, &submit_info, submit_fence);
     if (result != VK_SUCCESS) {
-        log_texture->error("upload_to_texture: staging buffer creation failed with {}", static_cast<int32_t>(result));
-        return;
+        log_context->critical(
+            "vkQueueSubmit2() in submit_command_buffers failed with {} {}",
+            static_cast<int32_t>(result), c_str(result)
+        );
+        abort();
     }
-    vmaSetAllocationName(m_vma_allocator, staging_allocation, "upload_to_texture staging");
 
-    // Copy data to staging buffer
-    std::memcpy(staging_alloc_result.pMappedData, data, data_size);
-    vmaFlushAllocation(m_vma_allocator, staging_allocation, 0, data_size);
-
-    const Texture_impl& tex_impl = texture.get_impl();
-    VkImage destination_image = tex_impl.get_vk_image();
-
-    const VkBufferImageCopy region{
-        .bufferOffset      = 0,
-        .bufferRowLength   = (row_stride > 0) ? static_cast<uint32_t>(row_stride / pixel_size) : 0,
-        .bufferImageHeight = 0,
-        .imageSubresource  = {
-            .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
-            .mipLevel       = static_cast<uint32_t>(level),
-            .baseArrayLayer = 0,
-            .layerCount     = 1
-        },
-        .imageOffset = {x, y, 0},
-        .imageExtent = {
-            static_cast<uint32_t>(width),
-            static_cast<uint32_t>(height),
-            1
-        }
-    };
-
-    VkCommandBuffer device_cb = get_device_frame_command_buffer();
-    if (device_cb != VK_NULL_HANDLE) {
-        // In-frame path: record into the active device cb and defer
-        // staging destruction to the frame-completion handler. Serialize
-        // against concurrent init-time callers.
-        std::lock_guard<std::mutex> lock{m_recording_mutex};
-        tex_impl.transition_layout(device_cb, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-        vkCmdCopyBufferToImage(device_cb, staging_buffer, destination_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-        tex_impl.transition_layout(device_cb, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-
-        VmaAllocator allocator = m_vma_allocator;
-        add_completion_handler(
-            [allocator, staging_buffer, staging_allocation](Device_impl&) {
-                vmaDestroyBuffer(allocator, staging_buffer, staging_allocation);
-            }
-        );
-    } else {
-        // No device frame active: fall back to immediate commands (blocks).
-        log_texture->warn(
-            "upload_to_texture: out-of-frame fallback path (blocks CPU until GPU "
-            "finishes copy). texture '{}' level={} {}x{}",
-            tex_impl.get_debug_label().string_view(), level, width, height
-        );
-        const Vulkan_immediate_commands::Command_buffer_wrapper& cmd = m_immediate_commands->acquire();
-
-        tex_impl.transition_layout(cmd.m_cmd_buf, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-        vkCmdCopyBufferToImage(cmd.m_cmd_buf, staging_buffer, destination_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-        tex_impl.transition_layout(cmd.m_cmd_buf, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-
-        // Submit and wait (staging buffer must survive until copy completes)
-        Submit_handle submit = m_immediate_commands->submit(cmd);
-        m_immediate_commands->wait(submit);
-
-        vmaDestroyBuffer(m_vma_allocator, staging_buffer, staging_allocation);
+    // Implicit present: any cb that engaged a swapchain via
+    // begin_swapchain has already had the swapchain's present_semaphore
+    // routed into the signal list above. Now drive vkQueuePresentKHR
+    // on each so callers don't have to manage a separate present step.
+    for (Swapchain_impl* swapchain : submit_info_aggregate.swapchains_to_present) {
+        ERHE_VERIFY(swapchain != nullptr);
+        const bool present_ok = swapchain->present();
+        log_swapchain->trace("submit_command_buffers: implicit present ok={}", present_ok);
+        static_cast<void>(present_ok);
     }
 }
 
@@ -1256,34 +1116,61 @@ void Device_impl::frame_completed(const uint64_t completed_frame)
 auto Device_impl::wait_frame() -> bool
 {
     ERHE_VERIFY(m_state == Device_frame_state::idle);
+
+    // Per-(frame_in_flight, thread) command pool reset, gated on the
+    // device's timeline semaphore. update_frame_completion (called from
+    // end_frame) signals m_vulkan_frame_end_semaphore at value
+    // m_frame_index right before incrementing, so once the GPU reaches
+    // value F-N the previous use of the slot we're about to enter
+    // (frame F-N, slot S = F % N) has fully retired and its cbs +
+    // implicit fences/semaphores can be recycled.
+    //
+    // For the first N frames the slot has never been used so nothing
+    // needs waiting on; for F > N we wait until the timeline reports
+    // F-N before clearing. The clear destroys each
+    // Command_buffer wrapper, which in turn recycles its implicit
+    // VkSemaphore / VkFence back to Device_sync_pool.
+    const size_t   slot = static_cast<size_t>(get_frame_in_flight_index());
+    const uint64_t N    = get_number_of_frames_in_flight();
+    if (m_frame_index > N) {
+        const uint64_t wait_value = m_frame_index - N;
+        const VkSemaphoreWaitInfo wait_info{
+            .sType          = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
+            .pNext          = nullptr,
+            .flags          = 0,
+            .semaphoreCount = 1,
+            .pSemaphores    = &m_vulkan_frame_end_semaphore,
+            .pValues        = &wait_value,
+        };
+        const VkResult result = vkWaitSemaphores(m_vulkan_device, &wait_info, UINT64_MAX);
+        if (result != VK_SUCCESS) {
+            log_context->critical(
+                "vkWaitSemaphores() in wait_frame failed with {} {}",
+                static_cast<int32_t>(result), c_str(result)
+            );
+            abort();
+        }
+    }
+
+    auto& thread_pools = m_command_pools[slot];
+    for (Per_thread_command_pool& thread_pool : thread_pools) {
+        thread_pool.allocated_command_buffers.clear();
+        if (thread_pool.command_pool != VK_NULL_HANDLE) {
+            const VkResult reset_result = vkResetCommandPool(m_vulkan_device, thread_pool.command_pool, 0);
+            if (reset_result != VK_SUCCESS) {
+                log_context->critical(
+                    "vkResetCommandPool() in wait_frame failed with {} {}",
+                    static_cast<int32_t>(reset_result), c_str(reset_result)
+                );
+                abort();
+            }
+        }
+    }
+
     set_state(Device_frame_state::waited, "wait_frame");
     return true;
 }
 
-auto Device_impl::wait_swapchain_frame(Frame_state& out_frame_state) -> bool
-{
-    // Must be called after wait_frame() (device state = waited). The Vulkan
-    // swapchain owns its own state machine driven by wait/begin/end; skipping
-    // this call is valid when the desktop window is not being rendered into
-    // (e.g. OpenXR), provided begin_swapchain_frame / end_swapchain_frame are
-    // skipped to match.
-    ERHE_VERIFY(m_state == Device_frame_state::waited);
-
-    bool result = false;
-    if (m_surface) {
-        Swapchain* swapchain = m_surface->get_swapchain();
-        if (swapchain != nullptr) {
-            result = swapchain->get_impl().wait_frame(out_frame_state);
-        }
-    }
-    if (!result) {
-        out_frame_state.predicted_display_time   = 0;
-        out_frame_state.predicted_display_period = 0;
-        out_frame_state.should_render            = false;
-        return false;
-    }
-    return true;
-}
 
 auto Device_impl::begin_frame() -> bool
 {
@@ -1325,157 +1212,66 @@ auto Device_impl::begin_frame() -> bool
         abort();
     }
 
-    m_active_device_frame_command_buffer = df.command_buffer;
     set_state(Device_frame_state::recording, "begin_frame");
     return true;
 }
 
 auto Device_impl::begin_frame(const Frame_begin_info& frame_begin_info) -> bool
 {
-    // Compat path: combine device-frame open and swapchain-frame open.
-    const bool device_ok = begin_frame();
-    if (!device_ok) {
-        return false;
-    }
-    Frame_state dummy_state{};
-    return begin_swapchain_frame(frame_begin_info, dummy_state);
-}
-
-auto Device_impl::end_frame(const Frame_end_info& frame_end_info) -> bool
-{
-    // Under the unified command-buffer model, render passes record
-    // directly into the device-frame cb via acquire_shared_command_buffer.
-    // Everything (offscreen render passes, swapchain render pass,
-    // transfers, clears, blits) lands in the single device-cb submit
-    // below.
-
-    // Valid entry states: in_swapchain_frame (old editor path that went
-    // begin_frame(info) -> render -> end_frame(info)), or recording (new
-    // path that already called end_swapchain_frame).
-    ERHE_VERIFY(
-        (m_state == Device_frame_state::in_swapchain_frame) ||
-        (m_state == Device_frame_state::recording)
-    );
-
-    // Compat: caller did not call end_swapchain_frame first. Fold it in
-    // so the nested swapchain frame is properly closed before submit.
-    if (m_state == Device_frame_state::in_swapchain_frame) {
-        end_swapchain_frame(frame_end_info);
-    }
-
-    // Close the device command buffer we opened in begin_frame(). The
-    // subsequent submit path differs depending on whether a swapchain
-    // frame was nested: Swapchain_impl::end_frame submits with acquire
-    // wait + present signal + fence; our own no-swapchain branch submits
-    // with just the fence so the slot is still paced.
-    const size_t slot = static_cast<size_t>(get_frame_in_flight_index());
-    Device_frame_in_flight& df = m_device_submit_history[slot];
-    if (df.command_buffer != VK_NULL_HANDLE) {
-        const VkResult r = vkEndCommandBuffer(df.command_buffer);
-        if (r != VK_SUCCESS) {
-            log_context->critical(
-                "vkEndCommandBuffer() failed with {} {}",
-                static_cast<int32_t>(r), c_str(r)
-            );
-            abort();
-        }
-    }
-    m_active_device_frame_command_buffer = VK_NULL_HANDLE;
-
-    bool result = true;
-    if (m_had_swapchain_frame && m_surface) {
-        Swapchain* swapchain = m_surface->get_swapchain();
-        if (swapchain != nullptr) {
-            result = swapchain->get_impl().end_frame(frame_end_info);
-        }
-    } else if ((df.command_buffer != VK_NULL_HANDLE) && (df.submit_fence != VK_NULL_HANDLE)) {
-        // Device-only frame (no swapchain nested): submit the cb so the
-        // slot's fence gets signaled when the GPU completes, enabling
-        // the next wait_frame on this slot to recycle resources.
-        const VkCommandBufferSubmitInfo cb_info{
-            .sType         = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
-            .pNext         = nullptr,
-            .commandBuffer = df.command_buffer,
-            .deviceMask    = 0,
-        };
-        const VkSubmitInfo2 submit_info{
-            .sType                    = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
-            .pNext                    = nullptr,
-            .flags                    = 0,
-            .waitSemaphoreInfoCount   = 0,
-            .pWaitSemaphoreInfos      = nullptr,
-            .commandBufferInfoCount   = 1,
-            .pCommandBufferInfos      = &cb_info,
-            .signalSemaphoreInfoCount = 0,
-            .pSignalSemaphoreInfos    = nullptr,
-        };
-        const VkResult r = vkQueueSubmit2(m_vulkan_graphics_queue, 1, &submit_info, df.submit_fence);
-        if (r != VK_SUCCESS) {
-            log_context->critical(
-                "vkQueueSubmit2() for device-only frame failed with {} {}",
-                static_cast<int32_t>(r), c_str(r)
-            );
-            abort();
-        }
-    }
-    m_had_swapchain_frame = false;
-
-    update_frame_completion();
-
-    ERHE_VULKAN_SYNC_TRACE("[FRAME_END] frame_index={}", m_frame_index);
-    set_state(Device_frame_state::idle, "end_frame");
-    return result;
+    // Legacy compat: used to combine device-frame open with the
+    // swapchain-frame open. begin_swapchain_frame moved to
+    // Command_buffer::begin_swapchain, so the swapchain side is no
+    // longer engaged here -- callers wanting the swapchain part must
+    // call command_buffer.begin_swapchain(...) explicitly. This body
+    // keeps compiling so hello_swap can iterate to the new pattern.
+    static_cast<void>(frame_begin_info);
+    return begin_frame();
 }
 
 auto Device_impl::end_frame() -> bool
 {
-    // No-args end_frame: caller used the new split (end_swapchain_frame was
-    // called if a swapchain frame was nested). Frame_end_info is discarded
-    // by every backend's Swapchain::end_frame anyway.
-    return end_frame(Frame_end_info{});
+    // CONTRACT: end_frame advances the frame index. That is its ONLY job.
+    //
+    // It does not submit any command buffer, it does not present any
+    // swapchain image, and it does not touch any GPU resource other
+    // than the device-owned timeline semaphore that update_frame_completion
+    // signals. Callers must have already submitted every cb they
+    // recorded via Device::submit_command_buffers (which presents
+    // implicitly when a cb engaged a swapchain via begin_swapchain).
+    //
+    // Mechanics: update_frame_completion() submits an empty
+    // vkQueueSubmit2 that signals m_vulkan_frame_end_semaphore at the
+    // current m_frame_index, then increments m_frame_index. The next
+    // wait_frame() consults the timeline semaphore at value
+    // (m_frame_index - N) to gate per-(frame_in_flight, thread_slot)
+    // command-pool reset.
+    ERHE_VERIFY(
+        (m_state == Device_frame_state::in_swapchain_frame) ||
+        (m_state == Device_frame_state::recording) ||
+        (m_state == Device_frame_state::waited)
+    );
+
+    m_had_swapchain_frame = false;
+    update_frame_completion();
+
+    ERHE_VULKAN_SYNC_TRACE("[FRAME_END] frame_index={}", m_frame_index);
+    set_state(Device_frame_state::idle, "end_frame");
+    return true;
 }
 
-auto Device_impl::begin_swapchain_frame(const Frame_begin_info& frame_begin_info, Frame_state& out_frame_state) -> bool
+auto Device_impl::end_frame(const Frame_end_info& frame_end_info) -> bool
 {
-    ERHE_VERIFY(m_state == Device_frame_state::recording);
-
-    if (!m_surface) {
-        out_frame_state.should_render = false;
-        return false;
-    }
-    Swapchain* swapchain = m_surface->get_swapchain();
-    if (swapchain == nullptr) {
-        out_frame_state.should_render = false;
-        return false;
-    }
-
-    const bool ok = swapchain->get_impl().begin_frame(frame_begin_info);
-    out_frame_state.should_render = ok;
-    if (ok) {
-        set_state(Device_frame_state::in_swapchain_frame, "begin_swapchain_frame");
-        m_had_swapchain_frame = true;
-    }
-    return ok;
+    // Legacy compat overload. The Frame_end_info argument used to carry
+    // the predicted-display-time / present-mode hints into
+    // Swapchain_impl::end_frame, but presentation has moved into
+    // Device::submit_command_buffers (driven by Command_buffer::begin_swapchain).
+    // The argument is now ignored; both overloads have identical
+    // behaviour: advance frame index. This overload is kept only so
+    // existing call sites compile while they migrate to the no-args form.
+    static_cast<void>(frame_end_info);
+    return end_frame();
 }
 
-void Device_impl::end_swapchain_frame(const Frame_end_info& /*frame_end_info*/)
-{
-    ERHE_VERIFY(m_state == Device_frame_state::in_swapchain_frame);
-    // No submit yet; end_frame() performs the actual vkQueueSubmit2 +
-    // vkQueuePresentKHR (guarded on m_had_swapchain_frame). We just flip
-    // state back to recording so end_frame's precondition is met.
-    set_state(Device_frame_state::recording, "end_swapchain_frame");
-}
-
-void Device_impl::prime_device_frame_slot()
-{
-    // Alternative to wait_swapchain_frame when the caller does not engage
-    // the desktop swapchain (e.g. OpenXR). Must be called after wait_frame()
-    // and before begin_frame(). MUST NOT be combined with wait_swapchain_frame
-    // in the same tick -- that would double-prime the slot.
-    ERHE_VERIFY(m_state == Device_frame_state::waited);
-    ensure_device_frame_slot(get_frame_in_flight_index());
-}
 
 void Device_impl::wait_idle()
 {
@@ -1510,12 +1306,6 @@ void Device_impl::wait_idle()
         entry.callback(*this);
     }
     m_completion_handlers.clear();
-}
-
-auto Device_impl::is_in_device_frame() const -> bool
-{
-    return (m_state == Device_frame_state::recording) ||
-           (m_state == Device_frame_state::in_swapchain_frame);
 }
 
 auto Device_impl::is_in_swapchain_frame() const -> bool
@@ -1624,150 +1414,6 @@ auto Device_impl::allocate_ring_buffer_entry(
     };
     m_ring_buffers.push_back(std::make_unique<Ring_buffer>(m_device, create_info));
     return m_ring_buffers.back()->acquire(required_alignment, ring_buffer_usage, byte_count);
-}
-
-void Device_impl::memory_barrier(Memory_barrier_mask barriers)
-{
-    // Record a global memory barrier on the active device-frame cb.
-    // OpenGL's glMemoryBarrier semantics: "make all prior GPU writes
-    // visible to the specified dst uses". We translate the mask bits to
-    // Vulkan dst stage/access and use a conservative src that covers
-    // any prior memory write.
-    //
-    // get_device_frame_command_buffer() returns VK_NULL_HANDLE when
-    // either no device frame is active or a render pass is currently
-    // recording. vkCmdPipelineBarrier2 inside a render pass without a
-    // matching subpass self-dependency is invalid; callers must emit
-    // global memory barriers outside render passes.
-    VkCommandBuffer cb = get_device_frame_command_buffer();
-    if (cb == VK_NULL_HANDLE) {
-        if (is_in_device_frame()) {
-            m_device.device_message(
-                Message_severity::error,
-                "memory_barrier() called inside a render pass; dropped. "
-                "Global memory barriers must be emitted outside render passes "
-                "because our render passes do not declare matching subpass "
-                "self-dependencies."
-            );
-        }
-        return;
-    }
-
-    const unsigned int mask = static_cast<unsigned int>(barriers);
-
-    VkPipelineStageFlags2 dst_stage  = 0;
-    VkAccessFlags2        dst_access = 0;
-
-    constexpr unsigned int vertex_attrib_array_barrier_bit  = 0x00000001u;
-    constexpr unsigned int element_array_barrier_bit        = 0x00000002u;
-    constexpr unsigned int uniform_barrier_bit              = 0x00000004u;
-    constexpr unsigned int texture_fetch_barrier_bit        = 0x00000008u;
-    constexpr unsigned int shader_image_access_barrier_bit  = 0x00000020u;
-    constexpr unsigned int command_barrier_bit              = 0x00000040u;
-    constexpr unsigned int pixel_buffer_barrier_bit         = 0x00000080u;
-    constexpr unsigned int texture_update_barrier_bit       = 0x00000100u;
-    constexpr unsigned int buffer_update_barrier_bit        = 0x00000200u;
-    constexpr unsigned int framebuffer_barrier_bit          = 0x00000400u;
-    constexpr unsigned int atomic_counter_barrier_bit       = 0x00001000u;
-    constexpr unsigned int shader_storage_barrier_bit       = 0x00002000u;
-    constexpr unsigned int client_mapped_buffer_barrier_bit = 0x00004000u;
-
-    constexpr VkPipelineStageFlags2 any_shader_stage =
-        VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
-    constexpr VkAccessFlags2        shader_storage_rw =
-        VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
-
-    if ((mask & vertex_attrib_array_barrier_bit) != 0) {
-        dst_stage  |= VK_PIPELINE_STAGE_2_VERTEX_ATTRIBUTE_INPUT_BIT;
-        dst_access |= VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT;
-    }
-    if ((mask & element_array_barrier_bit) != 0) {
-        dst_stage  |= VK_PIPELINE_STAGE_2_INDEX_INPUT_BIT;
-        dst_access |= VK_ACCESS_2_INDEX_READ_BIT;
-    }
-    if ((mask & uniform_barrier_bit) != 0) {
-        dst_stage  |= any_shader_stage;
-        dst_access |= VK_ACCESS_2_UNIFORM_READ_BIT;
-    }
-    if ((mask & texture_fetch_barrier_bit) != 0) {
-        dst_stage  |= any_shader_stage;
-        dst_access |= VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
-    }
-    if ((mask & shader_image_access_barrier_bit) != 0) {
-        dst_stage  |= any_shader_stage;
-        dst_access |= shader_storage_rw;
-    }
-    if ((mask & command_barrier_bit) != 0) {
-        dst_stage  |= VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT;
-        dst_access |= VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT;
-    }
-    if ((mask & pixel_buffer_barrier_bit) != 0) {
-        dst_stage  |= VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT;
-        dst_access |= VK_ACCESS_2_TRANSFER_READ_BIT | VK_ACCESS_2_TRANSFER_WRITE_BIT;
-    }
-    if ((mask & texture_update_barrier_bit) != 0) {
-        dst_stage  |= VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT;
-        dst_access |= VK_ACCESS_2_TRANSFER_WRITE_BIT;
-    }
-    if ((mask & buffer_update_barrier_bit) != 0) {
-        dst_stage  |= VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT;
-        dst_access |= VK_ACCESS_2_TRANSFER_WRITE_BIT;
-    }
-    if ((mask & framebuffer_barrier_bit) != 0) {
-        dst_stage  |= VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT
-                   |  VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT
-                   |  VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT;
-        dst_access |= VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT
-                   |  VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT
-                   |  VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT
-                   |  VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-    }
-    if ((mask & atomic_counter_barrier_bit) != 0) {
-        dst_stage  |= any_shader_stage;
-        dst_access |= shader_storage_rw;
-    }
-    if ((mask & shader_storage_barrier_bit) != 0) {
-        dst_stage  |= any_shader_stage;
-        dst_access |= shader_storage_rw;
-    }
-    if ((mask & client_mapped_buffer_barrier_bit) != 0) {
-        dst_stage  |= VK_PIPELINE_STAGE_2_HOST_BIT;
-        dst_access |= VK_ACCESS_2_HOST_READ_BIT;
-    }
-
-    if (dst_stage == 0) {
-        return;
-    }
-
-    const VkMemoryBarrier2 memory_barrier_info{
-        .sType         = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
-        .pNext         = nullptr,
-        .srcStageMask  = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
-        .srcAccessMask = VK_ACCESS_2_MEMORY_WRITE_BIT,
-        .dstStageMask  = dst_stage,
-        .dstAccessMask = dst_access,
-    };
-    const VkDependencyInfo dependency_info{
-        .sType                    = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-        .pNext                    = nullptr,
-        .dependencyFlags          = 0,
-        .memoryBarrierCount       = 1,
-        .pMemoryBarriers          = &memory_barrier_info,
-        .bufferMemoryBarrierCount = 0,
-        .pBufferMemoryBarriers    = nullptr,
-        .imageMemoryBarrierCount  = 0,
-        .pImageMemoryBarriers     = nullptr,
-    };
-    vkCmdPipelineBarrier2(cb, &dependency_info);
-
-    ERHE_VULKAN_SYNC_TRACE(
-        "[MEM_BARRIER] mask=0x{:x} src_stage={} src_access={} dst_stage={} dst_access={}",
-        mask,
-        pipeline_stage_flags_str(memory_barrier_info.srcStageMask),
-        access_flags_str(memory_barrier_info.srcAccessMask),
-        pipeline_stage_flags_str(memory_barrier_info.dstStageMask),
-        access_flags_str(memory_barrier_info.dstAccessMask)
-    );
 }
 
 auto Device_impl::get_format_properties(erhe::dataformat::Format format) const -> Format_properties
@@ -1935,134 +1581,6 @@ auto Device_impl::choose_depth_stencil_format(unsigned int sort_flags, int reque
     return choose_depth_stencil_format(formats);
 }
 
-void Device_impl::clear_texture(const Texture& texture, std::array<double, 4> value)
-{
-    const Texture_impl& tex_impl = texture.get_impl();
-    VkImage image = tex_impl.get_vk_image();
-    if (image == VK_NULL_HANDLE) {
-        return;
-    }
-
-    const erhe::dataformat::Format pixelformat = tex_impl.get_pixelformat();
-    const bool is_depth   = erhe::dataformat::get_depth_size_bits(pixelformat) > 0;
-    const bool is_stencil = erhe::dataformat::get_stencil_size_bits(pixelformat) > 0;
-
-    const VkImageLayout final_layout = (is_depth || is_stencil)
-        ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL
-        : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-    auto record = [&](VkCommandBuffer cb) {
-        tex_impl.transition_layout(cb, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-        if (is_depth || is_stencil) {
-            const VkClearDepthStencilValue clear_depth_stencil{
-                .depth   = static_cast<float>(value[0]),
-                .stencil = static_cast<uint32_t>(value[1])
-            };
-            VkImageAspectFlags aspect_mask = 0;
-            if (is_depth)   aspect_mask |= VK_IMAGE_ASPECT_DEPTH_BIT;
-            if (is_stencil) aspect_mask |= VK_IMAGE_ASPECT_STENCIL_BIT;
-            const VkImageSubresourceRange range{aspect_mask, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS};
-            vkCmdClearDepthStencilImage(cb, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clear_depth_stencil, 1, &range);
-        } else {
-            const VkClearColorValue clear_color{
-                .float32 = {
-                    static_cast<float>(value[0]),
-                    static_cast<float>(value[1]),
-                    static_cast<float>(value[2]),
-                    static_cast<float>(value[3])
-                }
-            };
-            const VkImageSubresourceRange range{VK_IMAGE_ASPECT_COLOR_BIT, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS};
-            vkCmdClearColorImage(cb, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clear_color, 1, &range);
-        }
-        tex_impl.transition_layout(cb, final_layout);
-    };
-
-    VkCommandBuffer device_cb = get_device_frame_command_buffer();
-    if (device_cb != VK_NULL_HANDLE) {
-        std::lock_guard<std::mutex> lock{m_recording_mutex};
-        record(device_cb);
-    } else {
-        const Vulkan_immediate_commands::Command_buffer_wrapper& cmd = m_immediate_commands->acquire();
-        record(cmd.m_cmd_buf);
-        Submit_handle submit = m_immediate_commands->submit(cmd);
-        m_immediate_commands->wait(submit);
-    }
-}
-
-// to_vk_image_layout is now in vulkan_helpers.cpp/hpp
-
-void Device_impl::transition_texture_layout(const Texture& texture, Image_layout new_layout)
-{
-    const Texture_impl& tex_impl = texture.get_impl();
-    VkImage image = tex_impl.get_vk_image();
-    if (image == VK_NULL_HANDLE) {
-        return;
-    }
-
-    VkCommandBuffer device_cb = get_device_frame_command_buffer();
-    if (device_cb != VK_NULL_HANDLE) {
-        std::lock_guard<std::mutex> lock{m_recording_mutex};
-        tex_impl.transition_layout(device_cb, to_vk_image_layout(new_layout));
-    } else {
-        const Vulkan_immediate_commands::Command_buffer_wrapper& cmd = m_immediate_commands->acquire();
-        tex_impl.transition_layout(cmd.m_cmd_buf, to_vk_image_layout(new_layout));
-        Submit_handle submit = m_immediate_commands->submit(cmd);
-        m_immediate_commands->wait(submit);
-    }
-}
-
-void Device_impl::cmd_texture_barrier(uint64_t usage_before, uint64_t usage_after)
-{
-    // Strip the user_synchronized modifier -- it only controls whether
-    // the automatic end-of-renderpass barrier fires; the actual
-    // stage/access mapping should ignore it.
-    const uint64_t src_usage = usage_before & ~Image_usage_flag_bit_mask::user_synchronized;
-    const uint64_t dst_usage = usage_after  & ~Image_usage_flag_bit_mask::user_synchronized;
-
-    const Vk_stage_access src_sa = usage_to_vk_stage_access(src_usage, false);
-    const Vk_stage_access dst_sa = usage_to_vk_stage_access(dst_usage, false);
-
-    if ((src_sa.stage == 0) || (dst_sa.stage == 0)) {
-        return;
-    }
-
-    VkCommandBuffer command_buffer = acquire_shared_command_buffer();
-    if (command_buffer == VK_NULL_HANDLE) {
-        log_render_pass->error("cmd_texture_barrier(): no device-frame command buffer available");
-        return;
-    }
-
-    const VkMemoryBarrier2 memory_barrier{
-        .sType         = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
-        .pNext         = nullptr,
-        .srcStageMask  = static_cast<VkPipelineStageFlags2>(src_sa.stage),
-        .srcAccessMask = static_cast<VkAccessFlags2>(src_sa.access),
-        .dstStageMask  = static_cast<VkPipelineStageFlags2>(dst_sa.stage),
-        .dstAccessMask = static_cast<VkAccessFlags2>(dst_sa.access),
-    };
-    const VkDependencyInfo dependency_info{
-        .sType                    = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-        .pNext                    = nullptr,
-        .dependencyFlags          = 0,
-        .memoryBarrierCount       = 1,
-        .pMemoryBarriers          = &memory_barrier,
-        .bufferMemoryBarrierCount = 0,
-        .pBufferMemoryBarriers    = nullptr,
-        .imageMemoryBarrierCount  = 0,
-        .pImageMemoryBarriers     = nullptr,
-    };
-    vkCmdPipelineBarrier2(command_buffer, &dependency_info);
-
-    ERHE_VULKAN_SYNC_TRACE(
-        "[EXPLICIT_BARRIER] src_stage={} src_access={} dst_stage={} dst_access={}",
-        pipeline_stage_flags_str(memory_barrier.srcStageMask),
-        access_flags_str(memory_barrier.srcAccessMask),
-        pipeline_stage_flags_str(memory_barrier.dstStageMask),
-        access_flags_str(memory_barrier.dstAccessMask)
-    );
-}
-
 void Device_impl::start_frame_capture()
 {
     RENDERDOC_API_1_7_0* api = static_cast<RENDERDOC_API_1_7_0*>(erhe::window::get_renderdoc_api());
@@ -2093,19 +1611,19 @@ void Device_impl::end_frame_capture()
     }
 }
 
-auto Device_impl::make_blit_command_encoder() -> Blit_command_encoder
+auto Device_impl::make_blit_command_encoder(Command_buffer& command_buffer) -> Blit_command_encoder
 {
-    return Blit_command_encoder(m_device);
+    return Blit_command_encoder{m_device, command_buffer};
 }
 
-auto Device_impl::make_compute_command_encoder() -> Compute_command_encoder
+auto Device_impl::make_compute_command_encoder(Command_buffer& command_buffer) -> Compute_command_encoder
 {
-    return Compute_command_encoder(m_device);
+    return Compute_command_encoder{m_device, command_buffer};
 }
 
-auto Device_impl::make_render_command_encoder() -> Render_command_encoder
+auto Device_impl::make_render_command_encoder(Command_buffer& command_buffer) -> Render_command_encoder
 {
-    return Render_command_encoder(m_device);
+    return Render_command_encoder{m_device, command_buffer};
 }
 
 void Device_impl::set_debug_label(const VkObjectType object_type, const uint64_t object_handle, const char* label)
@@ -2148,75 +1666,58 @@ auto Device_impl::get_sync_pool() -> Device_sync_pool&
     return *m_sync_pool;
 }
 
-auto Device_impl::get_active_command_buffer() const -> VkCommandBuffer
+auto Device_impl::get_command_buffer(unsigned int thread_slot) -> Command_buffer&
 {
-    // The device-frame cb is the one thing every render pass, transfer, and
-    // encoder records into under the unified command-buffer model. Return it
-    // directly -- an active render pass shares the same cb, so there's no
-    // need to route through m_active_render_pass.
-    return m_active_device_frame_command_buffer;
-}
+    ERHE_VERIFY(thread_slot < s_number_of_thread_slots);
+    const size_t frame_slot = static_cast<size_t>(get_frame_in_flight_index());
+    Per_thread_command_pool& pool = m_command_pools[frame_slot][thread_slot];
+    ERHE_VERIFY(pool.command_pool != VK_NULL_HANDLE);
 
-auto Device_impl::get_device_frame_command_buffer() const -> VkCommandBuffer
-{
-    if (!is_in_device_frame()) {
-        ERHE_VULKAN_SYNC_TRACE(
-            "[GET_CB] null: not in device frame (state={}, frame_index={})",
-            c_str(m_state), m_frame_index
+    const VkCommandBufferAllocateInfo allocate_info{
+        .sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        .pNext              = nullptr,
+        .commandPool        = pool.command_pool,
+        .level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+        .commandBufferCount = 1
+    };
+    VkCommandBuffer vk_command_buffer{VK_NULL_HANDLE};
+    const VkResult result = vkAllocateCommandBuffers(m_vulkan_device, &allocate_info, &vk_command_buffer);
+    if (result != VK_SUCCESS) {
+        log_context->critical(
+            "vkAllocateCommandBuffers() failed with {} {}",
+            static_cast<int32_t>(result), c_str(result)
         );
-        m_device.device_message(
-            Message_severity::error,
-            fmt::format(
-                "get_device_frame_command_buffer: not in device frame "
-                "(state={}, frame_index={}); callers will fall back to the "
-                "immediate-commands path",
-                c_str(m_state), m_frame_index
-            )
-        );
-        return VK_NULL_HANDLE;
+        abort();
     }
-    // Transfer/blit/clear commands and their pipeline barriers are not
-    // allowed inside a render pass instance (unless the render pass has
-    // a subpass self-dependency, which ours don't). When a swapchain
-    // render pass is mid-recording on the device cb, return VK_NULL_HANDLE
-    // so callers (upload_to_*, clear_texture, blit encoder Recording_scope)
-    // fall back to the immediate-commands path and record into an
-    // independent cb.
-    if (m_active_render_pass != nullptr) {
-        ERHE_VULKAN_SYNC_TRACE(
-            "[GET_CB] null: render pass active (state={}, frame_index={})",
-            c_str(m_state), m_frame_index
-        );
-        m_device.device_message(
-            Message_severity::error,
-            fmt::format(
-                "get_device_frame_command_buffer: render pass active "
-                "(state={}, frame_index={}); transfer/blit/clear cannot record "
-                "into the device cb inside a render pass, callers will fall "
-                "back to the immediate-commands path",
-                c_str(m_state), m_frame_index
-            )
-        );
-        return VK_NULL_HANDLE;
-    }
-    const size_t slot = static_cast<size_t>(get_frame_in_flight_index());
-    const VkCommandBuffer cb = m_device_submit_history[slot].command_buffer;
-    if (cb == VK_NULL_HANDLE) {
-        // Unexpected: we are in a device frame and no render pass is
-        // active, yet the slot we are about to index into has no cb.
-        // This indicates that begin_frame opened a slot whose cb was
-        // never allocated -- typically a swapchain/device slot-index
-        // mismatch. Warn (not trace) so the condition surfaces even in
-        // release-style logging configurations.
-        log_context->warn(
-            "get_device_frame_command_buffer: slot {} has no cb "
-            "(state={}, frame_index={}, active_device_cb={}, N={})",
-            slot, c_str(m_state), m_frame_index,
-            reinterpret_cast<uintptr_t>(m_active_device_frame_command_buffer),
-            get_number_of_frames_in_flight()
-        );
-    }
-    return cb;
+
+    auto label = erhe::utility::Debug_label{
+        fmt::format("Device cb (frame_slot={}, thread_slot={}, allocation_index={})",
+            frame_slot, thread_slot, pool.allocated_command_buffers.size())
+    };
+    set_debug_label(VK_OBJECT_TYPE_COMMAND_BUFFER, reinterpret_cast<uint64_t>(vk_command_buffer), label.data());
+
+    auto command_buffer = std::make_unique<Command_buffer>(m_device, label);
+    command_buffer->get_impl().set_vulkan_command_buffer(vk_command_buffer);
+
+    // Implicit per-cb sync primitives, owned for the lifetime of the
+    // wrapper (until the per-thread pool is reset on the next frame
+    // cycle). Recycled in Command_buffer_impl::~Command_buffer_impl.
+    const VkSemaphore implicit_semaphore = m_sync_pool->get_semaphore();
+    const VkFence     implicit_fence     = m_sync_pool->get_fence();
+    set_debug_label(
+        VK_OBJECT_TYPE_SEMAPHORE,
+        reinterpret_cast<uint64_t>(implicit_semaphore),
+        fmt::format("Cb implicit semaphore (frame_slot={}, thread_slot={})", frame_slot, thread_slot).c_str()
+    );
+    set_debug_label(
+        VK_OBJECT_TYPE_FENCE,
+        reinterpret_cast<uint64_t>(implicit_fence),
+        fmt::format("Cb implicit fence (frame_slot={}, thread_slot={})", frame_slot, thread_slot).c_str()
+    );
+    command_buffer->get_impl().set_implicit_sync(implicit_semaphore, implicit_fence);
+
+    pool.allocated_command_buffers.push_back(std::move(command_buffer));
+    return *pool.allocated_command_buffers.back();
 }
 
 auto Device_impl::get_active_render_pass() const -> VkRenderPass

@@ -11,6 +11,7 @@ namespace erhe::graph {
 }
 
 namespace erhe::graphics {
+    class Command_buffer;
     class Device;
 }
 
@@ -27,7 +28,7 @@ public:
     // Public API
     [[nodiscard]] auto get_nodes() const -> const std::vector<Rendergraph_node*>&;
     void sort           ();
-    void execute        ();
+    void execute        (erhe::graphics::Command_buffer& command_buffer);
     void register_node  (Rendergraph_node* node);
     void unregister_node(Rendergraph_node* node);
     auto connect        (int key, Rendergraph_node* source_node, Rendergraph_node* sink_node) -> bool;

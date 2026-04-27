@@ -16,6 +16,8 @@
 #include "windows/viewport_window.hpp"
 
 #include "erhe_commands/commands.hpp"
+#include "erhe_graphics/command_buffer.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_math/math_util.hpp"
@@ -259,9 +261,13 @@ auto Scene_commands::create_new_rendertarget(erhe::scene::Node* parent) -> std::
         return {};
     }
 
+    ERHE_VERIFY(m_context.current_command_buffer != nullptr);
+    erhe::graphics::Command_buffer& command_buffer = *m_context.current_command_buffer;
+
     // Rendertarget_mesh is Mesh (can be rendered in 3D scene) with textured rectangle vertex data, provides Texture
     auto mesh = std::make_shared<Rendertarget_mesh>(
         *m_context.graphics_device,
+        command_buffer,
         *m_context.mesh_memory,
         2048,
         2048,
@@ -270,9 +276,9 @@ auto Scene_commands::create_new_rendertarget(erhe::scene::Node* parent) -> std::
 
     {
         // Clear once
-        erhe::graphics::Render_command_encoder render_encoder = m_context.graphics_device->make_render_command_encoder();
-        erhe::graphics::Scoped_render_pass scoped_render_pass{*mesh->get_render_pass()};
-        mesh->render_done(m_context);
+        erhe::graphics::Render_command_encoder render_encoder = m_context.graphics_device->make_render_command_encoder(command_buffer);
+        erhe::graphics::Scoped_render_pass scoped_render_pass{*mesh->get_render_pass(), command_buffer};
+        mesh->render_done(command_buffer, m_context);
     }
 
     mesh->layer_id = scene_root->layers().rendertarget()->id;

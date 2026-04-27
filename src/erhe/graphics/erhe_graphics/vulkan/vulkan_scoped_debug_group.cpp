@@ -26,12 +26,10 @@ Scoped_debug_group_impl::Scoped_debug_group_impl(erhe::utility::Debug_label debu
 
     log_debug->debug("begin debug group: {}", m_debug_label.string_view());
 
-    m_command_buffer = device_impl->get_active_command_buffer();
-    if (m_command_buffer != VK_NULL_HANDLE) {
-        vkCmdBeginDebugUtilsLabelEXT(m_command_buffer, &label_info);
-        return;
-    }
-
+    // The cb-targeted debug label needs an explicit Command_buffer& to
+    // record into; there's no "active cb" singleton anymore. Until the
+    // public Scoped_debug_group takes a Command_buffer, fall back to the
+    // queue-level label only.
     m_queue = device_impl->get_graphics_queue();
     if (m_queue != VK_NULL_HANDLE) {
         vkQueueBeginDebugUtilsLabelEXT(m_queue, &label_info);

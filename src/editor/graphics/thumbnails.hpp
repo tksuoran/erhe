@@ -9,6 +9,7 @@
 #include <vector>
 
 namespace erhe::graphics {
+    class Command_buffer;
     class Device;
     class Texture;
 }
@@ -44,7 +45,7 @@ public:
 class Thumbnails
 {
 public:
-    Thumbnails(const Thumbnails_config& thumbnails_config, erhe::graphics::Device& graphics_device, App_context& context);
+    Thumbnails(const Thumbnails_config& thumbnails_config, erhe::graphics::Device& graphics_device, erhe::graphics::Command_buffer& init_command_buffer, App_context& context);
     ~Thumbnails() noexcept;
 
     // This should be called once per frame, outside command encoder

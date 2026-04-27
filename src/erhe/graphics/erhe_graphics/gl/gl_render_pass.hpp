@@ -43,9 +43,10 @@ public:
 
 private:
     friend class Render_pass;
-    // The before/after arguments are ignored by the OpenGL backend; the
-    // driver handles all cross-pass synchronization implicitly.
-    void start_render_pass(Render_pass* render_pass_before, Render_pass* render_pass_after);
+    // The command_buffer / before / after arguments are ignored by the
+    // OpenGL backend; the driver handles all cross-pass synchronization
+    // implicitly and there is no native command buffer to record into.
+    void start_render_pass(Command_buffer& command_buffer, Render_pass* render_pass_before, Render_pass* render_pass_after);
     void end_render_pass  (Render_pass* render_pass_after);
 
 private:

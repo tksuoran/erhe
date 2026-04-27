@@ -282,8 +282,8 @@ void Id_renderer::render(const Render_parameters& parameters)
 
     // Render
     {
-        Render_command_encoder encoder = m_graphics_device.make_render_command_encoder();
-        erhe::graphics::Scoped_render_pass scoped_render_pass{*m_render_pass.get()};
+        Render_command_encoder encoder = m_graphics_device.make_render_command_encoder(parameters.command_buffer);
+        erhe::graphics::Scoped_render_pass scoped_render_pass{*m_render_pass.get(), parameters.command_buffer};
         m_camera_buffers.bind(encoder, camera_range);
 
         if (m_use_scissor) {
@@ -333,7 +333,7 @@ void Id_renderer::render(const Render_parameters& parameters)
     // Transfer pixel data from GPU to CPU
     {
         entry.buffer_range = m_texture_read_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_read, color_image_size_bytes + depth_image_size_bytes);
-        Blit_command_encoder encoder = m_graphics_device.make_blit_command_encoder();
+        Blit_command_encoder encoder = m_graphics_device.make_blit_command_encoder(parameters.command_buffer);
 
         const Texture* source_texture = m_color_texture.get();
         std::uintptr_t source_slice   = 0;

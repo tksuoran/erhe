@@ -51,8 +51,8 @@ auto to_mtl_index_type(const erhe::dataformat::Format format) -> MTL::IndexType
 
 } // anonymous namespace
 
-Render_command_encoder_impl::Render_command_encoder_impl(Device& device)
-    : Command_encoder_impl{device}
+Render_command_encoder_impl::Render_command_encoder_impl(Device& device, Command_buffer& command_buffer)
+    : Command_encoder_impl{device, command_buffer}
 {
 }
 

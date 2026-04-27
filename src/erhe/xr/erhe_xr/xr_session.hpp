@@ -7,7 +7,7 @@
 #include <functional>
 #include <vector>
 
-namespace erhe::graphics { class Device; }
+namespace erhe::graphics { class Command_buffer; class Device; }
 namespace erhe::window   { class Context_window; }
 
 namespace erhe::xr {
@@ -34,7 +34,7 @@ public:
     [[nodiscard]] auto is_session_running          () const -> bool;
     [[nodiscard]] auto begin_frame                 () -> bool;
     [[nodiscard]] auto wait_frame                  () -> XrFrameState*;
-    [[nodiscard]] auto render_frame                (std::function<bool(Render_view&)> render_view_callback) -> bool;
+    [[nodiscard]] auto render_frame                (erhe::graphics::Command_buffer& command_buffer, std::function<bool(Render_view&, erhe::graphics::Command_buffer&)> render_view_callback) -> bool;
     [[nodiscard]] auto end_frame                   (const bool rendered) -> bool;
     [[nodiscard]] auto get_xr_session              () const -> XrSession;
     [[nodiscard]] auto get_xr_reference_space_local() const -> XrSpace;

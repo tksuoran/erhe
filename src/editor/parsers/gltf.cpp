@@ -12,9 +12,11 @@
 #include "items.hpp"
 
 #include "erhe_file/file.hpp"
+#include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_gltf/gltf.hpp"
 #include "erhe_gltf/image_transfer.hpp"
+#include "erhe_verify/verify.hpp"
 #include "erhe_primitive/build_info.hpp"
 #include "erhe_primitive/primitive.hpp"
 #include "erhe_primitive/material.hpp"
@@ -103,6 +105,8 @@ void import_gltf(
 {
     erhe::graphics::Device& graphics_device = *context.graphics_device;
     tf::Executor&           executor        = *context.executor;
+    ERHE_VERIFY(context.current_command_buffer != nullptr);
+    erhe::graphics::Command_buffer& command_buffer = *context.current_command_buffer;
 
     erhe::scene::Scene temp_scene{"temp scene", nullptr};
     const auto temp_scene_root_node = temp_scene.get_root_node();
@@ -110,7 +114,7 @@ void import_gltf(
     root_node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
     root_node->set_parent(temp_scene_root_node); // Will be moved to final scene later
 
-    erhe::gltf::Image_transfer image_transfer{graphics_device};
+    erhe::gltf::Image_transfer image_transfer{graphics_device, command_buffer};
     erhe::gltf::Gltf_parse_arguments parse_arguments{
         .graphics_device = graphics_device,
         .executor        = executor,

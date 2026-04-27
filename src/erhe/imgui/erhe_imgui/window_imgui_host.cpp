@@ -4,6 +4,8 @@
 #include "erhe_imgui/imgui_log.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_imgui/scoped_imgui_context.hpp"
+#include "erhe_graphics/command_buffer.hpp"
+#include "erhe_graphics/device.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_profile/profile.hpp"
@@ -249,7 +251,7 @@ void Window_imgui_host::stop_text_input()
     m_context_window.stop_text_input();
 }
 
-void Window_imgui_host::execute_rendergraph_node()
+void Window_imgui_host::execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -258,10 +260,10 @@ void Window_imgui_host::execute_rendergraph_node()
     // Process pending ImGui texture create/update/destroy BEFORE opening
     // the render pass -- Blit_command_encoder (used for texture uploads)
     // cannot record inside a Vulkan render pass.
-    m_imgui_renderer.update_draw_data_textures();
+    m_imgui_renderer.update_draw_data_textures(command_buffer);
 
-    erhe::graphics::Render_command_encoder render_encoder = m_graphics_device.make_render_command_encoder();
-    erhe::graphics::Scoped_render_pass scoped_render_pass{*m_render_pass.get()};
+    erhe::graphics::Render_command_encoder render_encoder = m_graphics_device.make_render_command_encoder(command_buffer);
+    erhe::graphics::Scoped_render_pass scoped_render_pass{*m_render_pass.get(), command_buffer};
     m_imgui_renderer.render_draw_data(render_encoder, *m_render_pass);
 }
 

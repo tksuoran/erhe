@@ -374,7 +374,7 @@ auto Post_processing_node::get_producer_output_texture(const int key, int) const
     return {};
 }
 
-void Post_processing_node::execute_rendergraph_node()
+void Post_processing_node::execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer)
 {
     if (!m_enabled) {
         return;
@@ -397,7 +397,7 @@ void Post_processing_node::execute_rendergraph_node()
     // Input texture may have changed
     update_parameters();
 
-    m_post_processing.post_process(*this);
+    m_post_processing.post_process(*this, command_buffer);
 }
 
 /// //////////////////////////////////////////
@@ -442,10 +442,10 @@ auto Post_processing::make_program(
         };
 }
 
-Post_processing::Post_processing(erhe::graphics::Device& d, App_context& app_context)
+Post_processing::Post_processing(erhe::graphics::Device& d, erhe::graphics::Command_buffer& init_command_buffer, App_context& app_context)
     : m_context         {app_context}
     , m_fragment_outputs{erhe::graphics::Fragment_output{.name = "out_color", .type = erhe::graphics::Glsl_type::float_vec4, .location = 0}}
-    , m_dummy_texture   {d.create_dummy_texture(erhe::dataformat::Format::format_16_vec4_float)}
+    , m_dummy_texture   {d.create_dummy_texture(init_command_buffer, erhe::dataformat::Format::format_16_vec4_float)}
     , m_sampler_linear{
         d,
         erhe::graphics::Sampler_create_info{
@@ -634,7 +634,7 @@ auto Post_processing::get_nodes() -> const std::vector<std::shared_ptr<Post_proc
 /// //////////////////////////////////////////
 /// //////////////////////////////////////////
 
-void Post_processing::post_process(Post_processing_node& node)
+void Post_processing::post_process(Post_processing_node& node, erhe::graphics::Command_buffer& command_buffer)
 {
     // log_frame->trace("Post_processing::post_process()");
     erhe::graphics::Scoped_debug_group outer_debug_group{"post_process"};
@@ -678,8 +678,8 @@ void Post_processing::post_process(Post_processing_node& node)
         erhe::graphics::Render_pass* render_pass       = node.downsample_render_passes.at(destination_level - 1).get();
         const unsigned int           binding_point     = m_parameter_block.get_binding_point();
 
-        erhe::graphics::Render_command_encoder encoder = m_context.graphics_device->make_render_command_encoder();
-        erhe::graphics::Scoped_render_pass scoped_render_pass{*render_pass, previous_render_pass, nullptr};
+        erhe::graphics::Render_command_encoder encoder = m_context.graphics_device->make_render_command_encoder(command_buffer);
+        erhe::graphics::Scoped_render_pass scoped_render_pass{*render_pass, command_buffer, previous_render_pass, nullptr};
         previous_render_pass = render_pass;
 
         encoder.set_bind_group_layout(&m_bind_group_layout);
@@ -700,7 +700,7 @@ void Post_processing::post_process(Post_processing_node& node)
                 encoder.set_render_pipeline(*p);
             }
         }
-        m_texture_heap->bind();
+        m_texture_heap->bind(encoder);
         encoder.set_sampled_image(s_input_texture, *input_texture, m_sampler_linear);
         // source_level == 0 reads from s_input via SOURCE; s_downsample is
         // unused. Otherwise read the previous pyramid level's dedicated texture.
@@ -742,8 +742,8 @@ void Post_processing::post_process(Post_processing_node& node)
         erhe::graphics::Render_pass* render_pass = node.upsample_render_passes.at(destination_level).get();
         const unsigned int binding_point = m_parameter_block.get_binding_point();
 
-        erhe::graphics::Render_command_encoder encoder = m_context.graphics_device->make_render_command_encoder();
-        erhe::graphics::Scoped_render_pass scoped_render_pass{*render_pass, previous_render_pass, nullptr};
+        erhe::graphics::Render_command_encoder encoder = m_context.graphics_device->make_render_command_encoder(command_buffer);
+        erhe::graphics::Scoped_render_pass scoped_render_pass{*render_pass, command_buffer, previous_render_pass, nullptr};
         previous_render_pass = render_pass;
 
         encoder.set_bind_group_layout(&m_bind_group_layout);
@@ -760,7 +760,7 @@ void Post_processing::post_process(Post_processing_node& node)
             }
         }
 
-        m_texture_heap->bind();
+        m_texture_heap->bind(encoder);
         encoder.set_sampled_image(s_input_texture, *input_texture, m_sampler_linear);
 
         // s_downsample is only read by the first upsample pass (as SOURCE),

@@ -136,7 +136,10 @@ void Render_target::update(int width, int height, erhe::graphics::Swapchain* swa
                 }
             }
         );
-        m_graphics_device.clear_texture(*m_color_texture.get(), { 1.0, 0.0, 1.0, 1.0 });
+        // (Used to debug-clear m_color_texture to magenta here; the
+        // render pass's own load_action discards or clears the
+        // texture on first use, so the explicit pre-clear is no
+        // longer needed.)
 
         if (m_depth_stencil_format == erhe::dataformat::Format::format_undefined) {
             m_depth_stencil_texture.reset();

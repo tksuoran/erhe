@@ -698,7 +698,8 @@ auto load_scene(
         auto temp_root = std::make_shared<erhe::scene::Node>("temp_root");
         temp_root->set_parent(temp_scene.get_root_node());
 
-        erhe::gltf::Image_transfer image_transfer{*context->graphics_device};
+        ERHE_VERIFY(context->current_command_buffer != nullptr);
+        erhe::gltf::Image_transfer image_transfer{*context->graphics_device, *context->current_command_buffer};
         erhe::gltf::Gltf_parse_arguments parse_args{
             .graphics_device = *context->graphics_device,
             .executor        = *context->executor,

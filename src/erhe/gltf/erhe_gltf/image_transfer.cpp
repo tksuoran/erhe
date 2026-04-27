@@ -1,6 +1,7 @@
 #include "image_transfer.hpp"
 
 #include "erhe_graphics/blit_command_encoder.hpp"
+#include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/image_loader.hpp"
 #include "erhe_graphics/ring_buffer.hpp"
@@ -9,13 +10,17 @@
 
 namespace erhe::gltf {
 
-Image_transfer::Image_transfer(erhe::graphics::Device& graphics_device)
+Image_transfer::Image_transfer(
+    erhe::graphics::Device&         graphics_device,
+    erhe::graphics::Command_buffer& init_command_buffer
+)
     : m_graphics_device{graphics_device}
     , m_texture_upload_buffer{
         graphics_device,
         erhe::graphics::Buffer_target::transfer_src,
         "Image_transfer::m_texture_upload_buffer"
     }
+    , m_init_command_buffer{init_command_buffer}
 {
 }
 
@@ -31,7 +36,7 @@ void Image_transfer::upload_to_texture(
     bool                               generate_mipmap
 )
 {
-    erhe::graphics::Blit_command_encoder encoder{m_graphics_device};
+    erhe::graphics::Blit_command_encoder encoder{m_graphics_device, m_init_command_buffer};
 
     const erhe::graphics::Buffer*  source_buffer          = buffer_range.get_buffer()->get_buffer();
     const std::uintptr_t           source_offset          = buffer_range.get_byte_start_offset_in_buffer();

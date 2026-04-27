@@ -1,11 +1,11 @@
 #include "erhe_graphics/vulkan/vulkan_blit_command_encoder.hpp"
 #include "erhe_graphics/vulkan/vulkan_buffer.hpp"
+#include "erhe_graphics/vulkan/vulkan_command_buffer.hpp"
 #include "erhe_graphics/vulkan/vulkan_device.hpp"
 #include "erhe_graphics/vulkan/vulkan_helpers.hpp"
-#include "erhe_graphics/vulkan/vulkan_immediate_commands.hpp"
 #include "erhe_graphics/vulkan/vulkan_render_pass.hpp"
-#include "erhe_graphics/vulkan/vulkan_submit_handle.hpp"
 #include "erhe_graphics/vulkan/vulkan_texture.hpp"
+#include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_dataformat/dataformat.hpp"
 #include "erhe_verify/verify.hpp"
@@ -19,52 +19,32 @@ namespace erhe::graphics {
 
 namespace {
 
-// RAII helper used by each blit encoder method. Prefers recording into
-// the active device-frame command buffer (Step 6/Step 5a), falling back
-// to immediate_commands (acquire/submit/wait) when no device frame is
-// active. The destructor submits and waits only in the fallback case;
-// device-frame recordings are flushed by Device_impl::end_frame().
-//
-// When using the device cb, the constructor grabs Device_impl::m_recording_mutex
-// to serialize against concurrent init-time callers; the lock is held
-// for the lifetime of the scope so the whole blit sequence is atomic in
-// the device cb.
+// Thin wrapper that pulls the encoder's VkCommandBuffer for each blit
+// method. The caller must have called begin() on the cb before
+// constructing the encoder; the cb is bound by Device_impl::get_command_buffer
+// at allocation time and used directly here.
 class Recording_scope final
 {
 public:
-    explicit Recording_scope(Device_impl& d) : device{d}
+    Recording_scope(Device_impl& d, Command_buffer& command_buffer) : device{d}
     {
-        VkCommandBuffer device_cb = device.get_device_frame_command_buffer();
-        if (device_cb != VK_NULL_HANDLE) {
-            device_lock = std::unique_lock<std::mutex>{device.m_recording_mutex};
-            cb = device_cb;
-            return;
-        }
-        immediate = &device.get_immediate_commands().acquire();
-        cb = immediate->m_cmd_buf;
-    }
-    ~Recording_scope() noexcept
-    {
-        if (immediate != nullptr) {
-            Submit_handle h = device.get_immediate_commands().submit(*immediate);
-            device.get_immediate_commands().wait(h);
-        }
+        cb = command_buffer.get_impl().get_vulkan_command_buffer();
+        ERHE_VERIFY(cb != VK_NULL_HANDLE);
     }
     Recording_scope(const Recording_scope&)            = delete;
     Recording_scope& operator=(const Recording_scope&) = delete;
     Recording_scope(Recording_scope&&)                 = delete;
     Recording_scope& operator=(Recording_scope&&)      = delete;
 
-    Device_impl&                 device;
-    VkCommandBuffer              cb{VK_NULL_HANDLE};
-    std::unique_lock<std::mutex> device_lock{};
-    const Vulkan_immediate_commands::Command_buffer_wrapper* immediate{nullptr};
+    Device_impl&    device;
+    VkCommandBuffer cb{VK_NULL_HANDLE};
 };
 
 } // namespace
 
-Blit_command_encoder_impl::Blit_command_encoder_impl(Device& device)
-    : m_device{device}
+Blit_command_encoder_impl::Blit_command_encoder_impl(Device& device, Command_buffer& command_buffer)
+    : m_device        {device}
+    , m_command_buffer{command_buffer}
 {
 }
 
@@ -136,7 +116,7 @@ void Blit_command_encoder_impl::copy_from_texture(
     VkImage src_image = source_texture->get_impl().get_vk_image();
     VkImage dst_image = destination_texture->get_impl().get_vk_image();
 
-    Recording_scope scope{m_device.get_impl()};
+    Recording_scope scope{m_device.get_impl(), m_command_buffer};
 
     // Transition source to transfer src
     const VkImageMemoryBarrier2 src_barrier{
@@ -280,7 +260,7 @@ void Blit_command_encoder_impl::copy_from_buffer(
         }
     };
 
-    Recording_scope scope{m_device.get_impl()};
+    Recording_scope scope{m_device.get_impl(), m_command_buffer};
 
     // Transition image to transfer destination layout
     const VkImageMemoryBarrier2 pre_barrier{
@@ -373,7 +353,7 @@ void Blit_command_encoder_impl::copy_from_texture(
     VkImage  src_image  = source_texture->get_impl().get_vk_image();
     VkBuffer dst_buffer = destination_buffer->get_impl().get_vk_buffer();
 
-    Recording_scope scope{m_device.get_impl()};
+    Recording_scope scope{m_device.get_impl(), m_command_buffer};
 
     // Transition source to transfer src
     const VkImageMemoryBarrier2 pre_barrier{
@@ -443,7 +423,7 @@ void Blit_command_encoder_impl::generate_mipmaps(const Texture* texture)
     // For texture views, use the view's base array layer offset
     const uint32_t base_layer = static_cast<uint32_t>(texture->get_impl().get_view_base_array_layer());
 
-    Recording_scope scope{m_device.get_impl()};
+    Recording_scope scope{m_device.get_impl(), m_command_buffer};
 
     // Transition mip level 0 to transfer src
     const VkImageLayout current_layout = texture->get_impl().get_current_layout();
@@ -564,7 +544,7 @@ void Blit_command_encoder_impl::fill_buffer(
         return;
     }
 
-    Recording_scope scope{m_device.get_impl()};
+    Recording_scope scope{m_device.get_impl(), m_command_buffer};
 
     // vkCmdFillBuffer fills with a uint32_t value, replicate the byte across 4 bytes
     uint32_t fill_value =
@@ -652,7 +632,7 @@ void Blit_command_encoder_impl::copy_from_buffer(
         return;
     }
 
-    Recording_scope scope{m_device.get_impl()};
+    Recording_scope scope{m_device.get_impl(), m_command_buffer};
 
     const VkBufferCopy region{
         .srcOffset = static_cast<VkDeviceSize>(source_offset),
