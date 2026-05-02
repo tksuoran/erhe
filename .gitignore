@@ -1,8 +1,10 @@
-.claude
+# Ignore local Claude Code state (settings, sessions, plans, ...) but
+# track project-scoped skills so the team gets them with the repo.
+.claude/*
+!.claude/skills/
 .idea/*
 !.idea/runConfigurations
 !.idea/runConfigurations/**
-.claude/settings.local.json
 .vs
 .vscode/compile_commands.json
 erhe_cmake_profiling.json
