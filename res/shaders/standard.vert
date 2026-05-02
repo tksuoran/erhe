@@ -1,3 +1,4 @@
+#include "erhe_camera_view.glsl"
                                    layout(location = 0) out vec4      v_position;
 #ifdef ERHE_ATTRIBUTE_a_texcoord_0
 layout(location = 1) out vec2      v_texcoord;
@@ -43,7 +44,7 @@ void main()
     world_from_node_normal = primitive.primitives[ERHE_DRAW_ID].world_from_node_normal;
 #endif
 
-    mat4 clip_from_world = camera.cameras[0].clip_from_world;
+    mat4 clip_from_world = camera.cameras[c_view_index].clip_from_world;
 
 #ifdef ERHE_ATTRIBUTE_a_normal
     vec3 normal          = normalize(vec3(world_from_node_normal * vec4(a_normal, 0.0)));

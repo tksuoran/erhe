@@ -1,3 +1,4 @@
+#include "erhe_camera_view.glsl"
 layout(location = 0) in float v_line_width;
 layout(location = 1) in vec4  v_color;
 layout(location = 2) in vec4  v_start_end;
@@ -15,7 +16,7 @@ void main(void)
     // This shader uses the shared program_interface bind_group_layout
     // (with camera_block) so it stays compatible with the descriptor
     // sets bound by other renderers in the same render pass.
-    vec2  vp_offset  = camera.cameras[0].viewport.xy;
+    vec2  vp_offset  = camera.cameras[c_view_index].viewport.xy;
     vec2  frag_xy    = gl_FragCoord.xy - vp_offset;
     vec2  start      = v_start_end.xy;
     vec2  end        = v_start_end.zw;

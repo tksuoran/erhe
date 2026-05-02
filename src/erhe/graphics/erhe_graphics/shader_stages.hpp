@@ -4,6 +4,7 @@
 #include "erhe_graphics/enums.hpp"
 #include "erhe_utility/debug_label.hpp"
 
+#include <cstdint>
 #include <filesystem>
 #include <map>
 #include <string>
@@ -62,6 +63,19 @@ public:
 
     void add_interface_block(const Shader_resource* uniform_block);
 
+    // Enable VK_KHR_multiview / GL_EXT_multiview for this shader stage
+    // pipeline. The prelude builder will:
+    //   - require GL_EXT_multiview on every stage,
+    //   - emit `layout(num_views = N) in;` in the vertex stage prelude
+    //     (after #version / #extension lines),
+    //   - inject `#define ERHE_MULTIVIEW 1` and
+    //     `#define ERHE_VIEW_COUNT N`.
+    // Shader source uses `c_view_index` (from erhe_camera_view.glsl) to
+    // pick the per-view UBO entry; under multiview that resolves to
+    // `gl_ViewIndex`, and under non-multiview to `0u`. view_count must
+    // be > 1; pass 1 (or do not call this) for the single-view path.
+    void enable_multiview(uint32_t view_count);
+
     [[nodiscard]] auto get_description() const -> std::string;
 
     std::string                                      name;
@@ -77,6 +91,11 @@ public:
     std::vector<Shader_stage>                        shaders               {};
     std::vector<std::filesystem::path>               extra_include_paths   {};
     const Bind_group_layout*                         bind_group_layout     {nullptr};
+    // Multiview view count. 0 = disabled (single-view), >= 2 = enabled
+    // (typically 2 for stereo). When non-zero, the prelude builder emits
+    // GL_EXT_multiview, ERHE_MULTIVIEW, and `layout(num_views = N) in;`
+    // for vertex stages. Set via enable_multiview().
+    uint32_t                                         multiview_view_count  {0};
     bool                                             dump_reflection       {false};
     bool                                             dump_interface        {false};
     bool                                             dump_final_source     {false};

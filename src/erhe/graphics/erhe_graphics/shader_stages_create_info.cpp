@@ -195,6 +195,24 @@ auto Shader_stages_create_info::final_source(
         sb << "\n";
     }
 
+    // Multiview prelude.
+    //
+    // GL_EXT_multiview is the Vulkan / SPIR-V flavour of multiview:
+    // the view count is taken from the render pass (subpass.viewMask
+    // / VkRenderPassMultiviewCreateInfo), not from a shader layout
+    // qualifier. The shader source only needs the extension and uses
+    // `gl_ViewIndex` to read the current view. The OpenGL flavour
+    // (GL_OVR_multiview2) does require `layout(num_views = N) in;`
+    // in the vertex shader, but that path is out of scope; this
+    // engine targets Vulkan multiview only on Quest.
+    if (multiview_view_count >= 2) {
+        sb << "// Multiview\n";
+        sb << "#extension GL_EXT_multiview : require\n";
+        sb << "#define ERHE_MULTIVIEW 1\n";
+        sb << "#define ERHE_VIEW_COUNT " << multiview_view_count << "\n";
+        sb << "\n";
+    }
+
     sb << "#define ERHE_GLSL_VERSION " << graphics_device.get_info().glsl_version << "\n";
 
     // Gate shader code that uses gl_ClipDistance / user clip planes. On
@@ -423,6 +441,16 @@ void Shader_stages_create_info::add_interface_block(const Shader_resource* inter
 {
     ERHE_VERIFY(interface_block != nullptr);
     interface_blocks.push_back(interface_block);
+}
+
+void Shader_stages_create_info::enable_multiview(uint32_t view_count)
+{
+    ERHE_VERIFY(view_count >= 2);
+    multiview_view_count = view_count;
+    // The actual `#extension GL_EXT_multiview : require` directive and
+    // the per-stage `layout(num_views = N) in;` line are emitted by
+    // final_source() based on multiview_view_count, so callers do not
+    // have to push entries into `extensions` themselves.
 }
 
 auto Shader_stages_create_info::get_description() const -> std::string
