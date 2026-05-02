@@ -240,18 +240,52 @@ The foundation has already landed in the working tree:
   `Xr_session::render_frame_multiview()`.
 - `Headset_view::m_use_multiview` flag latched at construction
   from `Xr_session::is_multiview_enabled()`. When true,
-  `render_headset()` early-returns through the multiview path:
-  acquires the shared layered swapchain, opens one
-  `Scoped_render_pass` with `view_mask = (1 << view_count) - 1`,
-  and lets `load_action = Clear` paint both layers. This is a
-  clear-only stub today; real forward / line rendering follows
-  once the pipeline-pair refactor lands.
+  `render_headset()` drives `Xr_session::render_frame_multiview()`:
+  acquires the shared layered swapchain, builds a
+  `std::vector<Camera_view_input>` from the per-eye
+  `Headset_view_resources::Camera`s, opens one `Scoped_render_pass`
+  with `view_mask = (1 << view_count) - 1`, and calls
+  `App_rendering::render_composer()` with the per-eye
+  `multiview_views` span on the `Render_context`.
+- `Headset_view::m_multiview_view_resources` indexes
+  `Headset_view_resources` by `Render_view::slot` on the multiview
+  path. The per-eye fallback's color-texture-keyed
+  `m_view_resources` lookup is wrong here because
+  `Xr_session::render_frame_multiview()` exposes the layered
+  textures on `Render_views_frame::shared_*` and leaves every
+  per-view `color_texture = nullptr`; matching by null collapses
+  both eyes onto one resources object and one shared `Camera/Node`,
+  producing cyclopean stereo. Per-slot lookup keeps each eye on its
+  own `Camera/Node`.
+- `Headset_view_resources` tolerates a null `color_texture` /
+  `depth_stencil_texture` on the multiview path (skips per-view
+  `Render_pass` construction; the headset multiview callback builds
+  the layered render pass over `frame.shared_*_texture`).
+- `Render_pipeline_create_info::multiview_shader_stages`: optional
+  sibling-shader pointer on each pipeline. Populated by
+  `Pipeline_renderpasses` from `Programs::get_multiview(name)` for
+  every editor pipeline. `App_rendering`'s init task succeeds
+  `programs_load_task` so the multiview map is fully populated
+  before the constructor runs (without that edge, parallel init
+  races leave every `multiview_shader_stages` field null and the
+  headset path silently falls back to single-view shaders).
+- `Forward_renderer::render` and `draw_primitives` pick the
+  pipeline's `multiview_shader_stages` sibling when
+  `parameters.multiview_views` is non-empty. The selection routes
+  through `set_render_pipeline_state(temp_state, override)` so the
+  Vulkan render-encoder cache compiles a separate `VkPipeline`
+  keyed on the multiview shader modules + the multiview render
+  pass; the `Lazy_render_pipeline` cache (which baked the
+  single-view shader_stages) is intentionally bypassed for these
+  draws.
+- `Composition_pass::render` forwards `Render_context::multiview_views`
+  to `Render_parameters::multiview_views` on both the mesh
+  `render(...)` and fullscreen `draw_primitives(...)` paths.
 
 ### Validated on Quest 3 (Vulkan), 2026-05-02
 
-End-to-end clear-only multiview path runs on device. Both eyes
-receive the cleared color through one render submission, which
-exercises the full chain:
+End-to-end multiview forward rendering runs on device with correct
+per-eye stereo parallax. The full chain is exercised:
 
 - Vulkan multiview device feature detected at startup
   (`multiview = true`, `maxMultiviewViewCount = 6`).
@@ -266,56 +300,21 @@ exercises the full chain:
 - Composition layer projection views with
   `imageArrayIndex = view_index` route layer 0 to the left eye
   and layer 1 to the right eye on the OpenXR runtime.
-
-Real forward / line rendering is the remaining work; see
-"Remaining work" below.
+- Per-eye material draws use the multiview-compiled
+  `circular_brushed_metal` shader (verified via a temporary
+  per-eye `gl_ViewIndex` tint producing red-left / blue-right);
+  scene geometry shows IPD parallax between eyes (verified
+  visually in headset).
 
 ## Remaining work
 
-Done items have been moved to "Already in place" above. The two
-remaining items both depend on a shader-variant strategy decision
-that should be made before either lands.
+### A. Wide-line + debug-line per-view-strided compute (Option D)
 
-### A. Pipeline pair strategy (cross-cutting)
-
-`Programs::get_multiview(name)` already provides multiview shader
-stages (eagerly compiled at startup when `max_view_count >= 2`).
-The remaining cross-cutting concern is that the current pipeline
-construction (in `app_rendering.cpp` and similar
-tools/renderers files) bakes a single `shader_stages` pointer
-into each `Render_pipeline_create_info` at init time. To run a
-multiview render pass, those pipelines need a sibling set built
-from `programs.get_multiview(name)`.
-
-Concretely:
-
-- A pipeline created with shaders using `gl_ViewIndex` (multiview
-  variant) is only valid in a render pass with non-zero
-  `viewMask`. Binding it to a single-view editor-viewport render
-  pass fails Vulkan validation.
-- A non-multiview pipeline bound in a multiview render pass would
-  read `cameras[0]` for both layers, breaking stereo.
-- `Forward_renderer::Render_parameters::render_pipeline_states`
-  takes a span of `Lazy_render_pipeline*`. Each pipeline carries
-  one `Shader_stages*`. So the pipeline construction site is the
-  choke point at which the variant decision is made.
-
-Affected files (initial sweep, may grow): `src/editor/app_rendering.cpp`
-(many polygon-fill pipeline definitions),
-`src/editor/renderers/composition_pass.cpp`,
-`src/editor/renderers/id_renderer.cpp`,
-`src/editor/tools/debug_visualizations.cpp`,
-`src/editor/tools/tools.cpp`.
-
-Suggested layout: each pipeline field becomes a small
-`Render_pipeline_pair { single_view, multiview }` and the call
-site picks based on whether the surrounding pass is multiview.
-Headset_view then routes through the multiview pipelines via
-`Render_parameters::render_pipeline_states`.
-
-### B. Wide-line + debug-line per-view-strided compute (Option D)
-
-Once option A is in:
+The remaining gap is the line / debug-line render path. Today the
+headset multiview callback drives `App_rendering::render_composer()`
+only, which covers material draws but skips
+`Content_wide_line_renderer`, `Debug_renderer`, and the tool
+overlay. Wiring those into the multiview path requires:
 
 - View UBO in `Content_wide_line_renderer` and `Debug_renderer`
   becomes `view[max_view_count]`.
@@ -328,41 +327,40 @@ Once option A is in:
   `content_line_after_compute.{vert,frag}`, `edge_lines.vert`,
   `wide_lines.vert`, `debug_line.vert`) compile a multiview variant
   that indexes the triangle SSBO by `gl_VertexID + gl_ViewIndex *
-  stride_per_view`.
+  stride_per_view`. The pipeline-pair plumbing
+  (`Render_pipeline_create_info::multiview_shader_stages`) is
+  already in place and ready to receive these.
 - CPU dispatch sites stop looping per view and dispatch once per
   primitive group.
+- `Headset_view::render_headset()` multiview callback adds the
+  line / debug-line dispatches (and tools overlay) inside the
+  layered render pass.
 
 Output is bit-identical to the current per-view path at
 `view_count = 1`.
 
-### C. Headset_view orchestration
+### B. Cyclopean shadow fit on the headset multiview path
 
-Once option A is in:
-
-- Add `m_multiview_enabled` flag from
-  `Xr_session::is_multiview_enabled()`.
-- When true, `render_headset()` builds a
-  `std::vector<Camera_view_input>` from the per-eye
-  `Headset_view_resources::Camera`s, computes a cyclopean Camera
-  (midpoint position, slerp orientation, union FOV) for the shadow
-  fit, and calls `Xr_session::render_frame_multiview()` with a
-  callback that:
-  - Issues a single `Scoped_render_pass` (view_mask = 0b11,
-    color/depth = `frame.shared_*_texture`).
-  - Calls `Forward_renderer::render(...)` with
-    `multiview_views = views` and the multiview program set
-    (option A).
-  - Calls the line / debug-line dispatches (option B).
-  - Records the cyclopean shadow fit before the render pass.
-- When false, the existing per-view loop stays.
+`Light_projections` already supports a cyclopean fit (see
+"Shadow / light buffer" above), but the headset multiview
+callback does not currently compute a cyclopean Camera and pass
+it through. Today the shadow fit reuses whatever the per-eye
+fallback path set up. Compute the midpoint-position +
+slerp-orientation + union-FOV virtual camera in
+`render_headset()` and feed it into the shadow render node before
+opening the multiview render pass.
 
 ## Risks / open items
 
-- **Pipeline cache key.** Pipelines compiled against multiview
-  render passes are not interchangeable with non-multiview
-  pipelines. The pipeline cache key (or compatibility-render-pass
-  key) must include `view_mask` (or equivalently a "multiview"
-  flag).
+- **Pipeline cache key.** Resolved by the
+  `multiview_shader_stages` sibling-pointer approach: the
+  multiview path goes through
+  `set_render_pipeline_state(temp_state, override_shader_stages)`,
+  which lets the Vulkan render-encoder cache key on the multiview
+  shader modules + the multiview render pass independently of the
+  `Lazy_render_pipeline` cache (which is keyed on the single-view
+  shader_stages and is intentionally bypassed for multiview
+  draws).
 - **MSAA + multiview.** The depth/color resolve attachments now
   span `multiview_layer_count` layers (already plumbed). Validate
   on device before relying on it; Adreno 740 supports the
