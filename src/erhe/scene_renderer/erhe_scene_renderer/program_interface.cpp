@@ -29,7 +29,7 @@ Program_interface::Program_interface(
     }
     , vertex_format     {vertex_format}
     , config            {config}
-    , camera_interface  {graphics_device, config.max_camera_count}
+    , camera_interface  {graphics_device, config.max_camera_count, config.max_view_count}
     , cube_interface    {graphics_device}
     , joint_interface   {graphics_device, config.max_joint_count}
     , light_interface   {graphics_device, config.max_light_count}
@@ -38,6 +38,7 @@ Program_interface::Program_interface(
 {
     // Write clamped values back to config so callers see actual UBO limits
     config.max_camera_count    = static_cast<int>(camera_interface.max_camera_count);
+    config.max_view_count      = static_cast<int>(camera_interface.max_view_count);
     config.max_joint_count     = static_cast<int>(joint_interface.max_joint_count);
     config.max_light_count     = static_cast<int>(light_interface.max_light_count);
     config.max_material_count  = static_cast<int>(material_interface.max_material_count);
