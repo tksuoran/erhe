@@ -35,6 +35,7 @@
 #include "erhe_graphics/device.hpp"
 #include "erhe_xr/headset.hpp"
 #include "erhe_xr/xr_instance.hpp"
+#include "erhe_xr/xr_log.hpp"
 #include "erhe_xr/xr_session.hpp"
 
 #include <imgui/imgui.h>
@@ -143,6 +144,16 @@ Headset_view::Headset_view(
     ERHE_PROFILE_FUNCTION();
     if (headset == nullptr) {
         return;
+    }
+
+    // Latch the multiview capability flag once at startup. Xr_session
+    // already considered the device cap, view count, and matching extents;
+    // we just thread it through to choose the render path each frame.
+    if (m_headset->get_xr_session() != nullptr) {
+        m_use_multiview = m_headset->get_xr_session()->is_multiview_enabled();
+        if (m_use_multiview) {
+            log_xr->info("Headset_view: multiview render path enabled");
+        }
     }
     app_rendering.add(this);
 
@@ -433,6 +444,59 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
         m_app_context.graphics_device->start_frame_capture();
         m_renderdoc_capture_started = true;
         m_request_renderdoc_capture = false;
+    }
+
+    // Multiview render path. Currently a clear-only stub: it acquires the
+    // shared layered swapchain, opens a single render pass with view_mask
+    // = (1 << view_count) - 1 and lets the load_action = Clear paint both
+    // layers. Real forward / line rendering follows once the pipeline-pair
+    // refactor lands (see doc/multiview.md "A. Pipeline pair strategy").
+    if (m_frame_timing.should_render && m_use_multiview) {
+        auto multiview_callback = [this](const erhe::xr::Render_views_frame& frame, erhe::graphics::Command_buffer& views_cb) -> bool {
+            erhe::graphics::Texture* color_texture         = frame.shared_color_texture;
+            erhe::graphics::Texture* depth_stencil_texture = frame.shared_depth_stencil_texture;
+            ERHE_VERIFY(color_texture != nullptr);
+
+            erhe::graphics::Render_pass_descriptor render_pass_descriptor{};
+            render_pass_descriptor.color_attachments[0].texture       = color_texture;
+            render_pass_descriptor.color_attachments[0].load_action   = erhe::graphics::Load_action::Clear;
+            render_pass_descriptor.color_attachments[0].store_action  = erhe::graphics::Store_action::Store;
+            render_pass_descriptor.color_attachments[0].usage_before  = erhe::graphics::Image_usage_flag_bit_mask::color_attachment;
+            render_pass_descriptor.color_attachments[0].layout_before = erhe::graphics::Image_layout::color_attachment_optimal;
+            render_pass_descriptor.color_attachments[0].usage_after   = erhe::graphics::Image_usage_flag_bit_mask::color_attachment;
+            render_pass_descriptor.color_attachments[0].layout_after  = erhe::graphics::Image_layout::color_attachment_optimal;
+            render_pass_descriptor.color_attachments[0].clear_value   = {0.05, 0.10, 0.20, 1.0};
+            if (depth_stencil_texture != nullptr) {
+                render_pass_descriptor.depth_attachment.texture       = depth_stencil_texture;
+                render_pass_descriptor.depth_attachment.load_action   = erhe::graphics::Load_action::Clear;
+                render_pass_descriptor.depth_attachment.store_action  = erhe::graphics::Store_action::Store;
+                render_pass_descriptor.depth_attachment.usage_before  = erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment;
+                render_pass_descriptor.depth_attachment.layout_before = erhe::graphics::Image_layout::depth_stencil_attachment_optimal;
+                render_pass_descriptor.depth_attachment.usage_after   = erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment;
+                render_pass_descriptor.depth_attachment.layout_after  = erhe::graphics::Image_layout::depth_stencil_attachment_optimal;
+            }
+            render_pass_descriptor.render_target_width  = static_cast<int>(frame.width);
+            render_pass_descriptor.render_target_height = static_cast<int>(frame.height);
+            render_pass_descriptor.view_mask            = frame.view_mask;
+            render_pass_descriptor.debug_label          = erhe::utility::Debug_label{"XR multiview"};
+
+            erhe::graphics::Render_pass multiview_render_pass{*m_app_context.graphics_device, render_pass_descriptor};
+            erhe::graphics::Render_command_encoder encoder = m_app_context.graphics_device->make_render_command_encoder(views_cb);
+            erhe::graphics::Scoped_render_pass scoped_render_pass{multiview_render_pass, views_cb};
+            // The clear is performed by the load_action; no draws yet.
+            // Forward / line rendering is deferred until pipeline pairs
+            // are wired up (doc/multiview.md "A. Pipeline pair strategy").
+            (void)encoder;
+            return true;
+        };
+        m_headset->render_multiview(command_buffer, multiview_callback);
+        ++m_frame_number;
+        if (m_renderdoc_capture_started) {
+            m_app_context.graphics_device->end_frame_capture();
+            m_renderdoc_capture_started = false;
+        }
+        m_headset->end_frame(m_frame_timing.should_render);
+        return true;
     }
 
     if (m_frame_timing.should_render) {

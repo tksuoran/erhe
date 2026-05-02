@@ -87,6 +87,7 @@
 #   include "xr/hand_tracker.hpp"
 //#   include "xr/theremin.hpp"
 #   include "erhe_xr/headset.hpp"
+#   include "erhe_xr/xr_session.hpp"
 #   include "erhe_xr/xr_log.hpp"
 #   include "erhe_xr/xr_instance.hpp"
 #   if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
@@ -847,6 +848,17 @@ public:
             m_selection            = std::make_unique<Selection     >(commands, m_app_context, app_message_bus);
             m_scene_commands       = std::make_unique<Scene_commands>(commands, m_app_context);
             m_debug_draw           = std::make_unique<Debug_draw    >(m_app_context);
+            // Drive max_view_count from the OpenXR session's multiview
+            // capability. The session was created above (line ~789).
+            // When multiview is enabled, the camera UBO holds two
+            // entries (one per eye); shaders compiled with
+            // ERHE_MULTIVIEW pick the right one via gl_ViewIndex.
+            int xr_max_view_count = 1;
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+            if (m_headset && (m_headset->get_xr_session() != nullptr) && m_headset->get_xr_session()->is_multiview_enabled()) {
+                xr_max_view_count = static_cast<int>(m_headset->get_xr_session()->get_view_count());
+            }
+#endif
             erhe::scene_renderer::Program_interface_config program_interface_config{
                 .shader_paths = {
                     std::filesystem::path{"res"} / std::filesystem::path{"shaders"},
@@ -857,7 +869,8 @@ public:
                 .max_light_count     = m_renderer_config.max_light_count,
                 .max_material_count  = m_renderer_config.max_material_count,
                 .max_primitive_count = m_renderer_config.max_primitive_count,
-                .max_draw_count      = m_renderer_config.max_draw_count
+                .max_draw_count      = m_renderer_config.max_draw_count,
+                .max_view_count      = xr_max_view_count
             };
             m_program_interface    = std::make_unique<erhe::scene_renderer::Program_interface>(
                 *m_graphics_device.get(),
