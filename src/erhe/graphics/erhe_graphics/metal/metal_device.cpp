@@ -487,16 +487,6 @@ void Device_impl::wait_idle()
     }
 }
 
-void Device_impl::wait_for_frame(const uint64_t frame_value)
-{
-    // The OpenXR Quest cb-lifecycle workaround targeted by this method is
-    // a Vulkan-only concern (Meta's runtime calls vkFreeCommandBuffers on
-    // its own per-application compositor command buffer at every
-    // xrEndFrame). Metal does not host an OpenXR runtime that shares its
-    // queue this way, so there is nothing to wait on here.
-    static_cast<void>(frame_value);
-}
-
 void Device_impl::on_thread_enter()
 {
     // TODO Create NS::AutoreleasePool for this thread

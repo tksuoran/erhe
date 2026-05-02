@@ -121,11 +121,6 @@ void Device_impl::wait_idle()
     // No-op for null backend
 }
 
-void Device_impl::wait_for_frame(const uint64_t frame_value)
-{
-    static_cast<void>(frame_value);
-}
-
 auto Device_impl::is_in_swapchain_frame() const -> bool
 {
     return false;

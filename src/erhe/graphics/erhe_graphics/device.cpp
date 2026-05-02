@@ -112,10 +112,6 @@ void Device::wait_idle()
 {
     m_impl->wait_idle();
 }
-void Device::wait_for_frame(const uint64_t frame_value)
-{
-    m_impl->wait_for_frame(frame_value);
-}
 auto Device::recreate_surface_for_new_window() -> bool
 {
     return m_impl->recreate_surface_for_new_window();

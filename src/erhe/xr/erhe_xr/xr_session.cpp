@@ -1770,25 +1770,6 @@ auto Xr_session::end_frame(const bool rendered) -> bool
     if (rendered) {
         check_gl_context_in_current_in_this_thread();
     }
-
-    // Quest workaround: Meta's OpenXR runtime calls vkFreeCommandBuffers
-    // on its previous-frame compositor command buffer at the start of
-    // every xrEndFrame. The runtime does not wait for that cb to retire
-    // before freeing it, so on Quest the call hits
-    // VUID-vkFreeCommandBuffers-pCommandBuffers-00047 whenever the
-    // previous compositor cb is still in pending state on the GPU. We
-    // mirror Swapchain_impl::setup_frame's per-slot fence wait pattern by
-    // blocking on the device's frame-end timeline semaphore at the
-    // previous frame's value. Queue submission ordering then guarantees
-    // the runtime's previous compositor cb (queued during the previous
-    // xrEndFrame, i.e. before our update_frame_completion submit that
-    // signals the timeline) has fully retired by the time we reach
-    // xrEndFrame here. wait_for_frame is a no-op on non-Vulkan backends.
-    const uint64_t current_frame_index = m_graphics_device.get_frame_index();
-    if (current_frame_index >= 1) {
-        m_graphics_device.wait_for_frame(current_frame_index - 1);
-    }
-
     log_xr->trace("xrEndFrame");
     const XrResult result = xrEndFrame(m_xr_session, &frame_end_info);
     ERHE_XR_CHECK(result);

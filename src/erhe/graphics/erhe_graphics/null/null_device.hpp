@@ -38,7 +38,6 @@ public:
     [[nodiscard]] auto end_frame  (const Frame_end_info& frame_end_info) -> bool;
 
     void               wait_idle            ();
-    void               wait_for_frame       (uint64_t frame_value);
     [[nodiscard]] auto recreate_surface_for_new_window() -> bool;
     [[nodiscard]] auto is_in_swapchain_frame() const -> bool;
 

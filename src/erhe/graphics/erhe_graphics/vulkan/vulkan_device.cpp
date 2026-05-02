@@ -1404,37 +1404,6 @@ auto Device_impl::is_in_swapchain_frame() const -> bool
     return m_state == Device_frame_state::in_swapchain_frame;
 }
 
-void Device_impl::wait_for_frame(const uint64_t frame_value)
-{
-    if (m_vulkan_frame_end_semaphore == VK_NULL_HANDLE) {
-        return;
-    }
-    // The timeline starts at 0 and is signalled at value m_frame_index by
-    // each end_frame() (m_frame_index itself starts at 1). Anything below
-    // 1 cannot have been signalled yet, so a wait would either stall
-    // forever (positive values not yet reached) or be trivially satisfied
-    // (the initial 0 is always present). Skip both cases.
-    if (frame_value < 1) {
-        return;
-    }
-    const VkSemaphoreWaitInfo wait_info{
-        .sType          = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
-        .pNext          = nullptr,
-        .flags          = 0,
-        .semaphoreCount = 1,
-        .pSemaphores    = &m_vulkan_frame_end_semaphore,
-        .pValues        = &frame_value,
-    };
-    const VkResult result = vkWaitSemaphores(m_vulkan_device, &wait_info, UINT64_MAX);
-    if (result != VK_SUCCESS) {
-        log_context->critical(
-            "vkWaitSemaphores() in wait_for_frame failed with {} {}",
-            static_cast<int32_t>(result), c_str(result)
-        );
-        abort();
-    }
-}
-
 void Device_impl::update_frame_completion()
 {
     VkResult result = VK_SUCCESS;
