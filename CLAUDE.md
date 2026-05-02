@@ -128,7 +128,7 @@ Many systems have swappable backends selected at CMake configure time via `#ifde
 
 ## Quest device launches
 
-**Before issuing any command that starts an app on Quest** (`adb shell am start -n org.libsdl.app.quest/...`, `scripts/install_android.bat quest run`, or any sequence that ends in launching the app on the headset), prompt the user to put the headset on and pick up / activate the Touch controllers, and wait for explicit confirmation before running the launch. Quest's `RequiresControllersLaunchInterceptor` shows a system "Controllers Required" dialog that blocks the immersive app from coming to the foreground until controllers are detected as in-hand; launching while the headset is off the user's head wastes the attempt and we have to retry. Pure builds and installs (no app start) do not need the prompt.
+Do the install (`scripts\install_android.bat quest`) FIRST, while the user can keep their hands free. **Only after the APK is on the device**, prompt the user to put the headset on and pick up / activate the Touch controllers, and wait for explicit confirmation before running the launch (`adb shell am start -n org.libsdl.app.quest/...` or `scripts\install_android.bat quest run`). Quest's `RequiresControllersLaunchInterceptor` shows a system "Controllers Required" dialog that blocks the immersive app from coming to the foreground until controllers are detected as in-hand; launching while the headset is off the user's head wastes the attempt and we have to retry. Pure builds and installs (no app start) do not need the prompt.
 
 ## Python
 
