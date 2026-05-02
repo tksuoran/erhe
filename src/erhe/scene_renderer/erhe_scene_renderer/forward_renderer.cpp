@@ -171,16 +171,32 @@ void Forward_renderer::render(const Render_parameters& parameters)
 
     m_texture_heap->bind(parameters.render_encoder);
 
+    // On the multiview path each pipeline picks its multiview-compiled
+    // sibling shader stages so gl_ViewIndex resolves and the shaders
+    // read camera.cameras[gl_ViewIndex] instead of cameras[0]. The
+    // selection happens through the override-shader-stages path so the
+    // Vulkan pipeline cache compiles a separate VkPipeline keyed on
+    // the multiview shader modules; the Lazy_render_pipeline cache is
+    // not used because its baked shader_stages is the single-view
+    // variant.
+    const bool multiview_path = !parameters.multiview_views.empty();
+
     for (auto* render_pipeline_state : render_pipeline_states) {
         const erhe::graphics::Render_pipeline_create_info& pipeline = render_pipeline_state->data;
         bool use_override_shader_stages = (parameters.override_shader_stages != nullptr);
+        const erhe::graphics::Shader_stages* multiview_stages =
+            multiview_path ? pipeline.multiview_shader_stages : nullptr;
+        if (multiview_stages != nullptr) {
+            use_override_shader_stages = true;
+        }
         if ((pipeline.shader_stages == nullptr) && !use_override_shader_stages) {
             continue;
         }
 
-        auto* used_shader_stages = use_override_shader_stages
-            ? parameters.override_shader_stages
-            : pipeline.shader_stages;
+        auto* used_shader_stages =
+            (parameters.override_shader_stages != nullptr) ? parameters.override_shader_stages :
+            (multiview_stages != nullptr)                  ? multiview_stages :
+                                                             pipeline.shader_stages;
         if (!used_shader_stages->is_valid()) {
             use_override_shader_stages = true;
             used_shader_stages = parameters.error_shader_stages;
@@ -320,14 +336,22 @@ void Forward_renderer::draw_primitives(const Render_parameters& parameters, cons
 
     m_texture_heap->bind(parameters.render_encoder);
 
+    // See render() above for the multiview-pipeline selection rationale.
+    const bool multiview_path_dp = !parameters.multiview_views.empty();
+
     for (auto* render_pipeline_state : render_pipeline_states) {
         const erhe::graphics::Render_pipeline_create_info& pipeline = render_pipeline_state->data;
-        if (!pipeline.shader_stages) {
+        const erhe::graphics::Shader_stages* multiview_stages =
+            multiview_path_dp ? pipeline.multiview_shader_stages : nullptr;
+        if (!pipeline.shader_stages && (multiview_stages == nullptr)) {
             continue;
         }
         erhe::graphics::Scoped_debug_group pass_scope{pipeline.debug_label};
 
-        if (parameters.render_pass != nullptr) {
+        if (multiview_stages != nullptr) {
+            erhe::graphics::Render_pipeline_state temp_state = make_temp_pipeline_state(pipeline);
+            parameters.render_encoder.set_render_pipeline_state(temp_state, multiview_stages);
+        } else if (parameters.render_pass != nullptr) {
             erhe::graphics::Render_pipeline* p = render_pipeline_state->get_pipeline_for(parameters.render_pass->get_descriptor());
             if (p == nullptr) { continue; }
             parameters.render_encoder.set_render_pipeline(*p);
