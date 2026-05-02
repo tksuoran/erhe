@@ -61,6 +61,14 @@ public:
 
         const glm::vec3                                                    ambient_light    {0.0f};
         const erhe::scene::Camera*                                         camera           {nullptr};
+        // Multiview cameras. When non-empty, the renderer writes one
+        // Camera UBO entry per view via Camera_buffer::update_views()
+        // and binds the resulting block; shaders compiled with
+        // enable_multiview() then index camera.cameras[gl_ViewIndex].
+        // The single `camera` field above is ignored on this path. The
+        // span size must match Program_interface_config::max_view_count
+        // (i.e. the cameras[N] array size declared in the UBO).
+        std::span<const Camera_view_input>                                 multiview_views{};
         const Light_projections*                                           light_projections{nullptr};
         const std::span<const std::shared_ptr<erhe::scene::Light>>&        lights           {};
         const std::span<const std::shared_ptr<erhe::scene::Skin>>&         skins            {};

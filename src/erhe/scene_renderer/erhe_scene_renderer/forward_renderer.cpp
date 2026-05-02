@@ -122,7 +122,24 @@ void Forward_renderer::render(const Render_parameters& parameters)
 
     using Ring_buffer_range = erhe::graphics::Ring_buffer_range;
     std::optional<Ring_buffer_range> camera_buffer_range{};
-    if (camera != nullptr) {
+    if (!parameters.multiview_views.empty()) {
+        // Multiview path: write one Camera UBO entry per view. The
+        // exposure/grid/frame state is shared across views; FOV and
+        // pose come from each Camera_view_input. Shaders compiled with
+        // enable_multiview() pick the per-eye entry via gl_ViewIndex.
+        const float exposure = (camera != nullptr) ? camera->get_exposure() : 1.0f;
+        camera_buffer_range = m_camera_buffer.update_views(
+            parameters.multiview_views,
+            exposure,
+            parameters.grid_size,
+            parameters.grid_line_width,
+            parameters.frame_number,
+            parameters.reverse_depth,
+            parameters.depth_range,
+            parameters.conventions
+        );
+        m_camera_buffer.bind(parameters.render_encoder, camera_buffer_range.value());
+    } else if (camera != nullptr) {
         camera_buffer_range = m_camera_buffer.update(
             *camera->projection(),
             *camera->get_node(),
@@ -257,7 +274,20 @@ void Forward_renderer::draw_primitives(const Render_parameters& parameters, cons
     }
 
     std::optional<Ring_buffer_range> camera_range;
-    if (camera != nullptr) {
+    if (!parameters.multiview_views.empty()) {
+        const float exposure = (camera != nullptr) ? camera->get_exposure() : 1.0f;
+        camera_range = m_camera_buffer.update_views(
+            parameters.multiview_views,
+            exposure,
+            parameters.grid_size,
+            parameters.grid_line_width,
+            parameters.frame_number,
+            parameters.reverse_depth,
+            parameters.depth_range,
+            parameters.conventions
+        );
+        m_camera_buffer.bind(parameters.render_encoder, camera_range.value());
+    } else if (camera != nullptr) {
         camera_range = m_camera_buffer.update(
             *camera->projection(),
             *camera->get_node(),
