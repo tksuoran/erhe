@@ -1106,7 +1106,17 @@ public:
             }
             ERHE_TASK_FOOTER(
                 .name("App_rendering")
-                .succeed(mesh_memory_task)
+                // App_rendering's Pipeline_renderpasses constructor reads
+                // both the per-shader Reloadable_shader_stages references
+                // AND Programs::get_multiview(name) for the
+                // multiview_shader_stages siblings. The latter only
+                // returns non-null after Programs::load_programs has
+                // populated the multiview map; without this dependency
+                // parallel init can race -- App_rendering ends up with
+                // nullptr multiview pipelines and the headset multiview
+                // path silently falls back to single-view shaders for
+                // every material.
+                .succeed(mesh_memory_task, programs_load_task)
             );
 
             ERHE_TASK_HEADER(some_windows_task)
