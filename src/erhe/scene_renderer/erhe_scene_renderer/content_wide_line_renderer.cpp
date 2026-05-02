@@ -182,11 +182,17 @@ Content_wide_line_renderer::Content_wide_line_renderer(
     );
 
     // Multiview graphics-pipeline layout. Triangle SSBO bound here
-    // read-only (vertex stage indexes it via gl_VertexID + gl_ViewIndex *
-    // stride_per_view). View UBO bound for stride_per_view. Camera UBO
-    // bound for the fragment stage's camera.cameras[c_view_index].
-    // viewport.xy read. The line-vertex SSBO at binding 0 is omitted
-    // because the graphics pipeline never reads compute input.
+    // read-only (vertex stage indexes it via gl_VertexID + gl_ViewIndex
+    // * stride_per_view). View UBO bound for stride_per_view AND for
+    // the fragment shader's per-eye viewport.xy read - we deliberately
+    // do NOT include the program_interface camera UBO at binding 4 in
+    // this layout. Switching descriptor-set layouts mid-render-pass
+    // (here from forward_renderer's program_interface layout to this
+    // wide-line layout) invalidates any previously bound descriptors,
+    // and we have no way to re-bind the camera UBO that
+    // forward_renderer wrote earlier in the same pass. So the
+    // multiview content_line_after_compute fragment reads viewport.xy
+    // from view.cameras[c_view_index] instead.
     m_multiview_graphics_bind_group_layout = std::make_unique<erhe::graphics::Bind_group_layout>(
         graphics_device,
         erhe::graphics::Bind_group_layout_create_info{
@@ -196,7 +202,6 @@ Content_wide_line_renderer::Content_wide_line_renderer(
                     (m_view_block->get_type() == erhe::graphics::Shader_resource::Type::shader_storage_block)
                         ? erhe::graphics::Binding_type::storage_buffer
                         : erhe::graphics::Binding_type::uniform_buffer},
-                {camera_buffer_binding_point, erhe::graphics::Binding_type::uniform_buffer},
             },
             .debug_label       = "Content wide line multiview graphics",
             .uses_texture_heap = false

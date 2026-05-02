@@ -1074,13 +1074,11 @@ public:
                             .name             = "content_line_after_compute_multiview",
                             .struct_types     = {
                                 m_content_wide_line_renderer->get_triangle_vertex_struct(),
-                                m_content_wide_line_renderer->get_view_camera_struct(),
-                                &m_program_interface->camera_interface.camera_struct
+                                m_content_wide_line_renderer->get_view_camera_struct()
                             },
                             .interface_blocks = {
                                 m_content_wide_line_renderer->get_triangle_vertex_buffer_read_block(),
-                                m_content_wide_line_renderer->get_view_block(),
-                                &m_program_interface->camera_interface.camera_block
+                                m_content_wide_line_renderer->get_view_block()
                             },
                             .fragment_outputs = &m_content_wide_line_renderer->get_fragment_outputs(),
                             // No vertex_format: the multiview vertex

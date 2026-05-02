@@ -175,9 +175,15 @@ void Composition_pass::render(const Render_context& context)
         erhe::scene_renderer::Content_wide_line_renderer* content_wide_line_renderer = context.app_context.content_wide_line_renderer;
         if (use_content_wide_line_renderer && (content_wide_line_renderer != nullptr) && content_wide_line_renderer->is_enabled()) {
             ERHE_VERIFY(context.render_pass != nullptr);
-            // Render the compute-expanded triangles with the outline pipeline state
+            // Render the compute-expanded triangles with the outline
+            // pipeline state. Under multiview the renderer binds its
+            // sibling SSBO-read graphics shader and the surrounding
+            // multiview render pass distributes the single draw across
+            // both layers; under single-view the existing
+            // vertex-attribute path runs.
+            const bool multiview = !context.multiview_views.empty();
             for (auto* render_pipeline_state : render_pipeline_states) {
-                content_wide_line_renderer->render(*context.encoder, *render_pipeline_state, *context.render_pass, content_wide_line_group);
+                content_wide_line_renderer->render(*context.encoder, *render_pipeline_state, *context.render_pass, content_wide_line_group, multiview);
             }
         } else {
             context.app_context.forward_renderer->render(
