@@ -446,16 +446,66 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
         m_request_renderdoc_capture = false;
     }
 
-    // Multiview render path. Currently a clear-only stub: it acquires the
-    // shared layered swapchain, opens a single render pass with view_mask
-    // = (1 << view_count) - 1 and lets the load_action = Clear paint both
-    // layers. Real forward / line rendering follows once the pipeline-pair
-    // refactor lands (see doc/multiview.md "A. Pipeline pair strategy").
+    // Multiview render path. Acquires the shared layered swapchain,
+    // opens a single Render_pass with view_mask = (1 << view_count) -
+    // 1, builds per-view Camera_view_inputs, and drives composer.render
+    // once. Pipelines pick their multiview_shader_stages sibling so
+    // gl_ViewIndex resolves and each eye reads its own camera entry
+    // from cameras[gl_ViewIndex].
+    //
+    // Tools / debug-line rendering are not on the multiview path yet --
+    // they need the same pipeline-pair / per-view-strided refactor (see
+    // doc/multiview.md "Remaining work"). Mirror mode and ID rendering
+    // are also skipped under multiview.
     if (m_frame_timing.should_render && m_use_multiview) {
-        auto multiview_callback = [this](const erhe::xr::Render_views_frame& frame, erhe::graphics::Command_buffer& views_cb) -> bool {
-            erhe::graphics::Texture* color_texture         = frame.shared_color_texture;
-            erhe::graphics::Texture* depth_stencil_texture = frame.shared_depth_stencil_texture;
+        auto multiview_callback = [this](const erhe::xr::Render_views_frame& frame_in, erhe::graphics::Command_buffer& views_cb) -> bool {
+            erhe::graphics::Texture* color_texture         = frame_in.shared_color_texture;
+            erhe::graphics::Texture* depth_stencil_texture = frame_in.shared_depth_stencil_texture;
             ERHE_VERIFY(color_texture != nullptr);
+
+            // Update each per-eye Headset_view_resources from the
+            // matching Render_view so the Camera nodes / projections
+            // are current. update() also writes back near/far_depth
+            // into the Render_view, which Xr_session reads for
+            // composition_layer_depth_infos. Cast away const on the
+            // frame views to allow the back-write -- the frame is
+            // owned by Xr_session and the callback is the documented
+            // place to update it.
+            erhe::xr::Render_views_frame& frame = const_cast<erhe::xr::Render_views_frame&>(frame_in);
+            std::vector<erhe::scene_renderer::Camera_view_input> view_inputs;
+            view_inputs.reserve(frame.views.size());
+            const erhe::math::Viewport viewport_xy{
+                .x      = 0,
+                .y      = 0,
+                .width  = static_cast<int>(frame.width),
+                .height = static_cast<int>(frame.height)
+            };
+            erhe::scene::Camera* primary_camera = nullptr;
+            for (erhe::xr::Render_view& render_view : frame.views) {
+                const std::shared_ptr<Headset_view_resources>& view_resources = get_headset_view_resources(render_view);
+                if (!view_resources->is_valid()) {
+                    return false;
+                }
+                const erhe::scene::Projection::Fov_sides fov_sides{render_view.fov_left, render_view.fov_right, render_view.fov_up, render_view.fov_down};
+                view_resources->update(render_view, fov_sides);
+                erhe::scene::Camera* camera = view_resources->get_camera();
+                if (primary_camera == nullptr) {
+                    primary_camera = camera;
+                }
+                view_inputs.push_back(erhe::scene_renderer::Camera_view_input{
+                    .projection = camera->projection(),
+                    .node       = camera->get_node(),
+                    .viewport   = viewport_xy
+                });
+            }
+
+            // Update scene transforms once per frame (not per view).
+            std::shared_ptr<Scene_root> scene_root = get_scene_root();
+            ERHE_VERIFY(scene_root);
+            scene_root->get_scene().update_node_transforms();
+            m_app_context.tools->get_tool_scene_root()->get_hosted_scene()->update_node_transforms();
+            m_app_context.app_message_bus->hover_scene_view.send_message(Hover_scene_view_message{.scene_view = this});
+            m_app_context.app_message_bus->render_scene_view.send_message(Render_scene_view_message{.scene_view = this});
 
             erhe::graphics::Render_pass_descriptor render_pass_descriptor{};
             render_pass_descriptor.color_attachments[0].texture       = color_texture;
@@ -481,12 +531,26 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
             render_pass_descriptor.debug_label          = erhe::utility::Debug_label{"XR multiview"};
 
             erhe::graphics::Render_pass multiview_render_pass{*m_app_context.graphics_device, render_pass_descriptor};
-            erhe::graphics::Render_command_encoder encoder = m_app_context.graphics_device->make_render_command_encoder(views_cb);
-            erhe::graphics::Scoped_render_pass scoped_render_pass{multiview_render_pass, views_cb};
-            // The clear is performed by the load_action; no draws yet.
-            // Forward / line rendering is deferred until pipeline pairs
-            // are wired up (doc/multiview.md "A. Pipeline pair strategy").
-            (void)encoder;
+
+            {
+                erhe::graphics::Render_command_encoder encoder = m_app_context.graphics_device->make_render_command_encoder(views_cb);
+                erhe::graphics::Scoped_render_pass scoped_render_pass{multiview_render_pass, views_cb};
+
+                Render_context render_context {
+                    .command_buffer         = &views_cb,
+                    .encoder                = &encoder,
+                    .render_pass            = &multiview_render_pass,
+                    .app_context            = m_app_context,
+                    .scene_view             = *this,
+                    .viewport_config        = m_viewport_config,
+                    .camera                 = primary_camera,
+                    .viewport_scene_view    = nullptr,
+                    .viewport               = viewport_xy,
+                    .override_shader_stages = nullptr,
+                    .multiview_views        = std::span<const erhe::scene_renderer::Camera_view_input>{view_inputs}
+                };
+                m_app_context.app_rendering->render_composer(render_context);
+            }
             return true;
         };
         m_headset->render_multiview(command_buffer, multiview_callback);
