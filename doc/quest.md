@@ -95,39 +95,73 @@ is actually needed.
 
 ### 4.3 Build / install commands
 
-```bat
-:: Build a Mobile APK (debug)
-scripts\build_android.bat mobile
+The three wrapper scripts cover the common flows. All probe
+`ANDROID_HOME` (falling back to `%LOCALAPPDATA%\Android\Sdk`) and
+`JAVA_HOME` (falling back to Android Studio's bundled JBR JDK 21);
+no environment setup is needed if Android Studio is installed in the
+default location.
 
-:: Build a Quest APK (debug)
+#### Build only (`scripts\build_android.bat`)
+
+```bat
+:: Debug builds (default)
+scripts\build_android.bat mobile
 scripts\build_android.bat quest
 
-:: Install onto a connected device (passes through to adb install -r -g -d)
+:: Release builds (debug-keystore signed; for local performance testing)
+scripts\build_android.bat mobile assembleMobileRelease
+scripts\build_android.bat quest  assembleQuestRelease
+
+:: Clean rebuild
+scripts\build_android.bat quest clean assembleQuestDebug
+
+:: Pass-through gradle properties
+scripts\build_android.bat quest assembleQuestDebug -Pvulkan_validation_skip
+```
+
+`build_android.bat` requires the flavor as its first argument and
+forwards every remaining argument to gradlew verbatim. Note that the
+bat script's argument parser drops `=` in flag values; pass bare
+properties like `-Pvulkan_validation_skip` rather than
+`-Pvulkan_validation_skip=1`. For property values that need an `=`,
+invoke `gradlew.bat` directly (after exporting `JAVA_HOME` and
+`ANDROID_HOME`).
+
+#### Install + launch (`scripts\install_android.bat`)
+
+```bat
+:: Install onto a connected device (passes -r -g -d to adb install)
 scripts\install_android.bat mobile debug
 scripts\install_android.bat quest  debug
+scripts\install_android.bat quest  release
 
-:: Install + launch with the LAUNCHER+VR intent
+:: Install + launch
 scripts\install_android.bat quest debug run
-scripts\install_android.bat quest debug run -s <quest-adb-serial>
 
-:: Build + install + launch in one shot (debug or release)
+:: Target a specific device when multiple are attached
+scripts\install_android.bat quest debug run -s <quest-adb-serial>
+```
+
+Build type defaults to `debug`. `install_android.bat` only consumes a
+pre-built APK; if the APK does not exist it prints which
+`build_android.bat` invocation to run.
+
+#### Build + install + launch in one step (`scripts\run_android.bat`)
+
+```bat
+:: Drives Gradle's install<Flavor><BuildType> task (compile + package
+:: + adb install) then launches via MAIN+LAUNCHER+VR so Horizon enters
+:: immersive composition.
 scripts\run_android.bat quest
 scripts\run_android.bat quest release
 scripts\run_android.bat quest release -s <quest-adb-serial>
 ```
 
-Both `build_android.bat` and `install_android.bat` require the flavor as
-their first positional argument; omitting it prints a usage error
-rather than picking a default. `run_android.bat` is a convenience
-wrapper that invokes Gradle's `install<Flavor><BuildType>` task
-(compile + package + adb install in one step) and then launches the
-activity via the `MAIN+LAUNCHER+VR` intent so Horizon recognizes the
-quest flavor as immersive-VR.
-
-The APK output paths are:
+#### APK output paths
 
 - `android-project/app/build/outputs/apk/mobile/debug/app-mobile-debug.apk`
 - `android-project/app/build/outputs/apk/quest/debug/app-quest-debug.apk`
+- `android-project/app/build/outputs/apk/mobile/release/app-mobile-release.apk`
 - `android-project/app/build/outputs/apk/quest/release/app-quest-release.apk`
 
 Release APKs are signed with the auto-generated debug keystore so they
@@ -138,6 +172,57 @@ publishing.
 
 When both a phone and a Quest are attached at the same time, pass
 `-s <serial>` so adb knows which device to talk to.
+
+### 4.3.1 Vulkan validation layer
+
+GPU-side errors on Quest are silent without validation layers loaded,
+so the editor hangs on the first bad command (descriptor mismatch,
+image layout violation, multiview misuse) with no log line and the
+device-error abort hook (`editor.cpp` line ~698) never fires. To make
+those failures loud:
+
+**Bundling (build-time).** The Khronos `VK_LAYER_KHRONOS_validation`
+.so is fetched from the Vulkan SDK release pinned in
+`android-project/app/build.gradle` (`validationLayerVersion`) and
+staged under `android-project/app/libs/arm64-v8a/` by the Gradle task
+`fetchVulkanValidationLayer`. From there Gradle's normal `jniLibs`
+packaging puts it in the APK. **This task runs by default for every
+flavor and build type**; the download is cached under
+`build/vulkan-validation-layer-cache/` after the first run. The .so
+adds ~10 MB to the APK; pass `-Pvulkan_validation_skip` to drop it:
+
+```bat
+scripts\build_android.bat quest assembleQuestDebug -Pvulkan_validation_skip
+```
+
+**Enabling (runtime).** Bundling alone does not slow rendering -
+the loader only loads the layer when the C++ device init explicitly
+asks for it. Set the JSON config knob to ask for it:
+
+```jsonc
+// config/editor/erhe_graphics.json
+{
+    "vulkan": {
+        "vulkan_validation_layers": true,
+        ...
+    }
+}
+```
+
+`vulkan_device_init.cpp` enables `VK_LAYER_KHRONOS_validation` only
+when both the config knob is true AND the layer is loadable (i.e.
+the .so is in the APK). When enabled, expect noticeable per-frame
+CPU overhead from the layer.
+
+**Diagnostic flow.** Validation messages route through the existing
+`Device::device_message` callback (registered in
+`editor.cpp:698`), which copies the message to the clipboard and
+calls `ERHE_FATAL` on `Message_severity::error`. So the first
+invalid Vulkan command becomes a loud abort with the offending
+message in `adb logcat` and on the host clipboard.
+
+Leave the config knob off for normal runs. Flip it on when chasing
+hangs or visual corruption.
 
 ### 4.4 Phase 4 pass criterion
 

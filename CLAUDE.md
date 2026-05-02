@@ -141,13 +141,16 @@ Prefer the wrapper scripts when possible -- they handle both probes plus device-
 
 ### Vulkan validation layer on Quest / Android
 
-Without validation layers, GPU-side errors (descriptor set mismatches, image-layout violations, multiview misuse) are silent on Quest -- the editor hangs on the first bad frame with no log line, and abort hooks never fire. To enable validation:
+Without validation layers, GPU-side errors (descriptor set mismatches, image-layout violations, multiview misuse) are silent on Quest -- the editor hangs on the first bad frame with no log line, and abort hooks never fire.
 
-1. Build with the property set, e.g. `scripts\build_android.bat quest assembleQuestDebug -Pvulkan_validation` (use the bare form -- the bat script's argument parser mangles `=` in flags). The Gradle task `fetchVulkanValidationLayer` downloads the Khronos `VK_LAYER_KHRONOS_validation` `.so` for `arm64-v8a` from the Vulkan SDK release matching `validationLayerVersion` in `android-project/app/build.gradle` and stages it under `android-project/app/libs/arm64-v8a/`. The .so is then bundled into the APK by Gradle's normal `jniLibs` packaging.
-2. Set `"vulkan_validation_layers": true` in `config/editor/erhe_graphics.json`. The C++ device init checks for the layer's availability and only enables it when both the config knob is on AND the layer is loadable.
-3. Errors flow through `Device::device_message` -> the editor's callback (in `editor.cpp` line ~698) which calls `ERHE_FATAL` on `Message_severity::error`, so device-level Vulkan errors become loud aborts.
+The Khronos `VK_LAYER_KHRONOS_validation` `.so` is bundled into every Quest / Android APK by default. The Gradle task `fetchVulkanValidationLayer` downloads the .so for `arm64-v8a` from the Vulkan SDK release matching `validationLayerVersion` in `android-project/app/build.gradle` and stages it under `android-project/app/libs/arm64-v8a/`; from there Gradle's normal `jniLibs` packaging puts it in the APK. The download is cached after the first build. To drop the .so (saves ~10 MB but loses the diagnostic capability), pass `-Pvulkan_validation_skip` to gradle / `build_android.bat`.
 
-The .so adds ~10 MB to the APK and noticeable per-frame overhead, so leave it off for normal runs.
+To actually USE the layer at runtime:
+
+1. Set `"vulkan_validation_layers": true` in `config/editor/erhe_graphics.json`. The C++ device init enables `VK_LAYER_KHRONOS_validation` only when both this config knob is on AND the layer is loadable from the APK; bundling the .so alone does NOT slow normal runs.
+2. Validation errors flow through `Device::device_message` -> the editor's callback (in `editor.cpp` line ~698) which calls `ERHE_FATAL` on `Message_severity::error`, so device-level Vulkan errors become loud aborts.
+
+When the layer is enabled there is noticeable per-frame overhead -- leave the config knob off for normal runs and flip it on when chasing a hang or visual corruption.
 
 ## Python
 

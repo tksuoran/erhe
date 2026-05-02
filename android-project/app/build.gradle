@@ -145,17 +145,19 @@ android {
         }
     }
 
-    // Optional: package the Khronos Vulkan validation layer .so into the
-    // APK so VK_LAYER_KHRONOS_validation is loadable on device. Opt in
-    // with `-Pvulkan_validation=1`. The C++ side enables the layer only
-    // when the matching config knob is true (config/editor/erhe_graphics.json
-    // -> "vulkan_validation_layers": true) AND the layer is detected at
-    // runtime; this task only ensures the .so is present.
+    // Package the Khronos Vulkan validation layer .so into the APK so
+    // VK_LAYER_KHRONOS_validation is loadable on device. The C++ side
+    // enables the layer only when the matching config knob is true
+    // (config/editor/erhe_graphics.json -> "vulkan_validation_layers":
+    // true) AND the layer is detected at runtime; this task only
+    // ensures the .so is present in the APK so the loader CAN find it.
     //
-    // Without this, Quest / Android builds get NO Vulkan validation, so
-    // GPU-side errors (descriptor mismatches, layout violations, etc.)
-    // are silent and the editor hangs without diagnostics.
-    if (project.hasProperty('vulkan_validation')) {
+    // Bundled by default: makes "enable validation" a one-config-knob
+    // change with no rebuild needed. The download is cached after the
+    // first run. Opt out with `-Pvulkan_validation_skip` to drop the
+    // ~10 MB layer .so from the APK (e.g. when iterating on a
+    // bandwidth-constrained connection or sizing the release APK).
+    if (!project.hasProperty('vulkan_validation_skip')) {
         // Pin to the same Vulkan SDK version the headers reference (see
         // vulkan_device_init.cpp comment on khronos_validation_layer.html).
         // Bump in lock-step with the SDK upgrade.
