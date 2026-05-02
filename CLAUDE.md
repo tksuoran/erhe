@@ -130,6 +130,25 @@ Many systems have swappable backends selected at CMake configure time via `#ifde
 
 Do the install (`scripts\install_android.bat quest`) FIRST, while the user can keep their hands free. **Only after the APK is on the device**, prompt the user to put the headset on and pick up / activate the Touch controllers, and wait for explicit confirmation before running the launch (`adb shell am start -n org.libsdl.app.quest/...` or `scripts\install_android.bat quest run`). Quest's `RequiresControllersLaunchInterceptor` shows a system "Controllers Required" dialog that blocks the immersive app from coming to the foreground until controllers are detected as in-hand; launching while the headset is off the user's head wastes the attempt and we have to retry. Pure builds and installs (no app start) do not need the prompt.
 
+### Locating Android tools in shell commands
+
+The scripts in `scripts\` (`install_android.bat`, `run_android.bat`, `build_android.bat`) all probe for the Android SDK and JDK in the same way; mirror this when running adb / gradle / java directly from a shell:
+
+- **`ANDROID_HOME`**: use `$ANDROID_HOME` if set, else fall back to `%LOCALAPPDATA%\Android\Sdk\` on Windows. Adb lives at `<ANDROID_HOME>\platform-tools\adb.exe`. In bash on Windows: `"$LOCALAPPDATA/Android/Sdk/platform-tools/adb.exe"`.
+- **`JAVA_HOME`** (only needed for direct gradle / gradlew calls; the scripts above set it for you): use `$JAVA_HOME` if set, else fall back to `C:\Program Files\Android\Android Studio\jbr` (Android Studio's bundled JDK 21). Gradle 8.12 + AGP do not support JDK 25.
+
+Prefer the wrapper scripts when possible -- they handle both probes plus device-state checks. Drop to direct invocations only when a script does not cover the case (e.g. passing a `-P` gradle property the script's bat-arg parser mangles; see "Vulkan validation layer on Quest / Android" below).
+
+### Vulkan validation layer on Quest / Android
+
+Without validation layers, GPU-side errors (descriptor set mismatches, image-layout violations, multiview misuse) are silent on Quest -- the editor hangs on the first bad frame with no log line, and abort hooks never fire. To enable validation:
+
+1. Build with the property set, e.g. `scripts\build_android.bat quest assembleQuestDebug -Pvulkan_validation` (use the bare form -- the bat script's argument parser mangles `=` in flags). The Gradle task `fetchVulkanValidationLayer` downloads the Khronos `VK_LAYER_KHRONOS_validation` `.so` for `arm64-v8a` from the Vulkan SDK release matching `validationLayerVersion` in `android-project/app/build.gradle` and stages it under `android-project/app/libs/arm64-v8a/`. The .so is then bundled into the APK by Gradle's normal `jniLibs` packaging.
+2. Set `"vulkan_validation_layers": true` in `config/editor/erhe_graphics.json`. The C++ device init checks for the layer's availability and only enables it when both the config knob is on AND the layer is loadable.
+3. Errors flow through `Device::device_message` -> the editor's callback (in `editor.cpp` line ~698) which calls `ERHE_FATAL` on `Message_severity::error`, so device-level Vulkan errors become loud aborts.
+
+The .so adds ~10 MB to the APK and noticeable per-frame overhead, so leave it off for normal runs.
+
 ## Python
 
 **IMPORTANT: On this Windows machine, always use the `py -3` launcher to run Python scripts. Never use `python` or `python3` - they resolve to the Microsoft Store stub and will fail.** This applies to all Python invocations: scripts, codegen, tools.

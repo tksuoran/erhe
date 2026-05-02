@@ -66,4 +66,6 @@ android-project/.gradle/
 android-project/build/
 android-project/app/build/
 android-project/app/.cxx/
+# Validation layer .so fetched by `-Pvulkan_validation=1` build (see app/build.gradle).
+android-project/app/libs/
 android-project/local.properties

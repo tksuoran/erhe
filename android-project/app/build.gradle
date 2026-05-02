@@ -144,6 +144,59 @@ android {
             }
         }
     }
+
+    // Optional: package the Khronos Vulkan validation layer .so into the
+    // APK so VK_LAYER_KHRONOS_validation is loadable on device. Opt in
+    // with `-Pvulkan_validation=1`. The C++ side enables the layer only
+    // when the matching config knob is true (config/editor/erhe_graphics.json
+    // -> "vulkan_validation_layers": true) AND the layer is detected at
+    // runtime; this task only ensures the .so is present.
+    //
+    // Without this, Quest / Android builds get NO Vulkan validation, so
+    // GPU-side errors (descriptor mismatches, layout violations, etc.)
+    // are silent and the editor hangs without diagnostics.
+    if (project.hasProperty('vulkan_validation')) {
+        // Pin to the same Vulkan SDK version the headers reference (see
+        // vulkan_device_init.cpp comment on khronos_validation_layer.html).
+        // Bump in lock-step with the SDK upgrade.
+        def validationLayerVersion = "1.4.328.1"
+        def validationLayerUrl = "https://github.com/KhronosGroup/Vulkan-ValidationLayers/releases/download/vulkan-sdk-${validationLayerVersion}/android-binaries-${validationLayerVersion}.zip"
+        def cacheDir = layout.buildDirectory.dir("vulkan-validation-layer-cache").get().asFile
+        def cacheZip = new File(cacheDir, "android-binaries-${validationLayerVersion}.zip")
+        def jniLibsDir = file("libs/arm64-v8a")
+        def layerSo = new File(jniLibsDir, "libVkLayer_khronos_validation.so")
+
+        def fetchValidationLayer = tasks.register("fetchVulkanValidationLayer") {
+            outputs.file(layerSo)
+            outputs.upToDateWhen { layerSo.exists() }
+            doLast {
+                if (!layerSo.exists()) {
+                    cacheDir.mkdirs()
+                    if (!cacheZip.exists()) {
+                        logger.lifecycle("Downloading Vulkan validation layer ${validationLayerVersion}")
+                        ant.get(src: validationLayerUrl, dest: cacheZip, verbose: false, usetimestamp: true)
+                    }
+                    jniLibsDir.mkdirs()
+                    copy {
+                        from(zipTree(cacheZip)) {
+                            include "android-binaries-${validationLayerVersion}/arm64-v8a/libVkLayer_khronos_validation.so"
+                            eachFile { fcd ->
+                                fcd.relativePath = new RelativePath(true, fcd.name)
+                            }
+                            includeEmptyDirs = false
+                        }
+                        into jniLibsDir
+                    }
+                    logger.lifecycle("Staged ${layerSo}")
+                }
+            }
+        }
+        applicationVariants.all { variant ->
+            def variantName = variant.name.capitalize()
+            tasks["merge${variantName}JniLibFolders"]
+                .dependsOn(fetchValidationLayer)
+        }
+    }
     lint {
         abortOnError = false
     }
