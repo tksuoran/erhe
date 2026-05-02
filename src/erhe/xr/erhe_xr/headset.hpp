@@ -16,6 +16,7 @@ namespace erhe::window { class Context_window; }
 namespace erhe::xr {
 
 class Render_view;
+class Render_views_frame;
 class Xr_session;
 
 class Frame_timing
@@ -45,6 +46,10 @@ public:
     auto update_actions() const -> bool;
     auto begin_frame_  () -> Frame_timing;
     auto render        (erhe::graphics::Command_buffer& command_buffer, std::function<bool(Render_view&, erhe::graphics::Command_buffer&)> render_view_callback) -> bool;
+    // Multiview render entry. Forwards to Xr_session::render_frame_multiview().
+    // Only valid when Xr_session::is_multiview_enabled() returns true; the
+    // caller is expected to check that and otherwise fall back to render().
+    auto render_multiview(erhe::graphics::Command_buffer& command_buffer, std::function<bool(const Render_views_frame&, erhe::graphics::Command_buffer&)> render_views_callback) -> bool;
     auto end_frame     (bool rendered) -> bool;
     [[nodiscard]] auto get_actions_left        ()       ->       Xr_actions*;
     [[nodiscard]] auto get_actions_left        () const -> const Xr_actions*;

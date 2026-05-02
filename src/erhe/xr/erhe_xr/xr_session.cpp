@@ -513,6 +513,8 @@ auto Xr_session::create_swapchains() -> bool
     }
 
     m_view_swapchains.clear();
+    m_shared_color_swapchain        .reset();
+    m_shared_depth_stencil_swapchain.reset();
 
     const int64_t native_color_format         = erhe::graphics::dataformat_to_native_swapchain_format(m_swapchain_color_format);
     const int64_t native_depth_stencil_format = erhe::graphics::dataformat_to_native_swapchain_format(m_swapchain_depth_stencil_format);
@@ -536,6 +538,126 @@ auto Xr_session::create_swapchains() -> bool
 #endif
 
     const auto& views = m_instance.get_xr_view_configuration_views();
+
+    // Multiview swapchain path: a single shared color + (optional) depth
+    // XrSwapchain with arraySize = view_count, wrapped as 2D array
+    // textures so VK_KHR_multiview can render every layer in one pass.
+    // Gated on:
+    //   - Vulkan multiview device feature (queried at device init)
+    //   - exactly two views (primary stereo); other view counts are
+    //     valid OpenXR configurations but the engine has no multiview
+    //     plumbing for them yet.
+    //   - all per-view extents identical (multiview demands a single
+    //     image of one width x height; non-uniform per-view extents
+    //     mean we must keep the per-eye-swapchain path).
+    m_use_multiview = false;
+#if defined(XR_USE_GRAPHICS_API_VULKAN)
+    if ((views.size() == 2) && m_graphics_device.get_info().multiview) {
+        const auto& view0 = views[0];
+        const auto& view1 = views[1];
+        const bool extents_match =
+            (view0.recommendedImageRectWidth      == view1.recommendedImageRectWidth) &&
+            (view0.recommendedImageRectHeight     == view1.recommendedImageRectHeight) &&
+            (view0.recommendedSwapchainSampleCount == view1.recommendedSwapchainSampleCount);
+        if (extents_match) {
+            m_use_multiview = true;
+        } else {
+            log_xr->info("Multiview disabled: per-view recommended extents differ across eyes");
+        }
+    }
+#endif
+
+    if (m_use_multiview) {
+        const auto& view = views[0];
+        const uint32_t view_count = static_cast<uint32_t>(views.size());
+
+        const XrSwapchainCreateInfo color_swapchain_create_info{
+            .type        = XR_TYPE_SWAPCHAIN_CREATE_INFO,
+            .next        = nullptr,
+            .createFlags = 0,
+            .usageFlags  = XR_SWAPCHAIN_USAGE_SAMPLED_BIT | XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT,
+            .format      = native_color_format,
+            .sampleCount = view.recommendedSwapchainSampleCount,
+            .width       = view.recommendedImageRectWidth,
+            .height      = view.recommendedImageRectHeight,
+            .faceCount   = 1,
+            .arraySize   = view_count,
+            .mipCount    = 1
+        };
+        XrSwapchain color_xr_swapchain{XR_NULL_HANDLE};
+        check_gl_context_in_current_in_this_thread();
+        const XrResult color_result = xrCreateSwapchain(m_xr_session, &color_swapchain_create_info, &color_xr_swapchain);
+        if (color_result != XR_SUCCESS) {
+            log_xr->error("xrCreateSwapchain() (multiview color) failed with error {}", c_str(color_result));
+            return false;
+        }
+
+        XrSwapchain depth_stencil_xr_swapchain{XR_NULL_HANDLE};
+        if (create_depth_stencil_swapchain && (native_depth_stencil_format != 0)) {
+            const XrSwapchainCreateInfo depth_stencil_swapchain_create_info{
+                .type        = XR_TYPE_SWAPCHAIN_CREATE_INFO,
+                .next        = nullptr,
+                .createFlags = 0,
+                .usageFlags  = XR_SWAPCHAIN_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+                .format      = native_depth_stencil_format,
+                .sampleCount = view.recommendedSwapchainSampleCount,
+                .width       = view.recommendedImageRectWidth,
+                .height      = view.recommendedImageRectHeight,
+                .faceCount   = 1,
+                .arraySize   = view_count,
+                .mipCount    = 1
+            };
+            check_gl_context_in_current_in_this_thread();
+            const XrResult depth_stencil_result = xrCreateSwapchain(m_xr_session, &depth_stencil_swapchain_create_info, &depth_stencil_xr_swapchain);
+            if (depth_stencil_result != XR_SUCCESS) {
+                log_xr->error("xrCreateSwapchain() (multiview depth) failed with error {}", c_str(depth_stencil_result));
+                check(xrDestroySwapchain(color_xr_swapchain));
+                return false;
+            }
+        }
+
+        m_shared_color_swapchain.emplace(
+            m_graphics_device,
+            color_xr_swapchain,
+            m_swapchain_color_format,
+            view.recommendedImageRectWidth,
+            view.recommendedImageRectHeight,
+            view.recommendedSwapchainSampleCount,
+            view_count,
+            color_texture_usage,
+            "XR multiview color"
+        );
+        if (depth_stencil_xr_swapchain != XR_NULL_HANDLE) {
+            m_shared_depth_stencil_swapchain.emplace(
+                m_graphics_device,
+                depth_stencil_xr_swapchain,
+                m_swapchain_depth_stencil_format,
+                view.recommendedImageRectWidth,
+                view.recommendedImageRectHeight,
+                view.recommendedSwapchainSampleCount,
+                view_count,
+                depth_stencil_texture_usage,
+                "XR multiview depth stencil"
+            );
+        }
+        log_xr->info("OpenXR multiview swapchain created: {}x{}, {} views, sampleCount {}",
+            view.recommendedImageRectWidth, view.recommendedImageRectHeight,
+            view_count, view.recommendedSwapchainSampleCount);
+
+        // Skip the per-eye swapchain creation loop below.
+        if (m_instance.extensions.FB_passthrough) {
+            // Fall through to the passthrough setup at the end of this
+            // function by jumping past the per-eye creation loop.
+        }
+        // The original passthrough block lives below the per-eye loop;
+        // returning here would skip it. Instead, replicate by leaving
+        // the per-eye loop disabled via an early branch and continuing
+        // execution at the function tail. The per-eye creation loop is
+        // wrapped in `if (!m_use_multiview) { ... }` below.
+    }
+
+    if (!m_use_multiview)
+    {
     for (uint32_t view_index = 0; view_index < views.size(); ++view_index) {
         const auto& view = views[view_index];
         const XrSwapchainCreateInfo color_swapchain_create_info{
@@ -591,6 +713,7 @@ auto Xr_session::create_swapchains() -> bool
                 view.recommendedImageRectWidth,
                 view.recommendedImageRectHeight,
                 view.recommendedSwapchainSampleCount,
+                /*array_layer_count*/ 1,
                 color_texture_usage,
                 fmt::format("XR color view {}", view_index)
             },
@@ -601,11 +724,13 @@ auto Xr_session::create_swapchains() -> bool
                 view.recommendedImageRectWidth,
                 view.recommendedImageRectHeight,
                 view.recommendedSwapchainSampleCount,
+                /*array_layer_count*/ 1,
                 depth_stencil_texture_usage,
                 fmt::format("XR depth stencil view {}", view_index)
             }
         );
     }
+    } // if (!m_use_multiview)
 
     if (m_instance.extensions.FB_passthrough) {
         XrPassthroughCreateInfoFB passthrough_create_info{
@@ -1377,6 +1502,211 @@ auto Xr_session::render_frame(erhe::graphics::Command_buffer& command_buffer, st
         // proceeds to record view i+1.
         view_cb.end();
         erhe::graphics::Command_buffer* cbs[] = { &view_cb };
+        m_graphics_device.submit_command_buffers(std::span<erhe::graphics::Command_buffer* const>{cbs});
+    }
+
+    return true;
+}
+
+auto Xr_session::is_multiview_enabled() const -> bool
+{
+    return m_use_multiview;
+}
+
+auto Xr_session::get_view_count() const -> uint32_t
+{
+    return static_cast<uint32_t>(m_instance.get_xr_view_configuration_views().size());
+}
+
+auto Xr_session::render_frame_multiview(
+    erhe::graphics::Command_buffer& command_buffer,
+    std::function<bool(const Render_views_frame&, erhe::graphics::Command_buffer&)> render_views_callback
+) -> bool
+{
+    ERHE_PROFILE_FUNCTION();
+
+    if (m_xr_session == XR_NULL_HANDLE) {
+        return false;
+    }
+    if (!m_use_multiview || !m_shared_color_swapchain.has_value()) {
+        log_xr->error("render_frame_multiview() called when multiview is not enabled");
+        return false;
+    }
+
+    uint32_t view_count_output{0};
+    {
+        ERHE_PROFILE_SCOPE("xrLocateViews");
+
+        XrViewState view_state{
+            .type           = XR_TYPE_VIEW_STATE,
+            .next           = nullptr,
+            .viewStateFlags = 0
+        };
+        const uint32_t view_capacity_input{static_cast<uint32_t>(m_xr_views.size())};
+
+        const XrViewLocateInfo view_locate_info{
+            .type                  = XR_TYPE_VIEW_LOCATE_INFO,
+            .next                  = nullptr,
+            .viewConfigurationType = m_instance.get_xr_view_configuration_type(),
+            .displayTime           = m_xr_frame_state.predictedDisplayTime,
+            .space                 = m_xr_reference_space_stage
+        };
+
+        ERHE_XR_CHECK(
+            xrLocateViews(
+                m_xr_session,
+                &view_locate_info,
+                &view_state,
+                view_capacity_input,
+                &view_count_output,
+                m_xr_views.data()
+            )
+        );
+        ERHE_VERIFY(view_count_output == view_capacity_input);
+    }
+
+    const auto& view_configuration_views = m_instance.get_xr_view_configuration_views();
+    const uint32_t view_count = view_count_output;
+
+    m_xr_composition_layer_projection_views.resize(view_count);
+    m_xr_composition_layer_depth_infos     .resize(view_count);
+
+    // Acquire the single shared color and depth swapchain images.
+    // Acquired-image optionals live at function scope so their destructors
+    // run after submit (matches the per-view path's reasoning).
+    std::optional<Swapchain_image> acquired_color = m_shared_color_swapchain->acquire();
+    if (!acquired_color.has_value() || !m_shared_color_swapchain->wait()) {
+        log_xr->warn("multiview: no shared color swapchain image");
+        return false;
+    }
+    std::optional<Swapchain_image> acquired_depth;
+    bool use_depth_image = false;
+    if (m_shared_depth_stencil_swapchain.has_value()) {
+        acquired_depth = m_shared_depth_stencil_swapchain->acquire();
+        use_depth_image = acquired_depth.has_value() && m_shared_depth_stencil_swapchain->wait();
+        if (!use_depth_image) {
+            log_xr->debug("multiview: no shared depth swapchain image");
+        }
+    }
+
+    erhe::graphics::Texture* color_texture = acquired_color->get_texture();
+    if (color_texture == nullptr) {
+        log_xr->warn("multiview: invalid color image");
+        return false;
+    }
+    erhe::graphics::Texture* depth_stencil_texture = nullptr;
+    if (use_depth_image) {
+        depth_stencil_texture = acquired_depth->get_texture();
+        if (depth_stencil_texture == nullptr) {
+            log_xr->warn("multiview: invalid depth image");
+            use_depth_image = false;
+        }
+    }
+
+    // Single per-frame view command buffer: setup_cb signals views_cb's
+    // implicit GPU primitive; views_cb wait_for_gpu's it. Same fan-out
+    // pattern as render_frame() but with one fanout instead of N.
+    erhe::graphics::Command_buffer& views_cb = m_graphics_device.get_command_buffer(/*thread_slot*/ 0);
+    command_buffer.signal_gpu(views_cb);
+    command_buffer.end();
+    {
+        erhe::graphics::Command_buffer* cbs[] = { &command_buffer };
+        m_graphics_device.submit_command_buffers(std::span<erhe::graphics::Command_buffer* const>{cbs});
+    }
+
+    views_cb.begin();
+    views_cb.wait_for_gpu(views_cb);
+
+    Render_views_frame frame;
+    frame.shared_color_texture         = color_texture;
+    frame.shared_depth_stencil_texture = depth_stencil_texture;
+    frame.width                        = view_configuration_views[0].recommendedImageRectWidth;
+    frame.height                       = view_configuration_views[0].recommendedImageRectHeight;
+    frame.view_mask                    = (view_count >= 32) ? 0xFFFFFFFFu : ((1u << view_count) - 1u);
+    frame.views.reserve(view_count);
+    for (uint32_t i = 0; i < view_count; ++i) {
+        frame.views.push_back(Render_view{
+            .slot      = i,
+            .view_pose = {
+                .orientation = to_glm(m_xr_views[i].pose.orientation),
+                .position    = to_glm(m_xr_views[i].pose.position),
+            },
+            .fov_left              = m_xr_views[i].fov.angleLeft,
+            .fov_right             = m_xr_views[i].fov.angleRight,
+            .fov_up                = m_xr_views[i].fov.angleUp,
+            .fov_down              = m_xr_views[i].fov.angleDown,
+            // The shared 2D-array textures are exposed via the frame's
+            // shared_*_texture pointers; the per-view entries leave
+            // these null to make it explicit that the per-eye-image
+            // pattern does not apply to the multiview path.
+            .color_texture         = nullptr,
+            .depth_stencil_texture = nullptr,
+            .color_format          = m_swapchain_color_format,
+            .depth_stencil_format  = m_swapchain_depth_stencil_format,
+            .width                 = view_configuration_views[i].recommendedImageRectWidth,
+            .height                = view_configuration_views[i].recommendedImageRectHeight,
+            .composition_alpha     = m_instance.get_configuration().composition_alpha,
+            .near_depth            = 0.0f, // TODO
+            .far_depth             = 1.0f  // TODO
+        });
+    }
+
+    {
+        const bool result = render_views_callback(frame, views_cb);
+        if (result == false) {
+            log_xr->warn("multiview render callback returned false");
+            return false;
+        }
+    }
+
+    // Build composition layer projection views; both views point to the
+    // same shared swapchain with imageArrayIndex selecting the per-eye
+    // layer.
+    for (uint32_t i = 0; i < view_count; ++i) {
+        m_xr_composition_layer_depth_infos[i] = {
+            .type     = XR_TYPE_COMPOSITION_LAYER_DEPTH_INFO_KHR,
+            .next     = nullptr,
+            .subImage = {
+                .swapchain = (use_depth_image && m_shared_depth_stencil_swapchain.has_value())
+                    ? m_shared_depth_stencil_swapchain->get_xr_swapchain()
+                    : XR_NULL_HANDLE,
+                .imageRect = {
+                    .offset = { 0, 0 },
+                    .extent = {
+                        static_cast<int32_t>(view_configuration_views[i].recommendedImageRectWidth),
+                        static_cast<int32_t>(view_configuration_views[i].recommendedImageRectHeight)
+                    }
+                },
+                .imageArrayIndex = i
+            },
+            .minDepth = 0.0f,
+            .maxDepth = 1.0f,
+            .nearZ    = frame.views[i].far_depth,
+            .farZ     = frame.views[i].near_depth
+        };
+
+        m_xr_composition_layer_projection_views[i] = {
+            .type = XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW,
+            .next = use_depth_image ? &m_xr_composition_layer_depth_infos[i] : nullptr,
+            .pose = m_xr_views[i].pose,
+            .fov  = m_xr_views[i].fov,
+            .subImage = {
+                .swapchain = m_shared_color_swapchain->get_xr_swapchain(),
+                .imageRect = {
+                    .offset = { 0, 0 },
+                    .extent = {
+                        static_cast<int32_t>(view_configuration_views[i].recommendedImageRectWidth),
+                        static_cast<int32_t>(view_configuration_views[i].recommendedImageRectHeight)
+                    }
+                },
+                .imageArrayIndex = i
+            }
+        };
+    }
+
+    views_cb.end();
+    {
+        erhe::graphics::Command_buffer* cbs[] = { &views_cb };
         m_graphics_device.submit_command_buffers(std::span<erhe::graphics::Command_buffer* const>{cbs});
     }
 

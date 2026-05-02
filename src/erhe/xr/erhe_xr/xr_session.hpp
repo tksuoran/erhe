@@ -5,6 +5,8 @@
 #include <openxr/openxr.h>
 
 #include <functional>
+#include <optional>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -25,6 +27,23 @@ public:
     XrPath                       path        {XR_NULL_PATH};
     std::string                  display_name;
     XrPerformanceMetricsCounterMETA last       {.type = XR_TYPE_PERFORMANCE_METRICS_COUNTER_META, .next = nullptr};
+};
+
+// Aggregate handed to the multiview render callback. The shared color
+// and depth textures are 2D array textures that span every view; the
+// caller renders into them once with VK_KHR_multiview's viewMask, and
+// the layer per view is selected via gl_ViewIndex inside the shaders.
+// view_mask is the bitmask of layers the renderer should write to
+// (typically (1u << view_count) - 1, e.g. 0b11 for stereo).
+class Render_views_frame
+{
+public:
+    std::vector<Render_view> views;
+    erhe::graphics::Texture* shared_color_texture        {nullptr};
+    erhe::graphics::Texture* shared_depth_stencil_texture{nullptr};
+    uint32_t                 view_mask                   {0};
+    uint32_t                 width                       {0};
+    uint32_t                 height                      {0};
 };
 
 class Xr_session
@@ -48,7 +67,17 @@ public:
     [[nodiscard]] auto begin_frame                 () -> bool;
     [[nodiscard]] auto wait_frame                  () -> XrFrameState*;
     [[nodiscard]] auto render_frame                (erhe::graphics::Command_buffer& command_buffer, std::function<bool(Render_view&, erhe::graphics::Command_buffer&)> render_view_callback) -> bool;
+    // Multiview render frame variant: acquires a single shared layered
+    // color (and optional layered depth) image from the multiview
+    // swapchain, builds a Render_views_frame describing all per-view
+    // poses + the shared 2D-array textures, and invokes the callback
+    // once. The callback records a single command buffer that draws
+    // every view in one render pass via VK_KHR_multiview. Only valid
+    // when is_multiview_enabled() returns true; returns false otherwise.
+    [[nodiscard]] auto render_frame_multiview      (erhe::graphics::Command_buffer& command_buffer, std::function<bool(const Render_views_frame&, erhe::graphics::Command_buffer&)> render_views_callback) -> bool;
     [[nodiscard]] auto end_frame                   (const bool rendered) -> bool;
+    [[nodiscard]] auto is_multiview_enabled        () const -> bool;
+    [[nodiscard]] auto get_view_count              () const -> uint32_t;
     [[nodiscard]] auto get_xr_session              () const -> XrSession;
     [[nodiscard]] auto get_xr_reference_space_local() const -> XrSpace;
     [[nodiscard]] auto get_xr_reference_space_stage() const -> XrSpace;
@@ -111,7 +140,16 @@ private:
     bool                                          m_mirror_mode{false};
     erhe::dataformat::Format                      m_swapchain_color_format;
     erhe::dataformat::Format                      m_swapchain_depth_stencil_format;
+    // Per-eye swapchains. Populated when multiview is disabled.
     std::vector<Swapchains>                       m_view_swapchains;
+    // Shared multiview swapchains. Populated when m_use_multiview is
+    // true. Each swapchain image is a 2D array texture with one layer
+    // per view; the renderer attaches a 2D_ARRAY image view spanning
+    // every layer and uses VK_KHR_multiview to write all layers in one
+    // pass. m_view_swapchains is empty in this case.
+    std::optional<Swapchain>                      m_shared_color_swapchain;
+    std::optional<Swapchain>                      m_shared_depth_stencil_swapchain;
+    bool                                          m_use_multiview{false};
     std::vector<XrView>                           m_xr_views;
     std::vector<XrCompositionLayerProjectionView> m_xr_composition_layer_projection_views;
     std::vector<XrCompositionLayerDepthInfoKHR>   m_xr_composition_layer_depth_infos;

@@ -208,6 +208,22 @@ auto Headset::render(erhe::graphics::Command_buffer& command_buffer, std::functi
     return true;
 }
 
+auto Headset::render_multiview(
+    erhe::graphics::Command_buffer&                                                          command_buffer,
+    std::function<bool(const Render_views_frame&, erhe::graphics::Command_buffer&)>          render_views_callback
+) -> bool
+{
+    ERHE_PROFILE_FUNCTION();
+
+    if (!m_xr_session) {
+        return false;
+    }
+    if (!m_xr_session->render_frame_multiview(command_buffer, std::move(render_views_callback))) {
+        return false;
+    }
+    return true;
+}
+
 auto Headset::end_frame(const bool rendered) -> bool
 {
     ERHE_PROFILE_FUNCTION();
