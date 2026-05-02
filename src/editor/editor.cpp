@@ -1001,7 +1001,8 @@ public:
                     *m_graphics_device.get(),
                     m_mesh_memory->edge_line_vertex_buffer,
                     nullptr,
-                    nullptr
+                    nullptr,
+                    xr_max_view_count
                 );
                 if (m_graphics_device->get_info().use_compute_shader) {
                     const std::filesystem::path shader_path = std::filesystem::path{"res"} / std::filesystem::path{"shaders"};
@@ -1013,7 +1014,8 @@ public:
                             .name             = "compute_before_content_line",
                             .struct_types     = {
                                 m_content_wide_line_renderer->get_edge_line_vertex_struct(),
-                                m_content_wide_line_renderer->get_triangle_vertex_struct()
+                                m_content_wide_line_renderer->get_triangle_vertex_struct(),
+                                m_content_wide_line_renderer->get_view_camera_struct()
                             },
                             .interface_blocks = {
                                 m_content_wide_line_renderer->get_edge_line_vertex_buffer_block(),
@@ -1058,10 +1060,51 @@ public:
                             m_content_wide_line_graphics_stages = std::make_unique<Shader_stages>(*m_graphics_device, std::move(prototype));
                         }
                     }
+                    // Multiview-compiled graphics shader pair. Compiled
+                    // only when the headset can drive multiview
+                    // (max_view_count >= 2); not used by single-view
+                    // viewports. Reads the triangle SSBO directly from
+                    // the vertex stage at gl_VertexID + gl_ViewIndex *
+                    // stride_per_view (see line_after_compute.vert
+                    // ERHE_MULTIVIEW branch) so a single draw inside
+                    // the headset's multiview render pass produces
+                    // correct stereo output for content edge lines.
+                    if (xr_max_view_count >= 2) {
+                        Shader_stages_create_info create_info{
+                            .name             = "content_line_after_compute_multiview",
+                            .struct_types     = {
+                                m_content_wide_line_renderer->get_triangle_vertex_struct(),
+                                m_content_wide_line_renderer->get_view_camera_struct(),
+                                &m_program_interface->camera_interface.camera_struct
+                            },
+                            .interface_blocks = {
+                                m_content_wide_line_renderer->get_triangle_vertex_buffer_read_block(),
+                                m_content_wide_line_renderer->get_view_block(),
+                                &m_program_interface->camera_interface.camera_block
+                            },
+                            .fragment_outputs = &m_content_wide_line_renderer->get_fragment_outputs(),
+                            // No vertex_format: the multiview vertex
+                            // shader reads the triangle SSBO instead of
+                            // input-assembler attributes.
+                            .no_vertex_input  = true,
+                            .shaders = {
+                                { Shader_type::vertex_shader,   shader_path / "line_after_compute.vert"        },
+                                { Shader_type::fragment_shader, shader_path / "content_line_after_compute.frag" }
+                            },
+                            .bind_group_layout = m_content_wide_line_renderer->get_multiview_graphics_bind_group_layout(),
+                        };
+                        create_info.enable_multiview(static_cast<uint32_t>(xr_max_view_count));
+                        Shader_stages_prototype prototype = build_shader_stages(*m_graphics_device, create_info);
+                        if (prototype.is_valid()) {
+                            m_content_wide_line_multiview_graphics_stages = std::make_unique<Shader_stages>(*m_graphics_device, std::move(prototype));
+                        }
+                    }
+
                     if (m_content_wide_line_compute_stages && m_content_wide_line_graphics_stages) {
                         m_content_wide_line_renderer->set_shader_stages(
                             m_content_wide_line_compute_stages.get(),
-                            m_content_wide_line_graphics_stages.get()
+                            m_content_wide_line_graphics_stages.get(),
+                            m_content_wide_line_multiview_graphics_stages.get()
                         );
                     }
                 }
@@ -2025,6 +2068,7 @@ public:
     std::unique_ptr<erhe::scene_renderer::Content_wide_line_renderer> m_content_wide_line_renderer;
     std::unique_ptr<erhe::graphics::Shader_stages>                   m_content_wide_line_compute_stages;
     std::unique_ptr<erhe::graphics::Shader_stages>                   m_content_wide_line_graphics_stages;
+    std::unique_ptr<erhe::graphics::Shader_stages>                   m_content_wide_line_multiview_graphics_stages;
 
     std::unique_ptr<erhe::imgui::Imgui_windows>              m_imgui_windows;
     std::unique_ptr<App_scenes             >                 m_app_scenes;
