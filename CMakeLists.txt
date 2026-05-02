@@ -261,10 +261,22 @@ endif ()
 if (ERHE_SPIRV)
     CPMAddPackage(
         NAME              glslang
-        VERSION           16.2.0
-        GIT_TAG           16.2.0
+        VERSION           16.3.0
+        GIT_TAG           16.3.0
         GIT_SHALLOW       TRUE
         GITHUB_REPOSITORY KhronosGroup/glslang
+        # Local patch for an upstream bug in glslang 16.3.0 (still
+        # present): Builder::createConstVariable passes the
+        # OpConstantComposite id through as the Variable operand of
+        # DebugGlobalVariable, which spirv-val 1.4.328+ rejects under
+        # VUID-VkShaderModuleCreateInfo-pCode-08737. Affects every
+        # compute shader (synthesised gl_WorkGroupSize) plus any
+        # file-scope const composite array. See
+        # doc/glslang_bug_report_debugglobalvariable.md and the
+        # patch file's header for the full write-up. Drop this once
+        # KhronosGroup/glslang ships a release containing the fix.
+        PATCHES
+            "${CMAKE_CURRENT_LIST_DIR}/cmake/patches/glslang-debugglobalvariable-noop-for-composites.patch"
         OPTIONS
                       "GLSLANG_TESTS OFF"
              "GLSLANG_ENABLE_INSTALL OFF"
