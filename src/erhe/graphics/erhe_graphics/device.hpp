@@ -147,6 +147,18 @@ public:
     bool     uniform_and_storage_buffer_16bit_access{false};
     bool     storage_push_constant_16               {false};
     bool     storage_input_output_16                {false};
+
+    // Reflect VkPhysicalDeviceMultiviewFeatures (VK_KHR_multiview, promoted
+    // to Vulkan 1.1 core). Set when the corresponding feature was advertised
+    // by the physical device and enabled on VkDevice creation.
+    bool     multiview                              {false};
+    bool     multiview_geometry_shader              {false};
+    bool     multiview_tessellation_shader          {false};
+
+    // Reflect VkPhysicalDeviceMultiviewProperties (Vulkan 1.1 core). Spec
+    // minimum for max_multiview_view_count is 6.
+    uint32_t max_multiview_view_count               {0};
+    uint32_t max_multiview_instance_index           {0};
 #endif
 
     bool use_clip_control            {false};

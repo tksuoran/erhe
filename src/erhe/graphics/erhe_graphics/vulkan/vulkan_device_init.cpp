@@ -588,9 +588,19 @@ Device_impl::Device_impl(
         m_portability_subset_properties.pNext = m_driver_properties.pNext;
         m_driver_properties.pNext             = &m_portability_subset_properties;
     }
+    // VkPhysicalDeviceMultiviewProperties is core in Vulkan 1.1; chain
+    // unconditionally on a 1.1+ device. Kept local: spliced into the local
+    // physical_device_properties2.pNext, not into the m_driver_properties
+    // member, so its address does not outlive this function scope.
+    VkPhysicalDeviceMultiviewProperties query_multiview_properties{
+        .sType                     = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_PROPERTIES,
+        .pNext                     = &m_driver_properties,
+        .maxMultiviewViewCount     = 0,
+        .maxMultiviewInstanceIndex = 0,
+    };
     VkPhysicalDeviceProperties2 physical_device_properties2 {
         .sType      = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
-        .pNext      = &m_driver_properties,
+        .pNext      = &query_multiview_properties,
         .properties = {}
     };
     vkGetPhysicalDeviceProperties2(m_vulkan_physical_device, &physical_device_properties2);
@@ -611,6 +621,8 @@ Device_impl::Device_impl(
     log_context->info("  Device ID           = {:08x}",      properties.deviceID);
     log_context->info("  Device type         = {}",          c_str(properties.deviceType));
     log_context->info("  Device name         = {}",          properties.deviceName);
+    log_context->info("  maxMultiviewViewCount     = {}",    query_multiview_properties.maxMultiviewViewCount);
+    log_context->info("  maxMultiviewInstanceIndex = {}",    query_multiview_properties.maxMultiviewInstanceIndex);
     // Detach m_portability_subset_properties from the local property chain
     // so it stays a self-contained struct for downstream queries.
     m_portability_subset_properties.pNext = nullptr;
@@ -747,6 +759,21 @@ Device_impl::Device_impl(
     };
     {
         query_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&query_16bit_storage_features);
+        query_features_chain_last        = query_features_chain_last->pNext;
+    }
+
+    // VK_KHR_multiview, promoted to Vulkan 1.1 core. Aliases
+    // VkPhysicalDeviceVulkan11Features bits of the same name; safe to
+    // chain unconditionally on a 1.1+ device.
+    VkPhysicalDeviceMultiviewFeatures query_multiview_features{
+        .sType                        = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_FEATURES,
+        .pNext                        = nullptr,
+        .multiview                    = VK_FALSE,
+        .multiviewGeometryShader      = VK_FALSE,
+        .multiviewTessellationShader  = VK_FALSE,
+    };
+    {
+        query_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&query_multiview_features);
         query_features_chain_last        = query_features_chain_last->pNext;
     }
 
@@ -1100,6 +1127,32 @@ Device_impl::Device_impl(
     log_startup->info("  storagePushConstant16              = {}", query_16bit_storage_features.storagePushConstant16              == VK_TRUE);
     log_startup->info("  storageInputOutput16               = {}", query_16bit_storage_features.storageInputOutput16               == VK_TRUE);
 
+    VkPhysicalDeviceMultiviewFeatures set_multiview_features{
+        .sType                       = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_FEATURES,
+        .pNext                       = nullptr,
+        .multiview                   = query_multiview_features.multiview,
+        .multiviewGeometryShader     = query_multiview_features.multiviewGeometryShader,
+        .multiviewTessellationShader = query_multiview_features.multiviewTessellationShader,
+    };
+    if ((set_multiview_features.multiview                   == VK_TRUE) ||
+        (set_multiview_features.multiviewGeometryShader     == VK_TRUE) ||
+        (set_multiview_features.multiviewTessellationShader == VK_TRUE)) {
+        set_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&set_multiview_features);
+        set_features_chain_last        = set_features_chain_last->pNext;
+        if (set_multiview_features.multiview == VK_TRUE) {
+            log_debug->debug("Enabled feature multiview");
+        }
+        if (set_multiview_features.multiviewGeometryShader == VK_TRUE) {
+            log_debug->debug("Enabled feature multiviewGeometryShader");
+        }
+        if (set_multiview_features.multiviewTessellationShader == VK_TRUE) {
+            log_debug->debug("Enabled feature multiviewTessellationShader");
+        }
+    }
+    log_startup->info("  multiview                          = {}", query_multiview_features.multiview                   == VK_TRUE);
+    log_startup->info("  multiviewGeometryShader            = {}", query_multiview_features.multiviewGeometryShader     == VK_TRUE);
+    log_startup->info("  multiviewTessellationShader        = {}", query_multiview_features.multiviewTessellationShader == VK_TRUE);
+
     const VkDeviceCreateInfo device_create_info = {
         .sType                   = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
         .pNext                   = &set_device_features,
@@ -1287,6 +1340,11 @@ Device_impl::Device_impl(
     m_info.uniform_and_storage_buffer_16bit_access = (set_16bit_storage_features.uniformAndStorageBuffer16BitAccess == VK_TRUE);
     m_info.storage_push_constant_16                = (set_16bit_storage_features.storagePushConstant16              == VK_TRUE);
     m_info.storage_input_output_16                 = (set_16bit_storage_features.storageInputOutput16               == VK_TRUE);
+    m_info.multiview                               = (set_multiview_features.multiview                   == VK_TRUE);
+    m_info.multiview_geometry_shader               = (set_multiview_features.multiviewGeometryShader     == VK_TRUE);
+    m_info.multiview_tessellation_shader           = (set_multiview_features.multiviewTessellationShader == VK_TRUE);
+    m_info.max_multiview_view_count                = query_multiview_properties.maxMultiviewViewCount;
+    m_info.max_multiview_instance_index            = query_multiview_properties.maxMultiviewInstanceIndex;
 
     // Vulkan coordinate conventions
     m_info.coordinate_conventions.native_depth_range = erhe::math::Depth_range::zero_to_one;
