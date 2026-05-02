@@ -1044,17 +1044,37 @@ Device_impl::Device_impl(
         log_startup->info("  descriptorBindingSampledImageUpdateAfterBind = {}", di.descriptorBindingSampledImageUpdateAfterBind == VK_TRUE);
     }
 
+    // VkPhysicalDeviceVulkan11Features subsumes VkPhysicalDevice16BitStorageFeatures
+    // and VkPhysicalDeviceMultiviewFeatures (and several other 1.1-promoted
+    // feature structs). Per VUID-VkDeviceCreateInfo-pNext-02829, the chain
+    // must not include both the 1.1 Features struct AND any of the granular
+    // structs it subsumes - the spec disallows aliasing the same feature
+    // through two different paths. So we set the 16bit-storage and multiview
+    // flags directly on this struct and skip pushing the granular versions
+    // onto the chain below.
     VkPhysicalDeviceVulkan11Features set_vulkan_11_features{
-        .sType                = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES,
-        .pNext                = nullptr,
-        .shaderDrawParameters = query_vulkan_11_features.shaderDrawParameters,
+        .sType                              = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES,
+        .pNext                              = nullptr,
+        .storageBuffer16BitAccess           = query_16bit_storage_features.storageBuffer16BitAccess,
+        .uniformAndStorageBuffer16BitAccess = query_16bit_storage_features.uniformAndStorageBuffer16BitAccess,
+        .storagePushConstant16              = query_16bit_storage_features.storagePushConstant16,
+        .storageInputOutput16               = query_16bit_storage_features.storageInputOutput16,
+        .multiview                          = query_multiview_features.multiview,
+        .multiviewGeometryShader            = query_multiview_features.multiviewGeometryShader,
+        .multiviewTessellationShader        = query_multiview_features.multiviewTessellationShader,
+        .shaderDrawParameters               = query_vulkan_11_features.shaderDrawParameters,
     };
     {
         set_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&set_vulkan_11_features);
         set_features_chain_last        = set_features_chain_last->pNext;
-        if (set_vulkan_11_features.shaderDrawParameters == VK_TRUE) {
-            log_debug->debug("Enabled feature shaderDrawParameters");
-        }
+        if (set_vulkan_11_features.storageBuffer16BitAccess           == VK_TRUE) log_debug->debug("Enabled feature storageBuffer16BitAccess");
+        if (set_vulkan_11_features.uniformAndStorageBuffer16BitAccess == VK_TRUE) log_debug->debug("Enabled feature uniformAndStorageBuffer16BitAccess");
+        if (set_vulkan_11_features.storagePushConstant16              == VK_TRUE) log_debug->debug("Enabled feature storagePushConstant16");
+        if (set_vulkan_11_features.storageInputOutput16               == VK_TRUE) log_debug->debug("Enabled feature storageInputOutput16");
+        if (set_vulkan_11_features.multiview                          == VK_TRUE) log_debug->debug("Enabled feature multiview");
+        if (set_vulkan_11_features.multiviewGeometryShader            == VK_TRUE) log_debug->debug("Enabled feature multiviewGeometryShader");
+        if (set_vulkan_11_features.multiviewTessellationShader        == VK_TRUE) log_debug->debug("Enabled feature multiviewTessellationShader");
+        if (set_vulkan_11_features.shaderDrawParameters               == VK_TRUE) log_debug->debug("Enabled feature shaderDrawParameters");
     }
 
     VkPhysicalDeviceVulkan13Features set_vulkan_13_features{
@@ -1095,60 +1115,16 @@ Device_impl::Device_impl(
     log_startup->info("  shaderFloat16                  = {}", query_shader_float16_int8_features.shaderFloat16 == VK_TRUE);
     log_startup->info("  shaderInt8                     = {}", query_shader_float16_int8_features.shaderInt8    == VK_TRUE);
 
-    VkPhysicalDevice16BitStorageFeatures set_16bit_storage_features{
-        .sType                              = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_16BIT_STORAGE_FEATURES,
-        .pNext                              = nullptr,
-        .storageBuffer16BitAccess           = query_16bit_storage_features.storageBuffer16BitAccess,
-        .uniformAndStorageBuffer16BitAccess = query_16bit_storage_features.uniformAndStorageBuffer16BitAccess,
-        .storagePushConstant16              = query_16bit_storage_features.storagePushConstant16,
-        .storageInputOutput16               = query_16bit_storage_features.storageInputOutput16,
-    };
-    if ((set_16bit_storage_features.storageBuffer16BitAccess           == VK_TRUE) ||
-        (set_16bit_storage_features.uniformAndStorageBuffer16BitAccess == VK_TRUE) ||
-        (set_16bit_storage_features.storagePushConstant16              == VK_TRUE) ||
-        (set_16bit_storage_features.storageInputOutput16               == VK_TRUE)) {
-        set_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&set_16bit_storage_features);
-        set_features_chain_last        = set_features_chain_last->pNext;
-        if (set_16bit_storage_features.storageBuffer16BitAccess == VK_TRUE) {
-            log_debug->debug("Enabled feature storageBuffer16BitAccess");
-        }
-        if (set_16bit_storage_features.uniformAndStorageBuffer16BitAccess == VK_TRUE) {
-            log_debug->debug("Enabled feature uniformAndStorageBuffer16BitAccess");
-        }
-        if (set_16bit_storage_features.storagePushConstant16 == VK_TRUE) {
-            log_debug->debug("Enabled feature storagePushConstant16");
-        }
-        if (set_16bit_storage_features.storageInputOutput16 == VK_TRUE) {
-            log_debug->debug("Enabled feature storageInputOutput16");
-        }
-    }
+    // 16bit storage and multiview feature flags are folded into
+    // set_vulkan_11_features above; the granular VkPhysicalDevice16BitStorageFeatures
+    // and VkPhysicalDeviceMultiviewFeatures structs would alias the same
+    // feature bits and trip VUID-VkDeviceCreateInfo-pNext-02829, so we
+    // only log the queried availability here for parity with the other
+    // feature reports.
     log_startup->info("  storageBuffer16BitAccess           = {}", query_16bit_storage_features.storageBuffer16BitAccess           == VK_TRUE);
     log_startup->info("  uniformAndStorageBuffer16BitAccess = {}", query_16bit_storage_features.uniformAndStorageBuffer16BitAccess == VK_TRUE);
     log_startup->info("  storagePushConstant16              = {}", query_16bit_storage_features.storagePushConstant16              == VK_TRUE);
     log_startup->info("  storageInputOutput16               = {}", query_16bit_storage_features.storageInputOutput16               == VK_TRUE);
-
-    VkPhysicalDeviceMultiviewFeatures set_multiview_features{
-        .sType                       = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_FEATURES,
-        .pNext                       = nullptr,
-        .multiview                   = query_multiview_features.multiview,
-        .multiviewGeometryShader     = query_multiview_features.multiviewGeometryShader,
-        .multiviewTessellationShader = query_multiview_features.multiviewTessellationShader,
-    };
-    if ((set_multiview_features.multiview                   == VK_TRUE) ||
-        (set_multiview_features.multiviewGeometryShader     == VK_TRUE) ||
-        (set_multiview_features.multiviewTessellationShader == VK_TRUE)) {
-        set_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&set_multiview_features);
-        set_features_chain_last        = set_features_chain_last->pNext;
-        if (set_multiview_features.multiview == VK_TRUE) {
-            log_debug->debug("Enabled feature multiview");
-        }
-        if (set_multiview_features.multiviewGeometryShader == VK_TRUE) {
-            log_debug->debug("Enabled feature multiviewGeometryShader");
-        }
-        if (set_multiview_features.multiviewTessellationShader == VK_TRUE) {
-            log_debug->debug("Enabled feature multiviewTessellationShader");
-        }
-    }
     log_startup->info("  multiview                          = {}", query_multiview_features.multiview                   == VK_TRUE);
     log_startup->info("  multiviewGeometryShader            = {}", query_multiview_features.multiviewGeometryShader     == VK_TRUE);
     log_startup->info("  multiviewTessellationShader        = {}", query_multiview_features.multiviewTessellationShader == VK_TRUE);
@@ -1336,13 +1312,13 @@ Device_impl::Device_impl(
     m_info.use_clip_distance           = (qf.shaderClipDistance == VK_TRUE);
     m_info.shader_float16              = (set_shader_float16_int8_features.shaderFloat16 == VK_TRUE);
     m_info.shader_int8                 = (set_shader_float16_int8_features.shaderInt8    == VK_TRUE);
-    m_info.storage_buffer_16bit_access             = (set_16bit_storage_features.storageBuffer16BitAccess           == VK_TRUE);
-    m_info.uniform_and_storage_buffer_16bit_access = (set_16bit_storage_features.uniformAndStorageBuffer16BitAccess == VK_TRUE);
-    m_info.storage_push_constant_16                = (set_16bit_storage_features.storagePushConstant16              == VK_TRUE);
-    m_info.storage_input_output_16                 = (set_16bit_storage_features.storageInputOutput16               == VK_TRUE);
-    m_info.multiview                               = (set_multiview_features.multiview                   == VK_TRUE);
-    m_info.multiview_geometry_shader               = (set_multiview_features.multiviewGeometryShader     == VK_TRUE);
-    m_info.multiview_tessellation_shader           = (set_multiview_features.multiviewTessellationShader == VK_TRUE);
+    m_info.storage_buffer_16bit_access             = (set_vulkan_11_features.storageBuffer16BitAccess           == VK_TRUE);
+    m_info.uniform_and_storage_buffer_16bit_access = (set_vulkan_11_features.uniformAndStorageBuffer16BitAccess == VK_TRUE);
+    m_info.storage_push_constant_16                = (set_vulkan_11_features.storagePushConstant16              == VK_TRUE);
+    m_info.storage_input_output_16                 = (set_vulkan_11_features.storageInputOutput16               == VK_TRUE);
+    m_info.multiview                               = (set_vulkan_11_features.multiview                          == VK_TRUE);
+    m_info.multiview_geometry_shader               = (set_vulkan_11_features.multiviewGeometryShader            == VK_TRUE);
+    m_info.multiview_tessellation_shader           = (set_vulkan_11_features.multiviewTessellationShader        == VK_TRUE);
     m_info.max_multiview_view_count                = query_multiview_properties.maxMultiviewViewCount;
     m_info.max_multiview_instance_index            = query_multiview_properties.maxMultiviewInstanceIndex;
 
