@@ -374,6 +374,26 @@ auto Headset_view::get_headset_view_resources(erhe::xr::Render_view& render_view
     return *i;
 }
 
+auto Headset_view::get_multiview_view_resources(erhe::xr::Render_view& render_view) -> std::shared_ptr<Headset_view_resources>
+{
+    ERHE_PROFILE_FUNCTION();
+
+    const std::size_t slot = static_cast<std::size_t>(render_view.slot);
+    if (m_multiview_view_resources.size() <= slot) {
+        m_multiview_view_resources.resize(slot + 1);
+    }
+    std::shared_ptr<Headset_view_resources>& entry = m_multiview_view_resources[slot];
+    if (!entry) {
+        entry = std::make_shared<Headset_view_resources>(
+            *m_context.graphics_device,
+            render_view,
+            *this,
+            slot
+        );
+    }
+    return entry;
+}
+
 static constexpr std::string_view c_id_headset_clear{"HS clear"};
 static constexpr std::string_view c_id_headset_render_content{"HS render content"};
 
@@ -482,7 +502,7 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
             };
             erhe::scene::Camera* primary_camera = nullptr;
             for (erhe::xr::Render_view& render_view : frame.views) {
-                const std::shared_ptr<Headset_view_resources>& view_resources = get_headset_view_resources(render_view);
+                const std::shared_ptr<Headset_view_resources>& view_resources = get_multiview_view_resources(render_view);
                 if (!view_resources->is_valid()) {
                     return false;
                 }
