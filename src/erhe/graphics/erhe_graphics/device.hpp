@@ -310,6 +310,20 @@ public:
     // completion handlers. For init boundaries, not the steady-state loop.
     void wait_idle();
 
+    // Block CPU-side until end_frame() has signalled the device frame
+    // timeline at the given value, i.e. the GPU has fully retired the
+    // submit chain of the frame whose end_frame() ran with
+    // m_frame_index == frame_value. Used by the OpenXR end_frame path
+    // to ensure the previous frame's GPU work (in particular, the
+    // runtime's compositor command buffer that xrEndFrame queued just
+    // before our update_frame_completion submit) has retired before the
+    // current xrEndFrame triggers Meta's vkFreeCommandBuffers recycle
+    // on it -- without this, Meta's runtime hits
+    // VUID-vkFreeCommandBuffers-pCommandBuffers-00047 on Quest. Calls
+    // with frame_value below the timeline's initial value return
+    // immediately. No-op on non-Vulkan backends.
+    void wait_for_frame(uint64_t frame_value);
+
     // Tear down and rebuild the platform surface and its swapchain. Used
     // on Android when the activity returns from background with a new
     // ANativeWindow: the existing VkSurfaceKHR is destroyed, a fresh one

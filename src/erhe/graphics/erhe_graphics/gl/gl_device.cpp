@@ -1655,6 +1655,16 @@ auto Device_impl::is_in_swapchain_frame() const -> bool
     return m_state == Device_frame_state::in_swapchain_frame;
 }
 
+void Device_impl::wait_for_frame(const uint64_t frame_value)
+{
+    // The OpenXR Quest cb-lifecycle workaround targeted by this method is
+    // a Vulkan-only concern (Meta's runtime calls vkFreeCommandBuffers on
+    // its own per-application compositor command buffer at every
+    // xrEndFrame). The GL OpenXR binding does not share that codepath, so
+    // there is nothing to wait on here.
+    static_cast<void>(frame_value);
+}
+
 auto Device_impl::get_frame_index() const -> uint64_t
 {
     return m_frame_index;
