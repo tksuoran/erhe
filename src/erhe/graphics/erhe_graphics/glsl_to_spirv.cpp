@@ -23,10 +23,12 @@
 #include "glslang/Public/ResourceLimits.h"
 #include "glslang/Public/ShaderLang.h"
 #include <glslang/MachineIndependent/localintermediate.h>
+#include <glslang/build_info.h>
 #include <SPIRV/GlslangToSpv.h>
 #include <SPIRV/disassemble.h>
 
 #include <algorithm>
+#include <mutex>
 #include <sstream>
 
 namespace erhe::graphics {
@@ -101,6 +103,20 @@ Glslang_shader_stages::Glslang_shader_stages(Shader_stages_prototype_impl& shade
     : m_shader_stages_prototype{shader_stages_prototype}
     , m_cache{cache}
 {
+    // Log the linked glslang version once per process so we can confirm
+    // the SPIR-V we ship was produced by the version we pinned in
+    // CMakeLists.txt (and not, for example, served from a stale cache
+    // entry built by an earlier glslang).
+    static std::once_flag logged_glslang_version;
+    std::call_once(logged_glslang_version, []() {
+        log_program->info(
+            "glslang version: {}.{}.{}{}",
+            GLSLANG_VERSION_MAJOR,
+            GLSLANG_VERSION_MINOR,
+            GLSLANG_VERSION_PATCH,
+            GLSLANG_VERSION_FLAVOR
+        );
+    });
 }
 
 Glslang_shader_stages::~Glslang_shader_stages() noexcept = default;
