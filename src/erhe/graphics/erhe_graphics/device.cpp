@@ -8,16 +8,16 @@
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/compute_command_encoder.hpp"
 
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
 # include "erhe_graphics/gl/gl_device.hpp"
 #endif
-#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+#if defined(ERHE_GRAPHICS_API_VULKAN)
 # include "erhe_graphics/vulkan/vulkan_device.hpp"
 #endif
-#if defined(ERHE_GRAPHICS_LIBRARY_METAL)
+#if defined(ERHE_GRAPHICS_API_METAL)
 # include "erhe_graphics/metal/metal_device.hpp"
 #endif
-#if defined(ERHE_GRAPHICS_LIBRARY_NONE)
+#if defined(ERHE_GRAPHICS_API_NONE)
 # include "erhe_graphics/null/null_device.hpp"
 #endif
 
@@ -38,14 +38,14 @@ Device::Device(
     const Vulkan_external_creators* vulkan_external_creators
 )
     : m_device_message_callback{std::move(device_message_callback)}
-#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+#if defined(ERHE_GRAPHICS_API_VULKAN)
     , m_impl      {std::make_unique<Device_impl>(*this, surface_create_info, graphics_config, vulkan_external_creators)}
 #else
     , m_impl      {std::make_unique<Device_impl>(*this, surface_create_info, graphics_config)}
 #endif
     , m_spirv_cache{std::filesystem::path{"spirv_cache"}}
 {
-#if !defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+#if !defined(ERHE_GRAPHICS_API_VULKAN)
     static_cast<void>(vulkan_external_creators);
 #endif
 }

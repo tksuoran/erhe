@@ -54,7 +54,7 @@ Build output goes to `build/<presetName>/`.
 ### Linux
 
 ```bash
-cmake -B build -DERHE_GRAPHICS_LIBRARY=opengl -DERHE_WINDOW_LIBRARY=sdl ...
+cmake -B build -DERHE_GRAPHICS_API=opengl -DERHE_WINDOW_LIBRARY=sdl ...
 cmake --build build --target editor
 ```
 
@@ -64,7 +64,7 @@ Required packages: `libwayland-dev libxkbcommon-dev xorg-dev` (Ubuntu) or equiva
 
 | Option | Default | Notes |
 |--------|---------|-------|
-| `ERHE_GRAPHICS_LIBRARY` | - | `opengl`, `vulkan`, or `none` (headless) |
+| `ERHE_GRAPHICS_API` | - | `opengl`, `vulkan`, or `none` (headless) |
 | `ERHE_PHYSICS_LIBRARY` | `jolt` | `jolt` or `none` |
 | `ERHE_RAYTRACE_LIBRARY` | `bvh` | `bvh`, `tinybvh`, `embree`, or `none` (none uses GPU ID-buffer picking) |
 | `ERHE_PROFILE_LIBRARY` | `tracy` | `tracy`, `nvtx`, `superluminal`, or `none` |

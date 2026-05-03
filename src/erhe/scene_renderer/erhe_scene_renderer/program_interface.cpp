@@ -168,7 +168,7 @@ auto Program_interface::make_prototype(
             process_shader(erhe::graphics::Shader_type::compute_shader,  cs_path);
         }
         process_shader(erhe::graphics::Shader_type::fragment_shader, fs_path);
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
         process_shader(erhe::graphics::Shader_type::geometry_shader, gs_path);
 #endif
         process_shader(erhe::graphics::Shader_type::vertex_shader,   vs_path);

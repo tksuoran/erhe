@@ -124,13 +124,13 @@ public:
 
     int  glsl_version           {0};
 
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
     int  gl_version             {0};
     bool core_profile           {false};
     bool compatibility_profile  {false};
     bool forward_compatible     {false};
 #endif
-#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+#if defined(ERHE_GRAPHICS_API_VULKAN)
     uint32_t vulkan_api_version {0};
     uint32_t vulkan_driver_id   {0};
 

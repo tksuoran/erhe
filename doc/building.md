@@ -100,7 +100,7 @@ cmake --build build/OpenGL_Debug --target editor
 
 | Option | Description | Recognized values |
 | :--- | :--- | :--- |
-| `ERHE_GRAPHICS_LIBRARY` | Graphics backend | `opengl`, `none` (headless) |
+| `ERHE_GRAPHICS_API` | Graphics backend | `opengl`, `none` (headless) |
 | `ERHE_WINDOW_LIBRARY` | Window library | `sdl`, `none` (headless) |
 | `ERHE_PHYSICS_LIBRARY` | Physics library | `jolt`, `none` |
 | `ERHE_RAYTRACE_LIBRARY` | Raytrace library | `bvh`, `tinybvh`, `embree`, `none` |

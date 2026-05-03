@@ -1,6 +1,6 @@
 #include "erhe_graphics/vulkan/vulkan_metal_layer_mac.hpp"
 
-#if defined(ERHE_OS_MACOS) && defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+#if defined(ERHE_OS_MACOS) && defined(ERHE_GRAPHICS_API_VULKAN)
 
 #import <Cocoa/Cocoa.h>
 #import <QuartzCore/CAMetalLayer.h>

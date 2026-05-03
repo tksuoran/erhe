@@ -292,7 +292,7 @@ conditional:
 
 ```cmake
 if (ERHE_TARGET_OS_ANDROID)
-    set(ERHE_GRAPHICS_LIBRARY "vulkan" CACHE STRING "" FORCE)
+    set(ERHE_GRAPHICS_API "vulkan" CACHE STRING "" FORCE)
     set(ERHE_WINDOW_LIBRARY   "sdl"    CACHE STRING "" FORCE)
     if (ERHE_ANDROID_FLAVOR STREQUAL "quest")
         set(ERHE_XR_LIBRARY "openxr" CACHE STRING "" FORCE)

@@ -6,7 +6,7 @@
 #include "erhe_utility/bit_helpers.hpp"
 #include "erhe_verify/verify.hpp"
 
-#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+#if defined(ERHE_GRAPHICS_API_VULKAN)
 # include "volk.h"
 # include <vulkan/vk_platform.h>
 # include <vulkan/vulkan_core.h>
@@ -312,14 +312,14 @@ auto Xr_instance::create_instance() -> bool
 
     std::vector<const char*> enabled_extensions;
 
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
     enabled_extensions.push_back(XR_KHR_OPENGL_ENABLE_EXTENSION_NAME);
 //# if defined(ERHE_OS_LINUX)
 //    enabled_extensions.push_back(XR_KHR_OPENGL_WAYLAND_EXTENSION_NAME);
 //# endif
 #endif
 
-#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+#if defined(ERHE_GRAPHICS_API_VULKAN)
     if (!has_extension(XR_KHR_VULKAN_ENABLE2_EXTENSION_NAME)) {
         log_xr->error(
             XR_KHR_VULKAN_ENABLE2_EXTENSION_NAME
@@ -514,11 +514,11 @@ auto Xr_instance::create_instance() -> bool
         }
     }
 
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
     xrGetOpenGLGraphicsRequirementsKHR = get_proc_addr<PFN_xrGetOpenGLGraphicsRequirementsKHR>("xrGetOpenGLGraphicsRequirementsKHR");
 #endif
 
-#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+#if defined(ERHE_GRAPHICS_API_VULKAN)
     xrGetVulkanGraphicsRequirements2KHR = get_proc_addr<PFN_xrGetVulkanGraphicsRequirements2KHR>("xrGetVulkanGraphicsRequirements2KHR");
     xrCreateVulkanInstanceKHR           = get_proc_addr<PFN_xrCreateVulkanInstanceKHR          >("xrCreateVulkanInstanceKHR");
     xrGetVulkanGraphicsDevice2KHR       = get_proc_addr<PFN_xrGetVulkanGraphicsDevice2KHR      >("xrGetVulkanGraphicsDevice2KHR");
@@ -630,7 +630,7 @@ auto Xr_instance::get_xr_environment_blend_mode() const -> XrEnvironmentBlendMod
     return m_xr_environment_blend_mode;
 }
 
-#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+#if defined(ERHE_GRAPHICS_API_VULKAN)
 auto Xr_instance::make_vulkan_external_creators() const -> erhe::graphics::Vulkan_external_creators
 {
     erhe::graphics::Vulkan_external_creators creators;
