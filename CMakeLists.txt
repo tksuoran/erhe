@@ -695,12 +695,24 @@ else ()
 endif ()
 
 if (${ERHE_XR_LIBRARY} STREQUAL "openxr")
+    # Patch the core_validation API layer's codegen so that aliased
+    # XrStructureType values (e.g. XR_TYPE_GRAPHICS_BINDING_VULKAN2_KHR
+    # = XR_TYPE_GRAPHICS_BINDING_VULKAN_KHR) accept any one of the
+    # alias-introducing extensions, not just the canonical one. Without
+    # this, enabling only XR_KHR_vulkan_enable2 and passing
+    # XrGraphicsBindingVulkan2KHR triggers a spurious
+    # VUID-xrStructureTypeToString-value-parameter that any "warnings
+    # are fatal" debug callback escalates to an abort. See the patch
+    # file's header for the full write-up. Drop this once the upstream
+    # fix lands in OpenXR-SDK-Source.
     CPMAddPackage(
         NAME              OpenXR-SDK
-        VERSION           1.1.58
-        GIT_TAG           release-1.1.58
+        VERSION           1.1.59
+        GIT_TAG           release-1.1.59
         GIT_SHALLOW       TRUE
         GITHUB_REPOSITORY KhronosGroup/OpenXR-SDK-Source
+        PATCHES
+            "${CMAKE_CURRENT_LIST_DIR}/cmake/patches/openxr-sdk-validation-accept-aliased-extensions.patch"
         OPTIONS
             "BUILD_API_LAYERS ON"
                  "BUILD_TESTS OFF"
