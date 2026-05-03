@@ -1,8 +1,8 @@
 #include "xr/headset_view.hpp"
 
 #include "config/generated/editor_settings_config.hpp"
-#include "config/generated/headset_config.hpp"
-#include "config/generated/perf_settings_level.hpp"
+#include "erhe_xr/generated/headset_config.hpp"
+#include "erhe_xr/generated/perf_settings_level.hpp"
 #include "config/generated/viewport_config_data.hpp"
 #include "app_context.hpp"
 #include "erhe_imgui/windows/performance_window.hpp"

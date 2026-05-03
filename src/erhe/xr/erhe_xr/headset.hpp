@@ -31,7 +31,7 @@ public:
 class Headset final
 {
 public:
-    Headset(erhe::window::Context_window& context_window, const Xr_configuration& configuration);
+    Headset(erhe::window::Context_window& context_window, const Headset_config& configuration);
     ~Headset() noexcept;
 
     // Second-phase construction. Must be called after the graphics Device has been
@@ -63,7 +63,7 @@ public:
 
 private:
     erhe::window::Context_window& m_context_window;
-    Xr_configuration              m_configuration;
+    Headset_config                m_configuration;
     std::unique_ptr<Xr_instance>  m_xr_instance;
     std::unique_ptr<Xr_session >  m_xr_session;
 };

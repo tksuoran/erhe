@@ -171,7 +171,7 @@ and add a second phase:
 ```cpp
 class Headset {
 public:
-    Headset(erhe::window::Context_window&, const Xr_configuration&);
+    Headset(erhe::window::Context_window&, const Headset_config&);
     // Second phase. On the OpenGL backend this is a no-op wrapper around
     // the existing session constructor (the session can and should still
     // be built from the main-thread GL context). On Vulkan it must be
@@ -286,7 +286,7 @@ image lifetime is owned by the OpenXR swapchain and is released when
 `m_headset = std::make_unique<Headset>(...)` before `m_graphics_device`
 is created. Restructure to:
 
-1. Build `Xr_configuration` (unchanged).
+1. Build `Headset_config` (unchanged).
 2. Create `m_headset = std::make_unique<Headset>(*m_window.get(), configuration)`.
    With the new split from Step 4 this constructs only the `Xr_instance`.
 3. If `m_headset && m_headset->is_valid()` (Xr_instance ready) and the

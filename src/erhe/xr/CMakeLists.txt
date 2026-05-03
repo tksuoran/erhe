@@ -26,7 +26,32 @@ if (${ERHE_XR_LIBRARY} STREQUAL "openxr")
     )
 endif ()
 
-target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
+
+# Headset_config codegen. Headset_config lives here so Xr_session and other
+# erhe::xr code can include it directly. The serialize/deserialize .cpp files
+# are compiled in the editor target (alongside other simdjson users) to avoid
+# ABI mismatch from differing arch flags -- only the struct headers are
+# generated into this library.
+set(_xr_config_defs "${CMAKE_CURRENT_SOURCE_DIR}/definitions")
+set(_xr_config_out  "${CMAKE_CURRENT_BINARY_DIR}/erhe_xr/generated")
+
+erhe_codegen_generate(
+    TARGET          ${_target}
+    DEFINITIONS_DIR "${_xr_config_defs}"
+    OUTPUT_DIR      "${_xr_config_out}"
+    DEFINITIONS
+        "${_xr_config_defs}/headset_config.py"
+        "${_xr_config_defs}/perf_settings_level.py"
+)
+
+set(_xr_config_hpps
+    ${_xr_config_out}/headset_config.hpp
+    ${_xr_config_out}/perf_settings_level.hpp
+)
+set_source_files_properties(${_xr_config_hpps} PROPERTIES GENERATED TRUE)
+target_sources(${_target} PRIVATE ${_xr_config_hpps})
+source_group("codegen generated" FILES ${_xr_config_hpps})
 
 # TODO Use pimpl in Xr_instance to be able to replace PUBLIC with PRIVATE
 if (ERHE_TARGET_OS_WINDOWS)
@@ -82,6 +107,7 @@ target_compile_definitions(${_target} PRIVATE XR_API_LAYER_PATH="${OPENXR_BINARY
 # in both the GL and Vulkan branches.
 target_link_libraries(${_target}
     PUBLIC
+        erhe::codegen
         erhe::dataformat
         erhe::graphics
         erhe::window

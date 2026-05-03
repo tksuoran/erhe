@@ -8,7 +8,7 @@
 
 namespace erhe::xr {
 
-Headset::Headset(erhe::window::Context_window& context_window, const Xr_configuration& configuration)
+Headset::Headset(erhe::window::Context_window& context_window, const Headset_config& configuration)
     : m_context_window{context_window}
     , m_configuration {configuration}
 {
@@ -45,7 +45,7 @@ auto Headset::create_session(erhe::graphics::Device& graphics_device) -> bool
         *m_xr_instance.get(),
         m_context_window,
         graphics_device,
-        m_configuration.mirror_mode
+        m_configuration.openxr_mirror
     );
     return static_cast<bool>(m_xr_session);
 }

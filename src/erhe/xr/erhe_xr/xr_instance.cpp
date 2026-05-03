@@ -89,8 +89,8 @@ auto initialize_android_loader() -> bool
 #endif // XR_USE_PLATFORM_ANDROID
 
 Xr_instance::Xr_instance(
-    const Xr_configuration& configuration,
-    Message_callback        message_callback
+    const Headset_config& configuration,
+    Message_callback      message_callback
 )
     : m_configuration   {configuration}
     , m_message_callback{message_callback}
@@ -1509,7 +1509,7 @@ auto Xr_instance::attach_actions(const XrSession session) -> bool
     return true;
 }
 
-auto Xr_instance::get_configuration() const -> const Xr_configuration&
+auto Xr_instance::get_configuration() const -> const Headset_config&
 {
     return m_configuration;
 }
