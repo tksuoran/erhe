@@ -189,7 +189,8 @@ Operations::Operations(
     m_make_mesh_config.instance_count = scene_config.instance_count;
     m_make_mesh_config.instance_gap   = scene_config.instance_gap;
     m_make_mesh_config.object_scale   = scene_config.object_scale;
-    m_make_mesh_config.detail         = scene_config.detail;
+    // detail and mass_scale moved to per-command args in commands.json;
+    // the Operations UI uses Make_mesh_config defaults for them.
 
     m_hover_scene_view_subscription = app_message_bus.hover_scene_view.subscribe(
         [&](Hover_scene_view_message& message) {
