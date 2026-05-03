@@ -140,7 +140,11 @@ void Init_status_display::render_text_overlay(
             log_startup->info("Init: {}", line);
         }
 
-        m_text_renderer.render(encoder, xr_render_pass, viewport);
+        // Pass through multiview = (view_mask != 0). The multiview
+        // render pass broadcasts a single screen-space draw to every
+        // layer; the per-layer fallback (view_mask = 0) renders into
+        // one array slice at a time.
+        m_text_renderer.render(encoder, xr_render_pass, viewport, view_mask != 0u);
     }
 }
 
@@ -305,20 +309,26 @@ void Init_status_display::render_present_xr()
         if (timing.begin_ok) {
             erhe::xr::Xr_session* const session = m_headset->get_xr_session();
             const bool multiview_ok = (session != nullptr) && session->is_multiview_enabled();
-            // Init_status_display's multiview branch is currently disabled
-            // because Text_renderer builds its pipeline against a
-            // non-multiview render pass (view_mask = 0); drawing it into
-            // a multiview render pass trips
-            // VUID-vkCmdDraw-renderPass-02684 (render-pass /
-            // pipeline view-mask incompatibility). The per-eye path
-            // below works on every backend, including Vulkan + Quest.
-            // Flip kAllowMultiview to true once Text_renderer ships a
-            // multiview-aware pipeline variant.
-            constexpr bool kAllowMultiview = false;
+            // Text_renderer ships a multiview-compiled shader stages
+            // sibling when the editor is built with xr_max_view_count
+            // >= 2 (see Text_renderer ctor). Drive the true multiview
+            // branch when both the swapchain and Text_renderer support
+            // it; the per-layer fallback below is kept for builds that
+            // disable multiview at construction.
+            const bool kAllowMultiview = true;
             if (kAllowMultiview && timing.should_render && multiview_ok) {
                 auto callback = [this](const erhe::xr::Render_views_frame& frame, erhe::graphics::Command_buffer& views_cb) -> bool {
                     erhe::graphics::Texture* const color_texture         = frame.shared_color_texture;
-                    erhe::graphics::Texture* const depth_stencil_texture = frame.shared_depth_stencil_texture;
+                    // Skip depth on the init overlay: Text_renderer's
+                    // pipeline uses reverse-depth (compare op = greater)
+                    // and prints at z = 0 (NDC z = 0 = far in reverse
+                    // depth), which would always fail the depth test
+                    // against a cleared depth buffer. The overlay is
+                    // pure 2D and has nothing else competing for depth,
+                    // so dropping the depth attachment is the
+                    // narrowest fix and keeps Text_renderer's pipeline
+                    // unchanged.
+                    erhe::graphics::Texture* const depth_stencil_texture = nullptr;
                     if (color_texture == nullptr) {
                         return false;
                     }
@@ -349,7 +359,16 @@ void Init_status_display::render_present_xr()
                 // existing pipeline works because each pass is single-view.
                 auto callback = [this](const erhe::xr::Render_views_frame& frame, erhe::graphics::Command_buffer& views_cb) -> bool {
                     erhe::graphics::Texture* const color_texture         = frame.shared_color_texture;
-                    erhe::graphics::Texture* const depth_stencil_texture = frame.shared_depth_stencil_texture;
+                    // Skip depth on the init overlay: Text_renderer's
+                    // pipeline uses reverse-depth (compare op = greater)
+                    // and prints at z = 0 (NDC z = 0 = far in reverse
+                    // depth), which would always fail the depth test
+                    // against a cleared depth buffer. The overlay is
+                    // pure 2D and has nothing else competing for depth,
+                    // so dropping the depth attachment is the
+                    // narrowest fix and keeps Text_renderer's pipeline
+                    // unchanged.
+                    erhe::graphics::Texture* const depth_stencil_texture = nullptr;
                     if (color_texture == nullptr) {
                         return false;
                     }
@@ -376,8 +395,11 @@ void Init_status_display::render_present_xr()
                     if (view.color_texture == nullptr) {
                         return false;
                     }
+                    // Drop depth on the init overlay (see comment in the
+                    // multiview callback above for the reverse-depth /
+                    // compare-op rationale).
                     render_text_overlay(
-                        view_cb, view.color_texture, view.depth_stencil_texture,
+                        view_cb, view.color_texture, /*depth_stencil_texture*/ nullptr,
                         static_cast<int>(view.width), static_cast<int>(view.height),
                         0u, 0u, "Init_status_display (XR per-eye)"
                     );

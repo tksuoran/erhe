@@ -5,6 +5,7 @@
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/render_pass.hpp"
+#include "erhe_graphics/render_pipeline_state.hpp"
 #include "erhe_graphics/ring_buffer.hpp"
 #include "erhe_graphics/ring_buffer_range.hpp"
 #include "erhe_graphics/scoped_debug_group.hpp"
@@ -61,13 +62,57 @@ auto Text_renderer::build_shader_stages() -> erhe::graphics::Shader_stages_proto
     return prototype;
 }
 
+auto Text_renderer::build_multiview_shader_stages() -> erhe::graphics::Shader_stages_prototype
+{
+    using namespace erhe::graphics;
+
+    const auto shader_path = std::filesystem::path{"res"} / std::filesystem::path{"shaders"};
+    const std::filesystem::path vs_path = shader_path / std::filesystem::path{"text.vert"};
+    const std::filesystem::path fs_path = shader_path / std::filesystem::path{"text.frag"};
+    Shader_stages_create_info create_info{
+        .name             = "text_multiview",
+        .interface_blocks = m_use_buffer_texture
+            ? std::vector<const Shader_resource*>{ &m_projection_block }
+            : std::vector<const Shader_resource*>{ &m_projection_block, &m_vertex_ssbo_block },
+        .fragment_outputs = &m_fragment_outputs,
+        .vertex_format    = nullptr,
+        .shaders = {
+            { Shader_type::vertex_shader,   vs_path },
+            { Shader_type::fragment_shader, fs_path }
+        },
+        .bind_group_layout = &m_bind_group_layout,
+    };
+
+    if (m_use_buffer_texture) {
+        create_info.defines.emplace_back("ERHE_VERTEX_DATA_TEXTURE_BUFFER", "1");
+    }
+
+    // Inject GL_EXT_multiview, ERHE_MULTIVIEW, and `layout(num_views = N) in;`
+    // for the vertex stage. The text shaders themselves don't need any
+    // ERHE_MULTIVIEW branches because text content is identical across
+    // all views (orthographic screen-space projection), so the runtime
+    // simply broadcasts the same draw to every layer.
+    create_info.enable_multiview(static_cast<uint32_t>(m_max_view_count));
+
+    Shader_stages_prototype prototype{m_graphics_device, create_info};
+    prototype.compile_shaders();
+    prototype.link_program();
+    if (!prototype.is_valid()) {
+        log_startup->error("Text renderer multiview shader compilation failed");
+    }
+
+    return prototype;
+}
+
 Text_renderer::Text_renderer(
     erhe::graphics::Device&         graphics_device,
     erhe::graphics::Command_buffer& init_command_buffer,
     const bool                      enabled,
-    const int                       font_size
+    const int                       font_size,
+    const int                       max_view_count
 )
     : m_graphics_device          {graphics_device}
+    , m_max_view_count           {std::max(1, max_view_count)}
     , m_projection_block         {graphics_device, "projection", 0, erhe::graphics::Shader_resource::Type::uniform_block}
     , m_vertex_ssbo_block{
         graphics_device,
@@ -192,6 +237,13 @@ Text_renderer::Text_renderer(
     config.enabled   = enabled;
     config.font_size = font_size;
 
+    if (m_max_view_count >= 2) {
+        m_multiview_shader_stages.emplace(
+            graphics_device,
+            build_multiview_shader_stages()
+        );
+    }
+
     if (!config.enabled) {
         log_startup->info("Text renderer disabled due to config setting");
         return;
@@ -314,7 +366,12 @@ auto Text_renderer::measure(const std::string_view text) const -> erhe::ui::Rect
     return m_font ? m_font->measure(text) : erhe::ui::Rectangle{};
 }
 
-void Text_renderer::render(erhe::graphics::Render_command_encoder& encoder, const erhe::graphics::Render_pass& render_pass, erhe::math::Viewport viewport)
+void Text_renderer::render(
+    erhe::graphics::Render_command_encoder& encoder,
+    const erhe::graphics::Render_pass&      render_pass,
+    erhe::math::Viewport                    viewport,
+    const bool                              multiview
+)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -341,11 +398,34 @@ void Text_renderer::render(erhe::graphics::Render_command_encoder& encoder, cons
 
     encoder.set_viewport_rect(viewport.x, viewport.y, viewport.width, viewport.height);
     encoder.set_bind_group_layout(&m_bind_group_layout);
-    erhe::graphics::Render_pipeline* pipeline = m_pipeline.get_pipeline_for(render_pass.get_descriptor());
-    if (pipeline == nullptr) {
-        return;
+    if (multiview && m_multiview_shader_stages.has_value() && m_multiview_shader_stages->is_valid()) {
+        // Multiview path: bypass the Lazy_render_pipeline cache (which
+        // bakes the single-view shader_stages) and build a per-call
+        // pipeline state with the multiview-compiled shader stages.
+        // Mirrors Forward_renderer's multiview override path; the
+        // Vulkan pipeline cache keys on the multiview shader modules
+        // and the multiview render pass viewMask.
+        erhe::graphics::Render_pipeline_state temp_state{
+            erhe::graphics::Render_pipeline_data{
+                .debug_label          = m_pipeline.data.debug_label,
+                .shader_stages        = &m_multiview_shader_stages.value(),
+                .vertex_input         = m_pipeline.data.vertex_input,
+                .input_assembly       = m_pipeline.data.input_assembly,
+                .multisample          = m_pipeline.data.multisample,
+                .viewport_depth_range = m_pipeline.data.viewport_depth_range,
+                .rasterization        = m_pipeline.data.rasterization,
+                .depth_stencil        = m_pipeline.data.depth_stencil,
+                .color_blend          = m_pipeline.data.color_blend
+            }
+        };
+        encoder.set_render_pipeline_state(temp_state, &m_multiview_shader_stages.value());
+    } else {
+        erhe::graphics::Render_pipeline* pipeline = m_pipeline.get_pipeline_for(render_pass.get_descriptor());
+        if (pipeline == nullptr) {
+            return;
+        }
+        encoder.set_render_pipeline(*pipeline);
     }
-    encoder.set_render_pipeline(*pipeline);
     m_texture_heap->bind(encoder);
     // Bind the named scalar samplers explicitly. On Metal these are direct
     // [[texture(N)]] bindings; on Vulkan they are pushed via push descriptors.

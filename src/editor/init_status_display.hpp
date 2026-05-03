@@ -83,7 +83,7 @@ private:
     erhe::xr::Headset*                m_headset{nullptr};
     bool                              m_enabled{false};
     std::vector<std::string>          m_lines;
-    std::array<double, 4>             m_clear_color{0.01, 0.01, 0.01, 1.0};
+    std::array<double, 4>             m_clear_color{0.01, 0.02, 0.06, 1.0}; // very dark blue
 };
 
 } // namespace editor

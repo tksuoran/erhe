@@ -869,7 +869,8 @@ public:
                 *m_graphics_device.get(),
                 *m_app_context.current_command_buffer,
                 m_text_renderer_config.enabled,
-                m_text_renderer_config.font_size
+                m_text_renderer_config.font_size,
+                xr_max_view_count
             );
 
             // Stack-local: the status display is only useful during init,
