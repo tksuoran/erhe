@@ -2,7 +2,7 @@
     "presets": [
         {
             "name": "OpenXR",
-            "msaa_sample_count": 2,
+            "msaa_sample_count": 1,
             "shadow_enable": true,
             "shadow_resolution": 1024,
             "shadow_light_count": 1,
