@@ -43,7 +43,9 @@ Device::Device(
 #else
     , m_impl      {std::make_unique<Device_impl>(*this, surface_create_info, graphics_config)}
 #endif
+#if defined(ERHE_SPIRV)
     , m_spirv_cache{std::filesystem::path{"spirv_cache"}}
+#endif
 {
 #if !defined(ERHE_GRAPHICS_API_VULKAN)
     static_cast<void>(vulkan_external_creators);
@@ -197,10 +199,12 @@ auto Device::get_impl() const -> const Device_impl&
 {
     return *m_impl.get();
 }
+#if defined(ERHE_SPIRV)
 auto Device::get_spirv_cache() -> Spirv_cache&
 {
     return m_spirv_cache;
 }
+#endif
 void Device::set_shader_error_callback(Shader_error_callback callback)
 {
     m_shader_error_callback = std::move(callback);

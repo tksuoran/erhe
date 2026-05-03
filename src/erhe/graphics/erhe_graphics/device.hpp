@@ -3,7 +3,9 @@
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/ring_buffer_range.hpp"
 #include "erhe_graphics/shader_monitor.hpp"
-#include "erhe_graphics/spirv_cache.hpp"
+#if defined(ERHE_SPIRV)
+#   include "erhe_graphics/spirv_cache.hpp"
+#endif
 #include "erhe_graphics/surface.hpp"
 #include "erhe_graphics/generated/graphics_config.hpp"
 #include "erhe_math/math_util.hpp"
@@ -385,7 +387,9 @@ public:
     [[nodiscard]] auto get_graphics_config                () const -> const Graphics_config&;
     [[nodiscard]] auto get_impl                           () -> Device_impl&;
     [[nodiscard]] auto get_impl                           () const -> const Device_impl&;
+#if defined(ERHE_SPIRV)
     [[nodiscard]] auto get_spirv_cache                    () -> Spirv_cache&;
+#endif
     void               set_shader_error_callback          (Shader_error_callback callback);
     void               set_state_dump_callback            (State_dump_callback callback);
     void               set_trace_callback                 (Trace_callback callback);
@@ -406,7 +410,9 @@ public:
 private:
     Device_message_callback      m_device_message_callback{};
     std::unique_ptr<Device_impl> m_impl;
+#if defined(ERHE_SPIRV)
     Spirv_cache                  m_spirv_cache;
+#endif
     Shader_error_callback        m_shader_error_callback  {};
     State_dump_callback          m_state_dump_callback    {};
     Trace_callback               m_trace_callback         {};
