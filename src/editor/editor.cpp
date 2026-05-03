@@ -1747,7 +1747,9 @@ public:
         // execute happens later when Operation_stack::update() drains the
         // queue on the first tick, which is fine -- by then the per-frame
         // command buffer is open.
+        log_startup->info("Init: run_startup_script");
         run_startup_script();
+        log_startup->info("Init: run_startup_script done");
 
         // Close the init-time command buffer opened in the member init
         // list (or reseated by Init_status_display::render_present),
@@ -1755,16 +1757,20 @@ public:
         // upload + clear so the resources are ready for the main render
         // loop.
         ERHE_VERIFY(m_app_context.current_command_buffer != nullptr);
+        log_startup->info("Init: closing + submitting init command buffer");
         m_app_context.current_command_buffer->end();
         erhe::graphics::Command_buffer* init_cbs[] = { m_app_context.current_command_buffer };
         m_graphics_device->submit_command_buffers(std::span<erhe::graphics::Command_buffer* const>{init_cbs});
+        log_startup->info("Init: waiting for GPU to finish init work");
         m_graphics_device->wait_idle();
+        log_startup->info("Init: GPU idle reached");
         m_app_context.current_command_buffer = nullptr;
 
         // Advance the frame index so subsequent frames are paced on the
         // device timeline.
         const bool init_end_frame_ok = m_graphics_device->end_frame();
         ERHE_VERIFY(init_end_frame_ok);
+        log_startup->info("Init: editor ready, entering main loop");
 
         m_last_window_width  = m_window->get_width();
         m_last_window_height = m_window->get_height();
@@ -1958,6 +1964,8 @@ public:
 
         Scene_commands& sc = *m_app_context.scene_commands;
 
+        log_startup->info("commands.json: running startup script");
+
         for (simdjson::ondemand::value element : commands_array) {
             std::string                name;
             bool                       has_args{false};
@@ -2047,11 +2055,16 @@ public:
                 log_startup->warn("commands.json: command '{}' does not accept args; ignoring args block", name);
             }
 
+            log_startup->info("commands.json: invoking '{}'", name);
             const bool ok = command->try_call();
             if (!ok) {
                 log_startup->warn("commands.json: command '{}' returned false", name);
+            } else {
+                log_startup->info("commands.json: '{}' returned ok", name);
             }
         }
+
+        log_startup->info("commands.json: startup script complete");
     }
 
     void run()
