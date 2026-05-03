@@ -37,10 +37,19 @@ namespace erhe::renderer {
 class Debug_renderer_program_interface
 {
 public:
-    explicit Debug_renderer_program_interface(erhe::graphics::Device& graphics_device);
+    // max_view_count: size N of the cameras[N] array inside the view UBO.
+    // 1 = single-view (default). >= 2 = stereo / OpenXR multiview. The
+    // single-view callers always populate cameras[0] only and set
+    // view_count = 1 at runtime; multiview callers (added in Phase 2)
+    // populate all N entries. Mirrors Content_wide_line_renderer.
+    explicit Debug_renderer_program_interface(
+        erhe::graphics::Device& graphics_device,
+        int                     max_view_count = 1
+    );
 
     bool                                             use_compute{false};
     bool                                             use_geometry_shader{false};
+    int                                              max_view_count{1};
 
     erhe::graphics::Fragment_outputs                 fragment_outputs;
 
@@ -60,15 +69,29 @@ public:
     erhe::dataformat::Vertex_format                  line_vertex_format;
     std::unique_ptr<erhe::graphics::Shader_stages>   line_shader_stages;
 
-    std::unique_ptr<erhe::graphics::Shader_resource> view_block;
+    // View UBO. Layout:
+    //   ViewCamera cameras[max_view_count];   // per-eye camera
+    //   uint   view_count;                    // 1 single-view, N multiview
+    //   uint   stride_per_view;               // triangle vertices per eye
+    //   float  vp_y_sign;
+    //   float  _padding0;
+    std::unique_ptr<erhe::graphics::Shader_resource>   view_camera_struct;
+    std::unique_ptr<erhe::graphics::Shader_resource>   view_block;
     std::unique_ptr<erhe::graphics::Bind_group_layout> bind_group_layout;
-    std::size_t                                      clip_from_world_offset{0};
-    std::size_t                                      viewport_offset       {0};
-    std::size_t                                      fov_offset            {0};
+
+    // Offsets inside one ViewCamera entry (repeated max_view_count times
+    // at the start of view_block).
+    std::size_t                                      view_camera_clip_from_world_offset       {0};
+    std::size_t                                      view_camera_viewport_offset              {0};
+    std::size_t                                      view_camera_fov_offset                   {0};
+    std::size_t                                      view_camera_view_position_in_world_offset{0};
+    std::size_t                                      view_camera_stride                       {0};
+
+    // Offsets in view_block, after the cameras[] array.
+    std::size_t                                      view_count_offset     {0};
+    std::size_t                                      stride_per_view_offset{0};
     std::size_t                                      vp_y_sign_offset      {0};
     std::size_t                                      padding0_offset       {0};
-    std::size_t                                      padding1_offset       {0};
-    std::size_t                                      padding2_offset       {0};
 };
 
 class Primitive_renderer;
@@ -78,7 +101,14 @@ class Debug_renderer_config;
 class Debug_renderer
 {
 public:
-    explicit Debug_renderer(erhe::graphics::Device& graphics_device);
+    // max_view_count threads through to Debug_renderer_program_interface.
+    // Default 1 keeps existing single-view callers unchanged; pass >= 2
+    // for stereo / OpenXR multiview (added in Phase 2 of the multiview
+    // port - see doc/debug_renderer_multiview.md).
+    explicit Debug_renderer(
+        erhe::graphics::Device& graphics_device,
+        int                     max_view_count = 1
+    );
     ~Debug_renderer() noexcept;
 
     // Public API

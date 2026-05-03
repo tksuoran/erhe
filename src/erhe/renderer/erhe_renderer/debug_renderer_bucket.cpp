@@ -11,6 +11,8 @@
 #include "erhe_math/math_util.hpp"
 #include "erhe_verify/verify.hpp"
 
+#include <cstring>
+
 namespace erhe::renderer {
 
 using glm::mat4;
@@ -162,30 +164,39 @@ auto Debug_renderer_bucket::update_view_buffer(const View& view) -> erhe::graphi
 {
     const Debug_renderer_program_interface& program_interface = m_debug_renderer.get_program_interface();
     const erhe::graphics::Shader_resource&  view_block        = *program_interface.view_block.get();
-    erhe::graphics::Ring_buffer_range       view_buffer_range = m_view_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, view_block.get_size_bytes());
-    const auto                view_gpu_data     = view_buffer_range.get_span();
-    size_t                    view_write_offset = 0;
-    std::byte* const          start             = view_gpu_data.data();
-    const std::size_t         byte_count        = view_gpu_data.size_bytes();
-    const std::size_t         word_count        = byte_count / sizeof(float);
-    const std::span<float>    gpu_float_data {reinterpret_cast<float*   >(start), word_count};
-    const std::span<uint32_t> gpu_uint32_data{reinterpret_cast<uint32_t*>(start), word_count};
+    const std::size_t                       view_block_size   = view_block.get_size_bytes();
+    erhe::graphics::Ring_buffer_range       view_buffer_range = m_view_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, view_block_size);
+    const std::span<std::byte>              view_gpu_data     = view_buffer_range.get_span();
+
+    // Zero the whole block so unused cameras[k>0] entries (and any
+    // padding) read as zeros on the GPU. MoltenVK descriptor validation
+    // requires the bound range to cover the full block size; leaving
+    // tail bytes uninitialised here would expose ring-buffer leftovers
+    // from a prior frame to the shader.
+    std::memset(view_gpu_data.data(), 0, view_gpu_data.size_bytes());
 
     using erhe::graphics::write;
     using erhe::graphics::as_span;
-    write(view_gpu_data, program_interface.clip_from_world_offset, as_span(view.clip_from_world));
-    write(view_gpu_data, program_interface.viewport_offset,        as_span(view.viewport       ));
-    write(view_gpu_data, program_interface.fov_offset,             as_span(view.fov_sides      ));
+
+    // Single-view: populate cameras[0] only. Phase 2 will extend this
+    // to write all view_count entries when start_view supplies a
+    // multi-camera view.
+    write(view_gpu_data, program_interface.view_camera_clip_from_world_offset,        as_span(view.clip_from_world       ));
+    write(view_gpu_data, program_interface.view_camera_viewport_offset,               as_span(view.viewport              ));
+    write(view_gpu_data, program_interface.view_camera_fov_offset,                    as_span(view.fov_sides             ));
+    write(view_gpu_data, program_interface.view_camera_view_position_in_world_offset, as_span(view.view_position_in_world));
+
+    const uint32_t view_count_uint      = 1u;
+    const uint32_t stride_per_view_uint = 0u; // unused in single-view; Phase 2 fills this for multiview
+    write(view_gpu_data, program_interface.view_count_offset,      as_span(view_count_uint     ));
+    write(view_gpu_data, program_interface.stride_per_view_offset, as_span(stride_per_view_uint));
+
     const bool  top_left  = (m_graphics_device.get_info().coordinate_conventions.framebuffer_origin == erhe::math::Framebuffer_origin::top_left);
     const float vp_y_sign = top_left ? -1.0f : 1.0f;
-    const float zero      = 0.0f;
     write(view_gpu_data, program_interface.vp_y_sign_offset, as_span(vp_y_sign));
-    write(view_gpu_data, program_interface.padding0_offset,  as_span(zero));
-    write(view_gpu_data, program_interface.padding1_offset,  as_span(zero));
-    write(view_gpu_data, program_interface.padding2_offset,  as_span(zero));
+    // padding0 already zero-filled by the memset above.
 
-    view_write_offset += program_interface.view_block->get_size_bytes();
-    view_buffer_range.bytes_written(view_write_offset);
+    view_buffer_range.bytes_written(view_block_size);
     view_buffer_range.close();
     return view_buffer_range;
 }

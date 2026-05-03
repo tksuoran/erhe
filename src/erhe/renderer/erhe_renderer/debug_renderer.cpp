@@ -21,8 +21,12 @@
 
 namespace erhe::renderer {
 
-Debug_renderer_program_interface::Debug_renderer_program_interface(erhe::graphics::Device& graphics_device)
+Debug_renderer_program_interface::Debug_renderer_program_interface(
+    erhe::graphics::Device& graphics_device,
+    const int               max_view_count_arg
+)
     : use_compute{graphics_device.get_info().use_compute_shader}
+    , max_view_count{std::max(1, max_view_count_arg)}
     , fragment_outputs{
         erhe::graphics::Fragment_output{
             .name     = "out_color",
@@ -56,20 +60,36 @@ Debug_renderer_program_interface::Debug_renderer_program_interface(erhe::graphic
     line_vertex_struct->add_vec4("position_0");
     line_vertex_struct->add_vec4("color_0");
 
+    // View UBO layout:
+    //   ViewCamera cameras[max_view_count];   // per-eye camera
+    //   uint   view_count;                    // 1 single-view, N multiview
+    //   uint   stride_per_view;               // triangle vertices per eye
+    //   float  vp_y_sign;                     // coordinate convention
+    //   float  _padding0;                     // pad to 16-byte boundary
+    //
+    // Per-eye data is grouped into cameras[] so a future multiview
+    // compute shader can write one triangle slab per view in a single
+    // dispatch and the multiview vertex shader can index its SSBO read
+    // by gl_ViewIndex (Phase 2). In Phase 1, view_count is always 1 and
+    // cameras[0] is the only entry actually consumed.
+    view_camera_struct = std::make_unique<erhe::graphics::Shader_resource>(graphics_device, "DebugViewCamera");
+    view_camera_clip_from_world_offset        = view_camera_struct->add_mat4("clip_from_world"       )->get_offset_in_parent();
+    view_camera_viewport_offset               = view_camera_struct->add_vec4("viewport"              )->get_offset_in_parent();
+    view_camera_fov_offset                    = view_camera_struct->add_vec4("fov"                   )->get_offset_in_parent();
+    view_camera_view_position_in_world_offset = view_camera_struct->add_vec4("view_position_in_world")->get_offset_in_parent();
+    view_camera_stride                        = view_camera_struct->get_size_bytes();
+
     view_block = std::make_unique<erhe::graphics::Shader_resource>(
         graphics_device,
         "view",
         3,
         erhe::graphics::Shader_resource::Type::uniform_block
     );
-
-    clip_from_world_offset = view_block->add_mat4 ("clip_from_world")->get_offset_in_parent();
-    viewport_offset        = view_block->add_vec4 ("viewport"       )->get_offset_in_parent();
-    fov_offset             = view_block->add_vec4 ("fov"            )->get_offset_in_parent();
+    view_block->add_struct("cameras", view_camera_struct.get(), static_cast<std::size_t>(max_view_count));
+    view_count_offset      = view_block->add_uint ("view_count"     )->get_offset_in_parent();
+    stride_per_view_offset = view_block->add_uint ("stride_per_view")->get_offset_in_parent();
     vp_y_sign_offset       = view_block->add_float("vp_y_sign"      )->get_offset_in_parent();
     padding0_offset        = view_block->add_float("_padding0"      )->get_offset_in_parent();
-    padding1_offset        = view_block->add_float("_padding1"      )->get_offset_in_parent();
-    padding2_offset        = view_block->add_float("_padding2"      )->get_offset_in_parent();
 
     const auto shader_path = std::filesystem::path{"res"} / std::filesystem::path{"shaders"};
 
@@ -131,7 +151,7 @@ Debug_renderer_program_interface::Debug_renderer_program_interface(erhe::graphic
             const std::filesystem::path comp_path = shader_path / std::filesystem::path{"compute_before_line.comp"};
             Shader_stages_create_info create_info{
                 .name             = "compute_before_line",
-                .struct_types     = { line_vertex_struct.get(), triangle_vertex_struct.get() },
+                .struct_types     = { line_vertex_struct.get(), triangle_vertex_struct.get(), view_camera_struct.get() },
                 .interface_blocks = { line_vertex_buffer_block.get(), triangle_vertex_buffer_block.get(), view_block.get() },
                 .shaders          = { { Shader_type::compute_shader, comp_path }, },
                 .bind_group_layout = bind_group_layout.get(),
@@ -151,6 +171,7 @@ Debug_renderer_program_interface::Debug_renderer_program_interface(erhe::graphic
             const std::filesystem::path frag_path = shader_path / std::filesystem::path{"line_after_compute.frag"};
             Shader_stages_create_info create_info{
                 .name             = "line_after_compute",
+                .struct_types     = { view_camera_struct.get() },
                 .interface_blocks = { view_block.get() },
                 .fragment_outputs = &fragment_outputs,
                 .vertex_format    = &triangle_vertex_format,
@@ -182,6 +203,7 @@ Debug_renderer_program_interface::Debug_renderer_program_interface(erhe::graphic
         const std::filesystem::path frag_path = shader_path / std::filesystem::path{"line_simple.frag"};
         Shader_stages_create_info create_info{
             .name             = "line_simple",
+            .struct_types     = { view_camera_struct.get() },
             .interface_blocks = { view_block.get() },
             .fragment_outputs = &fragment_outputs,
             .vertex_format    = &line_vertex_format,
@@ -214,6 +236,7 @@ Debug_renderer_program_interface::Debug_renderer_program_interface(erhe::graphic
         const std::filesystem::path frag_path = shader_path / std::filesystem::path{"line_after_compute.frag"};
         Shader_stages_create_info create_info{
             .name             = "debug_line_geometry",
+            .struct_types     = { view_camera_struct.get() },
             .interface_blocks = { view_block.get() },
             .fragment_outputs = &fragment_outputs,
             .vertex_format    = &line_vertex_format,
@@ -232,9 +255,9 @@ Debug_renderer_program_interface::Debug_renderer_program_interface(erhe::graphic
     }
 }
 
-Debug_renderer::Debug_renderer(erhe::graphics::Device& graphics_device)
+Debug_renderer::Debug_renderer(erhe::graphics::Device& graphics_device, const int max_view_count)
     : m_graphics_device  {graphics_device}
-    , m_program_interface{graphics_device}
+    , m_program_interface{graphics_device, max_view_count}
     , m_vertex_input{
         graphics_device,
         erhe::graphics::Vertex_input_state_data::make(m_program_interface.triangle_vertex_format)
@@ -287,12 +310,14 @@ void Debug_renderer::begin_frame(
 {
     erhe::graphics::Scoped_debug_group debug_group{"Debug_renderer::begin_frame"};
 
-    const auto* camera_node = camera.get_node();
+    const erhe::scene::Node* camera_node = camera.get_node();
     ERHE_VERIFY(camera_node != nullptr);
 
     const erhe::scene::Camera_projection_transforms projection_transforms = camera.projection_transforms(viewport, true, erhe::math::Depth_range::zero_to_one, conventions);
     const glm::mat4                                 clip_from_world       = projection_transforms.clip_from_world.get_matrix();
     const erhe::scene::Projection::Fov_sides        fov_sides             = camera.projection()->get_fov_sides(viewport);
+    const glm::mat4                                 world_from_node       = camera_node->world_from_node();
+    const glm::vec4                                 view_position_in_world{world_from_node[3]};
 
     for (size_t i = 0, end = m_view_stack.size(); i < end; ++i) {
         m_view_stack.pop();
@@ -312,7 +337,8 @@ void Debug_renderer::begin_frame(
                 fov_sides.right,
                 fov_sides.up,
                 fov_sides.down
-            }
+            },
+            .view_position_in_world = view_position_in_world
         }
     );
 }
