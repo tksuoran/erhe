@@ -117,6 +117,14 @@ if (ERHE_TARGET_OS_ANDROID)
     set(ERHE_WINDOW_LIBRARY   "sdl"     CACHE STRING "" FORCE)
     if (ERHE_ANDROID_FLAVOR STREQUAL "quest")
         set(ERHE_XR_LIBRARY "openxr" CACHE STRING "" FORCE)
+        # Surfaces an ERHE_TARGET_QUEST_STANDALONE compile definition for
+        # code paths that need to work around behaviours specific to the
+        # Quest's on-device OpenXR runtime (Meta's libvrapiimpl.so). The
+        # define MUST NOT cover Quest builds reached via Meta Quest Link
+        # / Air Link or any desktop OpenXR runtime; those run as desktop
+        # builds where this CMake branch does not apply, so no extra
+        # guard is needed.
+        add_compile_definitions(ERHE_TARGET_QUEST_STANDALONE=1)
     else ()
         set(ERHE_XR_LIBRARY "none"   CACHE STRING "" FORCE)
     endif ()
