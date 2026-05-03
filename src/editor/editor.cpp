@@ -932,7 +932,7 @@ public:
             ERHE_TASK_HEADER(debug_renderer_task)
             {
                 ERHE_GET_GL_CONTEXT
-                m_debug_renderer = std::make_unique<erhe::renderer::Debug_renderer>(*m_graphics_device.get());
+                m_debug_renderer = std::make_unique<erhe::renderer::Debug_renderer>(*m_graphics_device.get(), xr_max_view_count);
             }
             ERHE_TASK_FOOTER( .name("Debug_renderer") );
 

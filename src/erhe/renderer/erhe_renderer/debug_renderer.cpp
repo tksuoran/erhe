@@ -143,7 +143,42 @@ Debug_renderer_program_interface::Debug_renderer_program_interface(
             *triangle_vertex_buffer_block.get()
         );
 
+        // Read-only sibling of triangle_vertex_buffer_block, mapped to
+        // the same descriptor binding (1) but declared readonly so the
+        // multiview vertex shader can declare it without colliding with
+        // the compute side's writeonly declaration. See
+        // content_wide_line_renderer for the same pattern.
+        triangle_vertex_buffer_read_block = std::make_unique<erhe::graphics::Shader_resource>(
+            graphics_device,
+            erhe::graphics::Shader_resource::Block_create_info{
+                .name          = "triangle_vertex_buffer",
+                .binding_point = 1,
+                .type          = erhe::graphics::Shader_resource::Type::shader_storage_block,
+                .readonly      = true
+            }
+        );
+        triangle_vertex_buffer_read_block->add_struct(
+            "vertices",
+            triangle_vertex_struct.get(),
+            erhe::graphics::Shader_resource::unsized_array
+        );
+
         bind_group_layout = make_bind_group_layout();
+
+        multiview_graphics_bind_group_layout = std::make_unique<erhe::graphics::Bind_group_layout>(
+            graphics_device,
+            erhe::graphics::Bind_group_layout_create_info{
+                .bindings = {
+                    {triangle_vertex_buffer_block->get_binding_point(), erhe::graphics::Binding_type::storage_buffer},
+                    {view_block->get_binding_point(),
+                        (view_block->get_type() == erhe::graphics::Shader_resource::Type::shader_storage_block)
+                            ? erhe::graphics::Binding_type::storage_buffer
+                            : erhe::graphics::Binding_type::uniform_buffer},
+                },
+                .debug_label       = "Debug renderer multiview graphics",
+                .uses_texture_heap = false
+            }
+        );
 
         using namespace erhe::graphics;
         // Compute shader
@@ -188,6 +223,52 @@ Debug_renderer_program_interface::Debug_renderer_program_interface(
                 graphics_device.get_shader_monitor().add(create_info, graphics_shader_stages.get());
             } else {
                 log_startup->error("Unable to load line_after_compute shader - check working directory '{}'", std::filesystem::current_path().string());
+            }
+        }
+
+        // Multiview graphics variant. Built only when max_view_count >= 2
+        // (which implies the device exposes multiview); single-view
+        // callers never invoke it. Phase 3 wires Headset_view's
+        // multiview callback to use this stage; until then it exists
+        // but is unreachable in production.
+        //
+        // The compute side does NOT need a multiview-specific variant:
+        // compute_before_line.comp's main() always loops `for (v <
+        // view.view_count)` and indexes view.cameras[v], so a single
+        // compiled compute program serves both paths -- the C++ side
+        // just writes the right view_count at runtime.
+        if (max_view_count >= 2) {
+            // Multiview graphics: vertex stage reads pre-transformed
+            // triangles from the read-only triangle SSBO (binding 1) at
+            // gl_VertexID + gl_ViewIndex * stride_per_view; fragment
+            // stage reads view.cameras[gl_ViewIndex].viewport.xy. The
+            // create_info has no vertex_format because the input
+            // assembler is not used; vertex_input is set to nullptr at
+            // pipeline construction time.
+            {
+                const std::filesystem::path vert_path = shader_path / std::filesystem::path{"line_after_compute.vert"};
+                const std::filesystem::path frag_path = shader_path / std::filesystem::path{"line_after_compute.frag"};
+                Shader_stages_create_info create_info{
+                    .name             = "line_after_compute_multiview",
+                    .struct_types     = { triangle_vertex_struct.get(), view_camera_struct.get() },
+                    .interface_blocks = { triangle_vertex_buffer_read_block.get(), view_block.get() },
+                    .fragment_outputs = &fragment_outputs,
+                    .no_vertex_input  = true, // multiview vert reads the SSBO, not the input assembler
+                    .shaders = {
+                        { Shader_type::vertex_shader,   vert_path },
+                        { Shader_type::fragment_shader, frag_path }
+                    },
+                    .bind_group_layout = multiview_graphics_bind_group_layout.get(),
+                };
+                create_info.enable_multiview(static_cast<uint32_t>(max_view_count));
+
+                Shader_stages_prototype prototype = build_shader_stages(graphics_device, create_info);
+                if (prototype.is_valid()) {
+                    multiview_graphics_shader_stages = std::make_unique<Shader_stages>(graphics_device, std::move(prototype));
+                    graphics_device.get_shader_monitor().add(create_info, multiview_graphics_shader_stages.get());
+                } else {
+                    log_startup->error("Unable to load multiview line_after_compute shader");
+                }
             }
         }
     }
@@ -289,14 +370,21 @@ Debug_renderer::~Debug_renderer() noexcept
 
 auto Debug_renderer::get(const Debug_renderer_config& config) -> Primitive_renderer
 {
+    auto start_active_view = [&](Debug_renderer_bucket& bucket) {
+        if (is_multiview_active()) {
+            bucket.start_view(std::span<const View>{m_multiview_views});
+        } else {
+            bucket.start_view(get_view());
+        }
+    };
     for (Debug_renderer_bucket& bucket : m_buckets) {
         if (bucket.match(config)) {
-            bucket.start_view(get_view());
+            start_active_view(bucket);
             return Primitive_renderer{*this, bucket};
         }
     }
     Debug_renderer_bucket& bucket = m_buckets.emplace_back(m_graphics_device, *this, config);
-    bucket.start_view(get_view());
+    start_active_view(bucket);
     return Primitive_renderer{*this, bucket};
 }
 
@@ -341,6 +429,47 @@ void Debug_renderer::begin_frame(
             .view_position_in_world = view_position_in_world
         }
     );
+
+    m_multiview_views.clear();
+}
+
+void Debug_renderer::begin_frame(
+    const erhe::math::Viewport                viewport,
+    std::span<const View>                     views,
+    const erhe::math::Coordinate_conventions& /*conventions*/
+)
+{
+    erhe::graphics::Scoped_debug_group debug_group{"Debug_renderer::begin_frame(multiview)"};
+
+    ERHE_VERIFY(static_cast<int>(views.size()) == m_program_interface.max_view_count);
+
+    // Reset both single-view and multiview state.
+    for (size_t i = 0, end = m_view_stack.size(); i < end; ++i) {
+        m_view_stack.pop();
+    }
+
+    // Push a representative single-view View (cameras[0]) so legacy
+    // single-camera Tool / Renderable submissions still work; the
+    // multiview UBO write path uses m_multiview_views directly. The
+    // shared (x, y, w, h) viewport rect goes into View::viewport so the
+    // single-view fallback keeps the multiview swapchain extent.
+    View representative = views.empty() ? View{} : views[0];
+    representative.viewport = glm::vec4{
+        static_cast<float>(viewport.x),
+        static_cast<float>(viewport.y),
+        static_cast<float>(viewport.width),
+        static_cast<float>(viewport.height)
+    };
+    push_view(representative);
+
+    m_multiview_views.assign(views.begin(), views.end());
+    // Multiview views share (x, y, w, h) with the swapchain, but each
+    // View carries its own clip_from_world, fov, and
+    // view_position_in_world. Force the shared viewport so the bucket
+    // does not pick up whatever the caller left in views[k].viewport.
+    for (View& v : m_multiview_views) {
+        v.viewport = representative.viewport;
+    }
 }
 
 void Debug_renderer::compute(erhe::graphics::Compute_command_encoder& command_encoder)
@@ -365,7 +494,12 @@ void Debug_renderer::compute(erhe::graphics::Compute_command_encoder& command_en
     // encoders, not within one).
 }
 
-void Debug_renderer::render(erhe::graphics::Render_command_encoder& encoder, const erhe::graphics::Render_pass& render_pass, const erhe::math::Viewport viewport)
+void Debug_renderer::render(
+    erhe::graphics::Render_command_encoder& encoder,
+    const erhe::graphics::Render_pass&      render_pass,
+    const erhe::math::Viewport              viewport,
+    const bool                              multiview
+)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -382,12 +516,12 @@ void Debug_renderer::render(erhe::graphics::Render_command_encoder& encoder, con
 
     // Draw hidden
     for (Debug_renderer_bucket& bucket : m_buckets) {
-        bucket.render(encoder, render_pass, true, false);
+        bucket.render(encoder, render_pass, true, false, multiview);
     }
 
     // Draw visible
     for (Debug_renderer_bucket& bucket : m_buckets) {
-        bucket.render(encoder, render_pass, false, true);
+        bucket.render(encoder, render_pass, false, true, multiview);
     }
 }
 
@@ -396,6 +530,7 @@ void Debug_renderer::end_frame()
     for (Debug_renderer_bucket& bucket : m_buckets) {
         bucket.release_buffers();
     }
+    m_multiview_views.clear();
 }
 
 } // namespace erhe::renderer
