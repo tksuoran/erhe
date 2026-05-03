@@ -200,10 +200,11 @@ private:
     // Latched at construction from Xr_session::is_multiview_enabled().
     // When true, render_headset() drives Xr_session::render_frame_multiview()
     // (single shared layered swapchain, single render pass with view_mask =
-    // 0b11) instead of the per-eye render_frame() loop. Currently the
-    // multiview callback only clears the layered target -- forward / line
-    // rendering through the multiview pipeline pair lands in a follow-up
-    // commit (see doc/multiview.md "A. Pipeline pair strategy").
+    // 0b11) instead of the per-eye render_frame() loop. The multiview
+    // callback drives forward composition, content wide lines, and
+    // debug lines through the multiview pipeline pair so all three
+    // appear in both eyes from one render pass; mirror mode and ID
+    // rendering are still gated to the per-eye path.
     bool                                                 m_use_multiview{false};
     erhe::xr::Frame_timing                               m_frame_timing{};
     uint64_t                                             m_frame_number{0};

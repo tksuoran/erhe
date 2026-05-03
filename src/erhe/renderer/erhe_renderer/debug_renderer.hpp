@@ -40,10 +40,11 @@ class Debug_renderer_program_interface
 {
 public:
     // max_view_count: size N of the cameras[N] array inside the view UBO.
-    // 1 = single-view (default). >= 2 = stereo / OpenXR multiview. The
-    // single-view callers always populate cameras[0] only and set
-    // view_count = 1 at runtime; multiview callers (added in Phase 2)
-    // populate all N entries. Mirrors Content_wide_line_renderer.
+    // 1 = single-view (default). >= 2 = stereo / OpenXR multiview.
+    // Single-view callers populate cameras[0] only and set view_count
+    // = 1 at runtime; multiview callers populate all N entries.
+    // Mirrors Content_wide_line_renderer; see
+    // doc/debug_renderer_multiview.md for the full layout.
     explicit Debug_renderer_program_interface(
         erhe::graphics::Device& graphics_device,
         int                     max_view_count = 1
@@ -136,9 +137,8 @@ class Debug_renderer
 {
 public:
     // max_view_count threads through to Debug_renderer_program_interface.
-    // Default 1 keeps existing single-view callers unchanged; pass >= 2
-    // for stereo / OpenXR multiview (added in Phase 2 of the multiview
-    // port - see doc/debug_renderer_multiview.md).
+    // Default 1 keeps single-view callers unchanged; pass >= 2 for
+    // stereo / OpenXR multiview. See doc/debug_renderer_multiview.md.
     explicit Debug_renderer(
         erhe::graphics::Device& graphics_device,
         int                     max_view_count = 1
@@ -152,12 +152,10 @@ public:
         const erhe::scene::Camera&                camera,
         const erhe::math::Coordinate_conventions& conventions = erhe::math::Coordinate_conventions{}
     );
-    // Multiview overload (Phase 2 -- exists but not yet used by any
-    // caller; Phase 3 wires it into Headset_view::multiview_callback).
-    // `views` size must equal max_view_count from construction. The
-    // shared `viewport` matches the multiview swapchain extent (same
-    // (w, h) for both eyes); per-eye projection differences are
-    // captured in each View's clip_from_world.
+    // Multiview overload. `views` size must equal max_view_count from
+    // construction. The shared `viewport` matches the multiview
+    // swapchain extent (same (w, h) for every eye); per-eye projection
+    // differences are captured in each View's clip_from_world.
     void begin_frame(
         erhe::math::Viewport                      viewport,
         std::span<const View>                     views,

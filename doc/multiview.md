@@ -308,38 +308,7 @@ per-eye stereo parallax. The full chain is exercised:
 
 ## Remaining work
 
-### A. Wide-line + debug-line per-view-strided compute (Option D)
-
-The remaining gap is the line / debug-line render path. Today the
-headset multiview callback drives `App_rendering::render_composer()`
-only, which covers material draws but skips
-`Content_wide_line_renderer`, `Debug_renderer`, and the tool
-overlay. Wiring those into the multiview path requires:
-
-- View UBO in `Content_wide_line_renderer` and `Debug_renderer`
-  becomes `view[max_view_count]`.
-- Triangle SSBO sized for `max_view_count * line_count * 6`
-  vertices, laid out `[view][line][vertex]`.
-- `compute_before_line.comp` and `compute_before_content_line.comp`
-  loop over `view[]` (or unroll for stereo) and write each view's
-  output to its stride.
-- Line draw vertex shaders (`line_after_compute.vert`,
-  `content_line_after_compute.{vert,frag}`, `edge_lines.vert`,
-  `wide_lines.vert`, `debug_line.vert`) compile a multiview variant
-  that indexes the triangle SSBO by `gl_VertexID + gl_ViewIndex *
-  stride_per_view`. The pipeline-pair plumbing
-  (`Render_pipeline_create_info::multiview_shader_stages`) is
-  already in place and ready to receive these.
-- CPU dispatch sites stop looping per view and dispatch once per
-  primitive group.
-- `Headset_view::render_headset()` multiview callback adds the
-  line / debug-line dispatches (and tools overlay) inside the
-  layered render pass.
-
-Output is bit-identical to the current per-view path at
-`view_count = 1`.
-
-### B. Cyclopean shadow fit on the headset multiview path
+### A. Cyclopean shadow fit on the headset multiview path
 
 `Light_projections` already supports a cyclopean fit (see
 "Shadow / light buffer" above), but the headset multiview

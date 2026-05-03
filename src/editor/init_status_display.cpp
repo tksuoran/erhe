@@ -309,14 +309,13 @@ void Init_status_display::render_present_xr()
         if (timing.begin_ok) {
             erhe::xr::Xr_session* const session = m_headset->get_xr_session();
             const bool multiview_ok = (session != nullptr) && session->is_multiview_enabled();
-            // Text_renderer ships a multiview-compiled shader stages
-            // sibling when the editor is built with xr_max_view_count
-            // >= 2 (see Text_renderer ctor). Drive the true multiview
-            // branch when both the swapchain and Text_renderer support
-            // it; the per-layer fallback below is kept for builds that
-            // disable multiview at construction.
-            const bool kAllowMultiview = true;
-            if (kAllowMultiview && timing.should_render && multiview_ok) {
+            if (timing.should_render && multiview_ok) {
+                // Multiview path. Text_renderer ships a multiview-
+                // compiled shader stages sibling when the editor is
+                // built with xr_max_view_count >= 2; both branches in
+                // Text_renderer::render hold the same single ortho
+                // projection so a single draw broadcasts to every
+                // layer.
                 auto callback = [this](const erhe::xr::Render_views_frame& frame, erhe::graphics::Command_buffer& views_cb) -> bool {
                     erhe::graphics::Texture* const color_texture         = frame.shared_color_texture;
                     // Skip depth on the init overlay: Text_renderer's
@@ -325,9 +324,8 @@ void Init_status_display::render_present_xr()
                     // depth), which would always fail the depth test
                     // against a cleared depth buffer. The overlay is
                     // pure 2D and has nothing else competing for depth,
-                    // so dropping the depth attachment is the
-                    // narrowest fix and keeps Text_renderer's pipeline
-                    // unchanged.
+                    // so dropping the depth attachment is the narrowest
+                    // fix and keeps Text_renderer's pipeline unchanged.
                     erhe::graphics::Texture* const depth_stencil_texture = nullptr;
                     if (color_texture == nullptr) {
                         return false;
@@ -346,43 +344,6 @@ void Init_status_display::render_present_xr()
                 // caller's job to call Device::end_frame() to balance
                 // the wait_frame() / get_command_buffer() pair the
                 // editor opened before this constructor body ran.
-                const bool xr_end_ok = m_graphics_device.end_frame();
-                ERHE_VERIFY(xr_end_ok);
-            } else if (timing.should_render && multiview_ok) {
-                // Multiview swapchain available, but multiview rendering
-                // disabled (kAllowMultiview false above; Text_renderer's
-                // pipeline is not multiview-compatible). Acquire the
-                // shared multiview swapchain and render each eye into
-                // its own array layer with a separate non-multiview
-                // (view_mask = 0) render pass. Same swapchain submission
-                // shape as the multiview path, but Text_renderer's
-                // existing pipeline works because each pass is single-view.
-                auto callback = [this](const erhe::xr::Render_views_frame& frame, erhe::graphics::Command_buffer& views_cb) -> bool {
-                    erhe::graphics::Texture* const color_texture         = frame.shared_color_texture;
-                    // Skip depth on the init overlay: Text_renderer's
-                    // pipeline uses reverse-depth (compare op = greater)
-                    // and prints at z = 0 (NDC z = 0 = far in reverse
-                    // depth), which would always fail the depth test
-                    // against a cleared depth buffer. The overlay is
-                    // pure 2D and has nothing else competing for depth,
-                    // so dropping the depth attachment is the
-                    // narrowest fix and keeps Text_renderer's pipeline
-                    // unchanged.
-                    erhe::graphics::Texture* const depth_stencil_texture = nullptr;
-                    if (color_texture == nullptr) {
-                        return false;
-                    }
-                    for (std::size_t i = 0; i < frame.views.size(); ++i) {
-                        render_text_overlay(
-                            views_cb, color_texture, depth_stencil_texture,
-                            static_cast<int>(frame.width), static_cast<int>(frame.height),
-                            0u, static_cast<unsigned int>(i),
-                            "Init_status_display (XR multiview per-layer)"
-                        );
-                    }
-                    return true;
-                };
-                xr_rendered = m_headset->render_multiview(*init_cb, callback);
                 const bool xr_end_ok = m_graphics_device.end_frame();
                 ERHE_VERIFY(xr_end_ok);
             } else if (timing.should_render) {

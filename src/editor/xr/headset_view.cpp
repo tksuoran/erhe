@@ -477,12 +477,10 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
     // 1, builds per-view Camera_view_inputs, and drives composer.render
     // once. Pipelines pick their multiview_shader_stages sibling so
     // gl_ViewIndex resolves and each eye reads its own camera entry
-    // from cameras[gl_ViewIndex].
-    //
-    // Tools / debug-line rendering are not on the multiview path yet --
-    // they need the same pipeline-pair / per-view-strided refactor (see
-    // doc/multiview.md "Remaining work"). Mirror mode and ID rendering
-    // are also skipped under multiview.
+    // from cameras[gl_ViewIndex]. Content_wide_line_renderer and
+    // Debug_renderer feed the same multiview pass via per-view-strided
+    // compute (see doc/debug_renderer_multiview.md). Mirror mode and
+    // ID rendering are still skipped under multiview.
     if (m_frame_timing.should_render && m_use_multiview) {
         auto multiview_callback = [this](const erhe::xr::Render_views_frame& frame_in, erhe::graphics::Command_buffer& views_cb) -> bool {
             erhe::graphics::Texture* color_texture         = frame_in.shared_color_texture;
