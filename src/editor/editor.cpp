@@ -877,25 +877,29 @@ public:
             // Init_status_display takes a reference to
             // m_app_context.current_command_buffer so its render_present()
             // can reseat the pointer after driving a swapchain frame for
-            // the loading screen.
-            // OpenXR mode for Init_status_display is intentionally
-            // disabled here: parallel init's init_message callbacks
-            // fire from taskflow worker threads, but the OpenXR
-            // session APIs (xrPollEvent / xrWaitFrame / xrBeginFrame /
-            // xrEndFrame) are not thread-safe and must be driven from
-            // a single thread (the editor's main thread, post-init).
-            // Routing them through render_present_xr from worker
-            // threads would race with the main thread's session use
-            // once the editor enters its main loop. Until we have a
-            // single-threaded init path or a posted-message variant,
-            // OpenXR builds rely on adb logcat for init progress.
+            // the loading screen. When a Headset is supplied,
+            // render_present_xr drives an OpenXR frame instead of the
+            // desktop swapchain. Note: parallel init's init_message
+            // callbacks fire from taskflow worker threads. The main
+            // thread is blocked in taskflow.run() throughout, so only
+            // the worker threads touch the XR session here -- but
+            // concurrent set_line() calls from multiple workers are
+            // serialized only by the lack of contention in practice;
+            // adding a mutex around set_line is the right fix if that
+            // ever changes.
+            erhe::xr::Headset* const init_status_headset =
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+                m_headset.get();
+#else
+                nullptr;
+#endif
             Init_status_display init_status_display{
                 *m_graphics_device.get(),
                 m_app_context.current_command_buffer,
                 *m_window.get(),
                 *m_text_renderer.get(),
-                !m_app_context.OpenXR,
-                nullptr
+                true,
+                init_status_headset
             };
 
             init_status_display.set_line(0, "Initializing erhe editor...");

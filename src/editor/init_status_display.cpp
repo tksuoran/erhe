@@ -12,6 +12,7 @@
 #include "erhe_math/viewport.hpp"
 #include "erhe_renderer/text_renderer.hpp"
 #include "erhe_ui/rectangle.hpp"
+#include "erhe_utility/debug_label.hpp"
 #include "erhe_verify/verify.hpp"
 #include "erhe_window/window.hpp"
 #if defined(ERHE_XR_LIBRARY_OPENXR)
@@ -31,8 +32,6 @@ namespace editor {
 namespace {
 
 constexpr uint32_t c_text_color_abgr = 0xFFFFFFFFu; // opaque white
-
-constexpr std::array<double, 4> c_clear_color{0.01, 0.01, 0.01, 1.0};
 
 } // namespace
 
@@ -62,6 +61,87 @@ void Init_status_display::set_line(const std::size_t line_index, const std::stri
     }
     m_lines.at(line_index) = text;
     render_present();
+}
+
+void Init_status_display::set_clear_color(const std::array<double, 4> color)
+{
+    m_clear_color = color;
+}
+
+void Init_status_display::render_text_overlay(
+    erhe::graphics::Command_buffer& command_buffer,
+    erhe::graphics::Texture* const  color_texture,
+    erhe::graphics::Texture* const  depth_stencil_texture,
+    const int                       width,
+    const int                       height,
+    const unsigned int              view_mask,
+    const unsigned int              texture_layer,
+    const char* const               debug_label
+)
+{
+    erhe::graphics::Render_pass_descriptor render_pass_descriptor{};
+    render_pass_descriptor.color_attachments[0].texture       = color_texture;
+    render_pass_descriptor.color_attachments[0].texture_layer = texture_layer;
+    render_pass_descriptor.color_attachments[0].load_action   = erhe::graphics::Load_action::Clear;
+    render_pass_descriptor.color_attachments[0].store_action  = erhe::graphics::Store_action::Store;
+    render_pass_descriptor.color_attachments[0].usage_before  = erhe::graphics::Image_usage_flag_bit_mask::color_attachment;
+    render_pass_descriptor.color_attachments[0].layout_before = erhe::graphics::Image_layout::color_attachment_optimal;
+    render_pass_descriptor.color_attachments[0].usage_after   = erhe::graphics::Image_usage_flag_bit_mask::color_attachment;
+    render_pass_descriptor.color_attachments[0].layout_after  = erhe::graphics::Image_layout::color_attachment_optimal;
+    render_pass_descriptor.color_attachments[0].clear_value   = m_clear_color;
+    if (depth_stencil_texture != nullptr) {
+        render_pass_descriptor.depth_attachment.texture       = depth_stencil_texture;
+        render_pass_descriptor.depth_attachment.texture_layer = texture_layer;
+        render_pass_descriptor.depth_attachment.load_action   = erhe::graphics::Load_action::Clear;
+        render_pass_descriptor.depth_attachment.store_action  = erhe::graphics::Store_action::Store;
+        render_pass_descriptor.depth_attachment.usage_before  = erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment;
+        render_pass_descriptor.depth_attachment.layout_before = erhe::graphics::Image_layout::depth_stencil_attachment_optimal;
+        render_pass_descriptor.depth_attachment.usage_after   = erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment;
+        render_pass_descriptor.depth_attachment.layout_after  = erhe::graphics::Image_layout::depth_stencil_attachment_optimal;
+    }
+    render_pass_descriptor.render_target_width  = width;
+    render_pass_descriptor.render_target_height = height;
+    render_pass_descriptor.view_mask            = view_mask;
+    render_pass_descriptor.debug_label          = erhe::utility::Debug_label{std::string_view{debug_label}};
+
+    erhe::graphics::Render_pass            xr_render_pass{m_graphics_device, render_pass_descriptor};
+    erhe::graphics::Render_command_encoder encoder = m_graphics_device.make_render_command_encoder(command_buffer);
+    {
+        erhe::graphics::Scoped_render_pass scoped{xr_render_pass, command_buffer};
+
+        encoder.set_viewport_rect(0, 0, width, height);
+        encoder.set_scissor_rect (0, 0, width, height);
+
+        const erhe::math::Viewport viewport{0, 0, width, height};
+
+        const float       font_size   = m_text_renderer.font_size();
+        const float       line_height = font_size * 1.5f;
+        const float       center_y    = static_cast<float>(height) * 0.5f;
+        const std::size_t line_count  = m_lines.size();
+
+        const bool top_left = (
+            m_graphics_device.get_info().coordinate_conventions.framebuffer_origin
+            == erhe::math::Framebuffer_origin::top_left
+        );
+        const float dir = top_left ? +1.0f : -1.0f;
+
+        for (std::size_t i = 0; i < line_count; ++i) {
+            const std::string& line = m_lines[i];
+            if (line.empty()) {
+                continue;
+            }
+            const erhe::ui::Rectangle bounds = m_text_renderer.measure(line);
+            const float text_width  = static_cast<float>(bounds.size().x);
+            const float x           = (static_cast<float>(width) - text_width) * 0.5f;
+            const float offset_from_center =
+                (static_cast<float>(i) - (static_cast<float>(line_count - 1) * 0.5f)) * line_height;
+            const float y = center_y + dir * (offset_from_center + line_height * 0.5f);
+            m_text_renderer.print(glm::vec3{x, y, 0.0f}, c_text_color_abgr, line);
+            log_startup->info("Init: {}", line);
+        }
+
+        m_text_renderer.render(encoder, xr_render_pass, viewport);
+    }
 }
 
 void Init_status_display::render_present()
@@ -129,7 +209,7 @@ void Init_status_display::render_present_desktop()
         erhe::graphics::Render_pass_descriptor render_pass_descriptor{};
         render_pass_descriptor.swapchain                          = swapchain;
         render_pass_descriptor.color_attachments[0].load_action   = erhe::graphics::Load_action::Clear;
-        render_pass_descriptor.color_attachments[0].clear_value   = c_clear_color;
+        render_pass_descriptor.color_attachments[0].clear_value   = m_clear_color;
         render_pass_descriptor.color_attachments[0].usage_before  = erhe::graphics::Image_usage_flag_bit_mask::present;
         render_pass_descriptor.color_attachments[0].layout_before = erhe::graphics::Image_layout::present_src;
         render_pass_descriptor.color_attachments[0].usage_after   = erhe::graphics::Image_usage_flag_bit_mask::present;
@@ -224,77 +304,29 @@ void Init_status_display::render_present_xr()
         const erhe::xr::Frame_timing timing = m_headset->begin_frame_();
         if (timing.begin_ok) {
             erhe::xr::Xr_session* const session = m_headset->get_xr_session();
-            if (timing.should_render && (session != nullptr) && session->is_multiview_enabled()) {
+            const bool multiview_ok = (session != nullptr) && session->is_multiview_enabled();
+            // Init_status_display's multiview branch is currently disabled
+            // because Text_renderer builds its pipeline against a
+            // non-multiview render pass (view_mask = 0); drawing it into
+            // a multiview render pass trips
+            // VUID-vkCmdDraw-renderPass-02684 (render-pass /
+            // pipeline view-mask incompatibility). The per-eye path
+            // below works on every backend, including Vulkan + Quest.
+            // Flip kAllowMultiview to true once Text_renderer ships a
+            // multiview-aware pipeline variant.
+            constexpr bool kAllowMultiview = false;
+            if (kAllowMultiview && timing.should_render && multiview_ok) {
                 auto callback = [this](const erhe::xr::Render_views_frame& frame, erhe::graphics::Command_buffer& views_cb) -> bool {
                     erhe::graphics::Texture* const color_texture         = frame.shared_color_texture;
                     erhe::graphics::Texture* const depth_stencil_texture = frame.shared_depth_stencil_texture;
                     if (color_texture == nullptr) {
                         return false;
                     }
-
-                    erhe::graphics::Render_pass_descriptor render_pass_descriptor{};
-                    render_pass_descriptor.color_attachments[0].texture       = color_texture;
-                    render_pass_descriptor.color_attachments[0].load_action   = erhe::graphics::Load_action::Clear;
-                    render_pass_descriptor.color_attachments[0].store_action  = erhe::graphics::Store_action::Store;
-                    render_pass_descriptor.color_attachments[0].usage_before  = erhe::graphics::Image_usage_flag_bit_mask::color_attachment;
-                    render_pass_descriptor.color_attachments[0].layout_before = erhe::graphics::Image_layout::color_attachment_optimal;
-                    render_pass_descriptor.color_attachments[0].usage_after   = erhe::graphics::Image_usage_flag_bit_mask::color_attachment;
-                    render_pass_descriptor.color_attachments[0].layout_after  = erhe::graphics::Image_layout::color_attachment_optimal;
-                    render_pass_descriptor.color_attachments[0].clear_value   = c_clear_color;
-                    if (depth_stencil_texture != nullptr) {
-                        render_pass_descriptor.depth_attachment.texture       = depth_stencil_texture;
-                        render_pass_descriptor.depth_attachment.load_action   = erhe::graphics::Load_action::Clear;
-                        render_pass_descriptor.depth_attachment.store_action  = erhe::graphics::Store_action::Store;
-                        render_pass_descriptor.depth_attachment.usage_before  = erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment;
-                        render_pass_descriptor.depth_attachment.layout_before = erhe::graphics::Image_layout::depth_stencil_attachment_optimal;
-                        render_pass_descriptor.depth_attachment.usage_after   = erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment;
-                        render_pass_descriptor.depth_attachment.layout_after  = erhe::graphics::Image_layout::depth_stencil_attachment_optimal;
-                    }
-                    render_pass_descriptor.render_target_width  = static_cast<int>(frame.width);
-                    render_pass_descriptor.render_target_height = static_cast<int>(frame.height);
-                    render_pass_descriptor.view_mask            = frame.view_mask;
-                    render_pass_descriptor.debug_label          = "Init_status_display (XR)";
-
-                    erhe::graphics::Render_pass            xr_render_pass{m_graphics_device, render_pass_descriptor};
-                    erhe::graphics::Render_command_encoder encoder = m_graphics_device.make_render_command_encoder(views_cb);
-                    {
-                        erhe::graphics::Scoped_render_pass scoped{xr_render_pass, views_cb};
-
-                        const int width  = static_cast<int>(frame.width);
-                        const int height = static_cast<int>(frame.height);
-                        encoder.set_viewport_rect(0, 0, width, height);
-                        encoder.set_scissor_rect (0, 0, width, height);
-
-                        const erhe::math::Viewport viewport{0, 0, width, height};
-
-                        const float       font_size   = m_text_renderer.font_size();
-                        const float       line_height = font_size * 1.5f;
-                        const float       center_y    = static_cast<float>(height) * 0.5f;
-                        const std::size_t line_count  = m_lines.size();
-
-                        const bool top_left = (
-                            m_graphics_device.get_info().coordinate_conventions.framebuffer_origin
-                            == erhe::math::Framebuffer_origin::top_left
-                        );
-                        const float dir = top_left ? +1.0f : -1.0f;
-
-                        for (std::size_t i = 0; i < line_count; ++i) {
-                            const std::string& line = m_lines[i];
-                            if (line.empty()) {
-                                continue;
-                            }
-                            const erhe::ui::Rectangle bounds = m_text_renderer.measure(line);
-                            const float text_width  = static_cast<float>(bounds.size().x);
-                            const float x           = (static_cast<float>(width) - text_width) * 0.5f;
-                            const float offset_from_center =
-                                (static_cast<float>(i) - (static_cast<float>(line_count - 1) * 0.5f)) * line_height;
-                            const float y = center_y + dir * (offset_from_center + line_height * 0.5f);
-                            m_text_renderer.print(glm::vec3{x, y, 0.0f}, c_text_color_abgr, line);
-                            log_startup->info("Init: {}", line);
-                        }
-
-                        m_text_renderer.render(encoder, xr_render_pass, viewport);
-                    }
+                    render_text_overlay(
+                        views_cb, color_texture, depth_stencil_texture,
+                        static_cast<int>(frame.width), static_cast<int>(frame.height),
+                        frame.view_mask, 0u, "Init_status_display (XR multiview)"
+                    );
                     return true;
                 };
                 xr_rendered = m_headset->render_multiview(*init_cb, callback);
@@ -304,6 +336,58 @@ void Init_status_display::render_present_xr()
                 // caller's job to call Device::end_frame() to balance
                 // the wait_frame() / get_command_buffer() pair the
                 // editor opened before this constructor body ran.
+                const bool xr_end_ok = m_graphics_device.end_frame();
+                ERHE_VERIFY(xr_end_ok);
+            } else if (timing.should_render && multiview_ok) {
+                // Multiview swapchain available, but multiview rendering
+                // disabled (kAllowMultiview false above; Text_renderer's
+                // pipeline is not multiview-compatible). Acquire the
+                // shared multiview swapchain and render each eye into
+                // its own array layer with a separate non-multiview
+                // (view_mask = 0) render pass. Same swapchain submission
+                // shape as the multiview path, but Text_renderer's
+                // existing pipeline works because each pass is single-view.
+                auto callback = [this](const erhe::xr::Render_views_frame& frame, erhe::graphics::Command_buffer& views_cb) -> bool {
+                    erhe::graphics::Texture* const color_texture         = frame.shared_color_texture;
+                    erhe::graphics::Texture* const depth_stencil_texture = frame.shared_depth_stencil_texture;
+                    if (color_texture == nullptr) {
+                        return false;
+                    }
+                    for (std::size_t i = 0; i < frame.views.size(); ++i) {
+                        render_text_overlay(
+                            views_cb, color_texture, depth_stencil_texture,
+                            static_cast<int>(frame.width), static_cast<int>(frame.height),
+                            0u, static_cast<unsigned int>(i),
+                            "Init_status_display (XR multiview per-layer)"
+                        );
+                    }
+                    return true;
+                };
+                xr_rendered = m_headset->render_multiview(*init_cb, callback);
+                const bool xr_end_ok = m_graphics_device.end_frame();
+                ERHE_VERIFY(xr_end_ok);
+            } else if (timing.should_render) {
+                // Per-eye fallback for graphics APIs that do not support
+                // multiview (currently the OpenGL backend). The callback
+                // is invoked once per view; render the same text overlay
+                // into each eye's swapchain image. view_mask=0 means a
+                // plain single-layer render pass.
+                auto callback = [this](erhe::xr::Render_view& view, erhe::graphics::Command_buffer& view_cb) -> bool {
+                    if (view.color_texture == nullptr) {
+                        return false;
+                    }
+                    render_text_overlay(
+                        view_cb, view.color_texture, view.depth_stencil_texture,
+                        static_cast<int>(view.width), static_cast<int>(view.height),
+                        0u, 0u, "Init_status_display (XR per-eye)"
+                    );
+                    return true;
+                };
+                xr_rendered = m_headset->render(*init_cb, callback);
+                // Same lifecycle as the multiview branch: render() ends +
+                // submits init_cb and per-view command buffers itself;
+                // the device frame still needs end_frame() to balance the
+                // outer wait_frame()/get_command_buffer() pair.
                 const bool xr_end_ok = m_graphics_device.end_frame();
                 ERHE_VERIFY(xr_end_ok);
             } else {

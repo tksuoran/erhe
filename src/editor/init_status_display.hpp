@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <chrono>
 #include <cstddef>
 #include <string>
@@ -7,7 +8,7 @@
 #include <thread>
 #include <vector>
 
-namespace erhe::graphics { class Command_buffer; class Device; }
+namespace erhe::graphics { class Command_buffer; class Device; class Texture; }
 namespace erhe::renderer { class Text_renderer; }
 namespace erhe::window   { class Context_window; }
 namespace erhe::xr       { class Headset; }
@@ -39,14 +40,35 @@ public:
     Init_status_display (Init_status_display&&)      = delete;
     void operator=      (Init_status_display&&)      = delete;
 
-    void set_line(std::size_t line_index, std::string_view text);
-    void render_present();
+    void set_line       (std::size_t line_index, std::string_view text);
+    void set_clear_color(std::array<double, 4> color);
+    void render_present ();
 
 private:
     static constexpr std::chrono::milliseconds kMinPresentInterval{16};
 
     void render_present_desktop();
     void render_present_xr     ();
+
+    // Records a render pass that clears `color_texture` (and optionally
+    // `depth_stencil_texture`) to m_clear_color and draws the current
+    // m_lines centered on top. Shared by the multiview, per-layer
+    // multiview-swapchain, and per-eye XR paths. `view_mask` is 0 for
+    // single-layer (per-eye, per-layer of a multiview swapchain, and
+    // desktop analogues) and a layer bitmask for the true multiview
+    // path. `texture_layer` selects an array layer of `color_texture`
+    // (and `depth_stencil_texture`) when view_mask == 0; ignored on
+    // the multiview path.
+    void render_text_overlay(
+        erhe::graphics::Command_buffer& command_buffer,
+        erhe::graphics::Texture*        color_texture,
+        erhe::graphics::Texture*        depth_stencil_texture,
+        int                             width,
+        int                             height,
+        unsigned int                    view_mask,
+        unsigned int                    texture_layer,
+        const char*                     debug_label
+    );
 
     erhe::graphics::Device&           m_graphics_device;
     // Reference to the editor's current init Command_buffer pointer. The
@@ -61,6 +83,7 @@ private:
     erhe::xr::Headset*                m_headset{nullptr};
     bool                              m_enabled{false};
     std::vector<std::string>          m_lines;
+    std::array<double, 4>             m_clear_color{0.01, 0.01, 0.01, 1.0};
 };
 
 } // namespace editor
