@@ -33,7 +33,7 @@
         {
             "name": "scene.add_platonic_solids",
             "args": {
-                "instance_count": 2,
+                "instance_count": 1,
                 "instance_gap": 0.5,
                 "object_scale": 0.25,
                 "detail": 4,
