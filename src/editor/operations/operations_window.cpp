@@ -16,6 +16,7 @@
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_builder.hpp"
+#include "scene/scene_commands.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/scene_serialization.hpp"
 #include "scene/viewport_scene_views.hpp"
@@ -318,19 +319,29 @@ void Operations::imgui()
         }
 #endif
         if (erhe::imgui::make_button("Platonic Solids", erhe::imgui::Item_mode::normal, button_size)) {
-            m_context.scene_builder->add_platonic_solids(m_make_mesh_config);
+            Add_platonic_solids_command& cmd = m_context.scene_commands->get_add_platonic_solids_command();
+            cmd.set_make_mesh_config(m_make_mesh_config);
+            cmd.try_call();
         }
         if (erhe::imgui::make_button("Johnson Solids", erhe::imgui::Item_mode::normal, button_size)) {
-            m_context.scene_builder->add_johnson_solids(m_make_mesh_config);
+            Add_johnson_solids_command& cmd = m_context.scene_commands->get_add_johnson_solids_command();
+            cmd.set_make_mesh_config(m_make_mesh_config);
+            cmd.try_call();
         }
         if (erhe::imgui::make_button("Curved Shapes", erhe::imgui::Item_mode::normal, button_size)) {
-            m_context.scene_builder->add_curved_shapes(m_make_mesh_config);
+            Add_curved_shapes_command& cmd = m_context.scene_commands->get_add_curved_shapes_command();
+            cmd.set_make_mesh_config(m_make_mesh_config);
+            cmd.try_call();
         }
         if (erhe::imgui::make_button("Chain", erhe::imgui::Item_mode::normal, button_size)) {
-            m_context.scene_builder->add_torus_chain(m_make_mesh_config, true);
+            Add_chain_command& cmd = m_context.scene_commands->get_add_chain_command();
+            cmd.set_make_mesh_config(m_make_mesh_config);
+            cmd.try_call();
         }
         if (erhe::imgui::make_button("Toruses", erhe::imgui::Item_mode::normal, button_size)) {
-            m_context.scene_builder->add_torus_chain(m_make_mesh_config, false);
+            Add_toruses_command& cmd = m_context.scene_commands->get_add_toruses_command();
+            cmd.set_make_mesh_config(m_make_mesh_config);
+            cmd.try_call();
         }
     }
 

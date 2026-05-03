@@ -5,6 +5,10 @@
 
 #include "brushes/brush.hpp"
 #include "brushes/brush_placement.hpp"
+#include "operations/ambient_light_operation.hpp"
+#include "operations/compound_operation.hpp"
+#include "operations/item_insert_remove_operation.hpp"
+#include "operations/operation_stack.hpp"
 #include "parsers/json_polyhedron.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "content_library/content_library.hpp"
@@ -106,9 +110,12 @@ Scene_builder::Scene_builder(
         tools,
         scene_views
     );
-    setup_lights();
     make_brushes(app_settings, mesh_memory, executor);
-    add_room    ();
+    // The default lights and floor instance are added later via the undoable
+    // `scene.add_lights` and `scene.add_room` commands (queued through
+    // Operation_stack, which is not yet wired into App_context at
+    // construction time). The default commands.json invokes them at startup
+    // so the visual default is preserved.
     ERHE_VERIFY(context.current_command_buffer != nullptr);
     mesh_memory.buffer_transfer_queue.flush(*context.current_command_buffer);
 }
@@ -765,12 +772,28 @@ void Scene_builder::add_room()
         .motion_mode     = erhe::physics::Motion_mode::e_static
     };
 
-    auto floor_instance_node = m_floor_brush->make_instance(
+    std::shared_ptr<erhe::scene::Node> floor_instance_node = m_floor_brush->make_instance(
         floor_brush_instance_create_info
     );
-
-    floor_instance_node->set_parent(m_scene_root->get_scene().get_root_node());
     floor_instance_node->set_lock_edit(true);
+
+    std::vector<std::shared_ptr<Operation>> operations;
+    operations.push_back(
+        std::make_shared<Item_insert_remove_operation>(
+            Item_insert_remove_operation::Parameters{
+                .context = m_context,
+                .item    = floor_instance_node,
+                .parent  = m_scene_root->get_scene().get_root_node(),
+                .mode    = Item_insert_remove_operation::Mode::insert
+            }
+        )
+    );
+
+    m_context.operation_stack->queue(
+        std::make_shared<Compound_operation>(
+            Compound_operation::Parameters{.operations = std::move(operations)}
+        )
+    );
 }
 
 void Scene_builder::add_platonic_solids(const Make_mesh_config& config)
@@ -809,13 +832,17 @@ void Scene_builder::add_torus_chain(const Make_mesh_config& config, bool connect
     float y = major_radius + minor_radius;
     float z = 0.0f;
 
-    float x_stride = connected 
+    float x_stride = connected
         ? major_radius - 2.0f * minor_radius + major_radius
         : 3 * major_radius;
     glm::mat4 alternate_rotate[2] = {
         glm::mat4{1.0f},
         erhe::math::create_rotation<float>(glm::pi<float>() / 2.0f, glm::vec3{1.0f, 0.0f, 0.0f})
     };
+
+    const std::shared_ptr<erhe::scene::Node>& root_node = m_scene_root->get_scene().get_root_node();
+    std::vector<std::shared_ptr<Operation>> operations;
+    operations.reserve(config.instance_count);
 
     const std::shared_ptr<Brush>& brush = m_torus_brush;
     for (int i = 0; i < config.instance_count; ++i) {
@@ -827,10 +854,27 @@ void Scene_builder::add_torus_chain(const Make_mesh_config& config, bool connect
             .material        = config.material ? config.material : materials.at(material_index),
             .scale           = config.object_scale
         };
-        auto instance_node = brush->make_instance(brush_instance_create_info);
+        std::shared_ptr<erhe::scene::Node> instance_node = brush->make_instance(brush_instance_create_info);
         instance_node->set_name(fmt::format("{}.{}", instance_node->get_name(), i + 1));
-        instance_node->set_parent(m_scene_root->get_scene().get_root_node());
+        operations.push_back(
+            std::make_shared<Item_insert_remove_operation>(
+                Item_insert_remove_operation::Parameters{
+                    .context = m_context,
+                    .item    = instance_node,
+                    .parent  = root_node,
+                    .mode    = Item_insert_remove_operation::Mode::insert
+                }
+            )
+        );
         x = x + x_stride;
+    }
+
+    if (!operations.empty()) {
+        m_context.operation_stack->queue(
+            std::make_shared<Compound_operation>(
+                Compound_operation::Parameters{.operations = std::move(operations)}
+            )
+        );
     }
 }
 
@@ -933,6 +977,10 @@ void Scene_builder::make_mesh_nodes(const Make_mesh_config& config, std::vector<
         ERHE_VERIFY(!materials.empty());
         ERHE_VERIFY(visible_material_count > 0);
 
+        const std::shared_ptr<erhe::scene::Node>& root_node = m_scene_root->get_scene().get_root_node();
+        std::vector<std::shared_ptr<Operation>> operations;
+        operations.reserve(pack_entries.size());
+
         for (auto& entry : pack_entries) {
             // TODO this will lock up if there are no visible materials
             do {
@@ -993,11 +1041,24 @@ void Scene_builder::make_mesh_nodes(const Make_mesh_config& config, std::vector<
             if (config.instance_count > 1) {
                 instance_node->set_name(fmt::format("{}.{}", instance_node->get_name(), entry.instance_number + 1));
             }
-            instance_node->set_parent(m_scene_root->get_scene().get_root_node());
+            operations.push_back(
+                std::make_shared<Item_insert_remove_operation>(
+                    Item_insert_remove_operation::Parameters{
+                        .context = m_context,
+                        .item    = instance_node,
+                        .parent  = root_node,
+                        .mode    = Item_insert_remove_operation::Mode::insert
+                    }
+                )
+            );
+        }
 
-#if !defined(NDEBUG)
-            m_scene_root->get_scene().sanity_check();
-#endif
+        if (!operations.empty()) {
+            m_context.operation_stack->queue(
+                std::make_shared<Compound_operation>(
+                    Compound_operation::Parameters{.operations = std::move(operations)}
+                )
+            );
         }
     }
 }
@@ -1076,7 +1137,7 @@ auto Scene_builder::make_directional_light(
     const vec3             position,
     const vec3             color,
     const float            intensity
-) -> std::shared_ptr<Light>
+) -> std::shared_ptr<erhe::scene::Node>
 {
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{m_scene_root->item_host_mutex};
 
@@ -1089,7 +1150,6 @@ auto Scene_builder::make_directional_light(
     light->layer_id  = m_scene_root->layers().light()->id;
     light->enable_flag_bits(Item_flags::content | Item_flags::visible | Item_flags::show_in_ui | Item_flags::show_debug_visualizations);
     node->attach          (light);
-    node->set_parent      (m_scene_root->get_scene().get_root_node());
     node->enable_flag_bits(Item_flags::content | Item_flags::visible | Item_flags::show_in_ui);
 
     const mat4 m = erhe::math::create_look_at(
@@ -1099,7 +1159,7 @@ auto Scene_builder::make_directional_light(
     );
     node->set_parent_from_node(m);
 
-    return light;
+    return node;
 }
 
 auto Scene_builder::make_spot_light(
@@ -1109,7 +1169,7 @@ auto Scene_builder::make_spot_light(
     const vec3             color,
     const float            intensity,
     const vec2             spot_cone_angle
-) -> std::shared_ptr<Light>
+) -> std::shared_ptr<erhe::scene::Node>
 {
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{m_scene_root->item_host_mutex};
 
@@ -1124,49 +1184,19 @@ auto Scene_builder::make_spot_light(
     light->layer_id         = m_scene_root->layers().light()->id;
     light->enable_flag_bits(Item_flags::content | Item_flags::visible | Item_flags::show_in_ui);
     node->attach          (light);
-    node->set_parent      (m_scene_root->get_scene().get_root_node());
     node->enable_flag_bits(Item_flags::content | Item_flags::visible | Item_flags::show_in_ui);
 
     const mat4 m = erhe::math::create_look_at(position, target, vec3{0.0f, 0.0f, 1.0f});
     node->set_parent_from_node(m);
 
-    return light;
+    return node;
 }
 
-void Scene_builder::setup_lights()
+void Scene_builder::add_lights()
 {
-    const auto& layers = m_scene_root->layers();
-    layers.light()->ambient_light = glm::vec4{0.04f, 0.04f, 0.04f, 0.0f};
-
-    //make_directional_light(
-    //    "X",
-    //    vec3{1.0f, 0.0f, 0.0f},
-    //    vec3{1.0f, 0.0f, 0.0f},
-    //    2.0f
-    //);
-    //make_directional_light(
-    //    "Y",
-    //    vec3{0.0f, 1.0f, 0.0f},
-    //    vec3{0.0f, 1.0f, 0.0f},
-    //    2.0f
-    //);
-    //make_directional_light(
-    //    "Z",
-    //    vec3{0.0f, 0.0f, 1.0f},
-    //    vec3{0.0f, 0.0f, 1.0f},
-    //    2.0f
-    //);
-    //make_spot_light(
-    //    "Spot",
-    //    vec3{0.0f, 1.0f, 0.0f}, // position
-    //    vec3{0.0f, 0.0f, 0.0f}, // target
-    //    vec3{0.0f, 1.0f, 0.0f}, // color
-    //    10.0f,                  // intensity
-    //    vec2{                   // cone angles
-    //        glm::pi<float>() * 0.125f,
-    //        glm::pi<float>() * 0.25f
-    //    }
-    //);
+    const Scene_layers&       layers           = m_scene_root->layers();
+    erhe::scene::Light_layer* light_layer      = layers.light();
+    const glm::vec4           target_ambient   {0.04f, 0.04f, 0.04f, 0.0f};
 
     const float directional_light_intensity = m_scene_config.directional_light_intensity;
     const float directional_light_radius    = m_scene_config.directional_light_radius;
@@ -1176,12 +1206,18 @@ void Scene_builder::setup_lights()
     const float spot_light_radius           = m_scene_config.spot_light_radius;
     const float spot_light_height           = m_scene_config.spot_light_height;
     const int   spot_light_count            = m_scene_config.spot_light_count;
+
+    std::vector<std::shared_ptr<erhe::scene::Node>> light_nodes;
+    light_nodes.reserve(static_cast<std::size_t>(directional_light_count + spot_light_count));
+
     if (directional_light_count == 1) {
-        make_directional_light(
-            "X",
-            vec3{1.0f, 1.0f, 0.0f}, // pos
-            vec3{1.0f, 1.0f, 1.0f}, // color
-            2.0f // intensity
+        light_nodes.push_back(
+            make_directional_light(
+                "X",
+                vec3{1.0f, 1.0f, 0.0f}, // pos
+                vec3{1.0f, 1.0f, 1.0f}, // color
+                2.0f // intensity
+            )
         );
     } else {
         for (int i = 0; i < directional_light_count; ++i) {
@@ -1200,7 +1236,7 @@ void Scene_builder::setup_lights()
             const float       x_pos     = R * std::sin(rel * glm::two_pi<float>() + 1.0f / 7.0f);
             const float       z_pos     = R * std::cos(rel * glm::two_pi<float>() + 1.0f / 7.0f);
             const vec3        position  = vec3{x_pos, directional_light_height, z_pos};
-            make_directional_light(name, position, color, intensity);
+            light_nodes.push_back(make_directional_light(name, position, color, intensity));
         }
     }
 
@@ -1226,8 +1262,35 @@ void Scene_builder::setup_lights()
             glm::pi<float>() / 5.0f,
             glm::pi<float>() / 4.0f
         };
-        make_spot_light(name, position, target, color, intensity, spot_cone_angle);
+        light_nodes.push_back(make_spot_light(name, position, target, color, intensity, spot_cone_angle));
     }
+
+    if (light_nodes.empty() && (light_layer->ambient_light == target_ambient)) {
+        return;
+    }
+
+    const std::shared_ptr<erhe::scene::Node>& root_node = m_scene_root->get_scene().get_root_node();
+    std::vector<std::shared_ptr<Operation>> operations;
+    operations.reserve(light_nodes.size() + 1);
+    operations.push_back(std::make_shared<Ambient_light_operation>(light_layer, target_ambient));
+    for (const std::shared_ptr<erhe::scene::Node>& light_node : light_nodes) {
+        operations.push_back(
+            std::make_shared<Item_insert_remove_operation>(
+                Item_insert_remove_operation::Parameters{
+                    .context = m_context,
+                    .item    = light_node,
+                    .parent  = root_node,
+                    .mode    = Item_insert_remove_operation::Mode::insert
+                }
+            )
+        );
+    }
+
+    m_context.operation_stack->queue(
+        std::make_shared<Compound_operation>(
+            Compound_operation::Parameters{.operations = std::move(operations)}
+        )
+    );
 }
 
 void Scene_builder::animate_lights(const double time_d)

@@ -2,6 +2,7 @@
 
 #include "brushes/brush_tool.hpp"
 #include "physics/collision_generator.hpp"
+#include "scene/make_mesh_config.hpp"
 
 #include "erhe_profile/profile.hpp"
 
@@ -66,16 +67,6 @@ class Viewport_config_window;
 class Viewport_scene_view;
 class Scene_views;
 
-class Make_mesh_config
-{
-public:
-    std::shared_ptr<erhe::primitive::Material> material      {};
-    int                                        instance_count{1};
-    float                                      instance_gap  {0.5f};
-    float                                      object_scale  {1.0f};
-    int                                        detail        {4};
-};
-
 class Scene_builder final
 {
 public:
@@ -109,6 +100,8 @@ public:
         glm::vec3        look_at = glm::vec3{0.0f, 0.0f, 0.0f}
     ) -> std::shared_ptr<erhe::scene::Camera>;
 
+    void add_room           ();
+    void add_lights         ();
     void add_platonic_solids(const Make_mesh_config& config);
     void add_johnson_solids (const Make_mesh_config& config);
     void add_curved_shapes  (const Make_mesh_config& config);
@@ -121,7 +114,7 @@ private:
         glm::vec3        position,
         glm::vec3        color,
         float            intensity
-    ) -> std::shared_ptr<erhe::scene::Light>;
+    ) -> std::shared_ptr<erhe::scene::Node>;
 
     auto make_spot_light(
         std::string_view name,
@@ -130,7 +123,7 @@ private:
         glm::vec3        color,
         float            intensity,
         glm::vec2        spot_cone_angle
-    ) -> std::shared_ptr<erhe::scene::Light>;
+    ) -> std::shared_ptr<erhe::scene::Node>;
 
     auto make_brush(Content_library_node& folder, Brush_data&& brush_create_info) -> std::shared_ptr<Brush>;
 
@@ -164,7 +157,6 @@ private:
         Scene_views&                    scene_views
     );
     void animate_lights     (const double time_d);
-    void add_room           ();
 
     auto get_brushes() -> Content_library_node&;
 
@@ -176,7 +168,6 @@ private:
     void make_cone_brushes          (App_settings& app_settings, erhe::scene_renderer::Mesh_memory& mesh_memory);
     void make_json_brushes          (App_settings& app_settings, erhe::scene_renderer::Mesh_memory& mesh_memory, tf::Taskflow* tf, Json_library& library);
     void make_mesh_nodes            (const Make_mesh_config& config, std::vector<std::shared_ptr<Brush>>& brushes);
-    void setup_lights               ();
 
     App_context&          m_context;
     const Scene_config&   m_scene_config;

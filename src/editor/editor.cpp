@@ -8,6 +8,8 @@
 #include "editor.hpp"
 
 #include "app_context.hpp"
+#include "config/generated/commands_config.hpp"
+#include "config/generated/commands_config_serialization.hpp"
 #include "config/generated/editor_settings_config.hpp"
 #include "config/generated/editor_settings_config_serialization.hpp"
 #include "erhe_scene_renderer/generated/mesh_memory_config.hpp"
@@ -582,6 +584,7 @@ public:
         , m_text_renderer_config{erhe::codegen::load_config<Text_renderer_config>  ("config/editor/text_renderer.json")}
         , m_window_config       {erhe::codegen::load_config<Window_config>         ("config/editor/window.json")}
         , m_editor_settings     {erhe::codegen::load_config<Editor_settings_config>("config/editor/editor_settings.json")}
+        , m_commands_config     {erhe::codegen::load_config<Commands_config>       ("config/editor/commands.json")}
     {
 #if defined(ERHE_OS_ANDROID) && defined(ERHE_XR_LIBRARY_OPENXR)
         // On Android the only flavor that links OpenXR is `quest` (Meta Quest 3).
@@ -1933,11 +1936,46 @@ public:
         return true;
     }
 
+    void run_startup_script()
+    {
+        ERHE_PROFILE_FUNCTION();
+
+        if (m_commands_config.commands.empty()) {
+            return;
+        }
+
+        Make_mesh_config make_mesh_config{};
+        make_mesh_config.instance_count = m_commands_config.instance_count;
+        make_mesh_config.instance_gap   = m_commands_config.instance_gap;
+        make_mesh_config.object_scale   = m_commands_config.object_scale;
+        make_mesh_config.detail         = m_commands_config.detail;
+
+        Scene_commands& sc = *m_app_context.scene_commands;
+        sc.get_add_platonic_solids_command().set_make_mesh_config(make_mesh_config);
+        sc.get_add_johnson_solids_command ().set_make_mesh_config(make_mesh_config);
+        sc.get_add_curved_shapes_command  ().set_make_mesh_config(make_mesh_config);
+        sc.get_add_chain_command          ().set_make_mesh_config(make_mesh_config);
+        sc.get_add_toruses_command        ().set_make_mesh_config(make_mesh_config);
+
+        for (const std::string& name : m_commands_config.commands) {
+            erhe::commands::Command* command = m_commands->find_command(name);
+            if (command == nullptr) {
+                log_startup->warn("commands.json: unknown command '{}'", name);
+                continue;
+            }
+            const bool ok = command->try_call();
+            if (!ok) {
+                log_startup->warn("commands.json: command '{}' returned false", name);
+            }
+        }
+    }
+
     void run()
     {
         ERHE_PROFILE_FUNCTION();
 
         m_run_started = true;
+        run_startup_script();
         float wait_time = m_app_context.use_sleep ? m_app_context.sleep_margin : 0.0f;
         // TODO: https://registry.khronos.org/OpenGL/extensions/NV/GLX_NV_delay_before_swap.txt
         // Also:
@@ -2021,6 +2059,7 @@ public:
     Text_renderer_config                m_text_renderer_config;
     Window_config                       m_window_config;
     Editor_settings_config              m_editor_settings;
+    Commands_config                     m_commands_config;
 
     std::unique_ptr<tf::Executor>       m_executor;
     Item_async_task_guard               m_item_task_guard; // destroyed before m_executor

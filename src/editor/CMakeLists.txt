@@ -223,6 +223,8 @@ erhe_target_sources_grouped(
     main.cpp
     mcp/mcp_server.cpp
     mcp/mcp_server.hpp
+    operations/ambient_light_operation.cpp
+    operations/ambient_light_operation.hpp
     operations/compound_operation.cpp
     operations/compound_operation.hpp
     operations/geometry_operations.cpp
@@ -307,6 +309,7 @@ erhe_target_sources_grouped(
     scene/node_raytrace.cpp
     scene/node_raytrace.hpp
     scene/node_raytrace_mask.hpp
+    scene/make_mesh_config.hpp
     scene/scene_builder.cpp
     scene/scene_builder.hpp
     scene/scene_commands.cpp
@@ -509,6 +512,7 @@ erhe_codegen_generate(
         "${_xr_config_defs}:erhe_xr/generated/"
     DEFINITIONS
         "${_config_defs}/camera_controls_config.py"
+        "${_config_defs}/commands_config.py"
         "${_config_defs}/developer_config.py"
         "${_config_defs}/editor_settings_config.py"
         "${_config_defs}/grid_config.py"
@@ -541,6 +545,9 @@ set(_config_sources
     ${_config_out}/camera_controls_config.hpp
     ${_config_out}/camera_controls_config_serialization.hpp
     ${_config_out}/camera_controls_config.cpp
+    ${_config_out}/commands_config.hpp
+    ${_config_out}/commands_config_serialization.hpp
+    ${_config_out}/commands_config.cpp
     ${_config_out}/developer_config.hpp
     ${_config_out}/developer_config_serialization.hpp
     ${_config_out}/developer_config.cpp
