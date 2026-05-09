@@ -4,6 +4,7 @@
 #include "erhe_graphics/metal/metal_render_command_encoder.hpp"
 #include "erhe_graphics/metal/metal_shader_stages.hpp"
 #include "erhe_graphics/device.hpp"
+#include "erhe_graphics/lazy_shader_handle.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_verify/verify.hpp"
@@ -17,7 +18,12 @@ namespace erhe::graphics {
 Render_pipeline_impl::Render_pipeline_impl(Device& device, const Render_pipeline_create_info& create_info)
     : m_device_impl{device.get_impl()}
 {
-    const Shader_stages* shader_stages = create_info.shader_stages;
+    // Prefer lazy_shader_stages when set; falls through to the raw
+    // create_info.shader_stages otherwise. See vulkan equivalent.
+    const Shader_stages* shader_stages =
+        (create_info.lazy_shader_stages != nullptr)
+            ? create_info.lazy_shader_stages->shader_stages()
+            : create_info.shader_stages;
     if (shader_stages == nullptr) {
         return;
     }

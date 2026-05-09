@@ -8,6 +8,8 @@
 #include "erhe_graphics/gl/gl_render_pass.hpp"
 #include "erhe_graphics/gl/gl_sampler.hpp"
 #include "erhe_graphics/gl/gl_state_tracker.hpp"
+#include "erhe_graphics/lazy_shader_handle.hpp"
+#include "erhe_graphics/render_pipeline.hpp"
 #include "erhe_graphics/gl/gl_texture.hpp"
 #include "erhe_graphics/render_pipeline.hpp"
 #include "erhe_graphics/render_pipeline_state.hpp"
@@ -43,8 +45,15 @@ void Render_command_encoder_impl::set_sampled_image(uint32_t binding_point, cons
 void Render_command_encoder_impl::set_render_pipeline(const Render_pipeline& pipeline)
 {
     const Render_pipeline_create_info& ci = pipeline.get_create_info();
+    // Prefer lazy_shader_stages when set; falls through to ci.shader_stages
+    // otherwise. Mirrors the resolution in the Vulkan / Metal backend
+    // pipeline ctors so all backends honor the same Lazy_shader_handle.
+    const Shader_stages* shader_stages =
+        (ci.lazy_shader_stages != nullptr)
+            ? ci.lazy_shader_stages->shader_stages()
+            : ci.shader_stages;
     OpenGL_state_tracker& tracker = m_device.get_impl().m_gl_state_tracker;
-    tracker.shader_stages  .execute(ci.shader_stages);
+    tracker.shader_stages  .execute(shader_stages);
     tracker.vertex_input   .execute(ci.vertex_input);
     tracker.input_assembly .execute(ci.input_assembly);
     tracker.rasterization  .execute(ci.rasterization);
