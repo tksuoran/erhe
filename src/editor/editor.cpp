@@ -813,6 +813,41 @@ public:
                         }
                     }
                 };
+                // Position-only variant: same streams 1 and 2 as the skinned
+                // format above, but stream 0 carries position only (no joint
+                // indices or weights). Static meshes that don't need skinning
+                // can be built against this format via
+                // mesh_memory->get_or_create_format_pools(m_position_only_vertex_format)
+                // so they don't waste 12 bytes per vertex on unused skinning
+                // attributes. Routing static-mesh builds and pipelines to
+                // this format is follow-up work; the registration here
+                // exercises the multi-format pool registry end-to-end.
+                m_position_only_vertex_format = erhe::dataformat::Vertex_format{
+                    {
+                        0,
+                        {
+                            { Format::format_32_vec3_float, Vertex_attribute_usage::position, 0}
+                        }
+                    },
+                    {
+                        1,
+                        {
+                            { Format::format_32_vec3_float, Vertex_attribute_usage::normal,    normal_attribute},
+                            { Format::format_32_vec4_float, Vertex_attribute_usage::tangent,   0},
+                            { Format::format_32_vec2_float, Vertex_attribute_usage::tex_coord, 0},
+                            { Format::format_32_vec4_float, Vertex_attribute_usage::color,     0},
+                        }
+                    },
+                    {
+                        2,
+                        {
+                            { Format::format_32_vec3_float, Vertex_attribute_usage::normal, normal_attribute_smooth},
+                            { Format::format_8_vec2_unorm,  Vertex_attribute_usage::custom, custom_attribute_aniso_control},
+                            { Format::format_16_vec2_uint,  Vertex_attribute_usage::custom, custom_attribute_valency_edge_count},
+                            { Format::format_8_vec4_unorm,  Vertex_attribute_usage::custom, custom_attribute_id}
+                        }
+                    }
+                };
             }
 
             m_clipboard            = std::make_unique<Clipboard     >(commands, m_app_context, app_message_bus);
@@ -970,6 +1005,10 @@ public:
             {
                 ERHE_GET_GL_CONTEXT
                 m_mesh_memory = std::make_unique<erhe::scene_renderer::Mesh_memory>(m_mesh_memory_config, *m_graphics_device.get(), m_vertex_format);
+                // Eagerly register the position-only format so its pool
+                // entry exists before any caller queries it. The pool stays
+                // empty (lazy growth) until a primitive is built into it.
+                static_cast<void>(m_mesh_memory->get_or_create_format_pools(m_position_only_vertex_format));
             }
             ERHE_TASK_FOOTER( .name("Mesh_memory") );
 
@@ -2183,6 +2222,7 @@ public:
     std::unique_ptr<erhe::renderer::Jolt_debug_renderer    > m_jolt_debug_renderer;
 #endif
     erhe::dataformat::Vertex_format                          m_vertex_format;
+    erhe::dataformat::Vertex_format                          m_position_only_vertex_format;
 
     std::unique_ptr<Programs                              >  m_programs;
     std::unique_ptr<erhe::scene_renderer::Forward_renderer>  m_forward_renderer;
