@@ -151,6 +151,7 @@
 #include "erhe_scene_renderer/program_interface.hpp"
 #include "erhe_scene_renderer/scene_renderer_log.hpp"
 #include "erhe_scene_renderer/shadow_renderer.hpp"
+#include "erhe_scene_renderer/shader_variant_cache.hpp"
 #include "erhe_scene_renderer/standard_shader_variants.hpp"
 #include "erhe_scene_renderer/texel_renderer.hpp"
 #include "erhe_time/sleep.hpp"
@@ -1598,14 +1599,18 @@ public:
         }
 #endif
 
-        // Standard shader variant cache. Constructed after Programs::load_programs
-        // (so the fallback Shader_stages reference is to a fully linked
-        // program) and destructed before m_programs (so the fallback stays
-        // alive for the cache's lifetime). Stays empty until a render-time
-        // call site asks for a variant via get_or_compile().
-        m_standard_shader_variants = std::make_unique<erhe::scene_renderer::Standard_shader_variants>(
+        // Shader variant cache + typed adapter. Constructed after
+        // Programs::load_programs (so the fallback reference is to a fully
+        // linked program) and destructed before m_programs (so the
+        // fallback stays alive for the cache's lifetime). The generic
+        // cache stays empty until a render-time call site asks for a
+        // variant via get_or_compile().
+        m_shader_variant_cache = std::make_unique<erhe::scene_renderer::Shader_variant_cache>(
             *m_graphics_device.get(),
-            *m_program_interface.get(),
+            *m_program_interface.get()
+        );
+        m_standard_shader_variants = std::make_unique<erhe::scene_renderer::Standard_shader_variants>(
+            *m_shader_variant_cache.get(),
             m_programs->standard.shader_stages
         );
 
@@ -2244,10 +2249,14 @@ public:
     erhe::dataformat::Vertex_format                          m_position_only_vertex_format;
 
     std::unique_ptr<Programs                              >  m_programs;
-    // Owned after Programs (uses programs->standard.shader_stages as the
-    // fallback when a variant compile fails), destructed before Programs
-    // (the cache's dtor detaches its variants from the Shader_monitor;
-    // the fallback reference stays valid as long as Programs is alive).
+    // Generic shader variant cache. Owned by editor so its lifetime
+    // brackets every consumer (Standard_shader_variants typed adapter,
+    // future Lazy_shader_handle members on Programs). Destruction order:
+    // m_standard_shader_variants -> m_shader_variant_cache -> m_programs
+    // (the cache's dtor detaches its entries from the Shader_monitor).
+    std::unique_ptr<erhe::scene_renderer::Shader_variant_cache> m_shader_variant_cache;
+    // Typed adapter over m_shader_variant_cache. Holds a reference to
+    // programs->standard.shader_stages as the compile-failure fallback.
     std::unique_ptr<erhe::scene_renderer::Standard_shader_variants> m_standard_shader_variants;
     std::unique_ptr<erhe::scene_renderer::Forward_renderer>  m_forward_renderer;
     std::unique_ptr<erhe::scene_renderer::Shadow_renderer >  m_shadow_renderer;

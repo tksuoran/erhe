@@ -29,6 +29,8 @@ erhe_target_sources_grouped(
     erhe_scene_renderer/program_interface.hpp
     erhe_scene_renderer/scene_renderer_log.cpp
     erhe_scene_renderer/scene_renderer_log.hpp
+    erhe_scene_renderer/shader_variant_cache.cpp
+    erhe_scene_renderer/shader_variant_cache.hpp
     erhe_scene_renderer/shadow_renderer.cpp
     erhe_scene_renderer/shadow_renderer.hpp
     erhe_scene_renderer/standard_shader_variant.cpp
