@@ -154,6 +154,14 @@ void Init_status_display::render_present()
         return;
     }
 
+    // Drain the OS window event queue so the window stays responsive
+    // during long init phases. Input events accumulate in the window's
+    // input-event buffer and are dispatched once Editor::run() begins.
+    // On Quest / Android this also lets SDL deliver foreground/background
+    // and surface-changed events that the runtime needs to keep the
+    // session alive.
+    m_window.poll_events();
+
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     if (m_headset != nullptr) {
         render_present_xr();
