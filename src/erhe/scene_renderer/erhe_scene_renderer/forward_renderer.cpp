@@ -24,6 +24,8 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
+#include <fmt/format.h>
+
 #include <functional>
 
 namespace erhe::scene_renderer {
@@ -418,7 +420,26 @@ void Forward_renderer::render(const Render_parameters& parameters)
             // Single-format scenes with one block per pool produce exactly
             // one bucket and the loop below collapses to today's behavior.
             const std::vector<Bucket> buckets = bucket_meshes_by_buffers(meshes, primitive_mode);
+            std::size_t bucket_index = 0;
             for (const Bucket& bucket : buckets) {
+                // Annotate each MDI with a RenderDoc / Vulkan debug-utils
+                // scope so captures show one labeled marker per bucket
+                // (e.g. "bucket 1/3 mesh=2 streams=3"). Format the label
+                // up front; Debug_label interns into a string pool so
+                // repeated identical labels collapse to one entry.
+                erhe::graphics::Scoped_debug_group bucket_scope{
+                    erhe::utility::Debug_label{
+                        fmt::format(
+                            "bucket {}/{} meshes={} streams={}",
+                            bucket_index + 1,
+                            buckets.size(),
+                            bucket.meshes.size(),
+                            bucket.key.vertex_buffers.size()
+                        )
+                    }
+                };
+                ++bucket_index;
+
                 // Per-bucket variant override. Falls through to the
                 // pipeline-default binding when the cache returns null /
                 // invalid (mid-compile fallback) or when variant lookup

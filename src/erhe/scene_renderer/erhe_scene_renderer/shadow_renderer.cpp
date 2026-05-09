@@ -20,6 +20,8 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
+#include <fmt/format.h>
+
 namespace erhe::scene_renderer {
 
 using erhe::graphics::Render_pass;
@@ -319,7 +321,21 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
             // Group meshes by GPU buffer set; multi-draw-indirect needs
             // identical vertex/index bindings for every draw it covers.
             const std::vector<Bucket> buckets = bucket_meshes_by_buffers(meshes, primitive_mode);
+            std::size_t bucket_index = 0;
             for (const Bucket& bucket : buckets) {
+                erhe::graphics::Scoped_debug_group bucket_scope{
+                    erhe::utility::Debug_label{
+                        fmt::format(
+                            "shadow bucket {}/{} meshes={} streams={}",
+                            bucket_index + 1,
+                            buckets.size(),
+                            bucket.meshes.size(),
+                            bucket.key.vertex_buffers.size()
+                        )
+                    }
+                };
+                ++bucket_index;
+
                 encoder.set_index_buffer(bucket.key.index_buffer);
                 for (std::size_t stream_index = 0; stream_index < bucket.key.vertex_buffers.size(); ++stream_index) {
                     encoder.set_vertex_buffer(
