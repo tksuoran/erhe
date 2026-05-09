@@ -39,19 +39,21 @@ public:
     static constexpr std::size_t s_vertex_binding_non_position = 1;
     static constexpr std::size_t s_vertex_binding_custom       = 2;
 
-    [[nodiscard]] auto get_vertex_buffer(std::size_t stream_index) -> erhe::graphics::Buffer*;
+    // Returns the first block of the requested vertex stream's pool, or
+    // nullptr if the pool has not yet been grown by an allocate(). Provided
+    // for callers that need a "default" buffer pointer; new code should bind
+    // from Buffer_range::buffer instead.
+    [[nodiscard]] auto get_vertex_buffer       (std::size_t stream_index) -> erhe::graphics::Buffer*;
+    [[nodiscard]] auto get_default_index_buffer() -> erhe::graphics::Buffer*;
 
     erhe::graphics::Device&                          graphics_device;
     erhe::graphics::Buffer_transfer_queue            buffer_transfer_queue;
     erhe::dataformat::Vertex_format&                 vertex_format;
-    erhe::graphics::Buffer                           vertex_buffer_position;
-    erhe::graphics::Buffer                           vertex_buffer_non_position;
-    erhe::graphics::Buffer                           vertex_buffer_custom;
-    erhe::graphics::Buffer                           index_buffer;
+    // The edge-line vertex buffer is still owned eagerly by Mesh_memory so that
+    // Content_wide_line_renderer's existing Buffer& constructor parameter
+    // resolves at editor startup. Step 7 of the mesh_memory plan moves this
+    // into edge_line_vertex_pool.
     erhe::graphics::Buffer                           edge_line_vertex_buffer;
-    // The pools wrap the buffers above with allocators. Step 2 keeps the
-    // buffers owned by Mesh_memory; Step 3 transfers ownership into the
-    // pools and lets allocate() grow new blocks lazily.
     erhe::graphics_buffer_sink::Buffer_pool          vertex_pool_position;
     erhe::graphics_buffer_sink::Buffer_pool          vertex_pool_non_position;
     erhe::graphics_buffer_sink::Buffer_pool          vertex_pool_custom;
@@ -60,11 +62,6 @@ public:
     erhe::graphics_buffer_sink::Graphics_buffer_sink graphics_buffer_sink;
     erhe::primitive::Buffer_info                     buffer_info;
     erhe::graphics::Vertex_input_state               vertex_input;
-
-private:
-    [[nodiscard]] auto get_vertex_buffer_size          (const Mesh_memory_config& mesh_memory_config, std::size_t stream) const -> std::size_t;
-    [[nodiscard]] auto get_index_buffer_size           (const Mesh_memory_config& mesh_memory_config) const -> std::size_t;
-    [[nodiscard]] auto get_edge_line_vertex_buffer_size(const Mesh_memory_config& mesh_memory_config) const -> std::size_t;
 };
 
 }
