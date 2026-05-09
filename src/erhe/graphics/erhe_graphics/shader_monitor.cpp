@@ -99,6 +99,37 @@ void Shader_monitor::add(Reloadable_shader_stages& reloadable_shader_stages)
     add(reloadable_shader_stages.create_info, &reloadable_shader_stages.shader_stages);
 }
 
+void Shader_monitor::remove(Reloadable_shader_stages& reloadable_shader_stages)
+{
+    remove(&reloadable_shader_stages.shader_stages);
+}
+
+void Shader_monitor::remove(Shader_stages* shader_stages)
+{
+    if (shader_stages == nullptr) {
+        return;
+    }
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
+
+    // Walk every watched file and drop reload entries whose shader_stages
+    // pointer matches. The set is keyed on the same pointer so equal-key
+    // entries are unique per (file, shader_stages); a single linear pass
+    // per file finds at most one match. Empty File entries are left in
+    // m_files -- update_once_per_frame iterates each file's reload_entries
+    // and an empty set does no work. Pruning the File map would also
+    // require pruning m_reload_list which can hold a now-stale File*.
+    for (auto& [path, file] : m_files) {
+        auto& entries = file.reload_entries;
+        for (auto it = entries.begin(); it != entries.end();) {
+            if (it->shader_stages == shader_stages) {
+                it = entries.erase(it);
+            } else {
+                ++it;
+            }
+        }
+    }
+}
+
 void Shader_monitor::add(
     const std::filesystem::path&     path,
     const Shader_stages_create_info& create_info,
