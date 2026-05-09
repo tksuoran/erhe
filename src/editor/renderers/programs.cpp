@@ -155,90 +155,22 @@ Programs::Programs(
 
 void Programs::load_programs(
     tf::Executor&                            executor,
-    erhe::graphics::Device&                  graphics_device,
+    erhe::graphics::Device&                  /*graphics_device*/,
     erhe::scene_renderer::Program_interface& /*program_interface*/,
     const Init_message_fn&                   init_message
 )
 {
+    // Phase 3: lazy startup. The Programs ctor has already constructed
+    // every Cached_shader_handle with its key; nothing compiles here.
+    // The first frame that asks a handle for shader_stages() (or the
+    // first dropdown / debug-viz selection) triggers that shader's
+    // compile through the Shader_variant_cache, which registers the
+    // resulting Reloadable_shader_stages with the Shader_monitor for
+    // hot reload.
+    //
+    // Kept as a no-op for the parallel-init taskflow that already
+    // calls it; future work will fold this away entirely.
     static_cast<void>(executor);
-
-    ERHE_PROFILE_SCOPE("Programs::load_programs (warmup)");
-
-    // List of (name, handle*) pairs to warm up. Built from
-    // m_handles_by_name with a couple of conditional skips:
-    //   - wide_lines_*: built around geometry shaders, which Metal
-    //     doesn't support; skip the warmup so the cache doesn't log
-    //     compile failures (the geometry-shader pipelines that
-    //     reference these handles are also skipped on Metal).
-    //   - depth: legacy placeholder; the source file pair
-    //     (depth_only.{vert,frag}) exists so the warmup is harmless,
-    //     but no pipeline currently consumes the resulting stages.
-    const bool skip_geometry_shaders = graphics_device.get_info().use_compute_shader;
-
-    auto warmup = [&init_message](
-        const char*                                  display_name,
-        erhe::scene_renderer::Cached_shader_handle& handle
-    ) {
-        if (init_message) {
-            init_message(fmt::format("Compiling shader stages: {}", display_name));
-        }
-        // Force-resolve through the cache. The single-view compile
-        // happens here; multiview_shader_stages() builds the multiview
-        // sibling key and compiles that too when multiview is on.
-        // Discarded return values are intentional -- the side effect
-        // (cache populate) is what we want.
-        static_cast<void>(handle.shader_stages());
-        static_cast<void>(handle.multiview_shader_stages());
-    };
-
-    warmup("error",                     error);
-    warmup("standard",                  standard);
-    warmup("anisotropic_slope",         anisotropic_slope);
-    warmup("anisotropic_engine_ready",  anisotropic_engine_ready);
-    warmup("circular_brushed_metal",    circular_brushed_metal);
-    warmup("brdf_slice",                brdf_slice);
-    warmup("brush",                     brush);
-    warmup("textured",                  textured);
-    warmup("sky",                       sky);
-    warmup("grid",                      grid);
-    if (!skip_geometry_shaders) {
-        warmup("wide_lines_draw_color",   wide_lines_draw_color);
-        warmup("wide_lines_vertex_color", wide_lines_vertex_color);
-    }
-    warmup("points",                    points);
-    warmup("id",                        id);
-    warmup("tool",                      tool);
-    warmup("debug_depth",               debug_depth);
-    warmup("debug_vertex_normal",       debug_vertex_normal);
-    warmup("debug_fragment_normal",     debug_fragment_normal);
-    warmup("debug_normal_texture",      debug_normal_texture);
-    warmup("debug_tangent",             debug_tangent);
-    warmup("debug_vertex_tangent_w",    debug_vertex_tangent_w);
-    warmup("debug_bitangent",           debug_bitangent);
-    warmup("debug_texcoord",            debug_texcoord);
-    warmup("debug_base_color_texture",  debug_base_color_texture);
-    warmup("debug_vertex_color_rgb",    debug_vertex_color_rgb);
-    warmup("debug_vertex_color_alpha",  debug_vertex_color_alpha);
-    warmup("debug_aniso_strength",      debug_aniso_strength);
-    warmup("debug_aniso_texcoord",      debug_aniso_texcoord);
-    warmup("debug_vdotn",               debug_vdotn);
-    warmup("debug_ldotn",               debug_ldotn);
-    warmup("debug_hdotv",               debug_hdotv);
-    warmup("debug_joint_indices",       debug_joint_indices);
-    warmup("debug_joint_weights",       debug_joint_weights);
-    warmup("debug_omega_o",             debug_omega_o);
-    warmup("debug_omega_i",             debug_omega_i);
-    warmup("debug_omega_g",             debug_omega_g);
-    warmup("debug_vertex_valency",      debug_vertex_valency);
-    warmup("debug_polygon_edge_count",  debug_polygon_edge_count);
-    warmup("debug_metallic",            debug_metallic);
-    warmup("debug_roughness",           debug_roughness);
-    warmup("debug_occlusion",           debug_occlusion);
-    warmup("debug_emissive",            debug_emissive);
-    warmup("debug_shadowmap_texels",    debug_shadowmap_texels);
-    warmup("debug_shadow",              debug_shadow);
-    warmup("debug_misc",                debug_misc);
-
     if (init_message) {
         init_message("");
     }

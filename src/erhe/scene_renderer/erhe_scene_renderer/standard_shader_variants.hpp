@@ -1,5 +1,6 @@
 #pragma once
 
+#include "erhe_scene_renderer/cached_shader_handle.hpp"
 #include "erhe_scene_renderer/shader_variant_cache.hpp"
 #include "erhe_scene_renderer/standard_shader_variant.hpp"
 
@@ -20,19 +21,20 @@ class Program_interface;
 // defines=make_standard_variant_defines(key), single-view} and forwards
 // to the underlying cache.
 //
-// The fallback parameter is a shader-stages reference (typically the
-// editor's pre-built "error" shader) returned when a variant compile or
-// link fails. The failed entry is still stored in the underlying cache
-// so the next frame doesn't retry compile.
+// The fallback handle is itself a lazy Cached_shader_handle (typically
+// the editor's "error" shader). When a standard variant compile fails,
+// the adapter returns fallback_handle.shader_stages() -- which lazy-
+// compiles the fallback if it has not been compiled yet, returning
+// nullptr only if the fallback also fails. The renderer's
+// error_shader_stages parameter then steps in.
 //
-// clear() / size() forward to the underlying cache. The cache owns its
-// Shader_monitor lifetime; this adapter holds no entries of its own.
+// clear() / size() forward to the underlying cache.
 class Standard_shader_variants final
 {
 public:
     Standard_shader_variants(
-        Shader_variant_cache&                cache,
-        const erhe::graphics::Shader_stages& fallback_shader_stages
+        Shader_variant_cache& cache,
+        Cached_shader_handle& fallback_handle
     );
     ~Standard_shader_variants() noexcept;
 
@@ -48,8 +50,8 @@ public:
     [[nodiscard]] auto size() const -> std::size_t;
 
 private:
-    Shader_variant_cache&                m_cache;
-    const erhe::graphics::Shader_stages& m_fallback_shader_stages;
+    Shader_variant_cache& m_cache;
+    Cached_shader_handle& m_fallback_handle;
 };
 
 } // namespace erhe::scene_renderer

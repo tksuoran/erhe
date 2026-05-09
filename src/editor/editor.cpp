@@ -1612,12 +1612,13 @@ public:
 
         // Standard shader variant cache adapter. The underlying
         // Shader_variant_cache was constructed earlier (before Programs).
-        // The fallback shader is programs.error: by this point in init
-        // load_programs has force-resolved every handle through the cache,
-        // so error.shader_stages() returns a fully linked program.
+        // The fallback handle is programs.error -- a lazy
+        // Cached_shader_handle. Standard_shader_variants resolves it
+        // on demand when a variant compile fails, so the fallback
+        // doesn't have to be precompiled here.
         m_standard_shader_variants = std::make_unique<erhe::scene_renderer::Standard_shader_variants>(
             *m_shader_variant_cache.get(),
-            *m_programs->error.shader_stages()
+            m_programs->error
         );
 
         fill_app_context();

@@ -8,11 +8,11 @@
 namespace erhe::scene_renderer {
 
 Standard_shader_variants::Standard_shader_variants(
-    Shader_variant_cache&                cache,
-    const erhe::graphics::Shader_stages& fallback_shader_stages
+    Shader_variant_cache& cache,
+    Cached_shader_handle& fallback_handle
 )
-    : m_cache                {cache}
-    , m_fallback_shader_stages{fallback_shader_stages}
+    : m_cache           {cache}
+    , m_fallback_handle {fallback_handle}
 {
 }
 
@@ -37,7 +37,10 @@ auto Standard_shader_variants::get_or_compile(const Standard_variant_key& key) -
     if (stages != nullptr) {
         return stages;
     }
-    return &m_fallback_shader_stages;
+    // Standard variant compile failed; fall back to the supplied
+    // handle (typically programs.error). The handle is itself lazy --
+    // it compiles its underlying shader on first access.
+    return m_fallback_handle.shader_stages();
 }
 
 void Standard_shader_variants::clear()

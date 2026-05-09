@@ -408,9 +408,14 @@ void Forward_renderer::render(const Render_parameters& parameters)
             (parameters.override_shader_stages != nullptr) ? parameters.override_shader_stages :
             (multiview_stages != nullptr)                  ? multiview_stages :
                                                              pipeline_shader_stages;
-        if (!used_shader_stages->is_valid()) {
+        if ((used_shader_stages == nullptr) || !used_shader_stages->is_valid()) {
             use_override_shader_stages = true;
             used_shader_stages = parameters.error_shader_stages;
+        }
+        if ((used_shader_stages == nullptr) || !used_shader_stages->is_valid()) {
+            // Both the requested shader and the error fallback failed to
+            // compile (e.g. shader source missing). Skip this pipeline.
+            continue;
         }
 
         //erhe::graphics::Scoped_debug_group pass_scope{"Forward_renderer::render() pass"};
