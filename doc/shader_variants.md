@@ -1,13 +1,53 @@
-# Shader variants for editor rendering -- requirements (deferred)
+# Shader variants for editor rendering -- requirements (in progress)
 
 ## Status
 
-**Deferred.** This document records the requirements only. Implementation is
-blocked on the planned mesh-memory refactor that lets different meshes
-carry different vertex formats; until that lands, every mesh shares a
-single fixed vertex format and the mesh-side axes of the variant key
-collapse to a constant. Picking up the work before the refactor would
-build a key that does not actually vary along its mesh dimension.
+**Infrastructure landed; render-time adoption follow-up.** The mesh-memory
+refactor (per-format pools + Vertex_format_key registry, lazy buffer
+growth, Buffer_range::buffer for renderer-side identity, bucket-by-buffer-set
+draw scheduling) shipped in commits 88296e56..04c956fa, so the per-mesh
+vertex format axes of the variant key are no longer architecturally
+degenerate. Subsequent commits land the shader-side machinery:
+
+- Light buffer partition: each per-type sub-array carries shadow-mapped
+  lights as the prefix and non-shadow lights as the suffix; standard.frag
+  uses six count-based loops.
+- Standard_variant_key (5 material booleans + 6 mesh booleans + 6 scene
+  integer counts) and the GLSL define emitter
+  (`make_standard_variant_defines`) live in
+  `src/erhe/scene_renderer/erhe_scene_renderer/standard_shader_variant.{hpp,cpp}`.
+- `Standard_shader_variants` (`standard_shader_variants.{hpp,cpp}`) caches
+  compiled variants keyed by `Standard_variant_key`, registers each
+  variant with the `Shader_monitor` for hot reload, and supports
+  invalidate-all via `clear()`. `Shader_monitor::remove()` was added to
+  detach evicted variants safely.
+- `compute_standard_variant_key()` reads a (Material*, Vertex_format,
+  mesh_has_skin, light counts) tuple into the key, honoring the plan
+  invariant `ERHE_USE_VERTEX_VARYING_X => ERHE_ATTRIBUTE_a_X`.
+- `res/shaders/standard.{vert,frag}` consume the new macros (gated via
+  `res/shaders/erhe_standard_variant.glsl` so the non-variant
+  `programs.standard` build path stays bit-identical).
+- The editor instantiates the cache on `App_context::standard_shader_variants`
+  after `Programs::load_programs` completes.
+
+**Remaining adoption work:** wire specific render-time call sites to the
+cache (they compute the key and pass the result through
+`Forward_renderer::Render_parameters::override_shader_stages`). Natural
+candidates: `Scene_preview` (material/brush previews), the
+`Shader_stages_variant::standard` debug-visualization branch in
+`Viewport_scene_view::get_override_shader_stages` /
+`Headset_view`. Adoption to non-`standard` shaders such as
+`circular_brushed_metal` (the editor's actual main lit shader) is out
+of scope for this plan; revisit when the standard variant cache has
+proven the pattern.
+
+## Original status (now historical)
+
+Implementation was originally blocked on the planned mesh-memory refactor
+that lets different meshes carry different vertex formats; until that
+landed, every mesh shared a single fixed vertex format and the mesh-side
+axes of the variant key collapsed to a constant. That refactor has now
+shipped (see above).
 
 ## Motivation
 
