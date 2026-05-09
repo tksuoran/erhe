@@ -22,6 +22,14 @@ Scoped_debug_group_impl::Scoped_debug_group_impl(erhe::utility::Debug_label debu
     }
 }
 
+// Metal already routes labels to the active MTL::RenderCommandEncoder via
+// Render_pass_impl::get_active_mtl_encoder(); the explicit cb argument is
+// not needed (the encoder owns the cb).
+Scoped_debug_group_impl::Scoped_debug_group_impl(Command_buffer&, erhe::utility::Debug_label debug_label)
+    : Scoped_debug_group_impl{std::move(debug_label)}
+{
+}
+
 Scoped_debug_group_impl::~Scoped_debug_group_impl() noexcept
 {
     MTL::RenderCommandEncoder* encoder = Render_pass_impl::get_active_mtl_encoder();

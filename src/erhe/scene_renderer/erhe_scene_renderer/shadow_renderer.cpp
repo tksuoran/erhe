@@ -3,6 +3,7 @@
 #include "erhe_scene_renderer/shadow_renderer.hpp"
 
 #include "erhe_graphics/render_pass.hpp"
+#include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/draw_indirect.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
@@ -235,7 +236,10 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
         parameters.conventions
     );
 
-    erhe::graphics::Scoped_debug_group debug_group{"Shadow_renderer::render()"};
+    erhe::graphics::Scoped_debug_group debug_group{
+        parameters.command_buffer,
+        erhe::utility::Debug_label{"Shadow_renderer::render()"}
+    };
 
     const auto& mesh_spans = parameters.mesh_spans;
     const auto& lights     = parameters.lights;
@@ -324,6 +328,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
             std::size_t bucket_index = 0;
             for (const Bucket& bucket : buckets) {
                 erhe::graphics::Scoped_debug_group bucket_scope{
+                    parameters.command_buffer,
                     erhe::utility::Debug_label{
                         fmt::format(
                             "shadow bucket {}/{} meshes={} streams={}",

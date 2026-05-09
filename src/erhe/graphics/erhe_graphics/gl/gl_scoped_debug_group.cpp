@@ -23,6 +23,13 @@ Scoped_debug_group_impl::Scoped_debug_group_impl(erhe::utility::Debug_label debu
     );
 }
 
+// GL has no per-cb concept; the active GL context is the recording target,
+// so the cb-targeted overload is identical to the single-arg one.
+Scoped_debug_group_impl::Scoped_debug_group_impl(Command_buffer&, erhe::utility::Debug_label debug_label)
+    : Scoped_debug_group_impl{std::move(debug_label)}
+{
+}
+
 Scoped_debug_group_impl::~Scoped_debug_group_impl() noexcept
 {
     if (!s_enabled) {
