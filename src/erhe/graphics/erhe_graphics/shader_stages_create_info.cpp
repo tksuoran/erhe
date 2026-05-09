@@ -382,7 +382,16 @@ auto Shader_stages_create_info::final_source(
     if (defines.size() > 0) {
         sb << "// Defines\n";
         for (const auto& i : defines) {
-            sb << "#define " << i.first << " " << i.second << '\n';
+            // Comment-only entry: empty name means "do not emit #define,
+            // just emit the value as a // comment line in the preamble".
+            // Used by the standard shader variant cache to surface the
+            // disabled boolean axes alongside the enabled ones so RenderDoc
+            // captures show the full key in the preamble.
+            if (i.first.empty()) {
+                sb << "// " << i.second << '\n';
+            } else {
+                sb << "#define " << i.first << " " << i.second << '\n';
+            }
         }
         sb << "\n";
     }

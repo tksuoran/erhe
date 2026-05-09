@@ -55,12 +55,19 @@ auto make_standard_variant_defines(const Standard_variant_key& key)
     // non-variant fallbacks and uses what we emit here instead.
     defines.emplace_back(std::string{"ERHE_STANDARD_VARIANT_BUILD"}, std::string{"1"});
 
-    // Boolean axes -- emit only when set, with value "1" so the GLSL
-    // preprocessor recognizes both `#ifdef ERHE_X` and `#if ERHE_X` style
-    // checks.
-#define ERHE_X(NAME, FIELD)                                                            \
-    if (key.get_boolean(Standard_variant_key::Boolean_axis::FIELD)) {                  \
-        defines.emplace_back(std::string{"ERHE_" #NAME}, std::string{"1"});            \
+    // Boolean axes -- emit `#define ERHE_<NAME> 1` for each set bit so
+    // the shader's `#ifdef ERHE_<NAME>` / `#if ERHE_<NAME>` checks both
+    // resolve. Disabled bits are not #defined (otherwise `#ifdef` would
+    // see them as enabled), but a comment line is appended to the
+    // preamble so RenderDoc captures show the full key in the
+    // generated source -- the empty-name convention is recognized by
+    // Shader_stages_create_info::final_source as "emit value as a //
+    // comment, no #define".
+#define ERHE_X(NAME, FIELD)                                                                       \
+    if (key.get_boolean(Standard_variant_key::Boolean_axis::FIELD)) {                             \
+        defines.emplace_back(std::string{"ERHE_" #NAME}, std::string{"1"});                       \
+    } else {                                                                                      \
+        defines.emplace_back(std::string{}, std::string{"ERHE_" #NAME " disabled"});              \
     }
     ERHE_STANDARD_VARIANT_BOOL_AXES(ERHE_X)
 #undef ERHE_X
