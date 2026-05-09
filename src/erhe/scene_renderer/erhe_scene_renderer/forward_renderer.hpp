@@ -35,6 +35,7 @@ namespace erhe::scene {
 namespace erhe::scene_renderer {
 
 class Program_interface;
+class Standard_shader_variants;
 
 class Forward_renderer
 {
@@ -81,6 +82,15 @@ public:
         const erhe::Item_filter                                            filter{};
         const erhe::graphics::Shader_stages*                               override_shader_stages{nullptr};
         const erhe::graphics::Shader_stages*                               error_shader_stages{nullptr};
+        // Optional. When non-null and a pipeline opts in via
+        // Render_pipeline_create_info::uses_standard_variants, the bucket
+        // loop computes a per-bucket Standard_variant_key (material caps
+        // OR'd across the bucket's primitives, the pipeline's
+        // vertex_format, mesh.skin presence OR'd across the bucket, and
+        // light_projections->light_counts) and overrides the bucket's
+        // shader_stages with the cache lookup. Skipped when
+        // override_shader_stages is non-null (debug-viz takes priority).
+        Standard_shader_variants*                                          standard_shader_variants{nullptr};
         const glm::uvec4&                                                  debug_joint_indices{0, 0, 0, 0};
         const std::span<glm::vec4>&                                        debug_joint_colors{};
         const std::string_view                                             debug_label;

@@ -19,6 +19,8 @@
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene_renderer/scene_renderer_log.hpp"
 #include "erhe_scene_renderer/program_interface.hpp"
+#include "erhe_scene_renderer/standard_shader_variant.hpp"
+#include "erhe_scene_renderer/standard_shader_variants.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -183,6 +185,73 @@ auto bucket_meshes_by_buffers(
     return buckets;
 }
 
+// Build a Standard_variant_key for an entire bucket: OR every primitive's
+// material caps across the bucket, OR the per-mesh has-skin flag, and pair
+// with the pipeline's vertex_format and the scene's per-frame light counts.
+//
+// One bucket emits one MDI, so it must compile a single shader. ORing the
+// caps gives a permissive variant -- a primitive whose material doesn't
+// actually use, e.g., a normal map runs through the same shader but the
+// runtime `if (normal_texture.x != max_u32)` check skips the sampling.
+// The optimization vs. today is that variants with all-flags-off omit the
+// dead code paths entirely.
+[[nodiscard]] auto compute_bucket_variant_key(
+    const Bucket&                                                  bucket,
+    const erhe::dataformat::Vertex_format&                         vertex_format,
+    const erhe::scene_renderer::Standard_variant_light_counts&     light_counts
+) -> erhe::scene_renderer::Standard_variant_key
+{
+    erhe::scene_renderer::Standard_variant_key key{};
+    bool                                       has_any_skin = false;
+    bool                                       seeded       = false;
+
+    for (const std::shared_ptr<erhe::scene::Mesh>& mesh : bucket.meshes) {
+        if (!mesh) {
+            continue;
+        }
+        if (mesh->skin) {
+            has_any_skin = true;
+        }
+        for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh->get_primitives()) {
+            if (!mesh_primitive.material) {
+                continue;
+            }
+            const erhe::scene_renderer::Standard_variant_key per_primitive =
+                erhe::scene_renderer::compute_standard_variant_key(
+                    mesh_primitive.material.get(),
+                    vertex_format,
+                    /*mesh_has_skin*/ false, // skinning OR'd separately below
+                    light_counts
+                );
+            if (!seeded) {
+                // Take counts from the first computed key (light_counts
+                // are constant across the bucket, but copying once here
+                // avoids re-seeding manually).
+                key    = per_primitive;
+                seeded = true;
+            } else {
+                key.boolean_mask |= per_primitive.boolean_mask;
+            }
+        }
+    }
+
+    if (!seeded) {
+        // No primitive carries a material; build a base key from just the
+        // format + light counts so the cache still keys consistently.
+        key = erhe::scene_renderer::compute_standard_variant_key(
+            /*material*/ nullptr,
+            vertex_format,
+            /*mesh_has_skin*/ false,
+            light_counts
+        );
+    }
+
+    if (has_any_skin) {
+        key.set_boolean(erhe::scene_renderer::Standard_variant_key::Boolean_axis::use_skinning, true);
+    }
+    return key;
+}
+
 }
 
 void Forward_renderer::render(const Render_parameters& parameters)
@@ -314,6 +383,28 @@ void Forward_renderer::render(const Render_parameters& parameters)
         parameters.render_encoder.set_viewport_rect(viewport.x, viewport.y, viewport.width, viewport.height);
         parameters.render_encoder.set_scissor_rect(viewport.x, viewport.y, viewport.width, viewport.height);
 
+        // Track what's bound after the per-pipeline state so per-bucket
+        // variant overrides only rebind when the chosen shader differs.
+        const erhe::graphics::Shader_stages* currently_bound_shader = used_shader_stages;
+
+        // Per-bucket variant lookup is gated on:
+        //   - no per-call override_shader_stages (debug viz wins)
+        //   - not on the multiview path (multiview uses pre-built stages)
+        //   - this pipeline opted in via uses_standard_variants
+        //   - the cache, vertex_format, and light_projections are supplied
+        // !use_override_shader_stages already covers multiview transitively
+        // (multiview_stages != nullptr forced that flag above), but the
+        // explicit !multiview_path keeps the gate self-evident.
+        // When inactive, the bucket loop runs identically to before this
+        // change.
+        const bool variant_lookup_active =
+            !use_override_shader_stages &&
+            !multiview_path &&
+            pipeline.uses_standard_variants &&
+            (parameters.standard_shader_variants != nullptr) &&
+            (pipeline.vertex_format != nullptr) &&
+            (parameters.light_projections != nullptr);
+
         for (const auto& meshes : mesh_spans) {
             ERHE_PROFILE_SCOPE("mesh span");
             //ERHE_PROFILE_GPU_SCOPE(c_forward_renderer_render);
@@ -328,6 +419,24 @@ void Forward_renderer::render(const Render_parameters& parameters)
             // one bucket and the loop below collapses to today's behavior.
             const std::vector<Bucket> buckets = bucket_meshes_by_buffers(meshes, primitive_mode);
             for (const Bucket& bucket : buckets) {
+                // Per-bucket variant override. Falls through to the
+                // pipeline-default binding when the cache returns null /
+                // invalid (mid-compile fallback) or when variant lookup
+                // is gated off.
+                if (variant_lookup_active) {
+                    const erhe::scene_renderer::Standard_variant_key key = compute_bucket_variant_key(
+                        bucket,
+                        *pipeline.vertex_format,
+                        parameters.light_projections->light_counts
+                    );
+                    const erhe::graphics::Shader_stages* variant = parameters.standard_shader_variants->get_or_compile(key);
+                    if ((variant != nullptr) && variant->is_valid() && (variant != currently_bound_shader)) {
+                        erhe::graphics::Render_pipeline_state temp_state = make_temp_pipeline_state(pipeline);
+                        parameters.render_encoder.set_render_pipeline_state(temp_state, variant);
+                        currently_bound_shader = variant;
+                    }
+                }
+
                 parameters.render_encoder.set_index_buffer(bucket.key.index_buffer);
                 for (std::size_t stream_index = 0; stream_index < bucket.key.vertex_buffers.size(); ++stream_index) {
                     parameters.render_encoder.set_vertex_buffer(
