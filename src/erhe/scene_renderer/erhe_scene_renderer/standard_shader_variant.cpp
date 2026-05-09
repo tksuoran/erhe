@@ -1,5 +1,8 @@
 #include "erhe_scene_renderer/standard_shader_variant.hpp"
 
+#include "erhe_dataformat/vertex_format.hpp"
+#include "erhe_primitive/material.hpp"
+
 namespace erhe::scene_renderer {
 
 namespace {
@@ -48,6 +51,10 @@ auto make_standard_variant_defines(const Standard_variant_key& key)
 {
     std::vector<std::pair<std::string, std::string>> defines;
 
+    // Build-mode marker so erhe_standard_variant.glsl skips its
+    // non-variant fallbacks and uses what we emit here instead.
+    defines.emplace_back(std::string{"ERHE_STANDARD_VARIANT_BUILD"}, std::string{"1"});
+
     // Boolean axes -- emit only when set, with value "1" so the GLSL
     // preprocessor recognizes both `#ifdef ERHE_X` and `#if ERHE_X` style
     // checks.
@@ -66,6 +73,112 @@ auto make_standard_variant_defines(const Standard_variant_key& key)
 #undef ERHE_X
 
     return defines;
+}
+
+namespace {
+
+[[nodiscard]] auto vertex_format_has_attribute(
+    const erhe::dataformat::Vertex_format&       format,
+    const erhe::dataformat::Vertex_attribute_usage usage,
+    const std::size_t                            usage_index
+) -> bool
+{
+    return format.find_attribute(usage, usage_index).attribute != nullptr;
+}
+
+[[nodiscard]] auto sampler_is_bound(const erhe::primitive::Material_texture_sampler& s) -> bool
+{
+    return static_cast<bool>(s.texture);
+}
+
+[[nodiscard]] auto any_sampler_uses_tex_coord_zero(const erhe::primitive::Material& material) -> bool
+{
+    const erhe::primitive::Material_texture_samplers& s = material.data.texture_samplers;
+    auto uses_zero = [](const erhe::primitive::Material_texture_sampler& sampler) {
+        return sampler_is_bound(sampler) && (sampler.tex_coord == 0u);
+    };
+    return uses_zero(s.base_color)
+        || uses_zero(s.metallic_roughness)
+        || uses_zero(s.normal)
+        || uses_zero(s.occlusion)
+        || uses_zero(s.emissive);
+}
+
+} // anonymous namespace
+
+auto compute_standard_variant_key(
+    const erhe::primitive::Material*       material,
+    const erhe::dataformat::Vertex_format& vertex_format,
+    const bool                             mesh_has_skin,
+    const Standard_variant_light_counts&   light_counts
+) -> Standard_variant_key
+{
+    using Axis = Standard_variant_key::Boolean_axis;
+
+    Standard_variant_key key{};
+
+    // Scene sub-key (constant for the render call).
+    key.directional_light_count        = light_counts.directional_light_count;
+    key.directional_shadowmapped_count = light_counts.directional_shadowmapped_count;
+    key.spot_light_count               = light_counts.spot_light_count;
+    key.spot_shadowmapped_count        = light_counts.spot_shadowmapped_count;
+    key.point_light_count              = light_counts.point_light_count;
+    key.point_shadowmapped_count       = light_counts.point_shadowmapped_count;
+
+    using usage = erhe::dataformat::Vertex_attribute_usage;
+    const bool has_position = vertex_format_has_attribute(vertex_format, usage::position, 0);
+    const bool has_normal_0 = vertex_format_has_attribute(vertex_format, usage::normal,   erhe::dataformat::normal_attribute);
+    const bool has_tangent  = vertex_format_has_attribute(vertex_format, usage::tangent,  0);
+    const bool has_texcoord_0 = vertex_format_has_attribute(vertex_format, usage::tex_coord, 0);
+    const bool has_color_0  = vertex_format_has_attribute(vertex_format, usage::color,    0);
+    const bool has_joint_indices = vertex_format_has_attribute(vertex_format, usage::joint_indices, 0);
+    const bool has_joint_weights = vertex_format_has_attribute(vertex_format, usage::joint_weights, 0);
+    static_cast<void>(has_position); // position is required by the shader; not a variant axis
+
+    // Skinning: needs both joint attributes AND the mesh actually has a Skin.
+    if (has_joint_indices && has_joint_weights && mesh_has_skin) {
+        key.set_boolean(Axis::use_skinning, true);
+    }
+
+    // Color is always passed through if present (gating deferred per plan).
+    if (has_color_0) {
+        key.set_boolean(Axis::use_vertex_varying_color, true);
+    }
+
+    if (material == nullptr) {
+        // No material bound: emit a minimal key (counts already set).
+        // The vertex normal varying is still useful for unlit visuals
+        // when present, but the lit/unlit branch in the shader treats
+        // missing material as "fully unlit", so leaving it off is fine.
+        return key;
+    }
+
+    const erhe::primitive::Material_data&             data     = material->data;
+    const erhe::primitive::Material_texture_samplers& samplers = data.texture_samplers;
+
+    // Material booleans -- set per bound sampler.
+    if (sampler_is_bound(samplers.base_color))         { key.set_boolean(Axis::use_base_color_texture,         true); }
+    if (sampler_is_bound(samplers.metallic_roughness)) { key.set_boolean(Axis::use_metallic_roughness_texture, true); }
+    if (sampler_is_bound(samplers.normal))             { key.set_boolean(Axis::use_normal_texture,             true); }
+    if (sampler_is_bound(samplers.occlusion))          { key.set_boolean(Axis::use_occlusion_texture,          true); }
+    if (sampler_is_bound(samplers.emissive))           { key.set_boolean(Axis::use_emission_texture,           true); }
+
+    // Mesh sub-key axes that depend on the bound material.
+    if (has_normal_0 && !data.unlit) {
+        key.set_boolean(Axis::use_vertex_varying_normal, true);
+    }
+    // Tangent + bitangent come together: the bitangent varying carries the
+    // sign-corrected cross product computed in the vertex stage. They're
+    // only useful when a normal map sampler is bound (or future aniso).
+    if (has_tangent && has_normal_0 && sampler_is_bound(samplers.normal)) {
+        key.set_boolean(Axis::use_vertex_varying_tangent,   true);
+        key.set_boolean(Axis::use_vertex_varying_bitangent, true);
+    }
+    if (has_texcoord_0 && any_sampler_uses_tex_coord_zero(*material)) {
+        key.set_boolean(Axis::use_vertex_varying_texcoord0, true);
+    }
+
+    return key;
 }
 
 } // namespace erhe::scene_renderer
