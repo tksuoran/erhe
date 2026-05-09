@@ -12,8 +12,11 @@
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_graphics/texture_heap.hpp"
+#include "erhe_primitive/buffer_mesh.hpp"
+#include "erhe_primitive/primitive.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/light.hpp"
+#include "erhe_scene/mesh.hpp"
 #include "erhe_scene_renderer/scene_renderer_log.hpp"
 #include "erhe_scene_renderer/program_interface.hpp"
 #include "erhe_profile/profile.hpp"
@@ -86,6 +89,55 @@ auto make_temp_pipeline_state(const erhe::graphics::Render_pipeline_create_info&
         .depth_stencil        = ci.depth_stencil,
         .color_blend          = ci.color_blend
     }};
+}
+
+class Span_buffers
+{
+public:
+    erhe::graphics::Buffer*              index_buffer{nullptr};
+    std::vector<erhe::graphics::Buffer*> vertex_buffers;
+    bool                                 valid{false};
+};
+
+auto resolve_span_buffers(
+    const std::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes,
+    const erhe::primitive::Primitive_mode                      primitive_mode
+) -> Span_buffers
+{
+    Span_buffers result;
+    for (const std::shared_ptr<erhe::scene::Mesh>& mesh : meshes) {
+        if (!mesh) {
+            continue;
+        }
+        for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh->get_primitives()) {
+            const erhe::primitive::Primitive* primitive = mesh_primitive.primitive.get();
+            if (primitive == nullptr) {
+                continue;
+            }
+            const erhe::primitive::Buffer_mesh* buffer_mesh = primitive->get_renderable_mesh();
+            if (buffer_mesh == nullptr) {
+                continue;
+            }
+            if (buffer_mesh->index_range(primitive_mode).index_count == 0) {
+                continue;
+            }
+            if (!result.valid) {
+                result.index_buffer = buffer_mesh->index_buffer_range.buffer;
+                result.vertex_buffers.reserve(buffer_mesh->vertex_buffer_ranges.size());
+                for (const erhe::primitive::Buffer_range& vr : buffer_mesh->vertex_buffer_ranges) {
+                    result.vertex_buffers.push_back(vr.buffer);
+                }
+                result.valid = true;
+            } else {
+                ERHE_VERIFY(buffer_mesh->index_buffer_range.buffer == result.index_buffer);
+                ERHE_VERIFY(buffer_mesh->vertex_buffer_ranges.size() == result.vertex_buffers.size());
+                for (std::size_t i = 0; i < buffer_mesh->vertex_buffer_ranges.size(); ++i) {
+                    ERHE_VERIFY(buffer_mesh->vertex_buffer_ranges[i].buffer == result.vertex_buffers[i]);
+                }
+            }
+        }
+    }
+    return result;
 }
 
 }
@@ -218,16 +270,29 @@ void Forward_renderer::render(const Render_parameters& parameters)
         }
         parameters.render_encoder.set_viewport_rect(viewport.x, viewport.y, viewport.width, viewport.height);
         parameters.render_encoder.set_scissor_rect(viewport.x, viewport.y, viewport.width, viewport.height);
-        parameters.render_encoder.set_index_buffer(parameters.index_buffer);
-        parameters.render_encoder.set_vertex_buffer(parameters.vertex_buffer0, 0, 0);
-        parameters.render_encoder.set_vertex_buffer(parameters.vertex_buffer1, 0, 1);
-        parameters.render_encoder.set_vertex_buffer(parameters.vertex_buffer2, 0, 2);
 
         for (const auto& meshes : mesh_spans) {
             ERHE_PROFILE_SCOPE("mesh span");
             //ERHE_PROFILE_GPU_SCOPE(c_forward_renderer_render);
             if (meshes.empty()) {
                 continue;
+            }
+
+            // Until Step 4 introduces per-buffer-set bucketing, all primitives
+            // in a span must share the same vertex/index buffer set. The helper
+            // walks the span once and asserts that invariant.
+            const Span_buffers span_buffers = resolve_span_buffers(meshes, primitive_mode);
+            if (!span_buffers.valid) {
+                continue;
+            }
+
+            parameters.render_encoder.set_index_buffer(span_buffers.index_buffer);
+            for (std::size_t stream_index = 0; stream_index < span_buffers.vertex_buffers.size(); ++stream_index) {
+                parameters.render_encoder.set_vertex_buffer(
+                    span_buffers.vertex_buffers[stream_index],
+                    0,
+                    static_cast<uint32_t>(stream_index)
+                );
             }
 
             std::size_t primitive_count{0};

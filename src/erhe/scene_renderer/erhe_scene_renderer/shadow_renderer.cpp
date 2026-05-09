@@ -11,7 +11,10 @@
 #include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_graphics/texture_heap.hpp"
+#include "erhe_primitive/buffer_mesh.hpp"
+#include "erhe_primitive/primitive.hpp"
 #include "erhe_scene/light.hpp"
+#include "erhe_scene/mesh.hpp"
 #include "erhe_scene_renderer/program_interface.hpp"
 #include "erhe_scene_renderer/scene_renderer_log.hpp"
 #include "erhe_profile/profile.hpp"
@@ -29,6 +32,59 @@ using erhe::graphics::Depth_stencil_state;
 using erhe::graphics::Color_blend_state;
 
 static constexpr std::string_view c_shadow_renderer_initialize_component{"Shadow_renderer::initialize_component()"};
+
+namespace {
+
+class Span_buffers
+{
+public:
+    erhe::graphics::Buffer*              index_buffer{nullptr};
+    std::vector<erhe::graphics::Buffer*> vertex_buffers;
+    bool                                 valid{false};
+};
+
+auto resolve_span_buffers(
+    const std::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes,
+    const erhe::primitive::Primitive_mode                      primitive_mode
+) -> Span_buffers
+{
+    Span_buffers result;
+    for (const std::shared_ptr<erhe::scene::Mesh>& mesh : meshes) {
+        if (!mesh) {
+            continue;
+        }
+        for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh->get_primitives()) {
+            const erhe::primitive::Primitive* primitive = mesh_primitive.primitive.get();
+            if (primitive == nullptr) {
+                continue;
+            }
+            const erhe::primitive::Buffer_mesh* buffer_mesh = primitive->get_renderable_mesh();
+            if (buffer_mesh == nullptr) {
+                continue;
+            }
+            if (buffer_mesh->index_range(primitive_mode).index_count == 0) {
+                continue;
+            }
+            if (!result.valid) {
+                result.index_buffer = buffer_mesh->index_buffer_range.buffer;
+                result.vertex_buffers.reserve(buffer_mesh->vertex_buffer_ranges.size());
+                for (const erhe::primitive::Buffer_range& vr : buffer_mesh->vertex_buffer_ranges) {
+                    result.vertex_buffers.push_back(vr.buffer);
+                }
+                result.valid = true;
+            } else {
+                ERHE_VERIFY(buffer_mesh->index_buffer_range.buffer == result.index_buffer);
+                ERHE_VERIFY(buffer_mesh->vertex_buffer_ranges.size() == result.vertex_buffers.size());
+                for (std::size_t i = 0; i < buffer_mesh->vertex_buffer_ranges.size(); ++i) {
+                    ERHE_VERIFY(buffer_mesh->vertex_buffer_ranges[i].buffer == result.vertex_buffers[i]);
+                }
+            }
+        }
+    }
+    return result;
+}
+
+}
 
 Shadow_renderer::Shadow_renderer(
     erhe::graphics::Device&         graphics_device,
@@ -125,8 +181,6 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
     ERHE_PROFILE_FUNCTION();
 
     ERHE_VERIFY(parameters.vertex_input_state != nullptr);
-    ERHE_VERIFY(parameters.index_buffer != nullptr);
-    ERHE_VERIFY(parameters.vertex_buffer0 != nullptr);
     ERHE_VERIFY(parameters.view_camera != nullptr);
     ERHE_VERIFY(parameters.texture);
 
@@ -194,7 +248,6 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
             continue;
         }
 
-        // TODO Multiple vertex buffer bindings
         encoder.set_bind_group_layout(m_bind_group_layout);
         encoder.set_render_pipeline(*render_pipeline);
         encoder.set_viewport_rect(
@@ -203,10 +256,6 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
             parameters.light_camera_viewport.width,
             parameters.light_camera_viewport.height
         );
-        encoder.set_index_buffer(parameters.index_buffer);
-        encoder.set_vertex_buffer(parameters.vertex_buffer0, 0, 0);
-        encoder.set_vertex_buffer(parameters.vertex_buffer1, 0, 1);
-        encoder.set_vertex_buffer(parameters.vertex_buffer2, 0, 2);
         m_material_buffer.bind(encoder, material_range);
         m_joint_buffer.bind(encoder, joint_range);
         m_light_buffer.bind_light_buffer(encoder, light_range);
@@ -226,6 +275,27 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
         m_texture_heap->bind(encoder);
 
         for (const auto& meshes : mesh_spans) {
+            if (meshes.empty()) {
+                continue;
+            }
+
+            // Until Step 4 introduces per-buffer-set bucketing, all primitives
+            // in a span must share the same vertex/index buffer set. The helper
+            // walks the span once and asserts that invariant.
+            const Span_buffers span_buffers = resolve_span_buffers(meshes, primitive_mode);
+            if (!span_buffers.valid) {
+                continue;
+            }
+
+            encoder.set_index_buffer(span_buffers.index_buffer);
+            for (std::size_t stream_index = 0; stream_index < span_buffers.vertex_buffers.size(); ++stream_index) {
+                encoder.set_vertex_buffer(
+                    span_buffers.vertex_buffers[stream_index],
+                    0,
+                    static_cast<uint32_t>(stream_index)
+                );
+            }
+
             std::size_t primitive_count{0};
             Ring_buffer_range primitive_range = m_primitive_buffer.update(meshes, primitive_mode, shadow_filter, Primitive_interface_settings{}, primitive_count);
             if (primitive_count == 0) {

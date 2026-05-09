@@ -51,7 +51,8 @@ auto Graphics_buffer_sink::allocate_vertex_buffer(
             .count        = vertex_count,
             .element_size = vertex_element_size,
             .byte_offset  = byte_offset,
-            .stream       = stream
+            .stream       = stream,
+            .buffer       = entry.buffer
         },
         .allocation = erhe::buffer::Buffer_allocation{entry.allocator, byte_offset, allocation_byte_count}
     };
@@ -75,7 +76,9 @@ auto Graphics_buffer_sink::allocate_index_buffer(
         .range = erhe::primitive::Buffer_range{
             .count        = index_count,
             .element_size = index_element_size,
-            .byte_offset  = byte_offset
+            .byte_offset  = byte_offset,
+            .stream       = 0,
+            .buffer       = m_index_buffer
         },
         .allocation = erhe::buffer::Buffer_allocation{m_index_allocator, byte_offset, allocation_byte_count}
     };
@@ -164,7 +167,9 @@ auto Graphics_buffer_sink::allocate_edge_line_vertex_buffer(
         .range = erhe::primitive::Buffer_range{
             .count        = vertex_count,
             .element_size = vertex_element_size,
-            .byte_offset  = byte_offset
+            .byte_offset  = byte_offset,
+            .stream       = 0,
+            .buffer       = m_edge_line_vertex_buffer
         },
         .allocation = erhe::buffer::Buffer_allocation{*m_edge_line_vertex_allocator, byte_offset, allocation_byte_count}
     };
