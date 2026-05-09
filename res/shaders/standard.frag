@@ -2,36 +2,39 @@
 #include "erhe_camera_view.glsl"
 #include "erhe_light.glsl"
 #include "erhe_texture.glsl"
+#include "erhe_standard_variant.glsl"
 
 layout(location = 0) in vec4      v_position;
 
-#ifdef ERHE_ATTRIBUTE_a_texcoord_0
+#ifdef ERHE_USE_VERTEX_VARYING_TEXCOORD0
 layout(location = 1) in vec2      v_texcoord;
 #else
 const  vec2 v_texcoord = vec2(0.5, 0.5);
 #endif
 
-#ifdef ERHE_ATTRIBUTE_a_color_0
+#ifdef ERHE_USE_VERTEX_VARYING_COLOR
 layout(location = 2) in vec4      v_color;
 #else
 const  vec4 v_color = vec4(1.0);
 #endif
 
+// See standard.vert for why v_aniso_control is gated on the raw
+// ERHE_ATTRIBUTE_a_custom_1 rather than a variant axis.
 #ifdef ERHE_ATTRIBUTE_a_custom_1
 layout(location = 3) in vec2      v_aniso_control;
 #else
 const  vec2 v_aniso_control = vec2(0.0);
 #endif
 
-#if defined(ERHE_ATTRIBUTE_a_tangent)
+#ifdef ERHE_USE_VERTEX_VARYING_TANGENT
 layout(location = 4) in vec3      v_T;
 #endif
 
-#if defined(ERHE_ATTRIBUTE_a_normal) && defined(ERHE_ATTRIBUTE_a_tangent)
+#ifdef ERHE_USE_VERTEX_VARYING_BITANGENT
 layout(location = 5) in vec3      v_B;
 #endif
 
-#ifdef ERHE_ATTRIBUTE_a_normal
+#ifdef ERHE_USE_VERTEX_VARYING_NORMAL
 layout(location = 6) in vec3      v_N;
 #endif
 
@@ -59,13 +62,13 @@ void main()
 
         vec3 V = normalize(view_position_in_world - v_position.xyz);
 
-#ifdef ERHE_ATTRIBUTE_a_tangent
+#ifdef ERHE_USE_VERTEX_VARYING_TANGENT
         vec3 T = normalize(v_T);
 #endif
-#if defined(ERHE_ATTRIBUTE_a_normal) && defined(ERHE_ATTRIBUTE_a_tangent)
+#ifdef ERHE_USE_VERTEX_VARYING_BITANGENT
         vec3 B = normalize(v_B);
 #endif
-#ifdef ERHE_ATTRIBUTE_a_normal
+#ifdef ERHE_USE_VERTEX_VARYING_NORMAL
         vec3 N = normalize(v_N);
 #else
         vec3 N = vec3(0.0, 1.0, 0.0);
@@ -94,7 +97,7 @@ void main()
             ).xyz * 2.0 - vec3(1.0);
             ntex.xy = ntex.xy * material.normal_texture_scale;
             ntex    = normalize(ntex);
-#if defined(ERHE_ATTRIBUTE_a_normal) && defined(ERHE_ATTRIBUTE_a_tangent)
+#if defined(ERHE_USE_VERTEX_VARYING_NORMAL) && defined(ERHE_USE_VERTEX_VARYING_BITANGENT)
             N       = normalize(mat3(T, B, N) * ntex);
 #else
             N       = ntex;
@@ -117,22 +120,22 @@ void main()
 
         float N_dot_V = clamped_dot(N, V);
 
-        uint directional_light_count    = light_block.directional_light_count;
-        uint spot_light_count           = light_block.spot_light_count;
-        uint point_light_count          = light_block.point_light_count;
-        uint directional_shadow_count   = light_block.directional_shadow_count;
-        uint spot_shadow_count          = light_block.spot_shadow_count;
-        uint point_shadow_count         = light_block.point_shadow_count;
-        uint directional_light_offset   = 0;
-        uint spot_light_offset          = directional_light_count;
-        uint point_light_offset         = spot_light_offset + spot_light_count;
+        // Per-type light loop bounds. In a variant build these are
+        // compile-time integer literals (Standard_variant_key fields
+        // ERHE_LIGHT_*_COUNT / _SHADOWMAPPED_COUNT) so each loop unrolls
+        // or disappears. In a non-variant build the
+        // erhe_standard_variant.glsl fallbacks expand them to the runtime
+        // light_block.*_count fields, matching today's behavior.
+        uint directional_light_offset = 0;
+        uint spot_light_offset        = uint(ERHE_LIGHT_DIRECTIONAL_COUNT);
+        uint point_light_offset       = spot_light_offset + uint(ERHE_LIGHT_SPOT_COUNT);
 
         //color += (0.5 + 0.5 * N.y) * light_block.ambient_light.rgb * base_color;
         color  = light_block.ambient_light.rgb * occlusion * base_color;
         color += emissive;
 
         // Directional - shadow-mapped prefix
-        for (uint i = 0u; i < directional_shadow_count; ++i) {
+        for (uint i = 0u; i < uint(ERHE_LIGHT_DIRECTIONAL_SHADOWMAPPED_COUNT); ++i) {
             uint  light_index    = directional_light_offset + i;
             Light light          = light_block.lights[light_index];
             vec3  point_to_light = light.direction_and_outer_spot_cos.xyz;
@@ -153,7 +156,7 @@ void main()
         }
 
         // Directional - non-shadow suffix
-        for (uint i = directional_shadow_count; i < directional_light_count; ++i) {
+        for (uint i = uint(ERHE_LIGHT_DIRECTIONAL_SHADOWMAPPED_COUNT); i < uint(ERHE_LIGHT_DIRECTIONAL_COUNT); ++i) {
             uint  light_index    = directional_light_offset + i;
             Light light          = light_block.lights[light_index];
             vec3  point_to_light = light.direction_and_outer_spot_cos.xyz;
@@ -174,7 +177,7 @@ void main()
         }
 
         // Spot - shadow-mapped prefix
-        for (uint i = 0u; i < spot_shadow_count; ++i) {
+        for (uint i = 0u; i < uint(ERHE_LIGHT_SPOT_SHADOWMAPPED_COUNT); ++i) {
             uint  light_index    = spot_light_offset + i;
             Light light          = light_block.lights[light_index];
             vec3  point_to_light = light.position_and_inner_spot_cos.xyz - v_position.xyz;
@@ -198,7 +201,7 @@ void main()
         }
 
         // Spot - non-shadow suffix
-        for (uint i = spot_shadow_count; i < spot_light_count; ++i) {
+        for (uint i = uint(ERHE_LIGHT_SPOT_SHADOWMAPPED_COUNT); i < uint(ERHE_LIGHT_SPOT_COUNT); ++i) {
             uint  light_index    = spot_light_offset + i;
             Light light          = light_block.lights[light_index];
             vec3  point_to_light = light.position_and_inner_spot_cos.xyz - v_position.xyz;
@@ -222,7 +225,7 @@ void main()
 
         // Point - shadow-mapped prefix
         // Point shadows are not yet sampled (TODO in old code), so this matches the suffix branch.
-        for (uint i = 0u; i < point_shadow_count; ++i) {
+        for (uint i = 0u; i < uint(ERHE_LIGHT_POINT_SHADOWMAPPED_COUNT); ++i) {
             uint  light_index    = point_light_offset + i;
             Light light          = light_block.lights[light_index];
             vec3  point_to_light = light.position_and_inner_spot_cos.xyz - v_position.xyz;
@@ -244,7 +247,7 @@ void main()
         }
 
         // Point - non-shadow suffix
-        for (uint i = point_shadow_count; i < point_light_count; ++i) {
+        for (uint i = uint(ERHE_LIGHT_POINT_SHADOWMAPPED_COUNT); i < uint(ERHE_LIGHT_POINT_COUNT); ++i) {
             uint  light_index    = point_light_offset + i;
             Light light          = light_block.lights[light_index];
             vec3  point_to_light = light.position_and_inner_spot_cos.xyz - v_position.xyz;
