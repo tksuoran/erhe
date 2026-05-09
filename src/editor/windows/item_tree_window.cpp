@@ -1282,9 +1282,6 @@ void Item_tree::imgui_tree(float ui_scale)
         const bool enable_physics = m_context.app_settings->physics.static_enable;
         auto scene_root = std::make_shared<Scene_root>(
             nullptr,
-            nullptr,
-            nullptr,
-            nullptr,
             content_library,
             "new scene",
             enable_physics

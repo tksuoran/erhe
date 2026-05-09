@@ -6,6 +6,7 @@
 #include "app_message_bus.hpp"
 #include "app_settings.hpp"
 #include "content_library/content_library.hpp"
+#include "content_library/content_library_window.hpp"
 #include "editor_log.hpp"
 #include "operations/operation.hpp"
 #include "operations/operation_stack.hpp"
@@ -36,9 +37,10 @@ public:
     void undo   (App_context& context) override;
 
 private:
-    std::filesystem::path            m_path;
-    std::shared_ptr<Scene_root>      m_scene_root;
-    std::shared_ptr<Content_library> m_content_library;
+    std::filesystem::path                  m_path;
+    std::shared_ptr<Scene_root>            m_scene_root;
+    std::shared_ptr<Content_library>       m_content_library;
+    std::shared_ptr<Content_library_window> m_content_library_window;
 };
 
 Scene_open_operation::Scene_open_operation(const std::filesystem::path& path)
@@ -58,15 +60,20 @@ void Scene_open_operation::execute(App_context& context)
 
         const bool enable_physics = context.app_settings->physics.static_enable;
         m_scene_root = std::make_shared<Scene_root>(
-            context.imgui_renderer,
-            context.imgui_windows,
-            &context,
             context.app_message_bus,
             m_content_library,
             erhe::file::to_string(m_path.filename()),
             enable_physics
         );
         m_scene_root->register_to_editor_scenes(*context.app_scenes);
+
+        m_content_library_window = std::make_shared<Content_library_window>(
+            *context.imgui_renderer,
+            *context.imgui_windows,
+            context,
+            m_content_library,
+            m_scene_root->get_name()
+        );
 
         auto browser_window = m_scene_root->make_browser_window(
             *context.imgui_renderer,

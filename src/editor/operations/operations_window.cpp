@@ -5,6 +5,7 @@
 #include "brushes/brush.hpp"
 #include "app_settings.hpp"
 #include "content_library/content_library.hpp"
+#include "content_library/content_library_window.hpp"
 #include "items.hpp"
 #include "operations/geometry_operations.hpp"
 #include "operations/item_insert_remove_operation.hpp"
@@ -205,8 +206,6 @@ Operations::Operations(
             try {
                 auto content_library = std::make_shared<Content_library>();
                 auto scene_root = editor::load_scene(
-                    m_context.imgui_renderer,
-                    m_context.imgui_windows,
                     &m_context,
                     m_context.app_message_bus,
                     m_context.app_scenes,
@@ -215,6 +214,15 @@ Operations::Operations(
                 );
                 if (scene_root) {
                     log_operations->info("Scene loaded: {}", scene_root->get_name());
+                    m_loaded_content_library_windows.push_back(
+                        std::make_shared<Content_library_window>(
+                            *m_context.imgui_renderer,
+                            *m_context.imgui_windows,
+                            m_context,
+                            content_library,
+                            scene_root->get_name()
+                        )
+                    );
                     auto browser_window = scene_root->make_browser_window(
                         *m_context.imgui_renderer,
                         *m_context.imgui_windows,

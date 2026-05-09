@@ -3,11 +3,6 @@
 #include <filesystem>
 #include <memory>
 
-namespace erhe::imgui {
-    class Imgui_renderer;
-    class Imgui_windows;
-}
-
 namespace editor {
 
 class App_context;
@@ -22,8 +17,6 @@ auto save_scene(
 ) -> bool;
 
 auto load_scene(
-    erhe::imgui::Imgui_renderer*            imgui_renderer,
-    erhe::imgui::Imgui_windows*             imgui_windows,
     App_context*                            context,
     App_message_bus*                        app_message_bus,
     App_scenes*                             app_scenes,
