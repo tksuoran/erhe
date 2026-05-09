@@ -193,6 +193,15 @@ void Light_projections::apply(
         }
     }
 
+    // Snapshot for the standard shader variant cache (scene sub-key).
+    // Slots match type_index_of: 0 directional, 1 spot, 2 point.
+    light_counts.directional_shadowmapped_count = static_cast<uint16_t>(per_type_shadow[0]);
+    light_counts.directional_light_count        = static_cast<uint16_t>(per_type_shadow[0] + per_type_nonshadow[0]);
+    light_counts.spot_shadowmapped_count        = static_cast<uint16_t>(per_type_shadow[1]);
+    light_counts.spot_light_count               = static_cast<uint16_t>(per_type_shadow[1] + per_type_nonshadow[1]);
+    light_counts.point_shadowmapped_count       = static_cast<uint16_t>(per_type_shadow[2]);
+    light_counts.point_light_count              = static_cast<uint16_t>(per_type_shadow[2] + per_type_nonshadow[2]);
+
     // Compute base slots: type major (directional, spot, point, other),
     // shadow minor (shadow-casters, then non-shadow-casters within each type).
     std::size_t base_shadow   [4] = {0, 0, 0, 0};

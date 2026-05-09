@@ -7,6 +7,7 @@
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/light.hpp"
 #include "erhe_math/viewport.hpp"
+#include "erhe_scene_renderer/standard_shader_variant.hpp"
 
 #include <memory>
 
@@ -108,6 +109,13 @@ public:
     erhe::scene::Light_projection_parameters              parameters;
     std::vector<erhe::scene::Light_projection_transforms> light_projection_transforms;
     std::shared_ptr<erhe::graphics::Texture>              shadow_map_texture;
+
+    // Per-frame light count snapshot used to populate the scene sub-key
+    // of Standard_variant_key. Mirrors the per-(type, has_shadow)
+    // partition counts apply() computes when assigning UBO slots, so
+    // render-time call sites can read them without re-walking the
+    // lights span.
+    Standard_variant_light_counts                         light_counts{};
 
     // TODO A bit hacky injection of these parameters..
     float                                                 brdf_phi         {0.0f};
