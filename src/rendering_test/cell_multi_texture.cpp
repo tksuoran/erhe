@@ -113,7 +113,7 @@ void Rendering_test::draw_multi_texture_quad(
 
     encoder.draw_primitives(erhe::graphics::Primitive_type::triangle, 0, 3);
 
-    texture_heap.unbind();
+    texture_heap.unbind(encoder.get_command_buffer());
     buffer_range.release();
 }
 

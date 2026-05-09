@@ -738,7 +738,10 @@ void Tile_renderer::render(erhe::graphics::Render_command_encoder& render_encode
         return;
     }
 
-    erhe::graphics::Scoped_debug_group pass_scope{"Tile_renderer::render()"};
+    erhe::graphics::Scoped_debug_group pass_scope{
+        render_encoder.get_command_buffer(),
+        "Tile_renderer::render()"
+    };
 
     erhe::graphics::Render_pipeline* pipeline_ptr = m_pipeline.get_pipeline_for(render_pass.get_descriptor());
     if (pipeline_ptr == nullptr) {
@@ -813,7 +816,7 @@ void Tile_renderer::render(erhe::graphics::Render_command_encoder& render_encode
     projection_buffer_range.release();
     vertex_buffer_range.release();
 
-    texture_heap.unbind();
+    texture_heap.unbind(render_encoder.get_command_buffer());
 
     m_vertex_buffer_range.reset();
 }

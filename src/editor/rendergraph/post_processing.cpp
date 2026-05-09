@@ -656,7 +656,7 @@ auto Post_processing::get_nodes() -> const std::vector<std::shared_ptr<Post_proc
 void Post_processing::post_process(Post_processing_node& node, erhe::graphics::Command_buffer& command_buffer)
 {
     // log_frame->trace("Post_processing::post_process()");
-    erhe::graphics::Scoped_debug_group outer_debug_group{"post_process"};
+    erhe::graphics::Scoped_debug_group outer_debug_group{command_buffer, "post_process"};
 
     const std::shared_ptr<erhe::graphics::Texture> input_texture = node.get_consumer_input_texture(erhe::rendergraph::Rendergraph_node_key::viewport_texture);
     ERHE_VERIFY(input_texture);
@@ -680,7 +680,7 @@ void Post_processing::post_process(Post_processing_node& node, erhe::graphics::C
     ERHE_VERIFY(parameter_buffer != nullptr);
     const std::size_t parameter_range_base_offset = node.parameter_buffer_range.get_byte_start_offset_in_buffer();
 
-    m_texture_heap->reset_heap();
+    m_texture_heap->reset_heap(command_buffer);
 
 
     // Downsample passes. Each pass reads pyramid level source_level and
@@ -691,7 +691,7 @@ void Post_processing::post_process(Post_processing_node& node, erhe::graphics::C
     //   distinct Texture objects, so no feedback-loop UB.
     erhe::graphics::Render_pass* previous_render_pass = nullptr;
     for (const size_t source_level : node.downsample_source_levels) {
-        erhe::graphics::Scoped_debug_group inner_debug_group{"downsample"};
+        erhe::graphics::Scoped_debug_group inner_debug_group{command_buffer, "downsample"};
 
         const size_t                 destination_level = source_level + 1;
         erhe::graphics::Render_pass* render_pass       = node.downsample_render_passes.at(destination_level - 1).get();
@@ -756,7 +756,7 @@ void Post_processing::post_process(Post_processing_node& node, erhe::graphics::C
     // Render target and sampled textures are always distinct Texture objects
     // so no feedback-loop UB.
     for (const size_t source_level : node.upsample_source_levels) {
-        erhe::graphics::Scoped_debug_group inner_debug_group{"upsample"};
+        erhe::graphics::Scoped_debug_group inner_debug_group{command_buffer, "upsample"};
         const size_t destination_level = source_level - 1;
         erhe::graphics::Render_pass* render_pass = node.upsample_render_passes.at(destination_level).get();
         const unsigned int binding_point = m_parameter_block.get_binding_point();
@@ -823,7 +823,7 @@ void Post_processing::post_process(Post_processing_node& node, erhe::graphics::C
         encoder.draw_primitives(erhe::graphics::Primitive_type::triangle, 0, 3);
     }
 
-    m_texture_heap->unbind();
+    m_texture_heap->unbind(command_buffer);
 }
 
 }

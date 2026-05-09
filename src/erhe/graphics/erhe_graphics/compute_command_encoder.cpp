@@ -52,5 +52,9 @@ void Compute_command_encoder::dispatch_compute(
 {
     m_impl->dispatch_compute(x_size, y_size, z_size);
 }
+auto Compute_command_encoder::get_command_buffer() -> Command_buffer&
+{
+    return m_impl->get_command_buffer();
+}
 
 } // namespace erhe::graphics

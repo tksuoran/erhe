@@ -605,7 +605,10 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
 
                 erhe::scene::Scene* hosted_scene = scene_root->get_hosted_scene();
                 if (hosted_scene != nullptr) {
-                    erhe::graphics::Scoped_debug_group content_wide_line_renderer_debug_group{"content_wide_line_renderer (multiview)"};
+                    erhe::graphics::Scoped_debug_group content_wide_line_renderer_debug_group{
+                        views_cb,
+                        "content_wide_line_renderer (multiview)"
+                    };
                     auto feed_pass = [&](const Composition_pass* pass) {
                         if ((pass == nullptr) || !pass->use_content_wide_line_renderer || !pass->enabled) {
                             return;

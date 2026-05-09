@@ -28,9 +28,9 @@ Texture_heap::Texture_heap(
 
 Texture_heap::~Texture_heap() noexcept = default;
 
-void Texture_heap::reset_heap()
+void Texture_heap::reset_heap(Command_buffer& command_buffer)
 {
-    m_impl->reset_heap();
+    m_impl->reset_heap(command_buffer);
 }
 
 auto Texture_heap::get_shader_handle(const Texture* texture, const Sampler* sampler) -> uint64_t
@@ -44,9 +44,9 @@ auto Texture_heap::allocate(const Texture* texture, const Sampler* sampler) -> u
 }
 
 // TODO Maybe this should use Render_command_encoder?
-void Texture_heap::unbind()
+void Texture_heap::unbind(Command_buffer& command_buffer)
 {
-    m_impl->unbind();
+    m_impl->unbind(command_buffer);
 }
 
 auto Texture_heap::bind(Render_command_encoder& encoder) -> std::size_t

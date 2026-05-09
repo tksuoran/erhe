@@ -940,7 +940,7 @@ auto Imgui_renderer::image_button(Draw_texture_parameters&& parameters) -> bool
 
 void Imgui_renderer::update_texture(ImTextureData* tex, erhe::graphics::Command_buffer& command_buffer)
 {
-    erhe::graphics::Scoped_debug_group pass_scope{"Imgui_renderer::update_texture()"};
+    erhe::graphics::Scoped_debug_group pass_scope{command_buffer, "Imgui_renderer::update_texture()"};
 
     ERHE_VERIFY(tex != nullptr);
 
@@ -1159,7 +1159,10 @@ void Imgui_renderer::render_draw_data(
         return;
     }
 
-    erhe::graphics::Scoped_debug_group pass_scope{"Imgui_renderer::render_draw_data()"};
+    erhe::graphics::Scoped_debug_group pass_scope{
+        render_encoder.get_command_buffer(),
+        "Imgui_renderer::render_draw_data()"
+    };
 
     auto&       program                       = m_imgui_program_interface;
     const auto& draw_parameter_struct_offsets = program.draw_parameter_struct_offsets;
@@ -1198,10 +1201,10 @@ void Imgui_renderer::render_draw_data(
     render_encoder.set_viewport_rect(0, 0, fb_width, fb_height);
     render_encoder.set_scissor_rect(0, 0, fb_width, fb_height);
 
-    m_texture_heap->reset_heap();
+    m_texture_heap->reset_heap(render_encoder.get_command_buffer());
 
     for (int n = 0; n < draw_data->CmdListsCount; n++) {
-        erhe::graphics::Scoped_debug_group cmd_list_scope{"CmdList"};
+        erhe::graphics::Scoped_debug_group cmd_list_scope{render_encoder.get_command_buffer(), "CmdList"};
 
         // log_frame->trace("CmdList {}", n);
         const ImDrawList* cmd_list = draw_data->CmdLists[n];
@@ -1464,7 +1467,7 @@ void Imgui_renderer::render_draw_data(
             if (cmd_batch_end == cmd_list->CmdBuffer.Size) {
                 break;
             } else {
-                m_texture_heap->reset_heap();
+                m_texture_heap->reset_heap(render_encoder.get_command_buffer());
             }
         } // outer loop going throught batches of commands
     } // for all cmd lists
@@ -1476,7 +1479,7 @@ void Imgui_renderer::render_draw_data(
     gl::disable(gl::Enable_cap::clip_distance3);
 #endif // TODO
 
-    m_texture_heap->unbind();
+    m_texture_heap->unbind(render_encoder.get_command_buffer());
 
     SPDLOG_LOGGER_TRACE(log_frame, "end Imgui_renderer::render_draw_data()");
 }

@@ -19,6 +19,7 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_utility/bit_helpers.hpp"
+#include "erhe_verify/verify.hpp"
 
 namespace editor {
 
@@ -337,7 +338,8 @@ void Tools::update_transforms()
 void Tools::render_viewport_tools(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION();
-    erhe::graphics::Scoped_debug_group debug_group{"Tools::render_viewport_tools"};
+    ERHE_VERIFY(context.command_buffer != nullptr);
+    erhe::graphics::Scoped_debug_group debug_group{*context.command_buffer, "Tools::render_viewport_tools"};
 
     for (const auto& tool : m_background_tools) {
         tool->tool_render(context);

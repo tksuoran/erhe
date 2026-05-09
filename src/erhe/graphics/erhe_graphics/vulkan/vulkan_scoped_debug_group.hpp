@@ -11,7 +11,6 @@ class Command_buffer;
 class Scoped_debug_group_impl final
 {
 public:
-    explicit Scoped_debug_group_impl(erhe::utility::Debug_label debug_label);
     Scoped_debug_group_impl(Command_buffer& command_buffer, erhe::utility::Debug_label debug_label);
     ~Scoped_debug_group_impl() noexcept;
 
@@ -20,7 +19,6 @@ public:
 private:
     erhe::utility::Debug_label m_debug_label;
     VkCommandBuffer            m_command_buffer;
-    VkQueue                    m_queue;
 };
 
 } // namespace erhe::graphics

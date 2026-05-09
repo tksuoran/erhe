@@ -116,7 +116,10 @@ void Depth_to_color_rendergraph_node::execute_rendergraph_node(erhe::graphics::C
         return;
     }
 
-    erhe::graphics::Scoped_debug_group pass_scope{"Depth_to_color_rendergraph_node::execute_rendergraph_node()"};
+    erhe::graphics::Scoped_debug_group pass_scope{
+        command_buffer,
+        "Depth_to_color_rendergraph_node::execute_rendergraph_node()"
+    };
 
     erhe::graphics::Render_pass* render_pass = m_render_target.get_render_pass();
     erhe::math::Viewport viewport{

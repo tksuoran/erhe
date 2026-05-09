@@ -7,7 +7,9 @@ namespace erhe::graphics {
 
 bool Scoped_debug_group_impl::s_enabled{false};
 
-Scoped_debug_group_impl::Scoped_debug_group_impl(erhe::utility::Debug_label debug_label)
+// GL has no per-cb concept; the active GL context is the recording
+// target, so the cb argument is unused.
+Scoped_debug_group_impl::Scoped_debug_group_impl(Command_buffer&, erhe::utility::Debug_label debug_label)
     : m_debug_label{std::move(debug_label)}
 {
     ERHE_VERIFY(!m_debug_label.empty());
@@ -21,13 +23,6 @@ Scoped_debug_group_impl::Scoped_debug_group_impl(erhe::utility::Debug_label debu
         static_cast<GLsizei>(m_debug_label.size() + 1),
         m_debug_label.data()
     );
-}
-
-// GL has no per-cb concept; the active GL context is the recording target,
-// so the cb-targeted overload is identical to the single-arg one.
-Scoped_debug_group_impl::Scoped_debug_group_impl(Command_buffer&, erhe::utility::Debug_label debug_label)
-    : Scoped_debug_group_impl{std::move(debug_label)}
-{
 }
 
 Scoped_debug_group_impl::~Scoped_debug_group_impl() noexcept

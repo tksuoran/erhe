@@ -24,6 +24,8 @@ public:
     void set_compute_pipeline      (const Compute_pipeline& pipeline);
     void dispatch_compute          (std::uintptr_t x_size, std::uintptr_t y_size, std::uintptr_t z_size);
 
+    [[nodiscard]] auto get_command_buffer() -> Command_buffer& { return m_command_buffer; }
+
 private:
     // Returns the VkCommandBuffer this encoder records into.
     // Sourced from m_command_buffer; this encoder no longer falls back

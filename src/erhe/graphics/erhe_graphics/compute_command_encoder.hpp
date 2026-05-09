@@ -33,6 +33,11 @@ public:
     void set_compute_pipeline      (const Compute_pipeline& pipeline);
     void dispatch_compute          (std::uintptr_t x_size, std::uintptr_t y_size, std::uintptr_t z_size);
 
+    // The Command_buffer this encoder records into. Mirrors
+    // Render_command_encoder::get_command_buffer; needed so callers can
+    // hand the cb to Scoped_debug_group's cb-targeted ctor.
+    [[nodiscard]] auto get_command_buffer() -> Command_buffer&;
+
 private:
     erhe::utility::pimpl_ptr<Compute_command_encoder_impl, 128, 16> m_impl;
 };

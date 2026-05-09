@@ -322,7 +322,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
         m_camera_buffer.bind(parameters.render_encoder, camera_buffer_range.value());
     }
 
-    m_texture_heap->reset_heap();
+    m_texture_heap->reset_heap(parameters.render_encoder.get_command_buffer());
 
     Ring_buffer_range material_range = m_material_buffer.update(*m_texture_heap.get(), materials);
     m_material_buffer.bind(parameters.render_encoder, material_range);
@@ -516,7 +516,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
     joint_range.release();
     light_range.release();
 
-    m_texture_heap->unbind();
+    m_texture_heap->unbind(parameters.render_encoder.get_command_buffer());
 }
 
 void Forward_renderer::draw_primitives(const Render_parameters& parameters, const erhe::scene::Light* light)
@@ -530,7 +530,7 @@ void Forward_renderer::draw_primitives(const Render_parameters& parameters, cons
 
     parameters.render_encoder.set_bind_group_layout(m_program_interface.bind_group_layout.get());
 
-    m_texture_heap->reset_heap();
+    m_texture_heap->reset_heap(parameters.render_encoder.get_command_buffer());
 
     using Ring_buffer_range = erhe::graphics::Ring_buffer_range;
     Ring_buffer_range material_range = m_material_buffer.update(*m_texture_heap.get(), parameters.materials);
@@ -626,7 +626,7 @@ void Forward_renderer::draw_primitives(const Render_parameters& parameters, cons
         camera_range.value().release();
     }
 
-    m_texture_heap->unbind();
+    m_texture_heap->unbind(parameters.render_encoder.get_command_buffer());
 }
 
 } // namespace erhe::scene_renderer

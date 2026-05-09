@@ -379,9 +379,9 @@ void Text_renderer::render(
         return;
     }
 
-    erhe::graphics::Scoped_debug_group pass_scope{"Text_renderer::render()"};
+    erhe::graphics::Scoped_debug_group pass_scope{encoder.get_command_buffer(), "Text_renderer::render()"};
 
-    m_texture_heap->reset_heap();
+    m_texture_heap->reset_heap(encoder.get_command_buffer());
 
     const bool top_left = (m_graphics_device.get_info().coordinate_conventions.framebuffer_origin == erhe::math::Framebuffer_origin::top_left);
     const glm::mat4 clip_from_window = erhe::math::create_orthographic(
@@ -490,7 +490,7 @@ void Text_renderer::render(
         vertex_buffer_range.release();
     }
 
-    m_texture_heap->unbind();
+    m_texture_heap->unbind(encoder.get_command_buffer());
 
     m_vertex_buffer_ranges.clear();
 }

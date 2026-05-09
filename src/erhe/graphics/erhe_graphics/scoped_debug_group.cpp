@@ -15,11 +15,6 @@
 
 namespace erhe::graphics {
 
-Scoped_debug_group::Scoped_debug_group(erhe::utility::Debug_label debug_label)
-    : m_impl{debug_label}
-{
-}
-
 Scoped_debug_group::Scoped_debug_group(Command_buffer& command_buffer, erhe::utility::Debug_label debug_label)
     : m_impl{command_buffer, debug_label}
 {

@@ -256,7 +256,7 @@ void Id_renderer::render(const Render_parameters& parameters)
     const std::size_t color_image_size_bytes = s_extent * s_extent * erhe::dataformat::get_format_size_bytes(m_color_texture->get_pixelformat());
     const std::size_t depth_image_size_bytes = s_extent * s_extent * erhe::dataformat::get_format_size_bytes(m_depth_texture->get_pixelformat());
 
-    Scoped_debug_group debug_group{"Id_renderer::render()"};
+    Scoped_debug_group debug_group{parameters.command_buffer, "Id_renderer::render()"};
 
     const auto projection_transforms = camera.projection_transforms(viewport, parameters.reverse_depth, parameters.depth_range, parameters.conventions);
     const mat4 clip_from_world       = projection_transforms.clip_from_world.get_matrix();
