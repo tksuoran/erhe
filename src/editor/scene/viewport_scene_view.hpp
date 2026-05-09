@@ -157,8 +157,13 @@ private:
     // viewport for 3d camera
     erhe::math::Viewport               m_projection_viewport  {0, 0, 0, 0};
 
-    //Shader_stages_variant              m_shader_stages_variant{Shader_stages_variant::standard};
-    Shader_stages_variant              m_shader_stages_variant{Shader_stages_variant::circular_brushed_metal};
+    // not_set means "no per-call shader override"; the polygon_fill_standard_*
+    // pipelines then take their baked programs.standard.shader_stages and the
+    // Forward_renderer per-bucket Standard_shader_variants lookup substitutes
+    // a right-sized variant. Selecting circular_brushed_metal / anisotropic_*
+    // / debug_* from the dropdown still works -- get_variant_shader_stages
+    // returns the picked shader and the per-call override path takes over.
+    Shader_stages_variant              m_shader_stages_variant{Shader_stages_variant::not_set};
     Renderer_choice                    m_renderer_choice      {Renderer_choice::forward};
     bool                               m_is_scene_view_hovered{false};
     bool                               m_show_navigation_gizmo{true};
