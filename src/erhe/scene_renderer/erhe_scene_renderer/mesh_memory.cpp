@@ -101,15 +101,19 @@ Mesh_memory::Mesh_memory(const Mesh_memory_config& mesh_memory_config, erhe::gra
             .debug_label                            = "Mesh_memory edge line vertex buffer"
         }
     }
+    , vertex_pool_position    {buffer_transfer_queue, s_vertex_binding_position}
+    , vertex_pool_non_position{buffer_transfer_queue, s_vertex_binding_non_position}
+    , vertex_pool_custom      {buffer_transfer_queue, s_vertex_binding_custom}
+    , index_pool              {buffer_transfer_queue, 0}
+    , edge_line_vertex_pool   {buffer_transfer_queue, 0}
     , graphics_buffer_sink{
-        buffer_transfer_queue,
         {
-            &vertex_buffer_position,
-            &vertex_buffer_non_position,
-            &vertex_buffer_custom
+            &vertex_pool_position,
+            &vertex_pool_non_position,
+            &vertex_pool_custom
         },
-        &index_buffer,
-        &edge_line_vertex_buffer
+        &index_pool,
+        &edge_line_vertex_pool
     }
     , buffer_info{
         .index_type    = erhe::dataformat::Format::format_32_scalar_uint,
@@ -121,6 +125,13 @@ Mesh_memory::Mesh_memory(const Mesh_memory_config& mesh_memory_config, erhe::gra
         erhe::graphics::Vertex_input_state_data::make(vertex_format)
     }
 {
+    // Register the eagerly-created buffers as the first (only) block of each
+    // pool. Step 3 will defer block creation to first allocate().
+    vertex_pool_position    .add_existing_block(&vertex_buffer_position,     vertex_buffer_position    .get_capacity_byte_count());
+    vertex_pool_non_position.add_existing_block(&vertex_buffer_non_position, vertex_buffer_non_position.get_capacity_byte_count());
+    vertex_pool_custom      .add_existing_block(&vertex_buffer_custom,       vertex_buffer_custom      .get_capacity_byte_count());
+    index_pool              .add_existing_block(&index_buffer,               index_buffer              .get_capacity_byte_count());
+    edge_line_vertex_pool   .add_existing_block(&edge_line_vertex_buffer,    edge_line_vertex_buffer   .get_capacity_byte_count());
 }
 
 Mesh_memory::~Mesh_memory() noexcept

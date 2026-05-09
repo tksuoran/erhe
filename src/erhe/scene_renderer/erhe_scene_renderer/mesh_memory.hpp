@@ -2,6 +2,7 @@
 
 #include "erhe_dataformat/vertex_format.hpp"
 #include "erhe_graphics/buffer.hpp"
+#include "erhe_graphics_buffer_sink/buffer_pool.hpp"
 #include "erhe_graphics_buffer_sink/graphics_buffer_sink.hpp"
 #include "erhe_graphics/buffer_transfer_queue.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
@@ -48,6 +49,14 @@ public:
     erhe::graphics::Buffer                           vertex_buffer_custom;
     erhe::graphics::Buffer                           index_buffer;
     erhe::graphics::Buffer                           edge_line_vertex_buffer;
+    // The pools wrap the buffers above with allocators. Step 2 keeps the
+    // buffers owned by Mesh_memory; Step 3 transfers ownership into the
+    // pools and lets allocate() grow new blocks lazily.
+    erhe::graphics_buffer_sink::Buffer_pool          vertex_pool_position;
+    erhe::graphics_buffer_sink::Buffer_pool          vertex_pool_non_position;
+    erhe::graphics_buffer_sink::Buffer_pool          vertex_pool_custom;
+    erhe::graphics_buffer_sink::Buffer_pool          index_pool;
+    erhe::graphics_buffer_sink::Buffer_pool          edge_line_vertex_pool;
     erhe::graphics_buffer_sink::Graphics_buffer_sink graphics_buffer_sink;
     erhe::primitive::Buffer_info                     buffer_info;
     erhe::graphics::Vertex_input_state               vertex_input;
