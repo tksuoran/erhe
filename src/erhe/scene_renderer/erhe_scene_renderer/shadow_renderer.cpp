@@ -35,53 +35,90 @@ static constexpr std::string_view c_shadow_renderer_initialize_component{"Shadow
 
 namespace {
 
-class Span_buffers
+class Buffer_set
 {
 public:
     erhe::graphics::Buffer*              index_buffer{nullptr};
     std::vector<erhe::graphics::Buffer*> vertex_buffers;
-    bool                                 valid{false};
+
+    [[nodiscard]] auto valid() const -> bool { return index_buffer != nullptr; }
+
+    [[nodiscard]] auto operator==(const Buffer_set& other) const -> bool
+    {
+        return index_buffer == other.index_buffer && vertex_buffers == other.vertex_buffers;
+    }
 };
 
-auto resolve_span_buffers(
-    const std::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes,
-    const erhe::primitive::Primitive_mode                      primitive_mode
-) -> Span_buffers
+auto peek_mesh_buffers(
+    const std::shared_ptr<erhe::scene::Mesh>& mesh,
+    const erhe::primitive::Primitive_mode     primitive_mode
+) -> Buffer_set
 {
-    Span_buffers result;
-    for (const std::shared_ptr<erhe::scene::Mesh>& mesh : meshes) {
-        if (!mesh) {
+    Buffer_set result;
+    if (!mesh) {
+        return result;
+    }
+    for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh->get_primitives()) {
+        const erhe::primitive::Primitive* primitive = mesh_primitive.primitive.get();
+        if (primitive == nullptr) {
             continue;
         }
-        for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh->get_primitives()) {
-            const erhe::primitive::Primitive* primitive = mesh_primitive.primitive.get();
-            if (primitive == nullptr) {
-                continue;
+        const erhe::primitive::Buffer_mesh* buffer_mesh = primitive->get_renderable_mesh();
+        if (buffer_mesh == nullptr) {
+            continue;
+        }
+        if (buffer_mesh->index_range(primitive_mode).index_count == 0) {
+            continue;
+        }
+        if (!result.valid()) {
+            result.index_buffer = buffer_mesh->index_buffer_range.buffer;
+            result.vertex_buffers.reserve(buffer_mesh->vertex_buffer_ranges.size());
+            for (const erhe::primitive::Buffer_range& vr : buffer_mesh->vertex_buffer_ranges) {
+                result.vertex_buffers.push_back(vr.buffer);
             }
-            const erhe::primitive::Buffer_mesh* buffer_mesh = primitive->get_renderable_mesh();
-            if (buffer_mesh == nullptr) {
-                continue;
-            }
-            if (buffer_mesh->index_range(primitive_mode).index_count == 0) {
-                continue;
-            }
-            if (!result.valid) {
-                result.index_buffer = buffer_mesh->index_buffer_range.buffer;
-                result.vertex_buffers.reserve(buffer_mesh->vertex_buffer_ranges.size());
-                for (const erhe::primitive::Buffer_range& vr : buffer_mesh->vertex_buffer_ranges) {
-                    result.vertex_buffers.push_back(vr.buffer);
-                }
-                result.valid = true;
-            } else {
-                ERHE_VERIFY(buffer_mesh->index_buffer_range.buffer == result.index_buffer);
-                ERHE_VERIFY(buffer_mesh->vertex_buffer_ranges.size() == result.vertex_buffers.size());
-                for (std::size_t i = 0; i < buffer_mesh->vertex_buffer_ranges.size(); ++i) {
-                    ERHE_VERIFY(buffer_mesh->vertex_buffer_ranges[i].buffer == result.vertex_buffers[i]);
-                }
+        } else {
+            ERHE_VERIFY(buffer_mesh->index_buffer_range.buffer == result.index_buffer);
+            ERHE_VERIFY(buffer_mesh->vertex_buffer_ranges.size() == result.vertex_buffers.size());
+            for (std::size_t i = 0; i < buffer_mesh->vertex_buffer_ranges.size(); ++i) {
+                ERHE_VERIFY(buffer_mesh->vertex_buffer_ranges[i].buffer == result.vertex_buffers[i]);
             }
         }
     }
     return result;
+}
+
+class Bucket
+{
+public:
+    Buffer_set                                      key;
+    std::vector<std::shared_ptr<erhe::scene::Mesh>> meshes;
+};
+
+auto bucket_meshes_by_buffers(
+    const std::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes,
+    const erhe::primitive::Primitive_mode                      primitive_mode
+) -> std::vector<Bucket>
+{
+    std::vector<Bucket> buckets;
+    for (const std::shared_ptr<erhe::scene::Mesh>& mesh : meshes) {
+        const Buffer_set bs = peek_mesh_buffers(mesh, primitive_mode);
+        if (!bs.valid()) {
+            continue;
+        }
+        Bucket* found = nullptr;
+        for (Bucket& b : buckets) {
+            if (b.key == bs) {
+                found = &b;
+                break;
+            }
+        }
+        if (found == nullptr) {
+            buckets.push_back(Bucket{.key = bs, .meshes = {}});
+            found = &buckets.back();
+        }
+        found->meshes.push_back(mesh);
+    }
+    return buckets;
 }
 
 }
@@ -279,55 +316,53 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
                 continue;
             }
 
-            // Until Step 4 introduces per-buffer-set bucketing, all primitives
-            // in a span must share the same vertex/index buffer set. The helper
-            // walks the span once and asserts that invariant.
-            const Span_buffers span_buffers = resolve_span_buffers(meshes, primitive_mode);
-            if (!span_buffers.valid) {
-                continue;
-            }
+            // Group meshes by GPU buffer set; multi-draw-indirect needs
+            // identical vertex/index bindings for every draw it covers.
+            const std::vector<Bucket> buckets = bucket_meshes_by_buffers(meshes, primitive_mode);
+            for (const Bucket& bucket : buckets) {
+                encoder.set_index_buffer(bucket.key.index_buffer);
+                for (std::size_t stream_index = 0; stream_index < bucket.key.vertex_buffers.size(); ++stream_index) {
+                    encoder.set_vertex_buffer(
+                        bucket.key.vertex_buffers[stream_index],
+                        0,
+                        static_cast<uint32_t>(stream_index)
+                    );
+                }
 
-            encoder.set_index_buffer(span_buffers.index_buffer);
-            for (std::size_t stream_index = 0; stream_index < span_buffers.vertex_buffers.size(); ++stream_index) {
-                encoder.set_vertex_buffer(
-                    span_buffers.vertex_buffers[stream_index],
-                    0,
-                    static_cast<uint32_t>(stream_index)
-                );
-            }
+                const std::span<const std::shared_ptr<erhe::scene::Mesh>> bucket_meshes{bucket.meshes};
+                std::size_t primitive_count{0};
+                Ring_buffer_range primitive_range = m_primitive_buffer.update(bucket_meshes, primitive_mode, shadow_filter, Primitive_interface_settings{}, primitive_count);
+                if (primitive_count == 0) {
+                    primitive_range.cancel();
+                    continue;
+                }
+                Draw_indirect_buffer_range draw_indirect_buffer_range = m_draw_indirect_buffer.update(bucket_meshes, primitive_mode, shadow_filter);
+                ERHE_VERIFY(primitive_count == draw_indirect_buffer_range.draw_indirect_count);
+                if (primitive_count == 0) {
+                    primitive_range.cancel();
+                    draw_indirect_buffer_range.range.cancel();
+                    continue;
+                }
 
-            std::size_t primitive_count{0};
-            Ring_buffer_range primitive_range = m_primitive_buffer.update(meshes, primitive_mode, shadow_filter, Primitive_interface_settings{}, primitive_count);
-            if (primitive_count == 0) {
-                primitive_range.cancel();
-                continue;
-            }
-            Draw_indirect_buffer_range draw_indirect_buffer_range = m_draw_indirect_buffer.update(meshes, primitive_mode, shadow_filter);
-            ERHE_VERIFY(primitive_count == draw_indirect_buffer_range.draw_indirect_count);
-            if (primitive_count == 0) {
-                primitive_range.cancel();
-                draw_indirect_buffer_range.range.cancel();
-                continue;
-            }
+                m_primitive_buffer.bind(encoder, primitive_range);
+                m_draw_indirect_buffer.bind(encoder, draw_indirect_buffer_range.range);
 
-            m_primitive_buffer.bind(encoder, primitive_range);
-            m_draw_indirect_buffer.bind(encoder, draw_indirect_buffer_range.range);
+                {
+                    static constexpr std::string_view c_id_mdi{"mdi"};
 
-            {
-                static constexpr std::string_view c_id_mdi{"mdi"};
-
-                ERHE_PROFILE_SCOPE("mdi");
-                //ERHE_PROFILE_GPU_SCOPE(c_id_mdi);
-                encoder.multi_draw_indexed_primitives_indirect(
-                    pipeline.data.input_assembly.primitive_topology,
-                    parameters.index_type,
-                    draw_indirect_buffer_range.range.get_byte_start_offset_in_buffer(),
-                    draw_indirect_buffer_range.draw_indirect_count,
-                    sizeof(erhe::graphics::Draw_indexed_primitives_indirect_command)
-                );
+                    ERHE_PROFILE_SCOPE("mdi");
+                    //ERHE_PROFILE_GPU_SCOPE(c_id_mdi);
+                    encoder.multi_draw_indexed_primitives_indirect(
+                        pipeline.data.input_assembly.primitive_topology,
+                        parameters.index_type,
+                        draw_indirect_buffer_range.range.get_byte_start_offset_in_buffer(),
+                        draw_indirect_buffer_range.draw_indirect_count,
+                        sizeof(erhe::graphics::Draw_indexed_primitives_indirect_command)
+                    );
+                }
+                primitive_range.release();
+                draw_indirect_buffer_range.range.release();
             }
-            primitive_range.release();
-            draw_indirect_buffer_range.range.release();
         }
 
         control_range.release();

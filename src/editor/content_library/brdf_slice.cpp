@@ -103,9 +103,6 @@ void Brdf_slice_rendergraph_node::execute_rendergraph_node(erhe::graphics::Comma
         erhe::scene_renderer::Forward_renderer::Render_parameters{
             .render_encoder         = render_encoder,
             .index_type             = erhe::dataformat::Format::format_32_scalar_uint, // Note: Indices are not used by render_fullscreen()
-            .index_buffer           = nullptr,
-            .vertex_buffer0         = nullptr,
-            .vertex_buffer1         = nullptr,
             .light_projections      = &light_projections,
             .lights                 = {},
             .materials              = std::span<const std::shared_ptr<erhe::primitive::Material>>(&m_material, 1),

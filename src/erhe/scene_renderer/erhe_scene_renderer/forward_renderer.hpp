@@ -54,13 +54,6 @@ public:
     public:
         erhe::graphics::Render_command_encoder&                            render_encoder;
         erhe::dataformat::Format                                           index_type       {erhe::dataformat::Format::format_32_scalar_uint};
-        // index_buffer / vertex_buffer0..2 are deprecated and ignored by render():
-        // the renderer derives buffer bindings from each primitive's Buffer_range::buffer.
-        // Remove these fields once all callers have been migrated (Step 4 of mesh_memory plan).
-        erhe::graphics::Buffer*                                            index_buffer     {nullptr};
-        erhe::graphics::Buffer*                                            vertex_buffer0   {nullptr};
-        erhe::graphics::Buffer*                                            vertex_buffer1   {nullptr};
-        erhe::graphics::Buffer*                                            vertex_buffer2   {nullptr};
 
         const glm::vec3                                                    ambient_light    {0.0f};
         const erhe::scene::Camera*                                         camera           {nullptr};
