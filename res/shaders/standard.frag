@@ -42,14 +42,23 @@ layout(location = 7) flat in uint v_material_index;
 
 void main()
 {
-    Material material           = material.materials[v_material_index];
+    Material material   = material.materials[v_material_index];
+    vec3     base_color = material.base_color.rgb;
+
+#ifdef ERHE_USE_VERTEX_VARYING_COLOR
+    base_color *= v_color.rgb;
+#endif
+
+#ifdef ERHE_USE_BASE_COLOR_TEXTURE
     uvec2    base_color_texture = material.base_color_texture;
-    vec3     base_color         = v_color.rgb * material.base_color.rgb * sample_texture(
+    base_color *= sample_texture(
         base_color_texture,
         v_texcoord,
         material.base_color_rotation_scale,
         material.base_color_offset
     ).rgb;
+#endif
+
     vec3 color;
     if (material.unlit == 1) {
         color = base_color;
@@ -68,55 +77,54 @@ void main()
 #ifdef ERHE_USE_VERTEX_VARYING_BITANGENT
         vec3 B = normalize(v_B);
 #endif
+
 #ifdef ERHE_USE_VERTEX_VARYING_NORMAL
         vec3 N = normalize(v_N);
 #else
         vec3 N = vec3(0.0, 1.0, 0.0);
 #endif
 
-        uvec2 metallic_roughness_texture = material.metallic_roughness_texture;
-        uvec2 normal_texture             = material.normal_texture;
-        uvec2 occlusion_texture          = material.occlusion_texture;
-        uvec2 emissive_texture           = material.emissive_texture;
-
+#ifdef ERHE_USE_METALLIC_ROUGHNESS_TEXTURE
         vec4 metallic_roughness = sample_texture(
-            metallic_roughness_texture,
+            material.metallic_roughness_texture,
             v_texcoord,
             material.metallic_roughness_rotation_scale,
             material.metallic_roughness_offset
         );
         float metallic  = material.metallic * metallic_roughness.b;
         float roughness = max(material.roughness.x * metallic_roughness.g, 1e-4);
+#else
+        float metallic  = material.metallic;
+        float roughness = material.roughness.x;
+#endif
 
-        if (normal_texture.x != max_u32) {
+#ifdef ERHE_USE_NORMAL_TEXTURE
+        {
             vec3 ntex = sample_texture(
-                normal_texture,
+                material.normal_texture,
                 v_texcoord,
                 material.normal_rotation_scale,
                 material.normal_offset
             ).xyz * 2.0 - vec3(1.0);
             ntex.xy = ntex.xy * material.normal_texture_scale;
             ntex    = normalize(ntex);
-#if defined(ERHE_USE_VERTEX_VARYING_NORMAL) && defined(ERHE_USE_VERTEX_VARYING_BITANGENT)
+#   if defined(ERHE_USE_VERTEX_VARYING_NORMAL) && defined(ERHE_USE_VERTEX_VARYING_BITANGENT)
             N       = normalize(mat3(T, B, N) * ntex);
-#else
+#   else
             N       = ntex;
-#endif
+#   endif
         }
+#endif 
 
-        vec3 emissive = material.emissive.rgb * material.emissive.rgb * sample_texture(
-            emissive_texture,
+        vec3 emissive = material.emissive.rgb;
+#ifdef ERHE_USE_EMISSION_TEXTURE
+        emissive *= sample_texture(
+            material.emissive_texture,
             v_texcoord,
             material.emissive_rotation_scale,
             material.emissive_offset
         ).rgb;
-
-        float occlusion = sample_texture(
-            occlusion_texture,
-            v_texcoord,
-            material.occlusion_rotation_scale,
-            material.occlusion_offset
-        ).r;
+#endif
 
         float N_dot_V = clamped_dot(N, V);
 
@@ -131,7 +139,18 @@ void main()
         uint point_light_offset       = spot_light_offset + uint(ERHE_LIGHT_SPOT_COUNT);
 
         //color += (0.5 + 0.5 * N.y) * light_block.ambient_light.rgb * base_color;
-        color  = light_block.ambient_light.rgb * occlusion * base_color;
+        color  = light_block.ambient_light.rgb * base_color;
+#ifdef ERHE_USE_OCCLUSION_TEXTURE
+        {
+            float occlusion = sample_texture(
+                material.occlusion_texture,
+                v_texcoord,
+                material.occlusion_rotation_scale,
+                material.occlusion_offset
+            ).r;
+            color *= occlusion;
+        }
+#endif
         color += emissive;
 
         // Directional - shadow-mapped prefix
