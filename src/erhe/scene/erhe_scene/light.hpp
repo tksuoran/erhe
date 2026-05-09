@@ -34,7 +34,7 @@ class Light_projection_transforms
 public:
     const Light* light       {nullptr};
     std::size_t  index       {0}; // index in lights block shader resource (all lights)
-    std::size_t  shadow_index{0}; // index among shadow-casting lights (for render pass / array layer)
+    std::size_t  shadow_index{0}; // shadow texture array layer / render pass index (equals index when partitioned)
     Transform    world_from_light_camera;
     Transform    clip_from_light_camera;
     Transform    clip_from_world;

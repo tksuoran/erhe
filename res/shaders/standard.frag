@@ -117,24 +117,28 @@ void main()
 
         float N_dot_V = clamped_dot(N, V);
 
-        uint directional_light_count  = light_block.directional_light_count;
-        uint spot_light_count         = light_block.spot_light_count;
-        uint point_light_count        = light_block.point_light_count;
-        uint directional_light_offset = 0;
-        uint spot_light_offset        = directional_light_count;
-        uint point_light_offset       = spot_light_offset + spot_light_count;
+        uint directional_light_count    = light_block.directional_light_count;
+        uint spot_light_count           = light_block.spot_light_count;
+        uint point_light_count          = light_block.point_light_count;
+        uint directional_shadow_count   = light_block.directional_shadow_count;
+        uint spot_shadow_count          = light_block.spot_shadow_count;
+        uint point_shadow_count         = light_block.point_shadow_count;
+        uint directional_light_offset   = 0;
+        uint spot_light_offset          = directional_light_count;
+        uint point_light_offset         = spot_light_offset + spot_light_count;
 
         //color += (0.5 + 0.5 * N.y) * light_block.ambient_light.rgb * base_color;
         color  = light_block.ambient_light.rgb * occlusion * base_color;
         color += emissive;
 
-        for (uint i = 0; i < directional_light_count; ++i) {
+        // Directional - shadow-mapped prefix
+        for (uint i = 0u; i < directional_shadow_count; ++i) {
             uint  light_index    = directional_light_offset + i;
             Light light          = light_block.lights[light_index];
             vec3  point_to_light = light.direction_and_outer_spot_cos.xyz;
-            vec3  L              = normalize(point_to_light);   // Direction from surface point to light
+            vec3  L              = normalize(point_to_light);
             float N_dot_L        = dot(N, L);
-            if (N_dot_L > 0.0) { // || N_dot_V > 0.0
+            if (N_dot_L > 0.0) {
                 vec3 intensity = light.radiance_and_range.rgb * sample_light_visibility(v_position, light_index, N_dot_L);
                 color += intensity * isotropic_brdf(
                     base_color,
@@ -148,13 +152,35 @@ void main()
             }
         }
 
-        for (uint i = 0; i < spot_light_count; ++i) {
+        // Directional - non-shadow suffix
+        for (uint i = directional_shadow_count; i < directional_light_count; ++i) {
+            uint  light_index    = directional_light_offset + i;
+            Light light          = light_block.lights[light_index];
+            vec3  point_to_light = light.direction_and_outer_spot_cos.xyz;
+            vec3  L              = normalize(point_to_light);
+            float N_dot_L        = dot(N, L);
+            if (N_dot_L > 0.0) {
+                vec3 intensity = light.radiance_and_range.rgb;
+                color += intensity * isotropic_brdf(
+                    base_color,
+                    roughness,
+                    metallic,
+                    material.reflectance,
+                    L,
+                    V,
+                    N
+                );
+            }
+        }
+
+        // Spot - shadow-mapped prefix
+        for (uint i = 0u; i < spot_shadow_count; ++i) {
             uint  light_index    = spot_light_offset + i;
             Light light          = light_block.lights[light_index];
             vec3  point_to_light = light.position_and_inner_spot_cos.xyz - v_position.xyz;
             vec3  L              = normalize(point_to_light);
             float N_dot_L        = dot(N, L);
-            if (N_dot_L > 0.0) { // || N_dot_V > 0.0
+            if (N_dot_L > 0.0) {
                 float range_attenuation = get_range_attenuation(light.radiance_and_range.w, length(point_to_light));
                 float spot_attenuation  = get_spot_attenuation(-point_to_light, light.direction_and_outer_spot_cos.xyz, light.direction_and_outer_spot_cos.w, light.position_and_inner_spot_cos.w);
                 float light_visibility  = sample_light_visibility(v_position, light_index, N_dot_L);
@@ -171,16 +197,62 @@ void main()
             }
         }
 
-        for (uint i = 0; i < point_light_count; ++i) {
+        // Spot - non-shadow suffix
+        for (uint i = spot_shadow_count; i < spot_light_count; ++i) {
+            uint  light_index    = spot_light_offset + i;
+            Light light          = light_block.lights[light_index];
+            vec3  point_to_light = light.position_and_inner_spot_cos.xyz - v_position.xyz;
+            vec3  L              = normalize(point_to_light);
+            float N_dot_L        = dot(N, L);
+            if (N_dot_L > 0.0) {
+                float range_attenuation = get_range_attenuation(light.radiance_and_range.w, length(point_to_light));
+                float spot_attenuation  = get_spot_attenuation(-point_to_light, light.direction_and_outer_spot_cos.xyz, light.direction_and_outer_spot_cos.w, light.position_and_inner_spot_cos.w);
+                vec3  intensity         = range_attenuation * spot_attenuation * light.radiance_and_range.rgb;
+                color += intensity * isotropic_brdf(
+                    base_color,
+                    roughness,
+                    metallic,
+                    material.reflectance,
+                    L,
+                    V,
+                    N
+                );
+            }
+        }
+
+        // Point - shadow-mapped prefix
+        // Point shadows are not yet sampled (TODO in old code), so this matches the suffix branch.
+        for (uint i = 0u; i < point_shadow_count; ++i) {
             uint  light_index    = point_light_offset + i;
             Light light          = light_block.lights[light_index];
             vec3  point_to_light = light.position_and_inner_spot_cos.xyz - v_position.xyz;
             vec3  L              = normalize(point_to_light);
             float N_dot_L        = dot(N, L);
-            if (N_dot_L > 0.0) { // || N_dot_V > 0.0
+            if (N_dot_L > 0.0) {
                 float range_attenuation = get_range_attenuation(light.radiance_and_range.w, length(point_to_light));
-                float light_visibility  = 1.0; // TODO sample_light_visibility(v_position, light_index, N_dot_L);
-                vec3  intensity         = range_attenuation * light.radiance_and_range.rgb * light_visibility;
+                vec3  intensity         = range_attenuation * light.radiance_and_range.rgb;
+                color += intensity * isotropic_brdf(
+                    base_color,
+                    roughness,
+                    metallic,
+                    material.reflectance,
+                    L,
+                    V,
+                    N
+                );
+            }
+        }
+
+        // Point - non-shadow suffix
+        for (uint i = point_shadow_count; i < point_light_count; ++i) {
+            uint  light_index    = point_light_offset + i;
+            Light light          = light_block.lights[light_index];
+            vec3  point_to_light = light.position_and_inner_spot_cos.xyz - v_position.xyz;
+            vec3  L              = normalize(point_to_light);
+            float N_dot_L        = dot(N, L);
+            if (N_dot_L > 0.0) {
+                float range_attenuation = get_range_attenuation(light.radiance_and_range.w, length(point_to_light));
+                vec3  intensity         = range_attenuation * light.radiance_and_range.rgb;
                 color += intensity * isotropic_brdf(
                     base_color,
                     roughness,

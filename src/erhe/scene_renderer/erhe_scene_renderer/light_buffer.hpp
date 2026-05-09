@@ -37,19 +37,22 @@ public:
 class Light_block
 {
 public:
-    std::size_t  shadow_texture_compare;    // uvec2
-    std::size_t  shadow_texture_no_compare; // uvec2
+    std::size_t  shadow_texture_compare;       // uvec2
+    std::size_t  shadow_texture_no_compare;    // uvec2
 
-    std::size_t  directional_light_count;   // uint
-    std::size_t  spot_light_count;          // uint
-    std::size_t  point_light_count;         // uint
-    std::size_t  reserved_1;                // uint
+    std::size_t  directional_light_count;      // uint
+    std::size_t  spot_light_count;             // uint
+    std::size_t  point_light_count;            // uint
+    std::size_t  directional_shadow_count;     // uint - shadow-mapped prefix size for directional lights
 
-    std::size_t  brdf_material;             // uint
-    std::size_t  reserved_2;                // uint
-    std::size_t  brdf_phi_incident_phi;     // vec2
+    std::size_t  spot_shadow_count;            // uint - shadow-mapped prefix size for spot lights
+    std::size_t  point_shadow_count;           // uint - shadow-mapped prefix size for point lights
+    std::size_t  brdf_material;                // uint
+    std::size_t  reserved_1;                   // uint - pad to vec2 alignment
 
-    std::size_t  ambient_light;             // vec4
+    std::size_t  brdf_phi_incident_phi;        // vec2
+
+    std::size_t  ambient_light;                // vec4
 
     Light_struct light;
     std::size_t  light_struct;
