@@ -58,7 +58,6 @@ public:
     //   editor's Program_interface_config.
     Content_wide_line_renderer(
         erhe::graphics::Device&        graphics_device,
-        erhe::graphics::Buffer&        edge_line_vertex_buffer,
         erhe::graphics::Shader_stages* compute_shader_stages,
         erhe::graphics::Shader_stages* graphics_shader_stages,
         int                            max_view_count = 1
@@ -171,6 +170,12 @@ public:
 private:
     struct Dispatch_entry
     {
+        // Source GPU buffer holding the edge-line vertex pairs for this
+        // mesh. With lazy edge-line pool growth, different meshes may live
+        // in different GPU buffers, so each dispatch records its own
+        // source buffer pointer rather than reading from a single shared
+        // one held by the renderer.
+        erhe::graphics::Buffer* edge_buffer            {nullptr};
         std::size_t edge_buffer_byte_offset{0};
         std::size_t edge_count             {0};
         glm::mat4   world_from_node        {1.0f};
@@ -195,7 +200,6 @@ private:
     };
 
     erhe::graphics::Device&                                m_graphics_device;
-    erhe::graphics::Buffer&                                m_edge_line_vertex_buffer;
     int                                                    m_max_view_count{1};
 
     // Shader resources (define the interface contract for shaders)

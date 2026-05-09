@@ -1017,7 +1017,6 @@ public:
                 ERHE_GET_GL_CONTEXT
                 m_content_wide_line_renderer = std::make_unique<erhe::scene_renderer::Content_wide_line_renderer>(
                     *m_graphics_device.get(),
-                    m_mesh_memory->edge_line_vertex_buffer,
                     nullptr,
                     nullptr,
                     xr_max_view_count

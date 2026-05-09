@@ -77,7 +77,6 @@ void Rendering_test::make_content_wide_line_renderer()
     // those definitions. The renderer stays alive so the resources remain valid.
     m_content_wide_line_renderer = std::make_unique<erhe::scene_renderer::Content_wide_line_renderer>(
         m_graphics_device,
-        m_mesh_memory.edge_line_vertex_buffer,
         nullptr,
         nullptr
     );

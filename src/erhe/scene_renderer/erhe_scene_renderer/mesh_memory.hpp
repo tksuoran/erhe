@@ -60,9 +60,6 @@ public:
     erhe::graphics::Device&                          graphics_device;
     erhe::graphics::Buffer_transfer_queue            buffer_transfer_queue;
     erhe::dataformat::Vertex_format&                 vertex_format;
-    // Edge-line vertex buffer is still owned eagerly by Mesh_memory until
-    // Step 7 of the mesh_memory plan moves it into edge_line_vertex_pool.
-    erhe::graphics::Buffer                           edge_line_vertex_buffer;
     erhe::graphics_buffer_sink::Buffer_pool          index_pool;
     erhe::graphics_buffer_sink::Buffer_pool          edge_line_vertex_pool;
     Format_pools                                     default_format_pools;
