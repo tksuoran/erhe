@@ -39,7 +39,7 @@ Scene_preview::Scene_preview(
         graphics_device,
         erhe::graphics::Render_pipeline_create_info{
             .debug_label    = erhe::utility::Debug_label{"Polygon Fill Opaque"},
-            .shader_stages  = &programs.standard.shader_stages,
+            .lazy_shader_stages = &programs.standard,
             .vertex_input   = &mesh_memory.vertex_input,
             .input_assembly = Input_assembly_state::triangle,
             .rasterization  = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
