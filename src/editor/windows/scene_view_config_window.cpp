@@ -41,7 +41,7 @@ void Scene_view_config_window::imgui()
         "##viewport_view_settings",
         2,
         ImGuiTableFlags_Resizable | ImGuiTableFlags_RowBg,
-        ImVec2{600.0f, 150.0}
+        ImVec2{600.0f, 180.0}
     );
     ImGui::TableSetupColumn("Label",  ImGuiTableColumnFlags_WidthStretch, 1.0f, 1);
     ImGui::TableSetupColumn("Editor", ImGuiTableColumnFlags_WidthStretch, 3.0f, 2);
@@ -101,6 +101,23 @@ void Scene_view_config_window::imgui()
         );
         if (variant_combo_used) {
             viewport_scene_view->set_shader_stages_variant(variant);
+        }
+
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        ImGui::TextUnformatted("Renderer");
+        ImGui::TableNextColumn();
+
+        Renderer_choice renderer_choice = viewport_scene_view->get_renderer_choice();
+        bool renderer_combo_used = ImGui::Combo(
+            "##RendererChoice",
+            reinterpret_cast<int*>(&renderer_choice),
+            c_renderer_choice_strings,
+            IM_ARRAYSIZE(c_renderer_choice_strings),
+            IM_ARRAYSIZE(c_renderer_choice_strings)
+        );
+        if (renderer_combo_used) {
+            viewport_scene_view->set_renderer_choice(renderer_choice);
         }
     }
 

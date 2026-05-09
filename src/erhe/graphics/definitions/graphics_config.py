@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Graphics_config",
-    version=3,
+    version=4,
     short_desc="Graphics Settings",
     long_desc="",
     developer=False,
@@ -53,6 +53,16 @@ struct("Graphics_config",
             default="true",
             short_desc="Reverse Z",
             long_desc="When true, depth buffers use reverse-Z (near=1.0, far=0.0) for better precision. Baked into pipeline depth state, projection matrices and shadow comparison samplers at engine init -- runtime callers must use the same direction.",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "use_draw_list_renderer",
+            Bool,
+            added_in=4,
+            default="false",
+            short_desc="Use Draw List Renderer",
+            long_desc="Default renderer for new viewports: true selects Draw_list_renderer, false selects Forward_renderer. Each viewport can override this at runtime via Scene View Config.",
             visible=True,
             developer=False
         ),
