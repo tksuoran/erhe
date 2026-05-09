@@ -502,11 +502,11 @@ Vertex_buffer_writer::Vertex_buffer_writer(Build_context& build_context, Buffer_
     , buffer_sink  {buffer_sink}
     , stream       {stream}
     , stride       {stride}
+    , buffer_range {build_context.root.buffer_mesh.vertex_buffer_ranges[stream]}
 {
-    const auto& vertex_buffer_range = build_context.root.buffer_mesh.vertex_buffer_ranges[stream];
-    vertex_data.resize(vertex_buffer_range.count * vertex_buffer_range.element_size);
+    vertex_data.resize(buffer_range.count * buffer_range.element_size);
     vertex_data_span = vertex_data;
-    ERHE_VERIFY(vertex_buffer_range.element_size == stride);
+    ERHE_VERIFY(buffer_range.element_size == stride);
 }
 
 Vertex_buffer_writer::~Vertex_buffer_writer() noexcept
@@ -522,6 +522,7 @@ auto Vertex_buffer_writer::start_offset() -> std::size_t
 Index_buffer_writer::Index_buffer_writer(Build_context& build_context, Buffer_sink& buffer_sink)
     : build_context  {build_context}
     , buffer_sink    {buffer_sink}
+    , buffer_range   {build_context.root.buffer_mesh.index_buffer_range}
     , index_type     {build_context.root.build_info.buffer_info.index_type}
     , index_type_size{build_context.root.buffer_mesh.index_buffer_range.element_size}
 {
