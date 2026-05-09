@@ -5,11 +5,11 @@
 namespace erhe::graphics_buffer_sink {
 
 Graphics_buffer_sink::Graphics_buffer_sink(
-    std::initializer_list<Buffer_pool*> vertex_pools,
-    Buffer_pool*                        index_pool,
-    Buffer_pool*                        edge_line_vertex_pool
+    std::vector<Buffer_pool*> vertex_pools,
+    Buffer_pool*              index_pool,
+    Buffer_pool*              edge_line_vertex_pool
 )
-    : m_vertex_pools         {vertex_pools.begin(), vertex_pools.end()}
+    : m_vertex_pools         {std::move(vertex_pools)}
     , m_index_pool           {index_pool}
     , m_edge_line_vertex_pool{edge_line_vertex_pool}
 {

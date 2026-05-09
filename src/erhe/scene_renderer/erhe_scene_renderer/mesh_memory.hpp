@@ -3,10 +3,13 @@
 #include "erhe_dataformat/vertex_format.hpp"
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics_buffer_sink/buffer_pool.hpp"
-#include "erhe_graphics_buffer_sink/graphics_buffer_sink.hpp"
 #include "erhe_graphics/buffer_transfer_queue.hpp"
-#include "erhe_graphics/state/vertex_input_state.hpp"
-#include "erhe_primitive/build_info.hpp"
+#include "erhe_scene_renderer/format_pools.hpp"
+#include "erhe_scene_renderer/generated/mesh_memory_config.hpp"
+
+#include <cstdint>
+#include <memory>
+#include <unordered_map>
 
 namespace erhe::graphics {
     class Buffer;
@@ -39,29 +42,44 @@ public:
     static constexpr std::size_t s_vertex_binding_non_position = 1;
     static constexpr std::size_t s_vertex_binding_custom       = 2;
 
-    // Returns the first block of the requested vertex stream's pool, or
-    // nullptr if the pool has not yet been grown by an allocate(). Provided
-    // for callers that need a "default" buffer pointer; new code should bind
-    // from Buffer_range::buffer instead.
     [[nodiscard]] auto get_vertex_buffer       (std::size_t stream_index) -> erhe::graphics::Buffer*;
     [[nodiscard]] auto get_default_index_buffer() -> erhe::graphics::Buffer*;
+
+    // Look up (or create) the Format_pools that owns vertex storage for the
+    // given Vertex_format. The lookup key is a Vertex_format_key bit-mask, so
+    // two semantically identical formats constructed differently (e.g. one
+    // hand-authored in editor.cpp, one parsed from a Triangle_soup) collapse
+    // to the same Format_pools.
+    //
+    // The default editor format's pools are accessible both via this method
+    // and via the legacy direct fields below (buffer_info, vertex_input,
+    // vertex_pool_position, etc.). The two views refer to the same Format_pools
+    // instance; the legacy fields stay so older call sites compile unchanged.
+    [[nodiscard]] auto get_or_create_format_pools(const erhe::dataformat::Vertex_format& format) -> Format_pools&;
 
     erhe::graphics::Device&                          graphics_device;
     erhe::graphics::Buffer_transfer_queue            buffer_transfer_queue;
     erhe::dataformat::Vertex_format&                 vertex_format;
-    // The edge-line vertex buffer is still owned eagerly by Mesh_memory so that
-    // Content_wide_line_renderer's existing Buffer& constructor parameter
-    // resolves at editor startup. Step 7 of the mesh_memory plan moves this
-    // into edge_line_vertex_pool.
+    // Edge-line vertex buffer is still owned eagerly by Mesh_memory until
+    // Step 7 of the mesh_memory plan moves it into edge_line_vertex_pool.
     erhe::graphics::Buffer                           edge_line_vertex_buffer;
-    erhe::graphics_buffer_sink::Buffer_pool          vertex_pool_position;
-    erhe::graphics_buffer_sink::Buffer_pool          vertex_pool_non_position;
-    erhe::graphics_buffer_sink::Buffer_pool          vertex_pool_custom;
     erhe::graphics_buffer_sink::Buffer_pool          index_pool;
     erhe::graphics_buffer_sink::Buffer_pool          edge_line_vertex_pool;
-    erhe::graphics_buffer_sink::Graphics_buffer_sink graphics_buffer_sink;
-    erhe::primitive::Buffer_info                     buffer_info;
-    erhe::graphics::Vertex_input_state               vertex_input;
+    Format_pools                                     default_format_pools;
+
+    // Reference aliases into default_format_pools. Existing call sites that
+    // wrote `mesh_memory.buffer_info` or took its address keep compiling.
+    erhe::primitive::Buffer_info&                    buffer_info;
+    erhe::graphics::Vertex_input_state&              vertex_input;
+    erhe::graphics_buffer_sink::Graphics_buffer_sink& graphics_buffer_sink;
+    erhe::graphics_buffer_sink::Buffer_pool&         vertex_pool_position;
+    erhe::graphics_buffer_sink::Buffer_pool&         vertex_pool_non_position;
+    erhe::graphics_buffer_sink::Buffer_pool&         vertex_pool_custom;
+
+private:
+    Mesh_memory_config                                          m_config;
+    std::unordered_map<uint32_t, std::unique_ptr<Format_pools>> m_extra_format_pools;
+    uint32_t                                                    m_default_format_key{0};
 };
 
 }

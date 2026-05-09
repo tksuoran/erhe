@@ -121,4 +121,61 @@ auto Vertex_format::get_attributes() const -> std::vector<Attribute_stream>
     return result;
 }
 
+namespace {
+
+[[nodiscard]] auto attribute_to_key_bit(Vertex_attribute_usage usage_type, std::size_t usage_index) -> uint32_t
+{
+    switch (usage_type) {
+        case Vertex_attribute_usage::position:      return Vertex_format_key::position;
+        case Vertex_attribute_usage::tangent:       return Vertex_format_key::tangent;
+        case Vertex_attribute_usage::bitangent:     return Vertex_format_key::bitangent;
+        case Vertex_attribute_usage::color:         return Vertex_format_key::color;
+        case Vertex_attribute_usage::joint_indices: return Vertex_format_key::joint_indices;
+        case Vertex_attribute_usage::joint_weights: return Vertex_format_key::joint_weights;
+        case Vertex_attribute_usage::normal: {
+            switch (usage_index) {
+                case 0:  return Vertex_format_key::normal_0;
+                case 1:  return Vertex_format_key::normal_1;
+                case 2:  return Vertex_format_key::normal_2;
+                case 3:  return Vertex_format_key::normal_3;
+                default: return 0u;
+            }
+        }
+        case Vertex_attribute_usage::tex_coord: {
+            switch (usage_index) {
+                case 0:  return Vertex_format_key::tex_coord_0;
+                case 1:  return Vertex_format_key::tex_coord_1;
+                case 2:  return Vertex_format_key::tex_coord_2;
+                case 3:  return Vertex_format_key::tex_coord_3;
+                default: return 0u;
+            }
+        }
+        case Vertex_attribute_usage::custom: {
+            switch (usage_index) {
+                case 0:  return Vertex_format_key::custom_0;
+                case 1:  return Vertex_format_key::custom_1;
+                case 2:  return Vertex_format_key::custom_2;
+                case 3:  return Vertex_format_key::custom_3;
+                default: return 0u;
+            }
+        }
+        case Vertex_attribute_usage::none:
+        default:
+            return 0u;
+    }
+}
+
+} // anonymous namespace
+
+auto compute_vertex_format_key(const Vertex_format& format) -> uint32_t
+{
+    uint32_t key = 0;
+    for (const Vertex_stream& stream : format.streams) {
+        for (const Vertex_attribute& attribute : stream.attributes) {
+            key |= attribute_to_key_bit(attribute.usage_type, attribute.usage_index);
+        }
+    }
+    return key;
+}
+
 } // namespace erhe::dataformat

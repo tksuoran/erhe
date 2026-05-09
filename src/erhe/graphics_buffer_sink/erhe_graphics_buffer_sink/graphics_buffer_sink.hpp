@@ -18,9 +18,9 @@ class Graphics_buffer_sink : public erhe::primitive::Buffer_sink
 {
 public:
     Graphics_buffer_sink(
-        std::initializer_list<Buffer_pool*> vertex_pools,
-        Buffer_pool*                        index_pool,
-        Buffer_pool*                        edge_line_vertex_pool = nullptr
+        std::vector<Buffer_pool*> vertex_pools,
+        Buffer_pool*              index_pool,
+        Buffer_pool*              edge_line_vertex_pool = nullptr
     );
 
     [[nodiscard]] auto allocate_vertex_buffer                   (std::size_t stream, std::size_t vertex_count, std::size_t vertex_element_size) -> erhe::primitive::Buffer_sink_allocation override;
