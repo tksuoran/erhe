@@ -31,6 +31,8 @@ erhe_target_sources_grouped(
     erhe_scene_renderer/scene_renderer_log.hpp
     erhe_scene_renderer/shadow_renderer.cpp
     erhe_scene_renderer/shadow_renderer.hpp
+    erhe_scene_renderer/standard_shader_variant.cpp
+    erhe_scene_renderer/standard_shader_variant.hpp
     erhe_scene_renderer/texel_renderer.cpp
     erhe_scene_renderer/texel_renderer.hpp
 )
