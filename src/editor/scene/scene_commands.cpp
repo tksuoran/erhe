@@ -133,19 +133,18 @@ void Add_lights_command::apply_args(const Add_lights_args& args)
 {
     m_args = args;
 
-    // Clamp directional_light_count to the active graphics preset's
+    // Clamp directional_light_shadow_count to the active graphics preset's
     // shadow_light_count -- the shadow-map texture array has a fixed
     // capacity, and exceeding it would silently drop lights or crash
-    // shader bindings. Previously this clamp lived in editor.cpp on
-    // Scene_config; it moved here when the field migrated to per-command
-    // args.
+    // shader bindings. The no-shadow count is unconstrained by the
+    // shadow array.
     const Graphics_preset_entry& preset = m_context.app_settings->graphics.current_graphics_preset;
-    if (preset.shadow_enable && (m_args.directional_light_count > preset.shadow_light_count)) {
+    if (preset.shadow_enable && (m_args.directional_light_shadow_count > preset.shadow_light_count)) {
         log_startup->info(
-            "Clamping scene.add_lights args.directional_light_count from {} to {} (graphics preset '{}' shadow_light_count)",
-            m_args.directional_light_count, preset.shadow_light_count, preset.name
+            "Clamping scene.add_lights args.directional_light_shadow_count from {} to {} (graphics preset '{}' shadow_light_count)",
+            m_args.directional_light_shadow_count, preset.shadow_light_count, preset.name
         );
-        m_args.directional_light_count = preset.shadow_light_count;
+        m_args.directional_light_shadow_count = preset.shadow_light_count;
     }
 }
 
