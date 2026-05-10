@@ -6,6 +6,7 @@
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
 #include "renderers/composition_pass.hpp"
+#include "rendergraph/shadow_render_node.hpp"
 #include "scene/scene_root.hpp"
 
 #include "erhe_graphics/render_pipeline.hpp"
@@ -15,6 +16,7 @@
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene_renderer/forward_renderer.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
+#include "erhe_scene_renderer/shadow_renderer.hpp"
 #include "erhe_scene_renderer/standard_shader_variant.hpp"
 #include "erhe_scene_renderer/standard_shader_variants.hpp"
 
@@ -189,12 +191,43 @@ void prewarm_all(App_context& context)
         context.forward_renderer->prewarm_standard_variants(params);
     }
 
-    const std::size_t after = context.standard_shader_variants->size();
-    const std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
-    const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
+    const std::chrono::steady_clock::time_point t_after_forward = std::chrono::steady_clock::now();
+    const std::size_t after_forward = context.standard_shader_variants->size();
+
+    // Shadow depth pass: drive the per-(vertex_input_state, reverse_depth)
+    // Lazy_render_pipeline + the per-light render-pass formats so
+    // vkCreateGraphicsPipelines for each shadow-atlas slot runs at init.
+    // The shadow shader stages are eagerly compiled (Reloadable_shader_stages)
+    // so this is purely the Vulkan-pipeline phase, not a shader-module
+    // phase. Goes through every active Shadow_render_node owned by
+    // App_rendering -- one per Scene_view that has its shadow atlas
+    // configured.
+    std::size_t shadow_node_count = 0;
+    if (context.shadow_renderer != nullptr) {
+        for (const std::shared_ptr<Shadow_render_node>& shadow_node : context.app_rendering->get_all_shadow_nodes()) {
+            if (!shadow_node) {
+                continue;
+            }
+            const std::span<const std::unique_ptr<erhe::graphics::Render_pass>> render_passes = shadow_node->get_render_passes();
+            if (render_passes.empty()) {
+                continue;
+            }
+            context.shadow_renderer->prewarm_pipelines(
+                &context.mesh_memory->vertex_input,
+                render_passes,
+                shadow_node->get_reverse_depth()
+            );
+            ++shadow_node_count;
+        }
+    }
+
+    const std::chrono::steady_clock::time_point t_end = std::chrono::steady_clock::now();
+    const auto ms_forward = std::chrono::duration_cast<std::chrono::milliseconds>(t_after_forward - t0).count();
+    const auto ms_shadow  = std::chrono::duration_cast<std::chrono::milliseconds>(t_end - t_after_forward).count();
     log_startup->info(
-        "prewarm: forward+content-library compiled {} new variants ({} total) in {} ms",
-        after - before, after, ms
+        "prewarm: forward+content-library compiled {} new variants ({} total) in {} ms; shadow prewarm walked {} node(s) in {} ms",
+        after_forward - before, after_forward, ms_forward,
+        shadow_node_count, ms_shadow
     );
 }
 
