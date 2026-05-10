@@ -25,6 +25,9 @@ namespace erhe::graphics {
     class Render_pipeline_state;
     class Texture;
 }
+namespace erhe::primitive {
+    class Material;
+}
 namespace erhe::scene {
     class Camera;
     class Light;
@@ -106,6 +109,43 @@ public:
 
     void render(const Render_parameters& parameters);
     void draw_primitives(const Render_parameters& parameters, const erhe::scene::Light* light);
+
+    // Init-time prewarm. Walks the same buckets render() would build for
+    // each (pipeline, mesh_span) pair, computes the per-bucket
+    // Standard_variant_key with the supplied light_counts, and calls
+    // standard_shader_variants->get_or_compile(key, view_count) for every
+    // requested view count. Pipelines that do not opt into standard
+    // variants (uses_standard_variants=false or vertex_format=null) are
+    // skipped, exactly mirroring the runtime gate.
+    //
+    // extra_materials is a content-library style list whose meshes are
+    // not yet attached to the scene -- each material is converted to a
+    // single Standard_variant_key against fallback_vertex_format (no
+    // skin, no aniso_control beyond what the material/format combination
+    // would imply at draw time) and prewarmed once. extra_materials is
+    // ignored when fallback_vertex_format is null.
+    //
+    // Performs no GPU draws and does not require a Render_command_encoder.
+    // The compile work is glslang -> SPIR-V -> vkCreateShaderModule for
+    // each cache miss; populating the per-pipeline VkPipeline cache is
+    // the caller's responsibility (see Device::warmup_render_pipeline
+    // when it lands).
+    class Prewarm_parameters
+    {
+    public:
+        std::span<erhe::graphics::Lazy_render_pipeline*>             render_pipeline_states;
+        const std::vector<
+            std::span<const std::shared_ptr<erhe::scene::Mesh>>
+        >&                                                           mesh_spans;
+        std::span<const std::shared_ptr<erhe::primitive::Material>>  extra_materials{};
+        Standard_variant_light_counts                                light_counts{};
+        std::span<const uint32_t>                                    multiview_view_counts;
+        Standard_shader_variants*                                    standard_shader_variants{nullptr};
+        const erhe::dataformat::Vertex_format*                       fallback_vertex_format{nullptr};
+        erhe::primitive::Primitive_mode                              primitive_mode{erhe::primitive::Primitive_mode::polygon_fill};
+    };
+
+    void prewarm_standard_variants(const Prewarm_parameters& parameters);
 
     static const std::vector<std::span<const std::shared_ptr<erhe::scene::Mesh>>> empty_mesh_spans;
 
