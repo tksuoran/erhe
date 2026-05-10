@@ -18,17 +18,18 @@ namespace {
     std::vector<std::pair<std::string, std::string>> defines
 ) -> std::vector<std::pair<std::string, std::string>>
 {
-    // Sort by name first so two keys built with the same logical defines
-    // in different orders compare equal.
-    std::sort(
-        defines.begin(),
-        defines.end(),
-        [](const std::pair<std::string, std::string>& a, const std::pair<std::string, std::string>& b) {
-            return a.first < b.first;
-        }
-    );
-    // Dedup adjacent duplicates by name. Two entries with the same name
-    // and different values is a caller bug -- log it and keep the first.
+    // Sort by the full pair so two keys built with the same logical
+    // defines in different orders compare equal. Sorting by name alone
+    // would coalesce empty-name "comment" entries (used by
+    // make_standard_variant_defines to render `// ERHE_FOO disabled`
+    // markers in the shader source) and trigger spurious "conflicting
+    // values" warnings when several axes are disabled.
+    std::sort(defines.begin(), defines.end());
+    // Dedup adjacent entries:
+    //   - Identical (name, value): drop the duplicate silently.
+    //   - Same non-empty name, different value: caller bug -- warn and keep
+    //     the first.
+    //   - Empty name with different values: distinct comment lines, keep both.
     auto out = defines.begin();
     auto in  = defines.begin();
     while (in != defines.end()) {
@@ -37,16 +38,22 @@ namespace {
         }
         auto next = in;
         ++next;
-        while ((next != defines.end()) && (next->first == out->first)) {
-            if (next->second != out->second) {
+        while (next != defines.end()) {
+            if (*next == *out) {
+                ++next;
+                continue;
+            }
+            if (!out->first.empty() && (next->first == out->first)) {
                 log_program_interface->warn(
                     "Shader_variant_key: duplicate define '{}' with conflicting values '{}' vs '{}'; keeping the first",
                     out->first,
                     out->second,
                     next->second
                 );
+                ++next;
+                continue;
             }
-            ++next;
+            break;
         }
         in = next;
         ++out;
@@ -128,6 +135,32 @@ auto Shader_variant_cache::compile_locked(const Shader_variant_key& key) -> erhe
     const auto it = m_entries.find(key);
     if (it != m_entries.end()) {
         return it->second.get();
+    }
+
+    {
+        std::string defines_summary;
+        for (const std::pair<std::string, std::string>& define : key.defines) {
+            if (!defines_summary.empty()) {
+                defines_summary += ' ';
+            }
+            if (define.first.empty()) {
+                // Comment marker emitted as `// <value>` in the shader
+                // preamble; show it bare so the disabled axis is visible.
+                defines_summary += define.second;
+            } else {
+                defines_summary += define.first;
+                defines_summary += '=';
+                defines_summary += define.second;
+            }
+        }
+        log_program_interface->debug(
+            "Compiling new shader variant: name='{}', multiview={}, no_vertex_input={}, dump_interface={}, defines=[{}]",
+            key.name,
+            key.multiview_view_count,
+            key.no_vertex_input,
+            key.dump_interface,
+            defines_summary
+        );
     }
 
     erhe::graphics::Shader_stages_create_info create_info{
