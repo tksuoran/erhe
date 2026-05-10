@@ -71,6 +71,7 @@
 #include "preview/material_preview.hpp"
 #include "renderers/id_renderer.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
+#include "renderers/prewarm.hpp"
 #include "renderers/programs.hpp"
 #include "rendergraph/post_processing.hpp"
 #include "rendertarget_imgui_host.hpp"
@@ -1817,6 +1818,14 @@ public:
         log_startup->info("Init: run_startup_script");
         run_startup_script();
         log_startup->info("Init: run_startup_script done");
+
+        // Drive the standard shader-variant cache from the same buckets
+        // the runtime forward path would build for the loaded scene +
+        // content library. Pulls glslang -> SPIR-V -> vkCreateShaderModule
+        // out of the first-frame budget; the trailing wait_idle below
+        // already covers any GPU work the prewarm enqueues.
+        log_startup->info("Init: prewarm shader variants");
+        prewarm_all(m_app_context);
 
         // Close the init-time command buffer opened in the member init
         // list (or reseated by Init_status_display::render_present),

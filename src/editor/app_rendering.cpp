@@ -463,6 +463,11 @@ auto App_rendering::make_composition_pass(const std::string_view name) -> std::s
     return renderpass;
 }
 
+auto App_rendering::composition_passes() const -> const std::vector<std::shared_ptr<Composition_pass>>&
+{
+    return m_composer.composition_passes;
+}
+
 using Vertex_input_state         = erhe::graphics::Vertex_input_state;
 using Input_assembly_state       = erhe::graphics::Input_assembly_state;
 using Multisample_state          = erhe::graphics::Multisample_state;
