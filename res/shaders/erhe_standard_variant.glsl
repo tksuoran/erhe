@@ -1,56 +1,29 @@
 #ifndef ERHE_STANDARD_VARIANT_GLSL
 #define ERHE_STANDARD_VARIANT_GLSL
 
-// Axis fallbacks for the editor's standard lit shader.
+// Documentation header for the editor's standard lit shader variants.
 //
-// In a variant cache build, Standard_shader_variants has already #defined
-// ERHE_STANDARD_VARIANT_BUILD plus the per-axis flags / counts that match
-// the (material, mesh, scene) key. In a non-variant build (the editor's
-// pre-built `standard` stages compiled by Programs::load_programs), none
-// of those defines are present and we fall back to the pre-variant
-// behavior:
-//   - declare every varying whose source attribute is present in the
-//     vertex_format,
-//   - enable skinning iff joint_indices_0 + joint_weights_0 are present,
-//   - read the per-type light loop bounds out of light_block at runtime.
+// Standard_shader_variants always emits ERHE_STANDARD_VARIANT_BUILD plus
+// the per-axis flags / counts that match the (material, mesh, scene) key,
+// and Programs::standard itself is now a canonical empty-key variant
+// (Standard_variant_key{}) compiled through the same cache. The shader
+// source can rely on:
+//   - ERHE_USE_VERTEX_VARYING_X => ERHE_ATTRIBUTE_a_X (the underlying
+//     attribute is always declared when the varying is enabled),
+//   - ERHE_USE_SKINNING => the joint attributes are present,
+//   - ERHE_LIGHT_*_*_COUNT being a compile-time integer literal so the
+//     light loops unroll or vanish,
+//   - ERHE_BXDF_MODEL being a compile-time integer literal mapped from
+//     erhe::primitive::Bxdf_model.
 //
-// The variant-cache emitter guarantees ERHE_USE_VERTEX_VARYING_X implies
-// ERHE_ATTRIBUTE_a_X (so a varying never references an attribute that
-// is not declared) and that ERHE_USE_SKINNING implies the joint
-// attributes. The shader source can therefore gate raw attribute reads
-// on ERHE_ATTRIBUTE_a_X (still injected automatically from the vertex
-// format) and gate varying declarations / the light loops on the
-// ERHE_USE_VERTEX_VARYING_X / ERHE_LIGHT_*_*_COUNT macros without any
-// knowledge of which build mode is active.
+// No non-variant fallback path exists; if you hit a "undefined macro"
+// error in standard.frag / standard.vert, it means a code path is
+// compiling them without going through the Standard_shader_variants
+// adapter -- fix the call site, do not reintroduce fallback macros.
 
-#ifndef ERHE_STANDARD_VARIANT_BUILD
-
-#  if defined(ERHE_ATTRIBUTE_a_normal)
-#    define ERHE_USE_VERTEX_VARYING_NORMAL 1
-#  endif
-#  if defined(ERHE_ATTRIBUTE_a_tangent)
-#    define ERHE_USE_VERTEX_VARYING_TANGENT 1
-#    if defined(ERHE_ATTRIBUTE_a_normal)
-#      define ERHE_USE_VERTEX_VARYING_BITANGENT 1
-#    endif
-#  endif
-#  if defined(ERHE_ATTRIBUTE_a_texcoord_0)
-#    define ERHE_USE_VERTEX_VARYING_TEXCOORD0 1
-#  endif
-#  if defined(ERHE_ATTRIBUTE_a_color_0)
-#    define ERHE_USE_VERTEX_VARYING_COLOR 1
-#  endif
-#  if defined(ERHE_ATTRIBUTE_a_joint_indices_0) && defined(ERHE_ATTRIBUTE_a_joint_weights_0)
-#    define ERHE_USE_SKINNING 1
-#  endif
-
-#  define ERHE_LIGHT_DIRECTIONAL_COUNT              light_block.directional_light_count
-#  define ERHE_LIGHT_DIRECTIONAL_SHADOWMAPPED_COUNT light_block.directional_shadow_count
-#  define ERHE_LIGHT_SPOT_COUNT                     light_block.spot_light_count
-#  define ERHE_LIGHT_SPOT_SHADOWMAPPED_COUNT        light_block.spot_shadow_count
-#  define ERHE_LIGHT_POINT_COUNT                    light_block.point_light_count
-#  define ERHE_LIGHT_POINT_SHADOWMAPPED_COUNT       light_block.point_shadow_count
-
-#endif // !ERHE_STANDARD_VARIANT_BUILD
+// Bxdf_model enum values. Keep in sync with erhe::primitive::Bxdf_model.
+#define ERHE_BXDF_MODEL_UNLIT             0
+#define ERHE_BXDF_MODEL_ISOTROPIC_BRDF    1
+#define ERHE_BXDF_MODEL_ANISOTROPIC_BRDF  2
 
 #endif // ERHE_STANDARD_VARIANT_GLSL

@@ -18,9 +18,7 @@ layout(location = 2) in vec4      v_color;
 const  vec4 v_color = vec4(1.0);
 #endif
 
-// See standard.vert for why v_aniso_control is gated on the raw
-// ERHE_ATTRIBUTE_a_custom_1 rather than a variant axis.
-#ifdef ERHE_ATTRIBUTE_a_custom_1
+#ifdef ERHE_USE_VERTEX_VARYING_ANISO_CONTROL
 layout(location = 3) in vec2      v_aniso_control;
 #else
 const  vec2 v_aniso_control = vec2(0.0);
@@ -60,9 +58,10 @@ void main()
 #endif
 
     vec3 color;
-    if (material.unlit == 1) {
-        color = base_color;
-    } else {
+#if ERHE_BXDF_MODEL == ERHE_BXDF_MODEL_UNLIT
+    color = base_color;
+#else
+    {
         vec3 view_position_in_world = vec3(
             camera.cameras[c_view_index].world_from_node[3][0],
             camera.cameras[c_view_index].world_from_node[3][1],
@@ -84,6 +83,30 @@ void main()
         vec3 N = vec3(0.0, 1.0, 0.0);
 #endif
 
+#if defined(ERHE_USE_CIRCULAR_BRUSHED_METAL) && defined(ERHE_USE_VERTEX_VARYING_TANGENT) && defined(ERHE_USE_VERTEX_VARYING_BITANGENT) && defined(ERHE_USE_VERTEX_VARYING_NORMAL)
+        {
+            float circular_anisotropy_magnitude = pow(length(v_texcoord) * 8.0, 0.25);
+            vec2  T_circular                    = (circular_anisotropy_magnitude > 0.0) ? normalize(v_texcoord) : vec2(0.0, 0.0);
+            // X is used to modulate anisotropy level:
+            //   0.0 -- Anisotropic
+            //   1.0 -- Isotropic when approaching texcoord (0, 0)
+            // Y is used for tangent space selection/control:
+            //   0.0 -- Use geometry T and B (from vertex attribute
+            //   1.0 -- Use T and B derived from texcoord
+            // GLSL mix(a, b, w) = a * (1 - w) + y * w   w == 0 -> a, w == 1 -> b
+            float anisotropy_strength = mix(
+                1.0,
+                min(1.0, circular_anisotropy_magnitude),
+                v_aniso_control.y
+            ) * v_aniso_control.x;
+            // Mix tangent space geometric .. texcoord generated
+            vec3 T0 = T;
+            vec3 B0 = B;
+            T = circular_anisotropy_magnitude > 0.0 ? mix(T0, T_circular.x * T0 + T_circular.y * B0, v_aniso_control.y) : T0;
+            B = circular_anisotropy_magnitude > 0.0 ? mix(B0, T_circular.y * T0 - T_circular.x * B0, v_aniso_control.y) : B0;
+        }
+#endif
+
 #ifdef ERHE_USE_METALLIC_ROUGHNESS_TEXTURE
         vec4 metallic_roughness = sample_texture(
             material.metallic_roughness_texture,
@@ -91,11 +114,13 @@ void main()
             material.metallic_roughness_rotation_scale,
             material.metallic_roughness_offset
         );
-        float metallic  = material.metallic * metallic_roughness.b;
-        float roughness = max(material.roughness.x * metallic_roughness.g, 1e-4);
+        float metallic    = material.metallic * metallic_roughness.b;
+        float roughness_x = max(material.roughness.x * metallic_roughness.g, 1e-4);
+        float roughness_y = max(material.roughness.y * metallic_roughness.g, 1e-4);
 #else
-        float metallic  = material.metallic;
-        float roughness = material.roughness.x;
+        float metallic    = material.metallic;
+        float roughness_x = material.roughness.x;
+        float roughness_y = material.roughness.y;
 #endif
 
 #ifdef ERHE_USE_NORMAL_TEXTURE
@@ -128,12 +153,19 @@ void main()
 
         float N_dot_V = clamped_dot(N, V);
 
-        // Per-type light loop bounds. In a variant build these are
-        // compile-time integer literals (Standard_variant_key fields
-        // ERHE_LIGHT_*_COUNT / _SHADOWMAPPED_COUNT) so each loop unrolls
-        // or disappears. In a non-variant build the
-        // erhe_standard_variant.glsl fallbacks expand them to the runtime
-        // light_block.*_count fields, matching today's behavior.
+        // Compile-time BxDF dispatch. The Anisotropic branch needs T and
+        // B; if the mesh / variant did not enable the tangent/bitangent
+        // varyings, fall back to the isotropic call (using roughness_x)
+        // so the shader still links and renders something reasonable.
+#if (ERHE_BXDF_MODEL == ERHE_BXDF_MODEL_ANISOTROPIC_BRDF) && defined(ERHE_USE_VERTEX_VARYING_TANGENT) && defined(ERHE_USE_VERTEX_VARYING_BITANGENT)
+#  define BXDF_CALL(L_arg) anisotropic_brdf(base_color, roughness_x, roughness_y, metallic, material.reflectance, L_arg, V, T, B, N)
+#else
+#  define BXDF_CALL(L_arg) isotropic_brdf(base_color, roughness_x, metallic, material.reflectance, L_arg, V, N)
+#endif
+
+        // Per-type light loop bounds. These are compile-time integer
+        // literals emitted by Standard_shader_variants from the
+        // Standard_variant_key counts, so each loop unrolls or disappears.
         uint directional_light_offset = 0;
         uint spot_light_offset        = uint(ERHE_LIGHT_DIRECTIONAL_COUNT);
         uint point_light_offset       = spot_light_offset + uint(ERHE_LIGHT_SPOT_COUNT);
@@ -162,15 +194,7 @@ void main()
             float N_dot_L        = dot(N, L);
             if (N_dot_L > 0.0) {
                 vec3 intensity = light.radiance_and_range.rgb * sample_light_visibility(v_position, light_index, N_dot_L);
-                color += intensity * isotropic_brdf(
-                    base_color,
-                    roughness,
-                    metallic,
-                    material.reflectance,
-                    L,
-                    V,
-                    N
-                );
+                color += intensity * BXDF_CALL(L);
             }
         }
 
@@ -183,15 +207,7 @@ void main()
             float N_dot_L        = dot(N, L);
             if (N_dot_L > 0.0) {
                 vec3 intensity = light.radiance_and_range.rgb;
-                color += intensity * isotropic_brdf(
-                    base_color,
-                    roughness,
-                    metallic,
-                    material.reflectance,
-                    L,
-                    V,
-                    N
-                );
+                color += intensity * BXDF_CALL(L);
             }
         }
 
@@ -207,15 +223,7 @@ void main()
                 float spot_attenuation  = get_spot_attenuation(-point_to_light, light.direction_and_outer_spot_cos.xyz, light.direction_and_outer_spot_cos.w, light.position_and_inner_spot_cos.w);
                 float light_visibility  = sample_light_visibility(v_position, light_index, N_dot_L);
                 vec3  intensity         = range_attenuation * spot_attenuation * light.radiance_and_range.rgb * light_visibility;
-                color += intensity * isotropic_brdf(
-                    base_color,
-                    roughness,
-                    metallic,
-                    material.reflectance,
-                    L,
-                    V,
-                    N
-                );
+                color += intensity * BXDF_CALL(L);
             }
         }
 
@@ -230,15 +238,7 @@ void main()
                 float range_attenuation = get_range_attenuation(light.radiance_and_range.w, length(point_to_light));
                 float spot_attenuation  = get_spot_attenuation(-point_to_light, light.direction_and_outer_spot_cos.xyz, light.direction_and_outer_spot_cos.w, light.position_and_inner_spot_cos.w);
                 vec3  intensity         = range_attenuation * spot_attenuation * light.radiance_and_range.rgb;
-                color += intensity * isotropic_brdf(
-                    base_color,
-                    roughness,
-                    metallic,
-                    material.reflectance,
-                    L,
-                    V,
-                    N
-                );
+                color += intensity * BXDF_CALL(L);
             }
         }
 
@@ -253,15 +253,7 @@ void main()
             if (N_dot_L > 0.0) {
                 float range_attenuation = get_range_attenuation(light.radiance_and_range.w, length(point_to_light));
                 vec3  intensity         = range_attenuation * light.radiance_and_range.rgb;
-                color += intensity * isotropic_brdf(
-                    base_color,
-                    roughness,
-                    metallic,
-                    material.reflectance,
-                    L,
-                    V,
-                    N
-                );
+                color += intensity * BXDF_CALL(L);
             }
         }
 
@@ -275,18 +267,12 @@ void main()
             if (N_dot_L > 0.0) {
                 float range_attenuation = get_range_attenuation(light.radiance_and_range.w, length(point_to_light));
                 vec3  intensity         = range_attenuation * light.radiance_and_range.rgb;
-                color += intensity * isotropic_brdf(
-                    base_color,
-                    roughness,
-                    metallic,
-                    material.reflectance,
-                    L,
-                    V,
-                    N
-                );
+                color += intensity * BXDF_CALL(L);
             }
         }
+#undef BXDF_CALL
     }
+#endif
 
     float exposure = camera.cameras[c_view_index].exposure;
     out_color.rgb = color * exposure * material.opacity;

@@ -1265,7 +1265,7 @@ private:
             // NOTE: MaterialSpecularGlossiness is only supported in a hacky way to load Hintze Hall
             const std::unique_ptr<fastgltf::MaterialSpecularGlossiness>& specular_glossiness = material.specularGlossiness;
             if (specular_glossiness && specular_glossiness->diffuseTexture.has_value()) {
-                create_data.unlit = true;
+                create_data.bxdf_model = erhe::primitive::Bxdf_model::unlit;
                 apply_texture(specular_glossiness->diffuseTexture.value(), create_samplers.base_color, false);
             }
 

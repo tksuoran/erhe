@@ -17,6 +17,7 @@ namespace erhe {
 namespace erhe::scene {
     class Mesh;
     class Mesh_layer;
+    class Mesh_primitive_ref;
     class Node;
 }
 
@@ -109,6 +110,20 @@ public:
         const Primitive_interface_settings&                        settings,
         std::size_t&                                               out_primitive_count,
         bool                                                       use_id_ranges = false
+    ) -> erhe::graphics::Ring_buffer_range;
+
+    // Primitive-level overload used by callers that bucket at primitive
+    // granularity (forward_renderer's variant-aware buckets). Each ref
+    // contributes one entry; primitives within a single mesh whose
+    // materials have different variant signatures land in different
+    // refs (and different buckets) and therefore in separate calls.
+    auto update(
+        const std::span<const erhe::scene::Mesh_primitive_ref>& primitive_refs,
+        erhe::primitive::Primitive_mode                         primitive_mode,
+        const erhe::Item_filter&                                filter,
+        const Primitive_interface_settings&                     settings,
+        std::size_t&                                            out_primitive_count,
+        bool                                                    use_id_ranges = false
     ) -> erhe::graphics::Ring_buffer_range;
 
     auto update(

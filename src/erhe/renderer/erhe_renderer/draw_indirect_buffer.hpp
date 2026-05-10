@@ -9,7 +9,10 @@
 #include <span>
 
 namespace erhe { class Item_filter; }
-namespace erhe::scene { class Mesh; }
+namespace erhe::scene {
+    class Mesh;
+    class Mesh_primitive_ref;
+}
 
 namespace erhe::renderer {
 
@@ -30,6 +33,15 @@ public:
         const std::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes,
         erhe::primitive::Primitive_mode                            primitive_mode,
         const erhe::Item_filter&                                   filter
+    ) -> Draw_indirect_buffer_range;
+
+    // Primitive-level overload used by callers that bucket at primitive
+    // granularity. Each ref produces exactly one draw command (no inner
+    // loop over the mesh's primitives).
+    auto update(
+        const std::span<const erhe::scene::Mesh_primitive_ref>& primitive_refs,
+        erhe::primitive::Primitive_mode                         primitive_mode,
+        const erhe::Item_filter&                                filter
     ) -> Draw_indirect_buffer_range;
 
     //// void debug_properties_window();

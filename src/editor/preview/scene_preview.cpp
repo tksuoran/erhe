@@ -41,6 +41,8 @@ Scene_preview::Scene_preview(
             .debug_label    = erhe::utility::Debug_label{"Polygon Fill Opaque"},
             .lazy_shader_stages = &programs.standard,
             .vertex_input   = &mesh_memory.vertex_input,
+            .vertex_format  = &mesh_memory.vertex_format,
+            .uses_standard_variants = true,
             .input_assembly = Input_assembly_state::triangle,
             .rasterization  = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
             .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),

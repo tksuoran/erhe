@@ -363,7 +363,9 @@ TEST_F(Mcp_test, get_material_details_has_full_structure)
     EXPECT_TRUE(d.contains("emissive"));
     EXPECT_TRUE(d.contains("normal_texture_scale"));
     EXPECT_TRUE(d.contains("occlusion_texture_strength"));
-    EXPECT_TRUE(d.contains("unlit"));
+    EXPECT_TRUE(d.contains("bxdf_model"));
+    EXPECT_TRUE(d.contains("use_circular_brushed_metal"));
+    EXPECT_TRUE(d.contains("use_aniso_control"));
     ASSERT_TRUE(d.contains("texture_samplers"));
     const json& ts = d["texture_samplers"];
     ASSERT_TRUE(ts.is_object());
@@ -535,18 +537,52 @@ TEST_F(Mcp_test, edit_material_occlusion_texture_strength_round_trip)
     );
 }
 
-TEST_F(Mcp_test, edit_material_unlit_toggle)
+TEST_F(Mcp_test, edit_material_bxdf_model_cycle)
 {
     json before = material_details();
-    const bool original = before["unlit"].get<bool>();
+    const std::string original = before["bxdf_model"].get<std::string>();
+    const std::string target =
+        (original == "unlit")          ? "anisotropic_brdf" :
+        (original == "anisotropic_brdf") ? "isotropic_brdf" :
+                                           "unlit";
 
     edit_and_wait(
-        json{{"unlit", !original}},
-        [original](const json& d) { return d["unlit"].get<bool>() == !original; }
+        json{{"bxdf_model", target}},
+        [target](const json& d) { return d["bxdf_model"].get<std::string>() == target; }
     );
     edit_and_wait(
-        json{{"unlit", original}},
-        [original](const json& d) { return d["unlit"].get<bool>() == original; }
+        json{{"bxdf_model", original}},
+        [original](const json& d) { return d["bxdf_model"].get<std::string>() == original; }
+    );
+}
+
+TEST_F(Mcp_test, edit_material_use_circular_brushed_metal_toggle)
+{
+    json before = material_details();
+    const bool original = before["use_circular_brushed_metal"].get<bool>();
+
+    edit_and_wait(
+        json{{"use_circular_brushed_metal", !original}},
+        [original](const json& d) { return d["use_circular_brushed_metal"].get<bool>() == !original; }
+    );
+    edit_and_wait(
+        json{{"use_circular_brushed_metal", original}},
+        [original](const json& d) { return d["use_circular_brushed_metal"].get<bool>() == original; }
+    );
+}
+
+TEST_F(Mcp_test, edit_material_use_aniso_control_toggle)
+{
+    json before = material_details();
+    const bool original = before["use_aniso_control"].get<bool>();
+
+    edit_and_wait(
+        json{{"use_aniso_control", !original}},
+        [original](const json& d) { return d["use_aniso_control"].get<bool>() == !original; }
+    );
+    edit_and_wait(
+        json{{"use_aniso_control", original}},
+        [original](const json& d) { return d["use_aniso_control"].get<bool>() == original; }
     );
 }
 

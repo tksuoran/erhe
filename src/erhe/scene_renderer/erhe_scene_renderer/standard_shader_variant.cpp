@@ -138,6 +138,7 @@ auto compute_standard_variant_key(
     const bool has_tangent  = vertex_format_has_attribute(vertex_format, usage::tangent,  0);
     const bool has_texcoord_0 = vertex_format_has_attribute(vertex_format, usage::tex_coord, 0);
     const bool has_color_0  = vertex_format_has_attribute(vertex_format, usage::color,    0);
+    const bool has_aniso_control = vertex_format_has_attribute(vertex_format, usage::custom, erhe::dataformat::custom_attribute_aniso_control);
     const bool has_joint_indices = vertex_format_has_attribute(vertex_format, usage::joint_indices, 0);
     const bool has_joint_weights = vertex_format_has_attribute(vertex_format, usage::joint_weights, 0);
     static_cast<void>(has_position); // position is required by the shader; not a variant axis
@@ -170,19 +171,45 @@ auto compute_standard_variant_key(
     if (sampler_is_bound(samplers.occlusion))          { key.set_boolean(Axis::use_occlusion_texture,          true); }
     if (sampler_is_bound(samplers.emissive))           { key.set_boolean(Axis::use_emission_texture,           true); }
 
+    // Material shading-model axes.
+    if (data.use_circular_brushed_metal) {
+        key.set_boolean(Axis::use_circular_brushed_metal, true);
+    }
+    key.bxdf_model = static_cast<uint16_t>(data.bxdf_model);
+
+    const bool is_unlit            = data.bxdf_model == erhe::primitive::Bxdf_model::unlit;
+    const bool is_anisotropic_brdf = data.bxdf_model == erhe::primitive::Bxdf_model::anisotropic_brdf;
+
     // Mesh sub-key axes that depend on the bound material.
-    if (has_normal_0 && !data.unlit) {
+    if (has_normal_0 && !is_unlit) {
         key.set_boolean(Axis::use_vertex_varying_normal, true);
     }
     // Tangent + bitangent come together: the bitangent varying carries the
     // sign-corrected cross product computed in the vertex stage. They're
-    // only useful when a normal map sampler is bound (or future aniso).
-    if (has_tangent && has_normal_0 && sampler_is_bound(samplers.normal)) {
+    // useful when a normal map sampler is bound, when the BxDF is
+    // anisotropic (anisotropic_brdf needs T and B as inputs), or when a
+    // tangent-frame-rewriting effect (e.g. circular brushed metal) is on.
+    const bool needs_tangent_frame =
+        sampler_is_bound(samplers.normal) ||
+        is_anisotropic_brdf ||
+        data.use_circular_brushed_metal;
+    if (has_tangent && has_normal_0 && needs_tangent_frame) {
         key.set_boolean(Axis::use_vertex_varying_tangent,   true);
         key.set_boolean(Axis::use_vertex_varying_bitangent, true);
     }
-    if (has_texcoord_0 && any_sampler_uses_tex_coord_zero(*material)) {
+    // Texcoord 0 is needed when any bound sampler uses it OR when circular
+    // brushed metal is on (the brush direction is derived from UV).
+    const bool needs_texcoord_0 =
+        any_sampler_uses_tex_coord_zero(*material) ||
+        data.use_circular_brushed_metal;
+    if (has_texcoord_0 && needs_texcoord_0) {
         key.set_boolean(Axis::use_vertex_varying_texcoord0, true);
+    }
+
+    // Aniso control varying: enabled when the mesh ships per-vertex aniso
+    // data (custom_attribute_aniso_control) AND the material consumes it.
+    if (has_aniso_control && data.use_aniso_control) {
+        key.set_boolean(Axis::use_vertex_varying_aniso_control, true);
     }
 
     return key;

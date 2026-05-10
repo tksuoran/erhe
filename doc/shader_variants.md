@@ -93,10 +93,12 @@ lacks tangents, the variant must drop the normal-mapping path.
 |-------|----------|
 | `ERHE_USE_SKINNING` | vertex format has `joint_indices` AND `joint_weights` AND the mesh has a `Skin` attached |
 | `ERHE_USE_VERTEX_VARYING_NORMAL` | vertex format has `normal` AND `!material.unlit` |
-| `ERHE_USE_VERTEX_VARYING_TANGENT` | vertex format has `tangent` AND material has a `normal` sampler texture (or future aniso material) |
+| `ERHE_USE_VERTEX_VARYING_TANGENT` | vertex format has `tangent` AND `normal` AND (material has a `normal` sampler OR `material.use_circular_brushed_metal`) |
 | `ERHE_USE_VERTEX_VARYING_BITANGENT` | same condition as tangent |
-| `ERHE_USE_VERTEX_VARYING_TEXCOORD0` | vertex format has `tex_coord,0` AND any material sampler with `tex_coord==0` is present |
+| `ERHE_USE_VERTEX_VARYING_TEXCOORD0` | vertex format has `tex_coord,0` AND (any material sampler with `tex_coord==0` is present OR `material.use_circular_brushed_metal`) |
 | `ERHE_USE_VERTEX_VARYING_COLOR` | vertex format has `color,0` (always pass through; gating left for later) |
+| `ERHE_USE_VERTEX_VARYING_ANISO_CONTROL` | vertex format has `custom,custom_attribute_aniso_control` AND `material.use_aniso_control` |
+| `ERHE_USE_CIRCULAR_BRUSHED_METAL` | `material.use_circular_brushed_metal` |
 
 These cannot be derived from material alone -- they require knowing each
 mesh's vertex format. **This is the dimension that is currently degenerate

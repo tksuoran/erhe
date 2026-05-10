@@ -18,17 +18,18 @@ Standard_shader_variants::Standard_shader_variants(
 
 Standard_shader_variants::~Standard_shader_variants() noexcept = default;
 
-auto Standard_shader_variants::get_or_compile(const Standard_variant_key& key) -> const erhe::graphics::Shader_stages*
+auto Standard_shader_variants::get_or_compile(
+    const Standard_variant_key& key,
+    const uint32_t              multiview_view_count
+) -> const erhe::graphics::Shader_stages*
 {
-    // Adapt the typed key to a generic Shader_variant_key. The standard
-    // shader is always single-view here -- multiview siblings are
-    // requested through their own dedicated entry points (Forward_renderer
-    // multiview path uses pre-built multiview_shader_stages on the
-    // pipeline, which do not flow through this typed adapter).
+    // Adapt the typed key to a generic Shader_variant_key. The variant
+    // cache keys on multiview_view_count, so single-view (0) and the
+    // OpenXR multiview build (view count >= 2) get separate cache entries.
     Shader_variant_key generic_key{
         std::string{"standard"},
         make_standard_variant_defines(key),
-        /*multiview_view_count*/ 0u,
+        multiview_view_count,
         /*no_vertex_input     */ false,
         /*dump_interface      */ false
     };

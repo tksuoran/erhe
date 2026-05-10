@@ -11,12 +11,7 @@ layout(location = 1) out vec2      v_texcoord;
 layout(location = 2) out vec4      v_color;
 #endif
 
-// v_aniso_control intentionally bypasses the variant-axis machinery: the
-// anisotropic material extension (custom_1 = aniso strength + tangent
-// rotation) is out of scope for the standard variant cache per
-// doc/shader_variants.md, so the varying is gated on raw attribute
-// presence the same way it always was.
-#ifdef ERHE_ATTRIBUTE_a_custom_1
+#ifdef ERHE_USE_VERTEX_VARYING_ANISO_CONTROL
 layout(location = 3) out vec2      v_aniso_control;
 #endif
 
@@ -99,7 +94,7 @@ void main()
     v_color          = a_color_0;
 #endif
 
-#ifdef ERHE_ATTRIBUTE_a_custom_1
-    v_aniso_control  = a_custom_1; //aniso_control;
+#ifdef ERHE_USE_VERTEX_VARYING_ANISO_CONTROL
+    v_aniso_control  = a_custom_1;
 #endif
 }
