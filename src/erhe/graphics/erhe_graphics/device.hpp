@@ -323,6 +323,33 @@ public:
     // valid.
     void clear_render_pipeline_cache();
 
+    // Init-time prewarm. Constructs a Render_pipeline from the supplied
+    // create_info and discards it; on Vulkan the resulting binary is
+    // retained in the driver-level VkPipelineCache (m_pipeline_cache)
+    // because Render_pipeline_impl's constructor calls
+    // vkCreateGraphicsPipelines with that cache. Subsequent constructions
+    // (or set_render_pipeline_state cache misses) with the same shader
+    // modules + pipeline-state tuple skip the IR-optimization step and
+    // complete significantly faster -- this is the dominant cost in the
+    // first-frame budget on tile-based mobile drivers (Adreno on Quest).
+    //
+    // Note: this populates the driver-level binary cache only. The
+    // application-level VkPipeline cache that Render_command_encoder_impl
+    // populates (keyed on the active VkRenderPass pointer) is NOT
+    // populated by this call -- a runtime bind still calls
+    // vkCreateGraphicsPipelines once, but reuses the warmed driver cache.
+    // OpenGL and Null backends are effectively no-ops; Metal participates
+    // only when the backend opts into MTLBinaryArchive, which it does not
+    // today.
+    //
+    // Caller contract: create_info must be well-formed (non-null
+    // shader_stages with valid modules, formats matching a render pass
+    // the runtime will use). Malformed create_infos surface as
+    // Message_severity::error from the backend, which the editor wires
+    // to ERHE_FATAL when validation layers are on -- prewarm is not a
+    // place to probe with speculative inputs.
+    void warmup_render_pipeline(const Render_pipeline_create_info& create_info);
+
     // Tear down and rebuild the platform surface and its swapchain. Used
     // on Android when the activity returns from background with a new
     // ANativeWindow: the existing VkSurfaceKHR is destroyed, a fresh one
