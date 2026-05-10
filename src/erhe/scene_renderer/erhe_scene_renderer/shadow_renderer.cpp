@@ -398,4 +398,31 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
     return true;
 }
 
+void Shadow_renderer::prewarm_pipelines(
+    const erhe::graphics::Vertex_input_state*                                vertex_input_state,
+    std::span<const std::unique_ptr<erhe::graphics::Render_pass>>            render_passes,
+    const bool                                                               reverse_depth
+)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    if (vertex_input_state == nullptr) {
+        return;
+    }
+
+    erhe::graphics::Lazy_render_pipeline& pipeline = get_pipeline(vertex_input_state, reverse_depth);
+
+    for (const std::unique_ptr<erhe::graphics::Render_pass>& render_pass : render_passes) {
+        if (!render_pass) {
+            continue;
+        }
+        // Force the format-hashed Render_pipeline (and its underlying
+        // VkPipeline on Vulkan) to be constructed before the first draw.
+        // Mirrors the runtime call site at render() above; the ignored
+        // return is intentional (we just want the side effect of cache
+        // population).
+        (void)pipeline.get_pipeline_for(render_pass->get_descriptor());
+    }
+}
+
 } // namespace erhe::scene_renderer
