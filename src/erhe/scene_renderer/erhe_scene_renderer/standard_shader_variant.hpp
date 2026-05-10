@@ -11,6 +11,9 @@ namespace erhe::dataformat {
 namespace erhe::primitive {
     class Material;
 }
+namespace erhe::scene {
+    class Light_layer;
+}
 
 namespace erhe::scene_renderer {
 
@@ -120,6 +123,21 @@ public:
     uint16_t point_light_count              {0};
     uint16_t point_shadowmapped_count       {0};
 };
+
+// Walk a Light_layer's lights, partition them by (Light::type,
+// cast_shadow), and produce the count snapshot the standard shader
+// variant cache keys on. Used by the init-time prewarm paths
+// (renderers/prewarm.cpp, preview/scene_preview.cpp) so they do not
+// reimplement the tally.
+//
+// Light_projections::apply (light_buffer.cpp) maintains its own inline
+// tally that ALSO populates a per-type-and-shadow scratch array used
+// for UBO slot assignment; the two implementations must stay
+// bit-identical (same type_index, same cast_shadow gate, same per-type
+// totals fed to the six count fields). Update both together.
+[[nodiscard]] auto compute_standard_variant_light_counts(
+    const erhe::scene::Light_layer& layer
+) -> Standard_variant_light_counts;
 
 // Build a Standard_variant_key from a (material, vertex_format, has_skin,
 // scene-light-counts) tuple.

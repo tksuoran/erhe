@@ -181,7 +181,11 @@ void Light_projections::apply(
         }
     };
 
-    // Pass 1: count, by (type_bucket, shadow_bucket).
+    // Pass 1: count, by (type_bucket, shadow_bucket). Mirrors the tally
+    // exposed via compute_standard_variant_light_counts() (see
+    // standard_shader_variant.hpp); the per-type scratch is reused below
+    // for slot assignment so we keep an inline tally rather than calling
+    // the helper. Any change here must also update the helper.
     std::size_t per_type_shadow   [4] = {0, 0, 0, 0};
     std::size_t per_type_nonshadow[4] = {0, 0, 0, 0};
     for (std::size_t i = 0; i < lights.size(); ++i) {

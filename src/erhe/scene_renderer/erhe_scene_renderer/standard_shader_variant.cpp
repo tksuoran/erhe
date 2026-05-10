@@ -2,6 +2,10 @@
 
 #include "erhe_dataformat/vertex_format.hpp"
 #include "erhe_primitive/material.hpp"
+#include "erhe_scene/light.hpp"
+#include "erhe_scene/scene.hpp"
+
+#include <memory>
 
 namespace erhe::scene_renderer {
 
@@ -213,6 +217,42 @@ auto compute_standard_variant_key(
     }
 
     return key;
+}
+
+auto compute_standard_variant_light_counts(const erhe::scene::Light_layer& layer)
+    -> Standard_variant_light_counts
+{
+    auto type_index = [](const erhe::scene::Light_type t) -> std::size_t {
+        switch (t) {
+            case erhe::scene::Light_type::directional: return 0;
+            case erhe::scene::Light_type::spot:        return 1;
+            case erhe::scene::Light_type::point:       return 2;
+            default:                                   return 3;
+        }
+    };
+
+    std::size_t per_type_shadow   [4] = {0, 0, 0, 0};
+    std::size_t per_type_nonshadow[4] = {0, 0, 0, 0};
+    for (const std::shared_ptr<erhe::scene::Light>& light : layer.lights) {
+        if (!light) {
+            continue;
+        }
+        const std::size_t t = type_index(light->type);
+        if (light->cast_shadow) {
+            ++per_type_shadow[t];
+        } else {
+            ++per_type_nonshadow[t];
+        }
+    }
+
+    Standard_variant_light_counts result{};
+    result.directional_shadowmapped_count = static_cast<uint16_t>(per_type_shadow[0]);
+    result.directional_light_count        = static_cast<uint16_t>(per_type_shadow[0] + per_type_nonshadow[0]);
+    result.spot_shadowmapped_count        = static_cast<uint16_t>(per_type_shadow[1]);
+    result.spot_light_count               = static_cast<uint16_t>(per_type_shadow[1] + per_type_nonshadow[1]);
+    result.point_shadowmapped_count       = static_cast<uint16_t>(per_type_shadow[2]);
+    result.point_light_count              = static_cast<uint16_t>(per_type_shadow[2] + per_type_nonshadow[2]);
+    return result;
 }
 
 } // namespace erhe::scene_renderer

@@ -5,6 +5,8 @@
 #include "app_scenes.hpp"
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
+#include "preview/brush_preview.hpp"
+#include "preview/material_preview.hpp"
 #include "renderers/composition_pass.hpp"
 #include "rendergraph/shadow_render_node.hpp"
 #include "scene/scene_root.hpp"
@@ -29,49 +31,6 @@
 namespace editor {
 
 namespace {
-
-// Mirrors the type-and-cast_shadow tally in Light_projections::apply
-// (light_buffer.cpp around lines 184-203). The runtime feeds these six
-// counts into compute_bucket_variant_key on each frame; reproducing the
-// tally here lets the prewarm produce keys that hash to the same cache
-// entries the runtime will consume.
-[[nodiscard]] auto snapshot_light_counts(const erhe::scene::Light_layer& layer)
-    -> erhe::scene_renderer::Standard_variant_light_counts
-{
-    using Light_type = erhe::scene::Light_type;
-
-    auto type_index = [](const Light_type t) -> std::size_t {
-        switch (t) {
-            case Light_type::directional: return 0;
-            case Light_type::spot:        return 1;
-            case Light_type::point:       return 2;
-            default:                      return 3;
-        }
-    };
-
-    std::size_t per_type_shadow   [4] = {0, 0, 0, 0};
-    std::size_t per_type_nonshadow[4] = {0, 0, 0, 0};
-    for (const std::shared_ptr<erhe::scene::Light>& light : layer.lights) {
-        if (!light) {
-            continue;
-        }
-        const std::size_t t = type_index(light->type);
-        if (light->cast_shadow) {
-            ++per_type_shadow[t];
-        } else {
-            ++per_type_nonshadow[t];
-        }
-    }
-
-    erhe::scene_renderer::Standard_variant_light_counts result{};
-    result.directional_shadowmapped_count = static_cast<uint16_t>(per_type_shadow[0]);
-    result.directional_light_count        = static_cast<uint16_t>(per_type_shadow[0] + per_type_nonshadow[0]);
-    result.spot_shadowmapped_count        = static_cast<uint16_t>(per_type_shadow[1]);
-    result.spot_light_count               = static_cast<uint16_t>(per_type_shadow[1] + per_type_nonshadow[1]);
-    result.point_shadowmapped_count       = static_cast<uint16_t>(per_type_shadow[2]);
-    result.point_light_count              = static_cast<uint16_t>(per_type_shadow[2] + per_type_nonshadow[2]);
-    return result;
-}
 
 [[nodiscard]] auto collect_standard_variant_pipelines(
     const std::vector<std::shared_ptr<Composition_pass>>& passes
@@ -154,7 +113,7 @@ void prewarm_all(App_context& context)
         }
 
         const erhe::scene_renderer::Standard_variant_light_counts light_counts =
-            snapshot_light_counts(*light_layer);
+            erhe::scene_renderer::compute_standard_variant_light_counts(*light_layer);
 
         const erhe::scene::Mesh_layer* content_layer    = scene_root->layers().content();
         const erhe::scene::Mesh_layer* controller_layer = scene_root->layers().controller();
@@ -221,13 +180,43 @@ void prewarm_all(App_context& context)
         }
     }
 
+    const std::chrono::steady_clock::time_point t_after_shadow = std::chrono::steady_clock::now();
+    const std::size_t after_shadow = context.standard_shader_variants->size();
+
+    // Material- and brush-preview render paths. Each preview owns its
+    // own offscreen render target with its own scene_root + content
+    // library; the variant cache is shared (single Standard_shader_variants
+    // for the whole editor) so preview-specific (vertex_format,
+    // light_count) combinations get prewarmed entries here. Both are
+    // always single-view -- preview render targets are 2D textures, not
+    // multiview swapchains.
+    if (context.material_preview != nullptr) {
+        context.material_preview->prewarm_variants(
+            *context.forward_renderer,
+            *context.standard_shader_variants,
+            context.mesh_memory->vertex_format
+        );
+    }
+    if (context.brush_preview != nullptr) {
+        context.brush_preview->prewarm_variants(
+            *context.forward_renderer,
+            *context.standard_shader_variants,
+            context.mesh_memory->vertex_format
+        );
+    }
+
     const std::chrono::steady_clock::time_point t_end = std::chrono::steady_clock::now();
-    const auto ms_forward = std::chrono::duration_cast<std::chrono::milliseconds>(t_after_forward - t0).count();
-    const auto ms_shadow  = std::chrono::duration_cast<std::chrono::milliseconds>(t_end - t_after_forward).count();
+    const std::size_t after_previews = context.standard_shader_variants->size();
+    const auto ms_forward  = std::chrono::duration_cast<std::chrono::milliseconds>(t_after_forward - t0).count();
+    const auto ms_shadow   = std::chrono::duration_cast<std::chrono::milliseconds>(t_after_shadow  - t_after_forward).count();
+    const auto ms_previews = std::chrono::duration_cast<std::chrono::milliseconds>(t_end           - t_after_shadow).count();
     log_startup->info(
-        "prewarm: forward+content-library compiled {} new variants ({} total) in {} ms; shadow prewarm walked {} node(s) in {} ms",
-        after_forward - before, after_forward, ms_forward,
-        shadow_node_count, ms_shadow
+        "prewarm: forward+content-library compiled {} new variants ({} total) in {} ms; "
+        "shadow prewarm walked {} node(s) in {} ms; "
+        "previews compiled {} new variants ({} total) in {} ms",
+        after_forward  - before,          after_forward,  ms_forward,
+        shadow_node_count,                                ms_shadow,
+        after_previews - after_shadow,    after_previews, ms_previews
     );
 }
 
