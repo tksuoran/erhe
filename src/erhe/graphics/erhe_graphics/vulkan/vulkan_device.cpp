@@ -356,6 +356,36 @@ auto Device_impl::get_cached_pipeline(const std::size_t hash) -> VkPipeline
     return VK_NULL_HANDLE;
 }
 
+void Device_impl::clear_render_pipeline_cache()
+{
+    // The Vulkan pipeline cache hashes raw VkShaderModule handle values
+    // (see Render_command_encoder_impl::set_render_pipeline_state).
+    // When the upstream shader cache (e.g. Shader_variant_cache) destroys
+    // its modules, the driver may recycle those handle values for new
+    // modules, and a future bind whose hash collides with an old entry
+    // would receive a stale VkPipeline carrying the previous shader code.
+    // Drop every cached pipeline here and let the next bind rebuild
+    // against the fresh modules. Pipelines are queued for destruction
+    // through the per-frame completion handler so any in-flight GPU work
+    // that still references them stays valid.
+    std::vector<VkPipeline> to_destroy;
+    {
+        std::lock_guard<std::mutex> lock{m_pipeline_map_mutex};
+        to_destroy.reserve(m_pipeline_map.size());
+        for (auto& [hash, pipeline] : m_pipeline_map) {
+            if (pipeline != VK_NULL_HANDLE) {
+                to_destroy.push_back(pipeline);
+            }
+        }
+        m_pipeline_map.clear();
+    }
+    for (VkPipeline pipeline : to_destroy) {
+        add_completion_handler([device = m_vulkan_device, pipeline](Device_impl&) {
+            vkDestroyPipeline(device, pipeline, nullptr);
+        });
+    }
+}
+
 auto Device_impl::create_graphics_pipeline(const VkGraphicsPipelineCreateInfo& create_info, const std::size_t hash) -> VkPipeline
 {
     VkPipeline pipeline = VK_NULL_HANDLE;

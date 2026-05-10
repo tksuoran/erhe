@@ -114,6 +114,10 @@ void Device::wait_idle()
 {
     m_impl->wait_idle();
 }
+void Device::clear_render_pipeline_cache()
+{
+    m_impl->clear_render_pipeline_cache();
+}
 auto Device::recreate_surface_for_new_window() -> bool
 {
     return m_impl->recreate_surface_for_new_window();
