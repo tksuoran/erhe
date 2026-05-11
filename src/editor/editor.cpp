@@ -8,6 +8,14 @@
 #include "editor.hpp"
 
 #include "app_context.hpp"
+#include "config/generated/add_cameras_args.hpp"
+#include "config/generated/add_cameras_args_serialization.hpp"
+#include "config/generated/add_lights_args.hpp"
+#include "config/generated/add_lights_args_serialization.hpp"
+#include "config/generated/add_room_args.hpp"
+#include "config/generated/add_room_args_serialization.hpp"
+#include "config/generated/make_mesh_args.hpp"
+#include "config/generated/make_mesh_args_serialization.hpp"
 #include "config/generated/editor_settings_config.hpp"
 #include "config/generated/editor_settings_config_serialization.hpp"
 #include "erhe_scene_renderer/generated/mesh_memory_config.hpp"
@@ -744,26 +752,6 @@ public:
                 m_window->get_scale_factor()
             );
 
-            // Clamp Scene_config::directional_light_count to the active graphics
-            // preset's shadow_light_count, so the default scene cannot request
-            // more directional lights than the shadow-map array can hold. This
-            // runs once at startup, before Scene_builder consumes the value;
-            // changing the preset at runtime requires a restart for the scene
-            // to be rebuilt.
-            {
-                const Graphics_preset_entry& preset = m_app_settings->graphics.current_graphics_preset;
-                if (preset.shadow_enable) {
-                    const int requested = m_editor_settings.scene.directional_light_count;
-                    if (requested > preset.shadow_light_count) {
-                        log_startup->info(
-                            "Clamping Scene_config::directional_light_count from {} to {} (graphics preset '{}' shadow_light_count)",
-                            requested, preset.shadow_light_count, preset.name
-                        );
-                        m_editor_settings.scene.directional_light_count = preset.shadow_light_count;
-                    }
-                }
-            }
-
 #if defined(ERHE_XR_LIBRARY_OPENXR)
             // Second-phase OpenXR initialization: build the Xr_session now that
             // the graphics Device exists. Apparently it is necessary to create
@@ -1258,22 +1246,13 @@ public:
             {
                 ERHE_GET_GL_CONTEXT
                 m_scene_builder = std::make_unique<Scene_builder>(
-                    m_editor_settings.scene,               //const Scene_config&             scene_config
-                    m_editor_settings.post_processing,     //bool                            enable_post_processing
-                    m_default_scene,                //std::shared_ptr<Scene_root>     scene
-                    *m_executor.get(),              //tf::Executor&                   executor
-                    *m_graphics_device.get(),       //erhe::graphics::Device&         graphics_device
-                    *m_imgui_renderer.get(),        //erhe::imgui::Imgui_renderer&    imgui_renderer
-                    *m_imgui_windows.get(),         //erhe::imgui::Imgui_windows&     imgui_windows
-                    *m_rendergraph.get(),           //erhe::rendergraph::Rendergraph& rendergraph
-                    m_app_context,                  //App_context&                    app_context
-                    *m_app_message_bus.get(),       //App_message_bus&                app_message_bus
-                    *m_app_rendering.get(),         //App_rendering&                  app_rendering
-                    *m_app_settings.get(),          //App_settings&                   app_settings
-                    *m_mesh_memory.get(),           //erhe::scene_renderer::Mesh_memory& mesh_memory
-                    *m_post_processing.get(),       //Post_processing&                post_processing
-                    *m_tools.get(),                 //Tools&                          tools
-                    *m_viewport_scene_views.get()   //Scene_views&                    scene_views
+                    m_editor_settings.scene,           //const Scene_config&                scene_config
+                    m_editor_settings.post_processing, //bool                               enable_post_processing
+                    m_default_scene,                   //std::shared_ptr<Scene_root>        scene
+                    *m_executor.get(),                 //tf::Executor&                      executor
+                    m_app_context,                     //App_context&                       app_context
+                    *m_app_settings.get(),             //App_settings&                      app_settings
+                    *m_mesh_memory.get()               //erhe::scene_renderer::Mesh_memory& mesh_memory
                 );
             }
             ERHE_TASK_FOOTER(
@@ -1759,22 +1738,39 @@ public:
 #endif
         m_tools->set_priority_tool(m_physics_tool.get());
 
+        // Run the startup command script while the init-time command
+        // buffer is still open. Several scripted commands (e.g.
+        // scene.add_cameras building the default Viewport_scene_view +
+        // Shadow_render_node, scene.add_* invoking Brush::make_instance)
+        // record GPU work during their try_call(), so they need a valid
+        // m_app_context.current_command_buffer. Item_insert_remove_operation
+        // execute happens later when Operation_stack::update() drains the
+        // queue on the first tick, which is fine -- by then the per-frame
+        // command buffer is open.
+        log_startup->info("Init: run_startup_script");
+        run_startup_script();
+        log_startup->info("Init: run_startup_script done");
+
         // Close the init-time command buffer opened in the member init
         // list (or reseated by Init_status_display::render_present),
         // submit, and block until the GPU has consumed every recorded
         // upload + clear so the resources are ready for the main render
         // loop.
         ERHE_VERIFY(m_app_context.current_command_buffer != nullptr);
+        log_startup->info("Init: closing + submitting init command buffer");
         m_app_context.current_command_buffer->end();
         erhe::graphics::Command_buffer* init_cbs[] = { m_app_context.current_command_buffer };
         m_graphics_device->submit_command_buffers(std::span<erhe::graphics::Command_buffer* const>{init_cbs});
+        log_startup->info("Init: waiting for GPU to finish init work");
         m_graphics_device->wait_idle();
+        log_startup->info("Init: GPU idle reached");
         m_app_context.current_command_buffer = nullptr;
 
         // Advance the frame index so subsequent frames are paced on the
         // device timeline.
         const bool init_end_frame_ok = m_graphics_device->end_frame();
         ERHE_VERIFY(init_end_frame_ok);
+        log_startup->info("Init: editor ready, entering main loop");
 
         m_last_window_width  = m_window->get_width();
         m_last_window_height = m_window->get_height();
@@ -1931,6 +1927,144 @@ public:
     {
         // TODO
         return true;
+    }
+
+    void run_startup_script()
+    {
+        ERHE_PROFILE_FUNCTION();
+
+        std::optional<std::string> file_content = erhe::file::read("commands script", "config/editor/commands.json");
+        if (!file_content.has_value()) {
+            log_startup->info("commands.json not found; skipping startup script");
+            return;
+        }
+
+        simdjson::ondemand::parser parser;
+        simdjson::padded_string padded{file_content.value()};
+        simdjson::ondemand::document doc;
+        simdjson::error_code error = parser.iterate(padded).get(doc);
+        if (error != simdjson::SUCCESS) {
+            log_startup->error("commands.json: failed to parse JSON: {}", simdjson::error_message(error));
+            return;
+        }
+
+        simdjson::ondemand::object root;
+        error = doc.get_object().get(root);
+        if (error != simdjson::SUCCESS) {
+            log_startup->error("commands.json: top-level value is not an object");
+            return;
+        }
+
+        simdjson::ondemand::array commands_array;
+        error = root["commands"].get_array().get(commands_array);
+        if (error != simdjson::SUCCESS) {
+            log_startup->info("commands.json: no 'commands' array; skipping startup script");
+            return;
+        }
+
+        Scene_commands& sc = *m_app_context.scene_commands;
+
+        log_startup->info("commands.json: running startup script");
+
+        for (simdjson::ondemand::value element : commands_array) {
+            std::string                name;
+            bool                       has_args{false};
+            simdjson::ondemand::object args_obj;
+
+            simdjson::ondemand::json_type type;
+            if (element.type().get(type) != simdjson::SUCCESS) {
+                log_startup->warn("commands.json: malformed array element (type lookup failed)");
+                continue;
+            }
+
+            if (type == simdjson::ondemand::json_type::string) {
+                std::string_view sv;
+                if (element.get_string().get(sv) == simdjson::SUCCESS) {
+                    name = std::string{sv};
+                }
+            } else if (type == simdjson::ondemand::json_type::object) {
+                simdjson::ondemand::object obj;
+                if (element.get_object().get(obj) != simdjson::SUCCESS) {
+                    log_startup->warn("commands.json: malformed object entry");
+                    continue;
+                }
+                std::string_view name_sv;
+                if (obj["name"].get_string().get(name_sv) != simdjson::SUCCESS) {
+                    log_startup->warn("commands.json: object entry missing 'name' field");
+                    continue;
+                }
+                name = std::string{name_sv};
+                if (obj["args"].get_object().get(args_obj) == simdjson::SUCCESS) {
+                    has_args = true;
+                }
+            } else {
+                log_startup->warn("commands.json: unexpected array element type");
+                continue;
+            }
+
+            if (name.empty()) {
+                log_startup->warn("commands.json: empty command name");
+                continue;
+            }
+
+            erhe::commands::Command* command = m_commands->find_command(name);
+            if (command == nullptr) {
+                log_startup->warn("commands.json: unknown command '{}'", name);
+                continue;
+            }
+
+            // Dispatch args by command name. The five scene.add_* mesh
+            // commands take Make_mesh_args; scene.add_lights takes
+            // Add_lights_args; everything else takes none.
+            const bool is_mesh_command =
+                (name == "scene.add_platonic_solids") ||
+                (name == "scene.add_johnson_solids")  ||
+                (name == "scene.add_curved_shapes")   ||
+                (name == "scene.add_chain")           ||
+                (name == "scene.add_toruses");
+
+            if (is_mesh_command) {
+                Make_mesh_args args{};
+                if (has_args) {
+                    deserialize(args_obj, args);
+                }
+                if      (name == "scene.add_platonic_solids") sc.get_add_platonic_solids_command().apply_args(args);
+                else if (name == "scene.add_johnson_solids")  sc.get_add_johnson_solids_command ().apply_args(args);
+                else if (name == "scene.add_curved_shapes")   sc.get_add_curved_shapes_command  ().apply_args(args);
+                else if (name == "scene.add_chain")           sc.get_add_chain_command          ().apply_args(args);
+                else if (name == "scene.add_toruses")         sc.get_add_toruses_command        ().apply_args(args);
+            } else if (name == "scene.add_cameras") {
+                Add_cameras_args args{};
+                if (has_args) {
+                    deserialize(args_obj, args);
+                }
+                sc.get_add_cameras_command().apply_args(args);
+            } else if (name == "scene.add_lights") {
+                Add_lights_args args{};
+                if (has_args) {
+                    deserialize(args_obj, args);
+                }
+                sc.get_add_lights_command().apply_args(args);
+            } else if (name == "scene.add_room") {
+                Add_room_args args{};
+                if (has_args) {
+                    deserialize(args_obj, args);
+                }
+                sc.get_add_room_command().apply_args(args);
+            } else if (has_args) {
+                log_startup->warn("commands.json: command '{}' does not accept args; ignoring args block", name);
+            }
+
+            log_startup->info("commands.json: invoking '{}'", name);
+            const bool ok = command->try_call();
+            if (!ok) {
+                log_startup->warn("commands.json: command '{}' returned false", name);
+            } else {
+                log_startup->info("commands.json: '{}' returned ok", name);
+            }
+        }
+
+        log_startup->info("commands.json: startup script complete");
     }
 
     void run()

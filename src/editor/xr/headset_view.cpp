@@ -15,6 +15,7 @@
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "renderers/composition_pass.hpp"
 #include "renderers/render_context.hpp"
+#include "renderers/render_style.hpp"
 #include "rendergraph/shadow_render_node.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/tools.hpp"
@@ -569,6 +570,28 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
                 get_conventions()
             );
 
+            // Render_context shared by the wide-line feed (below) and the
+            // tool / renderable submission that follows. Encoder is
+            // nullptr at this point; the wide-line feed only needs
+            // viewport_config to resolve per-pass render styles, and the
+            // tool / renderable submission stage does not need the encoder
+            // for line accumulation. multiview_views is set so renderables
+            // that are multiview-aware (Forward_renderer's compositor
+            // path, Debug_renderer) pick the multiview shader stages.
+            Render_context cpu_render_context {
+                .command_buffer         = &views_cb,
+                .encoder                = nullptr,
+                .render_pass            = nullptr,
+                .app_context            = m_app_context,
+                .scene_view             = *this,
+                .viewport_config        = m_viewport_config,
+                .camera                 = primary_camera,
+                .viewport_scene_view    = nullptr,
+                .viewport               = viewport_xy,
+                .override_shader_stages = nullptr,
+                .multiview_views        = std::span<const erhe::scene_renderer::Camera_view_input>{view_inputs}
+            };
+
             // Content wide-line compute path. Mirror viewport_scene_view's
             // setup but feed every view's clip_from_world to the renderer
             // via Camera_view_inputs so the compute shader writes one
@@ -587,9 +610,19 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
                         if ((pass == nullptr) || !pass->use_content_wide_line_renderer || !pass->enabled) {
                             return;
                         }
+                        // Pass settings resolution mirrors Composition_pass /
+                        // viewport_scene_view: explicit primitive_settings wins,
+                        // otherwise derive from the render style. The default
+                        // Primitive_interface_settings::constant_color0 is white,
+                        // so omitting the get_render_style branch leaves render-
+                        // style-driven passes (opaque_edge_lines_*) rendering
+                        // white instead of the configured line color.
                         erhe::scene_renderer::Primitive_interface_settings settings;
                         if (pass->primitive_settings.has_value()) {
                             settings = pass->primitive_settings.value();
+                        } else if (pass->get_render_style) {
+                            const Render_style_data& style = pass->get_render_style(cpu_render_context);
+                            settings = get_primitive_settings(style, pass->primitive_mode);
                         }
                         const glm::vec4 color      = settings.constant_color0;
                         const float     line_width = settings.constant_size;
@@ -613,29 +646,6 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
                 }
             }
 
-            // Tool / Renderable submission feeds Debug_renderer (and any
-            // renderable that submits world-space primitives). Lines are
-            // identical across views, so a single submission against the
-            // primary_camera context is correct -- Debug_renderer's
-            // multi-camera View span is what gets fanned out per-eye in
-            // its compute stage. Encoder is nullptr at this point; the
-            // submission API does not need it for line accumulation.
-            // multiview_views is set on the Render_context so renderables
-            // that are multiview-aware (Forward_renderer's compositor
-            // path) can pick the multiview shader stages.
-            Render_context cpu_render_context {
-                .command_buffer         = &views_cb,
-                .encoder                = nullptr,
-                .render_pass            = nullptr,
-                .app_context            = m_app_context,
-                .scene_view             = *this,
-                .viewport_config        = m_viewport_config,
-                .camera                 = primary_camera,
-                .viewport_scene_view    = nullptr,
-                .viewport               = viewport_xy,
-                .override_shader_stages = nullptr,
-                .multiview_views        = std::span<const erhe::scene_renderer::Camera_view_input>{view_inputs}
-            };
             m_app_context.tools        ->render_viewport_tools(cpu_render_context);
             m_app_context.app_rendering->render_viewport_renderables(cpu_render_context);
 

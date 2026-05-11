@@ -1,7 +1,12 @@
 #include "scene/scene_commands.hpp"
 
+#include "config/generated/make_mesh_args.hpp"
+#include "config/generated/graphics_preset_entry.hpp"
+
 #include "app_context.hpp"
+#include "app_settings.hpp"
 #include "app_windows.hpp"
+#include "editor_log.hpp"
 #include "items.hpp"
 #include "operations/compound_operation.hpp"
 #include "operations/item_insert_remove_operation.hpp"
@@ -9,6 +14,7 @@
 #include "operations/operation_stack.hpp"
 #include "rendertarget_mesh.hpp"
 #include "rendertarget_imgui_host.hpp"
+#include "scene/scene_builder.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/viewport_scene_view.hpp"
 #include "scene/viewport_scene_views.hpp"
@@ -76,6 +82,207 @@ auto Create_new_rendertarget_command::try_call() -> bool
 {
     return m_context.scene_commands->create_new_rendertarget().operator bool();
 }
+
+Add_cameras_command::Add_cameras_command(erhe::commands::Commands& commands, App_context& context)
+    : Command  {commands, "scene.add_cameras"}
+    , m_context{context}
+{
+}
+
+auto Add_cameras_command::try_call() -> bool
+{
+    m_context.scene_builder->add_cameras(m_args);
+    return true;
+}
+
+void Add_cameras_command::apply_args(const Add_cameras_args& args)
+{
+    m_args = args;
+}
+
+Add_room_command::Add_room_command(erhe::commands::Commands& commands, App_context& context)
+    : Command  {commands, "scene.add_room"}
+    , m_context{context}
+{
+}
+
+auto Add_room_command::try_call() -> bool
+{
+    m_context.scene_builder->add_room(m_args);
+    return true;
+}
+
+void Add_room_command::apply_args(const Add_room_args& args)
+{
+    m_args = args;
+}
+
+Add_lights_command::Add_lights_command(erhe::commands::Commands& commands, App_context& context)
+    : Command  {commands, "scene.add_lights"}
+    , m_context{context}
+{
+}
+
+auto Add_lights_command::try_call() -> bool
+{
+    m_context.scene_builder->add_lights(m_args);
+    return true;
+}
+
+void Add_lights_command::apply_args(const Add_lights_args& args)
+{
+    m_args = args;
+
+    // Clamp directional_light_count to the active graphics preset's
+    // shadow_light_count -- the shadow-map texture array has a fixed
+    // capacity, and exceeding it would silently drop lights or crash
+    // shader bindings. Previously this clamp lived in editor.cpp on
+    // Scene_config; it moved here when the field migrated to per-command
+    // args.
+    const Graphics_preset_entry& preset = m_context.app_settings->graphics.current_graphics_preset;
+    if (preset.shadow_enable && (m_args.directional_light_count > preset.shadow_light_count)) {
+        log_startup->info(
+            "Clamping scene.add_lights args.directional_light_count from {} to {} (graphics preset '{}' shadow_light_count)",
+            m_args.directional_light_count, preset.shadow_light_count, preset.name
+        );
+        m_args.directional_light_count = preset.shadow_light_count;
+    }
+}
+
+Add_platonic_solids_command::Add_platonic_solids_command(erhe::commands::Commands& commands, App_context& context)
+    : Command  {commands, "scene.add_platonic_solids"}
+    , m_context{context}
+{
+}
+
+auto Add_platonic_solids_command::try_call() -> bool
+{
+    m_context.scene_builder->add_platonic_solids(m_make_mesh_config);
+    return true;
+}
+
+void Add_platonic_solids_command::set_make_mesh_config(const Make_mesh_config& config)
+{
+    m_make_mesh_config = config;
+}
+
+void Add_platonic_solids_command::apply_args(const Make_mesh_args& args)
+{
+    m_make_mesh_config = Make_mesh_config{};
+    m_make_mesh_config.instance_count = args.instance_count;
+    m_make_mesh_config.instance_gap   = args.instance_gap;
+    m_make_mesh_config.object_scale   = args.object_scale;
+    m_make_mesh_config.detail         = args.detail;
+    m_make_mesh_config.mass_scale     = args.mass_scale;
+}
+
+Add_johnson_solids_command::Add_johnson_solids_command(erhe::commands::Commands& commands, App_context& context)
+    : Command  {commands, "scene.add_johnson_solids"}
+    , m_context{context}
+{
+}
+
+auto Add_johnson_solids_command::try_call() -> bool
+{
+    m_context.scene_builder->add_johnson_solids(m_make_mesh_config);
+    return true;
+}
+
+void Add_johnson_solids_command::set_make_mesh_config(const Make_mesh_config& config)
+{
+    m_make_mesh_config = config;
+}
+
+void Add_johnson_solids_command::apply_args(const Make_mesh_args& args)
+{
+    m_make_mesh_config = Make_mesh_config{};
+    m_make_mesh_config.instance_count = args.instance_count;
+    m_make_mesh_config.instance_gap   = args.instance_gap;
+    m_make_mesh_config.object_scale   = args.object_scale;
+    m_make_mesh_config.detail         = args.detail;
+    m_make_mesh_config.mass_scale     = args.mass_scale;
+}
+
+Add_curved_shapes_command::Add_curved_shapes_command(erhe::commands::Commands& commands, App_context& context)
+    : Command  {commands, "scene.add_curved_shapes"}
+    , m_context{context}
+{
+}
+
+auto Add_curved_shapes_command::try_call() -> bool
+{
+    m_context.scene_builder->add_curved_shapes(m_make_mesh_config);
+    return true;
+}
+
+void Add_curved_shapes_command::set_make_mesh_config(const Make_mesh_config& config)
+{
+    m_make_mesh_config = config;
+}
+
+void Add_curved_shapes_command::apply_args(const Make_mesh_args& args)
+{
+    m_make_mesh_config = Make_mesh_config{};
+    m_make_mesh_config.instance_count = args.instance_count;
+    m_make_mesh_config.instance_gap   = args.instance_gap;
+    m_make_mesh_config.object_scale   = args.object_scale;
+    m_make_mesh_config.detail         = args.detail;
+    m_make_mesh_config.mass_scale     = args.mass_scale;
+}
+
+Add_chain_command::Add_chain_command(erhe::commands::Commands& commands, App_context& context)
+    : Command  {commands, "scene.add_chain"}
+    , m_context{context}
+{
+}
+
+auto Add_chain_command::try_call() -> bool
+{
+    m_context.scene_builder->add_torus_chain(m_make_mesh_config, true);
+    return true;
+}
+
+void Add_chain_command::set_make_mesh_config(const Make_mesh_config& config)
+{
+    m_make_mesh_config = config;
+}
+
+void Add_chain_command::apply_args(const Make_mesh_args& args)
+{
+    m_make_mesh_config = Make_mesh_config{};
+    m_make_mesh_config.instance_count = args.instance_count;
+    m_make_mesh_config.instance_gap   = args.instance_gap;
+    m_make_mesh_config.object_scale   = args.object_scale;
+    m_make_mesh_config.detail         = args.detail;
+    m_make_mesh_config.mass_scale     = args.mass_scale;
+}
+
+Add_toruses_command::Add_toruses_command(erhe::commands::Commands& commands, App_context& context)
+    : Command  {commands, "scene.add_toruses"}
+    , m_context{context}
+{
+}
+
+auto Add_toruses_command::try_call() -> bool
+{
+    m_context.scene_builder->add_torus_chain(m_make_mesh_config, false);
+    return true;
+}
+
+void Add_toruses_command::set_make_mesh_config(const Make_mesh_config& config)
+{
+    m_make_mesh_config = config;
+}
+
+void Add_toruses_command::apply_args(const Make_mesh_args& args)
+{
+    m_make_mesh_config = Make_mesh_config{};
+    m_make_mesh_config.instance_count = args.instance_count;
+    m_make_mesh_config.instance_gap   = args.instance_gap;
+    m_make_mesh_config.object_scale   = args.object_scale;
+    m_make_mesh_config.detail         = args.detail;
+    m_make_mesh_config.mass_scale     = args.mass_scale;
+}
 #pragma endregion Command
 
 Scene_commands::Scene_commands(erhe::commands::Commands& commands, App_context& context)
@@ -84,11 +291,27 @@ Scene_commands::Scene_commands(erhe::commands::Commands& commands, App_context& 
     , m_create_new_empty_node_command  {commands, context}
     , m_create_new_light_command       {commands, context}
     , m_create_new_rendertarget_command{commands, context}
+    , m_add_cameras_command            {commands, context}
+    , m_add_room_command               {commands, context}
+    , m_add_lights_command             {commands, context}
+    , m_add_platonic_solids_command    {commands, context}
+    , m_add_johnson_solids_command     {commands, context}
+    , m_add_curved_shapes_command      {commands, context}
+    , m_add_chain_command              {commands, context}
+    , m_add_toruses_command            {commands, context}
 {
     commands.register_command   (&m_create_new_camera_command);
     commands.register_command   (&m_create_new_empty_node_command);
     commands.register_command   (&m_create_new_light_command);
     commands.register_command   (&m_create_new_rendertarget_command);
+    commands.register_command   (&m_add_cameras_command);
+    commands.register_command   (&m_add_room_command);
+    commands.register_command   (&m_add_lights_command);
+    commands.register_command   (&m_add_platonic_solids_command);
+    commands.register_command   (&m_add_johnson_solids_command);
+    commands.register_command   (&m_add_curved_shapes_command);
+    commands.register_command   (&m_add_chain_command);
+    commands.register_command   (&m_add_toruses_command);
     commands.bind_command_to_key(&m_create_new_camera_command,       erhe::window::Key_f2, true);
     commands.bind_command_to_key(&m_create_new_empty_node_command,   erhe::window::Key_f3, true);
     commands.bind_command_to_key(&m_create_new_light_command,        erhe::window::Key_f4, true);
@@ -97,6 +320,46 @@ Scene_commands::Scene_commands(erhe::commands::Commands& commands, App_context& 
     commands.bind_command_to_menu(&m_create_new_empty_node_command,   "Create.Empty Node");
     commands.bind_command_to_menu(&m_create_new_light_command,        "Create.Light");
     commands.bind_command_to_menu(&m_create_new_rendertarget_command, "Create.Rendertarget");
+}
+
+auto Scene_commands::get_add_cameras_command() -> Add_cameras_command&
+{
+    return m_add_cameras_command;
+}
+
+auto Scene_commands::get_add_room_command() -> Add_room_command&
+{
+    return m_add_room_command;
+}
+
+auto Scene_commands::get_add_lights_command() -> Add_lights_command&
+{
+    return m_add_lights_command;
+}
+
+auto Scene_commands::get_add_platonic_solids_command() -> Add_platonic_solids_command&
+{
+    return m_add_platonic_solids_command;
+}
+
+auto Scene_commands::get_add_johnson_solids_command() -> Add_johnson_solids_command&
+{
+    return m_add_johnson_solids_command;
+}
+
+auto Scene_commands::get_add_curved_shapes_command() -> Add_curved_shapes_command&
+{
+    return m_add_curved_shapes_command;
+}
+
+auto Scene_commands::get_add_chain_command() -> Add_chain_command&
+{
+    return m_add_chain_command;
+}
+
+auto Scene_commands::get_add_toruses_command() -> Add_toruses_command&
+{
+    return m_add_toruses_command;
 }
 
 auto Scene_commands::get_scene_root(erhe::scene::Node* parent) const -> Scene_root*

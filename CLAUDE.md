@@ -23,6 +23,8 @@ Alternative configurations:
 - `configure_vs2026_opengl_no_tracy.bat` - without Tracy profiler
 - `configure_vs2026_vulkan.bat` - Vulkan backend
 
+**Always use the `scripts\` build scripts on Windows.** Do not invoke `cmake --preset` directly -- the wrappers encode the project's intended configure flow (CPM caching, MSVC env init, etc.).
+
 ### macOS (Xcode)
 
 Use the build scripts in `scripts/`:
@@ -41,24 +43,18 @@ cmake --build build_xcode_metal  --target editor --config Debug
 
 **Always use the `scripts/` build scripts on macOS.** Do not use CMake presets directly on macOS.
 
-### Using CMake Presets (Windows/Linux)
-
-```bash
-cmake --preset OpenGL_Debug    # Debug OpenGL build
-cmake --preset OpenGL_Release  # Release OpenGL build
-cmake --preset Vulkan_Debug    # Debug Vulkan build
-```
-
-Build output goes to `build/<presetName>/`.
-
 ### Linux
 
 ```bash
-cmake -B build -DERHE_GRAPHICS_API=opengl -DERHE_WINDOW_LIBRARY=sdl ...
+scripts/configure_ninja_linux.sh
 cmake --build build --target editor
 ```
 
 Required packages: `libwayland-dev libxkbcommon-dev xorg-dev` (Ubuntu) or equivalent.
+
+### CMake presets exist but should not be used
+
+`CMakePresets.json` defines presets like `OpenGL_Debug` and `Vulkan_Debug`. Do not invoke `cmake --preset ...` directly. The `scripts/` wrappers (`configure_vs2026_*.bat` on Windows, `configure_xcode_*.sh` on macOS, `configure_ninja_linux.sh` on Linux) wrap the configure step with the project's expected environment and should be used instead. Plans, scripts, and docs should not reference `cmake --preset`.
 
 ### Key CMake Options
 

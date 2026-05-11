@@ -15,16 +15,17 @@ endif ()
 erhe_target_sources_grouped(
     ${_target} TREE "${PROJECT_SOURCE_DIR}" FILES
 
+    config/editor/commands.json
+    config/editor/desktop_window_imgui_host_imgui.ini
+    config/editor/desktop_windows.json
+    config/editor/editor_settings.json
     config/editor/erhe_graphics.json
+    config/editor/graphics_presets.json
+    config/editor/logging.json
     config/editor/mesh_memory.json
+    config/editor/openxr_windows.json
     config/editor/renderer.json
     config/editor/text_renderer.json
-    config/editor/logging.json
-    config/editor/graphics_presets.json
-    config/editor/openxr_windows.json
-    config/editor/editor_settings.json
-    config/editor/desktop_windows.json
-    config/editor/desktop_window_imgui_host_imgui.ini
 
     res/editor/shaders/brdf_slice.frag
     res/editor/shaders/brdf_slice.vert
@@ -223,6 +224,8 @@ erhe_target_sources_grouped(
     main.cpp
     mcp/mcp_server.cpp
     mcp/mcp_server.hpp
+    operations/ambient_light_operation.cpp
+    operations/ambient_light_operation.hpp
     operations/compound_operation.cpp
     operations/compound_operation.hpp
     operations/geometry_operations.cpp
@@ -307,6 +310,7 @@ erhe_target_sources_grouped(
     scene/node_raytrace.cpp
     scene/node_raytrace.hpp
     scene/node_raytrace_mask.hpp
+    scene/make_mesh_config.hpp
     scene/scene_builder.cpp
     scene/scene_builder.hpp
     scene/scene_commands.cpp
@@ -535,6 +539,10 @@ erhe_codegen_generate(
         "${_config_defs}/render_style_data.py"
         "${_config_defs}/debug_visualizations_config.py"
         "${_config_defs}/default_viewport_config.py"
+        "${_config_defs}/make_mesh_args.py"
+        "${_config_defs}/add_lights_args.py"
+        "${_config_defs}/add_room_args.py"
+        "${_config_defs}/add_cameras_args.py"
 )
 
 set(_config_sources
@@ -619,6 +627,18 @@ set(_config_sources
     ${_config_out}/debug_visualizations_config.hpp
     ${_config_out}/debug_visualizations_config_serialization.hpp
     ${_config_out}/debug_visualizations_config.cpp
+    ${_config_out}/make_mesh_args.hpp
+    ${_config_out}/make_mesh_args_serialization.hpp
+    ${_config_out}/make_mesh_args.cpp
+    ${_config_out}/add_lights_args.hpp
+    ${_config_out}/add_lights_args_serialization.hpp
+    ${_config_out}/add_lights_args.cpp
+    ${_config_out}/add_room_args.hpp
+    ${_config_out}/add_room_args_serialization.hpp
+    ${_config_out}/add_room_args.cpp
+    ${_config_out}/add_cameras_args.hpp
+    ${_config_out}/add_cameras_args_serialization.hpp
+    ${_config_out}/add_cameras_args.cpp
     ${_config_out}/viewport_config.hpp
     ${_config_out}/viewport_config_serialization.hpp
     ${_config_out}/viewport_config.cpp
