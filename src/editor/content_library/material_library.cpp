@@ -21,9 +21,12 @@ void add_default_materials(Content_library& library)
             erhe::primitive::Material_create_info{
                 .name = name,
                 .data = {
-                    .base_color = glm::vec3{r, g, b},
-                    .roughness  = roughness,
-                    .metallic   = 1.0f
+                    .base_color                 = glm::vec3{r, g, b},
+                    .roughness                  = roughness,
+                    .metallic                   = 1.0f,
+                    .bxdf_model                 = erhe::primitive::Bxdf_model::anisotropic_brdf,
+                    .use_circular_brushed_metal = true,
+                    .use_aniso_control          = true
                 }
             }
         );

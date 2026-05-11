@@ -448,7 +448,9 @@ void Mcp_server::refresh_tool_list()
             {"emissive",                   {{"type", "array"},   {"items", {{"type", "number"}}}, {"minItems", 3}, {"maxItems", 3}, {"description", "Linear RGB emissive [r, g, b]"}}},
             {"normal_texture_scale",       {{"type", "number"},  {"description", "Normal map scale"}}},
             {"occlusion_texture_strength", {{"type", "number"},  {"description", "Occlusion map strength"}}},
-            {"unlit",                      {{"type", "boolean"}, {"description", "Disable lighting (use base color directly)"}}},
+            {"bxdf_model",                 {{"type", "string"},  {"enum", json::array({"unlit", "isotropic_brdf", "anisotropic_brdf"})}, {"description", "Selects which BxDF the standard shader applies"}}},
+            {"use_circular_brushed_metal", {{"type", "boolean"}, {"description", "Enable circular brushed metal shading variant"}}},
+            {"use_aniso_control",          {{"type", "boolean"}, {"description", "Enable anisotropic shading control"}}},
             {"texture_samplers",           {
                 {"type", "object"},
                 {"description", "Per-slot texture assignments. Textures must come from the scene's content library (use get_scene_textures to list)."},
@@ -846,7 +848,12 @@ auto Mcp_server::query_material_details(const json& args) -> std::string
                 {"emissive",                   {d.emissive.x, d.emissive.y, d.emissive.z}},
                 {"normal_texture_scale",       d.normal_texture_scale},
                 {"occlusion_texture_strength", d.occlusion_texture_strength},
-                {"unlit",                      d.unlit},
+                {"bxdf_model",
+                    (d.bxdf_model == erhe::primitive::Bxdf_model::unlit)            ? "unlit" :
+                    (d.bxdf_model == erhe::primitive::Bxdf_model::anisotropic_brdf) ? "anisotropic_brdf" :
+                                                                                      "isotropic_brdf"},
+                {"use_circular_brushed_metal", d.use_circular_brushed_metal},
+                {"use_aniso_control",          d.use_aniso_control},
                 {"texture_samplers", {
                     {"base_color",         sampler_to_json(d.texture_samplers.base_color)},
                     {"metallic_roughness", sampler_to_json(d.texture_samplers.metallic_roughness)},
@@ -1618,9 +1625,36 @@ auto Mcp_server::action_edit_material(const json& args) -> std::string
         after.occlusion_texture_strength = f;
         applied["occlusion_texture_strength"] = f;
     }
-    if (try_read_bool(args, "unlit", b)) {
-        after.unlit = b;
-        applied["unlit"] = b;
+    {
+        const auto bxdf_it = args.find("bxdf_model");
+        if (bxdf_it != args.end()) {
+            if (!bxdf_it->is_string()) {
+                json r = make_text_content("bxdf_model must be a string");
+                r["isError"] = true;
+                return r.dump();
+            }
+            const std::string s = bxdf_it->get<std::string>();
+            if (s == "unlit") {
+                after.bxdf_model = erhe::primitive::Bxdf_model::unlit;
+            } else if (s == "isotropic_brdf") {
+                after.bxdf_model = erhe::primitive::Bxdf_model::isotropic_brdf;
+            } else if (s == "anisotropic_brdf") {
+                after.bxdf_model = erhe::primitive::Bxdf_model::anisotropic_brdf;
+            } else {
+                json r = make_text_content("bxdf_model must be one of 'unlit', 'isotropic_brdf', 'anisotropic_brdf'");
+                r["isError"] = true;
+                return r.dump();
+            }
+            applied["bxdf_model"] = s;
+        }
+    }
+    if (try_read_bool(args, "use_circular_brushed_metal", b)) {
+        after.use_circular_brushed_metal = b;
+        applied["use_circular_brushed_metal"] = b;
+    }
+    if (try_read_bool(args, "use_aniso_control", b)) {
+        after.use_aniso_control = b;
+        applied["use_aniso_control"] = b;
     }
 
     const auto ts_it = args.find("texture_samplers");

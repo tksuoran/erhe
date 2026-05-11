@@ -18,8 +18,10 @@ class Program_interface;
 // Typed adapter over Shader_variant_cache for the editor's standard lit
 // shader. Translates a Standard_variant_key (10 boolean axes + 6 light
 // counts) into a generic Shader_variant_key {name="standard",
-// defines=make_standard_variant_defines(key), single-view} and forwards
-// to the underlying cache.
+// defines=make_standard_variant_defines(key), multiview_view_count} and
+// forwards to the underlying cache. Pass multiview_view_count=0 for the
+// regular single-view case, or the OpenXR view count (>= 2) for the
+// multiview build.
 //
 // The fallback handle is itself a lazy Cached_shader_handle (typically
 // the editor's "error" shader). When a standard variant compile fails,
@@ -43,7 +45,10 @@ public:
     Standard_shader_variants& operator=(const Standard_shader_variants&) = delete;
     Standard_shader_variants& operator=(Standard_shader_variants&&)      = delete;
 
-    [[nodiscard]] auto get_or_compile(const Standard_variant_key& key) -> const erhe::graphics::Shader_stages*;
+    [[nodiscard]] auto get_or_compile(
+        const Standard_variant_key& key,
+        uint32_t                    multiview_view_count = 0u
+    ) -> const erhe::graphics::Shader_stages*;
 
     void clear();
 

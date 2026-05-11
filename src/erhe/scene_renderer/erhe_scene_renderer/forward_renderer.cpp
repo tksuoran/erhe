@@ -197,104 +197,149 @@ auto peek_mesh_buffers(
     return result;
 }
 
+// Bucket key folds Buffer_set together with the per-primitive
+// Standard_variant_key boolean mask AND the bxdf_model count axis. Two
+// primitives share a bucket only when they share the GPU buffer set
+// (so MDI bindings match) AND every variant-affecting field (so one
+// compiled shader correctly renders every primitive in the bucket).
+// Different primitives within the same mesh can land in different
+// buckets when their materials carry different variant axes -- the
+// bucket key is a primitive-level concept, not a mesh-level one.
+class Bucket_key
+{
+public:
+    Buffer_set buffer_set;
+    uint32_t   variant_boolean_mask{0};
+    uint16_t   bxdf_model          {0};
+
+    [[nodiscard]] auto valid() const -> bool { return buffer_set.valid(); }
+
+    [[nodiscard]] auto operator==(const Bucket_key& other) const -> bool
+    {
+        return (buffer_set            == other.buffer_set           ) &&
+               (variant_boolean_mask  == other.variant_boolean_mask ) &&
+               (bxdf_model            == other.bxdf_model           );
+    }
+};
+
 class Bucket
 {
 public:
-    Buffer_set                                      key;
-    std::vector<std::shared_ptr<erhe::scene::Mesh>> meshes;
+    Bucket_key                                  key;
+    std::vector<erhe::scene::Mesh_primitive_ref> primitives;
 };
 
-auto bucket_meshes_by_buffers(
+class Primitive_variant_signature
+{
+public:
+    uint32_t boolean_mask{0};
+    uint16_t bxdf_model  {0};
+};
+
+// Per-primitive Standard_variant_key fields (boolean_mask + bxdf_model)
+// that affect the bucket. Skinning is per-mesh, so primitives of a
+// skinned mesh inherit the skinning bit regardless of their material.
+// light_counts are scene-wide so they don't enter the bucket key.
+[[nodiscard]] auto compute_primitive_variant_signature(
+    const erhe::scene::Mesh&                 mesh,
+    const erhe::scene::Mesh_primitive&       mesh_primitive,
+    const erhe::dataformat::Vertex_format&   vertex_format
+) -> Primitive_variant_signature
+{
+    Primitive_variant_signature result{};
+    if (mesh_primitive.material) {
+        const erhe::scene_renderer::Standard_variant_key key =
+            erhe::scene_renderer::compute_standard_variant_key(
+                mesh_primitive.material.get(),
+                vertex_format,
+                /*mesh_has_skin*/ false,
+                erhe::scene_renderer::Standard_variant_light_counts{}
+            );
+        result.boolean_mask = key.boolean_mask;
+        result.bxdf_model   = key.bxdf_model;
+    }
+    if (mesh.skin) {
+        result.boolean_mask |= (uint32_t{1} <<
+                 static_cast<uint32_t>(erhe::scene_renderer::Standard_variant_key::Boolean_axis::use_skinning));
+    }
+    return result;
+}
+
+auto bucket_primitives_by_buffers_and_variant(
     const std::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes,
-    const erhe::primitive::Primitive_mode                      primitive_mode
+    const erhe::primitive::Primitive_mode                      primitive_mode,
+    const erhe::dataformat::Vertex_format*                     vertex_format
 ) -> std::vector<Bucket>
 {
     std::vector<Bucket> buckets;
     for (const std::shared_ptr<erhe::scene::Mesh>& mesh : meshes) {
-        const Buffer_set bs = peek_mesh_buffers(mesh, primitive_mode);
-        if (!bs.valid()) {
+        if (!mesh) {
             continue;
         }
-        Bucket* found = nullptr;
-        for (Bucket& b : buckets) {
-            if (b.key == bs) {
-                found = &b;
-                break;
+        const Buffer_set mesh_bs = peek_mesh_buffers(mesh, primitive_mode);
+        if (!mesh_bs.valid()) {
+            continue;
+        }
+        const std::vector<erhe::scene::Mesh_primitive>& mesh_primitives = mesh->get_primitives();
+        for (std::size_t primitive_index = 0; primitive_index < mesh_primitives.size(); ++primitive_index) {
+            const erhe::scene::Mesh_primitive& mesh_primitive = mesh_primitives[primitive_index];
+            const erhe::primitive::Primitive*  primitive_ptr  = mesh_primitive.primitive.get();
+            if (primitive_ptr == nullptr) {
+                continue;
             }
+            const erhe::primitive::Buffer_mesh* buffer_mesh = primitive_ptr->get_renderable_mesh();
+            if ((buffer_mesh == nullptr) || (buffer_mesh->index_range(primitive_mode).index_count == 0)) {
+                continue;
+            }
+            // When vertex_format is null, the pipeline does not opt into
+            // standard variants -- bucket purely by Buffer_set so the
+            // signature stays zero-valued and behaves like the legacy
+            // path (one bucket per buffer set).
+            const Primitive_variant_signature sig = (vertex_format != nullptr)
+                ? compute_primitive_variant_signature(*mesh, mesh_primitive, *vertex_format)
+                : Primitive_variant_signature{};
+            const Bucket_key bk{
+                .buffer_set           = mesh_bs,
+                .variant_boolean_mask = sig.boolean_mask,
+                .bxdf_model           = sig.bxdf_model
+            };
+            Bucket* found = nullptr;
+            for (Bucket& b : buckets) {
+                if (b.key == bk) {
+                    found = &b;
+                    break;
+                }
+            }
+            if (found == nullptr) {
+                buckets.push_back(Bucket{.key = bk, .primitives = {}});
+                found = &buckets.back();
+            }
+            found->primitives.push_back(erhe::scene::Mesh_primitive_ref{
+                .mesh            = mesh,
+                .primitive_index = primitive_index
+            });
         }
-        if (found == nullptr) {
-            buckets.push_back(Bucket{.key = bs, .meshes = {}});
-            found = &buckets.back();
-        }
-        found->meshes.push_back(mesh);
     }
     return buckets;
 }
 
-// Build a Standard_variant_key for an entire bucket: OR every primitive's
-// material caps across the bucket, OR the per-mesh has-skin flag, and pair
-// with the pipeline's vertex_format and the scene's per-frame light counts.
-//
-// One bucket emits one MDI, so it must compile a single shader. ORing the
-// caps gives a permissive variant -- a primitive whose material doesn't
-// actually use, e.g., a normal map runs through the same shader but the
-// runtime `if (normal_texture.x != max_u32)` check skips the sampling.
-// The optimization vs. today is that variants with all-flags-off omit the
-// dead code paths entirely.
+// Build a Standard_variant_key for an entire bucket. The boolean_mask is
+// already pre-computed in the bucket key during bucketing; pair it with
+// the scene's per-frame light counts.
 [[nodiscard]] auto compute_bucket_variant_key(
-    const Bucket&                                                  bucket,
-    const erhe::dataformat::Vertex_format&                         vertex_format,
-    const erhe::scene_renderer::Standard_variant_light_counts&     light_counts
+    const Bucket&                                              bucket,
+    const erhe::scene_renderer::Standard_variant_light_counts& light_counts
 ) -> erhe::scene_renderer::Standard_variant_key
 {
     erhe::scene_renderer::Standard_variant_key key{};
-    bool                                       has_any_skin = false;
-    bool                                       seeded       = false;
-
-    for (const std::shared_ptr<erhe::scene::Mesh>& mesh : bucket.meshes) {
-        if (!mesh) {
-            continue;
-        }
-        if (mesh->skin) {
-            has_any_skin = true;
-        }
-        for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh->get_primitives()) {
-            if (!mesh_primitive.material) {
-                continue;
-            }
-            const erhe::scene_renderer::Standard_variant_key per_primitive =
-                erhe::scene_renderer::compute_standard_variant_key(
-                    mesh_primitive.material.get(),
-                    vertex_format,
-                    /*mesh_has_skin*/ false, // skinning OR'd separately below
-                    light_counts
-                );
-            if (!seeded) {
-                // Take counts from the first computed key (light_counts
-                // are constant across the bucket, but copying once here
-                // avoids re-seeding manually).
-                key    = per_primitive;
-                seeded = true;
-            } else {
-                key.boolean_mask |= per_primitive.boolean_mask;
-            }
-        }
-    }
-
-    if (!seeded) {
-        // No primitive carries a material; build a base key from just the
-        // format + light counts so the cache still keys consistently.
-        key = erhe::scene_renderer::compute_standard_variant_key(
-            /*material*/ nullptr,
-            vertex_format,
-            /*mesh_has_skin*/ false,
-            light_counts
-        );
-    }
-
-    if (has_any_skin) {
-        key.set_boolean(erhe::scene_renderer::Standard_variant_key::Boolean_axis::use_skinning, true);
-    }
+    key.boolean_mask                   = bucket.key.variant_boolean_mask;
+    key.directional_light_count        = light_counts.directional_light_count;
+    key.directional_shadowmapped_count = light_counts.directional_shadowmapped_count;
+    key.spot_light_count               = light_counts.spot_light_count;
+    key.spot_shadowmapped_count        = light_counts.spot_shadowmapped_count;
+    key.point_light_count              = light_counts.point_light_count;
+    key.point_shadowmapped_count       = light_counts.point_shadowmapped_count;
+    key.bxdf_model                     = bucket.key.bxdf_model;
     return key;
 }
 
@@ -393,7 +438,8 @@ void Forward_renderer::render(const Render_parameters& parameters)
 
     for (auto* render_pipeline_state : render_pipeline_states) {
         const erhe::graphics::Render_pipeline_create_info& pipeline = render_pipeline_state->data;
-        bool use_override_shader_stages = (parameters.override_shader_stages != nullptr);
+        const bool caller_provided_override = (parameters.override_shader_stages != nullptr);
+        bool use_override_shader_stages = caller_provided_override;
         const erhe::graphics::Shader_stages* multiview_stages =
             multiview_path ? resolve_pipeline_multiview_shader_stages(pipeline) : nullptr;
         if (multiview_stages != nullptr) {
@@ -448,21 +494,23 @@ void Forward_renderer::render(const Render_parameters& parameters)
 
         // Per-bucket variant lookup is gated on:
         //   - no per-call override_shader_stages (debug viz wins)
-        //   - not on the multiview path (multiview uses pre-built stages)
         //   - this pipeline opted in via uses_standard_variants
         //   - the cache, vertex_format, and light_projections are supplied
-        // !use_override_shader_stages already covers multiview transitively
-        // (multiview_stages != nullptr forced that flag above), but the
-        // explicit !multiview_path keeps the gate self-evident.
-        // When inactive, the bucket loop runs identically to before this
-        // change.
+        // The multiview path is allowed: the variant cache keys on
+        // multiview_view_count, so single-view (0) and multiview-built
+        // (>= 2) variants land in distinct cache entries. When the
+        // bucket-level variant matches the multiview pre-bind exactly,
+        // the (variant != currently_bound_shader) check below avoids a
+        // redundant rebind. When inactive, the bucket loop runs
+        // identically to before this change.
         const bool variant_lookup_active =
-            !use_override_shader_stages &&
-            !multiview_path &&
+            !caller_provided_override &&
             pipeline.uses_standard_variants &&
             (parameters.standard_shader_variants != nullptr) &&
             (pipeline.vertex_format != nullptr) &&
             (parameters.light_projections != nullptr);
+        const uint32_t bucket_multiview_view_count =
+            multiview_path ? static_cast<uint32_t>(parameters.multiview_views.size()) : 0u;
 
         for (const auto& meshes : mesh_spans) {
             ERHE_PROFILE_SCOPE("mesh span");
@@ -471,29 +519,43 @@ void Forward_renderer::render(const Render_parameters& parameters)
                 continue;
             }
 
-            // Group meshes by the GPU buffer set their primitives live in;
-            // multi-draw-indirect needs identical vertex/index bindings for
-            // every draw it covers, so each buffer set becomes its own MDI.
-            // Single-format scenes with one block per pool produce exactly
-            // one bucket and the loop below collapses to today's behavior.
-            const std::vector<Bucket> buckets = bucket_meshes_by_buffers(meshes, primitive_mode);
+            // Group primitives by GPU buffer set + per-primitive variant
+            // signature. The buffer-set component preserves the MDI
+            // requirement that every draw in a bucket share vertex /
+            // index bindings; the variant component ensures every draw
+            // in a bucket also wants the same compiled shader, so the
+            // bucket's single variant binding is correct for every
+            // primitive it covers. Bucketing is per-primitive: two
+            // primitives within the same mesh whose materials carry
+            // different variant axes land in different buckets and
+            // each get the right variant. When the pipeline does not
+            // opt into standard variants, vertex_format is null and
+            // the variant_boolean_mask collapses to 0 so the grouping
+            // degenerates to one bucket per buffer set.
+            const std::vector<Bucket> buckets = bucket_primitives_by_buffers_and_variant(
+                meshes,
+                primitive_mode,
+                pipeline.vertex_format
+            );
             std::size_t bucket_index = 0;
             for (const Bucket& bucket : buckets) {
                 // Annotate each MDI with a RenderDoc / Vulkan debug-utils
                 // scope so captures show one labeled marker per bucket
-                // (e.g. "bucket 1/3 meshes=2 streams=3"). The cb-targeted
-                // overload records the begin/end label calls into the
-                // same cb the encoder writes to so RenderDoc nests the
-                // bucket's draw under it.
+                // (e.g. "bucket 1/3 prims=2 streams=3 mask=0x..."). The
+                // cb-targeted overload records the begin/end label calls
+                // into the same cb the encoder writes to so RenderDoc
+                // nests the bucket's draw under it.
                 erhe::graphics::Scoped_debug_group bucket_scope{
                     parameters.render_encoder.get_command_buffer(),
                     erhe::utility::Debug_label{
                         fmt::format(
-                            "bucket {}/{} meshes={} streams={}",
+                            "bucket {}/{} prims={} streams={} mask=0x{:08x} bxdf={}",
                             bucket_index + 1,
                             buckets.size(),
-                            bucket.meshes.size(),
-                            bucket.key.vertex_buffers.size()
+                            bucket.primitives.size(),
+                            bucket.key.buffer_set.vertex_buffers.size(),
+                            bucket.key.variant_boolean_mask,
+                            bucket.key.bxdf_model
                         )
                     }
                 };
@@ -506,10 +568,12 @@ void Forward_renderer::render(const Render_parameters& parameters)
                 if (variant_lookup_active) {
                     const erhe::scene_renderer::Standard_variant_key key = compute_bucket_variant_key(
                         bucket,
-                        *pipeline.vertex_format,
                         parameters.light_projections->light_counts
                     );
-                    const erhe::graphics::Shader_stages* variant = parameters.standard_shader_variants->get_or_compile(key);
+                    const erhe::graphics::Shader_stages* variant = parameters.standard_shader_variants->get_or_compile(
+                        key,
+                        bucket_multiview_view_count
+                    );
                     if ((variant != nullptr) && variant->is_valid() && (variant != currently_bound_shader)) {
                         erhe::graphics::Render_pipeline_state temp_state = make_temp_pipeline_state(pipeline);
                         parameters.render_encoder.set_render_pipeline_state(temp_state, variant);
@@ -517,23 +581,23 @@ void Forward_renderer::render(const Render_parameters& parameters)
                     }
                 }
 
-                parameters.render_encoder.set_index_buffer(bucket.key.index_buffer);
-                for (std::size_t stream_index = 0; stream_index < bucket.key.vertex_buffers.size(); ++stream_index) {
+                parameters.render_encoder.set_index_buffer(bucket.key.buffer_set.index_buffer);
+                for (std::size_t stream_index = 0; stream_index < bucket.key.buffer_set.vertex_buffers.size(); ++stream_index) {
                     parameters.render_encoder.set_vertex_buffer(
-                        bucket.key.vertex_buffers[stream_index],
+                        bucket.key.buffer_set.vertex_buffers[stream_index],
                         0,
                         static_cast<uint32_t>(stream_index)
                     );
                 }
 
-                const std::span<const std::shared_ptr<erhe::scene::Mesh>> bucket_meshes{bucket.meshes};
+                const std::span<const erhe::scene::Mesh_primitive_ref> bucket_primitives{bucket.primitives};
                 std::size_t primitive_count{0};
-                Ring_buffer_range primitive_range = m_primitive_buffer.update(bucket_meshes, primitive_mode, filter, parameters.primitive_settings, primitive_count);
+                Ring_buffer_range primitive_range = m_primitive_buffer.update(bucket_primitives, primitive_mode, filter, parameters.primitive_settings, primitive_count);
                 if (primitive_count == 0){
                     primitive_range.cancel();
                     continue;
                 }
-                erhe::renderer::Draw_indirect_buffer_range draw_indirect_buffer_range = m_draw_indirect_buffer.update(bucket_meshes, primitive_mode, filter);
+                erhe::renderer::Draw_indirect_buffer_range draw_indirect_buffer_range = m_draw_indirect_buffer.update(bucket_primitives, primitive_mode, filter);
                 if (draw_indirect_buffer_range.draw_indirect_count == 0) {
                     primitive_range.cancel();
                     draw_indirect_buffer_range.range.cancel();

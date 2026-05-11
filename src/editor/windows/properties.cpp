@@ -1020,7 +1020,19 @@ void Properties::material_properties()
         //});
         //pop_group();
     }
-    add_entry("Unlit",       [&](){ ImGui::Checkbox("##",    &data.unlit); });
+    add_entry("BxDF Model", [&]() {
+        static const char* const c_bxdf_model_names[] = {
+            "Unlit",
+            "Isotropic BRDF",
+            "Anisotropic BRDF"
+        };
+        int current = static_cast<int>(data.bxdf_model);
+        if (ImGui::Combo("##", &current, c_bxdf_model_names, IM_ARRAYSIZE(c_bxdf_model_names))) {
+            data.bxdf_model = static_cast<erhe::primitive::Bxdf_model>(current);
+        }
+    });
+    add_entry("Circular Brushed Metal", [&](){ ImGui::Checkbox("##",    &data.use_circular_brushed_metal); });
+    add_entry("Aniso Control",          [&](){ ImGui::Checkbox("##",    &data.use_aniso_control); });
     add_entry("Metallic",    [&](){ ImGui::SliderFloat("##", &data.metallic,     0.0f,  1.0f); });
     add_entry("Reflectance", [&](){ ImGui::SliderFloat("##", &data.reflectance,  0.35f, 1.0f); });
     add_entry("Roughness X", [&](){ ImGui::SliderFloat("##", &data.roughness.x,  0.1f,  0.8f); });

@@ -453,6 +453,13 @@ auto Device_impl::recreate_surface_for_new_window() -> bool
     return false;
 }
 
+void Device_impl::clear_render_pipeline_cache()
+{
+    // Metal pipelines are owned by Render_pipeline objects directly;
+    // there is no hash-keyed cache analogous to Vulkan's m_pipeline_map
+    // that could return stale entries when shader stages are recompiled.
+}
+
 void Device_impl::wait_idle()
 {
     // Metal has no vkDeviceWaitIdle equivalent. The standard idiom is to

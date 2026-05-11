@@ -4,6 +4,7 @@
 #include "erhe_renderer/renderer_log.hpp"
 #include "erhe_graphics/span.hpp"
 #include "erhe_graphics/draw_indirect.hpp"
+#include "erhe_primitive/primitive.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_profile/profile.hpp"
 
@@ -103,6 +104,86 @@ auto Draw_indirect_buffer::update(
     buffer_range.close();
 
     SPDLOG_LOGGER_TRACE(log_draw, "wrote {} entries to draw indirect buffer", draw_indirect_count);
+    return Draw_indirect_buffer_range{
+        std::move(buffer_range),
+        draw_indirect_count
+    };
+}
+
+auto Draw_indirect_buffer::update(
+    const std::span<const erhe::scene::Mesh_primitive_ref>& primitive_refs,
+    const erhe::primitive::Primitive_mode                   primitive_mode,
+    const erhe::Item_filter&                                filter
+) -> Draw_indirect_buffer_range
+{
+    ERHE_PROFILE_FUNCTION();
+
+    const std::size_t                 primitive_count = primitive_refs.size();
+    if (primitive_count == 0) {
+        return {};
+    }
+    const std::size_t                 entry_size      = sizeof(erhe::graphics::Draw_indexed_primitives_indirect_command);
+    const std::size_t                 max_byte_count  = primitive_count * entry_size;
+    erhe::graphics::Ring_buffer_range buffer_range    = acquire(erhe::graphics::Ring_buffer_usage::CPU_write, max_byte_count);
+    const std::span<std::byte>        gpu_data        = buffer_range.get_span();
+    std::size_t                       write_offset    {0};
+    constexpr uint32_t                instance_count     {1};
+    constexpr uint32_t                base_instance      {0};
+    std::size_t                       draw_indirect_count{0};
+
+    for (const erhe::scene::Mesh_primitive_ref& ref : primitive_refs) {
+        const std::shared_ptr<erhe::scene::Mesh>& mesh = ref.mesh;
+        if (!mesh) {
+            continue;
+        }
+        if (mesh->get_node() == nullptr) {
+            continue;
+        }
+        if (!filter(mesh->get_flag_bits())) {
+            continue;
+        }
+        const std::vector<erhe::scene::Mesh_primitive>& mesh_primitives = mesh->get_primitives();
+        if (ref.primitive_index >= mesh_primitives.size()) {
+            continue;
+        }
+        const erhe::scene::Mesh_primitive& mesh_primitive = mesh_primitives[ref.primitive_index];
+        const erhe::primitive::Primitive*  primitive_ptr  = mesh_primitive.primitive.get();
+        if (primitive_ptr == nullptr) {
+            continue;
+        }
+        const erhe::primitive::Buffer_mesh* buffer_mesh = primitive_ptr->get_renderable_mesh();
+        if (buffer_mesh == nullptr) {
+            continue;
+        }
+        const erhe::primitive::Index_range index_range = buffer_mesh->index_range(primitive_mode);
+        if (index_range.index_count == 0) {
+            continue;
+        }
+
+        uint32_t index_count = static_cast<uint32_t>(index_range.index_count);
+        if (m_max_index_count_enable) {
+            index_count = std::min(index_count, static_cast<uint32_t>(m_max_index_count));
+        }
+
+        const uint32_t base_index  = buffer_mesh->base_index();
+        const uint32_t first_index = static_cast<uint32_t>(index_range.first_index + base_index);
+        const uint32_t base_vertex = buffer_mesh->base_vertex();
+
+        const erhe::graphics::Draw_indexed_primitives_indirect_command draw_command{
+            index_count,
+            instance_count,
+            first_index,
+            base_vertex,
+            base_instance
+        };
+        erhe::graphics::write(gpu_data, write_offset, erhe::graphics::as_span(draw_command));
+        write_offset += entry_size;
+        ++draw_indirect_count;
+    }
+
+    buffer_range.bytes_written(write_offset);
+    buffer_range.close();
+
     return Draw_indirect_buffer_range{
         std::move(buffer_range),
         draw_indirect_count

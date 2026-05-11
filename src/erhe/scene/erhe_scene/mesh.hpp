@@ -29,6 +29,19 @@ public:
     std::shared_ptr<erhe::primitive::Material>  material;
 };
 
+class Mesh;
+
+// Non-owning reference to a single primitive of a mesh, used by renderers
+// that bucket / draw at primitive granularity rather than at mesh
+// granularity. The mesh shared_ptr keeps the mesh alive for the lifetime
+// of the ref; primitive_index indexes Mesh::get_primitives().
+class Mesh_primitive_ref
+{
+public:
+    std::shared_ptr<Mesh> mesh;
+    std::size_t           primitive_index{0};
+};
+
 class Mesh : public erhe::Item<Item_base, Node_attachment, Mesh, erhe::Item_kind::clone_using_custom_clone_constructor>
 {
 public:

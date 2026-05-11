@@ -312,6 +312,17 @@ public:
     // completion handlers. For init boundaries, not the steady-state loop.
     void wait_idle();
 
+    // Drop every cached graphics pipeline that was built against any
+    // previously-compiled shader stages. Backends that key their pipeline
+    // cache on raw shader-module handles (Vulkan) MUST flush the cache
+    // when those shader stages are destroyed -- otherwise drivers that
+    // recycle module handle values cause stale pipelines to be returned
+    // for fresh modules. Backends without that hazard (OpenGL, Metal,
+    // Null) implement this as a no-op. Pipelines are destroyed via the
+    // backend's deferred-destruction queue so in-flight GPU work stays
+    // valid.
+    void clear_render_pipeline_cache();
+
     // Tear down and rebuild the platform surface and its swapchain. Used
     // on Android when the activity returns from background with a new
     // ANativeWindow: the existing VkSurfaceKHR is destroyed, a fresh one

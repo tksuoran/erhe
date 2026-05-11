@@ -5,6 +5,7 @@
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_scene_renderer/program_interface.hpp"
 #include "erhe_scene_renderer/shader_variant_cache.hpp"
+#include "erhe_scene_renderer/standard_shader_variant.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -56,7 +57,7 @@ Programs::Programs(
     , error                   {cache, sv_key("error", {}, false, /*dump_interface*/ true), multiview_count(program_interface)}
     , brdf_slice              {cache, sv_key("brdf_slice"),                                multiview_count(program_interface)}
     , brush                   {cache, sv_key("brush"),                                     multiview_count(program_interface)}
-    , standard                {cache, sv_key("standard"),                                  multiview_count(program_interface)}
+    , standard                {cache, sv_key("standard", erhe::scene_renderer::make_standard_variant_defines(erhe::scene_renderer::Standard_variant_key{})), multiview_count(program_interface)}
     , anisotropic_slope       {cache, sv_key("anisotropic_slope"),                         multiview_count(program_interface)}
     , anisotropic_engine_ready{cache, sv_key("anisotropic_engine_ready"),                  multiview_count(program_interface)}
     , circular_brushed_metal  {cache, sv_key("circular_brushed_metal"),                    multiview_count(program_interface)}

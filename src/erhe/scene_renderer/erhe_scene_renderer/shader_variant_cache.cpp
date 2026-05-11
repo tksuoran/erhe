@@ -235,12 +235,19 @@ auto Shader_variant_cache::get_or_compile(
 
 void Shader_variant_cache::clear()
 {
-    std::lock_guard<std::mutex> lock{m_mutex};
-    erhe::graphics::Shader_monitor& monitor = m_graphics_device.get_shader_monitor();
-    for (auto& [key, entry] : m_entries) {
-        monitor.remove(*entry);
+    {
+        std::lock_guard<std::mutex> lock{m_mutex};
+        erhe::graphics::Shader_monitor& monitor = m_graphics_device.get_shader_monitor();
+        for (auto& [key, entry] : m_entries) {
+            monitor.remove(*entry);
+        }
+        m_entries.clear();
     }
-    m_entries.clear();
+    // The Vulkan backend's render-pipeline cache hashes raw shader-module
+    // handles. Driver-recycled handles after our shader_stages drop above
+    // would otherwise collide with stale cached pipelines and bind the
+    // wrong shader. Other backends implement this as a no-op.
+    m_graphics_device.clear_render_pipeline_cache();
 }
 
 auto Shader_variant_cache::size() const -> std::size_t

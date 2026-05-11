@@ -31,13 +31,16 @@ namespace erhe::scene_renderer {
     X(USE_NORMAL_TEXTURE,             use_normal_texture)                                   \
     X(USE_OCCLUSION_TEXTURE,          use_occlusion_texture)                                \
     X(USE_EMISSION_TEXTURE,           use_emission_texture)                                 \
+    /* Material shading variants -- compile-time selection of shading model */              \
+    X(USE_CIRCULAR_BRUSHED_METAL,     use_circular_brushed_metal)                           \
     /* Mesh booleans -- function of the mesh's Vertex_format AND the material's needs */    \
     X(USE_SKINNING,                   use_skinning)                                         \
     X(USE_VERTEX_VARYING_NORMAL,      use_vertex_varying_normal)                            \
     X(USE_VERTEX_VARYING_TANGENT,     use_vertex_varying_tangent)                           \
     X(USE_VERTEX_VARYING_BITANGENT,   use_vertex_varying_bitangent)                         \
     X(USE_VERTEX_VARYING_TEXCOORD0,   use_vertex_varying_texcoord0)                         \
-    X(USE_VERTEX_VARYING_COLOR,       use_vertex_varying_color)
+    X(USE_VERTEX_VARYING_COLOR,       use_vertex_varying_color)                             \
+    X(USE_VERTEX_VARYING_ANISO_CONTROL, use_vertex_varying_aniso_control)
 
 #define ERHE_STANDARD_VARIANT_COUNT_AXES(X)                                                 \
     /* Scene integer counts -- exact (no tier rounding) */                                  \
@@ -46,7 +49,12 @@ namespace erhe::scene_renderer {
     X(LIGHT_SPOT_COUNT,                     spot_light_count)                               \
     X(LIGHT_SPOT_SHADOWMAPPED_COUNT,        spot_shadowmapped_count)                        \
     X(LIGHT_POINT_COUNT,                    point_light_count)                              \
-    X(LIGHT_POINT_SHADOWMAPPED_COUNT,       point_shadowmapped_count)
+    X(LIGHT_POINT_SHADOWMAPPED_COUNT,       point_shadowmapped_count)                       \
+    /* Material BxDF selection -- discrete enum encoded as a count axis    */               \
+    /* (0 = unlit, 1 = isotropic_brdf, 2 = anisotropic_brdf). Mirrors      */               \
+    /* erhe::primitive::Bxdf_model and the ERHE_BXDF_MODEL_* GLSL macros   */               \
+    /* in erhe_standard_variant.glsl.                                       */              \
+    X(BXDF_MODEL,                           bxdf_model)
 
 class Standard_variant_key
 {
@@ -129,6 +137,9 @@ public:
 //    tex_coord index 0 AND any bound material sampler has tex_coord==0.
 //  - USE_VERTEX_VARYING_COLOR is set when the vertex_format has color
 //    index 0 (gating left for later per the plan).
+//  - USE_VERTEX_VARYING_ANISO_CONTROL is set when the vertex_format has
+//    the custom_attribute_aniso_control attribute AND
+//    material.use_aniso_control is true.
 //
 // The function honors the plan invariant ERHE_USE_VERTEX_VARYING_X =>
 // ERHE_ATTRIBUTE_a_X (the underlying attribute is always required for
