@@ -6,6 +6,7 @@
 #include "brushes/brush_placement.hpp"
 #include "content_library/content_library.hpp"
 #include "operations/item_parent_change_operation.hpp"
+#include "operations/material_change_operation.hpp"
 #include "operations/operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "erhe_math/math_util.hpp"
@@ -15,6 +16,8 @@
 
 #include "erhe_commands/command.hpp"
 #include "erhe_commands/commands.hpp"
+#include "erhe_dataformat/dataformat.hpp"
+#include "erhe_graphics/texture.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/light.hpp"
@@ -314,6 +317,7 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "get_scene_cameras")   result = query_scene_cameras   (req->arguments);
         else if (req->tool_name == "get_scene_lights")    result = query_scene_lights    (req->arguments);
         else if (req->tool_name == "get_scene_materials") result = query_scene_materials (req->arguments);
+        else if (req->tool_name == "get_scene_textures") result = query_scene_textures  (req->arguments);
         else if (req->tool_name == "get_scene_brushes")  result = query_scene_brushes  (req->arguments);
         else if (req->tool_name == "get_material_details")result = query_material_details(req->arguments);
         else if (req->tool_name == "get_selection")       result = query_selection       (req->arguments);
@@ -327,6 +331,7 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "unlock_items")       result = action_unlock_items   (req->arguments);
         else if (req->tool_name == "add_tags")           result = action_add_tags       (req->arguments);
         else if (req->tool_name == "remove_tags")        result = action_remove_tags    (req->arguments);
+        else if (req->tool_name == "edit_material")      result = action_edit_material  (req->arguments);
         else                                              result = execute_command       (req->tool_name);
 
         req->result_promise.set_value(std::move(result));
@@ -350,6 +355,7 @@ void Mcp_server::refresh_tool_list()
     m_tool_infos.push_back({"get_scene_lights",    "List all lights in a scene",                             schema_scene_name()});
     m_tool_infos.push_back({"get_scene_materials", "List all materials in a scene's content library",        schema_scene_name()});
     m_tool_infos.push_back({"get_material_details","Get detailed material properties",                       schema_scene_and_item("material_name", "Name of the material")});
+    m_tool_infos.push_back({"get_scene_textures", "List all textures in a scene's content library",         schema_scene_name()});
     m_tool_infos.push_back({"get_scene_brushes",  "List all brushes in a scene's content library",         schema_scene_name()});
     m_tool_infos.push_back({"get_selection",        "Get currently selected items",                          schema_no_args()});
     m_tool_infos.push_back({"get_undo_redo_stack", "Get undo/redo operation stacks",                       schema_no_args()});
@@ -418,6 +424,44 @@ void Mcp_server::refresh_tool_list()
             {"tags",       {{"type", "array"}, {"items", {{"type", "string"}}}, {"description", "Tags to remove"}}}
         }},
         {"required", json::array({"scene_name", "ids", "tags"})}
+    }});
+    json texture_slot_schema = {
+        {"type", "object"},
+        {"properties", {
+            {"texture",   {{"description", "Texture: string (name in content library), integer (texture id), or null to clear. Omit to keep current."}}},
+            {"tex_coord", {{"type", "integer"}, {"minimum", 0},  {"description", "UV channel index (e.g. 0 for TEXCOORD_0)"}}},
+            {"rotation",  {{"type", "number"}, {"description", "UV rotation in radians"}}},
+            {"offset",    {{"type", "array"},  {"items", {{"type", "number"}}}, {"minItems", 2}, {"maxItems", 2}, {"description", "UV offset [u, v]"}}},
+            {"scale",     {{"type", "array"},  {"items", {{"type", "number"}}}, {"minItems", 2}, {"maxItems", 2}, {"description", "UV scale [u, v]"}}}
+        }}
+    };
+    m_tool_infos.push_back({"edit_material",      "Edit material properties including texture assignments (undoable). Only fields supplied are changed.", {
+        {"type", "object"},
+        {"properties", {
+            {"scene_name",                 {{"type", "string"},  {"description", "Name of the scene"}}},
+            {"material_name",              {{"type", "string"},  {"description", "Name of the material to edit"}}},
+            {"base_color",                 {{"type", "array"},   {"items", {{"type", "number"}}}, {"minItems", 3}, {"maxItems", 3}, {"description", "Linear RGB base color [r, g, b]"}}},
+            {"opacity",                    {{"type", "number"},  {"description", "Opacity in [0, 1]"}}},
+            {"roughness",                  {{"description", "Roughness; either [x, y] for anisotropic or a single number applied to both."}}},
+            {"metallic",                   {{"type", "number"},  {"description", "Metallic factor in [0, 1]"}}},
+            {"reflectance",                {{"type", "number"},  {"description", "Dielectric reflectance in [0, 1]"}}},
+            {"emissive",                   {{"type", "array"},   {"items", {{"type", "number"}}}, {"minItems", 3}, {"maxItems", 3}, {"description", "Linear RGB emissive [r, g, b]"}}},
+            {"normal_texture_scale",       {{"type", "number"},  {"description", "Normal map scale"}}},
+            {"occlusion_texture_strength", {{"type", "number"},  {"description", "Occlusion map strength"}}},
+            {"unlit",                      {{"type", "boolean"}, {"description", "Disable lighting (use base color directly)"}}},
+            {"texture_samplers",           {
+                {"type", "object"},
+                {"description", "Per-slot texture assignments. Textures must come from the scene's content library (use get_scene_textures to list)."},
+                {"properties", {
+                    {"base_color",         texture_slot_schema},
+                    {"metallic_roughness", texture_slot_schema},
+                    {"normal",             texture_slot_schema},
+                    {"occlusion",          texture_slot_schema},
+                    {"emissive",           texture_slot_schema}
+                }}
+            }}
+        }},
+        {"required", json::array({"scene_name", "material_name"})}
     }});
 
     // Editor commands
@@ -775,6 +819,22 @@ auto Mcp_server::query_material_details(const json& args) -> std::string
     for (const auto& mat : mat_list) {
         if (mat->get_name() == material_name) {
             const auto& d = mat->data;
+            auto sampler_to_json = [](const erhe::primitive::Material_texture_sampler& s) -> json {
+                json entry = {
+                    {"tex_coord", s.tex_coord},
+                    {"rotation",  s.rotation},
+                    {"offset",    {s.offset.x, s.offset.y}},
+                    {"scale",     {s.scale.x,  s.scale.y}}
+                };
+                if (s.texture) {
+                    entry["texture_id"]   = s.texture->get_id();
+                    entry["texture_name"] = s.texture->get_name();
+                } else {
+                    entry["texture_id"]   = nullptr;
+                    entry["texture_name"] = nullptr;
+                }
+                return entry;
+            };
             json result = {
                 {"name",                       mat->get_name()},
                 {"id",                         mat->get_id()},
@@ -787,9 +847,13 @@ auto Mcp_server::query_material_details(const json& args) -> std::string
                 {"normal_texture_scale",       d.normal_texture_scale},
                 {"occlusion_texture_strength", d.occlusion_texture_strength},
                 {"unlit",                      d.unlit},
-                {"has_base_color_texture",     d.texture_samplers.base_color.texture != nullptr},
-                {"has_normal_texture",         d.texture_samplers.normal.texture != nullptr},
-                {"has_metallic_roughness_texture", d.texture_samplers.metallic_roughness.texture != nullptr}
+                {"texture_samplers", {
+                    {"base_color",         sampler_to_json(d.texture_samplers.base_color)},
+                    {"metallic_roughness", sampler_to_json(d.texture_samplers.metallic_roughness)},
+                    {"normal",             sampler_to_json(d.texture_samplers.normal)},
+                    {"occlusion",          sampler_to_json(d.texture_samplers.occlusion)},
+                    {"emissive",           sampler_to_json(d.texture_samplers.emissive)}
+                }}
             };
             return make_json_content(result).dump();
         }
@@ -798,6 +862,36 @@ auto Mcp_server::query_material_details(const json& args) -> std::string
     json r = make_text_content("Material not found: " + material_name);
     r["isError"] = true;
     return r.dump();
+}
+
+auto Mcp_server::query_scene_textures(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    auto* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        json r = make_text_content("Scene not found: " + scene_name);
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    auto library = sr->get_content_library();
+    if (!library || !library->textures) {
+        return make_json_content({{"textures", json::array()}}).dump();
+    }
+
+    json textures = json::array();
+    const auto& tex_list = library->textures->get_all<erhe::graphics::Texture>();
+    for (const auto& tex : tex_list) {
+        textures.push_back({
+            {"name",   tex->get_name()},
+            {"id",     tex->get_id()},
+            {"width",  tex->get_width()},
+            {"height", tex->get_height()},
+            {"format", erhe::dataformat::c_str(tex->get_pixelformat())}
+        });
+    }
+
+    return make_json_content({{"textures", textures}}).dump();
 }
 
 auto Mcp_server::query_scene_brushes(const json& args) -> std::string
@@ -1258,6 +1352,358 @@ auto Mcp_server::action_remove_tags(const json& args) -> std::string
         }
     }
     return make_json_content({{"untagged_count", static_cast<int>(items.size())}}).dump();
+}
+
+namespace {
+
+[[nodiscard]] auto try_read_vec3(const json& obj, const char* key, glm::vec3& out) -> bool
+{
+    const auto it = obj.find(key);
+    if (it == obj.end() || !it->is_array() || it->size() < 3) {
+        return false;
+    }
+    const json& a = *it;
+    if (!a[0].is_number() || !a[1].is_number() || !a[2].is_number()) {
+        return false;
+    }
+    out.x = a[0].get<float>();
+    out.y = a[1].get<float>();
+    out.z = a[2].get<float>();
+    return true;
+}
+
+[[nodiscard]] auto try_read_vec2(const json& obj, const char* key, glm::vec2& out) -> bool
+{
+    const auto it = obj.find(key);
+    if (it == obj.end()) {
+        return false;
+    }
+    if (it->is_number()) {
+        const float v = it->get<float>();
+        out.x = v;
+        out.y = v;
+        return true;
+    }
+    if (it->is_array() && it->size() >= 2 && (*it)[0].is_number() && (*it)[1].is_number()) {
+        out.x = (*it)[0].get<float>();
+        out.y = (*it)[1].get<float>();
+        return true;
+    }
+    return false;
+}
+
+[[nodiscard]] auto try_read_float(const json& obj, const char* key, float& out) -> bool
+{
+    const auto it = obj.find(key);
+    if (it == obj.end() || !it->is_number()) {
+        return false;
+    }
+    out = it->get<float>();
+    return true;
+}
+
+[[nodiscard]] auto try_read_bool(const json& obj, const char* key, bool& out) -> bool
+{
+    const auto it = obj.find(key);
+    if (it == obj.end() || !it->is_boolean()) {
+        return false;
+    }
+    out = it->get<bool>();
+    return true;
+}
+
+class Slot_edit
+{
+public:
+    bool                                     has_texture{false};
+    std::shared_ptr<erhe::graphics::Texture> texture{};
+    std::optional<uint32_t>                  tex_coord{};
+    std::optional<float>                     rotation{};
+    std::optional<glm::vec2>                 offset{};
+    std::optional<glm::vec2>                 scale{};
+};
+
+[[nodiscard]] auto find_texture_in_library(
+    const std::vector<std::shared_ptr<erhe::graphics::Texture>>& tex_list,
+    const json&                                                  ref,
+    std::shared_ptr<erhe::graphics::Texture>&                    out_texture,
+    std::string&                                                 out_error
+) -> bool
+{
+    if (ref.is_number_integer() || ref.is_number_unsigned()) {
+        const std::size_t target_id = ref.get<std::size_t>();
+        for (const auto& tex : tex_list) {
+            if (tex->get_id() == target_id) {
+                out_texture = tex;
+                return true;
+            }
+        }
+        out_error = "Texture id not found in content library: " + std::to_string(target_id);
+        return false;
+    }
+    if (ref.is_string()) {
+        const std::string target_name = ref.get<std::string>();
+        for (const auto& tex : tex_list) {
+            if (tex->get_name() == target_name) {
+                out_texture = tex;
+                return true;
+            }
+        }
+        out_error = "Texture name not found in content library: " + target_name;
+        return false;
+    }
+    out_error = "Texture reference must be a string (name), integer (id), or null (clear)";
+    return false;
+}
+
+[[nodiscard]] auto parse_slot_edit(
+    const json&                                                  slot_json,
+    const std::vector<std::shared_ptr<erhe::graphics::Texture>>& tex_list,
+    Slot_edit&                                                   out_edit,
+    std::string&                                                 out_error
+) -> bool
+{
+    if (!slot_json.is_object()) {
+        out_error = "Texture slot entry must be an object";
+        return false;
+    }
+
+    const auto tex_it = slot_json.find("texture");
+    if (tex_it != slot_json.end()) {
+        out_edit.has_texture = true;
+        if (tex_it->is_null()) {
+            out_edit.texture.reset();
+        } else if (!find_texture_in_library(tex_list, *tex_it, out_edit.texture, out_error)) {
+            return false;
+        }
+    }
+
+    const auto tc_it = slot_json.find("tex_coord");
+    if (tc_it != slot_json.end()) {
+        if (!tc_it->is_number_integer() && !tc_it->is_number_unsigned()) {
+            out_error = "tex_coord must be an integer";
+            return false;
+        }
+        out_edit.tex_coord = tc_it->get<uint32_t>();
+    }
+
+    float f_tmp{};
+    if (try_read_float(slot_json, "rotation", f_tmp)) {
+        out_edit.rotation = f_tmp;
+    }
+    glm::vec2 v2_tmp{};
+    if (try_read_vec2(slot_json, "offset", v2_tmp)) {
+        out_edit.offset = v2_tmp;
+    }
+    if (try_read_vec2(slot_json, "scale", v2_tmp)) {
+        out_edit.scale = v2_tmp;
+    }
+    return true;
+}
+
+void apply_slot_edit(const Slot_edit& edit, erhe::primitive::Material_texture_sampler& target)
+{
+    if (edit.has_texture)         target.texture   = edit.texture;
+    if (edit.tex_coord.has_value()) target.tex_coord = edit.tex_coord.value();
+    if (edit.rotation.has_value()) target.rotation  = edit.rotation.value();
+    if (edit.offset.has_value())   target.offset    = edit.offset.value();
+    if (edit.scale.has_value())    target.scale     = edit.scale.value();
+}
+
+[[nodiscard]] auto slot_edit_summary(const Slot_edit& edit) -> json
+{
+    json entry = json::object();
+    if (edit.has_texture) {
+        if (edit.texture) {
+            entry["texture_id"]   = edit.texture->get_id();
+            entry["texture_name"] = edit.texture->get_name();
+        } else {
+            entry["texture_id"]   = nullptr;
+            entry["texture_name"] = nullptr;
+        }
+    }
+    if (edit.tex_coord.has_value()) entry["tex_coord"] = edit.tex_coord.value();
+    if (edit.rotation.has_value())  entry["rotation"]  = edit.rotation.value();
+    if (edit.offset.has_value())    entry["offset"]    = {edit.offset->x, edit.offset->y};
+    if (edit.scale.has_value())     entry["scale"]     = {edit.scale->x,  edit.scale->y};
+    return entry;
+}
+
+} // anonymous namespace
+
+auto Mcp_server::action_edit_material(const json& args) -> std::string
+{
+    if (m_context.operation_stack == nullptr) {
+        json r = make_text_content("Operation stack not available");
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    const std::string scene_name    = args.value("scene_name", "");
+    const std::string material_name = args.value("material_name", "");
+
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        json r = make_text_content("Scene not found: " + scene_name);
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    auto library = sr->get_content_library();
+    if (!library || !library->materials) {
+        json r = make_text_content("No materials in scene: " + scene_name);
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    std::shared_ptr<erhe::primitive::Material> material;
+    const auto& mat_list = library->materials->get_all<erhe::primitive::Material>();
+    for (const auto& mat : mat_list) {
+        if (mat->get_name() == material_name) {
+            material = mat;
+            break;
+        }
+    }
+    if (!material) {
+        json r = make_text_content("Material not found: " + material_name);
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    if (material->is_lock_edit()) {
+        json r = make_text_content("Material is locked: " + material_name);
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    const erhe::primitive::Material_data before = material->data;
+    erhe::primitive::Material_data       after  = before;
+
+    json applied = json::object();
+
+    glm::vec3 v3{};
+    glm::vec2 v2{};
+    float     f{};
+    bool      b{};
+
+    if (try_read_vec3(args, "base_color", v3)) {
+        after.base_color = v3;
+        applied["base_color"] = {v3.x, v3.y, v3.z};
+    }
+    if (try_read_float(args, "opacity", f)) {
+        after.opacity = f;
+        applied["opacity"] = f;
+    }
+    if (try_read_vec2(args, "roughness", v2)) {
+        after.roughness = v2;
+        applied["roughness"] = {v2.x, v2.y};
+    }
+    if (try_read_float(args, "metallic", f)) {
+        after.metallic = f;
+        applied["metallic"] = f;
+    }
+    if (try_read_float(args, "reflectance", f)) {
+        after.reflectance = f;
+        applied["reflectance"] = f;
+    }
+    if (try_read_vec3(args, "emissive", v3)) {
+        after.emissive = v3;
+        applied["emissive"] = {v3.x, v3.y, v3.z};
+    }
+    if (try_read_float(args, "normal_texture_scale", f)) {
+        after.normal_texture_scale = f;
+        applied["normal_texture_scale"] = f;
+    }
+    if (try_read_float(args, "occlusion_texture_strength", f)) {
+        after.occlusion_texture_strength = f;
+        applied["occlusion_texture_strength"] = f;
+    }
+    if (try_read_bool(args, "unlit", b)) {
+        after.unlit = b;
+        applied["unlit"] = b;
+    }
+
+    const auto ts_it = args.find("texture_samplers");
+    if (ts_it != args.end()) {
+        if (!ts_it->is_object()) {
+            json r = make_text_content("texture_samplers must be an object");
+            r["isError"] = true;
+            return r.dump();
+        }
+
+        if (!library->textures) {
+            json r = make_text_content("Content library has no textures node");
+            r["isError"] = true;
+            return r.dump();
+        }
+        const auto& tex_list = library->textures->get_all<erhe::graphics::Texture>();
+
+        struct Named_slot
+        {
+            const char*                                slot_name;
+            erhe::primitive::Material_texture_sampler* target;
+        };
+        const Named_slot slots[] = {
+            {"base_color",         &after.texture_samplers.base_color},
+            {"metallic_roughness", &after.texture_samplers.metallic_roughness},
+            {"normal",             &after.texture_samplers.normal},
+            {"occlusion",          &after.texture_samplers.occlusion},
+            {"emissive",           &after.texture_samplers.emissive}
+        };
+
+        std::vector<std::pair<const Named_slot*, Slot_edit>> parsed_edits;
+        parsed_edits.reserve(std::size(slots));
+
+        for (const Named_slot& slot : slots) {
+            const auto slot_it = ts_it->find(slot.slot_name);
+            if (slot_it == ts_it->end()) {
+                continue;
+            }
+            Slot_edit  edit{};
+            std::string slot_error{};
+            if (!parse_slot_edit(*slot_it, tex_list, edit, slot_error)) {
+                json r = make_text_content(std::string{slot.slot_name} + ": " + slot_error);
+                r["isError"] = true;
+                return r.dump();
+            }
+            parsed_edits.emplace_back(&slot, std::move(edit));
+        }
+
+        json applied_textures = json::object();
+        for (auto& [slot, edit] : parsed_edits) {
+            apply_slot_edit(edit, *slot->target);
+            applied_textures[slot->slot_name] = slot_edit_summary(edit);
+        }
+        if (!applied_textures.empty()) {
+            applied["texture_samplers"] = applied_textures;
+        }
+    }
+
+    if (applied.empty()) {
+        json r = make_text_content("No editable material fields supplied");
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    if (after == before) {
+        return make_json_content({
+            {"name",     material->get_name()},
+            {"id",       material->get_id()},
+            {"applied",  applied},
+            {"changed",  false}
+        }).dump();
+    }
+
+    m_context.operation_stack->queue(
+        std::make_shared<Material_change_operation>(material, before, after)
+    );
+
+    return make_json_content({
+        {"name",    material->get_name()},
+        {"id",      material->get_id()},
+        {"applied", applied},
+        {"changed", true}
+    }).dump();
 }
 
 } // namespace editor

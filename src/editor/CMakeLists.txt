@@ -822,3 +822,7 @@ if (NOT ERHE_TARGET_OS_ANDROID)
 
     erhe_target_settings(${_target} "erhe-executables")
 endif ()
+
+if (${ERHE_BUILD_TESTS})
+    add_subdirectory(mcp/test)
+endif ()

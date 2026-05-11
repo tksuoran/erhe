@@ -96,6 +96,7 @@ private:
     auto query_scene_lights     (const nlohmann::json& args) -> std::string;
     auto query_scene_materials  (const nlohmann::json& args) -> std::string;
     auto query_material_details (const nlohmann::json& args) -> std::string;
+    auto query_scene_textures   (const nlohmann::json& args) -> std::string;
     auto query_scene_brushes    (const nlohmann::json& args) -> std::string;
     auto query_selection        (const nlohmann::json& args) -> std::string;
     auto query_undo_redo_stack  (const nlohmann::json& args) -> std::string;
@@ -108,6 +109,7 @@ private:
     auto action_unlock_items    (const nlohmann::json& args) -> std::string;
     auto action_add_tags        (const nlohmann::json& args) -> std::string;
     auto action_remove_tags     (const nlohmann::json& args) -> std::string;
+    auto action_edit_material   (const nlohmann::json& args) -> std::string;
     auto execute_command        (const std::string& tool_name) -> std::string;
 
     erhe::commands::Commands& m_commands;
