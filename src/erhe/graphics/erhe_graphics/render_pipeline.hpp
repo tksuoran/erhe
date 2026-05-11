@@ -14,6 +14,10 @@
 #include <mutex>
 #include <unordered_map>
 
+namespace erhe::dataformat {
+    class Vertex_format;
+}
+
 namespace erhe::graphics {
 
 class Bind_group_layout;
@@ -38,6 +42,18 @@ public:
     // from Programs::get_multiview(name) at construction.
     Shader_stages*               multiview_shader_stages{nullptr};
     const Vertex_input_state*    vertex_input         {nullptr};
+    // Vertex_format that produced the bound vertex_input. Optional; only
+    // set on pipelines that opt into the standard shader variant cache
+    // (uses_standard_variants below). The renderer reads this when
+    // computing a per-bucket Standard_variant_key.
+    const erhe::dataformat::Vertex_format* vertex_format{nullptr};
+    // When true, Forward_renderer's bucket loop consults
+    // Standard_shader_variants (when the cache is supplied via
+    // Render_parameters and this pipeline's vertex_format is non-null)
+    // and substitutes a per-bucket variant for shader_stages. Default
+    // false -- pipelines without a "standard" lit shader stay on their
+    // baked stages.
+    bool                         uses_standard_variants{false};
     Input_assembly_state         input_assembly       {};
     Multisample_state            multisample          {};
     Viewport_depth_range_state   viewport_depth_range {};

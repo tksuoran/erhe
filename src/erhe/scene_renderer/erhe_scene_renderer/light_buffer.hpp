@@ -7,6 +7,7 @@
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/light.hpp"
 #include "erhe_math/viewport.hpp"
+#include "erhe_scene_renderer/standard_shader_variant.hpp"
 
 #include <memory>
 
@@ -37,19 +38,22 @@ public:
 class Light_block
 {
 public:
-    std::size_t  shadow_texture_compare;    // uvec2
-    std::size_t  shadow_texture_no_compare; // uvec2
+    std::size_t  shadow_texture_compare;       // uvec2
+    std::size_t  shadow_texture_no_compare;    // uvec2
 
-    std::size_t  directional_light_count;   // uint
-    std::size_t  spot_light_count;          // uint
-    std::size_t  point_light_count;         // uint
-    std::size_t  reserved_1;                // uint
+    std::size_t  directional_light_count;      // uint
+    std::size_t  spot_light_count;             // uint
+    std::size_t  point_light_count;            // uint
+    std::size_t  directional_shadow_count;     // uint - shadow-mapped prefix size for directional lights
 
-    std::size_t  brdf_material;             // uint
-    std::size_t  reserved_2;                // uint
-    std::size_t  brdf_phi_incident_phi;     // vec2
+    std::size_t  spot_shadow_count;            // uint - shadow-mapped prefix size for spot lights
+    std::size_t  point_shadow_count;           // uint - shadow-mapped prefix size for point lights
+    std::size_t  brdf_material;                // uint
+    std::size_t  reserved_1;                   // uint - pad to vec2 alignment
 
-    std::size_t  ambient_light;             // vec4
+    std::size_t  brdf_phi_incident_phi;        // vec2
+
+    std::size_t  ambient_light;                // vec4
 
     Light_struct light;
     std::size_t  light_struct;
@@ -105,6 +109,13 @@ public:
     erhe::scene::Light_projection_parameters              parameters;
     std::vector<erhe::scene::Light_projection_transforms> light_projection_transforms;
     std::shared_ptr<erhe::graphics::Texture>              shadow_map_texture;
+
+    // Per-frame light count snapshot used to populate the scene sub-key
+    // of Standard_variant_key. Mirrors the per-(type, has_shadow)
+    // partition counts apply() computes when assigning UBO slots, so
+    // render-time call sites can read them without re-walking the
+    // lights span.
+    Standard_variant_light_counts                         light_counts{};
 
     // TODO A bit hacky injection of these parameters..
     float                                                 brdf_phi         {0.0f};

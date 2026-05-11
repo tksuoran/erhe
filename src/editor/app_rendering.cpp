@@ -492,9 +492,11 @@ Pipeline_renderpasses::Pipeline_renderpasses(
     , m_empty_vertex_input{graphics_device}
     , polygon_fill_standard_opaque_positive_determinant{graphics_device, erhe::graphics::Render_pipeline_create_info{
         .debug_label    = erhe::utility::Debug_label{"Polygon Fill Opaque Positive Determinant"},
-        .shader_stages           = &programs.circular_brushed_metal.shader_stages,
-        .multiview_shader_stages = get_multiview_stages(programs, "circular_brushed_metal"),
+        .shader_stages           = &programs.standard.shader_stages,
+        .multiview_shader_stages = get_multiview_stages(programs, "standard"),
         .vertex_input   = &mesh_memory.vertex_input,
+        .vertex_format  = &mesh_memory.vertex_format,
+        .uses_standard_variants = true,
         .input_assembly = Input_assembly_state::triangle,
         .rasterization  = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
         .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
@@ -502,9 +504,11 @@ Pipeline_renderpasses::Pipeline_renderpasses(
     }}
     , polygon_fill_standard_opaque_negative_determinant{graphics_device, erhe::graphics::Render_pipeline_create_info{
         .debug_label    = erhe::utility::Debug_label{"Polygon Fill Opaque Negative Determinant"},
-        .shader_stages           = &programs.circular_brushed_metal.shader_stages,
-        .multiview_shader_stages = get_multiview_stages(programs, "circular_brushed_metal"),
+        .shader_stages           = &programs.standard.shader_stages,
+        .multiview_shader_stages = get_multiview_stages(programs, "standard"),
         .vertex_input   = &mesh_memory.vertex_input,
+        .vertex_format  = &mesh_memory.vertex_format,
+        .uses_standard_variants = true,
         .input_assembly = Input_assembly_state::triangle,
         .rasterization  = Rasterization_state::cull_mode_back_cw.with_winding_flip_if(m_y_flip),
         .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
@@ -512,9 +516,11 @@ Pipeline_renderpasses::Pipeline_renderpasses(
     }}
     , polygon_fill_standard_opaque_selected_positive_determinant{graphics_device, erhe::graphics::Render_pipeline_create_info{
         .debug_label    = erhe::utility::Debug_label{"Polygon Fill Opaque Selected Positive Determinant"},
-        .shader_stages           = &programs.circular_brushed_metal.shader_stages,
-        .multiview_shader_stages = get_multiview_stages(programs, "circular_brushed_metal"),
+        .shader_stages           = &programs.standard.shader_stages,
+        .multiview_shader_stages = get_multiview_stages(programs, "standard"),
         .vertex_input   = &mesh_memory.vertex_input,
+        .vertex_format  = &mesh_memory.vertex_format,
+        .uses_standard_variants = true,
         .input_assembly = Input_assembly_state::triangle,
         .rasterization  = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
         .depth_stencil  = {
@@ -545,9 +551,11 @@ Pipeline_renderpasses::Pipeline_renderpasses(
     }}
     , polygon_fill_standard_opaque_selected_negative_determinant{graphics_device, erhe::graphics::Render_pipeline_create_info{
         .debug_label    = erhe::utility::Debug_label{"Polygon Fill Opaque Selected Negative Determinant"},
-        .shader_stages           = &programs.circular_brushed_metal.shader_stages,
-        .multiview_shader_stages = get_multiview_stages(programs, "circular_brushed_metal"),
+        .shader_stages           = &programs.standard.shader_stages,
+        .multiview_shader_stages = get_multiview_stages(programs, "standard"),
         .vertex_input   = &mesh_memory.vertex_input,
+        .vertex_format  = &mesh_memory.vertex_format,
+        .uses_standard_variants = true,
         .input_assembly = Input_assembly_state::triangle,
         .rasterization  = Rasterization_state::cull_mode_back_cw.with_winding_flip_if(m_y_flip),
         .depth_stencil  = {
@@ -578,9 +586,11 @@ Pipeline_renderpasses::Pipeline_renderpasses(
     }}
     , polygon_fill_standard_translucent{graphics_device, erhe::graphics::Render_pipeline_create_info{
         .debug_label    = erhe::utility::Debug_label{"Polygon Fill Translucent"},
-        .shader_stages           = &programs.circular_brushed_metal.shader_stages,
-        .multiview_shader_stages = get_multiview_stages(programs, "circular_brushed_metal"),
+        .shader_stages           = &programs.standard.shader_stages,
+        .multiview_shader_stages = get_multiview_stages(programs, "standard"),
         .vertex_input   = &mesh_memory.vertex_input,
+        .vertex_format  = &mesh_memory.vertex_format,
+        .uses_standard_variants = true,
         .input_assembly = Input_assembly_state::triangle,
         .rasterization  = Rasterization_state::cull_mode_none,
         .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
