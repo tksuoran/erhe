@@ -17,35 +17,41 @@ layout(location =  9) in float      v_line_width;
 layout(location = 10) in vec4       v_bone_color;
 layout(location = 11) flat in uvec2 v_valency_edge_count;
 
-const vec3 palette[24] = vec3[24](
-    vec3(0.0, 0.0, 0.0), //  0
-    vec3(1.0, 0.0, 0.0), //  1
-    vec3(0.0, 1.0, 0.0), //  2
-    vec3(0.0, 0.0, 1.0), //  3
-    vec3(1.0, 1.0, 0.0), //  4
-    vec3(0.0, 1.0, 1.0), //  5
-    vec3(1.0, 0.0, 1.0), //  6
-    vec3(1.0, 1.0, 1.0), //  7
-    vec3(0.5, 0.0, 0.0), //  8
-    vec3(0.0, 0.5, 0.0), //  9
-    vec3(0.0, 0.0, 0.5), // 10
-    vec3(0.5, 0.5, 0.0), // 11
-    vec3(0.0, 0.5, 0.5), // 12
-    vec3(0.5, 0.0, 0.5), // 13
-    vec3(0.5, 0.5, 0.5), // 14
-    vec3(1.0, 0.5, 0.0), // 15
-    vec3(1.0, 0.0, 0.5), // 16
-    vec3(0.5, 1.0, 0.0), // 17
-    vec3(0.0, 1.0, 0.5), // 18
-    vec3(0.5, 0.0, 1.0), // 19
-    vec3(0.0, 0.5, 1.0), // 20
-    vec3(1.0, 1.0, 0.5), // 21
-    vec3(0.5, 1.0, 1.0), // 22
-    vec3(1.0, 0.5, 1.0)  // 23
-);
+// File-scope const composite arrays trigger glslang's
+// DebugGlobalVariable emission with a Variable operand spirv-val
+// rejects (VUID-VkShaderModuleCreateInfo-pCode-08737 with glslang
+// 16.2.0 + Vulkan SDK 1.4.328.1). Move palette inside main() so
+// glslang emits a DebugLocalVariable instead.
 
 void main()
 {
+    const vec3 palette[24] = vec3[24](
+        vec3(0.0, 0.0, 0.0), //  0
+        vec3(1.0, 0.0, 0.0), //  1
+        vec3(0.0, 1.0, 0.0), //  2
+        vec3(0.0, 0.0, 1.0), //  3
+        vec3(1.0, 1.0, 0.0), //  4
+        vec3(0.0, 1.0, 1.0), //  5
+        vec3(1.0, 0.0, 1.0), //  6
+        vec3(1.0, 1.0, 1.0), //  7
+        vec3(0.5, 0.0, 0.0), //  8
+        vec3(0.0, 0.5, 0.0), //  9
+        vec3(0.0, 0.0, 0.5), // 10
+        vec3(0.5, 0.5, 0.0), // 11
+        vec3(0.0, 0.5, 0.5), // 12
+        vec3(0.5, 0.0, 0.5), // 13
+        vec3(0.5, 0.5, 0.5), // 14
+        vec3(1.0, 0.5, 0.0), // 15
+        vec3(1.0, 0.0, 0.5), // 16
+        vec3(0.5, 1.0, 0.0), // 17
+        vec3(0.0, 1.0, 0.5), // 18
+        vec3(0.5, 0.0, 1.0), // 19
+        vec3(0.0, 0.5, 1.0), // 20
+        vec3(1.0, 1.0, 0.5), // 21
+        vec3(0.5, 1.0, 1.0), // 22
+        vec3(1.0, 0.5, 1.0)  // 23
+    );
+
     Material material           = material.materials[v_material_index];
     uvec2    base_color_texture = material.base_color_texture;
     vec3     base_color         = v_color.rgb * material.base_color.rgb * sample_texture(
