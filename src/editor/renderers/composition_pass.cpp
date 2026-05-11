@@ -122,10 +122,6 @@ void Composition_pass::render(const Render_context& context)
         context.app_context.forward_renderer->draw_primitives(
             erhe::scene_renderer::Forward_renderer::Render_parameters{
                 .render_encoder         = *context.encoder,
-                .index_buffer           = &context.app_context.mesh_memory->index_buffer,
-                .vertex_buffer0         = &context.app_context.mesh_memory->vertex_buffer_position,
-                .vertex_buffer1         = &context.app_context.mesh_memory->vertex_buffer_non_position,
-                .vertex_buffer2         = &context.app_context.mesh_memory->vertex_buffer_custom,
                 .camera                 = context.camera,
                 .multiview_views        = context.multiview_views,
                 .light_projections      = nullptr,
@@ -190,10 +186,6 @@ void Composition_pass::render(const Render_context& context)
                 erhe::scene_renderer::Forward_renderer::Render_parameters{
                     .render_encoder         = *context.encoder,
                     .index_type             = context.app_context.mesh_memory->buffer_info.index_type,
-                    .index_buffer           = &context.app_context.mesh_memory->index_buffer,
-                    .vertex_buffer0         = &context.app_context.mesh_memory->vertex_buffer_position,
-                    .vertex_buffer1         = &context.app_context.mesh_memory->vertex_buffer_non_position,
-                    .vertex_buffer2         = &context.app_context.mesh_memory->vertex_buffer_custom,
                     .ambient_light          = layers.light()->ambient_light,
                     .camera                 = context.camera,
                     .multiview_views        = context.multiview_views,

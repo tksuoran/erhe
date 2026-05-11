@@ -101,16 +101,18 @@ void Build_context_root::get_vertex_attributes()
 
 void Build_context_root::allocate_vertex_buffers()
 {
+    // Lazy pools start with no allocated GPU memory and report 0 available;
+    // they grow on demand inside allocate_vertex_buffer(). The previous
+    // pre-flight check on get_available_vertex_byte_count() is therefore
+    // skipped -- we drive the allocation directly and treat a zero-count
+    // result (Buffer_sink_allocation default state) as the failure path.
     for (size_t i = 0, end = vertex_format.streams.size(); i < end; ++i) {
         const erhe::dataformat::Vertex_stream& sink_stream = vertex_format.streams[i];
-        const std::size_t allocation_byte_count = total_vertex_count * sink_stream.stride;
-        const std::size_t allocation_alignment  = sink_stream.stride;
-        const std::size_t available_byte_count  = build_info.buffer_info.buffer_sink.get_available_vertex_byte_count(i, allocation_alignment);
-        if (available_byte_count < allocation_byte_count) {
+        Buffer_sink_allocation sink_allocation = build_info.buffer_info.buffer_sink.allocate_vertex_buffer(i, total_vertex_count, sink_stream.stride);
+        if (sink_allocation.range.count == 0) {
             build_failed = true;
             return;
         }
-        Buffer_sink_allocation sink_allocation = build_info.buffer_info.buffer_sink.allocate_vertex_buffer(i, total_vertex_count, sink_stream.stride);
         buffer_mesh.vertex_buffer_ranges.emplace_back(sink_allocation.range);
         buffer_mesh.vertex_allocations.emplace_back(std::move(sink_allocation.allocation));
     }
@@ -123,14 +125,6 @@ void Build_context_root::allocate_index_buffer()
     const erhe::dataformat::Format index_type           {build_info.buffer_info.index_type};
     const std::size_t              index_type_size_bytes{erhe::dataformat::get_format_size_bytes(index_type)};
 
-    const std::size_t allocation_byte_count = total_index_count * index_type_size_bytes;
-    const std::size_t allocation_alignment  = index_type_size_bytes;
-    const std::size_t available_byte_count  = build_info.buffer_info.buffer_sink.get_available_index_byte_count(allocation_alignment);
-    if (available_byte_count < allocation_byte_count) {
-        build_failed = true;
-        return;
-    }
-
     log_primitive_builder->trace(
         "allocating index buffer "
         "total_index_count = {}, index type size = {}",
@@ -142,6 +136,10 @@ void Build_context_root::allocate_index_buffer()
         total_index_count,
         index_type_size_bytes
     );
+    if (sink_allocation.range.count == 0) {
+        build_failed = true;
+        return;
+    }
     buffer_mesh.index_buffer_range = sink_allocation.range;
     buffer_mesh.index_allocation   = std::move(sink_allocation.allocation);
 }
@@ -157,17 +155,16 @@ void Build_context_root::allocate_edge_line_vertex_buffer()
     const std::size_t vertex_count        = edge_count * 2;
     const std::size_t vertex_element_size = 8 * sizeof(float); // vec4 position + vec4 normal
 
-    const std::size_t available_byte_count = build_info.buffer_info.buffer_sink.get_available_edge_line_vertex_byte_count(vertex_element_size);
-    const std::size_t allocation_byte_count = vertex_count * vertex_element_size;
-    if (available_byte_count < allocation_byte_count) {
-        // Edge line vertex buffer not available or not enough space - not fatal
-        return;
-    }
-
     Buffer_sink_allocation sink_allocation = build_info.buffer_info.buffer_sink.allocate_edge_line_vertex_buffer(
         vertex_count,
         vertex_element_size
     );
+    // Empty result means the edge-line pool is unavailable for this sink
+    // (e.g., Cpu_buffer_sink) or out of room past max_buffers_per_pool;
+    // not fatal, edge lines just aren't built for this primitive.
+    if (sink_allocation.range.count == 0) {
+        return;
+    }
     buffer_mesh.edge_line_vertex_buffer_range = sink_allocation.range;
     buffer_mesh.edge_line_vertex_allocation   = std::move(sink_allocation.allocation);
 }

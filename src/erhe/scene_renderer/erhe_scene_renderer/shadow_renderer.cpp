@@ -11,7 +11,10 @@
 #include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_graphics/texture_heap.hpp"
+#include "erhe_primitive/buffer_mesh.hpp"
+#include "erhe_primitive/primitive.hpp"
 #include "erhe_scene/light.hpp"
+#include "erhe_scene/mesh.hpp"
 #include "erhe_scene_renderer/program_interface.hpp"
 #include "erhe_scene_renderer/scene_renderer_log.hpp"
 #include "erhe_profile/profile.hpp"
@@ -29,6 +32,96 @@ using erhe::graphics::Depth_stencil_state;
 using erhe::graphics::Color_blend_state;
 
 static constexpr std::string_view c_shadow_renderer_initialize_component{"Shadow_renderer::initialize_component()"};
+
+namespace {
+
+class Buffer_set
+{
+public:
+    erhe::graphics::Buffer*              index_buffer{nullptr};
+    std::vector<erhe::graphics::Buffer*> vertex_buffers;
+
+    [[nodiscard]] auto valid() const -> bool { return index_buffer != nullptr; }
+
+    [[nodiscard]] auto operator==(const Buffer_set& other) const -> bool
+    {
+        return index_buffer == other.index_buffer && vertex_buffers == other.vertex_buffers;
+    }
+};
+
+auto peek_mesh_buffers(
+    const std::shared_ptr<erhe::scene::Mesh>& mesh,
+    const erhe::primitive::Primitive_mode     primitive_mode
+) -> Buffer_set
+{
+    Buffer_set result;
+    if (!mesh) {
+        return result;
+    }
+    for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh->get_primitives()) {
+        const erhe::primitive::Primitive* primitive = mesh_primitive.primitive.get();
+        if (primitive == nullptr) {
+            continue;
+        }
+        const erhe::primitive::Buffer_mesh* buffer_mesh = primitive->get_renderable_mesh();
+        if (buffer_mesh == nullptr) {
+            continue;
+        }
+        if (buffer_mesh->index_range(primitive_mode).index_count == 0) {
+            continue;
+        }
+        if (!result.valid()) {
+            result.index_buffer = buffer_mesh->index_buffer_range.buffer;
+            result.vertex_buffers.reserve(buffer_mesh->vertex_buffer_ranges.size());
+            for (const erhe::primitive::Buffer_range& vr : buffer_mesh->vertex_buffer_ranges) {
+                result.vertex_buffers.push_back(vr.buffer);
+            }
+        } else {
+            ERHE_VERIFY(buffer_mesh->index_buffer_range.buffer == result.index_buffer);
+            ERHE_VERIFY(buffer_mesh->vertex_buffer_ranges.size() == result.vertex_buffers.size());
+            for (std::size_t i = 0; i < buffer_mesh->vertex_buffer_ranges.size(); ++i) {
+                ERHE_VERIFY(buffer_mesh->vertex_buffer_ranges[i].buffer == result.vertex_buffers[i]);
+            }
+        }
+    }
+    return result;
+}
+
+class Bucket
+{
+public:
+    Buffer_set                                      key;
+    std::vector<std::shared_ptr<erhe::scene::Mesh>> meshes;
+};
+
+auto bucket_meshes_by_buffers(
+    const std::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes,
+    const erhe::primitive::Primitive_mode                      primitive_mode
+) -> std::vector<Bucket>
+{
+    std::vector<Bucket> buckets;
+    for (const std::shared_ptr<erhe::scene::Mesh>& mesh : meshes) {
+        const Buffer_set bs = peek_mesh_buffers(mesh, primitive_mode);
+        if (!bs.valid()) {
+            continue;
+        }
+        Bucket* found = nullptr;
+        for (Bucket& b : buckets) {
+            if (b.key == bs) {
+                found = &b;
+                break;
+            }
+        }
+        if (found == nullptr) {
+            buckets.push_back(Bucket{.key = bs, .meshes = {}});
+            found = &buckets.back();
+        }
+        found->meshes.push_back(mesh);
+    }
+    return buckets;
+}
+
+}
 
 Shadow_renderer::Shadow_renderer(
     erhe::graphics::Device&         graphics_device,
@@ -125,8 +218,6 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
     ERHE_PROFILE_FUNCTION();
 
     ERHE_VERIFY(parameters.vertex_input_state != nullptr);
-    ERHE_VERIFY(parameters.index_buffer != nullptr);
-    ERHE_VERIFY(parameters.vertex_buffer0 != nullptr);
     ERHE_VERIFY(parameters.view_camera != nullptr);
     ERHE_VERIFY(parameters.texture);
 
@@ -194,7 +285,6 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
             continue;
         }
 
-        // TODO Multiple vertex buffer bindings
         encoder.set_bind_group_layout(m_bind_group_layout);
         encoder.set_render_pipeline(*render_pipeline);
         encoder.set_viewport_rect(
@@ -203,10 +293,6 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
             parameters.light_camera_viewport.width,
             parameters.light_camera_viewport.height
         );
-        encoder.set_index_buffer(parameters.index_buffer);
-        encoder.set_vertex_buffer(parameters.vertex_buffer0, 0, 0);
-        encoder.set_vertex_buffer(parameters.vertex_buffer1, 0, 1);
-        encoder.set_vertex_buffer(parameters.vertex_buffer2, 0, 2);
         m_material_buffer.bind(encoder, material_range);
         m_joint_buffer.bind(encoder, joint_range);
         m_light_buffer.bind_light_buffer(encoder, light_range);
@@ -226,38 +312,57 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
         m_texture_heap->bind(encoder);
 
         for (const auto& meshes : mesh_spans) {
-            std::size_t primitive_count{0};
-            Ring_buffer_range primitive_range = m_primitive_buffer.update(meshes, primitive_mode, shadow_filter, Primitive_interface_settings{}, primitive_count);
-            if (primitive_count == 0) {
-                primitive_range.cancel();
-                continue;
-            }
-            Draw_indirect_buffer_range draw_indirect_buffer_range = m_draw_indirect_buffer.update(meshes, primitive_mode, shadow_filter);
-            ERHE_VERIFY(primitive_count == draw_indirect_buffer_range.draw_indirect_count);
-            if (primitive_count == 0) {
-                primitive_range.cancel();
-                draw_indirect_buffer_range.range.cancel();
+            if (meshes.empty()) {
                 continue;
             }
 
-            m_primitive_buffer.bind(encoder, primitive_range);
-            m_draw_indirect_buffer.bind(encoder, draw_indirect_buffer_range.range);
+            // Group meshes by GPU buffer set; multi-draw-indirect needs
+            // identical vertex/index bindings for every draw it covers.
+            const std::vector<Bucket> buckets = bucket_meshes_by_buffers(meshes, primitive_mode);
+            for (const Bucket& bucket : buckets) {
+                encoder.set_index_buffer(bucket.key.index_buffer);
+                for (std::size_t stream_index = 0; stream_index < bucket.key.vertex_buffers.size(); ++stream_index) {
+                    encoder.set_vertex_buffer(
+                        bucket.key.vertex_buffers[stream_index],
+                        0,
+                        static_cast<uint32_t>(stream_index)
+                    );
+                }
 
-            {
-                static constexpr std::string_view c_id_mdi{"mdi"};
+                const std::span<const std::shared_ptr<erhe::scene::Mesh>> bucket_meshes{bucket.meshes};
+                std::size_t primitive_count{0};
+                Ring_buffer_range primitive_range = m_primitive_buffer.update(bucket_meshes, primitive_mode, shadow_filter, Primitive_interface_settings{}, primitive_count);
+                if (primitive_count == 0) {
+                    primitive_range.cancel();
+                    continue;
+                }
+                Draw_indirect_buffer_range draw_indirect_buffer_range = m_draw_indirect_buffer.update(bucket_meshes, primitive_mode, shadow_filter);
+                ERHE_VERIFY(primitive_count == draw_indirect_buffer_range.draw_indirect_count);
+                if (primitive_count == 0) {
+                    primitive_range.cancel();
+                    draw_indirect_buffer_range.range.cancel();
+                    continue;
+                }
 
-                ERHE_PROFILE_SCOPE("mdi");
-                //ERHE_PROFILE_GPU_SCOPE(c_id_mdi);
-                encoder.multi_draw_indexed_primitives_indirect(
-                    pipeline.data.input_assembly.primitive_topology,
-                    parameters.index_type,
-                    draw_indirect_buffer_range.range.get_byte_start_offset_in_buffer(),
-                    draw_indirect_buffer_range.draw_indirect_count,
-                    sizeof(erhe::graphics::Draw_indexed_primitives_indirect_command)
-                );
+                m_primitive_buffer.bind(encoder, primitive_range);
+                m_draw_indirect_buffer.bind(encoder, draw_indirect_buffer_range.range);
+
+                {
+                    static constexpr std::string_view c_id_mdi{"mdi"};
+
+                    ERHE_PROFILE_SCOPE("mdi");
+                    //ERHE_PROFILE_GPU_SCOPE(c_id_mdi);
+                    encoder.multi_draw_indexed_primitives_indirect(
+                        pipeline.data.input_assembly.primitive_topology,
+                        parameters.index_type,
+                        draw_indirect_buffer_range.range.get_byte_start_offset_in_buffer(),
+                        draw_indirect_buffer_range.draw_indirect_count,
+                        sizeof(erhe::graphics::Draw_indexed_primitives_indirect_command)
+                    );
+                }
+                primitive_range.release();
+                draw_indirect_buffer_range.range.release();
             }
-            primitive_range.release();
-            draw_indirect_buffer_range.range.release();
         }
 
         control_range.release();

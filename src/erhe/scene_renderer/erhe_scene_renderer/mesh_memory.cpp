@@ -5,126 +5,118 @@
 
 namespace erhe::scene_renderer {
 
-auto Mesh_memory::get_vertex_buffer_size(const Mesh_memory_config& mesh_memory_config, const std::size_t stream_index) const -> std::size_t
+namespace {
+
+constexpr std::size_t kilo = 1024;
+constexpr std::size_t mega = 1024 * kilo;
+
+[[nodiscard]] auto make_index_pool_block_info(
+    const Mesh_memory_config& config
+) -> erhe::graphics_buffer_sink::Buffer_pool_block_create_info
 {
-    static_cast<void>(stream_index);
-    const int vertex_buffer_size = mesh_memory_config.vertex_buffer_size;
-    std::size_t kilo = 1024;
-    std::size_t mega = 1024 * kilo;
-    return static_cast<std::size_t>(vertex_buffer_size) * mega;
+    return erhe::graphics_buffer_sink::Buffer_pool_block_create_info{
+        .usage                              = erhe::graphics::Buffer_usage::index,
+        .required_memory_property_bit_mask  = erhe::graphics::Memory_property_flag_bit_mask::device_local,
+        .preferred_memory_property_bit_mask = erhe::graphics::Memory_property_flag_bit_mask::none,
+        .block_size_bytes                   = static_cast<std::size_t>(config.index_pool_block_size_mb) * mega,
+        .max_blocks                         = static_cast<std::size_t>(config.max_buffers_per_pool),
+        .debug_label_prefix                 = "Mesh_memory index pool"
+    };
 }
 
-auto Mesh_memory::get_index_buffer_size(const Mesh_memory_config& mesh_memory_config) const -> std::size_t
+[[nodiscard]] auto make_edge_line_vertex_pool_block_info(
+    const Mesh_memory_config& config
+) -> erhe::graphics_buffer_sink::Buffer_pool_block_create_info
 {
-    int index_buffer_size = mesh_memory_config.index_buffer_size;
-    std::size_t kilo = 1024;
-    std::size_t mega = 1024 * kilo;
-    return static_cast<std::size_t>(index_buffer_size) * mega;
+    return erhe::graphics_buffer_sink::Buffer_pool_block_create_info{
+        .usage                              = erhe::graphics::Buffer_usage::vertex | erhe::graphics::Buffer_usage::storage,
+        .required_memory_property_bit_mask  = erhe::graphics::Memory_property_flag_bit_mask::device_local,
+        .preferred_memory_property_bit_mask = erhe::graphics::Memory_property_flag_bit_mask::none,
+        .block_size_bytes                   = static_cast<std::size_t>(config.edge_line_vertex_pool_block_size_mb) * mega,
+        .max_blocks                         = static_cast<std::size_t>(config.max_buffers_per_pool),
+        .debug_label_prefix                 = "Mesh_memory edge line vertex pool"
+    };
 }
 
-auto Mesh_memory::get_edge_line_vertex_buffer_size(const Mesh_memory_config& mesh_memory_config) const -> std::size_t
-{
-    // Use a fraction of the vertex buffer size - edge line data is much smaller
-    // Each edge needs 2 vec4 vertices = 32 bytes
-    int vertex_buffer_size = mesh_memory_config.vertex_buffer_size;
-    std::size_t kilo = 1024;
-    std::size_t mega = 1024 * kilo;
-    return static_cast<std::size_t>(vertex_buffer_size) * mega / 4;
-}
+} // anonymous namespace
 
 [[nodiscard]] auto Mesh_memory::get_vertex_buffer(const std::size_t stream_index) -> erhe::graphics::Buffer*
 {
-    switch (stream_index) {
-        case s_vertex_binding_position:     return &vertex_buffer_position;
-        case s_vertex_binding_non_position: return &vertex_buffer_non_position;
-        case s_vertex_binding_custom:       return &vertex_buffer_custom;
-        default: return nullptr;
+    if (stream_index >= default_format_pools.vertex_pools.size()) {
+        return nullptr;
     }
+    return default_format_pools.vertex_pools[stream_index]->get_first_buffer();
 }
 
-Mesh_memory::Mesh_memory(const Mesh_memory_config& mesh_memory_config, erhe::graphics::Device& graphics_device, erhe::dataformat::Vertex_format& vertex_format)
+[[nodiscard]] auto Mesh_memory::get_default_index_buffer() -> erhe::graphics::Buffer*
+{
+    return index_pool.get_first_buffer();
+}
+
+auto Mesh_memory::get_or_create_format_pools(const erhe::dataformat::Vertex_format& format) -> Format_pools&
+{
+    const uint32_t key = erhe::dataformat::compute_vertex_format_key(format);
+    if (key == m_default_format_key) {
+        return default_format_pools;
+    }
+    const auto it = m_extra_format_pools.find(key);
+    if (it != m_extra_format_pools.end()) {
+        return *it->second;
+    }
+    auto pools = std::make_unique<Format_pools>(
+        graphics_device,
+        buffer_transfer_queue,
+        m_config,
+        format,
+        index_pool,
+        edge_line_vertex_pool,
+        std::string{"Mesh_memory format pool"}
+    );
+    Format_pools& ref = *pools;
+    m_extra_format_pools.emplace(key, std::move(pools));
+    return ref;
+}
+
+Mesh_memory::Mesh_memory(
+    const Mesh_memory_config&        mesh_memory_config,
+    erhe::graphics::Device&          graphics_device,
+    erhe::dataformat::Vertex_format& vertex_format
+)
     : graphics_device       {graphics_device}
     , buffer_transfer_queue {graphics_device}
     , vertex_format         {vertex_format}
-    , vertex_buffer_position{
+    , index_pool{
         graphics_device,
-        erhe::graphics::Buffer_create_info{
-            .capacity_byte_count                    = get_vertex_buffer_size(mesh_memory_config, s_vertex_binding_position),
-            .memory_allocation_create_flag_bit_mask = 0,
-            .usage                                  = erhe::graphics::Buffer_usage::vertex,
-            .required_memory_property_bit_mask      = erhe::graphics::Memory_property_flag_bit_mask::device_local, // GPU only
-            .preferred_memory_property_bit_mask     = erhe::graphics::Memory_property_flag_bit_mask::none, // uploads via staging buffer
-            .debug_label                            = "Mesh_memory position vertex buffer"
-        }
-    }
-    , vertex_buffer_non_position{
-        graphics_device,
-        erhe::graphics::Buffer_create_info{
-            .capacity_byte_count                    = get_vertex_buffer_size(mesh_memory_config, s_vertex_binding_non_position),
-            .memory_allocation_create_flag_bit_mask = 0,
-            .usage                                  = erhe::graphics::Buffer_usage::vertex,
-            .required_memory_property_bit_mask      = erhe::graphics::Memory_property_flag_bit_mask::device_local, // GPU only
-            .preferred_memory_property_bit_mask     = erhe::graphics::Memory_property_flag_bit_mask::none, // uploads via staging buffer
-            .debug_label                            = "Mesh_memory non-position vertex buffer"
-        }
-    }
-    , vertex_buffer_custom{
-        graphics_device,
-        erhe::graphics::Buffer_create_info{
-            .capacity_byte_count                    = get_vertex_buffer_size(mesh_memory_config, s_vertex_binding_non_position),
-            .memory_allocation_create_flag_bit_mask = 0,
-            .usage                                  = erhe::graphics::Buffer_usage::vertex,
-            .required_memory_property_bit_mask      = erhe::graphics::Memory_property_flag_bit_mask::device_local, // GPU only
-            .preferred_memory_property_bit_mask     = erhe::graphics::Memory_property_flag_bit_mask::none, // uploads via staging buffer
-            .debug_label                            = "Mesh_memory custom vertex buffer"
-        }
-    }
-    , index_buffer{
-        graphics_device,
-        erhe::graphics::Buffer_create_info{
-            .capacity_byte_count                    = get_index_buffer_size(mesh_memory_config),
-            .memory_allocation_create_flag_bit_mask = 0,
-            .usage                                  = erhe::graphics::Buffer_usage::index,
-            .required_memory_property_bit_mask      = erhe::graphics::Memory_property_flag_bit_mask::device_local, // GPU only
-            .preferred_memory_property_bit_mask     = erhe::graphics::Memory_property_flag_bit_mask::none, // uploads via staging buffer
-            .debug_label                            = "Mesh_memory index buffer"
-        }
-    }
-    , edge_line_vertex_buffer{
-        graphics_device,
-        erhe::graphics::Buffer_create_info{
-            .capacity_byte_count                    = get_edge_line_vertex_buffer_size(mesh_memory_config),
-            .memory_allocation_create_flag_bit_mask = 0,
-            .usage                                  = erhe::graphics::Buffer_usage::vertex | erhe::graphics::Buffer_usage::storage,
-            .required_memory_property_bit_mask      = erhe::graphics::Memory_property_flag_bit_mask::device_local,
-            .preferred_memory_property_bit_mask     = erhe::graphics::Memory_property_flag_bit_mask::none,
-            .debug_label                            = "Mesh_memory edge line vertex buffer"
-        }
-    }
-    , graphics_buffer_sink{
         buffer_transfer_queue,
-        {
-            &vertex_buffer_position,
-            &vertex_buffer_non_position,
-            &vertex_buffer_custom
-        },
-        &index_buffer,
-        &edge_line_vertex_buffer
+        0,
+        make_index_pool_block_info(mesh_memory_config)
     }
-    , buffer_info{
-        .index_type    = erhe::dataformat::Format::format_32_scalar_uint,
-        .vertex_format = vertex_format,
-        .buffer_sink   = graphics_buffer_sink
-    }
-    , vertex_input{
+    , edge_line_vertex_pool{
         graphics_device,
-        erhe::graphics::Vertex_input_state_data::make(vertex_format)
+        buffer_transfer_queue,
+        0,
+        make_edge_line_vertex_pool_block_info(mesh_memory_config)
     }
+    , default_format_pools{
+        graphics_device,
+        buffer_transfer_queue,
+        mesh_memory_config,
+        vertex_format,
+        index_pool,
+        edge_line_vertex_pool,
+        std::string{"Mesh_memory default"}
+    }
+    , buffer_info          {default_format_pools.buffer_info}
+    , vertex_input         {default_format_pools.vertex_input}
+    , graphics_buffer_sink {default_format_pools.graphics_buffer_sink}
+    , vertex_pool_position    {*default_format_pools.vertex_pools.at(0)}
+    , vertex_pool_non_position{*default_format_pools.vertex_pools.at(1)}
+    , vertex_pool_custom      {*default_format_pools.vertex_pools.at(2)}
+    , m_config{mesh_memory_config}
 {
+    m_default_format_key = erhe::dataformat::compute_vertex_format_key(vertex_format);
 }
 
-Mesh_memory::~Mesh_memory() noexcept
-{
-}
+Mesh_memory::~Mesh_memory() noexcept = default;
 
 }

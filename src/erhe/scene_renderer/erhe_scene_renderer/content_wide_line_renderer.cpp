@@ -26,13 +26,11 @@ namespace erhe::scene_renderer {
 
 Content_wide_line_renderer::Content_wide_line_renderer(
     erhe::graphics::Device&        graphics_device,
-    erhe::graphics::Buffer&        edge_line_vertex_buffer,
     erhe::graphics::Shader_stages* compute_shader_stages,
     erhe::graphics::Shader_stages* graphics_shader_stages,
     int                            max_view_count
 )
     : m_graphics_device        {graphics_device}
-    , m_edge_line_vertex_buffer{edge_line_vertex_buffer}
     , m_max_view_count         {std::max(1, max_view_count)}
     , m_fragment_outputs{
         erhe::graphics::Fragment_output{
@@ -310,6 +308,7 @@ void Content_wide_line_renderer::add_mesh(
 
         const std::size_t edge_count = edge_range.count / 2;
         m_dispatches.push_back(Dispatch_entry{
+            .edge_buffer             = edge_range.buffer,
             .edge_buffer_byte_offset = edge_range.byte_offset,
             .edge_count              = edge_count,
             .world_from_node         = world_from_node,
@@ -481,9 +480,12 @@ void Content_wide_line_renderer::compute(
         // to end_frame().
         dispatch.view_buffer_range = std::move(view_buffer_range);
 
+        // Each dispatch carries its own source buffer pointer so meshes
+        // whose edge data landed in different lazy-grown pool blocks each
+        // get the right SSBO bound for their compute dispatch.
         command_encoder.set_buffer(
             erhe::graphics::Buffer_target::storage,
-            &m_edge_line_vertex_buffer,
+            dispatch.edge_buffer,
             dispatch.edge_buffer_byte_offset,
             dispatch.edge_count * 2 * sizeof(float) * 8,
             m_edge_line_vertex_buffer_block->get_binding_point()

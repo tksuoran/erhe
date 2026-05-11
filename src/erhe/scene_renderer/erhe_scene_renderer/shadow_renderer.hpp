@@ -60,10 +60,6 @@ public:
         erhe::graphics::Command_buffer&                  command_buffer;
         const erhe::graphics::Vertex_input_state*        vertex_input_state    {nullptr};
         erhe::dataformat::Format                         index_type            {erhe::dataformat::Format::format_undefined};
-        erhe::graphics::Buffer*                          index_buffer          {nullptr};
-        erhe::graphics::Buffer*                          vertex_buffer0        {nullptr};
-        erhe::graphics::Buffer*                          vertex_buffer1        {nullptr};
-        erhe::graphics::Buffer*                          vertex_buffer2        {nullptr};
 
         const erhe::scene::Camera*                       view_camera          {nullptr};
         const erhe::math::Viewport                       view_camera_viewport;

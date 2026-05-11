@@ -87,4 +87,48 @@ public:
     std::vector<Vertex_stream> streams;
 };
 
+// Compact identity for a Vertex_format -- one bit per (usage, index) attribute
+// slot. Two formats are considered equal by Mesh_memory's format pool registry
+// iff their keys match. The key assumes canonical element types per usage
+// (e.g. position = vec3 float, joint_indices = vec4 u8); if a future format
+// diverges from the canonical type for a usage, it needs a dedicated bit (or
+// a wider key) rather than a silent collision against the same key.
+//
+// Bit layout (uint32_t):
+//   0       position
+//   1       tangent
+//   2       bitangent
+//   4..7    normal[0..3]      (face, smooth, flat, ...)
+//   8       color
+//   9       joint_indices
+//   10      joint_weights
+//   12..15  tex_coord[0..3]
+//   16..19  custom[0..3]
+//
+// Bits with no current attribute meaning (3, 11, 20..31) are reserved.
+[[nodiscard]] auto compute_vertex_format_key(const Vertex_format& format) -> uint32_t;
+
+namespace Vertex_format_key {
+
+constexpr uint32_t position      = 1u <<  0;
+constexpr uint32_t tangent       = 1u <<  1;
+constexpr uint32_t bitangent     = 1u <<  2;
+constexpr uint32_t normal_0      = 1u <<  4;
+constexpr uint32_t normal_1      = 1u <<  5;
+constexpr uint32_t normal_2      = 1u <<  6;
+constexpr uint32_t normal_3      = 1u <<  7;
+constexpr uint32_t color         = 1u <<  8;
+constexpr uint32_t joint_indices = 1u <<  9;
+constexpr uint32_t joint_weights = 1u << 10;
+constexpr uint32_t tex_coord_0   = 1u << 12;
+constexpr uint32_t tex_coord_1   = 1u << 13;
+constexpr uint32_t tex_coord_2   = 1u << 14;
+constexpr uint32_t tex_coord_3   = 1u << 15;
+constexpr uint32_t custom_0      = 1u << 16;
+constexpr uint32_t custom_1      = 1u << 17;
+constexpr uint32_t custom_2      = 1u << 18;
+constexpr uint32_t custom_3      = 1u << 19;
+
+} // namespace Vertex_format_key
+
 } // namespace erhe::dataformat
