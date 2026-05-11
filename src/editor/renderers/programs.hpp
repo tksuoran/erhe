@@ -5,6 +5,9 @@
 #include "erhe_graphics/shader_stages.hpp"
 
 #include <functional>
+#include <map>
+#include <memory>
+#include <string>
 #include <string_view>
 
 namespace erhe::graphics       { class Device; }
@@ -106,6 +109,14 @@ public:
 
     [[nodiscard]] auto get_variant_shader_stages(Shader_stages_variant variant) const -> const erhe::graphics::Shader_stages*;
 
+    // Look up the multiview-compiled variant of a shader by its
+    // create_info name (e.g. "standard", "wide_lines"). Returns
+    // nullptr when multiview was disabled at startup or when the
+    // requested shader was never registered. The single-view variants
+    // remain accessible via the Reloadable_shader_stages fields above
+    // and are unchanged by multiview being on or off.
+    [[nodiscard]] auto get_multiview(std::string_view name) const -> const erhe::graphics::Shader_stages*;
+
     // Public members
     std::vector<std::filesystem::path>       shader_paths;
     erhe::graphics::Reloadable_shader_stages error;
@@ -167,6 +178,13 @@ public:
         erhe::graphics::Reloadable_shader_stages& reloadable_shader_stages;
         erhe::graphics::Shader_stages_prototype   prototype;
     };
+
+private:
+    // Multiview shader variants keyed by create_info.name. Populated
+    // during load_programs() when program_interface.config.max_view_count
+    // >= 2; empty otherwise. Each entry holds a Reloadable_shader_stages
+    // whose create_info has enable_multiview(view_count) applied.
+    std::map<std::string, std::unique_ptr<erhe::graphics::Reloadable_shader_stages>> m_multiview_variants;
 };
 
 }

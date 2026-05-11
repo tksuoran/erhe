@@ -169,11 +169,16 @@ void do_wide_line(uint in_line_index, uint out_triangle_index)
     vec2 offset_c_in_ndc = (-side_in_ndc + axis_in_ndc) * width1;
     vec2 offset_d_in_ndc = (-side_in_ndc - axis_in_ndc) * width0;
 
-    // a, b, c, d are in ndc space
-    vec4 a = vec4(v0_in_ndc.xy + offset_a_in_ndc, v0_in_ndc.z, width0);
-    vec4 b = vec4(v1_in_ndc.xy + offset_b_in_ndc, v1_in_ndc.z, width1);
-    vec4 c = vec4(v1_in_ndc.xy + offset_c_in_ndc, v1_in_ndc.z, width1);
-    vec4 d = vec4(v0_in_ndc.xy + offset_d_in_ndc, v0_in_ndc.z, width0);
+    // a, b, c, d are in ndc space.
+    // .w carries the full-width line thickness in screen pixels for
+    // line_after_compute.frag (which computes s = v_line_width^2 * 0.25
+    // assuming full-width, matching wide_lines.frag). width0/width1 are
+    // half-widths used for the per-side quad offsets above, so we double
+    // them when writing to .w.
+    vec4 a = vec4(v0_in_ndc.xy + offset_a_in_ndc, v0_in_ndc.z, 2.0 * width0);
+    vec4 b = vec4(v1_in_ndc.xy + offset_b_in_ndc, v1_in_ndc.z, 2.0 * width1);
+    vec4 c = vec4(v1_in_ndc.xy + offset_c_in_ndc, v1_in_ndc.z, 2.0 * width1);
+    vec4 d = vec4(v0_in_ndc.xy + offset_d_in_ndc, v0_in_ndc.z, 2.0 * width0);
 
     // Adjust screen coordinates for fragment shader gl_FragCoord matching.
     // On Metal (top-left origin), gl_FragCoord.y = 0 is at the top,

@@ -1,6 +1,7 @@
 #ifndef ERHE_LIGHT_GLSL
 #define ERHE_LIGHT_GLSL
 
+#include "erhe_camera_view.glsl"
 #include "erhe_texture.glsl"
 
 #if __VERSION__ >= 450
@@ -57,7 +58,7 @@ float sample_light_visibility(vec4 position, uint light_index, float N_dot_L) {
     //  - For reasons I do not fully yet understand, I had to scale the bias
     //      - Code uses 2.0 at the moment, but smaller values seem to also work.
 
-    float cdd = camera.cameras[0].clip_depth_direction; // -1.0 reverse Z, 1.0 forward Z
+    float cdd = camera.cameras[c_view_index].clip_depth_direction; // -1.0 reverse Z, 1.0 forward Z
 
     // First, a common part:
     vec2  dU_dXY = vec2(ERHE_DFDX(position_in_light_texture.x), ERHE_DFDY(position_in_light_texture.x));

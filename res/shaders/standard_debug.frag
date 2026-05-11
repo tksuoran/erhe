@@ -1,4 +1,5 @@
 #include "erhe_bxdf.glsl"
+#include "erhe_camera_view.glsl"
 #include "erhe_light.glsl"
 #include "erhe_srgb.glsl"
 #include "erhe_texture.glsl"
@@ -58,9 +59,9 @@ void main()
     ////     color = base_color;
     //// } else {
         vec3 view_position_in_world = vec3(
-            camera.cameras[0].world_from_node[3][0],
-            camera.cameras[0].world_from_node[3][1],
-            camera.cameras[0].world_from_node[3][2]
+            camera.cameras[c_view_index].world_from_node[3][0],
+            camera.cameras[c_view_index].world_from_node[3][1],
+            camera.cameras[c_view_index].world_from_node[3][2]
         ); 
 
         vec3 V = normalize(view_position_in_world - v_position.xyz);
@@ -190,7 +191,7 @@ void main()
         color = base_color;
     }
 
-    float exposure = camera.cameras[0].exposure;
+    float exposure = camera.cameras[c_view_index].exposure;
     out_color.rgb = color * exposure * material.opacity;
     out_color.a = material.opacity;
 

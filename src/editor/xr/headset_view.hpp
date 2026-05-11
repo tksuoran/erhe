@@ -185,6 +185,14 @@ private:
     bool                                                 m_update_actions_ok{false};
     bool                                                 m_request_renderdoc_capture{false};
     bool                                                 m_renderdoc_capture_started{false};
+    // Latched at construction from Xr_session::is_multiview_enabled().
+    // When true, render_headset() drives Xr_session::render_frame_multiview()
+    // (single shared layered swapchain, single render pass with view_mask =
+    // 0b11) instead of the per-eye render_frame() loop. Currently the
+    // multiview callback only clears the layered target -- forward / line
+    // rendering through the multiview pipeline pair lands in a follow-up
+    // commit (see doc/multiview.md "A. Pipeline pair strategy").
+    bool                                                 m_use_multiview{false};
     erhe::xr::Frame_timing                               m_frame_timing{};
     uint64_t                                             m_frame_number{0};
 

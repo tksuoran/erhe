@@ -80,15 +80,17 @@ Swapchain::Swapchain(
     uint32_t                       width,
     uint32_t                       height,
     uint32_t                       sample_count,
+    uint32_t                       array_layer_count,
     uint64_t                       texture_usage_mask,
     const std::string&             debug_label
 )
-    : m_xr_swapchain{xr_swapchain}
+    : m_xr_swapchain     {xr_swapchain}
+    , m_array_layer_count{array_layer_count == 0 ? 1u : array_layer_count}
 {
     ERHE_PROFILE_FUNCTION();
 
     if (xr_swapchain != XR_NULL_HANDLE) {
-        if (!enumerate_images(device, pixelformat, width, height, sample_count, texture_usage_mask, debug_label)) {
+        if (!enumerate_images(device, pixelformat, width, height, sample_count, m_array_layer_count, texture_usage_mask, debug_label)) {
             log_xr->warn("Swapchain::enumerate_images() failed");
         }
     }
@@ -105,10 +107,12 @@ Swapchain::~Swapchain() noexcept
 }
 
 Swapchain::Swapchain(Swapchain&& other) noexcept
-    : m_xr_swapchain{other.m_xr_swapchain}
-    , m_textures    {std::move(other.m_textures)}
+    : m_xr_swapchain     {other.m_xr_swapchain}
+    , m_array_layer_count{other.m_array_layer_count}
+    , m_textures         {std::move(other.m_textures)}
 {
-    other.m_xr_swapchain = XR_NULL_HANDLE;
+    other.m_xr_swapchain      = XR_NULL_HANDLE;
+    other.m_array_layer_count = 1;
 }
 
 void Swapchain::operator=(Swapchain&& other) noexcept
@@ -118,9 +122,16 @@ void Swapchain::operator=(Swapchain&& other) noexcept
         check_gl_context_in_current_in_this_thread();
         check(xrDestroySwapchain(m_xr_swapchain));
     }
-    m_xr_swapchain       = other.m_xr_swapchain;
-    m_textures           = std::move(other.m_textures);
-    other.m_xr_swapchain = XR_NULL_HANDLE;
+    m_xr_swapchain            = other.m_xr_swapchain;
+    m_array_layer_count       = other.m_array_layer_count;
+    m_textures                = std::move(other.m_textures);
+    other.m_xr_swapchain      = XR_NULL_HANDLE;
+    other.m_array_layer_count = 1;
+}
+
+auto Swapchain::get_array_layer_count() const -> uint32_t
+{
+    return m_array_layer_count;
 }
 
 auto Swapchain::acquire() -> std::optional<Swapchain_image>
@@ -207,6 +218,7 @@ namespace {
     uint32_t                       width,
     uint32_t                       height,
     uint32_t                       sample_count,
+    uint32_t                       array_layer_count,
     uint64_t                       texture_usage_mask,
     const std::string&             debug_label
 ) -> std::shared_ptr<erhe::graphics::Texture>
@@ -214,14 +226,23 @@ namespace {
     // The codebase convention is sample_count == 0 for non-MSAA textures;
     // OpenXR's recommendedSwapchainSampleCount is 1 for non-MSAA, so map 1 to 0.
     const int normalized_sample_count = (sample_count > 1) ? static_cast<int>(sample_count) : 0;
+    // Layered XR images (arraySize > 1) back the multiview render path: a
+    // single layered image holds one image per view. Wrap as a 2D array
+    // texture so the render pass can attach a 2D_ARRAY image view spanning
+    // every layer, which is what VK_KHR_multiview's viewMask reads from.
+    const bool                        is_layered = (array_layer_count > 1);
+    const erhe::graphics::Texture_type texture_type = is_layered
+        ? erhe::graphics::Texture_type::texture_2d_array
+        : erhe::graphics::Texture_type::texture_2d;
     erhe::graphics::Texture_create_info create_info{
         .device            = device,
         .usage_mask        = texture_usage_mask,
-        .type              = erhe::graphics::Texture_type::texture_2d,
+        .type              = texture_type,
         .pixelformat       = pixelformat,
         .sample_count      = normalized_sample_count,
         .width             = static_cast<int>(width),
         .height            = static_cast<int>(height),
+        .array_layer_count = is_layered ? static_cast<int>(array_layer_count) : 0,
         .wrap_texture_name = wrap_texture_name,
         .debug_label       = erhe::utility::Debug_label{debug_label}
     };
@@ -236,6 +257,7 @@ auto Swapchain::enumerate_images(
     uint32_t                       width,
     uint32_t                       height,
     uint32_t                       sample_count,
+    uint32_t                       array_layer_count,
     uint64_t                       texture_usage_mask,
     const std::string&             debug_label
 ) -> bool
@@ -278,6 +300,7 @@ auto Swapchain::enumerate_images(
             width,
             height,
             sample_count,
+            array_layer_count,
             texture_usage_mask,
             debug_label + " " + std::to_string(i)
         );
@@ -310,6 +333,7 @@ auto Swapchain::enumerate_images(
             width,
             height,
             sample_count,
+            array_layer_count,
             texture_usage_mask,
             debug_label + " " + std::to_string(i)
         );
@@ -320,6 +344,7 @@ auto Swapchain::enumerate_images(
     static_cast<void>(width);
     static_cast<void>(height);
     static_cast<void>(sample_count);
+    static_cast<void>(array_layer_count);
     static_cast<void>(texture_usage_mask);
     static_cast<void>(debug_label);
 #endif

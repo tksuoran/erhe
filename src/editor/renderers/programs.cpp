@@ -4,6 +4,7 @@
 #include "erhe_graphics/device.hpp"
 #include "erhe_scene_renderer/program_interface.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_verify/verify.hpp"
 
 #include <fmt/format.h>
 #include <taskflow/taskflow.hpp>
@@ -92,7 +93,15 @@ void Programs::load_programs(
 
     using CI = erhe::graphics::Shader_stages_create_info;
 
-    auto add_shader = [this, &program_interface, &prototypes, &init_message](
+    // Multiview is on when the program interface was built with
+    // max_view_count >= 2 (driven by Xr_session::is_multiview_enabled()
+    // in editor.cpp). When on, every shader is also compiled with
+    // enable_multiview(view_count) and stored in m_multiview_variants
+    // for the headset render path to look up.
+    const bool     multiview_enabled = (program_interface.config.max_view_count >= 2);
+    const uint32_t multiview_view_count = static_cast<uint32_t>(program_interface.config.max_view_count);
+
+    auto add_shader = [this, &program_interface, &prototypes, &init_message, multiview_enabled, multiview_view_count, &graphics_device](
         erhe::graphics::Reloadable_shader_stages&   reloadable_shader_stages,
         erhe::graphics::Shader_stages_create_info&& create_info
     ) {
@@ -105,6 +114,42 @@ void Programs::load_programs(
                         : create_info.debug_label.data()
                 )
             );
+        }
+
+        // Build the multiview variant first so we can copy from
+        // create_info before std::move'ing it into the single-view
+        // create_info slot. The multiview variant shares the original
+        // create_info's debug_label / name -- the only delta is
+        // enable_multiview(), which adds GL_EXT_multiview, ERHE_MULTIVIEW
+        // = 1, etc. via the shader prelude.
+        //
+        // The map key has to be unique per add_shader call. Many
+        // shaders share the same .name (e.g. several debug variants all
+        // use "standard_debug") but differ by .debug_label, so the key
+        // is debug_label when set, otherwise name. Without this, a
+        // second add_shader with the same .name would replace the map
+        // entry, destroying the Reloadable_shader_stages that the
+        // first Shader_stages_builder in `prototypes` already holds a
+        // reference to -- the dangling reference then crashes when the
+        // post-link loop reads its create_info.name.
+        if (multiview_enabled) {
+            erhe::graphics::Shader_stages_create_info multiview_create_info = create_info;
+            multiview_create_info.enable_multiview(multiview_view_count);
+
+            const std::string mv_key = create_info.debug_label.empty()
+                ? create_info.name
+                : std::string{create_info.debug_label.string_view()};
+            const std::string mv_placeholder_name = mv_key + "-multiview-not_loaded";
+            auto& mv_slot = m_multiview_variants[mv_key];
+            // Defensive: if the same key has already been registered
+            // (which would indicate a duplicate add_shader call we
+            // missed) fall through and overwrite -- the previous
+            // Shader_stages_builder reference would dangle, but at
+            // least we surface the issue rather than silently corrupt.
+            ERHE_VERIFY(mv_slot == nullptr);
+            mv_slot = std::make_unique<erhe::graphics::Reloadable_shader_stages>(graphics_device, mv_placeholder_name);
+            mv_slot->create_info = std::move(multiview_create_info);
+            prototypes.emplace_back(*mv_slot, program_interface);
         }
 
         reloadable_shader_stages.create_info = std::move(create_info);
@@ -259,6 +304,15 @@ auto Programs::get_variant_shader_stages(Shader_stages_variant variant) const ->
         case Shader_stages_variant::debug_misc:               return &debug_misc.shader_stages;
         default:                                              return &error.shader_stages;
     }
+}
+
+auto Programs::get_multiview(std::string_view name) const -> const erhe::graphics::Shader_stages*
+{
+    auto it = m_multiview_variants.find(std::string{name});
+    if (it == m_multiview_variants.end()) {
+        return nullptr;
+    }
+    return &it->second->shader_stages;
 }
 
 }
