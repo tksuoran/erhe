@@ -33,7 +33,7 @@
             }
         },
         {
-            "name": "scene.add_platonic_solids",
+            "name": "scene.add_johnson_solids",
             "args": {
                 "instance_count": 1,
                 "instance_gap": 0.5,
