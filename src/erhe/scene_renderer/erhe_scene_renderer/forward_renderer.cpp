@@ -743,4 +743,84 @@ void Forward_renderer::draw_primitives(const Render_parameters& parameters, cons
     m_texture_heap->unbind(parameters.render_encoder.get_command_buffer());
 }
 
+void Forward_renderer::prewarm_standard_variants(const Prewarm_parameters& parameters)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    if (parameters.standard_shader_variants == nullptr) {
+        return;
+    }
+    if (parameters.multiview_view_counts.empty()) {
+        return;
+    }
+
+    // Per-pipeline bucket walk. Mirrors the gate Forward_renderer::render
+    // applies before consulting the variant cache (uses_standard_variants
+    // && vertex_format != nullptr); pipelines that fail the gate would
+    // never call get_or_compile at runtime, so prewarming them would only
+    // pollute the cache with keys the renderer never asks for.
+    for (erhe::graphics::Lazy_render_pipeline* render_pipeline_state : parameters.render_pipeline_states) {
+        if (render_pipeline_state == nullptr) {
+            continue;
+        }
+        const erhe::graphics::Render_pipeline_create_info& pipeline = render_pipeline_state->data;
+        if (!pipeline.uses_standard_variants) {
+            continue;
+        }
+        if (pipeline.vertex_format == nullptr) {
+            continue;
+        }
+
+        for (const std::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes : parameters.mesh_spans) {
+            if (meshes.empty()) {
+                continue;
+            }
+            const std::vector<Bucket> buckets = bucket_primitives_by_buffers_and_variant(
+                meshes,
+                parameters.primitive_mode,
+                pipeline.vertex_format
+            );
+            for (const Bucket& bucket : buckets) {
+                const Standard_variant_key key = compute_bucket_variant_key(bucket, parameters.light_counts);
+                for (const uint32_t view_count : parameters.multiview_view_counts) {
+                    (void)parameters.standard_shader_variants->get_or_compile(key, view_count);
+                }
+            }
+        }
+    }
+
+    // Content-library / unattached materials. Each material is keyed
+    // against fallback_vertex_format; the editor doesn't know up-front
+    // whether the user will apply the material to a static mesh or a
+    // skinned mesh, so we prewarm both. When the format carries no joint
+    // attributes, compute_standard_variant_key collapses
+    // mesh_has_skin=true to the same key (the skinning bit also requires
+    // joint_indices+joint_weights), so the second get_or_compile lands
+    // on the cache hit path and costs nothing. Skipped when
+    // fallback_vertex_format is null.
+    if ((parameters.fallback_vertex_format != nullptr) && !parameters.extra_materials.empty()) {
+        for (const std::shared_ptr<erhe::primitive::Material>& material : parameters.extra_materials) {
+            if (!material) {
+                continue;
+            }
+            const Standard_variant_key key_unskinned = compute_standard_variant_key(
+                material.get(),
+                *parameters.fallback_vertex_format,
+                /*mesh_has_skin*/ false,
+                parameters.light_counts
+            );
+            const Standard_variant_key key_skinned = compute_standard_variant_key(
+                material.get(),
+                *parameters.fallback_vertex_format,
+                /*mesh_has_skin*/ true,
+                parameters.light_counts
+            );
+            for (const uint32_t view_count : parameters.multiview_view_counts) {
+                (void)parameters.standard_shader_variants->get_or_compile(key_unskinned, view_count);
+                (void)parameters.standard_shader_variants->get_or_compile(key_skinned,   view_count);
+            }
+        }
+    }
+}
+
 } // namespace erhe::scene_renderer

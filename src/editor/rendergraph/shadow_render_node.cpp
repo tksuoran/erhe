@@ -267,6 +267,21 @@ auto Shadow_render_node::get_viewport() const -> erhe::math::Viewport
     return m_viewport;
 }
 
+auto Shadow_render_node::get_render_passes() const -> std::span<const std::unique_ptr<erhe::graphics::Render_pass>>
+{
+    return std::span<const std::unique_ptr<erhe::graphics::Render_pass>>{m_render_passes};
+}
+
+auto Shadow_render_node::get_reverse_depth() const -> bool
+{
+    // Match the value the runtime feeds Shadow_renderer::Render_parameters
+    // (see execute_rendergraph_node above): the scene_view's live setting,
+    // not the cached m_reverse_depth that reconfigure() last sized the
+    // shadow texture against. The cache lookup the prewarm drives is
+    // keyed on this value, so prewarmed entries must use the same source.
+    return m_scene_view.get_reverse_depth();
+}
+
 auto Shadow_render_node::inputs_allowed() const -> bool
 {
     return false;

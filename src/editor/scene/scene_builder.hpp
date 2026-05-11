@@ -111,7 +111,8 @@ private:
         std::string_view name,
         glm::vec3        position,
         glm::vec3        color,
-        float            intensity
+        float            intensity,
+        bool             cast_shadow
     ) -> std::shared_ptr<erhe::scene::Node>;
 
     auto make_spot_light(

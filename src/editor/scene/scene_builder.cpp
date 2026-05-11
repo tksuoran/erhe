@@ -1153,18 +1153,20 @@ auto Scene_builder::make_directional_light(
     const std::string_view name,
     const vec3             position,
     const vec3             color,
-    const float            intensity
+    const float            intensity,
+    const bool             cast_shadow
 ) -> std::shared_ptr<erhe::scene::Node>
 {
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{m_scene_root->item_host_mutex};
 
     auto node  = std::make_shared<erhe::scene::Node>(name);
     auto light = std::make_shared<erhe::scene::Light>(name);
-    light->type      = Light::Type::directional;
-    light->color     = color;
-    light->intensity = intensity;
-    light->range     = 0.0f;
-    light->layer_id  = m_scene_root->layers().light()->id;
+    light->type        = Light::Type::directional;
+    light->color       = color;
+    light->intensity   = intensity;
+    light->range       = 0.0f;
+    light->cast_shadow = cast_shadow;
+    light->layer_id    = m_scene_root->layers().light()->id;
     light->enable_flag_bits(Item_flags::content | Item_flags::visible | Item_flags::show_in_ui | Item_flags::show_debug_visualizations);
     node->attach          (light);
     node->enable_flag_bits(Item_flags::content | Item_flags::visible | Item_flags::show_in_ui);
@@ -1215,25 +1217,29 @@ void Scene_builder::add_lights(const Add_lights_args& args)
     erhe::scene::Light_layer* light_layer      = layers.light();
     const glm::vec4           target_ambient   {0.04f, 0.04f, 0.04f, 0.0f};
 
-    const float directional_light_intensity = args.directional_light_intensity;
-    const float directional_light_radius    = args.directional_light_radius;
-    const float directional_light_height    = args.directional_light_height;
-    const int   directional_light_count     = args.directional_light_count;
-    const float spot_light_intensity        = args.spot_light_intensity;
-    const float spot_light_radius           = args.spot_light_radius;
-    const float spot_light_height           = args.spot_light_height;
-    const int   spot_light_count            = args.spot_light_count;
+    const float directional_light_intensity         = args.directional_light_intensity;
+    const float directional_light_radius            = args.directional_light_radius;
+    const float directional_light_height            = args.directional_light_height;
+    const int   directional_light_shadow_count      = std::max(0, args.directional_light_shadow_count);
+    const int   directional_light_no_shadow_count   = std::max(0, args.directional_light_no_shadow_count);
+    const int   directional_light_count             = directional_light_shadow_count + directional_light_no_shadow_count;
+    const float spot_light_intensity                = args.spot_light_intensity;
+    const float spot_light_radius                   = args.spot_light_radius;
+    const float spot_light_height                   = args.spot_light_height;
+    const int   spot_light_count                    = args.spot_light_count;
 
     std::vector<std::shared_ptr<erhe::scene::Node>> light_nodes;
     light_nodes.reserve(static_cast<std::size_t>(directional_light_count + spot_light_count));
 
     if (directional_light_count == 1) {
+        const bool cast_shadow = (directional_light_shadow_count == 1);
         light_nodes.push_back(
             make_directional_light(
                 "X",
                 vec3{1.0f, 1.0f, 0.0f}, // pos
                 vec3{1.0f, 1.0f, 1.0f}, // color
-                2.0f // intensity
+                2.0f,                   // intensity
+                cast_shadow
             )
         );
     } else {
@@ -1247,13 +1253,16 @@ void Scene_builder::add_lights(const Add_lights_args& args)
 
             erhe::math::hsv_to_rgb(h, s, v, r, g, b);
 
-            const vec3        color     = vec3{r, g, b};
-            const float       intensity = directional_light_intensity / static_cast<float>(directional_light_count);
-            const std::string name      = fmt::format("Directional light {}", i);
-            const float       x_pos     = R * std::sin(rel * glm::two_pi<float>() + 1.0f / 7.0f);
-            const float       z_pos     = R * std::cos(rel * glm::two_pi<float>() + 1.0f / 7.0f);
-            const vec3        position  = vec3{x_pos, directional_light_height, z_pos};
-            light_nodes.push_back(make_directional_light(name, position, color, intensity));
+            const vec3        color       = vec3{r, g, b};
+            const float       intensity   = directional_light_intensity / static_cast<float>(directional_light_count);
+            const bool        cast_shadow = (i < directional_light_shadow_count);
+            const std::string name        = fmt::format(
+                "Directional light {}{}", i, cast_shadow ? "" : " (no shadow)"
+            );
+            const float       x_pos       = R * std::sin(rel * glm::two_pi<float>() + 1.0f / 7.0f);
+            const float       z_pos       = R * std::cos(rel * glm::two_pi<float>() + 1.0f / 7.0f);
+            const vec3        position    = vec3{x_pos, directional_light_height, z_pos};
+            light_nodes.push_back(make_directional_light(name, position, color, intensity, cast_shadow));
         }
     }
 

@@ -12,10 +12,12 @@
         {
             "name": "scene.add_lights",
             "args": {
+                "_version": 2,
                 "directional_light_intensity": 4,
                 "directional_light_radius": 4.5,
                 "directional_light_height": 10,
-                "directional_light_count": 8,
+                "directional_light_shadow_count": 1,
+                "directional_light_no_shadow_count": 7,
                 "spot_light_intensity": 500,
                 "spot_light_radius": 10,
                 "spot_light_height": 5,

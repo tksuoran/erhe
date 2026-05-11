@@ -284,6 +284,8 @@ erhe_target_sources_grouped(
     renderers/id_renderer.hpp
     renderers/light_mesh.cpp
     renderers/light_mesh.hpp
+    renderers/prewarm.cpp
+    renderers/prewarm.hpp
     renderers/programs.cpp
     renderers/programs.hpp
     renderers/render_context.cpp

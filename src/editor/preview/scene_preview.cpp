@@ -12,7 +12,13 @@
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_math/math_util.hpp"
+#include "erhe_primitive/material.hpp"
+#include "erhe_scene/light.hpp"
+#include "erhe_scene/mesh.hpp"
 #include "erhe_scene/scene.hpp"
+#include "erhe_scene_renderer/forward_renderer.hpp"
+#include "erhe_scene_renderer/standard_shader_variant.hpp"
+#include "erhe_scene_renderer/standard_shader_variants.hpp"
 
 #include <fmt/format.h>
 
@@ -246,6 +252,51 @@ auto Scene_preview::get_shadow_texture() const -> erhe::graphics::Texture*
 auto Scene_preview::get_content_library() -> std::shared_ptr<Content_library>
 {
     return m_content_library;
+}
+
+void Scene_preview::prewarm_variants(
+    erhe::scene_renderer::Forward_renderer&         forward_renderer,
+    erhe::scene_renderer::Standard_shader_variants& standard_shader_variants,
+    const erhe::dataformat::Vertex_format&          fallback_vertex_format
+)
+{
+    if (!m_scene_root_shared) {
+        return;
+    }
+    const erhe::scene::Light_layer* light_layer = m_scene_root_shared->layers().light();
+    if (light_layer == nullptr) {
+        return;
+    }
+
+    const erhe::scene_renderer::Standard_variant_light_counts light_counts =
+        erhe::scene_renderer::compute_standard_variant_light_counts(*light_layer);
+
+    const erhe::scene::Mesh_layer* content_layer = m_scene_root_shared->layers().content();
+    std::vector<std::span<const std::shared_ptr<erhe::scene::Mesh>>> mesh_spans;
+    if (content_layer != nullptr) {
+        mesh_spans.push_back(content_layer->meshes);
+    }
+
+    std::span<const std::shared_ptr<erhe::primitive::Material>> extra_materials;
+    if (m_content_library && m_content_library->materials) {
+        extra_materials = m_content_library->materials->get_all<erhe::primitive::Material>();
+    }
+
+    // Preview is single-view -- offscreen render target, never multiview.
+    static constexpr uint32_t single_view = 0u;
+    const std::span<const uint32_t> view_counts{&single_view, 1};
+
+    const erhe::scene_renderer::Forward_renderer::Prewarm_parameters params{
+        .render_pipeline_states   = std::span<erhe::graphics::Lazy_render_pipeline*>{m_render_pipeline_states},
+        .mesh_spans               = mesh_spans,
+        .extra_materials          = extra_materials,
+        .light_counts             = light_counts,
+        .multiview_view_counts    = view_counts,
+        .standard_shader_variants = &standard_shader_variants,
+        .fallback_vertex_format   = &fallback_vertex_format,
+        .primitive_mode           = erhe::primitive::Primitive_mode::polygon_fill
+    };
+    forward_renderer.prewarm_standard_variants(params);
 }
 
 }

@@ -118,6 +118,13 @@ void Device::clear_render_pipeline_cache()
 {
     m_impl->clear_render_pipeline_cache();
 }
+void Device::warmup_render_pipeline(const Render_pipeline_create_info& create_info)
+{
+    // Construct + immediately destruct. The driver-level pipeline cache
+    // retains the compiled binary across the destruction; the discarded
+    // Render_pipeline only loses its (cheap) handle wrapper.
+    Render_pipeline pipeline{*this, create_info};
+}
 auto Device::recreate_surface_for_new_window() -> bool
 {
     return m_impl->recreate_surface_for_new_window();
