@@ -6,6 +6,7 @@
 #include "erhe_renderer/renderer_log.hpp"
 
 #include "erhe_graphics/device.hpp"
+#include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/compute_command_encoder.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/scoped_debug_group.hpp"
@@ -396,7 +397,10 @@ void Debug_renderer::begin_frame(
     const erhe::math::Coordinate_conventions& conventions
 )
 {
-    erhe::graphics::Scoped_debug_group debug_group{"Debug_renderer::begin_frame"};
+    // No Scoped_debug_group here: this path only sets up CPU-side view
+    // state (camera projection, view stack); no GPU commands are
+    // recorded. The bracketing belongs around Debug_renderer::compute /
+    // Debug_renderer::render which actually issue work.
 
     const erhe::scene::Node* camera_node = camera.get_node();
     ERHE_VERIFY(camera_node != nullptr);
@@ -439,7 +443,8 @@ void Debug_renderer::begin_frame(
     const erhe::math::Coordinate_conventions& /*conventions*/
 )
 {
-    erhe::graphics::Scoped_debug_group debug_group{"Debug_renderer::begin_frame(multiview)"};
+    // No Scoped_debug_group here for the same reason as the single-view
+    // begin_frame above: CPU-only multiview setup, no GPU commands.
 
     ERHE_VERIFY(static_cast<int>(views.size()) == m_program_interface.max_view_count);
 
@@ -503,7 +508,10 @@ void Debug_renderer::render(
 {
     ERHE_PROFILE_FUNCTION();
 
-    erhe::graphics::Scoped_debug_group scoped_debug_group{"Debug_renderer::render()"};
+    erhe::graphics::Scoped_debug_group scoped_debug_group{
+        encoder.get_command_buffer(),
+        "Debug_renderer::render()"
+    };
 
     encoder.set_viewport_rect(viewport.x, viewport.y, viewport.width, viewport.height);
 

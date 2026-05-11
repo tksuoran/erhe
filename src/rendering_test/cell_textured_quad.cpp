@@ -129,7 +129,7 @@ void Rendering_test::draw_textured_quad_cell(
 
     encoder.draw_primitives(erhe::graphics::Primitive_type::triangle, 0, 3);
 
-    texture_heap.unbind();
+    texture_heap.unbind(encoder.get_command_buffer());
     quad_buffer_range.release();
 }
 

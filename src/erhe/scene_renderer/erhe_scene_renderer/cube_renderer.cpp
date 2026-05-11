@@ -2,6 +2,7 @@
 #include "erhe_scene_renderer/cube_instance_buffer.hpp"
 
 #include "erhe_graphics/device.hpp"
+#include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/render_pipeline.hpp"
@@ -101,7 +102,10 @@ void Cube_renderer::render(const Render_parameters& parameters)
     const auto& viewport = parameters.viewport;
     const auto* camera   = parameters.camera;
 
-    erhe::graphics::Scoped_debug_group pass_scope{"Cube_renderer::render()"};
+    erhe::graphics::Scoped_debug_group pass_scope{
+        parameters.render_encoder.get_command_buffer(),
+        "Cube_renderer::render()"
+    };
 
     parameters.render_encoder.set_viewport_rect(viewport.x, viewport.y, viewport.width, viewport.height);
 

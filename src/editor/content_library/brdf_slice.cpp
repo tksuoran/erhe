@@ -84,7 +84,10 @@ void Brdf_slice_rendergraph_node::execute_rendergraph_node(erhe::graphics::Comma
 
     erhe::graphics::Render_pass* render_pass = m_render_target.get_render_pass();
     erhe::graphics::Scoped_render_pass scoped_render_pass{*render_pass, command_buffer};
-    erhe::graphics::Scoped_debug_group pass_scope{"Brdf_slice_rendergraph_node::execute_rendergraph_node()"};
+    erhe::graphics::Scoped_debug_group pass_scope{
+        command_buffer,
+        "Brdf_slice_rendergraph_node::execute_rendergraph_node()"
+    };
     erhe::scene_renderer::Light_projections light_projections;
     light_projections.brdf_phi          = m_brdf_slice.phi;
     light_projections.brdf_incident_phi = m_brdf_slice.incident_phi;

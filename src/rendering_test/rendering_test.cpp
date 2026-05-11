@@ -748,7 +748,7 @@ void Rendering_test::tick(erhe::graphics::Command_buffer& command_buffer)
         if (is_fullscreen_mode()) {
             const std::string_view name = get_subtest_at(m_settings.fullscreen_cell_col, m_settings.fullscreen_cell_row);
             const erhe::math::Viewport fw{0, 0, full_width, full_height};
-            erhe::graphics::Scoped_debug_group scope{"Fullscreen subtest"};
+            erhe::graphics::Scoped_debug_group scope{command_buffer, "Fullscreen subtest"};
             dispatch_subtest(name, command_buffer, encoder, fw, lights, meshes);
         } else if (is_replicate_mode()) {
             const std::string_view name = get_subtest_at(m_settings.replicate_cell_col, m_settings.replicate_cell_row);
@@ -757,7 +757,7 @@ void Rendering_test::tick(erhe::graphics::Command_buffer& command_buffer)
             for (int r = 0; r < rows; ++r) {
                 for (int c = 0; c < cols; ++c) {
                     const erhe::math::Viewport tile = get_grid_tile_viewport(c, r);
-                    erhe::graphics::Scoped_debug_group scope{"Replicated subtest"};
+                    erhe::graphics::Scoped_debug_group scope{command_buffer, "Replicated subtest"};
                     dispatch_subtest(name, command_buffer, encoder, tile, lights, meshes);
                 }
             }
@@ -771,7 +771,7 @@ void Rendering_test::tick(erhe::graphics::Command_buffer& command_buffer)
                         continue;
                     }
                     const erhe::math::Viewport tile = get_grid_tile_viewport(c, r);
-                    erhe::graphics::Scoped_debug_group scope{"Grid subtest"};
+                    erhe::graphics::Scoped_debug_group scope{command_buffer, "Grid subtest"};
                     dispatch_subtest(name, command_buffer, encoder, tile, lights, meshes);
                 }
             }

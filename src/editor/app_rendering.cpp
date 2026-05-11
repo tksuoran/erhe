@@ -1050,7 +1050,8 @@ void App_rendering::render_viewport_renderables(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION();
 
-    erhe::graphics::Scoped_debug_group debug_group{"App_rendering::render_viewport_renderables"};
+    ERHE_VERIFY(context.command_buffer != nullptr);
+    erhe::graphics::Scoped_debug_group debug_group{*context.command_buffer, "App_rendering::render_viewport_renderables"};
 
     for (auto* renderable : m_renderables) {
         renderable->render(context);
@@ -1063,7 +1064,8 @@ void App_rendering::render_composer(const Render_context& context)
 
     static constexpr std::string_view c_id_main{"Main"};
     //ERHE_PROFILE_GPU_SCOPE(c_id_main);
-    erhe::graphics::Scoped_debug_group pass_scope{"App_rendering::render_composer()"};
+    ERHE_VERIFY(context.command_buffer != nullptr);
+    erhe::graphics::Scoped_debug_group pass_scope{*context.command_buffer, "App_rendering::render_composer()"};
 
     m_composer.render(context);
 

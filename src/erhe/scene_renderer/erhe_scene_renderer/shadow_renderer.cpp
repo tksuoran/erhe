@@ -3,6 +3,7 @@
 #include "erhe_scene_renderer/shadow_renderer.hpp"
 
 #include "erhe_graphics/render_pass.hpp"
+#include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/draw_indirect.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
@@ -19,6 +20,8 @@
 #include "erhe_scene_renderer/scene_renderer_log.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
+
+#include <fmt/format.h>
 
 namespace erhe::scene_renderer {
 
@@ -233,7 +236,10 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
         parameters.conventions
     );
 
-    erhe::graphics::Scoped_debug_group debug_group{"Shadow_renderer::render()"};
+    erhe::graphics::Scoped_debug_group debug_group{
+        parameters.command_buffer,
+        erhe::utility::Debug_label{"Shadow_renderer::render()"}
+    };
 
     const auto& mesh_spans = parameters.mesh_spans;
     const auto& lights     = parameters.lights;
@@ -250,7 +256,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
     using Ring_buffer_range          = erhe::graphics::Ring_buffer_range;
     using Draw_indirect_buffer_range = erhe::renderer::Draw_indirect_buffer_range;
 
-    m_texture_heap->reset_heap();
+    m_texture_heap->reset_heap(parameters.command_buffer);
     Ring_buffer_range material_range = m_material_buffer.update(*m_texture_heap.get(), parameters.materials);
     Ring_buffer_range joint_range    = m_joint_buffer.update(glm::uvec4{0, 0, 0, 0}, {}, parameters.skins);
     Ring_buffer_range light_range    = m_light_buffer.update(lights, &parameters.light_projections, glm::vec3{0.0f});
@@ -319,7 +325,22 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
             // Group meshes by GPU buffer set; multi-draw-indirect needs
             // identical vertex/index bindings for every draw it covers.
             const std::vector<Bucket> buckets = bucket_meshes_by_buffers(meshes, primitive_mode);
+            std::size_t bucket_index = 0;
             for (const Bucket& bucket : buckets) {
+                erhe::graphics::Scoped_debug_group bucket_scope{
+                    parameters.command_buffer,
+                    erhe::utility::Debug_label{
+                        fmt::format(
+                            "shadow bucket {}/{} meshes={} streams={}",
+                            bucket_index + 1,
+                            buckets.size(),
+                            bucket.meshes.size(),
+                            bucket.key.vertex_buffers.size()
+                        )
+                    }
+                };
+                ++bucket_index;
+
                 encoder.set_index_buffer(bucket.key.index_buffer);
                 for (std::size_t stream_index = 0; stream_index < bucket.key.vertex_buffers.size(); ++stream_index) {
                     encoder.set_vertex_buffer(
@@ -368,7 +389,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
         control_range.release();
     }
 
-    m_texture_heap->unbind();
+    m_texture_heap->unbind(parameters.command_buffer);
 
     material_range.release();
     joint_range.release();

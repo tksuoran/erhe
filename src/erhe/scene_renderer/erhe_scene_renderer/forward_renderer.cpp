@@ -2,6 +2,7 @@
 
 #include "erhe_scene_renderer/forward_renderer.hpp"
 
+#include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/draw_indirect.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
@@ -23,6 +24,8 @@
 #include "erhe_scene_renderer/standard_shader_variants.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
+
+#include <fmt/format.h>
 
 #include <functional>
 
@@ -319,7 +322,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
         m_camera_buffer.bind(parameters.render_encoder, camera_buffer_range.value());
     }
 
-    m_texture_heap->reset_heap();
+    m_texture_heap->reset_heap(parameters.render_encoder.get_command_buffer());
 
     Ring_buffer_range material_range = m_material_buffer.update(*m_texture_heap.get(), materials);
     m_material_buffer.bind(parameters.render_encoder, material_range);
@@ -367,7 +370,14 @@ void Forward_renderer::render(const Render_parameters& parameters)
         }
 
         //erhe::graphics::Scoped_debug_group pass_scope{"Forward_renderer::render() pass"};
-        erhe::graphics::Scoped_debug_group pipeline_scope{pipeline.debug_label};
+        // Pipeline-level debug group recorded into the same cb the encoder
+        // is writing to so RenderDoc nests draw calls under it (the
+        // single-arg ctor on Vulkan only emits a queue-level label which
+        // captures show separated from the cb's commands).
+        erhe::graphics::Scoped_debug_group pipeline_scope{
+            parameters.render_encoder.get_command_buffer(),
+            pipeline.debug_label
+        };
 
         if (use_override_shader_stages) {
             erhe::graphics::Render_pipeline_state temp_state = make_temp_pipeline_state(pipeline);
@@ -418,7 +428,28 @@ void Forward_renderer::render(const Render_parameters& parameters)
             // Single-format scenes with one block per pool produce exactly
             // one bucket and the loop below collapses to today's behavior.
             const std::vector<Bucket> buckets = bucket_meshes_by_buffers(meshes, primitive_mode);
+            std::size_t bucket_index = 0;
             for (const Bucket& bucket : buckets) {
+                // Annotate each MDI with a RenderDoc / Vulkan debug-utils
+                // scope so captures show one labeled marker per bucket
+                // (e.g. "bucket 1/3 meshes=2 streams=3"). The cb-targeted
+                // overload records the begin/end label calls into the
+                // same cb the encoder writes to so RenderDoc nests the
+                // bucket's draw under it.
+                erhe::graphics::Scoped_debug_group bucket_scope{
+                    parameters.render_encoder.get_command_buffer(),
+                    erhe::utility::Debug_label{
+                        fmt::format(
+                            "bucket {}/{} meshes={} streams={}",
+                            bucket_index + 1,
+                            buckets.size(),
+                            bucket.meshes.size(),
+                            bucket.key.vertex_buffers.size()
+                        )
+                    }
+                };
+                ++bucket_index;
+
                 // Per-bucket variant override. Falls through to the
                 // pipeline-default binding when the cache returns null /
                 // invalid (mid-compile fallback) or when variant lookup
@@ -485,7 +516,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
     joint_range.release();
     light_range.release();
 
-    m_texture_heap->unbind();
+    m_texture_heap->unbind(parameters.render_encoder.get_command_buffer());
 }
 
 void Forward_renderer::draw_primitives(const Render_parameters& parameters, const erhe::scene::Light* light)
@@ -499,7 +530,7 @@ void Forward_renderer::draw_primitives(const Render_parameters& parameters, cons
 
     parameters.render_encoder.set_bind_group_layout(m_program_interface.bind_group_layout.get());
 
-    m_texture_heap->reset_heap();
+    m_texture_heap->reset_heap(parameters.render_encoder.get_command_buffer());
 
     using Ring_buffer_range = erhe::graphics::Ring_buffer_range;
     Ring_buffer_range material_range = m_material_buffer.update(*m_texture_heap.get(), parameters.materials);
@@ -564,7 +595,10 @@ void Forward_renderer::draw_primitives(const Render_parameters& parameters, cons
         if (!pipeline.shader_stages && (multiview_stages == nullptr)) {
             continue;
         }
-        erhe::graphics::Scoped_debug_group pass_scope{pipeline.debug_label};
+        erhe::graphics::Scoped_debug_group pass_scope{
+            parameters.render_encoder.get_command_buffer(),
+            pipeline.debug_label
+        };
 
         if (multiview_stages != nullptr) {
             erhe::graphics::Render_pipeline_state temp_state = make_temp_pipeline_state(pipeline);
@@ -592,7 +626,7 @@ void Forward_renderer::draw_primitives(const Render_parameters& parameters, cons
         camera_range.value().release();
     }
 
-    m_texture_heap->unbind();
+    m_texture_heap->unbind(parameters.render_encoder.get_command_buffer());
 }
 
 } // namespace erhe::scene_renderer

@@ -2,6 +2,7 @@
 #include "erhe_scene_renderer/buffer_binding_points.hpp"
 #include "erhe_scene_renderer/scene_renderer_log.hpp"
 
+#include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/compute_command_encoder.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
@@ -391,7 +392,10 @@ void Content_wide_line_renderer::compute(
         ERHE_VERIFY(camera != nullptr);
     }
 
-    erhe::graphics::Scoped_debug_group debug_scope{"Content_wide_line_renderer::compute"};
+    erhe::graphics::Scoped_debug_group debug_scope{
+        command_encoder.get_command_buffer(),
+        "Content_wide_line_renderer::compute"
+    };
 
     ERHE_VERIFY(m_compute_pipeline.has_value());
     command_encoder.set_bind_group_layout(m_bind_group_layout.get());
@@ -546,7 +550,10 @@ void Content_wide_line_renderer::render(
     // before any render pass begins. Emitting it here would be inside
     // the active render pass and therefore invalid on Vulkan.
 
-    erhe::graphics::Scoped_debug_group debug_scope{"Content_wide_line_renderer::render"};
+    erhe::graphics::Scoped_debug_group debug_scope{
+        render_encoder.get_command_buffer(),
+        "Content_wide_line_renderer::render"
+    };
 
     if (multiview) {
         // Multiview render path. The pipeline_state was constructed
