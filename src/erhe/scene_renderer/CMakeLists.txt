@@ -3,6 +3,8 @@ add_library(${_target})
 add_library(erhe::scene_renderer ALIAS ${_target})
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+    erhe_scene_renderer/cached_shader_handle.cpp
+    erhe_scene_renderer/cached_shader_handle.hpp
     erhe_scene_renderer/camera_buffer.cpp
     erhe_scene_renderer/camera_buffer.hpp
     erhe_scene_renderer/content_wide_line_renderer.cpp
@@ -29,6 +31,8 @@ erhe_target_sources_grouped(
     erhe_scene_renderer/program_interface.hpp
     erhe_scene_renderer/scene_renderer_log.cpp
     erhe_scene_renderer/scene_renderer_log.hpp
+    erhe_scene_renderer/shader_variant_cache.cpp
+    erhe_scene_renderer/shader_variant_cache.hpp
     erhe_scene_renderer/shadow_renderer.cpp
     erhe_scene_renderer/shadow_renderer.hpp
     erhe_scene_renderer/standard_shader_variant.cpp

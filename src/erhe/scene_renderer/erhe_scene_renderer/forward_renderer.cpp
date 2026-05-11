@@ -5,6 +5,7 @@
 #include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/draw_indirect.hpp"
+#include "erhe_graphics/lazy_shader_handle.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/render_pipeline.hpp"
@@ -81,11 +82,22 @@ const char* safe_str(const char* str)
     return str != nullptr ? str : "";
 }
 
+// Forward declaration; helper defined below.
+[[nodiscard]] auto resolve_pipeline_shader_stages(
+    const erhe::graphics::Render_pipeline_create_info& pipeline
+) -> const erhe::graphics::Shader_stages*;
+
 auto make_temp_pipeline_state(const erhe::graphics::Render_pipeline_create_info& ci) -> erhe::graphics::Render_pipeline_state
 {
+    // Resolve the lazy handle here so callers that pass temp_state to
+    // set_render_pipeline_state without an explicit override still get
+    // the right shader bound. The const_cast strips off the
+    // const-qualifier the resolver returns to match
+    // Render_pipeline_data's existing non-const Shader_stages* field.
+    const erhe::graphics::Shader_stages* resolved = resolve_pipeline_shader_stages(ci);
     return erhe::graphics::Render_pipeline_state{erhe::graphics::Render_pipeline_data{
         .debug_label          = ci.debug_label,
-        .shader_stages        = ci.shader_stages,
+        .shader_stages        = const_cast<erhe::graphics::Shader_stages*>(resolved),
         .vertex_input         = ci.vertex_input,
         .input_assembly       = ci.input_assembly,
         .multisample          = ci.multisample,
@@ -94,6 +106,37 @@ auto make_temp_pipeline_state(const erhe::graphics::Render_pipeline_create_info&
         .depth_stencil        = ci.depth_stencil,
         .color_blend          = ci.color_blend
     }};
+}
+
+// Pipelines may bind a Lazy_shader_handle instead of (or in addition to)
+// a raw Shader_stages*. The lazy handle takes priority: it lets a
+// pipeline reference a shader whose actual compile is deferred until
+// the renderer asks for it. Returns nullptr only when the handle's
+// underlying compile fails AND no fallback was wired through; the
+// renderer's existing error_shader_stages path then steps in.
+[[nodiscard]] auto resolve_pipeline_shader_stages(
+    const erhe::graphics::Render_pipeline_create_info& pipeline
+) -> const erhe::graphics::Shader_stages*
+{
+    if (pipeline.lazy_shader_stages != nullptr) {
+        return pipeline.lazy_shader_stages->shader_stages();
+    }
+    return pipeline.shader_stages;
+}
+
+// Same idea, but for the multiview-compiled sibling. The handle
+// returns nullptr when the pipeline didn't configure a multiview
+// view count -- caller treats nullptr as "no multiview sibling for
+// this pipeline" exactly as it does for the raw multiview_shader_stages
+// field.
+[[nodiscard]] auto resolve_pipeline_multiview_shader_stages(
+    const erhe::graphics::Render_pipeline_create_info& pipeline
+) -> const erhe::graphics::Shader_stages*
+{
+    if (pipeline.lazy_shader_stages != nullptr) {
+        return pipeline.lazy_shader_stages->multiview_shader_stages();
+    }
+    return pipeline.multiview_shader_stages;
 }
 
 class Buffer_set
@@ -352,21 +395,27 @@ void Forward_renderer::render(const Render_parameters& parameters)
         const erhe::graphics::Render_pipeline_create_info& pipeline = render_pipeline_state->data;
         bool use_override_shader_stages = (parameters.override_shader_stages != nullptr);
         const erhe::graphics::Shader_stages* multiview_stages =
-            multiview_path ? pipeline.multiview_shader_stages : nullptr;
+            multiview_path ? resolve_pipeline_multiview_shader_stages(pipeline) : nullptr;
         if (multiview_stages != nullptr) {
             use_override_shader_stages = true;
         }
-        if ((pipeline.shader_stages == nullptr) && !use_override_shader_stages) {
+        const erhe::graphics::Shader_stages* pipeline_shader_stages = resolve_pipeline_shader_stages(pipeline);
+        if ((pipeline_shader_stages == nullptr) && !use_override_shader_stages) {
             continue;
         }
 
         auto* used_shader_stages =
             (parameters.override_shader_stages != nullptr) ? parameters.override_shader_stages :
             (multiview_stages != nullptr)                  ? multiview_stages :
-                                                             pipeline.shader_stages;
-        if (!used_shader_stages->is_valid()) {
+                                                             pipeline_shader_stages;
+        if ((used_shader_stages == nullptr) || !used_shader_stages->is_valid()) {
             use_override_shader_stages = true;
             used_shader_stages = parameters.error_shader_stages;
+        }
+        if ((used_shader_stages == nullptr) || !used_shader_stages->is_valid()) {
+            // Both the requested shader and the error fallback failed to
+            // compile (e.g. shader source missing). Skip this pipeline.
+            continue;
         }
 
         //erhe::graphics::Scoped_debug_group pass_scope{"Forward_renderer::render() pass"};
@@ -591,8 +640,9 @@ void Forward_renderer::draw_primitives(const Render_parameters& parameters, cons
     for (auto* render_pipeline_state : render_pipeline_states) {
         const erhe::graphics::Render_pipeline_create_info& pipeline = render_pipeline_state->data;
         const erhe::graphics::Shader_stages* multiview_stages =
-            multiview_path_dp ? pipeline.multiview_shader_stages : nullptr;
-        if (!pipeline.shader_stages && (multiview_stages == nullptr)) {
+            multiview_path_dp ? resolve_pipeline_multiview_shader_stages(pipeline) : nullptr;
+        const erhe::graphics::Shader_stages* pipeline_shader_stages = resolve_pipeline_shader_stages(pipeline);
+        if ((pipeline_shader_stages == nullptr) && (multiview_stages == nullptr)) {
             continue;
         }
         erhe::graphics::Scoped_debug_group pass_scope{

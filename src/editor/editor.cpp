@@ -151,6 +151,7 @@
 #include "erhe_scene_renderer/program_interface.hpp"
 #include "erhe_scene_renderer/scene_renderer_log.hpp"
 #include "erhe_scene_renderer/shadow_renderer.hpp"
+#include "erhe_scene_renderer/shader_variant_cache.hpp"
 #include "erhe_scene_renderer/standard_shader_variants.hpp"
 #include "erhe_scene_renderer/texel_renderer.hpp"
 #include "erhe_time/sleep.hpp"
@@ -888,7 +889,18 @@ public:
                 m_vertex_format,
                 program_interface_config
             );
-            m_programs = std::make_unique<Programs>(*m_graphics_device.get(), *m_program_interface.get());
+            // Cache constructed before Programs so each Programs member
+            // (a Cached_shader_handle) can hold a reference to it. The
+            // cache stays empty until something calls get_or_compile.
+            m_shader_variant_cache = std::make_unique<erhe::scene_renderer::Shader_variant_cache>(
+                *m_graphics_device.get(),
+                *m_program_interface.get()
+            );
+            m_programs = std::make_unique<Programs>(
+                *m_graphics_device.get(),
+                *m_program_interface.get(),
+                *m_shader_variant_cache.get()
+            );
 
             m_text_renderer = std::make_unique<erhe::renderer::Text_renderer>(
                 *m_graphics_device.get(),
@@ -1598,15 +1610,15 @@ public:
         }
 #endif
 
-        // Standard shader variant cache. Constructed after Programs::load_programs
-        // (so the fallback Shader_stages reference is to a fully linked
-        // program) and destructed before m_programs (so the fallback stays
-        // alive for the cache's lifetime). Stays empty until a render-time
-        // call site asks for a variant via get_or_compile().
+        // Standard shader variant cache adapter. The underlying
+        // Shader_variant_cache was constructed earlier (before Programs).
+        // The fallback handle is programs.error -- a lazy
+        // Cached_shader_handle. Standard_shader_variants resolves it
+        // on demand when a variant compile fails, so the fallback
+        // doesn't have to be precompiled here.
         m_standard_shader_variants = std::make_unique<erhe::scene_renderer::Standard_shader_variants>(
-            *m_graphics_device.get(),
-            *m_program_interface.get(),
-            m_programs->standard.shader_stages
+            *m_shader_variant_cache.get(),
+            m_programs->error
         );
 
         fill_app_context();
@@ -2243,11 +2255,17 @@ public:
     erhe::dataformat::Vertex_format                          m_vertex_format;
     erhe::dataformat::Vertex_format                          m_position_only_vertex_format;
 
+    // Generic shader variant cache. Constructed before Programs so each
+    // Cached_shader_handle member of Programs can reference it; lives
+    // longer than Programs so handle.shader_stages() calls during
+    // Programs's destruction (if any) stay valid -- though
+    // Cached_shader_handle's dtor doesn't actually access the cache,
+    // so the order is also safe in the other direction. The cache's
+    // own dtor detaches entries from the Shader_monitor.
+    std::unique_ptr<erhe::scene_renderer::Shader_variant_cache> m_shader_variant_cache;
     std::unique_ptr<Programs                              >  m_programs;
-    // Owned after Programs (uses programs->standard.shader_stages as the
-    // fallback when a variant compile fails), destructed before Programs
-    // (the cache's dtor detaches its variants from the Shader_monitor;
-    // the fallback reference stays valid as long as Programs is alive).
+    // Typed adapter over m_shader_variant_cache. Holds a reference to
+    // programs.error.shader_stages() as the compile-failure fallback.
     std::unique_ptr<erhe::scene_renderer::Standard_shader_variants> m_standard_shader_variants;
     std::unique_ptr<erhe::scene_renderer::Forward_renderer>  m_forward_renderer;
     std::unique_ptr<erhe::scene_renderer::Shadow_renderer >  m_shadow_renderer;

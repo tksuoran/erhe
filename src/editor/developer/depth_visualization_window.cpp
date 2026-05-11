@@ -53,7 +53,7 @@ Depth_to_color_rendergraph_node::Depth_to_color_rendergraph_node(
         rendergraph.get_graphics_device(),
         erhe::graphics::Render_pipeline_create_info{
             .debug_label    = erhe::utility::Debug_label{"Debug_view"},
-            .shader_stages  = &programs.debug_depth.shader_stages,
+            .lazy_shader_stages = &programs.debug_depth,
             .vertex_input   = &m_empty_vertex_input,
             .input_assembly = erhe::graphics::Input_assembly_state::triangle,
             .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
