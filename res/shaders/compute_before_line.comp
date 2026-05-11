@@ -1,12 +1,13 @@
+#include "erhe_camera_view.glsl"
 
 layout(local_size_x = 32) in;
 
-float get_line_width(vec4 position, float thickness)
+float get_line_width(uint view_index, vec4 position, float thickness)
 {
-    float fov_left         = view.fov[0];
-    float fov_right        = view.fov[1];
+    float fov_left         = view.cameras[view_index].fov[0];
+    float fov_right        = view.cameras[view_index].fov[1];
     float fov_width        = fov_right - fov_left;
-    float viewport_width   = view.viewport[2];
+    float viewport_width   = view.cameras[view_index].viewport[2];
     float scaled_thickness = (thickness < 0.0)
         ? -thickness
         : max(thickness / position.w, 0.01);
@@ -108,12 +109,12 @@ vec2 ndc_from_screen_direction(vec2 screen, vec2 vp_size) {
     return screen / (0.5 * vp_size);
 }
 
-void do_wide_line(uint in_line_index, uint out_triangle_index)
+void do_wide_line(uint view_index, uint in_line_index, uint out_triangle_index)
 {
     uint in_i0           = 2 * in_line_index;
-    uint in_i1           = 2 * in_line_index + 1; 
+    uint in_i1           = 2 * in_line_index + 1;
     uint out_i0          = 3 * out_triangle_index;
-    mat4 clip_from_world = view.clip_from_world;
+    mat4 clip_from_world = view.cameras[view_index].clip_from_world;
     vec4 a_position0     = line_vertex_buffer.vertices[in_i0].position_0;
     vec4 a_color0        = line_vertex_buffer.vertices[in_i0].color_0   ;
     vec4 a_position1     = line_vertex_buffer.vertices[in_i1].position_0;
@@ -148,10 +149,10 @@ void do_wide_line(uint in_line_index, uint out_triangle_index)
     float line_width0 = position0.w;
     float line_width1 = position1.w;
 
-    float width0      = get_line_width(v0_clipped, line_width0);
-    float width1      = get_line_width(v1_clipped, line_width1);
+    float width0      = get_line_width(view_index, v0_clipped, line_width0);
+    float width1      = get_line_width(view_index, v1_clipped, line_width1);
 
-    vec2 vp_size         = view.viewport.zw;
+    vec2 vp_size         = view.cameras[view_index].viewport.zw;
 
     // Compute line axis and side vector in screen space
     vec3 v0_in_ndc       = v0_clipped.xyz / v0_clipped.w; //  clip to NDC
@@ -219,7 +220,24 @@ void do_wide_line(uint in_line_index, uint out_triangle_index)
 
 void main(void)
 {
-    uint in_line_index      = gl_GlobalInvocationID.x;
-    uint out_triangle_index = 2 * in_line_index;
-    do_wide_line(in_line_index, out_triangle_index);
+    uint in_line_index = gl_GlobalInvocationID.x;
+    // Per-thread: write 6 triangle vertices for this line in EACH view.
+    // Each view occupies a contiguous slab of view.stride_per_view
+    // vertices in the triangle SSBO so the multiview vertex shader can
+    // index it as gl_VertexID + gl_ViewIndex * stride_per_view and a
+    // single draw inside a multiview render pass produces correct
+    // stereo output.
+    //
+    // view.view_count is set by the C++ side: 1 on the single-view
+    // path (cameras[0] only, stride_per_view unused), N on the
+    // multiview path (cameras[0..N-1], stride_per_view =
+    // primitive_count * 6 vertices). out_triangle_index is the index
+    // into the SSBO viewed as 3-vertex triangles (each line expands to
+    // 2 triangles = 6 vertices, hence do_wide_line writes
+    // 3*out_triangle_index .. 3*out_triangle_index+5).
+    uint stride_triangles = view.stride_per_view / 3u; // triangles per view
+    for (uint v = 0u; v < view.view_count; ++v) {
+        uint out_triangle_index = v * stride_triangles + 2u * in_line_index;
+        do_wide_line(v, in_line_index, out_triangle_index);
+    }
 }

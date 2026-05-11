@@ -143,7 +143,13 @@ void Mcp_server::start()
 
 void Mcp_server::stop()
 {
-    if (!m_running.load()) {
+    // Always check thread joinability instead of m_running, because
+    // the worker thread itself flips m_running to false on its way
+    // out of httplib::listen() (line ~179 in server_thread_main).
+    // If stop() arrives after listen() returned but before ~Mcp_server
+    // joined, an early-return on m_running would leave a joinable
+    // std::thread alive whose destructor invokes std::terminate.
+    if (!m_server_thread.joinable() && !m_http_server) {
         return;
     }
 

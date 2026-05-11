@@ -5,11 +5,14 @@
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/render_pass.hpp"
+#include "erhe_graphics/render_pipeline_state.hpp"
 #include "erhe_graphics/ring_buffer.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/span.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_verify/verify.hpp"
+
+#include <cstring>
 
 namespace erhe::renderer {
 
@@ -158,34 +161,60 @@ Debug_renderer_bucket::Debug_renderer_bucket(
     }
 }
 
-auto Debug_renderer_bucket::update_view_buffer(const View& view) -> erhe::graphics::Ring_buffer_range
+auto Debug_renderer_bucket::update_view_buffer(
+    std::span<const View> views,
+    std::size_t           primitive_count_for_stride
+) -> erhe::graphics::Ring_buffer_range
 {
     const Debug_renderer_program_interface& program_interface = m_debug_renderer.get_program_interface();
     const erhe::graphics::Shader_resource&  view_block        = *program_interface.view_block.get();
-    erhe::graphics::Ring_buffer_range       view_buffer_range = m_view_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, view_block.get_size_bytes());
-    const auto                view_gpu_data     = view_buffer_range.get_span();
-    size_t                    view_write_offset = 0;
-    std::byte* const          start             = view_gpu_data.data();
-    const std::size_t         byte_count        = view_gpu_data.size_bytes();
-    const std::size_t         word_count        = byte_count / sizeof(float);
-    const std::span<float>    gpu_float_data {reinterpret_cast<float*   >(start), word_count};
-    const std::span<uint32_t> gpu_uint32_data{reinterpret_cast<uint32_t*>(start), word_count};
+    const std::size_t                       view_block_size   = view_block.get_size_bytes();
+    erhe::graphics::Ring_buffer_range       view_buffer_range = m_view_buffer.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, view_block_size);
+    const std::span<std::byte>              view_gpu_data     = view_buffer_range.get_span();
+
+    // Zero the whole block so unused cameras[k>views.size()] entries
+    // (and any padding) read as zeros on the GPU. MoltenVK descriptor
+    // validation requires the bound range to cover the full block
+    // size; leaving tail bytes uninitialised here would expose
+    // ring-buffer leftovers from a prior frame to the shader.
+    std::memset(view_gpu_data.data(), 0, view_gpu_data.size_bytes());
 
     using erhe::graphics::write;
     using erhe::graphics::as_span;
-    write(view_gpu_data, program_interface.clip_from_world_offset, as_span(view.clip_from_world));
-    write(view_gpu_data, program_interface.viewport_offset,        as_span(view.viewport       ));
-    write(view_gpu_data, program_interface.fov_offset,             as_span(view.fov_sides      ));
+
+    // Populate cameras[0..views.size()-1]. Single-view = 1 entry.
+    // Multiview = N entries (must equal max_view_count for the
+    // multiview vertex shader to index correctly).
+    const std::size_t cam_stride = program_interface.view_camera_stride;
+    for (std::size_t i = 0; i < views.size(); ++i) {
+        const std::size_t base = i * cam_stride;
+        write(view_gpu_data, base + program_interface.view_camera_clip_from_world_offset,        as_span(views[i].clip_from_world       ));
+        write(view_gpu_data, base + program_interface.view_camera_viewport_offset,               as_span(views[i].viewport              ));
+        write(view_gpu_data, base + program_interface.view_camera_fov_offset,                    as_span(views[i].fov_sides             ));
+        write(view_gpu_data, base + program_interface.view_camera_view_position_in_world_offset, as_span(views[i].view_position_in_world));
+    }
+
+    const uint32_t view_count_uint      = static_cast<uint32_t>(views.size());
+    // stride_per_view is in vertices: each line emits 6 vertices. The
+    // SSBO holds view_count contiguous slabs of this size; the
+    // multiview vertex shader indexes
+    //     gl_VertexID + gl_ViewIndex * stride_per_view
+    // and the compute shader's loop over view.view_count writes one
+    // slab per iteration at out_triangle_index = v * (stride/3) + 2*i.
+    // Single-view: stride_per_view is unused (view_count = 1, only the
+    // v=0 iteration runs); zero is fine and the caller passes 0.
+    const uint32_t stride_per_view_uint = (views.size() >= 2)
+        ? static_cast<uint32_t>(6u * primitive_count_for_stride)
+        : 0u;
+    write(view_gpu_data, program_interface.view_count_offset,      as_span(view_count_uint     ));
+    write(view_gpu_data, program_interface.stride_per_view_offset, as_span(stride_per_view_uint));
+
     const bool  top_left  = (m_graphics_device.get_info().coordinate_conventions.framebuffer_origin == erhe::math::Framebuffer_origin::top_left);
     const float vp_y_sign = top_left ? -1.0f : 1.0f;
-    const float zero      = 0.0f;
     write(view_gpu_data, program_interface.vp_y_sign_offset, as_span(vp_y_sign));
-    write(view_gpu_data, program_interface.padding0_offset,  as_span(zero));
-    write(view_gpu_data, program_interface.padding1_offset,  as_span(zero));
-    write(view_gpu_data, program_interface.padding2_offset,  as_span(zero));
+    // padding0 already zero-filled by the memset above.
 
-    view_write_offset += program_interface.view_block->get_size_bytes();
-    view_buffer_range.bytes_written(view_write_offset);
+    view_buffer_range.bytes_written(view_block_size);
     view_buffer_range.close();
     return view_buffer_range;
 }
@@ -207,23 +236,22 @@ auto Debug_renderer_bucket::make_draw(std::size_t vertex_byte_count, std::size_t
 
     if (m_draws.empty() || m_start_new_draw) {
         m_start_new_draw = false;
-        m_draws.emplace_back(
-            buffer_client.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, acquire_byte_count),
-            erhe::graphics::Ring_buffer_range{},
-            0
-        );
+        m_draws.emplace_back(Debug_draw_entry{
+            .input_buffer_range = buffer_client.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, acquire_byte_count),
+            .draw_buffer_range  = erhe::graphics::Ring_buffer_range{},
+            .view_buffer_range  = erhe::graphics::Ring_buffer_range{},
+            .primitive_count    = 0
+        });
         ++m_view_spans.back().end;
         ERHE_VERIFY(m_view_spans.back().end == m_draws.size());
     }
     if (m_draws.back().input_buffer_range.get_writable_byte_count() < vertex_byte_count) {
-        m_draws.emplace_back(
-            buffer_client.acquire(
-                erhe::graphics::Ring_buffer_usage::CPU_write,
-                acquire_byte_count
-            ),
-            erhe::graphics::Ring_buffer_range{},
-            0
-        );
+        m_draws.emplace_back(Debug_draw_entry{
+            .input_buffer_range = buffer_client.acquire(erhe::graphics::Ring_buffer_usage::CPU_write, acquire_byte_count),
+            .draw_buffer_range  = erhe::graphics::Ring_buffer_range{},
+            .view_buffer_range  = erhe::graphics::Ring_buffer_range{},
+            .primitive_count    = 0
+        });
         ++m_view_spans.back().end;
         ERHE_VERIFY(m_view_spans.back().end == m_draws.size());
     }
@@ -256,7 +284,22 @@ void Debug_renderer_bucket::start_view(const View& view)
     }
     m_view_spans.push_back(
         {
-            .view  = view,
+            .views = std::vector<View>{view},
+            .begin = m_draws.size(),
+            .end   = m_draws.size()
+        }
+    );
+    m_start_new_draw = true;
+}
+
+void Debug_renderer_bucket::start_view(std::span<const View> views)
+{
+    if (!m_view_spans.empty()) {
+        ERHE_VERIFY(m_view_spans.back().end == m_draws.size());
+    }
+    m_view_spans.push_back(
+        {
+            .views = std::vector<View>{views.begin(), views.end()},
             .begin = m_draws.size(),
             .end   = m_draws.size()
         }
@@ -293,17 +336,36 @@ void Debug_renderer_bucket::dispatch_compute(erhe::graphics::Compute_command_enc
     const std::size_t triangle_vertex_stride = m_debug_renderer.get_program_interface().triangle_vertex_format.streams.front().stride;
 
     for (Debug_draw_view_span& view_span : m_view_spans) {
-        erhe::graphics::Ring_buffer_range view_buffer_range = update_view_buffer(view_span.view);
-        m_view_buffer.bind(encoder, view_buffer_range);
+        const bool        is_multiview = (view_span.views.size() >= 2);
+        const std::size_t view_count   = view_span.views.size();
+
+        // Single-view: bind one view UBO per span (same stride_per_view
+        // = 0 across all draws inside). Multiview: stride_per_view
+        // depends on the per-draw primitive_count, so bind a fresh UBO
+        // per draw and hold it on the Debug_draw_entry so render() can
+        // re-bind it on the multiview graphics path.
+        erhe::graphics::Ring_buffer_range view_buffer_range{};
+        if (!is_multiview) {
+            view_buffer_range = update_view_buffer(view_span.views, /*primitive_count_for_stride*/ 0);
+            m_view_buffer.bind(encoder, view_buffer_range);
+        }
 
         for (size_t i = view_span.begin; i < view_span.end; ++i) {
             Debug_draw_entry& draw = m_draws[i];
             ERHE_VERIFY(draw.primitive_count > 0);
 
+            if (is_multiview) {
+                draw.view_buffer_range = update_view_buffer(view_span.views, draw.primitive_count);
+                m_view_buffer.bind(encoder, draw.view_buffer_range);
+            }
+
             draw.input_buffer_range.close();
             m_vertex_ssbo_buffer->bind(encoder, draw.input_buffer_range);
 
-            const std::size_t triangle_byte_count = 6 * draw.primitive_count * triangle_vertex_stride;
+            // Triangle SSBO must hold view_count contiguous slabs of
+            // 6 * primitive_count vertices each. Single-view: 1 slab.
+            const std::size_t per_view_triangle_byte_count = 6 * draw.primitive_count * triangle_vertex_stride;
+            const std::size_t triangle_byte_count          = view_count * per_view_triangle_byte_count;
             // See note in joint_buffer.cpp.
             const std::size_t triangle_acquire_byte_count = std::max(
                 triangle_byte_count,
@@ -322,7 +384,9 @@ void Debug_renderer_bucket::dispatch_compute(erhe::graphics::Compute_command_enc
             draw.input_buffer_range.release();
             draw.compute_dispatched = true;
         }
-        view_buffer_range.release();
+        if (!is_multiview) {
+            view_buffer_range.release();
+        }
     }
 }
 
@@ -334,12 +398,95 @@ void Debug_renderer_bucket::release_buffers()
         } else {
             draw.input_buffer_range.release();
         }
+        // Multiview path holds a per-draw view UBO range across the
+        // compute and render encoders; release here once both have run.
+        if (draw.view_buffer_range.get_buffer() != nullptr) {
+            draw.view_buffer_range.release();
+        }
     }
     clear();
 }
 
-void Debug_renderer_bucket::render(erhe::graphics::Render_command_encoder& render_encoder, const erhe::graphics::Render_pass& render_pass, bool draw_hidden, bool draw_visible)
+void Debug_renderer_bucket::render(
+    erhe::graphics::Render_command_encoder& render_encoder,
+    const erhe::graphics::Render_pass&      render_pass,
+    bool                                    draw_hidden,
+    bool                                    draw_visible,
+    bool                                    multiview
+)
 {
+    if (m_use_compute && multiview) {
+        // Multiview compute path. The pipeline_visible/hidden caches
+        // are keyed on the single-view shader stages and vertex
+        // format; bypass them entirely and build a per-call
+        // Render_pipeline_state that uses the multiview graphics
+        // shader stages with vertex_input = nullptr (the multiview
+        // vertex shader reads triangles from the SSBO directly,
+        // indexed by gl_VertexID + gl_ViewIndex * stride_per_view).
+        const Debug_renderer_program_interface& pi = m_debug_renderer.get_program_interface();
+        if ((pi.multiview_graphics_shader_stages == nullptr) ||
+            !pi.multiview_graphics_shader_stages->is_valid())
+        {
+            return;
+        }
+
+        auto render_multiview_compute_draws = [&](erhe::graphics::Lazy_render_pipeline& pipeline) {
+            // Build a temp pipeline state mirroring the cached
+            // single-view pipeline (depth/stencil/blend etc. carry over)
+            // but with multiview shader stages and no vertex input.
+            // Note: pipeline.data is Render_pipeline_create_info (the
+            // Lazy cache key); it has no scissor field, so the temp
+            // Render_pipeline_data leaves scissor default-initialised.
+            erhe::graphics::Render_pipeline_state temp_state{
+                erhe::graphics::Render_pipeline_data{
+                    .debug_label          = pipeline.data.debug_label,
+                    .shader_stages        = pi.multiview_graphics_shader_stages.get(),
+                    .vertex_input         = nullptr,
+                    .input_assembly       = pipeline.data.input_assembly,
+                    .multisample          = pipeline.data.multisample,
+                    .viewport_depth_range = pipeline.data.viewport_depth_range,
+                    .rasterization        = pipeline.data.rasterization,
+                    .depth_stencil        = pipeline.data.depth_stencil,
+                    .color_blend          = pipeline.data.color_blend
+                }
+            };
+
+            render_encoder.set_bind_group_layout(pi.multiview_graphics_bind_group_layout.get());
+            render_encoder.set_render_pipeline_state(temp_state, pi.multiview_graphics_shader_stages.get());
+
+            for (Debug_draw_entry& draw : m_draws) {
+                if (!draw.compute_dispatched) {
+                    continue;
+                }
+                // Re-bind the per-draw view UBO carried across from
+                // dispatch_compute(): the multiview vertex shader reads
+                // stride_per_view from it, and the fragment shader
+                // reads view.cameras[c_view_index].viewport.xy.
+                m_view_buffer.bind(render_encoder, draw.view_buffer_range);
+                // Triangle SSBO read-only at binding 1. The same
+                // descriptor binding the compute side wrote to;
+                // pi.triangle_vertex_buffer_read_block declares it
+                // readonly so the multiview vertex shader can index
+                // into it without colliding with the compute's
+                // writeonly declaration.
+                m_triangle_vertex_buffer->bind(render_encoder, draw.draw_buffer_range);
+                render_encoder.draw_primitives(
+                    pipeline.data.input_assembly.primitive_topology,
+                    0,
+                    static_cast<uint32_t>(6 * draw.primitive_count)
+                );
+            }
+        };
+
+        if (draw_hidden && m_config.draw_hidden) {
+            render_multiview_compute_draws(m_pipeline_hidden);
+        }
+        if (draw_visible && m_config.draw_visible) {
+            render_multiview_compute_draws(m_pipeline_visible);
+        }
+        return;
+    }
+
     if (m_use_compute) {
         // Compute path: render triangles from compute-generated triangle vertex buffer
         auto render_compute_draws = [&](erhe::graphics::Lazy_render_pipeline& pipeline) {
@@ -387,7 +534,11 @@ void Debug_renderer_bucket::render(erhe::graphics::Render_command_encoder& rende
             render_encoder.set_bind_group_layout(m_debug_renderer.get_program_interface().bind_group_layout.get());
             render_encoder.set_render_pipeline(*p);
             for (Debug_draw_view_span& view_span : m_view_spans) {
-                erhe::graphics::Ring_buffer_range view_buffer_range = update_view_buffer(view_span.view);
+                // Non-compute path is single-view only (the multiview
+                // pipeline reads from the triangle SSBO produced by
+                // the compute path, so the simple-line / geometry
+                // fallback never goes through multiview).
+                erhe::graphics::Ring_buffer_range view_buffer_range = update_view_buffer(view_span.views, /*primitive_count_for_stride*/ 0);
                 m_view_buffer.bind(render_encoder, view_buffer_range);
 
                 for (size_t i = view_span.begin; i < view_span.end; ++i) {
