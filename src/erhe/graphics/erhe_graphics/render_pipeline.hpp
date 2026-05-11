@@ -29,6 +29,14 @@ public:
     // Pipeline state
     erhe::utility::Debug_label   debug_label          {};
     Shader_stages*               shader_stages        {nullptr};
+    // Optional multiview-compiled sibling shader stages. When non-null,
+    // Forward_renderer's multiview render path (Render_parameters with
+    // a non-empty multiview_views span) picks this variant instead of
+    // shader_stages, so a single Render_pipeline_create_info can serve
+    // both the editor's single-view passes and the headset's multiview
+    // pass without duplicating the rest of the pipeline state. Sourced
+    // from Programs::get_multiview(name) at construction.
+    Shader_stages*               multiview_shader_stages{nullptr};
     const Vertex_input_state*    vertex_input         {nullptr};
     Input_assembly_state         input_assembly       {};
     Multisample_state            multisample          {};

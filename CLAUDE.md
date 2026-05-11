@@ -126,6 +126,10 @@ The `editor` executable is the main application. Entry point is `src/editor/main
 
 Many systems have swappable backends selected at CMake configure time via `#ifdef ERHE_<SUBSYSTEM>_LIBRARY_<VALUE>` guards. This is especially true for physics, raytrace, window, and XR subsystems.
 
+## Quest device launches
+
+Do the install (`scripts\install_android.bat quest`) FIRST, while the user can keep their hands free. **Only after the APK is on the device**, prompt the user to put the headset on and pick up / activate the Touch controllers, and wait for explicit confirmation before running the launch (`adb shell am start -n org.libsdl.app.quest/...` or `scripts\install_android.bat quest run`). Quest's `RequiresControllersLaunchInterceptor` shows a system "Controllers Required" dialog that blocks the immersive app from coming to the foreground until controllers are detected as in-hand; launching while the headset is off the user's head wastes the attempt and we have to retry. Pure builds and installs (no app start) do not need the prompt.
+
 ## Python
 
 **IMPORTANT: On this Windows machine, always use the `py -3` launcher to run Python scripts. Never use `python` or `python3` - they resolve to the Microsoft Store stub and will fail.** This applies to all Python invocations: scripts, codegen, tools.

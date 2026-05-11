@@ -1,3 +1,4 @@
+#include "erhe_camera_view.glsl"
 #include "erhe_srgb.glsl"
 
 layout(location = 0) in vec2      v_texcoord;
@@ -9,9 +10,9 @@ layout(location = 7) in float     v_tangent_scale;
 
 void main() {
     vec3 view_position_in_world = vec3(
-        camera.cameras[0].world_from_node[3][0],
-        camera.cameras[0].world_from_node[3][1],
-        camera.cameras[0].world_from_node[3][2]
+        camera.cameras[c_view_index].world_from_node[3][0],
+        camera.cameras[c_view_index].world_from_node[3][1],
+        camera.cameras[c_view_index].world_from_node[3][2]
     );
 
     vec3  V = normalize(view_position_in_world - v_position.xyz);

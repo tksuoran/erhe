@@ -892,12 +892,24 @@ public:
             // m_app_context.current_command_buffer so its render_present()
             // can reseat the pointer after driving a swapchain frame for
             // the loading screen.
+            // OpenXR mode for Init_status_display is intentionally
+            // disabled here: parallel init's init_message callbacks
+            // fire from taskflow worker threads, but the OpenXR
+            // session APIs (xrPollEvent / xrWaitFrame / xrBeginFrame /
+            // xrEndFrame) are not thread-safe and must be driven from
+            // a single thread (the editor's main thread, post-init).
+            // Routing them through render_present_xr from worker
+            // threads would race with the main thread's session use
+            // once the editor enters its main loop. Until we have a
+            // single-threaded init path or a posted-message variant,
+            // OpenXR builds rely on adb logcat for init progress.
             Init_status_display init_status_display{
                 *m_graphics_device.get(),
                 m_app_context.current_command_buffer,
                 *m_window.get(),
                 *m_text_renderer.get(),
-                !m_app_context.OpenXR
+                !m_app_context.OpenXR,
+                nullptr
             };
 
             init_status_display.set_line(0, "Initializing erhe editor...");
@@ -989,7 +1001,8 @@ public:
                     *m_graphics_device.get(),
                     m_mesh_memory->edge_line_vertex_buffer,
                     nullptr,
-                    nullptr
+                    nullptr,
+                    xr_max_view_count
                 );
                 if (m_graphics_device->get_info().use_compute_shader) {
                     const std::filesystem::path shader_path = std::filesystem::path{"res"} / std::filesystem::path{"shaders"};
@@ -1001,7 +1014,8 @@ public:
                             .name             = "compute_before_content_line",
                             .struct_types     = {
                                 m_content_wide_line_renderer->get_edge_line_vertex_struct(),
-                                m_content_wide_line_renderer->get_triangle_vertex_struct()
+                                m_content_wide_line_renderer->get_triangle_vertex_struct(),
+                                m_content_wide_line_renderer->get_view_camera_struct()
                             },
                             .interface_blocks = {
                                 m_content_wide_line_renderer->get_edge_line_vertex_buffer_block(),
@@ -1046,10 +1060,51 @@ public:
                             m_content_wide_line_graphics_stages = std::make_unique<Shader_stages>(*m_graphics_device, std::move(prototype));
                         }
                     }
+                    // Multiview-compiled graphics shader pair. Compiled
+                    // only when the headset can drive multiview
+                    // (max_view_count >= 2); not used by single-view
+                    // viewports. Reads the triangle SSBO directly from
+                    // the vertex stage at gl_VertexID + gl_ViewIndex *
+                    // stride_per_view (see line_after_compute.vert
+                    // ERHE_MULTIVIEW branch) so a single draw inside
+                    // the headset's multiview render pass produces
+                    // correct stereo output for content edge lines.
+                    if (xr_max_view_count >= 2) {
+                        Shader_stages_create_info create_info{
+                            .name             = "content_line_after_compute_multiview",
+                            .struct_types     = {
+                                m_content_wide_line_renderer->get_triangle_vertex_struct(),
+                                m_content_wide_line_renderer->get_view_camera_struct(),
+                                &m_program_interface->camera_interface.camera_struct
+                            },
+                            .interface_blocks = {
+                                m_content_wide_line_renderer->get_triangle_vertex_buffer_read_block(),
+                                m_content_wide_line_renderer->get_view_block(),
+                                &m_program_interface->camera_interface.camera_block
+                            },
+                            .fragment_outputs = &m_content_wide_line_renderer->get_fragment_outputs(),
+                            // No vertex_format: the multiview vertex
+                            // shader reads the triangle SSBO instead of
+                            // input-assembler attributes.
+                            .no_vertex_input  = true,
+                            .shaders = {
+                                { Shader_type::vertex_shader,   shader_path / "line_after_compute.vert"        },
+                                { Shader_type::fragment_shader, shader_path / "content_line_after_compute.frag" }
+                            },
+                            .bind_group_layout = m_content_wide_line_renderer->get_multiview_graphics_bind_group_layout(),
+                        };
+                        create_info.enable_multiview(static_cast<uint32_t>(xr_max_view_count));
+                        Shader_stages_prototype prototype = build_shader_stages(*m_graphics_device, create_info);
+                        if (prototype.is_valid()) {
+                            m_content_wide_line_multiview_graphics_stages = std::make_unique<Shader_stages>(*m_graphics_device, std::move(prototype));
+                        }
+                    }
+
                     if (m_content_wide_line_compute_stages && m_content_wide_line_graphics_stages) {
                         m_content_wide_line_renderer->set_shader_stages(
                             m_content_wide_line_compute_stages.get(),
-                            m_content_wide_line_graphics_stages.get()
+                            m_content_wide_line_graphics_stages.get(),
+                            m_content_wide_line_multiview_graphics_stages.get()
                         );
                     }
                 }
@@ -1106,7 +1161,17 @@ public:
             }
             ERHE_TASK_FOOTER(
                 .name("App_rendering")
-                .succeed(mesh_memory_task)
+                // App_rendering's Pipeline_renderpasses constructor reads
+                // both the per-shader Reloadable_shader_stages references
+                // AND Programs::get_multiview(name) for the
+                // multiview_shader_stages siblings. The latter only
+                // returns non-null after Programs::load_programs has
+                // populated the multiview map; without this dependency
+                // parallel init can race -- App_rendering ends up with
+                // nullptr multiview pipelines and the headset multiview
+                // path silently falls back to single-view shaders for
+                // every material.
+                .succeed(mesh_memory_task, programs_load_task)
             );
 
             ERHE_TASK_HEADER(some_windows_task)
@@ -2003,6 +2068,7 @@ public:
     std::unique_ptr<erhe::scene_renderer::Content_wide_line_renderer> m_content_wide_line_renderer;
     std::unique_ptr<erhe::graphics::Shader_stages>                   m_content_wide_line_compute_stages;
     std::unique_ptr<erhe::graphics::Shader_stages>                   m_content_wide_line_graphics_stages;
+    std::unique_ptr<erhe::graphics::Shader_stages>                   m_content_wide_line_multiview_graphics_stages;
 
     std::unique_ptr<erhe::imgui::Imgui_windows>              m_imgui_windows;
     std::unique_ptr<App_scenes             >                 m_app_scenes;

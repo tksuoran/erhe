@@ -8,11 +8,17 @@
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/surface.hpp"
 #include "erhe_graphics/swapchain.hpp"
+#include "erhe_graphics/texture.hpp"
 #include "erhe_math/viewport.hpp"
 #include "erhe_renderer/text_renderer.hpp"
 #include "erhe_ui/rectangle.hpp"
 #include "erhe_verify/verify.hpp"
 #include "erhe_window/window.hpp"
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+#  include "erhe_xr/headset.hpp"
+#  include "erhe_xr/xr.hpp"
+#  include "erhe_xr/xr_session.hpp"
+#endif
 
 #include <glm/glm.hpp>
 
@@ -35,12 +41,14 @@ Init_status_display::Init_status_display(
     erhe::graphics::Command_buffer*&  init_command_buffer,
     erhe::window::Context_window&     window,
     erhe::renderer::Text_renderer&    text_renderer,
-    const bool                        enabled
+    const bool                        enabled,
+    erhe::xr::Headset*                headset
 )
     : m_graphics_device    {graphics_device}
     , m_init_command_buffer{init_command_buffer}
     , m_window             {window}
     , m_text_renderer      {text_renderer}
+    , m_headset            {headset}
     , m_enabled            {enabled}
 {
 }
@@ -61,6 +69,19 @@ void Init_status_display::render_present()
     if (!m_enabled) {
         return;
     }
+
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+    if (m_headset != nullptr) {
+        render_present_xr();
+        return;
+    }
+#endif
+
+    render_present_desktop();
+}
+
+void Init_status_display::render_present_desktop()
+{
     erhe::graphics::Surface* const surface = m_graphics_device.get_surface();
     if (surface == nullptr) {
         return;
@@ -176,5 +197,164 @@ void Init_status_display::render_present()
     new_init_cb.begin();
     m_init_command_buffer = &new_init_cb;
 }
+
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+void Init_status_display::render_present_xr()
+{
+    ERHE_VERIFY(m_headset != nullptr);
+
+    // Step 1: end + submit the currently-open init cb so we can drive an
+    // XR frame on top. xr_session::render_frame_multiview() takes a setup
+    // cb and ends + submits it itself, so we hand off m_init_command_buffer
+    // (already in recording state) and reseat the pointer to nullptr until
+    // we open a fresh one in Step 3.
+    ERHE_VERIFY(m_init_command_buffer != nullptr);
+    erhe::graphics::Command_buffer* const init_cb = m_init_command_buffer;
+    m_init_command_buffer = nullptr;
+
+    // Step 2: drive an XR frame. Pump events first so the runtime can
+    // transition the session through IDLE -> READY (which triggers the
+    // application's xrBeginSession). Then begin the frame; if the
+    // runtime says begin_ok && should_render, render a single layered
+    // multiview pass with the loading text overlaid in screen space.
+    // Otherwise call end_frame(rendered = false) to keep the runtime
+    // happy and submit init_cb on its own (no XR rendering this tick).
+    bool xr_rendered = false;
+    if (m_headset->poll_events()) {
+        const erhe::xr::Frame_timing timing = m_headset->begin_frame_();
+        if (timing.begin_ok) {
+            erhe::xr::Xr_session* const session = m_headset->get_xr_session();
+            if (timing.should_render && (session != nullptr) && session->is_multiview_enabled()) {
+                auto callback = [this](const erhe::xr::Render_views_frame& frame, erhe::graphics::Command_buffer& views_cb) -> bool {
+                    erhe::graphics::Texture* const color_texture         = frame.shared_color_texture;
+                    erhe::graphics::Texture* const depth_stencil_texture = frame.shared_depth_stencil_texture;
+                    if (color_texture == nullptr) {
+                        return false;
+                    }
+
+                    erhe::graphics::Render_pass_descriptor render_pass_descriptor{};
+                    render_pass_descriptor.color_attachments[0].texture       = color_texture;
+                    render_pass_descriptor.color_attachments[0].load_action   = erhe::graphics::Load_action::Clear;
+                    render_pass_descriptor.color_attachments[0].store_action  = erhe::graphics::Store_action::Store;
+                    render_pass_descriptor.color_attachments[0].usage_before  = erhe::graphics::Image_usage_flag_bit_mask::color_attachment;
+                    render_pass_descriptor.color_attachments[0].layout_before = erhe::graphics::Image_layout::color_attachment_optimal;
+                    render_pass_descriptor.color_attachments[0].usage_after   = erhe::graphics::Image_usage_flag_bit_mask::color_attachment;
+                    render_pass_descriptor.color_attachments[0].layout_after  = erhe::graphics::Image_layout::color_attachment_optimal;
+                    render_pass_descriptor.color_attachments[0].clear_value   = c_clear_color;
+                    if (depth_stencil_texture != nullptr) {
+                        render_pass_descriptor.depth_attachment.texture       = depth_stencil_texture;
+                        render_pass_descriptor.depth_attachment.load_action   = erhe::graphics::Load_action::Clear;
+                        render_pass_descriptor.depth_attachment.store_action  = erhe::graphics::Store_action::Store;
+                        render_pass_descriptor.depth_attachment.usage_before  = erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment;
+                        render_pass_descriptor.depth_attachment.layout_before = erhe::graphics::Image_layout::depth_stencil_attachment_optimal;
+                        render_pass_descriptor.depth_attachment.usage_after   = erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment;
+                        render_pass_descriptor.depth_attachment.layout_after  = erhe::graphics::Image_layout::depth_stencil_attachment_optimal;
+                    }
+                    render_pass_descriptor.render_target_width  = static_cast<int>(frame.width);
+                    render_pass_descriptor.render_target_height = static_cast<int>(frame.height);
+                    render_pass_descriptor.view_mask            = frame.view_mask;
+                    render_pass_descriptor.debug_label          = "Init_status_display (XR)";
+
+                    erhe::graphics::Render_pass            xr_render_pass{m_graphics_device, render_pass_descriptor};
+                    erhe::graphics::Render_command_encoder encoder = m_graphics_device.make_render_command_encoder(views_cb);
+                    {
+                        erhe::graphics::Scoped_render_pass scoped{xr_render_pass, views_cb};
+
+                        const int width  = static_cast<int>(frame.width);
+                        const int height = static_cast<int>(frame.height);
+                        encoder.set_viewport_rect(0, 0, width, height);
+                        encoder.set_scissor_rect (0, 0, width, height);
+
+                        const erhe::math::Viewport viewport{0, 0, width, height};
+
+                        const float       font_size   = m_text_renderer.font_size();
+                        const float       line_height = font_size * 1.5f;
+                        const float       center_y    = static_cast<float>(height) * 0.5f;
+                        const std::size_t line_count  = m_lines.size();
+
+                        const bool top_left = (
+                            m_graphics_device.get_info().coordinate_conventions.framebuffer_origin
+                            == erhe::math::Framebuffer_origin::top_left
+                        );
+                        const float dir = top_left ? +1.0f : -1.0f;
+
+                        for (std::size_t i = 0; i < line_count; ++i) {
+                            const std::string& line = m_lines[i];
+                            if (line.empty()) {
+                                continue;
+                            }
+                            const erhe::ui::Rectangle bounds = m_text_renderer.measure(line);
+                            const float text_width  = static_cast<float>(bounds.size().x);
+                            const float x           = (static_cast<float>(width) - text_width) * 0.5f;
+                            const float offset_from_center =
+                                (static_cast<float>(i) - (static_cast<float>(line_count - 1) * 0.5f)) * line_height;
+                            const float y = center_y + dir * (offset_from_center + line_height * 0.5f);
+                            m_text_renderer.print(glm::vec3{x, y, 0.0f}, c_text_color_abgr, line);
+                            log_startup->info("Init: {}", line);
+                        }
+
+                        m_text_renderer.render(encoder, xr_render_pass, viewport);
+                    }
+                    return true;
+                };
+                xr_rendered = m_headset->render_multiview(*init_cb, callback);
+                // render_frame_multiview() ends + submits init_cb and
+                // the views cb internally but leaves the graphics
+                // device frame in the in-flight state -- it is the
+                // caller's job to call Device::end_frame() to balance
+                // the wait_frame() / get_command_buffer() pair the
+                // editor opened before this constructor body ran.
+                const bool xr_end_ok = m_graphics_device.end_frame();
+                ERHE_VERIFY(xr_end_ok);
+            } else {
+                // Session not yet RUNNING (state is IDLE / SYNCHRONIZED /
+                // VISIBLE), or runtime says don't render this tick. The
+                // init_cb still has the rest-of-init's recorded work, so
+                // submit it on its own and call xrEndFrame with
+                // rendered = false. Without xrEndFrame after a successful
+                // xrBeginFrame the runtime would refuse the next
+                // begin_frame.
+                init_cb->end();
+                erhe::graphics::Command_buffer* init_cbs[] = { init_cb };
+                m_graphics_device.submit_command_buffers(std::span<erhe::graphics::Command_buffer* const>{init_cbs});
+                const bool init_end_ok = m_graphics_device.end_frame();
+                ERHE_VERIFY(init_end_ok);
+            }
+            m_headset->end_frame(xr_rendered);
+        } else {
+            // begin_frame failed (session not yet ready). Just submit
+            // init_cb and don't try to call end_frame -- pairing
+            // xrEndFrame with a failed xrBeginFrame would error.
+            init_cb->end();
+            erhe::graphics::Command_buffer* init_cbs[] = { init_cb };
+            m_graphics_device.submit_command_buffers(std::span<erhe::graphics::Command_buffer* const>{init_cbs});
+            const bool init_end_ok = m_graphics_device.end_frame();
+            ERHE_VERIFY(init_end_ok);
+        }
+    } else {
+        // poll_events failed. Same fallback as above.
+        init_cb->end();
+        erhe::graphics::Command_buffer* init_cbs[] = { init_cb };
+        m_graphics_device.submit_command_buffers(std::span<erhe::graphics::Command_buffer* const>{init_cbs});
+        const bool init_end_ok = m_graphics_device.end_frame();
+        ERHE_VERIFY(init_end_ok);
+    }
+
+    // Step 3: re-open the init device frame so the rest of init has a cb
+    // to record into.
+    const bool reopen_wait_ok = m_graphics_device.wait_frame();
+    ERHE_VERIFY(reopen_wait_ok);
+    erhe::graphics::Command_buffer& new_init_cb = m_graphics_device.get_command_buffer(0);
+    new_init_cb.begin();
+    m_init_command_buffer = &new_init_cb;
+}
+#else
+void Init_status_display::render_present_xr()
+{
+    // OpenXR support compiled out. Fall back to the desktop path so the
+    // class is usable in unit tests / null backend builds.
+    render_present_desktop();
+}
+#endif
 
 } // namespace editor
