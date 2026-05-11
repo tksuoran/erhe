@@ -43,6 +43,16 @@ struct Viewport_config_data;
 
 namespace editor {
 
+enum class Renderer_choice : int {
+    forward,
+    draw_list
+};
+
+static constexpr const char* c_renderer_choice_strings[] = {
+    "Forward Renderer",
+    "Draw List Renderer"
+};
+
 class App_message_bus;
 class App_rendering;
 class App_scenes;
@@ -112,6 +122,9 @@ public:
     void set_shader_stages_variant(Shader_stages_variant variant);
     auto get_shader_stages_variant() const -> Shader_stages_variant;
 
+    void set_renderer_choice(Renderer_choice choice);
+    auto get_renderer_choice() const -> Renderer_choice;
+
     [[nodiscard]] auto get_ini_label                       () const -> const char* { return m_ini_label; }
     [[nodiscard]] auto get_viewport_from_window            (glm::vec2 position_in_window) const -> glm::vec2;
     [[nodiscard]] auto project_to_viewport                 (glm::vec3 position_in_world ) const -> std::optional<glm::vec3>;
@@ -146,6 +159,7 @@ private:
 
     //Shader_stages_variant              m_shader_stages_variant{Shader_stages_variant::standard};
     Shader_stages_variant              m_shader_stages_variant{Shader_stages_variant::circular_brushed_metal};
+    Renderer_choice                    m_renderer_choice      {Renderer_choice::forward};
     bool                               m_is_scene_view_hovered{false};
     bool                               m_show_navigation_gizmo{true};
     bool                               m_relative_hold_enable{false};

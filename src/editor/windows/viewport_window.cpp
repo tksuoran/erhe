@@ -202,18 +202,12 @@ void Viewport_window::imgui()
     ImVec2 viewport_start = ImGui::GetCursorPos();
     imgui_viewport();
     const std::shared_ptr<Viewport_scene_view> viewport_scene_view = m_viewport_scene_view.lock();
-    if (viewport_scene_view && viewport_scene_view->get_show_navigation_gizmo()) {
+    std::shared_ptr<erhe::scene::Camera> camera = viewport_scene_view ? viewport_scene_view->get_camera() : nullptr;
+    erhe::scene::Node* node = camera ? camera->get_node() : nullptr;
+    if (viewport_scene_view && viewport_scene_view->get_show_navigation_gizmo() && (node != nullptr)) {
         ImGui::SetCursorPos(viewport_start);
         const ImVec2 after_toolbar_cursor_pos = ImGui::GetCursorPos();
 
-        std::shared_ptr<erhe::scene::Camera> camera = viewport_scene_view->get_camera();
-        if (!camera) {
-            return;
-        }
-        erhe::scene::Node* node = camera->get_node();
-        if (node == nullptr) {
-            return;
-        }
         erhe::scene::Trs_transform transform = node->world_from_node_transform();
         glm::quat camera_rotation = transform.get_rotation();
         glm::vec3 camera_position = transform.get_translation();

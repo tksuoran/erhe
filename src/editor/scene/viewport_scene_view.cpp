@@ -729,6 +729,16 @@ auto Viewport_scene_view::get_shader_stages_variant() const -> Shader_stages_var
     return m_shader_stages_variant;
 }
 
+void Viewport_scene_view::set_renderer_choice(Renderer_choice choice)
+{
+    m_renderer_choice = choice;
+}
+
+auto Viewport_scene_view::get_renderer_choice() const -> Renderer_choice
+{
+    return m_renderer_choice;
+}
+
 auto Viewport_scene_view::get_override_shader_stages() const -> const erhe::graphics::Shader_stages*
 {
     return m_context.programs->get_variant_shader_stages(m_shader_stages_variant);

@@ -46,6 +46,7 @@
 #include "asset_browser/asset_browser.hpp"
 #include "brushes/brush.hpp"
 #include "content_library/brdf_slice.hpp"
+#include "content_library/content_library_window.hpp"
 #include "developer/clipboard_window.hpp"
 #include "developer/commands_window.hpp"
 #include "developer/composer_window.hpp"
@@ -1262,15 +1263,19 @@ public:
 
                 const bool enable_physics = m_app_settings->physics.static_enable;
                 m_default_scene = std::make_shared<Scene_root>(
-                    m_imgui_renderer.get(),
-                    m_imgui_windows.get(),
-                    &m_app_context,
                     m_app_message_bus.get(),
                     content_library,
                     "Default Scene",
                     enable_physics
                 );
                 m_default_scene->register_to_editor_scenes(*m_app_scenes);
+                m_default_content_library_window = std::make_shared<Content_library_window>(
+                    *m_imgui_renderer.get(),
+                    *m_imgui_windows.get(),
+                    m_app_context,
+                    content_library,
+                    m_default_scene->get_name()
+                );
                 m_default_scene_browser = m_default_scene->make_browser_window(
                     *m_imgui_renderer.get(), *m_imgui_windows.get(), m_app_context, *m_app_settings.get()
                 );
@@ -1853,6 +1858,7 @@ public:
             m_mcp_server.reset();
         }
         m_default_scene_browser.reset();
+        m_default_content_library_window.reset();
         m_default_scene.reset();
     }
     void fill_app_context()
@@ -2199,8 +2205,9 @@ public:
 
     App_context                         m_app_context;
 
-    std::shared_ptr<Scene_root>         m_default_scene;
-    std::shared_ptr<Item_tree_window>   m_default_scene_browser;
+    std::shared_ptr<Scene_root>             m_default_scene;
+    std::shared_ptr<Content_library_window> m_default_content_library_window;
+    std::shared_ptr<Item_tree_window>       m_default_scene_browser;
 
     // No dependencies (constructors)
     std::unique_ptr<erhe::commands::Commands      > m_commands;

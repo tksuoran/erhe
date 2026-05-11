@@ -1,22 +1,29 @@
 #include "erhe_camera_view.glsl"
-                                   layout(location = 0) out vec4      v_position;
+
+layout(location = 0) out vec4      v_position;
+
 #ifdef ERHE_ATTRIBUTE_a_texcoord_0
 layout(location = 1) out vec2      v_texcoord;
 #endif
+
 #ifdef ERHE_ATTRIBUTE_a_color_0
 layout(location = 2) out vec4      v_color;
 #endif
+
 #ifdef ERHE_ATTRIBUTE_a_custom_1
 layout(location = 3) out vec2      v_aniso_control;
 #endif
+
 #if defined(ERHE_ATTRIBUTE_a_normal) && defined(ERHE_ATTRIBUTE_a_tangent)
 layout(location = 4) out vec3      v_T;
 layout(location = 5) out vec3      v_B;
 #endif
+
 #ifdef ERHE_ATTRIBUTE_a_normal
 layout(location = 6) out vec3      v_N;
 #endif
-                                   layout(location = 7) flat out uint v_material_index;
+
+layout(location = 7) flat out uint v_material_index;
 
 void main()
 {

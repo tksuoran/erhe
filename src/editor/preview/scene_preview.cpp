@@ -55,9 +55,6 @@ Scene_preview::Scene_preview(
     m_content_library = std::make_shared<Content_library>();
 
     m_scene_root_shared = std::make_shared<Scene_root>(
-        nullptr, // No Imgui_renderer
-        nullptr, // No Imgui_windows
-        nullptr, // No App_context
         nullptr, // Don't process editor messages
         m_content_library,
         "Material preview scene",

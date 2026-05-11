@@ -257,9 +257,6 @@ Tools::Tools(
     const auto tools_content_library = std::make_shared<Content_library>();
 
     m_scene_root = std::make_shared<Scene_root>(
-        nullptr,
-        nullptr,
-        nullptr,
         nullptr, // Do not process editor messages
         tools_content_library,
         "Tool scene",
