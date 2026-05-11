@@ -1,15 +1,15 @@
 #include "erhe_graphics/shader_monitor.hpp"
 
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
 # include "erhe_graphics/gl/gl_device.hpp"
 #endif
-#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+#if defined(ERHE_GRAPHICS_API_VULKAN)
 # include "erhe_graphics/vulkan/vulkan_device.hpp"
 #endif
-#if defined(ERHE_GRAPHICS_LIBRARY_METAL)
+#if defined(ERHE_GRAPHICS_API_METAL)
 # include "erhe_graphics/metal/metal_device.hpp"
 #endif
-#if defined(ERHE_GRAPHICS_LIBRARY_NONE)
+#if defined(ERHE_GRAPHICS_API_NONE)
 # include "erhe_graphics/null/null_device.hpp"
 #endif
 

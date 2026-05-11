@@ -6,13 +6,13 @@
 #include "erhe_graphics/spirv_cache.hpp"
 #include "erhe_file/file.hpp"
 
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
 # include "erhe_graphics/gl/gl_shader_stages.hpp"
 #endif
-#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+#if defined(ERHE_GRAPHICS_API_VULKAN)
 # include "erhe_graphics/vulkan/vulkan_shader_stages.hpp"
 #endif
-#if defined(ERHE_GRAPHICS_LIBRARY_METAL)
+#if defined(ERHE_GRAPHICS_API_METAL)
 # include "erhe_graphics/metal/metal_shader_stages.hpp"
 #endif
 
@@ -57,7 +57,7 @@ namespace erhe::graphics {
     }
 }
 
-#if 0 && defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if 0 && defined(ERHE_GRAPHICS_API_OPENGL)
 [[nodiscard]] auto to_gl(const ::EShLanguage glslang_stage) -> gl::Shader_type
 {
     switch (glslang_stage) {
@@ -225,7 +225,7 @@ auto Glslang_shader_stages::compile_shader(Device& device, const Shader_stage& s
     const char* const source_name   = main_name.c_str();
     glslang_shader.setStringsWithLengthsAndNames(&source_string, &source_length, &source_name, 1);
 
-#if defined(ERHE_GRAPHICS_LIBRARY_METAL) || defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+#if defined(ERHE_GRAPHICS_API_METAL) || defined(ERHE_GRAPHICS_API_VULKAN)
     glslang_shader.setEnvInput(glslang::EShSource::EShSourceGlsl, language, glslang::EShClient::EShClientVulkan, 100);
     glslang_shader.setEnvClient(glslang::EShClient::EShClientVulkan, glslang::EshTargetClientVersion::EShTargetVulkan_1_1);
 #else

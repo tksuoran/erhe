@@ -11,6 +11,7 @@
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/vulkan_external_creators.hpp"
 
+#include "erhe_utility/env.hpp"
 #include "erhe_window/window.hpp"
 
 #include <algorithm>
@@ -48,17 +49,10 @@ auto Device_impl_debug_report_callback(
     void*                                       user_data
 ) -> VkBool32;
 
-void set_env(const char* key, const char* value)
+void set_env_or_warn(const char* key, const char* value)
 {
-    int ret = -1;
-#if defined(ERHE_OS_WINDOWS)
-    std::string assignment = fmt::format("{}={}", key, value);
-    ret = _putenv(assignment.c_str());
-#elif defined(ERHE_OS_LINUX) || defined(ERHE_OS_MACOS)
-    ret = setenv(key, value, 1);
-#endif
-    if (ret != 0) {
-        log_context->warn("Setting {}={} environment variable failed with error code {}.", key, value, ret);
+    if (!erhe::utility::set_env(key, value)) {
+        log_context->warn("Setting {}={} environment variable failed.", key, value);
     }
 }
 
@@ -225,14 +219,14 @@ Device_impl::Device_impl(
 #if defined(ERHE_OS_WINDOWS)
         const bool renderdoc_attached = (GetModuleHandleA("renderdoc.dll") != nullptr);
         if (!renderdoc_attached) {
-            set_env("VK_LOADER_LAYERS_DISABLE", "~implicit~");
+            set_env_or_warn("VK_LOADER_LAYERS_DISABLE", "~implicit~");
         }
-        set_env("DISABLE_LAYER_NV_OPTIMUS_1", "1");
-        set_env("DISABLE_LAYER_NV_GR2608_1", "1");
-        set_env("DISABLE_VULKAN_OBS_CAPTURE", "1");
+        set_env_or_warn("DISABLE_LAYER_NV_OPTIMUS_1", "1");
+        set_env_or_warn("DISABLE_LAYER_NV_GR2608_1", "1");
+        set_env_or_warn("DISABLE_VULKAN_OBS_CAPTURE", "1");
 #endif
 #if defined(ERHE_OS_MACOS)
-        //set_env("VK_LOADER_LAYERS_DISABLE", "~implicit~");
+        //set_env_or_warn("VK_LOADER_LAYERS_DISABLE", "~implicit~");
         if (graphics_config.vulkan.use_kosmickrisp) {
             // KosmicKrisp ICD lives at <vulkan_sdk>/share/vulkan/icd.d/libkosmickrisp_icd.json
             // (LunarG SDK >= 1.4.335). Point the loader at it explicitly so it is used
@@ -271,7 +265,7 @@ Device_impl::Device_impl(
                     );
                 } else {
                     log_context->info("KosmicKrisp selected: VK_DRIVER_FILES={}", icd_path);
-                    set_env("VK_DRIVER_FILES", icd_path.c_str());
+                    set_env_or_warn("VK_DRIVER_FILES", icd_path.c_str());
                 }
             }
         }

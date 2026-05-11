@@ -90,7 +90,7 @@
 #   include "erhe_xr/xr_session.hpp"
 #   include "erhe_xr/xr_log.hpp"
 #   include "erhe_xr/xr_instance.hpp"
-#   if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+#   if defined(ERHE_GRAPHICS_API_VULKAN)
 #       include "erhe_graphics/vulkan_external_creators.hpp"
 #   endif
 #endif
@@ -101,7 +101,7 @@
 #include "erhe_file/file.hpp"
 #include "erhe_file/file_log.hpp"
 #include "erhe_geometry/geometry_log.hpp"
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
 # include "erhe_gl/gl_helpers.hpp"
 # include "erhe_gl/gl_log.hpp"
 # include "erhe_gl/wrapper_functions.hpp"
@@ -463,7 +463,7 @@ public:
         const bool end_frame_ok = m_graphics_device->end_frame();
         ERHE_VERIFY(end_frame_ok);
 
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
         //if (!m_app_context.OpenXR) {
         //    gl::bind_framebuffer(gl::Framebuffer_target::framebuffer, 0);
         //    if (m_app_context.use_sleep) {
@@ -532,11 +532,11 @@ public:
             .use_stencil       = m_app_context.OpenXR_mirror,
             .msaa_sample_count = m_app_context.OpenXR_mirror ? 0 : 0,
             .size              = glm::ivec2{1920, 1080},
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
             .title             = erhe::window::format_window_title("erhe editor by Timo Suoranta - OpenGL"),
-#elif defined(ERHE_GRAPHICS_LIBRARY_METAL)
+#elif defined(ERHE_GRAPHICS_API_METAL)
             .title             = erhe::window::format_window_title("erhe editor by Timo Suoranta - Metal"),
-#elif defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+#elif defined(ERHE_GRAPHICS_API_VULKAN)
             .title             = erhe::window::format_window_title("erhe editor by Timo Suoranta - Vulkan"),
 #else
             .title             = erhe::window::format_window_title("erhe editor by Timo Suoranta"),
@@ -548,7 +548,7 @@ public:
         configuration.fullscreen               = window_config.fullscreen;
         configuration.high_pixel_density       = window_config.high_pixel_density;
         configuration.framebuffer_transparency = window_config.use_transparency;
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
         configuration.gl_major                 = window_config.gl_major;
         configuration.gl_minor                 = window_config.gl_minor;
 # if defined(ERHE_OS_MACOS)
@@ -646,23 +646,9 @@ public:
             // OpenGL this only builds the instance; the session is created
             // later via headset->create_session(*device) on the main thread so
             // the GL context is still current.
-            erhe::xr::Xr_configuration xr_configuration{};
             if (m_app_context.OpenXR) {
                 ERHE_PROFILE_SCOPE("make xr::Headset (instance)");
-                xr_configuration = erhe::xr::Xr_configuration{
-                    .swapchain_depth   = m_editor_settings.headset.swapchain_depth,
-                    .debug             = m_editor_settings.headset.debug,
-                    .api_dump          = m_editor_settings.headset.api_dump,
-                    .validation        = m_editor_settings.headset.validation,
-                    .quad_view         = m_editor_settings.headset.quad_view,
-                    .depth             = m_editor_settings.headset.depth,
-                    .visibility_mask   = m_editor_settings.headset.visibility_mask,
-                    .hand_tracking     = m_editor_settings.headset.hand_tracking,
-                    .composition_alpha = m_editor_settings.headset.composition_alpha,
-                    .mirror_mode       = m_app_context.OpenXR_mirror,
-                    .passthrough_fb    = m_editor_settings.headset.passthrough_fb
-                };
-                m_headset = std::make_unique<erhe::xr::Headset>(*m_window.get(), xr_configuration);
+                m_headset = std::make_unique<erhe::xr::Headset>(*m_window.get(), m_editor_settings.headset);
                 if (m_headset->get_xr_instance() == nullptr) {
                     log_headset->info("OpenXR instance not available. Disabling OpenXR.");
                     m_app_context.OpenXR = false;
@@ -671,7 +657,7 @@ public:
             }
 #endif
 
-#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN) && defined(ERHE_XR_LIBRARY_OPENXR)
+#if defined(ERHE_GRAPHICS_API_VULKAN) && defined(ERHE_XR_LIBRARY_OPENXR)
             // Fetch XR-owned Vulkan creators if an Xr_instance is available, so
             // that the Vulkan graphics device creates its instance / physical
             // device / device via the OpenXR runtime.
@@ -1568,13 +1554,13 @@ public:
             ERHE_FATAL("editor initialization failed");
         }
 
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
         m_window->make_current();
 #endif
         m_graphics_device->on_thread_enter();
 
         ERHE_PROFILE_FUNCTION();
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
         ERHE_PROFILE_GPU_CONTEXT
 #endif
 
@@ -1602,7 +1588,7 @@ public:
         // Notify ImGui renderer about current font settings
         m_imgui_renderer->on_font_config_changed(m_app_settings->imgui);
 
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
         if (m_graphics_device->get_info().use_clip_control) {
             gl::clip_control(gl::Clip_control_origin::lower_left, gl::Clip_control_depth::zero_to_one);
         }
@@ -2011,7 +1997,7 @@ public:
                 m_close_requested = true;
             }
 
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
             ERHE_PROFILE_FRAME_END
 #endif // TODO
         }
@@ -2183,7 +2169,7 @@ void run_editor()
 
     {
         ERHE_PROFILE_SCOPE("initialize logging");
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
         gl::initialize_logging();
         gl_helpers::initialize_logging();
 #endif

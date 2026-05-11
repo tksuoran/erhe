@@ -1,6 +1,6 @@
 #include "erhe_graphics/fragment_outputs.hpp"
 
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
 # include "erhe_gl/command_info.hpp"
 # include "erhe_gl/enum_string_functions.hpp"
 # include "erhe_gl/wrapper_enums.hpp"
@@ -224,7 +224,7 @@ auto Shader_stages_create_info::final_source(
         sb << "#define ERHE_HAS_CLIP_DISTANCE 1\n";
     }
 
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
     if (graphics_device.get_info().use_shader_storage_buffers && (graphics_device.get_info().gl_version < 430)) {
         ERHE_VERIFY(gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shader_storage_buffer_object));
         sb << "#extension GL_ARB_shader_storage_buffer_object : enable\n";
@@ -279,7 +279,7 @@ auto Shader_stages_create_info::final_source(
     }
     sb << "\n";
 #endif
-#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+#if defined(ERHE_GRAPHICS_API_VULKAN)
     if (graphics_device.get_info().use_multi_draw_indirect_core) {
         sb << "#define ERHE_DRAW_ID gl_DrawID\n";
     } else {
@@ -344,7 +344,7 @@ auto Shader_stages_create_info::final_source(
         sb << "#define ERHE_HAS_STORAGE_INPUT_OUTPUT_16 1\n";
     }
 #endif
-#if defined(ERHE_GRAPHICS_LIBRARY_METAL)
+#if defined(ERHE_GRAPHICS_API_METAL)
     // Metal does not support multi-draw indirect / gl_DrawID; emulate with push constant.
     // Only emit for vertex/compute -- fragment shaders receive draw ID via interpolated varying.
     if (shader.type == Shader_type::vertex_shader || shader.type == Shader_type::compute_shader) {

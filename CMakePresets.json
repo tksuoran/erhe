@@ -31,7 +31,7 @@
             "hidden":   true,
             "inherits": "Base",
             "cacheVariables": {
-                "ERHE_GRAPHICS_LIBRARY": "opengl",
+                "ERHE_GRAPHICS_API": "opengl",
                 "ERHE_SPIRV":            "OFF"
             }
         },
@@ -68,7 +68,7 @@
             "hidden":   true,
             "inherits": "Base",
             "cacheVariables": {
-                "ERHE_GRAPHICS_LIBRARY": "vulkan",
+                "ERHE_GRAPHICS_API": "vulkan",
                 "ERHE_SPIRV":            "ON"
             }
         },
@@ -91,7 +91,7 @@
             "hidden":   true,
             "inherits": "Base",
             "cacheVariables": {
-                "ERHE_GRAPHICS_LIBRARY": "metal",
+                "ERHE_GRAPHICS_API": "metal",
                 "ERHE_SPIRV":            "ON"
             },
             "condition": {

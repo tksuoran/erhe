@@ -71,7 +71,7 @@ Currently ERHE_SPIRV is only forced on for Metal. Vulkan also needs SPIR-V
 compilation via glslang. Add the same force-enable for Vulkan:
 
 ```cmake
-if (${ERHE_GRAPHICS_LIBRARY} STREQUAL "metal" OR ${ERHE_GRAPHICS_LIBRARY} STREQUAL "vulkan")
+if (${ERHE_GRAPHICS_API} STREQUAL "metal" OR ${ERHE_GRAPHICS_API} STREQUAL "vulkan")
     set(ERHE_SPIRV "ON" CACHE STRING "Enable SPIR-V" FORCE)
 endif ()
 ```
@@ -81,7 +81,7 @@ This ensures glslang is fetched and linked, and `ERHE_SPIRV` is defined.
 ### 1.2 Verify editor GL calls are guarded (no changes needed)
 
 All direct `gl::` calls in `src/editor/` are already wrapped with
-`#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)`:
+`#if defined(ERHE_GRAPHICS_API_OPENGL)`:
 
 - `app_rendering.cpp:368` -- `gl::clip_control()`
 - `editor.cpp:1255-1260` -- `gl::clip_control()`, `gl::enable(framebuffer_srgb)`
@@ -582,7 +582,7 @@ Fixes applied while running executables and eliminating Vulkan validation layer 
 | 37 | 2026-04-05 | editor | (shader) textured.frag missing Vulkan path | Editor and hextiles `textured.frag` referenced `s_texture[]` in the non-bindless `#else` branch. Added `#elif ERHE_VULKAN_DESCRIPTOR_INDEXING` paths using `erhe_texture_heap[]`. | `editor/res/shaders/textured.frag`, `hextiles/res/shaders/textured.frag` |
 | 38 | 2026-04-05 | editor | (assert) compile_shaders/link_program state | Vulkan shader prototype constructor compiles and links eagerly, but editor's `load_programs()` calls `compile_shaders()` and `link_program()` again. Changed both to return early when already completed instead of asserting. | `vulkan_shader_stages_prototype.cpp` |
 | 39 | 2026-04-05 | editor | VUID-VkShaderModuleCreateInfo-pCode-08740 | `sampleRateShading` feature needed for `gl_SampleID` in `circular_brushed_metal.frag` and `depth_only.frag`. `geometryShader` feature needed for `gl_PrimitiveID` in `id.frag` (SPIR-V requires Geometry capability even without geometry shader stage). Enabled both. | `vulkan_device_init.cpp` |
-| 40 | 2026-04-05 | editor | VUID-VkShaderModuleCreateInfo-pCode-08740 | Geometry shader `.geom` files auto-discovered by `Program_interface::make_prototype()`. Skipped with `#if !defined(ERHE_GRAPHICS_LIBRARY_VULKAN)`. | `program_interface.cpp` |
+| 40 | 2026-04-05 | editor | VUID-VkShaderModuleCreateInfo-pCode-08740 | Geometry shader `.geom` files auto-discovered by `Program_interface::make_prototype()`. Skipped with `#if !defined(ERHE_GRAPHICS_API_VULKAN)`. | `program_interface.cpp` |
 | 41 | 2026-04-05 | editor | VUID-VkImageViewCreateInfo-imageViewType-04973 | Thumbnails texture created as `texture_2d` with 200 array layers but view type was `VK_IMAGE_VIEW_TYPE_2D`. Auto-select `_ARRAY` variant in `to_vk_image_view_type()` when `array_layer_count > 1`. | `vulkan_texture.cpp` |
 | 42 | 2026-04-05 | editor | VUID-VkBufferImageCopy-bufferRowLength-09101 | Dummy texture creation hardcoded `src_bytes_per_row = 2*4` regardless of format. For `format_16_vec4_float` (8 bytes/pixel), `bufferRowLength` computed as 1 texel < width 2. Fixed to use `get_format_size_bytes()`. | `vulkan_device.cpp` |
 | 43 | 2026-04-05 | editor | VUID-VkImageMemoryBarrier-oldLayout-01213 | Shadowmap and scene preview textures missing `transfer_dst` usage flag for `clear_texture()`. Added to shadow_render_node.cpp and scene_preview.cpp. | `shadow_render_node.cpp`, `scene_preview.cpp` |

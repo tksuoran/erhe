@@ -496,6 +496,7 @@ set(_config_out  "${CMAKE_CURRENT_BINARY_DIR}/config/generated")
 set(_gfx_config_defs "${CMAKE_SOURCE_DIR}/src/erhe/graphics/definitions")
 set(_renderer_defs   "${CMAKE_SOURCE_DIR}/src/erhe/renderer/definitions")
 set(_scene_renderer_defs "${CMAKE_SOURCE_DIR}/src/erhe/scene_renderer/definitions")
+set(_xr_config_defs "${CMAKE_SOURCE_DIR}/src/erhe/xr/definitions")
 
 erhe_codegen_generate(
     TARGET          ${_target}
@@ -505,13 +506,12 @@ erhe_codegen_generate(
         "${_gfx_config_defs}:erhe_graphics/generated/"
         "${_renderer_defs}:erhe_renderer/generated/"
         "${_scene_renderer_defs}:erhe_scene_renderer/generated/"
+        "${_xr_config_defs}:erhe_xr/generated/"
     DEFINITIONS
         "${_config_defs}/camera_controls_config.py"
         "${_config_defs}/developer_config.py"
         "${_config_defs}/editor_settings_config.py"
         "${_config_defs}/grid_config.py"
-        "${_config_defs}/headset_config.py"
-        "${_config_defs}/perf_settings_level.py"
         "${_config_defs}/hotbar_config.py"
         "${_config_defs}/inventory_config.py"
         "${_config_defs}/hud_config.py"
@@ -547,11 +547,6 @@ set(_config_sources
     ${_config_out}/grid_config.hpp
     ${_config_out}/grid_config_serialization.hpp
     ${_config_out}/grid_config.cpp
-    ${_config_out}/headset_config.hpp
-    ${_config_out}/headset_config_serialization.hpp
-    ${_config_out}/headset_config.cpp
-    ${_config_out}/perf_settings_level.hpp
-    ${_config_out}/perf_settings_level.cpp
     ${_config_out}/hotbar_config.hpp
     ${_config_out}/hotbar_config_serialization.hpp
     ${_config_out}/hotbar_config.cpp
@@ -667,6 +662,16 @@ set_source_files_properties(${_scene_renderer_ser_sources} PROPERTIES GENERATED 
 target_sources(${_target} PRIVATE ${_scene_renderer_ser_sources})
 source_group("codegen generated/scene_renderer" FILES ${_scene_renderer_ser_sources})
 
+set(_xr_gen "${CMAKE_BINARY_DIR}/src/erhe/xr/erhe_xr/generated")
+set(_xr_ser_sources
+    ${_xr_gen}/headset_config_serialization.hpp
+    ${_xr_gen}/headset_config.cpp
+    ${_xr_gen}/perf_settings_level.cpp
+)
+set_source_files_properties(${_xr_ser_sources} PROPERTIES GENERATED TRUE)
+target_sources(${_target} PRIVATE ${_xr_ser_sources})
+source_group("codegen generated/xr" FILES ${_xr_ser_sources})
+
 target_link_libraries(
     ${_target}
     PRIVATE
@@ -743,8 +748,12 @@ endif ()
 if (${ERHE_AUDIO_LIBRARY} STREQUAL "miniaudio")
     target_link_libraries(${_target} PRIVATE miniaudio)
 endif ()
+# erhe::xr is always linked because it owns Headset_config (used by editor
+# settings serialization regardless of XR backend). The OpenXR loader is only
+# linked when the OpenXR backend is enabled.
+target_link_libraries(${_target} PRIVATE erhe::xr)
 if (${ERHE_XR_LIBRARY} STREQUAL "openxr")
-    target_link_libraries(${_target} PRIVATE erhe_xr openxr_loader)
+    target_link_libraries(${_target} PRIVATE openxr_loader)
 endif ()
 target_include_directories(${_target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR} ${_codegen_out})
 

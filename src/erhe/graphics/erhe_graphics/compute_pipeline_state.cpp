@@ -1,12 +1,12 @@
 #include "erhe_graphics/compute_pipeline_state.hpp"
 
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
 #   include "erhe_graphics/gl/gl_compute_pipeline.hpp"
-#elif defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+#elif defined(ERHE_GRAPHICS_API_VULKAN)
 #   include "erhe_graphics/vulkan/vulkan_compute_pipeline.hpp"
-#elif defined(ERHE_GRAPHICS_LIBRARY_METAL)
+#elif defined(ERHE_GRAPHICS_API_METAL)
 #   include "erhe_graphics/metal/metal_compute_pipeline.hpp"
-#elif defined(ERHE_GRAPHICS_LIBRARY_NONE)
+#elif defined(ERHE_GRAPHICS_API_NONE)
 #   include "erhe_graphics/null/null_compute_pipeline.hpp"
 #endif
 

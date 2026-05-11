@@ -33,7 +33,7 @@
 #include "erhe_verify/verify.hpp"
 #include "erhe_window/window_log.hpp"
 
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
 # include "erhe_gl/gl_log.hpp"
 #endif
 
@@ -131,7 +131,7 @@ Rendering_test::Rendering_test(std::string_view config_path)
     m_last_window_width  = m_window.get_width();
     m_last_window_height = m_window.get_height();
 
-#if !defined(ERHE_GRAPHICS_LIBRARY_METAL)
+#if !defined(ERHE_GRAPHICS_API_METAL)
     m_window.register_redraw_callback(
         [this](){
             if (!m_first_frame_rendered || m_in_tick.load()) {

@@ -531,11 +531,7 @@ auto Xr_session::create_swapchains() -> bool
     // doc/vulkan_backend.md). On GL the runtime accepts the depth format
     // and the editor uses the resulting depth texture for the projection
     // layer's depth info.
-#if defined(XR_USE_GRAPHICS_API_VULKAN)
-    constexpr bool create_depth_stencil_swapchain = true;
-#else
-    constexpr bool create_depth_stencil_swapchain = true;
-#endif
+    bool create_depth_stencil_swapchain = m_instance.get_configuration().swapchain_depth;
 
     const auto& views = m_instance.get_xr_view_configuration_views();
 

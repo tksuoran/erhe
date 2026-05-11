@@ -7,7 +7,7 @@
 # if defined(XR_USE_PLATFORM_WIN32)
 #   include <unknwn.h>
 # endif
-# if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+# if defined(ERHE_GRAPHICS_API_VULKAN)
 #  include "volk.h"
 # endif
 # if defined(XR_USE_PLATFORM_ANDROID)

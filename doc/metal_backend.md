@@ -15,7 +15,7 @@ scripts/configure_xcode_metal.sh
 cmake --build build_xcode_metal --target editor --config Debug
 ```
 
-CMake option: `ERHE_GRAPHICS_LIBRARY=metal`, which defines `ERHE_GRAPHICS_LIBRARY_METAL`. The metal-cpp headers are fetched via CPM from `bkaradzic/metal-cpp`.
+CMake option: `ERHE_GRAPHICS_API=metal`, which defines `ERHE_GRAPHICS_API_METAL`. The metal-cpp headers are fetched via CPM from `bkaradzic/metal-cpp`.
 
 ## Architecture
 

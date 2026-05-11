@@ -1,8 +1,8 @@
 #include "xr/headset_view.hpp"
 
 #include "config/generated/editor_settings_config.hpp"
-#include "config/generated/headset_config.hpp"
-#include "config/generated/perf_settings_level.hpp"
+#include "erhe_xr/generated/headset_config.hpp"
+#include "erhe_xr/generated/perf_settings_level.hpp"
 #include "config/generated/viewport_config_data.hpp"
 #include "app_context.hpp"
 #include "erhe_imgui/windows/performance_window.hpp"
@@ -852,7 +852,7 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
                 ///     dst_x0, dst_y0, dst_x1, dst_y1,
                 ///     gl::Clear_buffer_mask::color_buffer_bit, gl::Blit_framebuffer_filter::nearest
                 /// );
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
                 m_context_window.swap_buffers();
 #endif // TODO
             }

@@ -51,7 +51,7 @@ set_option(ERHE_AUDIO_LIBRARY              "Audio library. Either miniaudio or n
 set_option(ERHE_FONT_RASTERIZATION_LIBRARY "Font rasterization library. Either freetype or none"                        "freetype" "freetype;none")
 set_option(ERHE_GLTF_LIBRARY               "GLTF library. Either fastgltf or none"                                      "fastgltf" "fastgltf;none")
 set_option(ERHE_GUI_LIBRARY                "GUI library. Either imgui or none"                                          "imgui"    "imgui;none")
-set_option(ERHE_GRAPHICS_LIBRARY           "Graphics library to use with erhe. Either opengl, vulkan, metal or none"    "opengl"   "opengl;vulkan;metal;none")
+set_option(ERHE_GRAPHICS_API           "Graphics library to use with erhe. Either opengl, vulkan, metal or none"    "opengl"   "opengl;vulkan;metal;none")
 set_option(ERHE_PHYSICS_LIBRARY            "Physics library to use with erhe. Either jolt or none"                      "jolt"     "jolt;none")
 set_option(ERHE_PROFILE_LIBRARY            "Profile library to use with erhe. Either nvtx, superluminal, tracy or none" "none"     "nvtx;superluminal;tracy;none")
 set_option(ERHE_RAYTRACE_LIBRARY           "Raytrace library to use with erhe. Either embree, bvh, tinybvh or none"    "bvh"      "embree;bvh;tinybvh;none")
@@ -113,10 +113,18 @@ endif ()
 # OpenXR-SDK loader (already CPM-fetched for desktop) builds cleanly on the
 # NDK toolchain and produces a libopenxr_loader.so packaged into the APK.
 if (ERHE_TARGET_OS_ANDROID)
-    set(ERHE_GRAPHICS_LIBRARY "vulkan"  CACHE STRING "" FORCE)
+    set(ERHE_GRAPHICS_API "vulkan"  CACHE STRING "" FORCE)
     set(ERHE_WINDOW_LIBRARY   "sdl"     CACHE STRING "" FORCE)
     if (ERHE_ANDROID_FLAVOR STREQUAL "quest")
         set(ERHE_XR_LIBRARY "openxr" CACHE STRING "" FORCE)
+        # Surfaces an ERHE_TARGET_QUEST_STANDALONE compile definition for
+        # code paths that need to work around behaviours specific to the
+        # Quest's on-device OpenXR runtime (Meta's libvrapiimpl.so). The
+        # define MUST NOT cover Quest builds reached via Meta Quest Link
+        # / Air Link or any desktop OpenXR runtime; those run as desktop
+        # builds where this CMake branch does not apply, so no extra
+        # guard is needed.
+        add_compile_definitions(ERHE_TARGET_QUEST_STANDALONE=1)
     else ()
         set(ERHE_XR_LIBRARY "none"   CACHE STRING "" FORCE)
     endif ()
@@ -254,7 +262,7 @@ CPMAddPackage(
 add_definitions(-DGLM_ENABLE_EXPERIMENTAL)
 
 # Force ERHE_SPIRV on for Metal and Vulkan before the glslang fetch
-if (${ERHE_GRAPHICS_LIBRARY} STREQUAL "metal" OR ${ERHE_GRAPHICS_LIBRARY} STREQUAL "vulkan")
+if (${ERHE_GRAPHICS_API} STREQUAL "metal" OR ${ERHE_GRAPHICS_API} STREQUAL "vulkan")
     set(ERHE_SPIRV "ON" CACHE STRING "Enable SPIR-V" FORCE)
 endif ()
 
@@ -293,15 +301,15 @@ if (ERHE_SPIRV)
     add_definitions(-DERHE_SPIRV)
 endif ()
 
-if (${ERHE_GRAPHICS_LIBRARY} STREQUAL "opengl")
+if (${ERHE_GRAPHICS_API} STREQUAL "opengl")
     message(STATUS "Erhe configured to use OpenGL as graphics API.")
     set(ERHE_GRAPHICS_API_OPENGL TRUE)
-    add_definitions(-DERHE_GRAPHICS_LIBRARY_OPENGL)
+    add_definitions(-DERHE_GRAPHICS_API_OPENGL)
     find_package(OpenGL REQUIRED)
-elseif (${ERHE_GRAPHICS_LIBRARY} STREQUAL "vulkan")
+elseif (${ERHE_GRAPHICS_API} STREQUAL "vulkan")
     message(STATUS "Erhe configured to use vulkan as graphics API.")
     set(ERHE_GRAPHICS_API_VULKAN TRUE)
-    add_definitions(-DERHE_GRAPHICS_LIBRARY_VULKAN)
+    add_definitions(-DERHE_GRAPHICS_API_VULKAN)
     add_definitions(-DVK_NO_PROTOTYPES)
     CPMAddPackage(
         NAME              Vulkan-Headers
@@ -326,13 +334,13 @@ elseif (${ERHE_GRAPHICS_LIBRARY} STREQUAL "vulkan")
         GIT_SHALLOW       TRUE
         GITHUB_REPOSITORY zeux/volk
     )
-elseif (${ERHE_GRAPHICS_LIBRARY} STREQUAL "metal")
+elseif (${ERHE_GRAPHICS_API} STREQUAL "metal")
     if (NOT APPLE)
         message(FATAL_ERROR "Metal backend is only available on Apple platforms (macOS, iOS)")
     endif()
     message(STATUS "Erhe configured to use Metal as graphics API.")
     set(ERHE_GRAPHICS_API_METAL TRUE)
-    add_definitions(-DERHE_GRAPHICS_LIBRARY_METAL)
+    add_definitions(-DERHE_GRAPHICS_API_METAL)
     CPMAddPackage(
         NAME              metal-cpp
         GITHUB_REPOSITORY bkaradzic/metal-cpp
@@ -345,10 +353,10 @@ elseif (${ERHE_GRAPHICS_LIBRARY} STREQUAL "metal")
         GIT_TAG           vulkan-sdk-1.4.341.0
         GIT_SHALLOW       TRUE
     )
-elseif (${ERHE_GRAPHICS_LIBRARY} STREQUAL "none")
+elseif (${ERHE_GRAPHICS_API} STREQUAL "none")
     message(STATUS "Erhe configured to use null graphics backend (headless).")
     set(ERHE_GRAPHICS_API_NONE TRUE)
-    add_definitions(-DERHE_GRAPHICS_LIBRARY_NONE)
+    add_definitions(-DERHE_GRAPHICS_API_NONE)
 endif ()
 
 CPMAddPackage(
@@ -687,12 +695,24 @@ else ()
 endif ()
 
 if (${ERHE_XR_LIBRARY} STREQUAL "openxr")
+    # Patch the core_validation API layer's codegen so that aliased
+    # XrStructureType values (e.g. XR_TYPE_GRAPHICS_BINDING_VULKAN2_KHR
+    # = XR_TYPE_GRAPHICS_BINDING_VULKAN_KHR) accept any one of the
+    # alias-introducing extensions, not just the canonical one. Without
+    # this, enabling only XR_KHR_vulkan_enable2 and passing
+    # XrGraphicsBindingVulkan2KHR triggers a spurious
+    # VUID-xrStructureTypeToString-value-parameter that any "warnings
+    # are fatal" debug callback escalates to an abort. See the patch
+    # file's header for the full write-up. Drop this once the upstream
+    # fix lands in OpenXR-SDK-Source.
     CPMAddPackage(
         NAME              OpenXR-SDK
-        VERSION           1.1.58
-        GIT_TAG           release-1.1.58
+        VERSION           1.1.59
+        GIT_TAG           release-1.1.59
         GIT_SHALLOW       TRUE
         GITHUB_REPOSITORY KhronosGroup/OpenXR-SDK-Source
+        PATCHES
+            "${CMAKE_CURRENT_LIST_DIR}/cmake/patches/openxr-sdk-validation-accept-aliased-extensions.patch"
         OPTIONS
             "BUILD_API_LAYERS ON"
                  "BUILD_TESTS OFF"

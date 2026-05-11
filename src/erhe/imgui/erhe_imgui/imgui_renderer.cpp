@@ -5,7 +5,7 @@
 #include "erhe_imgui/imgui_host.hpp"
 
 // For user clip enable/disable
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
 # include "erhe_gl/wrapper_enums.hpp"
 # include "erhe_gl/wrapper_functions.hpp"
 #endif
@@ -968,7 +968,7 @@ void Imgui_renderer::update_texture(ImTextureData* tex, erhe::graphics::Command_
         log_imgui->trace("created texture {}", fmt::ptr(texture.get()));
 
         // Upload pixel data
-#if defined(ERHE_OS_MACOS) && defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_OS_MACOS) && defined(ERHE_GRAPHICS_API_OPENGL)
         // macOS GL driver has broken glCopyBufferSubData; use direct upload
         command_buffer.upload_to_texture(
             *texture.get(),
@@ -1031,7 +1031,7 @@ void Imgui_renderer::update_texture(ImTextureData* tex, erhe::graphics::Command_
         ERHE_VERIFY(texture != nullptr);
         log_imgui->trace("updating texture {}", fmt::ptr(texture));
 
-#if defined(ERHE_OS_MACOS) && defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_OS_MACOS) && defined(ERHE_GRAPHICS_API_OPENGL)
         auto update_rect = [&command_buffer, texture, tex](ImTextureRect& r) -> void
         {
             const std::size_t  src_offset = r.x * tex->BytesPerPixel + r.y * tex->GetPitch();
@@ -1180,7 +1180,7 @@ void Imgui_renderer::render_draw_data(
     using erhe::graphics::write;
     constexpr erhe::graphics::Ring_buffer_usage usage{erhe::graphics::Ring_buffer_usage::CPU_write};
 
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
     gl::enable(gl::Enable_cap::clip_distance0);
     gl::enable(gl::Enable_cap::clip_distance1);
     gl::enable(gl::Enable_cap::clip_distance2);
@@ -1469,7 +1469,7 @@ void Imgui_renderer::render_draw_data(
         } // outer loop going throught batches of commands
     } // for all cmd lists
 
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
     gl::disable(gl::Enable_cap::clip_distance0);
     gl::disable(gl::Enable_cap::clip_distance1);
     gl::disable(gl::Enable_cap::clip_distance2);

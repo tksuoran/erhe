@@ -22,7 +22,7 @@ public:
     bool            framebuffer_transparency{false};
     bool            high_pixel_density      {false};
     bool            enable_joystick         {true};
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
     bool            use_finish              {false};
     int             gl_major                {4};
 # if defined(ERHE_OS_MACOS)

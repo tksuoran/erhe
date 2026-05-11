@@ -4,9 +4,10 @@
 #include "erhe_xr/xr_log.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_utility/bit_helpers.hpp"
+#include "erhe_utility/env.hpp"
 #include "erhe_verify/verify.hpp"
 
-#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+#if defined(ERHE_GRAPHICS_API_VULKAN)
 # include "volk.h"
 # include <vulkan/vk_platform.h>
 # include <vulkan/vulkan_core.h>
@@ -25,6 +26,7 @@
 #include <openxr/openxr_platform.h>
 
 #include <cstdlib>
+#include <cstring>
 #include <thread>
 
 namespace erhe::xr {
@@ -89,8 +91,8 @@ auto initialize_android_loader() -> bool
 #endif // XR_USE_PLATFORM_ANDROID
 
 Xr_instance::Xr_instance(
-    const Xr_configuration& configuration,
-    Message_callback        message_callback
+    const Headset_config& configuration,
+    Message_callback      message_callback
 )
     : m_configuration   {configuration}
     , m_message_callback{message_callback}
@@ -299,6 +301,25 @@ XrBool32 erhe_xrDebugUtilsMessengerCallbackEXT(
     );
     log_xr->log(level, message);
 
+    // Suppress layer-internal false positives. xrStructureTypeToString is
+    // only ever called by api_dump / core_validation themselves to print
+    // type names; we never call it. The api_dump layer in OpenXR-SDK
+    // commits prior to V2-binding support mis-decodes
+    // XrGraphicsBindingVulkan2KHR as the V1 XrGraphicsBindingVulkanKHR
+    // and then calls xrStructureTypeToString with the literal V1 enum
+    // value, which core_validation then flags because XR_KHR_vulkan_enable
+    // (V1) is not enabled. Forwarding this to m_message_callback would
+    // ERHE_FATAL on a third-party-layer bug, so log and return without
+    // escalating.
+    const char* const message_id   = (callback_data->messageId   != nullptr) ? callback_data->messageId   : "";
+    const char* const function_str = (callback_data->functionName != nullptr) ? callback_data->functionName : "";
+    if (
+        (std::strcmp(function_str, "xrStructureTypeToString") == 0) &&
+        (std::strncmp(message_id, "VUID-xrStructureTypeToString-", 29) == 0)
+    ) {
+        return XR_TRUE;
+    }
+
     m_message_callback(severity, message, erhe_get_callstack());
 
     return XR_TRUE;
@@ -312,14 +333,14 @@ auto Xr_instance::create_instance() -> bool
 
     std::vector<const char*> enabled_extensions;
 
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
     enabled_extensions.push_back(XR_KHR_OPENGL_ENABLE_EXTENSION_NAME);
 //# if defined(ERHE_OS_LINUX)
 //    enabled_extensions.push_back(XR_KHR_OPENGL_WAYLAND_EXTENSION_NAME);
 //# endif
 #endif
 
-#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+#if defined(ERHE_GRAPHICS_API_VULKAN)
     if (!has_extension(XR_KHR_VULKAN_ENABLE2_EXTENSION_NAME)) {
         log_xr->error(
             XR_KHR_VULKAN_ENABLE2_EXTENSION_NAME
@@ -400,6 +421,10 @@ auto Xr_instance::create_instance() -> bool
     constexpr const char* const core_validation_layer_name           = "XR_APILAYER_LUNARG_core_validation";
     constexpr const char* const best_practices_validation_layer_name = "XR_APILAYER_KHRONOS_best_practices_validation";
     if (m_configuration.api_dump && has_layer(api_dump_layer_name)) {
+#if !defined(XR_USE_PLATFORM_ANDROID)
+        ERHE_VERIFY(erhe::utility::set_env("XR_API_DUMP_EXPORT_TYPE", "text"));
+        ERHE_VERIFY(erhe::utility::set_env("XR_API_DUMP_FILE_NAME", "logs/openxr.txt"));
+#endif
         enabled_layers.push_back(api_dump_layer_name);
     }
     if (m_configuration.validation && has_layer(core_validation_layer_name)) {
@@ -514,11 +539,11 @@ auto Xr_instance::create_instance() -> bool
         }
     }
 
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
     xrGetOpenGLGraphicsRequirementsKHR = get_proc_addr<PFN_xrGetOpenGLGraphicsRequirementsKHR>("xrGetOpenGLGraphicsRequirementsKHR");
 #endif
 
-#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+#if defined(ERHE_GRAPHICS_API_VULKAN)
     xrGetVulkanGraphicsRequirements2KHR = get_proc_addr<PFN_xrGetVulkanGraphicsRequirements2KHR>("xrGetVulkanGraphicsRequirements2KHR");
     xrCreateVulkanInstanceKHR           = get_proc_addr<PFN_xrCreateVulkanInstanceKHR          >("xrCreateVulkanInstanceKHR");
     xrGetVulkanGraphicsDevice2KHR       = get_proc_addr<PFN_xrGetVulkanGraphicsDevice2KHR      >("xrGetVulkanGraphicsDevice2KHR");
@@ -630,7 +655,7 @@ auto Xr_instance::get_xr_environment_blend_mode() const -> XrEnvironmentBlendMod
     return m_xr_environment_blend_mode;
 }
 
-#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+#if defined(ERHE_GRAPHICS_API_VULKAN)
 auto Xr_instance::make_vulkan_external_creators() const -> erhe::graphics::Vulkan_external_creators
 {
     erhe::graphics::Vulkan_external_creators creators;
@@ -1509,7 +1534,7 @@ auto Xr_instance::attach_actions(const XrSession session) -> bool
     return true;
 }
 
-auto Xr_instance::get_configuration() const -> const Xr_configuration&
+auto Xr_instance::get_configuration() const -> const Headset_config&
 {
     return m_configuration;
 }

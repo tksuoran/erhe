@@ -24,8 +24,8 @@ class Xr_instance;
 class Xr_perf_counter
 {
 public:
-    XrPath                       path        {XR_NULL_PATH};
-    std::string                  display_name;
+    XrPath                          path        {XR_NULL_PATH};
+    std::string                     display_name;
     XrPerformanceMetricsCounterMETA last       {.type = XR_TYPE_PERFORMANCE_METRICS_COUNTER_META, .next = nullptr};
 };
 

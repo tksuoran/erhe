@@ -28,7 +28,7 @@
 #include "erhe_graphics/render_pipeline.hpp"
 #include "erhe_graphics/scoped_debug_group.hpp"
 #include "erhe_math/math_util.hpp"
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
 #   include "erhe_gl/wrapper_functions.hpp"
 #   include "erhe_gl/enum_bit_mask_operators.hpp"
 #endif
@@ -380,7 +380,7 @@ void App_rendering::handle_graphics_settings_changed(Graphics_preset_entry* grap
     }
 
     if (graphics_preset != nullptr) {
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
         if (m_context.graphics_device->get_info().use_clip_control) {
             gl::clip_control(
                 gl::Clip_control_origin::lower_left,
