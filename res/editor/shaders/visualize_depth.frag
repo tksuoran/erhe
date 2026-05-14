@@ -2,16 +2,12 @@
 
 layout(location = 0) in vec2 v_texcoord;
 
-const vec3 temperature_colors[] = vec3[](
-    vec3(  4.,  35., 51.) / 255.,
-    vec3( 23.,  51.,122.) / 255.,
-    vec3( 85.,  59.,157.) / 255.,
-    vec3(129.,  79.,143.) / 255.,
-    vec3(175.,  95.,130.) / 255.,
-    vec3(222., 112.,101.) / 255.,
-    vec3(249., 146., 66.) / 255.,
-    vec3(249., 196., 65.) / 255.,
-    vec3(232., 250., 91.) / 255.);
+// Note: temperature_colors lives inside temperature_old() (function
+// scope) rather than at file scope. glslang 16.2.0 emits a
+// DebugGlobalVariable for file-scope const composite arrays whose
+// Variable operand spirv-val 1.4.328.1 rejects
+// (VUID-VkShaderModuleCreateInfo-pCode-08737). Function-scope const
+// arrays produce DebugLocalVariable instead and pass validation.
 
 //vec3(176.,29.,30.) / 255.,
 //vec3(241.,104.,38.) / 255.,
@@ -22,6 +18,16 @@ const vec3 temperature_colors[] = vec3[](
 
 
 vec3 temperature_old(float t) {
+    const vec3 temperature_colors[] = vec3[](
+        vec3(  4.,  35., 51.) / 255.,
+        vec3( 23.,  51.,122.) / 255.,
+        vec3( 85.,  59.,157.) / 255.,
+        vec3(129.,  79.,143.) / 255.,
+        vec3(175.,  95.,130.) / 255.,
+        vec3(222., 112.,101.) / 255.,
+        vec3(249., 146., 66.) / 255.,
+        vec3(249., 196., 65.) / 255.,
+        vec3(232., 250., 91.) / 255.);
     t *= float(temperature_colors.length() - 1);
     return srgb_to_linear(mix(temperature_colors[int(t)], temperature_colors[int(t) + 1], smoothstep(0.0, 1.0, fract(t))));
 }

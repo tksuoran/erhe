@@ -14,10 +14,15 @@
 #include <mutex>
 #include <unordered_map>
 
+namespace erhe::dataformat {
+    class Vertex_format;
+}
+
 namespace erhe::graphics {
 
 class Bind_group_layout;
 class Device;
+class Lazy_shader_handle;
 class Render_pass;
 class Render_pass_descriptor;
 class Shader_stages;
@@ -29,7 +34,37 @@ public:
     // Pipeline state
     erhe::utility::Debug_label   debug_label          {};
     Shader_stages*               shader_stages        {nullptr};
+    // Optional multiview-compiled sibling shader stages. When non-null,
+    // Forward_renderer's multiview render path (Render_parameters with
+    // a non-empty multiview_views span) picks this variant instead of
+    // shader_stages, so a single Render_pipeline_create_info can serve
+    // both the editor's single-view passes and the headset's multiview
+    // pass without duplicating the rest of the pipeline state. Sourced
+    // from Programs::get_multiview(name) at construction.
+    Shader_stages*               multiview_shader_stages{nullptr};
+    // Optional lazy resolver. When non-null, the renderer prefers
+    //   lazy_shader_stages->shader_stages()           (single-view path)
+    //   lazy_shader_stages->multiview_shader_stages() (multiview path)
+    // over the raw shader_stages / multiview_shader_stages fields above.
+    // Lets a pipeline bind a shader whose actual compile is deferred to
+    // first use, without changing the renderer's shader-resolution code
+    // paths beyond an extra null-check. Defaults nullptr -- pipelines
+    // that hold an already-compiled Shader_stages* keep their existing
+    // behavior.
+    Lazy_shader_handle*          lazy_shader_stages   {nullptr};
     const Vertex_input_state*    vertex_input         {nullptr};
+    // Vertex_format that produced the bound vertex_input. Optional; only
+    // set on pipelines that opt into the standard shader variant cache
+    // (uses_standard_variants below). The renderer reads this when
+    // computing a per-bucket Standard_variant_key.
+    const erhe::dataformat::Vertex_format* vertex_format{nullptr};
+    // When true, Forward_renderer's bucket loop consults
+    // Standard_shader_variants (when the cache is supplied via
+    // Render_parameters and this pipeline's vertex_format is non-null)
+    // and substitutes a per-bucket variant for shader_stages. Default
+    // false -- pipelines without a "standard" lit shader stay on their
+    // baked stages.
+    bool                         uses_standard_variants{false};
     Input_assembly_state         input_assembly       {};
     Multisample_state            multisample          {};
     Viewport_depth_range_state   viewport_depth_range {};

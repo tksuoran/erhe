@@ -6,7 +6,7 @@
 
 #include "erhe_dataformat/dataformat_log.hpp"
 #include "erhe_file/file.hpp"
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
 # include "erhe_gl/gl_log.hpp"
 #endif
 #include "erhe_verify/verify.hpp"
@@ -206,7 +206,7 @@ public:
         m_last_window_width  = m_window.get_width();
         m_last_window_height = m_window.get_height();
 
-#if !defined(ERHE_GRAPHICS_LIBRARY_METAL)
+#if !defined(ERHE_GRAPHICS_API_METAL)
         m_window.register_redraw_callback(
             [this](){
                 if (!m_first_frame_rendered || m_in_tick.load()) {
@@ -435,9 +435,6 @@ public:
             erhe::scene_renderer::Forward_renderer::Render_parameters{
                 .render_encoder         = render_encoder,
                 .index_type             = erhe::dataformat::Format::format_32_scalar_uint,
-                .index_buffer           = &m_mesh_memory.index_buffer,
-                .vertex_buffer0         = &m_mesh_memory.vertex_buffer_position,
-                .vertex_buffer1         = &m_mesh_memory.vertex_buffer_non_position,
                 .ambient_light          = glm::vec3{0.1f, 0.1f, 0.1f},
                 .camera                 = m_camera.get(),
                 .light_projections      = &m_light_projections,
@@ -643,7 +640,7 @@ void run_example()
     }
 
     example::initialize_logging();
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
     gl::initialize_logging();
 #endif
     erhe::dataformat::initialize_logging();

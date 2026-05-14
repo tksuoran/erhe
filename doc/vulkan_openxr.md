@@ -3,8 +3,8 @@
 ## Context
 
 `erhe::xr` currently only supports the OpenGL graphics backend. Every XR call
-path has a `#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)` guard and nothing in the
-`#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)` branches. A previous commit
+path has a `#if defined(ERHE_GRAPHICS_API_OPENGL)` guard and nothing in the
+`#if defined(ERHE_GRAPHICS_API_VULKAN)` branches. A previous commit
 (`eafc4efd vulkan openxr`) flipped the Vulkan configure scripts to enable
 `ERHE_XR_LIBRARY=openxr`, and some partial scaffolding has landed since:
 
@@ -12,7 +12,7 @@ path has a `#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)` guard and nothing in the
   so Vulkan builds do not pull in OpenGL.
 - `src/erhe/xr/CMakeLists.txt` links `volk::volk` and defines
   `XR_USE_GRAPHICS_API_VULKAN=1` when `ERHE_GRAPHICS_API_VULKAN` is set.
-- `xr_swapchain_image.{hpp,cpp}` already has a full `#if ERHE_GRAPHICS_LIBRARY_VULKAN`
+- `xr_swapchain_image.{hpp,cpp}` already has a full `#if ERHE_GRAPHICS_API_VULKAN`
   branch: `get_vk_image()` accessor, `m_vk_images` storage, and the
   `xrEnumerateSwapchainImages` call with `XrSwapchainImageVulkanKHR`.
 - `xr_instance.cpp:204` pushes `XR_KHR_VULKAN_ENABLE2_EXTENSION_NAME` into
@@ -74,10 +74,10 @@ runtimes encourage and it is what the existing partial scaffolding in
 ### Step 1 -- Declare and load the Vulkan enable2 entry points
 
 **`src/erhe/xr/erhe_xr/xr_instance.hpp`** gains four function pointer
-members guarded by `ERHE_GRAPHICS_LIBRARY_VULKAN`:
+members guarded by `ERHE_GRAPHICS_API_VULKAN`:
 
 ```cpp
-#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+#if defined(ERHE_GRAPHICS_API_VULKAN)
     PFN_xrGetVulkanGraphicsRequirements2KHR xrGetVulkanGraphicsRequirements2KHR{nullptr};
     PFN_xrCreateVulkanInstanceKHR           xrCreateVulkanInstanceKHR          {nullptr};
     PFN_xrGetVulkanGraphicsDevice2KHR       xrGetVulkanGraphicsDevice2KHR      {nullptr};
@@ -95,7 +95,7 @@ one the runtime exposes. Fix the call site to match.)
 block around line 362-368:
 
 ```cpp
-#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+#if defined(ERHE_GRAPHICS_API_VULKAN)
     xrGetVulkanGraphicsRequirements2KHR = get_proc_addr<PFN_xrGetVulkanGraphicsRequirements2KHR>("xrGetVulkanGraphicsRequirements2KHR");
     xrCreateVulkanInstanceKHR           = get_proc_addr<PFN_xrCreateVulkanInstanceKHR>          ("xrCreateVulkanInstanceKHR");
     xrGetVulkanGraphicsDevice2KHR       = get_proc_addr<PFN_xrGetVulkanGraphicsDevice2KHR>      ("xrGetVulkanGraphicsDevice2KHR");
@@ -171,7 +171,7 @@ and add a second phase:
 ```cpp
 class Headset {
 public:
-    Headset(erhe::window::Context_window&, const Xr_configuration&);
+    Headset(erhe::window::Context_window&, const Headset_config&);
     // Second phase. On the OpenGL backend this is a no-op wrapper around
     // the existing session constructor (the session can and should still
     // be built from the main-thread GL context). On Vulkan it must be
@@ -212,7 +212,7 @@ already exist on `Vulkan_device::Device_impl` to build the binding:
 
 **`src/erhe/xr/erhe_xr/xr_session.cpp`** `enumerate_swapchain_formats()`
 (lines 356-376) and `create_swapchains()` (lines 406-468) get
-`ERHE_GRAPHICS_LIBRARY_VULKAN` branches that mirror the OpenGL branches
+`ERHE_GRAPHICS_API_VULKAN` branches that mirror the OpenGL branches
 but:
 
 - Use `static_cast<VkFormat>(swapchain_format)` and
@@ -237,7 +237,7 @@ but:
 Vulkan TODO:
 
 ```cpp
-#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+#if defined(ERHE_GRAPHICS_API_VULKAN)
     uint64_t vk_color_image        {0}; // VkImage reinterpreted as uint64_t
     uint64_t vk_depth_stencil_image{0};
 #endif
@@ -259,9 +259,9 @@ pass the `vk_color_image` / `vk_depth_stencil_image` uint64 from the
 `Render_view` into the same `wrap_texture_name` slot:
 
 ```cpp
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
     .wrap_texture_name = render_view.color_texture,
-#elif defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+#elif defined(ERHE_GRAPHICS_API_VULKAN)
     .wrap_texture_name = render_view.vk_color_image,
 #endif
 ```
@@ -286,7 +286,7 @@ image lifetime is owned by the OpenXR swapchain and is released when
 `m_headset = std::make_unique<Headset>(...)` before `m_graphics_device`
 is created. Restructure to:
 
-1. Build `Xr_configuration` (unchanged).
+1. Build `Headset_config` (unchanged).
 2. Create `m_headset = std::make_unique<Headset>(*m_window.get(), configuration)`.
    With the new split from Step 4 this constructs only the `Xr_instance`.
 3. If `m_headset && m_headset->is_valid()` (Xr_instance ready) and the

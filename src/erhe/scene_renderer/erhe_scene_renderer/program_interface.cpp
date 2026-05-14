@@ -29,7 +29,7 @@ Program_interface::Program_interface(
     }
     , vertex_format     {vertex_format}
     , config            {config}
-    , camera_interface  {graphics_device, config.max_camera_count}
+    , camera_interface  {graphics_device, config.max_camera_count, config.max_view_count}
     , cube_interface    {graphics_device}
     , joint_interface   {graphics_device, config.max_joint_count}
     , light_interface   {graphics_device, config.max_light_count}
@@ -38,6 +38,7 @@ Program_interface::Program_interface(
 {
     // Write clamped values back to config so callers see actual UBO limits
     config.max_camera_count    = static_cast<int>(camera_interface.max_camera_count);
+    config.max_view_count      = static_cast<int>(camera_interface.max_view_count);
     config.max_joint_count     = static_cast<int>(joint_interface.max_joint_count);
     config.max_light_count     = static_cast<int>(light_interface.max_light_count);
     config.max_material_count  = static_cast<int>(material_interface.max_material_count);
@@ -167,7 +168,7 @@ auto Program_interface::make_prototype(
             process_shader(erhe::graphics::Shader_type::compute_shader,  cs_path);
         }
         process_shader(erhe::graphics::Shader_type::fragment_shader, fs_path);
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
         process_shader(erhe::graphics::Shader_type::geometry_shader, gs_path);
 #endif
         process_shader(erhe::graphics::Shader_type::vertex_shader,   vs_path);

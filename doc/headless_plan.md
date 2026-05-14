@@ -5,7 +5,7 @@
 Enable running the editor (and other erhe apps) without a display or GPU - headless/server mode for remote testing. Two new backends needed:
 
 1. **Null window** (`ERHE_WINDOW_LIBRARY=none`) - `Context_window` exists but does nothing
-2. **Null graphics** (`ERHE_GRAPHICS_LIBRARY=none`) - all graphics APIs implemented as no-ops, no actual GPU calls
+2. **Null graphics** (`ERHE_GRAPHICS_API=none`) - all graphics APIs implemented as no-ops, no actual GPU calls
 
 ## Current State
 
@@ -28,7 +28,7 @@ All the same public API as SDL/GLFW backends. Key behaviors:
 - **`poll_events()`**: no-op (just swap empty event buffers)
 - **`get_input_events()`**: returns empty vector
 - **`get_width()`/`get_height()`**: return configured size (default 1920x1080)
-- **`make_current()`/`clear_current()`/`swap_buffers()`**: no-ops (guarded by `ERHE_GRAPHICS_LIBRARY_OPENGL` - won't be called with null graphics)
+- **`make_current()`/`clear_current()`/`swap_buffers()`**: no-ops (guarded by `ERHE_GRAPHICS_API_OPENGL` - won't be called with null graphics)
 - **`get_cursor_position()`**: outputs 0, 0
 - **`set_cursor()`/`set_visible()`/`set_cursor_relative_hold()`**: no-ops
 - **`get_device_pointer()`/`get_window_handle()`**: return `nullptr`
@@ -47,8 +47,8 @@ All the same public API as SDL/GLFW backends. Key behaviors:
 ### CMake changes
 
 Root `CMakeLists.txt`:
-- Add `none` to `ERHE_GRAPHICS_LIBRARY` options
-- Add `elseif (STREQUAL "none")` block setting `ERHE_GRAPHICS_API_NONE` and `-DERHE_GRAPHICS_LIBRARY_NONE`
+- Add `none` to `ERHE_GRAPHICS_API` options
+- Add `elseif (STREQUAL "none")` block setting `ERHE_GRAPHICS_API_NONE` and `-DERHE_GRAPHICS_API_NONE`
 - No external library dependencies
 
 `src/erhe/graphics/CMakeLists.txt`:
@@ -105,14 +105,14 @@ The null `Buffer_impl` must provide real CPU memory for `map_bytes()`/`map_eleme
 ## Verification
 
 ```bash
-cmake -DERHE_WINDOW_LIBRARY=none -DERHE_GRAPHICS_LIBRARY=none -B build_headless
+cmake -DERHE_WINDOW_LIBRARY=none -DERHE_GRAPHICS_API=none -B build_headless
 cmake --build build_headless --target editor
 ./build_headless/editor  # Should start, run main loop, exit cleanly
 ```
 
 ## Risks
 
-1. **Hidden GL/Vulkan dependencies**: Code outside `erhe_graphics` may directly reference `ERHE_GRAPHICS_LIBRARY_OPENGL` for conditional compilation. These guards need auditing - any code that's only compiled when OpenGL is active needs a `none` path or needs to be made unconditional.
+1. **Hidden GL/Vulkan dependencies**: Code outside `erhe_graphics` may directly reference `ERHE_GRAPHICS_API_OPENGL` for conditional compilation. These guards need auditing - any code that's only compiled when OpenGL is active needs a `none` path or needs to be made unconditional.
 2. **ImGui backend**: The ImGui renderer likely calls graphics APIs directly. With null graphics, ImGui rendering must degrade gracefully (skip render calls). The existing `ERHE_GUI_LIBRARY=none` option may handle this.
 3. **Buffer mapping**: The editor relies on mapping GPU buffers to write geometry data. The null backend must provide real CPU memory for maps or the editor will crash on null pointer dereference.
 4. **Scope**: The GL backend has ~22 impl files. Writing null stubs for all of them is mechanical but tedious. Consider generating stubs or copying GL files and stripping the GL calls.

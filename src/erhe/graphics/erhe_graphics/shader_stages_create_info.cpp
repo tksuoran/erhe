@@ -1,6 +1,6 @@
 #include "erhe_graphics/fragment_outputs.hpp"
 
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
 # include "erhe_gl/command_info.hpp"
 # include "erhe_gl/enum_string_functions.hpp"
 # include "erhe_gl/wrapper_enums.hpp"
@@ -195,6 +195,24 @@ auto Shader_stages_create_info::final_source(
         sb << "\n";
     }
 
+    // Multiview prelude.
+    //
+    // GL_EXT_multiview is the Vulkan / SPIR-V flavour of multiview:
+    // the view count is taken from the render pass (subpass.viewMask
+    // / VkRenderPassMultiviewCreateInfo), not from a shader layout
+    // qualifier. The shader source only needs the extension and uses
+    // `gl_ViewIndex` to read the current view. The OpenGL flavour
+    // (GL_OVR_multiview2) does require `layout(num_views = N) in;`
+    // in the vertex shader, but that path is out of scope; this
+    // engine targets Vulkan multiview only on Quest.
+    if (multiview_view_count >= 2) {
+        sb << "// Multiview\n";
+        sb << "#extension GL_EXT_multiview : require\n";
+        sb << "#define ERHE_MULTIVIEW 1\n";
+        sb << "#define ERHE_VIEW_COUNT " << multiview_view_count << "\n";
+        sb << "\n";
+    }
+
     sb << "#define ERHE_GLSL_VERSION " << graphics_device.get_info().glsl_version << "\n";
 
     // Gate shader code that uses gl_ClipDistance / user clip planes. On
@@ -206,7 +224,7 @@ auto Shader_stages_create_info::final_source(
         sb << "#define ERHE_HAS_CLIP_DISTANCE 1\n";
     }
 
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
     if (graphics_device.get_info().use_shader_storage_buffers && (graphics_device.get_info().gl_version < 430)) {
         ERHE_VERIFY(gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shader_storage_buffer_object));
         sb << "#extension GL_ARB_shader_storage_buffer_object : enable\n";
@@ -261,7 +279,7 @@ auto Shader_stages_create_info::final_source(
     }
     sb << "\n";
 #endif
-#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+#if defined(ERHE_GRAPHICS_API_VULKAN)
     if (graphics_device.get_info().use_multi_draw_indirect_core) {
         sb << "#define ERHE_DRAW_ID gl_DrawID\n";
     } else {
@@ -326,7 +344,7 @@ auto Shader_stages_create_info::final_source(
         sb << "#define ERHE_HAS_STORAGE_INPUT_OUTPUT_16 1\n";
     }
 #endif
-#if defined(ERHE_GRAPHICS_LIBRARY_METAL)
+#if defined(ERHE_GRAPHICS_API_METAL)
     // Metal does not support multi-draw indirect / gl_DrawID; emulate with push constant.
     // Only emit for vertex/compute -- fragment shaders receive draw ID via interpolated varying.
     if (shader.type == Shader_type::vertex_shader || shader.type == Shader_type::compute_shader) {
@@ -364,7 +382,16 @@ auto Shader_stages_create_info::final_source(
     if (defines.size() > 0) {
         sb << "// Defines\n";
         for (const auto& i : defines) {
-            sb << "#define " << i.first << " " << i.second << '\n';
+            // Comment-only entry: empty name means "do not emit #define,
+            // just emit the value as a // comment line in the preamble".
+            // Used by the standard shader variant cache to surface the
+            // disabled boolean axes alongside the enabled ones so RenderDoc
+            // captures show the full key in the preamble.
+            if (i.first.empty()) {
+                sb << "// " << i.second << '\n';
+            } else {
+                sb << "#define " << i.first << " " << i.second << '\n';
+            }
         }
         sb << "\n";
     }
@@ -423,6 +450,16 @@ void Shader_stages_create_info::add_interface_block(const Shader_resource* inter
 {
     ERHE_VERIFY(interface_block != nullptr);
     interface_blocks.push_back(interface_block);
+}
+
+void Shader_stages_create_info::enable_multiview(uint32_t view_count)
+{
+    ERHE_VERIFY(view_count >= 2);
+    multiview_view_count = view_count;
+    // The actual `#extension GL_EXT_multiview : require` directive and
+    // the per-stage `layout(num_views = N) in;` line are emitted by
+    // final_source() based on multiview_view_count, so callers do not
+    // have to push entries into `extensions` themselves.
 }
 
 auto Shader_stages_create_info::get_description() const -> std::string

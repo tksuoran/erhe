@@ -1,3 +1,4 @@
+#include "erhe_camera_view.glsl"
 layout(location = 0) out vec2      v_texcoord;
 layout(location = 1) out vec4      v_position;
 layout(location = 2) out vec4      v_color;
@@ -27,7 +28,7 @@ void main()
             a_joint_weights_0.w * joint.joints[int(a_joint_indices_0.w) + primitive.primitives[ERHE_DRAW_ID].base_joint_index].world_from_bind_normal;
     }
 
-    mat4 clip_from_world = camera.cameras[0].clip_from_world;
+    mat4 clip_from_world = camera.cameras[c_view_index].clip_from_world;
     vec3 normal          = normalize(vec3(world_from_node_normal * vec4(a_normal,      0.0)));
     vec3 tangent         = vec3(world_from_node * vec4(a_tangent.xyz, 0.0));
     vec3 bitangent       = cross(normal, tangent) * a_tangent.w;

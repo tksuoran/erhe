@@ -3,6 +3,9 @@
 #include "erhe_math/viewport.hpp"
 #include "erhe_renderer/debug_renderer.hpp"
 #include "erhe_renderer/primitive_renderer.hpp"
+#include "erhe_scene_renderer/camera_buffer.hpp"
+
+#include <span>
 
 namespace erhe::graphics {
     class Command_buffer;
@@ -40,6 +43,13 @@ public:
     Viewport_scene_view*                    viewport_scene_view   {nullptr};
     erhe::math::Viewport                    viewport              {0, 0, 0, 0};
     const erhe::graphics::Shader_stages*    override_shader_stages{nullptr};
+    // Multiview cameras for the headset multiview render path. When
+    // non-empty, Composition_pass forwards this span as
+    // Render_parameters::multiview_views so Forward_renderer writes
+    // one Camera UBO entry per view and pipelines pick their
+    // multiview_shader_stages sibling. Empty on the editor's
+    // single-view viewport rendering path.
+    std::span<const erhe::scene_renderer::Camera_view_input> multiview_views{};
 };
 
 }

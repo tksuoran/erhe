@@ -33,7 +33,7 @@
 #include "erhe_verify/verify.hpp"
 #include "erhe_window/window_log.hpp"
 
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
 # include "erhe_gl/gl_log.hpp"
 #endif
 
@@ -131,7 +131,7 @@ Rendering_test::Rendering_test(std::string_view config_path)
     m_last_window_width  = m_window.get_width();
     m_last_window_height = m_window.get_height();
 
-#if !defined(ERHE_GRAPHICS_LIBRARY_METAL)
+#if !defined(ERHE_GRAPHICS_API_METAL)
     m_window.register_redraw_callback(
         [this](){
             if (!m_first_frame_rendered || m_in_tick.load()) {
@@ -340,9 +340,6 @@ void Rendering_test::dispatch_subtest(
                 erhe::scene_renderer::Forward_renderer::Render_parameters{
                     .render_encoder         = encoder,
                     .index_type             = erhe::dataformat::Format::format_32_scalar_uint,
-                    .index_buffer           = &m_mesh_memory.index_buffer,
-                    .vertex_buffer0         = &m_mesh_memory.vertex_buffer_position,
-                    .vertex_buffer1         = &m_mesh_memory.vertex_buffer_non_position,
                     .ambient_light          = glm::vec3{0.3f, 0.3f, 0.3f},
                     .camera                 = m_camera.get(),
                     .light_projections      = &m_light_projections,
@@ -379,9 +376,6 @@ void Rendering_test::dispatch_subtest(
                 erhe::scene_renderer::Forward_renderer::Render_parameters{
                     .render_encoder         = encoder,
                     .index_type             = erhe::dataformat::Format::format_32_scalar_uint,
-                    .index_buffer           = &m_mesh_memory.index_buffer,
-                    .vertex_buffer0         = &m_mesh_memory.vertex_buffer_position,
-                    .vertex_buffer1         = &m_mesh_memory.vertex_buffer_non_position,
                     .ambient_light          = glm::vec3{0.3f, 0.3f, 0.3f},
                     .camera                 = m_camera.get(),
                     .light_projections      = &m_light_projections,
@@ -477,9 +471,6 @@ void Rendering_test::dispatch_subtest(
             erhe::scene_renderer::Forward_renderer::Render_parameters{
                 .render_encoder         = encoder,
                 .index_type             = erhe::dataformat::Format::format_32_scalar_uint,
-                .index_buffer           = &m_mesh_memory.index_buffer,
-                .vertex_buffer0         = &m_mesh_memory.vertex_buffer_position,
-                .vertex_buffer1         = &m_mesh_memory.vertex_buffer_non_position,
                 .ambient_light          = glm::vec3{0.3f, 0.3f, 0.3f},
                 .camera                 = m_camera.get(),
                 .light_projections      = &m_light_projections,
@@ -534,9 +525,6 @@ void Rendering_test::dispatch_subtest(
             erhe::scene_renderer::Forward_renderer::Render_parameters{
                 .render_encoder         = encoder,
                 .index_type             = erhe::dataformat::Format::format_32_scalar_uint,
-                .index_buffer           = &m_mesh_memory.index_buffer,
-                .vertex_buffer0         = &m_mesh_memory.vertex_buffer_position,
-                .vertex_buffer1         = &m_mesh_memory.vertex_buffer_non_position,
                 .ambient_light          = glm::vec3{0.3f, 0.3f, 0.3f},
                 .camera                 = m_camera.get(),
                 .light_projections      = &m_light_projections,
@@ -596,9 +584,6 @@ void Rendering_test::dispatch_subtest(
             erhe::scene_renderer::Forward_renderer::Render_parameters{
                 .render_encoder         = encoder,
                 .index_type             = erhe::dataformat::Format::format_32_scalar_uint,
-                .index_buffer           = &m_mesh_memory.index_buffer,
-                .vertex_buffer0         = &m_mesh_memory.vertex_buffer_position,
-                .vertex_buffer1         = &m_mesh_memory.vertex_buffer_non_position,
                 .ambient_light          = glm::vec3{0.3f, 0.3f, 0.3f},
                 .camera                 = m_camera.get(),
                 .light_projections      = &m_light_projections,
@@ -763,7 +748,7 @@ void Rendering_test::tick(erhe::graphics::Command_buffer& command_buffer)
         if (is_fullscreen_mode()) {
             const std::string_view name = get_subtest_at(m_settings.fullscreen_cell_col, m_settings.fullscreen_cell_row);
             const erhe::math::Viewport fw{0, 0, full_width, full_height};
-            erhe::graphics::Scoped_debug_group scope{"Fullscreen subtest"};
+            erhe::graphics::Scoped_debug_group scope{command_buffer, "Fullscreen subtest"};
             dispatch_subtest(name, command_buffer, encoder, fw, lights, meshes);
         } else if (is_replicate_mode()) {
             const std::string_view name = get_subtest_at(m_settings.replicate_cell_col, m_settings.replicate_cell_row);
@@ -772,7 +757,7 @@ void Rendering_test::tick(erhe::graphics::Command_buffer& command_buffer)
             for (int r = 0; r < rows; ++r) {
                 for (int c = 0; c < cols; ++c) {
                     const erhe::math::Viewport tile = get_grid_tile_viewport(c, r);
-                    erhe::graphics::Scoped_debug_group scope{"Replicated subtest"};
+                    erhe::graphics::Scoped_debug_group scope{command_buffer, "Replicated subtest"};
                     dispatch_subtest(name, command_buffer, encoder, tile, lights, meshes);
                 }
             }
@@ -786,7 +771,7 @@ void Rendering_test::tick(erhe::graphics::Command_buffer& command_buffer)
                         continue;
                     }
                     const erhe::math::Viewport tile = get_grid_tile_viewport(c, r);
-                    erhe::graphics::Scoped_debug_group scope{"Grid subtest"};
+                    erhe::graphics::Scoped_debug_group scope{command_buffer, "Grid subtest"};
                     dispatch_subtest(name, command_buffer, encoder, tile, lights, meshes);
                 }
             }

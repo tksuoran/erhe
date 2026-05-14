@@ -121,6 +121,11 @@ void Device_impl::wait_idle()
     // No-op for null backend
 }
 
+void Device_impl::clear_render_pipeline_cache()
+{
+    // No-op for null backend (no pipeline cache to invalidate).
+}
+
 auto Device_impl::is_in_swapchain_frame() const -> bool
 {
     return false;

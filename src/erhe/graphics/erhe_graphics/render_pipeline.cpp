@@ -3,13 +3,13 @@
 #include "erhe_graphics/swapchain.hpp"
 #include "erhe_graphics/texture.hpp"
 
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
 #   include "erhe_graphics/gl/gl_render_pipeline.hpp"
-#elif defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+#elif defined(ERHE_GRAPHICS_API_VULKAN)
 #   include "erhe_graphics/vulkan/vulkan_render_pipeline.hpp"
-#elif defined(ERHE_GRAPHICS_LIBRARY_METAL)
+#elif defined(ERHE_GRAPHICS_API_METAL)
 #   include "erhe_graphics/metal/metal_render_pipeline.hpp"
-#elif defined(ERHE_GRAPHICS_LIBRARY_NULL)
+#elif defined(ERHE_GRAPHICS_API_NONE)
 #   include "erhe_graphics/null/null_render_pipeline.hpp"
 #endif
 

@@ -27,6 +27,11 @@ struct Program_interface_config
     int max_material_count {1000};
     int max_primitive_count{6000};
     int max_draw_count     {6000};
+    // Number of per-pass views packed into the camera UBO's cameras[N]
+    // array. 1 = single-view (default). 2 = stereo / OpenXR multiview.
+    // Vulkan multiview requires the device feature to be enabled and
+    // is wired up only on the multiview render path.
+    int max_view_count     {1};
 };
 
 class Program_interface

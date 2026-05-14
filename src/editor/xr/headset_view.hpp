@@ -150,6 +150,13 @@ public:
 
 private:
     [[nodiscard]] auto get_headset_view_resources(erhe::xr::Render_view& render_view) -> std::shared_ptr<Headset_view_resources>;
+    // Multiview path uses one Headset_view_resources per view slot. The
+    // per-eye fallback path matches by color_texture, but on the
+    // multiview path every Render_view has color_texture = nullptr (the
+    // shared layered swapchain is exposed via Render_views_frame::shared_*),
+    // so a color-texture lookup would collapse all eyes onto the same
+    // resources object and both eyes would share one Camera/Node.
+    [[nodiscard]] auto get_multiview_view_resources(erhe::xr::Render_view& render_view) -> std::shared_ptr<Headset_view_resources>;
 
     void setup_root_camera();
     void update_camera_node();
@@ -175,6 +182,11 @@ private:
     std::shared_ptr<erhe::scene::Node>                   m_headset_node; // transform set by headset
     std::shared_ptr<erhe::scene::Camera>                 m_root_camera;
     std::vector<std::shared_ptr<Headset_view_resources>> m_view_resources;
+    // Indexed by Render_view::slot; entries are created lazily on first
+    // use. Disjoint from m_view_resources so the per-eye fallback path
+    // and the multiview path do not stomp on each other if a session
+    // switches modes (e.g. during shader reloads).
+    std::vector<std::shared_ptr<Headset_view_resources>> m_multiview_view_resources;
     std::unique_ptr<Controller_visualization>            m_controller_visualization;
     std::vector<Finger_point>                            m_finger_inputs;
     Shader_stages_variant                                m_shader_stages_variant{Shader_stages_variant::not_set};    
@@ -185,6 +197,15 @@ private:
     bool                                                 m_update_actions_ok{false};
     bool                                                 m_request_renderdoc_capture{false};
     bool                                                 m_renderdoc_capture_started{false};
+    // Latched at construction from Xr_session::is_multiview_enabled().
+    // When true, render_headset() drives Xr_session::render_frame_multiview()
+    // (single shared layered swapchain, single render pass with view_mask =
+    // 0b11) instead of the per-eye render_frame() loop. The multiview
+    // callback drives forward composition, content wide lines, and
+    // debug lines through the multiview pipeline pair so all three
+    // appear in both eyes from one render pass; mirror mode and ID
+    // rendering are still gated to the per-eye path.
+    bool                                                 m_use_multiview{false};
     erhe::xr::Frame_timing                               m_frame_timing{};
     uint64_t                                             m_frame_number{0};
 

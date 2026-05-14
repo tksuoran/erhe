@@ -23,6 +23,8 @@ Alternative configurations:
 - `configure_vs2026_opengl_no_tracy.bat` - without Tracy profiler
 - `configure_vs2026_vulkan.bat` - Vulkan backend
 
+**Always use the `scripts\` build scripts on Windows.** Do not invoke `cmake --preset` directly -- the wrappers encode the project's intended configure flow (CPM caching, MSVC env init, etc.).
+
 ### macOS (Xcode)
 
 Use the build scripts in `scripts/`:
@@ -41,30 +43,24 @@ cmake --build build_xcode_metal  --target editor --config Debug
 
 **Always use the `scripts/` build scripts on macOS.** Do not use CMake presets directly on macOS.
 
-### Using CMake Presets (Windows/Linux)
-
-```bash
-cmake --preset OpenGL_Debug    # Debug OpenGL build
-cmake --preset OpenGL_Release  # Release OpenGL build
-cmake --preset Vulkan_Debug    # Debug Vulkan build
-```
-
-Build output goes to `build/<presetName>/`.
-
 ### Linux
 
 ```bash
-cmake -B build -DERHE_GRAPHICS_LIBRARY=opengl -DERHE_WINDOW_LIBRARY=sdl ...
+scripts/configure_ninja_linux.sh
 cmake --build build --target editor
 ```
 
 Required packages: `libwayland-dev libxkbcommon-dev xorg-dev` (Ubuntu) or equivalent.
 
+### CMake presets exist but should not be used
+
+`CMakePresets.json` defines presets like `OpenGL_Debug` and `Vulkan_Debug`. Do not invoke `cmake --preset ...` directly. The `scripts/` wrappers (`configure_vs2026_*.bat` on Windows, `configure_xcode_*.sh` on macOS, `configure_ninja_linux.sh` on Linux) wrap the configure step with the project's expected environment and should be used instead. Plans, scripts, and docs should not reference `cmake --preset`.
+
 ### Key CMake Options
 
 | Option | Default | Notes |
 |--------|---------|-------|
-| `ERHE_GRAPHICS_LIBRARY` | - | `opengl`, `vulkan`, or `none` (headless) |
+| `ERHE_GRAPHICS_API` | - | `opengl`, `vulkan`, or `none` (headless) |
 | `ERHE_PHYSICS_LIBRARY` | `jolt` | `jolt` or `none` |
 | `ERHE_RAYTRACE_LIBRARY` | `bvh` | `bvh`, `tinybvh`, `embree`, or `none` (none uses GPU ID-buffer picking) |
 | `ERHE_PROFILE_LIBRARY` | `tracy` | `tracy`, `nvtx`, `superluminal`, or `none` |
@@ -125,6 +121,32 @@ The `editor` executable is the main application. Entry point is `src/editor/main
 ### Backends / Abstraction Layers
 
 Many systems have swappable backends selected at CMake configure time via `#ifdef ERHE_<SUBSYSTEM>_LIBRARY_<VALUE>` guards. This is especially true for physics, raytrace, window, and XR subsystems.
+
+## Quest device launches
+
+Do the install (`scripts\install_android.bat quest`) FIRST, while the user can keep their hands free. **Only after the APK is on the device**, prompt the user to put the headset on and pick up / activate the Touch controllers, and wait for explicit confirmation before running the launch (`adb shell am start -n org.libsdl.app.quest/...` or `scripts\install_android.bat quest run`). Quest's `RequiresControllersLaunchInterceptor` shows a system "Controllers Required" dialog that blocks the immersive app from coming to the foreground until controllers are detected as in-hand; launching while the headset is off the user's head wastes the attempt and we have to retry. Pure builds and installs (no app start) do not need the prompt.
+
+### Locating Android tools in shell commands
+
+The scripts in `scripts\` (`install_android.bat`, `run_android.bat`, `build_android.bat`) all probe for the Android SDK and JDK in the same way; mirror this when running adb / gradle / java directly from a shell:
+
+- **`ANDROID_HOME`**: use `$ANDROID_HOME` if set, else fall back to `%LOCALAPPDATA%\Android\Sdk\` on Windows. Adb lives at `<ANDROID_HOME>\platform-tools\adb.exe`. In bash on Windows: `"$LOCALAPPDATA/Android/Sdk/platform-tools/adb.exe"`.
+- **`JAVA_HOME`** (only needed for direct gradle / gradlew calls; the scripts above set it for you): use `$JAVA_HOME` if set, else fall back to `C:\Program Files\Android\Android Studio\jbr` (Android Studio's bundled JDK 21). Gradle 8.12 + AGP do not support JDK 25.
+
+Prefer the wrapper scripts when possible -- they handle both probes plus device-state checks. Drop to direct invocations only when a script does not cover the case (e.g. passing a `-P` gradle property the script's bat-arg parser mangles; see "Vulkan validation layer on Quest / Android" below).
+
+### Vulkan validation layer on Quest / Android
+
+Without validation layers, GPU-side errors (descriptor set mismatches, image-layout violations, multiview misuse) are silent on Quest -- the editor hangs on the first bad frame with no log line, and abort hooks never fire.
+
+The Khronos `VK_LAYER_KHRONOS_validation` `.so` is bundled into every Quest / Android APK by default. The Gradle task `fetchVulkanValidationLayer` downloads the .so for `arm64-v8a` from the Vulkan SDK release matching `validationLayerVersion` in `android-project/app/build.gradle` and stages it under `android-project/app/libs/arm64-v8a/`; from there Gradle's normal `jniLibs` packaging puts it in the APK. The download is cached after the first build. To drop the .so (saves ~10 MB but loses the diagnostic capability), pass `-Pvulkan_validation_skip` to gradle / `build_android.bat`.
+
+To actually USE the layer at runtime:
+
+1. Set `"vulkan_validation_layers": true` in `config/editor/erhe_graphics.json`. The C++ device init enables `VK_LAYER_KHRONOS_validation` only when both this config knob is on AND the layer is loadable from the APK; bundling the .so alone does NOT slow normal runs.
+2. Validation errors flow through `Device::device_message` -> the editor's callback (in `editor.cpp` line ~698) which calls `ERHE_FATAL` on `Message_severity::error`, so device-level Vulkan errors become loud aborts.
+
+When the layer is enabled there is noticeable per-frame overhead -- leave the config knob off for normal runs and flip it on when chasing a hang or visual corruption.
 
 ## Python
 

@@ -1,3 +1,4 @@
+#include "erhe_camera_view.glsl"
 #include "erhe_srgb.glsl"
 
 layout(location = 0) in vec3      v_position;
@@ -7,9 +8,9 @@ layout(location = 2) flat in uint v_material_index;
 void main()
 {
     vec3 view_position_in_world = vec3(
-        camera.cameras[0].world_from_node[3][0],
-        camera.cameras[0].world_from_node[3][1],
-        camera.cameras[0].world_from_node[3][2]
+        camera.cameras[c_view_index].world_from_node[3][0],
+        camera.cameras[c_view_index].world_from_node[3][1],
+        camera.cameras[c_view_index].world_from_node[3][2]
     );
 
     vec3  v     = normalize(view_position_in_world - v_position);

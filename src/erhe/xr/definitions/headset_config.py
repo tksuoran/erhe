@@ -71,8 +71,12 @@ struct("Headset_config",
             Bool,
             added_in=1,
             default="false",
-            short_desc="",
-            long_desc="",
+            short_desc="Submit OpenXR composition-layer depth",
+            long_desc=("Enable XR_KHR_composition_layer_depth: the editor "
+                       "submits per-eye depth to the OpenXR compositor as part "
+                       "of the projection layer. Independent of "
+                       "swapchain_depth (which controls whether the editor's "
+                       "swapchains have a depth attachment at all)."),
             visible=True,
             developer=True
         ),
@@ -81,8 +85,12 @@ struct("Headset_config",
             Bool,
             added_in=2,
             default="false",
-            short_desc="",
-            long_desc="",
+            short_desc="Allocate a depth attachment for XR swapchains",
+            long_desc=("Request a depth+stencil attachment alongside the "
+                       "XR color swapchain. When false the editor allocates "
+                       "its own private depth target instead. Independent of "
+                       "the `depth` knob above (which submits depth to the "
+                       "OpenXR compositor)."),
             visible=True,
             developer=True
         ),

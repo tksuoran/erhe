@@ -4,9 +4,9 @@
 // window into the underlying CAMetalLayer so we can pin drawableSize from
 // C++ without going through MoltenVK. The implementation lives in
 // vulkan_metal_layer_mac.mm and is compiled only when ERHE_OS_MACOS +
-// ERHE_GRAPHICS_LIBRARY_VULKAN are both defined.
+// ERHE_GRAPHICS_API_VULKAN are both defined.
 
-#if defined(ERHE_OS_MACOS) && defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+#if defined(ERHE_OS_MACOS) && defined(ERHE_GRAPHICS_API_VULKAN)
 
 namespace erhe::graphics {
 

@@ -51,6 +51,7 @@ private:
     Render_pass_attachment_descriptor                m_stencil_attachment;
     int                                              m_render_target_width{0};
     int                                              m_render_target_height{0};
+    uint32_t                                         m_view_mask{0};
     erhe::utility::Debug_label                       m_debug_label;
     erhe::utility::Debug_label                       m_debug_group_name;
     bool                                             m_uses_multisample_resolve{false};
