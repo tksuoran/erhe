@@ -412,4 +412,8 @@ target_link_libraries(${_target}
         erhe::verify
 )
 
+if (${ERHE_BUILD_TESTS} STREQUAL "ON")
+    add_subdirectory(test)
+endif ()
+
 erhe_target_settings(${_target} "erhe")

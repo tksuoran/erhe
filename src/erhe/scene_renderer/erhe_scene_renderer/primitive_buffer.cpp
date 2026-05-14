@@ -47,9 +47,8 @@ Primitive_interface::Primitive_interface(erhe::graphics::Device& graphics_device
     if (graphics_device.get_info().use_shader_storage_buffers) {
         array_size = erhe::graphics::Shader_resource::unsized_array;
     } else {
-        const std::size_t struct_size  = primitive_struct.get_size_bytes();
-        const std::size_t element_size = ((struct_size + 15u) / 16u) * 16u; // std140 array element alignment
-        const std::size_t ubo_max     = static_cast<std::size_t>(graphics_device.get_info().max_uniform_block_size) / element_size;
+        const std::size_t element_size = primitive_struct.get_size_bytes(); // std140 default rounds to base alignment
+        const std::size_t ubo_max      = static_cast<std::size_t>(graphics_device.get_info().max_uniform_block_size) / element_size;
         this->max_primitive_count = std::min(this->max_primitive_count, ubo_max);
         array_size = this->max_primitive_count;
     }
