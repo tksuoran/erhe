@@ -564,10 +564,14 @@ void Forward_renderer::render(const Render_parameters& parameters)
                 // invalid (mid-compile fallback) or when variant lookup
                 // is gated off.
                 if (variant_lookup_active) {
-                    const erhe::scene_renderer::Standard_variant_key key = compute_bucket_variant_key(
+                    erhe::scene_renderer::Standard_variant_key key = compute_bucket_variant_key(
                         bucket,
                         parameters.light_projections->light_counts
                     );
+                    // Per-viewport debug-viz override is scene-wide,
+                    // not per-bucket, so it joins the variant key
+                    // after the bucket-level fields are filled in.
+                    key.shader_debug = static_cast<uint16_t>(parameters.shader_debug);
                     const erhe::graphics::Shader_stages* variant = parameters.standard_shader_variants->get_or_compile(
                         key,
                         bucket_multiview_view_count

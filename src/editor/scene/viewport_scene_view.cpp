@@ -143,7 +143,8 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
         .camera                 = camera.get(),
         .viewport_scene_view    = this,
         .viewport               = m_projection_viewport,
-        .override_shader_stages = get_override_shader_stages()
+        .override_shader_stages = get_override_shader_stages(),
+        .shader_debug           = m_shader_debug
     };
 
     if (do_render && m_is_scene_view_hovered && m_context.id_renderer->enabled) {
@@ -727,6 +728,16 @@ void Viewport_scene_view::set_shader_stages_variant(Shader_stages_variant varian
 auto Viewport_scene_view::get_shader_stages_variant() const -> Shader_stages_variant
 {
     return m_shader_stages_variant;
+}
+
+void Viewport_scene_view::set_shader_debug(erhe::scene_renderer::Shader_debug shader_debug)
+{
+    m_shader_debug = shader_debug;
+}
+
+auto Viewport_scene_view::get_shader_debug() const -> erhe::scene_renderer::Shader_debug
+{
+    return m_shader_debug;
 }
 
 void Viewport_scene_view::set_renderer_choice(Renderer_choice choice)

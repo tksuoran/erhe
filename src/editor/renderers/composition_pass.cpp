@@ -208,6 +208,7 @@ void Composition_pass::render(const Render_context& context)
                     .override_shader_stages   = this->allow_shader_stages_override ? context.override_shader_stages : nullptr,
                     .error_shader_stages      = context.app_context.programs->error.shader_stages(),
                     .standard_shader_variants = context.app_context.standard_shader_variants,
+                    .shader_debug             = context.shader_debug,
                     .debug_joint_indices    = context.app_context.app_rendering->debug_joint_indices,
                     .debug_joint_colors     = context.app_context.app_rendering->debug_joint_colors,
                     .debug_label            = get_name(),

@@ -5,6 +5,7 @@
 
 #include "erhe_rendergraph/texture_rendergraph_node.hpp"
 #include "erhe_scene/camera.hpp"
+#include "erhe_scene_renderer/standard_shader_variant.hpp"
 #include "erhe_math/viewport.hpp"
 
 #include <glm/glm.hpp>
@@ -122,6 +123,9 @@ public:
     void set_shader_stages_variant(Shader_stages_variant variant);
     auto get_shader_stages_variant() const -> Shader_stages_variant;
 
+    void set_shader_debug(erhe::scene_renderer::Shader_debug shader_debug);
+    auto get_shader_debug() const -> erhe::scene_renderer::Shader_debug;
+
     void set_renderer_choice(Renderer_choice choice);
     auto get_renderer_choice() const -> Renderer_choice;
 
@@ -164,6 +168,7 @@ private:
     // / debug_* from the dropdown still works -- get_variant_shader_stages
     // returns the picked shader and the per-call override path takes over.
     Shader_stages_variant              m_shader_stages_variant{Shader_stages_variant::not_set};
+    erhe::scene_renderer::Shader_debug m_shader_debug         {erhe::scene_renderer::Shader_debug::none};
     Renderer_choice                    m_renderer_choice      {Renderer_choice::forward};
     bool                               m_is_scene_view_hovered{false};
     bool                               m_show_navigation_gizmo{true};

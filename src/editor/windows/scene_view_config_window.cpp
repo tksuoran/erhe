@@ -9,6 +9,7 @@
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_imgui/imgui_helpers.hpp"
 #include "erhe_scene/scene.hpp"
+#include "erhe_scene_renderer/standard_shader_variant.hpp"
 
 #include <imgui/imgui.h>
 
@@ -41,7 +42,7 @@ void Scene_view_config_window::imgui()
             "##viewport_view_settings",
             2,
             ImGuiTableFlags_Resizable | ImGuiTableFlags_RowBg,
-            ImVec2{600.0f, 180.0}
+            ImVec2{600.0f, 220.0}
         ))
     {
         // BeginTable can fail (e.g. clipped window, zero-size cells); calling
@@ -107,6 +108,24 @@ void Scene_view_config_window::imgui()
         );
         if (variant_combo_used) {
             viewport_scene_view->set_shader_stages_variant(variant);
+        }
+
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        ImGui::TextUnformatted("Debug");
+        ImGui::TableNextColumn();
+
+        erhe::scene_renderer::Shader_debug shader_debug = viewport_scene_view->get_shader_debug();
+        int shader_debug_int = static_cast<int>(shader_debug);
+        if (ImGui::Combo(
+                "##ShaderDebug",
+                &shader_debug_int,
+                erhe::scene_renderer::c_shader_debug_strings,
+                IM_ARRAYSIZE(erhe::scene_renderer::c_shader_debug_strings),
+                IM_ARRAYSIZE(erhe::scene_renderer::c_shader_debug_strings)
+            ))
+        {
+            viewport_scene_view->set_shader_debug(static_cast<erhe::scene_renderer::Shader_debug>(shader_debug_int));
         }
 
         ImGui::TableNextRow();

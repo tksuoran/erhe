@@ -20,6 +20,79 @@ namespace erhe::scene {
 
 namespace erhe::scene_renderer {
 
+// Per-viewport debug-visualization selection that replaces the
+// standalone standard_debug.frag's ERHE_DEBUG_* defines. Each enum
+// value compiles a distinct variant of the standard shader that
+// overrides the final fragment color. Keep in sync with the
+// ERHE_SHADER_DEBUG_* macros in erhe_standard_variant.glsl and with
+// the c_shader_debug_strings table consumers (editor UI).
+enum class Shader_debug : uint16_t
+{
+    none                 = 0,
+    vertex_normal        = 1,
+    fragment_normal      = 2,
+    normal_texture       = 3,
+    tangent              = 4,
+    vertex_tangent_w     = 5,
+    bitangent            = 6,
+    texcoord             = 7,
+    base_color_texture   = 8,
+    vertex_color_rgb     = 9,
+    vertex_color_alpha   = 10,
+    aniso_strength       = 11,
+    aniso_texcoord       = 12,
+    vdotn                = 13,
+    ldotn                = 14,
+    hdotv                = 15,
+    joint_indices        = 16,
+    joint_weights        = 17,
+    omega_o              = 18,
+    omega_i              = 19,
+    omega_g              = 20,
+    vertex_valency       = 21,
+    polygon_edge_count   = 22,
+    metallic             = 23,
+    roughness            = 24,
+    occlusion            = 25,
+    emissive             = 26,
+    shadowmap_texels     = 27,
+    misc                 = 28
+};
+
+// User-visible display strings matching the Shader_debug enum, in
+// enum order. Used by the Scene_view_config_window combo.
+inline constexpr const char* c_shader_debug_strings[] = {
+    "None",
+    "Vertex Normal",
+    "Fragment Normal",
+    "Normal Texture",
+    "Tangent",
+    "Vertex Tangent W",
+    "Bitangent",
+    "TexCoord",
+    "Base Color Texture",
+    "Vertex Color RGB",
+    "Vertex Color Alpha",
+    "Aniso Strength",
+    "Aniso TexCoord",
+    "V.N",
+    "L.N",
+    "H.V",
+    "Joint Indices",
+    "Joint Weights",
+    "Omega o",
+    "Omega i",
+    "Omega g",
+    "Vertex Valency",
+    "Polygon Edge Count",
+    "Metallic",
+    "Roughness",
+    "Occlusion",
+    "Emissive",
+    "Shadowmap Texels",
+    "Debug Miscellaneous"
+};
+
 // X-macro list of variant axes for the editor's standard lit shader.
 //
 // Single source of truth: the key struct fields, the Boolean_axis enum, the
@@ -57,10 +130,14 @@ namespace erhe::scene_renderer {
     X(LIGHT_POINT_COUNT,                    point_light_count)                              \
     X(LIGHT_POINT_SHADOWMAPPED_COUNT,       point_shadowmapped_count)                       \
     /* Material BxDF selection -- discrete enum encoded as a count axis    */               \
-    /* (0 = unlit, 1 = isotropic_brdf, 2 = anisotropic_brdf). Mirrors      */               \
-    /* erhe::primitive::Bxdf_model and the ERHE_BXDF_MODEL_* GLSL macros   */               \
-    /* in erhe_standard_variant.glsl.                                       */              \
-    X(BXDF_MODEL,                           bxdf_model)
+    /* (0 = unlit, 1 = isotropic_brdf, 2 = anisotropic_brdf, 3 = slope,    */               \
+    /*  4 = engine_ready). Mirrors erhe::primitive::Bxdf_model and the    */                \
+    /* ERHE_BXDF_MODEL_* GLSL macros in erhe_standard_variant.glsl.       */                \
+    X(BXDF_MODEL,                           bxdf_model)                                     \
+    /* Per-viewport debug visualization. 0 = none, 1..N = ERHE_DEBUG_*    */                \
+    /* overrides absorbed from the retired standard_debug.frag. Mirrors  */                 \
+    /* Shader_debug above and the ERHE_SHADER_DEBUG_* GLSL macros.       */                 \
+    X(SHADER_DEBUG,                         shader_debug)
 
 class Standard_variant_key
 {

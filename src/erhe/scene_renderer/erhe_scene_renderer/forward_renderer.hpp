@@ -8,6 +8,7 @@
 #include "erhe_scene_renderer/light_buffer.hpp"
 #include "erhe_scene_renderer/material_buffer.hpp"
 #include "erhe_scene_renderer/primitive_buffer.hpp"
+#include "erhe_scene_renderer/standard_shader_variant.hpp"
 
 #include <glm/glm.hpp>
 
@@ -94,6 +95,12 @@ public:
         // shader_stages with the cache lookup. Skipped when
         // override_shader_stages is non-null (debug-viz takes priority).
         Standard_shader_variants*                                          standard_shader_variants{nullptr};
+        // Per-viewport debug visualization override. When non-none, the
+        // per-bucket variant key is rebuilt with this Shader_debug value
+        // so each pipeline picks the matching ERHE_SHADER_DEBUG variant
+        // of the standard shader. Default (Shader_debug::none) keeps
+        // the production rendering path.
+        Shader_debug                                                       shader_debug{Shader_debug::none};
         const glm::uvec4&                                                  debug_joint_indices{0, 0, 0, 0};
         const std::span<glm::vec4>&                                        debug_joint_colors{};
         const std::string_view                                             debug_label;

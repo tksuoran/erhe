@@ -4,6 +4,7 @@
 #include "erhe_renderer/debug_renderer.hpp"
 #include "erhe_renderer/primitive_renderer.hpp"
 #include "erhe_scene_renderer/camera_buffer.hpp"
+#include "erhe_scene_renderer/standard_shader_variant.hpp"
 
 #include <span>
 
@@ -43,6 +44,11 @@ public:
     Viewport_scene_view*                    viewport_scene_view   {nullptr};
     erhe::math::Viewport                    viewport              {0, 0, 0, 0};
     const erhe::graphics::Shader_stages*    override_shader_stages{nullptr};
+    // Per-viewport debug visualization. The composition_pass forwards
+    // this to Forward_renderer::Render_parameters::shader_debug, which
+    // selects the matching ERHE_SHADER_DEBUG variant of the standard
+    // shader. Shader_debug::none is the production default.
+    erhe::scene_renderer::Shader_debug      shader_debug{erhe::scene_renderer::Shader_debug::none};
     // Multiview cameras for the headset multiview render path. When
     // non-empty, Composition_pass forwards this span as
     // Render_parameters::multiview_views so Forward_renderer writes
