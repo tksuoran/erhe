@@ -130,6 +130,36 @@ The editor and other apps write their spdlog output to `logs/` relative to the w
 
 Do the install (`scripts\install_android.bat quest`) FIRST, while the user can keep their hands free. **Only after the APK is on the device**, prompt the user to put the headset on and pick up / activate the Touch controllers, and wait for explicit confirmation before running the launch (`adb shell am start -n org.libsdl.app.quest/...` or `scripts\install_android.bat quest run`). Quest's `RequiresControllersLaunchInterceptor` shows a system "Controllers Required" dialog that blocks the immersive app from coming to the foreground until controllers are detected as in-hand; launching while the headset is off the user's head wastes the attempt and we have to retry. Pure builds and installs (no app start) do not need the prompt.
 
+### Capturing logcat to a file on every Quest launch
+
+Always start `scripts/quest_logcat.sh` BEFORE the `adb shell am start ...` line. The in-memory logcat ring rolls over within seconds once the editor enters a per-frame error loop (e.g. the `XR_FRAME_DISCARDED` storm), so the only way to keep the full startup trace is to stream it to disk while it happens.
+
+```bash
+bash scripts/quest_logcat.sh             # prints the new capture path
+"$LOCALAPPDATA/Android/Sdk/platform-tools/adb.exe" shell am start -n org.libsdl.app.quest/org.libsdl.app.SDLActivity
+```
+
+The script enforces these invariants -- understand them before changing it:
+
+- **One extra process, ever.** The single backgrounded `adb logcat` is the only process owned by this workflow. `scripts/quest_logcat.sh` re-running kills the previous streamer before starting a new one; `scripts/quest_logcat.sh stop` kills it without starting a replacement. The shared `adb` server daemon is not "ours" -- it persists across sessions regardless.
+- **No leaks across Claude Code sessions.** The PID is tracked in `logs/.logcat.pid` (a real file in the repo, gitignored), so even a fresh shell finds and stops the prior capture.
+- **No PID-recycle hazard.** Before killing, the script confirms the recorded PID still points at an `adb` process via `ps -p PID`; if the PID was recycled to something unrelated, it leaves the new owner alone and just removes the stale PID file. Git Bash's `ps` reports the executable path only (no argv), so we match on `adb` -- this is fine because every other adb call in this workflow is short-lived.
+
+Capture files land in `logs/quest_<YYYYMMDD>_<HHMMSS>.log` (gitignored). To stop a capture explicitly (e.g. when wrapping up a session and you do not plan to launch again): `bash scripts/quest_logcat.sh stop`. If you forget, the next launch's start call cleans it up automatically.
+
+To grep the running capture: `tail -F logs/quest_<...>.log` or `grep <pattern> logs/quest_<...>.log`. The log file is appended to live by the streamer, so `tail -F` shows new entries as they land.
+
+### Filtering a capture down to erhe-only lines
+
+Raw logcat captures interleave hundreds of system tags (`MRSS`, `[CT]`, `wlan`, ...) with the editor's own output. A typical 30 s capture is 30k+ lines, which is too much to scan. Filter to just the editor's `erhe` spdlog tag:
+
+```bash
+bash scripts/quest_logcat.sh filter logs/quest_<YYYYMMDD>_<HHMMSS>.log
+# writes logs/quest_<YYYYMMDD>_<HHMMSS>_erhe.log
+```
+
+The filter is a single grep on ` erhe +:` (space, literal tag, optional padding, colon) anchored to logcat's threadtime tag column, so it does not match the substring "erhe" inside other tags or message bodies. Always work from the filtered file for analysis; reach for the unfiltered capture only when you need to correlate against OS-level events (e.g. `OpenXR`, `VrApi`, `MRSS`, `[CT]` tags from the Horizon runtime, or `WLAN`/`battery` for thermal-throttle context).
+
 ### Locating Android tools in shell commands
 
 The scripts in `scripts\` (`install_android.bat`, `run_android.bat`, `build_android.bat`) all probe for the Android SDK and JDK in the same way; mirror this when running adb / gradle / java directly from a shell:
