@@ -49,12 +49,6 @@ erhe_target_sources_grouped(
     res/editor/shaders/visualize_depth.frag
     res/editor/shaders/visualize_depth.vert
 
-    res/shaders/anisotropic_engine_ready.frag
-    res/shaders/anisotropic_engine_ready.vert
-    res/shaders/anisotropic_slope.frag
-    res/shaders/anisotropic_slope.vert
-    res/shaders/circular_brushed_metal.frag
-    res/shaders/circular_brushed_metal.vert
     res/shaders/compute_before_line.comp
     res/shaders/compute_before_content_line.comp
     res/shaders/depth_only.frag
@@ -82,8 +76,6 @@ erhe_target_sources_grouped(
     res/shaders/points.vert
     res/shaders/standard.frag
     res/shaders/standard.vert
-    res/shaders/standard_debug.frag
-    res/shaders/standard_debug.vert
     res/shaders/text.frag
     res/shaders/text.vert
     res/shaders/textured.frag

@@ -17,42 +17,19 @@ namespace editor {
 
 using Init_message_fn = std::function<void(std::string_view)>;
 
+// Per-call shader override that bypasses Standard_shader_variants. The
+// "debug_*" / "anisotropic_*" / "circular_brushed_metal" values that
+// used to live here moved onto Standard_variant_key axes:
+//   - anisotropic_slope / anisotropic_engine_ready -> Bxdf_model
+//   - circular_brushed_metal                       -> material.use_circular_brushed_metal
+//   - debug_*                                      -> Shader_debug (per viewport)
+// Only the handful that still represent independent override shaders
+// remain.
 enum class Shader_stages_variant : int {
     not_set,
     standard,
     error,
-    anisotropic_slope,
-    anisotropic_engine_ready,
-    circular_brushed_metal,
-    debug_depth,
-    debug_vertex_normal,
-    debug_fragment_normal,
-    debug_normal_texture,
-    debug_tangent,
-    debug_vertex_tangent_w,
-    debug_bitangent,
-    debug_texcoord,
-    debug_base_color_texture,
-    debug_vertex_color_rgb,
-    debug_vertex_color_alpha,
-    debug_aniso_strength,
-    debug_aniso_texcoord,
-    debug_vdotn,
-    debug_ldotn,
-    debug_hdotv,
-    debug_joint_indices,
-    debug_joint_weights,
-    debug_omega_o,
-    debug_omega_i,
-    debug_omega_g,
-    debug_vertex_valency,
-    debug_polygon_edge_count,
-    debug_metallic,
-    debug_roughness,
-    debug_occlusion,
-    debug_emissive,
-    debug_shadowmap_texels,
-    debug_misc
+    debug_depth
 };
 
 static constexpr const char* c_shader_stages_variant_strings[] =
@@ -60,38 +37,7 @@ static constexpr const char* c_shader_stages_variant_strings[] =
     "Not Set",
     "Standard",
     "Error",
-    "Anisotropic Slope",
-    "Anisotropic Engine-Ready",
-    "Circular Brushed Metal",
-    "Depth",
-    "Vertex Normal",
-    "Fragment Normal",
-    "Normal Texture",
-    "Tangent",
-    "Vertex Tangent W",
-    "Bitangent",
-    "TexCoord",
-    "Base Color Texture",
-    "Vertex Color RGB",
-    "Vertex Color Alpha",
-    "Aniso Strength",
-    "Aniso TexCoord",
-    "V.N",
-    "L.N",
-    "H.V",
-    "Joint Indices",
-    "Joint Weights",
-    "Omega o",
-    "Omega i",
-    "Omega g",
-    "Vertex Valency",
-    "Polygon Edge Count",
-    "Metallic",
-    "Roughness",
-    "Occlusion",
-    "Emissive",
-    "Shadowmap Texels",
-    "Debug Miscellaneous"
+    "Depth"
 };
 
 // Owns one Variant_handle per shader the editor uses. Each handle holds
@@ -132,9 +78,6 @@ public:
     erhe::scene_renderer::Variant_handle    brdf_slice;
     erhe::scene_renderer::Variant_handle    brush;
     erhe::scene_renderer::Variant_handle    standard;
-    erhe::scene_renderer::Variant_handle    anisotropic_slope;
-    erhe::scene_renderer::Variant_handle    anisotropic_engine_ready;
-    erhe::scene_renderer::Variant_handle    circular_brushed_metal;
     erhe::scene_renderer::Variant_handle    textured;
     erhe::scene_renderer::Variant_handle    sky;
     erhe::scene_renderer::Variant_handle    grid;
@@ -144,35 +87,7 @@ public:
     erhe::scene_renderer::Variant_handle    id;
     erhe::scene_renderer::Variant_handle    tool;
     erhe::scene_renderer::Variant_handle    debug_depth;
-    erhe::scene_renderer::Variant_handle    debug_vertex_normal;
-    erhe::scene_renderer::Variant_handle    debug_fragment_normal;
-    erhe::scene_renderer::Variant_handle    debug_normal_texture;
-    erhe::scene_renderer::Variant_handle    debug_tangent;
-    erhe::scene_renderer::Variant_handle    debug_vertex_tangent_w;
-    erhe::scene_renderer::Variant_handle    debug_bitangent;
-    erhe::scene_renderer::Variant_handle    debug_texcoord;
-    erhe::scene_renderer::Variant_handle    debug_base_color_texture;
-    erhe::scene_renderer::Variant_handle    debug_vertex_color_rgb;
-    erhe::scene_renderer::Variant_handle    debug_vertex_color_alpha;
-    erhe::scene_renderer::Variant_handle    debug_aniso_strength;
-    erhe::scene_renderer::Variant_handle    debug_aniso_texcoord;
-    erhe::scene_renderer::Variant_handle    debug_vdotn;
-    erhe::scene_renderer::Variant_handle    debug_ldotn;
-    erhe::scene_renderer::Variant_handle    debug_hdotv;
-    erhe::scene_renderer::Variant_handle    debug_joint_indices;
-    erhe::scene_renderer::Variant_handle    debug_joint_weights;
-    erhe::scene_renderer::Variant_handle    debug_omega_o;
-    erhe::scene_renderer::Variant_handle    debug_omega_i;
-    erhe::scene_renderer::Variant_handle    debug_omega_g;
-    erhe::scene_renderer::Variant_handle    debug_vertex_valency;
-    erhe::scene_renderer::Variant_handle    debug_polygon_edge_count;
-    erhe::scene_renderer::Variant_handle    debug_metallic;
-    erhe::scene_renderer::Variant_handle    debug_roughness;
-    erhe::scene_renderer::Variant_handle    debug_occlusion;
-    erhe::scene_renderer::Variant_handle    debug_emissive;
-    erhe::scene_renderer::Variant_handle    debug_shadowmap_texels;
     erhe::scene_renderer::Variant_handle    debug_shadow;
-    erhe::scene_renderer::Variant_handle    debug_misc;
 
 private:
     // Name -> handle map. Built in the ctor; backs get_multiview(name).

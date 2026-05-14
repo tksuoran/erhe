@@ -59,7 +59,6 @@ Material_interface::Material_interface(erhe::graphics::Device& graphics_device, 
         .emissive_offset                   = material_struct.add_vec2("emissive_offset"                  )->get_offset_in_parent(),
 
         .occlusion_texture_strength = material_struct.add_float("occlusion_texture_strength")->get_offset_in_parent(),
-        .unlit                      = material_struct.add_uint ("unlit"                     )->get_offset_in_parent(),
     }
     , max_material_count{static_cast<std::size_t>(max_material_count)}
 {
@@ -184,13 +183,6 @@ auto Material_buffer::update(
 
         material->material_buffer_index = material_index;
 
-        // The standard variant cache selects unlit/lit at compile time
-        // via ERHE_BXDF_MODEL, so this UBO field is only read by the
-        // legacy alternate-shader paths (standard_debug.frag, etc.).
-        // Derive it from bxdf_model so those keep working.
-        uint32_t unlit_value =
-            (material_data.bxdf_model == erhe::primitive::Bxdf_model::unlit) ? 1u : 0u;
-
         write(gpu_data, write_offset + offsets.roughness  ,                as_span(material_data.roughness  ));
         write(gpu_data, write_offset + offsets.metallic   ,                as_span(material_data.metallic   ));
         write(gpu_data, write_offset + offsets.reflectance,                as_span(material_data.reflectance));
@@ -222,7 +214,6 @@ auto Material_buffer::update(
 
         write(gpu_data, write_offset + offsets.emissive_offset,                   as_span(emissive          .offset));         // uvec2
         write(gpu_data, write_offset + offsets.occlusion_texture_strength,        as_span(material_data.occlusion_texture_strength));
-        write(gpu_data, write_offset + offsets.unlit,                             as_span(unlit_value));
 
         write_offset += entry_size;
         ++material_index;

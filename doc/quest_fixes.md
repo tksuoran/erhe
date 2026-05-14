@@ -12,11 +12,7 @@ B2a-perf. **[DEFERRED - perf measurement first] Vulkan / Metal pipeline ctor bui
 
 B3. **[DEFERRED - member-init constraint] Metal silently swallows wide_lines failure** -- `src/editor/renderers/programs.cpp:66-68`. Geom shader unsupported on Metal. **Fix:** gate the wide_lines `sv_key` registration on `use_compute_shader == false`, mirroring the pre-commit state. **Verify:** Metal build no longer logs shader-compile failures during init.
 
-B5. **[DEFERRED - tied to B14 migration] `Material_buffer.unlit` is a load-bearing band-aid** -- `src/erhe/scene_renderer/erhe_scene_renderer/material_buffer.cpp:191`. Read by `anisotropic_slope.frag`, `anisotropic_engine_ready.frag`, `circular_brushed_metal.frag`, `standard_debug.frag` instead of `bxdf_model`. **Fix:** migrate the four legacy shaders to read `bxdf_model` from the UBO; drop the `unlit` field. **Tie-in:** B14 (legacy shaders still eager); doing both together is one coherent commit. **Verify:** unlit material renders identically; `grep -r material.unlit` in shaders returns zero.
-
 B12. **[DEFERRED - Draw_list_renderer Phase 2] Removed runtime sampler-presence checks risk bindless UB** -- `src/editor/res/shaders/standard.frag` (commit 7704e198 removed `if (normal_texture.x != max_u32)` guards; now gated by build-time `#ifdef ERHE_USE_*_TEXTURE`). Combined with Forward_renderer's OR-merge bucket key (obsoleted by the swap) the hazard fires today on Vulkan bindless. **Fix:** post-swap, `Draw_list_renderer`'s per-entry variant resolution makes the matching correct; add `ERHE_VERIFY` at draw-list-entry build time so any future mismatch trips loudly. **Tie-in:** `doc/draw_list_renderer.md` Phase 2 (already cross-referenced).
-
-B14. **[DEFERRED - large shader migration] Variant cache covers `standard` only; legacy lit shaders still eager** -- `src/editor/renderers/programs.cpp:124-165`. `anisotropic_slope`, `anisotropic_engine_ready`, `circular_brushed_metal`, and 28 `standard_debug` variants are Cached_shader_handle members that get recompiled on any `Material_change_operation` -> `Standard_shader_variants::clear()` (hammer invalidation). **Fix:** keep them out of `Standard_shader_variants::clear()`'s scope (they don't share material-driven axes), or migrate them onto the variant-cache key. Doc the decision in `doc/shader_variants.md`. **Tie-in:** B5 (drop `unlit` field at the same time).
 
 ### D. Multiview / XR
 
@@ -61,7 +57,7 @@ Note: the branch's history was subsequently re-collapsed via the `git-history-cl
 
 - A11 (closed) is a prerequisite to retiring shadow_renderer (`doc/draw_list_renderer.md` Phase 6) cleanly.
 - B12 is a Phase 2 deliverable of `Draw_list_renderer`, not a standalone fix.
-- B5 + B14 + E13.Renderers overlap on Programs / legacy shaders; do B5 first, then B14, then E13.Renderers.
+- E13.Renderers (`Programs::load_programs` / `programs_load_task` / `m_handles_by_name` / `get_multiview`) survived B5 + B14 because deleting the legacy `Variant_handle` members shrank the per-name map but did not remove the name-keyed lookup path; ship it independently.
 
 ## Closed issues
 
@@ -125,6 +121,8 @@ B2b. **[DONE] `Variant_handle` memoizes resolves so the cache mutex leaves the p
 
 B4. **[DONE] Shader_monitor reload bypasses pipeline-cache flush** -- `src/erhe/graphics/erhe_graphics/shader_monitor.cpp:209`. `entry.shader_stages->reload(prototype)` recreates `VkShaderModule` without flushing the variant cache's pipeline cache. **Fix:** have `Reloadable_shader_stages::reload` call `m_graphics_device.clear_render_pipeline_cache()` (the variant cache already does this on its own `clear()`; mirror it). **Verify:** edit a watched shader at runtime; subsequent frames sample the new module.
 
+B5. **[DONE - landed with B14]** **`Material_buffer.unlit` is a load-bearing band-aid** -- the four legacy shaders that read it (`anisotropic_slope.frag`, `anisotropic_engine_ready.frag`, `circular_brushed_metal.frag`, `standard_debug.frag`) were retired in the same commit set as B14. `Material_struct::unlit` and the matching write path are gone from `material_buffer.{hpp,cpp}`; `grep -r material.unlit res/` returns zero.
+
 B6. **[DONE] Dead `anisotropy_strength`** -- `src/editor/res/shaders/standard.frag:96-101`. **Fix:** wire to `roughness_y = mix(roughness_x, roughness_y, anisotropy_strength)` (the docstring intent); the commit message advertises it. **Verify:** anisotropic material with `aniso_control = 0` matches isotropic baseline.
 
 B7. **[DONE - documented as BREAKING] Silent emissive semantic change** -- `src/editor/res/shaders/standard.frag` emissive block. Old: squared; new: linear. **Fix:** decide intent against a reference image; add a `BREAKING:` note if the change is intentional. **Verify:** comparison render of an emissive material.
@@ -134,6 +132,12 @@ B10. **[DONE] shader_stages.hpp promises layout(num_views=N) emission that never
 B11. **[DONE - footgun removed in earlier commit] ERHE_VERIFY(mv_slot == nullptr) footgun on shared shader names** -- `src/editor/renderers/programs.cpp:683`. `wide_lines_draw_color` and `wide_lines_vertex_color` both have `name="wide_lines"` and no `debug_label`. A future config enabling multiview with `use_compute_shader == false` trips the verify on the second emplace. **Fix:** key the slot map on `(name, defines)` or hash-discriminate.
 
 B13. **[DONE] Shader_variant_key is stringly-typed** -- `src/erhe/scene_renderer/erhe_scene_renderer/shader_variant_cache.hpp:32-49`. Typo in any shader name silently misses; compile fails; Metal/Vulkan returns nullptr from the pipeline ctor. **Fix:** tiny registry of valid shader names backing the key; reject unknown names at construction.
+
+B14. **[DONE]** **Variant cache covers `standard` only; legacy lit shaders still eager** -- the legacy `anisotropic_slope`, `anisotropic_engine_ready`, `circular_brushed_metal`, and 28 `standard_debug` Variant_handles are gone from `Programs`. Each feature is now a variant of `standard.frag`:
+- `anisotropic_slope` / `anisotropic_engine_ready` joined `erhe::primitive::Bxdf_model`; `standard.frag`'s `BXDF_CALL` dispatch picks `slope_brdf` for SLOPE and uses the existing `anisotropic_brdf` (with a 1e-7 roughness floor) for ENGINE_READY.
+- `circular_brushed_metal` was already a variant axis on `standard.frag`; the standalone shader was redundant and was deleted.
+- The 28 `ERHE_DEBUG_*` modes from `standard_debug.frag` became a new `erhe::scene_renderer::Shader_debug` enum stored per `Viewport_scene_view` and a new `SHADER_DEBUG` count axis on `Standard_variant_key`. `standard.frag` emits one `#if ERHE_SHADER_DEBUG == N` override block per value at the end of `main()`.
+The `Material_change_operation` -> `Standard_shader_variants::clear()` hammer still covers the standard variants but no longer recompiles legacy shaders that do not exist anymore. B5 landed in the same commit set: `Material_struct::unlit` is gone.
 
 ### C. Variant-cache invalidation perimeter (cumulative high)
 

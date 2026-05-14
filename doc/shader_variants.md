@@ -30,15 +30,24 @@ degenerate. Subsequent commits land the shader-side machinery:
 - The editor instantiates the cache on `App_context::standard_shader_variants`
   after `Programs::load_programs` completes.
 
-**Adoption status:** the `standard` shader's variant cache is wired
-through the editor's runtime render paths (`Forward_renderer`,
-`Scene_preview` material / brush previews, the
-`Shader_stages_variant::standard` debug-visualization branch in
-`Viewport_scene_view` / `Headset_view`). Full migration -- including
-the legacy lit shaders (`anisotropic_slope`,
-`anisotropic_engine_ready`, `circular_brushed_metal`) and the 28
-`standard_debug` variants -- is tracked alongside the
-Draw_list_renderer rollout in `doc/draw_list_renderer.md` Phases 4-6.
+**Adoption status (B14 closed):** the `standard` shader's variant cache
+covers every lit / debug path the editor ships. The legacy stand-alone
+shaders (`anisotropic_slope`, `anisotropic_engine_ready`,
+`circular_brushed_metal`, `standard_debug`) were deleted and their
+features became `standard` variant axes:
+
+- `anisotropic_slope` and `anisotropic_engine_ready` joined
+  `erhe::primitive::Bxdf_model`; the `BXDF_CALL` macro in
+  `standard.frag` picks `slope_brdf` for SLOPE and uses the existing
+  `anisotropic_brdf` (with a 1e-7 roughness floor) for ENGINE_READY.
+- `circular_brushed_metal` is the existing `ERHE_USE_CIRCULAR_BRUSHED_METAL`
+  boolean axis driven by `material.use_circular_brushed_metal`.
+- The 28 `standard_debug` ERHE_DEBUG_* modes became a new
+  `erhe::scene_renderer::Shader_debug` enum stored per
+  `Viewport_scene_view`. The new `SHADER_DEBUG` count axis on
+  `Standard_variant_key` selects one of 29 (`none` + 28) variants;
+  `standard.frag` emits an `#if ERHE_SHADER_DEBUG == N` override block
+  per value at the end of `main()` that fully replaces the lit colour.
 
 ## Original status (now historical)
 
@@ -212,8 +221,9 @@ without decoupling anything.
 
 - Disk caching of compiled SPIR-V / GL program binaries across editor
   runs.
-- Variant cache for non-`standard` shaders (`standard_debug`, `id`,
-  `depth`, ...).
+- Variant cache for non-`standard` shaders (`id`, `depth`, ...).
+  `standard_debug` no longer exists -- its modes are SHADER_DEBUG
+  values on the standard cache key (see Adoption status above).
 - Per-key dependency tracking inside the invalidation path.
 - Multiview pairing details (the cache must mirror
   `Programs::load_programs`' `enable_multiview()` pattern, but the
