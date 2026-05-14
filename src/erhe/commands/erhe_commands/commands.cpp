@@ -34,6 +34,18 @@ auto Commands::get_commands() const -> const std::vector<Command*>&
     return m_commands;
 }
 
+auto Commands::find_command(std::string_view name) const -> Command*
+{
+    // Matches get_commands(): read-only access without locking. All commands
+    // are registered during init before any caller of find_command runs.
+    for (Command* const command : m_commands) {
+        if (name == command->get_name()) {
+            return command;
+        }
+    }
+    return nullptr;
+}
+
 auto Commands::get_key_bindings() const -> const std::vector<Key_binding>&
 {
     return m_key_bindings;

@@ -1,9 +1,10 @@
 {
-    "_version": 2,
+    "_version": 4,
     "initial_clear": true,
     "renderdoc_capture_support": false,
     "shader_monitor_enabled": false,
     "force_disable_vsync": false,
+    "use_draw_list_renderer": false,
     "opengl": {
         "force_bindless_textures_off": false,
         "force_no_persistent_buffers": false,

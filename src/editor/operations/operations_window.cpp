@@ -5,6 +5,7 @@
 #include "brushes/brush.hpp"
 #include "app_settings.hpp"
 #include "content_library/content_library.hpp"
+#include "content_library/content_library_window.hpp"
 #include "items.hpp"
 #include "operations/geometry_operations.hpp"
 #include "operations/item_insert_remove_operation.hpp"
@@ -16,7 +17,10 @@
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_builder.hpp"
+#include "scene/scene_commands.hpp"
 #include "scene/scene_root.hpp"
+
+#include <algorithm>
 #include "scene/scene_serialization.hpp"
 #include "scene/viewport_scene_views.hpp"
 #include "tools/selection_tool.hpp"
@@ -188,7 +192,8 @@ Operations::Operations(
     m_make_mesh_config.instance_count = scene_config.instance_count;
     m_make_mesh_config.instance_gap   = scene_config.instance_gap;
     m_make_mesh_config.object_scale   = scene_config.object_scale;
-    m_make_mesh_config.detail         = scene_config.detail;
+    // detail and mass_scale moved to per-command args in commands.json;
+    // the Operations UI uses Make_mesh_config defaults for them.
 
     m_hover_scene_view_subscription = app_message_bus.hover_scene_view.subscribe(
         [&](Hover_scene_view_message& message) {
@@ -203,8 +208,6 @@ Operations::Operations(
             try {
                 auto content_library = std::make_shared<Content_library>();
                 auto scene_root = editor::load_scene(
-                    m_context.imgui_renderer,
-                    m_context.imgui_windows,
                     &m_context,
                     m_context.app_message_bus,
                     m_context.app_scenes,
@@ -213,6 +216,19 @@ Operations::Operations(
                 );
                 if (scene_root) {
                     log_operations->info("Scene loaded: {}", scene_root->get_name());
+                    prune_loaded_scene_windows();
+                    m_loaded_content_library_windows.push_back(
+                        Loaded_scene_window{
+                            .scene_root = scene_root,
+                            .content_library_window = std::make_shared<Content_library_window>(
+                                *m_context.imgui_renderer,
+                                *m_context.imgui_windows,
+                                m_context,
+                                content_library,
+                                scene_root->get_name()
+                            )
+                        }
+                    );
                     auto browser_window = scene_root->make_browser_window(
                         *m_context.imgui_renderer,
                         *m_context.imgui_windows,
@@ -318,19 +334,29 @@ void Operations::imgui()
         }
 #endif
         if (erhe::imgui::make_button("Platonic Solids", erhe::imgui::Item_mode::normal, button_size)) {
-            m_context.scene_builder->add_platonic_solids(m_make_mesh_config);
+            Add_platonic_solids_command& cmd = m_context.scene_commands->get_add_platonic_solids_command();
+            cmd.set_make_mesh_config(m_make_mesh_config);
+            cmd.try_call();
         }
         if (erhe::imgui::make_button("Johnson Solids", erhe::imgui::Item_mode::normal, button_size)) {
-            m_context.scene_builder->add_johnson_solids(m_make_mesh_config);
+            Add_johnson_solids_command& cmd = m_context.scene_commands->get_add_johnson_solids_command();
+            cmd.set_make_mesh_config(m_make_mesh_config);
+            cmd.try_call();
         }
         if (erhe::imgui::make_button("Curved Shapes", erhe::imgui::Item_mode::normal, button_size)) {
-            m_context.scene_builder->add_curved_shapes(m_make_mesh_config);
+            Add_curved_shapes_command& cmd = m_context.scene_commands->get_add_curved_shapes_command();
+            cmd.set_make_mesh_config(m_make_mesh_config);
+            cmd.try_call();
         }
         if (erhe::imgui::make_button("Chain", erhe::imgui::Item_mode::normal, button_size)) {
-            m_context.scene_builder->add_torus_chain(m_make_mesh_config, true);
+            Add_chain_command& cmd = m_context.scene_commands->get_add_chain_command();
+            cmd.set_make_mesh_config(m_make_mesh_config);
+            cmd.try_call();
         }
         if (erhe::imgui::make_button("Toruses", erhe::imgui::Item_mode::normal, button_size)) {
-            m_context.scene_builder->add_torus_chain(m_make_mesh_config, false);
+            Add_toruses_command& cmd = m_context.scene_commands->get_add_toruses_command();
+            cmd.set_make_mesh_config(m_make_mesh_config);
+            cmd.try_call();
         }
     }
 
@@ -1079,6 +1105,23 @@ void Operations::create_brush()
             new_brush->set_material(first_primitive.material);
         }
     }
+}
+
+void Operations::prune_loaded_scene_windows()
+{
+    // Drop entries whose Scene_root has been released (closed scene).
+    // Stable in-place erase to keep insertion order of the remaining
+    // entries identical to load order.
+    m_loaded_content_library_windows.erase(
+        std::remove_if(
+            m_loaded_content_library_windows.begin(),
+            m_loaded_content_library_windows.end(),
+            [](const Loaded_scene_window& entry) {
+                return entry.scene_root.expired();
+            }
+        ),
+        m_loaded_content_library_windows.end()
+    );
 }
 
 }

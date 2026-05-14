@@ -1,7 +1,6 @@
 #pragma once
 
 #include "app_message.hpp"
-#include "scene/frame_controller.hpp"
 
 #include "erhe_message_bus/message_bus.hpp"
 #include "erhe_profile/profile.hpp"
@@ -106,9 +105,6 @@ class Scene_root
 {
 public:
     Scene_root(
-        erhe::imgui::Imgui_renderer*            imgui_renderer,
-        erhe::imgui::Imgui_windows*             imgui_windows,
-        App_context*                            context,
         App_message_bus*                        app_message_bus,
         const std::shared_ptr<Content_library>& content_library,
         std::string_view                        name,
@@ -201,11 +197,7 @@ private:
     std::unique_ptr<erhe::scene::Scene>             m_scene;
     Scene_layers                                    m_layers;
 
-    std::shared_ptr<erhe::scene::Camera>            m_camera;
-    std::shared_ptr<Frame_controller>               m_camera_controls;
-
     std::shared_ptr<Item_tree_window>               m_node_tree_window;
-    std::shared_ptr<Item_tree_window>               m_content_library_tree_window;
 };
 
 }

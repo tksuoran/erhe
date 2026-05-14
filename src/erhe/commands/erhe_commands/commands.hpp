@@ -18,6 +18,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <string_view>
 
 namespace erhe::xr {
     class Xr_instance;
@@ -53,6 +54,7 @@ public:
     void sort_bindings   ();
 
     [[nodiscard]] auto get_commands                  () const -> const std::vector<Command*>&;
+    [[nodiscard]] auto find_command                  (std::string_view name) const -> Command*;
     [[nodiscard]] auto get_key_bindings              () const -> const std::vector<Key_binding>&;
     [[nodiscard]] auto get_menu_bindings             () const -> const std::vector<Menu_binding>&;
     [[nodiscard]] auto get_mouse_bindings            () const -> const std::vector<std::unique_ptr<Mouse_binding>>&;
