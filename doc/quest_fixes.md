@@ -18,8 +18,6 @@ B12. **[DEFERRED - Draw_list_renderer Phase 2] Removed runtime sampler-presence 
 
 D6. **[DEFERRED - needs multiview-MSAA root-cause] 1-MSAA on OpenXR is a workaround** -- `config/editor/graphics_presets_openxr.json:5`. Underlying multiview-MSAA issue not named or filed. **Fix (CLAUDE.md no-band-aid):** root-cause the multiview-MSAA failure, or remove the unreachable multiview-MSAA code paths. At minimum, file an issue and reference it in the config comment.
 
-D7. **[DEFERRED - needs Command_buffer API plumbing] GL backend drops end_render_pass debug sub-scope** -- `src/erhe/graphics/erhe_graphics/gl/gl_render_pass.cpp:817-822`. Comment justifies the loss because `end_render_pass()` has no `Command_buffer&`. **Fix:** plumb a `Command_buffer&` through.
-
 ### E. Build / config / docs / dead-code
 
 E3. **[DEFERRED - needs prewarm-orchestrator extension] `Device::warmup_render_pipeline` is dead code** -- `src/erhe/graphics/erhe_graphics/device.cpp:121-126, device.hpp:351`. Comments in `forward_renderer.hpp:131` and `prewarm.hpp:22` advertise it as Phase-2's VkPipeline-cache home, but `prewarm_all` never calls it. **Fix:** wire `prewarm_all` to call it for each variant the renderer's prewarm iterates (Phase-2 win); update `prewarm.hpp` comment.
@@ -156,6 +154,8 @@ D3. **[DONE] ERHE_VERIFY on env-var write** -- `src/editor/xr/xr_instance.cpp:42
 D4. **[DONE - partial; rename deferred] Stale comment + confusingly-close knobs** -- `src/editor/xr/xr_session.cpp:530-533` stale comment; `Headset_config.depth` vs `swapchain_depth`. **Fix:** drop the stale comment; rename to `composition_depth_layer` / `swapchain_depth_attachment` (or fill in `headset_config.py`'s empty `short_desc` fields explaining the distinction).
 
 D5. **[DONE] gl_ViewID_OVR / u_view_index doc drift** -- `src/erhe/scene_renderer/erhe_scene_renderer/camera_buffer.hpp:47`, `camera_buffer.cpp:123-125, 160-161`. Code emits `gl_ViewIndex` / `c_view_index`; comments still reference the old names. **Fix:** update comments. **Verify:** `grep -r gl_ViewID_OVR src/erhe` returns zero.
+
+D7. **[DONE] GL backend dropped end_render_pass debug sub-scope** -- `Render_pass_impl::end_render_pass` now takes a `Command_buffer&` on every backend; `Render_pass` forwards the cb it already cached in `m_active_command_buffer` (the defensive null check became an `ERHE_VERIFY`). GL backend opens a symmetric `Scoped_debug_group{cb, "Render_pass_impl::end_render_pass() <label>"}` mirroring the existing start sub-scope. Vulkan / Metal / Null accept the new parameter and discard it. **Verify:** RenderDoc capture shows the matching end sub-scope under `Render pass: <label>`.
 
 D8. **[DONE] Metal Scoped_debug_group_impl encoder identity desync** -- `src/erhe/graphics/erhe_graphics/metal/metal_scoped_debug_group.cpp:17-33`. Ctor sees `get_active_mtl_encoder()`; dtor sees a different encoder if recording switched. **Fix:** impl stores the encoder it pushed onto and pops on the same one.
 
