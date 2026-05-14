@@ -639,8 +639,8 @@ public:
 #   define ERHE_TASK_FOOTER(ops) ) ops
 #else
 #   define ERHE_GET_GL_CONTEXT
-#   define ERHE_TASK_HEADER(var) init_status_display.set_line(1, #var);
-#   define ERHE_TASK_FOOTER(ops) init_status_display.set_line(1, "");
+#   define ERHE_TASK_HEADER(var) init_status_display.set_line(1, #var); init_status_display.pump();
+#   define ERHE_TASK_FOOTER(ops) init_status_display.set_line(1, ""); init_status_display.pump();
 #endif
 
 #if defined(ERHE_PARALLEL_INIT)
@@ -939,8 +939,12 @@ public:
             };
 
             init_status_display.set_line(0, "Initializing erhe editor...");
+            init_status_display.pump();
             auto init_message = [&init_status_display](std::string_view msg) {
                 init_status_display.set_line(2, msg);
+#if !defined(ERHE_PARALLEL_INIT)
+                init_status_display.pump();
+#endif
             };
 
             ERHE_TASK_HEADER(programs_load_task)
