@@ -14,6 +14,7 @@
 #include "erhe_scene_renderer/primitive_buffer.hpp"
 
 #include <initializer_list>
+#include <span>
 
 namespace erhe::graphics {
     class Command_buffer;
@@ -60,10 +61,6 @@ public:
         erhe::graphics::Command_buffer&                  command_buffer;
         const erhe::graphics::Vertex_input_state*        vertex_input_state    {nullptr};
         erhe::dataformat::Format                         index_type            {erhe::dataformat::Format::format_undefined};
-        erhe::graphics::Buffer*                          index_buffer          {nullptr};
-        erhe::graphics::Buffer*                          vertex_buffer0        {nullptr};
-        erhe::graphics::Buffer*                          vertex_buffer1        {nullptr};
-        erhe::graphics::Buffer*                          vertex_buffer2        {nullptr};
 
         const erhe::scene::Camera*                       view_camera          {nullptr};
         const erhe::math::Viewport                       view_camera_viewport;
@@ -87,6 +84,24 @@ public:
     };
 
     auto render(const Render_parameters& parameters) -> bool;
+
+    // Init-time prewarm. Drives the pipeline-cache path render() takes so
+    // the per-render-pass VkPipeline (vkCreateGraphicsPipelines on Vulkan)
+    // exists before the first frame. Calls get_pipeline(vertex_input_state,
+    // reverse_depth) to ensure the matching Lazy_render_pipeline entry is
+    // registered, then invokes Lazy_render_pipeline::get_pipeline_for() on
+    // each supplied render-pass descriptor so its format-hashed VkPipeline
+    // variant is created.
+    //
+    // The depth-only shader stages are owned eagerly by m_shader_stages
+    // (Reloadable_shader_stages compiles at construction), so there is no
+    // Phase 1 shader-module compile to drive here -- only the lazy
+    // VkPipeline construction.
+    void prewarm_pipelines(
+        const erhe::graphics::Vertex_input_state*                                vertex_input_state,
+        std::span<const std::unique_ptr<erhe::graphics::Render_pass>>            render_passes,
+        bool                                                                     reverse_depth
+    );
 
 private:
     class Pipeline_cache_entry

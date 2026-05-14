@@ -60,7 +60,7 @@ Id_renderer::Id_renderer(
     , m_primitive_buffers    {graphics_device, program_interface.primitive_interface}
     , m_pipeline{graphics_device, erhe::graphics::Render_pipeline_create_info{
         .debug_label    = erhe::utility::Debug_label{"ID Renderer"},
-        .shader_stages  = &programs.id.shader_stages,
+        .lazy_shader_stages = &programs.id,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangle,
         .rasterization  = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
@@ -70,7 +70,7 @@ Id_renderer::Id_renderer(
 
     , m_selective_depth_clear_pipeline{graphics_device, erhe::graphics::Render_pipeline_create_info{
         .debug_label    = erhe::utility::Debug_label{"ID Renderer selective depth clear"},
-        .shader_stages  = &programs.id.shader_stages,
+        .lazy_shader_stages = &programs.id,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangle,
         .rasterization  = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
@@ -256,7 +256,7 @@ void Id_renderer::render(const Render_parameters& parameters)
     const std::size_t color_image_size_bytes = s_extent * s_extent * erhe::dataformat::get_format_size_bytes(m_color_texture->get_pixelformat());
     const std::size_t depth_image_size_bytes = s_extent * s_extent * erhe::dataformat::get_format_size_bytes(m_depth_texture->get_pixelformat());
 
-    Scoped_debug_group debug_group{"Id_renderer::render()"};
+    Scoped_debug_group debug_group{parameters.command_buffer, "Id_renderer::render()"};
 
     const auto projection_transforms = camera.projection_transforms(viewport, parameters.reverse_depth, parameters.depth_range, parameters.conventions);
     const mat4 clip_from_world       = projection_transforms.clip_from_world.get_matrix();

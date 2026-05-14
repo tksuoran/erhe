@@ -5,6 +5,7 @@
 #include "erhe_graphics/gl/gl_texture.hpp"
 #include "erhe_graphics/bind_group_layout.hpp"
 #include "erhe_graphics/graphics_log.hpp"
+#include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/scoped_debug_group.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
 
@@ -34,7 +35,7 @@ Texture_heap_impl::Texture_heap_impl(
     // by explicit combined_image_sampler bindings (bound by set_sampled_image)
     // and which units are left for the heap's flat material array.
     if ((m_device.get_info().texture_heap_path == Texture_heap_path::opengl_bindless_textures)) {
-        reset_heap();
+        reset_heap_state();
     } else {
         if (bind_group_layout != nullptr) {
             const Bind_group_layout_impl& layout_impl = bind_group_layout->get_impl();
@@ -46,7 +47,7 @@ Texture_heap_impl::Texture_heap_impl(
         m_gl_textures.resize(max_units);
         m_gl_samplers.resize(max_units);
         m_zero_vector.resize(max_units);
-        reset_heap();
+        reset_heap_state();
     }
 }
 
@@ -57,14 +58,19 @@ Texture_heap_impl::~Texture_heap_impl() noexcept
 #endif
 }
 
-void Texture_heap_impl::reset_heap()
+void Texture_heap_impl::reset_heap(Command_buffer& command_buffer)
 {
-    Scoped_debug_group debug_group{"Texture_heap_impl::reset_heap()"};
+    Scoped_debug_group debug_group{command_buffer, "Texture_heap_impl::reset_heap()"};
 
 #if ERHE_TEXTURE_HEAP_LOG
     log_texture_heap->trace("Texture_heap_impl::reset_heap()");
 #endif
 
+    reset_heap_state();
+}
+
+void Texture_heap_impl::reset_heap_state()
+{
     if ((m_device.get_info().texture_heap_path == Texture_heap_path::opengl_bindless_textures)) {
         m_textures.clear();
         m_samplers.clear();
@@ -222,9 +228,9 @@ auto Texture_heap_impl::allocate(const Texture* texture, const Sampler* sampler)
 }
 
 // TODO Maybe this should use Render_command_encoder?
-void Texture_heap_impl::unbind()
+void Texture_heap_impl::unbind(Command_buffer& command_buffer)
 {
-    Scoped_debug_group debug_group{"Texture_heap_impl::unbind()"};
+    Scoped_debug_group debug_group{command_buffer, "Texture_heap_impl::unbind()"};
 
 #if ERHE_TEXTURE_HEAP_LOG
     log_texture_heap->trace("Texture_heap_impl::unbind()");
@@ -281,9 +287,9 @@ auto get_binding_p_name(const gl::Texture_target gl_target) -> gl::Get_p_name
     }
 }
 
-auto Texture_heap_impl::bind(Render_command_encoder& /*encoder*/) -> std::size_t
+auto Texture_heap_impl::bind(Render_command_encoder& encoder) -> std::size_t
 {
-    Scoped_debug_group debug_group{"Texture_heap_impl::bind()"};
+    Scoped_debug_group debug_group{encoder.get_command_buffer(), "Texture_heap_impl::bind()"};
 
 #if ERHE_TEXTURE_HEAP_LOG
     log_texture_heap->trace(

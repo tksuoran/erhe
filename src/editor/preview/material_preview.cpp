@@ -160,7 +160,9 @@ void Material_preview::render_preview(const std::shared_ptr<erhe::primitive::Mat
 {
     ERHE_PROFILE_FUNCTION();
 
-    erhe::graphics::Scoped_debug_group outer_debug_scope{"Scene_preview::render_preview()"};
+    ERHE_VERIFY(m_context.current_command_buffer != nullptr);
+    erhe::graphics::Command_buffer& command_buffer = *m_context.current_command_buffer;
+    erhe::graphics::Scoped_debug_group outer_debug_scope{command_buffer, "Scene_preview::render_preview()"};
 
     m_content_library->materials->remove_all_children_recursively();
     m_content_library->materials->add(material);
@@ -181,9 +183,6 @@ void Material_preview::render_preview(const std::shared_ptr<erhe::primitive::Mat
         get_reverse_depth(),
         get_depth_range()
     );
-
-    ERHE_VERIFY(m_context.current_command_buffer != nullptr);
-    erhe::graphics::Command_buffer& command_buffer = *m_context.current_command_buffer;
     erhe::graphics::Render_command_encoder render_encoder = m_graphics_device.make_render_command_encoder(command_buffer);
     erhe::graphics::Scoped_render_pass scoped_render_pass{*m_render_pass.get(), command_buffer};
     const Render_context context{

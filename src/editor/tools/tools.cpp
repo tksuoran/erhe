@@ -19,6 +19,7 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_utility/bit_helpers.hpp"
+#include "erhe_verify/verify.hpp"
 
 namespace editor {
 
@@ -40,7 +41,7 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(
     // Only reads depth buffer, only writes stencil buffer.
     , tool1_hidden_stencil{graphics_device, erhe::graphics::Render_pipeline_create_info{
         .debug_label             = erhe::utility::Debug_label{"Tool pass 1: Tag depth hidden `s_stencil_tool_mesh_hidden`"},
-        .shader_stages           = &programs.tool.shader_stages,
+        .lazy_shader_stages      = &programs.tool,
         .vertex_input            = &mesh_memory.vertex_input,
         .input_assembly          = Input_assembly_state::triangle,
         .rasterization           = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
@@ -75,7 +76,7 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(
     // Only reads depth buffer, only writes stencil buffer.
     , tool2_visible_stencil{graphics_device, erhe::graphics::Render_pipeline_create_info{
         .debug_label             = erhe::utility::Debug_label{"Tool pass 2: Tag visible tool parts `s_stencil_tool_mesh_visible`"},
-        .shader_stages           = &programs.tool.shader_stages,
+        .lazy_shader_stages      = &programs.tool,
         .vertex_input            = &mesh_memory.vertex_input,
         .input_assembly          = erhe::graphics::Input_assembly_state::triangle,
         .rasterization           = erhe::graphics::Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
@@ -110,7 +111,7 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(
     // Only writes depth buffer, depth test always.
     , tool3_depth_clear{graphics_device, erhe::graphics::Render_pipeline_create_info{
         .debug_label          = erhe::utility::Debug_label{"Tool pass 3: Set depth to fixed value"},
-        .shader_stages        = &programs.tool.shader_stages,
+        .lazy_shader_stages   = &programs.tool,
         .vertex_input         = &mesh_memory.vertex_input,
         .input_assembly       = Input_assembly_state::triangle,
         .viewport_depth_range = Viewport_depth_range_state{
@@ -126,7 +127,7 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(
     // Normal depth buffer update with depth test.
     , tool4_depth{graphics_device, erhe::graphics::Render_pipeline_create_info{
         .debug_label    = erhe::utility::Debug_label{"Tool pass 4: Set depth to proper tool depth"},
-        .shader_stages  = &programs.tool.shader_stages,
+        .lazy_shader_stages = &programs.tool,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangle,
         .rasterization  = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
@@ -138,7 +139,7 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(
     // Normal depth test, stencil test require s_stencil_tool_mesh_visible, color writes enabled, no blending
     , tool5_visible_color{graphics_device, erhe::graphics::Render_pipeline_create_info{
         .debug_label             = erhe::utility::Debug_label{"Tool pass 5: Render visible tool parts, require `s_stencil_tool_mesh_visible`"},
-        .shader_stages           = &programs.tool.shader_stages,
+        .lazy_shader_stages      = &programs.tool,
         .vertex_input            = &mesh_memory.vertex_input,
         .input_assembly          = Input_assembly_state::triangle,
         .rasterization           = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
@@ -173,7 +174,7 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(
     // Normal depth test, stencil test requires s_stencil_tool_mesh_hidden, color writes enabled, blending
     , tool6_hidden_color{graphics_device, erhe::graphics::Render_pipeline_create_info{
         .debug_label                = erhe::utility::Debug_label{"Tool pass 6: Render hidden tool parts, require `s_stencil_tool_mesh_hidden`"},
-        .shader_stages              = &programs.tool.shader_stages,
+        .lazy_shader_stages         = &programs.tool,
         .vertex_input               = &mesh_memory.vertex_input,
         .input_assembly             = Input_assembly_state::triangle,
         .rasterization              = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
@@ -257,9 +258,6 @@ Tools::Tools(
     const auto tools_content_library = std::make_shared<Content_library>();
 
     m_scene_root = std::make_shared<Scene_root>(
-        nullptr,
-        nullptr,
-        nullptr,
         nullptr, // Do not process editor messages
         tools_content_library,
         "Tool scene",
@@ -340,7 +338,8 @@ void Tools::update_transforms()
 void Tools::render_viewport_tools(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION();
-    erhe::graphics::Scoped_debug_group debug_group{"Tools::render_viewport_tools"};
+    ERHE_VERIFY(context.command_buffer != nullptr);
+    erhe::graphics::Scoped_debug_group debug_group{*context.command_buffer, "Tools::render_viewport_tools"};
 
     for (const auto& tool : m_background_tools) {
         tool->tool_render(context);

@@ -110,6 +110,15 @@ public:
 
     auto make_composition_pass(std::string_view name) -> std::shared_ptr<Composition_pass>;
 
+    // Read-only access to the Composer's pass list for callers that need
+    // to walk the variant-aware Lazy_render_pipeline pointers. Returns
+    // the underlying vector by const reference WITHOUT taking the
+    // Composer's mutex, so callers must guarantee single-threaded access
+    // at the point of call. Intended exclusively for init-time use (the
+    // shader-variant prewarm in renderers/prewarm.cpp); do not call from
+    // the render thread.
+    [[nodiscard]] auto composition_passes() const -> const std::vector<std::shared_ptr<Composition_pass>>&;
+
     void imgui();
     void request_renderdoc_capture();
 

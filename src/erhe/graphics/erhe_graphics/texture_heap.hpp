@@ -7,6 +7,7 @@
 namespace erhe::graphics {
 
 class Bind_group_layout;
+class Command_buffer;
 class Device;
 class Render_command_encoder;
 class Sampler;
@@ -28,11 +29,17 @@ public:
     );
     ~Texture_heap() noexcept;
 
-    void reset_heap       ();
+    // Command_buffer is the cb that bracketing Scoped_debug_groups
+    // record into. On Vulkan the cb is load-bearing (cb-recorded
+    // vkCmdBeginDebugUtilsLabelEXT). On GL the cb is a stub passed only
+    // so the GL scoped debug groups around bindless make-resident /
+    // make-non-resident sequences continue to bracket the same code
+    // they always have.
+    void reset_heap       (Command_buffer& command_buffer);
     auto allocate         (const Texture* texture, const Sampler* sample) -> uint64_t;
     auto get_shader_handle(const Texture* texture, const Sampler* sample) -> uint64_t; // bindless ? handle : slot
     auto bind             (Render_command_encoder& encoder) -> std::size_t;
-    void unbind           ();
+    void unbind           (Command_buffer& command_buffer);
 
 private:
     erhe::utility::pimpl_ptr<Texture_heap_impl, 512, 16> m_impl;

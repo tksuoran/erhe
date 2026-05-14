@@ -25,6 +25,9 @@ namespace erhe::graphics {
     class Render_pipeline_state;
     class Texture;
 }
+namespace erhe::primitive {
+    class Material;
+}
 namespace erhe::scene {
     class Camera;
     class Light;
@@ -35,6 +38,7 @@ namespace erhe::scene {
 namespace erhe::scene_renderer {
 
 class Program_interface;
+class Standard_shader_variants;
 
 class Forward_renderer
 {
@@ -54,13 +58,17 @@ public:
     public:
         erhe::graphics::Render_command_encoder&                            render_encoder;
         erhe::dataformat::Format                                           index_type       {erhe::dataformat::Format::format_32_scalar_uint};
-        erhe::graphics::Buffer*                                            index_buffer     {nullptr};
-        erhe::graphics::Buffer*                                            vertex_buffer0   {nullptr};
-        erhe::graphics::Buffer*                                            vertex_buffer1   {nullptr};
-        erhe::graphics::Buffer*                                            vertex_buffer2   {nullptr};
 
         const glm::vec3                                                    ambient_light    {0.0f};
         const erhe::scene::Camera*                                         camera           {nullptr};
+        // Multiview cameras. When non-empty, the renderer writes one
+        // Camera UBO entry per view via Camera_buffer::update_views()
+        // and binds the resulting block; shaders compiled with
+        // enable_multiview() then index camera.cameras[gl_ViewIndex].
+        // The single `camera` field above is ignored on this path. The
+        // span size must match Program_interface_config::max_view_count
+        // (i.e. the cameras[N] array size declared in the UBO).
+        std::span<const Camera_view_input>                                 multiview_views{};
         const Light_projections*                                           light_projections{nullptr};
         const std::span<const std::shared_ptr<erhe::scene::Light>>&        lights           {};
         const std::span<const std::shared_ptr<erhe::scene::Skin>>&         skins            {};
@@ -77,6 +85,15 @@ public:
         const erhe::Item_filter                                            filter{};
         const erhe::graphics::Shader_stages*                               override_shader_stages{nullptr};
         const erhe::graphics::Shader_stages*                               error_shader_stages{nullptr};
+        // Optional. When non-null and a pipeline opts in via
+        // Render_pipeline_create_info::uses_standard_variants, the bucket
+        // loop computes a per-bucket Standard_variant_key (material caps
+        // OR'd across the bucket's primitives, the pipeline's
+        // vertex_format, mesh.skin presence OR'd across the bucket, and
+        // light_projections->light_counts) and overrides the bucket's
+        // shader_stages with the cache lookup. Skipped when
+        // override_shader_stages is non-null (debug-viz takes priority).
+        Standard_shader_variants*                                          standard_shader_variants{nullptr};
         const glm::uvec4&                                                  debug_joint_indices{0, 0, 0, 0};
         const std::span<glm::vec4>&                                        debug_joint_colors{};
         const std::string_view                                             debug_label;
@@ -92,6 +109,43 @@ public:
 
     void render(const Render_parameters& parameters);
     void draw_primitives(const Render_parameters& parameters, const erhe::scene::Light* light);
+
+    // Init-time prewarm. Walks the same buckets render() would build for
+    // each (pipeline, mesh_span) pair, computes the per-bucket
+    // Standard_variant_key with the supplied light_counts, and calls
+    // standard_shader_variants->get_or_compile(key, view_count) for every
+    // requested view count. Pipelines that do not opt into standard
+    // variants (uses_standard_variants=false or vertex_format=null) are
+    // skipped, exactly mirroring the runtime gate.
+    //
+    // extra_materials is a content-library style list whose meshes are
+    // not yet attached to the scene -- each material is converted to a
+    // single Standard_variant_key against fallback_vertex_format (no
+    // skin, no aniso_control beyond what the material/format combination
+    // would imply at draw time) and prewarmed once. extra_materials is
+    // ignored when fallback_vertex_format is null.
+    //
+    // Performs no GPU draws and does not require a Render_command_encoder.
+    // The compile work is glslang -> SPIR-V -> vkCreateShaderModule for
+    // each cache miss; populating the per-pipeline VkPipeline cache is
+    // the caller's responsibility (see Device::warmup_render_pipeline
+    // when it lands).
+    class Prewarm_parameters
+    {
+    public:
+        std::span<erhe::graphics::Lazy_render_pipeline*>             render_pipeline_states;
+        const std::vector<
+            std::span<const std::shared_ptr<erhe::scene::Mesh>>
+        >&                                                           mesh_spans;
+        std::span<const std::shared_ptr<erhe::primitive::Material>>  extra_materials{};
+        Standard_variant_light_counts                                light_counts{};
+        std::span<const uint32_t>                                    multiview_view_counts;
+        Standard_shader_variants*                                    standard_shader_variants{nullptr};
+        const erhe::dataformat::Vertex_format*                       fallback_vertex_format{nullptr};
+        erhe::primitive::Primitive_mode                              primitive_mode{erhe::primitive::Primitive_mode::polygon_fill};
+    };
+
+    void prewarm_standard_variants(const Prewarm_parameters& parameters);
 
     static const std::vector<std::span<const std::shared_ptr<erhe::scene::Mesh>>> empty_mesh_spans;
 

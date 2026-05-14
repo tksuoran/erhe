@@ -66,7 +66,6 @@ private:
     bool                                             m_is_active{false};
 
     erhe::utility::Debug_label                   m_debug_group_name;
-    erhe::utility::Debug_label                   m_end_debug_group_name;
     erhe::utility::Debug_label                   m_begin_debug_group_name;
     std::unique_ptr<Scoped_debug_group>          m_outer_debug_group;
 

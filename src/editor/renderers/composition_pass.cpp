@@ -122,11 +122,8 @@ void Composition_pass::render(const Render_context& context)
         context.app_context.forward_renderer->draw_primitives(
             erhe::scene_renderer::Forward_renderer::Render_parameters{
                 .render_encoder         = *context.encoder,
-                .index_buffer           = &context.app_context.mesh_memory->index_buffer,
-                .vertex_buffer0         = &context.app_context.mesh_memory->vertex_buffer_position,
-                .vertex_buffer1         = &context.app_context.mesh_memory->vertex_buffer_non_position,
-                .vertex_buffer2         = &context.app_context.mesh_memory->vertex_buffer_custom,
                 .camera                 = context.camera,
+                .multiview_views        = context.multiview_views,
                 .light_projections      = nullptr,
                 .lights                 = {},
                 .skins                  = {},
@@ -143,7 +140,7 @@ void Composition_pass::render(const Render_context& context)
                             : erhe::scene_renderer::Primitive_interface_settings{},
                 .viewport               = context.viewport,
                 .override_shader_stages = this->allow_shader_stages_override ? context.override_shader_stages : nullptr,
-                .error_shader_stages    = &context.app_context.programs->error.shader_stages,
+                .error_shader_stages    = context.app_context.programs->error.shader_stages(),
                 .debug_label            = get_debug_label().string_view(),
                 .reverse_depth          = context.scene_view.get_reverse_depth(),
                 .depth_range            = context.scene_view.get_depth_range(),
@@ -174,21 +171,24 @@ void Composition_pass::render(const Render_context& context)
         erhe::scene_renderer::Content_wide_line_renderer* content_wide_line_renderer = context.app_context.content_wide_line_renderer;
         if (use_content_wide_line_renderer && (content_wide_line_renderer != nullptr) && content_wide_line_renderer->is_enabled()) {
             ERHE_VERIFY(context.render_pass != nullptr);
-            // Render the compute-expanded triangles with the outline pipeline state
+            // Render the compute-expanded triangles with the outline
+            // pipeline state. Under multiview the renderer binds its
+            // sibling SSBO-read graphics shader and the surrounding
+            // multiview render pass distributes the single draw across
+            // both layers; under single-view the existing
+            // vertex-attribute path runs.
+            const bool multiview = !context.multiview_views.empty();
             for (auto* render_pipeline_state : render_pipeline_states) {
-                content_wide_line_renderer->render(*context.encoder, *render_pipeline_state, *context.render_pass, content_wide_line_group);
+                content_wide_line_renderer->render(*context.encoder, *render_pipeline_state, *context.render_pass, content_wide_line_group, multiview);
             }
         } else {
             context.app_context.forward_renderer->render(
                 erhe::scene_renderer::Forward_renderer::Render_parameters{
                     .render_encoder         = *context.encoder,
                     .index_type             = context.app_context.mesh_memory->buffer_info.index_type,
-                    .index_buffer           = &context.app_context.mesh_memory->index_buffer,
-                    .vertex_buffer0         = &context.app_context.mesh_memory->vertex_buffer_position,
-                    .vertex_buffer1         = &context.app_context.mesh_memory->vertex_buffer_non_position,
-                    .vertex_buffer2         = &context.app_context.mesh_memory->vertex_buffer_custom,
                     .ambient_light          = layers.light()->ambient_light,
                     .camera                 = context.camera,
+                    .multiview_views        = context.multiview_views,
                     .light_projections      = context.scene_view.get_light_projections(),
                     .lights                 = layers.light()->lights,
                     .skins                  = scene->get_skins(),
@@ -205,8 +205,9 @@ void Composition_pass::render(const Render_context& context)
                                 : erhe::scene_renderer::Primitive_interface_settings{},
                     .viewport               = context.viewport,
                     .filter                 = this->filter,
-                    .override_shader_stages = this->allow_shader_stages_override ? context.override_shader_stages : nullptr,
-                    .error_shader_stages    = &context.app_context.programs->error.shader_stages,
+                    .override_shader_stages   = this->allow_shader_stages_override ? context.override_shader_stages : nullptr,
+                    .error_shader_stages      = context.app_context.programs->error.shader_stages(),
+                    .standard_shader_variants = context.app_context.standard_shader_variants,
                     .debug_joint_indices    = context.app_context.app_rendering->debug_joint_indices,
                     .debug_joint_colors     = context.app_context.app_rendering->debug_joint_colors,
                     .debug_label            = get_name(),

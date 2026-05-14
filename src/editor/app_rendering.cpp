@@ -28,7 +28,7 @@
 #include "erhe_graphics/render_pipeline.hpp"
 #include "erhe_graphics/scoped_debug_group.hpp"
 #include "erhe_math/math_util.hpp"
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
 #   include "erhe_gl/wrapper_functions.hpp"
 #   include "erhe_gl/enum_bit_mask_operators.hpp"
 #endif
@@ -380,7 +380,7 @@ void App_rendering::handle_graphics_settings_changed(Graphics_preset_entry* grap
     }
 
     if (graphics_preset != nullptr) {
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
         if (m_context.graphics_device->get_info().use_clip_control) {
             gl::clip_control(
                 gl::Clip_control_origin::lower_left,
@@ -463,6 +463,11 @@ auto App_rendering::make_composition_pass(const std::string_view name) -> std::s
     return renderpass;
 }
 
+auto App_rendering::composition_passes() const -> const std::vector<std::shared_ptr<Composition_pass>>&
+{
+    return m_composer.composition_passes;
+}
+
 using Vertex_input_state         = erhe::graphics::Vertex_input_state;
 using Input_assembly_state       = erhe::graphics::Input_assembly_state;
 using Multisample_state          = erhe::graphics::Multisample_state;
@@ -471,18 +476,31 @@ using Rasterization_state        = erhe::graphics::Rasterization_state;
 using Depth_stencil_state        = erhe::graphics::Depth_stencil_state;
 using Color_blend_state          = erhe::graphics::Color_blend_state;
 
+// Helper: look up the multiview-compiled variant of `name` on Programs
+// and return it as a non-const Shader_stages* matching the
+// Render_pipeline_create_info::multiview_shader_stages field shape.
+// Returns nullptr when multiview was disabled at startup or when the
+// shader was never registered; in that case the pipeline falls back
+// to its single-view shader_stages on every render path.
+//
+// (After Phase 2b, every pipeline uses .lazy_shader_stages = &programs.foo
+// directly. The handle bundles single-view + multiview siblings, so the
+// previous get_multiview_stages helper is gone.)
+
 Pipeline_renderpasses::Pipeline_renderpasses(
     erhe::graphics::Device&            graphics_device,
     erhe::scene_renderer::Mesh_memory& mesh_memory,
-    Programs&                          programs, 
+    Programs&                          programs,
     const bool                         reverse_depth
 )
     : m_y_flip{graphics_device.get_info().coordinate_conventions.clip_space_y_flip == erhe::math::Clip_space_y_flip::enabled}
     , m_empty_vertex_input{graphics_device}
     , polygon_fill_standard_opaque_positive_determinant{graphics_device, erhe::graphics::Render_pipeline_create_info{
         .debug_label    = erhe::utility::Debug_label{"Polygon Fill Opaque Positive Determinant"},
-        .shader_stages  = &programs.circular_brushed_metal.shader_stages,
+        .lazy_shader_stages = &programs.standard,
         .vertex_input   = &mesh_memory.vertex_input,
+        .vertex_format  = &mesh_memory.vertex_format,
+        .uses_standard_variants = true,
         .input_assembly = Input_assembly_state::triangle,
         .rasterization  = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
         .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
@@ -490,8 +508,10 @@ Pipeline_renderpasses::Pipeline_renderpasses(
     }}
     , polygon_fill_standard_opaque_negative_determinant{graphics_device, erhe::graphics::Render_pipeline_create_info{
         .debug_label    = erhe::utility::Debug_label{"Polygon Fill Opaque Negative Determinant"},
-        .shader_stages  = &programs.circular_brushed_metal.shader_stages,
+        .lazy_shader_stages = &programs.standard,
         .vertex_input   = &mesh_memory.vertex_input,
+        .vertex_format  = &mesh_memory.vertex_format,
+        .uses_standard_variants = true,
         .input_assembly = Input_assembly_state::triangle,
         .rasterization  = Rasterization_state::cull_mode_back_cw.with_winding_flip_if(m_y_flip),
         .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
@@ -499,8 +519,10 @@ Pipeline_renderpasses::Pipeline_renderpasses(
     }}
     , polygon_fill_standard_opaque_selected_positive_determinant{graphics_device, erhe::graphics::Render_pipeline_create_info{
         .debug_label    = erhe::utility::Debug_label{"Polygon Fill Opaque Selected Positive Determinant"},
-        .shader_stages  = &programs.circular_brushed_metal.shader_stages,
+        .lazy_shader_stages = &programs.standard,
         .vertex_input   = &mesh_memory.vertex_input,
+        .vertex_format  = &mesh_memory.vertex_format,
+        .uses_standard_variants = true,
         .input_assembly = Input_assembly_state::triangle,
         .rasterization  = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
         .depth_stencil  = {
@@ -531,8 +553,10 @@ Pipeline_renderpasses::Pipeline_renderpasses(
     }}
     , polygon_fill_standard_opaque_selected_negative_determinant{graphics_device, erhe::graphics::Render_pipeline_create_info{
         .debug_label    = erhe::utility::Debug_label{"Polygon Fill Opaque Selected Negative Determinant"},
-        .shader_stages  = &programs.circular_brushed_metal.shader_stages,
+        .lazy_shader_stages = &programs.standard,
         .vertex_input   = &mesh_memory.vertex_input,
+        .vertex_format  = &mesh_memory.vertex_format,
+        .uses_standard_variants = true,
         .input_assembly = Input_assembly_state::triangle,
         .rasterization  = Rasterization_state::cull_mode_back_cw.with_winding_flip_if(m_y_flip),
         .depth_stencil  = {
@@ -563,8 +587,10 @@ Pipeline_renderpasses::Pipeline_renderpasses(
     }}
     , polygon_fill_standard_translucent{graphics_device, erhe::graphics::Render_pipeline_create_info{
         .debug_label    = erhe::utility::Debug_label{"Polygon Fill Translucent"},
-        .shader_stages  = &programs.circular_brushed_metal.shader_stages,
+        .lazy_shader_stages = &programs.standard,
         .vertex_input   = &mesh_memory.vertex_input,
+        .vertex_format  = &mesh_memory.vertex_format,
+        .uses_standard_variants = true,
         .input_assembly = Input_assembly_state::triangle,
         .rasterization  = Rasterization_state::cull_mode_none,
         .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
@@ -572,7 +598,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(
     }}
     , line_hidden_blend{graphics_device, erhe::graphics::Render_pipeline_create_info{
         .debug_label             = erhe::utility::Debug_label{"Hidden lines with blending"},
-        .shader_stages           = &programs.wide_lines_draw_color.shader_stages,
+        .lazy_shader_stages      = &programs.wide_lines_draw_color,
         .vertex_input            = &mesh_memory.vertex_input,
         .input_assembly          = Input_assembly_state::line,
         .multisample             = Multisample_state{
@@ -624,7 +650,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(
     }}
     , brush_back{graphics_device, erhe::graphics::Render_pipeline_create_info{
         .debug_label    = erhe::utility::Debug_label{"Brush back faces"},
-        .shader_stages  = &programs.brush.shader_stages,
+        .lazy_shader_stages = &programs.brush,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangle,
         .rasterization  = Rasterization_state::cull_mode_front_ccw.with_winding_flip_if(m_y_flip),
@@ -633,7 +659,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(
     }}
     , brush_front{graphics_device, erhe::graphics::Render_pipeline_create_info{
         .debug_label    = erhe::utility::Debug_label{"Brush front faces"},
-        .shader_stages  = &programs.brush.shader_stages,
+        .lazy_shader_stages = &programs.brush,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangle,
         .rasterization  = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
@@ -642,7 +668,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(
     }}
     , edge_lines{graphics_device, erhe::graphics::Render_pipeline_create_info{
         .debug_label    = erhe::utility::Debug_label{"Edge Lines"},
-        .shader_stages  = &programs.wide_lines_draw_color.shader_stages,
+        .lazy_shader_stages = &programs.wide_lines_draw_color,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::line,
         .rasterization  = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
@@ -674,7 +700,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(
     }}
     , outline{graphics_device, erhe::graphics::Render_pipeline_create_info{
         .debug_label    = erhe::utility::Debug_label{"Outline (selection/hover)"},
-        .shader_stages  = &programs.wide_lines_draw_color.shader_stages,
+        .lazy_shader_stages = &programs.wide_lines_draw_color,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::line,
         .multisample    = Multisample_state{
@@ -709,7 +735,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(
     }}
     , corner_points{graphics_device, erhe::graphics::Render_pipeline_create_info{
         .debug_label    = erhe::utility::Debug_label{"Corner Points"},
-        .shader_stages  = &programs.points.shader_stages,
+        .lazy_shader_stages = &programs.points,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::point,
         .rasterization  = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
@@ -718,7 +744,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(
     }}
     , polygon_centroids{graphics_device, erhe::graphics::Render_pipeline_create_info{
         .debug_label    = erhe::utility::Debug_label{"Polygon Centroids"},
-        .shader_stages  = &programs.points.shader_stages,
+        .lazy_shader_stages = &programs.points,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::point,
         .rasterization  = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
@@ -727,7 +753,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(
     }}
     , rendertarget_meshes{graphics_device, erhe::graphics::Render_pipeline_create_info{
         .debug_label    = erhe::utility::Debug_label{"Rendertarget Meshes"},
-        .shader_stages  = &programs.textured.shader_stages,
+        .lazy_shader_stages = &programs.textured,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangle,
         .rasterization  = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
@@ -738,7 +764,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(
     }}
     , sky{graphics_device, erhe::graphics::Render_pipeline_create_info{
         .debug_label          = erhe::utility::Debug_label{"Sky"},
-        .shader_stages        = &programs.sky.shader_stages,
+        .lazy_shader_stages   = &programs.sky,
         .vertex_input         = &mesh_memory.vertex_input,
         .input_assembly       = Input_assembly_state::triangle,
         .viewport_depth_range = Viewport_depth_range_state{
@@ -774,7 +800,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(
     }}
     , grid{graphics_device, erhe::graphics::Render_pipeline_create_info{
         .debug_label    = erhe::utility::Debug_label{"Grid"},
-        .shader_stages  = &programs.grid.shader_stages,
+        .lazy_shader_stages = &programs.grid,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangle,
         .rasterization  = Rasterization_state::cull_mode_none_depth_clamp,
@@ -1015,7 +1041,8 @@ void App_rendering::render_viewport_renderables(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION();
 
-    erhe::graphics::Scoped_debug_group debug_group{"App_rendering::render_viewport_renderables"};
+    ERHE_VERIFY(context.command_buffer != nullptr);
+    erhe::graphics::Scoped_debug_group debug_group{*context.command_buffer, "App_rendering::render_viewport_renderables"};
 
     for (auto* renderable : m_renderables) {
         renderable->render(context);
@@ -1028,7 +1055,8 @@ void App_rendering::render_composer(const Render_context& context)
 
     static constexpr std::string_view c_id_main{"Main"};
     //ERHE_PROFILE_GPU_SCOPE(c_id_main);
-    erhe::graphics::Scoped_debug_group pass_scope{"App_rendering::render_composer()"};
+    ERHE_VERIFY(context.command_buffer != nullptr);
+    erhe::graphics::Scoped_debug_group pass_scope{*context.command_buffer, "App_rendering::render_composer()"};
 
     m_composer.render(context);
 

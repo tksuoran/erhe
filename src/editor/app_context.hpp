@@ -25,6 +25,7 @@ namespace erhe::scene_renderer {
     class Forward_renderer;
     class Mesh_memory;
     class Shadow_renderer;
+    class Standard_shader_variants;
 }
 namespace erhe::commands { class Commands; }
 namespace erhe::window { class Context_window; }
@@ -135,6 +136,14 @@ public:
     erhe::rendergraph::Rendergraph*         rendergraph           {nullptr};
     erhe::scene_renderer::Forward_renderer* forward_renderer      {nullptr};
     erhe::scene_renderer::Shadow_renderer*  shadow_renderer       {nullptr};
+    // On-demand cache of "standard" shader variants. Lifetime is owned by
+    // editor.cpp; the pointer here lets render-time call sites reach the
+    // cache to look up a (material, vertex_format, scene-light-counts)
+    // variant via Standard_shader_variants::get_or_compile() and pass the
+    // result through Forward_renderer::Render_parameters::override_shader_stages.
+    // Stays null until Programs::load_programs() finishes -- the fallback
+    // shader the typed adapter holds is programs->error.shader_stages().
+    erhe::scene_renderer::Standard_shader_variants* standard_shader_variants{nullptr};
     erhe::window::Context_window*           context_window        {nullptr};
     Brdf_slice*                             brdf_slice            {nullptr};
     Brush_tool*                             brush_tool            {nullptr};

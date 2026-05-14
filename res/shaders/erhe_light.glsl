@@ -1,6 +1,7 @@
 #ifndef ERHE_LIGHT_GLSL
 #define ERHE_LIGHT_GLSL
 
+#include "erhe_camera_view.glsl"
 #include "erhe_texture.glsl"
 
 #if __VERSION__ >= 450
@@ -40,7 +41,13 @@ float sample_light_visibility(vec4 position, uint light_index, float N_dot_L) {
     // bound via Render_command_encoder::set_sampled_image() for all backends.
 
     Light light                                 = light_block.lights[light_index];
-    float array_layer                           = float(light_index);
+    // shadow_index_packed.x is the dense shadow-array-layer the
+    // Shadow_renderer wrote this light's depth map into. It differs
+    // from light_index whenever an earlier type bucket has any
+    // non-shadow lights (those skip the shadow array layer); without
+    // this indirection mixed shadow/non-shadow scenes sample the wrong
+    // layer.
+    float array_layer                           = float(light.shadow_index_packed.x);
     vec4  position_in_light_texture_homogeneous = light.texture_from_world * position;
     vec3  position_in_light_texture             = position_in_light_texture_homogeneous.xyz / position_in_light_texture_homogeneous.w;
     if (position_in_light_texture.z <= 0.0) {
@@ -57,7 +64,7 @@ float sample_light_visibility(vec4 position, uint light_index, float N_dot_L) {
     //  - For reasons I do not fully yet understand, I had to scale the bias
     //      - Code uses 2.0 at the moment, but smaller values seem to also work.
 
-    float cdd = camera.cameras[0].clip_depth_direction; // -1.0 reverse Z, 1.0 forward Z
+    float cdd = camera.cameras[c_view_index].clip_depth_direction; // -1.0 reverse Z, 1.0 forward Z
 
     // First, a common part:
     vec2  dU_dXY = vec2(ERHE_DFDX(position_in_light_texture.x), ERHE_DFDY(position_in_light_texture.x));

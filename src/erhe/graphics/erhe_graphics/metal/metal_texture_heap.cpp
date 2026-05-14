@@ -6,9 +6,11 @@
 #include "erhe_graphics/metal/metal_render_pass.hpp"
 #include "erhe_graphics/bind_group_layout.hpp"
 #include "erhe_graphics/buffer.hpp"
+#include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/ring_buffer.hpp"
 #include "erhe_graphics/ring_buffer_range.hpp"
+#include "erhe_graphics/scoped_debug_group.hpp"
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_graphics/sampler.hpp"
@@ -152,8 +154,9 @@ Texture_heap_impl::~Texture_heap_impl() noexcept
     m_argument_buffer_range.cancel();
 }
 
-void Texture_heap_impl::reset_heap()
+void Texture_heap_impl::reset_heap(Command_buffer& command_buffer)
 {
+    Scoped_debug_group debug_group{command_buffer, "Texture_heap_impl::reset_heap()"};
     m_textures.clear();
     m_samplers.clear();
     m_used_slot_count = 0;
@@ -310,8 +313,9 @@ auto Texture_heap_impl::bind(Render_command_encoder& /*encoder*/) -> std::size_t
     return m_used_slot_count;
 }
 
-void Texture_heap_impl::unbind()
+void Texture_heap_impl::unbind(Command_buffer& command_buffer)
 {
+    Scoped_debug_group debug_group{command_buffer, "Texture_heap_impl::unbind()"};
 }
 
 } // namespace erhe::graphics

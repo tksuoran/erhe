@@ -53,7 +53,7 @@ Depth_to_color_rendergraph_node::Depth_to_color_rendergraph_node(
         rendergraph.get_graphics_device(),
         erhe::graphics::Render_pipeline_create_info{
             .debug_label    = erhe::utility::Debug_label{"Debug_view"},
-            .shader_stages  = &programs.debug_depth.shader_stages,
+            .lazy_shader_stages = &programs.debug_depth,
             .vertex_input   = &m_empty_vertex_input,
             .input_assembly = erhe::graphics::Input_assembly_state::triangle,
             .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
@@ -116,7 +116,10 @@ void Depth_to_color_rendergraph_node::execute_rendergraph_node(erhe::graphics::C
         return;
     }
 
-    erhe::graphics::Scoped_debug_group pass_scope{"Depth_to_color_rendergraph_node::execute_rendergraph_node()"};
+    erhe::graphics::Scoped_debug_group pass_scope{
+        command_buffer,
+        "Depth_to_color_rendergraph_node::execute_rendergraph_node()"
+    };
 
     erhe::graphics::Render_pass* render_pass = m_render_target.get_render_pass();
     erhe::math::Viewport viewport{
@@ -144,9 +147,6 @@ void Depth_to_color_rendergraph_node::execute_rendergraph_node(erhe::graphics::C
         erhe::scene_renderer::Forward_renderer::Render_parameters{
             .render_encoder         = render_encoder,
             .index_type             = m_mesh_memory.buffer_info.index_type,
-            .index_buffer           = nullptr,
-            .vertex_buffer0         = nullptr,
-            .vertex_buffer1         = nullptr,
             .light_projections      = &light_projections,
             .lights                 = layers.light()->lights,
             .materials              = {},
