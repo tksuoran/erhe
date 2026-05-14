@@ -39,8 +39,9 @@ auto Standard_shader_variants::get_or_compile(
         return stages;
     }
     // Standard variant compile failed; fall back to the supplied
-    // handle (typically programs.error). The handle is itself lazy --
-    // it compiles its underlying shader on first access.
+    // handle (typically programs.error). The handle resolves through
+    // the same variant cache, so the fallback shader is compiled on its
+    // first access and memoized for later calls.
     return m_fallback_handle.shader_stages();
 }
 

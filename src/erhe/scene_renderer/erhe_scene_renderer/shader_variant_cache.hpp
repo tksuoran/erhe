@@ -18,6 +18,7 @@ namespace erhe::graphics {
 namespace erhe::scene_renderer {
 
 class Program_interface;
+class Variant_handle;
 
 // Registry of shader source names that Shader_variant_key accepts.
 // Acts as a name-typo guard: passing an unknown name to the ctor will
@@ -119,12 +120,27 @@ public:
     // Variant without a fallback. Returns nullptr on compile failure.
     [[nodiscard]] auto get_or_compile(const Shader_variant_key& key) -> const erhe::graphics::Shader_stages*;
 
-    // Drop every cached variant. Returned pointers become dangling.
-    // Shader_monitor entries are detached first so the polling thread
-    // does not call reload() on freed memory.
+    // Drop every cached variant. Returned pointers become dangling, so
+    // before freeing the entries clear() walks every registered
+    // Variant_handle and calls reset_memoization() on it. The next
+    // Variant_handle::shader_stages() / multiview_shader_stages() call
+    // therefore re-resolves through get_or_compile rather than handing
+    // out a dangling pointer. Shader_monitor entries are detached first
+    // so the polling thread does not call reload() on freed memory.
     void clear();
 
     [[nodiscard]] auto size() const -> std::size_t;
+
+    // Variant_handle registry. Handles register themselves at
+    // construction and unregister at destruction so clear() can walk
+    // every live handle and drop its memoized Shader_stages*. The
+    // m_mutex held by register / unregister / clear protects the
+    // m_handles vector only; the per-handle memoized Shader_stages*
+    // is left unsynchronized because every Variant_handle resolve and
+    // every clear() runs on the editor's render thread (the documented
+    // single-thread invariant described on Variant_handle).
+    void register_handle  (Variant_handle* handle);
+    void unregister_handle(Variant_handle* handle) noexcept;
 
 private:
     // Internal compile path. Caller holds m_mutex.
@@ -141,7 +157,8 @@ private:
         std::unique_ptr<erhe::graphics::Reloadable_shader_stages>,
         Shader_variant_key_hash
     > m_entries;
-    mutable std::mutex m_mutex;
+    std::vector<Variant_handle*> m_handles;
+    mutable std::mutex           m_mutex;
 };
 
 } // namespace erhe::scene_renderer

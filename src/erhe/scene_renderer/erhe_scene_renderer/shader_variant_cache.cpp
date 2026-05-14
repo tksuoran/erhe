@@ -2,6 +2,7 @@
 
 #include "erhe_scene_renderer/program_interface.hpp"
 #include "erhe_scene_renderer/scene_renderer_log.hpp"
+#include "erhe_scene_renderer/variant_handle.hpp"
 
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/shader_monitor.hpp"
@@ -298,6 +299,12 @@ void Shader_variant_cache::clear()
 {
     {
         std::lock_guard<std::mutex> lock{m_mutex};
+        // Reset memoized Shader_stages* on every live handle before
+        // freeing the entries; the cached pointers would otherwise
+        // dangle past this scope.
+        for (Variant_handle* handle : m_handles) {
+            handle->reset_memoization();
+        }
         erhe::graphics::Shader_monitor& monitor = m_graphics_device.get_shader_monitor();
         for (auto& [key, entry] : m_entries) {
             monitor.remove(*entry);
@@ -315,6 +322,25 @@ auto Shader_variant_cache::size() const -> std::size_t
 {
     std::lock_guard<std::mutex> lock{m_mutex};
     return m_entries.size();
+}
+
+void Shader_variant_cache::register_handle(Variant_handle* handle)
+{
+    ERHE_VERIFY(handle != nullptr);
+    std::lock_guard<std::mutex> lock{m_mutex};
+    m_handles.push_back(handle);
+}
+
+void Shader_variant_cache::unregister_handle(Variant_handle* handle) noexcept
+{
+    if (handle == nullptr) {
+        return;
+    }
+    std::lock_guard<std::mutex> lock{m_mutex};
+    std::vector<Variant_handle*>::iterator it = std::find(m_handles.begin(), m_handles.end(), handle);
+    if (it != m_handles.end()) {
+        m_handles.erase(it);
+    }
 }
 
 } // namespace erhe::scene_renderer
