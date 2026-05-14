@@ -643,7 +643,7 @@ void Mcp_server::refresh_tool_list()
             {"emissive",                   {{"type", "array"},   {"items", {{"type", "number"}}}, {"minItems", 3}, {"maxItems", 3}, {"description", "Linear RGB emissive [r, g, b]"}}},
             {"normal_texture_scale",       {{"type", "number"},  {"description", "Normal map scale"}}},
             {"occlusion_texture_strength", {{"type", "number"},  {"description", "Occlusion map strength"}}},
-            {"bxdf_model",                 {{"type", "string"},  {"enum", json::array({"unlit", "isotropic_brdf", "anisotropic_brdf"})}, {"description", "Selects which BxDF the standard shader applies"}}},
+            {"bxdf_model",                 {{"type", "string"},  {"enum", json::array({"unlit", "isotropic_brdf", "anisotropic_brdf", "anisotropic_slope", "anisotropic_engine_ready"})}, {"description", "Selects which BxDF the standard shader applies"}}},
             {"use_circular_brushed_metal", {{"type", "boolean"}, {"description", "Enable circular brushed metal shading variant"}}},
             {"use_aniso_control",          {{"type", "boolean"}, {"description", "Enable anisotropic shading control"}}},
             {"texture_samplers",           {
@@ -1044,9 +1044,11 @@ auto Mcp_server::query_material_details(const json& args) -> std::string
                 {"normal_texture_scale",       d.normal_texture_scale},
                 {"occlusion_texture_strength", d.occlusion_texture_strength},
                 {"bxdf_model",
-                    (d.bxdf_model == erhe::primitive::Bxdf_model::unlit)            ? "unlit" :
-                    (d.bxdf_model == erhe::primitive::Bxdf_model::anisotropic_brdf) ? "anisotropic_brdf" :
-                                                                                      "isotropic_brdf"},
+                    (d.bxdf_model == erhe::primitive::Bxdf_model::unlit)                    ? "unlit" :
+                    (d.bxdf_model == erhe::primitive::Bxdf_model::anisotropic_brdf)         ? "anisotropic_brdf" :
+                    (d.bxdf_model == erhe::primitive::Bxdf_model::anisotropic_slope)        ? "anisotropic_slope" :
+                    (d.bxdf_model == erhe::primitive::Bxdf_model::anisotropic_engine_ready) ? "anisotropic_engine_ready" :
+                                                                                              "isotropic_brdf"},
                 {"use_circular_brushed_metal", d.use_circular_brushed_metal},
                 {"use_aniso_control",          d.use_aniso_control},
                 {"texture_samplers", {
@@ -1964,8 +1966,12 @@ auto Mcp_server::action_edit_material(const json& args) -> std::string
                 after.bxdf_model = erhe::primitive::Bxdf_model::isotropic_brdf;
             } else if (s == "anisotropic_brdf") {
                 after.bxdf_model = erhe::primitive::Bxdf_model::anisotropic_brdf;
+            } else if (s == "anisotropic_slope") {
+                after.bxdf_model = erhe::primitive::Bxdf_model::anisotropic_slope;
+            } else if (s == "anisotropic_engine_ready") {
+                after.bxdf_model = erhe::primitive::Bxdf_model::anisotropic_engine_ready;
             } else {
-                json r = make_text_content("bxdf_model must be one of 'unlit', 'isotropic_brdf', 'anisotropic_brdf'");
+                json r = make_text_content("bxdf_model must be one of 'unlit', 'isotropic_brdf', 'anisotropic_brdf', 'anisotropic_slope', 'anisotropic_engine_ready'");
                 r["isError"] = true;
                 return r.dump();
             }

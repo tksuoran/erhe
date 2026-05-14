@@ -1038,7 +1038,9 @@ void Properties::material_properties()
         static const char* const c_bxdf_model_names[] = {
             "Unlit",
             "Isotropic BRDF",
-            "Anisotropic BRDF"
+            "Anisotropic BRDF",
+            "Anisotropic Slope",
+            "Anisotropic Engine-Ready"
         };
         int current = static_cast<int>(data.bxdf_model);
         if (ImGui::Combo("##", &current, c_bxdf_model_names, IM_ARRAYSIZE(c_bxdf_model_names))) {

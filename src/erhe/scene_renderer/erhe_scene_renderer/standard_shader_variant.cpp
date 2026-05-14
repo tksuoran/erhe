@@ -182,7 +182,10 @@ auto compute_standard_variant_key(
     key.bxdf_model = static_cast<uint16_t>(data.bxdf_model);
 
     const bool is_unlit            = data.bxdf_model == erhe::primitive::Bxdf_model::unlit;
-    const bool is_anisotropic_brdf = data.bxdf_model == erhe::primitive::Bxdf_model::anisotropic_brdf;
+    const bool is_anisotropic_brdf =
+        (data.bxdf_model == erhe::primitive::Bxdf_model::anisotropic_brdf) ||
+        (data.bxdf_model == erhe::primitive::Bxdf_model::anisotropic_slope) ||
+        (data.bxdf_model == erhe::primitive::Bxdf_model::anisotropic_engine_ready);
 
     // Mesh sub-key axes that depend on the bound material.
     if (has_normal_0 && !is_unlit) {

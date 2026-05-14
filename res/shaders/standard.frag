@@ -129,6 +129,15 @@ void main()
         }
 #endif
 
+        // The engine_ready BxDF expects very tight specular for
+        // metals; ship a relaxed roughness floor (1e-7) so the
+        // anisotropic GGX denominators do not blow up. All other
+        // BxDFs use the standard 1e-4 floor.
+#if ERHE_BXDF_MODEL == ERHE_BXDF_MODEL_ANISOTROPIC_ENGINE_READY
+        const float c_roughness_floor = 1e-7;
+#else
+        const float c_roughness_floor = 1e-4;
+#endif
 #ifdef ERHE_USE_METALLIC_ROUGHNESS_TEXTURE
         vec4 metallic_roughness = sample_texture(
             material.metallic_roughness_texture,
@@ -137,15 +146,15 @@ void main()
             material.metallic_roughness_offset
         );
         float metallic    = material.metallic * metallic_roughness.b;
-        float roughness_x = max(material.roughness.x * metallic_roughness.g, 1e-4);
-        float roughness_y = max(material.roughness.y * metallic_roughness.g, 1e-4);
+        float roughness_x = max(material.roughness.x * metallic_roughness.g, c_roughness_floor);
+        float roughness_y = max(material.roughness.y * metallic_roughness.g, c_roughness_floor);
 #else
         float metallic    = material.metallic;
-        // Apply the same 1e-4 floor on the no-texture path so the
-        // BRDF math (which divides by roughness terms) does not
-        // explode at 0.
-        float roughness_x = max(material.roughness.x, 1e-4);
-        float roughness_y = max(material.roughness.y, 1e-4);
+        // Apply the same floor on the no-texture path so the BRDF
+        // math (which divides by roughness terms) does not explode
+        // at 0.
+        float roughness_x = max(material.roughness.x, c_roughness_floor);
+        float roughness_y = max(material.roughness.y, c_roughness_floor);
 #endif
         // B6: collapse roughness_y to roughness_x when anisotropy_strength
         // drops to 0 (the circular-brush singularity falls back to
@@ -192,11 +201,15 @@ void main()
 
         float N_dot_V = clamped_dot(N, V);
 
-        // Compile-time BxDF dispatch. The Anisotropic branch needs T and
-        // B; if the mesh / variant did not enable the tangent/bitangent
-        // varyings, fall back to the isotropic call (using roughness_x)
-        // so the shader still links and renders something reasonable.
-#if (ERHE_BXDF_MODEL == ERHE_BXDF_MODEL_ANISOTROPIC_BRDF) && defined(ERHE_USE_VERTEX_VARYING_TANGENT) && defined(ERHE_USE_VERTEX_VARYING_BITANGENT)
+        // Compile-time BxDF dispatch. The Anisotropic branches need T
+        // and B; if the mesh / variant did not enable the
+        // tangent/bitangent varyings, fall back to the isotropic call
+        // (using roughness_x) so the shader still links and renders
+        // something reasonable.
+#if (ERHE_BXDF_MODEL == ERHE_BXDF_MODEL_ANISOTROPIC_SLOPE) && defined(ERHE_USE_VERTEX_VARYING_TANGENT) && defined(ERHE_USE_VERTEX_VARYING_BITANGENT)
+        mat3 TBN_t = transpose(mat3(T, B, N));
+#  define BXDF_CALL(L_arg) slope_brdf(base_color, roughness_x, roughness_y, metallic, material.reflectance, TBN_t, L_arg, V, T, B, N)
+#elif ((ERHE_BXDF_MODEL == ERHE_BXDF_MODEL_ANISOTROPIC_BRDF) || (ERHE_BXDF_MODEL == ERHE_BXDF_MODEL_ANISOTROPIC_ENGINE_READY)) && defined(ERHE_USE_VERTEX_VARYING_TANGENT) && defined(ERHE_USE_VERTEX_VARYING_BITANGENT)
 #  define BXDF_CALL(L_arg) anisotropic_brdf(base_color, roughness_x, roughness_y, metallic, material.reflectance, L_arg, V, T, B, N)
 #else
 #  define BXDF_CALL(L_arg) isotropic_brdf(base_color, roughness_x, metallic, material.reflectance, L_arg, V, N)

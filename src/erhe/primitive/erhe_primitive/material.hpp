@@ -19,13 +19,16 @@ namespace erhe::primitive {
 // variant axis (ERHE_BXDF_MODEL) so each value compiles a distinct
 // shader -- materials with different BxDFs land in different bucket
 // variants. The integer values are wired into the GLSL macros
-// ERHE_BXDF_MODEL_UNLIT / _ISOTROPIC_BRDF / _ANISOTROPIC_BRDF in
+// ERHE_BXDF_MODEL_UNLIT / _ISOTROPIC_BRDF / _ANISOTROPIC_BRDF /
+// _ANISOTROPIC_SLOPE / _ANISOTROPIC_ENGINE_READY in
 // erhe_standard_variant.glsl; keep them in sync.
 enum class Bxdf_model : uint16_t
 {
-    unlit            = 0,
-    isotropic_brdf   = 1,
-    anisotropic_brdf = 2
+    unlit                    = 0,
+    isotropic_brdf           = 1,
+    anisotropic_brdf         = 2,
+    anisotropic_slope        = 3,
+    anisotropic_engine_ready = 4
 };
 
 class Material_texture_sampler

@@ -22,8 +22,10 @@
 // adapter -- fix the call site, do not reintroduce fallback macros.
 
 // Bxdf_model enum values. Keep in sync with erhe::primitive::Bxdf_model.
-#define ERHE_BXDF_MODEL_UNLIT             0
-#define ERHE_BXDF_MODEL_ISOTROPIC_BRDF    1
-#define ERHE_BXDF_MODEL_ANISOTROPIC_BRDF  2
+#define ERHE_BXDF_MODEL_UNLIT                    0
+#define ERHE_BXDF_MODEL_ISOTROPIC_BRDF           1
+#define ERHE_BXDF_MODEL_ANISOTROPIC_BRDF         2
+#define ERHE_BXDF_MODEL_ANISOTROPIC_SLOPE        3
+#define ERHE_BXDF_MODEL_ANISOTROPIC_ENGINE_READY 4
 
 #endif // ERHE_STANDARD_VARIANT_GLSL
