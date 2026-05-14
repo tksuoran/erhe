@@ -1,4 +1,8 @@
 {
     "vertex_buffer_size": 128,
-    "index_buffer_size": 64
+    "index_buffer_size": 64,
+    "vertex_pool_block_size_mb": 32,
+    "index_pool_block_size_mb": 16,
+    "edge_line_vertex_pool_block_size_mb": 8,
+    "max_buffers_per_pool": 64
 }

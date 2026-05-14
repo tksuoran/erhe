@@ -22,8 +22,6 @@ D6. **[DEFERRED - needs multiview-MSAA root-cause] 1-MSAA on OpenXR is a workaro
 
 E3. **[DEFERRED - needs prewarm-orchestrator extension] `Device::warmup_render_pipeline` is dead code** -- `src/erhe/graphics/erhe_graphics/device.cpp:121-126, device.hpp:351`. Comments in `forward_renderer.hpp:131` and `prewarm.hpp:22` advertise it as Phase-2's VkPipeline-cache home, but `prewarm_all` never calls it. **Fix:** wire `prewarm_all` to call it for each variant the renderer's prewarm iterates (Phase-2 win); update `prewarm.hpp` comment.
 
-E11. **[DEFERRED - codegen-generated migrations from added_in markers] `config/editor/erhe_graphics.json` `_version` 2 -> 4 without migration** -- `_version` skipped 3, no migration logic. **Fix:** add the missing `migrate_v3_to_v4` stub (and `migrate_v2_to_v3` if v3 was meant to land between commits). Per CLAUDE.md, only bump when migrating; the bump must come with code. **Do not** roll the field back to v3 -- the in-tree config is already at v4, and downgrading is gratuitous churn even if users' writable copies have not yet been migrated. Ship the migration stub instead.
-
 #### Dead-code subsystems remaining from E13
 
 Per CLAUDE.md, each in its own commit so `git blame` stays useful:
@@ -190,6 +188,8 @@ E8. **[DONE] `doc/shader_variants.md` "Remaining adoption work"** -- lines 33-42
 E9. **[DONE] `doc/scene_root_cleanup.md` reads as future plan but is shipped** -- Step 1 / Step 2 already implemented in commit 3d570726. **Fix:** rewrite as postmortem.
 
 E10. **[DONE] `doc/multiview.md` overstates GL coverage** -- lines 9-14 promise a GL OpenXR multiview per-eye fallback that is not wired. **Fix:** add "GL OpenXR multiview is not supported; the GL path covers the desktop-mirror window only."
+
+E11. **[DONE - schema reset to v1] `config/editor/erhe_graphics.json` `_version` 2 -> 4 without migration.** The "missing migration" framing dissolved once we reset every production codegen struct to `version=1` with all `added_in=1` and stripped `_version` from every `config/**/*.json`. The codegen `register_migration<T>` / `run_migrations` framework remains in place (and is still exercised by `erhe_codegen_test`) so the next real version bump can ship its migration alongside the schema change. **Verify:** `erhe_codegen_test` passes all four migration tests; `cmake --build build_vs2026_opengl --target editor` succeeds with regenerated deserializers.
 
 E12. **[DONE] `src/editor/editor_settings.json` vs `config/editor/editor_settings.json`** -- out of sync (headset `_version` 2 vs 3, missing fields, conflicting `swapchain_depth`). **Fix:** determine which copy is canonical (check `src/editor/CMakeLists.txt`); delete the redundant copy, or regenerate from the codegen.
 

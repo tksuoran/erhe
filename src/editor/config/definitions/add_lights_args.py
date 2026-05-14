@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Add_lights_args",
-    version=2,
+    version=1,
     short_desc="Args for scene.add_lights",
     long_desc="Per-invocation argument block consumed by scene.add_lights. Configures the directional and spot lights placed by the default scene-light setup.",
     developer=False,
@@ -39,7 +39,7 @@ struct("Add_lights_args",
         field(
             "directional_light_shadow_count",
             Int,
-            added_in=2,
+            added_in=1,
             default="4",
             short_desc="Directional Light Shadow Count",
             long_desc="Number of shadow-casting directional lights to create. Clamped to the active graphics preset's shadow_light_count.",
@@ -49,7 +49,7 @@ struct("Add_lights_args",
         field(
             "directional_light_no_shadow_count",
             Int,
-            added_in=2,
+            added_in=1,
             default="0",
             short_desc="Directional Light No-Shadow Count",
             long_desc="Number of additional directional lights to create that do not cast shadows.",

@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Inventory_slot",
-    version=3,
+    version=1,
     short_desc="Inventory Slot",
     long_desc="A single slot in the inventory or hotbar grid",
     developer=False,
@@ -19,7 +19,7 @@ struct("Inventory_slot",
         field(
             "brush_name",
             String,
-            added_in=2,
+            added_in=1,
             default='""',
             short_desc="Brush name",
             long_desc="Brush name from content library; non-empty means brush slot",
@@ -29,7 +29,7 @@ struct("Inventory_slot",
         field(
             "material_name",
             String,
-            added_in=3,
+            added_in=1,
             default='""',
             short_desc="Material name",
             long_desc="Material name from content library; non-empty means material slot",

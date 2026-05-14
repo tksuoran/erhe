@@ -24,19 +24,21 @@
         "cell_count":   100
     },
     "headset": {
-        "_version":          3,
-        "openxr":            false,
-        "openxr_mirror":     false,
-        "swapchain_depth":   true,
-        "quad_view":         false,
-        "debug":             false,
-        "validation":        false,
-        "api_dump":          false,
-        "depth":             false,
-        "visibility_mask":   false,
-        "hand_tracking":     false,
-        "passthrough_fb":    false,
-        "composition_alpha": false
+        "openxr":                  false,
+        "openxr_mirror":           false,
+        "swapchain_depth":         true,
+        "quad_view":               false,
+        "debug":                   false,
+        "validation":              false,
+        "api_dump":                false,
+        "depth":                   false,
+        "visibility_mask":         false,
+        "hand_tracking":           false,
+        "passthrough_fb":          false,
+        "composition_alpha":       false,
+        "cpu_performance_level":   "e_unset",
+        "gpu_performance_level":   "e_unset",
+        "boost_on_thermal_warning": false
     },
     "hotbar": {
         "enabled": true,
@@ -73,7 +75,8 @@
     },
     "physics": {
         "static_enable": true,
-        "dynamic_enable": true
+        "dynamic_enable": true,
+        "debug_draw": false
     },
     "scene": {
         "imgui_window_scene_view": true,

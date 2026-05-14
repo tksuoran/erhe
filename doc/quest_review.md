@@ -29,7 +29,6 @@ The findings below remain open. See `doc/quest_fixes.md` for the matching fix-pl
 ### Build / config / dead code
 
 - **[high]** `Device::warmup_render_pipeline` is dead code -- `device.cpp:121, device.hpp:351`. The Phase-2 prewarm hook is wired through documentation only. [quest_fixes.md E3]
-- **[med]** `config/editor/erhe_graphics.json` `_version` 2 -> 4 without a migration. [quest_fixes.md E11]
 - **[med]** Dead-code subsystems remaining from E13: `Programs::load_programs` / `programs_load_task` / `Programs::m_handles_by_name` / `Programs::get_multiview` (renderers); `Buffer_pool::add_existing_block` (graphics buffers); `padding0_offset` (debug renderer); `vertex_buffer_size` / `index_buffer_size` config knobs (mesh memory). [quest_fixes.md E13 remaining subsystems]
 
 ### Commit hygiene
