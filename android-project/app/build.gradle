@@ -33,8 +33,11 @@ android {
                         pythonExe = ""
                     }
                 }
-                def cmakeArgs = ["-DANDROID_PLATFORM=android-21",
-                                 "-DANDROID_STL=c++_static"]
+                // ANDROID_PLATFORM is set per flavor below (mobile keeps
+                // android-21, quest raises to android-33). Keeping it out
+                // of defaultConfig means flavors don't have to fight a
+                // baseline that's wrong for them.
+                def cmakeArgs = ["-DANDROID_STL=c++_static"]
                 if (pythonExe) {
                     cmakeArgs << "-DPython3_EXECUTABLE=${pythonExe}"
                 }
@@ -47,18 +50,28 @@ android {
     productFlavors {
         mobile {
             dimension "device"
+            minSdkVersion 21
             externalNativeBuild {
                 cmake {
-                    arguments "-DERHE_ANDROID_FLAVOR=mobile"
+                    arguments "-DERHE_ANDROID_FLAVOR=mobile",
+                              "-DANDROID_PLATFORM=android-21"
                 }
             }
         }
         quest {
             dimension "device"
             applicationIdSuffix ".quest"
+            // Quest 3 ships on Horizon OS based on Android 14 (API 34);
+            // Quest 2's current Horizon OS updates run API 32+. API 33
+            // is the floor because the upstream third-party geogram uses
+            // backtrace() / backtrace_symbols(), which the NDK gates
+            // behind __INTRODUCED_IN(33). Anything older fails to link
+            // on Android.
+            minSdkVersion 33
             externalNativeBuild {
                 cmake {
-                    arguments "-DERHE_ANDROID_FLAVOR=quest"
+                    arguments "-DERHE_ANDROID_FLAVOR=quest",
+                              "-DANDROID_PLATFORM=android-33"
                 }
             }
         }
