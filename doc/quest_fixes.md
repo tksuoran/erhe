@@ -4,7 +4,70 @@ Fix plan for the non-obsolete findings in `doc/quest_review.md`. Issues that the
 
 Each item names file:line, the bug, the fix, and the verification hook. Severity is the `doc/quest_review.md` label.
 
-## A. Renderer-agnostic correctness (high + med)
+## Open issues
+
+### B. Vulkan / Metal / shader infrastructure
+
+B2a. **[DEFERRED - large pipeline-cache redesign] "Lazy" shader handles are eager on Vulkan/Metal** -- `src/erhe/graphics/erhe_graphics/vulkan/vulkan_render_pipeline.cpp:23-26`, `src/erhe/graphics/erhe_graphics/metal/metal_render_pipeline.cpp:23-26`. Pipeline ctor calls `lazy_shader_stages->shader_stages()` synchronously. **Fix (primary):** defer the resolve to first-use (Vulkan: in `set_render_pipeline_state` with a cached `VkPipeline`; Metal: first encoder bind with a cached `MTL::RenderPipelineState`). **No-band-aid note:** the `programs.cpp` / `programs.hpp` contracts advertise laziness ("Phase 3: lazy startup... nothing compiles here", "startup becomes truly lazy"). A rename-only escape hatch (keep eager + rename to a Cached_shader_handle-style name on Vulkan/Metal) leaves the contract violated in spirit; per CLAUDE.md's no-band-aid rule the primary fix is the right answer. Only fall back to "rename + document GL-only laziness" with explicit user authorisation that this is a known band-aid carve-out. **Verify:** RenderDoc trace of init shows zero shader-module creation on Vulkan until first draw.
+
+B2b. **[DEFERRED - tied to B2a] Cached_shader_handle is not actually a cache + name is misleading** -- `src/erhe/scene_renderer/erhe_scene_renderer/cached_shader_handle.cpp:29-31, 33-52`. Re-acquires `m_cache.m_mutex` every call; `multiview_shader_stages` allocates strings + vector each call. **Fix:** memoize `m_resolved_shader_stages` and `m_resolved_multiview_shader_stages` under the existing mutex (lazy single-write, no lock-free / atomic semantics). Reset on variant-cache `clear()`. **Plus a rename:** quest_review.md flags the name as misleading; consider `Variant_handle` or `Shader_handle`. Tie to B2a only if you choose the "rename" alternative for B2a -- the rename is independently valid. **Verify:** sampling profile shows the variant-cache mutex no longer in the hot path.
+
+B3. **[DEFERRED - member-init constraint] Metal silently swallows wide_lines failure** -- `src/editor/renderers/programs.cpp:66-68`. Geom shader unsupported on Metal. **Fix:** gate the wide_lines `sv_key` registration on `use_compute_shader == false`, mirroring the pre-commit state. **Verify:** Metal build no longer logs shader-compile failures during init.
+
+B5. **[DEFERRED - tied to B14 migration] `Material_buffer.unlit` is a load-bearing band-aid** -- `src/erhe/scene_renderer/erhe_scene_renderer/material_buffer.cpp:191`. Read by `anisotropic_slope.frag`, `anisotropic_engine_ready.frag`, `circular_brushed_metal.frag`, `standard_debug.frag` instead of `bxdf_model`. **Fix:** migrate the four legacy shaders to read `bxdf_model` from the UBO; drop the `unlit` field. **Tie-in:** B14 (legacy shaders still eager); doing both together is one coherent commit. **Verify:** unlit material renders identically; `grep -r material.unlit` in shaders returns zero.
+
+B12. **[DEFERRED - Draw_list_renderer Phase 2] Removed runtime sampler-presence checks risk bindless UB** -- `src/editor/res/shaders/standard.frag` (commit 7704e198 removed `if (normal_texture.x != max_u32)` guards; now gated by build-time `#ifdef ERHE_USE_*_TEXTURE`). Combined with Forward_renderer's OR-merge bucket key (obsoleted by the swap) the hazard fires today on Vulkan bindless. **Fix:** post-swap, `Draw_list_renderer`'s per-entry variant resolution makes the matching correct; add `ERHE_VERIFY` at draw-list-entry build time so any future mismatch trips loudly. **Tie-in:** `doc/draw_list_renderer.md` Phase 2 (already cross-referenced).
+
+B14. **[DEFERRED - large shader migration] Variant cache covers `standard` only; legacy lit shaders still eager** -- `src/editor/renderers/programs.cpp:124-165`. `anisotropic_slope`, `anisotropic_engine_ready`, `circular_brushed_metal`, and 28 `standard_debug` variants are Cached_shader_handle members that get recompiled on any `Material_change_operation` -> `Standard_shader_variants::clear()` (hammer invalidation). **Fix:** keep them out of `Standard_shader_variants::clear()`'s scope (they don't share material-driven axes), or migrate them onto the variant-cache key. Doc the decision in `doc/shader_variants.md`. **Tie-in:** B5 (drop `unlit` field at the same time).
+
+### D. Multiview / XR
+
+D6. **[DEFERRED - needs multiview-MSAA root-cause] 1-MSAA on OpenXR is a workaround** -- `config/editor/graphics_presets_openxr.json:5`. Underlying multiview-MSAA issue not named or filed. **Fix (CLAUDE.md no-band-aid):** root-cause the multiview-MSAA failure, or remove the unreachable multiview-MSAA code paths. At minimum, file an issue and reference it in the config comment.
+
+D7. **[DEFERRED - needs Command_buffer API plumbing] GL backend drops end_render_pass debug sub-scope** -- `src/erhe/graphics/erhe_graphics/gl/gl_render_pass.cpp:817-822`. Comment justifies the loss because `end_render_pass()` has no `Command_buffer&`. **Fix:** plumb a `Command_buffer&` through.
+
+### E. Build / config / docs / dead-code
+
+E3. **[DEFERRED - needs prewarm-orchestrator extension] `Device::warmup_render_pipeline` is dead code** -- `src/erhe/graphics/erhe_graphics/device.cpp:121-126, device.hpp:351`. Comments in `forward_renderer.hpp:131` and `prewarm.hpp:22` advertise it as Phase-2's VkPipeline-cache home, but `prewarm_all` never calls it. **Fix:** wire `prewarm_all` to call it for each variant the renderer's prewarm iterates (Phase-2 win); update `prewarm.hpp` comment.
+
+E11. **[DEFERRED - codegen-generated migrations from added_in markers] `config/editor/erhe_graphics.json` `_version` 2 -> 4 without migration** -- `_version` skipped 3, no migration logic. **Fix:** add the missing `migrate_v3_to_v4` stub (and `migrate_v2_to_v3` if v3 was meant to land between commits). Per CLAUDE.md, only bump when migrating; the bump must come with code. **Do not** roll the field back to v3 -- the in-tree config is already at v4, and downgrading is gratuitous churn even if users' writable copies have not yet been migrated. Ship the migration stub instead.
+
+#### Dead-code subsystems remaining from E13
+
+Per CLAUDE.md, each in its own commit so `git blame` stays useful:
+
+- **Renderers**: `Programs::load_programs`, `programs_load_task`, `Programs::m_handles_by_name`, `Programs::get_multiview` (`src/editor/renderers/programs.cpp:156-218`).
+- **Graphics buffers**: `Buffer_pool::add_existing_block` + the "manual mode" ctor (`src/erhe/graphics/erhe_graphics/buffer_pool.{cpp,hpp}`).
+- **Debug renderer**: `padding0_offset` (`src/erhe/scene_renderer/erhe_scene_renderer/debug_renderer_bucket.cpp` and header).
+- **Mesh memory**: deprecated `vertex_buffer_size` / `index_buffer_size` config knobs (`src/erhe/scene_renderer/definitions/mesh_memory_config.py`).
+
+### F. Commit hygiene
+
+F1. **[DEFERRED - requires user authorization for history rewrite] Commit 8f90a2b0 message claims an OpenXR-instance change not in the diff.** **Fix options (in order of preference under CLAUDE.md):**
+
+- (a) **Default:** land a follow-up commit that does the actual change and references 8f90a2b0 in its message. CLAUDE.md prefers creating new commits over amending; this is the only option that does not rewrite history.
+- (b) If the change was an accidental drop and the original code can be recovered, the follow-up commit is the restore.
+- (c) Rewriting the original commit message (via `git commit --amend` on tip or interactive rebase mid-branch) is destructive history rewriting and is blocked by CLAUDE.md's git-safety protocol -- both the "never run destructive git commands unless the user explicitly requests them" rule and the explicit "Never use git commands with the `-i` flag (like git rebase -i ...)" prohibition apply. Do not pick (c) without an explicit, scoped user authorization for *both* history rewriting and the `-i` flag.
+
+Note: the branch's history was subsequently re-collapsed via the `git-history-cleanup` skill (user-authorized), so `8f90a2b0` no longer exists on the cleaned-up branch. Re-evaluate whether the original missing OpenXR-instance change still needs a follow-up commit.
+
+### Carry-over follow-ups from partial-done fixes
+
+- **A5 viewport teardown:** floor brush / shape / material covered by `Scene_builder_floor_resources_operation`; viewport teardown still requires a Scene_views teardown API that does not exist yet.
+- **D4 rename:** stale comment dropped, `headset_config.py` `short_desc` fields filled. Renaming `Headset_config.depth` -> `composition_depth_layer` and `swapchain_depth` -> `swapchain_depth_attachment` deferred to avoid churn.
+- **M2 codegen serializer:** glTF import wires `KHR_materials_unlit` -> `bxdf_model = unlit`. Codegen JSON serialization of the three new `Material_data` fields stays a follow-up because the material is not currently codegen-managed.
+- **E1 SHA256:** `validationLayerVersion` is now an input on `fetchVulkanValidationLayer`; the `-Pvulkan_validation_skip` branch explicitly deletes any staged .so. SHA256 verification of the downloaded zip is still TODO.
+- **E4 quad-view sourcing:** prewarm.cpp documents the hard-coded `view_count=2` as Quest-stereo specific; a Varjo quad-view (view_count=4) still needs `max_view_count` sourced from `Headset_view` / `Xr_session` at startup.
+
+### Coupling and gating (open-issue dependencies)
+
+- A11 (closed) is a prerequisite to retiring shadow_renderer (`doc/draw_list_renderer.md` Phase 6) cleanly.
+- B12 is a Phase 2 deliverable of `Draw_list_renderer`, not a standalone fix.
+- B5 + B14 + E13.Renderers overlap on Programs / legacy shaders; do B5 first, then B14, then E13.Renderers.
+
+## Closed issues
+
+### A. Renderer-agnostic correctness (high + med)
 
 A1. **[DONE] camera_buffer trailing bytes uploaded uninitialised** -- `src/erhe/scene_renderer/erhe_scene_renderer/camera_buffer.cpp:122-140`. Single-camera `update()` writes one entry into a `block_size = entry_size * max_view_count` slice; cube_renderer / texel_renderer paths upload garbage in `cameras[1..N-1]` when multiview is on. **Fix:** memset trailing bytes after `write_camera_entry`, or shrink `block_size` to `entry_size` on the single-view path. **Verify:** RenderDoc capture under Quest multiview shows zero in `cameras[1]` for single-camera updates.
 
@@ -20,7 +83,7 @@ A4. **[DONE] Mcp_server start/stop race + DoS + auth + NaN + ambiguous lookup** 
    - `:1567-1573, 1442-1457` first-match material/texture name lookup is ambiguous on collisions. Return `isError` listing candidate ids when >1 match exists.
    - `:1517` `tex_coord` read as `uint32_t` but JSON schema only says `minimum: 0`; clamp to a small range explicitly.
 
-   **Verify:** existing `mcp_server_tests.cpp` integration tests (lines 246-265, 597-714) pass; add (a) a tampered-token test, (b) a NaN-float test, (c) a queue-overflow test, (d) an ambiguous-name test. Wrap test mutations in RAII save/restore so a failed assertion does not leave global state mutated (quest_review.md [med] for the test harness itself).
+   **Verify:** existing `mcp_server_tests.cpp` integration tests (lines 246-265, 597-714) pass; add (a) a tampered-token test, (b) a NaN-float test, (c) a queue-overflow test, (d) an ambiguous-name test. Wrap test mutations in RAII save/restore so a failed assertion does not leave global state mutated.
 
 A5. **[DONE - partial; viewport teardown deferred]** **Scene_builder "undoable" leaks side-state** -- `src/editor/scene/scene_builder.cpp:705-735, 737-753`. `add_room` and `add_cameras` synchronously create `floor_material`, push a `Brush` into `m_floor_brushes`, push an `ICollision_shape` into `m_collision_shapes`, and build `Viewport_scene_view` + viewport_window before queueing the `Compound_operation`. Undo only removes the scene-graph node. **Fix:** wrap material / brush / collision-shape / viewport creation in dedicated `Operation` subclasses so the undo unwind tears them down. Pattern reference: `Material_change_operation` in editor. **Verify:** regression test that runs `add_room()` -> undo -> `add_room()` and asserts `m_floor_brushes.size() == 1`. Floor brush/shape/material covered by `Scene_builder_floor_resources_operation`; viewport teardown still requires a Scene_views teardown API that does not exist yet.
 
@@ -54,19 +117,11 @@ A19. **[DONE] Content_wide_line_renderer per-dispatch SSBO bind, no dedup** -- `
 
 A20. **[DONE] simdjson ondemand ordered-access hazard** -- `src/editor/editor.cpp:2069-2075`. Reads `obj["name"]` then `obj["args"]` but `find_field_unordered` is not used; if the JSON entry keys are reordered, the second access fails. **Fix:** switch to `find_field_unordered` or document the key-order requirement in the JSON schema and validate.
 
-## B. Vulkan / Metal / shader infrastructure (high + med)
+### B. Vulkan / Metal / shader infrastructure (high + med)
 
 B1. **[DONE] vkCmdBeginDebugUtilsLabelEXT recorded unconditionally** -- `src/erhe/graphics/erhe_graphics/vulkan/vulkan_scoped_debug_group.cpp:34, 42`. Null function pointer if `VK_EXT_debug_utils` is not loaded. **Fix:** add `static bool s_enabled` (already in GL backend), early-return when false; gate on extension presence at device init.
 
-B2a. **[DEFERRED - large pipeline-cache redesign] "Lazy" shader handles are eager on Vulkan/Metal** -- `src/erhe/graphics/erhe_graphics/vulkan/vulkan_render_pipeline.cpp:23-26`, `src/erhe/graphics/erhe_graphics/metal/metal_render_pipeline.cpp:23-26`. Pipeline ctor calls `lazy_shader_stages->shader_stages()` synchronously. **Fix (primary):** defer the resolve to first-use (Vulkan: in `set_render_pipeline_state` with a cached `VkPipeline`; Metal: first encoder bind with a cached `MTL::RenderPipelineState`). **No-band-aid note:** the `programs.cpp` / `programs.hpp` contracts advertise laziness ("Phase 3: lazy startup... nothing compiles here", "startup becomes truly lazy"). A rename-only escape hatch (keep eager + rename to a Cached_shader_handle-style name on Vulkan/Metal) leaves the contract violated in spirit; per CLAUDE.md's no-band-aid rule the primary fix is the right answer. Only fall back to "rename + document GL-only laziness" with explicit user authorisation that this is a known band-aid carve-out. **Verify:** RenderDoc trace of init shows zero shader-module creation on Vulkan until first draw.
-
-B2b. **[DEFERRED - tied to B2a] Cached_shader_handle is not actually a cache + name is misleading** -- `src/erhe/scene_renderer/erhe_scene_renderer/cached_shader_handle.cpp:29-31, 33-52`. Re-acquires `m_cache.m_mutex` every call; `multiview_shader_stages` allocates strings + vector each call. **Fix:** memoize `m_resolved_shader_stages` and `m_resolved_multiview_shader_stages` under the existing mutex (lazy single-write, no lock-free / atomic semantics). Reset on variant-cache `clear()`. **Plus a rename:** quest_review.md:351 flags the name as misleading; consider `Variant_handle` or `Shader_handle`. Tie to B2a only if you choose the "rename" alternative for B2a -- the rename is independently valid. **Verify:** sampling profile shows the variant-cache mutex no longer in the hot path.
-
-B3. **[DEFERRED - member-init constraint] Metal silently swallows wide_lines failure** -- `src/editor/renderers/programs.cpp:66-68`. Geom shader unsupported on Metal. **Fix:** gate the wide_lines `sv_key` registration on `use_compute_shader == false`, mirroring the pre-commit state. **Verify:** Metal build no longer logs shader-compile failures during init.
-
 B4. **[DONE] Shader_monitor reload bypasses pipeline-cache flush** -- `src/erhe/graphics/erhe_graphics/shader_monitor.cpp:209`. `entry.shader_stages->reload(prototype)` recreates `VkShaderModule` without flushing the variant cache's pipeline cache. **Fix:** have `Reloadable_shader_stages::reload` call `m_graphics_device.clear_render_pipeline_cache()` (the variant cache already does this on its own `clear()`; mirror it). **Verify:** edit a watched shader at runtime; subsequent frames sample the new module.
-
-B5. **[DEFERRED - tied to B14 migration] `Material_buffer.unlit` is a load-bearing band-aid** -- `src/erhe/scene_renderer/erhe_scene_renderer/material_buffer.cpp:191`. Read by `anisotropic_slope.frag`, `anisotropic_engine_ready.frag`, `circular_brushed_metal.frag`, `standard_debug.frag` instead of `bxdf_model`. **Fix:** migrate the four legacy shaders to read `bxdf_model` from the UBO; drop the `unlit` field. **Tie-in:** B14 (legacy shaders still eager); doing both together is one coherent commit. **Verify:** unlit material renders identically; `grep -r material.unlit` in shaders returns zero.
 
 B6. **[DONE] Dead `anisotropy_strength`** -- `src/editor/res/shaders/standard.frag:96-101`. **Fix:** wire to `roughness_y = mix(roughness_x, roughness_y, anisotropy_strength)` (the docstring intent); the commit message advertises it. **Verify:** anisotropic material with `aniso_control = 0` matches isotropic baseline.
 
@@ -76,19 +131,15 @@ B10. **[DONE] shader_stages.hpp promises layout(num_views=N) emission that never
 
 B11. **[DONE - footgun removed in earlier commit] ERHE_VERIFY(mv_slot == nullptr) footgun on shared shader names** -- `src/editor/renderers/programs.cpp:683`. `wide_lines_draw_color` and `wide_lines_vertex_color` both have `name="wide_lines"` and no `debug_label`. A future config enabling multiview with `use_compute_shader == false` trips the verify on the second emplace. **Fix:** key the slot map on `(name, defines)` or hash-discriminate.
 
-B12. **[DEFERRED - Draw_list_renderer Phase 2] Removed runtime sampler-presence checks risk bindless UB** -- `src/editor/res/shaders/standard.frag` (commit 7704e198 removed `if (normal_texture.x != max_u32)` guards; now gated by build-time `#ifdef ERHE_USE_*_TEXTURE`). Combined with Forward_renderer's OR-merge bucket key (obsoleted by the swap) the hazard fires today on Vulkan bindless. **Fix:** post-swap, `Draw_list_renderer`'s per-entry variant resolution makes the matching correct; add `ERHE_VERIFY` at draw-list-entry build time so any future mismatch trips loudly. **Tie-in:** `doc/draw_list_renderer.md` Phase 2 (already cross-referenced).
-
 B13. **[DONE] Shader_variant_key is stringly-typed** -- `src/erhe/scene_renderer/erhe_scene_renderer/shader_variant_cache.hpp:32-49`. Typo in any shader name silently misses; compile fails; Metal/Vulkan returns nullptr from the pipeline ctor. **Fix:** tiny registry of valid shader names backing the key; reject unknown names at construction.
 
-B14. **[DEFERRED - large shader migration] Variant cache covers `standard` only; legacy lit shaders still eager** -- `src/editor/renderers/programs.cpp:124-165`. `anisotropic_slope`, `anisotropic_engine_ready`, `circular_brushed_metal`, and 28 `standard_debug` variants are Cached_shader_handle members that get recompiled on any `Material_change_operation` -> `Standard_shader_variants::clear()` (hammer invalidation). **Fix:** keep them out of `Standard_shader_variants::clear()`'s scope (they don't share material-driven axes), or migrate them onto the variant-cache key. Doc the decision in `doc/shader_variants.md`. **Tie-in:** B5 (drop `unlit` field at the same time).
-
-## C. Variant-cache invalidation perimeter (cumulative high)
+### C. Variant-cache invalidation perimeter (cumulative high)
 
 C1. **[DONE - partial; invalidate-now path added]** **Properties panel bypasses Material_change_operation** -- `src/editor/windows/properties.cpp:1023-1037`. ImGui combo / checkbox for `bxdf_model`, `use_circular_brushed_metal`, `use_aniso_control` writes `material->data` directly. **Fix:** route through `Material_change_operation` (consistent with MCP and the rest of the editor). **Verify:** flip "Circular Brushed Metal" via Properties; next frame's variant matches the new key.
 
 C2. **[DONE] Two-source-of-truth light-count tally** -- `src/erhe/scene_renderer/erhe_scene_renderer/standard_shader_variant.cpp:222-256` (`compute_standard_variant_light_counts`) vs `light_buffer.cpp:189-207` (`Light_projections::apply` inline tally). The "must stay bit-identical" comment is the band-aid. **Fix:** there must be a single source for the count. Return a `Light_layer_partition` struct (count snapshot + scratch arrays) from one helper that both `Light_projections::apply` and `compute_standard_variant_light_counts` call. Do not split the goal across "use the helper only for the count, scratch separately" -- that just re-creates the divergence risk in a smaller form. **Verify:** delete the "must stay bit-identical" comment after the merge.
 
-## D. Multiview / XR (high + med + low)
+### D. Multiview / XR (high + med + low)
 
 D1. **[DONE] Multiview wide-line feed ignores render_style and selection_outline animation** -- `src/editor/xr/headset_view.cpp:612-644`. Compare to `viewport_scene_view.cpp` `feed_pass`. **Fix:** copy the `else if (pass->get_render_style)` branch plus the `selection_outline` breathing animation, OR factor into a shared helper. **Verify:** Quest run shows correct opaque_edge_lines and selection_outline under multiview.
 
@@ -100,15 +151,11 @@ D4. **[DONE - partial; rename deferred] Stale comment + confusingly-close knobs*
 
 D5. **[DONE] gl_ViewID_OVR / u_view_index doc drift** -- `src/erhe/scene_renderer/erhe_scene_renderer/camera_buffer.hpp:47`, `camera_buffer.cpp:123-125, 160-161`. Code emits `gl_ViewIndex` / `c_view_index`; comments still reference the old names. **Fix:** update comments. **Verify:** `grep -r gl_ViewID_OVR src/erhe` returns zero.
 
-D6. **[DEFERRED - needs multiview-MSAA root-cause] 1-MSAA on OpenXR is a workaround** -- `config/editor/graphics_presets_openxr.json:5`. Underlying multiview-MSAA issue not named or filed. **Fix (CLAUDE.md no-band-aid):** root-cause the multiview-MSAA failure, or remove the unreachable multiview-MSAA code paths. At minimum, file an issue and reference it in the config comment.
-
-D7. **[DEFERRED - needs Command_buffer API plumbing] GL backend drops end_render_pass debug sub-scope** -- `src/erhe/graphics/erhe_graphics/gl/gl_render_pass.cpp:817-822`. Comment justifies the loss because `end_render_pass()` has no `Command_buffer&`. **Fix:** plumb a `Command_buffer&` through.
-
 D8. **[DONE] Metal Scoped_debug_group_impl encoder identity desync** -- `src/erhe/graphics/erhe_graphics/metal/metal_scoped_debug_group.cpp:17-33`. Ctor sees `get_active_mtl_encoder()`; dtor sees a different encoder if recording switched. **Fix:** impl stores the encoder it pushed onto and pops on the same one.
 
 D9. **[DONE - documented contract] Vulkan Scoped_debug_group caches handle, not Command_buffer&** -- `src/erhe/graphics/erhe_graphics/vulkan/vulkan_scoped_debug_group.cpp`. If the scope outlives the cb that produced its handle, dtor writes to a recycled handle. **Fix:** cache the `Command_buffer&` instead, OR document the lifetime contract with a static_assert.
 
-## M. Material / shader content (med)
+### M. Material / shader content (med)
 
 M1. **[DONE] Default-material switch is a user-visible content regression** -- `src/editor/content_library/material_library.cpp:24-30`. Every stock material now created with `bxdf_model = anisotropic_brdf` + `use_circular_brushed_metal = true`. Old saved scenes diverge from regenerated defaults. **Fix:** restore the previous isotropic default; opt new materials into anisotropic via UI / API only.
 
@@ -118,17 +165,15 @@ M3. **[DONE] Circular-brush magic-8.0 + UV-origin singularity** -- `src/editor/r
 
 M4. **[DONE] Roughness floor 1e-4 clamp inconsistent** -- `src/editor/res/shaders/standard.frag:117-118` vs 121-123. Clamp applies only on the `ERHE_USE_METALLIC_ROUGHNESS_TEXTURE` path. **Fix:** apply the floor on the no-texture path too.
 
-## E. Build / config / docs / dead-code (high + med + low)
+### E. Build / config / docs / dead-code (high + med + low)
 
 E1. **[DONE - partial; SHA256 verification deferred] Gradle task ships stale validation layer .so** -- `android-project/app/build.gradle:171-195`. `outputs.upToDateWhen { layerSo.exists() }` does not invalidate on `validationLayerVersion` bump. **Fix:** add `inputs.property("validationLayerVersion", validationLayerVersion)`; remove `libs/arm64-v8a/libVkLayer*.so` in the `-Pvulkan_validation_skip` branch; add SHA256 verification of the downloaded zip. **Verify:** bump version, re-run task, confirm new .so on device.
 
 E2. **[DONE] `ERHE_TARGET_QUEST_STANDALONE` is dead** -- `CMakeLists.txt:127`. Zero references in source tree. **Fix:** delete the `add_compile_definitions` line; if a Quest-only code path is needed, gate on `ANDROID` + `__aarch64__` instead.
 
-E3. **[DEFERRED - needs prewarm-orchestrator extension] `Device::warmup_render_pipeline` is dead code** -- `src/erhe/graphics/erhe_graphics/device.cpp:121-126, device.hpp:351`. Comments in `forward_renderer.hpp:131` and `prewarm.hpp:22` advertise it as Phase-2's VkPipeline-cache home, but `prewarm_all` never calls it. **Fix:** wire `prewarm_all` to call it for each variant the renderer's prewarm iterates (Phase-2 win); update `prewarm.hpp` comment. Tie-in: do this in the same commit as E5.
-
 E4. **[DONE - comment-only; quad-view sourcing deferred] Hardcoded prewarm view counts** -- `src/editor/renderers/prewarm.cpp:89-99`. `view_counts.push_back(0u); view_counts.push_back(2u);`. **Fix:** source `max_view_count` from `Headset_view` / `Xr_session`; prewarm `{0, max_view_count}`. **Verify:** Varjo quad-view config exercises four-view prewarm.
 
-E5. **[DONE] Stale prewarm comment** -- `src/erhe/graphics/erhe_graphics/prewarm.hpp:19-22`. "Subsequent commits will extend ..." names work already shipped. **Fix:** rewrite to describe what the file does today (tie with E3).
+E5. **[DONE] Stale prewarm comment** -- `src/erhe/graphics/erhe_graphics/prewarm.hpp:19-22`. "Subsequent commits will extend ..." names work already shipped. **Fix:** rewrite to describe what the file does today.
 
 E6. **[DONE] `doc/building.md` violates CLAUDE.md** -- lines 48-61 (cmake --preset section), 67 ("CMake: Select Configure Preset"), 73 (CLion preset), 90 (Linux ad-hoc cmake -B build), 99 (Windows backslashes in bash block), 128 (broken `ERHE_GRAPHICS_API` table cell). Plus typos at line 6 ("Exceptionionally", "inclouded"). **Fix:** delete the CMake-presets section; restore scripts/ wrapper requirement on macOS / Linux; restore the Quest controllers-required protocol summary; fix typos.
 
@@ -140,18 +185,9 @@ E9. **[DONE] `doc/scene_root_cleanup.md` reads as future plan but is shipped** -
 
 E10. **[DONE] `doc/multiview.md` overstates GL coverage** -- lines 9-14 promise a GL OpenXR multiview per-eye fallback that is not wired. **Fix:** add "GL OpenXR multiview is not supported; the GL path covers the desktop-mirror window only."
 
-E11. **[DEFERRED - codegen-generated migrations from added_in markers] `config/editor/erhe_graphics.json` `_version` 2 -> 4 without migration** -- `_version` skipped 3, no migration logic. **Fix:** add the missing `migrate_v3_to_v4` stub (and `migrate_v2_to_v3` if v3 was meant to land between commits). Per CLAUDE.md, only bump when migrating; the bump must come with code. **Do not** roll the field back to v3 -- the in-tree config is already at v4, and downgrading is gratuitous churn even if users' writable copies have not yet been migrated. Ship the migration stub instead.
-
 E12. **[DONE] `src/editor/editor_settings.json` vs `config/editor/editor_settings.json`** -- out of sync (headset `_version` 2 vs 3, missing fields, conflicting `swapchain_depth`). **Fix:** determine which copy is canonical (check `src/editor/CMakeLists.txt`); delete the redundant copy, or regenerate from the codegen.
 
-E13. **[DONE - Init UI only; rest deferred] Dead code to delete -- one PR per subsystem (not bundled):**
-   - **Renderers**: `Programs::load_programs`, `programs_load_task`, `Programs::m_handles_by_name`, `Programs::get_multiview` (`src/editor/renderers/programs.cpp:156-218`).
-   - **Init UI**: `Init_status_display::set_clear_color` (`init_status_display.cpp:66-69`), unused `texture_layer` param of `Init_status_display::render_text_overlay`.
-   - **Graphics buffers**: `Buffer_pool::add_existing_block` + the "manual mode" ctor (`src/erhe/graphics/erhe_graphics/buffer_pool.{cpp,hpp}`).
-   - **Debug renderer**: `padding0_offset` (`src/erhe/scene_renderer/erhe_scene_renderer/debug_renderer_bucket.cpp` and header).
-   - **Mesh memory**: deprecated `vertex_buffer_size` / `index_buffer_size` config knobs (`src/erhe/scene_renderer/definitions/mesh_memory_config.py`).
-
-   Each in its own commit so `git blame` stays useful.
+E13. **[DONE - Init UI only; rest deferred] Dead code to delete** -- the Init UI subset landed (`Init_status_display::set_clear_color` removed; unused `texture_layer` param dropped from `render_text_overlay`). The remaining four subsystems (Renderers, Graphics buffers, Debug renderer, Mesh memory) are tracked under Open Issues -> "Dead-code subsystems remaining from E13".
 
 E14. **[DONE] Debug_label String_pool leak** -- `src/erhe/utility/erhe_utility/debug_label.hpp:11-66`. Global `unordered_set<std::string>` with no eviction. Renderer-agnostic root cause; affects both Forward_renderer (call site goes away) and the future Draw_list_renderer (per-MDI-span labels). **Fix:** drop interning entirely; `Debug_label` stores its own `std::string`. The RAII scope guards already provide cheap lifetimes, so interning is solving a problem that no longer exists. **Verify:** `String_pool::size()` bounded after a soak run.
 
@@ -161,16 +197,13 @@ E16. **[DONE] `Headset_view_resources::is_valid()` is constant-true** -- `src/ed
 
 E17. **[DONE - documented invariant] Prewarm walks only `polygon_fill`** -- `src/editor/renderers/prewarm.cpp:148`, `scene_preview.cpp:296`. Editor renders composition passes with `polygon_fill`, `edge_lines`, `corner_points`, `corner_normals`, `polygon_centroids`. **Fix:** walk all modes (or `ERHE_VERIFY` that the others don't opt into `uses_standard_variants`).
 
-## F. Commit hygiene / messaging
+### Historical: original triage notes
 
-F1. **[DEFERRED - requires user authorization for history rewrite] Commit 8f90a2b0 message claims an OpenXR-instance change not in the diff.** **Fix options (in order of preference under CLAUDE.md):**
-   - (a) **Default:** land a follow-up commit that does the actual change and references 8f90a2b0 in its message. CLAUDE.md prefers creating new commits over amending; this is the only option that does not rewrite history.
-   - (b) If the change was an accidental drop and the original code can be recovered, the follow-up commit is the restore.
-   - (c) Rewriting the original commit message (via `git commit --amend` on tip or interactive rebase mid-branch) is destructive history rewriting and is blocked by CLAUDE.md's git-safety protocol -- both the "never run destructive git commands unless the user explicitly requests them" rule and the explicit "Never use git commands with the `-i` flag (like git rebase -i ...)" prohibition apply. Do not pick (c) without an explicit, scoped user authorization for *both* history rewriting and the `-i` flag.
+These sections drove the now-completed correctness pass and are kept for context.
 
-## Priority and bundling
+#### Priority and bundling
 
-Suggested commit groups (each is one PR or commit set):
+Original suggested commit groups (each was one PR or commit set):
 
 1. **High-severity correctness (A subset)**: A1, A2, A3, A6, A11. Add A10 + A20 ride-along. Add D1 (multiview wide-line render_style + selection_outline animation) ride-along since it is user-visible on Quest.
 2. **MCP correctness + auth + DoS**: A4 (all sub-items) + A14 (related shadow_light_count clamp from MCP exposure surface).
@@ -184,17 +217,9 @@ Suggested commit groups (each is one PR or commit set):
 10. **Build / config / docs (E)**: E1, E2, E6-E10, E11 as docs/config-only PRs. E12 is a CMake / canonical-source decision; ship it on its own. E3 + E4 + E5 + E7 as a prewarm wiring PR. E13 dead-code split per subsystem (note: E13.Renderers depends on B5 + B14 landing first). E14 standalone (Debug_label).
 11. **Commit hygiene (F)**: F1 -- ask user before doing.
 
-## Coupling and gating
+#### Roll-up verification
 
-- A11 is a prerequisite to retiring shadow_renderer (`doc/draw_list_renderer.md` Phase 6) cleanly.
-- B12 is a Phase 2 deliverable of `Draw_list_renderer`, not a standalone fix.
-- E3 + E4 + E5 + E7 are best done together (prewarm wiring + comment + doc).
-- B5 + B14 + E13 (Renderers) overlap on Programs / legacy shaders; do B5 first, then B14, then E13.
-- F1 needs explicit user sign-off before any history rewrite.
-
-## Roll-up verification
-
-Each fix carries its own verification hook above. End-to-end verification:
+End-to-end verification used during the correctness pass:
 
 - ThreadSanitizer build of the editor (A3, A4, A8).
 - Quest 3 launch via `scripts/install_android.bat quest run` after the controllers-required prompt, with `vulkan_validation_layers=true` in `config/editor/erhe_graphics.json` (A1, B1, B4, D1).

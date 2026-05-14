@@ -6,7 +6,49 @@ Each commit was reviewed independently by a critical agent looking for bugs, rac
 
 Severity guide: **high** = real bug or correctness / safety issue; **med** = bad API choice, lifetime risk, or maintainability footgun; **low** = style, doc, naming.
 
-## Forthcoming change: Forward_renderer replacement
+This report was generated before the review-driven correctness pass. `doc/quest_fixes.md` is the live tracker for which findings have been actioned. Use this document for the original detailed context of each finding.
+
+## Open issues
+
+The findings below remain open. See `doc/quest_fixes.md` for the matching fix-plan entry. Findings annotated `[OBSOLETE]` / `[OBSOLETE in part]` in the per-commit body are listed under Closed Issues even though the underlying concern is retired by the `Forward_renderer` -> `Draw_list_renderer` swap rather than fixed.
+
+### Pipeline + shader-handle architecture
+
+- **[high]** "Lazy" shader handles are eager on Vulkan / Metal -- `vulkan_render_pipeline.cpp:23-26`, `metal_render_pipeline.cpp:23-26`. Pipeline ctor resolves `lazy_shader_stages->shader_stages()` synchronously. [quest_fixes.md B2a]
+- **[high]** Cached_shader_handle is not actually a cache + name is misleading -- `cached_shader_handle.cpp:29-31, 33-52`. [quest_fixes.md B2b]
+- **[high]** Metal silently swallows `wide_lines` failure -- `programs.cpp:66-68`. Pipeline objects constructed but broken. [quest_fixes.md B3]
+- **[high]** Variant cache covers `standard` only -- legacy lit shaders (`anisotropic_*`, `circular_brushed_metal`, `standard_debug` variants) still eager and hammered by `Standard_shader_variants::clear()`. [quest_fixes.md B14]
+- **[high]** Material_buffer.unlit field is a load-bearing band-aid -- `material_buffer.cpp:191`. Migrate the four legacy shaders to read `bxdf_model` and drop `unlit`. [quest_fixes.md B5]
+- **[med]** Removed runtime sampler-presence checks risk bindless UB -- `standard.frag` build-time `#ifdef ERHE_USE_*_TEXTURE` gating; Draw_list_renderer Phase 2 covers the per-entry variant resolution. [quest_fixes.md B12]
+
+### Multiview / XR
+
+- **[med]** 1-MSAA on OpenXR is a workaround for the unfiled multiview-MSAA issue -- `graphics_presets_openxr.json:5`. [quest_fixes.md D6]
+- **[med]** GL backend silently drops end_render_pass debug sub-scope -- `gl_render_pass.cpp:817-822` lacks a `Command_buffer&`. [quest_fixes.md D7]
+
+### Build / config / dead code
+
+- **[high]** `Device::warmup_render_pipeline` is dead code -- `device.cpp:121, device.hpp:351`. The Phase-2 prewarm hook is wired through documentation only. [quest_fixes.md E3]
+- **[med]** `config/editor/erhe_graphics.json` `_version` 2 -> 4 without a migration. [quest_fixes.md E11]
+- **[med]** Dead-code subsystems remaining from E13: `Programs::load_programs` / `programs_load_task` / `Programs::m_handles_by_name` / `Programs::get_multiview` (renderers); `Buffer_pool::add_existing_block` (graphics buffers); `padding0_offset` (debug renderer); `vertex_buffer_size` / `index_buffer_size` config knobs (mesh memory). [quest_fixes.md E13 remaining subsystems]
+
+### Commit hygiene
+
+- **[high]** Commit `8f90a2b0` message claimed an OpenXR-instance change not in the diff. The branch's history was subsequently re-collapsed (user-authorized history rewrite via the `git-history-cleanup` skill), so `8f90a2b0` no longer exists, but the original missing change may still need a follow-up commit. [quest_fixes.md F1]
+
+### Carry-over follow-ups from partial-done fixes
+
+- Viewport teardown via a Scene_views teardown API (A5 partial).
+- Rename `Headset_config.depth` / `swapchain_depth` (D4 partial).
+- Codegen JSON serializer for `bxdf_model` / `use_circular_brushed_metal` / `use_aniso_control` (M2 partial).
+- SHA256 verification of the downloaded validation-layer zip (E1 partial).
+- Source `max_view_count` from `Headset_view` / `Xr_session` for quad-view configs (E4 partial).
+
+## Closed issues
+
+The remainder of this document is the historical review report. Findings here are either fixed (see `doc/quest_fixes.md` for the corresponding `[DONE]` entry) or `[OBSOLETE]` (retired by the `Forward_renderer` -> `Draw_list_renderer` swap; see `doc/draw_list_renderer.md`).
+
+### Forthcoming change: Forward_renderer replacement
 
 `erhe::scene_renderer::Forward_renderer` will be deprecated and removed; the replacement is `Draw_list_renderer` (`erhe::scene_renderer::Draw_list_renderer`). See `doc/draw_list_renderer.md` for the plan. Relevant for triage of the findings below:
 
@@ -16,7 +58,7 @@ Severity guide: **high** = real bug or correctness / safety issue; **med** = bad
 - `Forward_renderer::draw_primitives` (sky / grid / post fullscreen passes) keeps working unchanged in v1; findings against fullscreen-only paths remain live until that piece is folded into `Draw_list_renderer` later.
 - Variant-cache, prewarm, material-edit invalidation, multiview, Shader_monitor hot-reload, and the OpenXR / Init_status_display / MCP findings are all orthogonal to the renderer swap and stay live.
 
-## Commits under review
+### Commits under review
 
 1. `87eb2863` graphics + scene_renderer + xr: Vulkan multiview rendering foundation
 2. `380eb642` editor + shaders: end-to-end stereo multiview on Quest 3
@@ -34,9 +76,9 @@ Severity guide: **high** = real bug or correctness / safety issue; **med** = bad
 14. `407c7be3` editor + scene_renderer + graphics: pipeline prewarm at init
 15. `82e4b778` editor: startup script seeds Johnson solids + doc refresh
 
-## Per-commit findings
+### Per-commit findings
 
-### Commit 87eb2863 -- graphics + scene_renderer + xr: Vulkan multiview rendering foundation
+#### Commit 87eb2863 -- graphics + scene_renderer + xr: Vulkan multiview rendering foundation
 
 **TLDR:** Solid groundwork -- Vulkan multiview device-feature query/enable, layered XR swapchain, view-mask plumbing through Render_pass, cameras[N] UBO, and per-shader-stage prelude all hang together. The Headset_view path is admittedly a clear-only stub so most rendering machinery is unexercised. Two latent correctness issues stand out around the single-camera `Camera_buffer::update()` path now uploading a wider block.
 
@@ -53,7 +95,7 @@ Severity guide: **high** = real bug or correctness / safety issue; **med** = bad
 
 **No-issues note:** Vulkan multiview chain wiring (features2 pNext, layerCount/viewMask, framebuffer.layers=1, image-view layerCount sweep) is correct. Shared layered XrSwapchain + per-view `imageArrayIndex` is the canonical OpenXR multiview pattern. Debug-line `width^2 = (2 * w0/1)^2 * 0.25` math is consistent with the fragment shader.
 
-### Commit 380eb642 -- editor + shaders: end-to-end stereo multiview on Quest 3
+#### Commit 380eb642 -- editor + shaders: end-to-end stereo multiview on Quest 3
 
 **TLDR:** Large, mostly-coherent multiview wiring. Per-view-strided line compute lines up with the multiview vertex shader. Fragile parts: `Init_status_display`'s new XR path is shipped disabled, a defensive check is dead, and several const-correctness / lifetime smells should be cleaned up before more code piles on top.
 
@@ -70,7 +112,7 @@ Severity guide: **high** = real bug or correctness / safety issue; **med** = bad
 
 **No-issues note:** Per-view stride math (`stride_per_view = padded_edge_count * 6`, vertex-shader `idx = gl_VertexID + gl_ViewIndex * stride_per_view`) is internally consistent. std140 layout of `cameras[N]` + `world_from_node` is a multiple of 16 at every transition. Compute->vertex barrier uses `shader_storage_barrier_bit`. No transform-feedback / geometry-shader interactions.
 
-### Commit a22a90bb -- android + graphics: Vulkan validation layer in the APK + glslang 16.3.0
+#### Commit a22a90bb -- android + graphics: Vulkan validation layer in the APK + glslang 16.3.0
 
 **TLDR:** Vulkan device-create pNext fix and the glslang patch are sound, but the gradle task is fragile (no checksum, version bump does not reinvalidate cached .so) and the multiview wide-line feed in `headset_view.cpp` silently mis-renders edge-line / outline passes because it lacks the `get_render_style` + animated-outline logic from `viewport_scene_view.cpp`.
 
@@ -88,7 +130,7 @@ Severity guide: **high** = real bug or correctness / safety issue; **med** = bad
 
 **No-issues note:** `VkPhysicalDeviceVulkan11Features` consolidation correctly subsumes 16-bit storage and multiview. SPIR-V cache salt embedding `GLSLANG_VERSION_*` correctly invalidates pre-bump cache entries.
 
-### Commit d7aa7f3d -- build + xr: ERHE_GRAPHICS_API rename + Headset_config consolidation + OpenXR-SDK 1.1.59
+#### Commit d7aa7f3d -- build + xr: ERHE_GRAPHICS_API rename + Headset_config consolidation + OpenXR-SDK 1.1.59
 
 **TLDR:** Solid rename and consolidation, but contains a real bug (`ERHE_GRAPHICS_API_NULL` typo bricks the headless backend's render-pipeline include), defines `ERHE_TARGET_QUEST_STANDALONE` that nothing reads, ships overly broad VUID silencing plus aggressive `ERHE_VERIFY` on env-var writes, and leaves a stale code comment in `xr_session.cpp`.
 
@@ -107,7 +149,7 @@ Severity guide: **high** = real bug or correctness / safety issue; **med** = bad
 
 **No-issues note:** The rename itself is thorough -- `git grep ERHE_GRAPHICS_LIBRARY` yields zero stragglers. The editor.cpp simplification (passing `m_editor_settings.headset` directly instead of an ad-hoc Xr_configuration aggregate) is a clean win.
 
-### Commit 214f16b8 -- editor + renderer: Init_status_display via OpenXR + Debug_renderer multiview
+#### Commit 214f16b8 -- editor + renderer: Init_status_display via OpenXR + Debug_renderer multiview
 
 **TLDR:** Debug_renderer multiview port and Init_status_display XR plumbing land cleanly with reasoned shader / UBO layout, but the commit ships a documented OpenXR-thread-safety race instead of fixing it (band-aid), introduces dead code, and weakens (not strengthens) the Mcp_server stop-race story.
 
@@ -125,7 +167,7 @@ Severity guide: **high** = real bug or correctness / safety issue; **med** = bad
 
 **No-issues note:** UBO std140 layout checks out for the current `DebugViewCamera`. OpenXR begin_frame/end_frame pairing in `render_present_xr` correctly handles `should_render = false` and `begin_ok = false` branches. The depth-attachment drop is documented and correct given the reverse-depth Text_renderer pipeline.
 
-### Commit 8f90a2b0 -- editor: startup command scripts + scene-builder undoable + multiview polish
+#### Commit 8f90a2b0 -- editor: startup command scripts + scene-builder undoable + multiview polish
 
 **TLDR:** Solid refactor in concept, but the commit message is misleading (the "single OpenXR instance" change isn't in this diff), the new script driver has on-demand-parser ordering hazards, the "undoable" claim leaks side-state on undo, and `Init_status_display::poll_events()` will both discard input and fire from worker threads.
 
@@ -142,7 +184,7 @@ Severity guide: **high** = real bug or correctness / safety issue; **med** = bad
 
 **No-issues note:** Multiview wide-line render-style fix (`headset_view.cpp`) is correct. Codegen split (`add_*_args.py`, `make_mesh_args.py`) is clean and matches the typed-config story.
 
-### Commit 9feb3c1a -- erhe + editor: mesh_memory multi-format pool registry + lazy buffer growth
+#### Commit 9feb3c1a -- erhe + editor: mesh_memory multi-format pool registry + lazy buffer growth
 
 **TLDR:** Decent structural refactor, but ships a real data-corruption bug whenever any pool grows beyond its first block (Triangle_soup uploads target `get_first_buffer()` instead of the allocation's actual block), plus several latent traps (registry race, key collisions across stream layouts, dead config knobs, dead code, big peek/bucket duplication between forward and shadow renderers).
 
@@ -163,7 +205,7 @@ Severity guide: **high** = real bug or correctness / safety issue; **med** = bad
 - **[low]** `Buffer_pool` lacks explicit deleted copy/move special members.
 - **[low]** `Mesh_memory::vertex_format` reference + `Format_pools::vertex_format` value copy -- two-source-of-truth pattern, re-entrenched.
 
-### Commit 3d570726 -- editor + docs: slim Scene_root, viewport fixes, draw list renderer plan
+#### Commit 3d570726 -- editor + docs: slim Scene_root, viewport fixes, draw list renderer plan
 
 **TLDR:** Scene_root extraction is mostly sound and the BeginChild leak fix in `viewport_window.cpp` is correct, but the new `Content_library_window` introduces a lifetime regression in `Scene_open_operation::undo`, the `use_draw_list_renderer` config flag and `Renderer_choice` UI are dead scaffolding wired to nothing (**update:** per `doc/draw_list_renderer.md` Phase 0, these are the intentional config knob and per-viewport switch for the upcoming `Draw_list_renderer` -- not stray dead code, just landed ahead of the renderer they gate), and pre-existing latent bugs in the touched code remain unfixed.
 
@@ -180,7 +222,7 @@ Severity guide: **high** = real bug or correctness / safety issue; **med** = bad
 
 **No-issues note:** `viewport_window.cpp` BeginChild fix is correct; `brush.hpp` direct item.hpp include is justified; the `make_shared<Scene_root>(...)` call sites have all been updated to the new 4-argument signature.
 
-### Commit 32ecac80 -- scene_renderer + editor: Standard_shader_variants cache + bucket plumbing
+#### Commit 32ecac80 -- scene_renderer + editor: Standard_shader_variants cache + bucket plumbing
 
 **TLDR:** Variant cache infrastructure and light prefix-partition land cleanly, but the cache key has 5 dead-weight material-texture boolean axes (no shader uses them) that needlessly fragment the cache, and the new `shadow_index == index` policy quietly inflates the required `shadow_light_count` budget so shadow-casters can fall off the end of the render-pass array when many non-shadow lights are present.
 
@@ -197,7 +239,7 @@ Severity guide: **high** = real bug or correctness / safety issue; **med** = bad
 
 **No-issues note:** X-macro for axes is solid; `unique_ptr` storage for `Reloadable_shader_stages` preserves the Shader_monitor's stable pointer; multiview gate (`!multiview_path`) is correct; light prefix-partition math itself is right.
 
-### Commit f8dab5f8 -- graphics + rendergraph + scene_renderer: cb-targeted Scoped_debug_group for RenderDoc
+#### Commit f8dab5f8 -- graphics + rendergraph + scene_renderer: cb-targeted Scoped_debug_group for RenderDoc
 
 **TLDR:** The cb-targeted refactor is mechanically sound (the API is now coherent and RAII keeps begin/end balanced across the early-return paths traced), but the new per-bucket `fmt::format` debug labels create a per-frame allocation + global-mutex hot spot that monotonically leaks into the `String_pool` interning singleton, and the Vulkan backend never consults `s_enabled` (pre-existing, made worse by the proliferation of call sites).
 
@@ -211,7 +253,7 @@ Severity guide: **high** = real bug or correctness / safety issue; **med** = bad
 - **[low]** `Texture_heap::reset_heap` / `unbind` API now takes `Command_buffer&` purely for debug bookkeeping (`texture_heap.hpp:32-42`). API now lies about its dependency; consider a debug-free overload.
 - **[low]** Vulkan impl caches a `VkCommandBuffer` handle, not the `Command_buffer&`. If a Scoped_debug_group outlives the cb that produced its handle, dtor writes to a recycled handle. Document the lifetime contract.
 
-### Commit 7704e198 -- scene_renderer + editor: Standard_shader_variants refinement + Lazy_shader_handle
+#### Commit 7704e198 -- scene_renderer + editor: Standard_shader_variants refinement + Lazy_shader_handle
 
 **TLDR:** The lazy-compile claim is leaky -- on Vulkan and Metal the pipeline ctor calls `lazy_shader_stages->shader_stages()` synchronously, so the "drop eager compile from `load_programs`" only buys laziness on GL. Vulkan/Metal still compile during `Pipeline_renderpasses` ctor at init. `Cached_shader_handle` does not actually cache; every draw walks an `unordered_map` under a mutex. Several latent regressions / stale docs leak through.
 
@@ -229,7 +271,7 @@ Severity guide: **high** = real bug or correctness / safety issue; **med** = bad
 
 **No-issues note:** Threading is correctly serialized via cache + monitor mutexes. Member destruction order in `Editor::Impl` is correct. The dedup-log fix (`80b7bdbe`) is a proper root-cause fix.
 
-### Commit 04dc43ba -- editor: expose material editing via MCP server + integration tests
+#### Commit 04dc43ba -- editor: expose material editing via MCP server + integration tests
 
 **TLDR:** Functionally the dispatch + queue + `Material_change_operation` plumbing is correct and the test surface is broad, but the new code ships several real problems: zero input-range validation (NaN/inf/negative metallic accepted silently), no authentication on a JSON-RPC endpoint that mutates editor state, ambiguous material/texture lookup by name, an integration-test harness that hard-depends on whichever material happens to be index `0` (test leaves it mutated on failure), and a request-queue back-pressure model that lets a noisy client OOM the editor.
 
@@ -248,7 +290,7 @@ Severity guide: **high** = real bug or correctness / safety issue; **med** = bad
 
 **No-issues note:** Thread-handoff between HTTP worker and main thread for `action_edit_material` is correct (mutation happens through `operation_stack->queue` from the main thread inside `process_queued_requests`).
 
-### Commit c531aac0 -- editor + graphics: BxDF model + anisotropic brushed-metal materials
+#### Commit c531aac0 -- editor + graphics: BxDF model + anisotropic brushed-metal materials
 
 **TLDR:** Adds a `Bxdf_model` axis (unlit/isotropic/anisotropic) plus two new material booleans, threads them through the variant cache and bucket key, and forces a Vulkan pipeline-cache flush on `Shader_variant_cache::clear()`. Functionally works but ships dead shader code, an unused energy-control variable, a band-aid `unlit` UBO field, a default-material change that visually regresses every saved scene, and most importantly leaves the same Vulkan stale-handle hazard wide open in `Shader_monitor` live reload.
 
@@ -267,7 +309,7 @@ Severity guide: **high** = real bug or correctness / safety issue; **med** = bad
 - **[low]** `Mesh_primitive_ref::shared_ptr<Mesh>` by value in a hot per-frame vector bumps the refcount on every push. Consider raw `Mesh*` with documented lifetime.
 - **[low]** `int current` round-trip cast in `properties.cpp:1029-1031` is unguarded.
 
-### Commit 407c7be3 -- editor + scene_renderer + graphics: pipeline prewarm at init
+#### Commit 407c7be3 -- editor + scene_renderer + graphics: pipeline prewarm at init
 
 **TLDR:** Solid first cut at moving shader-variant compile and shadow VkPipeline construction out of the first-frame budget, with good single-source-of-truth for the light tally. But ships `Device::warmup_render_pipeline` as dead code, has a stale "subsequent commits will" header comment, and the comment-coupled "must stay bit-identical" tally in two places is a future-bug magnet rather than a fix.
 
@@ -285,7 +327,7 @@ Severity guide: **high** = real bug or correctness / safety issue; **med** = bad
 
 **No-issues note:** Shadow-pass dedup via `Lazy_render_pipeline*` pointer identity is correct. Gate (`uses_standard_variants && vertex_format != nullptr`) is bit-identical to runtime `variant_lookup_active` predicate (`forward_renderer.cpp:506-511`). Call-site placement after `run_startup_script()` and before `wait_idle` is right.
 
-### Commit 82e4b778 -- editor: startup script seeds Johnson solids + doc refresh
+#### Commit 82e4b778 -- editor: startup script seeds Johnson solids + doc refresh
 
 **TLDR:** The one-line JSON swap is clean and valid, but `doc/building.md` is the opposite of "refreshed" -- it adds typos, broken paths, and a "CMake Presets" section that directly violates CLAUDE.md's explicit prohibition on documenting `cmake --preset`.
 
@@ -301,13 +343,13 @@ Severity guide: **high** = real bug or correctness / safety issue; **med** = bad
 
 **Verified clean:** `commands.json` change parses (JSON valid, all five arg names match `Make_mesh_args` struct fields), `scene.add_johnson_solids` is a real registered command (`scene_commands.cpp:179`), `Scene_builder::add_johnson_solids` exists (`scene_builder.cpp:818`). ASCII-only check on both files passes.
 
-## Cumulative architectural review
+### Cumulative architectural review
 
-### TL;DR
+#### TL;DR
 
 The branch lands a coherent multi-pillar feature set (Vulkan multiview, OpenXR-SDK refresh, mesh-memory + variant-cache + prewarm) and the seams between pillars mostly fit. But the squash makes visible several cross-system half-finished contracts: the lazy-shader story is half-lazy at best, the variant cache covers only the `standard` shader while every legacy shader still lives in eager Cached_shader_handles, light-count tally code is intentionally duplicated with a "must stay bit-identical" comment, an `ERHE_GRAPHICS_API_NULL` typo slipped through the API rename, and `Init_status_display` drives OpenXR from a constructor that itself runs while taskflow workers are pushing status lines into the same `m_lines` vector without a mutex.
 
-### Architectural / cross-cutting findings
+#### Architectural / cross-cutting findings
 
 - **[high] "Lazy" shader handles are not actually lazy on Vulkan/Metal.** `Lazy_shader_handle` (`src/erhe/graphics/erhe_graphics/lazy_shader_handle.hpp`) + `Cached_shader_handle` (`src/erhe/scene_renderer/erhe_scene_renderer/cached_shader_handle.cpp:28`) are advertised in `programs.cpp` ("Phase 3: lazy startup... nothing compiles here") and in `programs.hpp:99` ("startup becomes truly lazy"). But `Render_pipeline_impl::Render_pipeline_impl` on both Vulkan (`vulkan_render_pipeline.cpp:21-26`) and Metal (`metal_render_pipeline.cpp:21-26`) resolves the handle synchronously via `create_info.lazy_shader_stages->shader_stages()` -- it compiles the shader the moment a `Render_pipeline` is constructed. Every `Pipeline_renderpasses` member in `app_rendering.cpp` is constructed at editor init through `Lazy_render_pipeline`, but Lazy_render_pipeline does eventually realize each pipeline; on the GL backend this works out, but on Vulkan the prewarm walks every Render_pipeline anyway. Net result: the "lazy" story buys you nothing on Vulkan beyond complexity, and the OpenGL "lazy" story is purely a deferral of GL shader-object creation, not glslang. Either commit fully to lazy (move the resolve into `set_render_pipeline_state` on Vulkan with cached VkPipeline reuse) or drop the abstraction and call it `Cached_shader_handle` without the lazy claim.
 
@@ -325,7 +367,7 @@ The branch lands a coherent multi-pillar feature set (Vulkan multiview, OpenXR-S
 
 - **[med] Duplicated bucket / `peek_mesh_buffers` machinery in forward + shadow.** `forward_renderer.cpp` introduces `Buffer_set`, `peek_mesh_buffers`, `Bucket_key` / `Bucket`, `bucket_primitives_by_buffers_and_variant` (~200 LOC). `shadow_renderer.cpp:36-119` re-implements `Buffer_set`, `peek_mesh_buffers`, `Bucket`, and `bucket_meshes_by_buffers` with only the variant-key part stripped. They have the same assertions ("primitives of a mesh must share buffer set"), the same `Buffer_set::operator==`, the same in-place linear search through `vector<Bucket>`. Forward's `bucket_primitives_by_buffers_and_variant` could collapse onto a smaller `bucket_meshes_by_buffer_set` reused by shadow if the variant signature were a separate sub-key composition. Shared header in `erhe_scene_renderer/` (or `erhe_renderer/`) would be the natural home. **[OBSOLETE in part - Forward_renderer replacement]** the forward side goes away with `Draw_list_renderer` (sorted-entry, per-edit buffer-set; no per-frame re-bucketing). The shadow side persists until `shadow_renderer` is migrated (out of scope for `Draw_list_renderer` v1). When that migration happens, decide whether to share `Draw_list_renderer`'s sorted-entry scheme with shadow rather than re-introducing a shared bucket header just to retire it again.
 
-### Missed cleanup opportunities
+#### Missed cleanup opportunities
 
 - `Programs::load_programs` (`programs.cpp:157-211`) is now a no-op apart from a single `init_message("")` call. The taskflow node in `editor.cpp:949` can be folded away with the method.
 - `Device::warmup_render_pipeline` (`device.cpp:121-126`, `device.hpp:351`) has zero call sites. `forward_renderer.hpp:131` and `prewarm.hpp:22` reference it as future home of VkPipeline-cache warmup but `prewarm_all` does not call it. Either wire prewarm to it or remove the method.
@@ -335,7 +377,7 @@ The branch lands a coherent multi-pillar feature set (Vulkan multiview, OpenXR-S
 - The `unlit` UBO field in `Material_data` is still allocated and written by `material_buffer.cpp:62, 191-225` purely because `anisotropic_*`, `circular_brushed_metal`, and `standard_debug` shaders read it. Once those land on `bxdf_model`-keyed variants the UBO slot can go.
 - `Programs::m_handles_by_name` (`programs.cpp:170-218`) is documented as "legacy name-keyed multiview lookup that app_rendering.cpp still uses through get_multiview_stages helper" -- but `get_multiview_stages` was removed in the same commit and the map plus `Programs::get_multiview` are dead.
 
-### Documentation drift
+#### Documentation drift
 
 - **`doc/prewarm.md`** -- The "Phase 2: VkPipeline cache" section (lines 53-82) documents `Device::warmup_render_pipeline` as if `prewarm_all` calls it. It does not (only `Shadow_renderer::prewarm_pipelines` and `Forward_renderer::prewarm_standard_variants` are invoked). Mark "future work" or wire the call.
 - **`doc/shader_variants.md`** -- Lines 1-12 say "Infrastructure landed; render-time adoption follow-up," but lines 33-42 list adoption work that has actually shipped on this branch (Scene_preview, Headset_view via the multiview path). The "Remaining adoption work" paragraph is stale.
@@ -344,20 +386,20 @@ The branch lands a coherent multi-pillar feature set (Vulkan multiview, OpenXR-S
 - **`doc/draw_list_renderer.md`** -- Plan-as-future-work, correctly so; clearly marked "first draft -- iterate before implementing."
 - **`doc/debug_renderer_multiview.md`** -- Marked "Implemented," matches the code.
 
-### Naming / API drift
+#### Naming / API drift
 
 - `ERHE_GRAPHICS_API_NULL` in `src/erhe/graphics/erhe_graphics/render_pipeline.cpp:12` is a typo of `ERHE_GRAPHICS_API_NONE` (the rest of the tree uses NONE; CMakeLists.txt only defines NONE). The headless build for `render_pipeline.cpp` falls through silently because none of the four backend conditions match. Rename-commit residue.
 - `Cached_shader_handle` is a misleading name -- it does cache on first access but caches *into a shared cache object*. `Variant_handle` or `Shader_handle` would describe what callers experience.
 - `Headset_config.depth` (enables `XR_KHR_composition_layer_depth`, used in `xr_instance.cpp:374`) vs `Headset_config.swapchain_depth` (creates a depth-stencil swapchain, used in `xr_session.cpp:534`) are dangerously similar names for orthogonal concepts. Rename to `composition_depth_layer` / `swapchain_depth_attachment` or document the distinction in `headset_config.py`'s currently-empty `short_desc` fields.
 
-### Cross-commit broken contracts
+#### Cross-commit broken contracts
 
 - Commit `407c7be3` (prewarm) advertises Phase 2 = "VkPipeline cache via `Device::warmup_render_pipeline`" but `prewarm_all` never calls it; commit `7704e198` (variant-cache refinement) was where this would have naturally landed and did not.
 - Commit `d7aa7f3d` (`ERHE_GRAPHICS_API` rename) missed `render_pipeline.cpp:12`; commit `87eb2863` (multiview foundation, same file) did not catch it either because the file already had multiple `#ifdef`s switched, and the `NULL` branch only fires in headless builds.
 - Commit `32ecac80` (variant cache + bucket plumbing) added `Material_change_operation::clear()` but commit `c531aac0` (BxDF model) added the Properties-panel `bxdf_model` combo and `use_circular_brushed_metal` / `use_aniso_control` checkboxes without routing them through the operation. The two commits agree on the variant axes; they disagree on who invalidates.
 - `_version` bumped in `config/editor/erhe_graphics.json` to version 4 with no migration logic to point at. CLAUDE.md says omit `_version` at 1 and only bump when migrating -- a whole-config v4 bump for an unused knob is the kind of pattern that needs justifying.
 
-### Conclusion
+#### Conclusion
 
 The riskiest area is the **variant-cache lifetime story**: a hot-reload pipeline-cache invalidation gap (`Shader_monitor` reload not flushing), a Properties-panel material-edit gap that leaves the cache live with the wrong shader, and a tally-duplication landmine in `Light_projections::apply` are three independent ways to render stale shaders without anybody noticing until a frame looks wrong.
 
@@ -365,7 +407,7 @@ The **strongest part** of the change is the multiview foundation: the capability
 
 Tightening the variant-cache invalidation perimeter and folding the now-dead `load_programs` / `warmup_render_pipeline` / `Init_status_display::set_clear_color` / `add_existing_block` / `m_handles_by_name` would buy the most signal for the smallest follow-up commit.
 
-## High-severity summary
+### High-severity summary
 
 The following are the high-severity findings concentrated for triage; lower-severity findings are in the per-commit sections above.
 
@@ -408,7 +450,7 @@ The following are the high-severity findings concentrated for triage; lower-seve
 | 35 | `doc/building.md:48-61` | Refresh adds a `cmake --preset` section that CLAUDE.md explicitly forbids. |
 | 36 | `doc/building.md:99, 90` | macOS / Linux blocks use Windows backslashes / skip the required `scripts/` wrappers. |
 
-## Themes that recur
+### Themes that recur
 
 - **Band-aid acknowledgement instead of root-cause fix** -- pattern repeats across `Init_status_display::set_line` race (acknowledged, not fixed), `Material_buffer.unlit` (kept to avoid migrating legacy shaders), and the duplicated light-tally helper (comment-pinned bit-identical instead of single-source).
 - **Dead code shipped as scaffolding** -- `Device::warmup_render_pipeline`, `Init_status_display::set_clear_color`, `Buffer_pool::add_existing_block`, `Programs::load_programs`, `anisotropy_strength`. (`use_draw_list_renderer` and `Renderer_choice` were initially flagged in this list but reclassify as *intentional* scaffolding for the planned `Draw_list_renderer` -- still landed before their consumer, but not stray.)
