@@ -38,7 +38,6 @@ erhe_target_sources_grouped(
     erhe_graphics/image_loader.hpp
     erhe_graphics/image_loader_wuffs.cpp
     erhe_graphics/image_loader_wuffs.hpp
-    erhe_graphics/lazy_shader_handle.hpp
     erhe_graphics/native_format.cpp
     erhe_graphics/native_format.hpp
     erhe_graphics/renderdoc_app.h
@@ -67,6 +66,7 @@ erhe_target_sources_grouped(
     erhe_graphics/shader_stages.cpp
     erhe_graphics/shader_stages.hpp
     erhe_graphics/shader_stages_create_info.cpp
+    erhe_graphics/shader_stages_handle.hpp
     erhe_graphics/span.hpp
     erhe_graphics/state/color_blend_state.cpp
     erhe_graphics/state/color_blend_state.hpp

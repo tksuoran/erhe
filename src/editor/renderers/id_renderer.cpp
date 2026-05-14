@@ -60,7 +60,7 @@ Id_renderer::Id_renderer(
     , m_primitive_buffers    {graphics_device, program_interface.primitive_interface}
     , m_pipeline{graphics_device, erhe::graphics::Render_pipeline_create_info{
         .debug_label    = erhe::utility::Debug_label{"ID Renderer"},
-        .lazy_shader_stages = &programs.id,
+        .shader_stages_handle = &programs.id,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangle,
         .rasterization  = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
@@ -70,7 +70,7 @@ Id_renderer::Id_renderer(
 
     , m_selective_depth_clear_pipeline{graphics_device, erhe::graphics::Render_pipeline_create_info{
         .debug_label    = erhe::utility::Debug_label{"ID Renderer selective depth clear"},
-        .lazy_shader_stages = &programs.id,
+        .shader_stages_handle = &programs.id,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangle,
         .rasterization  = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),

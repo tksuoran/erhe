@@ -103,8 +103,9 @@ Programs::Programs(
     static_cast<void>(graphics_device);
     // Name -> handle map for get_multiview(name). Backs the legacy
     // name-keyed multiview lookup that app_rendering.cpp still uses
-    // through its get_multiview_stages helper. Once every pipeline
-    // takes a Lazy_shader_handle* directly, this map can go.
+    // through its get_multiview_stages helper. Flagged for removal
+    // under E13 dead-code (every pipeline already passes a
+    // Shader_stages_handle* directly via the create_info field).
     m_handles_by_name = {
         {"error",                     &error},
         {"brdf_slice",                &brdf_slice},
@@ -161,16 +162,13 @@ void Programs::load_programs(
     const Init_message_fn&                   init_message
 )
 {
-    // Phase 3: lazy startup. The Programs ctor has already constructed
-    // every Cached_shader_handle with its key; nothing compiles here.
-    // The first frame that asks a handle for shader_stages() (or the
-    // first dropdown / debug-viz selection) triggers that shader's
-    // compile through the Shader_variant_cache, which registers the
-    // resulting Reloadable_shader_stages with the Shader_monitor for
-    // hot reload.
+    // The Programs ctor records every variant's key with the cache; the
+    // cache compiles on miss whenever the first consumer asks for the
+    // stages. The timing of that miss is not part of the handle's
+    // contract -- a backend may resolve in pipeline ctor or at bind time.
     //
-    // Kept as a no-op for the parallel-init taskflow that already
-    // calls it; future work will fold this away entirely.
+    // Kept as a no-op for the parallel-init taskflow that already calls
+    // it; deletion tracked under E13 dead-code.
     static_cast<void>(executor);
     if (init_message) {
         init_message("");

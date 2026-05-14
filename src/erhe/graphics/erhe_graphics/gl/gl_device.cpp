@@ -1623,8 +1623,8 @@ auto Device_impl::recreate_surface_for_new_window() -> bool
 void Device_impl::clear_render_pipeline_cache()
 {
     // OpenGL has no precompiled pipeline objects -- shader binding is
-    // resolved through Cached_shader_handle at every draw, so there is
-    // no stale-pipeline hazard like Vulkan's m_pipeline_map.
+    // resolved through Variant_handle at every draw, so there is no
+    // stale-pipeline hazard like Vulkan's m_pipeline_map.
 }
 
 void Device_impl::wait_idle()

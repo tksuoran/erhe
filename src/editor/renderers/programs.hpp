@@ -1,6 +1,6 @@
 #pragma once
 
-#include "erhe_scene_renderer/cached_shader_handle.hpp"
+#include "erhe_scene_renderer/variant_handle.hpp"
 
 #include <filesystem>
 #include <functional>
@@ -94,11 +94,9 @@ static constexpr const char* c_shader_stages_variant_strings[] =
     "Debug Miscellaneous"
 };
 
-// Owns one Cached_shader_handle per shader the editor uses. Each handle
-// holds a Shader_variant_key and resolves through the shared
-// Shader_variant_cache on first access. load_programs walks every
-// handle and force-resolves it (eager compile preserved through
-// Phase 2). Phase 3 drops that and startup becomes truly lazy.
+// Owns one Variant_handle per shader the editor uses. Each handle holds
+// a Shader_variant_key and resolves through the shared
+// Shader_variant_cache; the cache compiles on miss.
 //
 // Multiview siblings live inside the same handle:
 // handle.shader_stages() returns the single-view stages,
@@ -130,57 +128,57 @@ public:
 
     std::vector<std::filesystem::path>            shader_paths;
 
-    erhe::scene_renderer::Cached_shader_handle    error;
-    erhe::scene_renderer::Cached_shader_handle    brdf_slice;
-    erhe::scene_renderer::Cached_shader_handle    brush;
-    erhe::scene_renderer::Cached_shader_handle    standard;
-    erhe::scene_renderer::Cached_shader_handle    anisotropic_slope;
-    erhe::scene_renderer::Cached_shader_handle    anisotropic_engine_ready;
-    erhe::scene_renderer::Cached_shader_handle    circular_brushed_metal;
-    erhe::scene_renderer::Cached_shader_handle    textured;
-    erhe::scene_renderer::Cached_shader_handle    sky;
-    erhe::scene_renderer::Cached_shader_handle    grid;
-    erhe::scene_renderer::Cached_shader_handle    wide_lines_draw_color;
-    erhe::scene_renderer::Cached_shader_handle    wide_lines_vertex_color;
-    erhe::scene_renderer::Cached_shader_handle    points;
-    erhe::scene_renderer::Cached_shader_handle    id;
-    erhe::scene_renderer::Cached_shader_handle    tool;
-    erhe::scene_renderer::Cached_shader_handle    debug_depth;
-    erhe::scene_renderer::Cached_shader_handle    debug_vertex_normal;
-    erhe::scene_renderer::Cached_shader_handle    debug_fragment_normal;
-    erhe::scene_renderer::Cached_shader_handle    debug_normal_texture;
-    erhe::scene_renderer::Cached_shader_handle    debug_tangent;
-    erhe::scene_renderer::Cached_shader_handle    debug_vertex_tangent_w;
-    erhe::scene_renderer::Cached_shader_handle    debug_bitangent;
-    erhe::scene_renderer::Cached_shader_handle    debug_texcoord;
-    erhe::scene_renderer::Cached_shader_handle    debug_base_color_texture;
-    erhe::scene_renderer::Cached_shader_handle    debug_vertex_color_rgb;
-    erhe::scene_renderer::Cached_shader_handle    debug_vertex_color_alpha;
-    erhe::scene_renderer::Cached_shader_handle    debug_aniso_strength;
-    erhe::scene_renderer::Cached_shader_handle    debug_aniso_texcoord;
-    erhe::scene_renderer::Cached_shader_handle    debug_vdotn;
-    erhe::scene_renderer::Cached_shader_handle    debug_ldotn;
-    erhe::scene_renderer::Cached_shader_handle    debug_hdotv;
-    erhe::scene_renderer::Cached_shader_handle    debug_joint_indices;
-    erhe::scene_renderer::Cached_shader_handle    debug_joint_weights;
-    erhe::scene_renderer::Cached_shader_handle    debug_omega_o;
-    erhe::scene_renderer::Cached_shader_handle    debug_omega_i;
-    erhe::scene_renderer::Cached_shader_handle    debug_omega_g;
-    erhe::scene_renderer::Cached_shader_handle    debug_vertex_valency;
-    erhe::scene_renderer::Cached_shader_handle    debug_polygon_edge_count;
-    erhe::scene_renderer::Cached_shader_handle    debug_metallic;
-    erhe::scene_renderer::Cached_shader_handle    debug_roughness;
-    erhe::scene_renderer::Cached_shader_handle    debug_occlusion;
-    erhe::scene_renderer::Cached_shader_handle    debug_emissive;
-    erhe::scene_renderer::Cached_shader_handle    debug_shadowmap_texels;
-    erhe::scene_renderer::Cached_shader_handle    debug_shadow;
-    erhe::scene_renderer::Cached_shader_handle    debug_misc;
+    erhe::scene_renderer::Variant_handle    error;
+    erhe::scene_renderer::Variant_handle    brdf_slice;
+    erhe::scene_renderer::Variant_handle    brush;
+    erhe::scene_renderer::Variant_handle    standard;
+    erhe::scene_renderer::Variant_handle    anisotropic_slope;
+    erhe::scene_renderer::Variant_handle    anisotropic_engine_ready;
+    erhe::scene_renderer::Variant_handle    circular_brushed_metal;
+    erhe::scene_renderer::Variant_handle    textured;
+    erhe::scene_renderer::Variant_handle    sky;
+    erhe::scene_renderer::Variant_handle    grid;
+    erhe::scene_renderer::Variant_handle    wide_lines_draw_color;
+    erhe::scene_renderer::Variant_handle    wide_lines_vertex_color;
+    erhe::scene_renderer::Variant_handle    points;
+    erhe::scene_renderer::Variant_handle    id;
+    erhe::scene_renderer::Variant_handle    tool;
+    erhe::scene_renderer::Variant_handle    debug_depth;
+    erhe::scene_renderer::Variant_handle    debug_vertex_normal;
+    erhe::scene_renderer::Variant_handle    debug_fragment_normal;
+    erhe::scene_renderer::Variant_handle    debug_normal_texture;
+    erhe::scene_renderer::Variant_handle    debug_tangent;
+    erhe::scene_renderer::Variant_handle    debug_vertex_tangent_w;
+    erhe::scene_renderer::Variant_handle    debug_bitangent;
+    erhe::scene_renderer::Variant_handle    debug_texcoord;
+    erhe::scene_renderer::Variant_handle    debug_base_color_texture;
+    erhe::scene_renderer::Variant_handle    debug_vertex_color_rgb;
+    erhe::scene_renderer::Variant_handle    debug_vertex_color_alpha;
+    erhe::scene_renderer::Variant_handle    debug_aniso_strength;
+    erhe::scene_renderer::Variant_handle    debug_aniso_texcoord;
+    erhe::scene_renderer::Variant_handle    debug_vdotn;
+    erhe::scene_renderer::Variant_handle    debug_ldotn;
+    erhe::scene_renderer::Variant_handle    debug_hdotv;
+    erhe::scene_renderer::Variant_handle    debug_joint_indices;
+    erhe::scene_renderer::Variant_handle    debug_joint_weights;
+    erhe::scene_renderer::Variant_handle    debug_omega_o;
+    erhe::scene_renderer::Variant_handle    debug_omega_i;
+    erhe::scene_renderer::Variant_handle    debug_omega_g;
+    erhe::scene_renderer::Variant_handle    debug_vertex_valency;
+    erhe::scene_renderer::Variant_handle    debug_polygon_edge_count;
+    erhe::scene_renderer::Variant_handle    debug_metallic;
+    erhe::scene_renderer::Variant_handle    debug_roughness;
+    erhe::scene_renderer::Variant_handle    debug_occlusion;
+    erhe::scene_renderer::Variant_handle    debug_emissive;
+    erhe::scene_renderer::Variant_handle    debug_shadowmap_texels;
+    erhe::scene_renderer::Variant_handle    debug_shadow;
+    erhe::scene_renderer::Variant_handle    debug_misc;
 
 private:
     // Name -> handle map. Built in the ctor; backs get_multiview(name).
-    // Each Cached_shader_handle is owned by Programs (as a public
-    // member); the map holds a non-owning pointer.
-    std::unordered_map<std::string, erhe::scene_renderer::Cached_shader_handle*> m_handles_by_name;
+    // Each Variant_handle is owned by Programs (as a public member); the
+    // map holds a non-owning pointer.
+    std::unordered_map<std::string, erhe::scene_renderer::Variant_handle*> m_handles_by_name;
 };
 
 }

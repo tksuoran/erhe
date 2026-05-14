@@ -1,8 +1,8 @@
-#include "erhe_scene_renderer/cached_shader_handle.hpp"
+#include "erhe_scene_renderer/variant_handle.hpp"
 
 namespace erhe::scene_renderer {
 
-Cached_shader_handle::Cached_shader_handle(
+Variant_handle::Variant_handle(
     Shader_variant_cache& cache,
     Shader_variant_key    key
 )
@@ -12,7 +12,7 @@ Cached_shader_handle::Cached_shader_handle(
 {
 }
 
-Cached_shader_handle::Cached_shader_handle(
+Variant_handle::Variant_handle(
     Shader_variant_cache& cache,
     Shader_variant_key    key,
     uint32_t              multiview_view_count
@@ -23,14 +23,14 @@ Cached_shader_handle::Cached_shader_handle(
 {
 }
 
-Cached_shader_handle::~Cached_shader_handle() noexcept = default;
+Variant_handle::~Variant_handle() noexcept = default;
 
-auto Cached_shader_handle::shader_stages() -> const erhe::graphics::Shader_stages*
+auto Variant_handle::shader_stages() -> const erhe::graphics::Shader_stages*
 {
     return m_cache.get_or_compile(m_single_view_key);
 }
 
-auto Cached_shader_handle::multiview_shader_stages() -> const erhe::graphics::Shader_stages*
+auto Variant_handle::multiview_shader_stages() -> const erhe::graphics::Shader_stages*
 {
     if (m_multiview_view_count == 0) {
         return nullptr;

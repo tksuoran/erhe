@@ -891,8 +891,8 @@ public:
                 program_interface_config
             );
             // Cache constructed before Programs so each Programs member
-            // (a Cached_shader_handle) can hold a reference to it. The
-            // cache stays empty until something calls get_or_compile.
+            // (a Variant_handle) can hold a reference to it. The cache
+            // stays empty until something calls get_or_compile.
             m_shader_variant_cache = std::make_unique<erhe::scene_renderer::Shader_variant_cache>(
                 *m_graphics_device.get(),
                 *m_program_interface.get()
@@ -1641,10 +1641,9 @@ public:
 
         // Standard shader variant cache adapter. The underlying
         // Shader_variant_cache was constructed earlier (before Programs).
-        // The fallback handle is programs.error -- a lazy
-        // Cached_shader_handle. Standard_shader_variants resolves it
-        // on demand when a variant compile fails, so the fallback
-        // doesn't have to be precompiled here.
+        // The fallback handle is programs.error -- a Variant_handle.
+        // Standard_shader_variants resolves it when a variant compile
+        // fails, so the fallback does not have to be precompiled here.
         m_standard_shader_variants = std::make_unique<erhe::scene_renderer::Standard_shader_variants>(
             *m_shader_variant_cache.get(),
             m_programs->error
@@ -2307,12 +2306,12 @@ public:
     erhe::dataformat::Vertex_format                          m_position_only_vertex_format;
 
     // Generic shader variant cache. Constructed before Programs so each
-    // Cached_shader_handle member of Programs can reference it; lives
-    // longer than Programs so handle.shader_stages() calls during
-    // Programs's destruction (if any) stay valid -- though
-    // Cached_shader_handle's dtor doesn't actually access the cache,
-    // so the order is also safe in the other direction. The cache's
-    // own dtor detaches entries from the Shader_monitor.
+    // Variant_handle member of Programs can reference it; lives longer
+    // than Programs so handle.shader_stages() calls during Programs's
+    // destruction (if any) stay valid -- though Variant_handle's dtor
+    // doesn't actually access the cache, so the order is also safe in
+    // the other direction. The cache's own dtor detaches entries from
+    // the Shader_monitor.
     std::unique_ptr<erhe::scene_renderer::Shader_variant_cache> m_shader_variant_cache;
     std::unique_ptr<Programs                              >  m_programs;
     // Typed adapter over m_shader_variant_cache. Holds a reference to

@@ -5,7 +5,7 @@
 #include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/draw_indirect.hpp"
-#include "erhe_graphics/lazy_shader_handle.hpp"
+#include "erhe_graphics/shader_stages_handle.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/render_pipeline.hpp"
@@ -108,18 +108,16 @@ auto make_temp_pipeline_state(const erhe::graphics::Render_pipeline_create_info&
     }};
 }
 
-// Pipelines may bind a Lazy_shader_handle instead of (or in addition to)
-// a raw Shader_stages*. The lazy handle takes priority: it lets a
-// pipeline reference a shader whose actual compile is deferred until
-// the renderer asks for it. Returns nullptr only when the handle's
-// underlying compile fails AND no fallback was wired through; the
-// renderer's existing error_shader_stages path then steps in.
+// Pipelines may bind a Shader_stages_handle instead of (or in addition to)
+// a raw Shader_stages*. The handle takes priority. Returns nullptr only
+// when the handle's underlying compile fails AND no fallback was wired
+// through; the renderer's existing error_shader_stages path then steps in.
 [[nodiscard]] auto resolve_pipeline_shader_stages(
     const erhe::graphics::Render_pipeline_create_info& pipeline
 ) -> const erhe::graphics::Shader_stages*
 {
-    if (pipeline.lazy_shader_stages != nullptr) {
-        return pipeline.lazy_shader_stages->shader_stages();
+    if (pipeline.shader_stages_handle != nullptr) {
+        return pipeline.shader_stages_handle->shader_stages();
     }
     return pipeline.shader_stages;
 }
@@ -133,8 +131,8 @@ auto make_temp_pipeline_state(const erhe::graphics::Render_pipeline_create_info&
     const erhe::graphics::Render_pipeline_create_info& pipeline
 ) -> const erhe::graphics::Shader_stages*
 {
-    if (pipeline.lazy_shader_stages != nullptr) {
-        return pipeline.lazy_shader_stages->multiview_shader_stages();
+    if (pipeline.shader_stages_handle != nullptr) {
+        return pipeline.shader_stages_handle->multiview_shader_stages();
     }
     return pipeline.multiview_shader_stages;
 }

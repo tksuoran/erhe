@@ -45,7 +45,7 @@ Scene_preview::Scene_preview(
         graphics_device,
         erhe::graphics::Render_pipeline_create_info{
             .debug_label    = erhe::utility::Debug_label{"Polygon Fill Opaque"},
-            .lazy_shader_stages = &programs.standard,
+            .shader_stages_handle = &programs.standard,
             .vertex_input   = &mesh_memory.vertex_input,
             .vertex_format  = &mesh_memory.vertex_format,
             .uses_standard_variants = true,

@@ -122,7 +122,7 @@ Debug_visualizations::Debug_visualizations(
         graphics_device,
         erhe::graphics::Render_pipeline_create_info{
             .debug_label    = erhe::utility::Debug_label{"Shadow_debug"},
-            .lazy_shader_stages = &programs.debug_shadow,
+            .shader_stages_handle = &programs.debug_shadow,
             .vertex_input   = &m_empty_vertex_input,
             .input_assembly = erhe::graphics::Input_assembly_state::triangle,
             .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,

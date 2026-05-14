@@ -41,7 +41,7 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(
     // Only reads depth buffer, only writes stencil buffer.
     , tool1_hidden_stencil{graphics_device, erhe::graphics::Render_pipeline_create_info{
         .debug_label             = erhe::utility::Debug_label{"Tool pass 1: Tag depth hidden `s_stencil_tool_mesh_hidden`"},
-        .lazy_shader_stages      = &programs.tool,
+        .shader_stages_handle      = &programs.tool,
         .vertex_input            = &mesh_memory.vertex_input,
         .input_assembly          = Input_assembly_state::triangle,
         .rasterization           = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
@@ -76,7 +76,7 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(
     // Only reads depth buffer, only writes stencil buffer.
     , tool2_visible_stencil{graphics_device, erhe::graphics::Render_pipeline_create_info{
         .debug_label             = erhe::utility::Debug_label{"Tool pass 2: Tag visible tool parts `s_stencil_tool_mesh_visible`"},
-        .lazy_shader_stages      = &programs.tool,
+        .shader_stages_handle      = &programs.tool,
         .vertex_input            = &mesh_memory.vertex_input,
         .input_assembly          = erhe::graphics::Input_assembly_state::triangle,
         .rasterization           = erhe::graphics::Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
@@ -111,7 +111,7 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(
     // Only writes depth buffer, depth test always.
     , tool3_depth_clear{graphics_device, erhe::graphics::Render_pipeline_create_info{
         .debug_label          = erhe::utility::Debug_label{"Tool pass 3: Set depth to fixed value"},
-        .lazy_shader_stages   = &programs.tool,
+        .shader_stages_handle   = &programs.tool,
         .vertex_input         = &mesh_memory.vertex_input,
         .input_assembly       = Input_assembly_state::triangle,
         .viewport_depth_range = Viewport_depth_range_state{
@@ -127,7 +127,7 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(
     // Normal depth buffer update with depth test.
     , tool4_depth{graphics_device, erhe::graphics::Render_pipeline_create_info{
         .debug_label    = erhe::utility::Debug_label{"Tool pass 4: Set depth to proper tool depth"},
-        .lazy_shader_stages = &programs.tool,
+        .shader_stages_handle = &programs.tool,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangle,
         .rasterization  = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
@@ -139,7 +139,7 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(
     // Normal depth test, stencil test require s_stencil_tool_mesh_visible, color writes enabled, no blending
     , tool5_visible_color{graphics_device, erhe::graphics::Render_pipeline_create_info{
         .debug_label             = erhe::utility::Debug_label{"Tool pass 5: Render visible tool parts, require `s_stencil_tool_mesh_visible`"},
-        .lazy_shader_stages      = &programs.tool,
+        .shader_stages_handle      = &programs.tool,
         .vertex_input            = &mesh_memory.vertex_input,
         .input_assembly          = Input_assembly_state::triangle,
         .rasterization           = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
@@ -174,7 +174,7 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(
     // Normal depth test, stencil test requires s_stencil_tool_mesh_hidden, color writes enabled, blending
     , tool6_hidden_color{graphics_device, erhe::graphics::Render_pipeline_create_info{
         .debug_label                = erhe::utility::Debug_label{"Tool pass 6: Render hidden tool parts, require `s_stencil_tool_mesh_hidden`"},
-        .lazy_shader_stages         = &programs.tool,
+        .shader_stages_handle         = &programs.tool,
         .vertex_input               = &mesh_memory.vertex_input,
         .input_assembly             = Input_assembly_state::triangle,
         .rasterization              = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),

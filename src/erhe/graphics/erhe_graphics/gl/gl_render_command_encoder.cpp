@@ -8,7 +8,7 @@
 #include "erhe_graphics/gl/gl_render_pass.hpp"
 #include "erhe_graphics/gl/gl_sampler.hpp"
 #include "erhe_graphics/gl/gl_state_tracker.hpp"
-#include "erhe_graphics/lazy_shader_handle.hpp"
+#include "erhe_graphics/shader_stages_handle.hpp"
 #include "erhe_graphics/render_pipeline.hpp"
 #include "erhe_graphics/gl/gl_texture.hpp"
 #include "erhe_graphics/render_pipeline.hpp"
@@ -45,12 +45,13 @@ void Render_command_encoder_impl::set_sampled_image(uint32_t binding_point, cons
 void Render_command_encoder_impl::set_render_pipeline(const Render_pipeline& pipeline)
 {
     const Render_pipeline_create_info& ci = pipeline.get_create_info();
-    // Prefer lazy_shader_stages when set; falls through to ci.shader_stages
-    // otherwise. Mirrors the resolution in the Vulkan / Metal backend
-    // pipeline ctors so all backends honor the same Lazy_shader_handle.
+    // If a Shader_stages_handle was bound, resolve through it; otherwise
+    // use the raw ci.shader_stages pointer. Mirrors the resolution in the
+    // Vulkan / Metal backend pipeline ctors so all backends honor the
+    // same Shader_stages_handle.
     const Shader_stages* shader_stages =
-        (ci.lazy_shader_stages != nullptr)
-            ? ci.lazy_shader_stages->shader_stages()
+        (ci.shader_stages_handle != nullptr)
+            ? ci.shader_stages_handle->shader_stages()
             : ci.shader_stages;
     OpenGL_state_tracker& tracker = m_device.get_impl().m_gl_state_tracker;
     tracker.shader_stages  .execute(shader_stages);

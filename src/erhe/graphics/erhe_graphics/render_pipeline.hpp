@@ -22,7 +22,7 @@ namespace erhe::graphics {
 
 class Bind_group_layout;
 class Device;
-class Lazy_shader_handle;
+class Shader_stages_handle;
 class Render_pass;
 class Render_pass_descriptor;
 class Shader_stages;
@@ -42,16 +42,14 @@ public:
     // pass without duplicating the rest of the pipeline state. Sourced
     // from Programs::get_multiview(name) at construction.
     Shader_stages*               multiview_shader_stages{nullptr};
-    // Optional lazy resolver. When non-null, the renderer prefers
-    //   lazy_shader_stages->shader_stages()           (single-view path)
-    //   lazy_shader_stages->multiview_shader_stages() (multiview path)
-    // over the raw shader_stages / multiview_shader_stages fields above.
-    // Lets a pipeline bind a shader whose actual compile is deferred to
-    // first use, without changing the renderer's shader-resolution code
-    // paths beyond an extra null-check. Defaults nullptr -- pipelines
-    // that hold an already-compiled Shader_stages* keep their existing
-    // behavior.
-    Lazy_shader_handle*          lazy_shader_stages   {nullptr};
+    // Optional handle-based resolver. When non-null, the renderer
+    // resolves through:
+    //   shader_stages_handle->shader_stages()           (single-view path)
+    //   shader_stages_handle->multiview_shader_stages() (multiview path)
+    // and ignores the raw shader_stages / multiview_shader_stages fields
+    // above. Defaults nullptr -- pipelines that hold an already-compiled
+    // Shader_stages* keep using the raw fields.
+    Shader_stages_handle*        shader_stages_handle {nullptr};
     const Vertex_input_state*    vertex_input         {nullptr};
     // Vertex_format that produced the bound vertex_input. Optional; only
     // set on pipelines that opt into the standard shader variant cache

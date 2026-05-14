@@ -9,7 +9,7 @@ namespace erhe::scene_renderer {
 
 Standard_shader_variants::Standard_shader_variants(
     Shader_variant_cache& cache,
-    Cached_shader_handle& fallback_handle
+    Variant_handle&       fallback_handle
 )
     : m_cache           {cache}
     , m_fallback_handle {fallback_handle}
