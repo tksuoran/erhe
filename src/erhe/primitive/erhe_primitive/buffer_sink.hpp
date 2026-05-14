@@ -44,11 +44,18 @@ public:
     [[nodiscard]] virtual auto get_available_index_byte_count          (std::size_t alignment) const -> std::size_t                                = 0;
     [[nodiscard]] virtual auto get_available_edge_line_vertex_byte_count(std::size_t alignment) const -> std::size_t                               = 0;
 
-    virtual void enqueue_vertex_data          (std::size_t stream, std::size_t offset, std::vector<uint8_t>&& data) const = 0;
-    virtual void enqueue_index_data           (std::size_t offset, std::vector<uint8_t>&& data)                     const = 0;
-    virtual void enqueue_edge_line_vertex_data(std::size_t offset, std::vector<uint8_t>&& data)                     const = 0;
-    virtual void buffer_ready                 (Vertex_buffer_writer& writer)                                        const = 0;
-    virtual void buffer_ready                 (Index_buffer_writer&  writer)                                        const = 0;
+    // `buffer` selects which physical GPU buffer the upload lands in.
+    // For pools that may grow across multiple Buffer instances (the
+    // Mesh_memory case once a single 32 MB block fills) the caller must
+    // pass the Buffer* the allocation actually came from (available on
+    // `Buffer_sink_allocation::range.buffer`). Cpu_buffer_sink ignores
+    // the selector because it owns a single Cpu_buffer per stream;
+    // Graphics_buffer_sink requires it to be non-null.
+    virtual void enqueue_vertex_data          (erhe::graphics::Buffer* buffer, std::size_t stream, std::size_t offset, std::vector<uint8_t>&& data) const = 0;
+    virtual void enqueue_index_data           (erhe::graphics::Buffer* buffer, std::size_t offset, std::vector<uint8_t>&& data)                     const = 0;
+    virtual void enqueue_edge_line_vertex_data(erhe::graphics::Buffer* buffer, std::size_t offset, std::vector<uint8_t>&& data)                     const = 0;
+    virtual void buffer_ready                 (Vertex_buffer_writer& writer)                                                                        const = 0;
+    virtual void buffer_ready                 (Index_buffer_writer&  writer)                                                                        const = 0;
 };
 
 class Cpu_buffer_sink : public Buffer_sink
@@ -60,9 +67,9 @@ public:
     auto allocate_index_buffer           (std::size_t index_count, std::size_t index_element_size) -> Buffer_sink_allocation override;
     auto allocate_edge_line_vertex_buffer(std::size_t vertex_count, std::size_t vertex_element_size) -> Buffer_sink_allocation override;
 
-    void enqueue_vertex_data                     (std::size_t stream, std::size_t offset, std::vector<uint8_t>&& data) const override;
-    void enqueue_index_data                      (std::size_t offset, std::vector<uint8_t>&& data)                     const override;
-    void enqueue_edge_line_vertex_data           (std::size_t offset, std::vector<uint8_t>&& data)                     const override;
+    void enqueue_vertex_data                     (erhe::graphics::Buffer* buffer, std::size_t stream, std::size_t offset, std::vector<uint8_t>&& data) const override;
+    void enqueue_index_data                      (erhe::graphics::Buffer* buffer, std::size_t offset, std::vector<uint8_t>&& data)                     const override;
+    void enqueue_edge_line_vertex_data           (erhe::graphics::Buffer* buffer, std::size_t offset, std::vector<uint8_t>&& data)                     const override;
     void buffer_ready                            (Vertex_buffer_writer& writer)                                        const override;
     void buffer_ready                            (Index_buffer_writer&  writer)                                        const override;
     auto get_used_vertex_byte_count              (std::size_t stream) const -> std::size_t                                   override;

@@ -121,4 +121,41 @@ auto Vertex_format::get_attributes() const -> std::vector<Attribute_stream>
     return result;
 }
 
+namespace {
+
+constexpr auto mix(uint64_t seed, uint64_t value) -> uint64_t
+{
+    // Standard 64-bit hash mix (Knuth multiplicative; same shape as
+    // boost::hash_combine but adapted to 64-bit so streams + format +
+    // offset folding has headroom past a uint32 mask).
+    seed ^= value + 0x9e3779b97f4a7c15ull + (seed << 12) + (seed >> 4);
+    return seed;
+}
+
+} // anonymous namespace
+
+auto compute_vertex_format_key(const Vertex_format& format) -> uint64_t
+{
+    uint64_t key = 0;
+    key = mix(key, format.streams.size());
+    for (std::size_t stream_index = 0; stream_index < format.streams.size(); ++stream_index) {
+        const Vertex_stream& stream = format.streams[stream_index];
+        key = mix(key, stream_index);
+        // GPU-visible identity: two formats whose only difference is
+        // the stream binding (e.g. position lives on binding 0 vs 1)
+        // produce different vertex-input states and must hash apart.
+        key = mix(key, stream.binding);
+        key = mix(key, stream.stride);
+        key = mix(key, static_cast<uint64_t>(stream.step));
+        key = mix(key, stream.attributes.size());
+        for (const Vertex_attribute& attribute : stream.attributes) {
+            key = mix(key, static_cast<uint64_t>(attribute.usage_type));
+            key = mix(key, static_cast<uint64_t>(attribute.usage_index));
+            key = mix(key, static_cast<uint64_t>(attribute.format));
+            key = mix(key, static_cast<uint64_t>(attribute.offset));
+        }
+    }
+    return key;
+}
+
 } // namespace erhe::dataformat

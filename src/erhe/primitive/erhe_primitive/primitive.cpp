@@ -460,7 +460,7 @@ auto build_buffer_mesh_from_triangle_soup(const Triangle_soup& triangle_soup, co
     {
         std::vector<uint8_t> sink_index_data(index_count * index_range.element_size);
         memcpy(sink_index_data.data(), triangle_soup.index_data.data(), index_count * index_range.element_size);
-        buffer_info.buffer_sink.enqueue_index_data(index_range.byte_offset, std::move(sink_index_data));
+        buffer_info.buffer_sink.enqueue_index_data(index_range.buffer, index_range.byte_offset, std::move(sink_index_data));
     }
 
     // Copy and convert vertices to buffer
@@ -493,6 +493,7 @@ auto build_buffer_mesh_from_triangle_soup(const Triangle_soup& triangle_soup, co
             }
         }
         buffer_info.buffer_sink.enqueue_vertex_data(
+            buffer_mesh.vertex_buffer_ranges[stream_index].buffer,
             stream_index,
             buffer_mesh.vertex_buffer_ranges[stream_index].byte_offset,
             std::move(sink_vertex_data)

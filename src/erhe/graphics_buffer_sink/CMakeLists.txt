@@ -4,6 +4,8 @@ add_library(erhe::graphics_buffer_sink ALIAS ${_target})
 
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+    erhe_graphics_buffer_sink/buffer_pool.hpp
+    erhe_graphics_buffer_sink/buffer_pool.cpp
     erhe_graphics_buffer_sink/graphics_buffer_sink.hpp
     erhe_graphics_buffer_sink/graphics_buffer_sink.cpp
 )

@@ -311,9 +311,6 @@ void Rendering_test::render_stencil_cell(
             erhe::scene_renderer::Forward_renderer::Render_parameters{
                 .render_encoder         = render_encoder,
                 .index_type             = erhe::dataformat::Format::format_32_scalar_uint,
-                .index_buffer           = &m_mesh_memory.index_buffer,
-                .vertex_buffer0         = &m_mesh_memory.vertex_buffer_position,
-                .vertex_buffer1         = &m_mesh_memory.vertex_buffer_non_position,
                 .ambient_light          = glm::vec3{0.3f, 0.3f, 0.3f},
                 .camera                 = m_camera.get(),
                 .light_projections      = &m_light_projections,

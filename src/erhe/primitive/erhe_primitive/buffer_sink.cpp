@@ -76,8 +76,10 @@ auto Cpu_buffer_sink::allocate_index_buffer(const std::size_t index_count, const
     };
 }
 
-void Cpu_buffer_sink::enqueue_index_data(const std::size_t offset, std::vector<uint8_t>&& data) const 
+void Cpu_buffer_sink::enqueue_index_data(erhe::graphics::Buffer* /*buffer*/, const std::size_t offset, std::vector<uint8_t>&& data) const
 {
+    // CPU sink owns a single Cpu_buffer per stream, so the Buffer*
+    // selector is unused here.
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
 
     auto buffer_span = m_index_buffer.get_span();
@@ -85,7 +87,7 @@ void Cpu_buffer_sink::enqueue_index_data(const std::size_t offset, std::vector<u
     memcpy(offset_span.data(), data.data(), data.size());
 }
 
-void Cpu_buffer_sink::enqueue_vertex_data(const std::size_t stream, const std::size_t offset, std::vector<uint8_t>&& data) const
+void Cpu_buffer_sink::enqueue_vertex_data(erhe::graphics::Buffer* /*buffer*/, const std::size_t stream, const std::size_t offset, std::vector<uint8_t>&& data) const
 {
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
 
@@ -139,7 +141,7 @@ auto Cpu_buffer_sink::allocate_edge_line_vertex_buffer(std::size_t /*vertex_coun
     return {};
 }
 
-void Cpu_buffer_sink::enqueue_edge_line_vertex_data(std::size_t /*offset*/, std::vector<uint8_t>&& /*data*/) const
+void Cpu_buffer_sink::enqueue_edge_line_vertex_data(erhe::graphics::Buffer* /*buffer*/, std::size_t /*offset*/, std::vector<uint8_t>&& /*data*/) const
 {
 }
 

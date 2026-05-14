@@ -87,4 +87,18 @@ public:
     std::vector<Vertex_stream> streams;
 };
 
+// Identity hash for a Vertex_format. Mixes every stream's index, stride
+// and every attribute's (usage_type, usage_index, format, offset). Two
+// formats compare equal under Mesh_memory's format pool registry iff
+// their keys match; the hash is wide enough that two real-world erhe
+// formats are vanishingly unlikely to collide.
+//
+// History: this used to be a 32-bit bitmask of (usage, usage_index)
+// slots. That key ignored stream layout, stride and element format, so
+// two formats that shared the same set of (usage, usage_index) tuples
+// but differed in stream split or element type produced the same key
+// and reused the wrong Format_pools. See quest_review.md A7 (folded:
+// `compute_vertex_format_key` now returns uint64_t and reflects layout).
+[[nodiscard]] auto compute_vertex_format_key(const Vertex_format& format) -> uint64_t;
+
 } // namespace erhe::dataformat
