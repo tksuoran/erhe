@@ -616,6 +616,13 @@ public:
         //       skipped even if parallel init is not used.
         m_executor = std::make_unique<tf::Executor>(thread_count);
 
+        // Declared outside the try so the loading screen survives past
+        // the parallel-init catch block; the post-task init phase
+        // (run_startup_script, prewarm_all) still drives pump() through
+        // this owner. Constructed inside the try once Text_renderer is
+        // built; destroyed when Editor::Editor() returns.
+        std::unique_ptr<Init_status_display> init_status_display_ptr;
+
         try {
 #if defined(ERHE_PARALLEL_INIT)
             tf::Taskflow taskflow;
@@ -929,14 +936,15 @@ public:
 #else
                 nullptr;
 #endif
-            Init_status_display init_status_display{
+            init_status_display_ptr = std::make_unique<Init_status_display>(
                 *m_graphics_device.get(),
                 m_app_context.current_command_buffer,
                 *m_window.get(),
                 *m_text_renderer.get(),
                 true,
                 init_status_headset
-            };
+            );
+            Init_status_display& init_status_display = *init_status_display_ptr;
 
             init_status_display.set_line(0, "Initializing erhe editor...");
             init_status_display.pump();
@@ -1856,7 +1864,25 @@ public:
         // out of the first-frame budget; the trailing wait_idle below
         // already covers any GPU work the prewarm enqueues.
         log_startup->info("Init: prewarm shader variants");
-        prewarm_all(m_app_context);
+        if (init_status_display_ptr) {
+            init_status_display_ptr->set_line(1, "Prewarming shader variants");
+            init_status_display_ptr->pump();
+        }
+        prewarm_all(
+            m_app_context,
+            [&init_status_display_ptr](std::string_view scene_name) {
+                if (!init_status_display_ptr) {
+                    return;
+                }
+                init_status_display_ptr->set_line(2, scene_name);
+                init_status_display_ptr->pump();
+            }
+        );
+        if (init_status_display_ptr) {
+            init_status_display_ptr->set_line(1, "");
+            init_status_display_ptr->set_line(2, "");
+            init_status_display_ptr->pump();
+        }
 
         // Close the init-time command buffer opened in the member init
         // list (or reseated by Init_status_display::pump),

@@ -1,5 +1,8 @@
 #pragma once
 
+#include <functional>
+#include <string_view>
+
 namespace editor {
 
 class App_context;
@@ -25,6 +28,14 @@ class App_context;
 // on first rendergraph execute and do not exist at this insertion
 // point; the desktop path also lacks the 30 s OS interstitial pressure
 // that motivates the Quest warmup. See doc/prewarm.md.
-void prewarm_all(App_context& context);
+// init_message, when non-empty, is invoked once per Scene_root just
+// before its forward-path prewarm_standard_variants() call, with the
+// scene name as argument. Editor::Editor() routes this through
+// Init_status_display so the user sees per-scene progress on the
+// loading screen.
+void prewarm_all(
+    App_context&                                 context,
+    const std::function<void(std::string_view)>& init_message = {}
+);
 
 } // namespace editor

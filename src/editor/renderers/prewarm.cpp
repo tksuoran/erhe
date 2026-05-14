@@ -78,7 +78,10 @@ namespace {
 
 } // anonymous namespace
 
-void prewarm_all(App_context& context)
+void prewarm_all(
+    App_context&                                 context,
+    const std::function<void(std::string_view)>& init_message
+)
 {
     if ((context.forward_renderer == nullptr) ||
         (context.standard_shader_variants == nullptr) ||
@@ -212,6 +215,9 @@ void prewarm_all(App_context& context)
             .primitive_mode           = erhe::primitive::Primitive_mode::polygon_fill,
             .warmup_targets           = std::span<const erhe::scene_renderer::Forward_renderer::Warmup_target>{warmup_targets}
         };
+        if (init_message) {
+            init_message(scene_root->get_name());
+        }
         total_forward_warmups += context.forward_renderer->prewarm_standard_variants(params);
     }
 
