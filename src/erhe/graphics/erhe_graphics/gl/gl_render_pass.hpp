@@ -47,7 +47,7 @@ private:
     // OpenGL backend; the driver handles all cross-pass synchronization
     // implicitly and there is no native command buffer to record into.
     void start_render_pass(Command_buffer& command_buffer, Render_pass* render_pass_before, Render_pass* render_pass_after);
-    void end_render_pass  (Render_pass* render_pass_after);
+    void end_render_pass  (Command_buffer& command_buffer, Render_pass* render_pass_after);
 
 private:
     Device&                                          m_device;
@@ -67,6 +67,7 @@ private:
 
     erhe::utility::Debug_label                   m_debug_group_name;
     erhe::utility::Debug_label                   m_begin_debug_group_name;
+    erhe::utility::Debug_label                   m_end_debug_group_name;
     std::unique_ptr<Scoped_debug_group>          m_outer_debug_group;
 
     friend class Device_impl;

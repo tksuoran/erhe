@@ -205,6 +205,7 @@ Render_pass_impl::Render_pass_impl(Device& device, const Render_pass_descriptor&
     , m_debug_label         {descriptor.debug_label}
     , m_debug_group_name      {erhe::utility::Debug_label{fmt::format("Render pass: {}", descriptor.debug_label.string_view())}}
     , m_begin_debug_group_name{erhe::utility::Debug_label{fmt::format("Render_pass_impl::start_render_pass() {}", descriptor.debug_label.string_view())}}
+    , m_end_debug_group_name  {erhe::utility::Debug_label{fmt::format("Render_pass_impl::end_render_pass() {}", descriptor.debug_label.string_view())}}
 {
     auto check_multisample_resolve = [this](const Render_pass_attachment_descriptor& attachment)
     {
@@ -804,7 +805,7 @@ void Render_pass_impl::start_render_pass(Command_buffer& command_buffer, Render_
 
 }
 
-void Render_pass_impl::end_render_pass(Render_pass* const render_pass_after)
+void Render_pass_impl::end_render_pass(Command_buffer& command_buffer, Render_pass* const render_pass_after)
 {
     static_cast<void>(render_pass_after);
 
@@ -814,12 +815,7 @@ void Render_pass_impl::end_render_pass(Render_pass* const render_pass_after)
     ERHE_VERIFY(m_is_active);
     m_is_active = false;
 
-    // The outer "Render pass: <label>" scope (m_outer_debug_group)
-    // already brackets this method's GL state restoration; the
-    // previously-nested "end" sub-scope required a Command_buffer that
-    // end_render_pass does not receive, and the cb-required
-    // Scoped_debug_group constructor would have nothing to bracket
-    // against on Vulkan anyway (this is a GL-only path).
+    Scoped_debug_group end_debug_group{command_buffer, m_end_debug_group_name};
 
     std::array<gl::Framebuffer_attachment, 4> color_attachment_points = {
         gl::Framebuffer_attachment::color_attachment0,

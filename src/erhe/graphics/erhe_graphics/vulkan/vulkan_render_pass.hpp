@@ -39,7 +39,7 @@ public:
 
     // For Render_command_encoder
     void start_render_pass(Command_buffer& command_buffer, Render_pass* render_pass_before, Render_pass* render_pass_after);
-    void end_render_pass  (Render_pass* render_pass_after);
+    void end_render_pass  (Command_buffer& command_buffer, Render_pass* render_pass_after);
 
 private:
     friend class Device_impl;
