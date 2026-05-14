@@ -1242,6 +1242,16 @@ private:
 
         erhe::primitive::Material_data&             create_data     = create_info.data;
         erhe::primitive::Material_texture_samplers& create_samplers = create_data.texture_samplers;
+
+        // KHR_materials_unlit: import the unlit flag into Material_data::bxdf_model
+        // so the editor renders the material exactly as the source glTF intended.
+        // The specular-glossiness fallback below also flips bxdf_model to unlit;
+        // honoring KHR_materials_unlit first means we do not need that path's
+        // implicit fall-through to set it.
+        if (material.unlit) {
+            create_data.bxdf_model = erhe::primitive::Bxdf_model::unlit;
+        }
+
         if (material.normalTexture.has_value()) {
             apply_texture(material.normalTexture.value(), create_data.texture_samplers.normal, true);
             create_data.normal_texture_scale = material.normalTexture.value().scale;
@@ -1265,7 +1275,7 @@ private:
             // NOTE: MaterialSpecularGlossiness is only supported in a hacky way to load Hintze Hall
             const std::unique_ptr<fastgltf::MaterialSpecularGlossiness>& specular_glossiness = material.specularGlossiness;
             if (specular_glossiness && specular_glossiness->diffuseTexture.has_value()) {
-                create_data.unlit = true;
+                create_data.bxdf_model = erhe::primitive::Bxdf_model::unlit;
                 apply_texture(specular_glossiness->diffuseTexture.value(), create_samplers.base_color, false);
             }
 

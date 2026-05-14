@@ -12,6 +12,8 @@
 #include "items.hpp"
 #include "operations/material_change_operation.hpp"
 #include "operations/operation_stack.hpp"
+
+#include "erhe_scene_renderer/standard_shader_variants.hpp"
 #include "preview/material_preview.hpp"
 #include "rendertarget_mesh.hpp"
 #include "scene/frame_controller.hpp"
@@ -1020,7 +1022,40 @@ void Properties::material_properties()
         //});
         //pop_group();
     }
-    add_entry("Unlit",       [&](){ ImGui::Checkbox("##",    &data.unlit); });
+    // Helper: invalidate the standard variant cache immediately when a
+    // material flag that participates in the variant key flips. The
+    // end_material_inspect path eventually queues a
+    // Material_change_operation that invalidates too, but that only
+    // runs when editing stops; without this, intermediate frames
+    // render with stale variant keys.
+    auto invalidate_variants_now = [this]() {
+        if (m_context.standard_shader_variants != nullptr) {
+            m_context.standard_shader_variants->clear();
+        }
+    };
+
+    add_entry("BxDF Model", [&]() {
+        static const char* const c_bxdf_model_names[] = {
+            "Unlit",
+            "Isotropic BRDF",
+            "Anisotropic BRDF"
+        };
+        int current = static_cast<int>(data.bxdf_model);
+        if (ImGui::Combo("##", &current, c_bxdf_model_names, IM_ARRAYSIZE(c_bxdf_model_names))) {
+            data.bxdf_model = static_cast<erhe::primitive::Bxdf_model>(current);
+            invalidate_variants_now();
+        }
+    });
+    add_entry("Circular Brushed Metal", [&](){
+        if (ImGui::Checkbox("##", &data.use_circular_brushed_metal)) {
+            invalidate_variants_now();
+        }
+    });
+    add_entry("Aniso Control", [&](){
+        if (ImGui::Checkbox("##", &data.use_aniso_control)) {
+            invalidate_variants_now();
+        }
+    });
     add_entry("Metallic",    [&](){ ImGui::SliderFloat("##", &data.metallic,     0.0f,  1.0f); });
     add_entry("Reflectance", [&](){ ImGui::SliderFloat("##", &data.reflectance,  0.35f, 1.0f); });
     add_entry("Roughness X", [&](){ ImGui::SliderFloat("##", &data.roughness.x,  0.1f,  0.8f); });

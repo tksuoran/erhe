@@ -26,7 +26,12 @@ namespace erhe::scene {
     class Mesh;
     class Node;
 }
-namespace erhe::scene_renderer { class Mesh_memory; }
+namespace erhe::dataformat { class Vertex_format; }
+namespace erhe::scene_renderer {
+    class Forward_renderer;
+    class Mesh_memory;
+    class Standard_shader_variants;
+}
 
 namespace editor {
 
@@ -65,6 +70,23 @@ public:
     void set_color_texture_layer(unsigned int layer);
     void set_clear_color        (glm::vec4 clear_color);
     void update_rendertarget    (erhe::graphics::Device& graphics_device, bool reverse_depth);
+
+    // Init-time prewarm. Drives Forward_renderer::prewarm_standard_variants
+    // against this preview's own scene_root + content_library, so the
+    // first time the user opens the preview window does not pay for
+    // glslang -> SPIR-V compile of the standard variants for the
+    // preview's specific (Light_layer, content-library materials,
+    // single-view view_count=0) combination. Pipelines targeted are
+    // m_render_pipeline_states; the bucket+extra_materials walk uses
+    // mesh_memory.vertex_format as the fallback. Safe to call before
+    // update_rendertarget has built the offscreen render pass -- this
+    // only populates the shader-module cache, not the per-render-pass
+    // VkPipeline cache.
+    void prewarm_variants(
+        erhe::scene_renderer::Forward_renderer&         forward_renderer,
+        erhe::scene_renderer::Standard_shader_variants& standard_shader_variants,
+        const erhe::dataformat::Vertex_format&          fallback_vertex_format
+    );
 
 protected:
     erhe::graphics::Device&                             m_graphics_device;

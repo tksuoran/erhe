@@ -17,13 +17,22 @@ void add_default_materials(Content_library& library)
     //materials.make<erhe::primitive::Material>("Default",   glm::vec3{0.500f, 0.500f, 0.500f}, roughness, 0.0f);
     auto make = [&materials, &roughness](const char* name, float r, float g, float b)
     {
+        // Stock metal materials default to the isotropic BRDF so they
+        // match the pre-anisotropic-default content and any saved
+        // scenes that pre-date the anisotropic/circular-brush
+        // controls. Users can opt in to anisotropic / circular brushed
+        // metal per-material via the Properties panel or the MCP
+        // edit_material tool.
         materials.make<erhe::primitive::Material>(
             erhe::primitive::Material_create_info{
                 .name = name,
                 .data = {
-                    .base_color = glm::vec3{r, g, b},
-                    .roughness  = roughness,
-                    .metallic   = 1.0f
+                    .base_color                 = glm::vec3{r, g, b},
+                    .roughness                  = roughness,
+                    .metallic                   = 1.0f,
+                    .bxdf_model                 = erhe::primitive::Bxdf_model::isotropic_brdf,
+                    .use_circular_brushed_metal = false,
+                    .use_aniso_control          = false
                 }
             }
         );

@@ -6,6 +6,7 @@
 #include "brushes/brush_placement.hpp"
 #include "content_library/content_library.hpp"
 #include "operations/item_parent_change_operation.hpp"
+#include "operations/material_change_operation.hpp"
 #include "operations/operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "erhe_math/math_util.hpp"
@@ -15,6 +16,8 @@
 
 #include "erhe_commands/command.hpp"
 #include "erhe_commands/commands.hpp"
+#include "erhe_dataformat/dataformat.hpp"
+#include "erhe_graphics/texture.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/light.hpp"
@@ -26,8 +29,24 @@
 #include <httplib.h>
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
+#include <cerrno>
 #include <chrono>
+#include <cmath>
+#include <cstdlib>
+#include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <optional>
 #include <set>
+#include <sstream>
+#include <string_view>
+#include <system_error>
+
+#if !defined(_WIN32)
+#  include <sys/stat.h>
+#  include <unistd.h>
+#endif
 
 namespace editor {
 
@@ -106,6 +125,112 @@ auto schema_scene_and_item(const char* item_key, const char* item_desc) -> json
     };
 }
 
+// Returns $HOME/.claude/erhe_mcp_token (or %USERPROFILE%\.claude\... on
+// Windows). The directory is not created here; the file is optional.
+auto auth_token_path() -> std::filesystem::path
+{
+#if defined(_WIN32)
+    const char* base = std::getenv("USERPROFILE");
+#else
+    const char* base = std::getenv("HOME");
+#endif
+    if (base == nullptr || base[0] == '\0') {
+        return {};
+    }
+    return std::filesystem::path{base} / ".claude" / "erhe_mcp_token";
+}
+
+// Returns the trimmed file contents, or an empty string if the file
+// is missing or unreadable. On POSIX the file must be mode 0600
+// (owner read/write only); other modes are refused with a warning so
+// a world-readable token is not picked up silently.
+auto load_auth_token() -> std::string
+{
+    const std::filesystem::path path = auth_token_path();
+    if (path.empty()) {
+        return {};
+    }
+    std::error_code ec;
+    if (!std::filesystem::exists(path, ec)) {
+        return {};
+    }
+
+#if !defined(_WIN32)
+    struct stat st{};
+    if (::stat(path.string().c_str(), &st) != 0) {
+        log_mcp->warn("MCP server: cannot stat token file {}: {}", path.string(), std::strerror(errno));
+        return {};
+    }
+    const mode_t mode_bits = st.st_mode & 0777;
+    if (mode_bits != 0600) {
+        log_mcp->warn(
+            "MCP server: token file {} has mode {:o}; require 0600 (chmod 600 ~/.claude/erhe_mcp_token)",
+            path.string(), mode_bits
+        );
+        return {};
+    }
+    if (st.st_uid != ::getuid()) {
+        // Refuse to load a token owned by another user. Without this
+        // check a symlink swap or a stale file from a different uid
+        // (e.g. left over by another tester on a shared box) with
+        // mode 0600 would still be accepted as the local user's
+        // secret.
+        log_mcp->warn(
+            "MCP server: token file {} is not owned by uid {}; refusing to load",
+            path.string(), static_cast<unsigned long>(::getuid())
+        );
+        return {};
+    }
+#endif
+
+    std::ifstream in{path};
+    if (!in) {
+        log_mcp->warn("MCP server: cannot read token file {}", path.string());
+        return {};
+    }
+    std::stringstream buf;
+    buf << in.rdbuf();
+    std::string token = buf.str();
+    while (!token.empty() && (token.back() == '\n' || token.back() == '\r' || token.back() == ' ' || token.back() == '\t')) {
+        token.pop_back();
+    }
+    return token;
+}
+
+// Constant-time comparison so the response timing does not reveal how
+// far the first mismatch was. Both inputs are short opaque tokens; the
+// constant-time guard is cheap.
+auto constant_time_equal(std::string_view a, std::string_view b) -> bool
+{
+    if (a.size() != b.size()) {
+        return false;
+    }
+    unsigned int diff = 0;
+    for (std::size_t i = 0; i < a.size(); ++i) {
+        diff |= static_cast<unsigned int>(static_cast<unsigned char>(a[i]) ^ static_cast<unsigned char>(b[i]));
+    }
+    return diff == 0u;
+}
+
+// Parses "Authorization: Bearer <token>" out of an httplib::Request.
+// Returns the token (possibly empty) or std::nullopt if the header is
+// missing or malformed.
+auto bearer_token_from(const httplib::Request& req) -> std::optional<std::string>
+{
+    if (!req.has_header("Authorization")) {
+        return std::nullopt;
+    }
+    const std::string header = req.get_header_value("Authorization");
+    static constexpr std::string_view prefix = "Bearer ";
+    if (header.size() < prefix.size() ||
+        !std::equal(prefix.begin(), prefix.end(), header.begin(),
+                    [](char a, char b) { return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b)); }))
+    {
+        return std::nullopt;
+    }
+    return header.substr(prefix.size());
+}
+
 } // anonymous namespace
 
 Mcp_server::Mcp_server(
@@ -117,16 +242,40 @@ Mcp_server::Mcp_server(
     , m_context {context}
     , m_port    {port}
 {
+    m_auth_token = load_auth_token();
+    if (m_auth_token.empty()) {
+        log_mcp->warn(
+            "MCP server: no bearer token loaded (write a secret to ~/.claude/erhe_mcp_token "
+            "with mode 0600 to require Authorization: Bearer)"
+        );
+    } else {
+        log_mcp->info("MCP server: bearer-token auth enabled");
+    }
 }
 
 Mcp_server::~Mcp_server() noexcept
 {
-    stop();
+    // ~thread on a still-joinable handle calls std::terminate; the
+    // join itself can throw (system_error on EDEADLK / EINVAL).
+    // Catch and log so destruction is noexcept in practice and any
+    // platform-level join failure leaves a breadcrumb instead of
+    // crashing the editor at shutdown.
+    try {
+        stop();
+    } catch (const std::system_error& e) {
+        log_mcp->error("MCP server: ~Mcp_server caught system_error during stop: {}", e.what());
+    } catch (const std::exception& e) {
+        log_mcp->error("MCP server: ~Mcp_server caught exception during stop: {}", e.what());
+    } catch (...) {
+        log_mcp->error("MCP server: ~Mcp_server caught unknown exception during stop");
+    }
 }
 
 void Mcp_server::start()
 {
-    if (m_running.load()) {
+    std::lock_guard<std::mutex> lock{m_lifecycle_mutex};
+
+    if (m_running.load() || m_server_thread.joinable() || m_http_server) {
         return;
     }
 
@@ -135,6 +284,7 @@ void Mcp_server::start()
     refresh_tool_list();
 
     m_http_server = std::make_unique<httplib::Server>();
+    m_http_server->set_payload_max_length(k_max_payload_bytes);
     setup_routes();
 
     m_running.store(true);
@@ -143,7 +293,13 @@ void Mcp_server::start()
 
 void Mcp_server::stop()
 {
-    if (!m_running.load()) {
+    std::lock_guard<std::mutex> lock{m_lifecycle_mutex};
+
+    // Worker thread flips m_running to false on its way out of
+    // httplib::listen() (server_thread_main), so checking m_running
+    // alone would miss the post-listen window where the thread is
+    // still joinable. Check both the thread and the server pointer.
+    if (!m_server_thread.joinable() && !m_http_server) {
         return;
     }
 
@@ -184,6 +340,20 @@ void Mcp_server::setup_routes()
 {
     m_http_server->Post("/mcp", [this](const httplib::Request& req, httplib::Response& res) {
         res.set_header("Content-Type", "application/json");
+
+        // Auth check first. When m_auth_token is empty (token file not
+        // present or unreadable) auth is disabled and any request is
+        // accepted; the operator gets a startup warning so disabled
+        // auth is loud rather than silent.
+        if (!m_auth_token.empty()) {
+            const std::optional<std::string> presented = bearer_token_from(req);
+            if (!presented.has_value() || !constant_time_equal(*presented, m_auth_token)) {
+                res.status = 401;
+                res.set_header("WWW-Authenticate", "Bearer realm=\"erhe-mcp\"");
+                res.body = make_jsonrpc_error("null", -32001, "Unauthorized");
+                return;
+            }
+        }
 
         json request;
         try {
@@ -269,15 +439,35 @@ auto Mcp_server::handle_tools_call(
 
     {
         std::lock_guard<std::mutex> lock{m_queue_mutex};
+        if (m_request_queue.size() >= k_max_queue_depth) {
+            // Drop without enqueuing so process_queued_requests cannot
+            // pop a stale entry whose HTTP client has already timed
+            // out. -32000 is "server error" in JSON-RPC's reserved
+            // range; the message is what differentiates it from other
+            // -32000s.
+            return make_jsonrpc_error(id, -32000, "Server busy: request queue full");
+        }
         m_request_queue.push_back(std::move(queued));
     }
 
-    const auto status = result_future.wait_for(std::chrono::seconds{5});
+    const auto status = result_future.wait_for(k_request_timeout);
     if (status == std::future_status::timeout) {
         return make_jsonrpc_error(id, -32000, "Request timed out: " + tool_name);
     }
 
-    const std::string result_json = result_future.get();
+    std::string result_json;
+    try {
+        result_json = result_future.get();
+    } catch (const std::future_error& e) {
+        // The queued request's promise was destroyed without being
+        // settled. This can happen if Mcp_server is being torn down
+        // while HTTP handler threads are still waiting (the queue
+        // unique_ptrs are freed before this thread observes ready).
+        // Translate the broken_promise into a clean JSON-RPC error
+        // so the exception cannot escape into httplib's dispatcher.
+        log_mcp->warn("MCP server: future_error in handle_tools_call: {}", e.what());
+        return make_jsonrpc_error(id, -32000, "Internal: request abandoned: " + tool_name);
+    }
     json result = json::parse(result_json, nullptr, false);
     if (result.is_discarded()) {
         return make_jsonrpc_error(id, -32000, "Internal error processing: " + tool_name);
@@ -298,8 +488,22 @@ auto Mcp_server::process_queued_requests() -> int
         requests.swap(m_request_queue);
     }
 
+    const auto now = std::chrono::steady_clock::now();
     int count = 0;
     for (auto& req : requests) {
+        // Drop entries whose HTTP client has already given up (wait_for
+        // returned timeout in handle_tools_call). Without this guard
+        // a slow editor frame would still mutate editor state for a
+        // request the operator already considers failed. We still
+        // settle the promise so the future destructor does not abort.
+        if ((now - req->enqueued_at) >= k_request_timeout) {
+            req->result_promise.set_value(
+                make_jsonrpc_error("dropped", -32000, "Request expired before processing: " + req->tool_name)
+            );
+            log_mcp->warn("MCP server: dropped expired '{}' before processing", req->tool_name);
+            continue;
+        }
+
         std::string result;
 
         if      (req->tool_name == "list_scenes")         result = query_list_scenes     (req->arguments);
@@ -308,6 +512,7 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "get_scene_cameras")   result = query_scene_cameras   (req->arguments);
         else if (req->tool_name == "get_scene_lights")    result = query_scene_lights    (req->arguments);
         else if (req->tool_name == "get_scene_materials") result = query_scene_materials (req->arguments);
+        else if (req->tool_name == "get_scene_textures") result = query_scene_textures  (req->arguments);
         else if (req->tool_name == "get_scene_brushes")  result = query_scene_brushes  (req->arguments);
         else if (req->tool_name == "get_material_details")result = query_material_details(req->arguments);
         else if (req->tool_name == "get_selection")       result = query_selection       (req->arguments);
@@ -321,6 +526,7 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "unlock_items")       result = action_unlock_items   (req->arguments);
         else if (req->tool_name == "add_tags")           result = action_add_tags       (req->arguments);
         else if (req->tool_name == "remove_tags")        result = action_remove_tags    (req->arguments);
+        else if (req->tool_name == "edit_material")      result = action_edit_material  (req->arguments);
         else                                              result = execute_command       (req->tool_name);
 
         req->result_promise.set_value(std::move(result));
@@ -344,6 +550,7 @@ void Mcp_server::refresh_tool_list()
     m_tool_infos.push_back({"get_scene_lights",    "List all lights in a scene",                             schema_scene_name()});
     m_tool_infos.push_back({"get_scene_materials", "List all materials in a scene's content library",        schema_scene_name()});
     m_tool_infos.push_back({"get_material_details","Get detailed material properties",                       schema_scene_and_item("material_name", "Name of the material")});
+    m_tool_infos.push_back({"get_scene_textures", "List all textures in a scene's content library",         schema_scene_name()});
     m_tool_infos.push_back({"get_scene_brushes",  "List all brushes in a scene's content library",         schema_scene_name()});
     m_tool_infos.push_back({"get_selection",        "Get currently selected items",                          schema_no_args()});
     m_tool_infos.push_back({"get_undo_redo_stack", "Get undo/redo operation stacks",                       schema_no_args()});
@@ -412,6 +619,46 @@ void Mcp_server::refresh_tool_list()
             {"tags",       {{"type", "array"}, {"items", {{"type", "string"}}}, {"description", "Tags to remove"}}}
         }},
         {"required", json::array({"scene_name", "ids", "tags"})}
+    }});
+    json texture_slot_schema = {
+        {"type", "object"},
+        {"properties", {
+            {"texture",   {{"description", "Texture: string (name in content library), integer (texture id), or null to clear. Omit to keep current."}}},
+            {"tex_coord", {{"type", "integer"}, {"minimum", 0},  {"description", "UV channel index (e.g. 0 for TEXCOORD_0)"}}},
+            {"rotation",  {{"type", "number"}, {"description", "UV rotation in radians"}}},
+            {"offset",    {{"type", "array"},  {"items", {{"type", "number"}}}, {"minItems", 2}, {"maxItems", 2}, {"description", "UV offset [u, v]"}}},
+            {"scale",     {{"type", "array"},  {"items", {{"type", "number"}}}, {"minItems", 2}, {"maxItems", 2}, {"description", "UV scale [u, v]"}}}
+        }}
+    };
+    m_tool_infos.push_back({"edit_material",      "Edit material properties including texture assignments (undoable). Only fields supplied are changed.", {
+        {"type", "object"},
+        {"properties", {
+            {"scene_name",                 {{"type", "string"},  {"description", "Name of the scene"}}},
+            {"material_name",              {{"type", "string"},  {"description", "Name of the material to edit"}}},
+            {"base_color",                 {{"type", "array"},   {"items", {{"type", "number"}}}, {"minItems", 3}, {"maxItems", 3}, {"description", "Linear RGB base color [r, g, b]"}}},
+            {"opacity",                    {{"type", "number"},  {"description", "Opacity in [0, 1]"}}},
+            {"roughness",                  {{"description", "Roughness; either [x, y] for anisotropic or a single number applied to both."}}},
+            {"metallic",                   {{"type", "number"},  {"description", "Metallic factor in [0, 1]"}}},
+            {"reflectance",                {{"type", "number"},  {"description", "Dielectric reflectance in [0, 1]"}}},
+            {"emissive",                   {{"type", "array"},   {"items", {{"type", "number"}}}, {"minItems", 3}, {"maxItems", 3}, {"description", "Linear RGB emissive [r, g, b]"}}},
+            {"normal_texture_scale",       {{"type", "number"},  {"description", "Normal map scale"}}},
+            {"occlusion_texture_strength", {{"type", "number"},  {"description", "Occlusion map strength"}}},
+            {"bxdf_model",                 {{"type", "string"},  {"enum", json::array({"unlit", "isotropic_brdf", "anisotropic_brdf"})}, {"description", "Selects which BxDF the standard shader applies"}}},
+            {"use_circular_brushed_metal", {{"type", "boolean"}, {"description", "Enable circular brushed metal shading variant"}}},
+            {"use_aniso_control",          {{"type", "boolean"}, {"description", "Enable anisotropic shading control"}}},
+            {"texture_samplers",           {
+                {"type", "object"},
+                {"description", "Per-slot texture assignments. Textures must come from the scene's content library (use get_scene_textures to list)."},
+                {"properties", {
+                    {"base_color",         texture_slot_schema},
+                    {"metallic_roughness", texture_slot_schema},
+                    {"normal",             texture_slot_schema},
+                    {"occlusion",          texture_slot_schema},
+                    {"emissive",           texture_slot_schema}
+                }}
+            }}
+        }},
+        {"required", json::array({"scene_name", "material_name"})}
     }});
 
     // Editor commands
@@ -769,6 +1016,22 @@ auto Mcp_server::query_material_details(const json& args) -> std::string
     for (const auto& mat : mat_list) {
         if (mat->get_name() == material_name) {
             const auto& d = mat->data;
+            auto sampler_to_json = [](const erhe::primitive::Material_texture_sampler& s) -> json {
+                json entry = {
+                    {"tex_coord", s.tex_coord},
+                    {"rotation",  s.rotation},
+                    {"offset",    {s.offset.x, s.offset.y}},
+                    {"scale",     {s.scale.x,  s.scale.y}}
+                };
+                if (s.texture) {
+                    entry["texture_id"]   = s.texture->get_id();
+                    entry["texture_name"] = s.texture->get_name();
+                } else {
+                    entry["texture_id"]   = nullptr;
+                    entry["texture_name"] = nullptr;
+                }
+                return entry;
+            };
             json result = {
                 {"name",                       mat->get_name()},
                 {"id",                         mat->get_id()},
@@ -780,10 +1043,19 @@ auto Mcp_server::query_material_details(const json& args) -> std::string
                 {"emissive",                   {d.emissive.x, d.emissive.y, d.emissive.z}},
                 {"normal_texture_scale",       d.normal_texture_scale},
                 {"occlusion_texture_strength", d.occlusion_texture_strength},
-                {"unlit",                      d.unlit},
-                {"has_base_color_texture",     d.texture_samplers.base_color.texture != nullptr},
-                {"has_normal_texture",         d.texture_samplers.normal.texture != nullptr},
-                {"has_metallic_roughness_texture", d.texture_samplers.metallic_roughness.texture != nullptr}
+                {"bxdf_model",
+                    (d.bxdf_model == erhe::primitive::Bxdf_model::unlit)            ? "unlit" :
+                    (d.bxdf_model == erhe::primitive::Bxdf_model::anisotropic_brdf) ? "anisotropic_brdf" :
+                                                                                      "isotropic_brdf"},
+                {"use_circular_brushed_metal", d.use_circular_brushed_metal},
+                {"use_aniso_control",          d.use_aniso_control},
+                {"texture_samplers", {
+                    {"base_color",         sampler_to_json(d.texture_samplers.base_color)},
+                    {"metallic_roughness", sampler_to_json(d.texture_samplers.metallic_roughness)},
+                    {"normal",             sampler_to_json(d.texture_samplers.normal)},
+                    {"occlusion",          sampler_to_json(d.texture_samplers.occlusion)},
+                    {"emissive",           sampler_to_json(d.texture_samplers.emissive)}
+                }}
             };
             return make_json_content(result).dump();
         }
@@ -792,6 +1064,36 @@ auto Mcp_server::query_material_details(const json& args) -> std::string
     json r = make_text_content("Material not found: " + material_name);
     r["isError"] = true;
     return r.dump();
+}
+
+auto Mcp_server::query_scene_textures(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    auto* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        json r = make_text_content("Scene not found: " + scene_name);
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    auto library = sr->get_content_library();
+    if (!library || !library->textures) {
+        return make_json_content({{"textures", json::array()}}).dump();
+    }
+
+    json textures = json::array();
+    const auto& tex_list = library->textures->get_all<erhe::graphics::Texture>();
+    for (const auto& tex : tex_list) {
+        textures.push_back({
+            {"name",   tex->get_name()},
+            {"id",     tex->get_id()},
+            {"width",  tex->get_width()},
+            {"height", tex->get_height()},
+            {"format", erhe::dataformat::c_str(tex->get_pixelformat())}
+        });
+    }
+
+    return make_json_content({{"textures", textures}}).dump();
 }
 
 auto Mcp_server::query_scene_brushes(const json& args) -> std::string
@@ -1252,6 +1554,514 @@ auto Mcp_server::action_remove_tags(const json& args) -> std::string
         }
     }
     return make_json_content({{"untagged_count", static_cast<int>(items.size())}}).dump();
+}
+
+namespace {
+
+// Read helpers return a tri-state so the caller can distinguish "the
+// field was not in the JSON" from "the field was present but invalid
+// (wrong type, NaN, Inf)". The Invalid branch carries a human-readable
+// error in out_error so it can flow directly into a JSON-RPC error
+// response.
+enum class Field_status
+{
+    NotPresent,
+    Ok,
+    Invalid
+};
+
+[[nodiscard]] auto try_read_vec3(const json& obj, const char* key, glm::vec3& out, std::string& out_error) -> Field_status
+{
+    const auto it = obj.find(key);
+    if (it == obj.end()) {
+        return Field_status::NotPresent;
+    }
+    if (!it->is_array() || it->size() < 3) {
+        out_error = std::string{key} + " must be an array of 3 finite numbers";
+        return Field_status::Invalid;
+    }
+    const json& a = *it;
+    if (!a[0].is_number() || !a[1].is_number() || !a[2].is_number()) {
+        out_error = std::string{key} + " entries must be numbers";
+        return Field_status::Invalid;
+    }
+    const float x = a[0].get<float>();
+    const float y = a[1].get<float>();
+    const float z = a[2].get<float>();
+    if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z)) {
+        out_error = std::string{key} + " entries must be finite (got NaN or Inf)";
+        return Field_status::Invalid;
+    }
+    out.x = x;
+    out.y = y;
+    out.z = z;
+    return Field_status::Ok;
+}
+
+[[nodiscard]] auto try_read_vec2(const json& obj, const char* key, glm::vec2& out, std::string& out_error) -> Field_status
+{
+    const auto it = obj.find(key);
+    if (it == obj.end()) {
+        return Field_status::NotPresent;
+    }
+    if (it->is_number()) {
+        const float v = it->get<float>();
+        if (!std::isfinite(v)) {
+            out_error = std::string{key} + " must be finite (got NaN or Inf)";
+            return Field_status::Invalid;
+        }
+        out.x = v;
+        out.y = v;
+        return Field_status::Ok;
+    }
+    if (it->is_array() && it->size() >= 2 && (*it)[0].is_number() && (*it)[1].is_number()) {
+        const float x = (*it)[0].get<float>();
+        const float y = (*it)[1].get<float>();
+        if (!std::isfinite(x) || !std::isfinite(y)) {
+            out_error = std::string{key} + " entries must be finite (got NaN or Inf)";
+            return Field_status::Invalid;
+        }
+        out.x = x;
+        out.y = y;
+        return Field_status::Ok;
+    }
+    out_error = std::string{key} + " must be a number or an array of 2 finite numbers";
+    return Field_status::Invalid;
+}
+
+[[nodiscard]] auto try_read_float(const json& obj, const char* key, float& out, std::string& out_error) -> Field_status
+{
+    const auto it = obj.find(key);
+    if (it == obj.end()) {
+        return Field_status::NotPresent;
+    }
+    if (!it->is_number()) {
+        out_error = std::string{key} + " must be a number";
+        return Field_status::Invalid;
+    }
+    const float v = it->get<float>();
+    if (!std::isfinite(v)) {
+        out_error = std::string{key} + " must be finite (got NaN or Inf)";
+        return Field_status::Invalid;
+    }
+    out = v;
+    return Field_status::Ok;
+}
+
+[[nodiscard]] auto try_read_bool(const json& obj, const char* key, bool& out) -> bool
+{
+    const auto it = obj.find(key);
+    if (it == obj.end() || !it->is_boolean()) {
+        return false;
+    }
+    out = it->get<bool>();
+    return true;
+}
+
+class Slot_edit
+{
+public:
+    bool                                     has_texture{false};
+    std::shared_ptr<erhe::graphics::Texture> texture{};
+    std::optional<uint32_t>                  tex_coord{};
+    std::optional<float>                     rotation{};
+    std::optional<glm::vec2>                 offset{};
+    std::optional<glm::vec2>                 scale{};
+};
+
+[[nodiscard]] auto find_texture_in_library(
+    const std::vector<std::shared_ptr<erhe::graphics::Texture>>& tex_list,
+    const json&                                                  ref,
+    std::shared_ptr<erhe::graphics::Texture>&                    out_texture,
+    std::string&                                                 out_error
+) -> bool
+{
+    if (ref.is_number_integer() || ref.is_number_unsigned()) {
+        const std::size_t target_id = ref.get<std::size_t>();
+        for (const auto& tex : tex_list) {
+            if (tex->get_id() == target_id) {
+                out_texture = tex;
+                return true;
+            }
+        }
+        out_error = "Texture id not found in content library: " + std::to_string(target_id);
+        return false;
+    }
+    if (ref.is_string()) {
+        const std::string target_name = ref.get<std::string>();
+        std::shared_ptr<erhe::graphics::Texture> first_match;
+        std::vector<std::size_t> matching_ids;
+        for (const auto& tex : tex_list) {
+            if (tex->get_name() == target_name) {
+                if (!first_match) {
+                    first_match = tex;
+                }
+                matching_ids.push_back(tex->get_id());
+            }
+        }
+        if (!first_match) {
+            out_error = "Texture name not found in content library: " + target_name;
+            return false;
+        }
+        if (matching_ids.size() > 1) {
+            out_error = "Texture name '" + target_name + "' matches " +
+                        std::to_string(matching_ids.size()) + " textures (ids:";
+            for (const std::size_t id : matching_ids) {
+                out_error += " " + std::to_string(id);
+            }
+            out_error += "); reference by id to disambiguate";
+            return false;
+        }
+        out_texture = first_match;
+        return true;
+    }
+    out_error = "Texture reference must be a string (name), integer (id), or null (clear)";
+    return false;
+}
+
+[[nodiscard]] auto parse_slot_edit(
+    const json&                                                  slot_json,
+    const std::vector<std::shared_ptr<erhe::graphics::Texture>>& tex_list,
+    Slot_edit&                                                   out_edit,
+    std::string&                                                 out_error
+) -> bool
+{
+    if (!slot_json.is_object()) {
+        out_error = "Texture slot entry must be an object";
+        return false;
+    }
+
+    const auto tex_it = slot_json.find("texture");
+    if (tex_it != slot_json.end()) {
+        out_edit.has_texture = true;
+        if (tex_it->is_null()) {
+            out_edit.texture.reset();
+        } else if (!find_texture_in_library(tex_list, *tex_it, out_edit.texture, out_error)) {
+            return false;
+        }
+    }
+
+    const auto tc_it = slot_json.find("tex_coord");
+    if (tc_it != slot_json.end()) {
+        if (!tc_it->is_number_integer() && !tc_it->is_number_unsigned()) {
+            out_error = "tex_coord must be an integer";
+            return false;
+        }
+        // Forward-looking field: Material_texture_sampler::tex_coord
+        // is stored on the material, but the current standard shader
+        // reads v_texcoord (vertex stream a_texcoord_0 only). Accept
+        // 0 or 1 so a future multi-UV shader does not need a config
+        // bump, and reject larger values explicitly instead of
+        // wrapping uint32_t silently.
+        constexpr std::int64_t k_max_tex_coord = 1;
+        const std::int64_t raw = tc_it->get<std::int64_t>();
+        if (raw < 0 || raw > k_max_tex_coord) {
+            out_error = "tex_coord must be in [0, " + std::to_string(k_max_tex_coord) + "]";
+            return false;
+        }
+        out_edit.tex_coord = static_cast<uint32_t>(raw);
+    }
+
+    float f_tmp{};
+    switch (try_read_float(slot_json, "rotation", f_tmp, out_error)) {
+        case Field_status::Ok:         out_edit.rotation = f_tmp; break;
+        case Field_status::Invalid:    return false;
+        case Field_status::NotPresent: break;
+    }
+    glm::vec2 v2_tmp{};
+    switch (try_read_vec2(slot_json, "offset", v2_tmp, out_error)) {
+        case Field_status::Ok:         out_edit.offset = v2_tmp; break;
+        case Field_status::Invalid:    return false;
+        case Field_status::NotPresent: break;
+    }
+    switch (try_read_vec2(slot_json, "scale", v2_tmp, out_error)) {
+        case Field_status::Ok:         out_edit.scale = v2_tmp; break;
+        case Field_status::Invalid:    return false;
+        case Field_status::NotPresent: break;
+    }
+    return true;
+}
+
+void apply_slot_edit(const Slot_edit& edit, erhe::primitive::Material_texture_sampler& target)
+{
+    if (edit.has_texture)         target.texture   = edit.texture;
+    if (edit.tex_coord.has_value()) target.tex_coord = edit.tex_coord.value();
+    if (edit.rotation.has_value()) target.rotation  = edit.rotation.value();
+    if (edit.offset.has_value())   target.offset    = edit.offset.value();
+    if (edit.scale.has_value())    target.scale     = edit.scale.value();
+}
+
+[[nodiscard]] auto slot_edit_summary(const Slot_edit& edit) -> json
+{
+    json entry = json::object();
+    if (edit.has_texture) {
+        if (edit.texture) {
+            entry["texture_id"]   = edit.texture->get_id();
+            entry["texture_name"] = edit.texture->get_name();
+        } else {
+            entry["texture_id"]   = nullptr;
+            entry["texture_name"] = nullptr;
+        }
+    }
+    if (edit.tex_coord.has_value()) entry["tex_coord"] = edit.tex_coord.value();
+    if (edit.rotation.has_value())  entry["rotation"]  = edit.rotation.value();
+    if (edit.offset.has_value())    entry["offset"]    = {edit.offset->x, edit.offset->y};
+    if (edit.scale.has_value())     entry["scale"]     = {edit.scale->x,  edit.scale->y};
+    return entry;
+}
+
+} // anonymous namespace
+
+auto Mcp_server::action_edit_material(const json& args) -> std::string
+{
+    if (m_context.operation_stack == nullptr) {
+        json r = make_text_content("Operation stack not available");
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    const std::string scene_name    = args.value("scene_name", "");
+    const std::string material_name = args.value("material_name", "");
+
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        json r = make_text_content("Scene not found: " + scene_name);
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    auto library = sr->get_content_library();
+    if (!library || !library->materials) {
+        json r = make_text_content("No materials in scene: " + scene_name);
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    std::shared_ptr<erhe::primitive::Material> material;
+    const auto& mat_list = library->materials->get_all<erhe::primitive::Material>();
+    std::vector<std::size_t> matching_ids;
+    for (const auto& mat : mat_list) {
+        if (mat->get_name() == material_name) {
+            if (!material) {
+                material = mat;
+            }
+            matching_ids.push_back(mat->get_id());
+        }
+    }
+    if (!material) {
+        json r = make_text_content("Material not found: " + material_name);
+        r["isError"] = true;
+        return r.dump();
+    }
+    if (matching_ids.size() > 1) {
+        // Ambiguous: refuse to mutate. Return the candidate ids so the
+        // caller can re-issue with a disambiguating id (once the id
+        // path is added).
+        json r = make_text_content(
+            "Material name '" + material_name + "' matches " +
+            std::to_string(matching_ids.size()) + " materials"
+        );
+        r["isError"]      = true;
+        r["candidate_ids"] = matching_ids;
+        return r.dump();
+    }
+
+    if (material->is_lock_edit()) {
+        json r = make_text_content("Material is locked: " + material_name);
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    const erhe::primitive::Material_data before = material->data;
+    erhe::primitive::Material_data       after  = before;
+
+    json applied = json::object();
+
+    glm::vec3   v3{};
+    glm::vec2   v2{};
+    float       f{};
+    bool        b{};
+    std::string field_err;
+
+    auto reject = [](const std::string& msg) -> std::string {
+        json r = make_text_content(msg);
+        r["isError"] = true;
+        return r.dump();
+    };
+
+    auto clamp01 = [](float v) { return std::clamp(v, 0.0f, 1.0f); };
+    auto clamp01_vec3 = [&](glm::vec3 v) { return glm::vec3{clamp01(v.x), clamp01(v.y), clamp01(v.z)}; };
+    auto clamp01_vec2 = [&](glm::vec2 v) { return glm::vec2{clamp01(v.x), clamp01(v.y)}; };
+
+    switch (try_read_vec3(args, "base_color", v3, field_err)) {
+        case Field_status::Ok: {
+            const glm::vec3 clamped = clamp01_vec3(v3);
+            after.base_color = clamped;
+            applied["base_color"] = {clamped.x, clamped.y, clamped.z};
+            break;
+        }
+        case Field_status::Invalid:    return reject(field_err);
+        case Field_status::NotPresent: break;
+    }
+    switch (try_read_float(args, "opacity", f, field_err)) {
+        case Field_status::Ok:         after.opacity = clamp01(f); applied["opacity"] = after.opacity; break;
+        case Field_status::Invalid:    return reject(field_err);
+        case Field_status::NotPresent: break;
+    }
+    switch (try_read_vec2(args, "roughness", v2, field_err)) {
+        case Field_status::Ok: {
+            const glm::vec2 clamped = clamp01_vec2(v2);
+            after.roughness = clamped;
+            applied["roughness"] = {clamped.x, clamped.y};
+            break;
+        }
+        case Field_status::Invalid:    return reject(field_err);
+        case Field_status::NotPresent: break;
+    }
+    switch (try_read_float(args, "metallic", f, field_err)) {
+        case Field_status::Ok:         after.metallic = clamp01(f); applied["metallic"] = after.metallic; break;
+        case Field_status::Invalid:    return reject(field_err);
+        case Field_status::NotPresent: break;
+    }
+    switch (try_read_float(args, "reflectance", f, field_err)) {
+        case Field_status::Ok:         after.reflectance = clamp01(f); applied["reflectance"] = after.reflectance; break;
+        case Field_status::Invalid:    return reject(field_err);
+        case Field_status::NotPresent: break;
+    }
+    switch (try_read_vec3(args, "emissive", v3, field_err)) {
+        case Field_status::Ok: {
+            // Emissive is HDR; floor at 0 but no upper clamp.
+            const glm::vec3 clamped{std::max(0.0f, v3.x), std::max(0.0f, v3.y), std::max(0.0f, v3.z)};
+            after.emissive = clamped;
+            applied["emissive"] = {clamped.x, clamped.y, clamped.z};
+            break;
+        }
+        case Field_status::Invalid:    return reject(field_err);
+        case Field_status::NotPresent: break;
+    }
+    switch (try_read_float(args, "normal_texture_scale", f, field_err)) {
+        case Field_status::Ok:         after.normal_texture_scale = f; applied["normal_texture_scale"] = f; break;
+        case Field_status::Invalid:    return reject(field_err);
+        case Field_status::NotPresent: break;
+    }
+    switch (try_read_float(args, "occlusion_texture_strength", f, field_err)) {
+        case Field_status::Ok:         after.occlusion_texture_strength = clamp01(f); applied["occlusion_texture_strength"] = after.occlusion_texture_strength; break;
+        case Field_status::Invalid:    return reject(field_err);
+        case Field_status::NotPresent: break;
+    }
+    {
+        const auto bxdf_it = args.find("bxdf_model");
+        if (bxdf_it != args.end()) {
+            if (!bxdf_it->is_string()) {
+                json r = make_text_content("bxdf_model must be a string");
+                r["isError"] = true;
+                return r.dump();
+            }
+            const std::string s = bxdf_it->get<std::string>();
+            if (s == "unlit") {
+                after.bxdf_model = erhe::primitive::Bxdf_model::unlit;
+            } else if (s == "isotropic_brdf") {
+                after.bxdf_model = erhe::primitive::Bxdf_model::isotropic_brdf;
+            } else if (s == "anisotropic_brdf") {
+                after.bxdf_model = erhe::primitive::Bxdf_model::anisotropic_brdf;
+            } else {
+                json r = make_text_content("bxdf_model must be one of 'unlit', 'isotropic_brdf', 'anisotropic_brdf'");
+                r["isError"] = true;
+                return r.dump();
+            }
+            applied["bxdf_model"] = s;
+        }
+    }
+    if (try_read_bool(args, "use_circular_brushed_metal", b)) {
+        after.use_circular_brushed_metal = b;
+        applied["use_circular_brushed_metal"] = b;
+    }
+    if (try_read_bool(args, "use_aniso_control", b)) {
+        after.use_aniso_control = b;
+        applied["use_aniso_control"] = b;
+    }
+
+    const auto ts_it = args.find("texture_samplers");
+    if (ts_it != args.end()) {
+        if (!ts_it->is_object()) {
+            json r = make_text_content("texture_samplers must be an object");
+            r["isError"] = true;
+            return r.dump();
+        }
+
+        if (!library->textures) {
+            json r = make_text_content("Content library has no textures node");
+            r["isError"] = true;
+            return r.dump();
+        }
+        const auto& tex_list = library->textures->get_all<erhe::graphics::Texture>();
+
+        struct Named_slot
+        {
+            const char*                                slot_name;
+            erhe::primitive::Material_texture_sampler* target;
+        };
+        const Named_slot slots[] = {
+            {"base_color",         &after.texture_samplers.base_color},
+            {"metallic_roughness", &after.texture_samplers.metallic_roughness},
+            {"normal",             &after.texture_samplers.normal},
+            {"occlusion",          &after.texture_samplers.occlusion},
+            {"emissive",           &after.texture_samplers.emissive}
+        };
+
+        std::vector<std::pair<const Named_slot*, Slot_edit>> parsed_edits;
+        parsed_edits.reserve(std::size(slots));
+
+        for (const Named_slot& slot : slots) {
+            const auto slot_it = ts_it->find(slot.slot_name);
+            if (slot_it == ts_it->end()) {
+                continue;
+            }
+            Slot_edit  edit{};
+            std::string slot_error{};
+            if (!parse_slot_edit(*slot_it, tex_list, edit, slot_error)) {
+                json r = make_text_content(std::string{slot.slot_name} + ": " + slot_error);
+                r["isError"] = true;
+                return r.dump();
+            }
+            parsed_edits.emplace_back(&slot, std::move(edit));
+        }
+
+        json applied_textures = json::object();
+        for (auto& [slot, edit] : parsed_edits) {
+            apply_slot_edit(edit, *slot->target);
+            applied_textures[slot->slot_name] = slot_edit_summary(edit);
+        }
+        if (!applied_textures.empty()) {
+            applied["texture_samplers"] = applied_textures;
+        }
+    }
+
+    if (applied.empty()) {
+        json r = make_text_content("No editable material fields supplied");
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    if (after == before) {
+        return make_json_content({
+            {"name",     material->get_name()},
+            {"id",       material->get_id()},
+            {"applied",  applied},
+            {"changed",  false}
+        }).dump();
+    }
+
+    m_context.operation_stack->queue(
+        std::make_shared<Material_change_operation>(material, before, after)
+    );
+
+    return make_json_content({
+        {"name",    material->get_name()},
+        {"id",      material->get_id()},
+        {"applied", applied},
+        {"changed", true}
+    }).dump();
 }
 
 } // namespace editor

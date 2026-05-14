@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <chrono>
 #include <future>
 #include <memory>
 #include <mutex>
@@ -96,6 +97,7 @@ private:
     auto query_scene_lights     (const nlohmann::json& args) -> std::string;
     auto query_scene_materials  (const nlohmann::json& args) -> std::string;
     auto query_material_details (const nlohmann::json& args) -> std::string;
+    auto query_scene_textures   (const nlohmann::json& args) -> std::string;
     auto query_scene_brushes    (const nlohmann::json& args) -> std::string;
     auto query_selection        (const nlohmann::json& args) -> std::string;
     auto query_undo_redo_stack  (const nlohmann::json& args) -> std::string;
@@ -108,15 +110,43 @@ private:
     auto action_unlock_items    (const nlohmann::json& args) -> std::string;
     auto action_add_tags        (const nlohmann::json& args) -> std::string;
     auto action_remove_tags     (const nlohmann::json& args) -> std::string;
+    auto action_edit_material   (const nlohmann::json& args) -> std::string;
     auto execute_command        (const std::string& tool_name) -> std::string;
 
     erhe::commands::Commands& m_commands;
     App_context&              m_context;
     int                       m_port;
 
+    // Lifecycle (start/stop, server creation/destruction, thread join).
+    // Serializes start() / stop() against each other and against
+    // ~Mcp_server so the m_http_server / m_server_thread pair cannot
+    // be observed in a half-torn-down state.
+    std::mutex                       m_lifecycle_mutex;
     std::unique_ptr<httplib::Server> m_http_server;
     std::thread                      m_server_thread;
     std::atomic<bool>                m_running{false};
+
+    // Bearer token loaded from $HOME/.claude/erhe_mcp_token (file
+    // mode 0600 on POSIX). Empty when auth is disabled (the token
+    // file is missing). When set, every /mcp request must present
+    // Authorization: Bearer <m_auth_token>.
+    std::string                      m_auth_token;
+
+    // Maximum HTTP payload size (in bytes) accepted by httplib's POST
+    // parser. Requests larger than this are rejected by httplib with
+    // 413 before any handler runs.
+    static constexpr std::size_t     k_max_payload_bytes = 1 * 1024 * 1024;
+
+    // Maximum queue depth. Beyond this, handle_tools_call returns
+    // JSON-RPC -32000 "server busy" instead of enqueuing.
+    static constexpr std::size_t     k_max_queue_depth = 64;
+
+    // How long a queued request may sit before process_queued_requests
+    // drops it without mutating editor state. Must match the wait_for
+    // in handle_tools_call so an abandoned promise can never reach
+    // set_value (which would also leave the queue holding a
+    // result_promise that nobody is listening on).
+    static constexpr std::chrono::seconds k_request_timeout{5};
 
     // Tool info cache
     std::mutex                  m_tools_mutex;
@@ -125,9 +155,10 @@ private:
     // Request queue (populated by HTTP thread, drained by main thread)
     struct Queued_request
     {
-        std::string                tool_name;
-        nlohmann::json             arguments;
-        std::promise<std::string>  result_promise;
+        std::string                                   tool_name;
+        nlohmann::json                                arguments;
+        std::promise<std::string>                     result_promise;
+        std::chrono::steady_clock::time_point         enqueued_at{std::chrono::steady_clock::now()};
     };
     std::mutex                                       m_queue_mutex;
     std::vector<std::unique_ptr<Queued_request>>     m_request_queue;
