@@ -122,13 +122,16 @@ Headset_view_resources::Headset_view_resources(
 
 auto Headset_view_resources::is_valid() const -> bool
 {
-    // m_is_valid is flipped true unconditionally at the end of the
-    // ctor, so checking it alone is a tautology. Reflect the actually
-    // load-bearing post-condition: the per-view color texture / render
-    // pass were constructable. (The per-eye fallback path does not
-    // build a Render_pass; multiview swapchains may or may not be
-    // backed by a color texture depending on the runtime.)
-    return m_is_valid && (m_color_texture != nullptr) && (m_render_pass != nullptr);
+    // m_is_valid flips true at the end of the ctor, after the Camera +
+    // Node members are constructed. Multiview leaves m_color_texture and
+    // m_render_pass null on purpose -- the shared OpenXR swapchain feeds
+    // Render_views_frame::shared_*_texture, and the multiview render
+    // pass is built per-frame in Headset_view::render_headset(). The
+    // multiview callback in Headset_view only reads Camera + Node from
+    // this object, so m_is_valid alone is the load-bearing post-condition
+    // for both paths; gating on the per-view texture / render pass
+    // permanently rejects every multiview frame.
+    return m_is_valid;
 }
 
 auto Headset_view_resources::get_render_pass() const -> erhe::graphics::Render_pass*
