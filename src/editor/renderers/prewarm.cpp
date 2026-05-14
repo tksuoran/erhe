@@ -11,6 +11,7 @@
 #include "rendergraph/shadow_render_node.hpp"
 #include "scene/scene_root.hpp"
 
+#include "erhe_graphics/enums.hpp"
 #include "erhe_graphics/render_pipeline.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_scene/light.hpp"
@@ -21,6 +22,12 @@
 #include "erhe_scene_renderer/shadow_renderer.hpp"
 #include "erhe_scene_renderer/standard_shader_variant.hpp"
 #include "erhe_scene_renderer/standard_shader_variants.hpp"
+
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+#   include "xr/headset_view.hpp"
+#   include "erhe_xr/headset.hpp"
+#   include "erhe_xr/xr_session.hpp"
+#endif
 
 #include <algorithm>
 #include <chrono>
@@ -101,12 +108,55 @@ void prewarm_all(App_context& context)
         view_counts.push_back(0u);
     }
 
+    // VkPipeline-cache warmup target for the OpenXR multiview color pass.
+    // Quest 3's per-frame budget on a cold install is dominated by the
+    // driver IR-optimization step inside vkCreateGraphicsPipelines for
+    // the headset color pipelines (the application-level cache also
+    // misses on the first bind, but that cost is small once the driver
+    // cache has the binary). The real multiview render pass is built per
+    // frame inside Xr_session::render_frame_multiview() so the
+    // application-level cache cannot be populated here; the driver-level
+    // VkPipelineCache (Device_impl::m_pipeline_cache) reuses the binary
+    // across compatible render passes as long as the format/usage tuple
+    // matches.
+    //
+    // Sample count is 1 (multiview-MSAA workaround per quest_fixes.md
+    // D6); usage flags mirror headset_view.cpp's per-frame render pass
+    // descriptor exactly.
+    std::vector<erhe::scene_renderer::Forward_renderer::Warmup_target> warmup_targets;
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+    if (context.OpenXR && (context.headset_view != nullptr) && (context.headset_view->get_headset() != nullptr)) {
+        erhe::xr::Headset*    headset    = context.headset_view->get_headset();
+        erhe::xr::Xr_session* xr_session = headset->get_xr_session();
+        if (xr_session != nullptr) {
+            const erhe::dataformat::Format color_format         = xr_session->get_swapchain_color_format();
+            const erhe::dataformat::Format depth_stencil_format = xr_session->get_swapchain_depth_stencil_format();
+            if (color_format != erhe::dataformat::Format::format_undefined) {
+                erhe::scene_renderer::Forward_renderer::Warmup_target target{};
+                target.view_count               = xr_session->get_view_count();
+                target.color_attachment_count   = 1u;
+                target.color_attachment_formats[0] = color_format;
+                target.color_usage_before[0]    = erhe::graphics::Image_usage_flag_bit_mask::color_attachment;
+                target.color_usage_after[0]     = erhe::graphics::Image_usage_flag_bit_mask::color_attachment;
+                target.depth_attachment_format  = depth_stencil_format;
+                target.depth_usage_before       = erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment;
+                target.depth_usage_after        = erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment;
+                target.sample_count             = 1u;
+                if (target.view_count >= 2u) {
+                    warmup_targets.push_back(target);
+                }
+            }
+        }
+    }
+#endif
+
     std::vector<erhe::graphics::Lazy_render_pipeline*> standard_pipelines =
         collect_standard_variant_pipelines(context.app_rendering->composition_passes());
 
     const std::vector<std::shared_ptr<Scene_root>>& scene_roots =
         context.app_scenes->get_scene_roots();
 
+    std::size_t total_forward_warmups = 0;
     for (const std::shared_ptr<Scene_root>& scene_root : scene_roots) {
         if (!scene_root) {
             continue;
@@ -159,9 +209,10 @@ void prewarm_all(App_context& context)
             // && vertex_format != nullptr) catches the new pipeline
             // even though primitive_mode below stays polygon_fill --
             // the variant key does not depend on primitive_mode.
-            .primitive_mode           = erhe::primitive::Primitive_mode::polygon_fill
+            .primitive_mode           = erhe::primitive::Primitive_mode::polygon_fill,
+            .warmup_targets           = std::span<const erhe::scene_renderer::Forward_renderer::Warmup_target>{warmup_targets}
         };
-        context.forward_renderer->prewarm_standard_variants(params);
+        total_forward_warmups += context.forward_renderer->prewarm_standard_variants(params);
     }
 
     const std::chrono::steady_clock::time_point t_after_forward = std::chrono::steady_clock::now();
@@ -225,10 +276,10 @@ void prewarm_all(App_context& context)
     const auto ms_shadow   = std::chrono::duration_cast<std::chrono::milliseconds>(t_after_shadow  - t_after_forward).count();
     const auto ms_previews = std::chrono::duration_cast<std::chrono::milliseconds>(t_end           - t_after_shadow).count();
     log_startup->info(
-        "prewarm: forward+content-library compiled {} new variants ({} total) in {} ms; "
+        "prewarm: forward+content-library compiled {} new variants ({} total), warmed {} pipeline(s) in {} ms; "
         "shadow prewarm walked {} node(s) in {} ms; "
         "previews compiled {} new variants ({} total) in {} ms",
-        after_forward  - before,          after_forward,  ms_forward,
+        after_forward  - before,          after_forward,  total_forward_warmups, ms_forward,
         shadow_node_count,                                ms_shadow,
         after_previews - after_shadow,    after_previews, ms_previews
     );

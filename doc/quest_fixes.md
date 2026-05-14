@@ -20,8 +20,6 @@ D6. **[DEFERRED - needs multiview-MSAA root-cause] 1-MSAA on OpenXR is a workaro
 
 ### E. Build / config / docs / dead-code
 
-E3. **[DEFERRED - needs prewarm-orchestrator extension] `Device::warmup_render_pipeline` is dead code** -- `src/erhe/graphics/erhe_graphics/device.cpp:121-126, device.hpp:351`. Comments in `forward_renderer.hpp:131` and `prewarm.hpp:22` advertise it as Phase-2's VkPipeline-cache home, but `prewarm_all` never calls it. **Fix:** wire `prewarm_all` to call it for each variant the renderer's prewarm iterates (Phase-2 win); update `prewarm.hpp` comment.
-
 #### Dead-code subsystems remaining from E13
 
 Per CLAUDE.md, each in its own commit so `git blame` stays useful:
@@ -174,6 +172,8 @@ M4. **[DONE] Roughness floor 1e-4 clamp inconsistent** -- `src/editor/res/shader
 E1. **[DONE - partial; SHA256 verification deferred] Gradle task ships stale validation layer .so** -- `android-project/app/build.gradle:171-195`. `outputs.upToDateWhen { layerSo.exists() }` does not invalidate on `validationLayerVersion` bump. **Fix:** add `inputs.property("validationLayerVersion", validationLayerVersion)`; remove `libs/arm64-v8a/libVkLayer*.so` in the `-Pvulkan_validation_skip` branch; add SHA256 verification of the downloaded zip. **Verify:** bump version, re-run task, confirm new .so on device.
 
 E2. **[DONE] `ERHE_TARGET_QUEST_STANDALONE` is dead** -- `CMakeLists.txt:127`. Zero references in source tree. **Fix:** delete the `add_compile_definitions` line; if a Quest-only code path is needed, gate on `ANDROID` + `__aarch64__` instead.
+
+E3. **[DONE - partial; multiview wired, single-view deferred] `Device::warmup_render_pipeline` was dead code.** Forward_renderer now exposes `Warmup_target` and `Prewarm_parameters::warmup_targets`; `prewarm_standard_variants` walks every (Lazy_render_pipeline, bucket-variant-key, matching view_count) tuple and calls `Device::warmup_render_pipeline` for each match. The editor wires the multiview Quest target by reading color/depth-stencil formats from `Xr_session::get_swapchain_color_format()` / `get_swapchain_depth_stencil_format()` (new accessors), sample_count 1 (D6 multiview-MSAA workaround), and usage flags matching `headset_view.cpp`'s per-frame render pass descriptor. Single-view warmup (desktop mirror, main viewport offscreen) is intentionally not wired -- those render passes are constructed lazily on first rendergraph execute and do not exist at the prewarm insertion point, and the desktop path lacks the 30 s OS interstitial budget that motivated the Quest warmup. `prewarm.hpp` and `doc/prewarm.md` updated; the new "warmed N pipeline(s)" count is folded into the prewarm log line so Quest measurements can quantify the win.
 
 E4. **[DONE - comment-only; quad-view sourcing deferred] Hardcoded prewarm view counts** -- `src/editor/renderers/prewarm.cpp:89-99`. `view_counts.push_back(0u); view_counts.push_back(2u);`. **Fix:** source `max_view_count` from `Headset_view` / `Xr_session`; prewarm `{0, max_view_count}`. **Verify:** Varjo quad-view config exercises four-view prewarm.
 

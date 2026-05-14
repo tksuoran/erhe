@@ -79,6 +79,15 @@ public:
     [[nodiscard]] auto is_multiview_enabled        () const -> bool;
     [[nodiscard]] auto get_view_count              () const -> uint32_t;
     [[nodiscard]] auto get_xr_session              () const -> XrSession;
+    // Swapchain formats picked by enumerate_swapchain_formats() during
+    // session construction. Both are well-defined by the time the
+    // editor's prewarm phase runs; the depth/stencil format may be
+    // format_undefined when the runtime did not advertise a usable depth
+    // swapchain format. Used by the init-time pipeline warmup to drive
+    // Device::warmup_render_pipeline against the same format tuple the
+    // headset's per-frame render pass will use.
+    [[nodiscard]] auto get_swapchain_color_format         () const -> erhe::dataformat::Format;
+    [[nodiscard]] auto get_swapchain_depth_stencil_format () const -> erhe::dataformat::Format;
     [[nodiscard]] auto get_xr_reference_space_local() const -> XrSpace;
     [[nodiscard]] auto get_xr_reference_space_stage() const -> XrSpace;
     [[nodiscard]] auto get_xr_reference_space_view () const -> XrSpace;

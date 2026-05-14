@@ -745,16 +745,60 @@ void Forward_renderer::draw_primitives(const Render_parameters& parameters, cons
     m_texture_heap->unbind(parameters.render_encoder.get_command_buffer());
 }
 
-void Forward_renderer::prewarm_standard_variants(const Prewarm_parameters& parameters)
+auto Forward_renderer::prewarm_standard_variants(const Prewarm_parameters& parameters) -> std::size_t
 {
     ERHE_PROFILE_FUNCTION();
 
     if (parameters.standard_shader_variants == nullptr) {
-        return;
+        return 0;
     }
     if (parameters.multiview_view_counts.empty()) {
-        return;
+        return 0;
     }
+
+    std::size_t warmup_count = 0;
+
+    // Materializes one VkPipeline (on Vulkan) per (lazy pipeline, variant,
+    // matching Warmup_target) tuple. Shadows the resolved shader_stages
+    // into a Render_pipeline_create_info copy along with the target's
+    // format/usage fields, then drives Device::warmup_render_pipeline.
+    auto warmup_pipeline_variants =
+        [this, &parameters, &warmup_count](
+            const erhe::graphics::Render_pipeline_create_info& base_create_info,
+            const Standard_variant_key&                        key,
+            uint32_t                                           view_count,
+            const erhe::graphics::Shader_stages*               variant_shader_stages
+        ) {
+            if (parameters.warmup_targets.empty() || (variant_shader_stages == nullptr)) {
+                return;
+            }
+            for (const Warmup_target& target : parameters.warmup_targets) {
+                if (target.view_count != view_count) {
+                    continue;
+                }
+                erhe::graphics::Render_pipeline_create_info ci = base_create_info;
+                // The runtime forward path swaps shader_stages on the
+                // Render_pipeline_create_info via the variant cache;
+                // mirror that here by writing the resolved variant into
+                // the local copy and clearing shader_stages_handle so
+                // Render_pipeline_impl uses the raw pointer.
+                ci.shader_stages           = const_cast<erhe::graphics::Shader_stages*>(variant_shader_stages);
+                ci.shader_stages_handle    = nullptr;
+                ci.multiview_shader_stages = nullptr;
+                ci.color_attachment_count    = target.color_attachment_count;
+                ci.color_attachment_formats  = target.color_attachment_formats;
+                ci.depth_attachment_format   = target.depth_attachment_format;
+                ci.stencil_attachment_format = target.stencil_attachment_format;
+                ci.color_usage_before        = target.color_usage_before;
+                ci.color_usage_after         = target.color_usage_after;
+                ci.depth_usage_before        = target.depth_usage_before;
+                ci.depth_usage_after         = target.depth_usage_after;
+                ci.sample_count              = target.sample_count;
+                m_graphics_device.warmup_render_pipeline(ci);
+                ++warmup_count;
+            }
+            (void)key;
+        };
 
     // Per-pipeline bucket walk. Mirrors the gate Forward_renderer::render
     // applies before consulting the variant cache (uses_standard_variants
@@ -785,7 +829,9 @@ void Forward_renderer::prewarm_standard_variants(const Prewarm_parameters& param
             for (const Bucket& bucket : buckets) {
                 const Standard_variant_key key = compute_bucket_variant_key(bucket, parameters.light_counts);
                 for (const uint32_t view_count : parameters.multiview_view_counts) {
-                    (void)parameters.standard_shader_variants->get_or_compile(key, view_count);
+                    const erhe::graphics::Shader_stages* stages =
+                        parameters.standard_shader_variants->get_or_compile(key, view_count);
+                    warmup_pipeline_variants(pipeline, key, view_count, stages);
                 }
             }
         }
@@ -800,7 +846,28 @@ void Forward_renderer::prewarm_standard_variants(const Prewarm_parameters& param
     // joint_indices+joint_weights), so the second get_or_compile lands
     // on the cache hit path and costs nothing. Skipped when
     // fallback_vertex_format is null.
+    //
+    // Pipeline warmup for content-library materials needs a representative
+    // pipeline_create_info to copy state from. We pick the first pipeline
+    // in render_pipeline_states that opts into standard variants; that
+    // pipeline's state (rasterization, blend, depth_stencil, vertex_input)
+    // is the same the runtime will use because all polygon_fill standard
+    // pipelines share that state set in the editor.
     if ((parameters.fallback_vertex_format != nullptr) && !parameters.extra_materials.empty()) {
+        const erhe::graphics::Render_pipeline_create_info* representative_pipeline = nullptr;
+        if (!parameters.warmup_targets.empty()) {
+            for (erhe::graphics::Lazy_render_pipeline* render_pipeline_state : parameters.render_pipeline_states) {
+                if (render_pipeline_state == nullptr) {
+                    continue;
+                }
+                if (!render_pipeline_state->data.uses_standard_variants) {
+                    continue;
+                }
+                representative_pipeline = &render_pipeline_state->data;
+                break;
+            }
+        }
+
         for (const std::shared_ptr<erhe::primitive::Material>& material : parameters.extra_materials) {
             if (!material) {
                 continue;
@@ -818,11 +885,19 @@ void Forward_renderer::prewarm_standard_variants(const Prewarm_parameters& param
                 parameters.light_counts
             );
             for (const uint32_t view_count : parameters.multiview_view_counts) {
-                (void)parameters.standard_shader_variants->get_or_compile(key_unskinned, view_count);
-                (void)parameters.standard_shader_variants->get_or_compile(key_skinned,   view_count);
+                const erhe::graphics::Shader_stages* unskinned_stages =
+                    parameters.standard_shader_variants->get_or_compile(key_unskinned, view_count);
+                const erhe::graphics::Shader_stages* skinned_stages =
+                    parameters.standard_shader_variants->get_or_compile(key_skinned, view_count);
+                if (representative_pipeline != nullptr) {
+                    warmup_pipeline_variants(*representative_pipeline, key_unskinned, view_count, unskinned_stages);
+                    warmup_pipeline_variants(*representative_pipeline, key_skinned,   view_count, skinned_stages);
+                }
             }
         }
     }
+
+    return warmup_count;
 }
 
 } // namespace erhe::scene_renderer

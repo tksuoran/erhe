@@ -68,13 +68,34 @@ any GPU work the prewarm enqueues. The cost shows up at init (around
   diverge from the scene_view's live setting and would cause
   prewarm-cache misses.
 
-- (**Future work**) `Device::warmup_render_pipeline(const
-  Render_pipeline_create_info&)` exists in
-  `src/erhe/graphics/erhe_graphics/device.{hpp,cpp}` but is not yet
-  invoked by `prewarm_all`. The intent (constructing a discardable
-  `Render_pipeline` so the Vulkan VkPipelineCache absorbs the
-  binary) is sound; wiring it into the variant walk is tracked by
-  quest_fixes.md E3.
+- `Device::warmup_render_pipeline(const Render_pipeline_create_info&)`
+  in `src/erhe/graphics/erhe_graphics/device.{hpp,cpp}`. Constructs a
+  discardable `Render_pipeline`; on Vulkan the resulting binary is
+  retained in the driver-level VkPipelineCache
+  (`Device_impl::m_pipeline_cache`) so subsequent
+  `vkCreateGraphicsPipelines` calls with the same shader modules and
+  state tuple skip IR optimization. Hooked into the variant walk via
+  `Forward_renderer::Warmup_target` (see `forward_renderer.hpp`); each
+  target carries the color/depth/stencil formats, sample count, and
+  usage flags of one render pass the runtime will use. When
+  `Prewarm_parameters::warmup_targets` is non-empty,
+  `prewarm_standard_variants` calls `warmup_render_pipeline` once per
+  (Lazy_render_pipeline, bucket-variant-key, matching view_count)
+  tuple it visits, then returns the warmup count for the prewarm log
+  line.
+
+- Editor wiring (`src/editor/renderers/prewarm.cpp`). Sources the
+  multiview Quest target from
+  `headset_view->get_headset()->get_xr_session()`:
+  color/depth-stencil formats picked by
+  `Xr_session::enumerate_swapchain_formats()`, sample_count 1 (per
+  D6's multiview-MSAA workaround), and usage flags mirroring
+  `headset_view.cpp`'s per-frame render pass descriptor. Single-view
+  (desktop mirror, main viewport offscreen) warmup is intentionally
+  not wired because (a) those render passes are constructed lazily on
+  first rendergraph execute and do not exist at this insertion point,
+  and (b) the desktop path does not face the 30 s OS interstitial
+  budget that motivates the Quest warmup.
 
 ### Orchestrator + editor wiring
 
@@ -118,7 +139,7 @@ node in 34 ms, 1 preview variant in 43 ms.
 
 ## Remaining work
 
-### Phase 2 for the forward-color override path
+### Phase 2 application-level cache (still not addressed)
 
 The runtime forward path takes one of two routes per pipeline:
 
@@ -126,9 +147,7 @@ The runtime forward path takes one of two routes per pipeline:
    `parameters.render_pass != nullptr` and no override): goes through
    `Lazy_render_pipeline::get_pipeline_for(desc)`, which constructs a
    `Render_pipeline` and caches it in `m_variants` keyed by format
-   hash. Step 2 covers this for the shadow renderer; the forward
-   renderer does not have a corresponding init-time call yet because
-   the headset color pass takes route 2 below on multiview.
+   hash. Step 2 covers this for the shadow renderer.
 
 2. **Override path** (multiview AND/OR per-bucket variant): goes
    through `Render_command_encoder_impl::set_render_pipeline_state`,
@@ -141,42 +160,18 @@ The runtime forward path takes one of two routes per pipeline:
    callback in `Headset_view::render_headset()` from
    `Render_views_frame::shared_color_texture` /
    `shared_depth_stencil_texture`, which only exist after the first
-   `xrWaitFrame`. So we cannot populate this cache at init time.
+   `xrWaitFrame`. So we still cannot populate this cache at init
+   time.
 
-`Device::warmup_render_pipeline` already exists (Step 3) and
+`Device::warmup_render_pipeline` is now wired (see Phase 2 above) and
 populates the *driver-level* VkPipelineCache
-(`Device_impl::m_pipeline_cache`), which the runtime
-`vkCreateGraphicsPipelines` calls reuse for IR-optimization work
-even when the application-level cache misses. Wiring up callers for
-the forward-color override path would let the runtime pay only the
-Vulkan-side bind cost on first frame instead of the full driver
-optimization pass.
-
-Sketch of what the work looks like:
-
-- Walk every `(Lazy_render_pipeline, bucket-variant-key, view_count)`
-  tuple the prewarm visits today.
-- For each, build a `Render_pipeline_create_info` by copying
-  `Lazy_render_pipeline::data`, applying
-  `set_format_from_render_pass(desc)` against a synthesized
-  `Render_pass_descriptor` with the swapchain's color/depth format,
-  and overriding `shader_stages` to the variant's compiled
-  `Shader_stages*`.
-- Call `device.warmup_render_pipeline(ci)`.
-
-Open questions:
-
-- Where to source the swapchain formats. `Headset_view` knows the
-  OpenXR swapchain formats once `Xr_session::create_swapchains()` has
-  run; the desktop main viewport gets its format from the window
-  swapchain. Both should be available at the prewarm insertion point;
-  expose accessors.
-- Whether to add a bigger refactor that gets the application-level
-  cache populated too (would require a dummy render pass + encoder at
-  init, the heavyweight option from the original plan).
-- Quest startup currently works without this -- it's "nice to have"
-  for first-frame jitter, not a blocker. Worth measuring on Quest
-  with a frame-time graph before committing to the work.
+(`Device_impl::m_pipeline_cache`); the runtime
+`vkCreateGraphicsPipelines` calls reuse it for IR-optimization work
+even when the application-level cache misses on the first bind. The
+remaining gap is the application-level cache, which would require a
+dummy render pass + encoder at init (the heavyweight option from the
+original plan). Quest currently launches inside the 30 s budget so
+this is "nice to have", not a blocker; measure first.
 
 ### Other follow-ups
 

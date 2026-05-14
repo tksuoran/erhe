@@ -12,7 +12,10 @@
 
 #include <glm/glm.hpp>
 
+#include <array>
+#include <cstdint>
 #include <memory>
+#include <span>
 #include <vector>
 
 namespace erhe {
@@ -135,8 +138,40 @@ public:
     // Performs no GPU draws and does not require a Render_command_encoder.
     // The compile work is glslang -> SPIR-V -> vkCreateShaderModule for
     // each cache miss; populating the per-pipeline VkPipeline cache is
-    // the caller's responsibility (see Device::warmup_render_pipeline
-    // when it lands).
+    // optional and driven by Warmup_target below.
+    //
+    // Optional VkPipeline warmup. When set, prewarm_standard_variants not
+    // only compiles shader stages but also drives Device::warmup_render_pipeline
+    // for each (Lazy_render_pipeline, variant_key, view_count) tuple it
+    // visits whose view_count matches Warmup_target::view_count. On Vulkan
+    // this lands the compiled pipeline binary in the driver-level
+    // VkPipelineCache (Device_impl::m_pipeline_cache), so the first
+    // runtime vkCreateGraphicsPipelines call against the same shader
+    // modules + state tuple skips IR-optimization work even though the
+    // application-level VkRenderPass-keyed cache still misses on the
+    // first bind. The format/usage fields must match a render pass the
+    // runtime will actually use; mismatches do not produce validation
+    // errors (they pollute the cache with un-reused binaries instead).
+    // OpenGL / Null / Metal backends are no-ops on the device side.
+    class Warmup_target
+    {
+    public:
+        // Single-view: 0. Multiview: the view count the matching render
+        // pass uses (typically 2 for Quest stereo). Only variants
+        // compiled with this view_count are warmed; mixing
+        // multiview/single-view in one Warmup_target is not supported.
+        uint32_t                                view_count{0};
+        unsigned int                            color_attachment_count{0};
+        std::array<erhe::dataformat::Format, 4> color_attachment_formats{};
+        std::array<uint64_t, 4>                 color_usage_before{};
+        std::array<uint64_t, 4>                 color_usage_after{};
+        erhe::dataformat::Format                depth_attachment_format  {erhe::dataformat::Format::format_undefined};
+        erhe::dataformat::Format                stencil_attachment_format{erhe::dataformat::Format::format_undefined};
+        uint64_t                                depth_usage_before{0};
+        uint64_t                                depth_usage_after {0};
+        unsigned int                            sample_count{1};
+    };
+
     class Prewarm_parameters
     {
     public:
@@ -150,9 +185,19 @@ public:
         Standard_shader_variants*                                    standard_shader_variants{nullptr};
         const erhe::dataformat::Vertex_format*                       fallback_vertex_format{nullptr};
         erhe::primitive::Primitive_mode                              primitive_mode{erhe::primitive::Primitive_mode::polygon_fill};
+        // Optional. When non-null and a Warmup_target's view_count
+        // matches an entry in multiview_view_counts, the prewarm also
+        // calls Device::warmup_render_pipeline for every variant compiled
+        // at that view_count (see Warmup_target). Multiple targets can
+        // be supplied (e.g. one for the headset color pass, one for the
+        // mirror window) -- each is matched independently against the
+        // visited view_counts.
+        std::span<const Warmup_target>                               warmup_targets{};
     };
 
-    void prewarm_standard_variants(const Prewarm_parameters& parameters);
+    // Returns the number of Device::warmup_render_pipeline calls issued
+    // (0 when warmup_targets is empty); useful for the prewarm log.
+    auto prewarm_standard_variants(const Prewarm_parameters& parameters) -> std::size_t;
 
     static const std::vector<std::span<const std::shared_ptr<erhe::scene::Mesh>>> empty_mesh_spans;
 

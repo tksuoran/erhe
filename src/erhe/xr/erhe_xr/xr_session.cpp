@@ -316,6 +316,16 @@ auto Xr_session::get_xr_session() const -> XrSession
     return m_xr_session;
 }
 
+auto Xr_session::get_swapchain_color_format() const -> erhe::dataformat::Format
+{
+    return m_swapchain_color_format;
+}
+
+auto Xr_session::get_swapchain_depth_stencil_format() const -> erhe::dataformat::Format
+{
+    return m_swapchain_depth_stencil_format;
+}
+
 auto Xr_session::get_xr_reference_space_local() const -> XrSpace
 {
     return m_xr_reference_space_local;

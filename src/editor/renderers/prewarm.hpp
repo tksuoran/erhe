@@ -16,11 +16,15 @@ class App_context;
 // run_startup_script() and the close+submit+wait_idle block. Calling
 // from elsewhere is safe but the savings only matter at first-frame.
 //
-// Today this covers the `standard` shader's variant cache. The shadow
+// Today this covers the `standard` shader's variant cache, the shadow
 // depth pass, material- and brush-preview pipelines, and the
-// Vulkan-backend pipeline-cache warmup
-// (Device::warmup_render_pipeline) are tracked as follow-ups in
-// quest_fixes.md E3 and doc/prewarm.md.
+// driver-level VkPipeline cache warmup for the OpenXR multiview color
+// pass (via Forward_renderer::Warmup_target). Single-view (desktop
+// mirror, main viewport offscreen) pipeline-cache warmup is still a
+// follow-up because the matching render passes are constructed lazily
+// on first rendergraph execute and do not exist at this insertion
+// point; the desktop path also lacks the 30 s OS interstitial pressure
+// that motivates the Quest warmup. See doc/prewarm.md.
 void prewarm_all(App_context& context);
 
 } // namespace editor
