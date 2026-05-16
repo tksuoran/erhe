@@ -8,7 +8,10 @@ namespace erhe::graphics {
 
 bool Scoped_debug_group_impl::s_enabled{false};
 
-Scoped_debug_group_impl::Scoped_debug_group_impl(erhe::utility::Debug_label debug_label)
+// Metal routes labels to the active MTL::RenderCommandEncoder via
+// Render_pass_impl::get_active_mtl_encoder(); the explicit cb argument
+// is not consulted (the encoder owns the cb).
+Scoped_debug_group_impl::Scoped_debug_group_impl(Command_buffer&, erhe::utility::Debug_label debug_label)
     : m_debug_label{std::move(debug_label)}
 {
     MTL::RenderCommandEncoder* encoder = Render_pass_impl::get_active_mtl_encoder();
@@ -19,14 +22,17 @@ Scoped_debug_group_impl::Scoped_debug_group_impl(erhe::utility::Debug_label debu
         );
         encoder->pushDebugGroup(label);
         label->release();
+        // Cache the encoder we pushed onto so the destructor pops on
+        // the same encoder even if Render_pass_impl::get_active_mtl_encoder
+        // returns a different one by then.
+        m_pushed_encoder = encoder;
     }
 }
 
 Scoped_debug_group_impl::~Scoped_debug_group_impl() noexcept
 {
-    MTL::RenderCommandEncoder* encoder = Render_pass_impl::get_active_mtl_encoder();
-    if (encoder != nullptr) {
-        encoder->popDebugGroup();
+    if (m_pushed_encoder != nullptr) {
+        m_pushed_encoder->popDebugGroup();
     }
 }
 

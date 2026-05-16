@@ -425,7 +425,7 @@ void Hotbar::init_radial_menu(erhe::scene_renderer::Mesh_memory& mesh_memory, Sc
         disc_geo_mesh_shared,
         erhe::primitive::Build_info{
             .primitive_types = { .fill_triangles = true },
-            .buffer_info     = mesh_memory.buffer_info
+            .buffer_info     = mesh_memory.make_primitive_buffer_info()
         },
         dummy
     );

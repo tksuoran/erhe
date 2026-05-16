@@ -15,22 +15,25 @@ endif ()
 erhe_target_sources_grouped(
     ${_target} TREE "${PROJECT_SOURCE_DIR}" FILES
 
+    config/editor/commands.json
+    config/editor/desktop_window_imgui_host_imgui.ini
+    config/editor/desktop_windows.json
+    config/editor/editor_settings.json
     config/editor/erhe_graphics.json
+    config/editor/graphics_presets.json
+    config/editor/logging.json
     config/editor/mesh_memory.json
+    config/editor/openxr_windows.json
     config/editor/renderer.json
     config/editor/text_renderer.json
-    config/editor/logging.json
-    config/editor/graphics_presets.json
-    config/editor/openxr_windows.json
-    config/editor/editor_settings.json
-    config/editor/desktop_windows.json
-    config/editor/desktop_window_imgui_host_imgui.ini
 
     res/editor/shaders/brdf_slice.frag
     res/editor/shaders/brdf_slice.vert
     res/editor/shaders/brush.frag
     res/editor/shaders/brush.vert
     res/editor/shaders/compose.frag
+    res/editor/shaders/depth_to_color.frag
+    res/editor/shaders/depth_to_color.vert
     res/editor/shaders/downsample.frag
     res/editor/shaders/downsample_lowpass.frag
     res/editor/shaders/downsample_x.frag
@@ -45,30 +48,21 @@ erhe_target_sources_grouped(
     res/editor/shaders/tool.frag
     res/editor/shaders/tool.vert
     res/editor/shaders/upsample.frag
-    res/editor/shaders/visualize_depth.frag
-    res/editor/shaders/visualize_depth.vert
 
-    res/shaders/anisotropic_engine_ready.frag
-    res/shaders/anisotropic_engine_ready.vert
-    res/shaders/anisotropic_slope.frag
-    res/shaders/anisotropic_slope.vert
-    res/shaders/circular_brushed_metal.frag
-    res/shaders/circular_brushed_metal.vert
     res/shaders/compute_before_line.comp
     res/shaders/compute_before_content_line.comp
-    res/shaders/depth_only.frag
-    res/shaders/depth_only.vert
     res/shaders/edge_lines.frag
     res/shaders/edge_lines.vert
     res/shaders/erhe_bxdf.glsl
+    res/shaders/erhe_camera_view.glsl
     res/shaders/erhe_ggx.glsl
     res/shaders/erhe_light.glsl
     res/shaders/erhe_math.glsl
     res/shaders/erhe_srgb.glsl
     res/shaders/erhe_texture.glsl
     res/shaders/erhe_tonemap.glsl
-    res/shaders/error.frag
-    res/shaders/error.vert
+    #res/shaders/error.frag
+    #res/shaders/error.vert
     res/shaders/id.frag
     res/shaders/id.vert
     res/shaders/line_after_compute.frag
@@ -76,12 +70,10 @@ erhe_target_sources_grouped(
     res/shaders/content_line_after_compute.frag
     res/shaders/debug_line.geom
     res/shaders/debug_line.vert
-    res/shaders/points.frag
-    res/shaders/points.vert
+    #res/shaders/points.frag
+    #res/shaders/points.vert
     res/shaders/standard.frag
     res/shaders/standard.vert
-    res/shaders/standard_debug.frag
-    res/shaders/standard_debug.vert
     res/shaders/text.frag
     res/shaders/text.vert
     res/shaders/textured.frag
@@ -127,6 +119,8 @@ erhe_target_sources_grouped(
     content_library/brdf_slice.hpp
     content_library/content_library.cpp
     content_library/content_library.hpp
+    content_library/content_library_window.cpp
+    content_library/content_library_window.hpp
     content_library/material_library.cpp
     content_library/material_library.hpp
     create/create.cpp
@@ -222,6 +216,8 @@ erhe_target_sources_grouped(
     main.cpp
     mcp/mcp_server.cpp
     mcp/mcp_server.hpp
+    operations/ambient_light_operation.cpp
+    operations/ambient_light_operation.hpp
     operations/compound_operation.cpp
     operations/compound_operation.hpp
     operations/geometry_operations.cpp
@@ -236,6 +232,10 @@ erhe_target_sources_grouped(
     operations/item_reposition_in_parent_operation.hpp
     operations/material_change_operation.cpp
     operations/material_change_operation.hpp
+    operations/scene_builder_floor_resources_operation.cpp
+    operations/scene_builder_floor_resources_operation.hpp
+    operations/scene_builder_viewport_resources_operation.cpp
+    operations/scene_builder_viewport_resources_operation.hpp
     operations/merge_operation.cpp
     operations/merge_operation.hpp
     operations/mesh_operation.cpp
@@ -278,6 +278,8 @@ erhe_target_sources_grouped(
     renderers/id_renderer.hpp
     renderers/light_mesh.cpp
     renderers/light_mesh.hpp
+    renderers/prewarm.cpp
+    renderers/prewarm.hpp
     renderers/programs.cpp
     renderers/programs.hpp
     renderers/render_context.cpp
@@ -306,6 +308,7 @@ erhe_target_sources_grouped(
     scene/node_raytrace.cpp
     scene/node_raytrace.hpp
     scene/node_raytrace_mask.hpp
+    scene/make_mesh_config.hpp
     scene/scene_builder.cpp
     scene/scene_builder.hpp
     scene/scene_commands.cpp
@@ -495,6 +498,7 @@ set(_config_out  "${CMAKE_CURRENT_BINARY_DIR}/config/generated")
 set(_gfx_config_defs "${CMAKE_SOURCE_DIR}/src/erhe/graphics/definitions")
 set(_renderer_defs   "${CMAKE_SOURCE_DIR}/src/erhe/renderer/definitions")
 set(_scene_renderer_defs "${CMAKE_SOURCE_DIR}/src/erhe/scene_renderer/definitions")
+set(_xr_config_defs "${CMAKE_SOURCE_DIR}/src/erhe/xr/definitions")
 
 erhe_codegen_generate(
     TARGET          ${_target}
@@ -504,13 +508,12 @@ erhe_codegen_generate(
         "${_gfx_config_defs}:erhe_graphics/generated/"
         "${_renderer_defs}:erhe_renderer/generated/"
         "${_scene_renderer_defs}:erhe_scene_renderer/generated/"
+        "${_xr_config_defs}:erhe_xr/generated/"
     DEFINITIONS
         "${_config_defs}/camera_controls_config.py"
         "${_config_defs}/developer_config.py"
         "${_config_defs}/editor_settings_config.py"
         "${_config_defs}/grid_config.py"
-        "${_config_defs}/headset_config.py"
-        "${_config_defs}/perf_settings_level.py"
         "${_config_defs}/hotbar_config.py"
         "${_config_defs}/inventory_config.py"
         "${_config_defs}/hud_config.py"
@@ -534,6 +537,10 @@ erhe_codegen_generate(
         "${_config_defs}/render_style_data.py"
         "${_config_defs}/debug_visualizations_config.py"
         "${_config_defs}/default_viewport_config.py"
+        "${_config_defs}/make_mesh_args.py"
+        "${_config_defs}/add_lights_args.py"
+        "${_config_defs}/add_room_args.py"
+        "${_config_defs}/add_cameras_args.py"
 )
 
 set(_config_sources
@@ -546,11 +553,6 @@ set(_config_sources
     ${_config_out}/grid_config.hpp
     ${_config_out}/grid_config_serialization.hpp
     ${_config_out}/grid_config.cpp
-    ${_config_out}/headset_config.hpp
-    ${_config_out}/headset_config_serialization.hpp
-    ${_config_out}/headset_config.cpp
-    ${_config_out}/perf_settings_level.hpp
-    ${_config_out}/perf_settings_level.cpp
     ${_config_out}/hotbar_config.hpp
     ${_config_out}/hotbar_config_serialization.hpp
     ${_config_out}/hotbar_config.cpp
@@ -623,6 +625,18 @@ set(_config_sources
     ${_config_out}/debug_visualizations_config.hpp
     ${_config_out}/debug_visualizations_config_serialization.hpp
     ${_config_out}/debug_visualizations_config.cpp
+    ${_config_out}/make_mesh_args.hpp
+    ${_config_out}/make_mesh_args_serialization.hpp
+    ${_config_out}/make_mesh_args.cpp
+    ${_config_out}/add_lights_args.hpp
+    ${_config_out}/add_lights_args_serialization.hpp
+    ${_config_out}/add_lights_args.cpp
+    ${_config_out}/add_room_args.hpp
+    ${_config_out}/add_room_args_serialization.hpp
+    ${_config_out}/add_room_args.cpp
+    ${_config_out}/add_cameras_args.hpp
+    ${_config_out}/add_cameras_args_serialization.hpp
+    ${_config_out}/add_cameras_args.cpp
     ${_config_out}/viewport_config.hpp
     ${_config_out}/viewport_config_serialization.hpp
     ${_config_out}/viewport_config.cpp
@@ -666,6 +680,16 @@ set_source_files_properties(${_scene_renderer_ser_sources} PROPERTIES GENERATED 
 target_sources(${_target} PRIVATE ${_scene_renderer_ser_sources})
 source_group("codegen generated/scene_renderer" FILES ${_scene_renderer_ser_sources})
 
+set(_xr_gen "${CMAKE_BINARY_DIR}/src/erhe/xr/erhe_xr/generated")
+set(_xr_ser_sources
+    ${_xr_gen}/headset_config_serialization.hpp
+    ${_xr_gen}/headset_config.cpp
+    ${_xr_gen}/perf_settings_level.cpp
+)
+set_source_files_properties(${_xr_ser_sources} PROPERTIES GENERATED TRUE)
+target_sources(${_target} PRIVATE ${_xr_ser_sources})
+source_group("codegen generated/xr" FILES ${_xr_ser_sources})
+
 target_link_libraries(
     ${_target}
     PRIVATE
@@ -682,7 +706,6 @@ target_link_libraries(
         erhe::gltf
         erhe::graph
         erhe::graphics
-        erhe::graphics_buffer_sink
         erhe::imgui
         erhe::log
         erhe::math
@@ -742,8 +765,12 @@ endif ()
 if (${ERHE_AUDIO_LIBRARY} STREQUAL "miniaudio")
     target_link_libraries(${_target} PRIVATE miniaudio)
 endif ()
+# erhe::xr is always linked because it owns Headset_config (used by editor
+# settings serialization regardless of XR backend). The OpenXR loader is only
+# linked when the OpenXR backend is enabled.
+target_link_libraries(${_target} PRIVATE erhe::xr)
 if (${ERHE_XR_LIBRARY} STREQUAL "openxr")
-    target_link_libraries(${_target} PRIVATE erhe_xr openxr_loader)
+    target_link_libraries(${_target} PRIVATE openxr_loader)
 endif ()
 target_include_directories(${_target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR} ${_codegen_out})
 
@@ -789,4 +816,8 @@ if (NOT ERHE_TARGET_OS_ANDROID)
     # MSVC only target_link_options(${_target} PRIVATE "/MAP:${CMAKE_CURRENT_SOURCE_DIR}/editor.map")
 
     erhe_target_settings(${_target} "erhe-executables")
+endif ()
+
+if (${ERHE_BUILD_TESTS})
+    add_subdirectory(mcp/test)
 endif ()

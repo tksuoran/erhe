@@ -25,6 +25,7 @@ namespace erhe::scene_renderer {
     class Forward_renderer;
     class Mesh_memory;
     class Shadow_renderer;
+    class Shader_variant_cache;
 }
 namespace erhe::commands { class Commands; }
 namespace erhe::window { class Context_window; }
@@ -129,12 +130,14 @@ public:
 #if defined(ERHE_PHYSICS_LIBRARY_JOLT)
     erhe::renderer::Jolt_debug_renderer*    jolt_debug_renderer   {nullptr};
 #endif
-    erhe::renderer::Debug_renderer*         debug_renderer        {nullptr};
-    erhe::renderer::Text_renderer*          text_renderer         {nullptr};
+    erhe::renderer::Debug_renderer*                   debug_renderer            {nullptr};
+    erhe::rendergraph::Rendergraph*                   rendergraph               {nullptr};
+    erhe::renderer::Text_renderer*                    text_renderer             {nullptr};
     erhe::scene_renderer::Content_wide_line_renderer* content_wide_line_renderer{nullptr};
-    erhe::rendergraph::Rendergraph*         rendergraph           {nullptr};
-    erhe::scene_renderer::Forward_renderer* forward_renderer      {nullptr};
-    erhe::scene_renderer::Shadow_renderer*  shadow_renderer       {nullptr};
+    erhe::scene_renderer::Forward_renderer*           forward_renderer          {nullptr};
+    erhe::scene_renderer::Shadow_renderer*            shadow_renderer           {nullptr};
+    erhe::scene_renderer::Shader_variant_cache*       shader_variant_cache      {nullptr};
+
     erhe::window::Context_window*           context_window        {nullptr};
     Brdf_slice*                             brdf_slice            {nullptr};
     Brush_tool*                             brush_tool            {nullptr};

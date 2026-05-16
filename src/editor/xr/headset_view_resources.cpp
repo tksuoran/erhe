@@ -41,18 +41,28 @@ Headset_view_resources::Headset_view_resources(
 
     m_color_texture         = render_view.color_texture;
     m_depth_stencil_texture = render_view.depth_stencil_texture;
-    ERHE_VERIFY(m_color_texture != nullptr);
 
-    const erhe::dataformat::Format color_format = m_color_texture->get_pixelformat();
-    if (color_format != render_view.color_format) {
-        log_xr->warn("swapchain color format = {}, expected format = {}", erhe::dataformat::c_str(color_format), erhe::dataformat::c_str(render_view.color_format));
-        render_view.color_format = color_format;
-    }
-    if (m_depth_stencil_texture != nullptr) {
-        const erhe::dataformat::Format depth_stencil_format = m_depth_stencil_texture->get_pixelformat();
-        if (depth_stencil_format != render_view.depth_stencil_format) {
-            log_xr->warn("swapchain depth format = {}, expected format = {}", erhe::dataformat::c_str(depth_stencil_format), erhe::dataformat::c_str(render_view.depth_stencil_format));
-            render_view.depth_stencil_format = depth_stencil_format;
+    // The multiview render path leaves per-view textures null because
+    // the OpenXR shared swapchain feeds Render_views_frame::shared_*_texture
+    // instead, and Headset_view builds its own multiview Render_pass over
+    // those layered targets. In that case skip the per-view render-pass
+    // construction below; only the Camera + Node members are useful to
+    // the multiview path. The per-eye fallback path always has a non-null
+    // color texture and continues to build its per-view Render_pass.
+    const bool has_per_view_color_texture = (m_color_texture != nullptr);
+
+    if (has_per_view_color_texture) {
+        const erhe::dataformat::Format color_format = m_color_texture->get_pixelformat();
+        if (color_format != render_view.color_format) {
+            log_xr->warn("swapchain color format = {}, expected format = {}", erhe::dataformat::c_str(color_format), erhe::dataformat::c_str(render_view.color_format));
+            render_view.color_format = color_format;
+        }
+        if (m_depth_stencil_texture != nullptr) {
+            const erhe::dataformat::Format depth_stencil_format = m_depth_stencil_texture->get_pixelformat();
+            if (depth_stencil_format != render_view.depth_stencil_format) {
+                log_xr->warn("swapchain depth format = {}, expected format = {}", erhe::dataformat::c_str(depth_stencil_format), erhe::dataformat::c_str(render_view.depth_stencil_format));
+                render_view.depth_stencil_format = depth_stencil_format;
+            }
         }
     }
 
@@ -92,7 +102,9 @@ Headset_view_resources::Headset_view_resources(
     render_pass_descriptor.render_target_width  = m_width;
     render_pass_descriptor.render_target_height = m_height;
     render_pass_descriptor.debug_label = erhe::utility::Debug_label{fmt::format("XR {}", slot)};
-    m_render_pass = std::make_shared<Render_pass>(graphics_device, render_pass_descriptor);
+    if (has_per_view_color_texture) {
+        m_render_pass = std::make_shared<Render_pass>(graphics_device, render_pass_descriptor);
+    }
 
     m_camera = std::make_shared<erhe::scene::Camera>(
         fmt::format("Headset Camera slot {}", slot)
@@ -110,6 +122,15 @@ Headset_view_resources::Headset_view_resources(
 
 auto Headset_view_resources::is_valid() const -> bool
 {
+    // m_is_valid flips true at the end of the ctor, after the Camera +
+    // Node members are constructed. Multiview leaves m_color_texture and
+    // m_render_pass null on purpose -- the shared OpenXR swapchain feeds
+    // Render_views_frame::shared_*_texture, and the multiview render
+    // pass is built per-frame in Headset_view::render_headset(). The
+    // multiview callback in Headset_view only reads Camera + Node from
+    // this object, so m_is_valid alone is the load-bearing post-condition
+    // for both paths; gating on the per-view texture / render pass
+    // permanently rejects every multiview frame.
     return m_is_valid;
 }
 

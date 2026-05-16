@@ -1,10 +1,11 @@
+#include "erhe_camera_view.glsl"
 layout(location = 0) out      vec2  v_texcoord;
 layout(location = 1) flat out uvec2 v_texture;
 
 void main()
 {
     mat4 world_from_node = primitive.primitives[ERHE_DRAW_ID].world_from_node;
-    mat4 clip_from_world = camera.cameras[0].clip_from_world;
+    mat4 clip_from_world = camera.cameras[c_view_index].clip_from_world;
     uint material_index  = primitive.primitives[ERHE_DRAW_ID].material_index;
 
     vec4 position = world_from_node * vec4(a_position, 1.0);

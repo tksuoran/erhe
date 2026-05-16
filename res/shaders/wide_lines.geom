@@ -1,3 +1,4 @@
+#include "erhe_camera_view.glsl"
 // uniform vec4 _viewport;
 // uniform vec2 _line_width;
 
@@ -84,14 +85,14 @@ void main(void)
         }
     }
 
-    vec2 vpSize         = camera.cameras[0].viewport.zw;
+    vec2 vpSize         = camera.cameras[c_view_index].viewport.zw;
 
     // Compute line axis and side vector in screen space
     vec2 startInNDC     = start.xy / start.w;       //  clip to NDC: homogenize and drop z
     vec2 endInNDC       = end.xy   / end.w;
     vec2 lineInNDC      = endInNDC - startInNDC;
-    vec2 startInScreen  = (0.5 * startInNDC + vec2(0.5)) * vpSize + camera.cameras[0].viewport.xy;
-    vec2 endInScreen    = (0.5 * endInNDC   + vec2(0.5)) * vpSize + camera.cameras[0].viewport.xy;
+    vec2 startInScreen  = (0.5 * startInNDC + vec2(0.5)) * vpSize + camera.cameras[c_view_index].viewport.xy;
+    vec2 endInScreen    = (0.5 * endInNDC   + vec2(0.5)) * vpSize + camera.cameras[c_view_index].viewport.xy;
     vec2 lineInScreen   = lineInNDC * vpSize;       //  NDC to window (direction vector)
     vec2 axisInScreen   = normalize(lineInScreen);
     vec2 sideInScreen   = vec2(-axisInScreen.y, axisInScreen.x);    // rotate

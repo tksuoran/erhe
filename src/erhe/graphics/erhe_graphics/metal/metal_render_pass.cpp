@@ -324,8 +324,9 @@ void Render_pass_impl::start_render_pass(Command_buffer& command_buffer, Render_
     }
 }
 
-void Render_pass_impl::end_render_pass(Render_pass* const render_pass_after)
+void Render_pass_impl::end_render_pass(Command_buffer& command_buffer, Render_pass* const render_pass_after)
 {
+    static_cast<void>(command_buffer);
     static_cast<void>(render_pass_after);
 
     if (m_mtl_encoder != nullptr) {

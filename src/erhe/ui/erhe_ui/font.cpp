@@ -472,6 +472,7 @@ void Font::post_process(erhe::graphics::Command_buffer& /*init_command_buffer*/)
 void Font::trace_info() const {}
 #endif
 
+#if defined(ERHE_FONT_RASTERIZATION_LIBRARY_FREETYPE) && defined(ERHE_TEXT_LAYOUT_LIBRARY_HARFBUZZ)
 void Font::post_process(erhe::graphics::Command_buffer& init_command_buffer)
 {
     ERHE_PROFILE_FUNCTION();
@@ -525,6 +526,7 @@ void Font::post_process(erhe::graphics::Command_buffer& init_command_buffer)
 
     buffer_range.release();
 }
+#endif
 
 // https://en.wikipedia.org/wiki/List_of_typographic_features
 

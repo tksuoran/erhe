@@ -1,12 +1,13 @@
 #pragma once
 
 #include "erhe_xr/xr_action.hpp"
+#include "erhe_xr/generated/headset_config.hpp"
 
 #if defined(ERHE_OS_WINDOWS)
 #   include <unknwn.h>
 #endif
 
-#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+#if defined(ERHE_GRAPHICS_API_VULKAN)
 # include "erhe_graphics/vulkan_external_creators.hpp"
 #endif
 
@@ -35,22 +36,6 @@ public:
     XrPath xr_path{XR_NULL_PATH};
 };
 
-class Xr_configuration
-{
-public:
-    bool swapchain_depth  {false};
-    bool debug            {false};
-    bool api_dump         {false};
-    bool validation       {false};
-    bool quad_view        {false};
-    bool depth            {false};
-    bool visibility_mask  {false};
-    bool hand_tracking    {false};
-    bool composition_alpha{false};
-    bool mirror_mode      {false};
-    bool passthrough_fb   {false};
-};
-
 enum class Message_severity : unsigned int {
     verbose = 0,
     info    = 1,
@@ -66,8 +51,8 @@ class Xr_instance
 {
 public:
     explicit Xr_instance(
-        const Xr_configuration& configuration,
-        Message_callback        message_callback
+        const Headset_config& configuration,
+        Message_callback      message_callback
     );
     ~Xr_instance  () noexcept;
     Xr_instance   (const Xr_instance&) = delete;
@@ -80,7 +65,7 @@ public:
     [[nodiscard]] auto get_xr_instance                () const -> XrInstance;
     [[nodiscard]] auto get_xr_system_id               () const -> XrSystemId;
 
-#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+#if defined(ERHE_GRAPHICS_API_VULKAN)
     // Build a Vulkan_external_creators struct whose hooks wrap the
     // XR_KHR_vulkan_enable2 entry points. The returned struct is meant to be
     // passed to erhe::graphics::Device so that instance / physical device /
@@ -93,7 +78,7 @@ public:
     [[nodiscard]] auto get_xr_environment_blend_mode  () const -> XrEnvironmentBlendMode;
     [[nodiscard]] auto update_actions                 (Xr_session& session) -> bool;
                   auto get_current_interaction_profile(Xr_session& session) -> bool;
-    [[nodiscard]] auto get_configuration              () const -> const Xr_configuration&;
+    [[nodiscard]] auto get_configuration              () const -> const Headset_config&;
 
     // XR_EXT_performance_settings: apply CPU/GPU performance level. Either
     // value may be XR_PERF_SETTINGS_LEVEL_*_EXT, or -1 to skip the call for
@@ -168,10 +153,10 @@ public:
 
     PFN_xrCreateDebugUtilsMessengerEXT     xrCreateDebugUtilsMessengerEXT    {nullptr};
     PFN_xrGetVisibilityMaskKHR             xrGetVisibilityMaskKHR            {nullptr};
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
     PFN_xrGetOpenGLGraphicsRequirementsKHR xrGetOpenGLGraphicsRequirementsKHR{nullptr};
 #endif
-#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+#if defined(ERHE_GRAPHICS_API_VULKAN)
     PFN_xrGetVulkanGraphicsRequirements2KHR xrGetVulkanGraphicsRequirements2KHR{nullptr};
     PFN_xrCreateVulkanInstanceKHR           xrCreateVulkanInstanceKHR          {nullptr};
     PFN_xrGetVulkanGraphicsDevice2KHR       xrGetVulkanGraphicsDevice2KHR      {nullptr};
@@ -237,7 +222,7 @@ private:
 
     void collect_bindings(const Xr_action& action);
 
-    Xr_configuration                     m_configuration;
+    Headset_config                       m_configuration;
 
     XrInstance                           m_xr_instance               {XR_NULL_HANDLE};
     XrSystemGetInfo                      m_xr_system_info;

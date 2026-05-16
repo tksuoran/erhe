@@ -55,7 +55,7 @@ class Context_window
 public:
     explicit Context_window(const Window_configuration& configuration);
 
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
     explicit Context_window(Context_window* share);
 #endif
     virtual ~Context_window() noexcept;
@@ -71,7 +71,7 @@ public:
 
     auto open                             (const Window_configuration& configuration) -> bool;
 
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
     void make_current                     () const;
     void clear_current                    () const;
     auto delay_before_swap                (float seconds) const -> bool;
@@ -117,7 +117,7 @@ public:
 #if defined(ERHE_OS_LINUX)
     [[nodiscard]] auto get_wl_display() const -> struct wl_display*;
 #endif
-#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+#if defined(ERHE_GRAPHICS_API_VULKAN)
     [[nodiscard]] auto get_required_vulkan_instance_extensions() -> const std::vector<std::string>&;
     [[nodiscard]] auto create_vulkan_surface(void* vulkan_instance) -> void*;
 #endif
@@ -130,7 +130,7 @@ public:
     [[nodiscard]] auto consume_swapchain_dirty() -> bool;
 
 private:
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
     void get_extensions();
 #endif
 
@@ -169,10 +169,10 @@ private:
     std::atomic<bool>          m_paused           {false};
     std::atomic<bool>          m_swapchain_dirty  {false};
 
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
     SDL_FunctionPointer m_NV_delay_before_swap{nullptr};
 #endif
-#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+#if defined(ERHE_GRAPHICS_API_VULKAN)
     std::vector<std::string> m_required_instance_extensions;
 #endif
 

@@ -333,14 +333,6 @@ void Paint_tool::paint_vertex(
 )
 {
     auto& mesh_memory = *m_context.mesh_memory;
-    const erhe::dataformat::Vertex_format&   vertex_format    = mesh_memory.buffer_info.vertex_format;
-    const erhe::dataformat::Attribute_stream attribute_stream = vertex_format.find_attribute(erhe::dataformat::Vertex_attribute_usage::color, 0);
-    if (attribute_stream.attribute == nullptr) {
-        return;
-    }
-
-    const std::size_t stream_index  = attribute_stream.stream - vertex_format.streams.data();
-    const std::size_t vertex_offset = vertex_id * attribute_stream.stream->stride + attribute_stream.attribute->offset;
 
     std::vector<std::uint8_t> buffer;
 
@@ -351,9 +343,25 @@ void Paint_tool::paint_vertex(
         return ;
     }
 
-    //  const std::shared_ptr<GEO::Mesh>& geo_mesh = primitive.render_shape->get_mesh();
-    const erhe::primitive::Buffer_mesh& buffer_mesh       = primitive.render_shape->get_renderable_mesh();
-    const std::size_t                   range_byte_offset = buffer_mesh.vertex_buffer_ranges.at(stream_index).byte_offset;
+    const erhe::primitive::Buffer_mesh&             buffer_mesh      = primitive.render_shape->get_renderable_mesh();
+    const erhe::scene_renderer::Vertex_input_entry& vertex_input     = mesh_memory.get_vertex_input(buffer_mesh.vertex_input_key);
+    const erhe::dataformat::Vertex_format&          vertex_format    = vertex_input.vertex_format;
+    const erhe::dataformat::Attribute_stream        attribute_stream = vertex_format.find_attribute(erhe::dataformat::Vertex_attribute_usage::color, 0);
+    if (attribute_stream.attribute == nullptr) {
+        return;
+    }
+
+    const std::size_t stream_index      = attribute_stream.stream - vertex_format.streams.data();
+    const std::size_t vertex_offset     = vertex_id * attribute_stream.stream->stride + attribute_stream.attribute->offset;
+    const std::size_t range_byte_offset = buffer_mesh.vertex_buffer_ranges.at(stream_index).byte_offset;
+    const erhe::primitive::Buffer_range stream_vertex_buffer_range = buffer_mesh.vertex_buffer_ranges.at(stream_index);
+    erhe::primitive::Buffer_range vertex_buffer_update_range{
+        .count        = 1,
+        .element_size = erhe::dataformat::get_format_size_bytes(attribute_stream.attribute->format),
+        .byte_offset  = range_byte_offset + vertex_offset,
+        .pool_id      = stream_vertex_buffer_range.pool_id,
+        .buffer_id    = stream_vertex_buffer_range.buffer_id
+    };
     if (attribute_stream.attribute->format == erhe::dataformat::Format::format_32_vec4_float) {
         buffer.resize(sizeof(float) * 4);
         auto* const ptr = reinterpret_cast<float*>(buffer.data());
@@ -361,9 +369,8 @@ void Paint_tool::paint_vertex(
         ptr[1] = color.y;
         ptr[2] = color.z;
         ptr[3] = color.w;
-        mesh_memory.buffer_transfer_queue.enqueue(
-            mesh_memory.get_vertex_buffer(stream_index),
-            range_byte_offset + vertex_offset,
+        mesh_memory.enqueue_vertex_data(
+            vertex_buffer_update_range,
             std::move(buffer)
         );
     } else if (attribute_stream.attribute->format == erhe::dataformat::Format::format_8_vec4_unorm) {
@@ -373,12 +380,14 @@ void Paint_tool::paint_vertex(
         ptr[1] = erhe::dataformat::float_to_unorm8(color.y);
         ptr[2] = erhe::dataformat::float_to_unorm8(color.z);
         ptr[3] = erhe::dataformat::float_to_unorm8(color.w);
-        mesh_memory.buffer_transfer_queue.enqueue(
-            mesh_memory.get_vertex_buffer(stream_index),
-            range_byte_offset + vertex_offset,
+        mesh_memory.enqueue_vertex_data(
+            vertex_buffer_update_range,
             std::move(buffer)
         );
     }
+    // TODO To flush here, we'd need a command buffer.
+    //      For now, we assume flush happens once per frame.
+    // mesh_memory.flush();
 }
 
 void Paint_tool::paint()

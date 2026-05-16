@@ -6,10 +6,12 @@ erhe_target_sources_grouped(
     ${_target} TREE "${PROJECT_SOURCE_DIR}" FILES
 
     config/example/erhe_graphics.json
+    config/example/logging.json
     config/example/mesh_memory.json
     config/example/window.json
 
     res/shaders/erhe_bxdf.glsl
+    res/shaders/erhe_camera_view.glsl
     res/shaders/erhe_ggx.glsl
     res/shaders/erhe_light.glsl
     res/shaders/erhe_math.glsl
@@ -56,7 +58,6 @@ target_link_libraries(
         erhe::file
         erhe::gltf
         erhe::graphics
-        erhe::graphics_buffer_sink
         erhe::log
         erhe::math
         erhe::primitive

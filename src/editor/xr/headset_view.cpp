@@ -1,8 +1,8 @@
 #include "xr/headset_view.hpp"
 
 #include "config/generated/editor_settings_config.hpp"
-#include "config/generated/headset_config.hpp"
-#include "config/generated/perf_settings_level.hpp"
+#include "erhe_xr/generated/headset_config.hpp"
+#include "erhe_xr/generated/perf_settings_level.hpp"
 #include "config/generated/viewport_config_data.hpp"
 #include "app_context.hpp"
 #include "erhe_imgui/windows/performance_window.hpp"
@@ -11,10 +11,14 @@
 #include "app_rendering.hpp"
 #include "app_scenes.hpp"
 #include "rendertarget_imgui_host.hpp"
+#include "erhe_scene_renderer/content_wide_line_renderer.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
+#include "renderers/composition_pass.hpp"
 #include "renderers/render_context.hpp"
+#include "renderers/render_style.hpp"
 #include "rendergraph/shadow_render_node.hpp"
 #include "scene/scene_root.hpp"
+#include "time.hpp"
 #include "tools/tools.hpp"
 #include "xr/controller_visualization.hpp"
 #include "xr/hand_tracker.hpp"
@@ -25,16 +29,21 @@
 #include "erhe_graphics/compute_command_encoder.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/render_pass.hpp"
+#include "erhe_graphics/scoped_debug_group.hpp"
 #include "erhe_graphics/texture.hpp"
 
 #include "erhe_profile/profile.hpp"
+#include "erhe_renderer/debug_renderer.hpp"
 #include "erhe_renderer/primitive_renderer.hpp"
+#include "erhe_renderer/view.hpp"
 #include "erhe_rendergraph/rendergraph.hpp"
 #include "erhe_scene/camera.hpp"
+#include "erhe_scene/mesh.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_xr/headset.hpp"
 #include "erhe_xr/xr_instance.hpp"
+#include "erhe_xr/xr_log.hpp"
 #include "erhe_xr/xr_session.hpp"
 
 #include <imgui/imgui.h>
@@ -144,6 +153,16 @@ Headset_view::Headset_view(
     if (headset == nullptr) {
         return;
     }
+
+    // Latch the multiview capability flag once at startup. Xr_session
+    // already considered the device cap, view count, and matching extents;
+    // we just thread it through to choose the render path each frame.
+    if (m_headset->get_xr_session() != nullptr) {
+        m_use_multiview = m_headset->get_xr_session()->is_multiview_enabled();
+        if (m_use_multiview) {
+            log_xr->info("Headset_view: multiview render path enabled");
+        }
+    }
     app_rendering.add(this);
 
     commands.register_command(&m_offset_x_command);
@@ -238,12 +257,20 @@ void Headset_view::imgui()
     }
 
     // Shader selection
+    //ImGui::Combo(
+    //    "Shader Debug",
+    //    reinterpret_cast<int*>(&m_shader_stages_variant),
+    //    c_shader_stages_variant_strings,
+    //    IM_ARRAYSIZE(c_shader_stages_variant_strings),
+    //    IM_ARRAYSIZE(c_shader_stages_variant_strings)
+    //);
+
     ImGui::Combo(
-        "Render Mode",
-        reinterpret_cast<int*>(&m_shader_stages_variant),
-        c_shader_stages_variant_strings,
-        IM_ARRAYSIZE(c_shader_stages_variant_strings),
-        IM_ARRAYSIZE(c_shader_stages_variant_strings)
+        "Shader Debug",
+        &m_selected_shader_debug,
+        erhe::scene_renderer::c_shader_debug_strings,
+        IM_ARRAYSIZE(erhe::scene_renderer::c_shader_debug_strings),
+        IM_ARRAYSIZE(erhe::scene_renderer::c_shader_debug_strings)
     );
 
     erhe::imgui::Imgui_host* imgui_host = get_imgui_host();
@@ -363,6 +390,26 @@ auto Headset_view::get_headset_view_resources(erhe::xr::Render_view& render_view
     return *i;
 }
 
+auto Headset_view::get_multiview_view_resources(erhe::xr::Render_view& render_view) -> std::shared_ptr<Headset_view_resources>
+{
+    ERHE_PROFILE_FUNCTION();
+
+    const std::size_t slot = static_cast<std::size_t>(render_view.slot);
+    if (m_multiview_view_resources.size() <= slot) {
+        m_multiview_view_resources.resize(slot + 1);
+    }
+    std::shared_ptr<Headset_view_resources>& entry = m_multiview_view_resources[slot];
+    if (!entry) {
+        entry = std::make_shared<Headset_view_resources>(
+            *m_context.graphics_device,
+            render_view,
+            *this,
+            slot
+        );
+    }
+    return entry;
+}
+
 static constexpr std::string_view c_id_headset_clear{"HS clear"};
 static constexpr std::string_view c_id_headset_render_content{"HS render content"};
 
@@ -435,6 +482,320 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
         m_request_renderdoc_capture = false;
     }
 
+    // Multiview render path. Acquires the shared layered swapchain,
+    // opens a single Render_pass with view_mask = (1 << view_count) -
+    // 1, builds per-view Camera_view_inputs, and drives composer.render
+    // once. The pipelines handed to Forward_renderer on this path must
+    // carry the multiview-compiled shader_stages so gl_ViewIndex
+    // resolves and each eye reads its own camera entry from
+    // cameras[gl_ViewIndex]. Content_wide_line_renderer and
+    // Debug_renderer feed the same multiview pass via per-view-strided
+    // compute (see doc/debug_renderer_multiview.md). Mirror mode and
+    // ID rendering are still skipped under multiview.
+    if (m_frame_timing.should_render && m_use_multiview) {
+        auto multiview_callback = [this](const erhe::xr::Render_views_frame& frame_in, erhe::graphics::Command_buffer& views_cb) -> bool {
+            erhe::graphics::Texture* color_texture         = frame_in.shared_color_texture;
+            erhe::graphics::Texture* depth_stencil_texture = frame_in.shared_depth_stencil_texture;
+            ERHE_VERIFY(color_texture != nullptr);
+
+            // Update each per-eye Headset_view_resources from the
+            // matching Render_view so the Camera nodes / projections
+            // are current. update() also writes back near/far_depth
+            // into the Render_view, which Xr_session reads for
+            // composition_layer_depth_infos. Cast away const on the
+            // frame views to allow the back-write -- the frame is
+            // owned by Xr_session and the callback is the documented
+            // place to update it.
+            erhe::xr::Render_views_frame& frame = const_cast<erhe::xr::Render_views_frame&>(frame_in);
+            std::vector<erhe::scene_renderer::Camera_view_input> view_inputs;
+            view_inputs.reserve(frame.views.size());
+            const erhe::math::Viewport viewport_xy{
+                .x      = 0,
+                .y      = 0,
+                .width  = static_cast<int>(frame.width),
+                .height = static_cast<int>(frame.height)
+            };
+            erhe::scene::Camera* primary_camera = nullptr;
+            for (erhe::xr::Render_view& render_view : frame.views) {
+                const std::shared_ptr<Headset_view_resources>& view_resources = get_multiview_view_resources(render_view);
+                if (!view_resources->is_valid()) {
+                    return false;
+                }
+                const erhe::scene::Projection::Fov_sides fov_sides{render_view.fov_left, render_view.fov_right, render_view.fov_up, render_view.fov_down};
+                view_resources->update(render_view, fov_sides);
+                erhe::scene::Camera* camera = view_resources->get_camera();
+                if (primary_camera == nullptr) {
+                    primary_camera = camera;
+                }
+                view_inputs.push_back(erhe::scene_renderer::Camera_view_input{
+                    .projection = camera->projection(),
+                    .node       = camera->get_node(),
+                    .viewport   = viewport_xy
+                });
+            }
+
+            // Update scene transforms once per frame (not per view).
+            std::shared_ptr<Scene_root> scene_root = get_scene_root();
+            ERHE_VERIFY(scene_root);
+            scene_root->get_scene().update_node_transforms();
+            m_app_context.tools->get_tool_scene_root()->get_hosted_scene()->update_node_transforms();
+            m_app_context.app_message_bus->hover_scene_view.send_message(Hover_scene_view_message{.scene_view = this});
+            m_app_context.app_message_bus->render_scene_view.send_message(Render_scene_view_message{.scene_view = this});
+
+            // Debug_renderer multi-camera setup (Phase 3 of the
+            // multiview port). Build one erhe::renderer::View per eye
+            // so Debug_renderer's compute can fan world-space line
+            // submissions out to a per-eye triangle slab and the
+            // multiview vertex shader can pick the right slab via
+            // gl_ViewIndex inside the multiview render pass below.
+            // Tool / Renderable submissions push lines via
+            // Primitive_renderer once -- the lines are world-space and
+            // identical across views.
+            std::vector<erhe::renderer::View> debug_views;
+            debug_views.reserve(view_inputs.size());
+            for (const erhe::scene_renderer::Camera_view_input& view_input : view_inputs) {
+                ERHE_VERIFY(view_input.projection != nullptr);
+                ERHE_VERIFY(view_input.node       != nullptr);
+                const erhe::scene::Transform clip_from_camera = view_input.projection->clip_from_node_transform(
+                    view_input.viewport, get_reverse_depth(), get_depth_range(), get_conventions()
+                );
+                const glm::mat4              clip_from_world = clip_from_camera.get_matrix() * view_input.node->node_from_world();
+                const glm::mat4              world_from_node = view_input.node->world_from_node();
+                const erhe::scene::Projection::Fov_sides fov  = view_input.projection->get_fov_sides(view_input.viewport);
+                debug_views.push_back(erhe::renderer::View{
+                    .clip_from_world = clip_from_world,
+                    .viewport        = glm::vec4{
+                        static_cast<float>(viewport_xy.x),
+                        static_cast<float>(viewport_xy.y),
+                        static_cast<float>(viewport_xy.width),
+                        static_cast<float>(viewport_xy.height)
+                    },
+                    .fov_sides = glm::vec4{fov.left, fov.right, fov.up, fov.down},
+                    .view_position_in_world = glm::vec4{world_from_node[3]}
+                });
+            }
+            m_app_context.debug_renderer->begin_frame(
+                viewport_xy,
+                std::span<const erhe::renderer::View>{debug_views},
+                get_conventions()
+            );
+
+            // Render_context shared by the wide-line feed (below) and the
+            // tool / renderable submission that follows. Encoder is
+            // nullptr at this point; the wide-line feed only needs
+            // viewport_config to resolve per-pass render styles, and the
+            // tool / renderable submission stage does not need the encoder
+            // for line accumulation. multiview_views is set so renderables
+            // that are multiview-aware (Forward_renderer's compositor
+            // path, Debug_renderer) pick the multiview shader stages.
+            Render_context cpu_render_context {
+                .command_buffer      = &views_cb,
+                .encoder             = nullptr,
+                .render_pass         = nullptr,
+                .app_context         = m_app_context,
+                .scene_view          = *this,
+                .viewport_config     = m_viewport_config,
+                .camera              = primary_camera,
+                .viewport_scene_view = nullptr,
+                .viewport            = viewport_xy,
+                .multiview_views     = std::span<const erhe::scene_renderer::Camera_view_input>{view_inputs}
+            };
+
+            // Content wide-line compute path. Mirror viewport_scene_view's
+            // setup but feed every view's clip_from_world to the renderer
+            // via Camera_view_inputs so the compute shader writes one
+            // triangle slab per eye to a single SSBO. The multiview
+            // vertex shader then picks the per-eye slab via gl_ViewIndex
+            // inside the layered render pass below.
+            erhe::scene_renderer::Content_wide_line_renderer* content_wide_line_renderer = m_app_context.content_wide_line_renderer;
+            const bool drive_wide_lines = (content_wide_line_renderer != nullptr) && content_wide_line_renderer->is_enabled();
+            if (drive_wide_lines) {
+                content_wide_line_renderer->begin_frame();
+
+                erhe::scene::Scene* hosted_scene = scene_root->get_hosted_scene();
+                if (hosted_scene != nullptr) {
+                    erhe::graphics::Scoped_debug_group content_wide_line_renderer_debug_group{
+                        views_cb,
+                        "content_wide_line_renderer (multiview)"
+                    };
+                    auto feed_pass = [&](const Composition_pass* pass) {
+                        if ((pass == nullptr) || !pass->use_content_wide_line_renderer || !pass->enabled) {
+                            return;
+                        }
+                        // Pass settings resolution mirrors Composition_pass /
+                        // viewport_scene_view: explicit primitive_settings wins,
+                        // otherwise derive from the render style. The default
+                        // Primitive_interface_settings::constant_color0 is white,
+                        // so omitting the get_render_style branch leaves render-
+                        // style-driven passes (opaque_edge_lines_*) rendering
+                        // white instead of the configured line color.
+                        erhe::scene_renderer::Primitive_interface_settings settings;
+                        if (pass->primitive_settings.has_value()) {
+                            settings = pass->primitive_settings.value();
+                        } else if (pass->get_render_style) {
+                            const Render_style_data& style = pass->get_render_style(cpu_render_context);
+                            settings = get_primitive_settings(style, pass->primitive_mode);
+                        }
+                        const glm::vec4 color      = settings.constant_color0;
+                        const float     line_width = settings.constant_size;
+                        const auto&     filter     = pass->filter;
+                        const uint32_t  group      = pass->content_wide_line_group;
+                        for (const auto layer_id : pass->mesh_layers) {
+                            const auto mesh_layer = hosted_scene->get_mesh_layer_by_id(layer_id);
+                            if (mesh_layer) {
+                                for (const auto& mesh : mesh_layer->meshes) {
+                                    if (filter(mesh->get_flag_bits())) {
+                                        content_wide_line_renderer->add_mesh(*mesh, color, line_width, group);
+                                    }
+                                }
+                            }
+                        }
+                    };
+                    // Selection outline gets the breathing animation
+                    // matching viewport_scene_view's feed loop so the
+                    // headset and desktop mirror render the same
+                    // pulsing colour / width. The outline pass uses
+                    // explicit primitive_settings, so we patch the
+                    // colour/width into the pass before feeding.
+                    if (m_app_context.app_rendering->selection_outline) {
+                        const int64_t   t0_ns         = m_app_context.time->get_host_system_time_ns();
+                        const double    t0            = static_cast<double>(t0_ns) / 1'000'000'000.0;
+                        const float     period        = 1.0f / m_viewport_config.selection_highlight_frequency;
+                        const float     t1            = static_cast<float>(::fmod(t0, period));
+                        const float     t2            = static_cast<float>(0.5f + (2.0f * std::abs(2.0f * (t1 / period - std::floor(t1 / period + 0.5f))) - 1.0f) * 0.5f);
+                        const glm::vec4 outline_color = glm::mix(m_viewport_config.selection_highlight_low, m_viewport_config.selection_highlight_high, t2);
+                        const float     outline_width = m_viewport_config.selection_highlight_width_low * (1.0f - t2) + m_viewport_config.selection_highlight_width_high * t2;
+                        m_app_context.app_rendering->selection_outline->primitive_settings = erhe::scene_renderer::Primitive_interface_settings{
+                            .color_source    = erhe::scene_renderer::Primitive_color_source::constant_color,
+                            .constant_color0 = outline_color,
+                            .size_source     = erhe::scene_renderer::Primitive_size_source::constant_size,
+                            .constant_size   = outline_width
+                        };
+                    }
+                    feed_pass(m_app_context.app_rendering->selection_outline.get());
+                    feed_pass(m_app_context.app_rendering->opaque_edge_lines_not_selected.get());
+                    feed_pass(m_app_context.app_rendering->opaque_edge_lines_selected.get());
+                    feed_pass(m_app_context.app_rendering->translucent_outline.get());
+                }
+            }
+
+            m_app_context.tools        ->render_viewport_tools(cpu_render_context);
+            m_app_context.app_rendering->render_viewport_renderables(cpu_render_context);
+
+            // Combined compute pass for both renderers. Either one (or
+            // both) may have queued work; the barrier below covers SSBO
+            // and vertex-attribute readers downstream regardless of
+            // which compute ran. Skipping when neither needs compute
+            // avoids a stray Compute_command_encoder + barrier on
+            // backends that gate compute.
+            const bool need_compute = drive_wide_lines || m_app_context.debug_renderer->use_compute();
+            if (need_compute) {
+                {
+                    erhe::graphics::Compute_command_encoder compute_encoder = m_app_context.graphics_device->make_compute_command_encoder(views_cb);
+                    if (drive_wide_lines) {
+                        content_wide_line_renderer->compute(
+                            compute_encoder,
+                            viewport_xy,
+                            nullptr,
+                            std::span<const erhe::scene_renderer::Camera_view_input>{view_inputs},
+                            get_reverse_depth(),
+                            get_depth_range(),
+                            get_conventions()
+                        );
+                    }
+                    // Debug_renderer::compute() early-returns when
+                    // use_compute is false, so calling it
+                    // unconditionally here is safe.
+                    m_app_context.debug_renderer->compute(compute_encoder);
+                }
+                // Compute -> vertex barrier. The single-view per-eye
+                // path reads the triangle buffer via the input
+                // assembler (vertex_attrib_array_barrier_bit). The
+                // multiview path's vertex shader reads it as a
+                // read-only SSBO instead (shader_storage_barrier_bit)
+                // so the multiview vertex stage can index the per-eye
+                // slab via gl_ViewIndex. Issue both bits because
+                // multiview content rendering, multiview Debug_renderer,
+                // and (single-view) tool / mirror dispatches share
+                // this command buffer.
+                // Must be emitted after the compute encoder scope ends;
+                // on Metal the cb cannot be split while a compute
+                // encoder is open.
+                views_cb.memory_barrier(
+                    erhe::graphics::Memory_barrier_mask::vertex_attrib_array_barrier_bit |
+                    erhe::graphics::Memory_barrier_mask::shader_storage_barrier_bit
+                );
+            }
+
+            erhe::graphics::Render_pass_descriptor render_pass_descriptor{};
+            render_pass_descriptor.color_attachments[0].texture       = color_texture;
+            render_pass_descriptor.color_attachments[0].load_action   = erhe::graphics::Load_action::Clear;
+            render_pass_descriptor.color_attachments[0].store_action  = erhe::graphics::Store_action::Store;
+            render_pass_descriptor.color_attachments[0].usage_before  = erhe::graphics::Image_usage_flag_bit_mask::color_attachment;
+            render_pass_descriptor.color_attachments[0].layout_before = erhe::graphics::Image_layout::color_attachment_optimal;
+            render_pass_descriptor.color_attachments[0].usage_after   = erhe::graphics::Image_usage_flag_bit_mask::color_attachment;
+            render_pass_descriptor.color_attachments[0].layout_after  = erhe::graphics::Image_layout::color_attachment_optimal;
+            render_pass_descriptor.color_attachments[0].clear_value   = {0.05, 0.10, 0.20, 1.0};
+            if (depth_stencil_texture != nullptr) {
+                render_pass_descriptor.depth_attachment.texture       = depth_stencil_texture;
+                render_pass_descriptor.depth_attachment.load_action   = erhe::graphics::Load_action::Clear;
+                render_pass_descriptor.depth_attachment.store_action  = erhe::graphics::Store_action::Store;
+                render_pass_descriptor.depth_attachment.usage_before  = erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment;
+                render_pass_descriptor.depth_attachment.layout_before = erhe::graphics::Image_layout::depth_stencil_attachment_optimal;
+                render_pass_descriptor.depth_attachment.usage_after   = erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment;
+                render_pass_descriptor.depth_attachment.layout_after  = erhe::graphics::Image_layout::depth_stencil_attachment_optimal;
+            }
+            render_pass_descriptor.render_target_width  = static_cast<int>(frame.width);
+            render_pass_descriptor.render_target_height = static_cast<int>(frame.height);
+            render_pass_descriptor.view_mask            = frame.view_mask;
+            render_pass_descriptor.debug_label          = erhe::utility::Debug_label{"XR multiview"};
+
+            erhe::graphics::Render_pass multiview_render_pass{*m_app_context.graphics_device, render_pass_descriptor};
+
+            {
+                erhe::graphics::Render_command_encoder encoder = m_app_context.graphics_device->make_render_command_encoder(views_cb);
+                erhe::graphics::Scoped_render_pass scoped_render_pass{multiview_render_pass, views_cb};
+
+                Render_context render_context {
+                    .command_buffer      = &views_cb,
+                    .encoder             = &encoder,
+                    .render_pass         = &multiview_render_pass,
+                    .app_context         = m_app_context,
+                    .scene_view          = *this,
+                    .viewport_config     = m_viewport_config,
+                    .camera              = primary_camera,
+                    .viewport_scene_view = nullptr,
+                    .viewport            = viewport_xy,
+                    .shader_debug        = static_cast<erhe::scene_renderer::Shader_debug>(m_selected_shader_debug),
+                    .multiview_views     = std::span<const erhe::scene_renderer::Camera_view_input>{view_inputs}
+                };
+                m_app_context.app_rendering->render_composer(render_context);
+
+                // Debug_renderer multiview render. Inside the multiview
+                // render pass so gl_ViewIndex resolves to the right
+                // layer for each draw fanned out by the compute stage
+                // above. multiview = true picks the multiview-compiled
+                // shader stages and the multiview bind group layout.
+                m_app_context.debug_renderer->render(
+                    encoder, multiview_render_pass, viewport_xy, /*multiview=*/true
+                );
+            }
+            if (drive_wide_lines) {
+                content_wide_line_renderer->end_frame();
+            }
+            m_app_context.debug_renderer->end_frame();
+            return true;
+        };
+        m_headset->render_multiview(command_buffer, multiview_callback);
+        ++m_frame_number;
+        if (m_renderdoc_capture_started) {
+            m_app_context.graphics_device->end_frame_capture();
+            m_renderdoc_capture_started = false;
+        }
+        m_headset->end_frame(m_frame_timing.should_render);
+        return true;
+    }
+
     if (m_frame_timing.should_render) {
         bool first_view = true;
         auto callback = [this, &first_view](erhe::xr::Render_view& render_view, erhe::graphics::Command_buffer& view_cb) -> bool {
@@ -505,15 +866,15 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
             };
 
             Render_context render_context {
-                .command_buffer         = &view_cb,
-                .encoder                = nullptr, // filled in later once we start render pass
-                .app_context            = m_context,
-                .scene_view             = *this,
-                .viewport_config        = m_viewport_config,
-                .camera                 = view_resources->get_camera(),
-                .viewport_scene_view    = nullptr,
-                .viewport               = viewport,
-                .override_shader_stages = nullptr
+                .command_buffer      = &view_cb,
+                .encoder             = nullptr, // filled in later once we start render pass
+                .app_context         = m_context,
+                .scene_view          = *this,
+                .viewport_config     = m_viewport_config,
+                .camera              = view_resources->get_camera(),
+                .viewport_scene_view = nullptr,
+                .viewport            = viewport,
+                .shader_debug        = static_cast<erhe::scene_renderer::Shader_debug>(m_selected_shader_debug),
             };
             m_context.debug_renderer->begin_frame(
                 render_context.viewport, *render_context.camera,
@@ -557,9 +918,6 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
 
                 // When in mirror mode, speed up rendering by only rendering first view
                 if (!m_context.OpenXR_mirror || first_view) {
-                    const erhe::graphics::Shader_stages* override_shader_stages = m_context.programs->get_variant_shader_stages(m_shader_stages_variant);
-                    render_context.override_shader_stages = override_shader_stages;
-
                     m_context.app_rendering ->render_composer(render_context);
                     m_context.debug_renderer->render(encoder, *render_pass, render_context.viewport);
                 }
@@ -624,7 +982,7 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
                 ///     dst_x0, dst_y0, dst_x1, dst_y1,
                 ///     gl::Clear_buffer_mask::color_buffer_bit, gl::Blit_framebuffer_filter::nearest
                 /// );
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
                 m_context_window.swap_buffers();
 #endif // TODO
             }

@@ -70,9 +70,9 @@ void Item_tree::set_hover_callback(std::function<void()> fun)
     m_hover_callback = fun;
 }
 
-void Item_tree::set_context_menu_callback(Context_menu_callback fun)
+void Item_tree::add_item_context_menu_callback(Context_menu_callback fun)
 {
-    m_context_menu_callback = fun;
+    m_item_context_menu_callbacks.push_back(std::move(fun));
 }
 
 void Item_tree::clear_selection()
@@ -785,8 +785,10 @@ void Item_tree::item_popup_menu(const std::shared_ptr<erhe::Item_base>& item)
     if (begin_popup_context_item) {
         bool close{false};
 
-        if (m_context_menu_callback) {
-            m_context_menu_callback(item, m_operations, close);
+        if (!m_item_context_menu_callbacks.empty()) {
+            for (const Context_menu_callback& cb : m_item_context_menu_callbacks) {
+                cb(item, m_operations, close);
+            }
             ImGui::Separator();
         }
 
@@ -947,8 +949,10 @@ void Item_tree::root_popup_menu()
     if (begin_popup_context_item) {
         bool close{false};
 
-        if (m_context_menu_callback) {
-            m_context_menu_callback(m_root, m_operations, close);
+        if (!m_item_context_menu_callbacks.empty()) {
+            for (const Context_menu_callback& cb : m_item_context_menu_callbacks) {
+                cb(m_root, m_operations, close);
+            }
             ImGui::Separator();
         }
 
@@ -1281,9 +1285,6 @@ void Item_tree::imgui_tree(float ui_scale)
         content_library->materials.make("Default");
         const bool enable_physics = m_context.app_settings->physics.static_enable;
         auto scene_root = std::make_shared<Scene_root>(
-            nullptr,
-            nullptr,
-            nullptr,
             nullptr,
             content_library,
             "new scene",

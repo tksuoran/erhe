@@ -192,7 +192,6 @@ private:
     erhe::graphics::Bind_group_layout                  m_bind_group_layout;
     erhe::graphics::Ring_buffer_client                 m_parameter_buffer_client;
     Offsets                                            m_offsets;
-    erhe::graphics::Vertex_input_state                 m_empty_vertex_input;
     std::filesystem::path                              m_shader_path;
     Shader_stages                                      m_shader_stages;
     Pipelines                                          m_pipelines;

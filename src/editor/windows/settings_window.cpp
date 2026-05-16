@@ -19,7 +19,7 @@
 #include "config/generated/camera_controls_config_serialization.hpp"
 #include "config/generated/developer_config_serialization.hpp"
 #include "config/generated/grid_config_serialization.hpp"
-#include "config/generated/headset_config_serialization.hpp"
+#include "erhe_xr/generated/headset_config_serialization.hpp"
 #include "config/generated/hotbar_config_serialization.hpp"
 #include "config/generated/hud_config_serialization.hpp"
 #include "config/generated/inventory_slot_serialization.hpp"

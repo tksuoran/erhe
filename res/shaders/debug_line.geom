@@ -1,3 +1,5 @@
+#include "erhe_camera_view.glsl"
+
 layout(lines) in;
 layout(triangle_strip, max_vertices = 4) out;
 
@@ -10,10 +12,10 @@ layout(location = 2) out vec4  v_start_end;
 
 float get_line_width(vec4 position, float thickness)
 {
-    float fov_left         = view.fov[0];
-    float fov_right        = view.fov[1];
+    float fov_left         = view.cameras[c_view_index].fov[0];
+    float fov_right        = view.cameras[c_view_index].fov[1];
     float fov_width        = fov_right - fov_left;
-    float viewport_width   = view.viewport[2];
+    float viewport_width   = view.cameras[c_view_index].viewport[2];
     float scaled_thickness = (thickness < 0.0)
         ? -thickness
         : max(thickness / position.w, 0.01);
@@ -88,7 +90,7 @@ void main(void)
     float width0     = get_line_width(v0_clipped, thickness0);
     float width1     = get_line_width(v1_clipped, thickness1);
 
-    vec2 vp_size      = view.viewport.zw;
+    vec2 vp_size      = view.cameras[c_view_index].viewport.zw;
     vec3 v0_ndc       = v0_clipped.xyz / v0_clipped.w;
     vec3 v1_ndc       = v1_clipped.xyz / v1_clipped.w;
     vec2 v0_screen    = screen_from_ndc(v0_ndc.xy, vp_size);

@@ -1120,7 +1120,7 @@ auto Context_window::get_hwnd() const -> HWND
 {
     return glfwGetWin32Window(m_glfw_window);
 }
-# if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+# if defined(ERHE_GRAPHICS_API_OPENGL)
 auto Context_window::get_hglrc() const -> HGLRC
 {
     return glfwGetWGLContext(m_glfw_window);

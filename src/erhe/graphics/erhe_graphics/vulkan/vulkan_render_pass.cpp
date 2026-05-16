@@ -324,6 +324,7 @@ Render_pass_impl::Render_pass_impl(Device& device, const Render_pass_descriptor&
     , m_stencil_attachment  {descriptor.stencil_attachment}
     , m_render_target_width {descriptor.render_target_width}
     , m_render_target_height{descriptor.render_target_height}
+    , m_view_mask            {descriptor.view_mask}
     , m_debug_label         {descriptor.debug_label}
     , m_debug_group_name    {fmt::format("Render pass: {}", descriptor.debug_label.string_view())}
 {
@@ -463,6 +464,11 @@ Render_pass_impl::Render_pass_impl(Device& device, const Render_pass_descriptor&
             m_clear_values.push_back(depth_clear);
         }
 
+        // Swapchain render passes do not support multiview: the swapchain
+        // image is a 2D color attachment, not an array. The OpenXR layered
+        // swapchain target uses the off-screen path below.
+        ERHE_VERIFY(m_view_mask == 0);
+
         const VkSubpassDescription2 subpass_description{
             .sType                   = VK_STRUCTURE_TYPE_SUBPASS_DESCRIPTION_2,
             .pNext                   = nullptr,
@@ -527,6 +533,24 @@ Render_pass_impl::Render_pass_impl(Device& device, const Render_pass_descriptor&
         // Color attachments (and resolve attachments)
         std::vector<VkAttachmentReference2> resolve_attachment_references;
         bool has_resolve = false;
+
+        // Number of layers to span in each attachment image view. Multiview
+        // requires the framebuffer's image views to cover every layer
+        // referenced by the subpass viewMask; the spec requires layerCount
+        // >= (highest set bit in viewMask) + 1. Single-view passes use a
+        // 1-layer view as before.
+        const uint32_t multiview_layer_count = [this]() -> uint32_t {
+            if (m_view_mask == 0) {
+                return 1;
+            }
+            uint32_t highest_set_bit = 0;
+            for (uint32_t b = 0; b < 32; ++b) {
+                if ((m_view_mask & (1u << b)) != 0u) {
+                    highest_set_bit = b;
+                }
+            }
+            return highest_set_bit + 1u;
+        }();
 
         for (std::size_t i = 0; i < m_color_attachments.size(); ++i) {
             const Render_pass_attachment_descriptor& att = m_color_attachments[i];
@@ -617,7 +641,7 @@ Render_pass_impl::Render_pass_impl(Device& device, const Render_pass_descriptor&
             VkImageView view = const_cast<Texture_impl&>(att.texture->get_impl()).get_vk_image_view(
                 VK_IMAGE_ASPECT_COLOR_BIT,
                 static_cast<uint32_t>(att.texture_layer),
-                1,
+                multiview_layer_count,
                 static_cast<uint32_t>(att.texture_level),
                 1
             );
@@ -667,7 +691,7 @@ Render_pass_impl::Render_pass_impl(Device& device, const Render_pass_descriptor&
                     .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT
                 });
                 VkImageView resolve_view = const_cast<Texture_impl&>(att.resolve_texture->get_impl()).get_vk_image_view(
-                    VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1
+                    VK_IMAGE_ASPECT_COLOR_BIT, 0, multiview_layer_count, 0, 1
                 );
                 image_views.push_back(resolve_view);
                 m_clear_values.push_back(VkClearValue{}); // resolve doesn't use clear
@@ -813,7 +837,7 @@ Render_pass_impl::Render_pass_impl(Device& device, const Render_pass_descriptor&
             VkImageView view = const_cast<Texture_impl&>(m_depth_attachment.texture->get_impl()).get_vk_image_view(
                 depth_aspect,
                 static_cast<uint32_t>(m_depth_attachment.texture_layer),
-                1,
+                multiview_layer_count,
                 static_cast<uint32_t>(m_depth_attachment.texture_level),
                 1
             );
@@ -879,7 +903,7 @@ Render_pass_impl::Render_pass_impl(Device& device, const Render_pass_descriptor&
                 stencil_resolve_mode_vk = stencil_resolves ? to_vk_resolve_mode(m_stencil_attachment.resolve_mode) : VK_RESOLVE_MODE_NONE;
 
                 VkImageView resolve_view = const_cast<Texture_impl&>(resolve_texture->get_impl()).get_vk_image_view(
-                    resolve_aspect, 0, 1, 0, 1
+                    resolve_aspect, 0, multiview_layer_count, 0, 1
                 );
                 image_views.push_back(resolve_view);
                 m_clear_values.push_back(VkClearValue{}); // resolve doesn't use clear
@@ -898,12 +922,15 @@ Render_pass_impl::Render_pass_impl(Device& device, const Render_pass_descriptor&
             .stencilResolveMode             = stencil_resolve_mode_vk,
             .pDepthStencilResolveAttachment = &depth_resolve_reference
         };
+        // VK_KHR_multiview viewMask. 0 = single-view (default). Non-zero
+        // requires the device feature multiview to have been enabled at
+        // VkDevice creation; verified upstream in Headset_view.
         const VkSubpassDescription2 subpass_description{
             .sType                   = VK_STRUCTURE_TYPE_SUBPASS_DESCRIPTION_2,
             .pNext                   = has_depth_resolve ? &depth_stencil_resolve_info : nullptr,
             .flags                   = 0,
             .pipelineBindPoint       = VK_PIPELINE_BIND_POINT_GRAPHICS,
-            .viewMask                = 0,
+            .viewMask                = m_view_mask,
             .inputAttachmentCount    = 0,
             .pInputAttachments       = nullptr,
             .colorAttachmentCount    = static_cast<uint32_t>(color_attachment_references.size()),
@@ -1350,8 +1377,10 @@ void Render_pass_impl::start_render_pass(Command_buffer& command_buffer, Render_
     }
 }
 
-void Render_pass_impl::end_render_pass(Render_pass* const render_pass_after)
+void Render_pass_impl::end_render_pass(Command_buffer& command_buffer, Render_pass* const render_pass_after)
 {
+    static_cast<void>(command_buffer);
+
 #ifndef NDEBUG
     // Debug-only consistency check: whenever the caller has declared a
     // successor render pass, any attachment texture that appears in both

@@ -194,10 +194,10 @@ void Rendering_test::make_minimal_compute_triangle()
     // depth_stencil state, mirroring the wl_ns / wl_st pair.
     m_minimal_pipeline_A_red = std::make_unique<Lazy_render_pipeline>(
         m_graphics_device,
-        Render_pipeline_create_info{
+        Base_render_pipeline_create_info{
             .debug_label    = erhe::utility::Debug_label{"Minimal pipeline A (stencil=off, red)"},
-            .shader_stages  = m_minimal_graphics_shader_stages_red.get(),
-            .vertex_input   = m_minimal_vertex_input.get(),
+            //.shader_stages  = m_minimal_graphics_shader_stages_red.get(),
+            //.vertex_input   = m_minimal_vertex_input.get(),
             .input_assembly = Input_assembly_state::triangle,
             .rasterization  = Rasterization_state::cull_mode_none,
             .depth_stencil  = {
@@ -221,10 +221,10 @@ void Rendering_test::make_minimal_compute_triangle()
     };
     m_minimal_pipeline_B_green = std::make_unique<Lazy_render_pipeline>(
         m_graphics_device,
-        Render_pipeline_create_info{
+        Base_render_pipeline_create_info{
             .debug_label    = erhe::utility::Debug_label{"Minimal pipeline B (stencil=on ne1, green)"},
-            .shader_stages  = m_minimal_graphics_shader_stages_green.get(),
-            .vertex_input   = m_minimal_vertex_input.get(),
+            //.shader_stages  = m_minimal_graphics_shader_stages_green.get(),
+            //.vertex_input   = m_minimal_vertex_input.get(),
             .input_assembly = Input_assembly_state::triangle,
             .rasterization  = Rasterization_state::cull_mode_none,
             .depth_stencil  = {
@@ -252,10 +252,10 @@ void Rendering_test::make_minimal_compute_triangle()
     };
     m_minimal_pipeline_C_stencil_always_blue = std::make_unique<Lazy_render_pipeline>(
         m_graphics_device,
-        Render_pipeline_create_info{
+        Base_render_pipeline_create_info{
             .debug_label    = erhe::utility::Debug_label{"Minimal pipeline C (stencil=on always, blue)"},
-            .shader_stages  = m_minimal_graphics_shader_stages_blue.get(),
-            .vertex_input   = m_minimal_vertex_input.get(),
+            //.shader_stages  = m_minimal_graphics_shader_stages_blue.get(),
+            //.vertex_input   = m_minimal_vertex_input.get(),
             .input_assembly = Input_assembly_state::triangle,
             .rasterization  = Rasterization_state::cull_mode_none,
             .depth_stencil  = {
@@ -288,10 +288,10 @@ void Rendering_test::make_minimal_compute_triangle()
     };
     m_minimal_pipeline_D_stencil_eq_1_yellow = std::make_unique<Lazy_render_pipeline>(
         m_graphics_device,
-        Render_pipeline_create_info{
+        Base_render_pipeline_create_info{
             .debug_label    = erhe::utility::Debug_label{"Minimal pipeline D (stencil=on eq1, yellow)"},
-            .shader_stages  = m_minimal_graphics_shader_stages_yellow.get(),
-            .vertex_input   = m_minimal_vertex_input.get(),
+            //.shader_stages  = m_minimal_graphics_shader_stages_yellow.get(),
+            //.vertex_input   = m_minimal_vertex_input.get(),
             .input_assembly = Input_assembly_state::triangle,
             .rasterization  = Rasterization_state::cull_mode_none,
             .depth_stencil  = {
@@ -378,7 +378,12 @@ void Rendering_test::draw_minimal_compute_triangle(
     }
     using namespace erhe::graphics;
 
-    Render_pipeline* render_pipeline = pipeline_state.get_pipeline_for(m_swapchain_render_pass->get_descriptor());
+    Render_pipeline* render_pipeline = pipeline_state.get_pipeline_for(
+        m_swapchain_render_pass->get_descriptor(),
+        nullptr,
+        nullptr,
+        nullptr
+    );
     if (render_pipeline == nullptr) {
         return;
     }

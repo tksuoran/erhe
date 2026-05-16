@@ -17,7 +17,7 @@ Texture_heap_impl::Texture_heap_impl(
 
 Texture_heap_impl::~Texture_heap_impl() noexcept = default;
 
-void Texture_heap_impl::reset_heap()
+void Texture_heap_impl::reset_heap(Command_buffer& /*command_buffer*/)
 {
     m_used_slot_count = 0;
 }
@@ -41,7 +41,7 @@ auto Texture_heap_impl::bind(Render_command_encoder& /*encoder*/) -> std::size_t
     return m_used_slot_count;
 }
 
-void Texture_heap_impl::unbind()
+void Texture_heap_impl::unbind(Command_buffer& /*command_buffer*/)
 {
 }
 

@@ -93,6 +93,20 @@ public:
 
     void open_new_viewport_scene_view_node();
 
+    // Tear-down API for Scene_builder_viewport_resources_operation::undo.
+    // Removes the viewport (and its matching post_processing_node, if
+    // any) from the tracked collections; once the caller releases its
+    // own shared_ptr the destructors fire and the rendergraph nodes
+    // unregister themselves. destroy_viewport_scene_view also clears
+    // any cached hover / last references that still point at the
+    // viewport so the dangling raw pointer in those weak_ptrs is
+    // cleaned up cleanly.
+    void destroy_viewport_scene_view(
+        const std::shared_ptr<Viewport_scene_view>&  viewport_scene_view,
+        const std::shared_ptr<Post_processing_node>& post_processing_node
+    );
+    void destroy_viewport_window(const std::shared_ptr<Viewport_window>& viewport_window);
+
     void erase(Viewport_scene_view* viewport_scene_view);
 
     auto open_new_viewport_scene_view(

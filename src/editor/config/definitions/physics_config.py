@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Physics_config",
-    version=2,
+    version=1,
     short_desc="Physics",
     long_desc="",
     developer=False,
@@ -29,7 +29,7 @@ struct("Physics_config",
         field(
             "debug_draw",
             Bool,
-            added_in=2,
+            added_in=1,
             default="false",
             short_desc="Debug Draw",
             long_desc="Enable physics debug visualization",

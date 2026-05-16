@@ -1,10 +1,10 @@
 # erhe_primitive -- Code Review
 
 ## Summary
-A large library responsible for converting geometry data (from `erhe::geometry`/Geogram meshes) into GPU-ready vertex/index buffers. It includes a primitive builder pipeline, buffer sink abstraction (GPU and CPU backends), material management integrated with the item system, and ray tracing geometry support. The architecture is well-structured with clear data flow, though the complexity of the builder pipeline makes it dense.
+A large library responsible for converting geometry data (from `erhe::geometry`/Geogram meshes) into GPU-ready vertex/index buffers. It includes a primitive builder pipeline, separate vertex/index buffer sink abstractions (GPU and CPU backends), material management integrated with the item system, and ray tracing geometry support. The architecture is well-structured with clear data flow, though the complexity of the builder pipeline makes it dense.
 
 ## Strengths
-- Clean `Buffer_sink` abstraction with GPU (`Graphics_buffer_sink`) and CPU (`Cpu_buffer_sink`) implementations, enabling both rendering and raytrace/physics use cases
+- Split `Vertex_buffer_sink` / `Index_buffer_sink` abstractions with CPU implementations (`Cpu_vertex_buffer_sink`, `Cpu_index_buffer_sink`) for raytrace/physics callers; the GPU-backed path is provided by `erhe::scene_renderer::Mesh_memory` which implements both interfaces directly
 - `Build_context` systematically handles all vertex attributes (position, normal, tangent, texcoord, joint data, etc.) with proper fallbacks for missing data
 - `Primitive` has a good separation between render shape and collision shape, allowing different geometry for each
 - `Buffer_mesh` compactly stores all buffer ranges and bounding volumes

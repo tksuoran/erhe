@@ -6,7 +6,7 @@
 
 #include "erhe_dataformat/dataformat_log.hpp"
 #include "erhe_file/file.hpp"
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
 # include "erhe_gl/gl_log.hpp"
 #endif
 #include "erhe_verify/verify.hpp"
@@ -18,6 +18,7 @@
 #include "erhe_codegen/config_io.hpp"
 #include "erhe_scene_renderer/generated/mesh_memory_config.hpp"
 #include "erhe_scene_renderer/generated/mesh_memory_config_serialization.hpp"
+#include "erhe_scene_renderer/mesh_memory.hpp"
 #include "erhe_graphics/buffer_transfer_queue.hpp"
 #include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/generated/graphics_config_serialization.hpp"
@@ -43,6 +44,8 @@
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "erhe_scene_renderer/program_interface.hpp"
 #include "erhe_scene_renderer/scene_renderer_log.hpp"
+#include "erhe_scene_renderer/shader_variant_cache.hpp"
+//#include "erhe_scene_renderer/standard_shader_variants.hpp"
 #include "erhe_ui/ui_log.hpp"
 //#include "erhe_verify/verify.hpp"
 #include "erhe_window/renderdoc_capture.hpp"
@@ -122,34 +125,21 @@ public:
         }()}
         , m_y_flip{m_graphics_device.get_info().coordinate_conventions.clip_space_y_flip == erhe::math::Clip_space_y_flip::enabled}
         , m_image_transfer   {m_graphics_device, m_init_command_buffer}
-        , m_vertex_format{
-            {
-                0,
-                {
-                    { erhe::dataformat::Format::format_32_vec3_float, erhe::dataformat::Vertex_attribute_usage::position, 0 },
-                }
-            },
-            {
-                1,
-                {
-                    { erhe::dataformat::Format::format_32_vec3_float, erhe::dataformat::Vertex_attribute_usage::normal,    0 },
-                    { erhe::dataformat::Format::format_32_vec4_float, erhe::dataformat::Vertex_attribute_usage::tangent,   0 },
-                    { erhe::dataformat::Format::format_32_vec2_float, erhe::dataformat::Vertex_attribute_usage::tex_coord, 0 },
-                    { erhe::dataformat::Format::format_32_vec4_float, erhe::dataformat::Vertex_attribute_usage::color,     0 },
-                }
-            }
+        , m_mesh_memory{
+            erhe::codegen::load_config<Mesh_memory_config>("config/example/mesh_memory.json"),
+            m_graphics_device
         }
-        , m_mesh_memory      {erhe::codegen::load_config<Mesh_memory_config>("config/example/mesh_memory.json"), m_graphics_device, m_vertex_format}
         , m_program_interface_config{
             .shader_paths = {
                 std::filesystem::path{"res"} / std::filesystem::path{"shaders"},
                 std::filesystem::path{"res"} / std::filesystem::path{"example"} / std::filesystem::path{"shaders"},
             },
         }
-        , m_program_interface{m_graphics_device, m_mesh_memory.vertex_format, m_program_interface_config}
-        , m_programs         {m_graphics_device, m_program_interface}
-        , m_forward_renderer {m_graphics_device, m_init_command_buffer, m_program_interface}
-        , m_scene            {"example scene", nullptr}
+        , m_program_interface   {m_graphics_device, m_mesh_memory, m_program_interface_config}
+        , m_shader_variant_cache{m_graphics_device, m_program_interface}
+        , m_programs            {m_graphics_device, m_shader_variant_cache}
+        , m_forward_renderer    {m_graphics_device, m_init_command_buffer, m_mesh_memory, m_program_interface, m_shader_variant_cache}
+        , m_scene               {"example scene", nullptr}
     {
         m_window.set_title(
             erhe::window::format_window_title("erhe example", m_graphics_device.get_info().api_info)
@@ -172,11 +162,7 @@ public:
         );
 
         // Convert triangle soup vertex and index data to GL buffers
-        erhe::primitive::Buffer_info buffer_info{
-            .index_type    = erhe::dataformat::Format::format_32_scalar_uint,
-            .vertex_format = m_mesh_memory.vertex_format,
-            .buffer_sink   = m_mesh_memory.graphics_buffer_sink
-        };
+        erhe::primitive::Buffer_info buffer_info = m_mesh_memory.make_primitive_buffer_info();
 
         for (const auto& node : m_gltf_data.nodes) {
             auto mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
@@ -191,7 +177,9 @@ public:
             }
         }
 
-        m_mesh_memory.buffer_transfer_queue.flush(m_init_command_buffer);
+        m_mesh_memory.flush(m_init_command_buffer);
+
+        make_render_pipelines();
 
         m_camera = make_camera("Camera", glm::vec3{0.0f, 0.0f, 10.0f}, glm::vec3{0.0f, 0.0f, -1.0f});
         m_light = make_point_light("Light",
@@ -206,7 +194,7 @@ public:
         m_last_window_width  = m_window.get_width();
         m_last_window_height = m_window.get_height();
 
-#if !defined(ERHE_GRAPHICS_LIBRARY_METAL)
+#if !defined(ERHE_GRAPHICS_API_METAL)
         m_window.register_redraw_callback(
             [this](){
                 if (!m_first_frame_rendered || m_in_tick.load()) {
@@ -223,8 +211,6 @@ public:
             }
         );
 #endif
-
-        make_render_pipeline_states();
 
         // Close the init-time command buffer opened in the member init
         // list, submit, and block until the GPU has consumed every
@@ -433,25 +419,23 @@ public:
 
         m_forward_renderer.render(
             erhe::scene_renderer::Forward_renderer::Render_parameters{
-                .render_encoder         = render_encoder,
-                .index_type             = erhe::dataformat::Format::format_32_scalar_uint,
-                .index_buffer           = &m_mesh_memory.index_buffer,
-                .vertex_buffer0         = &m_mesh_memory.vertex_buffer_position,
-                .vertex_buffer1         = &m_mesh_memory.vertex_buffer_non_position,
-                .ambient_light          = glm::vec3{0.1f, 0.1f, 0.1f},
-                .camera                 = m_camera.get(),
-                .light_projections      = &m_light_projections,
-                .lights                 = lights,
-                .skins                  = m_gltf_data.skins,
-                .materials              = m_gltf_data.materials,
-                .mesh_spans             = { meshes },
-                .render_pipeline_states = m_render_pipeline_states,
-                .primitive_mode         = erhe::primitive::Primitive_mode::polygon_fill,
-                .primitive_settings     = erhe::scene_renderer::Primitive_interface_settings{},
-                .viewport               = viewport,
-                .filter                 = erhe::Item_filter{},
-                .override_shader_stages = nullptr,
-                .debug_label            = "example main render"
+                .base = erhe::scene_renderer::Forward_renderer::Base_render_parameters{
+                    .render_encoder    = render_encoder,
+                    .render_pass       = m_render_pass.get(),
+                    .viewport          = viewport,
+                    .camera            = m_camera.get(),
+                    .ambient_light     = glm::vec3{0.1f, 0.1f, 0.1f},
+                    .light_projections = &m_light_projections,
+                    .lights            = lights,
+                    .skins             = m_gltf_data.skins,
+                    .materials         = m_gltf_data.materials,
+                    .debug_label       = "example main render"
+                },
+                .mesh_spans            = { meshes },
+                .base_render_pipelines = m_render_pipelines,
+                .primitive_mode        = erhe::primitive::Primitive_mode::polygon_fill,
+                .primitive_settings    = erhe::scene_renderer::Primitive_interface_settings{},
+                .filter                = erhe::Item_filter{},
             }
         );
     }
@@ -476,9 +460,9 @@ private:
         render_pass_descriptor.color_attachments[0].clear_value[2] = 0.02;
         render_pass_descriptor.color_attachments[0].clear_value[3] = 1.0;
         render_pass_descriptor.color_attachments[0].usage_before   = erhe::graphics::Image_usage_flag_bit_mask::present;
-        render_pass_descriptor.color_attachments[0].layout_before = erhe::graphics::Image_layout::present_src;
+        render_pass_descriptor.color_attachments[0].layout_before  = erhe::graphics::Image_layout::present_src;
         render_pass_descriptor.color_attachments[0].usage_after    = erhe::graphics::Image_usage_flag_bit_mask::present;
-        render_pass_descriptor.color_attachments[0].layout_after  = erhe::graphics::Image_layout::present_src;
+        render_pass_descriptor.color_attachments[0].layout_after   = erhe::graphics::Image_layout::present_src;
         render_pass_descriptor.depth_attachment    .load_action    = erhe::graphics::Load_action::Clear;
         render_pass_descriptor.depth_attachment    .clear_value[0] = 0.0; // reverse depth
         render_pass_descriptor.render_target_width  = width;
@@ -487,21 +471,19 @@ private:
         m_render_pass = std::make_unique<erhe::graphics::Render_pass>(m_graphics_device, render_pass_descriptor);
     }
 
-    void make_render_pipeline_states()
+    void make_render_pipelines()
     {
-        m_standard_render_pipeline_state = std::make_unique<erhe::graphics::Lazy_render_pipeline>(
+        m_render_pipeline = std::make_unique<erhe::graphics::Lazy_render_pipeline>(
             m_graphics_device,
-            erhe::graphics::Render_pipeline_create_info{
+            erhe::graphics::Base_render_pipeline_create_info{
                 .debug_label    = erhe::utility::Debug_label{"Example Render_pass"},
-                .shader_stages  = &m_programs.standard,
-                .vertex_input   = &m_mesh_memory.vertex_input,
                 .input_assembly = erhe::graphics::Input_assembly_state::triangle,
                 .rasterization  = erhe::graphics::Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
                 .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled(),
                 .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled
             }
         );
-        m_render_pipeline_states.push_back(m_standard_render_pipeline_state.get());
+        m_render_pipelines.push_back(m_render_pipeline.get());
     }
 
     auto make_camera(const std::string_view name, const glm::vec3 position, const glm::vec3 look_at) -> std::shared_ptr<erhe::scene::Camera>
@@ -594,16 +576,16 @@ private:
     erhe::graphics::Command_buffer&                m_init_command_buffer;
     bool                                           m_y_flip;
     erhe::gltf::Image_transfer                     m_image_transfer;
-    erhe::dataformat::Vertex_format                m_vertex_format;
     erhe::scene_renderer::Mesh_memory              m_mesh_memory;
     erhe::scene_renderer::Program_interface_config m_program_interface_config;
     erhe::scene_renderer::Program_interface        m_program_interface;
+    erhe::scene_renderer::Shader_variant_cache     m_shader_variant_cache;
     Programs                                       m_programs;
     erhe::scene_renderer::Forward_renderer         m_forward_renderer;
     std::unique_ptr<erhe::graphics::Render_pass>   m_render_pass;
 
-    std::vector<erhe::graphics::Lazy_render_pipeline*>    m_render_pipeline_states;
-    std::unique_ptr<erhe::graphics::Lazy_render_pipeline> m_standard_render_pipeline_state;
+    std::vector<erhe::graphics::Lazy_render_pipeline*>    m_render_pipelines;
+    std::unique_ptr<erhe::graphics::Lazy_render_pipeline> m_render_pipeline;
 
     erhe::scene_renderer::Light_projections m_light_projections;
 
@@ -643,7 +625,7 @@ void run_example()
     }
 
     example::initialize_logging();
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
     gl::initialize_logging();
 #endif
     erhe::dataformat::initialize_logging();

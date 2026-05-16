@@ -13,19 +13,19 @@ void Rendering_test::make_render_pipeline_states()
     const auto& c = m_graphics_device.get_info().coordinate_conventions;
     const bool  y_flip = (c.clip_space_y_flip == erhe::math::Clip_space_y_flip::enabled);
 
-    m_standard_render_pipeline_state = std::make_unique<erhe::graphics::Lazy_render_pipeline>(
+    m_standard_render_pipeline = std::make_unique<erhe::graphics::Lazy_render_pipeline>(
         m_graphics_device,
-        erhe::graphics::Render_pipeline_create_info{
+        erhe::graphics::Base_render_pipeline_create_info{
             .debug_label    = erhe::utility::Debug_label{"Standard"},
-            .shader_stages  = &m_programs.standard,
-            .vertex_input   = &m_mesh_memory.vertex_input,
+            //.shader_stages  = &m_programs.standard,
+            //.vertex_input   = &m_mesh_memory.vertex_input(),
             .input_assembly = erhe::graphics::Input_assembly_state::triangle,
             .rasterization  = erhe::graphics::Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(y_flip),
             .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled(),
             .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled
         }
     );
-    m_render_pipeline_states.push_back(m_standard_render_pipeline_state.get());
+    m_render_pipeline_states.push_back(m_standard_render_pipeline.get());
 }
 
 void Rendering_test::render_scene(
@@ -37,34 +37,33 @@ void Rendering_test::render_scene(
 )
 {
     render_encoder.set_viewport_rect(viewport.x, viewport.y, viewport.width, viewport.height);
-    render_encoder.set_scissor_rect(viewport.x, viewport.y, viewport.width, viewport.height);
+    render_encoder.set_scissor_rect (viewport.x, viewport.y, viewport.width, viewport.height);
 
     const auto& conventions = m_graphics_device.get_info().coordinate_conventions;
     m_forward_renderer->render(
         erhe::scene_renderer::Forward_renderer::Render_parameters{
-            .render_encoder         = render_encoder,
-            .index_type             = erhe::dataformat::Format::format_32_scalar_uint,
-            .index_buffer           = &m_mesh_memory.index_buffer,
-            .vertex_buffer0         = &m_mesh_memory.vertex_buffer_position,
-            .vertex_buffer1         = &m_mesh_memory.vertex_buffer_non_position,
-            .ambient_light          = glm::vec3{0.3f, 0.3f, 0.3f},
-            .camera                 = m_camera.get(),
-            .light_projections      = &m_light_projections,
-            .lights                 = lights,
-            .skins                  = {},
-            .materials              = m_materials,
-            .mesh_spans             = { meshes },
-            .render_pipeline_states = m_render_pipeline_states,
-            .render_pass            = active_render_pass,
-            .primitive_mode         = erhe::primitive::Primitive_mode::polygon_fill,
-            .primitive_settings     = erhe::scene_renderer::Primitive_interface_settings{},
-            .viewport               = viewport,
-            .filter                 = erhe::Item_filter{},
-            .override_shader_stages = nullptr,
-            .debug_label            = "rendering test render",
-            .reverse_depth          = true,
-            .depth_range            = conventions.native_depth_range,
-            .conventions            = conventions
+            .base = erhe::scene_renderer::Forward_renderer::Base_render_parameters{
+                .render_encoder    = render_encoder,
+                .render_pass       = active_render_pass,
+                .viewport          = viewport,
+                //.index_type        = erhe::dataformat::Format::format_32_scalar_uint,
+                .camera            = m_camera.get(),
+                .ambient_light     = glm::vec3{0.3f, 0.3f, 0.3f},
+                .light_projections = &m_light_projections,
+                .lights            = lights,
+                .skins             = {},
+                .materials         = m_materials,
+                .reverse_depth     = true,
+                .depth_range       = conventions.native_depth_range,
+                .conventions       = conventions,
+                .debug_label       = "rendering test render",
+            },
+            .mesh_spans            = { meshes },
+            .base_render_pipelines = m_render_pipeline_states,
+            .primitive_mode        = erhe::primitive::Primitive_mode::polygon_fill,
+            .primitive_settings    = erhe::scene_renderer::Primitive_interface_settings{},
+            .filter                = erhe::Item_filter{},
+            //.override_shader_stages = nullptr,
         }
     );
 }
@@ -80,7 +79,6 @@ void Rendering_test::make_content_wide_line_renderer()
     // those definitions. The renderer stays alive so the resources remain valid.
     m_content_wide_line_renderer = std::make_unique<erhe::scene_renderer::Content_wide_line_renderer>(
         m_graphics_device,
-        m_mesh_memory.edge_line_vertex_buffer,
         nullptr,
         nullptr
     );
@@ -93,7 +91,8 @@ void Rendering_test::make_content_wide_line_renderer()
             .name             = "compute_before_content_line",
             .struct_types     = {
                 m_content_wide_line_renderer->get_edge_line_vertex_struct(),
-                m_content_wide_line_renderer->get_triangle_vertex_struct()
+                m_content_wide_line_renderer->get_triangle_vertex_struct(),
+                m_content_wide_line_renderer->get_view_camera_struct()
             },
             .interface_blocks = {
                 m_content_wide_line_renderer->get_edge_line_vertex_buffer_block(),
@@ -149,12 +148,12 @@ void Rendering_test::make_content_wide_line_renderer()
         );
 
         // Create pipeline state for rendering compute output.
-        m_compute_edge_lines_pipeline_state = std::make_unique<erhe::graphics::Lazy_render_pipeline>(
+        m_compute_edge_lines_pipeline = std::make_unique<erhe::graphics::Lazy_render_pipeline>(
             m_graphics_device,
-            erhe::graphics::Render_pipeline_create_info{
+            erhe::graphics::Base_render_pipeline_create_info{
                 .debug_label    = erhe::utility::Debug_label{"Compute Edge Lines Pipeline"},
-                .shader_stages  = m_content_wide_line_renderer->get_graphics_shader_stages(),
-                .vertex_input   = m_content_wide_line_renderer->get_vertex_input(),
+                //.shader_stages  = m_content_wide_line_renderer->get_graphics_shader_stages(),
+                //.vertex_input   = m_content_wide_line_renderer->get_vertex_input(),
                 .input_assembly = erhe::graphics::Input_assembly_state::triangle,
                 .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
                 .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled(),

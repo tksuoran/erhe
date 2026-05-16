@@ -535,36 +535,140 @@ auto Shader_resource::get_binding_target() const-> Buffer_target
     }
 }
 
-auto Shader_resource::get_size_bytes() const -> std::size_t
+auto glsl_struct_base_alignment(
+    const std::size_t             member_max_alignment,
+    const Shader_resource::Layout layout
+) -> std::size_t
+{
+    // GLSL std140/std430 rule 9: a structure's base alignment is the
+    // largest base alignment of any of its members. Under std140 the
+    // result is rounded up to a multiple of vec4 (16); std430 omits
+    // this round-up.
+    if (layout == Shader_resource::Layout::std140) {
+        return std::max<std::size_t>(member_max_alignment, 16);
+    }
+    return std::max<std::size_t>(member_max_alignment, 1);
+}
+
+auto glsl_round_up_size(
+    const std::size_t raw_offset,
+    const std::size_t base_alignment
+) -> std::size_t
+{
+    ERHE_VERIFY(base_alignment > 0);
+    return ((raw_offset + base_alignment - 1) / base_alignment) * base_alignment;
+}
+
+auto Shader_resource::get_base_alignment(const Layout layout) const -> std::size_t
+{
+    switch (m_type) {
+        case Type::basic: {
+            if (m_basic_type == Glsl_type::unsigned_int64) {
+                return 8;
+            }
+            const Type_details td = get_type_details(m_basic_type);
+            if (td.is_sampler()) {
+                return 0; // opaque
+            }
+            // For vectors, component_count is the vector width. For
+            // matrices, component_count is the column count and
+            // basic_type is the column vector type -- which lands in
+            // the same buckets here (mat4 -> 4 -> 16, mat3 -> 3 -> 16,
+            // mat2 -> 2 -> 8). mat2 in std140 should be 16 (vec4
+            // round-up) per GLSL spec rule 5, but no add_mat2 helper
+            // exists in this code base, so the single mat2 outcome is
+            // moot today; leave the std140 round-up to be handled at
+            // the struct level via glsl_struct_base_alignment.
+            const std::size_t component_count = td.component_count;
+            if (component_count >= 3) {
+                return 16;
+            }
+            if (component_count == 2) {
+                return 8;
+            }
+            return 4;
+        }
+        case Type::struct_type:
+        case Type::uniform_block:
+        case Type::shader_storage_block:
+        case Type::samplers: {
+            return glsl_struct_base_alignment(m_member_max_alignment, layout);
+        }
+        case Type::struct_member: {
+            // Member base alignment = the alignment of its referenced
+            // type. For struct-typed members, defer to the struct type.
+            ERHE_VERIFY(m_struct_type != nullptr);
+            return m_struct_type->get_base_alignment(layout);
+        }
+        case Type::sampler:
+        default: {
+            return 1; // opaque / non-aligned
+        }
+    }
+}
+
+auto Shader_resource::get_block_layout() const -> Layout
+{
+    const Shader_resource* node = this;
+    while ((node != nullptr) && !is_block(node->m_type)) {
+        node = node->m_parent;
+    }
+    if (node == nullptr) {
+        return Layout::std140;
+    }
+    if (node->m_type == Type::uniform_block) {
+        return Layout::std140;
+    }
+    if (node->m_type == Type::shader_storage_block) {
+        // SSBOs use std430 at GLSL 4.30+, std140 fallback below that --
+        // mirrors the layout emitted by get_layout_string().
+        return (m_device.get_info().glsl_version >= 430)
+            ? Layout::std430
+            : Layout::std140;
+    }
+    return Layout::std140;
+}
+
+auto Shader_resource::get_size_bytes(const Layout layout) const -> std::size_t
 {
     if (m_type == Type::struct_type) {
-        // Assume all members have been added
-        return m_offset;
+        // GLSL std140/std430 rule 9: struct size is the offset past the
+        // last member, rounded up to the struct's base alignment.
+        const std::size_t base_alignment = get_base_alignment(layout);
+        return glsl_round_up_size(m_offset, base_alignment);
     }
 
     if (m_type == Type::struct_member) {
-        std::size_t struct_size = m_struct_type->get_size_bytes();
+        std::size_t struct_size = m_struct_type->get_size_bytes(layout);
         std::size_t array_multiplier{1};
         if (m_array_size.has_value() && (m_array_size.value() > 0)) {
             array_multiplier = m_array_size.value();
 
-            // arrays in uniform block are packed with std140
-            if ((m_parent != nullptr) && (m_parent->get_type() == Type::uniform_block)) {
+            // std140 rule 10: array of structs has element stride
+            // equal to the struct's base alignment rounded up to a
+            // multiple of vec4. The struct size returned above is
+            // already vec4-aligned under std140 (rule 9), so this
+            // loop is a no-op in std140. Kept for std140 SSBO arrays
+            // whose struct happens to have base alignment > 16 (e.g.
+            // a struct containing a dvec4 member -- not currently
+            // exercised in this code base).
+            if (layout == Layout::std140) {
                 while ((struct_size % 16) != 0) {
                     ++struct_size;
                 }
             }
         }
 
-        // An unsized trailing array (m_array_size == unsized_array == 0) falls
-        // through with array_multiplier == 1, contributing one element's worth
-        // to the parent block's size. This matches what SPIRV-Cross emits when
-        // translating a SPIR-V runtime array to MSL for a discrete SSBO
-        // binding: a fixed-size array of length 1. Metal validates argument
-        // buffer bindings as offset + sizeof(MSL_struct) <= MTLBuffer.length,
-        // so ring-buffer acquires that bind such an SSBO must request at
-        // least the block's reported size (via get_size_bytes() on the block)
-        // to guarantee that validation passes on MoltenVK.
+        // An unsized trailing array (m_array_size == unsized_array == 0)
+        // falls through with array_multiplier == 1, contributing one
+        // element's worth to the parent block's size. This matches what
+        // SPIRV-Cross emits when translating a SPIR-V runtime array to
+        // MSL for a discrete SSBO binding: a fixed-size array of length
+        // 1. Metal validates argument buffer bindings as offset +
+        // sizeof(MSL_struct) <= MTLBuffer.length, so ring-buffer
+        // acquires that bind such an SSBO must request at least the
+        // block's reported size (via get_size_bytes() on the block) to
+        // guarantee that validation passes on MoltenVK.
         return struct_size * array_multiplier;
     }
 
@@ -582,8 +686,10 @@ auto Shader_resource::get_size_bytes() const -> std::size_t
         if (m_array_size.has_value() && (m_array_size.value() > 0)) {
             array_multiplier = m_array_size.value();
 
-            // arrays in uniform block are packed with std140
-            if ((m_parent != nullptr) && (m_parent->get_type() == Type::uniform_block)) {
+            // std140 rule 4: array of scalars/vectors has element
+            // stride rounded up to a multiple of vec4. std430 omits
+            // the round-up.
+            if (layout == Layout::std140) {
                 while ((element_size % 16) != 0) {
                     ++element_size;
                 }
@@ -790,11 +896,19 @@ auto Shader_resource::add_struct(
 {
     ERHE_VERIFY(struct_type != nullptr);
     sanitize(array_size);
-    align_offset_to(4); // align by 4 bytes TODO do what spec says
+
+    // Align the embedded struct member to the struct type's GLSL base
+    // alignment under whichever layout the parent block declares (std140
+    // for UBOs / pre-4.30 SSBOs, std430 for >=4.30 SSBOs).
+    const Layout      layout    = get_block_layout();
+    const std::size_t alignment = struct_type->get_base_alignment(layout);
+    ERHE_VERIFY(alignment > 0);
+    align_offset_to(static_cast<unsigned int>(alignment));
+    m_member_max_alignment = std::max<std::size_t>(m_member_max_alignment, alignment);
     auto* const new_member = m_members.emplace_back(
         std::make_unique<Shader_resource>(m_device, name, struct_type, array_size, this)
     ).get();
-    m_offset += new_member->get_size_bytes();
+    m_offset += new_member->get_size_bytes(layout);
     return new_member;
 }
 
@@ -863,10 +977,11 @@ auto Shader_resource::add_float(const std::string_view name, const std::optional
     ERHE_VERIFY(is_aggregate(m_type));
     sanitize(array_size);
     align_offset_to(4); // align by 4 bytes
+    m_member_max_alignment = std::max<std::size_t>(m_member_max_alignment, 4);
     auto* const new_member = m_members.emplace_back(
         std::make_unique<Shader_resource>(m_device, name, Glsl_type::float_, array_size, this)
     ).get();
-    m_offset += new_member->get_size_bytes();
+    m_offset += new_member->get_size_bytes(get_block_layout());
     return new_member;
 }
 
@@ -875,10 +990,11 @@ auto Shader_resource::add_vec2(const std::string_view name, const std::optional<
     ERHE_VERIFY(is_aggregate(m_type));
     sanitize(array_size);
     align_offset_to(2 * 4); // align by 2 * 4 bytes
+    m_member_max_alignment = std::max<std::size_t>(m_member_max_alignment, 8);
     auto* const new_member = m_members.emplace_back(
         std::make_unique<Shader_resource>(m_device, name, Glsl_type::float_vec2, array_size, this)
     ).get();
-    m_offset += new_member->get_size_bytes();
+    m_offset += new_member->get_size_bytes(get_block_layout());
     return new_member;
 }
 
@@ -887,10 +1003,11 @@ auto Shader_resource::add_vec3(const std::string_view name, const std::optional<
     ERHE_VERIFY(is_aggregate(m_type));
     sanitize(array_size);
     align_offset_to(4 * 4); // align by 4 * 4 bytes
+    m_member_max_alignment = std::max<std::size_t>(m_member_max_alignment, 16);
     auto* const new_member = m_members.emplace_back(
         std::make_unique<Shader_resource>(m_device, name, Glsl_type::float_vec3, array_size, this)
     ).get();
-    m_offset += new_member->get_size_bytes();
+    m_offset += new_member->get_size_bytes(get_block_layout());
     return new_member;
 }
 
@@ -899,10 +1016,11 @@ auto Shader_resource::add_vec4(const std::string_view name, const std::optional<
     ERHE_VERIFY(is_aggregate(m_type));
     sanitize(array_size);
     align_offset_to(4 * 4); // align by 4 * 4 bytes
+    m_member_max_alignment = std::max<std::size_t>(m_member_max_alignment, 16);
     auto* const new_member = m_members.emplace_back(
         std::make_unique<Shader_resource>(m_device, name, Glsl_type::float_vec4, array_size, this)
     ).get();
-    m_offset += new_member->get_size_bytes();
+    m_offset += new_member->get_size_bytes(get_block_layout());
     return new_member;
 }
 
@@ -914,6 +1032,7 @@ auto Shader_resource::add_mat4(
     ERHE_VERIFY(is_aggregate(m_type));
     sanitize(array_size);
     align_offset_to(4 * 4); // align by 4 * 4 bytes
+    m_member_max_alignment = std::max<std::size_t>(m_member_max_alignment, 16);
     auto* const new_member = m_members.emplace_back(
         std::make_unique<Shader_resource>(
             m_device,
@@ -923,7 +1042,7 @@ auto Shader_resource::add_mat4(
             this
         )
     ).get();
-    m_offset += new_member->get_size_bytes();
+    m_offset += new_member->get_size_bytes(get_block_layout());
     return new_member;
 }
 
@@ -935,6 +1054,7 @@ auto Shader_resource::add_int(
     ERHE_VERIFY(is_aggregate(m_type));
     sanitize(array_size);
     align_offset_to(4); // align by 4 bytes
+    m_member_max_alignment = std::max<std::size_t>(m_member_max_alignment, 4);
     auto* const new_member = m_members.emplace_back(
         std::make_unique<Shader_resource>(
             m_device,
@@ -944,7 +1064,7 @@ auto Shader_resource::add_int(
             this
         )
     ).get();
-    m_offset += new_member->get_size_bytes();
+    m_offset += new_member->get_size_bytes(get_block_layout());
     return new_member;
 }
 
@@ -956,6 +1076,7 @@ auto Shader_resource::add_uint(
     ERHE_VERIFY(is_aggregate(m_type));
     sanitize(array_size);
     align_offset_to(4); // align by 4 bytes
+    m_member_max_alignment = std::max<std::size_t>(m_member_max_alignment, 4);
     auto* const new_member = m_members.emplace_back(
         std::make_unique<Shader_resource>(
             m_device,
@@ -965,7 +1086,7 @@ auto Shader_resource::add_uint(
             this
         )
     ).get();
-    m_offset += new_member->get_size_bytes();
+    m_offset += new_member->get_size_bytes(get_block_layout());
     return new_member;
 }
 
@@ -977,6 +1098,7 @@ auto Shader_resource::add_uvec2(
     ERHE_VERIFY(is_aggregate(m_type));
     sanitize(array_size);
     align_offset_to(2 * 4); // align by 2 * 4 bytes
+    m_member_max_alignment = std::max<std::size_t>(m_member_max_alignment, 8);
     auto* const new_member = m_members.emplace_back(
         std::make_unique<Shader_resource>(
             m_device,
@@ -986,7 +1108,7 @@ auto Shader_resource::add_uvec2(
             this
         )
     ).get();
-    m_offset += new_member->get_size_bytes();
+    m_offset += new_member->get_size_bytes(get_block_layout());
     return new_member;
 }
 
@@ -998,6 +1120,7 @@ auto Shader_resource::add_uvec3(
     ERHE_VERIFY(is_aggregate(m_type));
     sanitize(array_size);
     align_offset_to(4 * 4); // align by 4 * 4 bytes
+    m_member_max_alignment = std::max<std::size_t>(m_member_max_alignment, 16);
     auto* const new_member = m_members.emplace_back(
         std::make_unique<Shader_resource>(
             m_device,
@@ -1007,7 +1130,7 @@ auto Shader_resource::add_uvec3(
             this
         )
     ).get();
-    m_offset += new_member->get_size_bytes();
+    m_offset += new_member->get_size_bytes(get_block_layout());
     return new_member;
 }
 
@@ -1019,6 +1142,7 @@ auto Shader_resource::add_uvec4(
     ERHE_VERIFY(is_aggregate(m_type));
     sanitize(array_size);
     align_offset_to(4 * 4); // align by 4 * 4 bytes
+    m_member_max_alignment = std::max<std::size_t>(m_member_max_alignment, 16);
     auto* const new_member = m_members.emplace_back(
         std::make_unique<Shader_resource>(
             m_device,
@@ -1028,7 +1152,7 @@ auto Shader_resource::add_uvec4(
             this
         )
     ).get();
-    m_offset += new_member->get_size_bytes();
+    m_offset += new_member->get_size_bytes(get_block_layout());
     return new_member;
 }
 
@@ -1040,6 +1164,7 @@ auto Shader_resource::add_uint64(
     ERHE_VERIFY(is_aggregate(m_type));
     sanitize(array_size);
     align_offset_to(8); // align by 8 bytes
+    m_member_max_alignment = std::max<std::size_t>(m_member_max_alignment, 8);
     auto* const new_member = m_members.emplace_back(
         std::make_unique<Shader_resource>(
             m_device,
@@ -1049,7 +1174,7 @@ auto Shader_resource::add_uint64(
             this
         )
     ).get();
-    m_offset += new_member->get_size_bytes();
+    m_offset += new_member->get_size_bytes(get_block_layout());
     return new_member;
 }
 

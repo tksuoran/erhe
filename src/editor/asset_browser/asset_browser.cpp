@@ -6,6 +6,7 @@
 #include "app_message_bus.hpp"
 #include "app_settings.hpp"
 #include "content_library/content_library.hpp"
+#include "content_library/content_library_window.hpp"
 #include "editor_log.hpp"
 #include "operations/operation.hpp"
 #include "operations/operation_stack.hpp"
@@ -18,11 +19,11 @@
 
 #include "erhe_file/file.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_primitive/build_info.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_profile/profile.hpp"
 
 #include <imgui/imgui.h>
-#include <imgui/imgui_internal.h>
 
 namespace editor {
 
@@ -36,9 +37,10 @@ public:
     void undo   (App_context& context) override;
 
 private:
-    std::filesystem::path            m_path;
-    std::shared_ptr<Scene_root>      m_scene_root;
-    std::shared_ptr<Content_library> m_content_library;
+    std::filesystem::path                  m_path;
+    std::shared_ptr<Scene_root>            m_scene_root;
+    std::shared_ptr<Content_library>       m_content_library;
+    std::shared_ptr<Content_library_window> m_content_library_window;
 };
 
 Scene_open_operation::Scene_open_operation(const std::filesystem::path& path)
@@ -53,29 +55,43 @@ void Scene_open_operation::execute(App_context& context)
 {
     ERHE_PROFILE_FUNCTION();
 
-    if (!m_scene_root) {
+    const bool first_time = !m_scene_root;
+    if (first_time) {
         m_content_library = std::make_shared<Content_library>();
 
         const bool enable_physics = context.app_settings->physics.static_enable;
         m_scene_root = std::make_shared<Scene_root>(
-            context.imgui_renderer,
-            context.imgui_windows,
-            &context,
             context.app_message_bus,
             m_content_library,
             erhe::file::to_string(m_path.filename()),
             enable_physics
         );
-        m_scene_root->register_to_editor_scenes(*context.app_scenes);
+    }
+    m_scene_root->register_to_editor_scenes(*context.app_scenes);
 
-        auto browser_window = m_scene_root->make_browser_window(
-            *context.imgui_renderer,
-            *context.imgui_windows,
-            context,
-            *context.app_settings
-        );
-        browser_window->show_window();
+    // Re-create the per-window UI state every time the operation
+    // executes (initial run + redo). undo() drops these explicitly,
+    // so without the reset here a redo would leak the prior
+    // Content_library_window. The shared_ptr resets are defensive on
+    // the first-time path too -- they're already null then.
+    m_content_library_window.reset();
+    m_content_library_window = std::make_shared<Content_library_window>(
+        *context.imgui_renderer,
+        *context.imgui_windows,
+        context,
+        m_content_library,
+        m_scene_root->get_name()
+    );
 
+    auto browser_window = m_scene_root->make_browser_window(
+        *context.imgui_renderer,
+        *context.imgui_windows,
+        context,
+        *context.app_settings
+    );
+    browser_window->show_window();
+
+    if (first_time) {
         import_gltf(
             context,
             erhe::primitive::Build_info{
@@ -85,14 +101,11 @@ void Scene_open_operation::execute(App_context& context)
                     .corner_points   = true,
                     .centroid_points = true
                 },
-                .buffer_info = context.mesh_memory->buffer_info
+                .buffer_info = context.mesh_memory->make_primitive_buffer_info()
             },
             *m_scene_root.get(),
             m_path
         );
-    } else {
-        // Re-register
-        m_scene_root->register_to_editor_scenes(*context.app_scenes);
     }
 
     context.app_message_bus->open_scene.send_message(
@@ -107,6 +120,11 @@ void Scene_open_operation::undo(App_context& context)
     ERHE_VERIFY(m_scene_root);
     m_scene_root->unregister_from_editor_scenes(*context.app_scenes);
     m_scene_root->remove_browser_window();
+    // Drop the Content_library_window we created in execute(). Without
+    // this, redo() re-allocates a fresh window while the previous one
+    // still holds an imgui-windows registration, leaking ImGui state
+    // and producing a duplicate "Content Library - ..." entry.
+    m_content_library_window.reset();
 }
 
 //
@@ -220,6 +238,27 @@ Asset_browser::Asset_browser(erhe::imgui::Imgui_renderer& imgui_renderer, erhe::
             return item_callback(item);
         }
     );
+    m_node_tree_window->add_item_context_menu_callback(
+        [this](
+            const std::shared_ptr<erhe::Item_base>& item,
+            std::vector<std::function<void()>>&     /*deferred_operations*/,
+            bool&                                   close
+        ) {
+            const std::shared_ptr<Asset_file_geogram> geogram = std::dynamic_pointer_cast<Asset_file_geogram>(item);
+            if (geogram) {
+                if (try_import(geogram)) {
+                    close = true;
+                }
+                return;
+            }
+            const std::shared_ptr<Asset_file_gltf> gltf = std::dynamic_pointer_cast<Asset_file_gltf>(item);
+            if (gltf) {
+                if (try_import(gltf) || try_open(gltf)) {
+                    close = true;
+                }
+            }
+        }
+    );
     scan();
 }
 
@@ -291,12 +330,11 @@ auto Asset_browser::try_import(const std::shared_ptr<Asset_file_gltf>& gltf) -> 
                     .corner_points   = true,
                     .centroid_points = true
                 },
-                .buffer_info = m_context.mesh_memory->buffer_info
+                .buffer_info = m_context.mesh_memory->make_primitive_buffer_info()
             },
             *m_context.scene_builder->get_scene_root().get(),
             *gltf->get_source_path()
         );
-        ImGui::CloseCurrentPopup();
         return true;
     }
     return false;
@@ -314,12 +352,11 @@ auto Asset_browser::try_import(const std::shared_ptr<Asset_file_geogram>& geogra
                     .corner_points   = true,
                     .centroid_points = true
                 },
-                .buffer_info = m_context.mesh_memory->buffer_info
+                .buffer_info = m_context.mesh_memory->make_primitive_buffer_info()
             },
             *m_context.scene_builder->get_scene_root().get(),
             *geogram->get_source_path()
         );
-        ImGui::CloseCurrentPopup();
         return true;
     }
     return false;
@@ -329,13 +366,9 @@ auto Asset_browser::try_open(const std::shared_ptr<Asset_file_gltf>& gltf) -> bo
 {
     std::string open_label = fmt::format("Open '{}'", erhe::file::to_string(*gltf->get_source_path()));
     if (ImGui::MenuItem(open_label.c_str())) {
-        //////
         m_context.operation_stack->queue(
             std::make_shared<Scene_open_operation>(*gltf->get_source_path())
         );
-
-        m_popup_node = nullptr;
-        ImGui::CloseCurrentPopup();
         return true;
     }
     return false;
@@ -343,90 +376,21 @@ auto Asset_browser::try_open(const std::shared_ptr<Asset_file_gltf>& gltf) -> bo
 
 auto Asset_browser::item_callback(const std::shared_ptr<erhe::Item_base>& item) -> bool
 {
-    const auto geogram = std::dynamic_pointer_cast<Asset_file_geogram>(item);
-    if (geogram) {
-        const ImGuiID popup_id{ImGui::GetID("asset_browser_node_popup")};
-
-        if (
-            ImGui::IsMouseReleased(ImGuiMouseButton_Right) &&
-            ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup) &&
-            m_popup_node == nullptr
-        ) {
-            m_popup_node = geogram.get();
-            ImGui::OpenPopupEx(popup_id, ImGuiPopupFlags_MouseButtonRight);
-        }
-
-        if (m_popup_node == geogram.get()) {
-            ERHE_PROFILE_SCOPE("popup");
-            if (ImGui::IsPopupOpen(popup_id, ImGuiPopupFlags_None)) {
-                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{10.0f, 10.0f});
-                const bool begin_popup_context_item = ImGui::BeginPopupEx(
-                    popup_id,
-                    ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoSavedSettings
-                );
-                if (begin_popup_context_item) {
-                    if (try_import(geogram)) {
-                        m_popup_node = nullptr;
-                    }
-
-                    ImGui::EndPopup();
-                }
-                ImGui::PopStyleVar();
-            } else {
-                m_popup_node = nullptr;
-            }
-        }
+    const std::shared_ptr<Asset_file_gltf> gltf = std::dynamic_pointer_cast<Asset_file_gltf>(item);
+    if (!gltf) {
         return false;
     }
-
-    const auto gltf = std::dynamic_pointer_cast<Asset_file_gltf>(item);
-    if (gltf) {
-        if (!gltf->is_scanned) {
-            gltf->contents = scan_gltf(*gltf->get_source_path());
-            gltf->is_scanned = true;
-        }
-
-        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup)) {
-            ImGui::BeginTooltip();
-            for (const auto& line : gltf->contents) {
-                ImGui::TextUnformatted(line.c_str());
-            }
-            ImGui::EndTooltip();
-        }
-
-        const ImGuiID popup_id{ImGui::GetID("asset_browser_node_popup")};
-
-        if (
-            ImGui::IsMouseReleased(ImGuiMouseButton_Right) &&
-            ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup) &&
-            m_popup_node == nullptr
-        ) {
-            m_popup_node = gltf.get();
-            ImGui::OpenPopupEx(popup_id, ImGuiPopupFlags_MouseButtonRight);
-        }
-
-        if (m_popup_node == gltf.get()) {
-            ERHE_PROFILE_SCOPE("popup");
-            if (ImGui::IsPopupOpen(popup_id, ImGuiPopupFlags_None)) {
-                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{10.0f, 10.0f});
-                const bool begin_popup_context_item = ImGui::BeginPopupEx(
-                    popup_id,
-                    ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoSavedSettings
-                );
-                if (begin_popup_context_item) {
-                    if (try_import(gltf) || try_open(gltf)) {
-                        m_popup_node = nullptr;
-                    }
-
-                    ImGui::EndPopup();
-                }
-                ImGui::PopStyleVar();
-            } else {
-                m_popup_node = nullptr;
-            }
-        }
+    if (!gltf->is_scanned) {
+        gltf->contents   = scan_gltf(*gltf->get_source_path());
+        gltf->is_scanned = true;
     }
-
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup)) {
+        ImGui::BeginTooltip();
+        for (const std::string& line : gltf->contents) {
+            ImGui::TextUnformatted(line.c_str());
+        }
+        ImGui::EndTooltip();
+    }
     return false;
 }
 

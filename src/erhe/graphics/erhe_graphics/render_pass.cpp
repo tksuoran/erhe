@@ -1,21 +1,22 @@
 #include "erhe_graphics/render_pass.hpp"
 
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
 # include "erhe_graphics/gl/gl_render_pass.hpp"
 #endif
-#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+#if defined(ERHE_GRAPHICS_API_VULKAN)
 # include "erhe_graphics/vulkan/vulkan_render_pass.hpp"
 #endif
-#if defined(ERHE_GRAPHICS_LIBRARY_METAL)
+#if defined(ERHE_GRAPHICS_API_METAL)
 # include "erhe_graphics/metal/metal_render_pass.hpp"
 #endif
-#if defined(ERHE_GRAPHICS_LIBRARY_NONE)
+#if defined(ERHE_GRAPHICS_API_NONE)
 # include "erhe_graphics/null/null_render_pass.hpp"
 #endif
 
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/gpu_timer.hpp"
 #include "erhe_graphics/texture.hpp"
+#include "erhe_verify/verify.hpp"
 
 #include <algorithm>
 
@@ -251,13 +252,13 @@ void Render_pass::start_render_pass(Command_buffer& command_buffer, Render_pass*
 
 void Render_pass::end_render_pass(Render_pass* const render_pass_after)
 {
-    if (m_active_command_buffer != nullptr) {
-        for (Gpu_timer* timer : m_gpu_timers) {
-            timer->write_end_timestamp(*m_active_command_buffer);
-        }
+    ERHE_VERIFY(m_active_command_buffer != nullptr);
+    Command_buffer& command_buffer = *m_active_command_buffer;
+    for (Gpu_timer* timer : m_gpu_timers) {
+        timer->write_end_timestamp(command_buffer);
     }
     m_active_command_buffer = nullptr;
-    m_impl->end_render_pass(render_pass_after);
+    m_impl->end_render_pass(command_buffer, render_pass_after);
     m_device.set_active_render_pass(nullptr);
 }
 

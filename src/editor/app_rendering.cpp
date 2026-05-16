@@ -11,6 +11,7 @@
 #include "erhe_renderer/text_renderer.hpp"
 #include "erhe_scene_renderer/content_wide_line_renderer.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
+#include "erhe_scene_renderer/shader_key.hpp"
 #include "renderers/programs.hpp"
 #include "renderers/render_context.hpp"
 #include "renderers/viewport_config.hpp"
@@ -28,7 +29,7 @@
 #include "erhe_graphics/render_pipeline.hpp"
 #include "erhe_graphics/scoped_debug_group.hpp"
 #include "erhe_math/math_util.hpp"
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
 #   include "erhe_gl/wrapper_functions.hpp"
 #   include "erhe_gl/enum_bit_mask_operators.hpp"
 #endif
@@ -144,11 +145,11 @@ App_rendering::App_rendering(
     using namespace erhe::primitive;
     using Blend_mode = erhe::renderer::Blend_mode;
     auto opaque_fill_not_selected_positive_determinant = make_composition_pass("Content fill opaque not selected positive determinant");
-    opaque_fill_not_selected_positive_determinant->mesh_layers            = { Mesh_layer_id::content, Mesh_layer_id::controller };
-    opaque_fill_not_selected_positive_determinant->primitive_mode         = Primitive_mode::polygon_fill;
-    opaque_fill_not_selected_positive_determinant->filter                 = opaque_not_selected_filter_positive_determinant;
-    opaque_fill_not_selected_positive_determinant->get_render_style       = render_style_not_selected;
-    opaque_fill_not_selected_positive_determinant->render_pipeline_states.push_back(
+    opaque_fill_not_selected_positive_determinant->mesh_layers      = { Mesh_layer_id::content, Mesh_layer_id::controller };
+    opaque_fill_not_selected_positive_determinant->primitive_mode   = Primitive_mode::polygon_fill;
+    opaque_fill_not_selected_positive_determinant->filter           = opaque_not_selected_filter_positive_determinant;
+    opaque_fill_not_selected_positive_determinant->get_render_style = render_style_not_selected;
+    opaque_fill_not_selected_positive_determinant->base_render_pipelines.push_back(
         get_render_pipeline_state(*opaque_fill_not_selected_positive_determinant.get(), Blend_mode::opaque, false, false)
     );
 
@@ -157,7 +158,7 @@ App_rendering::App_rendering(
     opaque_fill_not_selected_negative_determinant->primitive_mode   = Primitive_mode::polygon_fill;
     opaque_fill_not_selected_negative_determinant->filter           = opaque_not_selected_filter_negative_determinant;
     opaque_fill_not_selected_negative_determinant->get_render_style = render_style_not_selected;
-    opaque_fill_not_selected_negative_determinant->render_pipeline_states.push_back(
+    opaque_fill_not_selected_negative_determinant->base_render_pipelines.push_back(
         get_render_pipeline_state(*opaque_fill_not_selected_negative_determinant.get(), Blend_mode::opaque, false, true)
     );
 
@@ -170,7 +171,7 @@ App_rendering::App_rendering(
     opaque_fill_selected_positive_determinant->primitive_mode   = Primitive_mode::polygon_fill;
     opaque_fill_selected_positive_determinant->filter           = opaque_selected_or_hovered_filter_positive_determinant;
     opaque_fill_selected_positive_determinant->get_render_style = render_style_selected;
-    opaque_fill_selected_positive_determinant->render_pipeline_states.push_back(
+    opaque_fill_selected_positive_determinant->base_render_pipelines.push_back(
         get_render_pipeline_state(*opaque_fill_selected_positive_determinant.get(), Blend_mode::opaque, true, false)
     );
 
@@ -179,7 +180,7 @@ App_rendering::App_rendering(
     opaque_fill_selected_negative_determinant->primitive_mode   = Primitive_mode::polygon_fill;
     opaque_fill_selected_negative_determinant->filter           = opaque_selected_or_hovered_filter_negative_determinant;
     opaque_fill_selected_negative_determinant->get_render_style = render_style_selected;
-    opaque_fill_selected_negative_determinant->render_pipeline_states.push_back(
+    opaque_fill_selected_negative_determinant->base_render_pipelines.push_back(
         get_render_pipeline_state(*opaque_fill_selected_negative_determinant.get(), Blend_mode::opaque, true, true)
     );
 
@@ -190,10 +191,10 @@ App_rendering::App_rendering(
     opaque_edge_lines_not_selected->primitive_mode   = Primitive_mode::edge_lines;
     opaque_edge_lines_not_selected->filter           = opaque_not_selected_filter;
     opaque_edge_lines_not_selected->get_render_style = render_style_not_selected;
-    opaque_edge_lines_not_selected->render_pipeline_states.push_back(
+    opaque_edge_lines_not_selected->base_render_pipelines.push_back(
         get_render_pipeline_state(*opaque_edge_lines_not_selected.get(), Blend_mode::opaque, false, false)
     );
-    opaque_edge_lines_not_selected->allow_shader_stages_override = false;
+    //opaque_edge_lines_not_selected->allow_shader_stages_override = false;
     opaque_edge_lines_not_selected->use_content_wide_line_renderer = use_compute_wide_lines;
     opaque_edge_lines_not_selected->content_wide_line_group = 0;
 
@@ -202,10 +203,10 @@ App_rendering::App_rendering(
     opaque_edge_lines_selected->primitive_mode   = Primitive_mode::edge_lines;
     opaque_edge_lines_selected->filter           = opaque_selected_filter;
     opaque_edge_lines_selected->get_render_style = render_style_selected;
-    opaque_edge_lines_selected->render_pipeline_states.push_back(
+    opaque_edge_lines_selected->base_render_pipelines.push_back(
         get_render_pipeline_state(*opaque_edge_lines_selected.get(), Blend_mode::opaque, true, false)
     );
-    opaque_edge_lines_selected->allow_shader_stages_override = false;
+    //opaque_edge_lines_selected->allow_shader_stages_override = false;
     opaque_edge_lines_selected->use_content_wide_line_renderer = use_compute_wide_lines;
     opaque_edge_lines_selected->content_wide_line_group = 1;
 
@@ -213,8 +214,8 @@ App_rendering::App_rendering(
     selection_outline->mesh_layers      = { Mesh_layer_id::content };
     selection_outline->primitive_mode   = Primitive_mode::edge_lines;
     selection_outline->filter           = opaque_selected_or_hovered_filter;
-    selection_outline->render_pipeline_states.push_back(&m_pipeline_passes.outline);
-    selection_outline->allow_shader_stages_override = false;
+    selection_outline->base_render_pipelines.push_back(&m_pipeline_passes.outline);
+    //selection_outline->allow_shader_stages_override = false;
     selection_outline->use_content_wide_line_renderer = use_compute_wide_lines;
     selection_outline->content_wide_line_group = 2;
 
@@ -229,34 +230,35 @@ App_rendering::App_rendering(
     auto sky = make_composition_pass("Sky");
     sky->mesh_layers           = {};
     sky->non_mesh_vertex_count = 3; // Fullscreen quad
-    sky->render_pipeline_states.push_back(&m_pipeline_passes.sky);
+    sky->base_render_pipelines.push_back(&m_pipeline_passes.sky);
     sky->primitive_mode        = erhe::primitive::Primitive_mode::polygon_fill;
     sky->filter = erhe::Item_filter{
         .require_all_bits_set         = 0,
         .require_at_least_one_bit_set = 0,
         .require_all_bits_clear       = 0
     };
-    sky->allow_shader_stages_override = false;
+    sky->shader_stages         = &programs.sky.shader_stages;
 
     // Infinite plane with 4 triangles / 12 indices - https://stackoverflow.com/questions/12965161/rendering-infinitely-large-plane
     m_grid_composition_pass = make_composition_pass("Grid");
     m_grid_composition_pass->mesh_layers           = {};
     m_grid_composition_pass->non_mesh_vertex_count = 12;
-    m_grid_composition_pass->render_pipeline_states.push_back(&m_pipeline_passes.grid);
+    m_grid_composition_pass->base_render_pipelines.push_back(&m_pipeline_passes.grid);
     m_grid_composition_pass->primitive_mode        = erhe::primitive::Primitive_mode::polygon_fill;
     m_grid_composition_pass->filter = erhe::Item_filter{
         .require_all_bits_set         = 0,
         .require_at_least_one_bit_set = 0,
         .require_all_bits_clear       = 0
     };
-    m_grid_composition_pass->allow_shader_stages_override = false;
+    m_grid_composition_pass->shader_stages = &programs.grid.shader_stages;
+    //m_grid_composition_pass->allow_shader_stages_override = false;
 
     // Translucent
     auto translucent_fill = make_composition_pass("Content fill translucent");
     translucent_fill->mesh_layers    = { Mesh_layer_id::content };
     translucent_fill->primitive_mode = Primitive_mode::polygon_fill;
     translucent_fill->filter         = translucent_filter;
-    translucent_fill->render_pipeline_states.push_back(
+    translucent_fill->base_render_pipelines.push_back(
         get_render_pipeline_state(*translucent_fill.get(), Blend_mode::translucent, false, false)
     );
 
@@ -264,7 +266,7 @@ App_rendering::App_rendering(
     translucent_outline->mesh_layers    = { Mesh_layer_id::content };
     translucent_outline->primitive_mode = Primitive_mode::edge_lines;
     translucent_outline->filter         = translucent_filter;
-    translucent_outline->render_pipeline_states.push_back(
+    translucent_outline->base_render_pipelines.push_back(
         get_render_pipeline_state(*translucent_outline.get(), Blend_mode::translucent, false, false)
     );
     translucent_outline->use_content_wide_line_renderer = use_compute_wide_lines;
@@ -272,27 +274,32 @@ App_rendering::App_rendering(
 
     auto brush = make_composition_pass("Brush");
     brush->mesh_layers    = { Mesh_layer_id::brush };
-    brush->render_pipeline_states.push_back(&m_pipeline_passes.brush_back);
-    brush->render_pipeline_states.push_back(&m_pipeline_passes.brush_front);
+    brush->base_render_pipelines.push_back(&m_pipeline_passes.brush_back);
+    brush->base_render_pipelines.push_back(&m_pipeline_passes.brush_front);
     brush->primitive_mode = erhe::primitive::Primitive_mode::polygon_fill;
     brush->filter = erhe::Item_filter{
         .require_all_bits_set         = Item_flags::visible | Item_flags::brush,
         .require_at_least_one_bit_set = 0,
         .require_all_bits_clear       = 0
     };
-    brush->allow_shader_stages_override = false;
+    brush->shader_key_force_enable_mask = erhe::scene_renderer::make_shader_bool_mask(
+        erhe::scene_renderer::Shader_bool::VARIANT_BRUSH_PREVIEW
+    );
+    //brush->allow_shader_stages_override = false;
 
     auto rendertarget = make_composition_pass("Rendertarget");
     rendertarget->mesh_layers    = { Mesh_layer_id::rendertarget };
-    rendertarget->render_pipeline_states.push_back(&m_pipeline_passes.rendertarget_meshes);
+    rendertarget->base_render_pipelines.push_back(&m_pipeline_passes.rendertarget_meshes);
     rendertarget->primitive_mode = erhe::primitive::Primitive_mode::polygon_fill;
     rendertarget->filter = erhe::Item_filter{
         .require_all_bits_set         = Item_flags::visible | Item_flags::rendertarget,
         .require_at_least_one_bit_set = 0,
         .require_all_bits_clear       = 0
     };
-    rendertarget->allow_shader_stages_override = false;
-    //rendertarget->allow_shader_stages_override = true;
+    rendertarget->shader_key_force_enable_mask = erhe::scene_renderer::make_shader_bool_mask(
+        erhe::scene_renderer::Shader_bool::VARIANT_RENDERTARGET
+    );
+    //rendertarget->allow_shader_stages_override = false;
     m_graphics_settings_subscription = app_message_bus.graphics_settings.subscribe(
         [&](Graphics_settings_message& message) {
             handle_graphics_settings_changed(message.graphics_preset);
@@ -380,7 +387,7 @@ void App_rendering::handle_graphics_settings_changed(Graphics_preset_entry* grap
     }
 
     if (graphics_preset != nullptr) {
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
         if (m_context.graphics_device->get_info().use_clip_control) {
             gl::clip_control(
                 gl::Clip_control_origin::lower_left,
@@ -415,6 +422,19 @@ auto App_rendering::get_shadow_node_for_view(const Scene_view& scene_view) -> st
 auto App_rendering::get_all_shadow_nodes() -> const std::vector<std::shared_ptr<Shadow_render_node>>&
 {
     return m_all_shadow_render_nodes;
+}
+
+auto App_rendering::destroy_shadow_node(const std::shared_ptr<Shadow_render_node>& shadow_render_node) -> bool
+{
+    if (!shadow_render_node) {
+        return false;
+    }
+    const auto i = std::find(m_all_shadow_render_nodes.begin(), m_all_shadow_render_nodes.end(), shadow_render_node);
+    if (i == m_all_shadow_render_nodes.end()) {
+        return false;
+    }
+    m_all_shadow_render_nodes.erase(i);
+    return true;
 }
 
 auto App_rendering::get_render_pipeline_state(
@@ -463,6 +483,11 @@ auto App_rendering::make_composition_pass(const std::string_view name) -> std::s
     return renderpass;
 }
 
+auto App_rendering::composition_passes() const -> const std::vector<std::shared_ptr<Composition_pass>>&
+{
+    return m_composer.composition_passes;
+}
+
 using Vertex_input_state         = erhe::graphics::Vertex_input_state;
 using Input_assembly_state       = erhe::graphics::Input_assembly_state;
 using Multisample_state          = erhe::graphics::Multisample_state;
@@ -473,34 +498,28 @@ using Color_blend_state          = erhe::graphics::Color_blend_state;
 
 Pipeline_renderpasses::Pipeline_renderpasses(
     erhe::graphics::Device&            graphics_device,
-    erhe::scene_renderer::Mesh_memory& mesh_memory,
-    Programs&                          programs, 
+    erhe::scene_renderer::Mesh_memory& /*mesh_memory*/,
+    Programs&                          /*programs*/,
     const bool                         reverse_depth
 )
     : m_y_flip{graphics_device.get_info().coordinate_conventions.clip_space_y_flip == erhe::math::Clip_space_y_flip::enabled}
     , m_empty_vertex_input{graphics_device}
-    , polygon_fill_standard_opaque_positive_determinant{graphics_device, erhe::graphics::Render_pipeline_create_info{
+    , polygon_fill_standard_opaque_positive_determinant{graphics_device, erhe::graphics::Base_render_pipeline_create_info{
         .debug_label    = erhe::utility::Debug_label{"Polygon Fill Opaque Positive Determinant"},
-        .shader_stages  = &programs.circular_brushed_metal.shader_stages,
-        .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangle,
         .rasterization  = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
         .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
         .color_blend    = Color_blend_state::color_blend_disabled
     }}
-    , polygon_fill_standard_opaque_negative_determinant{graphics_device, erhe::graphics::Render_pipeline_create_info{
+    , polygon_fill_standard_opaque_negative_determinant{graphics_device, erhe::graphics::Base_render_pipeline_create_info{
         .debug_label    = erhe::utility::Debug_label{"Polygon Fill Opaque Negative Determinant"},
-        .shader_stages  = &programs.circular_brushed_metal.shader_stages,
-        .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangle,
         .rasterization  = Rasterization_state::cull_mode_back_cw.with_winding_flip_if(m_y_flip),
         .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
         .color_blend    = Color_blend_state::color_blend_disabled
     }}
-    , polygon_fill_standard_opaque_selected_positive_determinant{graphics_device, erhe::graphics::Render_pipeline_create_info{
+    , polygon_fill_standard_opaque_selected_positive_determinant{graphics_device, erhe::graphics::Base_render_pipeline_create_info{
         .debug_label    = erhe::utility::Debug_label{"Polygon Fill Opaque Selected Positive Determinant"},
-        .shader_stages  = &programs.circular_brushed_metal.shader_stages,
-        .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangle,
         .rasterization  = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
         .depth_stencil  = {
@@ -529,10 +548,8 @@ Pipeline_renderpasses::Pipeline_renderpasses(
         },
         .color_blend    = Color_blend_state::color_blend_disabled
     }}
-    , polygon_fill_standard_opaque_selected_negative_determinant{graphics_device, erhe::graphics::Render_pipeline_create_info{
+    , polygon_fill_standard_opaque_selected_negative_determinant{graphics_device, erhe::graphics::Base_render_pipeline_create_info{
         .debug_label    = erhe::utility::Debug_label{"Polygon Fill Opaque Selected Negative Determinant"},
-        .shader_stages  = &programs.circular_brushed_metal.shader_stages,
-        .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangle,
         .rasterization  = Rasterization_state::cull_mode_back_cw.with_winding_flip_if(m_y_flip),
         .depth_stencil  = {
@@ -561,19 +578,16 @@ Pipeline_renderpasses::Pipeline_renderpasses(
         },
         .color_blend    = Color_blend_state::color_blend_disabled
     }}
-    , polygon_fill_standard_translucent{graphics_device, erhe::graphics::Render_pipeline_create_info{
+    , polygon_fill_standard_translucent{graphics_device, erhe::graphics::Base_render_pipeline_create_info{
         .debug_label    = erhe::utility::Debug_label{"Polygon Fill Translucent"},
-        .shader_stages  = &programs.circular_brushed_metal.shader_stages,
-        .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangle,
         .rasterization  = Rasterization_state::cull_mode_none,
         .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
         .color_blend    = Color_blend_state::color_blend_premultiplied
     }}
-    , line_hidden_blend{graphics_device, erhe::graphics::Render_pipeline_create_info{
+    , line_hidden_blend{graphics_device, erhe::graphics::Base_render_pipeline_create_info{
         .debug_label             = erhe::utility::Debug_label{"Hidden lines with blending"},
-        .shader_stages           = &programs.wide_lines_draw_color.shader_stages,
-        .vertex_input            = &mesh_memory.vertex_input,
+        //.shader_stages           = programs.wide_lines_draw_color.shader_stages(),
         .input_assembly          = Input_assembly_state::line,
         .multisample             = Multisample_state{
             .alpha_to_coverage_enable = true
@@ -622,28 +636,25 @@ Pipeline_renderpasses::Pipeline_renderpasses(
             .constant = { 0.2f, 0.2f, 0.2f, 0.2f }
         }
     }}
-    , brush_back{graphics_device, erhe::graphics::Render_pipeline_create_info{
+    , brush_back{graphics_device, erhe::graphics::Base_render_pipeline_create_info{
         .debug_label    = erhe::utility::Debug_label{"Brush back faces"},
-        .shader_stages  = &programs.brush.shader_stages,
-        .vertex_input   = &mesh_memory.vertex_input,
+        //.shader_stages  = programs.brush.shader_stages(),
         .input_assembly = Input_assembly_state::triangle,
         .rasterization  = Rasterization_state::cull_mode_front_ccw.with_winding_flip_if(m_y_flip),
         .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
         .color_blend    = Color_blend_state::color_blend_premultiplied
     }}
-    , brush_front{graphics_device, erhe::graphics::Render_pipeline_create_info{
+    , brush_front{graphics_device, erhe::graphics::Base_render_pipeline_create_info{
         .debug_label    = erhe::utility::Debug_label{"Brush front faces"},
-        .shader_stages  = &programs.brush.shader_stages,
-        .vertex_input   = &mesh_memory.vertex_input,
+        //.shader_stages  = programs.brush.shader_stages(),
         .input_assembly = Input_assembly_state::triangle,
         .rasterization  = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
         .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
         .color_blend    = Color_blend_state::color_blend_premultiplied
     }}
-    , edge_lines{graphics_device, erhe::graphics::Render_pipeline_create_info{
+    , edge_lines{graphics_device, erhe::graphics::Base_render_pipeline_create_info{
         .debug_label    = erhe::utility::Debug_label{"Edge Lines"},
-        .shader_stages  = &programs.wide_lines_draw_color.shader_stages,
-        .vertex_input   = &mesh_memory.vertex_input,
+        //.shader_stages  = programs.wide_lines_draw_color.shader_stages(),
         .input_assembly = Input_assembly_state::line,
         .rasterization  = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
         .depth_stencil = {
@@ -672,10 +683,9 @@ Pipeline_renderpasses::Pipeline_renderpasses(
         },
         .color_blend    = Color_blend_state::color_blend_premultiplied
     }}
-    , outline{graphics_device, erhe::graphics::Render_pipeline_create_info{
+    , outline{graphics_device, erhe::graphics::Base_render_pipeline_create_info{
         .debug_label    = erhe::utility::Debug_label{"Outline (selection/hover)"},
-        .shader_stages  = &programs.wide_lines_draw_color.shader_stages,
-        .vertex_input   = &mesh_memory.vertex_input,
+        //.shader_stages  = programs.wide_lines_draw_color.shader_stages(),
         .input_assembly = Input_assembly_state::line,
         .multisample    = Multisample_state{
             .alpha_to_coverage_enable = true
@@ -707,28 +717,25 @@ Pipeline_renderpasses::Pipeline_renderpasses(
         },
         .color_blend    = Color_blend_state::color_blend_premultiplied
     }}
-    , corner_points{graphics_device, erhe::graphics::Render_pipeline_create_info{
+    , corner_points{graphics_device, erhe::graphics::Base_render_pipeline_create_info{
         .debug_label    = erhe::utility::Debug_label{"Corner Points"},
-        .shader_stages  = &programs.points.shader_stages,
-        .vertex_input   = &mesh_memory.vertex_input,
+        //.shader_stages  = programs.points.shader_stages(),
         .input_assembly = Input_assembly_state::point,
         .rasterization  = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
         .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
         .color_blend    = Color_blend_state::color_blend_disabled
     }}
-    , polygon_centroids{graphics_device, erhe::graphics::Render_pipeline_create_info{
+    , polygon_centroids{graphics_device, erhe::graphics::Base_render_pipeline_create_info{
         .debug_label    = erhe::utility::Debug_label{"Polygon Centroids"},
-        .shader_stages  = &programs.points.shader_stages,
-        .vertex_input   = &mesh_memory.vertex_input,
+        //.shader_stages  = programs.points.shader_stages(),
         .input_assembly = Input_assembly_state::point,
         .rasterization  = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
         .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
         .color_blend    = Color_blend_state::color_blend_disabled
     }}
-    , rendertarget_meshes{graphics_device, erhe::graphics::Render_pipeline_create_info{
+    , rendertarget_meshes{graphics_device, erhe::graphics::Base_render_pipeline_create_info{
         .debug_label    = erhe::utility::Debug_label{"Rendertarget Meshes"},
-        .shader_stages  = &programs.textured.shader_stages,
-        .vertex_input   = &mesh_memory.vertex_input,
+        //.shader_stages  = programs.textured.shader_stages(),
         .input_assembly = Input_assembly_state::triangle,
         .rasterization  = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
         // Useful for debugging rendertarget meshes
@@ -736,10 +743,9 @@ Pipeline_renderpasses::Pipeline_renderpasses(
         .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
         .color_blend    = Color_blend_state::color_blend_premultiplied
     }}
-    , sky{graphics_device, erhe::graphics::Render_pipeline_create_info{
+    , sky{graphics_device, erhe::graphics::Base_render_pipeline_create_info{
         .debug_label          = erhe::utility::Debug_label{"Sky"},
-        .shader_stages        = &programs.sky.shader_stages,
-        .vertex_input         = &mesh_memory.vertex_input,
+        //.shader_stages        = programs.sky.shader_stages(),
         .input_assembly       = Input_assembly_state::triangle,
         .viewport_depth_range = Viewport_depth_range_state{
             .min_depth = 0.0f, // Reverse Z far plane
@@ -772,10 +778,9 @@ Pipeline_renderpasses::Pipeline_renderpasses(
         },
         .color_blend    = Color_blend_state::color_blend_disabled
     }}
-    , grid{graphics_device, erhe::graphics::Render_pipeline_create_info{
+    , grid{graphics_device, erhe::graphics::Base_render_pipeline_create_info{
         .debug_label    = erhe::utility::Debug_label{"Grid"},
-        .shader_stages  = &programs.grid.shader_stages,
-        .vertex_input   = &mesh_memory.vertex_input,
+        //.shader_stages  = programs.grid.shader_stages(),
         .input_assembly = Input_assembly_state::triangle,
         .rasterization  = Rasterization_state::cull_mode_none_depth_clamp,
         .depth_stencil = {
@@ -810,9 +815,9 @@ Pipeline_renderpasses::Pipeline_renderpasses(
 void Pipeline_renderpasses::rebuild_depth_state(const bool reverse_depth)
 {
     using erhe::graphics::Compare_operation;
-    const auto depth_less          = erhe::graphics::get_depth_function(Compare_operation::less,             reverse_depth);
-    const auto depth_less_or_equal = erhe::graphics::get_depth_function(Compare_operation::less_or_equal,    reverse_depth);
-    const auto depth_greater       = erhe::graphics::get_depth_function(Compare_operation::greater,          reverse_depth);
+    const auto depth_less          = erhe::graphics::get_depth_function(Compare_operation::less,          reverse_depth);
+    const auto depth_less_or_equal = erhe::graphics::get_depth_function(Compare_operation::less_or_equal, reverse_depth);
+    const auto depth_greater       = erhe::graphics::get_depth_function(Compare_operation::greater,       reverse_depth);
     const auto depth_default       = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth);
 
     polygon_fill_standard_opaque_positive_determinant         .data.depth_stencil = depth_default;
@@ -976,13 +981,13 @@ void App_rendering::update_content_wide_line_pipeline_states(erhe::scene_rendere
             return;
         }
         std::vector<erhe::graphics::Lazy_render_pipeline*> new_states;
-        for (erhe::graphics::Lazy_render_pipeline* original : pass->render_pipeline_states) {
+        for (erhe::graphics::Lazy_render_pipeline* original : pass->base_render_pipelines) {
             auto pipeline = std::make_unique<erhe::graphics::Lazy_render_pipeline>(
                 *m_context.graphics_device,
-                erhe::graphics::Render_pipeline_create_info{
+                erhe::graphics::Base_render_pipeline_create_info{
                     .debug_label    = original->data.debug_label,
-                    .shader_stages  = shader_stages,
-                    .vertex_input   = vertex_input,
+                    //.shader_stages  = shader_stages,
+                    //.vertex_input   = vertex_input,
                     .input_assembly = erhe::graphics::Input_assembly_state::triangle,
                     .multisample    = original->data.multisample,
                     .rasterization  = original->data.rasterization,
@@ -993,7 +998,7 @@ void App_rendering::update_content_wide_line_pipeline_states(erhe::scene_rendere
             new_states.push_back(pipeline.get());
             m_compute_wide_line_pipeline_states.push_back(std::move(pipeline));
         }
-        pass->render_pipeline_states = new_states;
+        pass->base_render_pipelines = new_states;
     };
 
     update_pass(opaque_edge_lines_not_selected.get());
@@ -1015,7 +1020,8 @@ void App_rendering::render_viewport_renderables(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION();
 
-    erhe::graphics::Scoped_debug_group debug_group{"App_rendering::render_viewport_renderables"};
+    ERHE_VERIFY(context.command_buffer != nullptr);
+    erhe::graphics::Scoped_debug_group debug_group{*context.command_buffer, "App_rendering::render_viewport_renderables"};
 
     for (auto* renderable : m_renderables) {
         renderable->render(context);
@@ -1028,7 +1034,8 @@ void App_rendering::render_composer(const Render_context& context)
 
     static constexpr std::string_view c_id_main{"Main"};
     //ERHE_PROFILE_GPU_SCOPE(c_id_main);
-    erhe::graphics::Scoped_debug_group pass_scope{"App_rendering::render_composer()"};
+    ERHE_VERIFY(context.command_buffer != nullptr);
+    erhe::graphics::Scoped_debug_group pass_scope{*context.command_buffer, "App_rendering::render_composer()"};
 
     m_composer.render(context);
 

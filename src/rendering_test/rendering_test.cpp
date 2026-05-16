@@ -33,15 +33,19 @@
 #include "erhe_verify/verify.hpp"
 #include "erhe_window/window_log.hpp"
 
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
 # include "erhe_gl/gl_log.hpp"
 #endif
 
 namespace rendering_test {
 
 Rendering_test::Rendering_test(std::string_view config_path)
-    : m_settings{ erhe::codegen::load_config<Rendering_test_settings>(config_path) }
-    , m_graphics_config{ erhe::codegen::load_config<Graphics_config>("config/rendering_test/erhe_graphics.json") }
+    : m_settings{
+        erhe::codegen::load_config<Rendering_test_settings>(config_path)
+    }
+    , m_graphics_config{
+        erhe::codegen::load_config<Graphics_config>("config/rendering_test/erhe_graphics.json")
+    }
     , m_window{
         erhe::window::Window_configuration{
             .use_depth                = true,
@@ -86,33 +90,37 @@ Rendering_test::Rendering_test(std::string_view config_path)
         return cb;
     }()}
     , m_image_transfer   {m_graphics_device, m_init_command_buffer}
-    , m_vertex_format{
-        {
-            0,
-            {
-                { erhe::dataformat::Format::format_32_vec3_float, erhe::dataformat::Vertex_attribute_usage::position, 0 },
-            }
-        },
-        {
-            1,
-            {
-                { erhe::dataformat::Format::format_32_vec3_float, erhe::dataformat::Vertex_attribute_usage::normal,    0 },
-                { erhe::dataformat::Format::format_32_vec4_float, erhe::dataformat::Vertex_attribute_usage::tangent,   0 },
-                { erhe::dataformat::Format::format_32_vec2_float, erhe::dataformat::Vertex_attribute_usage::tex_coord, 0 },
-                { erhe::dataformat::Format::format_32_vec4_float, erhe::dataformat::Vertex_attribute_usage::color,     0 },
-            }
-        }
+    //, m_vertex_format{
+    //    {
+    //        0,
+    //        {
+    //            { erhe::dataformat::Format::format_32_vec3_float, erhe::dataformat::Vertex_attribute_usage::position, 0 },
+    //        }
+    //    },
+    //    {
+    //        1,
+    //        {
+    //            { erhe::dataformat::Format::format_32_vec3_float, erhe::dataformat::Vertex_attribute_usage::normal,    0 },
+    //            { erhe::dataformat::Format::format_32_vec4_float, erhe::dataformat::Vertex_attribute_usage::tangent,   0 },
+    //            { erhe::dataformat::Format::format_32_vec2_float, erhe::dataformat::Vertex_attribute_usage::tex_coord, 0 },
+    //            { erhe::dataformat::Format::format_32_vec4_float, erhe::dataformat::Vertex_attribute_usage::color,     0 },
+    //        }
+    //    }
+    //}
+    , m_mesh_memory{
+        erhe::codegen::load_config<Mesh_memory_config>("config/rendering_test/mesh_memory.json"),
+        m_graphics_device,
     }
-    , m_mesh_memory      {erhe::codegen::load_config<Mesh_memory_config>("config/rendering_test/mesh_memory.json"), m_graphics_device, m_vertex_format}
     , m_program_interface_config{
         .shader_paths = {
             std::filesystem::path{"res"} / std::filesystem::path{"shaders"},
             std::filesystem::path{"res"} / std::filesystem::path{"rendering_test"} / std::filesystem::path{"shaders"}
         }
     }
-    , m_program_interface{m_graphics_device, m_mesh_memory.vertex_format, m_program_interface_config}
-    , m_programs         {m_graphics_device, m_program_interface}
-    , m_scene            {"rendering test scene", nullptr}
+    , m_program_interface   {m_graphics_device, m_mesh_memory, m_program_interface_config}
+    , m_programs            {m_graphics_device, m_program_interface}
+    , m_shader_variant_cache{m_graphics_device, m_program_interface}
+    , m_scene               {"rendering test scene", nullptr}
 {
     m_window.set_title(
         erhe::window::format_window_title("erhe rendering test", m_graphics_device.get_info().api_info)
@@ -125,13 +133,13 @@ Rendering_test::Rendering_test(std::string_view config_path)
     // the constructor body before the run loop starts.
     create_test_scene(m_init_command_buffer);
     m_forward_renderer = std::make_unique<erhe::scene_renderer::Forward_renderer>(
-        m_graphics_device, m_init_command_buffer, m_program_interface
+        m_graphics_device, m_init_command_buffer, m_mesh_memory, m_program_interface, m_shader_variant_cache
     );
 
     m_last_window_width  = m_window.get_width();
     m_last_window_height = m_window.get_height();
 
-#if !defined(ERHE_GRAPHICS_LIBRARY_METAL)
+#if !defined(ERHE_GRAPHICS_API_METAL)
     m_window.register_redraw_callback(
         [this](){
             if (!m_first_frame_rendered || m_in_tick.load()) {
@@ -273,8 +281,8 @@ void Rendering_test::dispatch_subtest(
         // via content_wide_line_renderer. The test stays backend-agnostic
         // and never calls a geometry-shader path directly.
         render_scene(encoder, viewport, lights, meshes, m_swapchain_render_pass.get());
-        if (m_content_wide_line_renderer && m_content_wide_line_renderer->is_enabled() && m_compute_edge_lines_pipeline_state) {
-            m_content_wide_line_renderer->render(encoder, *m_compute_edge_lines_pipeline_state, *m_swapchain_render_pass.get());
+        if (m_content_wide_line_renderer && m_content_wide_line_renderer->is_enabled() && m_compute_edge_lines_pipeline) {
+            m_content_wide_line_renderer->render(encoder, *m_compute_edge_lines_pipeline, *m_swapchain_render_pass.get());
         }
     } else if (name == "cube_with_edge_lines_stencil") {
         // Like cube_with_edge_lines, but uses the STENCIL wide-line
@@ -289,8 +297,12 @@ void Rendering_test::dispatch_subtest(
         // sufficient to trigger the bug even without any stencil-write
         // step between them.
         render_scene(encoder, viewport, lights, meshes, m_swapchain_render_pass.get());
-        if (m_content_wide_line_renderer && m_content_wide_line_renderer->is_enabled() && m_compute_edge_lines_stencil_pipeline_state) {
-            m_content_wide_line_renderer->render(encoder, *m_compute_edge_lines_stencil_pipeline_state, *m_swapchain_render_pass.get());
+        if (
+            m_content_wide_line_renderer &&
+            m_content_wide_line_renderer->is_enabled() &&
+            m_compute_edge_lines_stencil_pipeline
+        ) {
+            m_content_wide_line_renderer->render(encoder, *m_compute_edge_lines_stencil_pipeline, *m_swapchain_render_pass.get());
         }
     } else if (name == "cube_edge_lines_only") {
         // Minimal reproducer: one content_wide_line_renderer draw of the
@@ -303,10 +315,14 @@ void Rendering_test::dispatch_subtest(
         // forward_renderer binds its descriptor sets (camera UBO etc.),
         // which content_wide_line_renderer::render() depends on. No draws
         // are issued by forward_renderer when the mesh span is empty.
-        if (m_content_wide_line_renderer && m_content_wide_line_renderer->is_enabled() && m_compute_edge_lines_pipeline_state) {
+        if (
+            m_content_wide_line_renderer &&
+            m_content_wide_line_renderer->is_enabled() &&
+            m_compute_edge_lines_pipeline
+        ) {
             const std::vector<std::shared_ptr<erhe::scene::Mesh>> empty_meshes;
             render_scene(encoder, viewport, lights, empty_meshes, m_swapchain_render_pass.get());
-            m_content_wide_line_renderer->render(encoder, *m_compute_edge_lines_pipeline_state, *m_swapchain_render_pass.get(), /*group=*/0);
+            m_content_wide_line_renderer->render(encoder, *m_compute_edge_lines_pipeline, *m_swapchain_render_pass.get(), /*group=*/0);
         }
     } else if (name == "sphere_edge_lines_only") {
         // Same as cube_edge_lines_only but draws the sphere (group 1).
@@ -314,10 +330,14 @@ void Rendering_test::dispatch_subtest(
         // cube_edge_lines_only and sphere_edge_lines_only rebinds the same
         // VkPipeline twice - isolating "two wide-line draws" from
         // "two different VkPipelines".
-        if (m_content_wide_line_renderer && m_content_wide_line_renderer->is_enabled() && m_compute_edge_lines_pipeline_state) {
+        if (
+            m_content_wide_line_renderer &&
+            m_content_wide_line_renderer->is_enabled() &&
+            m_compute_edge_lines_pipeline
+        ) {
             const std::vector<std::shared_ptr<erhe::scene::Mesh>> empty_meshes;
             render_scene(encoder, viewport, lights, empty_meshes, m_swapchain_render_pass.get());
-            m_content_wide_line_renderer->render(encoder, *m_compute_edge_lines_pipeline_state, *m_swapchain_render_pass.get(), /*group=*/1);
+            m_content_wide_line_renderer->render(encoder, *m_compute_edge_lines_pipeline, *m_swapchain_render_pass.get(), /*group=*/1);
         }
     } else if (name == "cube_edge_lines_stencil_masked") {
         // Same as cube_edge_lines_only, but with stencil masking: the
@@ -329,86 +349,90 @@ void Rendering_test::dispatch_subtest(
         // stencil_masked so a grid pairing the two does NOT introduce a
         // wide-line-pipeline switch - only the stencil-write pipeline and
         // the wide-line-stencil pipeline appear in an A->B->A->B sequence.
-        if (m_content_wide_line_renderer && m_content_wide_line_renderer->is_enabled() &&
-            m_compute_edge_lines_stencil_pipeline_state && m_stencil_cube)
-        {
+        if (
+            m_content_wide_line_renderer &&
+            m_content_wide_line_renderer->is_enabled() &&
+            m_compute_edge_lines_stencil_pipeline &&
+            m_stencil_cube
+        ) {
             const std::vector<std::shared_ptr<erhe::scene::Mesh>> cube_meshes{m_stencil_cube};
             encoder.set_viewport_rect(viewport.x, viewport.y, viewport.width, viewport.height);
             encoder.set_scissor_rect (viewport.x, viewport.y, viewport.width, viewport.height);
             const auto& conventions = m_graphics_device.get_info().coordinate_conventions;
             m_forward_renderer->render(
                 erhe::scene_renderer::Forward_renderer::Render_parameters{
-                    .render_encoder         = encoder,
-                    .index_type             = erhe::dataformat::Format::format_32_scalar_uint,
-                    .index_buffer           = &m_mesh_memory.index_buffer,
-                    .vertex_buffer0         = &m_mesh_memory.vertex_buffer_position,
-                    .vertex_buffer1         = &m_mesh_memory.vertex_buffer_non_position,
-                    .ambient_light          = glm::vec3{0.3f, 0.3f, 0.3f},
-                    .camera                 = m_camera.get(),
-                    .light_projections      = &m_light_projections,
-                    .lights                 = lights,
-                    .skins                  = {},
-                    .materials              = m_materials,
+                    .base = erhe::scene_renderer::Forward_renderer::Base_render_parameters{
+                        .render_encoder    = encoder,
+                        .render_pass       = m_swapchain_render_pass.get(),
+                        .viewport          = viewport,
+                        .camera            = m_camera.get(),
+                        .ambient_light     = glm::vec3{0.3f, 0.3f, 0.3f},
+                        .light_projections = &m_light_projections,
+                        .lights            = lights,
+                        .skins             = {},
+                        .materials         = m_materials,
+                        .reverse_depth     = true,
+                        .depth_range       = conventions.native_depth_range,
+                        .conventions       = conventions,
+                        .debug_label       = "cube_edge_lines_stencil_masked: stencil cube",
+                    },
                     .mesh_spans             = { cube_meshes },
-                    .render_pipeline_states = m_stencil_write_1_pipeline_states,
-                    .render_pass            = m_swapchain_render_pass.get(),
+                    .base_render_pipelines  = m_stencil_write_1_pipelines,
                     .primitive_mode         = erhe::primitive::Primitive_mode::polygon_fill,
                     .primitive_settings     = erhe::scene_renderer::Primitive_interface_settings{},
-                    .viewport               = viewport,
                     .filter                 = erhe::Item_filter{},
-                    .override_shader_stages = m_stencil_cyan_shader_stages.get(),
-                    .debug_label            = "cube_edge_lines_stencil_masked: stencil cube",
-                    .reverse_depth          = true,
-                    .depth_range            = conventions.native_depth_range,
-                    .conventions            = conventions
+                    //.override_shader_stages = m_stencil_cyan_shader_stages.get(),
                 }
             );
-            m_content_wide_line_renderer->render(encoder, *m_compute_edge_lines_stencil_pipeline_state, *m_swapchain_render_pass.get(), /*group=*/0);
+            m_content_wide_line_renderer->render(encoder, *m_compute_edge_lines_stencil_pipeline, *m_swapchain_render_pass.get(), /*group=*/0);
         }
     } else if (name == "sphere_edge_lines_stencil_masked") {
         // Same as cube_edge_lines_stencil_masked but draws group=1 (sphere
         // edges) for the wide-line step. Wide-line pipeline is identical.
-        if (m_content_wide_line_renderer && m_content_wide_line_renderer->is_enabled() &&
-            m_compute_edge_lines_stencil_pipeline_state && m_stencil_cube)
-        {
+        if (
+            m_content_wide_line_renderer &&
+            m_content_wide_line_renderer->is_enabled() &&
+            m_compute_edge_lines_stencil_pipeline &&
+            m_stencil_cube
+        ) {
             const std::vector<std::shared_ptr<erhe::scene::Mesh>> cube_meshes{m_stencil_cube};
             encoder.set_viewport_rect(viewport.x, viewport.y, viewport.width, viewport.height);
             encoder.set_scissor_rect (viewport.x, viewport.y, viewport.width, viewport.height);
             const auto& conventions = m_graphics_device.get_info().coordinate_conventions;
             m_forward_renderer->render(
                 erhe::scene_renderer::Forward_renderer::Render_parameters{
-                    .render_encoder         = encoder,
-                    .index_type             = erhe::dataformat::Format::format_32_scalar_uint,
-                    .index_buffer           = &m_mesh_memory.index_buffer,
-                    .vertex_buffer0         = &m_mesh_memory.vertex_buffer_position,
-                    .vertex_buffer1         = &m_mesh_memory.vertex_buffer_non_position,
-                    .ambient_light          = glm::vec3{0.3f, 0.3f, 0.3f},
-                    .camera                 = m_camera.get(),
-                    .light_projections      = &m_light_projections,
-                    .lights                 = lights,
-                    .skins                  = {},
-                    .materials              = m_materials,
+                    .base = erhe::scene_renderer::Forward_renderer::Base_render_parameters{
+                        .render_encoder    = encoder,
+                        .render_pass       = m_swapchain_render_pass.get(),
+                        .viewport          = viewport,
+                        //.index_type        = erhe::dataformat::Format::format_32_scalar_uint,
+                        .camera            = m_camera.get(),
+                        .ambient_light     = glm::vec3{0.3f, 0.3f, 0.3f},
+                        .light_projections = &m_light_projections,
+                        .lights            = lights,
+                        .skins             = {},
+                        .materials         = m_materials,
+                        .reverse_depth     = true,
+                        .depth_range       = conventions.native_depth_range,
+                        .conventions       = conventions,
+                        .debug_label       = "sphere_edge_lines_stencil_masked: stencil cube",
+                    },
                     .mesh_spans             = { cube_meshes },
-                    .render_pipeline_states = m_stencil_write_1_pipeline_states,
-                    .render_pass            = m_swapchain_render_pass.get(),
+                    .base_render_pipelines  = m_stencil_write_1_pipelines,
                     .primitive_mode         = erhe::primitive::Primitive_mode::polygon_fill,
                     .primitive_settings     = erhe::scene_renderer::Primitive_interface_settings{},
-                    .viewport               = viewport,
                     .filter                 = erhe::Item_filter{},
-                    .override_shader_stages = m_stencil_cyan_shader_stages.get(),
-                    .debug_label            = "sphere_edge_lines_stencil_masked: stencil cube",
-                    .reverse_depth          = true,
-                    .depth_range            = conventions.native_depth_range,
-                    .conventions            = conventions
+                    //.override_shader_stages = m_stencil_cyan_shader_stages.get(),
                 }
             );
-            m_content_wide_line_renderer->render(encoder, *m_compute_edge_lines_stencil_pipeline_state, *m_swapchain_render_pass.get(), /*group=*/1);
+            m_content_wide_line_renderer->render(encoder, *m_compute_edge_lines_stencil_pipeline, *m_swapchain_render_pass.get(), /*group=*/1);
         }
-    } else if ((name == "minimal_compute_A") ||
-               (name == "minimal_compute_B") ||
-               (name == "minimal_compute_C") ||
-               (name == "minimal_compute_D"))
-    {
+    } else if (
+        (name == "minimal_compute_A") ||
+        (name == "minimal_compute_B") ||
+        (name == "minimal_compute_C") ||
+        (name == "minimal_compute_D")
+    ) {
         // Smallest non-wide-line-renderer repro. Compute shader has
         // already produced one triangle's vertices into a ring-buffer
         // range (see dispatch_minimal_compute_triangle in tick()).
@@ -475,29 +499,28 @@ void Rendering_test::dispatch_subtest(
         const auto& conventions = m_graphics_device.get_info().coordinate_conventions;
         m_forward_renderer->render(
             erhe::scene_renderer::Forward_renderer::Render_parameters{
-                .render_encoder         = encoder,
-                .index_type             = erhe::dataformat::Format::format_32_scalar_uint,
-                .index_buffer           = &m_mesh_memory.index_buffer,
-                .vertex_buffer0         = &m_mesh_memory.vertex_buffer_position,
-                .vertex_buffer1         = &m_mesh_memory.vertex_buffer_non_position,
-                .ambient_light          = glm::vec3{0.3f, 0.3f, 0.3f},
-                .camera                 = m_camera.get(),
-                .light_projections      = &m_light_projections,
-                .lights                 = lights,
-                .skins                  = {},
-                .materials              = m_materials,
-                .mesh_spans             = { cube_meshes },
-                .render_pipeline_states = m_stencil_write_1_pipeline_states,
-                .render_pass            = m_swapchain_render_pass.get(),
-                .primitive_mode         = erhe::primitive::Primitive_mode::polygon_fill,
-                .primitive_settings     = erhe::scene_renderer::Primitive_interface_settings{},
-                .viewport               = viewport,
-                .filter                 = erhe::Item_filter{},
-                .override_shader_stages = m_stencil_cyan_shader_stages.get(),
-                .debug_label            = "C_then_stw1_then_D: stencil cube",
-                .reverse_depth          = true,
-                .depth_range            = conventions.native_depth_range,
-                .conventions            = conventions
+                .base = erhe::scene_renderer::Forward_renderer::Base_render_parameters{
+                    .render_encoder    = encoder,
+                    .render_pass       = m_swapchain_render_pass.get(),
+                    .viewport          = viewport,
+                    //.index_type        = erhe::dataformat::Format::format_32_scalar_uint,
+                    .camera            = m_camera.get(),
+                    .ambient_light     = glm::vec3{0.3f, 0.3f, 0.3f},
+                    .light_projections = &m_light_projections,
+                    .lights            = lights,
+                    .skins             = {},
+                    .materials         = m_materials,
+                    .reverse_depth     = true,
+                    .depth_range       = conventions.native_depth_range,
+                    .conventions       = conventions,
+                    .debug_label       = "C_then_stw1_then_D: stencil cube",
+                },
+                .mesh_spans            = { cube_meshes },
+                .base_render_pipelines = m_stencil_write_1_pipelines,
+                .primitive_mode        = erhe::primitive::Primitive_mode::polygon_fill,
+                .primitive_settings    = erhe::scene_renderer::Primitive_interface_settings{},
+                .filter                = erhe::Item_filter{},
+                //.override_shader_stages = m_stencil_cyan_shader_stages.get(),
             }
         );
         // 3) minimal pipe D
@@ -532,35 +555,36 @@ void Rendering_test::dispatch_subtest(
         const auto& conventions = m_graphics_device.get_info().coordinate_conventions;
         m_forward_renderer->render(
             erhe::scene_renderer::Forward_renderer::Render_parameters{
-                .render_encoder         = encoder,
-                .index_type             = erhe::dataformat::Format::format_32_scalar_uint,
-                .index_buffer           = &m_mesh_memory.index_buffer,
-                .vertex_buffer0         = &m_mesh_memory.vertex_buffer_position,
-                .vertex_buffer1         = &m_mesh_memory.vertex_buffer_non_position,
-                .ambient_light          = glm::vec3{0.3f, 0.3f, 0.3f},
-                .camera                 = m_camera.get(),
-                .light_projections      = &m_light_projections,
-                .lights                 = lights,
-                .skins                  = {},
-                .materials              = m_materials,
+                .base = erhe::scene_renderer::Forward_renderer::Base_render_parameters{
+                    .render_encoder    = encoder,
+                    .render_pass       = m_swapchain_render_pass.get(),
+                    .viewport          = viewport,
+                    //.index_type        = erhe::dataformat::Format::format_32_scalar_uint,
+                    .camera            = m_camera.get(),
+                    .ambient_light     = glm::vec3{0.3f, 0.3f, 0.3f},
+                    .light_projections = &m_light_projections,
+                    .lights            = lights,
+                    .skins             = {},
+                    .materials         = m_materials,
+                    .reverse_depth     = true,
+                    .depth_range       = conventions.native_depth_range,
+                    .conventions       = conventions,
+                    .debug_label       = "stw1_then_minimal_D: stencil cube",
+                },
                 .mesh_spans             = { cube_meshes },
-                .render_pipeline_states = m_stencil_write_1_pipeline_states,
-                .render_pass            = m_swapchain_render_pass.get(),
+                .base_render_pipelines  = m_stencil_write_1_pipelines,
                 .primitive_mode         = erhe::primitive::Primitive_mode::polygon_fill,
                 .primitive_settings     = erhe::scene_renderer::Primitive_interface_settings{},
-                .viewport               = viewport,
                 .filter                 = erhe::Item_filter{},
-                .override_shader_stages = m_stencil_cyan_shader_stages.get(),
-                .debug_label            = "stw1_then_minimal_D: stencil cube",
-                .reverse_depth          = true,
-                .depth_range            = conventions.native_depth_range,
-                .conventions            = conventions
+                //.override_shader_stages = m_stencil_cyan_shader_stages.get(),
             }
         );
         draw_minimal_compute_triangle(encoder, viewport, *m_minimal_pipeline_D_stencil_eq_1_yellow);
-    } else if ((name == "cube_no_stencil") ||
-               (name == "cube_stencil_test_ne_0") ||
-               (name == "cube_stencil_test_ne_0_no_depth")) {
+    } else if (
+        (name == "cube_no_stencil") ||
+        (name == "cube_stencil_test_ne_0") ||
+        (name == "cube_stencil_test_ne_0_no_depth")
+    ) {
         // Minimal VkPipeline-switch repro (no wide-line renderer).
         // Both subtests draw m_stencil_cube via forward_renderer using a
         // pipeline that differs only in its depth_stencil state:
@@ -576,47 +600,46 @@ void Rendering_test::dispatch_subtest(
             return;
         }
         const std::vector<std::shared_ptr<erhe::scene::Mesh>> cube_meshes{m_stencil_cube};
-        std::vector<erhe::graphics::Lazy_render_pipeline*>* pipeline_states_ptr = nullptr;
+        std::vector<erhe::graphics::Lazy_render_pipeline*>* pipelines_ptr = nullptr;
         const char* debug_label = "";
         if (name == "cube_no_stencil") {
-            pipeline_states_ptr = &m_no_stencil_red_pipeline_states;
-            debug_label         = "pipeline-switch repro: cube_no_stencil (red)";
+            pipelines_ptr = &m_no_stencil_red_pipelines;
+            debug_label   = "pipeline-switch repro: cube_no_stencil (red)";
         } else if (name == "cube_stencil_test_ne_0") {
-            pipeline_states_ptr = &m_stencil_test_ne_0_green_pipeline_states;
-            debug_label         = "pipeline-switch repro: cube_stencil_test_ne_0 (green)";
+            pipelines_ptr = &m_stencil_test_ne_0_green_pipelines;
+            debug_label   = "pipeline-switch repro: cube_stencil_test_ne_0 (green)";
         } else {
-            pipeline_states_ptr = &m_stencil_test_ne_0_no_depth_green_pipeline_states;
-            debug_label         = "pipeline-switch repro: cube_stencil_test_ne_0_no_depth (green)";
+            pipelines_ptr = &m_stencil_test_ne_0_no_depth_green_pipelines;
+            debug_label   = "pipeline-switch repro: cube_stencil_test_ne_0_no_depth (green)";
         }
-        std::vector<erhe::graphics::Lazy_render_pipeline*>& pipeline_states = *pipeline_states_ptr;
+        std::vector<erhe::graphics::Lazy_render_pipeline*>& pipelines = *pipelines_ptr;
         encoder.set_viewport_rect(viewport.x, viewport.y, viewport.width, viewport.height);
         encoder.set_scissor_rect (viewport.x, viewport.y, viewport.width, viewport.height);
         const auto& conventions = m_graphics_device.get_info().coordinate_conventions;
         m_forward_renderer->render(
             erhe::scene_renderer::Forward_renderer::Render_parameters{
-                .render_encoder         = encoder,
-                .index_type             = erhe::dataformat::Format::format_32_scalar_uint,
-                .index_buffer           = &m_mesh_memory.index_buffer,
-                .vertex_buffer0         = &m_mesh_memory.vertex_buffer_position,
-                .vertex_buffer1         = &m_mesh_memory.vertex_buffer_non_position,
-                .ambient_light          = glm::vec3{0.3f, 0.3f, 0.3f},
-                .camera                 = m_camera.get(),
-                .light_projections      = &m_light_projections,
-                .lights                 = lights,
-                .skins                  = {},
-                .materials              = m_materials,
+                .base = erhe::scene_renderer::Forward_renderer::Base_render_parameters{
+                    .render_encoder    = encoder,
+                    .render_pass       = m_swapchain_render_pass.get(),
+                    .viewport          = viewport,
+                    //.index_type      = erhe::dataformat::Format::format_32_scalar_uint,
+                    .camera            = m_camera.get(),
+                    .ambient_light     = glm::vec3{0.3f, 0.3f, 0.3f},
+                    .light_projections = &m_light_projections,
+                    .lights            = lights,
+                    .skins             = {},
+                    .materials         = m_materials,
+                    .reverse_depth     = true,
+                    .depth_range       = conventions.native_depth_range,
+                    .conventions       = conventions,
+                    .debug_label       = debug_label,
+                },
                 .mesh_spans             = { cube_meshes },
-                .render_pipeline_states = pipeline_states,
-                .render_pass            = m_swapchain_render_pass.get(),
+                .base_render_pipelines  = pipelines,
                 .primitive_mode         = erhe::primitive::Primitive_mode::polygon_fill,
                 .primitive_settings     = erhe::scene_renderer::Primitive_interface_settings{},
-                .viewport               = viewport,
                 .filter                 = erhe::Item_filter{},
-                .override_shader_stages = nullptr,
-                .debug_label            = debug_label,
-                .reverse_depth          = true,
-                .depth_range            = conventions.native_depth_range,
-                .conventions            = conventions
+                //.override_shader_stages = nullptr,
             }
         );
     } else if (name == "rtt") {
@@ -694,19 +717,22 @@ void Rendering_test::tick(erhe::graphics::Command_buffer& command_buffer)
     // --- Compute pass: expand edge lines to triangles.
     //     "edge_lines_compute" subtest uses group 0 (cube edges).
     //     "stencil_wide_line" subtest uses group 1 (sphere edges). ---
-    const bool compute_cube   = has_subtest("cube_with_edge_lines")
-                              || has_subtest("cube_with_edge_lines_stencil")
-                              || has_subtest("cube_edge_lines_only")
-                              || has_subtest("cube_edge_lines_stencil_masked");
-    const bool compute_sphere = has_subtest("stencil_wide_line")
-                              || has_subtest("sphere_edge_lines_only")
-                              || has_subtest("sphere_edge_lines_stencil_masked");
-    const bool compute_minimal_triangle = has_subtest("minimal_compute_A")
-                                        || has_subtest("minimal_compute_B")
-                                        || has_subtest("minimal_compute_C")
-                                        || has_subtest("minimal_compute_D")
-                                        || has_subtest("stw1_then_minimal_D")
-                                        || has_subtest("C_then_stw1_then_D");
+    const bool compute_cube =
+        has_subtest("cube_with_edge_lines")         ||
+        has_subtest("cube_with_edge_lines_stencil") ||
+        has_subtest("cube_edge_lines_only")         ||
+        has_subtest("cube_edge_lines_stencil_masked");
+    const bool compute_sphere =
+        has_subtest("stencil_wide_line")      ||
+        has_subtest("sphere_edge_lines_only") ||
+        has_subtest("sphere_edge_lines_stencil_masked");
+    const bool compute_minimal_triangle =
+        has_subtest("minimal_compute_A")   ||
+        has_subtest("minimal_compute_B")   ||
+        has_subtest("minimal_compute_C")   ||
+        has_subtest("minimal_compute_D")   ||
+        has_subtest("stw1_then_minimal_D") ||
+        has_subtest("C_then_stw1_then_D");
     const bool wide_line_needed = (compute_cube || compute_sphere);
 
     // Minimal-compute-triangle dispatch. Independent of the wide-line
@@ -763,7 +789,7 @@ void Rendering_test::tick(erhe::graphics::Command_buffer& command_buffer)
         if (is_fullscreen_mode()) {
             const std::string_view name = get_subtest_at(m_settings.fullscreen_cell_col, m_settings.fullscreen_cell_row);
             const erhe::math::Viewport fw{0, 0, full_width, full_height};
-            erhe::graphics::Scoped_debug_group scope{"Fullscreen subtest"};
+            erhe::graphics::Scoped_debug_group scope{command_buffer, "Fullscreen subtest"};
             dispatch_subtest(name, command_buffer, encoder, fw, lights, meshes);
         } else if (is_replicate_mode()) {
             const std::string_view name = get_subtest_at(m_settings.replicate_cell_col, m_settings.replicate_cell_row);
@@ -772,7 +798,7 @@ void Rendering_test::tick(erhe::graphics::Command_buffer& command_buffer)
             for (int r = 0; r < rows; ++r) {
                 for (int c = 0; c < cols; ++c) {
                     const erhe::math::Viewport tile = get_grid_tile_viewport(c, r);
-                    erhe::graphics::Scoped_debug_group scope{"Replicated subtest"};
+                    erhe::graphics::Scoped_debug_group scope{command_buffer, "Replicated subtest"};
                     dispatch_subtest(name, command_buffer, encoder, tile, lights, meshes);
                 }
             }
@@ -786,7 +812,7 @@ void Rendering_test::tick(erhe::graphics::Command_buffer& command_buffer)
                         continue;
                     }
                     const erhe::math::Viewport tile = get_grid_tile_viewport(c, r);
-                    erhe::graphics::Scoped_debug_group scope{"Grid subtest"};
+                    erhe::graphics::Scoped_debug_group scope{command_buffer, "Grid subtest"};
                     dispatch_subtest(name, command_buffer, encoder, tile, lights, meshes);
                 }
             }

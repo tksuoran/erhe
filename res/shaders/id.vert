@@ -1,3 +1,4 @@
+#include "erhe_camera_view.glsl"
 #define a_id a_custom_0
 
 layout(location = 0) flat out int v_draw_id;
@@ -19,7 +20,7 @@ vec3 vec3_from_uint(uint i)
 void main()
 {
     mat4 world_from_node   = primitive.primitives[ERHE_DRAW_ID].world_from_node;
-    mat4 clip_from_world   = camera.cameras[0].clip_from_world;
+    mat4 clip_from_world   = camera.cameras[c_view_index].clip_from_world;
     vec4 position_in_world = world_from_node * vec4(a_position, 1.0);
     gl_Position            = clip_from_world * position_in_world;
     v_draw_id              = ERHE_DRAW_ID;

@@ -19,17 +19,17 @@ void Rendering_test::make_stencil_pipelines()
 
     m_stencil_disabled_pipeline = std::make_unique<erhe::graphics::Lazy_render_pipeline>(
         m_graphics_device,
-        erhe::graphics::Render_pipeline_create_info{
+        erhe::graphics::Base_render_pipeline_create_info{
             .debug_label    = erhe::utility::Debug_label{"Stencil Disabled (baseline)"},
-            .shader_stages  = &m_programs.standard,
-            .vertex_input   = &m_mesh_memory.vertex_input,
+            //.shader_stages  = &m_programs.standard,
+            //.vertex_input   = &m_mesh_memory.vertex_input(),
             .input_assembly = erhe::graphics::Input_assembly_state::triangle,
             .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none.with_winding_flip_if(y_flip),
             .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled(),
             .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled
         }
     );
-    m_stencil_disabled_pipeline_states.push_back(m_stencil_disabled_pipeline.get());
+    m_stencil_disabled_pipelines.push_back(m_stencil_disabled_pipeline.get());
 
     // Selected-fill pattern from editor: function=always, write 0x80 into bit 7,
     // compareMask=0 (intentionally; matches editor).
@@ -44,10 +44,10 @@ void Rendering_test::make_stencil_pipelines()
     };
     m_stencil_write_0x80_pipeline = std::make_unique<erhe::graphics::Lazy_render_pipeline>(
         m_graphics_device,
-        erhe::graphics::Render_pipeline_create_info{
+        erhe::graphics::Base_render_pipeline_create_info{
             .debug_label    = erhe::utility::Debug_label{"Stencil Write 0x80"},
-            .shader_stages  = &m_programs.standard,
-            .vertex_input   = &m_mesh_memory.vertex_input,
+            //.shader_stages  = &m_programs.standard,
+            //.vertex_input   = &m_mesh_memory.vertex_input(),
             .input_assembly = erhe::graphics::Input_assembly_state::triangle,
             .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none.with_winding_flip_if(y_flip),
             .depth_stencil  = {
@@ -61,7 +61,7 @@ void Rendering_test::make_stencil_pipelines()
             .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled
         }
     );
-    m_stencil_write_0x80_pipeline_states.push_back(m_stencil_write_0x80_pipeline.get());
+    m_stencil_write_0x80_pipelines.push_back(m_stencil_write_0x80_pipeline.get());
 
     // Outline pattern from editor: function=not_equal 0x80 (bit 7 NOT set),
     // depth disabled, ops keep/keep/replace.
@@ -76,10 +76,10 @@ void Rendering_test::make_stencil_pipelines()
     };
     m_stencil_test_ne_0x80_pipeline = std::make_unique<erhe::graphics::Lazy_render_pipeline>(
         m_graphics_device,
-        erhe::graphics::Render_pipeline_create_info{
+        erhe::graphics::Base_render_pipeline_create_info{
             .debug_label    = erhe::utility::Debug_label{"Stencil Test != 0x80"},
-            .shader_stages  = &m_programs.standard,
-            .vertex_input   = &m_mesh_memory.vertex_input,
+            //.shader_stages  = &m_programs.standard,
+            //.vertex_input   = &m_mesh_memory.vertex_input(),
             .input_assembly = erhe::graphics::Input_assembly_state::triangle,
             .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none.with_winding_flip_if(y_flip),
             .depth_stencil  = {
@@ -93,7 +93,7 @@ void Rendering_test::make_stencil_pipelines()
             .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled
         }
     );
-    m_stencil_test_ne_0x80_pipeline_states.push_back(m_stencil_test_ne_0x80_pipeline.get());
+    m_stencil_test_ne_0x80_pipelines.push_back(m_stencil_test_ne_0x80_pipeline.get());
 
     // Stencil cell (1,3) pipelines: clear stencil 0, render the red cube
     // with "always replace 1", then render the green sphere with
@@ -133,10 +133,10 @@ void Rendering_test::make_stencil_pipelines()
     };
     m_stencil_write_1_pipeline = std::make_unique<erhe::graphics::Lazy_render_pipeline>(
         m_graphics_device,
-        erhe::graphics::Render_pipeline_create_info{
+        erhe::graphics::Base_render_pipeline_create_info{
             .debug_label    = erhe::utility::Debug_label{"Stencil Write 1 (red cube)"},
-            .shader_stages  = m_stencil_red_shader_stages.get(),
-            .vertex_input   = &m_mesh_memory.vertex_input,
+            //.shader_stages  = m_stencil_red_shader_stages.get(),
+            //.vertex_input   = &m_mesh_memory.vertex_input(),
             .input_assembly = erhe::graphics::Input_assembly_state::triangle,
             .rasterization  = erhe::graphics::Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(y_flip),
             .depth_stencil  = {
@@ -150,7 +150,7 @@ void Rendering_test::make_stencil_pipelines()
             .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled
         }
     );
-    m_stencil_write_1_pipeline_states.push_back(m_stencil_write_1_pipeline.get());
+    m_stencil_write_1_pipelines.push_back(m_stencil_write_1_pipeline.get());
 
     const erhe::graphics::Stencil_op_state stencil_test_ne_1_op{
         .stencil_fail_op = erhe::graphics::Stencil_op::keep,
@@ -163,10 +163,10 @@ void Rendering_test::make_stencil_pipelines()
     };
     m_stencil_test_ne_1_pipeline = std::make_unique<erhe::graphics::Lazy_render_pipeline>(
         m_graphics_device,
-        erhe::graphics::Render_pipeline_create_info{
+        erhe::graphics::Base_render_pipeline_create_info{
             .debug_label    = erhe::utility::Debug_label{"Stencil Test != 1 (green sphere)"},
-            .shader_stages  = m_stencil_green_shader_stages.get(),
-            .vertex_input   = &m_mesh_memory.vertex_input,
+            //.shader_stages  = m_stencil_green_shader_stages.get(),
+            //.vertex_input   = &m_mesh_memory.vertex_input(),
             .input_assembly = erhe::graphics::Input_assembly_state::triangle,
             .rasterization  = erhe::graphics::Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(y_flip),
             .depth_stencil  = {
@@ -180,7 +180,7 @@ void Rendering_test::make_stencil_pipelines()
             .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled
         }
     );
-    m_stencil_test_ne_1_pipeline_states.push_back(m_stencil_test_ne_1_pipeline.get());
+    m_stencil_test_ne_1_pipelines.push_back(m_stencil_test_ne_1_pipeline.get());
 
     // --- Minimal VkPipeline-switch reproducer (no wide-line renderer) ---
     //
@@ -208,10 +208,10 @@ void Rendering_test::make_stencil_pipelines()
     // "too few cubes" vs the correct "one cube exactly".
     m_no_stencil_red_pipeline = std::make_unique<erhe::graphics::Lazy_render_pipeline>(
         m_graphics_device,
-        erhe::graphics::Render_pipeline_create_info{
+        erhe::graphics::Base_render_pipeline_create_info{
             .debug_label    = erhe::utility::Debug_label{"Pipeline A: stencil_test=false (red)"},
-            .shader_stages  = m_stencil_red_shader_stages.get(),
-            .vertex_input   = &m_mesh_memory.vertex_input,
+            //.shader_stages  = m_stencil_red_shader_stages.get(),
+            //.vertex_input   = &m_mesh_memory.vertex_input(),
             .input_assembly = erhe::graphics::Input_assembly_state::triangle,
             .rasterization  = erhe::graphics::Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(y_flip),
             .depth_stencil  = {
@@ -223,7 +223,7 @@ void Rendering_test::make_stencil_pipelines()
             .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled
         }
     );
-    m_no_stencil_red_pipeline_states.push_back(m_no_stencil_red_pipeline.get());
+    m_no_stencil_red_pipelines.push_back(m_no_stencil_red_pipeline.get());
 
     const erhe::graphics::Stencil_op_state stencil_test_ne_0_op{
         .stencil_fail_op = erhe::graphics::Stencil_op::keep,
@@ -236,10 +236,10 @@ void Rendering_test::make_stencil_pipelines()
     };
     m_stencil_test_ne_0_green_pipeline = std::make_unique<erhe::graphics::Lazy_render_pipeline>(
         m_graphics_device,
-        erhe::graphics::Render_pipeline_create_info{
+        erhe::graphics::Base_render_pipeline_create_info{
             .debug_label    = erhe::utility::Debug_label{"Pipeline B: stencil_test=ne_0 (green)"},
-            .shader_stages  = m_stencil_green_shader_stages.get(),
-            .vertex_input   = &m_mesh_memory.vertex_input,
+            //.shader_stages  = m_stencil_green_shader_stages.get(),
+            //.vertex_input   = &m_mesh_memory.vertex_input(),
             .input_assembly = erhe::graphics::Input_assembly_state::triangle,
             .rasterization  = erhe::graphics::Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(y_flip),
             // depth_stencil here matches Pipeline A exactly except for
@@ -256,7 +256,7 @@ void Rendering_test::make_stencil_pipelines()
             .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled
         }
     );
-    m_stencil_test_ne_0_green_pipeline_states.push_back(m_stencil_test_ne_0_green_pipeline.get());
+    m_stencil_test_ne_0_green_pipelines.push_back(m_stencil_test_ne_0_green_pipeline.get());
 
     // Pipeline C: mirrors the depth_stencil state of
     // m_compute_edge_lines_stencil_pipeline_state used by the wide-line
@@ -266,10 +266,10 @@ void Rendering_test::make_stencil_pipelines()
     // with THE SAME depth-stencil delta that the wide-line path uses.
     m_stencil_test_ne_0_no_depth_green_pipeline = std::make_unique<erhe::graphics::Lazy_render_pipeline>(
         m_graphics_device,
-        erhe::graphics::Render_pipeline_create_info{
+        erhe::graphics::Base_render_pipeline_create_info{
             .debug_label    = erhe::utility::Debug_label{"Pipeline C: no_depth + stencil_test=ne_0 (green)"},
-            .shader_stages  = m_stencil_green_shader_stages.get(),
-            .vertex_input   = &m_mesh_memory.vertex_input,
+            //.shader_stages  = m_stencil_green_shader_stages.get(),
+            //.vertex_input   = &m_mesh_memory.vertex_input(),
             .input_assembly = erhe::graphics::Input_assembly_state::triangle,
             .rasterization  = erhe::graphics::Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(y_flip),
             .depth_stencil  = {
@@ -283,7 +283,7 @@ void Rendering_test::make_stencil_pipelines()
             .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled
         }
     );
-    m_stencil_test_ne_0_no_depth_green_pipeline_states.push_back(m_stencil_test_ne_0_no_depth_green_pipeline.get());
+    m_stencil_test_ne_0_no_depth_green_pipelines.push_back(m_stencil_test_ne_0_no_depth_green_pipeline.get());
 }
 
 // Pure-stencil masking test. The swapchain pass clears stencil to 0
@@ -309,35 +309,34 @@ void Rendering_test::render_stencil_cell(
         render_encoder.set_scissor_rect(viewport.x, viewport.y, viewport.width, viewport.height);
         m_forward_renderer->render(
             erhe::scene_renderer::Forward_renderer::Render_parameters{
-                .render_encoder         = render_encoder,
-                .index_type             = erhe::dataformat::Format::format_32_scalar_uint,
-                .index_buffer           = &m_mesh_memory.index_buffer,
-                .vertex_buffer0         = &m_mesh_memory.vertex_buffer_position,
-                .vertex_buffer1         = &m_mesh_memory.vertex_buffer_non_position,
-                .ambient_light          = glm::vec3{0.3f, 0.3f, 0.3f},
-                .camera                 = m_camera.get(),
-                .light_projections      = &m_light_projections,
-                .lights                 = lights,
-                .skins                  = {},
-                .materials              = m_materials,
-                .mesh_spans             = { meshes },
-                .render_pipeline_states = pipeline_states,
-                .render_pass            = active_render_pass,
-                .primitive_mode         = erhe::primitive::Primitive_mode::polygon_fill,
-                .primitive_settings     = erhe::scene_renderer::Primitive_interface_settings{},
-                .viewport               = viewport,
-                .filter                 = erhe::Item_filter{},
-                .override_shader_stages = nullptr,
-                .debug_label            = debug_label,
-                .reverse_depth          = true,
-                .depth_range            = conventions.native_depth_range,
-                .conventions            = conventions
+                .base = erhe::scene_renderer::Forward_renderer::Base_render_parameters{
+                    .render_encoder    = render_encoder,
+                    .render_pass       = active_render_pass,
+                    .viewport          = viewport,
+                    //.index_type      = erhe::dataformat::Format::format_32_scalar_uint,
+                    .camera            = m_camera.get(),
+                    .ambient_light     = glm::vec3{0.3f, 0.3f, 0.3f},
+                    .light_projections = &m_light_projections,
+                    .lights            = lights,
+                    .skins             = {},
+                    .materials         = m_materials,
+                    .reverse_depth     = true,
+                    .depth_range       = conventions.native_depth_range,
+                    .conventions       = conventions,
+                    .debug_label       = debug_label
+                },
+                .mesh_spans            = { meshes },
+                .base_render_pipelines = pipeline_states,
+                .primitive_mode        = erhe::primitive::Primitive_mode::polygon_fill,
+                .primitive_settings    = erhe::scene_renderer::Primitive_interface_settings{},
+                .filter                = erhe::Item_filter{},
+                //.override_shader_stages = nullptr,
             }
         );
     };
 
-    run_pass({m_stencil_cube},   m_stencil_write_1_pipeline_states,   "stencil cube (write 1)");
-    run_pass({m_stencil_sphere}, m_stencil_test_ne_1_pipeline_states, "stencil sphere (test != 1)");
+    run_pass({m_stencil_cube},   m_stencil_write_1_pipelines,   "stencil cube (write 1)");
+    run_pass({m_stencil_sphere}, m_stencil_test_ne_1_pipelines, "stencil sphere (test != 1)");
 }
 
 } // namespace rendering_test

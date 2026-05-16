@@ -94,7 +94,8 @@ Render_pipeline_impl::Render_pipeline_impl(Device& device, const Render_pipeline
     };
 
     // Input assembly
-    const VkPrimitiveTopology vk_topology = to_vk_primitive_topology(create_info.input_assembly.primitive_topology);
+    const Base_render_pipeline_create_info& base = create_info.base;
+    const VkPrimitiveTopology vk_topology = to_vk_primitive_topology(base.input_assembly.primitive_topology);
     const bool is_strip_or_fan =
         (vk_topology == VK_PRIMITIVE_TOPOLOGY_LINE_STRIP) ||
         (vk_topology == VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP) ||
@@ -102,7 +103,7 @@ Render_pipeline_impl::Render_pipeline_impl(Device& device, const Render_pipeline
         (vk_topology == VK_PRIMITIVE_TOPOLOGY_LINE_STRIP_WITH_ADJACENCY) ||
         (vk_topology == VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP_WITH_ADJACENCY);
     const VkBool32 primitive_restart_enable =
-        (create_info.input_assembly.primitive_restart && is_strip_or_fan) ? VK_TRUE : VK_FALSE;
+        (create_info.base.input_assembly.primitive_restart && is_strip_or_fan) ? VK_TRUE : VK_FALSE;
 
     const VkPipelineInputAssemblyStateCreateInfo input_assembly_state{
         .sType                  = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
@@ -127,11 +128,11 @@ Render_pipeline_impl::Render_pipeline_impl(Device& device, const Render_pipeline
         .sType                   = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
         .pNext                   = nullptr,
         .flags                   = 0,
-        .depthClampEnable        = create_info.rasterization.depth_clamp_enable ? VK_TRUE : VK_FALSE,
+        .depthClampEnable        = base.rasterization.depth_clamp_enable ? VK_TRUE : VK_FALSE,
         .rasterizerDiscardEnable = VK_FALSE,
-        .polygonMode             = to_vk_polygon_mode(create_info.rasterization.polygon_mode),
-        .cullMode                = to_vk_cull_mode(create_info.rasterization.face_cull_enable, create_info.rasterization.cull_face_mode),
-        .frontFace               = to_vk_front_face(create_info.rasterization.front_face_direction),
+        .polygonMode             = to_vk_polygon_mode(base.rasterization.polygon_mode),
+        .cullMode                = to_vk_cull_mode   (base.rasterization.face_cull_enable, base.rasterization.cull_face_mode),
+        .frontFace               = to_vk_front_face  (base.rasterization.front_face_direction),
         .depthBiasEnable         = VK_FALSE,
         .depthBiasConstantFactor = 0.0f,
         .depthBiasClamp          = 0.0f,
@@ -146,42 +147,42 @@ Render_pipeline_impl::Render_pipeline_impl(Device& device, const Render_pipeline
         .pNext                 = nullptr,
         .flags                 = 0,
         .rasterizationSamples  = sample_count_flags,
-        .sampleShadingEnable   = create_info.multisample.sample_shading_enable ? VK_TRUE : VK_FALSE,
-        .minSampleShading      = create_info.multisample.min_sample_shading,
+        .sampleShadingEnable   = base.multisample.sample_shading_enable ? VK_TRUE : VK_FALSE,
+        .minSampleShading      = base.multisample.min_sample_shading,
         .pSampleMask           = nullptr,
-        .alphaToCoverageEnable = create_info.multisample.alpha_to_coverage_enable ? VK_TRUE : VK_FALSE,
-        .alphaToOneEnable      = create_info.multisample.alpha_to_one_enable ? VK_TRUE : VK_FALSE
+        .alphaToCoverageEnable = base.multisample.alpha_to_coverage_enable ? VK_TRUE : VK_FALSE,
+        .alphaToOneEnable      = base.multisample.alpha_to_one_enable ? VK_TRUE : VK_FALSE
     };
 
     const VkPipelineDepthStencilStateCreateInfo depth_stencil_state{
         .sType                 = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
         .pNext                 = nullptr,
         .flags                 = 0,
-        .depthTestEnable       = create_info.depth_stencil.depth_test_enable ? VK_TRUE : VK_FALSE,
-        .depthWriteEnable      = create_info.depth_stencil.depth_write_enable ? VK_TRUE : VK_FALSE,
-        .depthCompareOp        = to_vk_compare_op(create_info.depth_stencil.depth_compare_op),
+        .depthTestEnable       = base.depth_stencil.depth_test_enable ? VK_TRUE : VK_FALSE,
+        .depthWriteEnable      = base.depth_stencil.depth_write_enable ? VK_TRUE : VK_FALSE,
+        .depthCompareOp        = to_vk_compare_op(base.depth_stencil.depth_compare_op),
         .depthBoundsTestEnable = VK_FALSE,
-        .stencilTestEnable     = create_info.depth_stencil.stencil_test_enable ? VK_TRUE : VK_FALSE,
-        .front                 = to_vk_stencil_op_state(create_info.depth_stencil.stencil_front),
-        .back                  = to_vk_stencil_op_state(create_info.depth_stencil.stencil_back),
+        .stencilTestEnable     = base.depth_stencil.stencil_test_enable ? VK_TRUE : VK_FALSE,
+        .front                 = to_vk_stencil_op_state(base.depth_stencil.stencil_front),
+        .back                  = to_vk_stencil_op_state(base.depth_stencil.stencil_back),
         .minDepthBounds        = 0.0f,
         .maxDepthBounds        = 1.0f
     };
 
     VkColorComponentFlags color_write_mask = 0;
-    if (create_info.color_blend.write_mask.red)   color_write_mask |= VK_COLOR_COMPONENT_R_BIT;
-    if (create_info.color_blend.write_mask.green) color_write_mask |= VK_COLOR_COMPONENT_G_BIT;
-    if (create_info.color_blend.write_mask.blue)  color_write_mask |= VK_COLOR_COMPONENT_B_BIT;
-    if (create_info.color_blend.write_mask.alpha) color_write_mask |= VK_COLOR_COMPONENT_A_BIT;
+    if (base.color_blend.write_mask.red)   color_write_mask |= VK_COLOR_COMPONENT_R_BIT;
+    if (base.color_blend.write_mask.green) color_write_mask |= VK_COLOR_COMPONENT_G_BIT;
+    if (base.color_blend.write_mask.blue)  color_write_mask |= VK_COLOR_COMPONENT_B_BIT;
+    if (base.color_blend.write_mask.alpha) color_write_mask |= VK_COLOR_COMPONENT_A_BIT;
 
     const VkPipelineColorBlendAttachmentState color_blend_attachment{
-        .blendEnable         = create_info.color_blend.enabled ? VK_TRUE : VK_FALSE,
-        .srcColorBlendFactor = to_vk_blend_factor(create_info.color_blend.rgb.source_factor),
-        .dstColorBlendFactor = to_vk_blend_factor(create_info.color_blend.rgb.destination_factor),
-        .colorBlendOp        = to_vk_blend_op(create_info.color_blend.rgb.equation_mode),
-        .srcAlphaBlendFactor = to_vk_blend_factor(create_info.color_blend.alpha.source_factor),
-        .dstAlphaBlendFactor = to_vk_blend_factor(create_info.color_blend.alpha.destination_factor),
-        .alphaBlendOp        = to_vk_blend_op(create_info.color_blend.alpha.equation_mode),
+        .blendEnable         = base.color_blend.enabled ? VK_TRUE : VK_FALSE,
+        .srcColorBlendFactor = to_vk_blend_factor(base.color_blend.rgb.source_factor),
+        .dstColorBlendFactor = to_vk_blend_factor(base.color_blend.rgb.destination_factor),
+        .colorBlendOp        = to_vk_blend_op    (base.color_blend.rgb.equation_mode),
+        .srcAlphaBlendFactor = to_vk_blend_factor(base.color_blend.alpha.source_factor),
+        .dstAlphaBlendFactor = to_vk_blend_factor(base.color_blend.alpha.destination_factor),
+        .alphaBlendOp        = to_vk_blend_op    (base.color_blend.alpha.equation_mode),
         .colorWriteMask      = color_write_mask
     };
 
@@ -194,10 +195,10 @@ Render_pipeline_impl::Render_pipeline_impl(Device& device, const Render_pipeline
         .attachmentCount = (create_info.color_attachment_count > 0) ? create_info.color_attachment_count : 0u,
         .pAttachments    = (create_info.color_attachment_count > 0) ? &color_blend_attachment : nullptr,
         .blendConstants  = {
-            create_info.color_blend.constant[0],
-            create_info.color_blend.constant[1],
-            create_info.color_blend.constant[2],
-            create_info.color_blend.constant[3]
+            base.color_blend.constant[0],
+            base.color_blend.constant[1],
+            base.color_blend.constant[2],
+            base.color_blend.constant[3]
         }
     };
 
@@ -215,7 +216,7 @@ Render_pipeline_impl::Render_pipeline_impl(Device& device, const Render_pipeline
     };
 
     // Get pipeline layout from bind group layout (fall back to shader stages' layout)
-    const Bind_group_layout* bind_group_layout = create_info.bind_group_layout;
+    const Bind_group_layout* bind_group_layout = base.bind_group_layout;
     if (bind_group_layout == nullptr) {
         bind_group_layout = shader_stages->get_bind_group_layout();
     }
@@ -280,7 +281,10 @@ Render_pipeline_impl::Render_pipeline_impl(Device& device, const Render_pipeline
         outgoing_dst_access
     );
     if (compatible_render_pass == VK_NULL_HANDLE) {
-        device.device_message(Message_severity::error,fmt::format("Render_pipeline_impl: failed to create compatible render pass for '{}'", shader_stages->name()));
+        device.device_message(
+            Message_severity::error,
+            fmt::format("Render_pipeline_impl: failed to create compatible render pass for '{}'", shader_stages->name())
+        );
         return;
     }
 
@@ -321,11 +325,11 @@ Render_pipeline_impl::Render_pipeline_impl(Device& device, const Render_pipeline
     }
 
     // Debug label
-    if (!create_info.debug_label.empty()) {
+    if (!base.debug_label.empty()) {
         device_impl.set_debug_label(
             VK_OBJECT_TYPE_PIPELINE,
             reinterpret_cast<uint64_t>(m_vk_pipeline),
-            fmt::format("Pipeline {}", create_info.debug_label.data()).c_str()
+            fmt::format("Pipeline {}", base.debug_label.data()).c_str()
         );
     }
 }

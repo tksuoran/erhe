@@ -8,7 +8,7 @@
 
 namespace erhe::xr {
 
-Headset::Headset(erhe::window::Context_window& context_window, const Xr_configuration& configuration)
+Headset::Headset(erhe::window::Context_window& context_window, const Headset_config& configuration)
     : m_context_window{context_window}
     , m_configuration {configuration}
 {
@@ -45,7 +45,7 @@ auto Headset::create_session(erhe::graphics::Device& graphics_device) -> bool
         *m_xr_instance.get(),
         m_context_window,
         graphics_device,
-        m_configuration.mirror_mode
+        m_configuration.openxr_mirror
     );
     return static_cast<bool>(m_xr_session);
 }
@@ -203,6 +203,22 @@ auto Headset::render(erhe::graphics::Command_buffer& command_buffer, std::functi
         return false;
     }
     if (!m_xr_session->render_frame(command_buffer, render_view_callback)) {
+        return false;
+    }
+    return true;
+}
+
+auto Headset::render_multiview(
+    erhe::graphics::Command_buffer&                                                          command_buffer,
+    std::function<bool(const Render_views_frame&, erhe::graphics::Command_buffer&)>          render_views_callback
+) -> bool
+{
+    ERHE_PROFILE_FUNCTION();
+
+    if (!m_xr_session) {
+        return false;
+    }
+    if (!m_xr_session->render_frame_multiview(command_buffer, std::move(render_views_callback))) {
         return false;
     }
     return true;

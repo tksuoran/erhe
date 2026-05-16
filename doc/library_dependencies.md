@@ -22,7 +22,6 @@ Each row lists a library's erhe dependencies. PUBLIC means the dependency is par
 | `gltf` | -- | file, profile, geometry, graphics, log, primitive, scene |
 | `graph` | -- | defer, log, verify, item |
 | `graphics` | configuration, dataformat, item, window | defer, file, log, profile, utility, verify |
-| `graphics_buffer_sink` | buffer, graphics, primitive | profile, verify |
 | `hash` | -- | -- |
 | `imgui` | commands, configuration, defer, graphics, log, math, rendergraph, window | file, profile, renderer, time |
 | `item` | profile, utility | log, message_bus, verify |
@@ -37,7 +36,7 @@ Each row lists a library's erhe dependencies. PUBLIC means the dependency is par
 | `renderer` | graphics, math, primitive, scene, ui | utility, defer, log, profile, verify |
 | `rendergraph` | graph, graphics, log, math, ui | profile, verify |
 | `scene` | item, math, primitive, profile | utility, log |
-| `scene_renderer` | dataformat, graphics, math, primitive, renderer, scene | file, log, message_bus, profile |
+| `scene_renderer` | buffer, codegen, dataformat, graphics, math, primitive, renderer, scene | file, log, message_bus, profile, utility, verify |
 | `time` | -- | log, profile |
 | `ui` | graphics, primitive, window | log, profile |
 | `utility` | -- | -- |
@@ -99,11 +98,10 @@ Core rendering and scene representation.
 
 High-level rendering systems that combine multiple Layer 3 libraries.
 
-- **`renderer`** -- Debug lines, text overlay, draw indirect. Depends on `graphics`, `scene`, `primitive`, `math`, `ui`.
+- **`renderer`** -- Debug lines, text overlay. Depends on `graphics`, `scene`, `primitive`, `math`, `ui`.
 - **`rendergraph`** -- Render pass DAG. Depends on `graph`, `graphics`, `math`, `ui`.
-- **`scene_renderer`** -- Forward renderer, shadow maps, GPU buffer management. Depends on `graphics`, `scene`, `primitive`, `renderer`, `math`, `dataformat`.
+- **`scene_renderer`** -- Forward renderer, shadow maps, GPU buffer management, mesh memory pools, draw indirect, shader variant cache. Depends on `buffer`, `codegen`, `graphics`, `scene`, `primitive`, `renderer`, `math`, `dataformat`. `Mesh_memory` implements `Vertex_buffer_sink` / `Index_buffer_sink` directly and owns the GPU buffer pools that used to live in the standalone `graphics_buffer_sink` library.
 - **`imgui`** -- Custom ImGui backend. Depends on `graphics`, `rendergraph`, `commands`, `window`, `math`, `configuration`.
-- **`graphics_buffer_sink`** -- Bridges `buffer` allocation with `graphics` GPU buffers. Depends on `buffer`, `graphics`, `primitive`.
 - **`geometry_renderer`** -- Debug geometry visualization. Depends on `geometry`, `renderer`, `math`.
 - **`gltf`** -- glTF import/export. Privately depends on `geometry`, `graphics`, `primitive`, `scene`.
 - **`physics`** -- Jolt physics abstraction. Depends on `geometry`, `primitive`, `renderer`.
@@ -128,9 +126,9 @@ Mesh data flows through several libraries on its way to the GPU:
 
 1. **`geometry`** -- `Geometry` wraps `GEO::Mesh` with typed attributes (positions, normals, tex coords, etc.). Shape generators and operations (subdivision, Conway, CSG) produce geometry.
 
-2. **`primitive`** -- `Primitive_builder` converts a `Geometry` into a `Buffer_mesh` containing vertex and index data organized by primitive mode (fill, edge lines, corner points, centroids). A `Buffer_sink` abstraction controls where the data goes.
+2. **`primitive`** -- `Primitive_builder` converts a `Geometry` into a `Buffer_mesh` containing vertex and index data organized by primitive mode (fill, edge lines, corner points, centroids). Separate `Vertex_buffer_sink` and `Index_buffer_sink` interfaces control where the data goes.
 
-3. **`graphics_buffer_sink`** -- `Graphics_buffer_sink` implements `Buffer_sink`, allocating space from GPU `Buffer` objects via `Free_list_allocator` (from `erhe::buffer`). The resulting `Buffer_allocation` RAII handles manage the GPU memory lifetime.
+3. **`scene_renderer`** -- `Mesh_memory` implements both sink interfaces directly and owns the GPU `Buffer_pool`s (one per `Vertex_stream` for vertices, one per `Format` for indices). Pools grow lazily; each block uses `Free_list_allocator` (from `erhe::buffer`) and the resulting `Buffer_allocation` RAII handles manage the GPU memory lifetime. CPU-only consumers (raytrace, glTF import) use `Cpu_vertex_buffer_sink` / `Cpu_index_buffer_sink` from `erhe::primitive`.
 
 4. **`graphics`** -- The GPU `Buffer` objects hold the actual vertex/index data. `Render_command_encoder` binds them for drawing.
 
@@ -140,9 +138,9 @@ Scene data is uploaded to the GPU and rendered through a chain of libraries:
 
 1. **`scene`** -- `Scene` holds the node tree, mesh layers, light layers. `Node::update_transforms()` propagates world transforms. Meshes reference `Primitive` and `Material` objects.
 
-2. **`scene_renderer`** -- Ring buffer clients (`Camera_buffer`, `Light_buffer`, `Material_buffer`, `Primitive_buffer`, `Joint_buffer`) upload scene data to the GPU each frame. `Forward_renderer` sets pipeline state and issues multi-draw-indirect calls. `Shadow_renderer` generates depth maps. `Program_interface` defines the shared C++/GLSL shader resource layout.
+2. **`scene_renderer`** -- Ring buffer clients (`Camera_buffer`, `Light_buffer`, `Material_buffer`, `Primitive_buffer`, `Joint_buffer`, `Draw_indirect_buffer`) upload scene data to the GPU each frame. `Forward_renderer` buckets primitives via `Render_bucket` / `bucket_primitives` and issues multi-draw-indirect calls; `Shader_variant_cache` keyed on `Shader_key` provides per-bucket shader stages. `Shadow_renderer` generates depth maps. `Program_interface` defines the shared C++/GLSL shader resource layout. `Mesh_memory` owns the GPU vertex/index `Buffer_pool`s.
 
-3. **`renderer`** -- `Draw_indirect_buffer` builds GPU draw commands from mesh spans filtered by `Item_filter`. `Debug_renderer` and `Text_renderer` provide overlay rendering.
+3. **`renderer`** -- `Debug_renderer` and `Text_renderer` provide overlay rendering. (The draw-indirect buffer machinery now lives in `scene_renderer` since it needs `Mesh_memory` to resolve pool buffers.)
 
 4. **`graphics`** -- `Ring_buffer` provides fence-synchronized circular GPU memory. `Render_pipeline_state` encapsulates all fixed-function state. `Render_command_encoder` records draw calls. `Shader_resource` generates GLSL declarations that match the C++ buffer layouts.
 

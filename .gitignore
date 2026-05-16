@@ -1,8 +1,11 @@
-.claude
+# Ignore local Claude Code state (settings, sessions, plans, ...) but
+# track project-scoped skills so the team gets them with the repo.
+.claude/*
+!.claude/skills/
+claude.sh
 .idea/*
 !.idea/runConfigurations
 !.idea/runConfigurations/**
-.claude/settings.local.json
 .vs
 .vscode/compile_commands.json
 erhe_cmake_profiling.json
@@ -66,4 +69,6 @@ android-project/.gradle/
 android-project/build/
 android-project/app/build/
 android-project/app/.cxx/
+# Validation layer .so fetched by `-Pvulkan_validation=1` build (see app/build.gradle).
+android-project/app/libs/
 android-project/local.properties

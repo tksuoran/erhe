@@ -11,6 +11,8 @@ erhe_target_sources_grouped(
     erhe_scene_renderer/cube_instance_buffer.hpp
     erhe_scene_renderer/cube_renderer.cpp
     erhe_scene_renderer/cube_renderer.hpp
+    erhe_scene_renderer/draw_indirect_buffer.cpp
+    erhe_scene_renderer/draw_indirect_buffer.hpp
     erhe_scene_renderer/forward_renderer.cpp
     erhe_scene_renderer/forward_renderer.hpp
     erhe_scene_renderer/joint_buffer.cpp
@@ -21,16 +23,24 @@ erhe_target_sources_grouped(
     erhe_scene_renderer/material_buffer.hpp
     erhe_scene_renderer/mesh_memory.cpp
     erhe_scene_renderer/mesh_memory.hpp
+    erhe_scene_renderer/buffer_pool.hpp
+    erhe_scene_renderer/buffer_pool.cpp
     erhe_scene_renderer/primitive_buffer.cpp
     erhe_scene_renderer/primitive_buffer.hpp
     erhe_scene_renderer/program_interface.cpp
     erhe_scene_renderer/program_interface.hpp
     erhe_scene_renderer/scene_renderer_log.cpp
     erhe_scene_renderer/scene_renderer_log.hpp
+    erhe_scene_renderer/shader_key.cpp
+    erhe_scene_renderer/shader_key.hpp
+    erhe_scene_renderer/shader_variant_cache.cpp
+    erhe_scene_renderer/shader_variant_cache.hpp
     erhe_scene_renderer/shadow_renderer.cpp
     erhe_scene_renderer/shadow_renderer.hpp
     erhe_scene_renderer/texel_renderer.cpp
     erhe_scene_renderer/texel_renderer.hpp
+    erhe_scene_renderer/variant_handle.cpp
+    erhe_scene_renderer/variant_handle.hpp
 )
 target_link_libraries(
     ${_target}
@@ -38,7 +48,6 @@ target_link_libraries(
         erhe::codegen
         erhe::dataformat
         erhe::graphics
-        erhe::graphics_buffer_sink
         erhe::math
         erhe::primitive
         erhe::renderer

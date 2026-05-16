@@ -29,7 +29,7 @@ cmake \
     -DERHE_FONT_RASTERIZATION_LIBRARY=freetype \
     -DERHE_GLTF_LIBRARY=fastgltf \
     -DERHE_GUI_LIBRARY=imgui \
-    -DERHE_GRAPHICS_LIBRARY=vulkan \
+    -DERHE_GRAPHICS_API=vulkan \
     -DERHE_PHYSICS_LIBRARY=jolt \
     -DERHE_PROFILE_LIBRARY=none \
     -DERHE_RAYTRACE_LIBRARY=bvh \

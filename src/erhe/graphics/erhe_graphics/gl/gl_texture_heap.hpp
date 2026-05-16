@@ -19,11 +19,17 @@ public:
     );
     ~Texture_heap_impl() noexcept;
 
-    void reset_heap       ();
+    void reset_heap       (Command_buffer& command_buffer);
     auto allocate         (const Texture* texture, const Sampler* sample) -> uint64_t;
     auto get_shader_handle(const Texture* texture, const Sampler* sample) -> uint64_t; // bindless ? handle : slot
     auto bind             (Render_command_encoder& encoder) -> std::size_t;
-    void unbind           ();
+    void unbind           (Command_buffer& command_buffer);
+
+private:
+    // Cb-less reset, used by the constructor (which has no cb in scope)
+    // and by the public reset_heap(cb) wrapper that bookends it with a
+    // Scoped_debug_group.
+    void reset_heap_state();
 
 protected:
     Device&                     m_device;

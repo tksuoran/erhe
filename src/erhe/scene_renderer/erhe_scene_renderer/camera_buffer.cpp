@@ -10,10 +10,13 @@
 #include "erhe_scene/projection.hpp"
 #include "erhe_scene/transform.hpp"
 #include "erhe_scene_renderer/scene_renderer_log.hpp"
+#include "erhe_verify/verify.hpp"
+
+#include <cstring>
 
 namespace erhe::scene_renderer {
 
-Camera_interface::Camera_interface(erhe::graphics::Device& graphics_device, const int max_camera_count)
+Camera_interface::Camera_interface(erhe::graphics::Device& graphics_device, const int max_camera_count, const int max_view_count)
     : camera_block{graphics_device, "camera", camera_buffer_binding_point, erhe::graphics::Shader_resource::Type::uniform_block}
     , camera_struct{graphics_device, "Camera"}
     , offsets{
@@ -32,8 +35,10 @@ Camera_interface::Camera_interface(erhe::graphics::Device& graphics_device, cons
         .padding              = camera_struct.add_uvec2("padding"             )->get_offset_in_parent(),
     }
     , max_camera_count{static_cast<std::size_t>(max_camera_count)}
+    , max_view_count{static_cast<std::size_t>(max_view_count)}
 {
-    camera_block.add_struct("cameras", &camera_struct, 1);
+    ERHE_VERIFY(max_view_count >= 1);
+    camera_block.add_struct("cameras", &camera_struct, static_cast<std::size_t>(max_view_count));
 }
 
 Camera_buffer::Camera_buffer(erhe::graphics::Device& graphics_device, Camera_interface& camera_interface)
@@ -46,6 +51,85 @@ Camera_buffer::Camera_buffer(erhe::graphics::Device& graphics_device, Camera_int
     , m_camera_interface{camera_interface}
 {
 }
+
+namespace {
+
+void write_camera_entry(
+    std::span<std::byte>                      gpu_data,
+    std::size_t                               write_offset,
+    const Camera_struct&                      offsets,
+    const erhe::scene::Projection&            camera_projection,
+    const glm::mat4&                          world_from_node,
+    const glm::mat4&                          node_from_world,
+    erhe::math::Viewport                      viewport,
+    float                                     exposure,
+    glm::vec4                                 grid_size,
+    glm::vec4                                 grid_line_width,
+    uint64_t                                  frame_number,
+    const bool                                reverse_depth,
+    const erhe::math::Depth_range             depth_range,
+    const erhe::math::Coordinate_conventions& conventions
+)
+{
+    const auto      clip_from_camera     = camera_projection.clip_from_node_transform(viewport, reverse_depth, depth_range, conventions);
+    const glm::mat4 world_from_clip      = world_from_node * clip_from_camera.get_inverse_matrix();
+    const glm::mat4 clip_from_world      = clip_from_camera.get_matrix() * node_from_world;
+    const float     viewport_floats[4]   {
+        static_cast<float>(viewport.x),
+        static_cast<float>(viewport.y),
+        static_cast<float>(viewport.width),
+        static_cast<float>(viewport.height)
+    };
+    const auto      fov_sides            = camera_projection.get_fov_sides(viewport);
+    const float     fov_floats[4]        { fov_sides.left, fov_sides.right, fov_sides.up, fov_sides.down };
+    const float     clip_depth_direction = reverse_depth ? -1.0f : 1.0f;
+    const float     view_depth_near      = camera_projection.z_near;
+    const float     view_depth_far       = camera_projection.z_far;
+    using erhe::graphics::as_span;
+    using erhe::graphics::write;
+    write(gpu_data, write_offset + offsets.world_from_node,      as_span(world_from_node     ));
+    write(gpu_data, write_offset + offsets.world_from_clip,      as_span(world_from_clip     ));
+    write(gpu_data, write_offset + offsets.clip_from_world,      as_span(clip_from_world     ));
+    write(gpu_data, write_offset + offsets.viewport,             as_span(viewport_floats     ));
+    write(gpu_data, write_offset + offsets.fov,                  as_span(fov_floats          ));
+    write(gpu_data, write_offset + offsets.clip_depth_direction, as_span(clip_depth_direction));
+    write(gpu_data, write_offset + offsets.view_depth_near,      as_span(view_depth_near     ));
+    write(gpu_data, write_offset + offsets.view_depth_far,       as_span(view_depth_far      ));
+    write(gpu_data, write_offset + offsets.exposure,             as_span(exposure            ));
+    write(gpu_data, write_offset + offsets.grid_size,            as_span(grid_size           ));
+    write(gpu_data, write_offset + offsets.grid_line_width,      as_span(grid_line_width     ));
+    write(gpu_data, write_offset + offsets.frame_number,         as_span(frame_number        ));
+    write(gpu_data, write_offset + offsets.padding,              as_span(frame_number        ));
+}
+
+void write_camera_entry(
+    std::span<std::byte>                      gpu_data,
+    std::size_t                               write_offset,
+    const Camera_struct&                      offsets,
+    const erhe::scene::Projection&            camera_projection,
+    const erhe::scene::Node&                  camera_node,
+    erhe::math::Viewport                      viewport,
+    float                                     exposure,
+    glm::vec4                                 grid_size,
+    glm::vec4                                 grid_line_width,
+    uint64_t                                  frame_number,
+    const bool                                reverse_depth,
+    const erhe::math::Depth_range             depth_range,
+    const erhe::math::Coordinate_conventions& conventions
+)
+{
+    write_camera_entry(
+        gpu_data, write_offset, offsets,
+        camera_projection,
+        camera_node.world_from_node(),
+        camera_node.node_from_world(),
+        viewport,
+        exposure, grid_size, grid_line_width, frame_number,
+        reverse_depth, depth_range, conventions
+    );
+}
+
+} // anonymous namespace
 
 auto Camera_buffer::update(
     const erhe::scene::Projection&            camera_projection,
@@ -64,51 +148,112 @@ auto Camera_buffer::update(
 
     SPDLOG_LOGGER_TRACE(log_render, "write_offset = {}", m_writer.write_offset);
 
-    const auto  entry_size       = m_camera_interface.camera_struct.get_size_bytes();
-    const auto& offsets          = m_camera_interface.offsets;
-    const auto  clip_from_camera = camera_projection.clip_from_node_transform(viewport, reverse_depth, depth_range, conventions);
+    const std::size_t entry_size  = m_camera_interface.camera_struct.get_size_bytes();
+    // Bind the full block (cameras[max_view_count]) so the shader can read
+    // any cameras[c_view_index] within range. Ring-buffer storage is
+    // recycled, so trailing entries past index 0 must be explicitly zeroed.
+    const std::size_t block_size  = entry_size * m_camera_interface.max_view_count;
+    const auto&       offsets     = m_camera_interface.offsets;
 
-    erhe::graphics::Ring_buffer_range buffer_range = acquire(erhe::graphics::Ring_buffer_usage::CPU_write, entry_size);
+    erhe::graphics::Ring_buffer_range buffer_range = acquire(erhe::graphics::Ring_buffer_usage::CPU_write, block_size);
     std::span<std::byte>              gpu_data     = buffer_range.get_span();
-    size_t                            write_offset = 0;
 
-    const glm::mat4 world_from_node = camera_node.world_from_node();
-    const glm::mat4 world_from_clip = world_from_node * clip_from_camera.get_inverse_matrix();
-    const glm::mat4 clip_from_world = clip_from_camera.get_matrix() * camera_node.node_from_world();
+    write_camera_entry(
+        gpu_data, 0, offsets,
+        camera_projection, camera_node, viewport,
+        exposure, grid_size, grid_line_width, frame_number,
+        reverse_depth, depth_range, conventions
+    );
+    if (block_size > entry_size) {
+        std::memset(gpu_data.data() + entry_size, 0, block_size - entry_size);
+    }
 
-    const float viewport_floats[4] {
-        static_cast<float>(viewport.x),
-        static_cast<float>(viewport.y),
-        static_cast<float>(viewport.width),
-        static_cast<float>(viewport.height)
-    };
-    const auto  fov_sides = camera_projection.get_fov_sides(viewport);
-    const float fov_floats[4] {
-        fov_sides.left,
-        fov_sides.right,
-        fov_sides.up,
-        fov_sides.down
-    };
-    const float clip_depth_direction = reverse_depth ? -1.0f : 1.0f;
-    const float view_depth_near      = camera_projection.z_near;
-    const float view_depth_far       = camera_projection.z_far;
-    using erhe::graphics::as_span;
-    using erhe::graphics::write;
-    write(gpu_data, write_offset + offsets.world_from_node,      as_span(world_from_node     ));
-    write(gpu_data, write_offset + offsets.world_from_clip,      as_span(world_from_clip     ));
-    write(gpu_data, write_offset + offsets.clip_from_world,      as_span(clip_from_world     ));
-    write(gpu_data, write_offset + offsets.viewport,             as_span(viewport_floats     ));
-    write(gpu_data, write_offset + offsets.fov,                  as_span(fov_floats          ));
-    write(gpu_data, write_offset + offsets.clip_depth_direction, as_span(clip_depth_direction));
-    write(gpu_data, write_offset + offsets.view_depth_near,      as_span(view_depth_near     ));
-    write(gpu_data, write_offset + offsets.view_depth_far,       as_span(view_depth_far      ));
-    write(gpu_data, write_offset + offsets.exposure,             as_span(exposure            ));
-    write(gpu_data, write_offset + offsets.grid_size,            as_span(grid_size           ));
-    write(gpu_data, write_offset + offsets.grid_line_width,      as_span(grid_line_width     ));
-    write(gpu_data, write_offset + offsets.frame_number,         as_span(frame_number        ));
-    write(gpu_data, write_offset + offsets.padding,              as_span(frame_number        ));
-    write_offset += entry_size;
-    buffer_range.bytes_written(write_offset);
+    buffer_range.bytes_written(block_size);
+    buffer_range.close();
+
+    return buffer_range;
+}
+
+auto Camera_buffer::update(
+    const erhe::scene::Projection&            camera_projection,
+    const erhe::scene::Transform&             world_from_camera,
+    erhe::math::Viewport                      viewport,
+    float                                     exposure,
+    glm::vec4                                 grid_size,
+    glm::vec4                                 grid_line_width,
+    uint64_t                                  frame_number,
+    const bool                                reverse_depth,
+    const erhe::math::Depth_range             depth_range,
+    const erhe::math::Coordinate_conventions& conventions
+) -> erhe::graphics::Ring_buffer_range
+{
+    ERHE_PROFILE_FUNCTION();
+
+    const std::size_t entry_size = m_camera_interface.camera_struct.get_size_bytes();
+    const std::size_t block_size = entry_size * m_camera_interface.max_view_count;
+    const auto&       offsets    = m_camera_interface.offsets;
+
+    erhe::graphics::Ring_buffer_range buffer_range = acquire(erhe::graphics::Ring_buffer_usage::CPU_write, block_size);
+    std::span<std::byte>              gpu_data     = buffer_range.get_span();
+
+    write_camera_entry(
+        gpu_data, 0, offsets,
+        camera_projection,
+        world_from_camera.get_matrix(),
+        world_from_camera.get_inverse_matrix(),
+        viewport,
+        exposure, grid_size, grid_line_width, frame_number,
+        reverse_depth, depth_range, conventions
+    );
+    if (block_size > entry_size) {
+        std::memset(gpu_data.data() + entry_size, 0, block_size - entry_size);
+    }
+
+    buffer_range.bytes_written(block_size);
+    buffer_range.close();
+
+    return buffer_range;
+}
+
+auto Camera_buffer::update_views(
+    std::span<const Camera_view_input>        views,
+    float                                     exposure,
+    glm::vec4                                 grid_size,
+    glm::vec4                                 grid_line_width,
+    uint64_t                                  frame_number,
+    const bool                                reverse_depth,
+    const erhe::math::Depth_range             depth_range,
+    const erhe::math::Coordinate_conventions& conventions
+) -> erhe::graphics::Ring_buffer_range
+{
+    ERHE_PROFILE_FUNCTION();
+
+    // The number of input views must match the cameras[N] array size
+    // declared in the UBO block; otherwise shader reads of
+    // cameras[c_view_index] would alias entries we never wrote.
+    ERHE_VERIFY(views.size() == m_camera_interface.max_view_count);
+
+    const std::size_t entry_size = m_camera_interface.camera_struct.get_size_bytes();
+    const std::size_t block_size = entry_size * m_camera_interface.max_view_count;
+    const auto&       offsets    = m_camera_interface.offsets;
+
+    erhe::graphics::Ring_buffer_range buffer_range = acquire(erhe::graphics::Ring_buffer_usage::CPU_write, block_size);
+    std::span<std::byte>              gpu_data     = buffer_range.get_span();
+
+    std::size_t write_offset = 0;
+    for (const Camera_view_input& view : views) {
+        ERHE_VERIFY(view.projection != nullptr);
+        ERHE_VERIFY(view.node != nullptr);
+        write_camera_entry(
+            gpu_data, write_offset, offsets,
+            *view.projection, *view.node, view.viewport,
+            exposure, grid_size, grid_line_width, frame_number,
+            reverse_depth, depth_range, conventions
+        );
+        write_offset += entry_size;
+    }
+
+    buffer_range.bytes_written(block_size);
     buffer_range.close();
 
     return buffer_range;

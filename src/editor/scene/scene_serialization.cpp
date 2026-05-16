@@ -545,8 +545,6 @@ auto save_scene(
 }
 
 auto load_scene(
-    erhe::imgui::Imgui_renderer*            imgui_renderer,
-    erhe::imgui::Imgui_windows*             imgui_windows,
     App_context*                            context,
     App_message_bus*                        app_message_bus,
     App_scenes*                             app_scenes,
@@ -590,9 +588,6 @@ auto load_scene(
 
     // Create Scene_root
     auto scene_root = std::make_shared<Scene_root>(
-        imgui_renderer,
-        imgui_windows,
-        context,
         app_message_bus,
         content_library,
         scene_file.name,
@@ -727,7 +722,7 @@ auto load_scene(
             .corner_points   = true,
             .centroid_points = true,
         },
-        .buffer_info = context->mesh_memory->buffer_info,
+        .buffer_info = context->mesh_memory->make_primitive_buffer_info()
     };
 
     for (const auto& mesh_ref : scene_file.mesh_references) {

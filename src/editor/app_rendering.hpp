@@ -54,23 +54,23 @@ public:
     );
     void rebuild_depth_state(bool reverse_depth);
 
-    bool                                   m_y_flip;
-    erhe::graphics::Vertex_input_state     m_empty_vertex_input;
-    erhe::graphics::Lazy_render_pipeline   polygon_fill_standard_opaque_positive_determinant;
-    erhe::graphics::Lazy_render_pipeline   polygon_fill_standard_opaque_negative_determinant;
-    erhe::graphics::Lazy_render_pipeline   polygon_fill_standard_opaque_selected_positive_determinant;
-    erhe::graphics::Lazy_render_pipeline   polygon_fill_standard_opaque_selected_negative_determinant;
-    erhe::graphics::Lazy_render_pipeline   polygon_fill_standard_translucent;
-    erhe::graphics::Lazy_render_pipeline   line_hidden_blend;
-    erhe::graphics::Lazy_render_pipeline   brush_back;
-    erhe::graphics::Lazy_render_pipeline   brush_front;
-    erhe::graphics::Lazy_render_pipeline   edge_lines;
-    erhe::graphics::Lazy_render_pipeline   outline;
-    erhe::graphics::Lazy_render_pipeline   corner_points;
-    erhe::graphics::Lazy_render_pipeline   polygon_centroids;
-    erhe::graphics::Lazy_render_pipeline   rendertarget_meshes;
-    erhe::graphics::Lazy_render_pipeline   sky;
-    erhe::graphics::Lazy_render_pipeline   grid;
+    bool                                 m_y_flip;
+    erhe::graphics::Vertex_input_state   m_empty_vertex_input;
+    erhe::graphics::Lazy_render_pipeline polygon_fill_standard_opaque_positive_determinant;
+    erhe::graphics::Lazy_render_pipeline polygon_fill_standard_opaque_negative_determinant;
+    erhe::graphics::Lazy_render_pipeline polygon_fill_standard_opaque_selected_positive_determinant;
+    erhe::graphics::Lazy_render_pipeline polygon_fill_standard_opaque_selected_negative_determinant;
+    erhe::graphics::Lazy_render_pipeline polygon_fill_standard_translucent;
+    erhe::graphics::Lazy_render_pipeline line_hidden_blend;
+    erhe::graphics::Lazy_render_pipeline brush_back;
+    erhe::graphics::Lazy_render_pipeline brush_front;
+    erhe::graphics::Lazy_render_pipeline edge_lines;
+    erhe::graphics::Lazy_render_pipeline outline;
+    erhe::graphics::Lazy_render_pipeline corner_points;
+    erhe::graphics::Lazy_render_pipeline polygon_centroids;
+    erhe::graphics::Lazy_render_pipeline rendertarget_meshes;
+    erhe::graphics::Lazy_render_pipeline sky;
+    erhe::graphics::Lazy_render_pipeline grid;
 };
 
 class App_rendering
@@ -96,6 +96,14 @@ public:
     [[nodiscard]] auto get_all_shadow_nodes    () -> const std::vector<std::shared_ptr<Shadow_render_node>>&;
     [[nodiscard]] auto is_capturing            () const -> bool;
 
+    // Drop the Shadow_render_node from m_all_shadow_render_nodes. Caller
+    // is expected to be Scene_builder_viewport_resources_operation's undo
+    // path tearing down a Viewport_scene_view: the only other shared_ptr
+    // owner is that operation, so dropping ours lets the node's destructor
+    // unregister it from the Rendergraph. Returns true if a matching entry
+    // was found and erased.
+    auto destroy_shadow_node(const std::shared_ptr<Shadow_render_node>& shadow_render_node) -> bool;
+
     void trigger_capture            ();
     void render_viewport_main       (const Render_context& context);
     void render_viewport_renderables(const Render_context& context);
@@ -109,6 +117,15 @@ public:
     void remove(Renderable* renderable);
 
     auto make_composition_pass(std::string_view name) -> std::shared_ptr<Composition_pass>;
+
+    // Read-only access to the Composer's pass list for callers that need
+    // to walk the variant-aware Lazy_render_pipeline pointers. Returns
+    // the underlying vector by const reference WITHOUT taking the
+    // Composer's mutex, so callers must guarantee single-threaded access
+    // at the point of call. Intended exclusively for init-time use (the
+    // shader-variant prewarm in renderers/prewarm.cpp); do not call from
+    // the render thread.
+    [[nodiscard]] auto composition_passes() const -> const std::vector<std::shared_ptr<Composition_pass>>&;
 
     void imgui();
     void request_renderdoc_capture();

@@ -1620,6 +1620,13 @@ auto Device_impl::recreate_surface_for_new_window() -> bool
     return false;
 }
 
+void Device_impl::clear_render_pipeline_cache()
+{
+    // OpenGL has no precompiled pipeline objects -- shader binding is
+    // resolved through Variant_handle at every draw, so there is no
+    // stale-pipeline hazard like Vulkan's m_pipeline_map.
+}
+
 void Device_impl::wait_idle()
 {
     // Block CPU until all submitted GL commands have completed on the GPU.

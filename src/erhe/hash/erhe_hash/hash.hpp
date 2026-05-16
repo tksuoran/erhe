@@ -25,6 +25,11 @@ static const uint64_t c_seed  = 0xcbf29ce484222325;
     return seed;
 }
 
+[[nodiscard]] inline auto hash(const uint64_t value, const uint64_t seed = c_seed) -> uint64_t
+{
+    return hash(&value, sizeof(uint64_t), seed);
+}
+
 [[nodiscard]] inline auto hash(const float value, const uint64_t seed = c_seed) -> uint64_t
 {
     return hash(&value, sizeof(float), seed);

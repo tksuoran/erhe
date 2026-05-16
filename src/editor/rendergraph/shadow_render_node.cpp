@@ -215,12 +215,6 @@ void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer
     m_context.shadow_renderer->render(
         erhe::scene_renderer::Shadow_renderer::Render_parameters{
             .command_buffer        = command_buffer,
-            .vertex_input_state    = &m_context.mesh_memory->vertex_input,
-            .index_type            = m_context.mesh_memory->buffer_info.index_type,
-            .index_buffer          = &m_context.mesh_memory->index_buffer,
-            .vertex_buffer0        = &m_context.mesh_memory->vertex_buffer_position,
-            .vertex_buffer1        = &m_context.mesh_memory->vertex_buffer_non_position,
-            .vertex_buffer2        = &m_context.mesh_memory->vertex_buffer_custom,
             .view_camera           = camera.get(),
             .view_camera_viewport  = {},
             .light_camera_viewport = m_viewport,
@@ -269,6 +263,21 @@ auto Shadow_render_node::get_texture() const -> std::shared_ptr<erhe::graphics::
 auto Shadow_render_node::get_viewport() const -> erhe::math::Viewport
 {
     return m_viewport;
+}
+
+auto Shadow_render_node::get_render_passes() const -> std::span<const std::unique_ptr<erhe::graphics::Render_pass>>
+{
+    return std::span<const std::unique_ptr<erhe::graphics::Render_pass>>{m_render_passes};
+}
+
+auto Shadow_render_node::get_reverse_depth() const -> bool
+{
+    // Match the value the runtime feeds Shadow_renderer::Render_parameters
+    // (see execute_rendergraph_node above): the scene_view's live setting,
+    // not the cached m_reverse_depth that reconfigure() last sized the
+    // shadow texture against. The cache lookup the prewarm drives is
+    // keyed on this value, so prewarmed entries must use the same source.
+    return m_scene_view.get_reverse_depth();
 }
 
 auto Shadow_render_node::inputs_allowed() const -> bool

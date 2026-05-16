@@ -2,14 +2,15 @@
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/swapchain.hpp"
 #include "erhe_graphics/texture.hpp"
+#include "erhe_verify/verify.hpp"
 
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
 #   include "erhe_graphics/gl/gl_render_pipeline.hpp"
-#elif defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+#elif defined(ERHE_GRAPHICS_API_VULKAN)
 #   include "erhe_graphics/vulkan/vulkan_render_pipeline.hpp"
-#elif defined(ERHE_GRAPHICS_LIBRARY_METAL)
+#elif defined(ERHE_GRAPHICS_API_METAL)
 #   include "erhe_graphics/metal/metal_render_pipeline.hpp"
-#elif defined(ERHE_GRAPHICS_LIBRARY_NULL)
+#elif defined(ERHE_GRAPHICS_API_NONE)
 #   include "erhe_graphics/null/null_render_pipeline.hpp"
 #endif
 
@@ -117,7 +118,7 @@ auto Render_pipeline::get_impl() const -> const Render_pipeline_impl&
 
 auto Render_pipeline::get_debug_label() const -> erhe::utility::Debug_label
 {
-    return m_create_info.debug_label;
+    return m_create_info.base.debug_label;
 }
 
 auto Render_pipeline::is_valid() const -> bool
@@ -158,10 +159,14 @@ auto compute_format_hash(const Render_pipeline_create_info& ci) -> std::size_t
 
 Lazy_render_pipeline::Lazy_render_pipeline() = default;
 
-Lazy_render_pipeline::Lazy_render_pipeline(Device& device, Render_pipeline_create_info create_info)
+Lazy_render_pipeline::Lazy_render_pipeline(Device& device, const Base_render_pipeline_create_info& create_info)
     : data    {std::move(create_info)}
     , m_device{&device}
 {
+    // These are handled later by get_pipeline_for()
+    //ERHE_VERIFY(data.shader_stages = nullptr);
+    //ERHE_VERIFY(data.vertex_input  == nullptr);
+    //ERHE_VERIFY(data.vertex_format == nullptr);
 }
 
 Lazy_render_pipeline::~Lazy_render_pipeline() noexcept = default;
@@ -185,14 +190,24 @@ auto Lazy_render_pipeline::operator=(Lazy_render_pipeline&& other) noexcept -> L
     return *this;
 }
 
-auto Lazy_render_pipeline::get_pipeline_for(const Render_pass_descriptor& render_pass_desc) -> Render_pipeline*
+auto Lazy_render_pipeline::get_pipeline_for(
+    const Render_pass_descriptor&          render_pass_desc,
+    const Shader_stages*                   shader_stages,
+    const Vertex_input_state*              vertex_input,
+    const erhe::dataformat::Vertex_format* vertex_format
+) -> Render_pipeline*
 {
     if (m_device == nullptr) {
         return nullptr;
     }
 
     // Build a create info with format info from the render pass
-    Render_pipeline_create_info ci = data;
+    Render_pipeline_create_info ci{
+        .base          = data,
+        .shader_stages = shader_stages,
+        .vertex_input  = vertex_input,
+        .vertex_format = vertex_format
+    };
     ci.set_format_from_render_pass(render_pass_desc);
 
     const std::size_t hash = compute_format_hash(ci);
@@ -216,7 +231,7 @@ auto Lazy_render_pipeline::get_pipeline_for(const Render_pass_descriptor& render
     return it->second.get();
 }
 
-auto Lazy_render_pipeline::get_create_info() const -> const Render_pipeline_create_info&
+auto Lazy_render_pipeline::get_create_info() const -> const Base_render_pipeline_create_info&
 {
     return data;
 }

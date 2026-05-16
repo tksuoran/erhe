@@ -3,7 +3,7 @@
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/gpu_timer.hpp"
 #include "erhe_graphics/ring_buffer_range.hpp"
-#include "erhe_renderer/draw_indirect_buffer.hpp"
+#include "erhe_scene_renderer/draw_indirect_buffer.hpp"
 #include "erhe_scene_renderer/camera_buffer.hpp"
 #include "erhe_scene_renderer/primitive_buffer.hpp"
 
@@ -30,8 +30,9 @@ namespace erhe::scene {
     class Mesh;
 }
 namespace erhe::scene_renderer {
-    class Program_interface;
     class Mesh_memory;
+    class Program_interface;
+    class Shader_variant_cache;
 }
 
 struct Id_renderer_config;
@@ -58,11 +59,12 @@ public:
     };
 
     Id_renderer(
-        const Id_renderer_config&                id_renderer_config,
-        erhe::graphics::Device&                  graphics_device,
-        erhe::scene_renderer::Program_interface& program_interface,
-        erhe::scene_renderer::Mesh_memory&       mesh_memory,
-        Programs&                                programs
+        const Id_renderer_config&                   id_renderer_config,
+        erhe::graphics::Device&                     graphics_device,
+        erhe::scene_renderer::Program_interface&    program_interface,
+        erhe::scene_renderer::Mesh_memory&          mesh_memory,
+        erhe::scene_renderer::Shader_variant_cache& shader_variant_cache,
+        Programs&                                   programs
     );
     ~Id_renderer() noexcept;
 
@@ -71,6 +73,7 @@ public:
     {
     public:
         erhe::graphics::Command_buffer&    command_buffer;
+        const erhe::graphics::Render_pass* render_pass{nullptr};
         const erhe::math::Viewport&        viewport;
         const erhe::scene::Camera&         camera;
         const std::initializer_list<const std::span<const std::shared_ptr<erhe::scene::Mesh>>>& content_mesh_spans;
@@ -122,10 +125,12 @@ private:
     // TODO Do not store these here?
     erhe::graphics::Device&                      m_graphics_device;
     erhe::scene_renderer::Mesh_memory&           m_mesh_memory;
+    erhe::scene_renderer::Shader_variant_cache&  m_shader_variant_cache;
+    Programs&                                    m_programs;
     bool                                         m_y_flip;
 
     erhe::scene_renderer::Camera_buffer          m_camera_buffers;
-    erhe::renderer::Draw_indirect_buffer         m_draw_indirect_buffers;
+    erhe::scene_renderer::Draw_indirect_buffer   m_draw_indirect_buffers;
     erhe::scene_renderer::Primitive_buffer       m_primitive_buffers;
 
     erhe::graphics::Lazy_render_pipeline         m_pipeline;
@@ -148,7 +153,12 @@ private:
         std::size_t                        mesh_primitive_index{0};
     };
 
-    void render(erhe::graphics::Render_command_encoder& render_encoder, const std::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes);
+    void render_meshes(
+        const Render_parameters&                                   parameters,
+        erhe::graphics::Render_command_encoder&                    render_encoder,
+        erhe::graphics::Lazy_render_pipeline&                      pipeline,
+        const std::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes
+    );
 
     std::vector<Range> m_ranges;
     bool               m_use_scissor{true};

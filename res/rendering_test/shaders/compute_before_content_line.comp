@@ -1,7 +1,7 @@
 
 layout(local_size_x = 32) in;
 
-float get_line_width(vec4 position, float thickness)
+float get_line_width(vec4 position, float thickness, vec4 fov, vec4 viewport)
 {
     // Negative thickness = fixed screen-space pixel width (no distance scaling)
     if (thickness < 0.0) {
@@ -9,10 +9,10 @@ float get_line_width(vec4 position, float thickness)
     }
     // Positive thickness = distance-scaled width
     // Match wide_lines.vert: min(4.0 * size, 20.0) and max(..., 1.0)
-    float fov_left         = view.fov[0];
-    float fov_right        = view.fov[1];
+    float fov_left         = fov[0];
+    float fov_right        = fov[1];
     float fov_width        = fov_right - fov_left;
-    float viewport_width   = view.viewport[2];
+    float viewport_width   = viewport[2];
     float max_size         = 4.0 * thickness;
     float scaled_thickness = max(max_size / position.w, 1.0);
     return (1.0 / 1024.0) * viewport_width * scaled_thickness / fov_width;
@@ -82,7 +82,7 @@ void do_wide_line(uint in_line_index, uint out_triangle_index)
 
     // Transform to world space using per-primitive transform
     mat4 world_from_node = view.world_from_node;
-    mat4 clip_from_world = view.clip_from_world;
+    mat4 clip_from_world = view.cameras[0].clip_from_world;
     vec4 world_pos0      = world_from_node * vec4(local_position0, 1.0);
     vec4 world_pos1      = world_from_node * vec4(local_position1, 1.0);
     mat3 normal_matrix   = mat3(world_from_node);
@@ -97,8 +97,9 @@ void do_wide_line(uint in_line_index, uint out_triangle_index)
     // Normal-based depth bias to avoid z-fighting with the surface
     // Same approach as wide_lines.vert: bias = 0.0005 * NdotV^2 * clip_depth_direction
     // Clamp NdotV to [0,1] so back-facing edges get zero bias instead of wrong-direction bias
-    vec3  view_dir0 = normalize(view.view_position_in_world.xyz - world_pos0.xyz);
-    vec3  view_dir1 = normalize(view.view_position_in_world.xyz - world_pos1.xyz);
+    vec3  view_position_in_world = view.cameras[0].view_position_in_world.xyz;
+    vec3  view_dir0 = normalize(view_position_in_world - world_pos0.xyz);
+    vec3  view_dir1 = normalize(view_position_in_world - world_pos1.xyz);
     float NdotV0    = clamp(dot(world_normal0, view_dir0), 0.0, 1.0);
     float NdotV1    = clamp(dot(world_normal1, view_dir1), 0.0, 1.0);
     float cdd       = view.clip_depth_direction;
@@ -129,10 +130,12 @@ void do_wide_line(uint in_line_index, uint out_triangle_index)
 
     vec4  color = vec4(view.line_color.xyz, 1.0);
 
-    float width0 = get_line_width(v0_clipped, line_thickness);
-    float width1 = get_line_width(v1_clipped, line_thickness);
+    vec4  fov      = view.cameras[0].fov;
+    vec4  viewport = view.cameras[0].viewport;
+    float width0   = get_line_width(v0_clipped, line_thickness, fov, viewport);
+    float width1   = get_line_width(v1_clipped, line_thickness, fov, viewport);
 
-    vec2 vp_size         = view.viewport.zw;
+    vec2 vp_size         = viewport.zw;
 
     vec3 v0_in_ndc       = v0_clipped.xyz / v0_clipped.w;
     vec3 v1_in_ndc       = v1_clipped.xyz / v1_clipped.w;
