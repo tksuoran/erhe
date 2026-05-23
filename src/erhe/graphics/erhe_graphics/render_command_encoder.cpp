@@ -1,16 +1,16 @@
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/render_pass.hpp"
 
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
 # include "erhe_graphics/gl/gl_render_command_encoder.hpp"
 #endif
-#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+#if defined(ERHE_GRAPHICS_API_VULKAN)
 # include "erhe_graphics/vulkan/vulkan_render_command_encoder.hpp"
 #endif
-#if defined(ERHE_GRAPHICS_LIBRARY_METAL)
+#if defined(ERHE_GRAPHICS_API_METAL)
 # include "erhe_graphics/metal/metal_render_command_encoder.hpp"
 #endif
-#if defined(ERHE_GRAPHICS_LIBRARY_NONE)
+#if defined(ERHE_GRAPHICS_API_NONE)
 # include "erhe_graphics/null/null_render_command_encoder.hpp"
 #endif
 
@@ -48,11 +48,6 @@ void Render_command_encoder::set_render_pipeline(const Render_pipeline& pipeline
 void Render_command_encoder::set_render_pipeline_state(const Render_pipeline_state& pipeline)
 {
     m_impl->set_render_pipeline_state(pipeline);
-}
-void Render_command_encoder::set_render_pipeline_state(const Render_pipeline_state& pipeline,
-    const Shader_stages* override_shader_stages)
-{
-    m_impl->set_render_pipeline_state(pipeline, override_shader_stages);
 }
 void Render_command_encoder::set_viewport_rect(int x, int y, int width, int height)
 {

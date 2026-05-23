@@ -134,6 +134,65 @@ void Scene_views::erase(Viewport_scene_view* viewport_scene_view)
     m_viewport_scene_views.erase(i, m_viewport_scene_views.end());
 }
 
+void Scene_views::destroy_viewport_scene_view(
+    const std::shared_ptr<Viewport_scene_view>&  viewport_scene_view,
+    const std::shared_ptr<Post_processing_node>& post_processing_node
+)
+{
+    if (!viewport_scene_view) {
+        return;
+    }
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
+
+    // Drop any cached references that point at this viewport. The
+    // ~Viewport_scene_view dtor only removes from m_viewport_scene_views;
+    // hover bookkeeping is our responsibility.
+    if (m_hover_scene_view == viewport_scene_view) {
+        m_hover_scene_view.reset();
+    }
+    if (m_last_scene_view.lock() == viewport_scene_view) {
+        m_last_scene_view.reset();
+    }
+    const auto hover_end = std::remove_if(
+        m_hover_stack.begin(),
+        m_hover_stack.end(),
+        [&viewport_scene_view](const std::weak_ptr<Viewport_scene_view>& entry) {
+            return entry.lock() == viewport_scene_view;
+        }
+    );
+    m_hover_stack.erase(hover_end, m_hover_stack.end());
+
+    if (post_processing_node) {
+        const auto pp = std::find(m_post_processing_nodes.begin(), m_post_processing_nodes.end(), post_processing_node);
+        if (pp != m_post_processing_nodes.end()) {
+            m_post_processing_nodes.erase(pp);
+        }
+    }
+
+    // Erase from m_viewport_scene_views explicitly so the only remaining
+    // strong reference is the caller's. When the caller releases it, the
+    // Viewport_scene_view dtor's erase(this) call becomes a no-op (the
+    // entry is already gone), then the Rendergraph_node dtor unregisters
+    // the node and disconnects its links.
+    const auto vsv = std::find(m_viewport_scene_views.begin(), m_viewport_scene_views.end(), viewport_scene_view);
+    if (vsv != m_viewport_scene_views.end()) {
+        m_viewport_scene_views.erase(vsv);
+    }
+}
+
+void Scene_views::destroy_viewport_window(const std::shared_ptr<Viewport_window>& viewport_window)
+{
+    if (!viewport_window) {
+        return;
+    }
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
+
+    const auto i = std::find(m_viewport_windows.begin(), m_viewport_windows.end(), viewport_window);
+    if (i != m_viewport_windows.end()) {
+        m_viewport_windows.erase(i);
+    }
+}
+
 auto Scene_views::create_viewport_scene_view(
     const Viewport_config_data&                           viewport_config_data,
     erhe::graphics::Device&                               graphics_device,

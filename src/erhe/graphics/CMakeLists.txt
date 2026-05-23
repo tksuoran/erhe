@@ -66,8 +66,6 @@ erhe_target_sources_grouped(
     erhe_graphics/shader_stages.cpp
     erhe_graphics/shader_stages.hpp
     erhe_graphics/shader_stages_create_info.cpp
-    erhe_graphics/spirv_cache.cpp
-    erhe_graphics/spirv_cache.hpp
     erhe_graphics/span.hpp
     erhe_graphics/state/color_blend_state.cpp
     erhe_graphics/state/color_blend_state.hpp
@@ -356,6 +354,8 @@ if (ERHE_SPIRV)
         erhe_graphics/glsl_includer.hpp
         erhe_graphics/glsl_to_spirv.cpp
         erhe_graphics/glsl_to_spirv.hpp
+        erhe_graphics/spirv_cache.cpp
+        erhe_graphics/spirv_cache.hpp
     )
     target_link_libraries(${_target}
         PUBLIC
@@ -410,5 +410,9 @@ target_link_libraries(${_target}
         erhe::utility
         erhe::verify
 )
+
+if (${ERHE_BUILD_TESTS} STREQUAL "ON")
+    add_subdirectory(test)
+endif ()
 
 erhe_target_settings(${_target} "erhe")

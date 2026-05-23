@@ -1,7 +1,8 @@
-// #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
-
 #include "erhe_scene_renderer/forward_renderer.hpp"
+#include "erhe_scene_renderer/mesh_memory.hpp"
+#include "erhe_scene_renderer/shader_variant_cache.hpp"
 
+#include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/draw_indirect.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
@@ -12,12 +13,18 @@
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_graphics/texture_heap.hpp"
+#include "erhe_primitive/buffer_mesh.hpp"
+#include "erhe_primitive/primitive.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/light.hpp"
+#include "erhe_scene/mesh.hpp"
 #include "erhe_scene_renderer/scene_renderer_log.hpp"
 #include "erhe_scene_renderer/program_interface.hpp"
+#include "erhe_scene_renderer/shader_key.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
+
+#include <fmt/format.h>
 
 #include <functional>
 
@@ -28,10 +35,14 @@ const std::vector<std::span<const std::shared_ptr<erhe::scene::Mesh>>> Forward_r
 Forward_renderer::Forward_renderer(
     erhe::graphics::Device&         graphics_device,
     erhe::graphics::Command_buffer& init_command_buffer,
-    Program_interface&              program_interface
+    Mesh_memory&                    mesh_memory,
+    Program_interface&              program_interface,
+    Shader_variant_cache&           shader_variant_cache
 )
     : m_graphics_device     {graphics_device}
+    , m_mesh_memory         {mesh_memory}   
     , m_program_interface   {program_interface}
+    , m_shader_variant_cache{shader_variant_cache}
     , m_camera_buffer       {graphics_device, program_interface.camera_interface}
     , m_draw_indirect_buffer{graphics_device, program_interface.config.max_draw_count}
     , m_joint_buffer        {graphics_device, program_interface.joint_interface}
@@ -73,26 +84,13 @@ const char* safe_str(const char* str)
     return str != nullptr ? str : "";
 }
 
-auto make_temp_pipeline_state(const erhe::graphics::Render_pipeline_create_info& ci) -> erhe::graphics::Render_pipeline_state
-{
-    return erhe::graphics::Render_pipeline_state{erhe::graphics::Render_pipeline_data{
-        .debug_label          = ci.debug_label,
-        .shader_stages        = ci.shader_stages,
-        .vertex_input         = ci.vertex_input,
-        .input_assembly       = ci.input_assembly,
-        .multisample          = ci.multisample,
-        .viewport_depth_range = ci.viewport_depth_range,
-        .rasterization        = ci.rasterization,
-        .depth_stencil        = ci.depth_stencil,
-        .color_blend          = ci.color_blend
-    }};
-}
-
 }
 
 void Forward_renderer::render(const Render_parameters& parameters)
 {
     ERHE_PROFILE_FUNCTION();
+
+    const Base_render_parameters& base = parameters.base;
 
     // Check for early out
     bool all_empty = true;
@@ -103,119 +101,189 @@ void Forward_renderer::render(const Render_parameters& parameters)
         }
     }
     if (all_empty) {
-        log_render->debug("Forward_renderer::render({}) - empty", parameters.debug_label);
+        log_render->debug("Forward_renderer::render({}) - empty", base.debug_label);
     }
 
-    log_render->debug("Forward_renderer::render({})", parameters.debug_label);
+    log_render->debug("Forward_renderer::render({})", base.debug_label);
 
-    const auto& viewport               = parameters.viewport;
-    const auto* camera                 = parameters.camera;
-    const auto& mesh_spans             = parameters.mesh_spans;
-    const auto& lights                 = parameters.lights;
-    const auto& skins                  = parameters.skins;
-    const auto& materials              = parameters.materials;
-    const auto& render_pipeline_states = parameters.render_pipeline_states;
-    const auto& filter                 = parameters.filter;
-    const auto  primitive_mode         = parameters.primitive_mode;
+    const auto& mesh_spans = parameters.mesh_spans;
+    const auto& filter     = parameters.filter;
 
-    parameters.render_encoder.set_bind_group_layout(m_program_interface.bind_group_layout.get());
+    erhe::graphics::Render_command_encoder& render_encoder = base.render_encoder;
+    render_encoder.set_bind_group_layout(m_program_interface.bind_group_layout.get());
 
     using Ring_buffer_range = erhe::graphics::Ring_buffer_range;
     std::optional<Ring_buffer_range> camera_buffer_range{};
-    if (camera != nullptr) {
-        camera_buffer_range = m_camera_buffer.update(
-            *camera->projection(),
-            *camera->get_node(),
-            viewport,
-            camera->get_exposure(),
-            parameters.grid_size,
-            parameters.grid_line_width,
-            parameters.frame_number,
-            parameters.reverse_depth,
-            parameters.depth_range,
-            parameters.conventions
+
+    // TODO Single path ERHE_VERIFY(!parameters.views.empty());
+    if (!base.views.empty()) {
+        // Multiview path: write one Camera UBO entry per view. The
+        // exposure/grid/frame state is shared across views; FOV and
+        // pose come from each Camera_view_input. Shaders compiled with
+        // enable_multiview() pick the per-eye entry via gl_ViewIndex.
+        const float exposure = (base.camera != nullptr) ? base.camera->get_exposure() : 1.0f;
+        camera_buffer_range = m_camera_buffer.update_views(
+            base.views,
+            exposure,
+            base.grid_size,
+            base.grid_line_width,
+            base.frame_number,
+            base.reverse_depth,
+            base.depth_range,
+            base.conventions
         );
-        m_camera_buffer.bind(parameters.render_encoder, camera_buffer_range.value());
+        m_camera_buffer.bind(render_encoder, camera_buffer_range.value());
+    } 
+    else if (base.camera != nullptr) {
+        camera_buffer_range = m_camera_buffer.update(
+            *base.camera->projection(),
+            *base.camera->get_node(),
+            base.viewport,
+            base.camera->get_exposure(),
+            base.grid_size,
+            base.grid_line_width,
+            base.frame_number,
+            base.reverse_depth,
+            base.depth_range,
+            base.conventions
+        );
+        m_camera_buffer.bind(render_encoder, camera_buffer_range.value());
     }
 
-    m_texture_heap->reset_heap();
+    m_texture_heap->reset_heap(render_encoder.get_command_buffer());
 
-    Ring_buffer_range material_range = m_material_buffer.update(*m_texture_heap.get(), materials);
-    m_material_buffer.bind(parameters.render_encoder, material_range);
+    Ring_buffer_range material_range = m_material_buffer.update(*m_texture_heap.get(), base.materials);
+    m_material_buffer.bind(render_encoder, material_range);
 
-    Ring_buffer_range joint_range = m_joint_buffer.update(parameters.debug_joint_indices, parameters.debug_joint_colors, skins);
-    m_joint_buffer.bind(parameters.render_encoder, joint_range);
+    Ring_buffer_range joint_range = m_joint_buffer.update(parameters.debug_joint_indices, parameters.debug_joint_colors, base.skins);
+    m_joint_buffer.bind(render_encoder, joint_range);
 
     // This must be done even if lights is empty.
     // For example, the number of lights is read from the light buffer.
-    Ring_buffer_range light_range = m_light_buffer.update(lights, parameters.light_projections, parameters.ambient_light);
-    m_light_buffer.bind_light_buffer(parameters.render_encoder, light_range);
-    m_light_buffer.bind_shadow_samplers(parameters.render_encoder, parameters.light_projections);
+    Ring_buffer_range light_range = m_light_buffer.update(base.lights, base.light_projections, base.ambient_light);
+    m_light_buffer.bind_light_buffer(render_encoder, light_range);
+    m_light_buffer.bind_shadow_samplers(render_encoder, base.light_projections);
 
-    m_texture_heap->bind(parameters.render_encoder);
+    m_texture_heap->bind(render_encoder);
 
-    for (auto* render_pipeline_state : render_pipeline_states) {
-        const erhe::graphics::Render_pipeline_create_info& pipeline = render_pipeline_state->data;
-        bool use_override_shader_stages = (parameters.override_shader_stages != nullptr);
-        if ((pipeline.shader_stages == nullptr) && !use_override_shader_stages) {
-            continue;
-        }
+    for (auto* render_pipeline_state : parameters.base_render_pipelines) {
+        erhe::graphics::Scoped_debug_group pipeline_scope{
+            render_encoder.get_command_buffer(),
+            render_pipeline_state->data.debug_label
+        };
 
-        auto* used_shader_stages = use_override_shader_stages
-            ? parameters.override_shader_stages
-            : pipeline.shader_stages;
-        if (!used_shader_stages->is_valid()) {
-            use_override_shader_stages = true;
-            used_shader_stages = parameters.error_shader_stages;
-        }
+        render_encoder.set_viewport_rect(base.viewport.x, base.viewport.y, base.viewport.width, base.viewport.height);
+        render_encoder.set_scissor_rect (base.viewport.x, base.viewport.y, base.viewport.width, base.viewport.height);
 
-        //erhe::graphics::Scoped_debug_group pass_scope{"Forward_renderer::render() pass"};
-        erhe::graphics::Scoped_debug_group pipeline_scope{pipeline.debug_label};
+        const Light_layer_partition partition = compute_light_layer_partition(base.lights);
 
-        if (use_override_shader_stages) {
-            erhe::graphics::Render_pipeline_state temp_state = make_temp_pipeline_state(pipeline);
-            parameters.render_encoder.set_render_pipeline_state(temp_state, used_shader_stages);
-        } else if (parameters.render_pass != nullptr) {
-            erhe::graphics::Render_pipeline* p = render_pipeline_state->get_pipeline_for(parameters.render_pass->get_descriptor());
-            if (p == nullptr) { continue; }
-            parameters.render_encoder.set_render_pipeline(*p);
-        } else {
-            erhe::graphics::Render_pipeline_state temp_state = make_temp_pipeline_state(pipeline);
-            parameters.render_encoder.set_render_pipeline_state(temp_state);
-        }
-        parameters.render_encoder.set_viewport_rect(viewport.x, viewport.y, viewport.width, viewport.height);
-        parameters.render_encoder.set_scissor_rect(viewport.x, viewport.y, viewport.width, viewport.height);
-        parameters.render_encoder.set_index_buffer(parameters.index_buffer);
-        parameters.render_encoder.set_vertex_buffer(parameters.vertex_buffer0, 0, 0);
-        parameters.render_encoder.set_vertex_buffer(parameters.vertex_buffer1, 0, 1);
-        parameters.render_encoder.set_vertex_buffer(parameters.vertex_buffer2, 0, 2);
+        Shader_key environment_key{};
+        environment_key.set(Shader_int::LIGHT_COUNT_DIRECTIONAL_NOT_SHADOWMAPPED, static_cast<uint32_t>(partition.per_type_nonshadow[0]));
+        environment_key.set(Shader_int::LIGHT_COUNT_DIRECTIONAL_SHADOWMAPPED,     static_cast<uint32_t>(partition.per_type_shadow   [0]));
+        environment_key.set(Shader_int::LIGHT_COUNT_SPOT_NOT_SHADOWMAPPED,        static_cast<uint32_t>(partition.per_type_nonshadow[1]));
+        environment_key.set(Shader_int::LIGHT_COUNT_SPOT_SHADOWMAPPED,            static_cast<uint32_t>(partition.per_type_shadow   [1]));
+        environment_key.set(Shader_int::LIGHT_COUNT_POINT_NOT_SHADOWMAPPED,       static_cast<uint32_t>(partition.per_type_nonshadow[2]));
+        environment_key.set(Shader_int::LIGHT_COUNT_POINT_SHADOWMAPPED,           static_cast<uint32_t>(partition.per_type_shadow   [2]));
+        environment_key.set(Shader_int::SHADER_DEBUG,                             static_cast<uint32_t>(parameters.shader_debug)); // TODO proper conversion
+        environment_key.set(Shader_int::SHADER_MULTIVIEW_COUNT,                   static_cast<uint16_t>(base.views.size()));
 
+        std::vector<Render_bucket> buckets;
         for (const auto& meshes : mesh_spans) {
-            ERHE_PROFILE_SCOPE("mesh span");
-            //ERHE_PROFILE_GPU_SCOPE(c_forward_renderer_render);
-            if (meshes.empty()) {
+            bucket_primitives(
+                buckets,
+                base.shader_key_boolean_mask_force_enable,
+                base.shader_key_boolean_mask_force_disable,
+                m_mesh_memory,
+                environment_key,
+                meshes,
+                parameters.primitive_mode,
+                Variant_signature_policy::require_exact_variant_signature
+            );
+        }
+
+        for (std::size_t bucket_index = 0, end = buckets.size(); bucket_index < end; ++bucket_index) {
+            const Render_bucket&      bucket       = buckets[bucket_index];
+            const Vertex_input_entry& vertex_input = m_mesh_memory.get_vertex_input(bucket.buffer_set.vertex_input_key);
+
+            const erhe::graphics::Reloadable_shader_stages* reloadable_shader_stages = m_shader_variant_cache.get(
+                bucket.shader_key,
+                &vertex_input.vertex_format
+            );
+            if (reloadable_shader_stages == nullptr) {
+                log_draw->warn(
+                    "No shader variant for bucket {} ({} primitives, {} vertex streams): {}",
+                    bucket_index,
+                    bucket.entries.size(),
+                    bucket.buffer_set.vertex_buffers.size(),
+                    bucket.shader_key.describe()
+                );
+                continue;
+            }
+            const erhe::graphics::Shader_stages* shader_stages = &reloadable_shader_stages->shader_stages;
+
+            erhe::graphics::Render_pipeline* render_pipeline = render_pipeline_state->get_pipeline_for(
+                base.render_pass->get_descriptor(),
+                shader_stages,
+                vertex_input.vertex_input.get(),
+                &vertex_input.vertex_format
+            );
+            if (render_pipeline == nullptr) {
+                log_draw->warn(
+                    "No render pipeline for bucket {} ({} primitives, {} vertex streams): {}",
+                    bucket_index,
+                    bucket.entries.size(),
+                    bucket.buffer_set.vertex_buffers.size(),
+                    bucket.shader_key.describe()
+                );
                 continue;
             }
 
+           erhe::graphics::Scoped_debug_group bucket_scope{
+                render_encoder.get_command_buffer(),
+                erhe::utility::Debug_label{
+                    fmt::format(
+                        "bucket {}/{} prims={} streams={} {}",
+                        bucket_index,
+                        buckets.size(),
+                        bucket.entries.size(),
+                        bucket.buffer_set.vertex_buffers.size(),
+                        bucket.shader_key.describe()
+                    )
+                }
+            };
+
+            base.render_encoder.set_render_pipeline(*render_pipeline);
+
+            erhe::graphics::Buffer* index_buffer = m_mesh_memory.get_index_buffer(bucket.buffer_set.index_buffer);
+            render_encoder.set_index_buffer(index_buffer);
+            for (std::size_t stream_index = 0; stream_index < bucket.buffer_set.vertex_buffers.size(); ++stream_index) {
+                erhe::graphics::Buffer* vertex_buffer = m_mesh_memory.get_vertex_buffer(bucket.buffer_set.vertex_buffers[stream_index]);
+                render_encoder.set_vertex_buffer(
+                    vertex_buffer,
+                    0,
+                    static_cast<uint32_t>(stream_index)
+                );
+            }
+
             std::size_t primitive_count{0};
-            Ring_buffer_range primitive_range = m_primitive_buffer.update(meshes, primitive_mode, filter, parameters.primitive_settings, primitive_count);
+            Ring_buffer_range primitive_range = m_primitive_buffer.update(bucket, parameters.primitive_mode, filter, parameters.primitive_settings, primitive_count);
             if (primitive_count == 0){
                 primitive_range.cancel();
                 continue;
             }
-            erhe::renderer::Draw_indirect_buffer_range draw_indirect_buffer_range = m_draw_indirect_buffer.update(meshes, primitive_mode, filter);
+            Draw_indirect_buffer_range draw_indirect_buffer_range = m_draw_indirect_buffer.update(bucket, parameters.primitive_mode, filter);
             if (draw_indirect_buffer_range.draw_indirect_count == 0) {
                 primitive_range.cancel();
                 draw_indirect_buffer_range.range.cancel();
                 continue;
             }
             ERHE_VERIFY(primitive_count == draw_indirect_buffer_range.draw_indirect_count);
-            m_primitive_buffer.bind(parameters.render_encoder, primitive_range);
-            m_draw_indirect_buffer.bind(parameters.render_encoder, draw_indirect_buffer_range.range); // Draw indirect buffer is not indexed, this binds the whole buffer
+            m_primitive_buffer.bind(render_encoder, primitive_range);
+            m_draw_indirect_buffer.bind(render_encoder, draw_indirect_buffer_range.range); // Draw indirect buffer is not indexed, this binds the whole buffer
 
-            parameters.render_encoder.multi_draw_indexed_primitives_indirect(
-                pipeline.input_assembly.primitive_topology,
-                parameters.index_type,
+            render_encoder.multi_draw_indexed_primitives_indirect(
+                erhe::graphics::Primitive_type::triangle, // render_pipeline->input_assembly.primitive_topology,
+                m_mesh_memory.get_index_format(bucket.buffer_set.index_buffer),
                 draw_indirect_buffer_range.range.get_byte_start_offset_in_buffer(),
                 draw_indirect_buffer_range.draw_indirect_count,
                 sizeof(erhe::graphics::Draw_indexed_primitives_indirect_command)
@@ -234,80 +302,96 @@ void Forward_renderer::render(const Render_parameters& parameters)
     joint_range.release();
     light_range.release();
 
-    m_texture_heap->unbind();
+    m_texture_heap->unbind(render_encoder.get_command_buffer());
 }
 
-void Forward_renderer::draw_primitives(const Render_parameters& parameters, const erhe::scene::Light* light)
+void Forward_renderer::draw_primitives(
+    const Primitive_render_parameters& parameters,
+    const erhe::scene::Light*          light
+)
 {
     ERHE_PROFILE_FUNCTION();
 
-    const auto& viewport               = parameters.viewport;
-    const auto* camera                 = parameters.camera;
-    const auto& lights                 = parameters.lights;
-    const auto& render_pipeline_states = parameters.render_pipeline_states;
+    const Base_render_parameters& base = parameters.base;
+    erhe::graphics::Render_command_encoder& render_encoder = base.render_encoder;
+    render_encoder.set_bind_group_layout(m_program_interface.bind_group_layout.get());
 
-    parameters.render_encoder.set_bind_group_layout(m_program_interface.bind_group_layout.get());
-
-    m_texture_heap->reset_heap();
+    m_texture_heap->reset_heap(render_encoder.get_command_buffer());
 
     using Ring_buffer_range = erhe::graphics::Ring_buffer_range;
-    Ring_buffer_range material_range = m_material_buffer.update(*m_texture_heap.get(), parameters.materials);
+    Ring_buffer_range material_range = m_material_buffer.update(*m_texture_heap.get(), base.materials);
     if (material_range.get_buffer() != nullptr) {
-        m_material_buffer.bind(parameters.render_encoder, material_range);
+        m_material_buffer.bind(render_encoder, material_range);
     }
 
     std::optional<Ring_buffer_range> camera_range;
-    if (camera != nullptr) {
-        camera_range = m_camera_buffer.update(
-            *camera->projection(),
-            *camera->get_node(),
-            viewport,
-            camera->get_exposure(),
-            parameters.grid_size,
-            parameters.grid_line_width,
-            parameters.frame_number,
-            parameters.reverse_depth,
-            parameters.depth_range,
-            parameters.conventions
+    if (!base.views.empty()) {
+        const float exposure = (base.camera != nullptr) ? base.camera->get_exposure() : 1.0f;
+        camera_range = m_camera_buffer.update_views(
+            base.views,
+            exposure,
+            base.grid_size,
+            base.grid_line_width,
+            base.frame_number,
+            base.reverse_depth,
+            base.depth_range,
+            base.conventions
         );
-        m_camera_buffer.bind(parameters.render_encoder, camera_range.value());
+        m_camera_buffer.bind(render_encoder, camera_range.value());
+    }
+    else if (base.camera != nullptr) {
+        camera_range = m_camera_buffer.update(
+            *base.camera->projection(),
+            *base.camera->get_node(),
+            base.viewport,
+            base.camera->get_exposure(),
+            base.grid_size,
+            base.grid_line_width,
+            base.frame_number,
+            base.reverse_depth,
+            base.depth_range,
+            base.conventions
+        );
+        m_camera_buffer.bind(render_encoder, camera_range.value());
     }
 
     std::optional<Ring_buffer_range> light_control_range{};
     if (light != nullptr) {
-        const auto* light_projection_transforms = parameters.light_projections->get_light_projection_transforms_for_light(light);
+        const auto* light_projection_transforms = base.light_projections->get_light_projection_transforms_for_light(light);
         if (light_projection_transforms != nullptr) {
             light_control_range = m_light_buffer.update_control(light_projection_transforms->index);
-            m_light_buffer.bind_control_buffer(parameters.render_encoder, light_control_range.value());
+            m_light_buffer.bind_control_buffer(render_encoder, light_control_range.value());
         } else {
             //// log_render->warn("Light {} has no light projection transforms", light->name());
         }
     }
 
-    Ring_buffer_range light_range = m_light_buffer.update(lights, parameters.light_projections, parameters.ambient_light);
-    m_light_buffer.bind_light_buffer(parameters.render_encoder, light_range);
-    m_light_buffer.bind_shadow_samplers(parameters.render_encoder, parameters.light_projections);
+    Ring_buffer_range light_range = m_light_buffer.update(base.lights, base.light_projections, base.ambient_light);
+    m_light_buffer.bind_light_buffer(render_encoder, light_range);
+    m_light_buffer.bind_shadow_samplers(render_encoder, base.light_projections);
 
-    m_texture_heap->bind(parameters.render_encoder);
+    m_texture_heap->bind(render_encoder);
 
-    for (auto* render_pipeline_state : render_pipeline_states) {
-        const erhe::graphics::Render_pipeline_create_info& pipeline = render_pipeline_state->data;
-        if (!pipeline.shader_stages) {
-            continue;
-        }
-        erhe::graphics::Scoped_debug_group pass_scope{pipeline.debug_label};
+    const erhe::graphics::Base_render_pipeline_create_info& pipeline = parameters.base_render_pipeline.data;
+    erhe::graphics::Scoped_debug_group pass_scope{
+        render_encoder.get_command_buffer(),
+        pipeline.debug_label
+    };
 
-        if (parameters.render_pass != nullptr) {
-            erhe::graphics::Render_pipeline* p = render_pipeline_state->get_pipeline_for(parameters.render_pass->get_descriptor());
-            if (p == nullptr) { continue; }
-            parameters.render_encoder.set_render_pipeline(*p);
-        } else {
-            erhe::graphics::Render_pipeline_state temp_state = make_temp_pipeline_state(pipeline);
-            parameters.render_encoder.set_render_pipeline_state(temp_state);
-        }
-        parameters.render_encoder.set_viewport_rect(viewport.x, viewport.y, viewport.width, viewport.height);
-        parameters.render_encoder.set_scissor_rect(viewport.x, viewport.y, viewport.width, viewport.height);
-        parameters.render_encoder.draw_primitives(pipeline.input_assembly.primitive_topology, 0, parameters.non_mesh_vertex_count);
+    const Vertex_input_entry& empty_vertex_input = m_mesh_memory.get_empty_vertex_input();
+
+    ERHE_VERIFY(base.render_pass != nullptr);
+    erhe::graphics::Render_pipeline* render_pipeline = parameters.base_render_pipeline.get_pipeline_for(
+        base.render_pass->get_descriptor(),
+        parameters.shader_stages,
+        empty_vertex_input.vertex_input.get(),
+        &empty_vertex_input.vertex_format
+    );
+    if (render_pipeline != nullptr) {
+        render_encoder.set_render_pipeline(*render_pipeline);
+        render_encoder.set_viewport_rect  (base.viewport.x, base.viewport.y, base.viewport.width, base.viewport.height);
+        render_encoder.set_scissor_rect   (base.viewport.x, base.viewport.y, base.viewport.width, base.viewport.height);
+        render_encoder.draw_primitives    (pipeline.input_assembly.primitive_topology, 0, parameters.vertex_count);
     }
 
     material_range.release();
@@ -320,7 +404,125 @@ void Forward_renderer::draw_primitives(const Render_parameters& parameters, cons
         camera_range.value().release();
     }
 
-    m_texture_heap->unbind();
+    m_texture_heap->unbind(render_encoder.get_command_buffer());
+}
+
+auto Forward_renderer::prewarm_standard_variants(const Prewarm_parameters& parameters) -> std::size_t
+{
+    ERHE_PROFILE_FUNCTION();
+
+    // Empty multiview_view_counts means "single view" (SHADER_MULTIVIEW_COUNT = 0),
+    // which matches the runtime base.views.empty() single-camera path.
+    static constexpr uint32_t single_view_default[] = { 0u };
+    const std::span<const uint32_t> view_counts = parameters.multiview_view_counts.empty()
+        ? std::span<const uint32_t>{single_view_default}
+        : parameters.multiview_view_counts;
+
+    std::size_t pipeline_warmup_count = 0;
+
+    for (erhe::graphics::Base_render_pipeline* render_pipeline_state : parameters.render_pipeline_states) {
+        if (render_pipeline_state == nullptr) {
+            continue;
+        }
+
+        for (const uint32_t view_count : view_counts) {
+            // Mirrors the environment_key block in render() above so the
+            // per-primitive Shader_key::derive sees the same light counts +
+            // multiview width the runtime would.
+            Shader_key environment_key{};
+            environment_key.set(Shader_int::LIGHT_COUNT_DIRECTIONAL_NOT_SHADOWMAPPED, static_cast<uint32_t>(parameters.light_partition.per_type_nonshadow[0]));
+            environment_key.set(Shader_int::LIGHT_COUNT_DIRECTIONAL_SHADOWMAPPED,     static_cast<uint32_t>(parameters.light_partition.per_type_shadow   [0]));
+            environment_key.set(Shader_int::LIGHT_COUNT_SPOT_NOT_SHADOWMAPPED,        static_cast<uint32_t>(parameters.light_partition.per_type_nonshadow[1]));
+            environment_key.set(Shader_int::LIGHT_COUNT_SPOT_SHADOWMAPPED,            static_cast<uint32_t>(parameters.light_partition.per_type_shadow   [1]));
+            environment_key.set(Shader_int::LIGHT_COUNT_POINT_NOT_SHADOWMAPPED,       static_cast<uint32_t>(parameters.light_partition.per_type_nonshadow[2]));
+            environment_key.set(Shader_int::LIGHT_COUNT_POINT_SHADOWMAPPED,           static_cast<uint32_t>(parameters.light_partition.per_type_shadow   [2]));
+            environment_key.set(Shader_int::SHADER_DEBUG,                             static_cast<uint32_t>(parameters.shader_debug));
+            environment_key.set(Shader_int::SHADER_MULTIVIEW_COUNT,                   view_count);
+
+            std::vector<Render_bucket> buckets;
+            for (const auto& meshes : parameters.mesh_spans) {
+                bucket_primitives(
+                    buckets,
+                    parameters.shader_key_force_enable_mask,
+                    parameters.shader_key_force_disable_mask,
+                    parameters.mesh_memory,
+                    environment_key,
+                    meshes,
+                    parameters.primitive_mode,
+                    Variant_signature_policy::require_exact_variant_signature
+                );
+            }
+
+            for (const Render_bucket& bucket : buckets) {
+                const Vertex_input_entry& vertex_input = parameters.mesh_memory.get_vertex_input(bucket.buffer_set.vertex_input_key);
+
+                // Phase 1: force shader-module compile (glslang -> SPIR-V ->
+                // vkCreateShaderModule) for this variant.
+                const erhe::graphics::Reloadable_shader_stages* reloadable_shader_stages = m_shader_variant_cache.get(
+                    bucket.shader_key,
+                    &vertex_input.vertex_format
+                );
+                if (reloadable_shader_stages == nullptr) {
+                    continue;
+                }
+
+                if (parameters.warmup_targets.empty()) {
+                    continue;
+                }
+
+                // Phase 2: populate the driver-level VkPipelineCache for every
+                // (Render_pipeline_create_info, bucket-variant-key) tuple whose
+                // view_count matches this iteration.
+                for (const Warmup_target& target : parameters.warmup_targets) {
+                    if (target.view_count != view_count) {
+                        continue;
+                    }
+                    erhe::graphics::Render_pipeline_create_info ci{
+                        .base          = render_pipeline_state->data,
+                        .shader_stages = &reloadable_shader_stages->shader_stages,
+                        .vertex_input  = vertex_input.vertex_input.get(),
+                        .vertex_format = &vertex_input.vertex_format
+                    };
+                    ci.color_attachment_count    = target.color_attachment_count;
+                    ci.color_attachment_formats  = target.color_attachment_formats;
+                    ci.color_usage_before        = target.color_usage_before;
+                    ci.color_usage_after         = target.color_usage_after;
+                    ci.depth_attachment_format   = target.depth_attachment_format;
+                    ci.stencil_attachment_format = target.stencil_attachment_format;
+                    ci.depth_usage_before        = target.depth_usage_before;
+                    ci.depth_usage_after         = target.depth_usage_after;
+                    ci.sample_count              = target.sample_count;
+                    m_graphics_device.warmup_render_pipeline(ci);
+                    ++pipeline_warmup_count;
+                }
+            }
+
+            // Content-library materials whose meshes are not yet attached:
+            // key each against the fallback Vertex_format with both
+            // mesh_has_skin = false and mesh_has_skin = true so a later
+            // runtime mesh-attach hits the cache. When the fallback format
+            // carries no joint attributes, the skinned variant collapses to
+            // the same key and the second get() is a cache hit.
+            for (const std::shared_ptr<erhe::primitive::Material>& material : parameters.extra_materials) {
+                if (!material) {
+                    continue;
+                }
+                for (const bool has_skin : { false, true }) {
+                    const erhe::dataformat::Vertex_format& vertex_format = has_skin
+                        ? parameters.mesh_memory.vertex_format_skinned
+                        : parameters.mesh_memory.vertex_format_not_skinned;
+
+                    Shader_key derived = environment_key.derive(material.get(), &vertex_format, has_skin);
+                    derived.bool_mask |=  parameters.shader_key_force_enable_mask;
+                    derived.bool_mask &= ~parameters.shader_key_force_disable_mask;
+
+                    static_cast<void>(m_shader_variant_cache.get(derived, &vertex_format));
+                }
+            }
+        }
+    }
+
+    return pipeline_warmup_count;
 }
 
 } // namespace erhe::scene_renderer

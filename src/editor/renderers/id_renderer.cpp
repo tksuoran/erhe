@@ -24,6 +24,7 @@
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene_renderer/program_interface.hpp"
+#include "erhe_scene_renderer/shader_variant_cache.hpp"
 
 namespace editor {
 
@@ -46,37 +47,41 @@ using Depth_stencil_state  = erhe::graphics::Depth_stencil_state;
 using Color_blend_state    = erhe::graphics::Color_blend_state;
 
 Id_renderer::Id_renderer(
-    const Id_renderer_config&                id_renderer_config,
-    erhe::graphics::Device&                  graphics_device,
-    erhe::scene_renderer::Program_interface& program_interface,
-    erhe::scene_renderer::Mesh_memory&       mesh_memory,
-    Programs&                                programs
+    const Id_renderer_config&                   id_renderer_config,
+    erhe::graphics::Device&                     graphics_device,
+    erhe::scene_renderer::Program_interface&    program_interface,
+    erhe::scene_renderer::Mesh_memory&          mesh_memory,
+    erhe::scene_renderer::Shader_variant_cache& shader_variant_cache,
+    Programs&                                   programs
 )
     : m_graphics_device      {graphics_device}
-    , m_mesh_memory          {mesh_memory}
-    , m_y_flip{graphics_device.get_info().coordinate_conventions.clip_space_y_flip == erhe::math::Clip_space_y_flip::enabled}
+    , m_mesh_memory          {mesh_memory}   
+    , m_shader_variant_cache {shader_variant_cache}
+    , m_programs             {programs}
+    , m_y_flip               {graphics_device.get_info().coordinate_conventions.clip_space_y_flip == erhe::math::Clip_space_y_flip::enabled}
     , m_camera_buffers       {graphics_device, program_interface.camera_interface}
     , m_draw_indirect_buffers{graphics_device, program_interface.config.max_draw_count}
     , m_primitive_buffers    {graphics_device, program_interface.primitive_interface}
-    , m_pipeline{graphics_device, erhe::graphics::Render_pipeline_create_info{
-        .debug_label    = erhe::utility::Debug_label{"ID Renderer"},
-        .shader_stages  = &programs.id.shader_stages,
-        .vertex_input   = &mesh_memory.vertex_input,
-        .input_assembly = Input_assembly_state::triangle,
-        .rasterization  = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
-        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(),
-        .color_blend    = Color_blend_state::color_blend_disabled
-    }}
-
-    , m_selective_depth_clear_pipeline{graphics_device, erhe::graphics::Render_pipeline_create_info{
-        .debug_label    = erhe::utility::Debug_label{"ID Renderer selective depth clear"},
-        .shader_stages  = &programs.id.shader_stages,
-        .vertex_input   = &mesh_memory.vertex_input,
-        .input_assembly = Input_assembly_state::triangle,
-        .rasterization  = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
-        .depth_stencil  = Depth_stencil_state::depth_test_always_stencil_test_disabled,
-        .color_blend    = Color_blend_state::color_writes_disabled,
-    }}
+    , m_pipeline{
+        graphics_device,
+        erhe::graphics::Base_render_pipeline_create_info{
+            .debug_label    = erhe::utility::Debug_label{"ID Renderer"},
+            .input_assembly = Input_assembly_state::triangle,
+            .rasterization  = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
+            .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(),
+            .color_blend    = Color_blend_state::color_blend_disabled
+        }
+    }
+    , m_selective_depth_clear_pipeline{
+        graphics_device,
+        erhe::graphics::Base_render_pipeline_create_info{
+            .debug_label    = erhe::utility::Debug_label{"ID Renderer selective depth clear"},
+            .input_assembly = Input_assembly_state::triangle,
+            .rasterization  = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
+            .depth_stencil  = Depth_stencil_state::depth_test_always_stencil_test_disabled,
+            .color_blend    = Color_blend_state::color_writes_disabled,
+        }
+    }
     , m_texture_read_buffer{
         graphics_device,
         erhe::graphics::Buffer_target::transfer_dst,
@@ -188,7 +193,12 @@ void Id_renderer::update_framebuffer(const erhe::math::Viewport viewport)
     }
 }
 
-void Id_renderer::render(erhe::graphics::Render_command_encoder& render_encoder, const std::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes)
+void Id_renderer::render_meshes(
+    const Render_parameters&                                   parameters,
+    erhe::graphics::Render_command_encoder&                    render_encoder,
+    erhe::graphics::Base_render_pipeline&                      pipeline,
+    const std::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes
+)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -199,33 +209,101 @@ void Id_renderer::render(erhe::graphics::Render_command_encoder& render_encoder,
         .require_at_least_one_bit_clear = 0u
     };
 
-    const erhe::scene_renderer::Primitive_interface_settings settings{
+    const erhe::scene_renderer::Primitive_interface_settings primitive_settings{
         .color_source = erhe::scene_renderer::Primitive_color_source::id_offset
     };
 
     const erhe::primitive::Primitive_mode primitive_mode{erhe::primitive::Primitive_mode::polygon_fill};
-    std::size_t primitive_count{0};
-    erhe::graphics::Ring_buffer_range          primitive_range            = m_primitive_buffers.update(meshes, primitive_mode, id_filter, settings, primitive_count, true);
-    erhe::renderer::Draw_indirect_buffer_range draw_indirect_buffer_range = m_draw_indirect_buffers.update(meshes, primitive_mode, id_filter);
-    if (draw_indirect_buffer_range.draw_indirect_count == 0) {
-        return;
-    }
-    if (primitive_count != draw_indirect_buffer_range.draw_indirect_count) {
-        log_render->warn("primitive_range != draw_indirect_buffer_range.draw_indirect_count");
-    }
 
-    m_primitive_buffers    .bind(render_encoder, primitive_range);
-    m_draw_indirect_buffers.bind(render_encoder, draw_indirect_buffer_range.range);
-    render_encoder.multi_draw_indexed_primitives_indirect(
-        m_pipeline.data.input_assembly.primitive_topology,
-        m_mesh_memory.buffer_info.index_type,
-        draw_indirect_buffer_range.range.get_byte_start_offset_in_buffer(),
-        draw_indirect_buffer_range.draw_indirect_count,
-        sizeof(erhe::graphics::Draw_indexed_primitives_indirect_command)
+    using namespace erhe::scene_renderer;
+    std::vector<Render_bucket> buckets;
+    const uint32_t boolean_mask_force_enable = erhe::scene_renderer::make_shader_bool_mask(
+        erhe::scene_renderer::Shader_bool::VARIANT_ID_RENDER
+    );
+    const uint32_t boolean_mask_force_disable = 0; // TODO: Maybe disable some features for ID rendering?
+    bucket_primitives(
+        buckets,
+        boolean_mask_force_enable,
+        boolean_mask_force_disable,
+        m_mesh_memory,
+        Shader_key{},
+        meshes,
+        primitive_mode,
+        Variant_signature_policy::accept_all_variant_signatures
     );
 
-    primitive_range.release();
-    draw_indirect_buffer_range.range.release();
+    for (std::size_t bucket_index = 0, end = buckets.size(); bucket_index < end; ++bucket_index) {
+        const Render_bucket&      bucket       = buckets[bucket_index];
+        const Vertex_input_entry& vertex_input = m_mesh_memory.get_vertex_input(bucket.buffer_set.vertex_input_key);
+
+        const erhe::graphics::Reloadable_shader_stages* reloadable_shader_stages = m_shader_variant_cache.get(
+            bucket.shader_key,
+            &vertex_input.vertex_format
+        );
+        if (reloadable_shader_stages == nullptr) {
+            log_draw->warn(
+                "No shader variant for bucket {} ({} primitives, {} vertex streams): {}",
+                bucket_index,
+                bucket.entries.size(),
+                bucket.buffer_set.vertex_buffers.size(),
+                bucket.shader_key.describe()
+            );
+            continue;
+        }
+        const erhe::graphics::Shader_stages* shader_stages = &reloadable_shader_stages->shader_stages;
+
+        erhe::graphics::Render_pipeline* render_pipeline = pipeline.get_pipeline_for(
+            parameters.render_pass->get_descriptor(),
+            shader_stages,
+            vertex_input.vertex_input.get(),
+            &vertex_input.vertex_format
+        );
+        if (render_pipeline == nullptr) {
+            log_draw->warn(
+                "No render pipeline for bucket {} ({} primitives, {} vertex streams): {}",
+                bucket_index,
+                bucket.entries.size(),
+                bucket.buffer_set.vertex_buffers.size(),
+                bucket.shader_key.describe()
+            );
+            continue;
+        }
+
+        erhe::graphics::Scoped_debug_group bucket_scope{
+            render_encoder.get_command_buffer(),
+            erhe::utility::Debug_label{
+                fmt::format(
+                    "bucket {}/{} prims={} streams={} {}",
+                    bucket_index,
+                    buckets.size(),
+                    bucket.entries.size(),
+                    bucket.buffer_set.vertex_buffers.size(),
+                    bucket.shader_key.describe()
+                )
+            }
+        };
+
+        std::size_t primitive_count{0};
+        erhe::graphics::Ring_buffer_range primitive_range = m_primitive_buffers.update(bucket, primitive_mode, id_filter, primitive_settings, primitive_count);
+        erhe::scene_renderer::Draw_indirect_buffer_range draw_indirect_buffer_range = m_draw_indirect_buffers.update(bucket, primitive_mode, id_filter);
+        if (primitive_count != draw_indirect_buffer_range.draw_indirect_count) {
+            log_render->warn("primitive_range != draw_indirect_buffer_range.draw_indirect_count");
+        }
+        if (draw_indirect_buffer_range.draw_indirect_count >= 0) {
+            m_primitive_buffers    .bind(render_encoder, primitive_range);
+            m_draw_indirect_buffers.bind(render_encoder, draw_indirect_buffer_range.range);
+            render_encoder.multi_draw_indexed_primitives_indirect(
+                m_pipeline.data.input_assembly.primitive_topology,
+                m_mesh_memory.get_index_format(bucket.buffer_set.index_buffer),
+                draw_indirect_buffer_range.range.get_byte_start_offset_in_buffer(),
+                draw_indirect_buffer_range.draw_indirect_count,
+                sizeof(erhe::graphics::Draw_indexed_primitives_indirect_command)
+            );
+        }
+
+        primitive_range.release();
+        draw_indirect_buffer_range.range.release();
+    }
 }
 
 void Id_renderer::render(const Render_parameters& parameters)
@@ -256,7 +334,7 @@ void Id_renderer::render(const Render_parameters& parameters)
     const std::size_t color_image_size_bytes = s_extent * s_extent * erhe::dataformat::get_format_size_bytes(m_color_texture->get_pixelformat());
     const std::size_t depth_image_size_bytes = s_extent * s_extent * erhe::dataformat::get_format_size_bytes(m_depth_texture->get_pixelformat());
 
-    Scoped_debug_group debug_group{"Id_renderer::render()"};
+    Scoped_debug_group debug_group{parameters.command_buffer, "Id_renderer::render()"};
 
     const auto projection_transforms = camera.projection_transforms(viewport, parameters.reverse_depth, parameters.depth_range, parameters.conventions);
     const mat4 clip_from_world       = projection_transforms.clip_from_world.get_matrix();
@@ -295,39 +373,27 @@ void Id_renderer::render(const Render_parameters& parameters)
         //// TODO Abstraction for partial clear
         m_primitive_buffers.reset_id_ranges();
 
-        const Render_pass_descriptor& render_pass_desc = m_render_pass->get_descriptor();
+        //const Render_pass_descriptor& render_pass_desc = m_render_pass->get_descriptor();
 
-        erhe::graphics::Render_pipeline* id_pipeline = m_pipeline.get_pipeline_for(render_pass_desc);
-        if (id_pipeline != nullptr) {
-            encoder.set_render_pipeline(*id_pipeline);
-
-            for (auto meshes : content_mesh_spans) {
-                render(encoder, meshes);
-            }
+        for (auto meshes : content_mesh_spans) {
+            render_meshes(parameters, encoder, m_pipeline, meshes);
         }
 
         // Clear depth for tool pixels
         {
-            erhe::graphics::Render_pipeline* depth_clear_pipeline = m_selective_depth_clear_pipeline.get_pipeline_for(render_pass_desc);
-            if (depth_clear_pipeline != nullptr) {
-                encoder.set_render_pipeline(*depth_clear_pipeline);
-                encoder.set_viewport_rect(viewport.x, viewport.y, viewport.width, viewport.height);
-                const float far_depth = parameters.reverse_depth ? 0.0f : 1.0f;
-                encoder.set_viewport_depth_range(far_depth, far_depth);
-                for (auto mesh_spans : tool_mesh_spans) {
-                    render(encoder, mesh_spans);
-                }
+            encoder.set_viewport_rect(viewport.x, viewport.y, viewport.width, viewport.height);
+            const float far_depth = parameters.reverse_depth ? 0.0f : 1.0f;
+            encoder.set_viewport_depth_range(far_depth, far_depth);
+            for (auto mesh_spans : tool_mesh_spans) {
+                render_meshes(parameters, encoder, m_selective_depth_clear_pipeline, mesh_spans);
             }
         }
 
         // Resume normal depth usage
         {
-            if (id_pipeline != nullptr) {
-                encoder.set_render_pipeline(*id_pipeline);
-                encoder.set_viewport_depth_range(0.0f, 1.0f);
-                for (auto meshes : tool_mesh_spans) {
-                    render(encoder, meshes);
-                }
+            encoder.set_viewport_depth_range(0.0f, 1.0f);
+            for (auto meshes : tool_mesh_spans) {
+                render_meshes(parameters, encoder, m_pipeline, meshes);
             }
         }
     }

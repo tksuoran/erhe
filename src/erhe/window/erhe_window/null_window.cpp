@@ -48,7 +48,7 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
     return true;
 }
 
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
 void Context_window::make_current() const
 {
 }
@@ -267,7 +267,7 @@ auto Context_window::get_wl_display() const -> struct wl_display*
 }
 #endif
 
-#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+#if defined(ERHE_GRAPHICS_API_VULKAN)
 auto Context_window::get_required_vulkan_instance_extensions() -> const std::vector<std::string>&
 {
     return m_required_instance_extensions;

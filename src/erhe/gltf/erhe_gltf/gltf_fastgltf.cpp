@@ -46,6 +46,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <limits>
+#include <optional>
 #include <string_view>
 #include <string>
 #include <variant>
@@ -55,6 +56,44 @@ using erhe::geometry::Mesh_info;
 using erhe::geometry::get_mesh_info;
 
 namespace erhe::gltf {
+
+// glTF extras carriers for erhe-specific Material_data fields that do not
+// have a standard glTF representation: bxdf_model (when not isotropic and
+// not unlit -- unlit rides on KHR_materials_unlit), use_circular_brushed
+// _metal, use_aniso_control, and the per-axis roughness_y. Round-trip
+// preservation is import-extras-read + export-extras-write keyed on the
+// glTF material index.
+class Material_extras
+{
+public:
+    std::optional<float>                       roughness_y;
+    std::optional<erhe::primitive::Bxdf_model> bxdf_model;
+    std::optional<bool>                        use_circular_brushed_metal;
+    std::optional<bool>                        use_aniso_control;
+};
+
+[[nodiscard]] auto bxdf_model_to_c_str(erhe::primitive::Bxdf_model model) -> const char*
+{
+    switch (model) {
+        case erhe::primitive::Bxdf_model::unlit:                    return "unlit";
+        case erhe::primitive::Bxdf_model::isotropic_brdf:           return "isotropic_brdf";
+        case erhe::primitive::Bxdf_model::anisotropic_brdf:         return "anisotropic_brdf";
+        case erhe::primitive::Bxdf_model::anisotropic_slope:        return "anisotropic_slope";
+        case erhe::primitive::Bxdf_model::anisotropic_engine_ready: return "anisotropic_engine_ready";
+    }
+    return "isotropic_brdf";
+}
+
+[[nodiscard]] auto bxdf_model_from_string(std::string_view s) -> std::optional<erhe::primitive::Bxdf_model>
+{
+    if (s == "unlit")                    return erhe::primitive::Bxdf_model::unlit;
+    if (s == "isotropic_brdf")           return erhe::primitive::Bxdf_model::isotropic_brdf;
+    if (s == "anisotropic_brdf")         return erhe::primitive::Bxdf_model::anisotropic_brdf;
+    if (s == "anisotropic_slope")        return erhe::primitive::Bxdf_model::anisotropic_slope;
+    if (s == "anisotropic_engine_ready") return erhe::primitive::Bxdf_model::anisotropic_engine_ready;
+    return std::nullopt;
+}
+
 
 constexpr glm::mat4 mat4_yup_from_zup{
     1.0f, 0.0f, 0.0f, 0.0f,
@@ -1242,6 +1281,16 @@ private:
 
         erhe::primitive::Material_data&             create_data     = create_info.data;
         erhe::primitive::Material_texture_samplers& create_samplers = create_data.texture_samplers;
+
+        // KHR_materials_unlit: import the unlit flag into Material_data::bxdf_model
+        // so the editor renders the material exactly as the source glTF intended.
+        // The specular-glossiness fallback below also flips bxdf_model to unlit;
+        // honoring KHR_materials_unlit first means we do not need that path's
+        // implicit fall-through to set it.
+        if (material.unlit) {
+            create_data.bxdf_model = erhe::primitive::Bxdf_model::unlit;
+        }
+
         if (material.normalTexture.has_value()) {
             apply_texture(material.normalTexture.value(), create_data.texture_samplers.normal, true);
             create_data.normal_texture_scale = material.normalTexture.value().scale;
@@ -1265,7 +1314,7 @@ private:
             // NOTE: MaterialSpecularGlossiness is only supported in a hacky way to load Hintze Hall
             const std::unique_ptr<fastgltf::MaterialSpecularGlossiness>& specular_glossiness = material.specularGlossiness;
             if (specular_glossiness && specular_glossiness->diffuseTexture.has_value()) {
-                create_data.unlit = true;
+                create_data.bxdf_model = erhe::primitive::Bxdf_model::unlit;
                 apply_texture(specular_glossiness->diffuseTexture.value(), create_samplers.base_color, false);
             }
 
@@ -1910,11 +1959,13 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
         fastgltf::Extensions::KHR_materials_sheen                 |
         //fastgltf::Extensions::KHR_draco_mesh_compression          |
         fastgltf::Extensions::KHR_materials_unlit;
-    // Collect erhe-specific extras during parsing
-    std::unordered_map<std::size_t, float> material_roughness_y;
+    // Collect erhe-specific extras during parsing. The parser callback
+    // runs before parse_material(), so we accumulate into a per-index map
+    // and replay each field after the standard glTF parse completes.
+    std::unordered_map<std::size_t, Material_extras> material_extras_map;
 
     fastgltf::Parser fastgltf_parser{extensions};
-    fastgltf_parser.setUserPointer(&material_roughness_y);
+    fastgltf_parser.setUserPointer(&material_extras_map);
     fastgltf_parser.setExtrasParseCallback(
         [](simdjson::dom::object* extras, std::size_t object_index, fastgltf::Category object_type, void* user_pointer) {
             if (object_type != fastgltf::Category::Materials) {
@@ -1923,12 +1974,40 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
             if (extras == nullptr) {
                 return;
             }
-            auto* roughness_y_map = static_cast<std::unordered_map<std::size_t, float>*>(user_pointer);
+            auto* extras_map = static_cast<std::unordered_map<std::size_t, Material_extras>*>(user_pointer);
+            Material_extras& entry = (*extras_map)[object_index];
+
             simdjson::dom::element roughness_y_element;
             if (extras->at_key("roughness_y").get(roughness_y_element) == simdjson::error_code::SUCCESS) {
                 double value = 0.0;
                 if (roughness_y_element.get_double().get(value) == simdjson::error_code::SUCCESS) {
-                    (*roughness_y_map)[object_index] = static_cast<float>(value);
+                    entry.roughness_y = static_cast<float>(value);
+                }
+            }
+
+            simdjson::dom::element bxdf_model_element;
+            if (extras->at_key("bxdf_model").get(bxdf_model_element) == simdjson::error_code::SUCCESS) {
+                std::string_view value;
+                if (bxdf_model_element.get_string().get(value) == simdjson::error_code::SUCCESS) {
+                    if (auto parsed = bxdf_model_from_string(value); parsed.has_value()) {
+                        entry.bxdf_model = parsed;
+                    }
+                }
+            }
+
+            simdjson::dom::element circular_element;
+            if (extras->at_key("use_circular_brushed_metal").get(circular_element) == simdjson::error_code::SUCCESS) {
+                bool value = false;
+                if (circular_element.get_bool().get(value) == simdjson::error_code::SUCCESS) {
+                    entry.use_circular_brushed_metal = value;
+                }
+            }
+
+            simdjson::dom::element aniso_element;
+            if (extras->at_key("use_aniso_control").get(aniso_element) == simdjson::error_code::SUCCESS) {
+                bool value = false;
+                if (aniso_element.get_bool().get(value) == simdjson::error_code::SUCCESS) {
+                    entry.use_aniso_control = value;
                 }
             }
         }
@@ -1949,13 +2028,29 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
     Gltf_parser erhe_parser{std::move(asset), result, arguments};
     erhe_parser.parse_and_build();
 
-    // Apply extras data to parsed materials
-    for (const auto& [material_index, roughness_y] : material_roughness_y) {
-        if (material_index < result.materials.size()) {
-            const std::shared_ptr<erhe::primitive::Material>& material = result.materials[material_index];
-            if (material) {
-                material->data.roughness.y = roughness_y;
-            }
+    // Apply extras data to parsed materials. bxdf_model in extras
+    // overrides the KHR_materials_unlit-driven assignment from
+    // parse_material when both are present (e.g. an anisotropic_brdf
+    // material that also wrote bxdf_model into extras for clarity).
+    for (const auto& [material_index, extras] : material_extras_map) {
+        if (material_index >= result.materials.size()) {
+            continue;
+        }
+        const std::shared_ptr<erhe::primitive::Material>& material = result.materials[material_index];
+        if (!material) {
+            continue;
+        }
+        if (extras.roughness_y.has_value()) {
+            material->data.roughness.y = extras.roughness_y.value();
+        }
+        if (extras.bxdf_model.has_value()) {
+            material->data.bxdf_model = extras.bxdf_model.value();
+        }
+        if (extras.use_circular_brushed_metal.has_value()) {
+            material->data.use_circular_brushed_metal = extras.use_circular_brushed_metal.value();
+        }
+        if (extras.use_aniso_control.has_value()) {
+            material->data.use_aniso_control = extras.use_aniso_control.value();
         }
     }
 
@@ -2363,16 +2458,18 @@ private:
         erhe::buffer::Cpu_buffer vertex_buffer{"", vertex_count * vertex_stride};
         erhe::buffer::Cpu_buffer index_buffer {"", index_count * index_stride};
 
-        erhe::primitive::Cpu_buffer_sink buffer_sink{{&vertex_buffer}, index_buffer};
+        erhe::primitive::Cpu_vertex_buffer_sink vertex_buffer_sink{{&vertex_buffer}};
+        erhe::primitive::Cpu_index_buffer_sink index_buffer_sink{index_buffer};
         const erhe::primitive::Build_info build_info{
             .primitive_types = {
                 .fill_triangles = true,
             },
             .buffer_info = {
-                .normal_style  = erhe::primitive::Normal_style::corner_normals,
-                .index_type    = erhe::dataformat::Format::format_32_scalar_uint,
-                .vertex_format = vertex_format,
-                .buffer_sink   = buffer_sink
+                .normal_style       = erhe::primitive::Normal_style::corner_normals,
+                .index_type         = erhe::dataformat::Format::format_32_scalar_uint,
+                .vertex_format      = vertex_format,
+                .vertex_buffer_sink = vertex_buffer_sink,
+                .index_buffer_sink  = index_buffer_sink
             }
         };
 
@@ -2441,6 +2538,12 @@ private:
                 .packedOcclusionRoughnessMetallicTextures = {},
                 .name                                     = FASTGLTF_STD_PMR_NS::string{material->get_name()}
             };
+            // Preserve the unlit BxDF via the standard KHR_materials_unlit
+            // extension; the import path keys off material.unlit in the
+            // same way. The other bxdf_model values + the use_* flags are
+            // erhe-specific and round-trip via extras (see
+            // setExtrasWriteCallback below).
+            gltf_material.unlit = (data.bxdf_model == erhe::primitive::Bxdf_model::unlit);
             m_gltf_asset.materials.push_back(std::move(gltf_material));
         }
         m_exported_materials.insert({material, gltf_material_index});
@@ -2696,13 +2799,47 @@ auto Gltf_exporter::export_gltf() -> std::string
             if (it == map->end()) {
                 return std::nullopt;
             }
-            const erhe::primitive::Material* material = it->second;
-            const float roughness_x = material->data.roughness.x;
-            const float roughness_y = material->data.roughness.y;
-            if (roughness_x == roughness_y) {
-                return std::nullopt; // No extra data needed
+            const erhe::primitive::Material*      material = it->second;
+            const erhe::primitive::Material_data& data     = material->data;
+
+            // Skip writing the bxdf_model extra when it's the
+            // round-trip default (isotropic_brdf) or when it's unlit
+            // (KHR_materials_unlit carries that case at the standard
+            // extension level).
+            const bool emit_bxdf_model =
+                (data.bxdf_model != erhe::primitive::Bxdf_model::isotropic_brdf) &&
+                (data.bxdf_model != erhe::primitive::Bxdf_model::unlit);
+            const bool emit_roughness_y =
+                (data.roughness.x != data.roughness.y);
+
+            if (!emit_roughness_y &&
+                !emit_bxdf_model &&
+                !data.use_circular_brushed_metal &&
+                !data.use_aniso_control)
+            {
+                return std::nullopt;
             }
-            return std::string("{\"roughness_y\": ") + std::to_string(roughness_y) + "}";
+
+            std::string out{"{"};
+            const char* sep = "";
+            if (emit_roughness_y) {
+                out += sep; out += "\"roughness_y\": "; out += std::to_string(data.roughness.y);
+                sep = ", ";
+            }
+            if (emit_bxdf_model) {
+                out += sep; out += "\"bxdf_model\": \""; out += bxdf_model_to_c_str(data.bxdf_model); out += "\"";
+                sep = ", ";
+            }
+            if (data.use_circular_brushed_metal) {
+                out += sep; out += "\"use_circular_brushed_metal\": true";
+                sep = ", ";
+            }
+            if (data.use_aniso_control) {
+                out += sep; out += "\"use_aniso_control\": true";
+                sep = ", ";
+            }
+            out += "}";
+            return out;
         }
     );
 

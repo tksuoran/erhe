@@ -117,8 +117,6 @@ Handle_visualizations::Handle_visualizations(
 
 #endif
 
-    erhe::graphics::Buffer_transfer_queue buffer_transfer_queue{mesh_memory.graphics_device};
-
     const auto arrow_cylinder = make_arrow_cylinder(mesh_memory);
     const auto arrow_cone     = make_arrow_cone    (mesh_memory);
     const auto thin_box       = make_box           (mesh_memory, false);
@@ -435,7 +433,7 @@ Handle_visualizations::Part::Part(
             .primitive_types{
                 .fill_triangles = true
             },
-            .buffer_info = mesh_memory.buffer_info
+            .buffer_info = mesh_memory.make_primitive_buffer_info()
         },
         erhe::primitive::Normal_style::corner_normals
     );
@@ -564,7 +562,8 @@ auto Handle_visualizations::make_material(
                 erhe::primitive::Material_create_info{
                     .name = name,
                     .data = {
-                        .base_color = color
+                        .base_color = color,
+                        .bxdf_model = erhe::primitive::Bxdf_model::unlit
                     }
                 }
             );
@@ -575,7 +574,8 @@ auto Handle_visualizations::make_material(
                 erhe::primitive::Material_create_info{
                     .name = name,
                     .data = {
-                        .base_color = color
+                        .base_color = color,
+                        .bxdf_model = erhe::primitive::Bxdf_model::unlit
                     }
                 }
             );
@@ -586,7 +586,8 @@ auto Handle_visualizations::make_material(
                 erhe::primitive::Material_create_info{
                     .name = name,
                     .data = {
-                        .base_color = color
+                        .base_color = color,
+                        .bxdf_model = erhe::primitive::Bxdf_model::unlit
                     }
                 }
             );

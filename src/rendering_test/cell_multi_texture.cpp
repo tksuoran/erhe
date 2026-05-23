@@ -26,9 +26,9 @@ void Rendering_test::make_multi_texture_pipeline()
     // s_textures is declared in m_test_bind_group_layout (see
     // cell_textured_quad.cpp::make_quad_pipeline) with array_size=3.
     erhe::graphics::Shader_stages_create_info create_info{
-        .name                  = "multi_texture_test",
-        .interface_blocks      = { m_multi_tex_block.get() },
-        .fragment_outputs      = &m_quad_fragment_outputs,
+        .name             = "multi_texture_test",
+        .interface_blocks = { m_multi_tex_block.get() },
+        .fragment_outputs = &m_quad_fragment_outputs,
         .shaders = {
             { erhe::graphics::Shader_type::vertex_shader,   shader_path / "multi_texture_test.vert" },
             { erhe::graphics::Shader_type::fragment_shader, shader_path / "multi_texture_test.frag" }
@@ -40,12 +40,12 @@ void Rendering_test::make_multi_texture_pipeline()
         erhe::graphics::build_shader_stages(m_graphics_device, std::move(create_info))
     );
 
-    m_multi_tex_pipeline = erhe::graphics::Lazy_render_pipeline{
+    m_multi_tex_pipeline = erhe::graphics::Base_render_pipeline{
         m_graphics_device,
-        erhe::graphics::Render_pipeline_create_info{
+        erhe::graphics::Base_render_pipeline_create_info{
             .debug_label    = erhe::utility::Debug_label{"Multi Texture Test Pipeline"},
-            .shader_stages  = m_multi_tex_shader_stages.get(),
-            .vertex_input   = &m_empty_vertex_input,
+            //.shader_stages  = m_multi_tex_shader_stages.get(),
+            //.vertex_input   = &m_empty_vertex_input,
             .input_assembly = erhe::graphics::Input_assembly_state::triangle,
             .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
             .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
@@ -101,7 +101,12 @@ void Rendering_test::draw_multi_texture_quad(
 
     encoder.set_bind_group_layout(m_test_bind_group_layout.get());
     {
-        erhe::graphics::Render_pipeline* p = m_multi_tex_pipeline.get_pipeline_for(render_pass.get_descriptor());
+        erhe::graphics::Render_pipeline* p = m_multi_tex_pipeline.get_pipeline_for(
+            render_pass.get_descriptor(),
+            nullptr,
+            nullptr,
+            nullptr
+        );
         if (p != nullptr) {
             encoder.set_render_pipeline(*p);
         }
@@ -113,7 +118,7 @@ void Rendering_test::draw_multi_texture_quad(
 
     encoder.draw_primitives(erhe::graphics::Primitive_type::triangle, 0, 3);
 
-    texture_heap.unbind();
+    texture_heap.unbind(encoder.get_command_buffer());
     buffer_range.release();
 }
 

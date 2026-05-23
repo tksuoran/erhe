@@ -16,8 +16,13 @@ target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(${_target}
     PUBLIC
         erhe::log
+        erhe::hash
         erhe::verify
         fmt::fmt
 )
 
 erhe_target_settings(${_target} "erhe")
+
+if (${ERHE_BUILD_TESTS} STREQUAL "ON")
+    add_subdirectory(test)
+endif ()

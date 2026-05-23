@@ -1,3 +1,4 @@
+#include "erhe_camera_view.glsl"
 layout(location = 0) in float v_line_width;
 layout(location = 1) in vec4  v_color;
 layout(location = 2) in vec4  v_start_end;
@@ -6,16 +7,21 @@ void main(void)
 {
     // v_start_end is in VIEWPORT-RELATIVE pixel coordinates (compute
     // shader writes them in [0..vp_size]). The fragment shader reads
-    // the DRAW viewport's origin from the camera UBO bound by the
-    // surrounding renderer flow (forward_renderer's camera_buffer.bind)
-    // and subtracts it from gl_FragCoord. This keeps the line distance
-    // test correct for any draw viewport origin and decouples the
-    // compute viewport from the draw viewport.
+    // the DRAW viewport's origin and subtracts it from gl_FragCoord
+    // so the line distance test is correct regardless of where the
+    // viewport sits inside the framebuffer.
     //
-    // This shader uses the shared program_interface bind_group_layout
-    // (with camera_block) so it stays compatible with the descriptor
-    // sets bound by other renderers in the same render pass.
-    vec2  vp_offset  = camera.cameras[0].viewport.xy;
+    // Single-view: read from program_interface's camera UBO (bound by
+    // the surrounding forward_renderer flow). Multiview: read from
+    // the wide-line renderer's per-eye view UBO instead - the
+    // multiview bind_group_layout intentionally does NOT include the
+    // program_interface camera UBO so we cannot rely on it being
+    // bound at draw time.
+#ifdef ERHE_MULTIVIEW
+    vec2  vp_offset  = view.cameras[c_view_index].viewport.xy;
+#else
+    vec2  vp_offset  = camera.cameras[c_view_index].viewport.xy;
+#endif
     vec2  frag_xy    = gl_FragCoord.xy - vp_offset;
     vec2  start      = v_start_end.xy;
     vec2  end        = v_start_end.zw;

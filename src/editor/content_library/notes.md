@@ -17,6 +17,8 @@ Provides a hierarchical container for reusable editor assets: materials, brushes
 
 - **`Material_library`** (`material_library.hpp`) -- Helper functions for populating default materials in a content library.
 
+- **`Content_library_window`** (`content_library_window.hpp`) -- Owns an `Item_tree_window` displaying a `Content_library`. Wires up the "Create Material" context menu and cross-library material drag-drop. Constructed by callers (editor.cpp, asset_browser.cpp, operations_window.cpp) alongside a `Scene_root`; not owned by `Scene_root` itself.
+
 ## Public API / Integration Points
 
 - `Content_library_node::add<T>()` -- add an asset

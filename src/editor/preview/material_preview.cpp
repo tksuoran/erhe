@@ -72,7 +72,7 @@ void Material_preview::make_preview_scene(erhe::scene_renderer::Mesh_memory& mes
         sphere_mesh,
         erhe::primitive::Build_info{
             .primitive_types = {.fill_triangles = true },
-            .buffer_info = mesh_memory.buffer_info
+            .buffer_info = mesh_memory.make_primitive_buffer_info()
         },
         dummy,
         erhe::primitive::Normal_style::corner_normals
@@ -134,10 +134,10 @@ void Material_preview::make_preview_scene(erhe::scene_renderer::Mesh_memory& mes
     );
 
     auto composition_pass = std::make_shared<Composition_pass>("Material Preview Composition_pass");
-    composition_pass->mesh_layers            = {Mesh_layer_id::content};
-    composition_pass->primitive_mode         = erhe::primitive::Primitive_mode::polygon_fill;
-    composition_pass->filter                 = erhe::Item_filter{};
-    composition_pass->render_pipeline_states = m_render_pipeline_states;
+    composition_pass->mesh_layers           = {Mesh_layer_id::content};
+    composition_pass->primitive_mode        = erhe::primitive::Primitive_mode::polygon_fill;
+    composition_pass->filter                = erhe::Item_filter{};
+    composition_pass->base_render_pipelines = m_render_pipelines;
     {
         std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_composer.mutex};
         m_composer.composition_passes.push_back(composition_pass);
@@ -146,13 +146,13 @@ void Material_preview::make_preview_scene(erhe::scene_renderer::Mesh_memory& mes
 
 void Material_preview::render_preview(
     const std::shared_ptr<erhe::graphics::Texture>&   texture,
-    const std::shared_ptr<erhe::primitive::Material>&  material
+    const std::shared_ptr<erhe::primitive::Material>& material
 )
 {
     set_color_texture(texture);
     resize(texture->get_width(), texture->get_height());
     set_clear_color(glm::vec4{0.0f, 0.0f, 0.0f, 0.0f});
-    update_rendertarget(m_graphics_device, get_reverse_depth());
+    update_rendertarget(*m_context.graphics_device, get_reverse_depth());
     render_preview(material);
 }
 
@@ -160,7 +160,9 @@ void Material_preview::render_preview(const std::shared_ptr<erhe::primitive::Mat
 {
     ERHE_PROFILE_FUNCTION();
 
-    erhe::graphics::Scoped_debug_group outer_debug_scope{"Scene_preview::render_preview()"};
+    ERHE_VERIFY(m_context.current_command_buffer != nullptr);
+    erhe::graphics::Command_buffer& command_buffer = *m_context.current_command_buffer;
+    erhe::graphics::Scoped_debug_group outer_debug_scope{command_buffer, "Scene_preview::render_preview()"};
 
     m_content_library->materials->remove_all_children_recursively();
     m_content_library->materials->add(material);
@@ -181,14 +183,12 @@ void Material_preview::render_preview(const std::shared_ptr<erhe::primitive::Mat
         get_reverse_depth(),
         get_depth_range()
     );
-
-    ERHE_VERIFY(m_context.current_command_buffer != nullptr);
-    erhe::graphics::Command_buffer& command_buffer = *m_context.current_command_buffer;
-    erhe::graphics::Render_command_encoder render_encoder = m_graphics_device.make_render_command_encoder(command_buffer);
+    erhe::graphics::Render_command_encoder render_encoder = m_context.graphics_device->make_render_command_encoder(command_buffer);
     erhe::graphics::Scoped_render_pass scoped_render_pass{*m_render_pass.get(), command_buffer};
     const Render_context context{
         .command_buffer      = &command_buffer,
         .encoder             = &render_encoder,
+        .render_pass         = m_render_pass.get(),
         .app_context         = m_context,
         .scene_view          = *this,
         .viewport_config     = m_viewport_config,
@@ -199,8 +199,7 @@ void Material_preview::render_preview(const std::shared_ptr<erhe::primitive::Mat
             .y      = 0,
             .width  = m_width,
             .height = m_height
-        },
-        .override_shader_stages = nullptr
+        }
     };
     m_composer.render(context);
 }

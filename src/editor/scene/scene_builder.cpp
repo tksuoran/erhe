@@ -1,25 +1,34 @@
 #include "scene/scene_builder.hpp"
 
-#include "app_rendering.hpp"
 #include "app_settings.hpp"
 
 #include "brushes/brush.hpp"
 #include "brushes/brush_placement.hpp"
+#include "operations/ambient_light_operation.hpp"
+#include "operations/compound_operation.hpp"
+#include "operations/item_insert_remove_operation.hpp"
+#include "operations/operation_stack.hpp"
+#include "operations/scene_builder_floor_resources_operation.hpp"
+#include "operations/scene_builder_viewport_resources_operation.hpp"
+
+#include "erhe_physics/icollision_shape.hpp"
+#include "erhe_primitive/material.hpp"
+
+#include <algorithm>
 #include "parsers/json_polyhedron.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "content_library/content_library.hpp"
 #include "scene/scene_root.hpp"
-#include "scene/viewport_scene_views.hpp"
 
 #include "SkylineBinPack.h" // RectangleBinPack
 
+#include "config/generated/add_cameras_args.hpp"
+#include "config/generated/add_lights_args.hpp"
+#include "config/generated/add_room_args.hpp"
 #include "config/generated/scene_config.hpp"
 #include "app_context.hpp"
 #include "erhe_graphics/command_buffer.hpp"
-#include "erhe_graphics/device.hpp"
-#include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_verify/verify.hpp"
-#include "erhe_rendergraph/rendergraph.hpp"
 #include "erhe_geometry/shapes/cone.hpp"
 #include "erhe_geometry/shapes/sphere.hpp"
 #include "erhe_geometry/shapes/torus.hpp"
@@ -70,18 +79,9 @@ Scene_builder::Scene_builder(
     const bool                         enable_post_processing,
     std::shared_ptr<Scene_root>        scene,
     tf::Executor&                      executor,
-    erhe::graphics::Device&            graphics_device,
-    erhe::imgui::Imgui_renderer&       imgui_renderer,
-    erhe::imgui::Imgui_windows&        imgui_windows,
-    erhe::rendergraph::Rendergraph&    rendergraph,
     App_context&                       context,
-    App_message_bus&                   app_message_bus,
-    App_rendering&                     app_rendering,
     App_settings&                      app_settings,
-    erhe::scene_renderer::Mesh_memory& mesh_memory,
-    Post_processing&                   post_processing,
-    Tools&                             tools,
-    Scene_views&                       scene_views
+    erhe::scene_renderer::Mesh_memory& mesh_memory
 )
     : m_context                {context}
     , m_scene_config           {scene_config}
@@ -89,52 +89,35 @@ Scene_builder::Scene_builder(
 {
     ERHE_PROFILE_FUNCTION();
     m_scene_root = scene;
-
-    m_mass_scale = scene_config.mass_scale;
-    m_detail     = scene_config.detail;
-
-    setup_cameras(
-        graphics_device,
-        imgui_renderer,
-        imgui_windows,
-        rendergraph,
-        context.OpenXR,
-        app_message_bus,
-        app_rendering,
-        app_settings,
-        post_processing,
-        tools,
-        scene_views
-    );
-    setup_lights();
-    make_brushes(app_settings, mesh_memory, executor);
-    add_room    ();
+    static_cast<void>(executor);
+    static_cast<void>(app_settings);
+    static_cast<void>(mesh_memory);
+    // Brush creation and the default cameras / lights / floor instance are
+    // all added later via the undoable scene.* commands queued through
+    // Operation_stack, which is not yet wired into App_context at
+    // construction time. The default commands.json invokes them at startup
+    // (during the init-cb phase) so the visual default is preserved.
     ERHE_VERIFY(context.current_command_buffer != nullptr);
-    mesh_memory.buffer_transfer_queue.flush(*context.current_command_buffer);
 }
 
 Scene_builder::~Scene_builder() noexcept
 {
 }
 
-auto Scene_builder::make_camera(std::string_view name, vec3 position, vec3 look_at) -> std::shared_ptr<erhe::scene::Camera>
+auto Scene_builder::make_camera(std::string_view name, vec3 position, vec3 look_at, float z_near, float z_far, float exposure, float shadow_range) -> std::shared_ptr<erhe::scene::Node>
 {
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{m_scene_root->item_host_mutex};
 
-    const float camera_exposure = m_scene_config.camera_exposure;
-    const float shadow_range   = m_scene_config.shadow_range;
-
-    auto node   = std::make_shared<erhe::scene::Node>(name);
-    auto camera = std::make_shared<erhe::scene::Camera>(name);
+    std::shared_ptr<erhe::scene::Node>   node   = std::make_shared<erhe::scene::Node>(name);
+    std::shared_ptr<erhe::scene::Camera> camera = std::make_shared<erhe::scene::Camera>(name);
     camera->projection()->fov_y           = glm::radians(35.0f);
     camera->projection()->projection_type = erhe::scene::Projection::Type::perspective_vertical;
-    camera->projection()->z_near          = 0.03f;
-    camera->projection()->z_far           = 1000.0f;
+    camera->projection()->z_near          = z_near;
+    camera->projection()->z_far           = z_far;
     camera->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui | Item_flags::show_debug_visualizations);
-    camera->set_exposure(camera_exposure);
+    camera->set_exposure(exposure);
     camera->set_shadow_range(shadow_range);
     node->attach(camera);
-    node->set_parent(m_scene_root->get_scene().get_root_node());
 
     const mat4 m = erhe::math::create_look_at(
         position, // eye
@@ -144,85 +127,97 @@ auto Scene_builder::make_camera(std::string_view name, vec3 position, vec3 look_
     node->set_parent_from_node(m);
     node->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
 
-    return camera;
+    return node;
 }
 
-void Scene_builder::setup_cameras(
-    erhe::graphics::Device&         graphics_device,
-    erhe::imgui::Imgui_renderer&    imgui_renderer,
-    erhe::imgui::Imgui_windows&     imgui_windows,
-    erhe::rendergraph::Rendergraph& rendergraph,
-    bool                            openxr,
-    App_message_bus&                app_message_bus,
-    App_rendering&                  app_rendering,
-    App_settings&                   app_settings,
-    Post_processing&                post_processing,
-    Tools&                          tools,
-    Scene_views&                    scene_views
-)
+void Scene_builder::add_cameras(const Add_cameras_args& args)
 {
-    const float camera_distance  = m_scene_config.camera_distance;
-    const float camera_elevation = m_scene_config.camera_elevation;
+    const float camera_distance  = args.camera_distance;
+    const float camera_elevation = args.camera_elevation;
 
-    const auto& camera_a = make_camera(
+    std::shared_ptr<erhe::scene::Node> camera_a_node = make_camera(
         "Camera A",
         vec3{0.0f, camera_elevation, camera_distance},
-        vec3{0.0f, 0.25f, 0.0f}
+        vec3{0.0f, 0.25f, 0.0f},
+        0.03f,
+        128.0f,
+        args.camera_exposure,
+        args.shadow_range
     );
-    camera_a->projection()->z_far = 128.0f;
-    //// camera_a->set_wireframe_color(glm::vec4{1.0f, 0.6f, 0.3f, 1.0f});
 
 #if defined(ERHE_ENABLE_SECOND_CAMERA)
-    const auto& camera_b = make_camera(
+    std::shared_ptr<erhe::scene::Node> camera_b_node = make_camera(
         "Camera B",
         vec3{-7.0f, 1.0f, 0.0f},
-        vec3{ 0.0f, 0.5f, 0.0f}
+        vec3{ 0.0f, 0.5f, 0.0f},
+        1.0f,
+        1000.0f,
+        args.camera_exposure,
+        args.shadow_range
     );
-    camera_b->projection()->z_near = 1.0f;
-    camera_b->projection()->z_far  = 1000.0f;
-    //// camera_b->set_wireframe_color(glm::vec4{0.3f, 0.6f, 1.00f, 1.0f});
 #endif
 
-    if (openxr) {
-        return;
+    const std::shared_ptr<erhe::scene::Node>& root_node = m_scene_root->get_scene().get_root_node();
+    std::vector<std::shared_ptr<Operation>> operations;
+    operations.reserve(3);
+    operations.push_back(
+        std::make_shared<Item_insert_remove_operation>(
+            Item_insert_remove_operation::Parameters{
+                .context = m_context,
+                .item    = camera_a_node,
+                .parent  = root_node,
+                .mode    = Item_insert_remove_operation::Mode::insert
+            }
+        )
+    );
+#if defined(ERHE_ENABLE_SECOND_CAMERA)
+    operations.push_back(
+        std::make_shared<Item_insert_remove_operation>(
+            Item_insert_remove_operation::Parameters{
+                .context = m_context,
+                .item    = camera_b_node,
+                .parent  = root_node,
+                .mode    = Item_insert_remove_operation::Mode::insert
+            }
+        )
+    );
+#endif
+
+    // The default desktop viewport is rendergraph + imgui plumbing tied
+    // to camera_a, not a scene-graph insert. On OpenXR the headset path
+    // renders the scene, so the desktop viewport is skipped. When the
+    // viewport IS created, it goes through
+    // Scene_builder_viewport_resources_operation so undo tears down the
+    // viewport / viewport_window / post_processing_node / shadow_render
+    // node together with the camera insertion.
+    const bool create_default_viewport = !m_context.OpenXR && m_scene_config.imgui_window_scene_view;
+    if (create_default_viewport) {
+        std::shared_ptr<erhe::scene::Camera> camera_a;
+        for (const std::shared_ptr<erhe::scene::Node_attachment>& attachment : camera_a_node->get_attachments()) {
+            camera_a = std::dynamic_pointer_cast<erhe::scene::Camera>(attachment);
+            if (camera_a) {
+                break;
+            }
+        }
+        ERHE_VERIFY(camera_a);
+
+        operations.push_back(
+            std::make_shared<Scene_builder_viewport_resources_operation>(
+                Scene_builder_viewport_resources_operation::Parameters{
+                    .scene_root             = m_scene_root,
+                    .camera                 = camera_a,
+                    .name                   = "Default Viewport",
+                    .enable_post_processing = m_enable_post_processing
+                }
+            )
+        );
     }
 
-    const bool enable_post_processing = m_enable_post_processing;
-
-    bool imgui_window_scene_view = m_scene_config.imgui_window_scene_view;
-    if (!imgui_window_scene_view) {
-        return;
-    }
-
-    const int msaa_sample_count = app_settings.graphics.current_graphics_preset.msaa_sample_count;
-    std::shared_ptr<erhe::rendergraph::Rendergraph_node> rendergraph_output_node{};
-    m_primary_viewport_window = scene_views.create_viewport_scene_view(
-        scene_views.get_viewport_config_data(),
-        graphics_device,
-        rendergraph,
-        imgui_windows,
-        app_rendering,
-        app_settings,
-        post_processing,
-        tools,
-        "Default Viewport",
-        m_scene_root,
-        camera_a,
-        std::max(2, msaa_sample_count), //// TODO Fix rendergraph
-        rendergraph_output_node,
-        enable_post_processing
+    m_context.operation_stack->queue(
+        std::make_shared<Compound_operation>(
+            Compound_operation::Parameters{.operations = std::move(operations)}
+        )
     );
-
-    scene_views.create_viewport_window(
-        imgui_renderer,
-        imgui_windows,
-        app_message_bus,
-        m_primary_viewport_window,
-        rendergraph_output_node,
-        "Default Viewport",
-        ""
-    );
-    // scene_views.create_basic_viewport_scene_view_node(rendergraph, m_primary_viewport_window, "Scene");
 }
 
 auto Scene_builder::make_brush(Content_library_node& folder, Brush_data&& brush_create_info) -> std::shared_ptr<Brush>
@@ -244,7 +239,7 @@ auto Scene_builder::build_info(erhe::scene_renderer::Mesh_memory& mesh_memory) -
             .corner_points   = true,
             .centroid_points = true
         },
-        .buffer_info = mesh_memory.buffer_info
+        .buffer_info = mesh_memory.make_primitive_buffer_info()
     };
 }
 
@@ -606,51 +601,12 @@ void Scene_builder::make_brushes(
 {
     ERHE_PROFILE_FUNCTION();
 
-    const float floor_size                   = m_scene_config.floor_size;
-    const float floor_height                 = m_scene_config.floor_height;
-    const bool  floor                        = m_scene_config.floor;
     const bool  make_johnson_solid_brushes   = m_scene_config.make_johnson_solid_brushes;
     const bool  make_platonic_solid_brushes_ = m_scene_config.make_platonic_solid_brushes;
     const bool  make_curved_brushes          = m_scene_config.make_curved_brushes;
-
-    // Floor
-    if (floor) {
-        auto floor_box_shape = erhe::physics::ICollision_shape::create_box_shape_shared(
-            0.5f * vec3{floor_size, std::max(floor_height, 0.10f), floor_size}
-        );
-
-        // Otherwise it will be destructed when leave add_floor() scope
-        m_collision_shapes.push_back(floor_box_shape);
-
-        //execution_queue->enqueue(
-        //    [this, &floor_box_shape, &app_settings, &mesh_memory]() {
-        {
-            ERHE_PROFILE_SCOPE("Floor brush");
-
-            std::shared_ptr<erhe::geometry::Geometry> floor_geometry = std::make_shared<erhe::geometry::Geometry>("floor");
-            erhe::geometry::shapes::make_box(floor_geometry->get_mesh(), floor_size, floor_height, floor_size);
-
-            const uint64_t flags =
-                erhe::geometry::Geometry::process_flag_connect |
-                erhe::geometry::Geometry::process_flag_build_edges |
-                erhe::geometry::Geometry::process_flag_compute_smooth_vertex_normals |
-                erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates;
-            floor_geometry->process(flags);
-
-            m_floor_brush = std::make_unique<Brush>(
-                Brush_data{
-                    .context         = m_context,
-                    .app_settings    = app_settings,
-                    .build_info      = build_info(mesh_memory),
-                    .normal_style    = Normal_style::polygon_normals,
-                    .geometry        = floor_geometry,
-                    .density         = 0.0f,
-                    .volume          = 0.0f,
-                    .collision_shape = floor_box_shape,
-                }
-            );
-        }
-    }
+    // Floor brush construction has moved into Scene_builder::add_room so
+    // the floor_size / floor_height / floor args from scene.add_room can
+    // drive it.
 
     Json_library library{"res/editor/polyhedra/johnson.json"};
     if (executor.num_workers() > 1) {
@@ -708,25 +664,60 @@ void Scene_builder::make_brushes(
     }
 
     ERHE_VERIFY(m_context.current_command_buffer != nullptr);
-    mesh_memory.buffer_transfer_queue.flush(*m_context.current_command_buffer);
+    mesh_memory.flush(*m_context.current_command_buffer);
 }
 
-void Scene_builder::add_room()
+void Scene_builder::add_room(const Add_room_args& args)
 {
     ERHE_PROFILE_FUNCTION();
 
-    if (!m_floor_brush) {
+    if (!args.floor) {
         return;
     }
 
-    Content_library& content_library = *m_scene_root->get_content_library().get();
-    Content_library_node& material_library = *content_library.materials.get();
-    std::shared_ptr<erhe::primitive::Material> floor_material{};
-    {
-        std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{content_library.mutex};
+    const float floor_size   = args.floor_size;
+    const float floor_height = args.floor_height;
 
-#if 1
-        floor_material = material_library.make<erhe::primitive::Material>(
+    // Build a fresh floor brush from the args. The brush, its collision
+    // shape and the floor material are tracked as side resources of the
+    // add_room operation: the Scene_builder_floor_resources_operation
+    // below pushes them into m_floor_brushes / m_collision_shapes /
+    // content_library.materials inside its execute(), and pops them on
+    // undo so that an undo of add_room does not leak the brush.
+    std::shared_ptr<erhe::physics::ICollision_shape> floor_box_shape =
+        erhe::physics::ICollision_shape::create_box_shape_shared(
+            0.5f * vec3{floor_size, std::max(floor_height, 0.10f), floor_size}
+        );
+
+    std::shared_ptr<erhe::geometry::Geometry> floor_geometry = std::make_shared<erhe::geometry::Geometry>("floor");
+    erhe::geometry::shapes::make_box(floor_geometry->get_mesh(), floor_size, floor_height, floor_size);
+    const uint64_t flags =
+        erhe::geometry::Geometry::process_flag_connect |
+        erhe::geometry::Geometry::process_flag_build_edges |
+        erhe::geometry::Geometry::process_flag_compute_smooth_vertex_normals |
+        erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates;
+    floor_geometry->process(flags);
+
+    ERHE_VERIFY(m_context.app_settings != nullptr);
+    ERHE_VERIFY(m_context.mesh_memory  != nullptr);
+    std::shared_ptr<Brush> floor_brush = std::make_shared<Brush>(
+        Brush_data{
+            .context         = m_context,
+            .app_settings    = *m_context.app_settings,
+            .build_info      = build_info(*m_context.mesh_memory),
+            .normal_style    = Normal_style::polygon_normals,
+            .geometry        = floor_geometry,
+            .density         = 0.0f,
+            .volume          = 0.0f,
+            .collision_shape = floor_box_shape,
+        }
+    );
+
+    // Construct the floor material without inserting it into the
+    // content library; the resources operation will install it on
+    // execute() and remove it on undo().
+    std::shared_ptr<erhe::primitive::Material> floor_material =
+        std::make_shared<erhe::primitive::Material>(
             erhe::primitive::Material_create_info{
                 .name = "Floor",
                 .data = {
@@ -736,24 +727,11 @@ void Scene_builder::add_room()
                 }
             }
         );
-#else
-        floor_material = material_library.make<erhe::primitive::Material>(
-            erhe::primitive::Material_create_info{
-                .name = "Floor",
-                .data = {
-                    .base_color = glm::vec3{1.0f, 1.0f, 1.0f},
-                    .roughness  = glm::vec2{1.0f, 1.0f},
-                    .metallic   = 0.0f
-                }
-            }
-        );
-#endif
-    }
 
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{m_scene_root->item_host_mutex};
 
     // Notably shadow cast is not enabled for floor
-    erhe::math::Aabb aabb = m_floor_brush->get_bounding_box();
+    erhe::math::Aabb aabb = floor_brush->get_bounding_box();
 
     Instance_create_info floor_brush_instance_create_info{
         .node_flags      = Item_flags::visible | Item_flags::content | Item_flags::show_in_ui | Item_flags::lock_viewport_selection | Item_flags::lock_viewport_transform | Item_flags::expand,
@@ -765,26 +743,77 @@ void Scene_builder::add_room()
         .motion_mode     = erhe::physics::Motion_mode::e_static
     };
 
-    auto floor_instance_node = m_floor_brush->make_instance(
+    std::shared_ptr<erhe::scene::Node> floor_instance_node = floor_brush->make_instance(
         floor_brush_instance_create_info
     );
-
-    floor_instance_node->set_parent(m_scene_root->get_scene().get_root_node());
     floor_instance_node->set_lock_edit(true);
+
+    std::vector<std::shared_ptr<Operation>> operations;
+    // Register the brush / collision shape / material first; the node
+    // insert then references the now-installed material. Undo runs in
+    // reverse order, removing the node before the resources, so the
+    // teardown order matches the build order.
+    operations.push_back(
+        std::make_shared<Scene_builder_floor_resources_operation>(
+            Scene_builder_floor_resources_operation::Parameters{
+                .builder         = this,
+                .brush           = floor_brush,
+                .collision_shape = floor_box_shape,
+                .material        = floor_material
+            }
+        )
+    );
+    operations.push_back(
+        std::make_shared<Item_insert_remove_operation>(
+            Item_insert_remove_operation::Parameters{
+                .context = m_context,
+                .item    = floor_instance_node,
+                .parent  = m_scene_root->get_scene().get_root_node(),
+                .mode    = Item_insert_remove_operation::Mode::insert
+            }
+        )
+    );
+
+    m_context.operation_stack->queue(
+        std::make_shared<Compound_operation>(
+            Compound_operation::Parameters{.operations = std::move(operations)}
+        )
+    );
+}
+
+void Scene_builder::ensure_brushes(const float mass_scale, const int detail)
+{
+    if (m_brushes_built) {
+        return;
+    }
+    m_mass_scale    = mass_scale;
+    m_detail        = detail;
+    m_brushes_built = true;
+
+    ERHE_VERIFY(m_context.app_settings != nullptr);
+    ERHE_VERIFY(m_context.mesh_memory  != nullptr);
+    ERHE_VERIFY(m_context.executor     != nullptr);
+    make_brushes(*m_context.app_settings, *m_context.mesh_memory, *m_context.executor);
+    if (m_context.current_command_buffer != nullptr) {
+        m_context.mesh_memory->flush(*m_context.current_command_buffer);
+    }
 }
 
 void Scene_builder::add_platonic_solids(const Make_mesh_config& config)
 {
+    ensure_brushes(config.mass_scale, config.detail);
     make_mesh_nodes(config, m_platonic_solids);
 }
 
 void Scene_builder::add_johnson_solids(const Make_mesh_config& config)
 {
+    ensure_brushes(config.mass_scale, config.detail);
     make_mesh_nodes(config, m_johnson_solids);
 }
 
 void Scene_builder::add_curved_shapes(const Make_mesh_config& config)
 {
+    ensure_brushes(config.mass_scale, config.detail);
     std::vector<std::shared_ptr<Brush>> brushes;
     brushes.push_back(m_sphere_brush);
     brushes.push_back(m_cylinder_brush[0]);
@@ -796,6 +825,7 @@ void Scene_builder::add_curved_shapes(const Make_mesh_config& config)
 
 void Scene_builder::add_torus_chain(const Make_mesh_config& config, bool connected)
 {
+    ensure_brushes(config.mass_scale, config.detail);
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{m_scene_root->item_host_mutex};
 
     const float major_radius = 1.0f  * config.object_scale;
@@ -809,13 +839,17 @@ void Scene_builder::add_torus_chain(const Make_mesh_config& config, bool connect
     float y = major_radius + minor_radius;
     float z = 0.0f;
 
-    float x_stride = connected 
+    float x_stride = connected
         ? major_radius - 2.0f * minor_radius + major_radius
         : 3 * major_radius;
     glm::mat4 alternate_rotate[2] = {
         glm::mat4{1.0f},
         erhe::math::create_rotation<float>(glm::pi<float>() / 2.0f, glm::vec3{1.0f, 0.0f, 0.0f})
     };
+
+    const std::shared_ptr<erhe::scene::Node>& root_node = m_scene_root->get_scene().get_root_node();
+    std::vector<std::shared_ptr<Operation>> operations;
+    operations.reserve(config.instance_count);
 
     const std::shared_ptr<Brush>& brush = m_torus_brush;
     for (int i = 0; i < config.instance_count; ++i) {
@@ -827,10 +861,27 @@ void Scene_builder::add_torus_chain(const Make_mesh_config& config, bool connect
             .material        = config.material ? config.material : materials.at(material_index),
             .scale           = config.object_scale
         };
-        auto instance_node = brush->make_instance(brush_instance_create_info);
+        std::shared_ptr<erhe::scene::Node> instance_node = brush->make_instance(brush_instance_create_info);
         instance_node->set_name(fmt::format("{}.{}", instance_node->get_name(), i + 1));
-        instance_node->set_parent(m_scene_root->get_scene().get_root_node());
+        operations.push_back(
+            std::make_shared<Item_insert_remove_operation>(
+                Item_insert_remove_operation::Parameters{
+                    .context = m_context,
+                    .item    = instance_node,
+                    .parent  = root_node,
+                    .mode    = Item_insert_remove_operation::Mode::insert
+                }
+            )
+        );
         x = x + x_stride;
+    }
+
+    if (!operations.empty()) {
+        m_context.operation_stack->queue(
+            std::make_shared<Compound_operation>(
+                Compound_operation::Parameters{.operations = std::move(operations)}
+            )
+        );
     }
 }
 
@@ -933,6 +984,10 @@ void Scene_builder::make_mesh_nodes(const Make_mesh_config& config, std::vector<
         ERHE_VERIFY(!materials.empty());
         ERHE_VERIFY(visible_material_count > 0);
 
+        const std::shared_ptr<erhe::scene::Node>& root_node = m_scene_root->get_scene().get_root_node();
+        std::vector<std::shared_ptr<Operation>> operations;
+        operations.reserve(pack_entries.size());
+
         for (auto& entry : pack_entries) {
             // TODO this will lock up if there are no visible materials
             do {
@@ -993,11 +1048,24 @@ void Scene_builder::make_mesh_nodes(const Make_mesh_config& config, std::vector<
             if (config.instance_count > 1) {
                 instance_node->set_name(fmt::format("{}.{}", instance_node->get_name(), entry.instance_number + 1));
             }
-            instance_node->set_parent(m_scene_root->get_scene().get_root_node());
+            operations.push_back(
+                std::make_shared<Item_insert_remove_operation>(
+                    Item_insert_remove_operation::Parameters{
+                        .context = m_context,
+                        .item    = instance_node,
+                        .parent  = root_node,
+                        .mode    = Item_insert_remove_operation::Mode::insert
+                    }
+                )
+            );
+        }
 
-#if !defined(NDEBUG)
-            m_scene_root->get_scene().sanity_check();
-#endif
+        if (!operations.empty()) {
+            m_context.operation_stack->queue(
+                std::make_shared<Compound_operation>(
+                    Compound_operation::Parameters{.operations = std::move(operations)}
+                )
+            );
         }
     }
 }
@@ -1075,21 +1143,22 @@ auto Scene_builder::make_directional_light(
     const std::string_view name,
     const vec3             position,
     const vec3             color,
-    const float            intensity
-) -> std::shared_ptr<Light>
+    const float            intensity,
+    const bool             cast_shadow
+) -> std::shared_ptr<erhe::scene::Node>
 {
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{m_scene_root->item_host_mutex};
 
     auto node  = std::make_shared<erhe::scene::Node>(name);
     auto light = std::make_shared<erhe::scene::Light>(name);
-    light->type      = Light::Type::directional;
-    light->color     = color;
-    light->intensity = intensity;
-    light->range     = 0.0f;
-    light->layer_id  = m_scene_root->layers().light()->id;
+    light->type        = Light::Type::directional;
+    light->color       = color;
+    light->intensity   = intensity;
+    light->range       = 0.0f;
+    light->cast_shadow = cast_shadow;
+    light->layer_id    = m_scene_root->layers().light()->id;
     light->enable_flag_bits(Item_flags::content | Item_flags::visible | Item_flags::show_in_ui | Item_flags::show_debug_visualizations);
     node->attach          (light);
-    node->set_parent      (m_scene_root->get_scene().get_root_node());
     node->enable_flag_bits(Item_flags::content | Item_flags::visible | Item_flags::show_in_ui);
 
     const mat4 m = erhe::math::create_look_at(
@@ -1099,7 +1168,7 @@ auto Scene_builder::make_directional_light(
     );
     node->set_parent_from_node(m);
 
-    return light;
+    return node;
 }
 
 auto Scene_builder::make_spot_light(
@@ -1109,7 +1178,7 @@ auto Scene_builder::make_spot_light(
     const vec3             color,
     const float            intensity,
     const vec2             spot_cone_angle
-) -> std::shared_ptr<Light>
+) -> std::shared_ptr<erhe::scene::Node>
 {
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{m_scene_root->item_host_mutex};
 
@@ -1124,64 +1193,63 @@ auto Scene_builder::make_spot_light(
     light->layer_id         = m_scene_root->layers().light()->id;
     light->enable_flag_bits(Item_flags::content | Item_flags::visible | Item_flags::show_in_ui);
     node->attach          (light);
-    node->set_parent      (m_scene_root->get_scene().get_root_node());
     node->enable_flag_bits(Item_flags::content | Item_flags::visible | Item_flags::show_in_ui);
 
     const mat4 m = erhe::math::create_look_at(position, target, vec3{0.0f, 0.0f, 1.0f});
     node->set_parent_from_node(m);
 
-    return light;
+    return node;
 }
 
-void Scene_builder::setup_lights()
+void Scene_builder::add_lights(const Add_lights_args& args)
 {
-    const auto& layers = m_scene_root->layers();
-    layers.light()->ambient_light = glm::vec4{0.04f, 0.04f, 0.04f, 0.0f};
+    const Scene_layers&       layers           = m_scene_root->layers();
+    erhe::scene::Light_layer* light_layer      = layers.light();
+    const glm::vec4           target_ambient   {0.04f, 0.04f, 0.04f, 0.0f};
 
-    //make_directional_light(
-    //    "X",
-    //    vec3{1.0f, 0.0f, 0.0f},
-    //    vec3{1.0f, 0.0f, 0.0f},
-    //    2.0f
-    //);
-    //make_directional_light(
-    //    "Y",
-    //    vec3{0.0f, 1.0f, 0.0f},
-    //    vec3{0.0f, 1.0f, 0.0f},
-    //    2.0f
-    //);
-    //make_directional_light(
-    //    "Z",
-    //    vec3{0.0f, 0.0f, 1.0f},
-    //    vec3{0.0f, 0.0f, 1.0f},
-    //    2.0f
-    //);
-    //make_spot_light(
-    //    "Spot",
-    //    vec3{0.0f, 1.0f, 0.0f}, // position
-    //    vec3{0.0f, 0.0f, 0.0f}, // target
-    //    vec3{0.0f, 1.0f, 0.0f}, // color
-    //    10.0f,                  // intensity
-    //    vec2{                   // cone angles
-    //        glm::pi<float>() * 0.125f,
-    //        glm::pi<float>() * 0.25f
-    //    }
-    //);
+    const float directional_light_intensity         = args.directional_light_intensity;
+    const float directional_light_radius            = args.directional_light_radius;
+    const float directional_light_height            = args.directional_light_height;
+    int         directional_light_shadow_count      = std::max(0, args.directional_light_shadow_count);
+    const int   directional_light_no_shadow_count   = std::max(0, args.directional_light_no_shadow_count);
 
-    const float directional_light_intensity = m_scene_config.directional_light_intensity;
-    const float directional_light_radius    = m_scene_config.directional_light_radius;
-    const float directional_light_height    = m_scene_config.directional_light_height;
-    const int   directional_light_count     = m_scene_config.directional_light_count;
-    const float spot_light_intensity        = m_scene_config.spot_light_intensity;
-    const float spot_light_radius           = m_scene_config.spot_light_radius;
-    const float spot_light_height           = m_scene_config.spot_light_height;
-    const int   spot_light_count            = m_scene_config.spot_light_count;
+    // Clamp shadow-light count to the active graphics preset's
+    // shadow_light_count. The shadow-map texture array has a fixed
+    // capacity, and exceeding it would silently drop lights or break
+    // shader bindings. add_lights() runs the clamp here so future
+    // callers via try_call() / key bindings / MCP / UI bypass the
+    // duplicate clamp that used to live in
+    // Add_lights_command::apply_args.
+    if (m_context.app_settings != nullptr) {
+        const Graphics_preset_entry& preset = m_context.app_settings->graphics.current_graphics_preset;
+        if (preset.shadow_enable && (directional_light_shadow_count > preset.shadow_light_count)) {
+            log_startup->info(
+                "Clamping Scene_builder::add_lights directional_light_shadow_count from {} to {} (graphics preset '{}' shadow_light_count)",
+                directional_light_shadow_count, preset.shadow_light_count, preset.name
+            );
+            directional_light_shadow_count = preset.shadow_light_count;
+        }
+    }
+
+    const int   directional_light_count             = directional_light_shadow_count + directional_light_no_shadow_count;
+    const float spot_light_intensity                = args.spot_light_intensity;
+    const float spot_light_radius                   = args.spot_light_radius;
+    const float spot_light_height                   = args.spot_light_height;
+    const int   spot_light_count                    = args.spot_light_count;
+
+    std::vector<std::shared_ptr<erhe::scene::Node>> light_nodes;
+    light_nodes.reserve(static_cast<std::size_t>(directional_light_count + spot_light_count));
+
     if (directional_light_count == 1) {
-        make_directional_light(
-            "X",
-            vec3{1.0f, 1.0f, 0.0f}, // pos
-            vec3{1.0f, 1.0f, 1.0f}, // color
-            2.0f // intensity
+        const bool cast_shadow = (directional_light_shadow_count == 1);
+        light_nodes.push_back(
+            make_directional_light(
+                "X",
+                vec3{1.0f, 1.0f, 0.0f}, // pos
+                vec3{1.0f, 1.0f, 1.0f}, // color
+                2.0f,                   // intensity
+                cast_shadow
+            )
         );
     } else {
         for (int i = 0; i < directional_light_count; ++i) {
@@ -1194,13 +1262,16 @@ void Scene_builder::setup_lights()
 
             erhe::math::hsv_to_rgb(h, s, v, r, g, b);
 
-            const vec3        color     = vec3{r, g, b};
-            const float       intensity = directional_light_intensity / static_cast<float>(directional_light_count);
-            const std::string name      = fmt::format("Directional light {}", i);
-            const float       x_pos     = R * std::sin(rel * glm::two_pi<float>() + 1.0f / 7.0f);
-            const float       z_pos     = R * std::cos(rel * glm::two_pi<float>() + 1.0f / 7.0f);
-            const vec3        position  = vec3{x_pos, directional_light_height, z_pos};
-            make_directional_light(name, position, color, intensity);
+            const vec3        color       = vec3{r, g, b};
+            const float       intensity   = directional_light_intensity / static_cast<float>(directional_light_count);
+            const bool        cast_shadow = (i < directional_light_shadow_count);
+            const std::string name        = fmt::format(
+                "Directional light {}{}", i, cast_shadow ? "" : " (no shadow)"
+            );
+            const float       x_pos       = R * std::sin(rel * glm::two_pi<float>() + 1.0f / 7.0f);
+            const float       z_pos       = R * std::cos(rel * glm::two_pi<float>() + 1.0f / 7.0f);
+            const vec3        position    = vec3{x_pos, directional_light_height, z_pos};
+            light_nodes.push_back(make_directional_light(name, position, color, intensity, cast_shadow));
         }
     }
 
@@ -1226,8 +1297,35 @@ void Scene_builder::setup_lights()
             glm::pi<float>() / 5.0f,
             glm::pi<float>() / 4.0f
         };
-        make_spot_light(name, position, target, color, intensity, spot_cone_angle);
+        light_nodes.push_back(make_spot_light(name, position, target, color, intensity, spot_cone_angle));
     }
+
+    if (light_nodes.empty() && (light_layer->ambient_light == target_ambient)) {
+        return;
+    }
+
+    const std::shared_ptr<erhe::scene::Node>& root_node = m_scene_root->get_scene().get_root_node();
+    std::vector<std::shared_ptr<Operation>> operations;
+    operations.reserve(light_nodes.size() + 1);
+    operations.push_back(std::make_shared<Ambient_light_operation>(light_layer, target_ambient));
+    for (const std::shared_ptr<erhe::scene::Node>& light_node : light_nodes) {
+        operations.push_back(
+            std::make_shared<Item_insert_remove_operation>(
+                Item_insert_remove_operation::Parameters{
+                    .context = m_context,
+                    .item    = light_node,
+                    .parent  = root_node,
+                    .mode    = Item_insert_remove_operation::Mode::insert
+                }
+            )
+        );
+    }
+
+    m_context.operation_stack->queue(
+        std::make_shared<Compound_operation>(
+            Compound_operation::Parameters{.operations = std::move(operations)}
+        )
+    );
 }
 
 void Scene_builder::animate_lights(const double time_d)
@@ -1270,6 +1368,76 @@ void Scene_builder::animate_lights(const double time_d)
 auto Scene_builder::get_scene_root() const -> std::shared_ptr<Scene_root>
 {
     return m_scene_root;
+}
+
+void Scene_builder::register_floor_resources(
+    const std::shared_ptr<Brush>&                           brush,
+    const std::shared_ptr<erhe::physics::ICollision_shape>& collision_shape,
+    const std::shared_ptr<erhe::primitive::Material>&       material
+)
+{
+    {
+        std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_brush_mutex};
+        if (brush) {
+            if (std::find(m_floor_brushes.begin(), m_floor_brushes.end(), brush) == m_floor_brushes.end()) {
+                m_floor_brushes.push_back(brush);
+            }
+        }
+        if (collision_shape) {
+            if (std::find(m_collision_shapes.begin(), m_collision_shapes.end(), collision_shape) == m_collision_shapes.end()) {
+                m_collision_shapes.push_back(collision_shape);
+            }
+        }
+    }
+
+    if (material && m_scene_root) {
+        const std::shared_ptr<Content_library>& content_library = m_scene_root->get_content_library();
+        if (content_library && content_library->materials) {
+            std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{content_library->mutex};
+            content_library->materials->add(material);
+        }
+    }
+}
+
+void Scene_builder::unregister_floor_resources(
+    const std::shared_ptr<Brush>&                           brush,
+    const std::shared_ptr<erhe::physics::ICollision_shape>& collision_shape,
+    const std::shared_ptr<erhe::primitive::Material>&       material
+)
+{
+    {
+        std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_brush_mutex};
+        if (brush) {
+            const auto it = std::find(m_floor_brushes.begin(), m_floor_brushes.end(), brush);
+            if (it != m_floor_brushes.end()) {
+                m_floor_brushes.erase(it);
+            }
+        }
+        if (collision_shape) {
+            const auto it = std::find(m_collision_shapes.begin(), m_collision_shapes.end(), collision_shape);
+            if (it != m_collision_shapes.end()) {
+                m_collision_shapes.erase(it);
+            }
+        }
+    }
+
+    if (material && m_scene_root) {
+        const std::shared_ptr<Content_library>& content_library = m_scene_root->get_content_library();
+        if (content_library && content_library->materials) {
+            std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{content_library->mutex};
+            content_library->materials->remove(material);
+        }
+    }
+}
+
+auto Scene_builder::floor_brushes_size() const -> std::size_t
+{
+    return m_floor_brushes.size();
+}
+
+auto Scene_builder::collision_shapes_size() const -> std::size_t
+{
+    return m_collision_shapes.size();
 }
 
 }

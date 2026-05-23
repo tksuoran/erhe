@@ -132,7 +132,6 @@ private:
     auto try_import(const std::shared_ptr<Asset_file_geogram>& geogram) -> bool;
 
     App_context& m_context;
-    Asset_node*  m_popup_node{nullptr};
 
     std::shared_ptr<Asset_node>           m_root;
     std::shared_ptr<Asset_browser_window> m_node_tree_window;

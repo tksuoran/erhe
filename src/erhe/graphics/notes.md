@@ -18,7 +18,7 @@ hides the underlying graphics API behind a pimpl pattern.
 - `Bind_group_layout` -- Describes the full set of resources a pipeline reads: buffer bindings (uniform / storage), combined image samplers (dedicated and texture-heap), and the GLSL sampler declarations that ship with them. See "Bind group layout" below.
 - `Texture_heap` -- Runtime sampler-array / argument-buffer / descriptor-indexing container for material textures. See "Texture heap" below.
 - `Render_pipeline_state` -- Complete render pipeline: shader, vertex input, rasterization, depth/stencil, color blend, multisample, viewport, scissor states.
-- `Render_pipeline` / `Lazy_render_pipeline` -- Compiled pipeline objects. `create_render_pipeline()` builds one up-front; `Lazy_render_pipeline` defers creation to first use and caches variants by render-pass format tuple.
+- `Render_pipeline` / `Base_render_pipeline` -- Compiled pipeline objects. `create_render_pipeline()` builds one up-front; `Base_render_pipeline` defers creation to first use and caches variants keyed by `(shader_stages, vertex_input, vertex_format, render-pass format)`.
 - `Render_pass` -- Framebuffer configuration with color/depth/stencil attachments and load/store actions. Attachment descriptors carry `usage_before` / `usage_after` so backends can derive image layout transitions and subpass dependencies without per-texture layout tracking.
 - `Render_command_encoder` -- Records draw commands: set pipeline, bind buffers, bind sampled images via `set_sampled_image()`, draw primitives (including multi-draw indirect).
 - `Ring_buffer` -- Circular GPU buffer for streaming per-frame data with fence-based synchronization.

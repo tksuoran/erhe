@@ -1,3 +1,4 @@
+#include "erhe_camera_view.glsl"
 
 layout(location = 0) in vec4 v_position;
 
@@ -44,9 +45,9 @@ bool intersect_plane(vec3 plane_normal, vec3 point_on_plane, vec3 ray_origin, ve
 void main()
 {
     vec3 view_position_in_world = vec3(
-        camera.cameras[0].world_from_node[3][0],
-        camera.cameras[0].world_from_node[3][1],
-        camera.cameras[0].world_from_node[3][2]
+        camera.cameras[c_view_index].world_from_node[3][0],
+        camera.cameras[c_view_index].world_from_node[3][1],
+        camera.cameras[c_view_index].world_from_node[3][2]
     );
     vec3  fragment_position = v_position.xyz / v_position.w;
     vec3  ro                = view_position_in_world;
@@ -60,14 +61,14 @@ void main()
 
     float epsilon = 0.0001;
 
-    float grid_l0_cell_size  = camera.cameras[0].grid_size      [0];
-    float grid_l0_line_width = camera.cameras[0].grid_line_width[0];
-    float grid_l1_cell_size  = camera.cameras[0].grid_size      [1];
-    float grid_l1_line_width = camera.cameras[0].grid_line_width[1];
-    float grid_l2_cell_size  = camera.cameras[0].grid_size      [2];
-    float grid_l2_line_width = camera.cameras[0].grid_line_width[2];
-    float grid_l3_cell_size  = camera.cameras[0].grid_size      [3];
-    float grid_l3_line_width = camera.cameras[0].grid_line_width[3];
+    float grid_l0_cell_size  = camera.cameras[c_view_index].grid_size      [0];
+    float grid_l0_line_width = camera.cameras[c_view_index].grid_line_width[0];
+    float grid_l1_cell_size  = camera.cameras[c_view_index].grid_size      [1];
+    float grid_l1_line_width = camera.cameras[c_view_index].grid_line_width[1];
+    float grid_l2_cell_size  = camera.cameras[c_view_index].grid_size      [2];
+    float grid_l2_line_width = camera.cameras[c_view_index].grid_line_width[2];
+    float grid_l3_cell_size  = camera.cameras[c_view_index].grid_size      [3];
+    float grid_l3_line_width = camera.cameras[c_view_index].grid_line_width[3];
     float grid_l0 = PristineGrid(uv / grid_l0_cell_size, vec2(grid_l0_line_width));
     float grid_l1 = PristineGrid(uv / grid_l1_cell_size, vec2(grid_l1_line_width));
     float grid_l2 = PristineGrid(uv / grid_l2_cell_size, vec2(grid_l2_line_width));

@@ -68,6 +68,14 @@ public:
     Render_pass_attachment_descriptor                stencil_attachment  {};
     int                                              render_target_width {0};
     int                                              render_target_height{0};
+    // Vulkan multiview view mask. 0 = single-view (default). Non-zero
+    // enables VK_KHR_multiview / VkSubpassDescription2.viewMask. The
+    // attached color/depth textures must then be array textures whose
+    // layer count covers the highest set bit + 1, and the framebuffer
+    // is laid out with layers=1 per Vulkan spec (the multiview machinery
+    // reads the actual per-view layers from the view mask). Ignored on
+    // non-Vulkan backends (OpenGL multiview is not supported).
+    uint32_t                                         view_mask           {0};
     erhe::utility::Debug_label                       debug_label;
 };
 

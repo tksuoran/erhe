@@ -36,16 +36,19 @@ void Scene_view_config_window::imgui()
     }
 
     std::shared_ptr<Scene_root> scene_root = m_scene_view->get_scene_root();
-    if (!scene_root) {
+
+    if (!ImGui::BeginTable(
+            "##viewport_view_settings",
+            2,
+            ImGuiTableFlags_Resizable | ImGuiTableFlags_RowBg,
+            ImVec2{600.0f, 220.0}
+        ))
+    {
+        // BeginTable can fail (e.g. clipped window, zero-size cells); calling
+        // EndTable without a matching successful BeginTable triggers an
+        // ImGui assertion. Bail out before any TableSetupColumn / TableNextRow.
         return;
     }
-
-    ImGui::BeginTable(
-        "##viewport_view_settings",
-        2,
-        ImGuiTableFlags_Resizable | ImGuiTableFlags_RowBg,
-        ImVec2{600.0f, 150.0}
-    );
     ImGui::TableSetupColumn("Label",  ImGuiTableColumnFlags_WidthStretch, 1.0f, 1);
     ImGui::TableSetupColumn("Editor", ImGuiTableColumnFlags_WidthStretch, 3.0f, 2);
 
@@ -54,9 +57,8 @@ void Scene_view_config_window::imgui()
     ImGui::TextUnformatted("Scene");
     ImGui::TableNextColumn();
 
-    //std::shared_ptr<Scene_root> old_scene_root = m_scene_view->get_scene_root();
     auto old_scene_root = scene_root;
-    const bool combo_used = m_context.app_scenes->scene_combo("##Scene", scene_root, false);
+    const bool combo_used = m_context.app_scenes->scene_combo("##Scene", scene_root, true);
     if (combo_used && scene_root != old_scene_root) {
         m_scene_view->set_scene_root(scene_root);
         Viewport_scene_view* viewport_scene_view = m_scene_view->as_viewport_scene_view();
@@ -64,8 +66,8 @@ void Scene_view_config_window::imgui()
             if (scene_root) {
                 const auto& cameras = scene_root->get_hosted_scene()->get_cameras();
                 viewport_scene_view->set_camera(
-                    cameras.empty() 
-                        ? std::shared_ptr<erhe::scene::Camera>{} 
+                    cameras.empty()
+                        ? std::shared_ptr<erhe::scene::Camera>{}
                         : cameras.front()
                 );
             } else {
@@ -80,27 +82,49 @@ void Scene_view_config_window::imgui()
         ImGui::TableNextColumn();
         ImGui::TextUnformatted("Camera");
         ImGui::TableNextColumn();
-        std::shared_ptr<erhe::scene::Camera> camera = viewport_scene_view->get_camera();
-        bool camera_combo_used = scene_root->camera_combo("##Camera", camera);
-        if (camera_combo_used) {
-            viewport_scene_view->set_camera(camera);
+        if (scene_root) {
+            std::shared_ptr<erhe::scene::Camera> camera = viewport_scene_view->get_camera();
+            bool camera_combo_used = scene_root->camera_combo("##Camera", camera);
+            if (camera_combo_used) {
+                viewport_scene_view->set_camera(camera);
+            }
+        } else {
+            ImGui::TextDisabled("(select a scene first)");
         }
 
         ImGui::TableNextRow();
         ImGui::TableNextColumn();
-        ImGui::TextUnformatted("Shader");
+        ImGui::TextUnformatted("Debug");
         ImGui::TableNextColumn();
 
-        Shader_stages_variant variant = viewport_scene_view->get_shader_stages_variant();
-        bool variant_combo_used = ImGui::Combo(
-            "##ShaderStagesVariant",
-            reinterpret_cast<int*>(&variant),
-            c_shader_stages_variant_strings,
-            IM_ARRAYSIZE(c_shader_stages_variant_strings),
-            IM_ARRAYSIZE(c_shader_stages_variant_strings)
+        erhe::scene_renderer::Shader_debug shader_debug = viewport_scene_view->get_shader_debug();
+        int shader_debug_int = static_cast<int>(shader_debug);
+        if (ImGui::Combo(
+                "##ShaderDebug",
+                &shader_debug_int,
+                erhe::scene_renderer::c_shader_debug_strings,
+                IM_ARRAYSIZE(erhe::scene_renderer::c_shader_debug_strings),
+                IM_ARRAYSIZE(erhe::scene_renderer::c_shader_debug_strings)
+            ))
+        {
+            viewport_scene_view->set_shader_debug(static_cast<erhe::scene_renderer::Shader_debug>(shader_debug_int));
+        }
+
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        ImGui::TextUnformatted("Renderer");
+        ImGui::TableNextColumn();
+
+        Renderer_choice renderer_choice = viewport_scene_view->get_renderer_choice();
+        bool renderer_combo_used = ImGui::Combo(
+            "##RendererChoice",
+            reinterpret_cast<int*>(&renderer_choice),
+            c_renderer_choice_strings,
+            IM_ARRAYSIZE(c_renderer_choice_strings),
+            IM_ARRAYSIZE(c_renderer_choice_strings)
         );
-        if (variant_combo_used) {
-            viewport_scene_view->set_shader_stages_variant(variant);
+        if (renderer_combo_used) {
+            viewport_scene_view->set_renderer_choice(renderer_choice);
         }
     }
 

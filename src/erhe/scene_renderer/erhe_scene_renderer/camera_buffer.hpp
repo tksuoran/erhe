@@ -6,12 +6,15 @@
 #include "erhe_math/math_util.hpp"
 #include "erhe_math/viewport.hpp"
 
+#include <span>
+
 namespace erhe::graphics {
     class Device;
 }
 namespace erhe::scene {
     class Node;
     class Projection;
+    class Transform;
 }
 
 namespace erhe::scene_renderer {
@@ -37,12 +40,28 @@ public:
 class Camera_interface
 {
 public:
-    Camera_interface(erhe::graphics::Device& graphics_device, int max_camera_count);
+    // max_camera_count: per-frame cap on the number of distinct cameras
+    //   recorded into the ring buffer (size of the underlying allocation).
+    // view_count:   size N of the cameras[N] array inside the UBO
+    //   block. 1 = single-view (default). 2 = stereo / OpenXR multiview.
+    //   The shader reads camera.cameras[c_view_index]; c_view_index is 0
+    //   for non-multiview shaders and gl_ViewIndex (from
+    //   GL_EXT_multiview / SPV_KHR_multiview) for multiview ones.
+    Camera_interface(erhe::graphics::Device& graphics_device, int max_camera_count, int view_count);
 
     erhe::graphics::Shader_resource camera_block;
     erhe::graphics::Shader_resource camera_struct;
     Camera_struct                   offsets{};
     std::size_t                     max_camera_count;
+    std::size_t                     view_count;
+};
+
+class Camera_view_input
+{
+public:
+    const erhe::scene::Projection* projection {nullptr};
+    const erhe::scene::Node*       node       {nullptr};
+    erhe::math::Viewport           viewport   {};
 };
 
 class Camera_buffer : public erhe::graphics::Ring_buffer_client
@@ -54,6 +73,43 @@ public:
         const erhe::scene::Projection&            camera_projection,
         const erhe::scene::Node&                  camera_node,
         erhe::math::Viewport                      viewport,
+        float                                     exposure,
+        glm::vec4                                 grid_size,
+        glm::vec4                                 grid_line_width,
+        uint64_t                                  frame_number,
+        bool                                      reverse_depth,
+        erhe::math::Depth_range                   depth_range,
+        const erhe::math::Coordinate_conventions& conventions = erhe::math::Coordinate_conventions{}
+    ) -> erhe::graphics::Ring_buffer_range;
+
+    // Overload taking a precomputed world<->camera Transform instead of
+    // a Node. Used by the shadow pass, where the directional-light
+    // "camera" is the snapped pose from Light_projection_transforms
+    // (see Light::stable_directional_light_projection_transforms): the
+    // shadow map is rasterized using that snapped pose, and the shading
+    // pass samples it via the matching snapped texture_from_world in
+    // light_buffer.cpp -- both sides must derive clip_from_world from
+    // the SAME snapped transform, not from the raw light node.
+    auto update(
+        const erhe::scene::Projection&            camera_projection,
+        const erhe::scene::Transform&             world_from_camera,
+        erhe::math::Viewport                      viewport,
+        float                                     exposure,
+        glm::vec4                                 grid_size,
+        glm::vec4                                 grid_line_width,
+        uint64_t                                  frame_number,
+        bool                                      reverse_depth,
+        erhe::math::Depth_range                   depth_range,
+        const erhe::math::Coordinate_conventions& conventions = erhe::math::Coordinate_conventions{}
+    ) -> erhe::graphics::Ring_buffer_range;
+
+    // Multi-view variant: writes one Camera_struct entry per view into
+    // the cameras[] array. The number of views must equal
+    // Camera_interface::view_count (the array size declared in the
+    // UBO block); shaders read camera.cameras[u_view_index]. Used for
+    // single-pass stereo / OpenXR multiview rendering.
+    auto update_views(
+        std::span<const Camera_view_input>        views,
         float                                     exposure,
         glm::vec4                                 grid_size,
         glm::vec4                                 grid_line_width,

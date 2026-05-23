@@ -17,7 +17,7 @@ public:
 
     [[nodiscard]] virtual auto get_capacity_byte_count () const noexcept -> std::size_t = 0;
     [[nodiscard]] virtual auto allocate_bytes          (std::size_t byte_count, std::size_t alignment) noexcept -> std::optional<std::size_t> = 0;
-    virtual                    void free_bytes         (std::size_t byte_offset, std::size_t byte_count) noexcept = 0;
+                  virtual void free_bytes              (std::size_t byte_offset, std::size_t byte_count) noexcept = 0;
     [[nodiscard]] virtual auto get_span                () noexcept -> std::span<std::byte> = 0;
     [[nodiscard]] virtual auto get_debug_label         () const -> std::string_view = 0;
     [[nodiscard]] virtual auto get_used_byte_count     () const -> std::size_t = 0;

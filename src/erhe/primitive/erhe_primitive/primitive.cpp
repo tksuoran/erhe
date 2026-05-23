@@ -65,16 +65,18 @@ Primitive_raytrace::Primitive_raytrace(const GEO::Mesh& mesh, Element_mappings* 
     static constexpr std::size_t raytrace_buffer_tail_padding = 16;
     m_rt_vertex_buffer = std::make_shared<erhe::buffer::Cpu_buffer>("raytrace_vertex", mesh_info.vertex_count_corners * vertex_stride, raytrace_buffer_tail_padding);
     m_rt_index_buffer  = std::make_shared<erhe::buffer::Cpu_buffer>("raytrace_index",  mesh_info.index_count_fill_triangles * index_stride, raytrace_buffer_tail_padding);
-    Cpu_buffer_sink buffer_sink{{m_rt_vertex_buffer.get()}, *m_rt_index_buffer.get()};
+    Cpu_vertex_buffer_sink vertex_buffer_sink{{m_rt_vertex_buffer.get()}};
+    Cpu_index_buffer_sink index_buffer_sink{*m_rt_index_buffer.get()};
     Build_info build_info{
         .primitive_types = {
             .fill_triangles = true,
         },
         .buffer_info = {
-            .normal_style  = Normal_style::corner_normals,
-            .index_type    = erhe::dataformat::Format::format_32_scalar_uint,
-            .vertex_format = vertex_format,
-            .buffer_sink   = buffer_sink
+            .normal_style       = Normal_style::corner_normals,
+            .index_type         = erhe::dataformat::Format::format_32_scalar_uint,
+            .vertex_format      = vertex_format,
+            .vertex_buffer_sink = vertex_buffer_sink,
+            .index_buffer_sink  = index_buffer_sink
         }
     };
 
@@ -169,12 +171,14 @@ Primitive_raytrace::Primitive_raytrace(Triangle_soup& triangle_soup)
     const std::size_t index_count = triangle_soup.get_index_count();
     m_rt_vertex_buffer = std::make_shared<erhe::buffer::Cpu_buffer>("triangle_soup_raytrace_vertex", vertex_count * vertex_stride);
     m_rt_index_buffer = std::make_shared<erhe::buffer::Cpu_buffer>("triangle_soup_raytrace_index", index_count * index_stride);
-    Cpu_buffer_sink buffer_sink{{m_rt_vertex_buffer.get()}, *m_rt_index_buffer.get()};
+    Cpu_vertex_buffer_sink vertex_buffer_sink{{m_rt_vertex_buffer.get()}};
+    Cpu_index_buffer_sink  index_buffer_sink{*m_rt_index_buffer.get()};
     const Buffer_info buffer_info{
-        .normal_style  = Normal_style::corner_normals,
-        .index_type    = erhe::dataformat::Format::format_32_scalar_uint,
-        .vertex_format = vertex_format,
-        .buffer_sink   = buffer_sink
+        .normal_style       = Normal_style::corner_normals,
+        .index_type         = erhe::dataformat::Format::format_32_scalar_uint,
+        .vertex_format      = vertex_format,
+        .vertex_buffer_sink = vertex_buffer_sink,
+        .index_buffer_sink  = index_buffer_sink
     };
 
     std::optional<Buffer_mesh> buffer_mesh_opt = build_buffer_mesh_from_triangle_soup(triangle_soup, buffer_info);
@@ -429,24 +433,25 @@ auto build_buffer_mesh_from_triangle_soup(const Triangle_soup& triangle_soup, co
 {
     // TODO Use index_type from buffer_info
     //const std::size_t  sink_vertex_stride   = buffer_info.vertex_format.stride();
-    const std::size_t  source_vertex_stride = triangle_soup.vertex_format.streams.front().stride;
-    const std::size_t  vertex_count         = triangle_soup.vertex_data.size() / source_vertex_stride;
-    const std::size_t  index_count          = triangle_soup.index_data.size();
-    Buffer_sink_allocation index_sink_allocation = buffer_info.buffer_sink.allocate_index_buffer(index_count, 4);
+    const std::size_t      source_vertex_stride  = triangle_soup.vertex_format.streams.front().stride;
+    const std::size_t      vertex_count          = triangle_soup.vertex_data.size() / source_vertex_stride;
+    const std::size_t      index_count           = triangle_soup.index_data.size();
+    Buffer_sink_allocation index_sink_allocation = buffer_info.index_buffer_sink.allocate_index_buffer_range(buffer_info.index_type, index_count);
     if (index_sink_allocation.range.count == 0) {
         return std::optional<Buffer_mesh>{};
     }
 
     Buffer_mesh buffer_mesh;
     buffer_mesh.triangle_fill_indices.primitive_type = Primitive_type::triangles;
-    buffer_mesh.triangle_fill_indices.first_index = 0;
-    buffer_mesh.triangle_fill_indices.index_count = index_count;
-    buffer_mesh.index_buffer_range = index_sink_allocation.range;
-    buffer_mesh.index_allocation   = std::move(index_sink_allocation.allocation);
+    buffer_mesh.triangle_fill_indices.first_index    = 0;
+    buffer_mesh.triangle_fill_indices.index_count    = index_count;
+    buffer_mesh.index_buffer_range                   = index_sink_allocation.range;
+    buffer_mesh.index_allocation                     = std::move(index_sink_allocation.allocation);
+    buffer_mesh.vertex_input_key                     = buffer_info.vertex_input_key;
 
     for (std::size_t i = 0, end = buffer_info.vertex_format.streams.size(); i < end; ++i) {
         const erhe::dataformat::Vertex_stream& stream = buffer_info.vertex_format.streams.at(i);
-        Buffer_sink_allocation vertex_sink_allocation = buffer_info.buffer_sink.allocate_vertex_buffer(i, vertex_count, stream.stride);
+        Buffer_sink_allocation vertex_sink_allocation = buffer_info.vertex_buffer_sink.allocate_vertex_buffer_range(stream, vertex_count);
         if (vertex_sink_allocation.range.count == 0) {
             return std::optional<Buffer_mesh>{};
         }
@@ -460,7 +465,7 @@ auto build_buffer_mesh_from_triangle_soup(const Triangle_soup& triangle_soup, co
     {
         std::vector<uint8_t> sink_index_data(index_count * index_range.element_size);
         memcpy(sink_index_data.data(), triangle_soup.index_data.data(), index_count * index_range.element_size);
-        buffer_info.buffer_sink.enqueue_index_data(index_range.byte_offset, std::move(sink_index_data));
+        buffer_info.index_buffer_sink.enqueue_index_data(index_range, std::move(sink_index_data));
     }
 
     // Copy and convert vertices to buffer
@@ -492,9 +497,8 @@ auto build_buffer_mesh_from_triangle_soup(const Triangle_soup& triangle_soup, co
                 }
             }
         }
-        buffer_info.buffer_sink.enqueue_vertex_data(
-            stream_index,
-            buffer_mesh.vertex_buffer_ranges[stream_index].byte_offset,
+        buffer_info.vertex_buffer_sink.enqueue_vertex_data(
+            buffer_mesh.vertex_buffer_ranges[stream_index],
             std::move(sink_vertex_data)
         );
     }
@@ -630,7 +634,7 @@ auto Primitive::make_raytrace() const -> bool
     return false;
 }
 
-auto Primitive::make_renderable_mesh(const Build_info& build_info, Normal_style normal_style) const -> bool
+auto Primitive::make_renderable_mesh(const Build_info& build_info, const Normal_style normal_style) const -> bool
 {
     if (!render_shape) {
         return false;

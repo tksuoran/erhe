@@ -1,15 +1,15 @@
 #include "erhe_graphics/compute_command_encoder.hpp"
 
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
 # include "erhe_graphics/gl/gl_compute_command_encoder.hpp"
 #endif
-#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+#if defined(ERHE_GRAPHICS_API_VULKAN)
 # include "erhe_graphics/vulkan/vulkan_compute_command_encoder.hpp"
 #endif
-#if defined(ERHE_GRAPHICS_LIBRARY_METAL)
+#if defined(ERHE_GRAPHICS_API_METAL)
 # include "erhe_graphics/metal/metal_compute_command_encoder.hpp"
 #endif
-#if defined(ERHE_GRAPHICS_LIBRARY_NONE)
+#if defined(ERHE_GRAPHICS_API_NONE)
 # include "erhe_graphics/null/null_compute_command_encoder.hpp"
 #endif
 
@@ -51,6 +51,10 @@ void Compute_command_encoder::dispatch_compute(
 )
 {
     m_impl->dispatch_compute(x_size, y_size, z_size);
+}
+auto Compute_command_encoder::get_command_buffer() -> Command_buffer&
+{
+    return m_impl->get_command_buffer();
 }
 
 } // namespace erhe::graphics

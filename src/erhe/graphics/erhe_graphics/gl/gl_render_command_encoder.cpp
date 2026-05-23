@@ -8,8 +8,8 @@
 #include "erhe_graphics/gl/gl_render_pass.hpp"
 #include "erhe_graphics/gl/gl_sampler.hpp"
 #include "erhe_graphics/gl/gl_state_tracker.hpp"
-#include "erhe_graphics/gl/gl_texture.hpp"
 #include "erhe_graphics/render_pipeline.hpp"
+#include "erhe_graphics/gl/gl_texture.hpp"
 #include "erhe_graphics/render_pipeline_state.hpp"
 #include "erhe_graphics/state/viewport_state.hpp"
 #include "erhe_verify/verify.hpp"
@@ -42,15 +42,17 @@ void Render_command_encoder_impl::set_sampled_image(uint32_t binding_point, cons
 
 void Render_command_encoder_impl::set_render_pipeline(const Render_pipeline& pipeline)
 {
-    const Render_pipeline_create_info& ci = pipeline.get_create_info();
+    const Render_pipeline_create_info&      ci            = pipeline.get_create_info();
+    const Base_render_pipeline_create_info& base          = ci.base;
+    const Shader_stages*                    shader_stages = ci.shader_stages;
     OpenGL_state_tracker& tracker = m_device.get_impl().m_gl_state_tracker;
-    tracker.shader_stages  .execute(ci.shader_stages);
+    tracker.shader_stages  .execute(shader_stages);
     tracker.vertex_input   .execute(ci.vertex_input);
-    tracker.input_assembly .execute(ci.input_assembly);
-    tracker.rasterization  .execute(ci.rasterization);
-    tracker.multisample    .execute(ci.multisample);
-    tracker.depth_stencil  .execute(ci.depth_stencil);
-    tracker.color_blend    .execute(ci.color_blend);
+    tracker.input_assembly .execute(base.input_assembly);
+    tracker.rasterization  .execute(base.rasterization);
+    tracker.multisample    .execute(base.multisample);
+    tracker.depth_stencil  .execute(base.depth_stencil);
+    tracker.color_blend    .execute(base.color_blend);
 }
 
 void Render_command_encoder_impl::set_render_pipeline_state(const Render_pipeline_state& pipeline)

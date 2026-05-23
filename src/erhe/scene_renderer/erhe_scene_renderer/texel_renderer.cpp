@@ -1,6 +1,7 @@
 #include "erhe_scene_renderer/texel_renderer.hpp"
 
 #include "erhe_graphics/device.hpp"
+#include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/render_pipeline.hpp"
@@ -55,7 +56,10 @@ void Texel_renderer::render(const Render_parameters& parameters)
     const auto* camera   = parameters.camera;
     const auto& lights   = parameters.lights;
 
-    erhe::graphics::Scoped_debug_group pass_scope{"Texel_renderer::render()"};
+    erhe::graphics::Scoped_debug_group pass_scope{
+        parameters.render_encoder.get_command_buffer(),
+        "Texel_renderer::render()"
+    };
 
     parameters.render_encoder.set_viewport_rect(viewport.x, viewport.y, viewport.width, viewport.height);
 
@@ -75,7 +79,7 @@ void Texel_renderer::render(const Render_parameters& parameters)
     );
     m_camera_buffer.bind(parameters.render_encoder, camera_buffer_range.value());
 
-    m_texture_heap->reset_heap();
+    m_texture_heap->reset_heap(parameters.render_encoder.get_command_buffer());
 
     Ring_buffer_range light_range = m_light_buffer.update(lights, parameters.light_projections, glm::vec3{0.0f});
     m_light_buffer.bind_light_buffer(parameters.render_encoder, light_range);
@@ -83,13 +87,18 @@ void Texel_renderer::render(const Render_parameters& parameters)
 
     m_texture_heap->bind(parameters.render_encoder);
 
-    erhe::graphics::Lazy_render_pipeline& pipeline = parameters.pipeline;
+    erhe::graphics::Base_render_pipeline& pipeline = parameters.pipeline;
 
     erhe::graphics::Texture* shadowmap_texture = parameters.light_projections->shadow_map_texture.get();
     uint32_t texel_count_x = shadowmap_texture->get_width();
     uint32_t texel_count_y = shadowmap_texture->get_height();
 
-    erhe::graphics::Render_pipeline* render_pipeline = pipeline.get_pipeline_for(parameters.render_pass.get_descriptor());
+    erhe::graphics::Render_pipeline* render_pipeline = pipeline.get_pipeline_for(
+        parameters.render_pass.get_descriptor(),
+        nullptr, // no shader stages override
+        nullptr, // no vertex input override
+        nullptr  // no vertex format override
+    );
     if (render_pipeline == nullptr) {
         return;
     }
@@ -101,7 +110,7 @@ void Texel_renderer::render(const Render_parameters& parameters)
 
     camera_buffer_range.value().release();
     light_range.release();
-    m_texture_heap->unbind();
+    m_texture_heap->unbind(parameters.render_encoder.get_command_buffer());
 }
 
 } // namespace erhe::scene_renderer

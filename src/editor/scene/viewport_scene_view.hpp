@@ -5,6 +5,7 @@
 
 #include "erhe_rendergraph/texture_rendergraph_node.hpp"
 #include "erhe_scene/camera.hpp"
+#include "erhe_scene_renderer/shader_key.hpp"
 #include "erhe_math/viewport.hpp"
 
 #include <glm/glm.hpp>
@@ -42,6 +43,16 @@ namespace erhe::scene_renderer {
 struct Viewport_config_data;
 
 namespace editor {
+
+enum class Renderer_choice : int {
+    forward,
+    draw_list
+};
+
+static constexpr const char* c_renderer_choice_strings[] = {
+    "Forward Renderer",
+    "Draw List Renderer"
+};
 
 class App_message_bus;
 class App_rendering;
@@ -108,9 +119,11 @@ public:
     void update_hover                (bool ray_only = false);
     void request_cursor_relative_hold(bool relative_hold_enable);
     void viewport_toolbar            ();
+    void set_shader_debug            (erhe::scene_renderer::Shader_debug shader_debug);
+    auto get_shader_debug            () const -> erhe::scene_renderer::Shader_debug;
 
-    void set_shader_stages_variant(Shader_stages_variant variant);
-    auto get_shader_stages_variant() const -> Shader_stages_variant;
+    void set_renderer_choice(Renderer_choice choice);
+    auto get_renderer_choice() const -> Renderer_choice;
 
     [[nodiscard]] auto get_ini_label                       () const -> const char* { return m_ini_label; }
     [[nodiscard]] auto get_viewport_from_window            (glm::vec2 position_in_window) const -> glm::vec2;
@@ -125,8 +138,6 @@ public:
     [[nodiscard]] auto get_cursor_relative_hold            () const -> bool;
 
 private:
-    [[nodiscard]] auto get_override_shader_stages() const -> const erhe::graphics::Shader_stages*;
-
     void update_hover_with_id_render();
 
     static int s_serial;
@@ -144,8 +155,8 @@ private:
     // viewport for 3d camera
     erhe::math::Viewport               m_projection_viewport  {0, 0, 0, 0};
 
-    //Shader_stages_variant              m_shader_stages_variant{Shader_stages_variant::standard};
-    Shader_stages_variant              m_shader_stages_variant{Shader_stages_variant::circular_brushed_metal};
+    erhe::scene_renderer::Shader_debug m_shader_debug         {erhe::scene_renderer::Shader_debug::none};
+    Renderer_choice                    m_renderer_choice      {Renderer_choice::forward};
     bool                               m_is_scene_view_hovered{false};
     bool                               m_show_navigation_gizmo{true};
     bool                               m_relative_hold_enable{false};

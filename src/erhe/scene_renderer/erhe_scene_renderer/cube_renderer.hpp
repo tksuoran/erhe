@@ -8,7 +8,7 @@
 namespace erhe::graphics {
     class Command_buffer;
     class Device;
-    class Lazy_render_pipeline;
+    class Base_render_pipeline;
     class Render_command_encoder;
     class Render_pass;
 }
@@ -36,7 +36,7 @@ public:
     public:
         Cube_instance_buffer&                   cube_instance_buffer;
         erhe::graphics::Render_command_encoder& render_encoder;
-        erhe::graphics::Lazy_render_pipeline&   render_pipeline_state;
+        erhe::graphics::Base_render_pipeline&   render_pipeline_state;
         const erhe::graphics::Render_pass&      render_pass;
         const erhe::scene::Camera*              camera{nullptr};
         std::shared_ptr<erhe::scene::Node>      node{};

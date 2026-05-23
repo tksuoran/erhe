@@ -124,7 +124,8 @@ void Rendertarget_mesh::resize_rendertarget(
         erhe::primitive::Material_create_info{
             .name = "Rendertarget Node",
             .data = {
-                .base_color = glm::vec3{0.1f, 0.1f, 0.2f}
+                .base_color = glm::vec3{1.0f, 1.0f, 1.0f},
+                .bxdf_model = erhe::primitive::Bxdf_model::unlit
             }
         }
     );
@@ -159,7 +160,7 @@ void Rendertarget_mesh::resize_rendertarget(
         geometry,
         erhe::primitive::Build_info{
             .primitive_types{ .fill_triangles = true },
-            .buffer_info = mesh_memory.buffer_info
+            .buffer_info = mesh_memory.make_primitive_buffer_info()
         },
         erhe::primitive::Normal_style::polygon_normals
     );
@@ -169,7 +170,7 @@ void Rendertarget_mesh::resize_rendertarget(
     clear_primitives();
     add_primitive(primitive, m_material);
 
-    mesh_memory.buffer_transfer_queue.flush(command_buffer);
+    mesh_memory.flush(command_buffer);
 
     enable_flag_bits(
         erhe::Item_flags::visible      |

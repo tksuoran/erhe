@@ -166,12 +166,12 @@ private:
         erhe::graphics::Reloadable_shader_stages upsample_last;
     };
     struct Pipelines {
-        erhe::graphics::Lazy_render_pipeline downsample_with_lowpass_input;
-        erhe::graphics::Lazy_render_pipeline downsample_with_lowpass;
-        erhe::graphics::Lazy_render_pipeline downsample;
-        erhe::graphics::Lazy_render_pipeline upsample_first;
-        erhe::graphics::Lazy_render_pipeline upsample;
-        erhe::graphics::Lazy_render_pipeline upsample_last;
+        erhe::graphics::Base_render_pipeline downsample_with_lowpass_input;
+        erhe::graphics::Base_render_pipeline downsample_with_lowpass;
+        erhe::graphics::Base_render_pipeline downsample;
+        erhe::graphics::Base_render_pipeline upsample_first;
+        erhe::graphics::Base_render_pipeline upsample;
+        erhe::graphics::Base_render_pipeline upsample_last;
     };
 
     static constexpr int    s_input_texture               = 0;
@@ -192,7 +192,6 @@ private:
     erhe::graphics::Bind_group_layout                  m_bind_group_layout;
     erhe::graphics::Ring_buffer_client                 m_parameter_buffer_client;
     Offsets                                            m_offsets;
-    erhe::graphics::Vertex_input_state                 m_empty_vertex_input;
     std::filesystem::path                              m_shader_path;
     Shader_stages                                      m_shader_stages;
     Pipelines                                          m_pipelines;

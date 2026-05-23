@@ -17,6 +17,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 
 namespace erhe::graphics {
     class Command_buffer;
@@ -47,11 +48,18 @@ public:
     };
     Config config;
 
+    // view_count: when >= 2, build an additional multiview-compiled
+    // Shader_stages variant so render(..., multiview = true) can draw
+    // the same screen-space text into a multiview render pass and have
+    // it appear on every layer in one draw. Default 1 keeps existing
+    // single-view callers unchanged. Mirrors the pattern used by
+    // Content_wide_line_renderer / Debug_renderer.
     Text_renderer(
         erhe::graphics::Device&         graphics_device,
         erhe::graphics::Command_buffer& init_command_buffer,
-        bool                            enabled   = true,
-        int                             font_size = 14
+        bool                            enabled        = true,
+        int                             font_size      = 14,
+        int                             view_count = 1
     );
     ~Text_renderer() noexcept;
 
@@ -65,11 +73,17 @@ public:
     [[nodiscard]] auto font_size() -> float;
     [[nodiscard]] auto measure  (std::string_view text) const -> erhe::ui::Rectangle;
 
-    void render(erhe::graphics::Render_command_encoder& encoder, const erhe::graphics::Render_pass& render_pass, erhe::math::Viewport viewport);
+    void render(
+        erhe::graphics::Render_command_encoder& encoder,
+        const erhe::graphics::Render_pass&      render_pass,
+        erhe::math::Viewport                    viewport,
+        bool                                    multiview = false
+    );
     void rebuild_depth_state(bool reverse_depth);
 
 private:
-    auto build_shader_stages() -> erhe::graphics::Shader_stages_prototype;
+    auto build_shader_stages          () -> erhe::graphics::Shader_stages_prototype;
+    auto build_multiview_shader_stages() -> erhe::graphics::Shader_stages_prototype;
 
     static constexpr std::size_t s_vertex_count{65536 * 8};
 
@@ -82,6 +96,7 @@ private:
     static constexpr std::size_t index_stride            {2};
 
     erhe::graphics::Device&                m_graphics_device;
+    int                                    m_view_count{1};
     erhe::graphics::Shader_resource        m_projection_block;
     erhe::graphics::Shader_resource        m_vertex_ssbo_block;
     erhe::graphics::Shader_resource*       m_clip_from_window_resource;
@@ -101,11 +116,12 @@ private:
     erhe::graphics::Sampler                m_nearest_sampler;
     erhe::graphics::Bind_group_layout      m_bind_group_layout;
     erhe::graphics::Shader_stages          m_shader_stages;
+    std::optional<erhe::graphics::Shader_stages> m_multiview_shader_stages;
     std::unique_ptr<erhe::ui::Font>        m_font;
     erhe::graphics::Ring_buffer_client     m_vertex_ssbo_buffer;
     erhe::graphics::Ring_buffer_client     m_projection_buffer;
     erhe::graphics::Vertex_input_state     m_vertex_input;
-    erhe::graphics::Lazy_render_pipeline    m_pipeline;
+    erhe::graphics::Base_render_pipeline   m_pipeline;
 
     std::vector<erhe::graphics::Ring_buffer_range> m_vertex_buffer_ranges;
     std::unique_ptr<erhe::graphics::Texture_heap>  m_texture_heap;

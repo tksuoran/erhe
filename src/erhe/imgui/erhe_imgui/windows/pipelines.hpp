@@ -8,7 +8,7 @@ namespace erhe::graphics {
     class Blend_state_component;
     class Color_blend_state;
     class Depth_stencil_state;
-    class Lazy_render_pipeline;
+    class Base_render_pipeline;
     class Render_pipeline_state;
     class Rasterization_state;
     class Stencil_op_state;
@@ -34,6 +34,6 @@ public:
 };
 
 void pipeline_imgui(erhe::graphics::Render_pipeline_state& pipeline);
-void pipeline_imgui(erhe::graphics::Lazy_render_pipeline& pipeline);
+void pipeline_imgui(erhe::graphics::Base_render_pipeline& pipeline);
 
 } // namespace erhe::imgui

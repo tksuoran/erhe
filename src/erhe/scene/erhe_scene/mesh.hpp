@@ -29,6 +29,8 @@ public:
     std::shared_ptr<erhe::primitive::Material>  material;
 };
 
+class Mesh;
+
 class Mesh : public erhe::Item<Item_base, Node_attachment, Mesh, erhe::Item_kind::clone_using_custom_clone_constructor>
 {
 public:

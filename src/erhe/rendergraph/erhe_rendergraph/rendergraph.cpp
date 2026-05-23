@@ -7,6 +7,7 @@
 #include "erhe_graph/node.hpp"
 #include "erhe_graph/pin.hpp"
 #include "erhe_graph/link.hpp"
+#include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/scoped_debug_group.hpp"
 #include "erhe_profile/profile.hpp"
@@ -85,14 +86,19 @@ void Rendergraph::execute(erhe::graphics::Command_buffer& command_buffer)
 
     sort();
 
+    // Cb-targeted scopes so RenderDoc nests each node's draws under the
+    // node's name. The single-arg ctor would fall back to a queue-level
+    // label on Vulkan, which captures place at submit time -- visually
+    // detached from the cb commands inside.
     erhe::graphics::Scoped_debug_group render_graph_scope{
+        command_buffer,
         erhe::utility::Debug_label{"Rendergraph::execute()"}
     };
 
     for (const auto& node : m_nodes) {
         if (node->is_enabled()) {
             SPDLOG_LOGGER_TRACE(log_frame, "Execute render graph node '{}'", node->get_name());
-            erhe::graphics::Scoped_debug_group node_scope{node->get_debug_label()};
+            erhe::graphics::Scoped_debug_group node_scope{command_buffer, node->get_debug_label()};
             node->execute_rendergraph_node(command_buffer);
         }
     }

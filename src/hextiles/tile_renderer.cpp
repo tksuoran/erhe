@@ -160,10 +160,10 @@ Tile_renderer::Tile_renderer(
     , m_vertex_input{m_graphics_device, erhe::graphics::Vertex_input_state_data::make(m_vertex_format)}
     , m_pipeline{
         graphics_device,
-        erhe::graphics::Render_pipeline_create_info{
+        erhe::graphics::Base_render_pipeline_create_info{
             .debug_label    = erhe::utility::Debug_label{"Map renderer"},
-            .shader_stages  = &m_shader_stages,
-            .vertex_input   = &m_vertex_input,
+            //.shader_stages  = &m_shader_stages,
+            //.vertex_input   = &m_vertex_input,
             .input_assembly = erhe::graphics::Input_assembly_state::triangle_strip,
             .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
             .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
@@ -738,9 +738,17 @@ void Tile_renderer::render(erhe::graphics::Render_command_encoder& render_encode
         return;
     }
 
-    erhe::graphics::Scoped_debug_group pass_scope{"Tile_renderer::render()"};
+    erhe::graphics::Scoped_debug_group pass_scope{
+        render_encoder.get_command_buffer(),
+        "Tile_renderer::render()"
+    };
 
-    erhe::graphics::Render_pipeline* pipeline_ptr = m_pipeline.get_pipeline_for(render_pass.get_descriptor());
+    erhe::graphics::Render_pipeline* pipeline_ptr = m_pipeline.get_pipeline_for(
+        render_pass.get_descriptor(),
+        &m_shader_stages,
+        &m_vertex_input,
+        &m_vertex_format
+    );
     if (pipeline_ptr == nullptr) {
         return;
     }
@@ -813,7 +821,7 @@ void Tile_renderer::render(erhe::graphics::Render_command_encoder& render_encode
     projection_buffer_range.release();
     vertex_buffer_range.release();
 
-    texture_heap.unbind();
+    texture_heap.unbind(render_encoder.get_command_buffer());
 
     m_vertex_buffer_range.reset();
 }

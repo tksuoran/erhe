@@ -3,7 +3,9 @@
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/ring_buffer_range.hpp"
 #include "erhe_graphics/shader_monitor.hpp"
-#include "erhe_graphics/spirv_cache.hpp"
+#if defined(ERHE_SPIRV)
+#   include "erhe_graphics/spirv_cache.hpp"
+#endif
 #include "erhe_graphics/surface.hpp"
 #include "erhe_graphics/generated/graphics_config.hpp"
 #include "erhe_math/math_util.hpp"
@@ -124,13 +126,13 @@ public:
 
     int  glsl_version           {0};
 
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
     int  gl_version             {0};
     bool core_profile           {false};
     bool compatibility_profile  {false};
     bool forward_compatible     {false};
 #endif
-#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+#if defined(ERHE_GRAPHICS_API_VULKAN)
     uint32_t vulkan_api_version {0};
     uint32_t vulkan_driver_id   {0};
 
@@ -147,6 +149,18 @@ public:
     bool     uniform_and_storage_buffer_16bit_access{false};
     bool     storage_push_constant_16               {false};
     bool     storage_input_output_16                {false};
+
+    // Reflect VkPhysicalDeviceMultiviewFeatures (VK_KHR_multiview, promoted
+    // to Vulkan 1.1 core). Set when the corresponding feature was advertised
+    // by the physical device and enabled on VkDevice creation.
+    bool     multiview                              {false};
+    bool     multiview_geometry_shader              {false};
+    bool     multiview_tessellation_shader          {false};
+
+    // Reflect VkPhysicalDeviceMultiviewProperties (Vulkan 1.1 core). Spec
+    // minimum for max_multiview_view_count is 6.
+    uint32_t max_multiview_view_count               {0};
+    uint32_t max_multiview_instance_index           {0};
 #endif
 
     bool use_clip_control            {false};
@@ -298,6 +312,44 @@ public:
     // completion handlers. For init boundaries, not the steady-state loop.
     void wait_idle();
 
+    // Drop every cached graphics pipeline that was built against any
+    // previously-compiled shader stages. Backends that key their pipeline
+    // cache on raw shader-module handles (Vulkan) MUST flush the cache
+    // when those shader stages are destroyed -- otherwise drivers that
+    // recycle module handle values cause stale pipelines to be returned
+    // for fresh modules. Backends without that hazard (OpenGL, Metal,
+    // Null) implement this as a no-op. Pipelines are destroyed via the
+    // backend's deferred-destruction queue so in-flight GPU work stays
+    // valid.
+    void clear_render_pipeline_cache();
+
+    // Init-time prewarm. Constructs a Render_pipeline from the supplied
+    // create_info and discards it; on Vulkan the resulting binary is
+    // retained in the driver-level VkPipelineCache (m_pipeline_cache)
+    // because Render_pipeline_impl's constructor calls
+    // vkCreateGraphicsPipelines with that cache. Subsequent constructions
+    // (or set_render_pipeline_state cache misses) with the same shader
+    // modules + pipeline-state tuple skip the IR-optimization step and
+    // complete significantly faster -- this is the dominant cost in the
+    // first-frame budget on tile-based mobile drivers (Adreno on Quest).
+    //
+    // Note: this populates the driver-level binary cache only. The
+    // application-level VkPipeline cache that Render_command_encoder_impl
+    // populates (keyed on the active VkRenderPass pointer) is NOT
+    // populated by this call -- a runtime bind still calls
+    // vkCreateGraphicsPipelines once, but reuses the warmed driver cache.
+    // OpenGL and Null backends are effectively no-ops; Metal participates
+    // only when the backend opts into MTLBinaryArchive, which it does not
+    // today.
+    //
+    // Caller contract: create_info must be well-formed (non-null
+    // shader_stages with valid modules, formats matching a render pass
+    // the runtime will use). Malformed create_infos surface as
+    // Message_severity::error from the backend, which the editor wires
+    // to ERHE_FATAL when validation layers are on -- prewarm is not a
+    // place to probe with speculative inputs.
+    void warmup_render_pipeline(const Render_pipeline_create_info& create_info);
+
     // Tear down and rebuild the platform surface and its swapchain. Used
     // on Android when the activity returns from background with a new
     // ANativeWindow: the existing VkSurfaceKHR is destroyed, a fresh one
@@ -373,7 +425,9 @@ public:
     [[nodiscard]] auto get_graphics_config                () const -> const Graphics_config&;
     [[nodiscard]] auto get_impl                           () -> Device_impl&;
     [[nodiscard]] auto get_impl                           () const -> const Device_impl&;
+#if defined(ERHE_SPIRV)
     [[nodiscard]] auto get_spirv_cache                    () -> Spirv_cache&;
+#endif
     void               set_shader_error_callback          (Shader_error_callback callback);
     void               set_state_dump_callback            (State_dump_callback callback);
     void               set_trace_callback                 (Trace_callback callback);
@@ -394,7 +448,9 @@ public:
 private:
     Device_message_callback      m_device_message_callback{};
     std::unique_ptr<Device_impl> m_impl;
+#if defined(ERHE_SPIRV)
     Spirv_cache                  m_spirv_cache;
+#endif
     Shader_error_callback        m_shader_error_callback  {};
     State_dump_callback          m_state_dump_callback    {};
     Trace_callback               m_trace_callback         {};

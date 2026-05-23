@@ -117,10 +117,10 @@ void Brush_preview::make_preview_scene()
     );
 
     auto composition_pass = std::make_shared<Composition_pass>("Material Preview Composition_pass");
-    composition_pass->mesh_layers            = {Mesh_layer_id::brush};
-    composition_pass->primitive_mode         = erhe::primitive::Primitive_mode::polygon_fill;
-    composition_pass->filter                 = erhe::Item_filter{};
-    composition_pass->render_pipeline_states = m_render_pipeline_states;
+    composition_pass->mesh_layers           = {Mesh_layer_id::brush};
+    composition_pass->primitive_mode        = erhe::primitive::Primitive_mode::polygon_fill;
+    composition_pass->filter                = erhe::Item_filter{};
+    composition_pass->base_render_pipelines = m_render_pipelines;
     {
         std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_composer.mutex};
         m_composer.composition_passes.push_back(composition_pass);
@@ -139,7 +139,7 @@ void Brush_preview::render_preview(
     set_color_texture_layer(texture_layer);
     resize(texture->get_width(), texture->get_height());
     set_clear_color(glm::vec4{0.0f, 0.0f, 0.0f, 0.0f});
-    update_rendertarget(m_graphics_device, get_reverse_depth());
+    update_rendertarget(*m_context.graphics_device, get_reverse_depth());
 
     if (m_mesh) {
         m_node->detach(m_mesh.get());
@@ -149,7 +149,7 @@ void Brush_preview::render_preview(
     ERHE_VERIFY(m_context.current_command_buffer != nullptr);
     erhe::graphics::Command_buffer& command_buffer = *m_context.current_command_buffer;
     const Brush::Scaled& brush_scaled = brush->get_scaled(1.0);
-    m_context.mesh_memory->buffer_transfer_queue.flush(command_buffer);
+    m_context.mesh_memory->flush(command_buffer);
 
     if (m_mesh) {
         m_mesh->clear_primitives();
@@ -165,8 +165,9 @@ void Brush_preview::render_preview(
         m_mesh->layer_id = { Mesh_layer_id::brush };
     }
 
-    const std::shared_ptr<erhe::primitive::Material>& render_material =
-        brush->get_material() ? brush->get_material() : m_material;
+    const std::shared_ptr<erhe::primitive::Material>& render_material = brush->get_material()
+        ? brush->get_material()
+        : m_material;
     m_mesh->add_primitive(brush_scaled.primitive, render_material);
     m_node->attach(m_mesh);
 
@@ -244,24 +245,24 @@ void Brush_preview::render_preview(
     );
 
     {
-        erhe::graphics::Render_command_encoder render_encoder = m_graphics_device.make_render_command_encoder(command_buffer);
+        erhe::graphics::Render_command_encoder render_encoder = m_context.graphics_device->make_render_command_encoder(command_buffer);
         erhe::graphics::Scoped_render_pass scoped_render_pass{*m_render_pass.get(), command_buffer};
         const Render_context context{
-            .command_buffer         = &command_buffer,
-            .encoder                = &render_encoder,
-            .app_context            = m_context,
-            .scene_view             = *this,
-            .viewport_config        = m_viewport_config,
-            .camera                 = m_camera.get(),
-            .viewport_scene_view    = nullptr,
-            .viewport               = viewport,
-            .override_shader_stages = nullptr
+            .command_buffer      = &command_buffer,
+            .encoder             = &render_encoder,
+            .render_pass         = m_render_pass.get(),
+            .app_context         = m_context,
+            .scene_view          = *this,
+            .viewport_config     = m_viewport_config,
+            .camera              = m_camera.get(),
+            .viewport_scene_view = nullptr,
+            .viewport            = viewport
         };
         m_composer.render(context);
     }
 
     {
-        erhe::graphics::Blit_command_encoder blit_encoder = m_graphics_device.make_blit_command_encoder(command_buffer);
+        erhe::graphics::Blit_command_encoder blit_encoder = m_context.graphics_device->make_blit_command_encoder(command_buffer);
         blit_encoder.generate_mipmaps(texture.get());
     }
 }

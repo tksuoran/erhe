@@ -6,7 +6,7 @@ Manages 3D scene data for the editor: scene roots (the top-level scene container
 
 ## Key Types
 
-- **`Scene_root`** -- Owns an `erhe::scene::Scene`, a physics world (`erhe::physics::IWorld`), a raytrace scene, mesh layers (`Scene_layers`), and a `Content_library`. Implements `erhe::scene::Scene_host`. Registers/unregisters nodes, cameras, meshes, lights, and skins. Manages `Node_physics` instances and rendertarget meshes. Multiple `Scene_root` instances can coexist (managed by `App_scenes`).
+- **`Scene_root`** -- Owns an `erhe::scene::Scene`, a physics world (`erhe::physics::IWorld`), a raytrace scene, mesh layers (`Scene_layers`), and a `Content_library`. Implements `erhe::scene::Scene_host`. Registers/unregisters nodes, cameras, meshes, lights, and skins. Manages `Node_physics` instances and rendertarget meshes. Multiple `Scene_root` instances can coexist (managed by `App_scenes`). Constructor takes only `App_message_bus*`, `Content_library`, name, and `enable_physics`; UI for the content library is provided separately by `Content_library_window` (in `content_library/`).
 
 - **`Scene_layers`** -- Defines mesh layers (content, brush, tool, controller, rendertarget) and a light layer. Each layer has an ID used for filtering during rendering.
 

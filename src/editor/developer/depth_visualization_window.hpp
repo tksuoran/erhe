@@ -40,11 +40,11 @@ public:
 private:
     erhe::scene_renderer::Forward_renderer& m_forward_renderer;
     erhe::scene_renderer::Mesh_memory&      m_mesh_memory;
+    Programs&                               m_programs;
 
     // TODO These resources should not be per node
-    erhe::graphics::Vertex_input_state                 m_empty_vertex_input;
-    erhe::graphics::Lazy_render_pipeline               m_render_pipeline_state;
-    std::vector<erhe::graphics::Lazy_render_pipeline*> m_render_pipeline_states;
+    erhe::graphics::Base_render_pipeline               m_render_pipeline;
+    std::vector<erhe::graphics::Base_render_pipeline*> m_render_pipelines;
     int                                                m_light_index{};
 };
 

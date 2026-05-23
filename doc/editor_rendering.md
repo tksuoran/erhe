@@ -2,6 +2,14 @@
 
 > This document was mostly written by Claude and may contain inaccuracies.
 
+Lit material drawing goes through `standard.{vert,frag}` as an
+uber-shader; feature differences (circular brushed metal, anisotropic
+BRDF, debug visualization modes, depth-only, ID rendering, brush
+preview, rendertarget) are variant axes on the `Shader_key`. See
+`doc/shader_variants.md` for the variant key, `doc/mesh_memory.md`
+for the `Render_bucket` / `bucket_primitives()` flow, and
+`doc/prewarm.md` for the init-time compile path.
+
 This document describes how the erhe editor uses erhe libraries to render a frame, covering the rendergraph, the composer, render pipelines, and stencil buffer usage.
 
 ## Rendergraph
@@ -113,7 +121,7 @@ Positive/negative determinant variants handle mirrored (negative-scale) geometry
 2. Builds draw indirect commands
 3. For each render pipeline state, sets the pipeline and calls `multi_draw_indexed_primitives_indirect()` to draw all matching primitives
 
-The forward renderer supports shader stages override for debug visualization modes (depth, normals, tangents, etc.) and falls back to an error shader when the main shader is invalid.
+Debug visualization modes (depth, normals, tangents, etc.) ride on the `SHADER_DEBUG` integer axis of `Shader_key`; each value selects a compile-time override block at the end of `standard.frag`. The renderer falls back to an error shader when a variant fails to compile.
 
 ## Render pipelines
 
@@ -123,7 +131,7 @@ Key pipelines and their depth/stencil/blend configuration:
 
 ### Opaque fill (not selected)
 
-- Shader: `circular_brushed_metal`
+- Shader: `standard` variant (per-material `Shader_key`)
 - Depth: test enabled, write enabled
 - Stencil: disabled
 - Blend: disabled
@@ -153,7 +161,7 @@ Key pipelines and their depth/stencil/blend configuration:
 
 ### Selection outline
 
-- Shader: `fat_triangle` (geometry shader expands triangles into thick outlines)
+- Shader: `wide_lines_draw_color` (line topology + geometry-shader expansion when the GS path is enabled, otherwise compute-shader-fed triangle output via `Content_wide_line_renderer`)
 - Depth: disabled
 - Stencil: function=not_equal 0x80, test_mask=0x80, write_mask=0x80, z_pass_op=replace
 - Blend: premultiplied alpha, alpha-to-coverage

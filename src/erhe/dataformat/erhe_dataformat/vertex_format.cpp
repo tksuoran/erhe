@@ -1,4 +1,7 @@
 #include "erhe_dataformat/vertex_format.hpp"
+#include "erhe_hash/hash.hpp"
+
+#include <sstream>
 
 namespace erhe::dataformat {
 
@@ -17,6 +20,16 @@ auto c_str(const Vertex_attribute_usage usage) -> const char*
         case Vertex_attribute_usage::tex_coord:     return "tex_coord";
         case Vertex_attribute_usage::custom:        return "custom";
         default:                                    return "?";
+    }
+}
+
+auto c_str(Vertex_step step) -> const char*
+{
+    switch (step) {
+        //using enum Vertex_step;
+        case Vertex_step::Step_per_vertex:   return "per_vertex";
+        case Vertex_step::Step_per_instance: return "per_instance";
+        default:                             return "?";
     }
 }
 
@@ -78,6 +91,75 @@ void Vertex_stream::finalize_stride()
     }
 }
 
+auto Vertex_stream::is_buffer_compatible(const Vertex_stream& other) const -> bool
+{
+    if (stride != other.stride) {
+        return false;
+    }
+    if (attributes.size() != other.attributes.size()) {
+        return false;
+    }
+    for (std::size_t i = 0; i < attributes.size(); ++i) {
+        const auto& attr = attributes[i];
+        const auto& other_attr = other.attributes[i];
+        if (attr.format != other_attr.format || attr.offset != other_attr.offset) {
+            return false;
+        }
+    }
+    return true;
+}
+
+auto Vertex_stream::get_hash() const -> uint64_t
+{
+    uint64_t result;
+    {
+        const uint64_t stream_packed =
+             static_cast<uint64_t>(binding)       |
+            (static_cast<uint64_t>(step   ) << 7) |
+            (static_cast<uint64_t>(stride ) << 8);
+        result = erhe::hash::hash(&stream_packed, 0);
+    }
+    result = erhe::hash::hash(static_cast<uint64_t>(attributes.size()), result);
+    for (const Vertex_attribute& attribute : attributes) {
+        const uint64_t attribute_packed =
+             static_cast<uint64_t>(attribute.format     )        |
+            (static_cast<uint64_t>(attribute.usage_type ) <<  8) |
+            (static_cast<uint64_t>(attribute.usage_index) << 16) |
+            (static_cast<uint64_t>(attribute.offset     ) << 24);
+        result = erhe::hash::hash(attribute_packed, result);
+    }
+    return result;
+}
+
+auto Vertex_attribute::to_string() const -> std::string
+{
+    std::stringstream ss;
+    ss << "format: "      << c_str(format)     << ", ";
+    ss << "usage_type: "  << c_str(usage_type) << ", ";
+    ss << "usage_index: " << usage_index       << ", ";
+    ss << "offset: "      << offset;
+    return ss.str();
+}
+
+auto Vertex_stream::to_string() const -> std::string
+{
+    std::stringstream ss;
+    ss << "binding: " << binding     << ", ";
+    ss << "stride: "  << stride      << ", ";
+    ss << "step: "    << c_str(step) << ", ";
+    ss << "attributes: {";
+    bool first = true;
+    for (const auto& attr : attributes) {
+        if (!first) {
+            ss << ", ";
+        }
+        ss << attr.to_string();
+        first = false;
+    }
+    ss << "}";
+    return ss.str();
+}
+
 Vertex_format::Vertex_format()
 {
 }
@@ -119,6 +201,32 @@ auto Vertex_format::get_attributes() const -> std::vector<Attribute_stream>
         }
     }
     return result;
+}
+
+auto Vertex_format::get_hash() const -> uint64_t
+{
+    uint64_t result = 0;
+    for (const Vertex_stream& stream : streams) {
+        const uint64_t stream_hash = stream.get_hash();
+        result = erhe::hash::hash(stream_hash, result);
+    }
+    return result;
+}
+
+auto Vertex_format::to_string() const -> std::string
+{
+    std::stringstream ss;
+    ss << "streams: {";
+    bool first = true;
+    for (const auto& stream : streams) {
+        if (!first) {
+            ss << ", ";
+        }
+        ss << stream.to_string();
+        first = false;
+    }
+    ss << "}";
+    return ss.str();
 }
 
 } // namespace erhe::dataformat

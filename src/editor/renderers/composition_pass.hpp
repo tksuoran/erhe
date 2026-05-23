@@ -9,7 +9,7 @@
 
 #include <functional>
 
-namespace erhe::graphics { class Lazy_render_pipeline; }
+namespace erhe::graphics { class Base_render_pipeline; }
 namespace erhe::scene    { using Layer_id = uint64_t; }
 
 struct Render_style_data;
@@ -35,16 +35,18 @@ public:
     static constexpr std::string_view static_type_name{"Composition_pass"};
     [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::composition_pass; }
 
-    bool                                                enabled{true}; // TODO consider using Item visibility flag
-    bool                                                use_content_wide_line_renderer{false};
-    uint32_t                                            content_wide_line_group{0};
-    std::vector<erhe::scene::Layer_id>                  mesh_layers;
-    std::size_t                                         non_mesh_vertex_count{0};
-    std::vector<erhe::graphics::Lazy_render_pipeline*> render_pipeline_states;
-    erhe::primitive::Primitive_mode                     primitive_mode{erhe::primitive::Primitive_mode::polygon_fill};
-    erhe::Item_filter                                   filter{};
-    std::shared_ptr<Scene_root>                         override_scene_root{};
-    bool                                                allow_shader_stages_override{true};
+    bool                                               enabled{true}; // TODO consider using Item visibility flag
+    bool                                               use_content_wide_line_renderer{false};
+    uint32_t                                           content_wide_line_group{0};
+    std::vector<erhe::scene::Layer_id>                 mesh_layers;
+    std::size_t                                        non_mesh_vertex_count{0};
+    std::vector<erhe::graphics::Base_render_pipeline*> base_render_pipelines;
+    erhe::primitive::Primitive_mode                    primitive_mode{erhe::primitive::Primitive_mode::polygon_fill};
+    erhe::Item_filter                                  filter{};
+    std::shared_ptr<Scene_root>                        override_scene_root{};
+    uint32_t                                           shader_key_force_enable_mask{0};
+    uint32_t                                           shader_key_force_disable_mask{0};
+    erhe::graphics::Shader_stages*                     shader_stages{nullptr};
 
     std::optional<erhe::scene_renderer::Primitive_interface_settings>      primitive_settings;
     std::function<void()>                                                  begin;

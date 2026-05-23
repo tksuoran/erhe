@@ -4,6 +4,7 @@
 #include "erhe_scene_renderer/light_buffer.hpp"
 
 #include <memory>
+#include <span>
 #include <string>
 
 namespace erhe::graphics       { class Command_buffer; class Device; class Gpu_timer; }
@@ -50,6 +51,14 @@ public:
     [[nodiscard]] auto get_light_projections() -> erhe::scene_renderer::Light_projections&;
     [[nodiscard]] auto get_texture          () const -> std::shared_ptr<erhe::graphics::Texture>;
     [[nodiscard]] auto get_viewport         () const -> erhe::math::Viewport;
+
+    // Read-only access to the per-light shadow Render_pass list and the
+    // active reverse-depth setting. Used by the init-time pipeline
+    // prewarm (renderers/prewarm.cpp) to drive Shadow_renderer::
+    // prewarm_pipelines so vkCreateGraphicsPipelines for each shadow
+    // pass runs at init rather than first frame.
+    [[nodiscard]] auto get_render_passes    () const -> std::span<const std::unique_ptr<erhe::graphics::Render_pass>>;
+    [[nodiscard]] auto get_reverse_depth    () const -> bool;
 
 private:
     App_context&                                              m_context;

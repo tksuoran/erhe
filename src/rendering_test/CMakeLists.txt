@@ -138,7 +138,6 @@ target_link_libraries(
         erhe::geometry
         erhe::gltf
         erhe::graphics
-        erhe::graphics_buffer_sink
         erhe::log
         erhe::math
         erhe::primitive

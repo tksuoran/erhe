@@ -1,5 +1,7 @@
 #include "operations/material_change_operation.hpp"
 
+#include "app_context.hpp"
+
 #include <fmt/format.h>
 
 namespace editor {
@@ -18,14 +20,18 @@ Material_change_operation::Material_change_operation(
 
 Material_change_operation::~Material_change_operation() noexcept = default;
 
-void Material_change_operation::execute(App_context&)
+void Material_change_operation::execute(App_context& context)
 {
+    static_cast<void>(context);
+
     // TODO Lock the item
     m_material->data = m_after;
 }
 
-void Material_change_operation::undo(App_context&)
+void Material_change_operation::undo(App_context& context)
 {
+    static_cast<void>(context);
+
     // TODO Lock the item
     m_material->data = m_before;
 }

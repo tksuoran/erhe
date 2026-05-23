@@ -1,3 +1,5 @@
+#include "erhe_camera_view.glsl"
+
 layout(location = 0) out vec4 v_position;
 
 void main()
@@ -17,7 +19,7 @@ void main()
         vec4( 1.0, 0.0,  0.0, 0.0)  // 1
     );
 
-    mat4 clip_from_world = camera.cameras[0].clip_from_world;
+    mat4 clip_from_world = camera.cameras[c_view_index].clip_from_world;
     vec4 position        = vertex[gl_VertexID];
 
     gl_Position = clip_from_world * position;

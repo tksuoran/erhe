@@ -5,6 +5,7 @@
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/render_pass.hpp"
+#include "erhe_graphics/render_pipeline_state.hpp"
 #include "erhe_graphics/ring_buffer.hpp"
 #include "erhe_graphics/ring_buffer_range.hpp"
 #include "erhe_graphics/scoped_debug_group.hpp"
@@ -61,13 +62,52 @@ auto Text_renderer::build_shader_stages() -> erhe::graphics::Shader_stages_proto
     return prototype;
 }
 
+auto Text_renderer::build_multiview_shader_stages() -> erhe::graphics::Shader_stages_prototype
+{
+    using namespace erhe::graphics;
+
+    const auto shader_path = std::filesystem::path{"res"} / std::filesystem::path{"shaders"};
+    const std::filesystem::path vs_path = shader_path / std::filesystem::path{"text.vert"};
+    const std::filesystem::path fs_path = shader_path / std::filesystem::path{"text.frag"};
+    Shader_stages_create_info create_info{
+        .name             = "text_multiview",
+        .interface_blocks = m_use_buffer_texture
+            ? std::vector<const Shader_resource*>{ &m_projection_block }
+            : std::vector<const Shader_resource*>{ &m_projection_block, &m_vertex_ssbo_block },
+        .fragment_outputs = &m_fragment_outputs,
+        .vertex_format    = nullptr,
+        .shaders = {
+            { Shader_type::vertex_shader,   vs_path },
+            { Shader_type::fragment_shader, fs_path }
+        },
+        .bind_group_layout = &m_bind_group_layout,
+    };
+
+    if (m_use_buffer_texture) {
+        create_info.defines.emplace_back("ERHE_VERTEX_DATA_TEXTURE_BUFFER", "1");
+    }
+
+    create_info.view_count = m_view_count;
+
+    Shader_stages_prototype prototype{m_graphics_device, create_info};
+    prototype.compile_shaders();
+    prototype.link_program();
+    if (!prototype.is_valid()) {
+        log_startup->error("Text renderer multiview shader compilation failed");
+    }
+
+    return prototype;
+}
+
 Text_renderer::Text_renderer(
     erhe::graphics::Device&         graphics_device,
     erhe::graphics::Command_buffer& init_command_buffer,
     const bool                      enabled,
-    const int                       font_size
+    const int                       font_size,
+    const int                       view_count
 )
     : m_graphics_device          {graphics_device}
+    , m_view_count           {std::max(1, view_count)}
     , m_projection_block         {graphics_device, "projection", 0, erhe::graphics::Shader_resource::Type::uniform_block}
     , m_vertex_ssbo_block{
         graphics_device,
@@ -176,10 +216,10 @@ Text_renderer::Text_renderer(
     , m_vertex_input      {graphics_device, {}}
     , m_pipeline{
         graphics_device,
-        erhe::graphics::Render_pipeline_create_info{
+        erhe::graphics::Base_render_pipeline_create_info{
             .debug_label    = erhe::utility::Debug_label{"Text renderer"},
-            .shader_stages  = &m_shader_stages,
-            .vertex_input   = &m_vertex_input,
+            //.shader_stages  = &m_shader_stages,
+            //.vertex_input   = &m_vertex_input,
             .input_assembly = erhe::graphics::Input_assembly_state::triangle,
             .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
             .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled(),
@@ -191,6 +231,13 @@ Text_renderer::Text_renderer(
 
     config.enabled   = enabled;
     config.font_size = font_size;
+
+    if (m_view_count >= 2) {
+        m_multiview_shader_stages.emplace(
+            graphics_device,
+            build_multiview_shader_stages()
+        );
+    }
 
     if (!config.enabled) {
         log_startup->info("Text renderer disabled due to config setting");
@@ -314,7 +361,12 @@ auto Text_renderer::measure(const std::string_view text) const -> erhe::ui::Rect
     return m_font ? m_font->measure(text) : erhe::ui::Rectangle{};
 }
 
-void Text_renderer::render(erhe::graphics::Render_command_encoder& encoder, const erhe::graphics::Render_pass& render_pass, erhe::math::Viewport viewport)
+void Text_renderer::render(
+    erhe::graphics::Render_command_encoder& encoder,
+    const erhe::graphics::Render_pass&      render_pass,
+    erhe::math::Viewport                    viewport,
+    const bool                              multiview
+)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -322,13 +374,14 @@ void Text_renderer::render(erhe::graphics::Render_command_encoder& encoder, cons
         return;
     }
 
-    erhe::graphics::Scoped_debug_group pass_scope{"Text_renderer::render()"};
+    erhe::graphics::Scoped_debug_group pass_scope{encoder.get_command_buffer(), "Text_renderer::render()"};
 
-    m_texture_heap->reset_heap();
+    m_texture_heap->reset_heap(encoder.get_command_buffer());
 
-    const bool top_left = (m_graphics_device.get_info().coordinate_conventions.framebuffer_origin == erhe::math::Framebuffer_origin::top_left);
+    const bool      top_left         = (m_graphics_device.get_info().coordinate_conventions.framebuffer_origin == erhe::math::Framebuffer_origin::top_left);
     const glm::mat4 clip_from_window = erhe::math::create_orthographic(
-        static_cast<float>(viewport.x), static_cast<float>(viewport.width),
+        static_cast<float>(viewport.x),
+        static_cast<float>(viewport.width),
         top_left ? static_cast<float>(viewport.height) : static_cast<float>(viewport.y),
         top_left ? static_cast<float>(viewport.y)      : static_cast<float>(viewport.height),
         0.0f,
@@ -341,16 +394,24 @@ void Text_renderer::render(erhe::graphics::Render_command_encoder& encoder, cons
 
     encoder.set_viewport_rect(viewport.x, viewport.y, viewport.width, viewport.height);
     encoder.set_bind_group_layout(&m_bind_group_layout);
-    erhe::graphics::Render_pipeline* pipeline = m_pipeline.get_pipeline_for(render_pass.get_descriptor());
+
+    // multiview                             &&
+    // m_multiview_shader_stages.has_value() &&
+    // m_multiview_shader_stages->is_valid()
+
+    erhe::graphics::Render_pipeline* pipeline = m_pipeline.get_pipeline_for(
+        render_pass.get_descriptor(),
+        multiview ? &m_multiview_shader_stages.value() : &m_shader_stages,
+        &m_vertex_input,
+        nullptr
+    );
     if (pipeline == nullptr) {
         return;
     }
     encoder.set_render_pipeline(*pipeline);
+
     m_texture_heap->bind(encoder);
-    // Bind the named scalar samplers explicitly. On Metal these are direct
-    // [[texture(N)]] bindings; on Vulkan they are pushed via push descriptors.
-    // The texture heap above still populates the bindless slots used by the
-    // Vulkan-descriptor-indexing shader path.
+
     encoder.set_sampled_image(0, *m_font->texture(), m_nearest_sampler);
     if (m_use_buffer_texture) {
         encoder.set_sampled_image(1, *m_vertex_buffer_texture, m_nearest_sampler);
@@ -377,9 +438,9 @@ void Text_renderer::render(erhe::graphics::Render_command_encoder& encoder, cons
                 m_projection_block.get_size_bytes()
             );
             const std::span<std::byte> gpu_data = projection_buffer_range.get_span();
-            write(gpu_data, m_u_clip_from_window_offset,      as_span(clip_from_window));
-            write(gpu_data, m_u_texture_offset,               as_span(shader_handle));
-            write(gpu_data, m_u_vertex_data_offset_offset,    as_span(vertex_data_offset));
+            write(gpu_data, m_u_clip_from_window_offset,   as_span(clip_from_window));
+            write(gpu_data, m_u_texture_offset,            as_span(shader_handle));
+            write(gpu_data, m_u_vertex_data_offset_offset, as_span(vertex_data_offset));
             projection_buffer_range.bytes_written(m_projection_block.get_size_bytes());
             projection_buffer_range.close();
             m_projection_buffer.bind(encoder, projection_buffer_range);
@@ -410,7 +471,7 @@ void Text_renderer::render(erhe::graphics::Render_command_encoder& encoder, cons
         vertex_buffer_range.release();
     }
 
-    m_texture_heap->unbind();
+    m_texture_heap->unbind(encoder.get_command_buffer());
 
     m_vertex_buffer_ranges.clear();
 }

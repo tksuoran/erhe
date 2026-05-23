@@ -4,7 +4,7 @@
 
 #include "erhe_codegen/config_io.hpp"
 #include "erhe_file/file.hpp"
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
 #   include "erhe_gl/gl_log.hpp"
 #endif
 #include "erhe_graphics/generated/graphics_config.hpp"
@@ -301,7 +301,7 @@ void run()
     }
 
     hello_swap::initialize_logging();
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
     gl::initialize_logging();
 #endif
     erhe::graphics::initialize_logging();

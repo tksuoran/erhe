@@ -8,16 +8,14 @@
 
 #include "app_context.hpp"
 #include "content_library/content_library.hpp"
-#include "operations/item_insert_remove_operation.hpp"
-#include "operations/operation_stack.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_commands.hpp"
 #include "scene/node_raytrace.hpp"
 #include "windows/item_tree_window.hpp"
 
-#include "erhe_primitive/material.hpp"
 #include "erhe_physics/iworld.hpp"
 #include "erhe_physics/irigid_body.hpp"
+#include "erhe_primitive/material.hpp"
 #include "erhe_raytrace/iscene.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/light.hpp"
@@ -42,7 +40,6 @@ using erhe::scene::Light_layer;
 using erhe::scene::Mesh;
 using erhe::scene::Mesh_layer;
 using erhe::scene::Scene;
-using erhe::primitive::Material;
 
 Scene_layers::Scene_layers()
 {
@@ -108,9 +105,6 @@ auto Scene_layers::mesh_layers() const -> std::array<erhe::scene::Mesh_layer*, 5
 };
 
 Scene_root::Scene_root(
-    erhe::imgui::Imgui_renderer*            imgui_renderer,
-    erhe::imgui::Imgui_windows*             imgui_windows,
-    App_context*                            context,
     App_message_bus*                        app_message_bus,
     const std::shared_ptr<Content_library>& content_library,
     const std::string_view                  name,
@@ -121,15 +115,8 @@ Scene_root::Scene_root(
     ERHE_PROFILE_FUNCTION();
 
     m_scene = std::make_unique<Scene>(name, this);
-    //m_scene->enable_flag_bits(erhe::Item_flags::invisible_parent);
     m_layers.add_layers_to_scene(*m_scene.get());
 
-    // Layer configuration
-    using std::make_shared;
-    using std::make_unique;
-    using erhe::scene::Node;
-
-    //m_scene->enable_flag_bits(erhe::Item_flags::show_in_ui);
     m_scene->get_root_node()->enable_flag_bits(erhe::Item_flags::invisible_parent);
     if (enable_physics) {
         m_physics_world = erhe::physics::IWorld::create_unique();
@@ -176,139 +163,6 @@ Scene_root::Scene_root(
     // NOTE: register_to_editor_scenes() must be called by the caller after
     // make_shared<Scene_root>() returns, because shared_from_this() cannot
     // be used during construction.
-
-    if ((imgui_renderer != nullptr) && (imgui_windows != nullptr) && (context != nullptr)) {
-        const std::size_t library_id = m_content_library->root->get_id();
-        m_content_library_tree_window = std::make_shared<Item_tree_window>(
-            *imgui_renderer,
-            *imgui_windows,
-            *context,
-            fmt::format("Content Library - {}###{}", name, library_id),
-            fmt::format("Content_library_{}", library_id)
-        );
-        m_content_library_tree_window->set_root(m_content_library->root);
-        m_content_library_tree_window->set_item_filter(
-            erhe::Item_filter{
-                .require_all_bits_set           = 0,
-                .require_at_least_one_bit_set   = 0,
-                .require_all_bits_clear         = 0,
-                .require_at_least_one_bit_clear = 0
-            }
-        );
-        m_content_library_tree_window->set_context_menu_callback(
-            [this, context](
-                const std::shared_ptr<erhe::Item_base>& item,
-                std::vector<std::function<void()>>&     deferred_operations,
-                bool&                                   close
-            ) {
-                const auto& content_node = std::dynamic_pointer_cast<Content_library_node>(item);
-                if (!content_node) {
-                    return;
-                }
-                // Find the folder this item belongs to (either item itself if it's a folder, or its parent)
-                const bool is_folder = !content_node->item && (content_node->type_code != 0);
-                auto materials = m_content_library->materials;
-                if (is_folder && content_node->type_code == erhe::Item_type::material) {
-                    if (ImGui::MenuItem("Create Material")) {
-                        deferred_operations.push_back(
-                            [context, materials]() {
-                                auto new_material = std::make_shared<erhe::primitive::Material>(
-                                    erhe::primitive::Material_create_info{
-                                        .name = "New Material",
-                                        .data = {
-                                            .base_color = glm::vec3{0.5f, 0.5f, 0.5f},
-                                            .roughness  = glm::vec2{0.5f, 0.5f},
-                                            .metallic   = 1.0f
-                                        }
-                                    }
-                                );
-                                auto new_node = std::make_shared<Content_library_node>(new_material);
-                                auto op = std::make_shared<Item_insert_remove_operation>(
-                                    Item_insert_remove_operation::Parameters{
-                                        .context = *context,
-                                        .item    = new_node,
-                                        .parent  = materials,
-                                        .mode    = Item_insert_remove_operation::Mode::insert
-                                    }
-                                );
-                                context->operation_stack->queue(op);
-                            }
-                        );
-                        close = true;
-                    }
-                }
-            }
-        );
-        m_content_library_tree_window->set_item_callback(
-            [this, context](const std::shared_ptr<erhe::Item_base>& item) -> bool {
-                if (!ImGui::IsDragDropActive()) {
-                    return false;
-                }
-                auto content_node = std::dynamic_pointer_cast<Content_library_node>(item);
-                if (!content_node) {
-                    return false;
-                }
-
-                // Accept drop on the materials folder or on material items within it
-                const auto& materials_folder = m_content_library->materials;
-                const bool is_materials_folder = (content_node == materials_folder);
-                const bool is_material_item    = !is_materials_folder &&
-                    content_node->item &&
-                    std::dynamic_pointer_cast<erhe::primitive::Material>(content_node->item) &&
-                    (content_node->get_parent().lock() == materials_folder);
-                if (!is_materials_folder && !is_material_item) {
-                    return false;
-                }
-
-                // Check payload is a Content_library_node with a Material
-                const ImGuiPayload* payload_peek = ImGui::GetDragDropPayload();
-                if (!payload_peek || !payload_peek->IsDataType("Content_library_node")) {
-                    return false;
-                }
-                erhe::Item_base* payload_item_base = *(static_cast<erhe::Item_base**>(payload_peek->Data));
-                auto source_node = std::dynamic_pointer_cast<Content_library_node>(payload_item_base->shared_from_this());
-                if (!source_node || !source_node->item) {
-                    return false;
-                }
-                auto source_material = std::dynamic_pointer_cast<erhe::primitive::Material>(source_node->item);
-                if (!source_material) {
-                    return false;
-                }
-
-                // Only copy across different content libraries
-                bool is_same_library = false;
-                for (auto check = source_node->get_parent().lock(); check; check = check->get_parent().lock()) {
-                    if (check == m_content_library->root) {
-                        is_same_library = true;
-                        break;
-                    }
-                }
-                if (is_same_library) {
-                    return false;
-                }
-
-                if (ImGui::BeginDragDropTarget()) {
-                    const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("Content_library_node");
-                    if (payload != nullptr) {
-                        auto new_material = std::make_shared<erhe::primitive::Material>(*source_material);
-                        auto new_node = std::make_shared<Content_library_node>(new_material);
-                        auto op = std::make_shared<Item_insert_remove_operation>(
-                            Item_insert_remove_operation::Parameters{
-                                .context = *context,
-                                .item    = new_node,
-                                .parent  = materials_folder,
-                                .mode    = Item_insert_remove_operation::Mode::insert
-                            }
-                        );
-                        context->operation_stack->queue(op);
-                    }
-                    ImGui::EndDragDropTarget();
-                    return true;
-                }
-                return false;
-            }
-        );
-    }
 
     if (app_message_bus != nullptr) {
         m_selection_subscription = app_message_bus->selection.subscribe(
@@ -452,7 +306,7 @@ auto Scene_root::make_browser_window(
             );
         }
     );
-    m_node_tree_window->set_context_menu_callback(
+    m_node_tree_window->add_item_context_menu_callback(
         [this, &context](
             const std::shared_ptr<erhe::Item_base>& item,
             std::vector<std::function<void()>>&     deferred_operations,

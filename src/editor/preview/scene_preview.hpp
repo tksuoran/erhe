@@ -26,7 +26,11 @@ namespace erhe::scene {
     class Mesh;
     class Node;
 }
-namespace erhe::scene_renderer { class Mesh_memory; }
+namespace erhe::dataformat { class Vertex_format; }
+namespace erhe::scene_renderer {
+    class Forward_renderer;
+    class Mesh_memory;
+}
 
 namespace editor {
 
@@ -66,28 +70,41 @@ public:
     void set_clear_color        (glm::vec4 clear_color);
     void update_rendertarget    (erhe::graphics::Device& graphics_device, bool reverse_depth);
 
+    // Init-time prewarm. Drives Forward_renderer::prewarm_standard_variants
+    // against this preview's own scene_root + content_library, so the
+    // first time the user opens the preview window does not pay for
+    // glslang -> SPIR-V compile of the standard variants for the
+    // preview's specific (Light_layer, content-library materials,
+    // single-view view_count=0) combination. Pipelines targeted are
+    // m_render_pipeline_states; the bucket+extra_materials walk uses
+    // mesh_memory.vertex_format as the fallback. Safe to call before
+    // update_rendertarget has built the offscreen render pass -- this
+    // only populates the shader-module cache, not the per-render-pass
+    // VkPipeline cache.
+    void prewarm_variants(erhe::scene_renderer::Forward_renderer& forward_renderer);
+
 protected:
-    erhe::graphics::Device&                             m_graphics_device;
-    bool                                                m_y_flip;
-    int                                                 m_width{0};
-    int                                                 m_height{0};
-    glm::vec4                                           m_clear_color{0.5f, 0.5f, 0.5f, 0.0f};
-    bool                                                m_use_external_color_texture{false};
-    erhe::dataformat::Format                            m_color_format;
-    std::shared_ptr<erhe::graphics::Texture>            m_color_texture;
-    unsigned int                                        m_color_texture_layer{0};
-    erhe::dataformat::Format                            m_depth_format;
-    std::unique_ptr<erhe::graphics::Texture>            m_depth_texture;
-    std::shared_ptr<erhe::graphics::Render_pass>        m_render_pass;
-    erhe::scene_renderer::Light_projections             m_light_projections;
-    erhe::graphics::Lazy_render_pipeline                m_render_pipeline_state;
-    std::vector<erhe::graphics::Lazy_render_pipeline*> m_render_pipeline_states;
-    Composer                                            m_composer;
-    std::shared_ptr<Scene_root>                         m_scene_root_shared;
-    std::shared_ptr<erhe::scene::Node>                  m_camera_node;
-    std::shared_ptr<erhe::scene::Camera>                m_camera;
-    std::shared_ptr<Content_library>                    m_content_library;
-    std::shared_ptr<erhe::graphics::Texture>            m_shadow_texture;
+    App_context&                                       m_context;
+    bool                                               m_y_flip;
+    int                                                m_width{0};
+    int                                                m_height{0};
+    glm::vec4                                          m_clear_color{0.5f, 0.5f, 0.5f, 0.0f};
+    bool                                               m_use_external_color_texture{false};
+    erhe::dataformat::Format                           m_color_format;
+    std::shared_ptr<erhe::graphics::Texture>           m_color_texture;
+    unsigned int                                       m_color_texture_layer{0};
+    erhe::dataformat::Format                           m_depth_format;
+    std::unique_ptr<erhe::graphics::Texture>           m_depth_texture;
+    std::shared_ptr<erhe::graphics::Render_pass>       m_render_pass;
+    erhe::scene_renderer::Light_projections            m_light_projections;
+    erhe::graphics::Base_render_pipeline               m_render_pipeline;
+    std::vector<erhe::graphics::Base_render_pipeline*> m_render_pipelines;
+    Composer                                           m_composer;
+    std::shared_ptr<Scene_root>                        m_scene_root_shared;
+    std::shared_ptr<erhe::scene::Node>                 m_camera_node;
+    std::shared_ptr<erhe::scene::Camera>               m_camera;
+    std::shared_ptr<Content_library>                   m_content_library;
+    std::shared_ptr<erhe::graphics::Texture>           m_shadow_texture;
 };
 
 }

@@ -16,6 +16,7 @@
 #include "erhe_graphics/texture.hpp"
 #include "erhe_graphics/texture_heap.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_scene_renderer/mesh_memory.hpp"
 #include "erhe_utility/align.hpp"
 
 #include <fmt/format.h>
@@ -539,7 +540,6 @@ Post_processing::Post_processing(erhe::graphics::Device& d, erhe::graphics::Comm
         m_parameter_block.get_binding_point()
     }
     , m_offsets           {m_parameter_block}
-    , m_empty_vertex_input{d}
     , m_shader_path{std::filesystem::path{"res"} / std::filesystem::path{"editor"} / std::filesystem::path{"shaders"}}
     , m_shader_stages{
         .downsample_with_lowpass_input{d, make_program(d, "downsample_lowpass", "downsample_lowpass.frag", flag_source_input)},
@@ -550,66 +550,60 @@ Post_processing::Post_processing(erhe::graphics::Device& d, erhe::graphics::Comm
         .upsample_last                {d, make_program(d, "upsample",           "upsample.frag",           flag_last_pass | flag_source_upsample)}
     }
     , m_pipelines{
-        .downsample_with_lowpass_input = erhe::graphics::Lazy_render_pipeline{
-            d, erhe::graphics::Render_pipeline_create_info{
+        .downsample_with_lowpass_input = erhe::graphics::Base_render_pipeline{
+            d, erhe::graphics::Base_render_pipeline_create_info{
                 .debug_label    = erhe::utility::Debug_label{"Downsample with Lowpass from input"},
-                .shader_stages  = &m_shader_stages.downsample_with_lowpass_input.shader_stages,
-                .vertex_input   = &m_empty_vertex_input,
+                //.shader_stages  = &m_shader_stages.downsample_with_lowpass_input.shader_stages,
                 .input_assembly = erhe::graphics::Input_assembly_state::triangle_strip,
                 .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
                 .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
                 .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled
             }
         },
-        .downsample_with_lowpass = erhe::graphics::Lazy_render_pipeline{
-            d, erhe::graphics::Render_pipeline_create_info{
+        .downsample_with_lowpass = erhe::graphics::Base_render_pipeline{
+            d, erhe::graphics::Base_render_pipeline_create_info{
                 .debug_label    = erhe::utility::Debug_label{"Downsample with Lowpass"},
-                .shader_stages  = &m_shader_stages.downsample_with_lowpass.shader_stages,
-                .vertex_input   = &m_empty_vertex_input,
+                //.shader_stages  = &m_shader_stages.downsample_with_lowpass.shader_stages,
                 .input_assembly = erhe::graphics::Input_assembly_state::triangle,
                 .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
                 .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
                 .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled
             }
         },
-        .downsample = erhe::graphics::Lazy_render_pipeline{
-            d, erhe::graphics::Render_pipeline_create_info{
+        .downsample = erhe::graphics::Base_render_pipeline{
+            d, erhe::graphics::Base_render_pipeline_create_info{
                 .debug_label    = erhe::utility::Debug_label{"Post Processing Downsample"},
-                .shader_stages  = &m_shader_stages.downsample.shader_stages,
-                .vertex_input   = &m_empty_vertex_input,
+                //.shader_stages  = &m_shader_stages.downsample.shader_stages,
                 .input_assembly = erhe::graphics::Input_assembly_state::triangle,
                 .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
                 .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
                 .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled
             }
         },
-        .upsample_first = erhe::graphics::Lazy_render_pipeline{
-            d, erhe::graphics::Render_pipeline_create_info{
+        .upsample_first = erhe::graphics::Base_render_pipeline{
+            d, erhe::graphics::Base_render_pipeline_create_info{
                 .debug_label    = erhe::utility::Debug_label{"Post Processing Upsample first"},
-                .shader_stages  = &m_shader_stages.upsample_first.shader_stages,
-                .vertex_input   = &m_empty_vertex_input,
+                //.shader_stages  = &m_shader_stages.upsample_first.shader_stages,
                 .input_assembly = erhe::graphics::Input_assembly_state::triangle,
                 .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
                 .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
                 .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled
             }
         },
-        .upsample = erhe::graphics::Lazy_render_pipeline{
-            d, erhe::graphics::Render_pipeline_create_info{
+        .upsample = erhe::graphics::Base_render_pipeline{
+            d, erhe::graphics::Base_render_pipeline_create_info{
                 .debug_label    = erhe::utility::Debug_label{"Post Processing Upsample"},
-                .shader_stages  = &m_shader_stages.upsample.shader_stages,
-                .vertex_input   = &m_empty_vertex_input,
+                //.shader_stages  = &m_shader_stages.upsample.shader_stages,
                 .input_assembly = erhe::graphics::Input_assembly_state::triangle,
                 .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
                 .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
                 .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled
             }
         },
-        .upsample_last = erhe::graphics::Lazy_render_pipeline{
-            d, erhe::graphics::Render_pipeline_create_info{
+        .upsample_last = erhe::graphics::Base_render_pipeline{
+            d, erhe::graphics::Base_render_pipeline_create_info{
                 .debug_label    = erhe::utility::Debug_label{"Post Processing Upsample last"},
-                .shader_stages  = &m_shader_stages.upsample_last.shader_stages,
-                .vertex_input   = &m_empty_vertex_input,
+                //.shader_stages  = &m_shader_stages.upsample_last.shader_stages,
                 .input_assembly = erhe::graphics::Input_assembly_state::triangle,
                 .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
                 .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
@@ -656,7 +650,7 @@ auto Post_processing::get_nodes() -> const std::vector<std::shared_ptr<Post_proc
 void Post_processing::post_process(Post_processing_node& node, erhe::graphics::Command_buffer& command_buffer)
 {
     // log_frame->trace("Post_processing::post_process()");
-    erhe::graphics::Scoped_debug_group outer_debug_group{"post_process"};
+    erhe::graphics::Scoped_debug_group outer_debug_group{command_buffer, "post_process"};
 
     const std::shared_ptr<erhe::graphics::Texture> input_texture = node.get_consumer_input_texture(erhe::rendergraph::Rendergraph_node_key::viewport_texture);
     ERHE_VERIFY(input_texture);
@@ -680,8 +674,9 @@ void Post_processing::post_process(Post_processing_node& node, erhe::graphics::C
     ERHE_VERIFY(parameter_buffer != nullptr);
     const std::size_t parameter_range_base_offset = node.parameter_buffer_range.get_byte_start_offset_in_buffer();
 
-    m_texture_heap->reset_heap();
+    m_texture_heap->reset_heap(command_buffer);
 
+    const erhe::scene_renderer::Vertex_input_entry& empty_vertex_input = m_context.mesh_memory->get_empty_vertex_input();
 
     // Downsample passes. Each pass reads pyramid level source_level and
     // writes pyramid level source_level+1 into its own dedicated texture:
@@ -691,7 +686,7 @@ void Post_processing::post_process(Post_processing_node& node, erhe::graphics::C
     //   distinct Texture objects, so no feedback-loop UB.
     erhe::graphics::Render_pass* previous_render_pass = nullptr;
     for (const size_t source_level : node.downsample_source_levels) {
-        erhe::graphics::Scoped_debug_group inner_debug_group{"downsample"};
+        erhe::graphics::Scoped_debug_group inner_debug_group{command_buffer, "downsample"};
 
         const size_t                 destination_level = source_level + 1;
         erhe::graphics::Render_pass* render_pass       = node.downsample_render_passes.at(destination_level - 1).get();
@@ -710,11 +705,20 @@ void Post_processing::post_process(Post_processing_node& node, erhe::graphics::C
             binding_point
         );
         {
-            erhe::graphics::Lazy_render_pipeline& lazy_pipeline =
-                (source_level == 0) ? m_pipelines.downsample_with_lowpass_input :
-                (source_level < node.lowpass_count) ? m_pipelines.downsample_with_lowpass :
-                m_pipelines.downsample;
-            erhe::graphics::Render_pipeline* p = lazy_pipeline.get_pipeline_for(render_pass->get_descriptor());
+            const bool is_first_downsample_pass = (source_level == 0);
+            const bool use_lowpass = !is_first_downsample_pass && (source_level < node.lowpass_count);
+            erhe::graphics::Base_render_pipeline& pipeline =
+                is_first_downsample_pass ? m_pipelines.downsample_with_lowpass_input :
+                use_lowpass              ? m_pipelines.downsample_with_lowpass :
+                                           m_pipelines.downsample;
+            erhe::graphics::Render_pipeline* p = pipeline.get_pipeline_for(
+                render_pass->get_descriptor(),
+                is_first_downsample_pass ? &m_shader_stages.downsample_with_lowpass_input.shader_stages :
+                use_lowpass              ? &m_shader_stages.downsample_with_lowpass.shader_stages :
+                                           &m_shader_stages.downsample.shader_stages,
+                empty_vertex_input.vertex_input.get(),
+                &empty_vertex_input.vertex_format
+            );
             if (p != nullptr) {
                 encoder.set_render_pipeline(*p);
             }
@@ -729,7 +733,7 @@ void Post_processing::post_process(Post_processing_node& node, erhe::graphics::C
             encoder.set_sampled_image(s_downsample_texture, *node.downsample_textures.at(source_level - 1), m_sampler_linear);
         }
         // s_upsample and s_downsample_dst are never read by downsample shaders.
-        encoder.set_sampled_image(s_upsample_texture,      *m_dummy_texture, m_sampler_linear);
+        encoder.set_sampled_image(s_upsample_texture,       *m_dummy_texture, m_sampler_linear);
         encoder.set_sampled_image(s_downsample_dst_texture, *m_dummy_texture, m_sampler_linear);
         {
             const int w = render_pass->get_render_target_width();
@@ -756,7 +760,7 @@ void Post_processing::post_process(Post_processing_node& node, erhe::graphics::C
     // Render target and sampled textures are always distinct Texture objects
     // so no feedback-loop UB.
     for (const size_t source_level : node.upsample_source_levels) {
-        erhe::graphics::Scoped_debug_group inner_debug_group{"upsample"};
+        erhe::graphics::Scoped_debug_group inner_debug_group{command_buffer, "upsample"};
         const size_t destination_level = source_level - 1;
         erhe::graphics::Render_pass* render_pass = node.upsample_render_passes.at(destination_level).get();
         const unsigned int binding_point = m_parameter_block.get_binding_point();
@@ -769,11 +773,18 @@ void Post_processing::post_process(Post_processing_node& node, erhe::graphics::C
         const bool is_first_upsample_pass = (source_level == node.upsample_source_levels.front());
         const bool is_last_upsample_pass  = (source_level == node.upsample_source_levels.back());
         {
-            erhe::graphics::Lazy_render_pipeline& lazy_pipeline =
+            erhe::graphics::Base_render_pipeline& pipeline =
                 is_first_upsample_pass ? m_pipelines.upsample_first :
                 is_last_upsample_pass  ? m_pipelines.upsample_last  :
-                m_pipelines.upsample;
-            erhe::graphics::Render_pipeline* p = lazy_pipeline.get_pipeline_for(render_pass->get_descriptor());
+                                         m_pipelines.upsample;
+            erhe::graphics::Render_pipeline* p = pipeline.get_pipeline_for(
+                render_pass->get_descriptor(),
+                is_first_upsample_pass ? &m_shader_stages.upsample_first.shader_stages :
+                is_last_upsample_pass  ? &m_shader_stages.upsample_last.shader_stages  :
+                                         &m_shader_stages.upsample.shader_stages,
+                empty_vertex_input.vertex_input.get(),
+                &empty_vertex_input.vertex_format
+            );
             if (p != nullptr) {
                 encoder.set_render_pipeline(*p);
             }
@@ -823,7 +834,7 @@ void Post_processing::post_process(Post_processing_node& node, erhe::graphics::C
         encoder.draw_primitives(erhe::graphics::Primitive_type::triangle, 0, 3);
     }
 
-    m_texture_heap->unbind();
+    m_texture_heap->unbind(command_buffer);
 }
 
 }

@@ -141,7 +141,7 @@ private:
     erhe::graphics::Ring_buffer_client        m_vertex_buffer;
     erhe::graphics::Ring_buffer_client        m_projection_buffer;
     erhe::graphics::Vertex_input_state        m_vertex_input;
-    erhe::graphics::Lazy_render_pipeline      m_pipeline;
+    erhe::graphics::Base_render_pipeline      m_pipeline;
 
     std::optional<erhe::graphics::Ring_buffer_range> m_vertex_buffer_range;
     size_t                                           m_index_count        {0};

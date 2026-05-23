@@ -204,8 +204,8 @@ Render_pass_impl::Render_pass_impl(Device& device, const Render_pass_descriptor&
     , m_render_target_height{descriptor.render_target_height}
     , m_debug_label         {descriptor.debug_label}
     , m_debug_group_name      {erhe::utility::Debug_label{fmt::format("Render pass: {}", descriptor.debug_label.string_view())}}
-    , m_end_debug_group_name  {erhe::utility::Debug_label{fmt::format("Render_pass_impl::end_render_pass() {}", descriptor.debug_label.string_view())}}
     , m_begin_debug_group_name{erhe::utility::Debug_label{fmt::format("Render_pass_impl::start_render_pass() {}", descriptor.debug_label.string_view())}}
+    , m_end_debug_group_name  {erhe::utility::Debug_label{fmt::format("Render_pass_impl::end_render_pass() {}", descriptor.debug_label.string_view())}}
 {
     auto check_multisample_resolve = [this](const Render_pass_attachment_descriptor& attachment)
     {
@@ -607,8 +607,8 @@ void Render_pass_impl::start_render_pass(Command_buffer& command_buffer, Render_
     ERHE_VERIFY(!m_is_active);
     m_is_active = true;
 
-    m_outer_debug_group = std::make_unique<Scoped_debug_group>(m_debug_group_name);
-    Scoped_debug_group begin_debug_group{m_begin_debug_group_name};
+    m_outer_debug_group = std::make_unique<Scoped_debug_group>(command_buffer, m_debug_group_name);
+    Scoped_debug_group begin_debug_group{command_buffer, m_begin_debug_group_name};
 
     if (m_device.get_info().vendor == Vendor::Nvidia) {
         // Workaround for https://developer.nvidia.com/bugs/5799090
@@ -805,7 +805,7 @@ void Render_pass_impl::start_render_pass(Command_buffer& command_buffer, Render_
 
 }
 
-void Render_pass_impl::end_render_pass(Render_pass* const render_pass_after)
+void Render_pass_impl::end_render_pass(Command_buffer& command_buffer, Render_pass* const render_pass_after)
 {
     static_cast<void>(render_pass_after);
 
@@ -815,7 +815,7 @@ void Render_pass_impl::end_render_pass(Render_pass* const render_pass_after)
     ERHE_VERIFY(m_is_active);
     m_is_active = false;
 
-    auto end_debug_group = std::make_unique<Scoped_debug_group>(m_end_debug_group_name);
+    Scoped_debug_group end_debug_group{command_buffer, m_end_debug_group_name};
 
     std::array<gl::Framebuffer_attachment, 4> color_attachment_points = {
         gl::Framebuffer_attachment::color_attachment0,
@@ -1014,7 +1014,6 @@ void Render_pass_impl::end_render_pass(Render_pass* const render_pass_after)
     // TODO Strictly speaking this is redundant, but might be useful for debugging
     m_device.get_impl().get_binding_state().bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);
 
-    end_debug_group.reset();
     m_outer_debug_group.reset();
 }
 

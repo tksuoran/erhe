@@ -27,6 +27,14 @@ public:
     void add(Shader_stages_create_info create_info, Shader_stages* program);
     void add(Reloadable_shader_stages& reloadable_shader_stages);
 
+    // Drop every reload entry that points at this shader_stages.
+    // Use before destroying a Reloadable_shader_stages whose lifetime is
+    // shorter than the Shader_monitor (e.g. a variant cache entry being
+    // evicted on cache invalidate-all). After this call the monitor will
+    // not attempt to reload() the freed object on the next file change.
+    void remove(Reloadable_shader_stages& reloadable_shader_stages);
+    void remove(Shader_stages* shader_stages);
+
 private:
     void set_run(bool value)
     {

@@ -150,8 +150,13 @@ void Create::window_imgui()
                 .app_settings = *m_context.app_settings,
                 .name         = m_brush_name,
                 .build_info   = erhe::primitive::Build_info{
-                    .primitive_types = { .fill_triangles = true, .edge_lines = true, .corner_points = true, .centroid_points = true },
-                    .buffer_info     = m_context.mesh_memory->buffer_info
+                    .primitive_types = {
+                        .fill_triangles  = true,
+                        .edge_lines      = true,
+                        .corner_points   = true,
+                        .centroid_points = true
+                    },
+                    .buffer_info     = m_context.mesh_memory->make_primitive_buffer_info()
                 },
                 .normal_style = m_normal_style,
                 .density      = m_density,
@@ -250,7 +255,7 @@ void Create::window_imgui()
                         .corner_points   = true,
                         .centroid_points = true
                     },
-                    .buffer_info     = m_context.mesh_memory->buffer_info
+                    .buffer_info     = m_context.mesh_memory->make_primitive_buffer_info()
                 },
                 .normal_style = m_normal_style,
                 .geometry     = source_geometry,

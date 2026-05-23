@@ -6,13 +6,13 @@
 #include "erhe_graphics/spirv_cache.hpp"
 #include "erhe_file/file.hpp"
 
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
 # include "erhe_graphics/gl/gl_shader_stages.hpp"
 #endif
-#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+#if defined(ERHE_GRAPHICS_API_VULKAN)
 # include "erhe_graphics/vulkan/vulkan_shader_stages.hpp"
 #endif
-#if defined(ERHE_GRAPHICS_LIBRARY_METAL)
+#if defined(ERHE_GRAPHICS_API_METAL)
 # include "erhe_graphics/metal/metal_shader_stages.hpp"
 #endif
 
@@ -23,10 +23,12 @@
 #include "glslang/Public/ResourceLimits.h"
 #include "glslang/Public/ShaderLang.h"
 #include <glslang/MachineIndependent/localintermediate.h>
+#include <glslang/build_info.h>
 #include <SPIRV/GlslangToSpv.h>
 #include <SPIRV/disassemble.h>
 
 #include <algorithm>
+#include <mutex>
 #include <sstream>
 
 namespace erhe::graphics {
@@ -55,7 +57,7 @@ namespace erhe::graphics {
     }
 }
 
-#if 0 && defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if 0 && defined(ERHE_GRAPHICS_API_OPENGL)
 [[nodiscard]] auto to_gl(const ::EShLanguage glslang_stage) -> gl::Shader_type
 {
     switch (glslang_stage) {
@@ -101,6 +103,20 @@ Glslang_shader_stages::Glslang_shader_stages(Shader_stages_prototype_impl& shade
     : m_shader_stages_prototype{shader_stages_prototype}
     , m_cache{cache}
 {
+    // Log the linked glslang version once per process so we can confirm
+    // the SPIR-V we ship was produced by the version we pinned in
+    // CMakeLists.txt (and not, for example, served from a stale cache
+    // entry built by an earlier glslang).
+    static std::once_flag logged_glslang_version;
+    std::call_once(logged_glslang_version, []() {
+        log_program->info(
+            "glslang version: {}.{}.{}{}",
+            GLSLANG_VERSION_MAJOR,
+            GLSLANG_VERSION_MINOR,
+            GLSLANG_VERSION_PATCH,
+            GLSLANG_VERSION_FLAVOR
+        );
+    });
 }
 
 Glslang_shader_stages::~Glslang_shader_stages() noexcept = default;
@@ -209,7 +225,7 @@ auto Glslang_shader_stages::compile_shader(Device& device, const Shader_stage& s
     const char* const source_name   = main_name.c_str();
     glslang_shader.setStringsWithLengthsAndNames(&source_string, &source_length, &source_name, 1);
 
-#if defined(ERHE_GRAPHICS_LIBRARY_METAL) || defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+#if defined(ERHE_GRAPHICS_API_METAL) || defined(ERHE_GRAPHICS_API_VULKAN)
     glslang_shader.setEnvInput(glslang::EShSource::EShSourceGlsl, language, glslang::EShClient::EShClientVulkan, 100);
     glslang_shader.setEnvClient(glslang::EShClient::EShClientVulkan, glslang::EshTargetClientVersion::EShTargetVulkan_1_1);
 #else
@@ -219,11 +235,11 @@ auto Glslang_shader_stages::compile_shader(Device& device, const Shader_stage& s
     glslang_shader.setEnvTarget(glslang::EShTargetLanguage::EShTargetSpv, glslang::EShTargetSpv_1_6);
 
     unsigned int messages{
-        EShMsgSpvRules           | // issue messages for SPIR-V generation
-        EShMsgDebugInfo          | // save debug information
-        EShMsgBuiltinSymbolTable | // print the builtin symbol table
-        EShMsgEnhanced           | // enhanced message readability
-        EShMsgDisplayErrorColumn   // Display error message column aswell as line
+        EShMsgSpvRules             | // issue messages for SPIR-V generation
+        EShMsgDebugInfo            | // save debug information
+      //EShMsgBuiltinSymbolTable   | // print the builtin symbol table
+        EShMsgEnhanced             | // enhanced message readability
+        EShMsgDisplayErrorColumn     // Display error message column aswell as line
     };
 
     Glsl_includer includer{
@@ -305,12 +321,12 @@ auto Glslang_shader_stages::link_program() -> bool
 
     unsigned int messages{0};
     //messages = messages | EShMsgAST;                // print the AST intermediate representation
-    messages = messages | EShMsgSpvRules;           // issue messages for SPIR-V generation
-    messages = messages | EShMsgDebugInfo;          // save debug information
-    messages = messages | EShMsgBuiltinSymbolTable; // print the builtin symbol table
-    messages = messages | EShMsgEnhanced;           // enhanced message readability
-    messages = messages | EShMsgAbsolutePath;       // Output Absolute path for messages
-    messages = messages | EShMsgDisplayErrorColumn; // Display error message column aswell as line
+    messages = messages | EShMsgSpvRules;             // issue messages for SPIR-V generation
+    messages = messages | EShMsgDebugInfo;            // save debug information
+    //messages = messages | EShMsgBuiltinSymbolTable; // print the builtin symbol table
+    messages = messages | EShMsgEnhanced;             // enhanced message readability
+    messages = messages | EShMsgAbsolutePath;         // Output Absolute path for messages
+    messages = messages | EShMsgDisplayErrorColumn;   // Display error message column aswell as line
 
     const bool link_ok = m_glslang_program->link(static_cast<const EShMessages>(messages));
     const char* const info_log = m_glslang_program->getInfoLog();

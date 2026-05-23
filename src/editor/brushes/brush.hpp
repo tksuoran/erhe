@@ -4,6 +4,7 @@
 #include "physics/collision_generator.hpp"
 #include "scene/scene_root.hpp"
 
+#include "erhe_item/item.hpp"
 #include "erhe_physics/irigid_body.hpp"
 #include "erhe_primitive/enums.hpp"
 #include "erhe_primitive/primitive.hpp"

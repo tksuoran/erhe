@@ -42,10 +42,9 @@ private:
     Brdf_slice&                                m_brdf_slice;
     std::shared_ptr<erhe::primitive::Material> m_material;
 
-    erhe::graphics::Vertex_input_state                  m_empty_vertex_input;
-    erhe::graphics::Lazy_render_pipeline                m_render_pipeline_state;
-    std::vector<erhe::graphics::Lazy_render_pipeline*> m_render_pipeline_states;
-    int                                                 m_area_size{0};
+    erhe::graphics::Vertex_input_state                 m_empty_vertex_input;
+    erhe::graphics::Base_render_pipeline               m_render_pipeline_state;
+    int                                                m_area_size{0};
 };
 
 

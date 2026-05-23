@@ -11,6 +11,7 @@
 #include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
+#include "erhe_graphics/scoped_debug_group.hpp"
 #include "erhe_graphics/shader_resource.hpp"
 #include "erhe_dataformat/dataformat.hpp"
 #include "erhe_verify/verify.hpp"
@@ -190,8 +191,9 @@ Texture_heap_impl::~Texture_heap_impl() noexcept
     );
 }
 
-void Texture_heap_impl::reset_heap()
+void Texture_heap_impl::reset_heap(Command_buffer& command_buffer)
 {
+    Scoped_debug_group debug_group{command_buffer, "Texture_heap_impl::reset_heap()"};
     m_used_slot_count = 0;
     for (std::size_t i = 0; i < m_max_textures; ++i) {
         m_textures[i] = nullptr;
@@ -284,8 +286,9 @@ auto Texture_heap_impl::allocate(const Texture* texture, const Sampler* sampler)
     return static_cast<uint64_t>(slot);
 }
 
-void Texture_heap_impl::unbind()
+void Texture_heap_impl::unbind(Command_buffer& command_buffer)
 {
+    Scoped_debug_group debug_group{command_buffer, "Texture_heap_impl::unbind()"};
     // No-op for descriptor sets
 }
 

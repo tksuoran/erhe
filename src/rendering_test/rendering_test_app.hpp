@@ -27,6 +27,7 @@
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "erhe_scene_renderer/program_interface.hpp"
 #include "erhe_scene_renderer/content_wide_line_renderer.hpp"
+#include "erhe_scene_renderer/shader_variant_cache.hpp"
 #include "erhe_window/window.hpp"
 #include "erhe_window/window_event_handler.hpp"
 
@@ -71,17 +72,17 @@ public:
     void tick(erhe::graphics::Command_buffer& command_buffer);
 
     // Setup helpers (rendering_test_setup.cpp)
-    void print_conventions();
-    void create_test_scene    (erhe::graphics::Command_buffer& init_command_buffer);
-    void create_test_textures (erhe::graphics::Command_buffer& init_command_buffer);
-    void update_swapchain_render_pass(int width, int height);
+    void print_conventions            ();
+    void create_test_scene            (erhe::graphics::Command_buffer& init_command_buffer);
+    void create_test_textures         (erhe::graphics::Command_buffer& init_command_buffer);
+    void update_swapchain_render_pass (int width, int height);
     void update_msaa_depth_render_pass(int width, int height);
-    void update_texture_render_pass(int width, int height);
+    void update_texture_render_pass   (int width, int height);
     [[nodiscard]] auto get_grid_tile_viewport(int col, int row) const -> erhe::math::Viewport;
-    [[nodiscard]] auto is_fullscreen_mode () const -> bool;
-    [[nodiscard]] auto is_replicate_mode  () const -> bool;
-    [[nodiscard]] auto get_subtest_at     (int col, int row) const -> std::string_view;
-    [[nodiscard]] auto has_subtest        (std::string_view name) const -> bool;
+    [[nodiscard]] auto is_fullscreen_mode    () const -> bool;
+    [[nodiscard]] auto is_replicate_mode     () const -> bool;
+    [[nodiscard]] auto get_subtest_at        (int col, int row) const -> std::string_view;
+    [[nodiscard]] auto has_subtest           (std::string_view name) const -> bool;
     void               dispatch_subtest(
         std::string_view                                        name,
         erhe::graphics::Command_buffer&                         command_buffer,
@@ -155,7 +156,7 @@ public:
     void draw_minimal_compute_triangle(
         erhe::graphics::Render_command_encoder& encoder,
         const erhe::math::Viewport&             viewport,
-        erhe::graphics::Lazy_render_pipeline&   pipeline_state
+        erhe::graphics::Base_render_pipeline&   pipeline_state
     );
     void end_frame_minimal_compute_triangle();
 
@@ -179,10 +180,10 @@ public:
     bool                                                        m_error_callback_set;
     erhe::graphics::Command_buffer&                             m_init_command_buffer;
     erhe::gltf::Image_transfer                                  m_image_transfer;
-    erhe::dataformat::Vertex_format                             m_vertex_format;
     erhe::scene_renderer::Mesh_memory                           m_mesh_memory;
     erhe::scene_renderer::Program_interface_config              m_program_interface_config;
     erhe::scene_renderer::Program_interface                     m_program_interface;
+    erhe::scene_renderer::Shader_variant_cache                  m_shader_variant_cache;
     rendering_test::Programs                                    m_programs;
     std::unique_ptr<erhe::scene_renderer::Forward_renderer>     m_forward_renderer;
     erhe::scene::Scene                                          m_scene;
@@ -195,17 +196,17 @@ public:
     erhe::scene_renderer::Light_projections                     m_light_projections;
 
     // 3D scene pipeline
-    std::unique_ptr<erhe::graphics::Lazy_render_pipeline>       m_standard_render_pipeline_state;
-    std::vector<erhe::graphics::Lazy_render_pipeline*>          m_render_pipeline_states;
+    std::unique_ptr<erhe::graphics::Base_render_pipeline>       m_standard_render_pipeline;
+    std::vector<erhe::graphics::Base_render_pipeline*>          m_render_pipeline_states;
 
     // Stencil diagnostic pipelines (legacy 0x80 patterns kept around for
     // future re-use; not currently bound to any cell).
-    std::unique_ptr<erhe::graphics::Lazy_render_pipeline>       m_stencil_disabled_pipeline;
-    std::vector<erhe::graphics::Lazy_render_pipeline*>          m_stencil_disabled_pipeline_states;
-    std::unique_ptr<erhe::graphics::Lazy_render_pipeline>       m_stencil_write_0x80_pipeline;
-    std::vector<erhe::graphics::Lazy_render_pipeline*>          m_stencil_write_0x80_pipeline_states;
-    std::unique_ptr<erhe::graphics::Lazy_render_pipeline>       m_stencil_test_ne_0x80_pipeline;
-    std::vector<erhe::graphics::Lazy_render_pipeline*>          m_stencil_test_ne_0x80_pipeline_states;
+    std::unique_ptr<erhe::graphics::Base_render_pipeline>       m_stencil_disabled_pipeline;
+    std::vector<erhe::graphics::Base_render_pipeline*>          m_stencil_disabled_pipelines;
+    std::unique_ptr<erhe::graphics::Base_render_pipeline>       m_stencil_write_0x80_pipeline;
+    std::vector<erhe::graphics::Base_render_pipeline*>          m_stencil_write_0x80_pipelines;
+    std::unique_ptr<erhe::graphics::Base_render_pipeline>       m_stencil_test_ne_0x80_pipeline;
+    std::vector<erhe::graphics::Base_render_pipeline*>          m_stencil_test_ne_0x80_pipelines;
 
     // Cell (1,3) stencil test pipelines: red cube writes stencil = 1, green
     // sphere only renders where stencil != 1. The shader stages are dedicated
@@ -219,26 +220,27 @@ public:
     // red/green pair (the two cells sit directly on top of each other
     // in the grid layout).
     std::unique_ptr<erhe::graphics::Shader_stages>              m_stencil_cyan_shader_stages;
-    std::unique_ptr<erhe::graphics::Lazy_render_pipeline>       m_stencil_write_1_pipeline;
-    std::vector<erhe::graphics::Lazy_render_pipeline*>          m_stencil_write_1_pipeline_states;
-    std::unique_ptr<erhe::graphics::Lazy_render_pipeline>       m_stencil_test_ne_1_pipeline;
-    std::vector<erhe::graphics::Lazy_render_pipeline*>          m_stencil_test_ne_1_pipeline_states;
+
+    std::unique_ptr<erhe::graphics::Base_render_pipeline>       m_stencil_write_1_pipeline;
+    std::vector<erhe::graphics::Base_render_pipeline*>          m_stencil_write_1_pipelines;
+    std::unique_ptr<erhe::graphics::Base_render_pipeline>       m_stencil_test_ne_1_pipeline;
+    std::vector<erhe::graphics::Base_render_pipeline*>          m_stencil_test_ne_1_pipelines;
 
     // Minimal VkPipeline-switch repro pipelines. Identical except for
     // depth_stencil.stencil_test_enable (off vs on with function=not_equal,
     // reference=0). Both draw the stencil cube via forward_renderer.
     // See the `cube_no_stencil` / `cube_stencil_test_ne_0` subtests.
-    std::unique_ptr<erhe::graphics::Lazy_render_pipeline>       m_no_stencil_red_pipeline;
-    std::vector<erhe::graphics::Lazy_render_pipeline*>          m_no_stencil_red_pipeline_states;
-    std::unique_ptr<erhe::graphics::Lazy_render_pipeline>       m_stencil_test_ne_0_green_pipeline;
-    std::vector<erhe::graphics::Lazy_render_pipeline*>          m_stencil_test_ne_0_green_pipeline_states;
+    std::unique_ptr<erhe::graphics::Base_render_pipeline>       m_no_stencil_red_pipeline;
+    std::vector<erhe::graphics::Base_render_pipeline*>          m_no_stencil_red_pipelines;
+    std::unique_ptr<erhe::graphics::Base_render_pipeline>       m_stencil_test_ne_0_green_pipeline;
+    std::vector<erhe::graphics::Base_render_pipeline*>          m_stencil_test_ne_0_green_pipelines;
     // Pipeline C: same stencil setup as Pipeline B, but with
     // depth_test=false, depth_write=false, compare=always. This matches
     // the depth_stencil state of m_compute_edge_lines_stencil_pipeline_state,
     // so pairing (A, C) via forward_renderer exercises exactly the same
     // depth_stencil delta as the wide-line regression.
-    std::unique_ptr<erhe::graphics::Lazy_render_pipeline>       m_stencil_test_ne_0_no_depth_green_pipeline;
-    std::vector<erhe::graphics::Lazy_render_pipeline*>          m_stencil_test_ne_0_no_depth_green_pipeline_states;
+    std::unique_ptr<erhe::graphics::Base_render_pipeline>       m_stencil_test_ne_0_no_depth_green_pipeline;
+    std::vector<erhe::graphics::Base_render_pipeline*>          m_stencil_test_ne_0_no_depth_green_pipelines;
 
     // Minimal compute-triangle repro resources (cell_minimal_compute_triangle.cpp).
     bool                                                        m_minimal_compute_enabled{false};
@@ -260,9 +262,11 @@ public:
     std::unique_ptr<erhe::graphics::Shader_stages>              m_minimal_graphics_shader_stages_green;
     std::unique_ptr<erhe::graphics::Shader_stages>              m_minimal_graphics_shader_stages_blue;
     std::unique_ptr<erhe::graphics::Shader_stages>              m_minimal_graphics_shader_stages_yellow;
+
     std::optional<erhe::graphics::Compute_pipeline>             m_minimal_compute_pipeline;
-    std::unique_ptr<erhe::graphics::Lazy_render_pipeline>       m_minimal_pipeline_A_red;
-    std::unique_ptr<erhe::graphics::Lazy_render_pipeline>       m_minimal_pipeline_B_green;
+
+    std::unique_ptr<erhe::graphics::Base_render_pipeline>       m_minimal_pipeline_A_red;
+    std::unique_ptr<erhe::graphics::Base_render_pipeline>       m_minimal_pipeline_B_green;
     // Pipeline C: stencil_test=true, function=always, keep ops, blue.
     // Pipeline D: stencil_test=true, function=equal 1, keep ops, yellow.
     // Both have stencil_test_enable=true; they differ only in stencil
@@ -271,8 +275,8 @@ public:
     // Pairing (C, D) in a 2-cell grid is the targeted repro for a
     // KosmicKrisp state-transition failure that keeps stencil_test_enable
     // but drops the stencil function/reference update on pipeline switch.
-    std::unique_ptr<erhe::graphics::Lazy_render_pipeline>       m_minimal_pipeline_C_stencil_always_blue;
-    std::unique_ptr<erhe::graphics::Lazy_render_pipeline>       m_minimal_pipeline_D_stencil_eq_1_yellow;
+    std::unique_ptr<erhe::graphics::Base_render_pipeline>       m_minimal_pipeline_C_stencil_always_blue;
+    std::unique_ptr<erhe::graphics::Base_render_pipeline>       m_minimal_pipeline_D_stencil_eq_1_yellow;
     erhe::graphics::Ring_buffer_client                          m_minimal_triangle_buffer_client{
         m_graphics_device,
         erhe::graphics::Buffer_target::storage,
@@ -286,10 +290,10 @@ public:
     std::unique_ptr<erhe::scene_renderer::Content_wide_line_renderer> m_content_wide_line_renderer;
     std::unique_ptr<erhe::graphics::Shader_stages>              m_compute_shader_stages;
     std::unique_ptr<erhe::graphics::Shader_stages>              m_graphics_shader_stages;
-    std::unique_ptr<erhe::graphics::Lazy_render_pipeline>       m_compute_edge_lines_pipeline_state;
+    std::unique_ptr<erhe::graphics::Base_render_pipeline>       m_compute_edge_lines_pipeline;
     // Wide-line pipeline variant with stencil test != 0x01 (used by the
     // cell that replicates the editor outline pattern).
-    std::unique_ptr<erhe::graphics::Lazy_render_pipeline>       m_compute_edge_lines_stencil_pipeline_state;
+    std::unique_ptr<erhe::graphics::Base_render_pipeline>       m_compute_edge_lines_stencil_pipeline;
 
     // Swapchain render pass
     std::unique_ptr<erhe::graphics::Texture>                    m_swapchain_depth_texture;
@@ -306,7 +310,7 @@ public:
     std::shared_ptr<erhe::graphics::Texture>                    m_msaa_depth_resolve_texture;
     std::unique_ptr<erhe::graphics::Render_pass>                m_msaa_depth_render_pass;
     std::unique_ptr<erhe::graphics::Shader_stages>              m_depth_visualize_shader_stages;
-    erhe::graphics::Lazy_render_pipeline                        m_depth_visualize_pipeline;
+    erhe::graphics::Base_render_pipeline                        m_depth_visualize_pipeline;
 
     // Dedicated bind group layout for the depth visualize cell.
     std::unique_ptr<erhe::graphics::Bind_group_layout>          m_depth_visualize_bind_group_layout;
@@ -342,7 +346,7 @@ public:
         }
     };
     std::unique_ptr<erhe::graphics::Shader_stages>              m_quad_shader_stages;
-    erhe::graphics::Lazy_render_pipeline                        m_quad_pipeline;
+    erhe::graphics::Base_render_pipeline                        m_quad_pipeline;
 
     // Separate samplers test pipeline (post-processing pattern)
     std::unique_ptr<erhe::graphics::Bind_group_layout>          m_sep_tex_bind_group_layout;
@@ -353,7 +357,7 @@ public:
     erhe::graphics::Shader_resource*                            m_sep_tex_count   {nullptr};
     erhe::graphics::Shader_resource*                            m_sep_tex_padding0{nullptr};
     std::unique_ptr<erhe::graphics::Shader_stages>              m_sep_tex_shader_stages;
-    erhe::graphics::Lazy_render_pipeline                        m_sep_tex_pipeline;
+    erhe::graphics::Base_render_pipeline                        m_sep_tex_pipeline;
 
     // Test textures (solid colors for texture heap testing)
     std::shared_ptr<erhe::graphics::Texture>                    m_red_texture;
@@ -368,7 +372,7 @@ public:
     erhe::graphics::Shader_resource*                            m_multi_tex_count   {nullptr};
     erhe::graphics::Shader_resource*                            m_multi_tex_padding0{nullptr};
     std::unique_ptr<erhe::graphics::Shader_stages>              m_multi_tex_shader_stages;
-    erhe::graphics::Lazy_render_pipeline                        m_multi_tex_pipeline;
+    erhe::graphics::Base_render_pipeline                        m_multi_tex_pipeline;
 
     // Window resize / run-loop state
     int                                      m_last_window_width     {0};

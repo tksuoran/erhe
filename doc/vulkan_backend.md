@@ -71,7 +71,7 @@ Currently ERHE_SPIRV is only forced on for Metal. Vulkan also needs SPIR-V
 compilation via glslang. Add the same force-enable for Vulkan:
 
 ```cmake
-if (${ERHE_GRAPHICS_LIBRARY} STREQUAL "metal" OR ${ERHE_GRAPHICS_LIBRARY} STREQUAL "vulkan")
+if (${ERHE_GRAPHICS_API} STREQUAL "metal" OR ${ERHE_GRAPHICS_API} STREQUAL "vulkan")
     set(ERHE_SPIRV "ON" CACHE STRING "Enable SPIR-V" FORCE)
 endif ()
 ```
@@ -81,7 +81,7 @@ This ensures glslang is fetched and linked, and `ERHE_SPIRV` is defined.
 ### 1.2 Verify editor GL calls are guarded (no changes needed)
 
 All direct `gl::` calls in `src/editor/` are already wrapped with
-`#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)`:
+`#if defined(ERHE_GRAPHICS_API_OPENGL)`:
 
 - `app_rendering.cpp:368` -- `gl::clip_control()`
 - `editor.cpp:1255-1260` -- `gl::clip_control()`, `gl::enable(framebuffer_srgb)`
@@ -582,7 +582,7 @@ Fixes applied while running executables and eliminating Vulkan validation layer 
 | 37 | 2026-04-05 | editor | (shader) textured.frag missing Vulkan path | Editor and hextiles `textured.frag` referenced `s_texture[]` in the non-bindless `#else` branch. Added `#elif ERHE_VULKAN_DESCRIPTOR_INDEXING` paths using `erhe_texture_heap[]`. | `editor/res/shaders/textured.frag`, `hextiles/res/shaders/textured.frag` |
 | 38 | 2026-04-05 | editor | (assert) compile_shaders/link_program state | Vulkan shader prototype constructor compiles and links eagerly, but editor's `load_programs()` calls `compile_shaders()` and `link_program()` again. Changed both to return early when already completed instead of asserting. | `vulkan_shader_stages_prototype.cpp` |
 | 39 | 2026-04-05 | editor | VUID-VkShaderModuleCreateInfo-pCode-08740 | `sampleRateShading` feature needed for `gl_SampleID` in `circular_brushed_metal.frag` and `depth_only.frag`. `geometryShader` feature needed for `gl_PrimitiveID` in `id.frag` (SPIR-V requires Geometry capability even without geometry shader stage). Enabled both. | `vulkan_device_init.cpp` |
-| 40 | 2026-04-05 | editor | VUID-VkShaderModuleCreateInfo-pCode-08740 | Geometry shader `.geom` files auto-discovered by `Program_interface::make_prototype()`. Skipped with `#if !defined(ERHE_GRAPHICS_LIBRARY_VULKAN)`. | `program_interface.cpp` |
+| 40 | 2026-04-05 | editor | VUID-VkShaderModuleCreateInfo-pCode-08740 | Geometry shader `.geom` files auto-discovered by `Program_interface::make_prototype()`. Skipped with `#if !defined(ERHE_GRAPHICS_API_VULKAN)`. | `program_interface.cpp` |
 | 41 | 2026-04-05 | editor | VUID-VkImageViewCreateInfo-imageViewType-04973 | Thumbnails texture created as `texture_2d` with 200 array layers but view type was `VK_IMAGE_VIEW_TYPE_2D`. Auto-select `_ARRAY` variant in `to_vk_image_view_type()` when `array_layer_count > 1`. | `vulkan_texture.cpp` |
 | 42 | 2026-04-05 | editor | VUID-VkBufferImageCopy-bufferRowLength-09101 | Dummy texture creation hardcoded `src_bytes_per_row = 2*4` regardless of format. For `format_16_vec4_float` (8 bytes/pixel), `bufferRowLength` computed as 1 texel < width 2. Fixed to use `get_format_size_bytes()`. | `vulkan_device.cpp` |
 | 43 | 2026-04-05 | editor | VUID-VkImageMemoryBarrier-oldLayout-01213 | Shadowmap and scene preview textures missing `transfer_dst` usage flag for `clear_texture()`. Added to shadow_render_node.cpp and scene_preview.cpp. | `shadow_render_node.cpp`, `scene_preview.cpp` |
@@ -619,7 +619,7 @@ Fixes applied while running executables and eliminating Vulkan validation layer 
 | 74 | 2026-04-06 | editor | (correctness) stencil pipeline cache aliasing | Pipeline cache key now hashes `stencil_front`/`stencil_back` so two pipelines that differ only in stencil ops/reference no longer alias to the same `VkPipeline`. | `vulkan_render_command_encoder.cpp` |
 | 75 | 2026-04-06 | editor | (leak) VkShaderModule on shutdown | Added `~Shader_stages_impl()` that calls `destroy_modules()` so VkShaderModule handles do not leak on shutdown. | `vulkan_shader_stages.cpp` |
 | 76 | 2026-04-06 | editor | VUID-VkImageMemoryBarrier-oldLayout-01213 | Replaced bare `UNDEFINED -> SHADER_READ_ONLY` transition for the Light_buffer fallback shadow texture with a `clear_texture()` call and added `depth_stencil_attachment` usage so the `DEPTH_STENCIL_READ_ONLY_OPTIMAL` layout is valid. | `light_buffer.cpp` |
-| 77 | 2026-04-06 | editor | (correctness) pipeline format match | Pass the active render pass into `Forward_renderer` from `rendering_test` so `Lazy_render_pipeline` picks the matching pipeline variant per render target format combination. | `rendering_test.cpp`, `forward_renderer.cpp` |
+| 77 | 2026-04-06 | editor | (correctness) pipeline format match | Pass the active render pass into `Forward_renderer` from `rendering_test` so `Base_render_pipeline` picks the matching pipeline variant per render target format combination. | `rendering_test.cpp`, `forward_renderer.cpp` |
 | 78 | 2026-04-06 | editor | (validation) gl_PrimitiveID dependency | Compute `v_primitive_id` in `id.vert` (`gl_VertexID/3`) and read it in `id.frag`, removing the SPIR-V Geometry capability dependency that reading `gl_PrimitiveID` in a fragment shader pulls in. | `id.vert`, `id.frag` |
 | 79 | 2026-04-08 | editor | (correctness) nested render pass detection | `Render_pass_impl::start_render_pass()` now asserts no other render pass is currently active, catching driver-side mismatches early. Vulkan device init also requires `synchronization2` so the simplified barrier API is available. | `vulkan_render_pass.cpp`, `vulkan_device_init.cpp` |
 | 80 | 2026-04-08 | editor | (debug) image layout trace log | Added optional layout-transition tracing to `logs/vulkan.txt` so layout-related validation errors can be debugged offline against a recorded transition history. | `vulkan_texture.cpp` |
@@ -672,7 +672,7 @@ and hash-based cache lookups on Vulkan.
 **New types:**
 - `Render_pipeline_create_info` -- extends old `Render_pipeline_data` with render pass format fields (color formats, depth format, stencil format, sample count, bind group layout)
 - `Render_pipeline` -- pimpl wrapping backend-specific compiled pipeline (Metal PSO + DepthStencilState, Vulkan VkPipeline, GL stores state)
-- `Lazy_render_pipeline` -- stores create info without format; creates pipeline variants on first use from active render pass format. Caches by format hash.
+- `Base_render_pipeline` -- stores create info without format; creates pipeline variants on first use from active render pass format. Caches by format hash.
 
 **New methods:**
 - `Device::create_render_pipeline(Render_pipeline_create_info)` -- up-front creation
