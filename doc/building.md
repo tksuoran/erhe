@@ -20,8 +20,8 @@ Exceptionally, a few dependencies are directly included in `src/`.
 -   C++ compiler: clang or GCC (not older than a couple of years)
 -   Python 3
 -   Packages:
-    -   Ubuntu: `libwayland-dev libxkbcommon-dev xorg-dev`
-    -   Arch: `gcc ninja cmake git less openssh libx11 libxrandr libxi libxinerama libxcursor mesa wayland wayland-protocols python`
+    -   Ubuntu: `libwayland-dev libxkbcommon-dev xorg-dev libtbb-dev`
+    -   Arch: `gcc ninja cmake git less openssh libx11 libxrandr libxi libxinerama libxcursor mesa wayland wayland-protocols python` (TODO tbb package name)
 -   Ubuntu 24.04 and archlinux has been tested
 
 ### macOS

@@ -468,8 +468,7 @@ endif ()
 if (${ERHE_SVG_LIBRARY} STREQUAL "plutosvg")
     CPMAddPackage(
         NAME              plutosvg
-        GIT_TAG           cc385fd83ebf890507c8cae37e3fe96cf166fed1
-        #VERSION           0.0.7
+        VERSION           0.0.8
         GIT_SHALLOW       TRUE
         GITHUB_REPOSITORY sammycage/plutosvg
     )

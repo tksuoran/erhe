@@ -3,6 +3,7 @@
 #include "erhe_dataformat/dataformat.hpp"
 #include "erhe_hash/hash.hpp"
 
+#include <string>
 #include <vector>
 
 namespace erhe::dataformat {

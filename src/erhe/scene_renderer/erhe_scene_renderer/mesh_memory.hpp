@@ -205,7 +205,7 @@ enum class Blending_mode_policy : uint32_t
     override_with_base_render_pipeline = 4  // override primitive blending mode from base render pipeline
 };
 
-[[nodiscard]] void bucket_primitives(
+void bucket_primitives(
     std::vector<Render_bucket>&                                buckets,
     uint32_t                                                   boolean_mask_force_enable,
     uint32_t                                                   boolean_mask_force_disable,
