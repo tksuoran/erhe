@@ -192,12 +192,12 @@ void Rendering_test::make_minimal_compute_triangle()
     // --- Graphics pipelines A (stencil_test=false, red) and B
     // (stencil_test=true, not_equal 1, green). They differ only in
     // depth_stencil state, mirroring the wl_ns / wl_st pair.
-    m_minimal_pipeline_A_red = std::make_unique<Lazy_render_pipeline>(
+    m_minimal_pipeline_A_red = std::make_unique<Base_render_pipeline>(
         m_graphics_device,
-        Render_pipeline_create_info{
+        Base_render_pipeline_create_info{
             .debug_label    = erhe::utility::Debug_label{"Minimal pipeline A (stencil=off, red)"},
-            .shader_stages  = m_minimal_graphics_shader_stages_red.get(),
-            .vertex_input   = m_minimal_vertex_input.get(),
+            //.shader_stages  = m_minimal_graphics_shader_stages_red.get(),
+            //.vertex_input   = m_minimal_vertex_input.get(),
             .input_assembly = Input_assembly_state::triangle,
             .rasterization  = Rasterization_state::cull_mode_none,
             .depth_stencil  = {
@@ -205,8 +205,8 @@ void Rendering_test::make_minimal_compute_triangle()
                 .depth_write_enable  = true,
                 .depth_compare_op    = get_depth_function(Compare_operation::less, true),
                 .stencil_test_enable = false
-            },
-            .color_blend    = Color_blend_state::color_blend_premultiplied
+            }
+            //.color_blend    = Color_blend_state::color_blend_premultiplied
         }
     );
 
@@ -219,12 +219,12 @@ void Rendering_test::make_minimal_compute_triangle()
         .test_mask       = 0xFFu,
         .write_mask      = 0x00u
     };
-    m_minimal_pipeline_B_green = std::make_unique<Lazy_render_pipeline>(
+    m_minimal_pipeline_B_green = std::make_unique<Base_render_pipeline>(
         m_graphics_device,
-        Render_pipeline_create_info{
+        Base_render_pipeline_create_info{
             .debug_label    = erhe::utility::Debug_label{"Minimal pipeline B (stencil=on ne1, green)"},
-            .shader_stages  = m_minimal_graphics_shader_stages_green.get(),
-            .vertex_input   = m_minimal_vertex_input.get(),
+            //.shader_stages  = m_minimal_graphics_shader_stages_green.get(),
+            //.vertex_input   = m_minimal_vertex_input.get(),
             .input_assembly = Input_assembly_state::triangle,
             .rasterization  = Rasterization_state::cull_mode_none,
             .depth_stencil  = {
@@ -234,8 +234,8 @@ void Rendering_test::make_minimal_compute_triangle()
                 .stencil_test_enable = true,
                 .stencil_front       = test_ne_1_op,
                 .stencil_back        = test_ne_1_op
-            },
-            .color_blend    = Color_blend_state::color_blend_premultiplied
+            }
+            //.color_blend    = Color_blend_state::color_blend_premultiplied
         }
     );
 
@@ -250,12 +250,12 @@ void Rendering_test::make_minimal_compute_triangle()
         .test_mask       = 0xFFu,
         .write_mask      = 0x00u
     };
-    m_minimal_pipeline_C_stencil_always_blue = std::make_unique<Lazy_render_pipeline>(
+    m_minimal_pipeline_C_stencil_always_blue = std::make_unique<Base_render_pipeline>(
         m_graphics_device,
-        Render_pipeline_create_info{
+        Base_render_pipeline_create_info{
             .debug_label    = erhe::utility::Debug_label{"Minimal pipeline C (stencil=on always, blue)"},
-            .shader_stages  = m_minimal_graphics_shader_stages_blue.get(),
-            .vertex_input   = m_minimal_vertex_input.get(),
+            //.shader_stages  = m_minimal_graphics_shader_stages_blue.get(),
+            //.vertex_input   = m_minimal_vertex_input.get(),
             .input_assembly = Input_assembly_state::triangle,
             .rasterization  = Rasterization_state::cull_mode_none,
             .depth_stencil  = {
@@ -265,8 +265,8 @@ void Rendering_test::make_minimal_compute_triangle()
                 .stencil_test_enable = true,
                 .stencil_front       = always_keep_op,
                 .stencil_back        = always_keep_op
-            },
-            .color_blend    = Color_blend_state::color_blend_premultiplied
+            }
+            //.color_blend    = Color_blend_state::color_blend_premultiplied
         }
     );
 
@@ -286,12 +286,12 @@ void Rendering_test::make_minimal_compute_triangle()
         .test_mask       = 0xFFu,
         .write_mask      = 0x00u
     };
-    m_minimal_pipeline_D_stencil_eq_1_yellow = std::make_unique<Lazy_render_pipeline>(
+    m_minimal_pipeline_D_stencil_eq_1_yellow = std::make_unique<Base_render_pipeline>(
         m_graphics_device,
-        Render_pipeline_create_info{
+        Base_render_pipeline_create_info{
             .debug_label    = erhe::utility::Debug_label{"Minimal pipeline D (stencil=on eq1, yellow)"},
-            .shader_stages  = m_minimal_graphics_shader_stages_yellow.get(),
-            .vertex_input   = m_minimal_vertex_input.get(),
+            //.shader_stages  = m_minimal_graphics_shader_stages_yellow.get(),
+            //.vertex_input   = m_minimal_vertex_input.get(),
             .input_assembly = Input_assembly_state::triangle,
             .rasterization  = Rasterization_state::cull_mode_none,
             .depth_stencil  = {
@@ -302,7 +302,7 @@ void Rendering_test::make_minimal_compute_triangle()
                 .stencil_front       = eq_1_keep_op,
                 .stencil_back        = eq_1_keep_op
             },
-            .color_blend    = Color_blend_state::color_blend_premultiplied
+            //.color_blend    = Color_blend_state::color_blend_premultiplied
         }
     );
 
@@ -370,7 +370,7 @@ void Rendering_test::dispatch_minimal_compute_triangle(erhe::graphics::Compute_c
 void Rendering_test::draw_minimal_compute_triangle(
     erhe::graphics::Render_command_encoder& encoder,
     const erhe::math::Viewport&             viewport,
-    erhe::graphics::Lazy_render_pipeline&   pipeline_state
+    erhe::graphics::Base_render_pipeline&   pipeline_state
 )
 {
     if (!m_minimal_compute_enabled || !m_minimal_triangle_range_valid || !m_swapchain_render_pass) {
@@ -378,7 +378,13 @@ void Rendering_test::draw_minimal_compute_triangle(
     }
     using namespace erhe::graphics;
 
-    Render_pipeline* render_pipeline = pipeline_state.get_pipeline_for(m_swapchain_render_pass->get_descriptor());
+    Render_pipeline* render_pipeline = pipeline_state.get_pipeline_for(
+        m_swapchain_render_pass->get_descriptor(),
+        &Color_blend_state::color_blend_premultiplied,
+        m_minimal_graphics_shader_stages_blue.get(),
+        m_minimal_vertex_input.get(),
+        &m_minimal_vertex_format
+    );
     if (render_pipeline == nullptr) {
         return;
     }
@@ -411,8 +417,8 @@ void Rendering_test::draw_minimal_compute_triangle(
     encoder.set_bind_group_layout(m_minimal_compute_bind_group_layout.get());
     encoder.set_render_pipeline(*render_pipeline);
 
-    Buffer*       triangle_buffer = m_minimal_triangle_range.get_buffer()->get_buffer();
-    std::size_t   offset          = m_minimal_triangle_range.get_byte_start_offset_in_buffer();
+    Buffer*     triangle_buffer = m_minimal_triangle_range.get_buffer()->get_buffer();
+    std::size_t offset          = m_minimal_triangle_range.get_byte_start_offset_in_buffer();
     encoder.set_vertex_buffer(triangle_buffer, offset, 0);
     encoder.draw_primitives(Primitive_type::triangle, 0, 3);
 }

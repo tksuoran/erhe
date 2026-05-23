@@ -11,11 +11,11 @@ Operations are queued without pre-validation. `Compound_operation` has no rollba
 
 | File | Lines | Issue |
 |------|-------|-------|
-| `debug_visualizations.cpp` | 1,708 | Handles every visualization type |
-| `editor.cpp` | 1,651 | Init + main loop + event handling |
-| `item_tree_window.cpp` | 1,389 | Selection state machine + drag-drop + UI |
-| `fly_camera_tool.cpp` | 1,383 | Camera control + physics + settings |
-| `trs_tool.cpp` | 1,380 | Transform interaction + 3 subtools + UI |
+| `editor.cpp` | 2,430 | Init + main loop + event handling |
+| `tools/debug_visualizations.cpp` | 1,760 | Handles every visualization type |
+| `windows/item_tree_window.cpp` | 1,419 | Selection state machine + drag-drop + UI |
+| `transform/trs_tool.cpp` | 1,380 | Transform interaction + 3 subtools + UI |
+| `tools/fly_camera_tool.cpp` | 1,371 | Camera control + physics + settings |
 
 ### 3. Fix commented-out mutex / thread safety (Small effort, Medium impact)
 

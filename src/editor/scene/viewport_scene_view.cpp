@@ -135,15 +135,15 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
     }
 
     Render_context context{
-        .command_buffer         = &command_buffer,
-        .encoder                = nullptr, // filled in later once we start render pass
-        .app_context            = m_context,
-        .scene_view             = *this,
-        .viewport_config        = m_viewport_config,
-        .camera                 = camera.get(),
-        .viewport_scene_view    = this,
-        .viewport               = m_projection_viewport,
-        .override_shader_stages = get_override_shader_stages()
+        .command_buffer      = &command_buffer,
+        .encoder             = nullptr, // filled in later once we start render pass
+        .app_context         = m_context,
+        .scene_view          = *this,
+        .viewport_config     = m_viewport_config,
+        .camera              = camera.get(),
+        .viewport_scene_view = this,
+        .viewport            = m_projection_viewport,
+        .shader_debug        = m_shader_debug
     };
 
     if (do_render && m_is_scene_view_hovered && m_context.id_renderer->enabled) {
@@ -154,7 +154,10 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
 
     if (do_render) {
         m_context.debug_renderer->begin_frame(context.viewport, *context.camera, get_conventions());
-        if (m_context.content_wide_line_renderer != nullptr && m_context.content_wide_line_renderer->is_enabled()) {
+        if (
+            (m_context.content_wide_line_renderer != nullptr) &&
+            m_context.content_wide_line_renderer->is_enabled()
+        ) {
             m_context.content_wide_line_renderer->begin_frame();
         }
 
@@ -163,7 +166,7 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
 
         if (m_context.debug_renderer->use_compute()) {
             {
-                erhe::graphics::Scoped_debug_group debug_group{"debug_renderer->compute()"};
+                erhe::graphics::Scoped_debug_group debug_group{command_buffer, "debug_renderer->compute()"};
                 erhe::graphics::Compute_command_encoder compute_encoder = graphics_device.make_compute_command_encoder(command_buffer);
                 m_context.debug_renderer->compute(compute_encoder);
             }
@@ -183,31 +186,41 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
             if (content_scene_root) {
                 erhe::scene::Scene* scene = content_scene_root->get_hosted_scene();
                 if (scene != nullptr) {
-                    erhe::graphics::Scoped_debug_group content_wide_line_renderer_debug_group{"content_wide_line_renderer"};
+                    erhe::graphics::Scoped_debug_group content_wide_line_renderer_debug_group{command_buffer, "content_wide_line_renderer"};
 
                     // Helper to feed meshes from a composition pass to the content wide line renderer
                     auto feed_pass = [&](const Composition_pass* pass) {
-                        if ((pass == nullptr) || !pass->use_content_wide_line_renderer || !pass->enabled) {
+                        if (pass == nullptr) {
+                            return;
+                        }
+                        auto& data = pass->data;
+                        if (!data.use_content_wide_line_renderer || !data.enabled) {
                             return;
                         }
                         erhe::scene_renderer::Primitive_interface_settings settings;
-                        if (pass->primitive_settings.has_value()) {
-                            settings = pass->primitive_settings.value();
-                        } else if (pass->get_render_style) {
-                            const Render_style_data& style = pass->get_render_style(context);
-                            settings = get_primitive_settings(style, pass->primitive_mode);
+                        if (data.primitive_settings.has_value()) {
+                            settings = data.primitive_settings.value();
+                        } else if (data.get_render_style) {
+                            const Render_style_data& style = data.get_render_style(context);
+                            settings = get_primitive_settings(style, data.primitive_mode);
                         }
                         const glm::vec4 color      = settings.constant_color0;
                         const float     line_width = settings.constant_size;
-                        const auto&     filter     = pass->filter;
-                        const uint32_t  group      = pass->content_wide_line_group;
+                        const auto&     filter     = data.filter;
+                        const uint32_t  group      = data.content_wide_line_group;
 
-                        for (const auto layer_id : pass->mesh_layers) {
+                        for (const auto layer_id : data.mesh_layers) {
                             const auto mesh_layer = scene->get_mesh_layer_by_id(layer_id);
                             if (mesh_layer) {
                                 for (const auto& mesh : mesh_layer->meshes) {
                                     if (filter(mesh->get_flag_bits())) {
-                                        m_context.content_wide_line_renderer->add_mesh(*mesh, color, line_width, group);
+                                        m_context.content_wide_line_renderer->add_mesh(
+                                            *m_context.mesh_memory,
+                                            *mesh,
+                                            color,
+                                            line_width,
+                                            group
+                                        );
                                     }
                                 }
                             }
@@ -225,27 +238,27 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
                         const float     outline_width = m_viewport_config.selection_highlight_width_low * (1.0f - t2) + m_viewport_config.selection_highlight_width_high * t2;
 
                         // Temporarily override primitive_settings for the animated outline
-                        m_context.app_rendering->selection_outline->primitive_settings = erhe::scene_renderer::Primitive_interface_settings{
+                        m_context.app_rendering->selection_outline->data.primitive_settings = erhe::scene_renderer::Primitive_interface_settings{
                             .color_source    = erhe::scene_renderer::Primitive_color_source::constant_color,
                             .constant_color0 = outline_color,
                             .size_source     = erhe::scene_renderer::Primitive_size_source::constant_size,
                             .constant_size   = outline_width
                         };
-                        erhe::graphics::Scoped_debug_group feed_debug_group{"selection_outline"};
+                        erhe::graphics::Scoped_debug_group feed_debug_group{command_buffer, "selection_outline"};
                         feed_pass(m_context.app_rendering->selection_outline.get());
                     }
 
                     // Feed regular edge line passes
                     {
-                        erhe::graphics::Scoped_debug_group feed_debug_group{"opaque_edge_lines_not_selected"};
-                        feed_pass(m_context.app_rendering->opaque_edge_lines_not_selected.get());
+                        erhe::graphics::Scoped_debug_group feed_debug_group{command_buffer, "opaque_edge_lines_not_selected"};
+                        feed_pass(m_context.app_rendering->edge_lines_not_selected.get());
                     }
                     {
-                        erhe::graphics::Scoped_debug_group feed_debug_group{"opaque_edge_lines_selected"};
-                        feed_pass(m_context.app_rendering->opaque_edge_lines_selected.get());
+                        erhe::graphics::Scoped_debug_group feed_debug_group{command_buffer, "opaque_edge_lines_selected"};
+                        feed_pass(m_context.app_rendering->edge_lines_selected.get());
                     }
                     {
-                        erhe::graphics::Scoped_debug_group feed_debug_group{"translucent_outline"};
+                        erhe::graphics::Scoped_debug_group feed_debug_group{command_buffer, "translucent_outline"};
                         feed_pass(m_context.app_rendering->translucent_outline.get());
                     }
                 }
@@ -719,19 +732,24 @@ void Viewport_scene_view::viewport_toolbar()
     }
 }
 
-void Viewport_scene_view::set_shader_stages_variant(Shader_stages_variant variant)
+void Viewport_scene_view::set_shader_debug(erhe::scene_renderer::Shader_debug shader_debug)
 {
-    m_shader_stages_variant = variant;
+    m_shader_debug = shader_debug;
 }
 
-auto Viewport_scene_view::get_shader_stages_variant() const -> Shader_stages_variant
+auto Viewport_scene_view::get_shader_debug() const -> erhe::scene_renderer::Shader_debug
 {
-    return m_shader_stages_variant;
+    return m_shader_debug;
 }
 
-auto Viewport_scene_view::get_override_shader_stages() const -> const erhe::graphics::Shader_stages*
+void Viewport_scene_view::set_renderer_choice(Renderer_choice choice)
 {
-    return m_context.programs->get_variant_shader_stages(m_shader_stages_variant);
+    m_renderer_choice = choice;
+}
+
+auto Viewport_scene_view::get_renderer_choice() const -> Renderer_choice
+{
+    return m_renderer_choice;
 }
 
 auto Viewport_scene_view::get_closest_point_on_line(const glm::vec3 P0, const glm::vec3 P1) -> std::optional<glm::vec3>

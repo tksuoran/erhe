@@ -2,13 +2,14 @@
 
 ## Dependencies
 
-All dependencies are either included directly in `src/` for small libraries, or fetched from their repositories using CMake CPM during the configure step.
+Most dependencies are fetched from their repositories using CMake CPM during the configure step.
+Exceptionally, a few dependencies are directly included in `src/`.
 
 ## Platform Requirements
 
 ### Windows
 
--   C++ compiler: Visual Studio 2026 recommended with msbuild (tested); ninja with GCC or clang may also work. Visual Studio 2022 likely still also works but is no longer actively maintained.
+-   Visual Studio 2026
 -   Python 3
 -   CMake
 -   Optional: [ninja](https://github.com/ninja-build/ninja/releases)
@@ -31,59 +32,51 @@ All dependencies are either included directly in `src/` for small libraries, or 
 
 ## Build Steps
 
-### Visual Studio (Windows)
+### Visual Studio 2026 (Windows)
+
+From an x64 Native Tools Command Prompt:
 
 ```bat
 git clone https://github.com/tksuoran/erhe
 cd erhe
 scripts\configure_vs2026_opengl.bat
+devenv build_vs2026_opengl\erhe.slnx
 ```
 
-Open the solution from the `build` directory with Visual Studio and build the `editor` target.
-
-### CMake Presets
-
-```bash
-cmake --preset OpenGL_Debug    # Debug OpenGL build
-cmake --preset OpenGL_Release  # Release OpenGL build
-```
-
-Note: While Vulkan CMake preset exists, Vulkan backend is in early stages and is nowhere near usable.
-
-Build output goes to `build/<presetName>/`.
-
-```bash
-cmake --build build/<presetName> --target editor
-```
+In Visual Studio press F5 to build and run editor.
 
 ### Visual Studio Code (Windows and Linux)
 
 1.  `git clone https://github.com/tksuoran/erhe`
 2.  Open the `erhe` folder in Visual Studio Code
-3.  Execute command: *CMake: Select Configure Preset*
-4.  Execute command: *CMake: Configure*
-5.  Execute command: *CMake: Build*
+3.  Run one of the wrapper scripts from `scripts/` from a terminal in
+    the project root (e.g. `scripts\configure_vs2026_opengl.bat` on
+    Windows, `scripts/configure_xcode_opengl.sh` on macOS,
+    `scripts/configure_ninja_linux.sh` on Linux). The wrappers
+    encode the project's intended configure flow; do not invoke
+    `cmake --preset` directly.
+4.  Open the generated build directory and use the *CMake: Build*
+    command, or build from a terminal:
+    `cmake --build <build-dir> --target editor`.
 
 ### CLion (Windows and Linux)
 
-At the time of writing, CLion does not fully support CMake presets. Enable the `Debug` profile only. Edit that profile's settings if you want a release build.
+Use the `scripts/` wrapper scripts to configure, then open the
+resulting build directory in CLion. Do not use CLion's own preset
+support directly -- the wrappers encode the project's intended
+configure flow.
 
-Note for Windows: It is much better to build with toolchains other than mingw, which has extremely slow linking times. Most likely you should setup Visual Studio toolchain in CLion before attempting to build erhe on Windows. 
-
-1.  Get from VCS: URL `https://github.com/tksuoran/erhe`
-2.  Clone
-3.  Keep `Debug` CMake profile enabled, do not enable other profiles
-4.  Select `Visual Studio` or `MinGW` toolchain
-5.  Wait for CMake configure to complete (`[Finished]` in CMake tab)
-6.  Build Project or Build `editor`
-7.  Run `editor`
+Note for Windows: It is much better to build with toolchains other
+than mingw, which has extremely slow linking times. Most likely you
+should setup Visual Studio toolchain in CLion before attempting to
+build erhe on Windows.
 
 ### Linux (command line)
 
 ```bash
 git clone https://github.com/tksuoran/erhe
 cd erhe
-cmake -B build
+scripts/configure_ninja_linux.sh
 cmake --build build --target editor
 ```
 
@@ -92,15 +85,47 @@ cmake --build build --target editor
 ```bash
 git clone https://github.com/tksuoran/erhe
 cd erhe
-cmake --preset OpenGL_Debug
-cmake --build build/OpenGL_Debug --target editor
+scripts/configure_xcode_metal.sh
+cmake --build build_xcode_metal --target editor --config Debug
 ```
+
+### Android
+
+Android support is in early stages and barely functional. No further support is planned for the moment.
+
+```bat
+git clone https://github.com/tksuoran/erhe
+cd erhe
+scripts\build_android.bat
+scripts\run_android.bat
+```
+
+### Meta Quest
+
+Support for Meta Quest is work in progress.
+
+```bat
+git clone https://github.com/tksuoran/erhe
+cd erhe
+scripts\build_android.bat
+```
+
+Important: when launching the editor on a Quest device over adb,
+run the install step first (`scripts\install_android.bat quest`)
+while the user can keep their hands free. **Only after the APK is on
+the device** should you prompt the user to put the headset on and
+pick up the Touch controllers, then launch with
+`scripts\install_android.bat quest run`. Quest's
+"Controllers Required" dialog blocks the immersive app from coming
+to the foreground until controllers are detected as in-hand;
+launching while the headset is off the user's head wastes the
+attempt and the launch must be retried.
 
 ## CMake Configuration Options
 
 | Option | Description | Recognized values |
 | :--- | :--- | :--- |
-| `ERHE_GRAPHICS_LIBRARY` | Graphics backend | `opengl`, `none` (headless) |
+| `ERHE_GRAPHICS_API` | Graphics backend | `opengl`, `vulkan`, `metal` (macOS only) `none` (headless) |
 | `ERHE_WINDOW_LIBRARY` | Window library | `sdl`, `none` (headless) |
 | `ERHE_PHYSICS_LIBRARY` | Physics library | `jolt`, `none` |
 | `ERHE_RAYTRACE_LIBRARY` | Raytrace library | `bvh`, `tinybvh`, `embree`, `none` |

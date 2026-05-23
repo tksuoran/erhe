@@ -7,7 +7,7 @@
 namespace erhe::graphics {
     class Command_buffer;
     class Device;
-    class Lazy_render_pipeline;
+    class Base_render_pipeline;
     class Render_command_encoder;
     class Render_pass;
 }
@@ -33,7 +33,7 @@ public:
     {
     public:
         erhe::graphics::Render_command_encoder&                     render_encoder;
-        erhe::graphics::Lazy_render_pipeline&                       pipeline;
+        erhe::graphics::Base_render_pipeline&                       pipeline;
         const erhe::graphics::Render_pass&                          render_pass;
         const erhe::scene::Camera*                                  camera           {nullptr};
         const Light_projections*                                    light_projections{nullptr};

@@ -1,3 +1,5 @@
+#include "erhe_camera_view.glsl"
+
 void main()
 {
     mat4 world_from_node;
@@ -12,7 +14,7 @@ void main()
             a_joint_weights_0.w * joint.joints[int(a_joint_indices_0.w) + primitive.primitives[ERHE_DRAW_ID].base_joint_index].world_from_bind;
     }
 
-    mat4 clip_from_world = camera.cameras[0].clip_from_world;
+    mat4 clip_from_world = camera.cameras[c_view_index].clip_from_world;
     vec4 position        = world_from_node * vec4(a_position, 1.0);
     gl_Position          = clip_from_world * position;
 }

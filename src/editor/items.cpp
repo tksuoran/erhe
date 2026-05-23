@@ -97,7 +97,7 @@ void async_for_nodes_with_mesh(
                         .corner_points   = true,
                         .centroid_points = true
                     },
-                    .buffer_info     = context.mesh_memory->buffer_info
+                    .buffer_info     = context.mesh_memory->make_primitive_buffer_info()
                 }
             };
 

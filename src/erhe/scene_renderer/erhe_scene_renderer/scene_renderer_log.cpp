@@ -11,6 +11,7 @@ std::shared_ptr<spdlog::logger> log_shadow_renderer;
 std::shared_ptr<spdlog::logger> log_startup;
 std::shared_ptr<spdlog::logger> log_material_buffer;
 std::shared_ptr<spdlog::logger> log_primitive_buffer;
+std::shared_ptr<spdlog::logger> log_mesh_memory;
 
 void initialize_logging()
 {
@@ -23,6 +24,7 @@ void initialize_logging()
     log_startup           = make_logger      ("erhe.scene_renderer.startup"              );
     log_material_buffer   = make_frame_logger("erhe.scene_renderer.material_buffer"      );
     log_primitive_buffer  = make_frame_logger("erhe.scene_renderer.primitive_buffer"     );
+    log_mesh_memory       = make_logger      ("erhe.scene_renderer.mesh_memory"          );
 }
 
 } // namespace erhe::scene_renderer

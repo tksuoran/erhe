@@ -1,3 +1,5 @@
+#include "erhe_camera_view.glsl"
+
 layout(location = 0) out float v_color;
 
 void main()
@@ -47,7 +49,7 @@ void main()
     float lod             = 0.0;
     float shadow_sample   = textureLod(s_shadow_no_compare, vec3(center_position_in_light_texture, light_layer), lod).x;
     vec4  pos_world       = light.world_from_texture * vec4(corner_position_in_light_texture, shadow_sample, 1.0);
-    mat4  clip_from_world = camera.cameras[0].clip_from_world;
+    mat4  clip_from_world = camera.cameras[c_view_index].clip_from_world;
     v_color     = float((cell_x ^ cell_y) & 1u);
     gl_Position = clip_from_world * pos_world;
 }

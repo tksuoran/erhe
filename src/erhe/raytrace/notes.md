@@ -89,7 +89,7 @@ Tests in `test/` using Google Test, run via `scripts/test_raytrace_all_backends.
 - **test_hierarchy.cpp** -- multi-level nesting: nested translation, rotation+translation, scale propagation, three-level nesting
 - **test_scene.cpp** -- empty scene, attach/detach geometry and instances
 
-Build with `-DERHE_BUILD_TESTS=ON`. Configure headless (`-DERHE_GRAPHICS_LIBRARY=none -DERHE_WINDOW_LIBRARY=none`) since raytrace has no GPU dependency.
+Build with `-DERHE_BUILD_TESTS=ON`. Configure headless (`-DERHE_GRAPHICS_API=none -DERHE_WINDOW_LIBRARY=none`) since raytrace has no GPU dependency.
 
 ## Notes
 - All interfaces use virtual dispatch with static factory methods.

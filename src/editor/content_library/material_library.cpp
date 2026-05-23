@@ -12,7 +12,7 @@ void add_default_materials(Content_library& library)
     //const glm::vec2 roughness{0.68f, 0.34f};
     const glm::vec2 roughness{0.34f, 0.20f};
 
-    auto& materials = *library.materials.get();
+    auto& materials = *library.materials.get(); 
 
     //materials.make<erhe::primitive::Material>("Default",   glm::vec3{0.500f, 0.500f, 0.500f}, roughness, 0.0f);
     auto make = [&materials, &roughness](const char* name, float r, float g, float b)
@@ -21,9 +21,13 @@ void add_default_materials(Content_library& library)
             erhe::primitive::Material_create_info{
                 .name = name,
                 .data = {
-                    .base_color = glm::vec3{r, g, b},
-                    .roughness  = roughness,
-                    .metallic   = 1.0f
+                    .base_color                 = glm::vec3{r, g, b},
+                    .roughness                  = roughness,
+                    .metallic                   = 1.0f,
+                    .bxdf_model                 = erhe::primitive::Bxdf_model::anisotropic_brdf,
+                    .blending_mode              = erhe::primitive::Material_blending_mode::opaque,
+                    .use_circular_brushed_metal = true,
+                    .use_aniso_control          = true
                 }
             }
         );

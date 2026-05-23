@@ -52,7 +52,7 @@ public:
     Context_window();
     explicit Context_window(const Window_configuration& configuration);
 
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
     explicit Context_window(Context_window* share);
 #endif
     virtual ~Context_window() noexcept;
@@ -101,7 +101,7 @@ public:
 
 #if defined(ERHE_OS_WINDOWS)
     [[nodiscard]] auto get_hwnd() const -> HWND;
-# if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+# if defined(ERHE_GRAPHICS_API_OPENGL)
     [[nodiscard]] auto get_hglrc() const -> HGLRC;
 # endif
 #endif

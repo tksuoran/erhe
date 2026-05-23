@@ -99,18 +99,14 @@ void Rendering_test::create_test_scene(erhe::graphics::Command_buffer& init_comm
         );
 
         erhe::primitive::Build_info build_info{
-            .primitive_types = {.fill_triangles = true, .edge_lines = true},
-            .buffer_info = {
-                .index_type    = erhe::dataformat::Format::format_32_scalar_uint,
-                .vertex_format = m_mesh_memory.vertex_format,
-                .buffer_sink   = m_mesh_memory.graphics_buffer_sink
-            }
+            .primitive_types = { .fill_triangles = true, .edge_lines = true },
+            .buffer_info = m_mesh_memory.make_primitive_buffer_info()
         };
 
         auto primitive = std::make_shared<erhe::primitive::Primitive>(
             geometry, build_info, erhe::primitive::Normal_style::corner_normals
         );
-        m_mesh_memory.buffer_transfer_queue.flush(init_command_buffer);
+        m_mesh_memory.flush(init_command_buffer);
 
         const erhe::primitive::Buffer_mesh* buffer_mesh = primitive->get_renderable_mesh();
         if (buffer_mesh != nullptr) {
@@ -155,11 +151,7 @@ void Rendering_test::create_test_scene(erhe::graphics::Command_buffer& init_comm
     // edges itself, but a single shared build_info is fine.
     const erhe::primitive::Build_info stencil_build_info{
         .primitive_types = {.fill_triangles = true, .edge_lines = true},
-        .buffer_info = {
-            .index_type    = erhe::dataformat::Format::format_32_scalar_uint,
-            .vertex_format = m_mesh_memory.vertex_format,
-            .buffer_sink   = m_mesh_memory.graphics_buffer_sink
-        }
+        .buffer_info = m_mesh_memory.make_primitive_buffer_info()
     };
     {
         auto geometry = std::make_shared<erhe::geometry::Geometry>("Stencil Cube");
@@ -195,7 +187,7 @@ void Rendering_test::create_test_scene(erhe::graphics::Command_buffer& init_comm
         auto primitive = std::make_shared<erhe::primitive::Primitive>(
             geometry, stencil_build_info, erhe::primitive::Normal_style::point_normals
         );
-        m_mesh_memory.buffer_transfer_queue.flush(init_command_buffer);
+        m_mesh_memory.flush(init_command_buffer);
 
         auto node = std::make_shared<erhe::scene::Node>("Stencil Sphere");
         auto mesh = std::make_shared<erhe::scene::Mesh>("Stencil Sphere");

@@ -1,12 +1,13 @@
+#include "erhe_camera_view.glsl"
 layout(location = 0) in      vec3 v_position;
 layout(location = 1) flat in uint v_material_index;
 
 void main()
 {
     vec3 view_position_in_world = vec3(
-        camera.cameras[0].world_from_node[3][0],
-        camera.cameras[0].world_from_node[3][1],
-        camera.cameras[0].world_from_node[3][2]
+        camera.cameras[c_view_index].world_from_node[3][0],
+        camera.cameras[c_view_index].world_from_node[3][1],
+        camera.cameras[c_view_index].world_from_node[3][2]
     );
     float d = distance(view_position_in_world, v_position);
 

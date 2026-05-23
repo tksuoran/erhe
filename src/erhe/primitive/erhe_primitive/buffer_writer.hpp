@@ -19,7 +19,8 @@ namespace erhe::geometry {
 namespace erhe::primitive {
 
 class Build_context;
-class Buffer_sink;
+class Vertex_buffer_sink;
+class Index_buffer_sink;
 class Buffer_mesh;
 
 /// Writes vertex attribute values to byte buffer/memory.
@@ -28,7 +29,7 @@ class Buffer_mesh;
 class Vertex_buffer_writer
 {
 public:
-    Vertex_buffer_writer(Build_context& build_context, Buffer_sink& buffer_sink, std::size_t stream, std::size_t stride);
+    Vertex_buffer_writer(Build_context& build_context, Vertex_buffer_sink& buffer_sink, std::size_t stream, std::size_t stride);
     Vertex_buffer_writer(const Vertex_buffer_writer&) = delete;
     Vertex_buffer_writer& operator=(const Vertex_buffer_writer&) = delete;
     Vertex_buffer_writer(Vertex_buffer_writer&&) = delete;
@@ -59,7 +60,7 @@ public:
     [[nodiscard]] auto start_offset() -> std::size_t;
 
     Build_context&            build_context;
-    Buffer_sink&              buffer_sink;
+    Vertex_buffer_sink&       buffer_sink;
     std::size_t               stream;
     std::size_t               stride;
     Buffer_range              buffer_range;
@@ -74,7 +75,7 @@ public:
 class Index_buffer_writer
 {
 public:
-    Index_buffer_writer(Build_context& build_context, Buffer_sink& buffer_sink);
+    Index_buffer_writer(Build_context& build_context, Index_buffer_sink& buffer_sink);
     virtual ~Index_buffer_writer() noexcept;
 
     void write_corner  (uint32_t v0);
@@ -85,7 +86,7 @@ public:
     [[nodiscard]] auto start_offset() -> std::size_t;
 
     Build_context&                 build_context;
-    Buffer_sink&                   buffer_sink;
+    Index_buffer_sink&             buffer_sink;
     Buffer_range                   buffer_range;
     const erhe::dataformat::Format index_type;
     const std::size_t              index_type_size{0};

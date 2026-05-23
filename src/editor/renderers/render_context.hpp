@@ -3,6 +3,10 @@
 #include "erhe_math/viewport.hpp"
 #include "erhe_renderer/debug_renderer.hpp"
 #include "erhe_renderer/primitive_renderer.hpp"
+#include "erhe_scene_renderer/camera_buffer.hpp"
+#include "erhe_scene_renderer/shader_key.hpp"
+
+#include <span>
 
 namespace erhe::graphics {
     class Command_buffer;
@@ -30,16 +34,17 @@ public:
     [[nodiscard]] auto get_scene      () const -> const erhe::scene::Scene*;
     [[nodiscard]] auto get            (const erhe::renderer::Debug_renderer_config& config) const -> erhe::renderer::Primitive_renderer;
 
-    erhe::graphics::Command_buffer*         command_buffer{nullptr};
-    erhe::graphics::Render_command_encoder* encoder{nullptr};
-    erhe::graphics::Render_pass*            render_pass{nullptr};
-    App_context&                            app_context;
-    Scene_view&                             scene_view;
-    Viewport_config&                        viewport_config;
-    erhe::scene::Camera*                    camera                {nullptr};
-    Viewport_scene_view*                    viewport_scene_view   {nullptr};
-    erhe::math::Viewport                    viewport              {0, 0, 0, 0};
-    const erhe::graphics::Shader_stages*    override_shader_stages{nullptr};
+    erhe::graphics::Command_buffer*                          command_buffer        {nullptr};
+    erhe::graphics::Render_command_encoder*                  encoder               {nullptr};
+    erhe::graphics::Render_pass*                             render_pass           {nullptr};
+    App_context&                                             app_context;
+    Scene_view&                                              scene_view;
+    Viewport_config&                                         viewport_config;
+    erhe::scene::Camera*                                     camera                {nullptr};
+    Viewport_scene_view*                                     viewport_scene_view   {nullptr};
+    erhe::math::Viewport                                     viewport              {0, 0, 0, 0};
+    erhe::scene_renderer::Shader_debug                       shader_debug          {erhe::scene_renderer::Shader_debug::none};
+    std::span<const erhe::scene_renderer::Camera_view_input> multiview_views;
 };
 
 }

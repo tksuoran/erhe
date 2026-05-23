@@ -2,6 +2,12 @@
 
 namespace erhe::primitive {
 
+Buffer_mesh::Buffer_mesh() = default;
+
+Buffer_mesh::Buffer_mesh(Buffer_mesh&& other) = default;
+
+Buffer_mesh& Buffer_mesh::operator=(Buffer_mesh&& other) = default;
+
 auto Buffer_mesh::base_vertex(std::size_t stream) const -> uint32_t
 {
     return static_cast<uint32_t>(vertex_buffer_ranges[stream].byte_offset / vertex_buffer_ranges[stream].element_size);

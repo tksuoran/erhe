@@ -14,7 +14,7 @@ static const uint64_t c_seed  = 0xcbf29ce484222325;
     const void*       data,
     const std::size_t byte_count,
     uint64_t          seed = c_seed
-)
+) -> uint64_t
 {
     const auto* u8_data = static_cast<const uint8_t*>(data);
 
@@ -23,6 +23,16 @@ static const uint64_t c_seed  = 0xcbf29ce484222325;
     }
 
     return seed;
+}
+
+[[nodiscard]] inline auto hash(const uint8_t value, const uint64_t seed = c_seed) -> uint64_t
+{
+    return hash(&value, sizeof(uint8_t), seed);
+}
+
+[[nodiscard]] inline auto hash(const uint64_t value, const uint64_t seed = c_seed) -> uint64_t
+{
+    return hash(&value, sizeof(uint64_t), seed);
 }
 
 [[nodiscard]] inline auto hash(const float value, const uint64_t seed = c_seed) -> uint64_t

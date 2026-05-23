@@ -112,7 +112,7 @@ Debug_visualizations::Debug_visualizations(
     App_context&                             context,
     App_message_bus&                         app_message_bus,
     App_rendering&                           app_rendering,
-    Programs&                                programs
+    Programs&                                /*programs*/
 )
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Debug Visualizations", "debug_visualizations"}
     , m_context{context}
@@ -120,14 +120,12 @@ Debug_visualizations::Debug_visualizations(
     , m_shadow_texel_renderer{std::make_unique<erhe::scene_renderer::Texel_renderer>(graphics_device, init_command_buffer, program_interface)}
     , m_shadow_texel_pipeline{
         graphics_device,
-        erhe::graphics::Render_pipeline_create_info{
+        erhe::graphics::Base_render_pipeline_create_info{
             .debug_label    = erhe::utility::Debug_label{"Shadow_debug"},
-            .shader_stages  = &programs.debug_shadow.shader_stages,
-            .vertex_input   = &m_empty_vertex_input,
+            //.shader_stages  = programs.debug_shadow.shader_stages(),
             .input_assembly = erhe::graphics::Input_assembly_state::triangle,
             .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
-            .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled(),
-            .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled
+            .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled()
         }
     }
 {

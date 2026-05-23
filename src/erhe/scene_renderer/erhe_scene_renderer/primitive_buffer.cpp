@@ -2,6 +2,7 @@
 
 #include "erhe_scene_renderer/primitive_buffer.hpp"
 #include "erhe_scene_renderer/buffer_binding_points.hpp"
+#include "erhe_scene_renderer/mesh_memory.hpp"
 #include "erhe_graphics/span.hpp"
 
 #include "erhe_math/math_util.hpp"
@@ -47,9 +48,8 @@ Primitive_interface::Primitive_interface(erhe::graphics::Device& graphics_device
     if (graphics_device.get_info().use_shader_storage_buffers) {
         array_size = erhe::graphics::Shader_resource::unsized_array;
     } else {
-        const std::size_t struct_size  = primitive_struct.get_size_bytes();
-        const std::size_t element_size = ((struct_size + 15u) / 16u) * 16u; // std140 array element alignment
-        const std::size_t ubo_max     = static_cast<std::size_t>(graphics_device.get_info().max_uniform_block_size) / element_size;
+        const std::size_t element_size = primitive_struct.get_size_bytes(); // std140 default rounds to base alignment
+        const std::size_t ubo_max      = static_cast<std::size_t>(graphics_device.get_info().max_uniform_block_size) / element_size;
         this->max_primitive_count = std::min(this->max_primitive_count, ubo_max);
         array_size = this->max_primitive_count;
     }
@@ -85,8 +85,8 @@ auto Primitive_buffer::id_ranges() const -> const std::vector<Id_range>&
 
 auto Primitive_buffer::update(
     const std::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes,
-    erhe::primitive::Primitive_mode                            primitive_mode,
     const erhe::Item_filter&                                   filter,
+    erhe::primitive::Primitive_mode                            primitive_mode,
     const Primitive_interface_settings&                        settings,
     std::size_t&                                               out_primitive_count,
     bool                                                       use_id_ranges
@@ -264,6 +264,115 @@ auto Primitive_buffer::update(
     buffer_range.close();
 
     // SPDLOG_LOGGER_TRACE(log_primitive_buffer, "wrote {} entries to primitive buffer", primitive_index);
+    return buffer_range;
+}
+
+auto Primitive_buffer::update(
+    const Render_bucket&                bucket,
+    erhe::primitive::Primitive_mode     primitive_mode,
+    const Primitive_interface_settings& settings,
+    bool                                use_id_ranges 
+) -> erhe::graphics::Ring_buffer_range
+{
+    ERHE_PROFILE_FUNCTION();
+
+    const std::size_t primitive_count = bucket.entries.size();
+    const auto        entry_size      = m_primitive_interface.primitive_struct.get_size_bytes();
+    const auto&       offsets         = m_primitive_interface.offsets;
+    const std::size_t max_byte_count  = primitive_count * entry_size;
+
+    // See note in joint_buffer.cpp: clamp to block size so MoltenVK's Metal
+    // argument validation has enough trailing space past the binding offset.
+    const std::size_t acquire_byte_count = std::max(max_byte_count, m_primitive_interface.primitive_block.get_size_bytes());
+
+    erhe::graphics::Ring_buffer_range buffer_range       = acquire(erhe::graphics::Ring_buffer_usage::CPU_write, acquire_byte_count);
+    std::span<std::byte>              primitive_gpu_data = buffer_range.get_span();
+    std::size_t                       write_offset       = 0;
+
+    for (const Mesh_primitive_entry& entry : bucket.entries) {
+        erhe::scene::Mesh* mesh = entry.mesh;
+        ERHE_VERIFY(mesh != nullptr);
+        const erhe::scene::Node* node = mesh->get_node();
+        ERHE_VERIFY(node != nullptr);
+        const std::vector<erhe::scene::Mesh_primitive>& mesh_primitives = mesh->get_primitives();
+        ERHE_VERIFY(entry.mesh_primitive_index < mesh_primitives.size());
+        const erhe::scene::Mesh_primitive& mesh_primitive = mesh_primitives[entry.mesh_primitive_index];
+        const erhe::primitive::Primitive*  primitive_ptr  = mesh_primitive.primitive.get();
+        ERHE_VERIFY(primitive_ptr != nullptr);
+        const erhe::primitive::Buffer_mesh* buffer_mesh = primitive_ptr->get_renderable_mesh();
+        ERHE_VERIFY(buffer_mesh != nullptr);
+        const erhe::primitive::Index_range index_range = buffer_mesh->index_range(primitive_mode);
+        const uint32_t count = static_cast<uint32_t>(index_range.index_count);
+        ERHE_VERIFY(count > 0);
+
+        const bool      use_primary_color    = mesh->is_selected() || !mesh->is_hovered();
+        const glm::mat4 world_from_node      = node->world_from_node();
+        const bool      negative_determinant = (node->get_flag_bits() & erhe::Item_flags::negative_determinant) == erhe::Item_flags::negative_determinant;
+        constexpr glm::mat4 invert_normal{
+            -1.0f,  0.0f,  0.0f, 0.0f,
+             0.0f, -1.0f,  0.0f, 0.0f,
+             0.0f,  0.0f, -1.0f, 0.0f,
+             0.0f,  0.0f,  0.0f, 1.0f
+        };
+        const glm::mat4 normal_transform_ = glm::transpose(glm::adjugate(world_from_node));
+        const glm::mat4 normal_transform  = negative_determinant
+            ? invert_normal * normal_transform_
+            : normal_transform_;
+
+        const erhe::primitive::Material* material = mesh_primitive.material.get();
+
+        const uint32_t power_of_two = erhe::utility::next_power_of_two(count);
+        const uint32_t mask         = power_of_two - 1;
+        const uint32_t current_bits = m_id_offset & mask;
+        if (current_bits != 0) {
+            const uint32_t add = power_of_two - current_bits;
+            m_id_offset += add;
+        }
+
+        const glm::vec4 wireframe_color  = glm::vec4{1.0f, 1.0f, 1.0f, 1.0f};
+        const glm::vec3 id_offset_vec3   = erhe::math::vec3_from_uint(m_id_offset);
+        const glm::vec4 id_offset_vec4   = glm::vec4{id_offset_vec3, 0.0f};
+        const uint32_t  material_index   = (material != nullptr) ? material->material_buffer_index : 0u;
+        const auto&     skin             = mesh->skin;
+        const float     skinning_factor  = skin ? 1.0f : 0.0f;
+        const uint32_t  base_joint_index = skin ? skin->skin_data.joint_buffer_index : 0;
+
+        using erhe::graphics::as_span;
+        const auto color_span =
+            (settings.color_source == Primitive_color_source::id_offset           ) ? as_span(id_offset_vec4 ) :
+            (settings.color_source == Primitive_color_source::mesh_wireframe_color) ? as_span(wireframe_color) :
+            use_primary_color                                                       ? as_span(settings.constant_color0) :
+                                                                                      as_span(settings.constant_color1);
+        const auto size_span =
+            (settings.size_source == Primitive_size_source::mesh_point_size) ? as_span(mesh->point_size      ) :
+            (settings.size_source == Primitive_size_source::mesh_line_width) ? as_span(mesh->line_width      ) :
+                                                                               as_span(settings.constant_size);
+
+        using erhe::graphics::write;
+        write(primitive_gpu_data, write_offset + offsets.world_from_node,  as_span(world_from_node ));
+        write(primitive_gpu_data, write_offset + offsets.normal_transform, as_span(normal_transform));
+        write(primitive_gpu_data, write_offset + offsets.color,            color_span               );
+        write(primitive_gpu_data, write_offset + offsets.material_index,   as_span(material_index  ));
+        write(primitive_gpu_data, write_offset + offsets.size,             size_span                );
+        write(primitive_gpu_data, write_offset + offsets.skinning_factor,  as_span(skinning_factor ));
+        write(primitive_gpu_data, write_offset + offsets.base_joint_index, as_span(base_joint_index));
+        write_offset += entry_size;
+
+        if (use_id_ranges) {
+            m_id_ranges.push_back(
+                Id_range{
+                    .offset                          = m_id_offset,
+                    .length                          = count,
+                    .mesh                            = mesh,
+                    .index_of_gltf_primitive_in_mesh = entry.mesh_primitive_index
+                }
+            );
+            m_id_offset += count;
+        }
+    }
+
+    buffer_range.bytes_written(write_offset);
+    buffer_range.close();
     return buffer_range;
 }
 

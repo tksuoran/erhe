@@ -2,14 +2,17 @@
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/swapchain.hpp"
 #include "erhe_graphics/texture.hpp"
+#include "erhe_graphics/state/vertex_input_state.hpp"
+#include "erhe_hash/hash.hpp"
+#include "erhe_verify/verify.hpp"
 
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
 #   include "erhe_graphics/gl/gl_render_pipeline.hpp"
-#elif defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+#elif defined(ERHE_GRAPHICS_API_VULKAN)
 #   include "erhe_graphics/vulkan/vulkan_render_pipeline.hpp"
-#elif defined(ERHE_GRAPHICS_LIBRARY_METAL)
+#elif defined(ERHE_GRAPHICS_API_METAL)
 #   include "erhe_graphics/metal/metal_render_pipeline.hpp"
-#elif defined(ERHE_GRAPHICS_LIBRARY_NULL)
+#elif defined(ERHE_GRAPHICS_API_NONE)
 #   include "erhe_graphics/null/null_render_pipeline.hpp"
 #endif
 
@@ -22,6 +25,7 @@ void Render_pipeline_create_info::set_format_from_render_pass(const Render_pass_
     depth_attachment_format   = erhe::dataformat::Format::format_undefined;
     stencil_attachment_format = erhe::dataformat::Format::format_undefined;
     sample_count = 1;
+    view_mask    = desc.view_mask;
 
     // Swapchain render passes: color/depth formats come from the swapchain, not textures
     if (desc.swapchain != nullptr) {
@@ -117,7 +121,7 @@ auto Render_pipeline::get_impl() const -> const Render_pipeline_impl&
 
 auto Render_pipeline::get_debug_label() const -> erhe::utility::Debug_label
 {
-    return m_create_info.debug_label;
+    return m_create_info.base.debug_label;
 }
 
 auto Render_pipeline::is_valid() const -> bool
@@ -130,43 +134,19 @@ auto Render_pipeline::get_create_info() const -> const Render_pipeline_create_in
     return m_create_info;
 }
 
-// --- Lazy_render_pipeline ---
+// --- Base_render_pipeline ---
 
-namespace {
+Base_render_pipeline::Base_render_pipeline() = default;
 
-auto compute_format_hash(const Render_pipeline_create_info& ci) -> std::size_t
-{
-    auto hash_combine = [](std::size_t& seed, std::size_t value) {
-        seed ^= value + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-    };
-    std::size_t hash = 0;
-    hash_combine(hash, static_cast<std::size_t>(ci.color_attachment_count));
-    for (unsigned int i = 0; i < ci.color_attachment_count; ++i) {
-        hash_combine(hash, static_cast<std::size_t>(ci.color_attachment_formats[i]));
-        hash_combine(hash, static_cast<std::size_t>(ci.color_usage_before[i]));
-        hash_combine(hash, static_cast<std::size_t>(ci.color_usage_after[i]));
-    }
-    hash_combine(hash, static_cast<std::size_t>(ci.depth_attachment_format));
-    hash_combine(hash, static_cast<std::size_t>(ci.stencil_attachment_format));
-    hash_combine(hash, static_cast<std::size_t>(ci.sample_count));
-    hash_combine(hash, static_cast<std::size_t>(ci.depth_usage_before));
-    hash_combine(hash, static_cast<std::size_t>(ci.depth_usage_after));
-    return hash;
-}
-
-} // anonymous namespace
-
-Lazy_render_pipeline::Lazy_render_pipeline() = default;
-
-Lazy_render_pipeline::Lazy_render_pipeline(Device& device, Render_pipeline_create_info create_info)
+Base_render_pipeline::Base_render_pipeline(Device& device, const Base_render_pipeline_create_info& create_info)
     : data    {std::move(create_info)}
     , m_device{&device}
 {
 }
 
-Lazy_render_pipeline::~Lazy_render_pipeline() noexcept = default;
+Base_render_pipeline::~Base_render_pipeline() noexcept = default;
 
-Lazy_render_pipeline::Lazy_render_pipeline(Lazy_render_pipeline&& other) noexcept
+Base_render_pipeline::Base_render_pipeline(Base_render_pipeline&& other) noexcept
     : data      {std::move(other.data)}
     , m_device  {other.m_device}
     , m_variants{std::move(other.m_variants)}
@@ -174,7 +154,7 @@ Lazy_render_pipeline::Lazy_render_pipeline(Lazy_render_pipeline&& other) noexcep
     other.m_device = nullptr;
 }
 
-auto Lazy_render_pipeline::operator=(Lazy_render_pipeline&& other) noexcept -> Lazy_render_pipeline&
+auto Base_render_pipeline::operator=(Base_render_pipeline&& other) noexcept -> Base_render_pipeline&
 {
     if (this != &other) {
         data       = std::move(other.data);
@@ -185,17 +165,68 @@ auto Lazy_render_pipeline::operator=(Lazy_render_pipeline&& other) noexcept -> L
     return *this;
 }
 
-auto Lazy_render_pipeline::get_pipeline_for(const Render_pass_descriptor& render_pass_desc) -> Render_pipeline*
+[[nodiscard]] auto Render_pipeline_create_info::get_hash() const -> uint64_t
+{
+    uint64_t 
+    v = erhe::hash::hash(&base.input_assembly,       sizeof(Input_assembly_state));
+    v = erhe::hash::hash(&base.multisample,          sizeof(Multisample_state), v);
+    v = erhe::hash::hash(&base.viewport_depth_range, sizeof(Viewport_depth_range_state), v);
+    v = erhe::hash::hash(&base.rasterization,        sizeof(Rasterization_state), v);
+    v = erhe::hash::hash(&base.depth_stencil,        sizeof(Depth_stencil_state), v);
+    v = erhe::hash::hash(&base.bind_group_layout,    sizeof(Bind_group_layout*), v);
+    if (base.color_blend != nullptr) {
+        v = erhe::hash::hash(base.color_blend, sizeof(Color_blend_state), v);
+    }
+    if (shader_stages != nullptr) {
+        // Pointer
+        v = erhe::hash::hash(&shader_stages, sizeof(Shader_stages*), v);
+    }
+    if (vertex_input != nullptr) {
+        v = erhe::hash::hash(&vertex_input->get_data(), sizeof(Vertex_input_state_data), v);
+    }
+    if (vertex_format != nullptr) {
+        v = erhe::hash::hash(vertex_format->get_hash(), v);
+    }
+    v = erhe::hash::hash(static_cast<uint8_t>(color_attachment_count), v);
+    for (unsigned i = 0; i < color_attachment_count; ++i) {
+        v = erhe::hash::hash(static_cast<uint8_t>(color_attachment_formats[i]), v);
+    }
+    v = erhe::hash::hash(static_cast<uint8_t>(depth_attachment_format), v);
+    v = erhe::hash::hash(static_cast<uint8_t>(stencil_attachment_format), v);
+    v = erhe::hash::hash(static_cast<uint8_t>(sample_count), v);
+    v = erhe::hash::hash(static_cast<uint8_t>(view_mask), v);
+
+    // Usage before and after does not affect hash on purpose.
+    return v;
+}
+
+auto Base_render_pipeline::get_pipeline_for(
+    const Render_pass_descriptor&          render_pass_desc,
+    const Color_blend_state*               color_blend,
+    const Shader_stages*                   shader_stages,
+    const Vertex_input_state*              vertex_input,
+    const erhe::dataformat::Vertex_format* vertex_format
+) -> Render_pipeline*
 {
     if (m_device == nullptr) {
         return nullptr;
     }
 
     // Build a create info with format info from the render pass
-    Render_pipeline_create_info ci = data;
+    Render_pipeline_create_info ci{
+        .base          = data,
+        .shader_stages = shader_stages,
+        .vertex_input  = vertex_input,
+        .vertex_format = vertex_format
+    };
+
+    if (data.color_blend == nullptr) {
+        ci.base.color_blend = color_blend;
+    }
+
     ci.set_format_from_render_pass(render_pass_desc);
 
-    const std::size_t hash = compute_format_hash(ci);
+    const uint64_t hash = ci.get_hash();
 
     {
         std::lock_guard<std::mutex> lock{m_mutex};
@@ -216,7 +247,7 @@ auto Lazy_render_pipeline::get_pipeline_for(const Render_pass_descriptor& render
     return it->second.get();
 }
 
-auto Lazy_render_pipeline::get_create_info() const -> const Render_pipeline_create_info&
+auto Base_render_pipeline::get_create_info() const -> const Base_render_pipeline_create_info&
 {
     return data;
 }

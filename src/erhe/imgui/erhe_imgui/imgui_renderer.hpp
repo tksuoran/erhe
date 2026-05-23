@@ -189,7 +189,7 @@ private:
     erhe::graphics::Ring_buffer_client            m_draw_parameter_buffer;
     erhe::graphics::Ring_buffer_client            m_draw_indirect_buffer;
     erhe::graphics::Vertex_input_state            m_vertex_input;
-    erhe::graphics::Lazy_render_pipeline          m_pipeline;
+    erhe::graphics::Base_render_pipeline          m_pipeline;
     Imgui_settings                                m_imgui_settings;
     std::unique_ptr<erhe::graphics::Texture_heap> m_texture_heap;
 

@@ -10,6 +10,7 @@
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/scoped_debug_group.hpp"
 #include "erhe_graphics/texture.hpp"
+#include "erhe_verify/verify.hpp"
 
 #include <fmt/format.h>
 
@@ -172,7 +173,11 @@ void Thumbnails::update()
 {
     // log_frame->trace("Thumbnails::update()");
 
-    erhe::graphics::Scoped_debug_group render_graph_scope{"Thumbnails::update()"};
+    ERHE_VERIFY(m_context.current_command_buffer != nullptr);
+    erhe::graphics::Scoped_debug_group render_graph_scope{
+        *m_context.current_command_buffer,
+        "Thumbnails::update()"
+    };
 
     for (size_t i = 0, end = m_thumbnails.size(); i < end; ++i) {
         Thumbnail& thumbnail = m_thumbnails[i];

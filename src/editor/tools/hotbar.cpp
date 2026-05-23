@@ -335,7 +335,7 @@ void Hotbar::init_hotbar()
     );
     const auto scene_root = m_context.scene_builder->get_scene_root();
     m_rendertarget_mesh->layer_id = scene_root->layers().rendertarget()->id;
-    m_rendertarget_mesh->enable_flag_bits(erhe::Item_flags::visible | erhe::Item_flags::translucent);
+    m_rendertarget_mesh->enable_flag_bits(erhe::Item_flags::visible);
 
     m_rendertarget_imgui_host = std::make_shared<editor::Rendertarget_imgui_host>(
         *m_context.imgui_renderer,
@@ -425,7 +425,7 @@ void Hotbar::init_radial_menu(erhe::scene_renderer::Mesh_memory& mesh_memory, Sc
         disc_geo_mesh_shared,
         erhe::primitive::Build_info{
             .primitive_types = { .fill_triangles = true },
-            .buffer_info     = mesh_memory.buffer_info
+            .buffer_info     = mesh_memory.make_primitive_buffer_info()
         },
         dummy
     );
@@ -442,9 +442,8 @@ void Hotbar::init_radial_menu(erhe::scene_renderer::Mesh_memory& mesh_memory, Sc
     m_radial_menu_background_mesh->layer_id = scene_root.layers().content()->id;
 
     m_radial_menu_background_mesh->enable_flag_bits(
-        erhe::Item_flags::content     |
-        erhe::Item_flags::visible     |
-        erhe::Item_flags::translucent |
+        erhe::Item_flags::content |
+        erhe::Item_flags::visible |
         erhe::Item_flags::show_in_ui
     );
 

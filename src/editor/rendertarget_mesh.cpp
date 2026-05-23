@@ -34,7 +34,7 @@ Rendertarget_mesh::Rendertarget_mesh(
     : erhe::scene::Mesh {"Rendertarget Node"}
     , m_pixels_per_meter{pixels_per_meter}
 {
-    enable_flag_bits(erhe::Item_flags::rendertarget | erhe::Item_flags::translucent);
+    enable_flag_bits(erhe::Item_flags::rendertarget);
 
     resize_rendertarget(command_buffer, graphics_device, mesh_memory, width, height);
 }
@@ -124,7 +124,9 @@ void Rendertarget_mesh::resize_rendertarget(
         erhe::primitive::Material_create_info{
             .name = "Rendertarget Node",
             .data = {
-                .base_color = glm::vec3{0.1f, 0.1f, 0.2f}
+                .base_color = glm::vec3{1.0f, 1.0f, 1.0f},
+                .bxdf_model = erhe::primitive::Bxdf_model::unlit,
+                .blending_mode = erhe::primitive::Material_blending_mode::alpha_blend
             }
         }
     );
@@ -159,7 +161,7 @@ void Rendertarget_mesh::resize_rendertarget(
         geometry,
         erhe::primitive::Build_info{
             .primitive_types{ .fill_triangles = true },
-            .buffer_info = mesh_memory.buffer_info
+            .buffer_info = mesh_memory.make_primitive_buffer_info()
         },
         erhe::primitive::Normal_style::polygon_normals
     );
@@ -169,14 +171,9 @@ void Rendertarget_mesh::resize_rendertarget(
     clear_primitives();
     add_primitive(primitive, m_material);
 
-    mesh_memory.buffer_transfer_queue.flush(command_buffer);
+    mesh_memory.flush(command_buffer);
 
-    enable_flag_bits(
-        erhe::Item_flags::visible      |
-        erhe::Item_flags::translucent  |
-        erhe::Item_flags::id           |
-        erhe::Item_flags::rendertarget
-    );
+    enable_flag_bits(erhe::Item_flags::visible | erhe::Item_flags::id |erhe::Item_flags::rendertarget);
 }
 
 auto Rendertarget_mesh::get_texture() const -> std::shared_ptr<erhe::graphics::Texture>

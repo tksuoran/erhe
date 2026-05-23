@@ -12,6 +12,8 @@ erhe_target_sources_grouped(
     erhe_utility/clipboard.hpp
     erhe_utility/debug_label.cpp
     erhe_utility/debug_label.hpp
+    erhe_utility/env.cpp
+    erhe_utility/env.hpp
     erhe_utility/pimpl_ptr.cpp
     erhe_utility/pimpl_ptr.hpp
 )

@@ -15,9 +15,9 @@ namespace erhe::scene_renderer {
 using erhe::graphics::Vertex_attribute;
 
 Program_interface::Program_interface(
-    erhe::graphics::Device&          graphics_device,
-    erhe::dataformat::Vertex_format& vertex_format,
-    Program_interface_config&        config
+    erhe::graphics::Device&   graphics_device,
+    Mesh_memory&              mesh_memory,
+    Program_interface_config& config
 )
     : graphics_device{graphics_device}
     , fragment_outputs{
@@ -27,17 +27,18 @@ Program_interface::Program_interface(
             .location = 0
         }
     }
-    , vertex_format     {vertex_format}
-    , config            {config}
-    , camera_interface  {graphics_device, config.max_camera_count}
-    , cube_interface    {graphics_device}
-    , joint_interface   {graphics_device, config.max_joint_count}
-    , light_interface   {graphics_device, config.max_light_count}
-    , material_interface{graphics_device, config.max_material_count}
+    , mesh_memory        {mesh_memory}
+    , config             {config}
+    , camera_interface   {graphics_device, config.max_camera_count, config.view_count}
+    , cube_interface     {graphics_device}
+    , joint_interface    {graphics_device, config.max_joint_count}
+    , light_interface    {graphics_device, config.max_light_count}
+    , material_interface {graphics_device, config.max_material_count}
     , primitive_interface{graphics_device, config.max_primitive_count}
 {
     // Write clamped values back to config so callers see actual UBO limits
     config.max_camera_count    = static_cast<int>(camera_interface.max_camera_count);
+    config.view_count      = static_cast<int>(camera_interface.view_count);
     config.max_joint_count     = static_cast<int>(joint_interface.max_joint_count);
     config.max_light_count     = static_cast<int>(light_interface.max_light_count);
     config.max_material_count  = static_cast<int>(material_interface.max_material_count);
@@ -113,9 +114,6 @@ auto Program_interface::make_prototype(
     if (create_info.fragment_outputs == nullptr) {
         create_info.fragment_outputs = &fragment_outputs;
     }
-    if (!create_info.no_vertex_input) {
-        create_info.vertex_format = &vertex_format;
-    }
     create_info.extra_include_paths = config.shader_paths;
     create_info.struct_types.push_back(&material_interface.material_struct);
     create_info.struct_types.push_back(&light_interface.light_struct);
@@ -167,7 +165,7 @@ auto Program_interface::make_prototype(
             process_shader(erhe::graphics::Shader_type::compute_shader,  cs_path);
         }
         process_shader(erhe::graphics::Shader_type::fragment_shader, fs_path);
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
         process_shader(erhe::graphics::Shader_type::geometry_shader, gs_path);
 #endif
         process_shader(erhe::graphics::Shader_type::vertex_shader,   vs_path);

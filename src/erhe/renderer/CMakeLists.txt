@@ -7,8 +7,6 @@ erhe_target_sources_grouped(
     erhe_renderer/debug_renderer.hpp
     erhe_renderer/debug_renderer_bucket.cpp
     erhe_renderer/debug_renderer_bucket.hpp
-    erhe_renderer/draw_indirect_buffer.cpp
-    erhe_renderer/draw_indirect_buffer.hpp
     erhe_renderer/primitive_renderer.cpp
     erhe_renderer/primitive_renderer.hpp
     erhe_renderer/renderer_log.cpp

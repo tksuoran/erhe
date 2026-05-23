@@ -1,6 +1,10 @@
 #include "erhe_graphics/spirv_cache.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 
+#include <glslang/build_info.h>
+
+#include <fmt/format.h>
+
 #include <fstream>
 #include <functional>
 #include <sstream>
@@ -21,10 +25,26 @@ auto shader_type_string(Shader_type type) -> const char*
     }
 }
 
-// Compilation settings salt - change this when SpvOptions or target env changes
-// to invalidate the cache
-static constexpr const char* c_settings_salt =
-    "vulkan_1_1:spv_1_6:debug:noopt:validate:includer:v3";
+// Compilation settings salt. Embeds the linked glslang version
+// (GLSLANG_VERSION_*) so cache entries are auto-invalidated when the
+// glslang dependency is bumped - the same source can compile to
+// different SPIR-V across glslang versions and we never want to
+// load a stale binary built by an earlier compiler.
+//
+// Bump the trailing "vN" tag whenever SpvOptions, the includer behaviour
+// or the target environment changes (since those affect SPIR-V output
+// without changing the glslang version number).
+auto make_settings_salt() -> std::string
+{
+    return fmt::format(
+        "vulkan_1_1:spv_1_6:debug:noopt:validate:includer:glslang{}.{}.{}{}:v4",
+        GLSLANG_VERSION_MAJOR,
+        GLSLANG_VERSION_MINOR,
+        GLSLANG_VERSION_PATCH,
+        GLSLANG_VERSION_FLAVOR
+    );
+}
+static const std::string c_settings_salt = make_settings_salt();
 
 } // anonymous namespace
 

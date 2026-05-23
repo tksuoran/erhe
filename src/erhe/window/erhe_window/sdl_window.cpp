@@ -1,6 +1,6 @@
 #include "erhe_window/sdl_window.hpp"
 
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
 # include "erhe_gl/dynamic_load.hpp"
 # include "erhe_gl/wrapper_functions.hpp"
 #endif
@@ -20,13 +20,13 @@
 # include <wayland-client.h>
 #endif
 
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
 # if defined(ERHE_OS_WINDOWS)
 #   include <GL/wglext.h>
 # endif
 #endif
 
-#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+#if defined(ERHE_GRAPHICS_API_VULKAN)
 # include <SDL3/SDL_vulkan.h>
 # include "volk.h"
 #endif
@@ -240,7 +240,7 @@ Context_window::Context_window(const Window_configuration& configuration)
     ERHE_VERIFY(ok);
 }
 
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
 Context_window::Context_window(Context_window* share)
 {
     ERHE_PROFILE_FUNCTION();
@@ -350,7 +350,7 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
         }
     }
 
-#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+#if defined(ERHE_GRAPHICS_API_VULKAN)
     bool vulkan_load_library_status = SDL_Vulkan_LoadLibrary(nullptr);
 #if defined(__APPLE__)
     if (!vulkan_load_library_status) {
@@ -407,13 +407,13 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
     };
 
     SDL_WindowFlags window_flags = SDL_WINDOW_HIGH_PIXEL_DENSITY | SDL_WINDOW_RESIZABLE;
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
     window_flags |= SDL_WINDOW_OPENGL;
 #endif
-#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+#if defined(ERHE_GRAPHICS_API_VULKAN)
     window_flags |= SDL_WINDOW_VULKAN;
 #endif
-#if defined(ERHE_GRAPHICS_LIBRARY_METAL)
+#if defined(ERHE_GRAPHICS_API_METAL)
     window_flags |= SDL_WINDOW_METAL;
 #endif
     if (configuration.fullscreen) { 
@@ -430,7 +430,7 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
         window_flags |= SDL_WINDOW_NOT_FOCUSABLE;
     }
 
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
     SDL_GL_SetAttribute(SDL_GL_RED_SIZE,       configuration.color_bit_depth);
     SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE,     configuration.color_bit_depth);
     SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE,      configuration.color_bit_depth);
@@ -478,7 +478,7 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
         return false;
     }
 
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
     SDL_GLContext sdl_context = SDL_GL_CreateContext(sdl_window);
     if (sdl_context == nullptr) {
         log_window->error("Failed to open GL context for GL {}.{}.", configuration.gl_major, configuration.gl_minor);
@@ -528,7 +528,7 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
     log_window->info("Window color depth red = {}, green = {}, blue = {}", red_size, green_size, blue_size);
     log_window->info("Window pixel density = {}, display scale = {}", m_pixel_density, display_scale);
 
-#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+#if defined(ERHE_GRAPHICS_API_VULKAN)
     Uint32 vulkan_instance_extension_count = 0;
     char const* const* vulkan_instance_extensions = SDL_Vulkan_GetInstanceExtensions(&vulkan_instance_extension_count);
     m_required_instance_extensions.clear();
@@ -560,7 +560,7 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
 
 Context_window::~Context_window() noexcept
 {
-#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+#if defined(ERHE_GRAPHICS_API_VULKAN)
     SDL_Vulkan_UnloadLibrary();
 #endif
 
@@ -578,7 +578,7 @@ Context_window::~Context_window() noexcept
     }
 }
 
-#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+#if defined(ERHE_GRAPHICS_API_VULKAN)
 auto Context_window::get_required_vulkan_instance_extensions() -> const std::vector<std::string>&
 {
     return m_required_instance_extensions;
@@ -1130,7 +1130,7 @@ auto Context_window::get_input_events() -> std::vector<Input_event>&
     return m_input_events[1 - m_input_event_queue_write];
 }
 
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
 void Context_window::get_extensions()
 {
     ERHE_PROFILE_FUNCTION();
@@ -1201,7 +1201,7 @@ void Context_window::set_swap_interval(int interval)
 
 auto Context_window::get_device_pointer() const -> void*
 {
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
 # if defined(ERHE_OS_WINDOWS)
     return wglGetCurrentContext();
 # else
@@ -1210,7 +1210,7 @@ auto Context_window::get_device_pointer() const -> void*
 # endif
 #endif
 
-#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+#if defined(ERHE_GRAPHICS_API_VULKAN)
     return nullptr; // TODO
 #endif
 }
@@ -1245,7 +1245,7 @@ auto Context_window::get_hwnd() const -> HWND
         return nullptr;
     }
 }
-# if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+# if defined(ERHE_GRAPHICS_API_OPENGL)
 auto Context_window::get_hglrc() const -> HGLRC
 {
     return wglGetCurrentContext();

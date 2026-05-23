@@ -23,9 +23,9 @@
         "erhe.graphics.threads": "info",
         "erhe.graphics.vertex_attribute": "info",
         "erhe.graphics.vertex_stream": "info",
-        "erhe.graphics.vulkan": "trace",
-        "erhe.graphics.vulkan_desc": "trace",
-        "erhe.graphics.vulkan_sync": "trace",
+        "erhe.graphics.vulkan": "info",
+        "erhe.graphics.vulkan_desc": "info",
+        "erhe.graphics.vulkan_sync": "info",
         "erhe.item.log": "info",
         "erhe.item.log_frame": "info",
         "erhe.math.input_axis": "warning",
@@ -47,6 +47,7 @@
         "erhe.scene_renderer.primitive_buffer": "info",
         "erhe.scene_renderer.render": "info",
         "erhe.scene_renderer.shadow_renderer": "info",
-        "erhe.scene_renderer.startup": "info"
+        "erhe.scene_renderer.startup": "info",
+        "erhe.scene_renderer.mesh_memory": "trace"
     }
 }

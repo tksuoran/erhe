@@ -77,7 +77,7 @@ elseif(${CMAKE_SYSTEM_NAME} STREQUAL "Android")
 
 ```cmake
 if (ERHE_TARGET_OS_ANDROID)
-    set(ERHE_GRAPHICS_LIBRARY "vulkan"  CACHE STRING "" FORCE)
+    set(ERHE_GRAPHICS_API "vulkan"  CACHE STRING "" FORCE)
     set(ERHE_WINDOW_LIBRARY   "sdl"     CACHE STRING "" FORCE)
     set(ERHE_XR_LIBRARY       "none"    CACHE STRING "" FORCE)
     set(ERHE_RAYTRACE_LIBRARY "bvh"     CACHE STRING "" FORCE)
@@ -464,7 +464,7 @@ the next indirect draw -- the SIGSEGV inside
 `vkCmdDrawIndexedIndirect` we observed in the earlier
 "hot path disabled" iteration. Keeping the Swapchain (and
 Swapchain_impl) C++ identity stable across recreate sidesteps that
-class of bug. The `Lazy_render_pipeline` cache and the bindless
+class of bug. The `Base_render_pipeline` cache and the bindless
 texture heap descriptor set are keyed on format / hold no
 swapchain-derived handles, so they survive the rebuild without any
 explicit invalidation.

@@ -330,6 +330,7 @@ void Pipelines::blend_state_component(const char* label, erhe::graphics::Blend_s
     ImGui::PopID();
 }
 
+#if 0
 void Pipelines::color_blend(erhe::graphics::Color_blend_state& color_blend)
 {
     ERHE_PROFILE_FUNCTION();
@@ -374,6 +375,7 @@ void Pipelines::color_blend(erhe::graphics::Color_blend_state& color_blend)
 
     ImGui::PopID();
 }
+#endif
 
 void Pipelines::imgui()
 {
@@ -438,56 +440,56 @@ void pipeline_imgui(erhe::graphics::Render_pipeline_state& pipeline)
 
         Pipelines::rasterization(pipeline.data.rasterization);
         Pipelines::depth_stencil(pipeline.data.depth_stencil);
-        Pipelines::color_blend  (pipeline.data.color_blend);
+        //Pipelines::color_blend  (pipeline.data.color_blend);
         ImGui::TreePop();
     }
 }
 
-void pipeline_imgui(erhe::graphics::Lazy_render_pipeline& pipeline)
+void pipeline_imgui(erhe::graphics::Base_render_pipeline& pipeline)
 {
-    erhe::graphics::Render_pipeline_create_info& data = pipeline.data;
+    erhe::graphics::Base_render_pipeline_create_info& data = pipeline.data;
     const char* name = data.debug_label.data();
     if (ImGui::TreeNodeEx(name, ImGuiTreeNodeFlags_Framed)) {
-        if (data.shader_stages != nullptr) {
-            ImGui::Text("Shader stages: %s", data.shader_stages->name().c_str());
-        }
-        if (data.vertex_input != nullptr) {
-            if (ImGui::TreeNodeEx("Vertex input", ImGuiTreeNodeFlags_Framed)) {
-                const erhe::graphics::Vertex_input_state_data& vertex_input_data = data.vertex_input->get_data();
-                int attribute_index = 0;
-                for (const erhe::graphics::Vertex_input_attribute& attribute : vertex_input_data.attributes) {
-                    const std::string attribute_label = fmt::format("Attribute {}", attribute_index++);
-                    ImGui::PushID(attribute_index);
-                    if (ImGui::TreeNodeEx(attribute_label.c_str(), ImGuiTreeNodeFlags_Framed)) {
-                        ImGui::Text("Location: %u", attribute.layout_location);
-                        ImGui::Text("Stride: %zu",  attribute.stride);
-                        ImGui::Text("Format: %s",   c_str(attribute.format) ? "yes" : "no");
-                        ImGui::Text("Offset: %zu",  attribute.offset);
-                        ImGui::TreePop();
-                    }
-                    ImGui::PopID();
-                }
-                int binding_index = 0;
-                for (const erhe::graphics::Vertex_input_binding& binding : vertex_input_data.bindings) {
-                    const std::string binding_label = fmt::format("Binding {}", binding_index++);
-                    ImGui::PushID(100 + binding_index);
-                    if (ImGui::TreeNodeEx(binding_label.c_str(), ImGuiTreeNodeFlags_Framed)) {
-                        ImGui::Text("Binding: %zu", binding.binding);
-                        ImGui::Text("Stride: %zu",  binding.stride);
-                        ImGui::Text("Divisor: %u", binding.divisor);
-                        ImGui::TreePop();
-                    }
-                    ImGui::PopID();
-                }
-                ImGui::TreePop();
-            }
-        }
+        //if (data.shader_stages != nullptr) {
+        //    ImGui::Text("Shader stages: %s", data.shader_stages->name().c_str());
+        //}
+        //if (data.vertex_input != nullptr) {
+        //    if (ImGui::TreeNodeEx("Vertex input", ImGuiTreeNodeFlags_Framed)) {
+        //        const erhe::graphics::Vertex_input_state_data& vertex_input_data = data.vertex_input->get_data();
+        //        int attribute_index = 0;
+        //        for (const erhe::graphics::Vertex_input_attribute& attribute : vertex_input_data.attributes) {
+        //            const std::string attribute_label = fmt::format("Attribute {}", attribute_index++);
+        //            ImGui::PushID(attribute_index);
+        //            if (ImGui::TreeNodeEx(attribute_label.c_str(), ImGuiTreeNodeFlags_Framed)) {
+        //                ImGui::Text("Location: %u", attribute.layout_location);
+        //                ImGui::Text("Stride: %zu",  attribute.stride);
+        //                ImGui::Text("Format: %s",   c_str(attribute.format) ? "yes" : "no");
+        //                ImGui::Text("Offset: %zu",  attribute.offset);
+        //                ImGui::TreePop();
+        //            }
+        //            ImGui::PopID();
+        //        }
+        //        int binding_index = 0;
+        //        for (const erhe::graphics::Vertex_input_binding& binding : vertex_input_data.bindings) {
+        //            const std::string binding_label = fmt::format("Binding {}", binding_index++);
+        //            ImGui::PushID(100 + binding_index);
+        //            if (ImGui::TreeNodeEx(binding_label.c_str(), ImGuiTreeNodeFlags_Framed)) {
+        //                ImGui::Text("Binding: %zu", binding.binding);
+        //                ImGui::Text("Stride: %zu",  binding.stride);
+        //                ImGui::Text("Divisor: %u", binding.divisor);
+        //                ImGui::TreePop();
+        //            }
+        //            ImGui::PopID();
+        //        }
+        //        ImGui::TreePop();
+        //    }
+        //}
         ImGui::Text("Primitive type: %s", erhe::graphics::c_str(data.input_assembly.primitive_topology));
         ImGui::Text("Primitive restart: %s", data.input_assembly.primitive_restart ? "yes" : "no");
 
         Pipelines::rasterization(data.rasterization);
         Pipelines::depth_stencil(data.depth_stencil);
-        Pipelines::color_blend  (data.color_blend);
+        //Pipelines::color_blend  (data.color_blend);
         ImGui::TreePop();
     }
 }

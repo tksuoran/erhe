@@ -45,7 +45,7 @@ public:
     void set_sampled_image        (uint32_t binding_point, const Texture& texture, const Sampler& sampler);
     void set_render_pipeline      (const Render_pipeline& pipeline);
     void set_render_pipeline_state(const Render_pipeline_state& pipeline);
-    void set_render_pipeline_state(const Render_pipeline_state& pipeline, const Shader_stages* override_shader_stages);
+    //void set_render_pipeline_state(const Render_pipeline_state& pipeline, const Shader_stages* override_shader_stages);
     void set_viewport_rect        (int x, int y, int width, int height);
     void set_viewport_depth_range (float min_depth, float max_depth);
     void set_scissor_rect         (int x, int y, int width, int height);

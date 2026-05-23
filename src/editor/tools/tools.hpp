@@ -57,12 +57,13 @@ public:
     void rebuild_depth_state(bool reverse_depth);
 
     bool                                 m_y_flip;
-    erhe::graphics::Lazy_render_pipeline tool1_hidden_stencil;
-    erhe::graphics::Lazy_render_pipeline tool2_visible_stencil;
-    erhe::graphics::Lazy_render_pipeline tool3_depth_clear;
-    erhe::graphics::Lazy_render_pipeline tool4_depth;
-    erhe::graphics::Lazy_render_pipeline tool5_visible_color;
-    erhe::graphics::Lazy_render_pipeline tool6_hidden_color;
+    erhe::graphics::Base_render_pipeline tool1_hidden_stencil;
+    erhe::graphics::Base_render_pipeline tool2_visible_stencil;
+    erhe::graphics::Base_render_pipeline tool3_depth_clear;
+    erhe::graphics::Base_render_pipeline tool4_depth;
+    erhe::graphics::Base_render_pipeline tool5_visible_color;
+    erhe::graphics::Color_blend_state    tool6_hidden_color_blend;
+    erhe::graphics::Base_render_pipeline tool6_hidden_color;
 };
 
 class Tools

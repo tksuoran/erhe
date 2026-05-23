@@ -1,0 +1,35 @@
+{
+    "commands": [
+        {
+            "name": "scene.add_cameras",
+            "args": {
+                "camera_exposure": 1,
+                "shadow_range": 30,
+                "camera_distance": 4,
+                "camera_elevation": 1.3
+            }
+        },
+        {
+            "name": "scene.add_lights",
+            "args": {
+                "directional_light_intensity": 4,
+                "directional_light_radius": 4.5,
+                "directional_light_height": 10,
+                "directional_light_shadow_count": 7,
+                "directional_light_no_shadow_count": 0,
+                "spot_light_intensity": 500,
+                "spot_light_radius": 10,
+                "spot_light_height": 5,
+                "spot_light_count": 0
+            }
+        },
+        {
+            "name": "scene.add_room",
+            "args": {
+                "floor": true,
+                "floor_size": 32,
+                "floor_height": 1
+            }
+        }
+    ]
+}

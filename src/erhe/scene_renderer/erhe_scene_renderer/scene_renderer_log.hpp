@@ -14,6 +14,7 @@ extern std::shared_ptr<spdlog::logger> log_shadow_renderer;
 extern std::shared_ptr<spdlog::logger> log_startup;
 extern std::shared_ptr<spdlog::logger> log_material_buffer;
 extern std::shared_ptr<spdlog::logger> log_primitive_buffer;
+extern std::shared_ptr<spdlog::logger> log_mesh_memory;
 
 void initialize_logging();
 

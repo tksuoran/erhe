@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_dataformat/dataformat.hpp"
+#include "erhe_hash/hash.hpp"
 
 #include <vector>
 
@@ -28,6 +29,21 @@ public:
     Vertex_attribute_usage   usage_type {Vertex_attribute_usage::none};
     std::size_t              usage_index{0};
     std::size_t              offset     {0};
+
+    [[nodiscard]] auto to_string() const -> std::string;
+
+    [[nodiscard]] auto operator==(const Vertex_attribute& other) const -> bool
+    {
+        return
+            (format      == other.format) &&
+            (usage_type  == other.usage_type) &&
+            (usage_index == other.usage_index) &&
+            (offset      == other.offset);
+    }
+    [[nodiscard]] auto operator!=(const Vertex_attribute& other) const -> bool
+    {
+        return !(*this == other);
+    }
 };
 
 static constexpr std::size_t normal_attribute        = 0;
@@ -45,10 +61,16 @@ enum class Vertex_step : unsigned int
     Step_per_instance
 };
 
+[[nodiscard]] auto c_str(Vertex_step step) -> const char*;
+
 class Vertex_stream
 {
 public:
+
+    static constexpr std::size_t binding_unused_dummy = 0xffff;
+
     explicit Vertex_stream(std::size_t binding);
+
     Vertex_stream(std::size_t binding, std::initializer_list<Vertex_attribute> attributes);
 
     [[nodiscard]] auto find_attribute(Vertex_attribute_usage usage_type, std::size_t index = 0) const -> const Vertex_attribute*;
@@ -60,6 +82,23 @@ public:
 
     // Call after all emplace_back() calls to pad stride for Vulkan alignment
     void finalize_stride();
+
+    [[nodiscard]] auto is_buffer_compatible(const Vertex_stream& other) const -> bool;
+    [[nodiscard]] auto get_hash() const -> uint64_t;
+    [[nodiscard]] auto to_string() const -> std::string;
+
+    [[nodiscard]] auto operator==(const Vertex_stream& other) const -> bool
+    {
+        return
+            (binding    == other.binding   ) &&
+            (stride     == other.stride    ) &&
+            (step       == other.step      ) &&
+            (attributes == other.attributes);
+    }
+    [[nodiscard]] auto operator!=(const Vertex_stream& other) const -> bool
+    {
+        return !(*this == other);
+    }
 
     std::vector<Vertex_attribute> attributes;
     std::size_t                   binding      {0};
@@ -83,6 +122,17 @@ public:
     [[nodiscard]] auto get_stream    (std::size_t binding) const -> const Vertex_stream*;
     [[nodiscard]] auto find_attribute(Vertex_attribute_usage usage_type, std::size_t index = 0) const -> Attribute_stream;
     [[nodiscard]] auto get_attributes() const -> std::vector<Attribute_stream>;
+    [[nodiscard]] auto get_hash      () const -> uint64_t;
+    [[nodiscard]] auto to_string     () const -> std::string;
+
+    [[nodiscard]] auto operator==(const Vertex_format& other) const -> bool
+    {
+        return (streams == other.streams);
+    }
+    [[nodiscard]] auto operator!=(const Vertex_format& other) const -> bool
+    {
+        return !(*this == other);
+    }
 
     std::vector<Vertex_stream> streams;
 };

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+
 namespace erhe::primitive {
 
 enum class Normal_style : unsigned int {
@@ -36,6 +38,26 @@ enum class Primitive_type : unsigned int {
     triangles_adjacency      = 13
 };
 
+enum class Bxdf_model : uint16_t
+{
+    unlit                    = 0,
+    isotropic_brdf           = 1,
+    anisotropic_brdf         = 2,
+    anisotropic_slope        = 3,
+    anisotropic_engine_ready = 4
+};
+
+enum class Material_blending_mode : uint16_t
+{
+    opaque       = 0,
+    alpha_blend  = 1,
+    multiply     = 2,
+    add          = 3,
+    subtract     = 4,
+    screen_door  = 5,
+    alpha_test   = 6
+};
+
 static constexpr const char* c_mode_strings[] = {
     "Not Set",
     "Polygon Fill",
@@ -52,7 +74,19 @@ static constexpr const char* c_normal_style_strings[] = {
     "Point Normals"
 };
 
+static const char* const c_material_blending_mode_names[] = {
+    "Opaque",
+    "Alpha Blend",
+    "Multiply",
+    "Add",
+    "Subtract",
+    "Screen Door",
+    "Alpha Test"
+};
+
 [[nodiscard]] auto c_str(Primitive_mode primitive_mode) -> const char*;
 [[nodiscard]] auto c_str(Normal_style normal_style) -> const char*;
+[[nodiscard]] auto c_str(Bxdf_model bxdf_model) -> const char*;
+[[nodiscard]] auto c_str(Material_blending_mode blending_mode) -> const char*;
 
 } // namespace erhe::primitive

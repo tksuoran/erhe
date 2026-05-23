@@ -1,0 +1,169 @@
+from erhe_codegen import *
+
+struct("Headset_config",
+    version=1,
+    short_desc="Virtual Reality Headset",
+    long_desc="",
+    developer=False,
+    fields=[
+        field(
+            "openxr",
+            Bool,
+            added_in=1,
+            default="false",
+            short_desc="OpenXR Enable",
+            long_desc="",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "openxr_mirror",
+            Bool,
+            added_in=1,
+            default="false",
+            short_desc="OpenXR Mirror Window",
+            long_desc="",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "quad_view",
+            Bool,
+            added_in=1,
+            default="false",
+            short_desc="Enable Quad View (Varjo)",
+            long_desc="",
+            visible=True,
+            developer=True
+        ),
+        field(
+            "debug",
+            Bool,
+            added_in=1,
+            default="false",
+            short_desc="Enable OpenXR Debug",
+            long_desc="",
+            visible=True,
+            developer=True
+        ),
+        field(
+            "validation",
+            Bool,
+            added_in=1,
+            default="false",
+            short_desc="Enable OpenXR Validation",
+            long_desc="",
+            visible=True,
+            developer=True
+        ),
+        field(
+            "api_dump",
+            Bool,
+            added_in=1,
+            default="false",
+            short_desc="Enable OpenXR API Dump",
+            long_desc="",
+            visible=True,
+            developer=True
+        ),
+        field(
+            "composition_depth_layer",
+            Bool,
+            added_in=1,
+            default="false",
+            short_desc="Submit OpenXR composition-layer depth",
+            long_desc=("Enable XR_KHR_composition_layer_depth: the editor "
+                       "submits per-eye depth to the OpenXR compositor as part "
+                       "of the projection layer. Independent of "
+                       "swapchain_depth_attachment (which controls whether "
+                       "the editor's swapchains have a depth attachment at "
+                       "all)."),
+            visible=True,
+            developer=True
+        ),
+        field(
+            "swapchain_depth_attachment",
+            Bool,
+            added_in=1,
+            default="false",
+            short_desc="Allocate a depth attachment for XR swapchains",
+            long_desc=("Request a depth+stencil attachment alongside the "
+                       "XR color swapchain. When false the editor allocates "
+                       "its own private depth target instead. Independent of "
+                       "the composition_depth_layer knob above (which submits "
+                       "depth to the OpenXR compositor)."),
+            visible=True,
+            developer=True
+        ),
+        field(
+            "visibility_mask",
+            Bool,
+            added_in=1,
+            default="false",
+            short_desc="",
+            long_desc="",
+            visible=True,
+            developer=True
+        ),
+        field(
+            "hand_tracking",
+            Bool,
+            added_in=1,
+            default="false",
+            short_desc="",
+            long_desc="",
+            visible=True,
+            developer=True
+        ),
+        field(
+            "passthrough_fb",
+            Bool,
+            added_in=1,
+            default="false",
+            short_desc="",
+            long_desc="",
+            visible=True,
+            developer=True
+        ),
+        field(
+            "composition_alpha",
+            Bool,
+            added_in=1,
+            default="false",
+            short_desc="",
+            long_desc="",
+            visible=True,
+            developer=True
+        ),
+        field(
+            "cpu_performance_level",
+            EnumRef("Perf_settings_level"),
+            added_in=1,
+            default="Perf_settings_level::e_unset",
+            short_desc="CPU Performance Level",
+            long_desc="Suggested CPU clock level via XR_EXT_performance_settings. e_unset keeps the runtime default.",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "gpu_performance_level",
+            EnumRef("Perf_settings_level"),
+            added_in=1,
+            default="Perf_settings_level::e_unset",
+            short_desc="GPU Performance Level",
+            long_desc="Suggested GPU clock level via XR_EXT_performance_settings. e_unset keeps the runtime default.",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "boost_on_thermal_warning",
+            Bool,
+            added_in=1,
+            default="false",
+            short_desc="Step Down Level on Thermal Warning",
+            long_desc="When the runtime sends a thermal warning event, automatically step the affected domain's level down by one notch.",
+            visible=True,
+            developer=False
+        ),
+    ],
+)

@@ -4,6 +4,7 @@
 #include "erhe_graphics/enums.hpp"
 #include "erhe_utility/debug_label.hpp"
 
+#include <cstdint>
 #include <filesystem>
 #include <map>
 #include <string>
@@ -77,6 +78,7 @@ public:
     std::vector<Shader_stage>                        shaders               {};
     std::vector<std::filesystem::path>               extra_include_paths   {};
     const Bind_group_layout*                         bind_group_layout     {nullptr};
+    uint32_t                                         view_count            {0};
     bool                                             dump_reflection       {false};
     bool                                             dump_interface        {false};
     bool                                             dump_final_source     {false};
@@ -98,8 +100,7 @@ public:
     auto link_program   () const -> bool;
 
 #if defined(ERHE_SPIRV)
-    auto compile_glslang     (Device& device, const Shader_stage& shader) -> std::shared_ptr<glslang::TShader>;
-    auto link_glslang_program() -> bool;
+    auto compile_glslang(Device& device, const Shader_stage& shader) -> std::shared_ptr<glslang::TShader>;
 #endif
 
     [[nodiscard]] auto name            () const -> const std::string&;
@@ -130,11 +131,11 @@ public:
     void reload    (Shader_stages_prototype&& prototype) const;
     void invalidate() const;
 
-    [[nodiscard]] auto name                () const -> const std::string&;
-    [[nodiscard]] auto is_valid            () const -> bool;
+    [[nodiscard]] auto name                 () const -> const std::string&;
+    [[nodiscard]] auto is_valid             () const -> bool;
     [[nodiscard]] auto get_bind_group_layout() const -> const Bind_group_layout*;
-    [[nodiscard]] auto get_impl            () -> Shader_stages_impl&;
-    [[nodiscard]] auto get_impl            () const -> const Shader_stages_impl&;
+    [[nodiscard]] auto get_impl             () -> Shader_stages_impl&;
+    [[nodiscard]] auto get_impl             () const -> const Shader_stages_impl&;
 
 private:
     std::unique_ptr<Shader_stages_impl> m_impl;

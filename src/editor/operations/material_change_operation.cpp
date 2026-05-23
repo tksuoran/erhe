@@ -1,5 +1,12 @@
 #include "operations/material_change_operation.hpp"
 
+#include "app_context.hpp"
+#include "app_scenes.hpp"
+#include "scene/scene_root.hpp"
+
+#include "erhe_scene/mesh.hpp"
+#include "erhe_scene/scene.hpp"
+
 #include <fmt/format.h>
 
 namespace editor {

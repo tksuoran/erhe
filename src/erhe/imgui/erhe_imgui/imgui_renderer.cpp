@@ -5,7 +5,7 @@
 #include "erhe_imgui/imgui_host.hpp"
 
 // For user clip enable/disable
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
 # include "erhe_gl/wrapper_enums.hpp"
 # include "erhe_gl/wrapper_functions.hpp"
 #endif
@@ -311,14 +311,11 @@ Imgui_renderer::Imgui_renderer(
     , m_vertex_input{graphics_device, erhe::graphics::Vertex_input_state_data::make(m_imgui_program_interface.vertex_format)}
     , m_pipeline{
         graphics_device,
-        erhe::graphics::Render_pipeline_create_info{
+        erhe::graphics::Base_render_pipeline_create_info{
             .debug_label    = erhe::utility::Debug_label{"ImGui Renderer"},
-            .shader_stages  = &m_shader_stages,
-            .vertex_input   = &m_vertex_input,
             .input_assembly = erhe::graphics::Input_assembly_state::triangle,
             .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
             .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
-            .color_blend    = erhe::graphics::Color_blend_state::color_blend_alpha
         }
     }
     , m_dummy_texture{graphics_device.create_dummy_texture(init_command_buffer, erhe::dataformat::Format::format_8_vec4_srgb)}
@@ -940,7 +937,7 @@ auto Imgui_renderer::image_button(Draw_texture_parameters&& parameters) -> bool
 
 void Imgui_renderer::update_texture(ImTextureData* tex, erhe::graphics::Command_buffer& command_buffer)
 {
-    erhe::graphics::Scoped_debug_group pass_scope{"Imgui_renderer::update_texture()"};
+    erhe::graphics::Scoped_debug_group pass_scope{command_buffer, "Imgui_renderer::update_texture()"};
 
     ERHE_VERIFY(tex != nullptr);
 
@@ -968,7 +965,7 @@ void Imgui_renderer::update_texture(ImTextureData* tex, erhe::graphics::Command_
         log_imgui->trace("created texture {}", fmt::ptr(texture.get()));
 
         // Upload pixel data
-#if defined(ERHE_OS_MACOS) && defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_OS_MACOS) && defined(ERHE_GRAPHICS_API_OPENGL)
         // macOS GL driver has broken glCopyBufferSubData; use direct upload
         command_buffer.upload_to_texture(
             *texture.get(),
@@ -1031,7 +1028,7 @@ void Imgui_renderer::update_texture(ImTextureData* tex, erhe::graphics::Command_
         ERHE_VERIFY(texture != nullptr);
         log_imgui->trace("updating texture {}", fmt::ptr(texture));
 
-#if defined(ERHE_OS_MACOS) && defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_OS_MACOS) && defined(ERHE_GRAPHICS_API_OPENGL)
         auto update_rect = [&command_buffer, texture, tex](ImTextureRect& r) -> void
         {
             const std::size_t  src_offset = r.x * tex->BytesPerPixel + r.y * tex->GetPitch();
@@ -1159,7 +1156,10 @@ void Imgui_renderer::render_draw_data(
         return;
     }
 
-    erhe::graphics::Scoped_debug_group pass_scope{"Imgui_renderer::render_draw_data()"};
+    erhe::graphics::Scoped_debug_group pass_scope{
+        render_encoder.get_command_buffer(),
+        "Imgui_renderer::render_draw_data()"
+    };
 
     auto&       program                       = m_imgui_program_interface;
     const auto& draw_parameter_struct_offsets = program.draw_parameter_struct_offsets;
@@ -1180,7 +1180,7 @@ void Imgui_renderer::render_draw_data(
     using erhe::graphics::write;
     constexpr erhe::graphics::Ring_buffer_usage usage{erhe::graphics::Ring_buffer_usage::CPU_write};
 
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
     gl::enable(gl::Enable_cap::clip_distance0);
     gl::enable(gl::Enable_cap::clip_distance1);
     gl::enable(gl::Enable_cap::clip_distance2);
@@ -1190,7 +1190,13 @@ void Imgui_renderer::render_draw_data(
     // This binds vertex input states (VAO) and shader stages (shader program)
     // and most other state
     render_encoder.set_bind_group_layout(&m_bind_group_layout);
-    erhe::graphics::Render_pipeline* pipeline = m_pipeline.get_pipeline_for(render_pass.get_descriptor());
+    erhe::graphics::Render_pipeline* pipeline = m_pipeline.get_pipeline_for(
+        render_pass.get_descriptor(),
+        &erhe::graphics::Color_blend_state::color_blend_alpha,
+        &m_shader_stages,
+        &m_vertex_input,
+        &m_imgui_program_interface.vertex_format
+    );
     if (pipeline == nullptr) {
         return;
     }
@@ -1198,10 +1204,10 @@ void Imgui_renderer::render_draw_data(
     render_encoder.set_viewport_rect(0, 0, fb_width, fb_height);
     render_encoder.set_scissor_rect(0, 0, fb_width, fb_height);
 
-    m_texture_heap->reset_heap();
+    m_texture_heap->reset_heap(render_encoder.get_command_buffer());
 
     for (int n = 0; n < draw_data->CmdListsCount; n++) {
-        erhe::graphics::Scoped_debug_group cmd_list_scope{"CmdList"};
+        erhe::graphics::Scoped_debug_group cmd_list_scope{render_encoder.get_command_buffer(), "CmdList"};
 
         // log_frame->trace("CmdList {}", n);
         const ImDrawList* cmd_list = draw_data->CmdLists[n];
@@ -1464,19 +1470,19 @@ void Imgui_renderer::render_draw_data(
             if (cmd_batch_end == cmd_list->CmdBuffer.Size) {
                 break;
             } else {
-                m_texture_heap->reset_heap();
+                m_texture_heap->reset_heap(render_encoder.get_command_buffer());
             }
         } // outer loop going throught batches of commands
     } // for all cmd lists
 
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
     gl::disable(gl::Enable_cap::clip_distance0);
     gl::disable(gl::Enable_cap::clip_distance1);
     gl::disable(gl::Enable_cap::clip_distance2);
     gl::disable(gl::Enable_cap::clip_distance3);
 #endif // TODO
 
-    m_texture_heap->unbind();
+    m_texture_heap->unbind(render_encoder.get_command_buffer());
 
     SPDLOG_LOGGER_TRACE(log_frame, "end Imgui_renderer::render_draw_data()");
 }

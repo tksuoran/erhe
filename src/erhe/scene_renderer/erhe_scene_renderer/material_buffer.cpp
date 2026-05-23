@@ -46,6 +46,7 @@ Material_interface::Material_interface(erhe::graphics::Device& graphics_device, 
         .emissive_texture           = material_struct.add_uvec2("emissive_texture"          )->get_offset_in_parent(),
         .opacity                    = material_struct.add_float("opacity"                   )->get_offset_in_parent(),
         .normal_texture_scale       = material_struct.add_float("normal_texture_scale"      )->get_offset_in_parent(),
+        .alpha_cutoff               = material_struct.add_float("alpha_cutoff"              )->get_offset_in_parent(),
 
         .base_color_rotation_scale         = material_struct.add_vec4("base_color_rotation_scale"        )->get_offset_in_parent(),
         .metallic_roughness_rotation_scale = material_struct.add_vec4("metallic_roughness_rotation_scale")->get_offset_in_parent(),
@@ -59,7 +60,6 @@ Material_interface::Material_interface(erhe::graphics::Device& graphics_device, 
         .emissive_offset                   = material_struct.add_vec2("emissive_offset"                  )->get_offset_in_parent(),
 
         .occlusion_texture_strength = material_struct.add_float("occlusion_texture_strength")->get_offset_in_parent(),
-        .unlit                      = material_struct.add_uint ("unlit")->get_offset_in_parent(),
     }
     , max_material_count{static_cast<std::size_t>(max_material_count)}
 {
@@ -184,8 +184,6 @@ auto Material_buffer::update(
 
         material->material_buffer_index = material_index;
 
-        uint32_t unlit_value = material_data.unlit ? 1 : 0;
-
         write(gpu_data, write_offset + offsets.roughness  ,                as_span(material_data.roughness  ));
         write(gpu_data, write_offset + offsets.metallic   ,                as_span(material_data.metallic   ));
         write(gpu_data, write_offset + offsets.reflectance,                as_span(material_data.reflectance));
@@ -202,6 +200,7 @@ auto Material_buffer::update(
         write(gpu_data, write_offset + offsets.emissive_texture,           as_span(emissive.shader_handle));
         write(gpu_data, write_offset + offsets.opacity,                    as_span(material_data.opacity    ));
         write(gpu_data, write_offset + offsets.normal_texture_scale,       as_span(material_data.normal_texture_scale));
+        write(gpu_data, write_offset + offsets.alpha_cutoff,               as_span(material_data.alpha_cutoff));
 
         write(gpu_data, write_offset + offsets.base_color_rotation_scale,         as_span(base_color        .rotation_scale)); // uvec4
         write(gpu_data, write_offset + offsets.metallic_roughness_rotation_scale, as_span(metallic_roughness.rotation_scale)); // uvec4
@@ -217,7 +216,6 @@ auto Material_buffer::update(
 
         write(gpu_data, write_offset + offsets.emissive_offset,                   as_span(emissive          .offset));         // uvec2
         write(gpu_data, write_offset + offsets.occlusion_texture_strength,        as_span(material_data.occlusion_texture_strength));
-        write(gpu_data, write_offset + offsets.unlit,                             as_span(unlit_value));
 
         write_offset += entry_size;
         ++material_index;

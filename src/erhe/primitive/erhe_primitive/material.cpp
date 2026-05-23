@@ -56,7 +56,11 @@ Material::Material(const Material_create_info& create_info)
         (lhs.emissive                   == rhs.emissive                  ) &&
         (lhs.normal_texture_scale       == rhs.normal_texture_scale      ) &&
         (lhs.occlusion_texture_strength == rhs.occlusion_texture_strength) &&
-        (lhs.unlit                      == rhs.unlit                     ) &&
+        (lhs.bxdf_model                 == rhs.bxdf_model                ) &&
+        (lhs.blending_mode              == rhs.blending_mode             ) &&
+        (lhs.alpha_cutoff               == rhs.alpha_cutoff              ) &&
+        (lhs.use_circular_brushed_metal == rhs.use_circular_brushed_metal) &&
+        (lhs.use_aniso_control          == rhs.use_aniso_control         ) &&
         (lhs.texture_samplers           == rhs.texture_samplers          );
 }
 

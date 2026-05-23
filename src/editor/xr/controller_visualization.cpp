@@ -42,7 +42,6 @@ Controller_visualization::Controller_visualization(
     erhe::geometry::shapes::make_torus(controller_geo_mesh, 0.05f, 0.0025f, 40, 14);
     transform_mesh(controller_geo_mesh, to_geo_mat4f(erhe::math::mat4_swap_yz));
 
-    erhe::graphics::Buffer_transfer_queue buffer_transfer_queue{mesh_memory.graphics_device};
     erhe::primitive::Element_mappings dummy{};
     erhe::primitive::Buffer_mesh buffer_mesh{};
     const bool buffer_mesh_ok = erhe::primitive::build_buffer_mesh(
@@ -50,7 +49,7 @@ Controller_visualization::Controller_visualization(
         controller_geo_mesh,
         erhe::primitive::Build_info{
             .primitive_types = {.fill_triangles = true },
-            .buffer_info = mesh_memory.buffer_info
+            .buffer_info = mesh_memory.make_primitive_buffer_info()
         },
         dummy, // TODO make element mappings optional
         erhe::primitive::Normal_style::corner_normals
@@ -63,7 +62,7 @@ Controller_visualization::Controller_visualization(
     m_controller_mesh = std::make_shared<erhe::scene::Mesh>("Controller");
     m_controller_mesh->add_primitive(primitive, controller_material);
     m_controller_node->enable_flag_bits(erhe::Item_flags::visible);
-    m_controller_mesh->enable_flag_bits(erhe::Item_flags::controller | erhe::Item_flags::opaque);
+    m_controller_mesh->enable_flag_bits(erhe::Item_flags::controller);
     m_controller_mesh->layer_id = scene_root.layers().content()->id;
     m_controller_node->attach(m_controller_mesh);
     m_controller_node->set_parent(view_root);

@@ -7,7 +7,7 @@ Original review: 2026-03-21
 
 The following issues from the original review have been addressed:
 
-- **#2 Frame duration cap** - Needs verification: may still be 25s instead of 25ms
+- **#3 Frame number never incremented** - Fixed: `++m_frame_number;` runs in `Time::prepare_update()` at `src/editor/time.cpp:22`.
 - **#8 Missing EndDragDropTarget** - Fixed: added `EndDragDropTarget()` before early return in `Content_library_node::combo()`
 - **#10 Missing EndDragDropTarget in scene_root** - Fixed: removed unnecessary `DragDropWithinTarget` guard, verified all Begin/End pairs are balanced
 
@@ -20,18 +20,11 @@ The following issues from the original review have been addressed:
 - **Description**: When `drag_node_payload` is not null but `drag_item_payload` is null, `drag_node` (result of `dynamic_cast`) could be null. Dereferencing `drag_node->item.get()` would be a null pointer dereference.
 - **Suggested fix**: Add null check for `drag_node` before accessing `drag_node->item`.
 
-### 2. Frame duration cap value may be too large
+### 2. Frame duration cap value is too large
 
-- **File**: `src/editor/time.cpp`, line 40
+- **File**: `src/editor/time.cpp`, line 41
 - **Severity**: bug
-- **Description**: The frame duration cap may be `25'000'000'000` nanoseconds (25 seconds) instead of `25'000'000` (25 milliseconds). Needs verification.
-
-### 3. Frame number never incremented
-
-- **File**: `src/editor/time.cpp`
-- **Severity**: warning
-- **Description**: `Time::m_frame_number` is never incremented in `prepare_update()`. Always remains 0.
-- **Suggested fix**: Add `++m_frame_number;` at end of `Time::prepare_update()`.
+- **Description**: The frame duration cap is `25'000'000'000` nanoseconds (25 seconds) instead of `25'000'000` (25 milliseconds).
 
 ### 4. Operation_stack::can_undo/can_redo not thread-safe
 

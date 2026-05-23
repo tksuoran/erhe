@@ -271,7 +271,7 @@ auto Content_library_node::remove(const std::shared_ptr<T>& entry) -> bool
         return false;
     }
     std::shared_ptr<Hierarchy> hierarchy = *i;
-    i->remove();
+    hierarchy->remove();
     invalidate_cache<T>();
     return true;
 }

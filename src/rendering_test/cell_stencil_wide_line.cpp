@@ -30,12 +30,10 @@ void Rendering_test::make_stencil_wide_line_pipeline()
         .write_mask      = 0x00u
     };
 
-    m_compute_edge_lines_stencil_pipeline_state = std::make_unique<erhe::graphics::Lazy_render_pipeline>(
+    m_compute_edge_lines_stencil_pipeline = std::make_unique<erhe::graphics::Base_render_pipeline>(
         m_graphics_device,
-        erhe::graphics::Render_pipeline_create_info{
+        erhe::graphics::Base_render_pipeline_create_info{
             .debug_label    = erhe::utility::Debug_label{"Compute Edge Lines + Stencil Test != 1"},
-            .shader_stages  = m_content_wide_line_renderer->get_graphics_shader_stages(),
-            .vertex_input   = m_content_wide_line_renderer->get_vertex_input(),
             .input_assembly = erhe::graphics::Input_assembly_state::triangle,
             .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
             .depth_stencil  = {
@@ -45,8 +43,7 @@ void Rendering_test::make_stencil_wide_line_pipeline()
                 .stencil_test_enable = true,
                 .stencil_front       = test_ne_1_op,
                 .stencil_back        = test_ne_1_op
-            },
-            .color_blend    = erhe::graphics::Color_blend_state::color_blend_premultiplied
+            }
         }
     );
 }
@@ -72,7 +69,7 @@ void Rendering_test::render_stencil_wide_line_cell(
     if (!m_content_wide_line_renderer || !m_content_wide_line_renderer->is_enabled()) {
         return;
     }
-    if (!m_compute_edge_lines_stencil_pipeline_state) {
+    if (!m_compute_edge_lines_stencil_pipeline) {
         return;
     }
     if (!m_stencil_cube || !m_stencil_sphere) {
@@ -88,29 +85,27 @@ void Rendering_test::render_stencil_wide_line_cell(
     const std::vector<std::shared_ptr<erhe::scene::Mesh>> cube_meshes{m_stencil_cube};
     m_forward_renderer->render(
         erhe::scene_renderer::Forward_renderer::Render_parameters{
-            .render_encoder         = render_encoder,
-            .index_type             = erhe::dataformat::Format::format_32_scalar_uint,
-            .index_buffer           = &m_mesh_memory.index_buffer,
-            .vertex_buffer0         = &m_mesh_memory.vertex_buffer_position,
-            .vertex_buffer1         = &m_mesh_memory.vertex_buffer_non_position,
-            .ambient_light          = glm::vec3{0.3f, 0.3f, 0.3f},
-            .camera                 = m_camera.get(),
-            .light_projections      = &m_light_projections,
-            .lights                 = lights,
-            .skins                  = {},
-            .materials              = m_materials,
-            .mesh_spans             = { cube_meshes },
-            .render_pipeline_states = m_stencil_write_1_pipeline_states,
-            .render_pass            = active_render_pass,
-            .primitive_mode         = erhe::primitive::Primitive_mode::polygon_fill,
-            .primitive_settings     = erhe::scene_renderer::Primitive_interface_settings{},
-            .viewport               = viewport,
-            .filter                 = erhe::Item_filter{},
-            .override_shader_stages = m_stencil_cyan_shader_stages.get(),
-            .debug_label            = "wide-line stencil cube (write 1, cyan)",
-            .reverse_depth          = true,
-            .depth_range            = conventions.native_depth_range,
-            .conventions            = conventions
+            .base = erhe::scene_renderer::Forward_renderer::Base_render_parameters{
+                .render_encoder    = render_encoder,
+                .render_pass       = active_render_pass,
+                .viewport          = viewport,
+                .camera            = m_camera.get(),
+                .ambient_light     = glm::vec3{0.3f, 0.3f, 0.3f},
+                .light_projections = &m_light_projections,
+                .lights            = lights,
+                .skins             = {},
+                .materials         = m_materials,
+                .reverse_depth     = true,
+                .depth_range       = conventions.native_depth_range,
+                .conventions       = conventions,
+                .debug_label       = "wide-line stencil cube (write 1, cyan)"
+            },
+            .mesh_spans            = { cube_meshes },
+            .base_render_pipelines = m_stencil_write_1_pipelines,
+            .primitive_mode        = erhe::primitive::Primitive_mode::polygon_fill,
+            .primitive_settings    = erhe::scene_renderer::Primitive_interface_settings{},
+            .filter                = erhe::Item_filter{},
+            //.override_shader_stages = m_stencil_cyan_shader_stages.get(),
         }
     );
 
@@ -126,8 +121,9 @@ void Rendering_test::render_stencil_wide_line_cell(
     // dedicated renderer instance per viewport.
     m_content_wide_line_renderer->render(
         render_encoder,
-        *m_compute_edge_lines_stencil_pipeline_state,
+        *m_compute_edge_lines_stencil_pipeline,
         *active_render_pass,
+        &erhe::graphics::Color_blend_state::color_blend_premultiplied,
         /*group=*/1
     );
 }

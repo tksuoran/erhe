@@ -197,7 +197,7 @@ private:
 
     erhe::graphics::Vertex_input_state                    m_empty_vertex_input;
     std::unique_ptr<erhe::scene_renderer::Texel_renderer> m_shadow_texel_renderer;
-    erhe::graphics::Lazy_render_pipeline                  m_shadow_texel_pipeline;
+    erhe::graphics::Base_render_pipeline                  m_shadow_texel_pipeline;
 };
 
 }

@@ -149,6 +149,7 @@ public:
     [[nodiscard]] auto end_frame  (const Frame_end_info& frame_end_info) -> bool;
 
     void               wait_idle            ();
+    void               clear_render_pipeline_cache();
     [[nodiscard]] auto recreate_surface_for_new_window() -> bool;
     [[nodiscard]] auto is_in_swapchain_frame() const -> bool;
 
@@ -248,6 +249,7 @@ public:
         erhe::dataformat::Format                       depth_attachment_format,
         erhe::dataformat::Format                       stencil_attachment_format,
         unsigned int                                   sample_count,
+        uint32_t                                       view_mask,
         VkPipelineStageFlags                           incoming_src_stage  = 0,
         VkAccessFlags                                  incoming_src_access = 0,
         VkPipelineStageFlags                           incoming_dst_stage  = 0,

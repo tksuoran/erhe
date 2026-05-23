@@ -356,6 +356,36 @@ auto Device_impl::get_cached_pipeline(const std::size_t hash) -> VkPipeline
     return VK_NULL_HANDLE;
 }
 
+void Device_impl::clear_render_pipeline_cache()
+{
+    // The Vulkan pipeline cache hashes raw VkShaderModule handle values
+    // (see Render_command_encoder_impl::set_render_pipeline_state).
+    // When the upstream shader cache (e.g. Shader_variant_cache) destroys
+    // its modules, the driver may recycle those handle values for new
+    // modules, and a future bind whose hash collides with an old entry
+    // would receive a stale VkPipeline carrying the previous shader code.
+    // Drop every cached pipeline here and let the next bind rebuild
+    // against the fresh modules. Pipelines are queued for destruction
+    // through the per-frame completion handler so any in-flight GPU work
+    // that still references them stays valid.
+    std::vector<VkPipeline> to_destroy;
+    {
+        std::lock_guard<std::mutex> lock{m_pipeline_map_mutex};
+        to_destroy.reserve(m_pipeline_map.size());
+        for (auto& [hash, pipeline] : m_pipeline_map) {
+            if (pipeline != VK_NULL_HANDLE) {
+                to_destroy.push_back(pipeline);
+            }
+        }
+        m_pipeline_map.clear();
+    }
+    for (VkPipeline pipeline : to_destroy) {
+        add_completion_handler([device = m_vulkan_device, pipeline](Device_impl&) {
+            vkDestroyPipeline(device, pipeline, nullptr);
+        });
+    }
+}
+
 auto Device_impl::create_graphics_pipeline(const VkGraphicsPipelineCreateInfo& create_info, const std::size_t hash) -> VkPipeline
 {
     VkPipeline pipeline = VK_NULL_HANDLE;
@@ -388,6 +418,7 @@ auto Device_impl::get_or_create_compatible_render_pass(
     const erhe::dataformat::Format                 depth_attachment_format,
     const erhe::dataformat::Format                 stencil_attachment_format,
     const unsigned int                             sample_count,
+    const uint32_t                                 view_mask,
     VkPipelineStageFlags                           incoming_src_stage,
     VkAccessFlags                                  incoming_src_access,
     VkPipelineStageFlags                           incoming_dst_stage,
@@ -411,6 +442,7 @@ auto Device_impl::get_or_create_compatible_render_pass(
     hash_combine(hash, static_cast<std::size_t>(depth_attachment_format));
     hash_combine(hash, static_cast<std::size_t>(stencil_attachment_format));
     hash_combine(hash, static_cast<std::size_t>(sample_count));
+    hash_combine(hash, static_cast<std::size_t>(view_mask));
     hash_combine(hash, static_cast<std::size_t>(incoming_src_stage));
     hash_combine(hash, static_cast<std::size_t>(incoming_src_access));
     hash_combine(hash, static_cast<std::size_t>(incoming_dst_stage));
@@ -491,12 +523,17 @@ auto Device_impl::get_or_create_compatible_render_pass(
             (has_stencil ? VK_IMAGE_ASPECT_STENCIL_BIT : 0u);
     }
 
+    // Vulkan render-pass compatibility requires the pipeline's compatibility
+    // render pass to have the same subpass viewMask as the in-use render
+    // pass. With viewMask hardcoded to 0, multiview render passes (viewMask
+    // != 0) silently bind a single-view pipeline; the driver replicates only
+    // the clear / load-op to every view layer but draws hit view 0 only.
     const VkSubpassDescription2 subpass{
         .sType                   = VK_STRUCTURE_TYPE_SUBPASS_DESCRIPTION_2,
         .pNext                   = nullptr,
         .flags                   = 0,
         .pipelineBindPoint       = VK_PIPELINE_BIND_POINT_GRAPHICS,
-        .viewMask                = 0,
+        .viewMask                = view_mask,
         .inputAttachmentCount    = 0,
         .pInputAttachments       = nullptr,
         .colorAttachmentCount    = static_cast<uint32_t>(color_refs.size()),

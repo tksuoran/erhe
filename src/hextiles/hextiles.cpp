@@ -15,7 +15,7 @@
 #include "erhe_commands/commands.hpp"
 #include "erhe_commands/commands_log.hpp"
 #include "erhe_file/file.hpp"
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
 # include "erhe_gl/gl_log.hpp"
 #endif
 #include "erhe_graph/graph_log.hpp"
@@ -470,7 +470,7 @@ void run_hextiles()
             erhe::log::load_log_configuration(contents.value());
         }
     }
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
     gl::initialize_logging();
 #endif
     erhe::commands::initialize_logging();

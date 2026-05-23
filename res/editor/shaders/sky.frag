@@ -1,3 +1,5 @@
+#include "erhe_camera_view.glsl"
+
 layout(location = 0) in highp vec4 v_position;
 
 highp float checkerboard(highp vec2 coord, highp vec2 frequency, highp float a, highp float b)
@@ -26,9 +28,9 @@ highp float checkerboard(highp vec2 coord, highp vec2 frequency, highp float a, 
 void main()
 {
     highp vec3 view_position_in_world = vec3(
-        camera.cameras[0].world_from_node[3][0],
-        camera.cameras[0].world_from_node[3][1],
-        camera.cameras[0].world_from_node[3][2]
+        camera.cameras[c_view_index].world_from_node[3][0],
+        camera.cameras[c_view_index].world_from_node[3][1],
+        camera.cameras[c_view_index].world_from_node[3][2]
     );
 
     highp vec3  pos       = v_position.xyz / v_position.w;
@@ -63,6 +65,6 @@ void main()
         highp vec3  sky_zenith_color     = vec3(0.2, 0.2, 0.22);
         sky_color = mix(sky_horizon_color, sky_zenith_color, sky_factor);
     }
-    out_color.rgb = intensity * sky_color * camera.cameras[0].exposure;
+    out_color.rgb = intensity * sky_color * camera.cameras[c_view_index].exposure;
     out_color.a = 1.0;
 }

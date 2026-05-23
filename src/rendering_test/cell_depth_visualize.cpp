@@ -32,7 +32,10 @@ void Rendering_test::make_depth_visualize_pipeline()
         m_graphics_device,
         erhe::graphics::Bind_group_layout_create_info{
             .bindings = {
-                {.binding_point = 0, .type = erhe::graphics::Binding_type::uniform_buffer},
+                {
+                    .binding_point = 0,
+                    .type = erhe::graphics::Binding_type::uniform_buffer
+                },
                 {
                     .binding_point   = 0,
                     .type            = erhe::graphics::Binding_type::combined_image_sampler,
@@ -47,9 +50,9 @@ void Rendering_test::make_depth_visualize_pipeline()
     );
 
     erhe::graphics::Shader_stages_create_info create_info{
-        .name                  = "depth_visualize",
-        .interface_blocks      = { m_quad_block.get() },
-        .fragment_outputs      = &m_quad_fragment_outputs,
+        .name              = "depth_visualize",
+        .interface_blocks  = { m_quad_block.get() },
+        .fragment_outputs  = &m_quad_fragment_outputs,
         .shaders = {
             { erhe::graphics::Shader_type::vertex_shader,   shader_path / "depth_visualize.vert" },
             { erhe::graphics::Shader_type::fragment_shader, shader_path / "depth_visualize.frag" }
@@ -61,16 +64,13 @@ void Rendering_test::make_depth_visualize_pipeline()
         erhe::graphics::build_shader_stages(m_graphics_device, std::move(create_info))
     );
 
-    m_depth_visualize_pipeline = erhe::graphics::Lazy_render_pipeline{
+    m_depth_visualize_pipeline = erhe::graphics::Base_render_pipeline{
         m_graphics_device,
-        erhe::graphics::Render_pipeline_create_info{
+        erhe::graphics::Base_render_pipeline_create_info{
             .debug_label       = erhe::utility::Debug_label{"Depth Visualize Pipeline"},
-            .shader_stages     = m_depth_visualize_shader_stages.get(),
-            .vertex_input      = &m_empty_vertex_input,
             .input_assembly    = erhe::graphics::Input_assembly_state::triangle,
             .rasterization     = erhe::graphics::Rasterization_state::cull_mode_none,
             .depth_stencil     = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
-            .color_blend       = erhe::graphics::Color_blend_state::color_blend_disabled,
             .bind_group_layout = m_depth_visualize_bind_group_layout.get()
         }
     };
@@ -116,7 +116,13 @@ void Rendering_test::draw_depth_visualize_cell(
 
     encoder.set_bind_group_layout(m_depth_visualize_bind_group_layout.get());
     {
-        erhe::graphics::Render_pipeline* p = m_depth_visualize_pipeline.get_pipeline_for(m_swapchain_render_pass->get_descriptor());
+        erhe::graphics::Render_pipeline* p = m_depth_visualize_pipeline.get_pipeline_for(
+            m_swapchain_render_pass->get_descriptor(),
+            nullptr,
+            m_depth_visualize_shader_stages.get(),
+            &m_empty_vertex_input,
+            nullptr // TODO where do we get vertex format from
+        );
         if (p != nullptr) {
             encoder.set_render_pipeline(*p);
         }

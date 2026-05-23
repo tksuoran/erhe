@@ -1,6 +1,7 @@
 #include "preview/scene_preview.hpp"
 
 #include "app_context.hpp"
+#include "app_scenes.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "renderers/programs.hpp"
 #include "renderers/viewport_config.hpp"
@@ -12,7 +13,12 @@
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_math/math_util.hpp"
+#include "erhe_primitive/material.hpp"
+#include "erhe_scene/light.hpp"
+#include "erhe_scene/mesh.hpp"
 #include "erhe_scene/scene.hpp"
+#include "erhe_scene_renderer/forward_renderer.hpp"
+#include "erhe_scene_renderer/shader_key.hpp"
 
 #include <fmt/format.h>
 
@@ -28,26 +34,23 @@ Scene_preview::Scene_preview(
     erhe::graphics::Device&            graphics_device,
     erhe::graphics::Command_buffer&    init_command_buffer,
     App_context&                       context,
-    erhe::scene_renderer::Mesh_memory& mesh_memory,
-    Programs&                          programs,
+    erhe::scene_renderer::Mesh_memory& /*mesh_memory*/,
+    Programs&                          /*programs*/,
     const bool                         reverse_depth
 )
-    : Scene_view       {context, Viewport_config{}}
-    , m_graphics_device{graphics_device}
+    : Scene_view{context, Viewport_config{}}
+    , m_context{context}
     , m_y_flip{graphics_device.get_info().coordinate_conventions.clip_space_y_flip == erhe::math::Clip_space_y_flip::enabled}
-    , m_render_pipeline_state{
+    , m_render_pipeline{
         graphics_device,
-        erhe::graphics::Render_pipeline_create_info{
-            .debug_label    = erhe::utility::Debug_label{"Polygon Fill Opaque"},
-            .shader_stages  = &programs.standard.shader_stages,
-            .vertex_input   = &mesh_memory.vertex_input,
+        erhe::graphics::Base_render_pipeline_create_info{
+            .debug_label    = erhe::utility::Debug_label{"Scene Preview"},
             .input_assembly = Input_assembly_state::triangle,
             .rasterization  = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
-            .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
-            .color_blend    = Color_blend_state::color_blend_disabled
+            .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth)
         }
     }
-    , m_render_pipeline_states{&m_render_pipeline_state}
+    , m_render_pipelines{&m_render_pipeline}
     , m_composer{"Material Preview Composer"}
 {
     ERHE_PROFILE_FUNCTION();
@@ -55,9 +58,6 @@ Scene_preview::Scene_preview(
     m_content_library = std::make_shared<Content_library>();
 
     m_scene_root_shared = std::make_shared<Scene_root>(
-        nullptr, // No Imgui_renderer
-        nullptr, // No Imgui_windows
-        nullptr, // No App_context
         nullptr, // Don't process editor messages
         m_content_library,
         "Material preview scene",
@@ -247,6 +247,77 @@ auto Scene_preview::get_shadow_texture() const -> erhe::graphics::Texture*
 auto Scene_preview::get_content_library() -> std::shared_ptr<Content_library>
 {
     return m_content_library;
+}
+
+void Scene_preview::prewarm_variants(erhe::scene_renderer::Forward_renderer& forward_renderer)
+{
+    if (!m_scene_root_shared) {
+        return;
+    }
+    const erhe::scene::Light_layer* light_layer = m_scene_root_shared->layers().light();
+    if (light_layer == nullptr) {
+        return;
+    }
+
+    const erhe::scene::Mesh_layer* content_layer = m_scene_root_shared->layers().content();
+    std::vector<std::span<const std::shared_ptr<erhe::scene::Mesh>>> mesh_spans;
+    if (content_layer != nullptr) {
+        mesh_spans.push_back(content_layer->meshes);
+    }
+
+    // Preview's own content library (typically empty for previews that
+    // borrow materials from the editor at render-time, e.g.
+    // Material_preview::render_preview(material) assigns a material from
+    // the main editor's content library to its sphere mesh just before
+    // the draw call) plus every main-editor Scene_root's content library.
+    // Without the main-editor pull, the preview's bucket walk only sees
+    // the sphere with material = nullptr -- the lit variant the user
+    // sees the first time they open the material panel would compile
+    // on the first preview frame.
+    std::vector<std::shared_ptr<erhe::primitive::Material>> all_materials;
+    if (m_content_library && m_content_library->materials) {
+        const std::vector<std::shared_ptr<erhe::primitive::Material>>& own = m_content_library->materials->get_all<erhe::primitive::Material>();
+        all_materials.insert(all_materials.end(), own.begin(), own.end());
+    }
+    if (m_context.app_scenes != nullptr) {
+        for (const std::shared_ptr<Scene_root>& main_scene_root : m_context.app_scenes->get_scene_roots()) {
+            if (!main_scene_root) {
+                continue;
+            }
+            const std::shared_ptr<Content_library> main_library = main_scene_root->get_content_library();
+            if (!main_library || !main_library->materials) {
+                continue;
+            }
+            const std::vector<std::shared_ptr<erhe::primitive::Material>>& mats = main_library->materials->get_all<erhe::primitive::Material>();
+            all_materials.insert(all_materials.end(), mats.begin(), mats.end());
+        }
+    }
+    const std::span<const std::shared_ptr<erhe::primitive::Material>> extra_materials{all_materials};
+
+    // The runtime preview render builds environment_key from the preview's
+    // own light_layer (Material_preview seeds 1 shadowed directional light,
+    // for example). Without snapshotting it here, prewarm would compile
+    // variants with all light counts = 0 and the first preview render
+    // would compile-on-miss for every standard-shader variant the preview
+    // actually uses.
+    const erhe::scene_renderer::Light_layer_partition partition = erhe::scene_renderer::compute_light_layer_partition(light_layer->lights);
+
+    // Preview is single-view -- offscreen render target, never multiview.
+    static constexpr uint32_t single_view = 0u;
+    const std::span<const uint32_t> view_counts{&single_view, 1};
+
+    const erhe::scene_renderer::Forward_renderer::Prewarm_parameters params{
+        .blending_mode_policy   = erhe::scene_renderer::Blending_mode_policy::allow_all, // TODO
+        .render_pipeline_states = std::span<erhe::graphics::Base_render_pipeline*>{m_render_pipelines},
+        .mesh_spans             = mesh_spans,
+        .extra_materials        = extra_materials,
+        .multiview_view_counts  = view_counts,
+        .mesh_memory            = *m_context.mesh_memory,
+        .primitive_mode         = erhe::primitive::Primitive_mode::polygon_fill,
+        .warmup_targets         = {},
+        .light_partition        = partition
+    };
+    forward_renderer.prewarm_standard_variants(params);
 }
 
 }

@@ -8,7 +8,7 @@
 // When this define is not present, the ERHE_VULKAN_* macros below expand to
 // no-ops so that no CPU work (argument evaluation, formatting, spdlog filter
 // dispatch) happens for those logging sites.
-#define ERHE_LOG_VULKAN 1
+// #define ERHE_LOG_VULKAN 1
 
 namespace erhe::graphics {
 

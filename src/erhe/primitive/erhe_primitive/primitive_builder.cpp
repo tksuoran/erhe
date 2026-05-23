@@ -34,11 +34,11 @@ Build_context_root::Build_context_root(
     , mesh_info       {::get_mesh_info(mesh)}
     , vertex_format   {build_info.buffer_info.vertex_format}
 {
-    get_mesh_info                   ();
-    get_vertex_attributes           ();
-    allocate_vertex_buffers         ();
-    allocate_index_buffer           ();
+    get_mesh_info                  ();
+    get_vertex_attributes          ();
+    allocate_vertex_buffers        ();
     allocate_edge_line_vertex_buffer();
+    allocate_index_buffer          ();
 }
 
 void Build_context_root::get_mesh_info()
@@ -101,19 +101,61 @@ void Build_context_root::get_vertex_attributes()
 
 void Build_context_root::allocate_vertex_buffers()
 {
+    // Lazy pools start with no allocated GPU memory and report 0 available;
+    // they grow on demand inside allocate_vertex_buffer(). The previous
+    // pre-flight check on get_available_vertex_byte_count() is therefore
+    // skipped -- we drive the allocation directly and treat a zero-count
+    // result (Buffer_sink_allocation default state) as the failure path.
+    //
+    // Special case: a primitive with zero vertices is legal (e.g. a
+    // point-cloud / empty mesh). The allocator returns a successful
+    // zero-byte allocation, so we must not interpret count == 0 as
+    // failure when total_vertex_count is also 0.
     for (size_t i = 0, end = vertex_format.streams.size(); i < end; ++i) {
         const erhe::dataformat::Vertex_stream& sink_stream = vertex_format.streams[i];
-        const std::size_t allocation_byte_count = total_vertex_count * sink_stream.stride;
-        const std::size_t allocation_alignment  = sink_stream.stride;
-        const std::size_t available_byte_count  = build_info.buffer_info.buffer_sink.get_available_vertex_byte_count(i, allocation_alignment);
-        if (available_byte_count < allocation_byte_count) {
+        Buffer_sink_allocation sink_allocation = build_info.buffer_info.vertex_buffer_sink.allocate_vertex_buffer_range(sink_stream, total_vertex_count);
+        if (sink_allocation.range.count == 0 && total_vertex_count > 0) {
+            // Allocator refused: out of memory / pool exhausted.
             build_failed = true;
             return;
         }
-        Buffer_sink_allocation sink_allocation = build_info.buffer_info.buffer_sink.allocate_vertex_buffer(i, total_vertex_count, sink_stream.stride);
         buffer_mesh.vertex_buffer_ranges.emplace_back(sink_allocation.range);
         buffer_mesh.vertex_allocations.emplace_back(std::move(sink_allocation.allocation));
     }
+}
+
+void Build_context_root::allocate_edge_line_vertex_buffer()
+{
+    // Allocate the dedicated edge-line vertex buffer range only when
+    // edge lines were requested, the mesh actually has edges, and the
+    // Buffer_info provides the wide-line vertex stream. CPU-buffer
+    // sinks (e.g. raytrace) leave edge_line_vertex_stream null and
+    // skip this entirely. The data is two vec4 (position + smooth
+    // normal) per edge endpoint -- see Build_context::build_edge_lines.
+    if (build_failed) {
+        return;
+    }
+    if (!build_info.primitive_types.edge_lines) {
+        return;
+    }
+    if (mesh_info.edge_count == 0) {
+        return;
+    }
+    if (build_info.buffer_info.edge_line_vertex_stream == nullptr) {
+        return;
+    }
+
+    const std::size_t edge_line_vertex_count = mesh_info.edge_count * 2;
+    Buffer_sink_allocation sink_allocation = build_info.buffer_info.vertex_buffer_sink.allocate_vertex_buffer_range(
+        *build_info.buffer_info.edge_line_vertex_stream,
+        edge_line_vertex_count
+    );
+    if (sink_allocation.range.count == 0) {
+        build_failed = true;
+        return;
+    }
+    buffer_mesh.edge_line_vertex_buffer_range = sink_allocation.range;
+    buffer_mesh.edge_line_vertex_allocation   = std::move(sink_allocation.allocation);
 }
 
 void Build_context_root::allocate_index_buffer()
@@ -123,14 +165,6 @@ void Build_context_root::allocate_index_buffer()
     const erhe::dataformat::Format index_type           {build_info.buffer_info.index_type};
     const std::size_t              index_type_size_bytes{erhe::dataformat::get_format_size_bytes(index_type)};
 
-    const std::size_t allocation_byte_count = total_index_count * index_type_size_bytes;
-    const std::size_t allocation_alignment  = index_type_size_bytes;
-    const std::size_t available_byte_count  = build_info.buffer_info.buffer_sink.get_available_index_byte_count(allocation_alignment);
-    if (available_byte_count < allocation_byte_count) {
-        build_failed = true;
-        return;
-    }
-
     log_primitive_builder->trace(
         "allocating index buffer "
         "total_index_count = {}, index type size = {}",
@@ -138,38 +172,16 @@ void Build_context_root::allocate_index_buffer()
         index_type_size_bytes
     );
 
-    Buffer_sink_allocation sink_allocation = build_info.buffer_info.buffer_sink.allocate_index_buffer(
-        total_index_count,
-        index_type_size_bytes
+    Buffer_sink_allocation sink_allocation = build_info.buffer_info.index_buffer_sink.allocate_index_buffer_range(
+        build_info.buffer_info.index_type,
+        total_index_count
     );
+    if (sink_allocation.range.count == 0) {
+        build_failed = true;
+        return;
+    }
     buffer_mesh.index_buffer_range = sink_allocation.range;
     buffer_mesh.index_allocation   = std::move(sink_allocation.allocation);
-}
-
-void Build_context_root::allocate_edge_line_vertex_buffer()
-{
-    if (!build_info.primitive_types.edge_lines) {
-        return;
-    }
-
-    // Each edge needs 2 vertices, each vertex is vec4 position + vec4 normal (32 bytes)
-    const std::size_t edge_count          = mesh_info.edge_count;
-    const std::size_t vertex_count        = edge_count * 2;
-    const std::size_t vertex_element_size = 8 * sizeof(float); // vec4 position + vec4 normal
-
-    const std::size_t available_byte_count = build_info.buffer_info.buffer_sink.get_available_edge_line_vertex_byte_count(vertex_element_size);
-    const std::size_t allocation_byte_count = vertex_count * vertex_element_size;
-    if (available_byte_count < allocation_byte_count) {
-        // Edge line vertex buffer not available or not enough space - not fatal
-        return;
-    }
-
-    Buffer_sink_allocation sink_allocation = build_info.buffer_info.buffer_sink.allocate_edge_line_vertex_buffer(
-        vertex_count,
-        vertex_element_size
-    );
-    buffer_mesh.edge_line_vertex_buffer_range = sink_allocation.range;
-    buffer_mesh.edge_line_vertex_allocation   = std::move(sink_allocation.allocation);
 }
 
 class Mesh_point_source : public erhe::math::Bounding_volume_source
@@ -224,6 +236,8 @@ auto Primitive_builder::build() -> bool
         m_normal_style,
     };
 
+    m_buffer_mesh.vertex_input_key = m_build_info.buffer_info.vertex_input_key;
+
     if (!build_context.is_ready()) {
         log_primitive_builder->debug("Primitive_builder::build() aborted because build_context is not ready");
         return false;
@@ -263,7 +277,7 @@ Build_context::Build_context(
 )
     : root           {buffer_mesh, mesh, build_info, element_mappings}
     , normal_style   {normal_style}
-    , index_writer   {*this, build_info.buffer_info.buffer_sink}
+    , index_writer   {*this, build_info.buffer_info.index_buffer_sink}
     , mesh_attributes{mesh}
 {
     if (root.build_failed) {
@@ -275,7 +289,7 @@ Build_context::Build_context(
         vertex_writers.push_back(
             std::make_unique<Vertex_buffer_writer>(
                 *this,
-                build_info.buffer_info.buffer_sink,
+                build_info.buffer_info.vertex_buffer_sink,
                 stream_index,
                 sink_stream.stride
             )
@@ -737,7 +751,11 @@ void Build_context::build_edge_lines()
         return;
     }
 
-    // Check if edge line vertex buffer is available
+    // Edge-line vertex data feeds Content_wide_line_renderer's compute
+    // expansion. Two vec4s per edge endpoint (position + smooth normal)
+    // matching the compute shader's edge_line_vertex SSBO struct. The
+    // buffer range itself is allocated up front by
+    // Build_context_root::allocate_edge_line_vertex_buffer().
     const bool has_edge_line_vertex_buffer = (root.buffer_mesh.edge_line_vertex_buffer_range.count > 0);
     std::vector<uint8_t> edge_line_vertex_data;
     const std::size_t    vertex_element_size = 8 * sizeof(float); // vec4 position + vec4 normal
@@ -754,12 +772,13 @@ void Build_context::build_edge_lines()
         const uint32_t     vertex_index_b = root.element_mappings.mesh_vertex_to_vertex_buffer_index[mesh_vertex_b];
         index_writer.write_edge(vertex_index_a, vertex_index_b);
 
-        // Write edge vertex positions and smooth normals to edge line vertex buffer (object-local space)
         if (has_edge_line_vertex_buffer) {
             const GEO::vec3f pos_a = get_pointf(root.mesh.vertices, mesh_vertex_a);
             const GEO::vec3f pos_b = get_pointf(root.mesh.vertices, mesh_vertex_b);
 
-            // Use smooth vertex normals (per-vertex, averaged from all adjacent facets)
+            // Smooth (averaged across adjacent facets) normal preferred; fall
+            // back to the per-vertex normal, then to a fixed up-axis. Matches
+            // the wireframe-bias smooth normal carried by the main mesh.
             const GEO::vec3f fallback_normal{0.0f, 1.0f, 0.0f};
             const std::optional<GEO::vec3f> vertex_normal_a = mesh_attributes.vertex_normal.try_get(mesh_vertex_a);
             const std::optional<GEO::vec3f> vertex_normal_b = mesh_attributes.vertex_normal.try_get(mesh_vertex_b);
@@ -777,10 +796,9 @@ void Build_context::build_edge_lines()
         }
     }
 
-    // Enqueue edge line vertex data for upload 
     if (has_edge_line_vertex_buffer && (edge_vertex_write_offset > 0)) {
-        root.build_info.buffer_info.buffer_sink.enqueue_edge_line_vertex_data(
-            root.buffer_mesh.edge_line_vertex_buffer_range.byte_offset,
+        root.build_info.buffer_info.vertex_buffer_sink.enqueue_vertex_data(
+            root.buffer_mesh.edge_line_vertex_buffer_range,
             std::move(edge_line_vertex_data)
         );
     }

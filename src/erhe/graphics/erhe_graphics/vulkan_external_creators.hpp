@@ -1,6 +1,6 @@
 #pragma once
 
-#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+#if defined(ERHE_GRAPHICS_API_VULKAN)
 
 #include "volk.h"
 

@@ -60,7 +60,7 @@ public:
 
     auto open                             (const Window_configuration& configuration) -> bool;
 
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
     void make_current                     () const;
     void clear_current                    () const;
     auto delay_before_swap                (float seconds) const -> bool;
@@ -105,7 +105,7 @@ public:
 #if defined(ERHE_OS_LINUX)
     [[nodiscard]] auto get_wl_display() const -> struct wl_display*;
 #endif
-#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+#if defined(ERHE_GRAPHICS_API_VULKAN)
     [[nodiscard]] auto get_required_vulkan_instance_extensions() -> const std::vector<std::string>&;
     [[nodiscard]] auto create_vulkan_surface(void* vulkan_instance) -> void*;
 #endif
@@ -117,7 +117,7 @@ private:
     std::function<void(Context_window& context_window)> m_input_event_synthesizer_callback;
     std::function<void()>    m_redraw_callback;
 
-#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+#if defined(ERHE_GRAPHICS_API_VULKAN)
     std::vector<std::string> m_required_instance_extensions;
 #endif
 };

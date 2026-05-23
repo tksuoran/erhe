@@ -48,20 +48,17 @@ Depth_to_color_rendergraph_node::Depth_to_color_rendergraph_node(
     }
     , m_forward_renderer  {forward_renderer}
     , m_mesh_memory       {mesh_memory}
-    , m_empty_vertex_input{rendergraph.get_graphics_device()}
-    , m_render_pipeline_state{
+    , m_programs          {programs}
+    , m_render_pipeline{
         rendergraph.get_graphics_device(),
-        erhe::graphics::Render_pipeline_create_info{
+        erhe::graphics::Base_render_pipeline_create_info{
             .debug_label    = erhe::utility::Debug_label{"Debug_view"},
-            .shader_stages  = &programs.debug_depth.shader_stages,
-            .vertex_input   = &m_empty_vertex_input,
             .input_assembly = erhe::graphics::Input_assembly_state::triangle,
             .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
-            .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
-            .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled
+            .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled
         }
     }
-    ,m_render_pipeline_states{&m_render_pipeline_state}
+    ,m_render_pipelines{&m_render_pipeline}
 {
     register_input("shadow_maps", erhe::rendergraph::Rendergraph_node_key::shadow_maps);
 }
@@ -116,7 +113,10 @@ void Depth_to_color_rendergraph_node::execute_rendergraph_node(erhe::graphics::C
         return;
     }
 
-    erhe::graphics::Scoped_debug_group pass_scope{"Depth_to_color_rendergraph_node::execute_rendergraph_node()"};
+    erhe::graphics::Scoped_debug_group pass_scope{
+        command_buffer,
+        "Depth_to_color_rendergraph_node::execute_rendergraph_node()"
+    };
 
     erhe::graphics::Render_pass* render_pass = m_render_target.get_render_pass();
     erhe::math::Viewport viewport{
@@ -141,20 +141,20 @@ void Depth_to_color_rendergraph_node::execute_rendergraph_node(erhe::graphics::C
     const auto& layers = scene_root->layers();
 
     m_forward_renderer.draw_primitives(
-        erhe::scene_renderer::Forward_renderer::Render_parameters{
-            .render_encoder         = render_encoder,
-            .index_type             = m_mesh_memory.buffer_info.index_type,
-            .index_buffer           = nullptr,
-            .vertex_buffer0         = nullptr,
-            .vertex_buffer1         = nullptr,
-            .light_projections      = &light_projections,
-            .lights                 = layers.light()->lights,
-            .materials              = {},
-            .mesh_spans             = {},
-            .non_mesh_vertex_count  = 3, // Full-screen triangle
-            .render_pipeline_states = m_render_pipeline_states,
-            .viewport               = viewport,
-            .debug_label            = "Depth_to_color_rendergraph_node::execute_rendergraph_node()"
+        erhe::scene_renderer::Forward_renderer::Primitive_render_parameters{
+            .base = erhe::scene_renderer::Forward_renderer::Base_render_parameters{
+                .render_encoder    = render_encoder,
+                .render_pass       = m_render_target.get_render_pass(),
+                .viewport          = viewport,
+                .light_projections = &light_projections,
+                .lights            = layers.light()->lights,
+                .materials         = {},
+                .debug_label       = "Depth_to_color_rendergraph_node::execute_rendergraph_node()"
+            },
+            .vertex_count          = 3, // Full-screen triangle
+            .base_render_pipeline  = m_render_pipeline,
+            .shader_stages         = &m_programs.depth_to_color.shader_stages
+
         },
         light_projection_transforms.light
     );
@@ -254,18 +254,22 @@ void Depth_visualization_window::imgui()
     }
 
     const auto& shadow_nodes = m_context.app_rendering->get_all_shadow_nodes();
+    Shadow_render_node* shadow_render_node = static_cast<Shadow_render_node*>(
+        m_depth_to_color_node->get_consumer_input_node(erhe::rendergraph::Rendergraph_node_key::shadow_maps)
+    );
     if (!shadow_nodes.empty()) {
         int last_index = static_cast<int>(shadow_nodes.size() - 1);
         const bool edited = ImGui::SliderInt("Viewport", &m_selected_shadow_node, 0, last_index);
-        if (edited && (m_selected_shadow_node >= 0) && (m_selected_shadow_node < shadow_nodes.size())) {
+        // Shadow_render_node is created by Scene_builder_viewport_resources_operation,
+        // which runs on the first tick -- after this window's constructor. Auto-wire
+        // here on the first frame where a shadow node exists but no input is connected.
+        const bool needs_initial_wire = (shadow_render_node == nullptr);
+        if ((edited || needs_initial_wire) && (m_selected_shadow_node >= 0) && (m_selected_shadow_node < shadow_nodes.size())) {
             const std::shared_ptr<Shadow_render_node> shadow_node = shadow_nodes.at(m_selected_shadow_node);
             set_shadow_renderer_node(shadow_node);
+            shadow_render_node = shadow_node.get();
         }
     }
-
-    auto* shadow_render_node = static_cast<Shadow_render_node*>(
-        m_depth_to_color_node->get_consumer_input_node(erhe::rendergraph::Rendergraph_node_key::shadow_maps)
-    );
     if (shadow_render_node == nullptr) {
         return;
     }

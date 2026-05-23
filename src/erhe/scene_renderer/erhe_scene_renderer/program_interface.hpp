@@ -17,6 +17,8 @@ namespace erhe::graphics { class Device; }
 
 namespace erhe::scene_renderer {
 
+class Mesh_memory;
+
 struct Program_interface_config
 {
     std::vector<std::filesystem::path> shader_paths;
@@ -27,15 +29,20 @@ struct Program_interface_config
     int max_material_count {1000};
     int max_primitive_count{6000};
     int max_draw_count     {6000};
+    // Number of per-pass views packed into the camera UBO's cameras[N]
+    // array. 1 = single-view (default). 2 = stereo / OpenXR multiview.
+    // Vulkan multiview requires the device feature to be enabled and
+    // is wired up only on the multiview render path.
+    int view_count     {1};
 };
 
 class Program_interface
 {
 public:
     Program_interface(
-        erhe::graphics::Device&          graphics_device,
-        erhe::dataformat::Vertex_format& vertex_format,
-        Program_interface_config&        config
+        erhe::graphics::Device&   graphics_device,
+        Mesh_memory&              mesh_memory,
+        Program_interface_config& config
     );
 
     Program_interface(const Program_interface&) = delete;
@@ -49,7 +56,7 @@ public:
 
     erhe::graphics::Device&                            graphics_device;
     erhe::graphics::Fragment_outputs                   fragment_outputs;
-    erhe::dataformat::Vertex_format&                   vertex_format;
+    Mesh_memory&                                       mesh_memory;
     Program_interface_config                           config;
     Camera_interface                                   camera_interface;
     Cube_interface                                     cube_interface;

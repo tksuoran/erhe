@@ -8,16 +8,16 @@
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/compute_command_encoder.hpp"
 
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
 # include "erhe_graphics/gl/gl_device.hpp"
 #endif
-#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+#if defined(ERHE_GRAPHICS_API_VULKAN)
 # include "erhe_graphics/vulkan/vulkan_device.hpp"
 #endif
-#if defined(ERHE_GRAPHICS_LIBRARY_METAL)
+#if defined(ERHE_GRAPHICS_API_METAL)
 # include "erhe_graphics/metal/metal_device.hpp"
 #endif
-#if defined(ERHE_GRAPHICS_LIBRARY_NONE)
+#if defined(ERHE_GRAPHICS_API_NONE)
 # include "erhe_graphics/null/null_device.hpp"
 #endif
 
@@ -38,14 +38,16 @@ Device::Device(
     const Vulkan_external_creators* vulkan_external_creators
 )
     : m_device_message_callback{std::move(device_message_callback)}
-#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+#if defined(ERHE_GRAPHICS_API_VULKAN)
     , m_impl      {std::make_unique<Device_impl>(*this, surface_create_info, graphics_config, vulkan_external_creators)}
 #else
     , m_impl      {std::make_unique<Device_impl>(*this, surface_create_info, graphics_config)}
 #endif
+#if defined(ERHE_SPIRV)
     , m_spirv_cache{std::filesystem::path{"spirv_cache"}}
+#endif
 {
-#if !defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+#if !defined(ERHE_GRAPHICS_API_VULKAN)
     static_cast<void>(vulkan_external_creators);
 #endif
 }
@@ -111,6 +113,17 @@ auto Device::end_frame(const Frame_end_info& frame_end_info) -> bool
 void Device::wait_idle()
 {
     m_impl->wait_idle();
+}
+void Device::clear_render_pipeline_cache()
+{
+    m_impl->clear_render_pipeline_cache();
+}
+void Device::warmup_render_pipeline(const Render_pipeline_create_info& create_info)
+{
+    // Construct + immediately destruct. The driver-level pipeline cache
+    // retains the compiled binary across the destruction; the discarded
+    // Render_pipeline only loses its (cheap) handle wrapper.
+    Render_pipeline pipeline{*this, create_info};
 }
 auto Device::recreate_surface_for_new_window() -> bool
 {
@@ -197,10 +210,12 @@ auto Device::get_impl() const -> const Device_impl&
 {
     return *m_impl.get();
 }
+#if defined(ERHE_SPIRV)
 auto Device::get_spirv_cache() -> Spirv_cache&
 {
     return m_spirv_cache;
 }
+#endif
 void Device::set_shader_error_callback(Shader_error_callback callback)
 {
     m_shader_error_callback = std::move(callback);

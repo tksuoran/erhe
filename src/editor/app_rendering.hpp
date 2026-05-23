@@ -54,23 +54,23 @@ public:
     );
     void rebuild_depth_state(bool reverse_depth);
 
-    bool                                   m_y_flip;
-    erhe::graphics::Vertex_input_state     m_empty_vertex_input;
-    erhe::graphics::Lazy_render_pipeline   polygon_fill_standard_opaque_positive_determinant;
-    erhe::graphics::Lazy_render_pipeline   polygon_fill_standard_opaque_negative_determinant;
-    erhe::graphics::Lazy_render_pipeline   polygon_fill_standard_opaque_selected_positive_determinant;
-    erhe::graphics::Lazy_render_pipeline   polygon_fill_standard_opaque_selected_negative_determinant;
-    erhe::graphics::Lazy_render_pipeline   polygon_fill_standard_translucent;
-    erhe::graphics::Lazy_render_pipeline   line_hidden_blend;
-    erhe::graphics::Lazy_render_pipeline   brush_back;
-    erhe::graphics::Lazy_render_pipeline   brush_front;
-    erhe::graphics::Lazy_render_pipeline   edge_lines;
-    erhe::graphics::Lazy_render_pipeline   outline;
-    erhe::graphics::Lazy_render_pipeline   corner_points;
-    erhe::graphics::Lazy_render_pipeline   polygon_centroids;
-    erhe::graphics::Lazy_render_pipeline   rendertarget_meshes;
-    erhe::graphics::Lazy_render_pipeline   sky;
-    erhe::graphics::Lazy_render_pipeline   grid;
+    bool                                 m_y_flip;
+    erhe::graphics::Vertex_input_state   m_empty_vertex_input;
+    erhe::graphics::Base_render_pipeline polygon_fill_standard_positive_determinant;
+    erhe::graphics::Base_render_pipeline polygon_fill_standard_negative_determinant;
+    erhe::graphics::Base_render_pipeline polygon_fill_standard_selected_positive_determinant;
+    erhe::graphics::Base_render_pipeline polygon_fill_standard_selected_negative_determinant;
+    erhe::graphics::Color_blend_state    line_hidden_blend_state;
+    erhe::graphics::Base_render_pipeline line_hidden_blend;
+    erhe::graphics::Base_render_pipeline brush_back;
+    erhe::graphics::Base_render_pipeline brush_front;
+    erhe::graphics::Base_render_pipeline edge_lines;
+    erhe::graphics::Base_render_pipeline outline;
+    erhe::graphics::Base_render_pipeline corner_points;
+    erhe::graphics::Base_render_pipeline polygon_centroids;
+    //erhe::graphics::Base_render_pipeline rendertarget_meshes;
+    erhe::graphics::Base_render_pipeline sky;
+    erhe::graphics::Base_render_pipeline grid;
 };
 
 class App_rendering
@@ -96,6 +96,14 @@ public:
     [[nodiscard]] auto get_all_shadow_nodes    () -> const std::vector<std::shared_ptr<Shadow_render_node>>&;
     [[nodiscard]] auto is_capturing            () const -> bool;
 
+    // Drop the Shadow_render_node from m_all_shadow_render_nodes. Caller
+    // is expected to be Scene_builder_viewport_resources_operation's undo
+    // path tearing down a Viewport_scene_view: the only other shared_ptr
+    // owner is that operation, so dropping ours lets the node's destructor
+    // unregister it from the Rendergraph. Returns true if a matching entry
+    // was found and erased.
+    auto destroy_shadow_node(const std::shared_ptr<Shadow_render_node>& shadow_render_node) -> bool;
+
     void trigger_capture            ();
     void render_viewport_main       (const Render_context& context);
     void render_viewport_renderables(const Render_context& context);
@@ -109,6 +117,31 @@ public:
     void remove(Renderable* renderable);
 
     auto make_composition_pass(std::string_view name) -> std::shared_ptr<Composition_pass>;
+    auto make_composition_pass(
+        std::string_view        name,
+        Composition_pass_data&& data,
+        bool                    selected,
+        bool                    negative_determinant
+    ) -> std::shared_ptr<Composition_pass>;
+    auto make_composition_pass(
+        std::string_view                                             name,
+        Composition_pass_data&&                                      data,
+        std::initializer_list<erhe::graphics::Base_render_pipeline*> pipelines
+    ) -> std::shared_ptr<Composition_pass>;
+    auto make_composition_pass(
+        std::string_view                           name,
+        const std::shared_ptr<Composition_pass>&   base_pass,
+        erhe::scene_renderer::Blending_mode_policy blending_mode_policy
+    ) -> std::shared_ptr<Composition_pass>;
+
+    // Read-only access to the Composer's pass list for callers that need
+    // to walk the variant-aware Base_render_pipeline pointers. Returns
+    // the underlying vector by const reference WITHOUT taking the
+    // Composer's mutex, so callers must guarantee single-threaded access
+    // at the point of call. Intended exclusively for init-time use (the
+    // shader-variant prewarm in renderers/prewarm.cpp); do not call from
+    // the render thread.
+    [[nodiscard]] auto composition_passes() const -> const std::vector<std::shared_ptr<Composition_pass>>&;
 
     void imgui();
     void request_renderdoc_capture();
@@ -119,19 +152,18 @@ public:
     std::vector<glm::vec4>            debug_joint_colors;
     std::shared_ptr<Composition_pass> selection_outline;
     std::shared_ptr<Composition_pass> hover_outline;
-    std::shared_ptr<Composition_pass> opaque_edge_lines_not_selected;
-    std::shared_ptr<Composition_pass> opaque_edge_lines_selected;
+    std::shared_ptr<Composition_pass> edge_lines_not_selected;
+    std::shared_ptr<Composition_pass> edge_lines_selected;
     std::shared_ptr<Composition_pass> translucent_outline;
 
 private:
     void handle_graphics_settings_changed(Graphics_preset_entry* graphics_preset);
 
     [[nodiscard]] auto get_render_pipeline_state(
-        const Composition_pass&    renderpass,
-        erhe::renderer::Blend_mode blend_mode,
-        bool                       selected,
-        bool                       negative_determinant
-    ) -> erhe::graphics::Lazy_render_pipeline*;
+        const Composition_pass& renderpass,
+        bool                    selected,
+        bool                    negative_determinant
+    ) -> erhe::graphics::Base_render_pipeline*;
 
     [[nodiscard]] auto width () const -> int;
     [[nodiscard]] auto height() const -> int;
@@ -147,7 +179,7 @@ private:
     std::shared_ptr<Composition_pass> m_grid_composition_pass;
 
     // Compute wide line pipeline states (created when Content_wide_line_renderer is ready)
-    std::vector<std::unique_ptr<erhe::graphics::Lazy_render_pipeline>> m_compute_wide_line_pipeline_states;
+    std::vector<std::unique_ptr<erhe::graphics::Base_render_pipeline>> m_compute_wide_line_pipeline_states;
 
     // TODO Re-add per-render-pass GPU timers when the composer's pipeline
     // passes own their own Render_pass objects.

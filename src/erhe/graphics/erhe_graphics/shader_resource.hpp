@@ -44,6 +44,20 @@ public:
         shader_storage_block = 6
     };
 
+    // GLSL interface block memory layout. Picks the alignment / padding
+    // rule set the GLSL spec defines:
+    //   std140 - rule 9 rounds the struct base alignment up to vec4 (16);
+    //            arrays of scalars / vectors round element stride up to
+    //            vec4. Required for uniform blocks. Used by shader storage
+    //            blocks when GLSL < 4.30.
+    //   std430 - rule 9 does NOT round to vec4; array element strides
+    //            track the array element's natural alignment. Available
+    //            for shader storage blocks at GLSL 4.30 and later.
+    enum class Layout : unsigned int {
+        std140 = 0,
+        std430 = 1
+    };
+
     [[nodiscard]] static auto is_basic           (Type type) -> bool;
     [[nodiscard]] static auto is_aggregate       (Type type) -> bool;
     [[nodiscard]] static auto should_emit_layout (Type type) -> bool;
@@ -151,7 +165,21 @@ public:
 
     // Returns size of block.
     // For arrays, size of one element is returned.
-    [[nodiscard]] auto get_size_bytes        () const -> std::size_t;
+    //
+    // Layout chooses std140 vs std430 alignment rules (see GLSL spec rule
+    // 9 -- struct size is rounded up to the struct's base alignment; in
+    // std140 the base alignment is further rounded up to vec4). Defaults
+    // to std140 because every uniform block uses it and SSBOs at GLSL <
+    // 4.30 fall back to std140 as well. Pass std430 explicitly when
+    // sizing an SSBO that the device declares with std430 (GLSL >= 4.30).
+    [[nodiscard]] auto get_size_bytes        (Layout layout = Layout::std140) const -> std::size_t;
+
+    // Base alignment of this resource under the requested layout. For
+    // aggregate types, this is the maximum base alignment of any member
+    // (rounded up to vec4 in std140). For Type::basic, it is the natural
+    // GLSL alignment of the type.
+    [[nodiscard]] auto get_base_alignment    (Layout layout = Layout::std140) const -> std::size_t;
+
     [[nodiscard]] auto get_offset            () const -> std::size_t;
     [[nodiscard]] auto get_next_member_offset() const -> std::size_t;
     [[nodiscard]] auto get_type_string       () const -> std::string;
@@ -243,6 +271,12 @@ private:
 
     void align_offset_to(unsigned int alignment);
 
+    // Walks up m_parent to the nearest block (uniform / shader storage)
+    // and returns the GLSL layout that block uses. Standalone struct
+    // types (no block ancestor) default to std140 (the conservative
+    // choice -- it's a valid base alignment for any later use site).
+    [[nodiscard]] auto get_block_layout() const -> Layout;
+
     void indent(std::stringstream& ss, int indent_level) const;
 
     Device&                    m_device;
@@ -269,6 +303,11 @@ private:
     // Aggregate type declation
     Member_collection m_members;
     std::size_t       m_offset{0}; // where next member will be placed
+
+    // Largest GLSL base alignment among the members added so far. Drives
+    // the struct's own base alignment per GLSL std140/std430 rule 9.
+    // Updated by every add_* method on an aggregate (struct_type, block).
+    std::size_t       m_member_max_alignment{1};
 
     // Interface blocks (aggregate type declaration)
     std::string       m_block_name;
@@ -303,5 +342,22 @@ private:
 
 void add_vertex_stream(const erhe::dataformat::Vertex_stream& vertex_stream, Shader_resource& vertex_struct,
     Shader_resource& vertices_block);
+
+// GLSL std140/std430 struct base alignment (spec rule 9):
+//   std140: max(member_max_alignment, 16)
+//   std430: member_max_alignment
+[[nodiscard]] auto glsl_struct_base_alignment(
+    std::size_t             member_max_alignment,
+    Shader_resource::Layout layout
+) -> std::size_t;
+
+// Round raw_offset up to the next multiple of base_alignment. The size
+// of a GLSL struct is its raw offset (offset of the next-to-be-placed
+// member, i.e. one past the last member) rounded up to the struct's
+// base alignment. base_alignment must be > 0.
+[[nodiscard]] auto glsl_round_up_size(
+    std::size_t raw_offset,
+    std::size_t base_alignment
+) -> std::size_t;
 
 } // namespace erhe::graphics

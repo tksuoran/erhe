@@ -28,23 +28,21 @@ public:
     static constexpr uint64_t lock_viewport_transform   = (1u <<  8);
     static constexpr uint64_t visible                   = (1u <<  9);
     static constexpr uint64_t invisible_parent          = (1u << 10);
-    static constexpr uint64_t opaque                    = (1u << 11);
-    static constexpr uint64_t translucent               = (1u << 12);
-    static constexpr uint64_t render_wireframe          = (1u << 13); // TODO
-    static constexpr uint64_t render_bounding_volume    = (1u << 14); // TODO
-    static constexpr uint64_t content                   = (1u << 15);
-    static constexpr uint64_t id                        = (1u << 16);
-    static constexpr uint64_t tool                      = (1u << 17);
-    static constexpr uint64_t brush                     = (1u << 18);
-    static constexpr uint64_t controller                = (1u << 19);
-    static constexpr uint64_t rendertarget              = (1u << 20);
-    static constexpr uint64_t expand                    = (1u << 21);
-    static constexpr uint64_t hovered_in_viewport       = (1u << 22);
-    static constexpr uint64_t hovered_in_item_tree      = (1u << 23);
-    static constexpr uint64_t negative_determinant      = (1u << 24);
-    static constexpr uint64_t lock_edit                  = (1u << 25);
-    static constexpr uint64_t show_in_developer_ui      = (1u << 26);
-    static constexpr uint64_t count                     = 27;
+    static constexpr uint64_t render_wireframe          = (1u << 11); // TODO
+    static constexpr uint64_t render_bounding_volume    = (1u << 12); // TODO
+    static constexpr uint64_t content                   = (1u << 13);
+    static constexpr uint64_t id                        = (1u << 14);
+    static constexpr uint64_t tool                      = (1u << 15);
+    static constexpr uint64_t brush                     = (1u << 16);
+    static constexpr uint64_t controller                = (1u << 17);
+    static constexpr uint64_t rendertarget              = (1u << 18);
+    static constexpr uint64_t expand                    = (1u << 19);
+    static constexpr uint64_t hovered_in_viewport       = (1u << 20);
+    static constexpr uint64_t hovered_in_item_tree      = (1u << 21);
+    static constexpr uint64_t negative_determinant      = (1u << 22);
+    static constexpr uint64_t lock_edit                 = (1u << 23);
+    static constexpr uint64_t show_in_developer_ui      = (1u << 24);
+    static constexpr uint64_t count                     = 25;
 
     static constexpr const char* c_bit_labels[] =
     {
@@ -59,8 +57,6 @@ public:
         "Lock Transform",
         "Visible",
         "Invisible Parent",
-        "Opaque",
-        "Translucent",
         "Render Wireframe",
         "Render Bounding Volume",
         "Content",

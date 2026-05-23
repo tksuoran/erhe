@@ -85,16 +85,13 @@ void Rendering_test::make_separate_samplers_pipeline()
         erhe::graphics::build_shader_stages(m_graphics_device, std::move(create_info))
     );
 
-    m_sep_tex_pipeline = erhe::graphics::Lazy_render_pipeline{
+    m_sep_tex_pipeline = erhe::graphics::Base_render_pipeline{
         m_graphics_device,
-        erhe::graphics::Render_pipeline_create_info{
+        erhe::graphics::Base_render_pipeline_create_info{
             .debug_label       = erhe::utility::Debug_label{"Separate Samplers Test Pipeline"},
-            .shader_stages     = m_sep_tex_shader_stages.get(),
-            .vertex_input      = &m_empty_vertex_input,
             .input_assembly    = erhe::graphics::Input_assembly_state::triangle,
             .rasterization     = erhe::graphics::Rasterization_state::cull_mode_none,
             .depth_stencil     = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
-            .color_blend       = erhe::graphics::Color_blend_state::color_blend_disabled,
             .bind_group_layout = m_sep_tex_bind_group_layout.get()
         }
     };
@@ -150,7 +147,13 @@ void Rendering_test::draw_separate_samplers_quad(
 
     encoder.set_bind_group_layout(m_sep_tex_bind_group_layout.get());
     {
-        erhe::graphics::Render_pipeline* p = m_sep_tex_pipeline.get_pipeline_for(render_pass.get_descriptor());
+        erhe::graphics::Render_pipeline* p = m_sep_tex_pipeline.get_pipeline_for(
+            render_pass.get_descriptor(),
+            nullptr,
+            m_sep_tex_shader_stages.get(),
+            &m_empty_vertex_input,
+            nullptr // TODO where do we get vertex format from?
+        );
         if (p != nullptr) {
             encoder.set_render_pipeline(*p);
         }
@@ -174,7 +177,7 @@ void Rendering_test::draw_separate_samplers_quad(
 
     encoder.draw_primitives(erhe::graphics::Primitive_type::triangle, 0, 3);
 
-    texture_heap.unbind();
+    texture_heap.unbind(encoder.get_command_buffer());
     buffer_range.release();
 }
 

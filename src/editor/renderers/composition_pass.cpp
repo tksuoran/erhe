@@ -50,7 +50,7 @@ void Composition_pass::render(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION();
 
-    if (!enabled) {
+    if (!data.enabled) {
         return;
     }
 
@@ -62,7 +62,7 @@ void Composition_pass::render(const Render_context& context)
         const float   period = 1.0f / context.viewport_config.selection_highlight_frequency;
         const float   t1     = static_cast<float>(::fmod(t0, period));
         const float   t2     = static_cast<float>(0.5f + triangle_wave(t1, period) * 0.5f);
-        context.app_context.app_rendering->selection_outline->primitive_settings = erhe::scene_renderer::Primitive_interface_settings{
+        context.app_context.app_rendering->selection_outline->data.primitive_settings = erhe::scene_renderer::Primitive_interface_settings{
             .color_source    = erhe::scene_renderer::Primitive_color_source::constant_color,
             .constant_color0 = glm::mix(
                 context.viewport_config.selection_highlight_low,
@@ -79,14 +79,16 @@ void Composition_pass::render(const Render_context& context)
         };
     }
 
-    const auto scene_root = this->override_scene_root ? override_scene_root : context.scene_view.get_scene_root();
+    const auto scene_root = data.override_scene_root 
+        ? data.override_scene_root 
+        : context.scene_view.get_scene_root();
     if (!scene_root) {
         log_composer->error("Missing scene root - cannot render");
         return;
     }
 
-    const Render_style_data* render_style = this->get_render_style
-        ? &this->get_render_style(context)
+    const Render_style_data* render_style = data.get_render_style
+        ? &data.get_render_style(context)
         : nullptr;
 
     const auto& layers           = scene_root->layers();
@@ -100,7 +102,7 @@ void Composition_pass::render(const Render_context& context)
 
     if (
         (render_style != nullptr) &&
-        !is_primitive_mode_enabled(*render_style, this->primitive_mode)
+        !is_primitive_mode_enabled(*render_style, data.primitive_mode)
     ) {
         log_composer->trace("primitive mode is not enabled - skipping");
         return;
@@ -117,44 +119,44 @@ void Composition_pass::render(const Render_context& context)
     //    renderpass.pipeline.data.shader_stages = context.override_shader_stages;
     //}
 
-    if (this->mesh_layers.empty()) {
+    if (data.mesh_layers.empty()) {
         log_composer->debug("render_fullscreen");
         context.app_context.forward_renderer->draw_primitives(
-            erhe::scene_renderer::Forward_renderer::Render_parameters{
-                .render_encoder         = *context.encoder,
-                .index_buffer           = &context.app_context.mesh_memory->index_buffer,
-                .vertex_buffer0         = &context.app_context.mesh_memory->vertex_buffer_position,
-                .vertex_buffer1         = &context.app_context.mesh_memory->vertex_buffer_non_position,
-                .vertex_buffer2         = &context.app_context.mesh_memory->vertex_buffer_custom,
-                .camera                 = context.camera,
-                .light_projections      = nullptr,
-                .lights                 = {},
-                .skins                  = {},
-                .materials              = {},
-                .mesh_spans             = erhe::scene_renderer::Forward_renderer::empty_mesh_spans,
-                .non_mesh_vertex_count  = this->non_mesh_vertex_count,
-                .render_pipeline_states = this->render_pipeline_states,
-                .primitive_mode         = this->primitive_mode,
-                .primitive_settings     = 
-                    primitive_settings.has_value()
-                        ? primitive_settings.value()
-                        : (render_style != nullptr)
-                            ? get_primitive_settings(*render_style, this->primitive_mode)
-                            : erhe::scene_renderer::Primitive_interface_settings{},
-                .viewport               = context.viewport,
-                .override_shader_stages = this->allow_shader_stages_override ? context.override_shader_stages : nullptr,
-                .error_shader_stages    = &context.app_context.programs->error.shader_stages,
-                .debug_label            = get_debug_label().string_view(),
-                .reverse_depth          = context.scene_view.get_reverse_depth(),
-                .depth_range            = context.scene_view.get_depth_range(),
-                .conventions            = context.scene_view.get_conventions()
+            erhe::scene_renderer::Forward_renderer::Primitive_render_parameters{
+                .base = erhe::scene_renderer::Forward_renderer::Base_render_parameters{
+                    .render_encoder    = *context.encoder,
+                    .render_pass       = context.render_pass,
+                    .viewport          = context.viewport,
+                    .camera            = context.camera,
+                    .views             = context.multiview_views,
+                    .light_projections = nullptr,
+                    .lights            = {},
+                    .skins             = {},
+                    .materials         = {},
+                    .shader_key_boolean_mask_force_enable  = data.shader_key_force_enable_mask,
+                    .shader_key_boolean_mask_force_disable = data.shader_key_force_disable_mask,
+                    .reverse_depth     = context.scene_view.get_reverse_depth(),
+                    .depth_range       = context.scene_view.get_depth_range(),
+                    .conventions       = context.scene_view.get_conventions(),
+                    .debug_label       = get_debug_label().string_view()
+                },
+                .vertex_count         = data.non_mesh_vertex_count,
+                .base_render_pipeline = *data.base_render_pipelines.front(), // TODO
+                //.primitive_mode         = this->primitive_mode,
+                //.primitive_settings     = 
+                //    primitive_settings.has_value()
+                //        ? primitive_settings.value()
+                //        : (render_style != nullptr)
+                //            ? get_primitive_settings(*render_style, this->primitive_mode)
+                //            : erhe::scene_renderer::Primitive_interface_settings{},
+                .shader_stages = data.shader_stages
             },
             nullptr
         );
     } else {
         erhe::scene::Scene* scene = scene_root->get_hosted_scene();
         m_mesh_spans.clear();
-        for (const auto id : this->mesh_layers) {
+        for (const auto id : data.mesh_layers) {
             const auto mesh_layer = scene->get_mesh_layer_by_id(id);
             if (mesh_layer) {
                 m_mesh_spans.push_back(mesh_layer->meshes);
@@ -167,52 +169,64 @@ void Composition_pass::render(const Render_context& context)
             return;
         }
 
-        log_composer->debug("calling render with {} render pipeline states", render_pipeline_states.size());
+        log_composer->debug("calling render with {} render pipelines", data.base_render_pipelines.size());
 
         // Use content wide line renderer (compute path) when geometry shaders are unavailable.
         // Meshes were already added and compute dispatched in viewport_scene_view.cpp before the render pass.
         erhe::scene_renderer::Content_wide_line_renderer* content_wide_line_renderer = context.app_context.content_wide_line_renderer;
-        if (use_content_wide_line_renderer && (content_wide_line_renderer != nullptr) && content_wide_line_renderer->is_enabled()) {
+        if (data.use_content_wide_line_renderer && (content_wide_line_renderer != nullptr) && content_wide_line_renderer->is_enabled()) {
             ERHE_VERIFY(context.render_pass != nullptr);
-            // Render the compute-expanded triangles with the outline pipeline state
-            for (auto* render_pipeline_state : render_pipeline_states) {
-                content_wide_line_renderer->render(*context.encoder, *render_pipeline_state, *context.render_pass, content_wide_line_group);
+            // Render the compute-expanded triangles with the outline
+            // pipeline state. Under multiview the renderer binds its
+            // sibling SSBO-read graphics shader and the surrounding
+            // multiview render pass distributes the single draw across
+            // both layers; under single-view the existing
+            // vertex-attribute path runs.
+            const bool multiview = !context.multiview_views.empty();
+            for (auto* base_render_pipeline : data.base_render_pipelines) {
+                content_wide_line_renderer->render(
+                    *context.encoder,
+                    *base_render_pipeline,
+                    *context.render_pass,
+                    &erhe::graphics::Color_blend_state::color_blend_premultiplied, // TODO configurable?
+                    data.content_wide_line_group,
+                    multiview
+                );
             }
         } else {
+            // log_draw->trace("Render pass {} filter = {}", get_name(), filter.describe());
             context.app_context.forward_renderer->render(
                 erhe::scene_renderer::Forward_renderer::Render_parameters{
-                    .render_encoder         = *context.encoder,
-                    .index_type             = context.app_context.mesh_memory->buffer_info.index_type,
-                    .index_buffer           = &context.app_context.mesh_memory->index_buffer,
-                    .vertex_buffer0         = &context.app_context.mesh_memory->vertex_buffer_position,
-                    .vertex_buffer1         = &context.app_context.mesh_memory->vertex_buffer_non_position,
-                    .vertex_buffer2         = &context.app_context.mesh_memory->vertex_buffer_custom,
-                    .ambient_light          = layers.light()->ambient_light,
-                    .camera                 = context.camera,
-                    .light_projections      = context.scene_view.get_light_projections(),
-                    .lights                 = layers.light()->lights,
-                    .skins                  = scene->get_skins(),
-                    .materials              = materials,
-                    .mesh_spans             = m_mesh_spans,
-                    .render_pipeline_states = this->render_pipeline_states,
-                    .render_pass            = context.render_pass,
-                    .primitive_mode         = this->primitive_mode,
-                    .primitive_settings     =
-                        primitive_settings.has_value()
-                            ? primitive_settings.value()
+                    .base = erhe::scene_renderer::Forward_renderer::Base_render_parameters{
+                        .render_encoder    = *context.encoder,
+                        .render_pass       = context.render_pass,
+                        .viewport          = context.viewport,
+                        .camera            = context.camera,
+                        .views             = context.multiview_views,
+                        .ambient_light     = layers.light()->ambient_light,
+                        .light_projections = context.scene_view.get_light_projections(),
+                        .lights            = layers.light()->lights,
+                        .skins             = scene->get_skins(),
+                        .materials         = materials,
+                        .reverse_depth     = context.scene_view.get_reverse_depth(),
+                        .depth_range       = context.scene_view.get_depth_range(),
+                        .conventions       = context.scene_view.get_conventions(),
+                        .debug_label       = get_name(),
+                    },
+                    .mesh_spans            = m_mesh_spans,
+                    .base_render_pipelines = data.base_render_pipelines,
+                    .blending_mode_policy  = data.blending_mode_policy,
+                    .primitive_mode        = data.primitive_mode,
+                    .primitive_settings    =
+                        data.primitive_settings.has_value()
+                            ? data.primitive_settings.value()
                             : (render_style != nullptr)
-                                ? get_primitive_settings(*render_style, this->primitive_mode)
+                                ? get_primitive_settings(*render_style, data.primitive_mode)
                                 : erhe::scene_renderer::Primitive_interface_settings{},
-                    .viewport               = context.viewport,
-                    .filter                 = this->filter,
-                    .override_shader_stages = this->allow_shader_stages_override ? context.override_shader_stages : nullptr,
-                    .error_shader_stages    = &context.app_context.programs->error.shader_stages,
-                    .debug_joint_indices    = context.app_context.app_rendering->debug_joint_indices,
-                    .debug_joint_colors     = context.app_context.app_rendering->debug_joint_colors,
-                    .debug_label            = get_name(),
-                    .reverse_depth          = context.scene_view.get_reverse_depth(),
-                    .depth_range            = context.scene_view.get_depth_range(),
-                    .conventions            = context.scene_view.get_conventions()
+                    .filter                = data.filter,
+                    .shader_debug          = context.shader_debug,
+                    .debug_joint_indices   = context.app_context.app_rendering->debug_joint_indices,
+                    .debug_joint_colors    = context.app_context.app_rendering->debug_joint_colors,
                 }
             );
         }
@@ -221,35 +235,35 @@ void Composition_pass::render(const Render_context& context)
 
 void Composition_pass::imgui()
 {
-    ImGui::Checkbox("Enabled", &enabled);
+    ImGui::Checkbox("Enabled", &data.enabled);
     if (ImGui::TreeNodeEx("Pipeline passes", ImGuiTreeNodeFlags_Framed)) {
         int pipeline_pass_index = 0;
-        for (erhe::graphics::Lazy_render_pipeline* render_pipeline_state : render_pipeline_states) {
+        for (erhe::graphics::Base_render_pipeline* base_render_pipeline : data.base_render_pipelines) {
             ImGui::PushID(pipeline_pass_index++);
-            erhe::imgui::pipeline_imgui(*render_pipeline_state);
+            erhe::imgui::pipeline_imgui(*base_render_pipeline);
             ImGui::PopID();
         }
         ImGui::TreePop();
     }   
-    ImGui::Text("Primitive Mode: %s", erhe::primitive::c_str(primitive_mode));
+    ImGui::Text("Primitive Mode: %s", erhe::primitive::c_str(data.primitive_mode));
 
     if (ImGui::TreeNodeEx("Filter", ImGuiTreeNodeFlags_Framed)) {
-        std::string require_all_bits_set           = erhe::Item_flags::to_string(filter.require_all_bits_set          );
-        std::string require_at_least_one_bit_set   = erhe::Item_flags::to_string(filter.require_at_least_one_bit_set  );
-        std::string require_all_bits_clear         = erhe::Item_flags::to_string(filter.require_all_bits_clear        );
-        std::string require_at_least_one_bit_clear = erhe::Item_flags::to_string(filter.require_at_least_one_bit_clear);
+        std::string require_all_bits_set           = erhe::Item_flags::to_string(data.filter.require_all_bits_set          );
+        std::string require_at_least_one_bit_set   = erhe::Item_flags::to_string(data.filter.require_at_least_one_bit_set  );
+        std::string require_all_bits_clear         = erhe::Item_flags::to_string(data.filter.require_all_bits_clear        );
+        std::string require_at_least_one_bit_clear = erhe::Item_flags::to_string(data.filter.require_at_least_one_bit_clear);
         ImGui::Text("require_all_bits_set = %s",           require_all_bits_set.c_str());
         ImGui::Text("require_at_least_one_bit_set = %s",   require_at_least_one_bit_set.c_str());
         ImGui::Text("require_all_bits_clear = %s",         require_all_bits_clear.c_str());
         ImGui::Text("require_at_least_one_bit_clear = %s", require_at_least_one_bit_clear.c_str());
         ImGui::TreePop();
     }
-    ImGui::Text("Primitive Mode: %s", erhe::primitive::c_str(primitive_mode));
+    ImGui::Text("Primitive Mode: %s", erhe::primitive::c_str(data.primitive_mode));
 
-    ImGui::Checkbox("Allow shader stages override", &allow_shader_stages_override);
-    if (primitive_settings.has_value()) {
-        //static void render_style_ui(Render_style_data& render_style);
-    }
+    //ImGui::Checkbox("Allow shader stages override", &allow_shader_stages_override);
+    //if (primitive_settings.has_value()) {
+    //    //static void render_style_ui(Render_style_data& render_style);
+    //}
 }
 
 }

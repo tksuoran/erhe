@@ -39,7 +39,7 @@ public:
 
     // For Render_command_encoder
     void start_render_pass(Command_buffer& command_buffer, Render_pass* render_pass_before, Render_pass* render_pass_after);
-    void end_render_pass  (Render_pass* render_pass_after);
+    void end_render_pass  (Command_buffer& command_buffer, Render_pass* render_pass_after);
 
 private:
     friend class Device_impl;
@@ -51,6 +51,7 @@ private:
     Render_pass_attachment_descriptor                m_stencil_attachment;
     int                                              m_render_target_width{0};
     int                                              m_render_target_height{0};
+    uint32_t                                         m_view_mask{0};
     erhe::utility::Debug_label                       m_debug_label;
     erhe::utility::Debug_label                       m_debug_group_name;
     bool                                             m_uses_multisample_resolve{false};

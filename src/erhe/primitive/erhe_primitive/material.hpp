@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_item/item.hpp"
+#include "erhe_primitive/enums.hpp"
 
 #include <glm/glm.hpp>
 
@@ -42,6 +43,26 @@ public:
 [[nodiscard]] auto operator==(const Material_texture_samplers& lhs, const Material_texture_samplers& rhs);
 [[nodiscard]] auto operator!=(const Material_texture_samplers& lhs, const Material_texture_samplers& rhs);
 
+// True when the mode needs framebuffer blending (so the host mesh must
+// route through the translucent composition-pass family). alpha_test and
+// screen_door render with depth write enabled and discard for masked
+// pixels, so they stay in the opaque pass.
+[[nodiscard]] inline auto needs_translucent_pass(const Material_blending_mode mode) -> bool
+{
+    switch (mode) {
+        case Material_blending_mode::alpha_blend:
+        case Material_blending_mode::multiply:
+        case Material_blending_mode::add:
+        case Material_blending_mode::subtract:
+            return true;
+        case Material_blending_mode::opaque:
+        case Material_blending_mode::screen_door:
+        case Material_blending_mode::alpha_test:
+            return false;
+    }
+    return false;
+}
+
 class Material_data
 {
 public:
@@ -53,7 +74,11 @@ public:
     glm::vec3                 emissive                  {0.0f, 0.0f, 0.0f};
     float                     normal_texture_scale      {1.0f};
     float                     occlusion_texture_strength{1.0f};
-    bool                      unlit                     {false};
+    Bxdf_model                bxdf_model                {Bxdf_model::isotropic_brdf};
+    Material_blending_mode    blending_mode             {Material_blending_mode::opaque};
+    float                     alpha_cutoff              {0.5f};
+    bool                      use_circular_brushed_metal{false};
+    bool                      use_aniso_control         {false};
     Material_texture_samplers texture_samplers          {};
 };
 

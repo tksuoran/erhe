@@ -30,7 +30,7 @@ public:
     );
 
 private:
-    erhe::graphics::Lazy_render_pipeline m_pipeline;
+    erhe::graphics::Base_render_pipeline m_pipeline;
     erhe::graphics::Vertex_input_state    m_vertex_input;
 };
 

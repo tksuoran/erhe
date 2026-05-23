@@ -19,11 +19,11 @@ public:
     );
     ~Texture_heap_impl() noexcept;
 
-    void reset_heap       ();
+    void reset_heap       (Command_buffer& command_buffer);
     auto allocate         (const Texture* texture, const Sampler* sampler) -> uint64_t;
     auto get_shader_handle(const Texture* texture, const Sampler* sampler) -> uint64_t;
     auto bind             (Render_command_encoder& encoder) -> std::size_t;
-    void unbind           ();
+    void unbind           (Command_buffer& command_buffer);
 
 protected:
     Device&        m_device;

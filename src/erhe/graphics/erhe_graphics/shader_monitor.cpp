@@ -1,18 +1,19 @@
 #include "erhe_graphics/shader_monitor.hpp"
 
-#if defined(ERHE_GRAPHICS_LIBRARY_OPENGL)
+#if defined(ERHE_GRAPHICS_API_OPENGL)
 # include "erhe_graphics/gl/gl_device.hpp"
 #endif
-#if defined(ERHE_GRAPHICS_LIBRARY_VULKAN)
+#if defined(ERHE_GRAPHICS_API_VULKAN)
 # include "erhe_graphics/vulkan/vulkan_device.hpp"
 #endif
-#if defined(ERHE_GRAPHICS_LIBRARY_METAL)
+#if defined(ERHE_GRAPHICS_API_METAL)
 # include "erhe_graphics/metal/metal_device.hpp"
 #endif
-#if defined(ERHE_GRAPHICS_LIBRARY_NONE)
+#if defined(ERHE_GRAPHICS_API_NONE)
 # include "erhe_graphics/null/null_device.hpp"
 #endif
 
+#include "erhe_graphics/device.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/glsl_file_loader.hpp"
 #include "erhe_profile/profile.hpp"
@@ -99,6 +100,37 @@ void Shader_monitor::add(Reloadable_shader_stages& reloadable_shader_stages)
     add(reloadable_shader_stages.create_info, &reloadable_shader_stages.shader_stages);
 }
 
+void Shader_monitor::remove(Reloadable_shader_stages& reloadable_shader_stages)
+{
+    remove(&reloadable_shader_stages.shader_stages);
+}
+
+void Shader_monitor::remove(Shader_stages* shader_stages)
+{
+    if (shader_stages == nullptr) {
+        return;
+    }
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
+
+    // Walk every watched file and drop reload entries whose shader_stages
+    // pointer matches. The set is keyed on the same pointer so equal-key
+    // entries are unique per (file, shader_stages); a single linear pass
+    // per file finds at most one match. Empty File entries are left in
+    // m_files -- update_once_per_frame iterates each file's reload_entries
+    // and an empty set does no work. Pruning the File map would also
+    // require pruning m_reload_list which can hold a now-stale File*.
+    for (auto& [path, file] : m_files) {
+        auto& entries = file.reload_entries;
+        for (auto it = entries.begin(); it != entries.end();) {
+            if (it->shader_stages == shader_stages) {
+                it = entries.erase(it);
+            } else {
+                ++it;
+            }
+        }
+    }
+}
+
 void Shader_monitor::add(
     const std::filesystem::path&     path,
     const Shader_stages_create_info& create_info,
@@ -171,12 +203,13 @@ void Shader_monitor::update_once_per_frame()
 
     const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
 
+    bool any_reloaded = false;
     for (auto* f : m_reload_list) {
         for (auto& entry : f->reload_entries) {
             Shader_stages_prototype prototype = build_shader_stages(m_device, entry.create_info);
             if (prototype.is_valid()) {
                 entry.shader_stages->reload(std::move(prototype));
-                std::stringstream ss;
+                any_reloaded = true;
                 log_shader_monitor->info("Shader program reload OK {}", entry.create_info.get_description());
             } else {
                 entry.shader_stages->invalidate();
@@ -190,6 +223,17 @@ void Shader_monitor::update_once_per_frame()
         }
     }
     m_reload_list.clear();
+
+    // Reloading a Shader_stages re-creates its underlying
+    // VkShaderModule but leaves the Base_render_pipeline format-hashed
+    // VkPipeline cache holding pipelines that still reference the old
+    // module. Flush the pipeline cache so next-frame renders pick up
+    // the new shader modules. (The variant cache invalidates its own
+    // pipeline cache on clear(); this mirrors that for monitor-driven
+    // hot-reloads.)
+    if (any_reloaded) {
+        m_device.clear_render_pipeline_cache();
+    }
 }
 
 } // namespace erhe::graphics
