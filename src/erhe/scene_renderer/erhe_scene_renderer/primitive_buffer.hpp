@@ -107,8 +107,8 @@ public:
 
     auto update(
         const std::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes,
-        erhe::primitive::Primitive_mode                            primitive_mode,
         const erhe::Item_filter&                                   filter,
+        erhe::primitive::Primitive_mode                            primitive_mode,
         const Primitive_interface_settings&                        settings,
         std::size_t&                                               out_primitive_count,
         bool                                                       use_id_ranges = false
@@ -117,9 +117,7 @@ public:
     auto update(
         const Render_bucket&                bucket,
         erhe::primitive::Primitive_mode     primitive_mode,
-        const erhe::Item_filter&            filter,
         const Primitive_interface_settings& settings,
-        std::size_t&                        out_primitive_count,
         bool                                use_id_ranges = false
     ) -> erhe::graphics::Ring_buffer_range;
 

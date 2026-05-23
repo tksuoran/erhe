@@ -330,6 +330,7 @@ void Pipelines::blend_state_component(const char* label, erhe::graphics::Blend_s
     ImGui::PopID();
 }
 
+#if 0
 void Pipelines::color_blend(erhe::graphics::Color_blend_state& color_blend)
 {
     ERHE_PROFILE_FUNCTION();
@@ -374,6 +375,7 @@ void Pipelines::color_blend(erhe::graphics::Color_blend_state& color_blend)
 
     ImGui::PopID();
 }
+#endif
 
 void Pipelines::imgui()
 {
@@ -438,7 +440,7 @@ void pipeline_imgui(erhe::graphics::Render_pipeline_state& pipeline)
 
         Pipelines::rasterization(pipeline.data.rasterization);
         Pipelines::depth_stencil(pipeline.data.depth_stencil);
-        Pipelines::color_blend  (pipeline.data.color_blend);
+        //Pipelines::color_blend  (pipeline.data.color_blend);
         ImGui::TreePop();
     }
 }
@@ -487,7 +489,7 @@ void pipeline_imgui(erhe::graphics::Base_render_pipeline& pipeline)
 
         Pipelines::rasterization(data.rasterization);
         Pipelines::depth_stencil(data.depth_stencil);
-        Pipelines::color_blend  (data.color_blend);
+        //Pipelines::color_blend  (data.color_blend);
         ImGui::TreePop();
     }
 }

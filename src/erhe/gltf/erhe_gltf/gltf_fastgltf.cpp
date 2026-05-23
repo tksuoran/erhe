@@ -66,10 +66,11 @@ namespace erhe::gltf {
 class Material_extras
 {
 public:
-    std::optional<float>                       roughness_y;
-    std::optional<erhe::primitive::Bxdf_model> bxdf_model;
-    std::optional<bool>                        use_circular_brushed_metal;
-    std::optional<bool>                        use_aniso_control;
+    std::optional<float>                                   roughness_y;
+    std::optional<erhe::primitive::Bxdf_model>             bxdf_model;
+    std::optional<erhe::primitive::Material_blending_mode> blending_mode;
+    std::optional<bool>                                    use_circular_brushed_metal;
+    std::optional<bool>                                    use_aniso_control;
 };
 
 [[nodiscard]] auto bxdf_model_to_c_str(erhe::primitive::Bxdf_model model) -> const char*
@@ -91,6 +92,36 @@ public:
     if (s == "anisotropic_brdf")         return erhe::primitive::Bxdf_model::anisotropic_brdf;
     if (s == "anisotropic_slope")        return erhe::primitive::Bxdf_model::anisotropic_slope;
     if (s == "anisotropic_engine_ready") return erhe::primitive::Bxdf_model::anisotropic_engine_ready;
+    return std::nullopt;
+}
+
+// Material_blending_mode <-> string mappings for the extras carrier.
+// Only the modes that glTF's alphaMode cannot represent need to round-trip
+// through extras (multiply, add, subtract, screen_door). The OPAQUE / MASK
+// / BLEND counterparts use the standard alphaMode field instead.
+[[nodiscard]] auto blending_mode_to_c_str(erhe::primitive::Material_blending_mode mode) -> const char*
+{
+    switch (mode) {
+        case erhe::primitive::Material_blending_mode::opaque:      return "opaque";
+        case erhe::primitive::Material_blending_mode::alpha_blend: return "alpha_blend";
+        case erhe::primitive::Material_blending_mode::multiply:    return "multiply";
+        case erhe::primitive::Material_blending_mode::add:         return "add";
+        case erhe::primitive::Material_blending_mode::subtract:    return "subtract";
+        case erhe::primitive::Material_blending_mode::screen_door: return "screen_door";
+        case erhe::primitive::Material_blending_mode::alpha_test:  return "alpha_test";
+    }
+    return "opaque";
+}
+
+[[nodiscard]] auto blending_mode_from_string(std::string_view s) -> std::optional<erhe::primitive::Material_blending_mode>
+{
+    if (s == "opaque")      return erhe::primitive::Material_blending_mode::opaque;
+    if (s == "alpha_blend") return erhe::primitive::Material_blending_mode::alpha_blend;
+    if (s == "multiply")    return erhe::primitive::Material_blending_mode::multiply;
+    if (s == "add")         return erhe::primitive::Material_blending_mode::add;
+    if (s == "subtract")    return erhe::primitive::Material_blending_mode::subtract;
+    if (s == "screen_door") return erhe::primitive::Material_blending_mode::screen_door;
+    if (s == "alpha_test")  return erhe::primitive::Material_blending_mode::alpha_test;
     return std::nullopt;
 }
 
@@ -1291,6 +1322,23 @@ private:
             create_data.bxdf_model = erhe::primitive::Bxdf_model::unlit;
         }
 
+        // Standard glTF alphaMode -> Material_blending_mode. MASK also
+        // pulls alphaCutoff. Erhe-specific modes (multiply / add /
+        // subtract / screen_door) ride on extras (see post-parse loop)
+        // and override this default.
+        switch (material.alphaMode) {
+            case fastgltf::AlphaMode::Opaque:
+                create_data.blending_mode = erhe::primitive::Material_blending_mode::opaque;
+                break;
+            case fastgltf::AlphaMode::Mask:
+                create_data.blending_mode = erhe::primitive::Material_blending_mode::alpha_test;
+                create_data.alpha_cutoff  = material.alphaCutoff;
+                break;
+            case fastgltf::AlphaMode::Blend:
+                create_data.blending_mode = erhe::primitive::Material_blending_mode::alpha_blend;
+                break;
+        }
+
         if (material.normalTexture.has_value()) {
             apply_texture(material.normalTexture.value(), create_data.texture_samplers.normal, true);
             create_data.normal_texture_scale = material.normalTexture.value().scale;
@@ -1825,7 +1873,6 @@ private:
             Item_flags::visible     |
             Item_flags::show_in_ui  |
             Item_flags::shadow_cast |
-            Item_flags::opaque      |
             Item_flags::id
         );
         for (std::size_t i = 0, end = mesh.primitives.size(); i < end; ++i) {
@@ -1995,6 +2042,19 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
                 }
             }
 
+            // erhe-specific blending modes (multiply/add/subtract/
+            // screen_door) ride here; opaque/blend/mask are restored
+            // from the standard alphaMode in parse_material().
+            simdjson::dom::element blending_mode_element;
+            if (extras->at_key("blending_mode").get(blending_mode_element) == simdjson::error_code::SUCCESS) {
+                std::string_view value;
+                if (blending_mode_element.get_string().get(value) == simdjson::error_code::SUCCESS) {
+                    if (auto parsed = blending_mode_from_string(value); parsed.has_value()) {
+                        entry.blending_mode = parsed;
+                    }
+                }
+            }
+
             simdjson::dom::element circular_element;
             if (extras->at_key("use_circular_brushed_metal").get(circular_element) == simdjson::error_code::SUCCESS) {
                 bool value = false;
@@ -2045,6 +2105,9 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
         }
         if (extras.bxdf_model.has_value()) {
             material->data.bxdf_model = extras.bxdf_model.value();
+        }
+        if (extras.blending_mode.has_value()) {
+            material->data.blending_mode = extras.blending_mode.value();
         }
         if (extras.use_circular_brushed_metal.has_value()) {
             material->data.use_circular_brushed_metal = extras.use_circular_brushed_metal.value();
@@ -2544,6 +2607,30 @@ private:
             // erhe-specific and round-trip via extras (see
             // setExtrasWriteCallback below).
             gltf_material.unlit = (data.bxdf_model == erhe::primitive::Bxdf_model::unlit);
+
+            // Material_blending_mode -> alphaMode (+ alphaCutoff for
+            // MASK). erhe-specific modes (multiply / add / subtract /
+            // screen_door) fall back to BLEND so a consumer that does
+            // not understand the extras still sees a sensible result;
+            // the exact value is restored on re-import via extras.
+            switch (data.blending_mode) {
+                case erhe::primitive::Material_blending_mode::opaque:
+                    gltf_material.alphaMode = fastgltf::AlphaMode::Opaque;
+                    break;
+                case erhe::primitive::Material_blending_mode::alpha_blend:
+                    gltf_material.alphaMode = fastgltf::AlphaMode::Blend;
+                    break;
+                case erhe::primitive::Material_blending_mode::alpha_test:
+                    gltf_material.alphaMode   = fastgltf::AlphaMode::Mask;
+                    gltf_material.alphaCutoff = data.alpha_cutoff;
+                    break;
+                case erhe::primitive::Material_blending_mode::multiply:
+                case erhe::primitive::Material_blending_mode::add:
+                case erhe::primitive::Material_blending_mode::subtract:
+                case erhe::primitive::Material_blending_mode::screen_door:
+                    gltf_material.alphaMode = fastgltf::AlphaMode::Blend;
+                    break;
+            }
             m_gltf_asset.materials.push_back(std::move(gltf_material));
         }
         m_exported_materials.insert({material, gltf_material_index});
@@ -2811,9 +2898,16 @@ auto Gltf_exporter::export_gltf() -> std::string
                 (data.bxdf_model != erhe::primitive::Bxdf_model::unlit);
             const bool emit_roughness_y =
                 (data.roughness.x != data.roughness.y);
+            // alphaMode covers opaque / alpha_blend / alpha_test. Other
+            // modes need extras so they survive a round-trip.
+            const bool emit_blending_mode =
+                (data.blending_mode != erhe::primitive::Material_blending_mode::opaque) &&
+                (data.blending_mode != erhe::primitive::Material_blending_mode::alpha_blend) &&
+                (data.blending_mode != erhe::primitive::Material_blending_mode::alpha_test);
 
             if (!emit_roughness_y &&
                 !emit_bxdf_model &&
+                !emit_blending_mode &&
                 !data.use_circular_brushed_metal &&
                 !data.use_aniso_control)
             {
@@ -2828,6 +2922,10 @@ auto Gltf_exporter::export_gltf() -> std::string
             }
             if (emit_bxdf_model) {
                 out += sep; out += "\"bxdf_model\": \""; out += bxdf_model_to_c_str(data.bxdf_model); out += "\"";
+                sep = ", ";
+            }
+            if (emit_blending_mode) {
+                out += sep; out += "\"blending_mode\": \""; out += blending_mode_to_c_str(data.blending_mode); out += "\"";
                 sep = ", ";
             }
             if (data.use_circular_brushed_metal) {

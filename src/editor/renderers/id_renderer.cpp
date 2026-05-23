@@ -68,8 +68,7 @@ Id_renderer::Id_renderer(
             .debug_label    = erhe::utility::Debug_label{"ID Renderer"},
             .input_assembly = Input_assembly_state::triangle,
             .rasterization  = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
-            .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(),
-            .color_blend    = Color_blend_state::color_blend_disabled
+            .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled()
         }
     }
     , m_selective_depth_clear_pipeline{
@@ -78,8 +77,7 @@ Id_renderer::Id_renderer(
             .debug_label    = erhe::utility::Debug_label{"ID Renderer selective depth clear"},
             .input_assembly = Input_assembly_state::triangle,
             .rasterization  = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
-            .depth_stencil  = Depth_stencil_state::depth_test_always_stencil_test_disabled,
-            .color_blend    = Color_blend_state::color_writes_disabled,
+            .depth_stencil  = Depth_stencil_state::depth_test_always_stencil_test_disabled
         }
     }
     , m_texture_read_buffer{
@@ -228,13 +226,17 @@ void Id_renderer::render_meshes(
         m_mesh_memory,
         Shader_key{},
         meshes,
+        id_filter,
         primitive_mode,
-        Variant_signature_policy::accept_all_variant_signatures
+        Variant_signature_policy::accept_all_variant_signatures,
+        Blending_mode_policy::allow_all // TODO
     );
 
     for (std::size_t bucket_index = 0, end = buckets.size(); bucket_index < end; ++bucket_index) {
         const Render_bucket&      bucket       = buckets[bucket_index];
         const Vertex_input_entry& vertex_input = m_mesh_memory.get_vertex_input(bucket.buffer_set.vertex_input_key);
+
+        ERHE_VERIFY(!bucket.entries.empty());
 
         const erhe::graphics::Reloadable_shader_stages* reloadable_shader_stages = m_shader_variant_cache.get(
             bucket.shader_key,
@@ -254,6 +256,7 @@ void Id_renderer::render_meshes(
 
         erhe::graphics::Render_pipeline* render_pipeline = pipeline.get_pipeline_for(
             parameters.render_pass->get_descriptor(),
+            nullptr,
             shader_stages,
             vertex_input.vertex_input.get(),
             &vertex_input.vertex_format
@@ -283,23 +286,19 @@ void Id_renderer::render_meshes(
             }
         };
 
-        std::size_t primitive_count{0};
-        erhe::graphics::Ring_buffer_range primitive_range = m_primitive_buffers.update(bucket, primitive_mode, id_filter, primitive_settings, primitive_count);
-        erhe::scene_renderer::Draw_indirect_buffer_range draw_indirect_buffer_range = m_draw_indirect_buffers.update(bucket, primitive_mode, id_filter);
-        if (primitive_count != draw_indirect_buffer_range.draw_indirect_count) {
-            log_render->warn("primitive_range != draw_indirect_buffer_range.draw_indirect_count");
-        }
-        if (draw_indirect_buffer_range.draw_indirect_count >= 0) {
-            m_primitive_buffers    .bind(render_encoder, primitive_range);
-            m_draw_indirect_buffers.bind(render_encoder, draw_indirect_buffer_range.range);
-            render_encoder.multi_draw_indexed_primitives_indirect(
-                m_pipeline.data.input_assembly.primitive_topology,
-                m_mesh_memory.get_index_format(bucket.buffer_set.index_buffer),
-                draw_indirect_buffer_range.range.get_byte_start_offset_in_buffer(),
-                draw_indirect_buffer_range.draw_indirect_count,
-                sizeof(erhe::graphics::Draw_indexed_primitives_indirect_command)
-            );
-        }
+        erhe::graphics::Ring_buffer_range primitive_range = m_primitive_buffers.update(bucket, primitive_mode, primitive_settings);
+        erhe::scene_renderer::Draw_indirect_buffer_range draw_indirect_buffer_range = m_draw_indirect_buffers.update(bucket, primitive_mode);
+        ERHE_VERIFY(draw_indirect_buffer_range.draw_indirect_count == bucket.entries.size());
+
+        m_primitive_buffers    .bind(render_encoder, primitive_range);
+        m_draw_indirect_buffers.bind(render_encoder, draw_indirect_buffer_range.range);
+        render_encoder.multi_draw_indexed_primitives_indirect(
+            m_pipeline.data.input_assembly.primitive_topology,
+            m_mesh_memory.get_index_format(bucket.buffer_set.index_buffer),
+            draw_indirect_buffer_range.range.get_byte_start_offset_in_buffer(),
+            draw_indirect_buffer_range.draw_indirect_count,
+            sizeof(erhe::graphics::Draw_indexed_primitives_indirect_command)
+        );
 
         primitive_range.release();
         draw_indirect_buffer_range.range.release();

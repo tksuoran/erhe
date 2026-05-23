@@ -143,9 +143,10 @@ void Cube_renderer::render(const Render_parameters& parameters)
     erhe::graphics::Base_render_pipeline& render_pipeline_state = parameters.render_pipeline_state;
     erhe::graphics::Render_pipeline* render_pipeline = render_pipeline_state.get_pipeline_for(
         parameters.render_pass.get_descriptor(),
-        nullptr, // no shader stages override
-        nullptr, // no vertex input override
-        nullptr  // no vertex format override
+        nullptr, // TODO
+        nullptr,
+        nullptr,
+        nullptr
     );
     if (render_pipeline == nullptr) {
         return;

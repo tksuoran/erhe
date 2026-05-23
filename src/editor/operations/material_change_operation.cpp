@@ -1,6 +1,11 @@
 #include "operations/material_change_operation.hpp"
 
 #include "app_context.hpp"
+#include "app_scenes.hpp"
+#include "scene/scene_root.hpp"
+
+#include "erhe_scene/mesh.hpp"
+#include "erhe_scene/scene.hpp"
 
 #include <fmt/format.h>
 
@@ -20,18 +25,14 @@ Material_change_operation::Material_change_operation(
 
 Material_change_operation::~Material_change_operation() noexcept = default;
 
-void Material_change_operation::execute(App_context& context)
+void Material_change_operation::execute(App_context&)
 {
-    static_cast<void>(context);
-
     // TODO Lock the item
     m_material->data = m_after;
 }
 
-void Material_change_operation::undo(App_context& context)
+void Material_change_operation::undo(App_context&)
 {
-    static_cast<void>(context);
-
     // TODO Lock the item
     m_material->data = m_before;
 }

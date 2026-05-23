@@ -30,8 +30,9 @@
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_physics/icollision_shape.hpp"
 #include "erhe_physics/irigid_body.hpp"
-#include "erhe_primitive/primitive.hpp"
 #include "erhe_primitive/buffer_mesh.hpp"
+#include "erhe_primitive/enums.hpp"
+#include "erhe_primitive/primitive.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_raytrace/iscene.hpp"
 #include "erhe_raytrace/iinstance.hpp"
@@ -1035,6 +1036,18 @@ void Properties::material_properties()
             data.bxdf_model = static_cast<erhe::primitive::Bxdf_model>(current);
         }
     });
+    add_entry("Blending Mode", [&]() {
+        // Order MUST match erhe::primitive::Material_blending_mode.
+        int current = static_cast<int>(data.blending_mode);
+        if (ImGui::Combo("##", &current, erhe::primitive::c_material_blending_mode_names, IM_ARRAYSIZE(erhe::primitive::c_material_blending_mode_names))) {
+            data.blending_mode = static_cast<erhe::primitive::Material_blending_mode>(current);
+        }
+    });
+    if (data.blending_mode == erhe::primitive::Material_blending_mode::alpha_test) {
+        add_entry("Alpha Cutoff", [&](){
+            ImGui::SliderFloat("##", &data.alpha_cutoff, 0.0f, 1.0f);
+        });
+    }
     add_entry("Circular Brushed Metal", [&](){
         ImGui::Checkbox("##", &data.use_circular_brushed_metal);
     });

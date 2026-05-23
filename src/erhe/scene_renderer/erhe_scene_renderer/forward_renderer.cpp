@@ -166,26 +166,26 @@ void Forward_renderer::render(const Render_parameters& parameters)
 
     m_texture_heap->bind(render_encoder);
 
+    render_encoder.set_viewport_rect(base.viewport.x, base.viewport.y, base.viewport.width, base.viewport.height);
+    render_encoder.set_scissor_rect (base.viewport.x, base.viewport.y, base.viewport.width, base.viewport.height);
+
+    const Light_layer_partition partition = compute_light_layer_partition(base.lights);
+
+    Shader_key environment_key{};
+    environment_key.set(Shader_int::LIGHT_COUNT_DIRECTIONAL_NOT_SHADOWMAPPED, static_cast<uint32_t>(partition.per_type_nonshadow[0]));
+    environment_key.set(Shader_int::LIGHT_COUNT_DIRECTIONAL_SHADOWMAPPED,     static_cast<uint32_t>(partition.per_type_shadow   [0]));
+    environment_key.set(Shader_int::LIGHT_COUNT_SPOT_NOT_SHADOWMAPPED,        static_cast<uint32_t>(partition.per_type_nonshadow[1]));
+    environment_key.set(Shader_int::LIGHT_COUNT_SPOT_SHADOWMAPPED,            static_cast<uint32_t>(partition.per_type_shadow   [1]));
+    environment_key.set(Shader_int::LIGHT_COUNT_POINT_NOT_SHADOWMAPPED,       static_cast<uint32_t>(partition.per_type_nonshadow[2]));
+    environment_key.set(Shader_int::LIGHT_COUNT_POINT_SHADOWMAPPED,           static_cast<uint32_t>(partition.per_type_shadow   [2]));
+    environment_key.set(Shader_int::SHADER_DEBUG,                             static_cast<uint32_t>(parameters.shader_debug)); // TODO proper conversion
+    environment_key.set(Shader_int::SHADER_MULTIVIEW_COUNT,                   static_cast<uint16_t>(base.views.size()));
+
     for (auto* render_pipeline_state : parameters.base_render_pipelines) {
         erhe::graphics::Scoped_debug_group pipeline_scope{
             render_encoder.get_command_buffer(),
             render_pipeline_state->data.debug_label
         };
-
-        render_encoder.set_viewport_rect(base.viewport.x, base.viewport.y, base.viewport.width, base.viewport.height);
-        render_encoder.set_scissor_rect (base.viewport.x, base.viewport.y, base.viewport.width, base.viewport.height);
-
-        const Light_layer_partition partition = compute_light_layer_partition(base.lights);
-
-        Shader_key environment_key{};
-        environment_key.set(Shader_int::LIGHT_COUNT_DIRECTIONAL_NOT_SHADOWMAPPED, static_cast<uint32_t>(partition.per_type_nonshadow[0]));
-        environment_key.set(Shader_int::LIGHT_COUNT_DIRECTIONAL_SHADOWMAPPED,     static_cast<uint32_t>(partition.per_type_shadow   [0]));
-        environment_key.set(Shader_int::LIGHT_COUNT_SPOT_NOT_SHADOWMAPPED,        static_cast<uint32_t>(partition.per_type_nonshadow[1]));
-        environment_key.set(Shader_int::LIGHT_COUNT_SPOT_SHADOWMAPPED,            static_cast<uint32_t>(partition.per_type_shadow   [1]));
-        environment_key.set(Shader_int::LIGHT_COUNT_POINT_NOT_SHADOWMAPPED,       static_cast<uint32_t>(partition.per_type_nonshadow[2]));
-        environment_key.set(Shader_int::LIGHT_COUNT_POINT_SHADOWMAPPED,           static_cast<uint32_t>(partition.per_type_shadow   [2]));
-        environment_key.set(Shader_int::SHADER_DEBUG,                             static_cast<uint32_t>(parameters.shader_debug)); // TODO proper conversion
-        environment_key.set(Shader_int::SHADER_MULTIVIEW_COUNT,                   static_cast<uint16_t>(base.views.size()));
 
         std::vector<Render_bucket> buckets;
         for (const auto& meshes : mesh_spans) {
@@ -196,14 +196,18 @@ void Forward_renderer::render(const Render_parameters& parameters)
                 m_mesh_memory,
                 environment_key,
                 meshes,
+                filter,
                 parameters.primitive_mode,
-                Variant_signature_policy::require_exact_variant_signature
+                Variant_signature_policy::require_exact_variant_signature,
+                parameters.blending_mode_policy
             );
         }
 
         for (std::size_t bucket_index = 0, end = buckets.size(); bucket_index < end; ++bucket_index) {
             const Render_bucket&      bucket       = buckets[bucket_index];
             const Vertex_input_entry& vertex_input = m_mesh_memory.get_vertex_input(bucket.buffer_set.vertex_input_key);
+
+            ERHE_VERIFY(!bucket.entries.empty());
 
             const erhe::graphics::Reloadable_shader_stages* reloadable_shader_stages = m_shader_variant_cache.get(
                 bucket.shader_key,
@@ -221,8 +225,12 @@ void Forward_renderer::render(const Render_parameters& parameters)
             }
             const erhe::graphics::Shader_stages* shader_stages = &reloadable_shader_stages->shader_stages;
 
+            // TODO Implement other blending modes
             erhe::graphics::Render_pipeline* render_pipeline = render_pipeline_state->get_pipeline_for(
                 base.render_pass->get_descriptor(),
+                (bucket.shader_key.blending_mode == erhe::primitive::Material_blending_mode::opaque)
+                    ? &erhe::graphics::Color_blend_state::color_blend_disabled
+                    : &erhe::graphics::Color_blend_state::color_blend_alpha,
                 shader_stages,
                 vertex_input.vertex_input.get(),
                 &vertex_input.vertex_format
@@ -238,7 +246,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
                 continue;
             }
 
-           erhe::graphics::Scoped_debug_group bucket_scope{
+            erhe::graphics::Scoped_debug_group bucket_scope{
                 render_encoder.get_command_buffer(),
                 erhe::utility::Debug_label{
                     fmt::format(
@@ -265,19 +273,9 @@ void Forward_renderer::render(const Render_parameters& parameters)
                 );
             }
 
-            std::size_t primitive_count{0};
-            Ring_buffer_range primitive_range = m_primitive_buffer.update(bucket, parameters.primitive_mode, filter, parameters.primitive_settings, primitive_count);
-            if (primitive_count == 0){
-                primitive_range.cancel();
-                continue;
-            }
-            Draw_indirect_buffer_range draw_indirect_buffer_range = m_draw_indirect_buffer.update(bucket, parameters.primitive_mode, filter);
-            if (draw_indirect_buffer_range.draw_indirect_count == 0) {
-                primitive_range.cancel();
-                draw_indirect_buffer_range.range.cancel();
-                continue;
-            }
-            ERHE_VERIFY(primitive_count == draw_indirect_buffer_range.draw_indirect_count);
+            Ring_buffer_range primitive_range = m_primitive_buffer.update(bucket, parameters.primitive_mode, parameters.primitive_settings);
+            Draw_indirect_buffer_range draw_indirect_buffer_range = m_draw_indirect_buffer.update(bucket, parameters.primitive_mode);
+            ERHE_VERIFY(draw_indirect_buffer_range.draw_indirect_count == bucket.entries.size());
             m_primitive_buffer.bind(render_encoder, primitive_range);
             m_draw_indirect_buffer.bind(render_encoder, draw_indirect_buffer_range.range); // Draw indirect buffer is not indexed, this binds the whole buffer
 
@@ -383,6 +381,7 @@ void Forward_renderer::draw_primitives(
     ERHE_VERIFY(base.render_pass != nullptr);
     erhe::graphics::Render_pipeline* render_pipeline = parameters.base_render_pipeline.get_pipeline_for(
         base.render_pass->get_descriptor(),
+        parameters.color_blend,
         parameters.shader_stages,
         empty_vertex_input.vertex_input.get(),
         &empty_vertex_input.vertex_format
@@ -448,8 +447,10 @@ auto Forward_renderer::prewarm_standard_variants(const Prewarm_parameters& param
                     parameters.mesh_memory,
                     environment_key,
                     meshes,
+                    {}, // TODO
                     parameters.primitive_mode,
-                    Variant_signature_policy::require_exact_variant_signature
+                    Variant_signature_policy::require_exact_variant_signature,
+                    parameters.blending_mode_policy
                 );
             }
 

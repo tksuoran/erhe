@@ -162,12 +162,9 @@ Tile_renderer::Tile_renderer(
         graphics_device,
         erhe::graphics::Base_render_pipeline_create_info{
             .debug_label    = erhe::utility::Debug_label{"Map renderer"},
-            //.shader_stages  = &m_shader_stages,
-            //.vertex_input   = &m_vertex_input,
             .input_assembly = erhe::graphics::Input_assembly_state::triangle_strip,
             .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
             .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
-            .color_blend    = erhe::graphics::Color_blend_state::color_blend_premultiplied,
         }
     }
 {
@@ -745,6 +742,7 @@ void Tile_renderer::render(erhe::graphics::Render_command_encoder& render_encode
 
     erhe::graphics::Render_pipeline* pipeline_ptr = m_pipeline.get_pipeline_for(
         render_pass.get_descriptor(),
+        &erhe::graphics::Color_blend_state::color_blend_premultiplied,
         &m_shader_stages,
         &m_vertex_input,
         &m_vertex_format

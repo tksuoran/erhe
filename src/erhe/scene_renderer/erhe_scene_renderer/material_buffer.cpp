@@ -46,6 +46,7 @@ Material_interface::Material_interface(erhe::graphics::Device& graphics_device, 
         .emissive_texture           = material_struct.add_uvec2("emissive_texture"          )->get_offset_in_parent(),
         .opacity                    = material_struct.add_float("opacity"                   )->get_offset_in_parent(),
         .normal_texture_scale       = material_struct.add_float("normal_texture_scale"      )->get_offset_in_parent(),
+        .alpha_cutoff               = material_struct.add_float("alpha_cutoff"              )->get_offset_in_parent(),
 
         .base_color_rotation_scale         = material_struct.add_vec4("base_color_rotation_scale"        )->get_offset_in_parent(),
         .metallic_roughness_rotation_scale = material_struct.add_vec4("metallic_roughness_rotation_scale")->get_offset_in_parent(),
@@ -199,6 +200,7 @@ auto Material_buffer::update(
         write(gpu_data, write_offset + offsets.emissive_texture,           as_span(emissive.shader_handle));
         write(gpu_data, write_offset + offsets.opacity,                    as_span(material_data.opacity    ));
         write(gpu_data, write_offset + offsets.normal_texture_scale,       as_span(material_data.normal_texture_scale));
+        write(gpu_data, write_offset + offsets.alpha_cutoff,               as_span(material_data.alpha_cutoff));
 
         write(gpu_data, write_offset + offsets.base_color_rotation_scale,         as_span(base_color        .rotation_scale)); // uvec4
         write(gpu_data, write_offset + offsets.metallic_roughness_rotation_scale, as_span(metallic_roughness.rotation_scale)); // uvec4

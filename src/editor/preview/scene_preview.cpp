@@ -44,14 +44,10 @@ Scene_preview::Scene_preview(
     , m_render_pipeline{
         graphics_device,
         erhe::graphics::Base_render_pipeline_create_info{
-            .debug_label    = erhe::utility::Debug_label{"Polygon Fill Opaque"},
-            //.shader_stages = programs.standard.shader_stages(),
-            //.vertex_input  = &mesh_memory.vertex_input(),
-            //.vertex_format = &mesh_memory.get_vertex_format(erhe::scene_renderer::mesh_flag_none),
+            .debug_label    = erhe::utility::Debug_label{"Scene Preview"},
             .input_assembly = Input_assembly_state::triangle,
             .rasterization  = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
-            .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
-            .color_blend    = Color_blend_state::color_blend_disabled
+            .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth)
         }
     }
     , m_render_pipelines{&m_render_pipeline}

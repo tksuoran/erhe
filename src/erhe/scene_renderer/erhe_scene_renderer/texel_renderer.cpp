@@ -93,11 +93,13 @@ void Texel_renderer::render(const Render_parameters& parameters)
     uint32_t texel_count_x = shadowmap_texture->get_width();
     uint32_t texel_count_y = shadowmap_texture->get_height();
 
+    // TODO
     erhe::graphics::Render_pipeline* render_pipeline = pipeline.get_pipeline_for(
         parameters.render_pass.get_descriptor(),
-        nullptr, // no shader stages override
-        nullptr, // no vertex input override
-        nullptr  // no vertex format override
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr
     );
     if (render_pipeline == nullptr) {
         return;

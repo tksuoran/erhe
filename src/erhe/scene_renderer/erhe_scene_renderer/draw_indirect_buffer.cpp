@@ -112,15 +112,13 @@ auto Draw_indirect_buffer::update(
 
 auto Draw_indirect_buffer::update(
     const Render_bucket&                  bucket,
-    const erhe::primitive::Primitive_mode primitive_mode,
-    const erhe::Item_filter&              filter
+    const erhe::primitive::Primitive_mode primitive_mode
 ) -> Draw_indirect_buffer_range
 {
     ERHE_PROFILE_FUNCTION();
 
-    if (bucket.entries.empty()) {
-        return {};
-    }
+    ERHE_VERIFY(!bucket.entries.empty());
+
     const std::size_t                 primitive_count = bucket.entries.size();
     const std::size_t                 entry_size      = sizeof(erhe::graphics::Draw_indexed_primitives_indirect_command);
     const std::size_t                 max_byte_count  = primitive_count * entry_size;
@@ -134,30 +132,16 @@ auto Draw_indirect_buffer::update(
     for (const Mesh_primitive_entry& entry : bucket.entries) {
         const erhe::scene::Mesh* mesh = entry.mesh;
         ERHE_VERIFY(mesh != nullptr);
-        if (mesh->get_node() == nullptr) {
-            continue;
-        }
-        if (!filter(mesh->get_flag_bits())) {
-            continue;
-        }
+        ERHE_VERIFY(mesh->get_node() != nullptr);
         const std::vector<erhe::scene::Mesh_primitive>& mesh_primitives = mesh->get_primitives();
-        if (entry.mesh_primitive_index >= mesh_primitives.size()) {
-            continue;
-        }
+        ERHE_VERIFY(entry.mesh_primitive_index < mesh_primitives.size());
         const erhe::scene::Mesh_primitive& mesh_primitive = mesh_primitives[entry.mesh_primitive_index];
         const erhe::primitive::Primitive*  primitive_ptr  = mesh_primitive.primitive.get();
-        if (primitive_ptr == nullptr) {
-            continue;
-        }
+        ERHE_VERIFY(primitive_ptr != nullptr);
         const erhe::primitive::Buffer_mesh* buffer_mesh = primitive_ptr->get_renderable_mesh();
-        if (buffer_mesh == nullptr) {
-            continue;
-        }
+        ERHE_VERIFY(buffer_mesh != nullptr);
         const erhe::primitive::Index_range index_range = buffer_mesh->index_range(primitive_mode);
-        if (index_range.index_count == 0) {
-            continue;
-        }
-
+        ERHE_VERIFY(index_range.index_count > 0);
         uint32_t index_count = static_cast<uint32_t>(index_range.index_count);
         if (m_max_index_count_enable) {
             index_count = std::min(index_count, static_cast<uint32_t>(m_max_index_count));

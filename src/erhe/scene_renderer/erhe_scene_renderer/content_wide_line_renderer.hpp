@@ -166,6 +166,7 @@ public:
         erhe::graphics::Render_command_encoder& render_encoder,
         erhe::graphics::Base_render_pipeline&   pipeline_state,
         const erhe::graphics::Render_pass&      render_pass,
+        erhe::graphics::Color_blend_state*      color_blend_state,
         uint32_t                                group = 0,
         bool                                    multiview = false
     );

@@ -30,7 +30,7 @@ public:
     static void stencil_op           (const char* label, erhe::graphics::Stencil_op_state& stencil_op);
     static void depth_stencil        (erhe::graphics::Depth_stencil_state& depth_stencil);
     static void blend_state_component(const char* label, erhe::graphics::Blend_state_component& component);
-    static void color_blend          (erhe::graphics::Color_blend_state& color_blend);
+    //static void color_blend          (erhe::graphics::Color_blend_state& color_blend);
 };
 
 void pipeline_imgui(erhe::graphics::Render_pipeline_state& pipeline);

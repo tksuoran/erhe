@@ -313,12 +313,9 @@ Imgui_renderer::Imgui_renderer(
         graphics_device,
         erhe::graphics::Base_render_pipeline_create_info{
             .debug_label    = erhe::utility::Debug_label{"ImGui Renderer"},
-            //.shader_stages  = &m_shader_stages,
-            //.vertex_input   = &m_vertex_input,
             .input_assembly = erhe::graphics::Input_assembly_state::triangle,
             .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
             .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
-            .color_blend    = erhe::graphics::Color_blend_state::color_blend_alpha
         }
     }
     , m_dummy_texture{graphics_device.create_dummy_texture(init_command_buffer, erhe::dataformat::Format::format_8_vec4_srgb)}
@@ -1195,6 +1192,7 @@ void Imgui_renderer::render_draw_data(
     render_encoder.set_bind_group_layout(&m_bind_group_layout);
     erhe::graphics::Render_pipeline* pipeline = m_pipeline.get_pipeline_for(
         render_pass.get_descriptor(),
+        &erhe::graphics::Color_blend_state::color_blend_alpha,
         &m_shader_stages,
         &m_vertex_input,
         &m_imgui_program_interface.vertex_format

@@ -65,12 +65,9 @@ void Rendering_test::make_quad_pipeline()
         m_graphics_device,
         erhe::graphics::Base_render_pipeline_create_info{
             .debug_label    = erhe::utility::Debug_label{"Textured Quad Pipeline"},
-            //.shader_stages  = m_quad_shader_stages.get(),
-            //.vertex_input   = &m_empty_vertex_input,
             .input_assembly = erhe::graphics::Input_assembly_state::triangle,
             .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
-            .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
-            .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled
+            .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled
         }
     };
 }
@@ -120,6 +117,7 @@ void Rendering_test::draw_textured_quad_cell(
         erhe::graphics::Render_pipeline* p = m_quad_pipeline.get_pipeline_for(
             m_swapchain_render_pass->get_descriptor(),
             nullptr,
+            m_quad_shader_stages.get(),
             nullptr,
             nullptr
         );

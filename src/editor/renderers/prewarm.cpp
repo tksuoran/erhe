@@ -124,21 +124,22 @@ void prewarm_all(
             if (!pass) {
                 continue;
             }
+            Composition_pass_data& data = pass->data;
             // Fullscreen passes (empty mesh_layers) take the
             // Forward_renderer::draw_primitives path with their own
             // fixed shader_stages; they do not consult the variant cache,
             // so prewarming them via prewarm_standard_variants would just
             // compile unrelated variants.
-            if (pass->mesh_layers.empty()) {
+            if (data.mesh_layers.empty()) {
                 continue;
             }
-            if (pass->base_render_pipelines.empty()) {
+            if (data.base_render_pipelines.empty()) {
                 continue;
             }
 
             std::vector<std::span<const std::shared_ptr<erhe::scene::Mesh>>> mesh_spans;
-            mesh_spans.reserve(pass->mesh_layers.size());
-            for (const erhe::scene::Layer_id layer_id : pass->mesh_layers) {
+            mesh_spans.reserve(data.mesh_layers.size());
+            for (const erhe::scene::Layer_id layer_id : data.mesh_layers) {
                 const std::shared_ptr<erhe::scene::Mesh_layer> mesh_layer = scene.get_mesh_layer_by_id(layer_id);
                 if (mesh_layer) {
                     mesh_spans.push_back(mesh_layer->meshes);
@@ -146,16 +147,16 @@ void prewarm_all(
             }
 
             const erhe::scene_renderer::Forward_renderer::Prewarm_parameters params{
-                .render_pipeline_states        = std::span<erhe::graphics::Base_render_pipeline*>{pass->base_render_pipelines},
+                .render_pipeline_states        = data.base_render_pipelines,
                 .mesh_spans                    = mesh_spans,
                 .extra_materials               = extra_materials,
                 .multiview_view_counts         = view_counts_span,
                 .mesh_memory                   = *context.mesh_memory,
-                .primitive_mode                = pass->primitive_mode,
+                .primitive_mode                = data.primitive_mode,
                 .warmup_targets                = {},
                 .light_partition               = partition,
-                .shader_key_force_enable_mask  = pass->shader_key_force_enable_mask,
-                .shader_key_force_disable_mask = pass->shader_key_force_disable_mask,
+                .shader_key_force_enable_mask  = data.shader_key_force_enable_mask,
+                .shader_key_force_disable_mask = data.shader_key_force_disable_mask,
                 .shader_debug                  = erhe::scene_renderer::Shader_debug::none
             };
             forward_pipeline_warmups += context.forward_renderer->prewarm_standard_variants(params);

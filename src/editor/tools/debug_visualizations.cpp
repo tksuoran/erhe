@@ -123,11 +123,9 @@ Debug_visualizations::Debug_visualizations(
         erhe::graphics::Base_render_pipeline_create_info{
             .debug_label    = erhe::utility::Debug_label{"Shadow_debug"},
             //.shader_stages  = programs.debug_shadow.shader_stages(),
-            //.vertex_input   = &m_empty_vertex_input,
             .input_assembly = erhe::graphics::Input_assembly_state::triangle,
             .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
-            .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled(),
-            .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled
+            .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled()
         }
     }
 {

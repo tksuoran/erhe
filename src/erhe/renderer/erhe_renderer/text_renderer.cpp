@@ -218,12 +218,9 @@ Text_renderer::Text_renderer(
         graphics_device,
         erhe::graphics::Base_render_pipeline_create_info{
             .debug_label    = erhe::utility::Debug_label{"Text renderer"},
-            //.shader_stages  = &m_shader_stages,
-            //.vertex_input   = &m_vertex_input,
             .input_assembly = erhe::graphics::Input_assembly_state::triangle,
             .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
             .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled(),
-            .color_blend    = erhe::graphics::Color_blend_state::color_blend_premultiplied,
         }
     }
 {
@@ -395,12 +392,9 @@ void Text_renderer::render(
     encoder.set_viewport_rect(viewport.x, viewport.y, viewport.width, viewport.height);
     encoder.set_bind_group_layout(&m_bind_group_layout);
 
-    // multiview                             &&
-    // m_multiview_shader_stages.has_value() &&
-    // m_multiview_shader_stages->is_valid()
-
     erhe::graphics::Render_pipeline* pipeline = m_pipeline.get_pipeline_for(
         render_pass.get_descriptor(),
+        &erhe::graphics::Color_blend_state::color_blend_premultiplied,
         multiview ? &m_multiview_shader_stages.value() : &m_shader_stages,
         &m_vertex_input,
         nullptr

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_item/item.hpp"
+#include "erhe_primitive/enums.hpp"
 
 #include <glm/glm.hpp>
 
@@ -14,22 +15,6 @@ namespace erhe::graphics {
 }
 
 namespace erhe::primitive {
-
-// Selects which BxDF the standard shader applies. Drives a count-style
-// variant axis (ERHE_BXDF_MODEL) so each value compiles a distinct
-// shader -- materials with different BxDFs land in different bucket
-// variants. The integer values are wired into the GLSL macros
-// ERHE_BXDF_MODEL_UNLIT / _ISOTROPIC_BRDF / _ANISOTROPIC_BRDF /
-// _ANISOTROPIC_SLOPE / _ANISOTROPIC_ENGINE_READY in
-// erhe_standard_variant.glsl; keep them in sync.
-enum class Bxdf_model : uint16_t
-{
-    unlit                    = 0,
-    isotropic_brdf           = 1,
-    anisotropic_brdf         = 2,
-    anisotropic_slope        = 3,
-    anisotropic_engine_ready = 4
-};
 
 class Material_texture_sampler
 {
@@ -58,6 +43,26 @@ public:
 [[nodiscard]] auto operator==(const Material_texture_samplers& lhs, const Material_texture_samplers& rhs);
 [[nodiscard]] auto operator!=(const Material_texture_samplers& lhs, const Material_texture_samplers& rhs);
 
+// True when the mode needs framebuffer blending (so the host mesh must
+// route through the translucent composition-pass family). alpha_test and
+// screen_door render with depth write enabled and discard for masked
+// pixels, so they stay in the opaque pass.
+[[nodiscard]] inline auto needs_translucent_pass(const Material_blending_mode mode) -> bool
+{
+    switch (mode) {
+        case Material_blending_mode::alpha_blend:
+        case Material_blending_mode::multiply:
+        case Material_blending_mode::add:
+        case Material_blending_mode::subtract:
+            return true;
+        case Material_blending_mode::opaque:
+        case Material_blending_mode::screen_door:
+        case Material_blending_mode::alpha_test:
+            return false;
+    }
+    return false;
+}
+
 class Material_data
 {
 public:
@@ -70,6 +75,8 @@ public:
     float                     normal_texture_scale      {1.0f};
     float                     occlusion_texture_strength{1.0f};
     Bxdf_model                bxdf_model                {Bxdf_model::isotropic_brdf};
+    Material_blending_mode    blending_mode             {Material_blending_mode::opaque};
+    float                     alpha_cutoff              {0.5f};
     bool                      use_circular_brushed_metal{false};
     bool                      use_aniso_control         {false};
     Material_texture_samplers texture_samplers          {};

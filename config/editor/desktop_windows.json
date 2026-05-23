@@ -1,10 +1,10 @@
 {
     "windows": {
+        "Content_library_238": true,
         "asset_browser": true,
         "clipboard": false,
         "commands": false,
-        "composer": false,
-        "Content_library_241": true,
+        "composer": true,
         "create": false,
         "debug_visualizations": false,
         "depth_visualization": false,
@@ -23,7 +23,7 @@
         "network": false,
         "node_pproperties": false,
         "operation_stack": false,
-        "operations": true,
+        "operations": false,
         "paint_tool": false,
         "performance": false,
         "physics": true,
@@ -39,7 +39,7 @@
         "timeline": true,
         "tool_properties": false,
         "tools_content_library": false,
-        "transform": true,
+        "transform": false,
         "viewport_config": false
     }
 }

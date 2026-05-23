@@ -32,8 +32,8 @@ Content_wide_line_renderer::Content_wide_line_renderer(
     erhe::graphics::Shader_stages* graphics_shader_stages,
     int                            view_count
 )
-    : m_graphics_device        {graphics_device}
-    , m_view_count         {std::max(1, view_count)}
+    : m_graphics_device {graphics_device}
+    , m_view_count      {std::max(1, view_count)}
     , m_fragment_outputs{
         erhe::graphics::Fragment_output{
             .name     = "out_color",
@@ -198,18 +198,22 @@ Content_wide_line_renderer::Content_wide_line_renderer(
         erhe::graphics::Bind_group_layout_create_info{
             .bindings = {
                 {m_triangle_vertex_buffer_block->get_binding_point(), erhe::graphics::Binding_type::storage_buffer},
-                {m_view_block->get_binding_point(),
+                {
+                    m_view_block->get_binding_point(),
                     (m_view_block->get_type() == erhe::graphics::Shader_resource::Type::shader_storage_block)
                         ? erhe::graphics::Binding_type::storage_buffer
-                        : erhe::graphics::Binding_type::uniform_buffer},
+                        : erhe::graphics::Binding_type::uniform_buffer
+                },
             },
             .debug_label       = "Content wide line multiview graphics",
             .uses_texture_heap = false
         }
     );
 
-    if ((m_compute_shader_stages != nullptr) && m_compute_shader_stages->is_valid() &&
-        (m_graphics_shader_stages != nullptr) && m_graphics_shader_stages->is_valid()) {
+    if (
+        (m_compute_shader_stages != nullptr) && m_compute_shader_stages->is_valid() &&
+        (m_graphics_shader_stages != nullptr) && m_graphics_shader_stages->is_valid()
+    ) {
         m_compute_pipeline.emplace(
             m_graphics_device,
             erhe::graphics::Compute_pipeline_data{
@@ -235,12 +239,14 @@ void Content_wide_line_renderer::set_shader_stages(
     erhe::graphics::Shader_stages* multiview_graphics_shader_stages
 )
 {
-    m_compute_shader_stages           = compute_shader_stages;
-    m_graphics_shader_stages          = graphics_shader_stages;
+    m_compute_shader_stages            = compute_shader_stages;
+    m_graphics_shader_stages           = graphics_shader_stages;
     m_multiview_graphics_shader_stages = multiview_graphics_shader_stages;
 
-    if ((m_compute_shader_stages != nullptr) && m_compute_shader_stages->is_valid() &&
-        (m_graphics_shader_stages != nullptr) && m_graphics_shader_stages->is_valid()) {
+    if (
+        (m_compute_shader_stages != nullptr) && m_compute_shader_stages->is_valid() &&
+        (m_graphics_shader_stages != nullptr) && m_graphics_shader_stages->is_valid()
+    ) {
         m_compute_pipeline.emplace(
             m_graphics_device,
             erhe::graphics::Compute_pipeline_data{
@@ -253,19 +259,19 @@ void Content_wide_line_renderer::set_shader_stages(
     }
 }
 
-auto Content_wide_line_renderer::get_edge_line_vertex_struct      () const -> erhe::graphics::Shader_resource* { return m_edge_line_vertex_struct.get(); }
-auto Content_wide_line_renderer::get_edge_line_vertex_buffer_block() const -> erhe::graphics::Shader_resource* { return m_edge_line_vertex_buffer_block.get(); }
-auto Content_wide_line_renderer::get_triangle_vertex_struct       () const -> erhe::graphics::Shader_resource* { return m_triangle_vertex_struct.get(); }
-auto Content_wide_line_renderer::get_triangle_vertex_buffer_block () const -> erhe::graphics::Shader_resource* { return m_triangle_vertex_buffer_block.get(); }
-auto Content_wide_line_renderer::get_triangle_vertex_buffer_read_block() const -> erhe::graphics::Shader_resource* { return m_triangle_vertex_buffer_read_block.get(); }
-auto Content_wide_line_renderer::get_view_camera_struct           () const -> erhe::graphics::Shader_resource* { return m_view_camera_struct.get(); }
-auto Content_wide_line_renderer::get_view_block                   () const -> erhe::graphics::Shader_resource* { return m_view_block.get(); }
-auto Content_wide_line_renderer::get_bind_group_layout            () const -> erhe::graphics::Bind_group_layout* { return m_bind_group_layout.get(); }
+auto Content_wide_line_renderer::get_edge_line_vertex_struct             () const -> erhe::graphics::Shader_resource*   { return m_edge_line_vertex_struct.get(); }
+auto Content_wide_line_renderer::get_edge_line_vertex_buffer_block       () const -> erhe::graphics::Shader_resource*   { return m_edge_line_vertex_buffer_block.get(); }
+auto Content_wide_line_renderer::get_triangle_vertex_struct              () const -> erhe::graphics::Shader_resource*   { return m_triangle_vertex_struct.get(); }
+auto Content_wide_line_renderer::get_triangle_vertex_buffer_block        () const -> erhe::graphics::Shader_resource*   { return m_triangle_vertex_buffer_block.get(); }
+auto Content_wide_line_renderer::get_triangle_vertex_buffer_read_block   () const -> erhe::graphics::Shader_resource*   { return m_triangle_vertex_buffer_read_block.get(); }
+auto Content_wide_line_renderer::get_view_camera_struct                  () const -> erhe::graphics::Shader_resource*   { return m_view_camera_struct.get(); }
+auto Content_wide_line_renderer::get_view_block                          () const -> erhe::graphics::Shader_resource*   { return m_view_block.get(); }
+auto Content_wide_line_renderer::get_bind_group_layout                   () const -> erhe::graphics::Bind_group_layout* { return m_bind_group_layout.get(); }
 auto Content_wide_line_renderer::get_multiview_graphics_bind_group_layout() const -> erhe::graphics::Bind_group_layout* { return m_multiview_graphics_bind_group_layout.get(); }
-auto Content_wide_line_renderer::get_fragment_outputs             () -> erhe::graphics::Fragment_outputs&       { return m_fragment_outputs; }
-auto Content_wide_line_renderer::get_triangle_vertex_format       () -> erhe::dataformat::Vertex_format&       { return m_triangle_vertex_format; }
-auto Content_wide_line_renderer::get_vertex_input                 () -> erhe::graphics::Vertex_input_state*    { return &m_vertex_input; }
-auto Content_wide_line_renderer::get_graphics_shader_stages       () -> erhe::graphics::Shader_stages*         { return m_graphics_shader_stages; }
+auto Content_wide_line_renderer::get_fragment_outputs                    () -> erhe::graphics::Fragment_outputs&        { return m_fragment_outputs; }
+auto Content_wide_line_renderer::get_triangle_vertex_format              () -> erhe::dataformat::Vertex_format&         { return m_triangle_vertex_format; }
+auto Content_wide_line_renderer::get_vertex_input                        () -> erhe::graphics::Vertex_input_state*      { return &m_vertex_input; }
+auto Content_wide_line_renderer::get_graphics_shader_stages              () -> erhe::graphics::Shader_stages*           { return m_graphics_shader_stages; }
 
 void Content_wide_line_renderer::begin_frame()
 {
@@ -507,10 +513,11 @@ void Content_wide_line_renderer::compute(
         // same (buffer, offset, size) tuple -- meshes sharing a single
         // pool block produce identical binds in sequence.
         const std::size_t edge_buffer_size = dispatch.edge_count * 2 * sizeof(float) * 8;
-        if (dispatch.edge_buffer != prev_edge_buffer ||
-            dispatch.edge_buffer_byte_offset != prev_edge_buffer_offset ||
-            edge_buffer_size != prev_edge_buffer_size)
-        {
+        if (
+            (dispatch.edge_buffer != prev_edge_buffer) ||
+            (dispatch.edge_buffer_byte_offset != prev_edge_buffer_offset) ||
+            (edge_buffer_size != prev_edge_buffer_size)
+        ) {
             command_encoder.set_buffer(
                 erhe::graphics::Buffer_target::storage,
                 dispatch.edge_buffer,
@@ -565,6 +572,7 @@ void Content_wide_line_renderer::render(
     erhe::graphics::Render_command_encoder& render_encoder,
     erhe::graphics::Base_render_pipeline&   pipeline_state,
     const erhe::graphics::Render_pass&      render_pass,
+    erhe::graphics::Color_blend_state*      color_blend_state,
     const uint32_t                          group,
     const bool                              multiview
 )
@@ -598,15 +606,17 @@ void Content_wide_line_renderer::render(
 
         erhe::graphics::Render_pipeline_state temp_state{
             erhe::graphics::Render_pipeline_data{
-                .debug_label    = pipeline_state.data.debug_label,
-                .shader_stages  = m_multiview_graphics_shader_stages,
-                .vertex_input   = nullptr, // multiview path reads triangle SSBO, not vertex buffer
-                .input_assembly = pipeline_state.data.input_assembly,
-                .multisample    = pipeline_state.data.multisample,
+                .debug_label          = pipeline_state.data.debug_label,
+                .shader_stages        = m_multiview_graphics_shader_stages,
+                .vertex_input         = nullptr, // multiview path reads triangle SSBO, not vertex buffer
+                .input_assembly       = pipeline_state.data.input_assembly,
+                .multisample          = pipeline_state.data.multisample,
                 .viewport_depth_range = pipeline_state.data.viewport_depth_range,
-                .rasterization  = pipeline_state.data.rasterization,
-                .depth_stencil  = pipeline_state.data.depth_stencil,
-                .color_blend    = pipeline_state.data.color_blend
+                .rasterization        = pipeline_state.data.rasterization,
+                .depth_stencil        = pipeline_state.data.depth_stencil,
+                .color_blend          = (color_blend_state != nullptr) 
+                    ? *color_blend_state 
+                    : erhe::graphics::Color_blend_state::color_blend_disabled
             }
         };
 
@@ -642,6 +652,7 @@ void Content_wide_line_renderer::render(
 
     erhe::graphics::Render_pipeline* render_pipeline = pipeline_state.get_pipeline_for(
         render_pass.get_descriptor(),
+        color_blend_state,
         m_graphics_shader_stages,
         &m_vertex_input,
         &m_triangle_vertex_format

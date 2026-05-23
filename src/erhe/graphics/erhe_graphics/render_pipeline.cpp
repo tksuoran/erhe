@@ -2,6 +2,8 @@
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/swapchain.hpp"
 #include "erhe_graphics/texture.hpp"
+#include "erhe_graphics/state/vertex_input_state.hpp"
+#include "erhe_hash/hash.hpp"
 #include "erhe_verify/verify.hpp"
 
 #if defined(ERHE_GRAPHICS_API_OPENGL)
@@ -134,51 +136,12 @@ auto Render_pipeline::get_create_info() const -> const Render_pipeline_create_in
 
 // --- Base_render_pipeline ---
 
-namespace {
-
-auto compute_format_hash(const Render_pipeline_create_info& ci) -> std::size_t
-{
-    auto hash_combine = [](std::size_t& seed, std::size_t value) {
-        seed ^= value + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-    };
-    std::size_t hash = 0;
-    hash_combine(hash, static_cast<std::size_t>(ci.color_attachment_count));
-    for (unsigned int i = 0; i < ci.color_attachment_count; ++i) {
-        hash_combine(hash, static_cast<std::size_t>(ci.color_attachment_formats[i]));
-        hash_combine(hash, static_cast<std::size_t>(ci.color_usage_before[i]));
-        hash_combine(hash, static_cast<std::size_t>(ci.color_usage_after[i]));
-    }
-    hash_combine(hash, static_cast<std::size_t>(ci.depth_attachment_format));
-    hash_combine(hash, static_cast<std::size_t>(ci.stencil_attachment_format));
-    hash_combine(hash, static_cast<std::size_t>(ci.sample_count));
-    hash_combine(hash, static_cast<std::size_t>(ci.view_mask));
-    hash_combine(hash, static_cast<std::size_t>(ci.depth_usage_before));
-    hash_combine(hash, static_cast<std::size_t>(ci.depth_usage_after));
-    // shader_stages / vertex_input / vertex_format are baked into the
-    // concrete Render_pipeline (VkPipeline modules on Vulkan, the
-    // Shader_stages* read by set_render_pipeline on OpenGL), so they
-    // must participate in the cache key. Pointer identity is stable
-    // for the editor's lifetime: shader_stages comes from a
-    // Reloadable_shader_stages owned by Shader_variant_cache, and
-    // vertex_input / vertex_format come from Mesh_memory's caches.
-    hash_combine(hash, reinterpret_cast<std::uintptr_t>(ci.shader_stages));
-    hash_combine(hash, reinterpret_cast<std::uintptr_t>(ci.vertex_input));
-    hash_combine(hash, reinterpret_cast<std::uintptr_t>(ci.vertex_format));
-    return hash;
-}
-
-} // anonymous namespace
-
 Base_render_pipeline::Base_render_pipeline() = default;
 
 Base_render_pipeline::Base_render_pipeline(Device& device, const Base_render_pipeline_create_info& create_info)
     : data    {std::move(create_info)}
     , m_device{&device}
 {
-    // These are handled later by get_pipeline_for()
-    //ERHE_VERIFY(data.shader_stages = nullptr);
-    //ERHE_VERIFY(data.vertex_input  == nullptr);
-    //ERHE_VERIFY(data.vertex_format == nullptr);
 }
 
 Base_render_pipeline::~Base_render_pipeline() noexcept = default;
@@ -202,8 +165,44 @@ auto Base_render_pipeline::operator=(Base_render_pipeline&& other) noexcept -> B
     return *this;
 }
 
+[[nodiscard]] auto Render_pipeline_create_info::get_hash() const -> uint64_t
+{
+    uint64_t 
+    v = erhe::hash::hash(&base.input_assembly,       sizeof(Input_assembly_state));
+    v = erhe::hash::hash(&base.multisample,          sizeof(Multisample_state), v);
+    v = erhe::hash::hash(&base.viewport_depth_range, sizeof(Viewport_depth_range_state), v);
+    v = erhe::hash::hash(&base.rasterization,        sizeof(Rasterization_state), v);
+    v = erhe::hash::hash(&base.depth_stencil,        sizeof(Depth_stencil_state), v);
+    v = erhe::hash::hash(&base.bind_group_layout,    sizeof(Bind_group_layout*), v);
+    if (base.color_blend != nullptr) {
+        v = erhe::hash::hash(base.color_blend, sizeof(Color_blend_state), v);
+    }
+    if (shader_stages != nullptr) {
+        // Pointer
+        v = erhe::hash::hash(&shader_stages, sizeof(Shader_stages*), v);
+    }
+    if (vertex_input != nullptr) {
+        v = erhe::hash::hash(&vertex_input->get_data(), sizeof(Vertex_input_state_data), v);
+    }
+    if (vertex_format != nullptr) {
+        v = erhe::hash::hash(vertex_format->get_hash(), v);
+    }
+    v = erhe::hash::hash(static_cast<uint8_t>(color_attachment_count), v);
+    for (unsigned i = 0; i < color_attachment_count; ++i) {
+        v = erhe::hash::hash(static_cast<uint8_t>(color_attachment_formats[i]), v);
+    }
+    v = erhe::hash::hash(static_cast<uint8_t>(depth_attachment_format), v);
+    v = erhe::hash::hash(static_cast<uint8_t>(stencil_attachment_format), v);
+    v = erhe::hash::hash(static_cast<uint8_t>(sample_count), v);
+    v = erhe::hash::hash(static_cast<uint8_t>(view_mask), v);
+
+    // Usage before and after does not affect hash on purpose.
+    return v;
+}
+
 auto Base_render_pipeline::get_pipeline_for(
     const Render_pass_descriptor&          render_pass_desc,
+    const Color_blend_state*               color_blend,
     const Shader_stages*                   shader_stages,
     const Vertex_input_state*              vertex_input,
     const erhe::dataformat::Vertex_format* vertex_format
@@ -220,9 +219,14 @@ auto Base_render_pipeline::get_pipeline_for(
         .vertex_input  = vertex_input,
         .vertex_format = vertex_format
     };
+
+    if (data.color_blend == nullptr) {
+        ci.base.color_blend = color_blend;
+    }
+
     ci.set_format_from_render_pass(render_pass_desc);
 
-    const std::size_t hash = compute_format_hash(ci);
+    const uint64_t hash = ci.get_hash();
 
     {
         std::lock_guard<std::mutex> lock{m_mutex};

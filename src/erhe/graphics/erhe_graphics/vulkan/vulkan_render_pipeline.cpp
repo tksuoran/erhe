@@ -170,22 +170,22 @@ Render_pipeline_impl::Render_pipeline_impl(Device& device, const Render_pipeline
     };
 
     VkColorComponentFlags color_write_mask = 0;
-    if (base.color_blend.write_mask.red)   color_write_mask |= VK_COLOR_COMPONENT_R_BIT;
-    if (base.color_blend.write_mask.green) color_write_mask |= VK_COLOR_COMPONENT_G_BIT;
-    if (base.color_blend.write_mask.blue)  color_write_mask |= VK_COLOR_COMPONENT_B_BIT;
-    if (base.color_blend.write_mask.alpha) color_write_mask |= VK_COLOR_COMPONENT_A_BIT;
+    const Color_blend_state& color_blend = (base.color_blend != nullptr) ? *base.color_blend : erhe::graphics::Color_blend_state::color_blend_disabled;
+    if (color_blend.write_mask.red)   color_write_mask |= VK_COLOR_COMPONENT_R_BIT;
+    if (color_blend.write_mask.green) color_write_mask |= VK_COLOR_COMPONENT_G_BIT;
+    if (color_blend.write_mask.blue)  color_write_mask |= VK_COLOR_COMPONENT_B_BIT;
+    if (color_blend.write_mask.alpha) color_write_mask |= VK_COLOR_COMPONENT_A_BIT;
 
     const VkPipelineColorBlendAttachmentState color_blend_attachment{
-        .blendEnable         = base.color_blend.enabled ? VK_TRUE : VK_FALSE,
-        .srcColorBlendFactor = to_vk_blend_factor(base.color_blend.rgb.source_factor),
-        .dstColorBlendFactor = to_vk_blend_factor(base.color_blend.rgb.destination_factor),
-        .colorBlendOp        = to_vk_blend_op    (base.color_blend.rgb.equation_mode),
-        .srcAlphaBlendFactor = to_vk_blend_factor(base.color_blend.alpha.source_factor),
-        .dstAlphaBlendFactor = to_vk_blend_factor(base.color_blend.alpha.destination_factor),
-        .alphaBlendOp        = to_vk_blend_op    (base.color_blend.alpha.equation_mode),
+        .blendEnable         = color_blend.enabled ? VK_TRUE : VK_FALSE,
+        .srcColorBlendFactor = to_vk_blend_factor(color_blend.rgb.source_factor),
+        .dstColorBlendFactor = to_vk_blend_factor(color_blend.rgb.destination_factor),
+        .colorBlendOp        = to_vk_blend_op    (color_blend.rgb.equation_mode),
+        .srcAlphaBlendFactor = to_vk_blend_factor(color_blend.alpha.source_factor),
+        .dstAlphaBlendFactor = to_vk_blend_factor(color_blend.alpha.destination_factor),
+        .alphaBlendOp        = to_vk_blend_op    (color_blend.alpha.equation_mode),
         .colorWriteMask      = color_write_mask
     };
-
     const VkPipelineColorBlendStateCreateInfo color_blend_state{
         .sType           = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
         .pNext           = nullptr,
@@ -195,10 +195,10 @@ Render_pipeline_impl::Render_pipeline_impl(Device& device, const Render_pipeline
         .attachmentCount = (create_info.color_attachment_count > 0) ? create_info.color_attachment_count : 0u,
         .pAttachments    = (create_info.color_attachment_count > 0) ? &color_blend_attachment : nullptr,
         .blendConstants  = {
-            base.color_blend.constant[0],
-            base.color_blend.constant[1],
-            base.color_blend.constant[2],
-            base.color_blend.constant[3]
+            color_blend.constant[0],
+            color_blend.constant[1],
+            color_blend.constant[2],
+            color_blend.constant[3]
         }
     };
 

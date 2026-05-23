@@ -478,8 +478,7 @@ private:
                 .debug_label    = erhe::utility::Debug_label{"Example Render_pass"},
                 .input_assembly = erhe::graphics::Input_assembly_state::triangle,
                 .rasterization  = erhe::graphics::Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
-                .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled(),
-                .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled
+                .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled()
             }
         );
         m_render_pipelines.push_back(m_render_pipeline.get());

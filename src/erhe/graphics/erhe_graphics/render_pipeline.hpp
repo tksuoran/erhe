@@ -37,8 +37,8 @@ public:
     Viewport_depth_range_state viewport_depth_range{};
     Rasterization_state        rasterization       {};
     Depth_stencil_state        depth_stencil       {};
-    Color_blend_state          color_blend         {};
     const Bind_group_layout*   bind_group_layout   {nullptr};
+    const Color_blend_state*   color_blend         {nullptr};
 };
 
 class Render_pipeline_create_info
@@ -46,6 +46,8 @@ class Render_pipeline_create_info
 public:
     // Helper: populate format fields from a Render_pass_descriptor
     void set_format_from_render_pass(const Render_pass_descriptor& desc);
+
+    [[nodiscard]] auto get_hash() const -> uint64_t;
 
     Base_render_pipeline_create_info        base;
 
@@ -116,6 +118,7 @@ public:
     // Call this during rendering when the render pass is active.
     [[nodiscard]] auto get_pipeline_for(
         const Render_pass_descriptor&          render_pass_desc,
+        const Color_blend_state*               color_blend,
         const Shader_stages*                   shader_stages,
         const Vertex_input_state*              vertex_input,
         const erhe::dataformat::Vertex_format* vertex_format
@@ -127,9 +130,9 @@ public:
     Base_render_pipeline_create_info data;
 
 private:
-    Device*                                                           m_device{nullptr};
-    std::mutex                                                        m_mutex;
-    std::unordered_map<std::size_t, std::unique_ptr<Render_pipeline>> m_variants;
+    Device*                                                        m_device{nullptr};
+    std::mutex                                                     m_mutex;
+    std::unordered_map<uint64_t, std::unique_ptr<Render_pipeline>> m_variants;
 };
 
 } // namespace erhe::graphics

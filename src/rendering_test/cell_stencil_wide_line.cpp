@@ -34,8 +34,6 @@ void Rendering_test::make_stencil_wide_line_pipeline()
         m_graphics_device,
         erhe::graphics::Base_render_pipeline_create_info{
             .debug_label    = erhe::utility::Debug_label{"Compute Edge Lines + Stencil Test != 1"},
-            //.shader_stages  = m_content_wide_line_renderer->get_graphics_shader_stages(),
-            //.vertex_input   = m_content_wide_line_renderer->get_vertex_input(),
             .input_assembly = erhe::graphics::Input_assembly_state::triangle,
             .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
             .depth_stencil  = {
@@ -45,8 +43,7 @@ void Rendering_test::make_stencil_wide_line_pipeline()
                 .stencil_test_enable = true,
                 .stencil_front       = test_ne_1_op,
                 .stencil_back        = test_ne_1_op
-            },
-            .color_blend    = erhe::graphics::Color_blend_state::color_blend_premultiplied
+            }
         }
     );
 }
@@ -126,6 +123,7 @@ void Rendering_test::render_stencil_wide_line_cell(
         render_encoder,
         *m_compute_edge_lines_stencil_pipeline,
         *active_render_pass,
+        &erhe::graphics::Color_blend_state::color_blend_premultiplied,
         /*group=*/1
     );
 }

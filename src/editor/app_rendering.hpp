@@ -56,11 +56,11 @@ public:
 
     bool                                 m_y_flip;
     erhe::graphics::Vertex_input_state   m_empty_vertex_input;
-    erhe::graphics::Base_render_pipeline polygon_fill_standard_opaque_positive_determinant;
-    erhe::graphics::Base_render_pipeline polygon_fill_standard_opaque_negative_determinant;
-    erhe::graphics::Base_render_pipeline polygon_fill_standard_opaque_selected_positive_determinant;
-    erhe::graphics::Base_render_pipeline polygon_fill_standard_opaque_selected_negative_determinant;
-    erhe::graphics::Base_render_pipeline polygon_fill_standard_translucent;
+    erhe::graphics::Base_render_pipeline polygon_fill_standard_positive_determinant;
+    erhe::graphics::Base_render_pipeline polygon_fill_standard_negative_determinant;
+    erhe::graphics::Base_render_pipeline polygon_fill_standard_selected_positive_determinant;
+    erhe::graphics::Base_render_pipeline polygon_fill_standard_selected_negative_determinant;
+    erhe::graphics::Color_blend_state    line_hidden_blend_state;
     erhe::graphics::Base_render_pipeline line_hidden_blend;
     erhe::graphics::Base_render_pipeline brush_back;
     erhe::graphics::Base_render_pipeline brush_front;
@@ -68,7 +68,7 @@ public:
     erhe::graphics::Base_render_pipeline outline;
     erhe::graphics::Base_render_pipeline corner_points;
     erhe::graphics::Base_render_pipeline polygon_centroids;
-    erhe::graphics::Base_render_pipeline rendertarget_meshes;
+    //erhe::graphics::Base_render_pipeline rendertarget_meshes;
     erhe::graphics::Base_render_pipeline sky;
     erhe::graphics::Base_render_pipeline grid;
 };
@@ -117,6 +117,22 @@ public:
     void remove(Renderable* renderable);
 
     auto make_composition_pass(std::string_view name) -> std::shared_ptr<Composition_pass>;
+    auto make_composition_pass(
+        std::string_view        name,
+        Composition_pass_data&& data,
+        bool                    selected,
+        bool                    negative_determinant
+    ) -> std::shared_ptr<Composition_pass>;
+    auto make_composition_pass(
+        std::string_view                                             name,
+        Composition_pass_data&&                                      data,
+        std::initializer_list<erhe::graphics::Base_render_pipeline*> pipelines
+    ) -> std::shared_ptr<Composition_pass>;
+    auto make_composition_pass(
+        std::string_view                           name,
+        const std::shared_ptr<Composition_pass>&   base_pass,
+        erhe::scene_renderer::Blending_mode_policy blending_mode_policy
+    ) -> std::shared_ptr<Composition_pass>;
 
     // Read-only access to the Composer's pass list for callers that need
     // to walk the variant-aware Base_render_pipeline pointers. Returns
@@ -136,18 +152,17 @@ public:
     std::vector<glm::vec4>            debug_joint_colors;
     std::shared_ptr<Composition_pass> selection_outline;
     std::shared_ptr<Composition_pass> hover_outline;
-    std::shared_ptr<Composition_pass> opaque_edge_lines_not_selected;
-    std::shared_ptr<Composition_pass> opaque_edge_lines_selected;
+    std::shared_ptr<Composition_pass> edge_lines_not_selected;
+    std::shared_ptr<Composition_pass> edge_lines_selected;
     std::shared_ptr<Composition_pass> translucent_outline;
 
 private:
     void handle_graphics_settings_changed(Graphics_preset_entry* graphics_preset);
 
     [[nodiscard]] auto get_render_pipeline_state(
-        const Composition_pass&    renderpass,
-        erhe::renderer::Blend_mode blend_mode,
-        bool                       selected,
-        bool                       negative_determinant
+        const Composition_pass& renderpass,
+        bool                    selected,
+        bool                    negative_determinant
     ) -> erhe::graphics::Base_render_pipeline*;
 
     [[nodiscard]] auto width () const -> int;

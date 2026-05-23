@@ -44,12 +44,9 @@ void Rendering_test::make_multi_texture_pipeline()
         m_graphics_device,
         erhe::graphics::Base_render_pipeline_create_info{
             .debug_label    = erhe::utility::Debug_label{"Multi Texture Test Pipeline"},
-            //.shader_stages  = m_multi_tex_shader_stages.get(),
-            //.vertex_input   = &m_empty_vertex_input,
             .input_assembly = erhe::graphics::Input_assembly_state::triangle,
             .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
-            .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
-            .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled
+            .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled
         }
     };
 }
@@ -104,6 +101,7 @@ void Rendering_test::draw_multi_texture_quad(
         erhe::graphics::Render_pipeline* p = m_multi_tex_pipeline.get_pipeline_for(
             render_pass.get_descriptor(),
             nullptr,
+            m_multi_tex_shader_stages.get(),
             nullptr,
             nullptr
         );

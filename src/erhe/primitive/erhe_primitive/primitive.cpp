@@ -44,6 +44,36 @@ auto c_str(const Normal_style normal_style) -> const char*
     }
 }
 
+auto c_str(const Bxdf_model bxdf_model) -> const char*
+{
+    switch (bxdf_model) {
+        case Bxdf_model::unlit                   : return "unlit";
+        case Bxdf_model::isotropic_brdf          : return "isotropic_brdf";
+        case Bxdf_model::anisotropic_brdf        : return "anisotropic_brdf";
+        case Bxdf_model::anisotropic_slope       : return "anisotropic_slope";
+        case Bxdf_model::anisotropic_engine_ready: return "anisotropic_engine_ready";
+        default: { 
+            ERHE_FATAL("Bad Bxdf_model");
+        }
+    }
+}
+
+auto c_str(const Material_blending_mode blending_mode) -> const char*
+{
+    switch (blending_mode) {
+        case Material_blending_mode::opaque     : return "opaque";
+        case Material_blending_mode::alpha_blend: return "alpha_blend";
+        case Material_blending_mode::multiply   : return "multiply";
+        case Material_blending_mode::add        : return "add";
+        case Material_blending_mode::subtract   : return "subtract";
+        case Material_blending_mode::screen_door: return "screen_door";
+        case Material_blending_mode::alpha_test : return "alpha_test";
+        default: { 
+            ERHE_FATAL("Bad Material_blending_mode");
+        }
+    }
+}
+
 #pragma region Primitive_raytrace
 Primitive_raytrace::Primitive_raytrace() = default;
 

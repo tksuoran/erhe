@@ -55,8 +55,7 @@ Depth_to_color_rendergraph_node::Depth_to_color_rendergraph_node(
             .debug_label    = erhe::utility::Debug_label{"Debug_view"},
             .input_assembly = erhe::graphics::Input_assembly_state::triangle,
             .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
-            .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
-            .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled
+            .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled
         }
     }
     ,m_render_pipelines{&m_render_pipeline}

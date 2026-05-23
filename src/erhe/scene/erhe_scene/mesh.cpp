@@ -1,4 +1,5 @@
 #include "erhe_scene/mesh.hpp"
+#include "erhe_primitive/material.hpp"
 #include "erhe_utility/bit_helpers.hpp"
 #include "erhe_raytrace/igeometry.hpp"
 #include "erhe_raytrace/iinstance.hpp"
@@ -162,7 +163,9 @@ void Mesh::handle_item_host_update(erhe::Item_host* const old_item_host, erhe::I
 
 void Mesh::handle_flag_bits_update(uint64_t old_flag_bits, uint64_t new_flag_bits)
 {
-    const bool visibility_changed = erhe::utility::test_bit_set(old_flag_bits ^ new_flag_bits, erhe::Item_flags::visible);
+    const uint64_t changed_bits = old_flag_bits ^ new_flag_bits;
+
+    const bool visibility_changed = erhe::utility::test_bit_set(changed_bits, erhe::Item_flags::visible);
     if (!visibility_changed) {
         return;
     }

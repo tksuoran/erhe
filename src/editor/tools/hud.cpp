@@ -152,7 +152,6 @@ Hud::Hud(
     m_rendertarget_mesh->enable_flag_bits(
         erhe::Item_flags::rendertarget |
         erhe::Item_flags::visible      |
-        erhe::Item_flags::translucent  |
         erhe::Item_flags::show_in_developer_ui
     );
 

@@ -63,8 +63,6 @@ auto Debug_renderer_bucket::Debug_renderer_bucket::make_pipeline(const bool visi
         m_graphics_device,
         Base_render_pipeline_create_info{
             .debug_label    = erhe::utility::Debug_label{"Line Renderer"},
-            //.shader_stages  = shader_stages,
-            //.vertex_input   = vertex_input,
             .input_assembly = input_assembly,
             .rasterization  = Rasterization_state::cull_mode_none,
             .depth_stencil  = {
@@ -91,27 +89,6 @@ auto Debug_renderer_bucket::Debug_renderer_bucket::make_pipeline(const bool visi
                     .write_mask      = 0b01111111u
                 },
             },
-
-            // RGB blend factors use CONSTANT_COLOR rather than CONSTANT_ALPHA
-            // because the Vulkan portability subset on MoltenVK rejects
-            // CONSTANT_ALPHA / ONE_MINUS_CONSTANT_ALPHA in the color channel
-            // (VUID-VkPipelineColorBlendAttachmentState-constantAlphaColorBlendFactors-04454).
-            // Setting the blend constant's RGB equal to its alpha makes
-            // CONSTANT_COLOR produce the same blend as CONSTANT_ALPHA would.
-            .color_blend = visible ? Color_blend_state::color_blend_premultiplied : Color_blend_state{
-                .enabled  = true,
-                .rgb      = {
-                    .equation_mode      = Blend_equation_mode::func_add,
-                    .source_factor      = Blending_factor::constant_color,
-                    .destination_factor = Blending_factor::one_minus_constant_color
-                },
-                .alpha    = {
-                    .equation_mode      = Blend_equation_mode::func_add,
-                    .source_factor      = Blending_factor::constant_alpha,
-                    .destination_factor = Blending_factor::one_minus_constant_alpha
-                },
-                .constant = { 0.1f, 0.1f, 0.1f, 0.1f },
-            }
         }
     };
 }
@@ -447,7 +424,7 @@ void Debug_renderer_bucket::render(
                     .viewport_depth_range = pipeline.data.viewport_depth_range,
                     .rasterization        = pipeline.data.rasterization,
                     .depth_stencil        = pipeline.data.depth_stencil,
-                    .color_blend          = pipeline.data.color_blend
+                    //.color_blend          = pipeline.data.color_blend
                 }
             };
 
@@ -489,13 +466,16 @@ void Debug_renderer_bucket::render(
 
     if (m_use_compute) {
         // Compute path: render triangles from compute-generated triangle vertex buffer
-        auto render_compute_draws = [&](erhe::graphics::Base_render_pipeline& pipeline) {
+        auto render_compute_draws = [&](const bool visible, erhe::graphics::Base_render_pipeline& pipeline) {
             erhe::graphics::Shader_stages* shader_stages = m_debug_renderer.get_program_interface().graphics_shader_stages.get();
             if (shader_stages == nullptr) {
                 return;
             }
             erhe::graphics::Render_pipeline* render_pipeline = pipeline.get_pipeline_for(
                 render_pass.get_descriptor(),
+                visible
+                    ? &m_debug_renderer.get_program_interface().color_blend_visible
+                    : &m_debug_renderer.get_program_interface().color_blend_xray,
                 shader_stages,
                 m_debug_renderer.get_vertex_input(),
                 &m_debug_renderer.get_program_interface().triangle_vertex_format
@@ -521,10 +501,10 @@ void Debug_renderer_bucket::render(
         };
 
         if (draw_hidden && m_config.draw_hidden) {
-            render_compute_draws(m_pipeline_hidden);
+            render_compute_draws(false, m_pipeline_hidden);
         }
         if (draw_visible && m_config.draw_visible) {
-            render_compute_draws(m_pipeline_visible);
+            render_compute_draws(true, m_pipeline_visible);
         }
     } else {
         // Non-compute path: close input ranges (upload CPU data to GPU), then render GL_LINES.
@@ -542,9 +522,12 @@ void Debug_renderer_bucket::render(
             }
         }
 
-        auto render_line_draws = [&](erhe::graphics::Base_render_pipeline& pipeline) {
+        auto render_line_draws = [&](const bool visible, erhe::graphics::Base_render_pipeline& pipeline) {
             erhe::graphics::Render_pipeline* p = pipeline.get_pipeline_for(
                 render_pass.get_descriptor(),
+                visible
+                    ? &m_debug_renderer.get_program_interface().color_blend_visible
+                    : &m_debug_renderer.get_program_interface().color_blend_xray,
                 m_debug_renderer.get_program_interface().graphics_shader_stages.get(),
                 m_debug_renderer.get_line_vertex_input(),
                 &m_debug_renderer.get_program_interface().line_vertex_format
@@ -581,10 +564,10 @@ void Debug_renderer_bucket::render(
         };
 
         if (draw_hidden && m_config.draw_hidden) {
-            render_line_draws(m_pipeline_hidden);
+            render_line_draws(false, m_pipeline_hidden);
         }
         if (draw_visible && m_config.draw_visible) {
-            render_line_draws(m_pipeline_visible);
+            render_line_draws(true, m_pipeline_visible);
         }
     }
 }

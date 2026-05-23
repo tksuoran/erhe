@@ -131,11 +131,11 @@ public:
     void reload    (Shader_stages_prototype&& prototype) const;
     void invalidate() const;
 
-    [[nodiscard]] auto name                () const -> const std::string&;
-    [[nodiscard]] auto is_valid            () const -> bool;
+    [[nodiscard]] auto name                 () const -> const std::string&;
+    [[nodiscard]] auto is_valid             () const -> bool;
     [[nodiscard]] auto get_bind_group_layout() const -> const Bind_group_layout*;
-    [[nodiscard]] auto get_impl            () -> Shader_stages_impl&;
-    [[nodiscard]] auto get_impl            () const -> const Shader_stages_impl&;
+    [[nodiscard]] auto get_impl             () -> Shader_stages_impl&;
+    [[nodiscard]] auto get_impl             () const -> const Shader_stages_impl&;
 
 private:
     std::unique_ptr<Shader_stages_impl> m_impl;

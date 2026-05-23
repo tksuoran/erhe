@@ -16,16 +16,7 @@ namespace erhe::scene_renderer {
 
 auto Shader_key_hash::operator()(const Shader_key& key) const noexcept -> std::size_t
 {
-    constexpr std::uint64_t seed = 14695981039346656037ull;
-
-    std::uint64_t hash = erhe::hash::hash(&key.bool_mask, sizeof(key.bool_mask), seed);
-
-    hash = erhe::hash::hash(
-        key.int_values.data(),
-        sizeof(key.int_values),
-        hash
-    );
-    return static_cast<std::size_t>(hash);
+    return static_cast<std::size_t>(key.get_hash());
 }
 
 Shader_key::Shader_key()
@@ -60,9 +51,23 @@ auto Shader_key::get_defines() const -> std::vector<std::pair<std::string, std::
 {
     const std::vector<std::pair<std::string, std::string>> defines = get_defines();
     std::stringstream ss;
-    for (auto & [key, value] : defines) {
-        ss << fmt::format("key = {}, value = {}\n", key, value);
+    if (blending_mode.has_value()) {
+        ss << fmt::format("blending_mode = {}\n", c_str(blending_mode.value()));
     }
+
+#define ERHE_X(PARAM) \
+    if (get(Shader_bool::PARAM)) { \
+        ss << "ERHE_" #PARAM " = 1\n"; \
+    } else { \
+        ss << "// ERHE_" #PARAM " is not defined\n"; \
+    }
+    ERHE_SHADER_BOOL(ERHE_X)
+#undef ERHE_X
+
+#define ERHE_X(PARAM) ss << fmt::format("ERHE_" #PARAM, " = {}\n", get(Shader_int::PARAM));
+    ERHE_SHADER_INT(ERHE_X)
+#undef ERHE_X
+
     return ss.str();
 }
 
@@ -107,7 +112,6 @@ auto Shader_key::derive(
     key.bool_mask  = bool_mask;
     key.int_values = int_values;
 
-    // Material sub-key (constant for the render call).
     using usage = erhe::dataformat::Vertex_attribute_usage;
     const bool has_normal_0      = (vertex_format != nullptr) && vertex_format_has_attribute(*vertex_format, usage::normal,        erhe::dataformat::normal_attribute);
     const bool has_tangent       = (vertex_format != nullptr) && vertex_format_has_attribute(*vertex_format, usage::tangent,       0);
@@ -131,6 +135,8 @@ auto Shader_key::derive(
         const erhe::primitive::Material_data&             data     = material->data;
         const erhe::primitive::Material_texture_samplers& samplers = data.texture_samplers;
 
+        key.blending_mode = data.blending_mode;
+
         // Material booleans -- set per bound sampler.
         if (sampler_is_bound(samplers.base_color))        { key.set(Shader_bool::USE_BASE_COLOR_TEXTURE,         true); }
         if (sampler_is_bound(samplers.metallic_roughness)){ key.set(Shader_bool::USE_METALLIC_ROUGHNESS_TEXTURE, true); }
@@ -141,7 +147,8 @@ auto Shader_key::derive(
         if (data.use_circular_brushed_metal) {
             key.set(Shader_bool::USE_CIRCULAR_BRUSHED_METAL, true);
         }
-        key.set(Shader_int::BXDF_MODEL, static_cast<uint32_t>(data.bxdf_model));
+        key.set(Shader_int::BXDF_MODEL,             static_cast<uint32_t>(data.bxdf_model));
+        key.set(Shader_int::MATERIAL_BLENDING_MODE, static_cast<uint32_t>(data.blending_mode));
 
         const bool is_unlit            = data.bxdf_model == erhe::primitive::Bxdf_model::unlit;
         const bool is_anisotropic_brdf =
@@ -160,9 +167,21 @@ auto Shader_key::derive(
             key.set(Shader_bool::USE_VERTEX_VARYING_TANGENT,   true);
             key.set(Shader_bool::USE_VERTEX_VARYING_BITANGENT, true);
         }
+        // alpha_test / screen_door sample base-color alpha for the
+        // discard threshold; force texcoord 0 to be passed even when
+        // the base color sampler itself does not use tex_coord 0
+        // (rare, but the discard path needs *some* UV; for now we
+        // gate strictly on the base-color sampler being on tex_coord 0).
+        const bool uses_alpha_cutout =
+            (data.blending_mode == erhe::primitive::Material_blending_mode::alpha_test) ||
+            (data.blending_mode == erhe::primitive::Material_blending_mode::screen_door);
+        const bool base_color_on_tex_coord_zero =
+            sampler_is_bound(samplers.base_color) &&
+            (samplers.base_color.tex_coord == 0u);
         const bool needs_texcoord_0 =
             any_sampler_uses_tex_coord_zero(*material) ||
-            data.use_circular_brushed_metal;
+            data.use_circular_brushed_metal ||
+            (uses_alpha_cutout && base_color_on_tex_coord_zero);
         if (has_texcoord_0 && needs_texcoord_0) {
             key.set(Shader_bool::USE_VERTEX_VARYING_TEXCOORD0, true);
         }

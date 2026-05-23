@@ -42,8 +42,7 @@ public:
     // loop over the mesh's primitives).
     auto update(
         const Render_bucket&            bucket,
-        erhe::primitive::Primitive_mode primitive_mode,
-        const erhe::Item_filter&        filter
+        erhe::primitive::Primitive_mode primitive_mode
     ) -> Draw_indirect_buffer_range;
 
     //// void debug_properties_window();

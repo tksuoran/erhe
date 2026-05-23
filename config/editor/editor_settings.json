@@ -14,7 +14,7 @@
     },
     "grid": {
         "snap_enabled": true,
-        "visible":      true,
+        "visible":      false,
         "major_color":  [0,0,0,1],
         "minor_color":  [0,0,0,0.5],
         "major_width":  4,
@@ -98,9 +98,9 @@
     "viewport": {
         "gizmo_scale": 6.5,
         "polygon_fill": true,
-        "edge_lines": true,
+        "edge_lines": false,
         "selection_polygon_fill": true,
-        "selection_edge_lines": true,
+        "selection_edge_lines": false,
         "corner_points": false,
         "polygon_centroids": false,
         "selection_bounding_box": false,

@@ -379,12 +379,20 @@ void bucket_primitives(
     const Mesh_memory&                                         mesh_memory,
     const Shader_key&                                          environment_shader_key,
     const std::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes,
+    const erhe::Item_filter&                                   filter,
     const erhe::primitive::Primitive_mode                      primitive_mode,
-    const Variant_signature_policy                             variant_signature_policy
+    const Variant_signature_policy                             variant_signature_policy,
+    const Blending_mode_policy                                 blending_mode_policy
 )
 {
     for (const std::shared_ptr<erhe::scene::Mesh>& mesh : meshes) {
         const auto primitives = mesh->get_primitives();
+        if (!filter(mesh->get_flag_bits())) {
+            // log_draw->warn("filtered away {} filter: {}", mesh->describe(2), filter.describe());
+            // static_cast<void>(filter(mesh->get_flag_bits()));
+            continue;
+        }
+
         for (size_t i = 0, count = primitives.size(); i < count; ++i) {
             const erhe::scene::Mesh_primitive& mesh_primitive = primitives[i];
             const erhe::primitive::Primitive* primitive = mesh_primitive.primitive.get();
@@ -402,6 +410,7 @@ void bucket_primitives(
             erhe::primitive::Material* material = (variant_signature_policy == Variant_signature_policy::require_exact_variant_signature)
                 ? mesh_primitive.material.get()
                 : nullptr;
+
             const Vertex_input_entry& vertex_input_entry = mesh_memory.get_vertex_input(buffer_mesh->vertex_input_key);
 
             Shader_key shader_key = environment_shader_key.derive(
@@ -411,6 +420,49 @@ void bucket_primitives(
             );
             shader_key.bool_mask |=  boolean_mask_force_enable;
             shader_key.bool_mask &= ~boolean_mask_force_disable;
+            switch (blending_mode_policy) {
+                case Blending_mode_policy::not_set: {
+                    ERHE_FATAL("Blending_mode_policy::not_set");
+                    break;
+                }
+                case Blending_mode_policy::opaque_primitives_only: {
+                    if (shader_key.blending_mode != erhe::primitive::Material_blending_mode::opaque) {
+                        continue;
+                    }
+                    break;
+                }
+                case Blending_mode_policy::translucent_primitives_only: {
+                    if (shader_key.blending_mode == erhe::primitive::Material_blending_mode::opaque) {
+                        continue;
+                    }
+                    break;
+                }
+                case Blending_mode_policy::allow_all: {
+                    // NOP
+                    break;
+                }
+                case Blending_mode_policy::override_with_base_render_pipeline: {
+                    erhe::primitive::Material_blending_mode blend_override = environment_shader_key.blending_mode.has_value() 
+                        ? environment_shader_key.blending_mode.value()
+                        : erhe::primitive::Material_blending_mode::opaque;
+                    if (shader_key.blending_mode.has_value()) {
+                        if (shader_key.blending_mode.value() != blend_override) {
+                            log_draw->warn(
+                                "Overriding blending mode for {} from {} to {}",
+                                mesh->describe(2),
+                                erhe::primitive::c_str(shader_key.blending_mode.value()),
+                                erhe::primitive::c_str(blend_override)
+                            );
+                        }
+                    }
+                    shader_key.blending_mode = blend_override;
+                    break;
+                }
+                default: {
+                    ERHE_FATAL("Bad Blending_mode_policy");
+                    break;
+                }
+            }
             const uint64_t shader_key_hash = shader_key.get_hash();
 
             bool done = false;

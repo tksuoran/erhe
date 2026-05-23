@@ -52,11 +52,9 @@ Shadow_renderer::Shadow_renderer(
         m_graphics_device,
         erhe::graphics::Base_render_pipeline_create_info{
             .debug_label       = erhe::utility::Debug_label{"Shadow Renderer"},
-            //.shader_stages     = &m_shader_stages.shader_stages,
             .input_assembly    = Input_assembly_state::triangle,
             .rasterization     = Rasterization_state::cull_mode_none,
             .depth_stencil     = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(graphics_device.get_graphics_config().reverse_depth),
-            .color_blend       = Color_blend_state::color_writes_disabled,
             .bind_group_layout = m_bind_group_layout
         }
     }
@@ -229,8 +227,10 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
                 m_mesh_memory,
                 environment_key,
                 meshes,
+                shadow_filter,
                 primitive_mode,
-                Variant_signature_policy::accept_all_variant_signatures
+                Variant_signature_policy::accept_all_variant_signatures,
+                Blending_mode_policy::opaque_primitives_only // TODO Think about what would be correct
             );
         }
 
@@ -277,6 +277,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
             }
             erhe::graphics::Render_pipeline* render_pipeline = m_pipeline.get_pipeline_for(
                 parameters.render_passes[shadow_index]->get_descriptor(),
+                &erhe::graphics::Color_blend_state::color_writes_disabled,
                 &reloadable_shader_stages->shader_stages,
                 vertex_input.vertex_input.get(),
                 &vertex_input.vertex_format
@@ -288,44 +289,28 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
             encoder.set_render_pipeline(*render_pipeline);
 
             //const std::span<const std::shared_ptr<erhe::scene::Mesh>> bucket_meshes{bucket.meshes};
-            std::size_t primitive_count{0};
             Ring_buffer_range primitive_range = m_primitive_buffer.update(
                 bucket,
                 primitive_mode,
-                shadow_filter,
-                Primitive_interface_settings{},
-                primitive_count
+                Primitive_interface_settings{}
             );
-            if (primitive_count == 0) {
-                primitive_range.cancel();
-                continue;
-            }
-            Draw_indirect_buffer_range draw_indirect_buffer_range = m_draw_indirect_buffer.update(bucket, primitive_mode, shadow_filter);
-            ERHE_VERIFY(primitive_count == draw_indirect_buffer_range.draw_indirect_count);
-            if (primitive_count == 0) {
-                primitive_range.cancel();
-                draw_indirect_buffer_range.range.cancel();
-                continue;
-            }
+            ERHE_VERIFY(!bucket.entries.empty());
+            Draw_indirect_buffer_range draw_indirect_buffer_range = m_draw_indirect_buffer.update(bucket, primitive_mode);
+            ERHE_VERIFY(bucket.entries.size() == draw_indirect_buffer_range.draw_indirect_count);
 
-            log_draw->warn("MDI - shader key = {}", bucket.shader_key.describe());
+            log_draw->debug("MDI - shader key = {}", bucket.shader_key.describe());
 
             m_primitive_buffer.bind(encoder, primitive_range);
             m_draw_indirect_buffer.bind(encoder, draw_indirect_buffer_range.range);
 
-            {
-                static constexpr std::string_view c_id_mdi{"mdi"};
+            encoder.multi_draw_indexed_primitives_indirect(
+                m_pipeline.data.input_assembly.primitive_topology,
+                m_mesh_memory.get_index_format(bucket.buffer_set.index_buffer),
+                draw_indirect_buffer_range.range.get_byte_start_offset_in_buffer(),
+                draw_indirect_buffer_range.draw_indirect_count,
+                sizeof(erhe::graphics::Draw_indexed_primitives_indirect_command)
+            );
 
-                ERHE_PROFILE_SCOPE("mdi");
-                //ERHE_PROFILE_GPU_SCOPE(c_id_mdi);
-                encoder.multi_draw_indexed_primitives_indirect(
-                    m_pipeline.data.input_assembly.primitive_topology,
-                    m_mesh_memory.get_index_format(bucket.buffer_set.index_buffer),
-                    draw_indirect_buffer_range.range.get_byte_start_offset_in_buffer(),
-                    draw_indirect_buffer_range.draw_indirect_count,
-                    sizeof(erhe::graphics::Draw_indexed_primitives_indirect_command)
-                );
-            }
             primitive_range.release();
             draw_indirect_buffer_range.range.release();
         }
@@ -357,6 +342,13 @@ void Shadow_renderer::prewarm_pipelines(
     const uint32_t boolean_mask_force_enable  = make_shader_bool_mask(Shader_bool::VARIANT_DEPTH_ONLY);
     const uint32_t boolean_mask_force_disable = 0;
 
+    erhe::Item_filter shadow_filter{
+        .require_all_bits_set           = erhe::Item_flags::visible | erhe::Item_flags::shadow_cast,
+        .require_at_least_one_bit_set   = 0u,
+        .require_all_bits_clear         = 0u,
+        .require_at_least_one_bit_clear = 0u
+    };
+
     std::vector<Render_bucket> buckets;
     for (const std::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes : mesh_spans) {
         bucket_primitives(
@@ -366,8 +358,10 @@ void Shadow_renderer::prewarm_pipelines(
             m_mesh_memory,
             environment_key,
             meshes,
+            shadow_filter,
             erhe::primitive::Primitive_mode::polygon_fill,
-            Variant_signature_policy::accept_all_variant_signatures
+            Variant_signature_policy::accept_all_variant_signatures,
+            Blending_mode_policy::opaque_primitives_only // TODO
         );
     }
 
@@ -397,6 +391,7 @@ void Shadow_renderer::prewarm_pipelines(
             static_cast<void>(
                 m_pipeline.get_pipeline_for(
                     render_pass->get_descriptor(),
+                    &erhe::graphics::Color_blend_state::color_writes_disabled,
                     &reloadable_shader_stages->shader_stages,
                     vertex_input.vertex_input.get(),
                     &vertex_input.vertex_format

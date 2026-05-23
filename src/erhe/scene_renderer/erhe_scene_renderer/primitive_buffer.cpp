@@ -85,8 +85,8 @@ auto Primitive_buffer::id_ranges() const -> const std::vector<Id_range>&
 
 auto Primitive_buffer::update(
     const std::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes,
-    erhe::primitive::Primitive_mode                            primitive_mode,
     const erhe::Item_filter&                                   filter,
+    erhe::primitive::Primitive_mode                            primitive_mode,
     const Primitive_interface_settings&                        settings,
     std::size_t&                                               out_primitive_count,
     bool                                                       use_id_ranges
@@ -270,36 +270,16 @@ auto Primitive_buffer::update(
 auto Primitive_buffer::update(
     const Render_bucket&                bucket,
     erhe::primitive::Primitive_mode     primitive_mode,
-    const erhe::Item_filter&            filter,
     const Primitive_interface_settings& settings,
-    std::size_t&                        out_primitive_count,
     bool                                use_id_ranges 
 ) -> erhe::graphics::Ring_buffer_range
 {
     ERHE_PROFILE_FUNCTION();
 
-    out_primitive_count = 0;
-
-    // Conservative count -- skips refs that would be filtered out.
-    std::size_t primitive_count = 0;
-    for (const Mesh_primitive_entry& entry : bucket.entries) {
-        ERHE_VERIFY(entry.mesh != nullptr);
-        if (entry.mesh->get_node() == nullptr) {
-            continue;
-        }
-        if (!filter(entry.mesh->get_flag_bits())) {
-            continue;
-        }
-        ERHE_VERIFY(entry.mesh_primitive_index < entry.mesh->get_primitives().size());
-        ++primitive_count;
-    }
-    if (primitive_count == 0) {
-        return {};
-    }
-
-    const auto        entry_size     = m_primitive_interface.primitive_struct.get_size_bytes();
-    const auto&       offsets        = m_primitive_interface.offsets;
-    const std::size_t max_byte_count = primitive_count * entry_size;
+    const std::size_t primitive_count = bucket.entries.size();
+    const auto        entry_size      = m_primitive_interface.primitive_struct.get_size_bytes();
+    const auto&       offsets         = m_primitive_interface.offsets;
+    const std::size_t max_byte_count  = primitive_count * entry_size;
 
     // See note in joint_buffer.cpp: clamp to block size so MoltenVK's Metal
     // argument validation has enough trailing space past the binding offset.
@@ -313,28 +293,17 @@ auto Primitive_buffer::update(
         erhe::scene::Mesh* mesh = entry.mesh;
         ERHE_VERIFY(mesh != nullptr);
         const erhe::scene::Node* node = mesh->get_node();
-        if (node == nullptr) {
-            continue;
-        }
-        if (!filter(mesh->get_flag_bits())) {
-            continue;
-        }
+        ERHE_VERIFY(node != nullptr);
         const std::vector<erhe::scene::Mesh_primitive>& mesh_primitives = mesh->get_primitives();
         ERHE_VERIFY(entry.mesh_primitive_index < mesh_primitives.size());
         const erhe::scene::Mesh_primitive& mesh_primitive = mesh_primitives[entry.mesh_primitive_index];
         const erhe::primitive::Primitive*  primitive_ptr  = mesh_primitive.primitive.get();
-        if (primitive_ptr == nullptr) {
-            continue;
-        }
+        ERHE_VERIFY(primitive_ptr != nullptr);
         const erhe::primitive::Buffer_mesh* buffer_mesh = primitive_ptr->get_renderable_mesh();
-        if (buffer_mesh == nullptr) {
-            continue;
-        }
+        ERHE_VERIFY(buffer_mesh != nullptr);
         const erhe::primitive::Index_range index_range = buffer_mesh->index_range(primitive_mode);
         const uint32_t count = static_cast<uint32_t>(index_range.index_count);
-        if (count == 0) {
-            continue;
-        }
+        ERHE_VERIFY(count > 0);
 
         const bool      use_primary_color    = mesh->is_selected() || !mesh->is_hovered();
         const glm::mat4 world_from_node      = node->world_from_node();
@@ -400,7 +369,6 @@ auto Primitive_buffer::update(
             );
             m_id_offset += count;
         }
-        ++out_primitive_count;
     }
 
     buffer_range.bytes_written(write_offset);

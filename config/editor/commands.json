@@ -30,16 +30,6 @@
                 "floor_size": 32,
                 "floor_height": 1
             }
-        },
-        {
-            "name": "scene.add_platonic_solids",
-            "args": {
-                "instance_count": 1,
-                "instance_gap": 0.5,
-                "object_scale": 0.25,
-                "detail": 4,
-                "mass_scale": 8
-            }
         }
     ]
 }

@@ -282,7 +282,12 @@ void Rendering_test::dispatch_subtest(
         // and never calls a geometry-shader path directly.
         render_scene(encoder, viewport, lights, meshes, m_swapchain_render_pass.get());
         if (m_content_wide_line_renderer && m_content_wide_line_renderer->is_enabled() && m_compute_edge_lines_pipeline) {
-            m_content_wide_line_renderer->render(encoder, *m_compute_edge_lines_pipeline, *m_swapchain_render_pass.get());
+            m_content_wide_line_renderer->render(
+                encoder,
+                *m_compute_edge_lines_pipeline,
+                *m_swapchain_render_pass.get(),
+                nullptr
+            );
         }
     } else if (name == "cube_with_edge_lines_stencil") {
         // Like cube_with_edge_lines, but uses the STENCIL wide-line
@@ -302,7 +307,12 @@ void Rendering_test::dispatch_subtest(
             m_content_wide_line_renderer->is_enabled() &&
             m_compute_edge_lines_stencil_pipeline
         ) {
-            m_content_wide_line_renderer->render(encoder, *m_compute_edge_lines_stencil_pipeline, *m_swapchain_render_pass.get());
+            m_content_wide_line_renderer->render(
+                encoder,
+                *m_compute_edge_lines_stencil_pipeline,
+                *m_swapchain_render_pass.get(),
+                nullptr
+            );
         }
     } else if (name == "cube_edge_lines_only") {
         // Minimal reproducer: one content_wide_line_renderer draw of the
@@ -322,7 +332,13 @@ void Rendering_test::dispatch_subtest(
         ) {
             const std::vector<std::shared_ptr<erhe::scene::Mesh>> empty_meshes;
             render_scene(encoder, viewport, lights, empty_meshes, m_swapchain_render_pass.get());
-            m_content_wide_line_renderer->render(encoder, *m_compute_edge_lines_pipeline, *m_swapchain_render_pass.get(), /*group=*/0);
+            m_content_wide_line_renderer->render(
+                encoder,
+                *m_compute_edge_lines_pipeline,
+                *m_swapchain_render_pass.get(),
+                nullptr,
+                0
+            );
         }
     } else if (name == "sphere_edge_lines_only") {
         // Same as cube_edge_lines_only but draws the sphere (group 1).
@@ -337,7 +353,13 @@ void Rendering_test::dispatch_subtest(
         ) {
             const std::vector<std::shared_ptr<erhe::scene::Mesh>> empty_meshes;
             render_scene(encoder, viewport, lights, empty_meshes, m_swapchain_render_pass.get());
-            m_content_wide_line_renderer->render(encoder, *m_compute_edge_lines_pipeline, *m_swapchain_render_pass.get(), /*group=*/1);
+            m_content_wide_line_renderer->render(
+                encoder,
+                *m_compute_edge_lines_pipeline,
+                *m_swapchain_render_pass.get(),
+                nullptr,
+                1
+            );
         }
     } else if (name == "cube_edge_lines_stencil_masked") {
         // Same as cube_edge_lines_only, but with stencil masking: the
@@ -384,7 +406,13 @@ void Rendering_test::dispatch_subtest(
                     //.override_shader_stages = m_stencil_cyan_shader_stages.get(),
                 }
             );
-            m_content_wide_line_renderer->render(encoder, *m_compute_edge_lines_stencil_pipeline, *m_swapchain_render_pass.get(), /*group=*/0);
+            m_content_wide_line_renderer->render(
+                encoder,
+                *m_compute_edge_lines_stencil_pipeline,
+                *m_swapchain_render_pass.get(),
+                nullptr,
+                0
+            );
         }
     } else if (name == "sphere_edge_lines_stencil_masked") {
         // Same as cube_edge_lines_stencil_masked but draws group=1 (sphere
@@ -425,7 +453,13 @@ void Rendering_test::dispatch_subtest(
                     //.override_shader_stages = m_stencil_cyan_shader_stages.get(),
                 }
             );
-            m_content_wide_line_renderer->render(encoder, *m_compute_edge_lines_stencil_pipeline, *m_swapchain_render_pass.get(), /*group=*/1);
+            m_content_wide_line_renderer->render(
+                encoder,
+                *m_compute_edge_lines_stencil_pipeline,
+                *m_swapchain_render_pass.get(),
+                nullptr,
+                1
+            );
         }
     } else if (
         (name == "minimal_compute_A") ||
@@ -745,7 +779,12 @@ void Rendering_test::tick(erhe::graphics::Command_buffer& command_buffer)
     if (wide_line_needed && m_content_wide_line_renderer && m_content_wide_line_renderer->is_enabled()) {
         m_content_wide_line_renderer->begin_frame();
         if (compute_cube) {
-            m_content_wide_line_renderer->add_mesh(m_mesh_memory, *m_test_cube, glm::vec4{0.0f, 0.0f, 0.4f, 1.0f}, -6.0f, /*group=*/0);
+            m_content_wide_line_renderer->add_mesh(
+                m_mesh_memory,
+                *m_test_cube,
+                glm::vec4{0.0f, 0.0f, 0.4f, 1.0f}, -6.0f,
+                0
+            );
         }
         if (compute_sphere && m_stencil_sphere) {
             m_content_wide_line_renderer->add_mesh(
@@ -753,7 +792,7 @@ void Rendering_test::tick(erhe::graphics::Command_buffer& command_buffer)
                 *m_stencil_sphere,
                 glm::vec4{1.0f, 1.0f, 0.0f, 1.0f},
                 -6.0f,
-                /*group=*/1
+                1
             );
         }
         {

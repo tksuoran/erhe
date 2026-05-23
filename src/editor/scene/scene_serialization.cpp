@@ -673,7 +673,6 @@ auto load_scene(
     constexpr uint64_t mesh_flags =
         erhe::Item_flags::visible     |
         erhe::Item_flags::content     |
-        erhe::Item_flags::opaque      |
         erhe::Item_flags::shadow_cast |
         erhe::Item_flags::id          |
         erhe::Item_flags::show_in_ui;

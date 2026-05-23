@@ -7,11 +7,13 @@
 #include "erhe_primitive/enums.hpp"
 #include "erhe_primitive/buffer_info.hpp"
 #include "erhe_primitive/buffer_sink.hpp"
+#include "erhe_primitive/material.hpp"
 #include "erhe_scene_renderer/generated/mesh_memory_config.hpp"
 #include "erhe_scene_renderer/shader_key.hpp"
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <span>
 #include <vector>
 
@@ -195,16 +197,19 @@ public:
     uint64_t                          shader_key_hash;
 };
 
-//[[nodiscard]] auto compute_variant_shader_key_hash(
-//    erhe::scene::Mesh&                     mesh,
-//    const erhe::scene::Mesh_primitive&     mesh_primitive,
-//    const erhe::dataformat::Vertex_format& vertex_format
-//) -> uint64_t;
-
 enum class Variant_signature_policy : uint32_t
 {
     accept_all_variant_signatures   = 0, // For example Shadow_renderer
     require_exact_variant_signature = 1  // For example Forward_renderer
+};
+
+enum class Blending_mode_policy : uint32_t
+{
+    not_set                            = 0, // error
+    opaque_primitives_only             = 1, // Keep opaque primitives only
+    translucent_primitives_only        = 2, // Keep translucent primitives only
+    allow_all                          = 3, // unique buckets for each blending mode
+    override_with_base_render_pipeline = 4  // override primitive blending mode from base render pipeline
 };
 
 [[nodiscard]] void bucket_primitives(
@@ -214,8 +219,10 @@ enum class Variant_signature_policy : uint32_t
     const Mesh_memory&                                         mesh_memory,
     const Shader_key&                                          environment_shader_key,
     const std::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes,
+    const erhe::Item_filter&                                   filter,
     erhe::primitive::Primitive_mode                            primitive_mode,
-    Variant_signature_policy                                   variant_signature_policy = Variant_signature_policy::accept_all_variant_signatures
+    Variant_signature_policy                                   variant_signature_policy, // Variant_signature_policy::accept_all_variant_signatures,
+    Blending_mode_policy                                       blending_mode_policy
 );
 
 }

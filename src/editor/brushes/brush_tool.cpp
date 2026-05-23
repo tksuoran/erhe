@@ -720,7 +720,6 @@ void Brush_tool::add_preview_mesh(Brush& brush)
     m_preview_mesh->enable_flag_bits(
         erhe::Item_flags::brush       |
         erhe::Item_flags::visible     |
-        erhe::Item_flags::translucent | // redundant
         erhe::Item_flags::no_message  |
         erhe::Item_flags::show_in_developer_ui
     );

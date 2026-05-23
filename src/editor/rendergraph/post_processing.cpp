@@ -556,8 +556,7 @@ Post_processing::Post_processing(erhe::graphics::Device& d, erhe::graphics::Comm
                 //.shader_stages  = &m_shader_stages.downsample_with_lowpass_input.shader_stages,
                 .input_assembly = erhe::graphics::Input_assembly_state::triangle_strip,
                 .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
-                .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
-                .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled
+                .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled
             }
         },
         .downsample_with_lowpass = erhe::graphics::Base_render_pipeline{
@@ -566,8 +565,7 @@ Post_processing::Post_processing(erhe::graphics::Device& d, erhe::graphics::Comm
                 //.shader_stages  = &m_shader_stages.downsample_with_lowpass.shader_stages,
                 .input_assembly = erhe::graphics::Input_assembly_state::triangle,
                 .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
-                .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
-                .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled
+                .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled
             }
         },
         .downsample = erhe::graphics::Base_render_pipeline{
@@ -576,8 +574,7 @@ Post_processing::Post_processing(erhe::graphics::Device& d, erhe::graphics::Comm
                 //.shader_stages  = &m_shader_stages.downsample.shader_stages,
                 .input_assembly = erhe::graphics::Input_assembly_state::triangle,
                 .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
-                .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
-                .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled
+                .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled
             }
         },
         .upsample_first = erhe::graphics::Base_render_pipeline{
@@ -586,8 +583,7 @@ Post_processing::Post_processing(erhe::graphics::Device& d, erhe::graphics::Comm
                 //.shader_stages  = &m_shader_stages.upsample_first.shader_stages,
                 .input_assembly = erhe::graphics::Input_assembly_state::triangle,
                 .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
-                .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
-                .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled
+                .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled
             }
         },
         .upsample = erhe::graphics::Base_render_pipeline{
@@ -596,8 +592,7 @@ Post_processing::Post_processing(erhe::graphics::Device& d, erhe::graphics::Comm
                 //.shader_stages  = &m_shader_stages.upsample.shader_stages,
                 .input_assembly = erhe::graphics::Input_assembly_state::triangle,
                 .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
-                .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
-                .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled
+                .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled
             }
         },
         .upsample_last = erhe::graphics::Base_render_pipeline{
@@ -606,8 +601,7 @@ Post_processing::Post_processing(erhe::graphics::Device& d, erhe::graphics::Comm
                 //.shader_stages  = &m_shader_stages.upsample_last.shader_stages,
                 .input_assembly = erhe::graphics::Input_assembly_state::triangle,
                 .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
-                .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
-                .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled
+                .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled
             }
         }
     }
@@ -713,6 +707,7 @@ void Post_processing::post_process(Post_processing_node& node, erhe::graphics::C
                                            m_pipelines.downsample;
             erhe::graphics::Render_pipeline* p = pipeline.get_pipeline_for(
                 render_pass->get_descriptor(),
+                nullptr,
                 is_first_downsample_pass ? &m_shader_stages.downsample_with_lowpass_input.shader_stages :
                 use_lowpass              ? &m_shader_stages.downsample_with_lowpass.shader_stages :
                                            &m_shader_stages.downsample.shader_stages,
@@ -779,6 +774,7 @@ void Post_processing::post_process(Post_processing_node& node, erhe::graphics::C
                                          m_pipelines.upsample;
             erhe::graphics::Render_pipeline* p = pipeline.get_pipeline_for(
                 render_pass->get_descriptor(),
+                nullptr,
                 is_first_upsample_pass ? &m_shader_stages.upsample_first.shader_stages :
                 is_last_upsample_pass  ? &m_shader_stages.upsample_last.shader_stages  :
                                          &m_shader_stages.upsample.shader_stages,

@@ -735,7 +735,7 @@ void Scene_builder::add_room(const Add_room_args& args)
 
     Instance_create_info floor_brush_instance_create_info{
         .node_flags      = Item_flags::visible | Item_flags::content | Item_flags::show_in_ui | Item_flags::lock_viewport_selection | Item_flags::lock_viewport_transform | Item_flags::expand,
-        .mesh_flags      = Item_flags::visible | Item_flags::content | Item_flags::opaque | Item_flags::id | Item_flags::show_in_ui | Item_flags::lock_viewport_selection | Item_flags::lock_viewport_transform | Item_flags::shadow_cast,
+        .mesh_flags      = Item_flags::visible | Item_flags::content | Item_flags::id | Item_flags::show_in_ui | Item_flags::lock_viewport_selection | Item_flags::lock_viewport_transform | Item_flags::shadow_cast,
         .scene_root      = m_scene_root.get(),
         .world_from_node = erhe::math::create_translation<float>(0.0f, -aabb.max.y - 0.001f, 0.0f),
         .material        = floor_material,
@@ -855,7 +855,7 @@ void Scene_builder::add_torus_chain(const Make_mesh_config& config, bool connect
     for (int i = 0; i < config.instance_count; ++i) {
         const Instance_create_info brush_instance_create_info{
             .node_flags      = Item_flags::show_in_ui | Item_flags::visible | Item_flags::content,
-            .mesh_flags      = Item_flags::show_in_ui | Item_flags::visible | Item_flags::opaque | Item_flags::content | Item_flags::id | Item_flags::shadow_cast,
+            .mesh_flags      = Item_flags::show_in_ui | Item_flags::visible | Item_flags::content | Item_flags::id | Item_flags::shadow_cast,
             .scene_root      = m_scene_root.get(),
             .world_from_node = erhe::math::create_translation(x, y, z) * alternate_rotate[connected ? (i & 1) : 0],
             .material        = config.material ? config.material : materials.at(material_index),
@@ -1023,7 +1023,6 @@ void Scene_builder::make_mesh_nodes(const Make_mesh_config& config, std::vector<
                 .mesh_flags =
                     Item_flags::show_in_ui |
                     Item_flags::visible    |
-                    Item_flags::opaque     |
                     Item_flags::content    |
                     Item_flags::id         |
                     Item_flags::shadow_cast,
@@ -1128,7 +1127,7 @@ void Scene_builder::add_cubes(glm::ivec3 shape, float scale, float gap)
                 auto mesh = std::make_shared<erhe::scene::Mesh>("");
                 mesh->add_primitive(primitive, material);
                 mesh->layer_id = m_scene_root->layers().content()->id;
-                mesh->enable_flag_bits(Item_flags::content | Item_flags::shadow_cast | Item_flags::opaque);
+                mesh->enable_flag_bits(Item_flags::content | Item_flags::shadow_cast);
                 node->attach(mesh);
                 node->set_parent(root);
                 node->set_parent_from_node(erhe::math::create_translation<float>(px, py, pz));

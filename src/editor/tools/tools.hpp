@@ -62,6 +62,7 @@ public:
     erhe::graphics::Base_render_pipeline tool3_depth_clear;
     erhe::graphics::Base_render_pipeline tool4_depth;
     erhe::graphics::Base_render_pipeline tool5_visible_color;
+    erhe::graphics::Color_blend_state    tool6_hidden_color_blend;
     erhe::graphics::Base_render_pipeline tool6_hidden_color;
 };
 

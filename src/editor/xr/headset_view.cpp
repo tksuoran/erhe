@@ -619,7 +619,11 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
                         "content_wide_line_renderer (multiview)"
                     };
                     auto feed_pass = [&](const Composition_pass* pass) {
-                        if ((pass == nullptr) || !pass->use_content_wide_line_renderer || !pass->enabled) {
+                        if (pass == nullptr) {
+                            return;
+                        }
+                        auto& data = pass->data;
+                        if (!data.use_content_wide_line_renderer || !data.enabled) {
                             return;
                         }
                         // Pass settings resolution mirrors Composition_pass /
@@ -630,17 +634,17 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
                         // style-driven passes (opaque_edge_lines_*) rendering
                         // white instead of the configured line color.
                         erhe::scene_renderer::Primitive_interface_settings settings;
-                        if (pass->primitive_settings.has_value()) {
-                            settings = pass->primitive_settings.value();
-                        } else if (pass->get_render_style) {
-                            const Render_style_data& style = pass->get_render_style(cpu_render_context);
-                            settings = get_primitive_settings(style, pass->primitive_mode);
+                        if (data.primitive_settings.has_value()) {
+                            settings = data.primitive_settings.value();
+                        } else if (data.get_render_style) {
+                            const Render_style_data& style = data.get_render_style(cpu_render_context);
+                            settings = get_primitive_settings(style, data.primitive_mode);
                         }
                         const glm::vec4 color      = settings.constant_color0;
                         const float     line_width = settings.constant_size;
-                        const auto&     filter     = pass->filter;
-                        const uint32_t  group      = pass->content_wide_line_group;
-                        for (const auto layer_id : pass->mesh_layers) {
+                        const auto&     filter     = data.filter;
+                        const uint32_t  group      = data.content_wide_line_group;
+                        for (const auto layer_id : data.mesh_layers) {
                             const auto mesh_layer = hosted_scene->get_mesh_layer_by_id(layer_id);
                             if (mesh_layer) {
                                 for (const auto& mesh : mesh_layer->meshes) {
@@ -665,7 +669,7 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
                         const float     t2            = static_cast<float>(0.5f + (2.0f * std::abs(2.0f * (t1 / period - std::floor(t1 / period + 0.5f))) - 1.0f) * 0.5f);
                         const glm::vec4 outline_color = glm::mix(m_viewport_config.selection_highlight_low, m_viewport_config.selection_highlight_high, t2);
                         const float     outline_width = m_viewport_config.selection_highlight_width_low * (1.0f - t2) + m_viewport_config.selection_highlight_width_high * t2;
-                        m_app_context.app_rendering->selection_outline->primitive_settings = erhe::scene_renderer::Primitive_interface_settings{
+                        m_app_context.app_rendering->selection_outline->data.primitive_settings = erhe::scene_renderer::Primitive_interface_settings{
                             .color_source    = erhe::scene_renderer::Primitive_color_source::constant_color,
                             .constant_color0 = outline_color,
                             .size_source     = erhe::scene_renderer::Primitive_size_source::constant_size,
@@ -673,8 +677,8 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
                         };
                     }
                     feed_pass(m_app_context.app_rendering->selection_outline.get());
-                    feed_pass(m_app_context.app_rendering->opaque_edge_lines_not_selected.get());
-                    feed_pass(m_app_context.app_rendering->opaque_edge_lines_selected.get());
+                    feed_pass(m_app_context.app_rendering->edge_lines_not_selected.get());
+                    feed_pass(m_app_context.app_rendering->edge_lines_selected.get());
                     feed_pass(m_app_context.app_rendering->translucent_outline.get());
                 }
             }

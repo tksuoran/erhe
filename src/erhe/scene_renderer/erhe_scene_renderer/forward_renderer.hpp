@@ -7,14 +7,18 @@
 #include "erhe_scene_renderer/joint_buffer.hpp"
 #include "erhe_scene_renderer/light_buffer.hpp"
 #include "erhe_scene_renderer/material_buffer.hpp"
+#include "erhe_scene_renderer/mesh_memory.hpp"
 #include "erhe_scene_renderer/primitive_buffer.hpp"
 #include "erhe_scene_renderer/shader_key.hpp"
 
 #include <glm/glm.hpp>
 
+#include "erhe_primitive/material.hpp"
+
 #include <array>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <span>
 #include <vector>
 
@@ -22,6 +26,7 @@ namespace erhe {
     class Item_filter;
 }
 namespace erhe::graphics {
+    class Color_blend_state;
     class Command_buffer;
     class Device;
     class Base_render_pipeline;
@@ -93,6 +98,7 @@ public:
             std::span<const std::shared_ptr<erhe::scene::Mesh>>
         >&                                                     mesh_spans;
         const std::span<erhe::graphics::Base_render_pipeline*> base_render_pipelines;
+        Blending_mode_policy                                   blending_mode_policy{Blending_mode_policy::not_set};
         const erhe::primitive::Primitive_mode                  primitive_mode{erhe::primitive::Primitive_mode::polygon_fill};
         Primitive_interface_settings                           primitive_settings{};
         const erhe::Item_filter                                filter{};
@@ -106,9 +112,10 @@ public:
     public:
         Base_render_parameters base;
 
-        std::size_t                           vertex_count{0};
-        erhe::graphics::Base_render_pipeline& base_render_pipeline;
-        const erhe::graphics::Shader_stages*  shader_stages{nullptr};
+        std::size_t                              vertex_count{0};
+        erhe::graphics::Base_render_pipeline&    base_render_pipeline;
+        const erhe::graphics::Color_blend_state* color_blend{nullptr};
+        const erhe::graphics::Shader_stages*     shader_stages{nullptr};
     };
 
     void render(const Render_parameters& parameters);
@@ -132,6 +139,7 @@ public:
     class Prewarm_parameters
     {
     public:
+        Blending_mode_policy                                        blending_mode_policy;
         std::span<erhe::graphics::Base_render_pipeline*>            render_pipeline_states;
         const std::vector<
             std::span<const std::shared_ptr<erhe::scene::Mesh>>

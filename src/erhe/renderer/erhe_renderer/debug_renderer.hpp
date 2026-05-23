@@ -95,6 +95,9 @@ public:
     erhe::dataformat::Vertex_format                  line_vertex_format;
     std::unique_ptr<erhe::graphics::Shader_stages>   line_shader_stages;
 
+    erhe::graphics::Color_blend_state                color_blend_visible;
+    erhe::graphics::Color_blend_state                color_blend_xray;
+
     // View UBO. Layout:
     //   ViewCamera cameras[view_count];   // per-eye camera
     //   uint   view_count;                    // 1 single-view, N multiview

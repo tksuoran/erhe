@@ -205,8 +205,8 @@ void Rendering_test::make_minimal_compute_triangle()
                 .depth_write_enable  = true,
                 .depth_compare_op    = get_depth_function(Compare_operation::less, true),
                 .stencil_test_enable = false
-            },
-            .color_blend    = Color_blend_state::color_blend_premultiplied
+            }
+            //.color_blend    = Color_blend_state::color_blend_premultiplied
         }
     );
 
@@ -234,8 +234,8 @@ void Rendering_test::make_minimal_compute_triangle()
                 .stencil_test_enable = true,
                 .stencil_front       = test_ne_1_op,
                 .stencil_back        = test_ne_1_op
-            },
-            .color_blend    = Color_blend_state::color_blend_premultiplied
+            }
+            //.color_blend    = Color_blend_state::color_blend_premultiplied
         }
     );
 
@@ -265,8 +265,8 @@ void Rendering_test::make_minimal_compute_triangle()
                 .stencil_test_enable = true,
                 .stencil_front       = always_keep_op,
                 .stencil_back        = always_keep_op
-            },
-            .color_blend    = Color_blend_state::color_blend_premultiplied
+            }
+            //.color_blend    = Color_blend_state::color_blend_premultiplied
         }
     );
 
@@ -302,7 +302,7 @@ void Rendering_test::make_minimal_compute_triangle()
                 .stencil_front       = eq_1_keep_op,
                 .stencil_back        = eq_1_keep_op
             },
-            .color_blend    = Color_blend_state::color_blend_premultiplied
+            //.color_blend    = Color_blend_state::color_blend_premultiplied
         }
     );
 
@@ -380,9 +380,10 @@ void Rendering_test::draw_minimal_compute_triangle(
 
     Render_pipeline* render_pipeline = pipeline_state.get_pipeline_for(
         m_swapchain_render_pass->get_descriptor(),
-        nullptr,
-        nullptr,
-        nullptr
+        &Color_blend_state::color_blend_premultiplied,
+        m_minimal_graphics_shader_stages_blue.get(),
+        m_minimal_vertex_input.get(),
+        &m_minimal_vertex_format
     );
     if (render_pipeline == nullptr) {
         return;
@@ -416,8 +417,8 @@ void Rendering_test::draw_minimal_compute_triangle(
     encoder.set_bind_group_layout(m_minimal_compute_bind_group_layout.get());
     encoder.set_render_pipeline(*render_pipeline);
 
-    Buffer*       triangle_buffer = m_minimal_triangle_range.get_buffer()->get_buffer();
-    std::size_t   offset          = m_minimal_triangle_range.get_byte_start_offset_in_buffer();
+    Buffer*     triangle_buffer = m_minimal_triangle_range.get_buffer()->get_buffer();
+    std::size_t offset          = m_minimal_triangle_range.get_byte_start_offset_in_buffer();
     encoder.set_vertex_buffer(triangle_buffer, offset, 0);
     encoder.draw_primitives(Primitive_type::triangle, 0, 3);
 }

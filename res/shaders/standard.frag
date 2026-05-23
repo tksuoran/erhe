@@ -89,13 +89,14 @@ void main()
 #endif
 
 #ifdef ERHE_USE_BASE_COLOR_TEXTURE
-    uvec2    base_color_texture = material.base_color_texture;
-    base_color *= sample_texture(
+    uvec2 base_color_texture = material.base_color_texture;
+    vec4  base_color_sample  = sample_texture(
         base_color_texture,
         v_texcoord,
         material.base_color_rotation_scale,
         material.base_color_offset
-    ).rgb;
+    );
+    base_color *= base_color_sample.rgb;
 #endif
 
 #ifdef ERHE_USES_LIT_LOCALS
@@ -374,8 +375,54 @@ void main()
 #endif
 
     float exposure = camera.cameras[c_view_index].exposure;
+
+    // Sampled fragment alpha for alpha-test / screen-door discards and
+    // for the alpha_blend pass. The contributing factors are
+    // material.opacity, the vertex color alpha (if present), and the
+    // base color texture's alpha (if sampled). v_texcoord falls back to
+    // (0.5, 0.5) when no texcoord varying is present, so the sample
+    // call is always legal.
+    float sampled_alpha = material.opacity;
+#ifdef ERHE_USE_VERTEX_VARYING_COLOR
+    sampled_alpha *= v_color.a;
+#endif
+#ifdef ERHE_USE_BASE_COLOR_TEXTURE
+    sampled_alpha *= base_color_sample.a;
+#endif
+
+#if ERHE_MATERIAL_BLENDING_MODE == ERHE_MATERIAL_BLENDING_MODE_ALPHA_TEST
+    if (sampled_alpha < material.alpha_cutoff) {
+        discard;
+    }
+#elif ERHE_MATERIAL_BLENDING_MODE == ERHE_MATERIAL_BLENDING_MODE_SCREEN_DOOR
+    {
+        const float bayer4[16] = float[16](
+             0.0/16.0,  8.0/16.0,  2.0/16.0, 10.0/16.0,
+            12.0/16.0,  4.0/16.0, 14.0/16.0,  6.0/16.0,
+             3.0/16.0, 11.0/16.0,  1.0/16.0,  9.0/16.0,
+            15.0/16.0,  7.0/16.0, 13.0/16.0,  5.0/16.0
+        );
+        ivec2 pix       = ivec2(gl_FragCoord.xy) & ivec2(3);
+        float threshold = bayer4[pix.y * 4 + pix.x];
+        if (sampled_alpha < threshold) {
+            discard;
+        }
+    }
+#endif
+
+#if ERHE_MATERIAL_BLENDING_MODE == ERHE_MATERIAL_BLENDING_MODE_ALPHA_BLEND
+    // Premultiplied alpha: blend state combines with src_factor=ONE.
     out_color.rgb = color * exposure * material.opacity;
-    out_color.a = material.opacity;
+    out_color.a   = material.opacity;
+#else
+    // opaque / alpha_test / screen_door / multiply / add / subtract:
+    // emit straight lit color. The fixed-function Color_blend_state on
+    // the multiply / add / subtract pipelines combines this with the
+    // framebuffer using src.rgb only; the opaque / discard modes write
+    // alpha = 1 with blending disabled.
+    out_color.rgb = color * exposure;
+    out_color.a   = 1.0;
+#endif
 
     // Per-viewport debug visualization overrides. Each branch fully
     // replaces the lit color; ERHE_SHADER_DEBUG is a count axis

@@ -54,6 +54,27 @@ Debug_renderer_program_interface::Debug_renderer_program_interface(
             }
         }
     }
+    // RGB blend factors use CONSTANT_COLOR rather than CONSTANT_ALPHA
+    // because the Vulkan portability subset on MoltenVK rejects
+    // CONSTANT_ALPHA / ONE_MINUS_CONSTANT_ALPHA in the color channel
+    // (VUID-VkPipelineColorBlendAttachmentState-constantAlphaColorBlendFactors-04454).
+    // Setting the blend constant's RGB equal to its alpha makes
+    // CONSTANT_COLOR produce the same blend as CONSTANT_ALPHA would.
+    , color_blend_visible{erhe::graphics::Color_blend_state::color_blend_premultiplied}
+    , color_blend_xray{
+        .enabled  = true,
+        .rgb      = {
+            .equation_mode      = erhe::graphics::Blend_equation_mode::func_add,
+            .source_factor      = erhe::graphics::Blending_factor::constant_color,
+            .destination_factor = erhe::graphics::Blending_factor::one_minus_constant_color
+        },
+        .alpha    = {
+            .equation_mode      = erhe::graphics::Blend_equation_mode::func_add,
+            .source_factor      = erhe::graphics::Blending_factor::constant_alpha,
+            .destination_factor = erhe::graphics::Blending_factor::one_minus_constant_alpha
+        },
+        .constant = { 0.1f, 0.1f, 0.1f, 0.1f },
+    }
 {
     // Line vertex struct defines the per-vertex data layout: position (xyz + width) and color.
     // Used as SSBO struct in compute path, and matches the vertex buffer layout in simple line path.

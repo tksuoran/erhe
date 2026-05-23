@@ -116,15 +116,19 @@ void Brush_preview::make_preview_scene()
         )
     );
 
-    auto composition_pass = std::make_shared<Composition_pass>("Material Preview Composition_pass");
-    composition_pass->mesh_layers           = {Mesh_layer_id::brush};
-    composition_pass->primitive_mode        = erhe::primitive::Primitive_mode::polygon_fill;
-    composition_pass->filter                = erhe::Item_filter{};
-    composition_pass->base_render_pipelines = m_render_pipelines;
-    {
-        std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_composer.mutex};
-        m_composer.composition_passes.push_back(composition_pass);
-    }
+
+    // TODO render brushes in normal render passes?
+
+    // auto composition_pass = std::make_shared<Composition_pass>("Brush preview Composition_pass");
+    // composition_pass->data.mesh_layers           = {Mesh_layer_id::brush};
+    // composition_pass->data.primitive_mode        = erhe::primitive::Primitive_mode::polygon_fill;
+    // composition_pass->data.filter                = erhe::Item_filter{};
+    // composition_pass->data.base_render_pipelines = m_render_pipelines;
+    // composition_pass->data.blending_mode_policy  = erhe::scene_renderer::Blending_mode_policy::translucent
+    // {
+    //     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_composer.mutex};
+    //     m_composer.composition_passes.push_back(composition_pass);
+    // }
 }
 
 void Brush_preview::render_preview(
@@ -158,7 +162,6 @@ void Brush_preview::render_preview(
         m_mesh->enable_flag_bits(
             erhe::Item_flags::brush       |
             erhe::Item_flags::visible     |
-            erhe::Item_flags::translucent | // redundant
             erhe::Item_flags::no_message  |
             erhe::Item_flags::show_in_developer_ui
         );

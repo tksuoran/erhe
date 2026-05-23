@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_hash/hash.hpp"
+#include "erhe_primitive/enums.hpp"
 
 #include <cstdint>
 #include <memory>
@@ -117,6 +118,7 @@ inline constexpr const char* c_shader_debug_strings[] = {
     X(LIGHT_COUNT_POINT_SHADOWMAPPED)           \
     X(LIGHT_COUNT_POINT_NOT_SHADOWMAPPED)       \
     X(BXDF_MODEL)                               \
+    X(MATERIAL_BLENDING_MODE)                   \
     X(SHADER_DEBUG)                             \
     X(SHADER_MULTIVIEW_COUNT)
 
@@ -185,6 +187,9 @@ public:
         constexpr std::uint64_t seed = 14695981039346656037ull;
         std::uint64_t hash = erhe::hash::hash(&bool_mask, sizeof(bool_mask), seed);
         hash = erhe::hash::hash(int_values.data(), sizeof(int_values), hash);
+        if (blending_mode.has_value()) {
+            hash = erhe::hash::hash(static_cast<uint8_t>(blending_mode.value()), hash);
+        }
         return hash;
     }
 
@@ -196,6 +201,7 @@ public:
 
     uint32_t                                                     bool_mask{0};
     std::array<uint32_t, static_cast<size_t>(Shader_int::count)> int_values;
+    std::optional<erhe::primitive::Material_blending_mode>       blending_mode;
 };
 
 class Shader_key_hash

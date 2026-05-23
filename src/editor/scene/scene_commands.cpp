@@ -534,12 +534,7 @@ auto Scene_commands::create_new_rendertarget(erhe::scene::Node* parent) -> std::
     }
 
     mesh->layer_id = scene_root->layers().rendertarget()->id;
-    mesh->enable_flag_bits(
-        erhe::Item_flags::rendertarget |
-        erhe::Item_flags::visible      |
-        erhe::Item_flags::translucent  |
-        erhe::Item_flags::show_in_ui
-    );
+    mesh->enable_flag_bits(erhe::Item_flags::rendertarget | erhe::Item_flags::visible | erhe::Item_flags::show_in_ui);
 
     // Node specifies transform for rendertarget in 3D scene
     auto node = std::make_shared<erhe::scene::Node>("rendertarget node");

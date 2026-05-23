@@ -37,6 +37,7 @@ public:
     std::size_t emissive_texture;           // uvec2
     std::size_t opacity;                    // float
     std::size_t normal_texture_scale;       // float
+    std::size_t alpha_cutoff;               // float
 
     std::size_t base_color_rotation_scale;         // uvec4
     std::size_t metallic_roughness_rotation_scale; // uvec4
