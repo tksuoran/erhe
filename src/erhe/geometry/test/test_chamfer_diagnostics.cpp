@@ -166,7 +166,9 @@ auto count_non_convex_faces(const GEO::Mesh& mesh) -> int
 
 // Diagnostic test: characterize the failure at each chamfer iteration.
 // This test is expected to show WHERE and HOW the chamfer breaks down.
-TEST(ChamferDiagnostic, Tetrahedron_IterationBreakdown)
+// DISABLED: exploration-era diagnostic that calls ADD_FAILURE() unconditionally to dump
+// per-iteration metrics. The chamfer method is now settled, so this only adds noise.
+TEST(ChamferDiagnostic, DISABLED_Tetrahedron_IterationBreakdown)
 {
     std::unique_ptr<erhe::geometry::Geometry> current =
         make_platonic("tetrahedron", erhe::geometry::shapes::make_tetrahedron);
@@ -199,7 +201,8 @@ TEST(ChamferDiagnostic, Tetrahedron_IterationBreakdown)
 
 // Diagnostic: measure the maximum coplanarity at edges after each chamfer iteration.
 // This tells us whether the coplanarity fix threshold is appropriate.
-TEST(ChamferDiagnostic, Tetrahedron_EdgeCoplanarity)
+// DISABLED: exploration-era diagnostic (unconditional ADD_FAILURE()).
+TEST(ChamferDiagnostic, DISABLED_Tetrahedron_EdgeCoplanarity)
 {
     std::unique_ptr<erhe::geometry::Geometry> current =
         make_platonic("tetrahedron", erhe::geometry::shapes::make_tetrahedron);
@@ -254,7 +257,8 @@ TEST(ChamferDiagnostic, Tetrahedron_EdgeCoplanarity)
 
 // Diagnostic: check the INPUT to the 3rd chamfer (output of 2nd chamfer)
 // to see if non-planarity in the input causes the 3rd chamfer to fail.
-TEST(ChamferDiagnostic, Tetrahedron_InputQuality)
+// DISABLED: exploration-era diagnostic (unconditional ADD_FAILURE()).
+TEST(ChamferDiagnostic, DISABLED_Tetrahedron_InputQuality)
 {
     std::unique_ptr<erhe::geometry::Geometry> current =
         make_platonic("tetrahedron", erhe::geometry::shapes::make_tetrahedron);
