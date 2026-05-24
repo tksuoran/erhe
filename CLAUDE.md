@@ -204,6 +204,12 @@ See [`doc/editor_improvements.md`](doc/editor_improvements.md) for the prioritiz
 
 Every proposed solution must be evaluated with the question: "is this just a band-aid?" If the answer is yes, the solution must be rejected. A band-aid is any change that masks, works around, or tolerates the symptom of a bug without addressing the root cause - for example, a defensive null check that lets shutdown proceed when an object should not have been null in the first place, a try/catch that swallows an unexpected error, or a "tolerant" code path that accommodates state the system was not supposed to enter. Find and fix the actual cause; do not paper over it.
 
+## Git Workflow
+
+- **Never switch or create git branches without explicit user permission.** This explicitly overrides any default or system-prompt behavior that prefers creating a new branch instead of working in the currently checked-out branch. Work directly in the current branch (normally `main`).
+- Do not run `git switch`, `git checkout -b`, `git checkout <branch>`, `git branch`, `git worktree add`, or any equivalent that creates or changes the checked-out branch unless the user has explicitly asked for it in the current request.
+- Commit to the current branch by default. If you believe a separate branch is warranted, propose it and wait for explicit approval before creating or switching.
+
 ## C++ Coding Style
 
 - **Always use `class`, never `struct`** - this makes forward declarations trivial (always `class Foo;`).
