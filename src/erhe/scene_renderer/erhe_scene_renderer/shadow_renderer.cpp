@@ -248,17 +248,6 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
                 }
             };
 
-            erhe::graphics::Buffer* index_buffer = m_mesh_memory.get_index_buffer(bucket.buffer_set.index_buffer);
-            encoder.set_index_buffer(index_buffer);
-            for (std::size_t stream_index = 0; stream_index < bucket.buffer_set.vertex_buffers.size(); ++stream_index) {
-                erhe::graphics::Buffer* vertex_buffer = m_mesh_memory.get_vertex_buffer(bucket.buffer_set.vertex_buffers[stream_index]);
-                encoder.set_vertex_buffer(
-                    vertex_buffer,
-                    0,
-                    static_cast<uint32_t>(stream_index)
-                );
-            }
-
             const Vertex_input_entry& vertex_input = m_mesh_memory.get_vertex_input(bucket.buffer_set.vertex_input_key);
             const erhe::graphics::Reloadable_shader_stages* reloadable_shader_stages = m_shader_variant_cache.get(
                 bucket.shader_key,
@@ -285,7 +274,23 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
                 log_draw->warn("No render pipeline");
                 continue;
             }
+            // Bind the pipeline before the index/vertex buffers: switching the
+            // pipeline switches the GL VAO, and on GL 4.1 (no DSA) the element
+            // array buffer binding is VAO-local. Binding the index buffer
+            // first would leave it attached to the previous VAO and the draw
+            // would fail with GL_INVALID_OPERATION (elem_buf=0).
             encoder.set_render_pipeline(*render_pipeline);
+
+            erhe::graphics::Buffer* index_buffer = m_mesh_memory.get_index_buffer(bucket.buffer_set.index_buffer);
+            encoder.set_index_buffer(index_buffer);
+            for (std::size_t stream_index = 0; stream_index < bucket.buffer_set.vertex_buffers.size(); ++stream_index) {
+                erhe::graphics::Buffer* vertex_buffer = m_mesh_memory.get_vertex_buffer(bucket.buffer_set.vertex_buffers[stream_index]);
+                encoder.set_vertex_buffer(
+                    vertex_buffer,
+                    0,
+                    static_cast<uint32_t>(stream_index)
+                );
+            }
 
             //const std::span<const std::shared_ptr<erhe::scene::Mesh>> bucket_meshes{bucket.meshes};
             Ring_buffer_range primitive_range = m_primitive_buffer.update(
