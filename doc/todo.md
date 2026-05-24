@@ -102,3 +102,37 @@ reverted to keep that commit focused. Both worth landing later:
   takes disk space. Fix: write to `<hash>.spv.tmp.<per-process-suffix>`
   then `std::filesystem::rename(tmp, final)` -- POSIX-atomic on the
   same filesystem and NTFS-atomic on Windows.
+
+## Enable only strictly-required Vulkan device features
+
+`src/erhe/graphics/erhe_graphics/vulkan/vulkan_device_init.cpp` builds the
+`VkDeviceCreateInfo` feature chain by copying each feature from the value the
+physical device reported (`set_*.feature = query_*.feature`) instead of
+requesting only the features the engine actually uses. The
+`VkPhysicalDeviceDescriptorIndexingFeatures` block is the clearest case: all 20
+fields are copied from the query even though the backend depends on only three
+(`runtimeDescriptorArray`, `descriptorBindingPartiallyBound`,
+`descriptorBindingVariableDescriptorCount`). `dynamicRendering` is enabled the
+same way and never used at all -- the backend renders through `VkRenderPass` /
+`vkCmdBeginRenderPass2` and never calls `vkCmdBeginRendering`.
+
+Why this is not ideal:
+- It enables features the backend does not use, widening the apparent dependency
+  surface and making it hard to tell what is actually required.
+- It can mask bugs: a shader that accidentally relies on a SPIR-V capability
+  compiles and runs on the dev machine because the matching feature happened to
+  be available and got enabled, then fails `vkCreateShaderModule` on hardware
+  where it is not.
+- "Copy whatever the device has" is the opposite of an explicit contract; the
+  required-vs-optional split is invisible at the call site.
+
+Fix sketch:
+- Define the minimal required feature set explicitly and abort (as a handful of
+  features already do) when one is missing.
+- For genuinely optional features, enable them only when a concrete code path
+  uses them, gated on the corresponding `Device_info` flag.
+- Stop copying entire feature structs wholesale; set only the named fields the
+  engine consumes. Drop `dynamicRendering` from the enabled set unless/until the
+  backend migrates to dynamic rendering.
+
+See `doc/vulkan_backend.md` ("Features enabled but not used by the backend").

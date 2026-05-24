@@ -218,4 +218,4 @@ VUID-VkDescriptorImageInfo-imageView-01976.
 - `Reloadable_shader_stages` combines `Shader_stages_create_info` with a live `Shader_stages` for hot-reload via `Shader_monitor`.
 - Enums in `enums.hpp` mirror Vulkan concepts (Buffer_target, Texture_type, Memory_usage, Texture_heap_path, Resolve_mode, etc.) to keep the API backend-neutral.
 - The `Graphics_config` type is generated (see `generated/graphics_config.hpp`).
-- See `doc/vulkan_backend.md` and `doc/metal_backend.md` for backend-specific design notes and historical implementation plans.
+- See `doc/vulkan_backend.md` and `doc/metal_backend.md` for backend-specific design notes.
