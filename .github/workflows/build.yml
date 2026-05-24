@@ -136,3 +136,70 @@ jobs:
 
       - name: Build editor
         run: cmake --build "${{ matrix.build_dir }}" --target editor --config "${{ matrix.config }}" --parallel
+
+  # Android / Meta Quest build. Kept separate from the matrix above because it
+  # is Gradle-driven (gradlew -> Android Gradle Plugin -> erhe's top-level
+  # CMake via externalNativeBuild on the NDK), which does not fit the
+  # cmake-configure + cmake-build steps the matrix jobs share. Builds the APK
+  # only; running on a headset needs physical hardware (a self-hosted runner).
+  build-quest:
+    name: Android (Quest / Vulkan + OpenXR)
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      CPM_SOURCE_CACHE: ${{ github.workspace }}/.cpm_cache
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Gradle 8.12 (the pinned wrapper) does not support JDK 25; AGP 8.7.3
+      # needs JDK 17+. JDK 21 matches the local toolchain (Android Studio JBR).
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      # NDK version is pinned in android-project/app/build.gradle; CMake 3.22.1
+      # is AGP 8.7.3's default and satisfies erhe's 3.16.3 floor.
+      - name: Install NDK, CMake and platform
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;28.2.13676358" "cmake;3.22.1"
+
+      - name: Cache CPM dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.cpm_cache
+          key: cpm-android-quest-${{ hashFiles('cmake/**', '**/CMakeLists.txt') }}
+          restore-keys: |
+            cpm-android-quest-
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-quest-${{ hashFiles('android-project/**/*.gradle', 'android-project/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: |
+            gradle-quest-
+
+      # -PpythonExecutable avoids the Windows-only `py -3` probe in
+      # app/build.gradle (which would fall back to CMake's Python detection).
+      # The committed gradlew has no exec bit in git, so set it here.
+      - name: Build Quest APK (assembleQuestDebug)
+        working-directory: android-project
+        run: |
+          chmod +x ./gradlew
+          ./gradlew -p . --no-daemon --console=plain -PpythonExecutable=$(which python3) assembleQuestDebug
+
+      - name: Upload Quest APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: erhe-quest-debug-apk
+          path: android-project/app/build/outputs/apk/quest/debug/app-quest-debug.apk
+          if-no-files-found: error
