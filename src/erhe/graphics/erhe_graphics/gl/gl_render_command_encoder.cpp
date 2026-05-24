@@ -52,7 +52,8 @@ void Render_command_encoder_impl::set_render_pipeline(const Render_pipeline& pip
     tracker.rasterization  .execute(base.rasterization);
     tracker.multisample    .execute(base.multisample);
     tracker.depth_stencil  .execute(base.depth_stencil);
-    tracker.color_blend    .execute(base.color_blend);
+    const Color_blend_state& color_blend = (base.color_blend != nullptr) ? *base.color_blend : Color_blend_state::color_blend_disabled;
+    tracker.color_blend    .execute(color_blend);
 }
 
 void Render_command_encoder_impl::set_render_pipeline_state(const Render_pipeline_state& pipeline)
