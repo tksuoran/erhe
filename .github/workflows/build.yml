@@ -32,6 +32,13 @@ jobs:
       # persists it between runs so heavy deps (Jolt, Geogram, ...) are not
       # re-downloaded every time.
       CPM_SOURCE_CACHE: ${{ github.workspace }}/.cpm_cache
+    # A step's `shell:` key does not accept ${{ }} expressions (no context,
+    # including matrix, is available there). Selecting the per-entry shell as
+    # the job default works because `defaults.run` does allow the matrix
+    # context, and it applies to every run: step in the job.
+    defaults:
+      run:
+        shell: ${{ matrix.shell }}
     strategy:
       fail-fast: false
       matrix:
@@ -101,9 +108,7 @@ jobs:
           sudo apt-get install -y ninja-build libwayland-dev libxkbcommon-dev xorg-dev libtbb-dev
 
       - name: Configure
-        shell: ${{ matrix.shell }}
         run: ${{ matrix.configure }}
 
       - name: Build editor
-        shell: ${{ matrix.shell }}
         run: cmake --build "${{ matrix.build_dir }}" --target editor --config "${{ matrix.config }}" --parallel
