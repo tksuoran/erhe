@@ -67,6 +67,22 @@ jobs:
             build_dir: build_xcode_metal
             config: Debug
 
+          - name: macOS (Xcode / OpenGL)
+            os: macos-latest
+            api: opengl
+            shell: bash
+            configure: bash scripts/configure_xcode_opengl.sh
+            build_dir: build_xcode_opengl
+            config: Debug
+
+          - name: macOS (Xcode / Vulkan)
+            os: macos-latest
+            api: vulkan
+            shell: bash
+            configure: bash scripts/configure_xcode_vulkan.sh
+            build_dir: build_xcode_vulkan
+            config: Debug
+
           # Visual Studio 2026 is preinstalled on the "windows-2025-vs2026"
           # runner label (see actions/runner-images#14017). During the
           # 2026-06-08..06-15 rollout it also becomes the default for
@@ -87,6 +103,14 @@ jobs:
             shell: cmd
             configure: call scripts\configure_vs2026_vulkan.bat
             build_dir: build_vs2026_vulkan
+            config: Debug
+
+          - name: Windows (VS 2026 / headless)
+            os: windows-2025-vs2026
+            api: none
+            shell: cmd
+            configure: call scripts\configure_vs2026_headless.bat
+            build_dir: build_vs2026_headless
             config: Debug
 
     steps:
