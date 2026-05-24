@@ -36,26 +36,14 @@ auto Debug_renderer_bucket::Debug_renderer_bucket::make_pipeline(const bool visi
     const bool reverse_depth = (m_graphics_device.get_info().coordinate_conventions.native_depth_range == erhe::math::Depth_range::zero_to_one);
     using namespace erhe::graphics;
 
-    const auto& program_interface = m_debug_renderer.get_program_interface();
-
-    // Three tiers: compute (triangles) > geometry shader (GL_LINES + geom expand) > simple (GL_LINES)
-    // thin_lines config forces simple path regardless of capability
-    Shader_stages*       shader_stages;
-    Vertex_input_state*  vertex_input;
-    Input_assembly_state input_assembly;
-    if (m_use_compute && !m_config.thin_lines) {
-        shader_stages  = program_interface.graphics_shader_stages.get();
-        vertex_input   = m_debug_renderer.get_vertex_input();
-        input_assembly = Input_assembly_state::triangle;
-    } else if (m_use_geometry_shader && !m_config.thin_lines) {
-        shader_stages  = program_interface.geometry_shader_stages.get();
-        vertex_input   = m_debug_renderer.get_line_vertex_input();
-        input_assembly = Input_assembly_state::line;
-    } else {
-        shader_stages  = program_interface.line_shader_stages.get();
-        vertex_input   = m_debug_renderer.get_line_vertex_input();
-        input_assembly = Input_assembly_state::line;
-    }
+    // Three tiers: compute (triangles) > geometry shader (GL_LINES + geom expand) > simple (GL_LINES).
+    // thin_lines forces the simple path regardless of capability. The shader
+    // stages and vertex input vary across tiers but live outside the base
+    // pipeline state -- they are passed to get_pipeline_for() at draw time
+    // (see render_compute_draws / render_line_draws below).
+    const Input_assembly_state input_assembly = (m_use_compute && !m_config.thin_lines)
+        ? Input_assembly_state::triangle
+        : Input_assembly_state::line;
 
     const Compare_operation depth_compare_op0 = visible ? Compare_operation::less : Compare_operation::greater_or_equal;
     const Compare_operation depth_compare_op  = reverse_depth ? reverse(depth_compare_op0) : depth_compare_op0;
@@ -523,19 +511,28 @@ void Debug_renderer_bucket::render(
         }
 
         auto render_line_draws = [&](const bool visible, erhe::graphics::Base_render_pipeline& pipeline) {
+            const Debug_renderer_program_interface& pi = m_debug_renderer.get_program_interface();
+            // graphics_shader_stages is built only on the compute path
+            // (see Debug_renderer_program_interface ctor). On GL 4.1 / Metal,
+            // where use_compute is false, that pointer is null and binding
+            // it would issue glUseProgram(0). Pick the matching non-compute
+            // shader instead -- geometry-expanded wide lines when available,
+            // else the simple GL_LINES shader.
+            erhe::graphics::Shader_stages* line_shader_stages =
+                (m_use_geometry_shader && !m_config.thin_lines)
+                    ? pi.geometry_shader_stages.get()
+                    : pi.line_shader_stages.get();
             erhe::graphics::Render_pipeline* p = pipeline.get_pipeline_for(
                 render_pass.get_descriptor(),
-                visible
-                    ? &m_debug_renderer.get_program_interface().color_blend_visible
-                    : &m_debug_renderer.get_program_interface().color_blend_xray,
-                m_debug_renderer.get_program_interface().graphics_shader_stages.get(),
+                visible ? &pi.color_blend_visible : &pi.color_blend_xray,
+                line_shader_stages,
                 m_debug_renderer.get_line_vertex_input(),
-                &m_debug_renderer.get_program_interface().line_vertex_format
+                &pi.line_vertex_format
             );
             if (p == nullptr) {
                 return;
             }
-            render_encoder.set_bind_group_layout(m_debug_renderer.get_program_interface().bind_group_layout.get());
+            render_encoder.set_bind_group_layout(pi.bind_group_layout.get());
             render_encoder.set_render_pipeline(*p);
             for (Debug_draw_view_span& view_span : m_view_spans) {
                 // Non-compute path is single-view only (the multiview
