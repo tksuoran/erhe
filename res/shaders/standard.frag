@@ -441,9 +441,11 @@ void main()
         ERHE_LIGHT_COUNT_POINT_SHADOWMAPPED + \
         ERHE_LIGHT_COUNT_POINT_NOT_SHADOWMAPPED) > 0)
         Light light_0 = light_block.lights[0];
-        vec3  point_to_light_0 = (ERHE_LIGHT_DIRECTIONAL_COUNT > 0)
-            ? light_0.direction_and_outer_spot_cos.xyz
-            : (light_0.position_and_inner_spot_cos.xyz - v_position.xyz);
+#    if ((ERHE_LIGHT_COUNT_DIRECTIONAL_SHADOWMAPPED + ERHE_LIGHT_COUNT_DIRECTIONAL_NOT_SHADOWMAPPED) > 0)
+        vec3  point_to_light_0 = light_0.direction_and_outer_spot_cos.xyz;
+#    else
+        vec3  point_to_light_0 = light_0.position_and_inner_spot_cos.xyz - v_position.xyz;
+#    endif
         vec3  L_dbg = normalize(point_to_light_0);
 #  else
         vec3  L_dbg = vec3(0.0, 1.0, 0.0);
