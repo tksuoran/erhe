@@ -105,6 +105,11 @@ public:
         Shader_debug                                           shader_debug{Shader_debug::none};
         const glm::uvec4&                                      debug_joint_indices{0, 0, 0, 0};
         const std::span<glm::vec4>&                            debug_joint_colors{};
+        // When non-null, bypass the Shader_variant_cache lookup and use
+        // these stages for every bucket. Used by non-standard primitive
+        // passes (e.g. macOS GL 4.1 edge_lines, where the geometry-shader
+        // wide_lines program replaces the standard mesh shader).
+        const erhe::graphics::Shader_stages*                   shader_stages_override{nullptr};
     };
 
     class Primitive_render_parameters

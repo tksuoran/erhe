@@ -199,6 +199,16 @@ App_rendering::App_rendering(
 
     const bool use_compute_wide_lines = graphics_device.get_info().use_compute_shader;
 
+    // On backends without compute (macOS GL 4.1) the edge_lines passes go
+    // through Forward_renderer instead of Content_wide_line_renderer; in
+    // that path the variant cache would pick the standard mesh shader,
+    // which has no line-expansion logic. Override with the wide_lines
+    // geometry-shader program (loaded in programs.cpp only on the same
+    // !use_compute_shader condition).
+    erhe::graphics::Shader_stages* const wide_lines_shader_stages = use_compute_wide_lines
+        ? nullptr
+        : &programs.wide_lines_draw_color.shader_stages;
+
     edge_lines_not_selected = make_composition_pass(
         "Content edge lines not selected",
         Composition_pass_data{
@@ -208,6 +218,7 @@ App_rendering::App_rendering(
             .blending_mode_policy          {Blending_mode_policy::override_with_base_render_pipeline},
             .primitive_mode                {Primitive_mode::edge_lines},
             .filter                        {filter_not_selected},
+            .shader_stages                 {wide_lines_shader_stages},
             .get_render_style              {render_style_not_selected}
         }, not_selected, positive_determinant
     );
@@ -221,6 +232,7 @@ App_rendering::App_rendering(
             .blending_mode_policy          {Blending_mode_policy::override_with_base_render_pipeline},
             .primitive_mode                {Primitive_mode::edge_lines},
             .filter                        {filter_selected},
+            .shader_stages                 {wide_lines_shader_stages},
             .get_render_style              {render_style_selected}
         }, selected, positive_determinant
     );
@@ -234,6 +246,7 @@ App_rendering::App_rendering(
             .blending_mode_policy          {Blending_mode_policy::override_with_base_render_pipeline},
             .primitive_mode                {Primitive_mode::edge_lines},
             .filter                        {filter_selected_or_hovered},
+            .shader_stages                 {wide_lines_shader_stages},
             .primitive_settings{
                 erhe::scene_renderer::Primitive_interface_settings{
                     .constant_color0 = glm::vec4{1.0f, 0.75f, 0.0f, 1.0f},

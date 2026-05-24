@@ -213,20 +213,21 @@ void Composition_pass::render(const Render_context& context)
                         .conventions       = context.scene_view.get_conventions(),
                         .debug_label       = get_name(),
                     },
-                    .mesh_spans            = m_mesh_spans,
-                    .base_render_pipelines = data.base_render_pipelines,
-                    .blending_mode_policy  = data.blending_mode_policy,
-                    .primitive_mode        = data.primitive_mode,
-                    .primitive_settings    =
+                    .mesh_spans             = m_mesh_spans,
+                    .base_render_pipelines  = data.base_render_pipelines,
+                    .blending_mode_policy   = data.blending_mode_policy,
+                    .primitive_mode         = data.primitive_mode,
+                    .primitive_settings     =
                         data.primitive_settings.has_value()
                             ? data.primitive_settings.value()
                             : (render_style != nullptr)
                                 ? get_primitive_settings(*render_style, data.primitive_mode)
                                 : erhe::scene_renderer::Primitive_interface_settings{},
-                    .filter                = data.filter,
-                    .shader_debug          = context.shader_debug,
-                    .debug_joint_indices   = context.app_context.app_rendering->debug_joint_indices,
-                    .debug_joint_colors    = context.app_context.app_rendering->debug_joint_colors,
+                    .filter                 = data.filter,
+                    .shader_debug           = context.shader_debug,
+                    .debug_joint_indices    = context.app_context.app_rendering->debug_joint_indices,
+                    .debug_joint_colors     = context.app_context.app_rendering->debug_joint_colors,
+                    .shader_stages_override = data.shader_stages,
                 }
             );
         }

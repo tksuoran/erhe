@@ -208,21 +208,24 @@ void Forward_renderer::render(const Render_parameters& parameters)
 
             ERHE_VERIFY(!bucket.entries.empty());
 
-            const erhe::graphics::Reloadable_shader_stages* reloadable_shader_stages = m_shader_variant_cache.get(
-                bucket.shader_key,
-                &vertex_input.vertex_format
-            );
-            if (reloadable_shader_stages == nullptr) {
-                log_draw->warn(
-                    "No shader variant for bucket {} ({} primitives, {} vertex streams): {}",
-                    bucket_index,
-                    bucket.entries.size(),
-                    bucket.buffer_set.vertex_buffers.size(),
-                    bucket.shader_key.describe()
+            const erhe::graphics::Shader_stages* shader_stages = parameters.shader_stages_override;
+            if (shader_stages == nullptr) {
+                const erhe::graphics::Reloadable_shader_stages* reloadable_shader_stages = m_shader_variant_cache.get(
+                    bucket.shader_key,
+                    &vertex_input.vertex_format
                 );
-                continue;
+                if (reloadable_shader_stages == nullptr) {
+                    log_draw->warn(
+                        "No shader variant for bucket {} ({} primitives, {} vertex streams): {}",
+                        bucket_index,
+                        bucket.entries.size(),
+                        bucket.buffer_set.vertex_buffers.size(),
+                        bucket.shader_key.describe()
+                    );
+                    continue;
+                }
+                shader_stages = &reloadable_shader_stages->shader_stages;
             }
-            const erhe::graphics::Shader_stages* shader_stages = &reloadable_shader_stages->shader_stages;
 
             // TODO Implement other blending modes
             erhe::graphics::Render_pipeline* render_pipeline = render_pipeline_state->get_pipeline_for(
@@ -279,7 +282,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
             m_draw_indirect_buffer.bind(render_encoder, draw_indirect_buffer_range.range); // Draw indirect buffer is not indexed, this binds the whole buffer
 
             render_encoder.multi_draw_indexed_primitives_indirect(
-                erhe::graphics::Primitive_type::triangle, // render_pipeline->input_assembly.primitive_topology,
+                render_pipeline_state->data.input_assembly.primitive_topology,
                 m_mesh_memory.get_index_format(bucket.buffer_set.index_buffer),
                 draw_indirect_buffer_range.range.get_byte_start_offset_in_buffer(),
                 draw_indirect_buffer_range.draw_indirect_count,
