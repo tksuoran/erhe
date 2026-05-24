@@ -2,6 +2,7 @@
 
 > A C++ 3D graphics library and sandbox editor, with a Vulkan/Metal-style rendering abstraction over OpenGL, Vulkan, and Metal.
 
+[![build](https://github.com/tksuoran/erhe/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/tksuoran/erhe/actions/workflows/build.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 ![C++20](https://img.shields.io/badge/C%2B%2B-20-blue.svg)
 ![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey.svg)
