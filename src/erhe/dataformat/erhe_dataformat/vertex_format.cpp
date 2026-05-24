@@ -117,7 +117,7 @@ auto Vertex_stream::get_hash() const -> uint64_t
              static_cast<uint64_t>(binding)       |
             (static_cast<uint64_t>(step   ) << 7) |
             (static_cast<uint64_t>(stride ) << 8);
-        result = erhe::hash::hash(&stream_packed, 0);
+        result = erhe::hash::hash(stream_packed);
     }
     result = erhe::hash::hash(static_cast<uint64_t>(attributes.size()), result);
     for (const Vertex_attribute& attribute : attributes) {

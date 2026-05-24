@@ -1,4 +1,4 @@
-// Regression test: compute_vertex_format_key must distinguish formats
+// Regression test: Vertex_format::get_hash() must distinguish formats
 // that share the same (usage, usage_index) bitmask but differ in stream
 // layout, stride, or element format. An earlier 32-bit bitmask keying
 // ignored those axes, so two formats that should have been distinct
@@ -14,7 +14,6 @@ using erhe::dataformat::Vertex_attribute;
 using erhe::dataformat::Vertex_attribute_usage;
 using erhe::dataformat::Vertex_format;
 using erhe::dataformat::Vertex_stream;
-using erhe::dataformat::compute_vertex_format_key;
 
 namespace {
 
@@ -38,7 +37,7 @@ TEST(VertexFormatKey, distinguishes_position_only_in_different_bindings)
     const Vertex_format a = make_single_stream_position_format(0);
     const Vertex_format b = make_single_stream_position_format(1);
 
-    EXPECT_NE(compute_vertex_format_key(a), compute_vertex_format_key(b));
+    EXPECT_NE(a.get_hash(), b.get_hash());
 }
 
 TEST(VertexFormatKey, distinguishes_same_attributes_split_across_streams)
@@ -60,7 +59,7 @@ TEST(VertexFormatKey, distinguishes_same_attributes_split_across_streams)
     const Vertex_format a{single};
     const Vertex_format b{s0, s1};
 
-    EXPECT_NE(compute_vertex_format_key(a), compute_vertex_format_key(b));
+    EXPECT_NE(a.get_hash(), b.get_hash());
 }
 
 TEST(VertexFormatKey, distinguishes_position_with_different_element_format)
@@ -76,7 +75,7 @@ TEST(VertexFormatKey, distinguishes_position_with_different_element_format)
     const Vertex_format a{s_float};
     const Vertex_format b{s_half};
 
-    EXPECT_NE(compute_vertex_format_key(a), compute_vertex_format_key(b));
+    EXPECT_NE(a.get_hash(), b.get_hash());
 }
 
 TEST(VertexFormatKey, equal_formats_produce_equal_keys)
@@ -84,5 +83,5 @@ TEST(VertexFormatKey, equal_formats_produce_equal_keys)
     const Vertex_format a = make_single_stream_position_format(0);
     const Vertex_format b = make_single_stream_position_format(0);
 
-    EXPECT_EQ(compute_vertex_format_key(a), compute_vertex_format_key(b));
+    EXPECT_EQ(a.get_hash(), b.get_hash());
 }
