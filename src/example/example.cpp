@@ -432,6 +432,7 @@ public:
                 },
                 .mesh_spans            = { meshes },
                 .base_render_pipelines = m_render_pipelines,
+                .blending_mode_policy  = erhe::scene_renderer::Blending_mode_policy::allow_all,
                 .primitive_mode        = erhe::primitive::Primitive_mode::polygon_fill,
                 .primitive_settings    = erhe::scene_renderer::Primitive_interface_settings{},
                 .filter                = erhe::Item_filter{},
