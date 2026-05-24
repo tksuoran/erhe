@@ -35,6 +35,7 @@ public:
     [[nodiscard]] auto is_sparse                 () const -> bool;
 
     void clear() const;
+    void set_buffer(Buffer& buffer);
 
 private:
     Texture_type               m_type                  {Texture_type::texture_2d};

@@ -128,6 +128,11 @@ void Texture_impl::clear() const
 {
 }
 
+void Texture_impl::set_buffer(Buffer& buffer)
+{
+    static_cast<void>(buffer);
+}
+
 auto operator==(const Texture_impl& lhs, const Texture_impl& rhs) noexcept -> bool
 {
     return &lhs == &rhs;

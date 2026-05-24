@@ -145,4 +145,9 @@ void Render_command_encoder_impl::multi_draw_indexed_primitives_indirect(
     static_cast<void>(stride);
 }
 
+void Render_command_encoder_impl::dump_state(const char* label) const
+{
+    static_cast<void>(label);
+}
+
 } // namespace erhe::graphics

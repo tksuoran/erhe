@@ -91,6 +91,16 @@ void Buffer_impl::flush_and_unmap_bytes(std::size_t byte_count) noexcept
     m_map = std::span<std::byte>{};
 }
 
+void Buffer_impl::upload_sub_data(std::size_t byte_offset, std::size_t byte_count, const void* data) noexcept
+{
+    ERHE_VERIFY(byte_offset + byte_count <= m_capacity_byte_count);
+    if ((byte_count == 0) || (data == nullptr)) {
+        return;
+    }
+    const std::byte* source = static_cast<const std::byte*>(data);
+    std::copy(source, source + byte_count, m_storage.begin() + byte_offset);
+}
+
 void Buffer_impl::dump() const noexcept
 {
 }
