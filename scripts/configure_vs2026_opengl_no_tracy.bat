@@ -6,8 +6,6 @@
 
 setlocal
 
-for /f "delims=" %%a in ('powershell -nologo -command "Get-Date -Format o"') do set "start=%%a"
-
 cmake ^
  -G "Visual Studio 18 2026" ^
  -A x64 ^
@@ -29,9 +27,3 @@ cmake ^
  -DERHE_XR_LIBRARY=openxr ^
  -DERHE_USE_ASAN:BOOL=OFF ^
  -DERHE_SPIRV=OFF
-
-for /f "delims=" %%a in ('powershell -nologo -command "Get-Date -Format o"') do set "end=%%a"
-
-for /f "delims=" %%a in ('powershell -nologo -command "$start=[datetime]::Parse('%start%'); $end=[datetime]::Parse('%end%'); ($end - $start).TotalSeconds"') do set duration=%%a
-
-echo Configure completed in %duration% seconds

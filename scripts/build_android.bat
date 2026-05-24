@@ -105,21 +105,16 @@ echo Gradle dir   = %_gradle_dir%
 echo Flavor       = %_flavor%
 echo Tasks        = %_tasks%
 
-for /f "delims=" %%a in ('powershell -nologo -command "Get-Date -Format o"') do set "start=%%a"
-
 call "%_gradle_dir%\gradlew.bat" -p "%_gradle_dir%" --no-daemon --console=plain %_tasks%
 set "_rc=%ERRORLEVEL%"
 
-for /f "delims=" %%a in ('powershell -nologo -command "Get-Date -Format o"') do set "end=%%a"
-for /f "delims=" %%a in ('powershell -nologo -command "$start=[datetime]::Parse('%start%'); $end=[datetime]::Parse('%end%'); ($end - $start).TotalSeconds"') do set duration=%%a
-
 if not "%_rc%"=="0" goto :failed
 
-echo Build completed in %duration% seconds
+echo Build completed
 set "_apk_path=%_gradle_dir%\app\build\outputs\apk\%_apk_dir%\%_apk_name%"
 if exist "%_apk_path%" echo APK: %_apk_path%
 exit /b 0
 
 :failed
-echo Build FAILED in %duration% seconds, exit code %_rc%
+echo Build FAILED, exit code %_rc%
 exit /b %_rc%

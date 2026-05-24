@@ -116,8 +116,6 @@ echo App id      = %_app_id%
 echo Gradle task = %_gradle_task%
 if not "%_serial%"=="" echo Device      = %_serial%
 
-for /f "delims=" %%a in ('powershell -nologo -command "Get-Date -Format o"') do set "start=%%a"
-
 :: ANDROID_SERIAL is honored by AGP's install task when set.
 if not "%_serial%"=="" (
     for /f "tokens=2" %%s in ("%_serial%") do set "ANDROID_SERIAL=%%s"
@@ -126,15 +124,12 @@ if not "%_serial%"=="" (
 call "%_gradle_dir%\gradlew.bat" -p "%_gradle_dir%" --no-daemon --console=plain %_gradle_task%
 set "_rc=%ERRORLEVEL%"
 
-for /f "delims=" %%a in ('powershell -nologo -command "Get-Date -Format o"') do set "end=%%a"
-for /f "delims=" %%a in ('powershell -nologo -command "$start=[datetime]::Parse('%start%'); $end=[datetime]::Parse('%end%'); ($end - $start).TotalSeconds"') do set duration=%%a
-
 if not "%_rc%"=="0" (
-    echo Build/install FAILED in %duration% seconds, exit code %_rc%
+    echo Build/install FAILED, exit code %_rc%
     exit /b %_rc%
 )
 
-echo Build + install completed in %duration% seconds.
+echo Build + install completed.
 
 :: --- Launch via the LAUNCHER+VR intent so Horizon enters immersive ----------
 echo Launching %_app_id%/org.libsdl.app.SDLActivity ...
