@@ -1,16 +1,45 @@
-[![Codacy Badge](https://app.codacy.com/project/badge/Grade/49fade7c78954f3a99a2d6ce84a9bc1a)](https://www.codacy.com/gh/tksuoran/erhe/dashboard?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=tksuoran/erhe&amp;utm_campaign=Badge_Grade)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-
 # erhe
 
-erhe is a C++ library and editor for 3D graphics with a graphics API abstraction loosely modeled after Vulkan and Metal, with backends for OpenGL, Metal and Vulkan. It runs on Windows, Linux, and macOS. The OpenGL backend requires a minimum of OpenGL 4.1; OpenGL 4.6 is recommended.
+> A C++ 3D graphics library and sandbox editor, with a Vulkan/Metal-style rendering abstraction over OpenGL, Vulkan, and Metal.
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+![C++20](https://img.shields.io/badge/C%2B%2B-20-blue.svg)
+![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey.svg)
 
 ![screenshot](https://github.com/tksuoran/erhe/wiki/images/13.png)
 
+erhe is an actively-developed personal research project for real-time rendering and geometry. Its editor is a sandbox for 3D scene creation, manipulation, and procedural mesh generation. erhe is the evolution of [RenderStack](https://github.com/tksuoran/RenderStack).
+
 [![erhe summer 2024](https://img.youtube.com/vi/8hnKr348qt8/0.jpg)](https://www.youtube.com/watch?v=8hnKr348qt8)
 
-erhe is the evolution of [RenderStack](https://github.com/tksuoran/RenderStack).
+## Quick start
 
+```sh
+git clone https://github.com/tksuoran/erhe
+cd erhe
+
+# Windows (from an x64 Native Tools Command Prompt)
+scripts\configure_vs2026_opengl.bat
+
+# Linux
+scripts/configure_ninja_linux.sh && cmake --build build --target editor
+
+# macOS
+scripts/configure_xcode_metal.sh && cmake --build build_xcode_metal --target editor --config Debug
+```
+
+See [doc/building.md](doc/building.md) for all backends, CMake options, and IDE setup.
+
+## Platforms
+
+| Platform | Graphics backends | Status |
+| :--- | :--- | :--- |
+| Windows | OpenGL, Vulkan | Primary |
+| Linux | OpenGL, Vulkan | Supported |
+| macOS | OpenGL (4.1), Metal | Supported |
+| Meta Quest / Android | Vulkan + OpenXR | Experimental |
+
+The OpenGL backend requires OpenGL 4.1 at minimum (the maximum available on macOS); 4.6 is recommended. See [doc/opengl41_compatibility.md](doc/opengl41_compatibility.md) for the compatibility layer.
 
 ## Editor
 
@@ -106,16 +135,14 @@ erhe is organized as a set of independent libraries under `src/erhe/`. Each has 
 
 ### OpenGL Compatibility
 
-erhe targets OpenGL 4.5 with DSA but includes a runtime compatibility layer for OpenGL 4.1 (the maximum version on macOS). Features like DSA, SSBOs, compute shaders, persistent mapping, and texture views are emulated or gracefully degraded at runtime. See [doc/opengl41_compatibility.md](doc/opengl41_compatibility.md) for details.
-
-## Building
-
-See [doc/building.md](doc/building.md) for build instructions, requirements, and CMake configuration options.
+erhe targets OpenGL 4.6 with DSA but includes a runtime compatibility layer for OpenGL 4.1 (the maximum version on macOS). Features like DSA, SSBOs, compute shaders, persistent mapping, and texture views are emulated or gracefully degraded at runtime. See [doc/opengl41_compatibility.md](doc/opengl41_compatibility.md) for details.
 
 ## License
 
-MIT -- see [LICENSE](src/erhe/LICENSE).
+erhe's own source is MIT-licensed -- see [src/erhe/LICENSE](src/erhe/LICENSE). Bundled and fetched third-party dependencies retain their own licenses; see [License.txt](License.txt) for the overview.
 
-## SAST Tools
+## Acknowledgements
 
-[PVS-Studio](https://pvs-studio.com/en/pvs-studio/?utm_source=website&utm_medium=github&utm_campaign=open_source) - static analyzer for C, C++, C#, and Java code.
+erhe stands on many excellent open-source projects, including [Dear ImGui](https://github.com/ocornut/imgui), [Jolt Physics](https://github.com/jrouwe/JoltPhysics), [Geogram](https://github.com/BrunoLevy/geogram), [fastgltf](https://github.com/spnda/fastgltf), [simdjson](https://github.com/simdjson/simdjson), [SDL](https://github.com/libsdl-org/SDL), [OpenXR](https://github.com/KhronosGroup/OpenXR-SDK), [FreeType](https://www.freetype.org/), [HarfBuzz](https://github.com/harfbuzz/harfbuzz), [Tracy](https://github.com/wolfpld/tracy), [GLM](https://github.com/g-truc/glm), [fmt](https://github.com/fmtlib/fmt), and [spdlog](https://github.com/gabime/spdlog). Dependencies are fetched at configure time via [CPM.cmake](https://github.com/cpm-cmake/CPM.cmake).
+
+Static analysis provided by [PVS-Studio](https://pvs-studio.com/en/pvs-studio/?utm_source=website&utm_medium=github&utm_campaign=open_source) - static analyzer for C, C++, C#, and Java code, free for open-source projects.
