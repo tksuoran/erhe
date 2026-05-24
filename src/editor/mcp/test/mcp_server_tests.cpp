@@ -908,7 +908,6 @@ TEST_F(Mcp_test, edit_material_rejects_nan_opacity)
 // least one returns the "Server busy" -32000 error.
 TEST_F(Mcp_test, queue_overflow_returns_busy_error)
 {
-    Mcp_env& env = Mcp_env::get();
     const std::string host = env_or    ("ERHE_MCP_TEST_HOST", "127.0.0.1");
     const int         port = env_or_int("ERHE_MCP_TEST_PORT", 8080);
 
