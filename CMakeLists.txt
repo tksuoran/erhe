@@ -368,6 +368,18 @@ CPMAddPackage(
     VERSION           0.43.1
     GIT_SHALLOW       TRUE
     GITHUB_REPOSITORY yhirose/cpp-httplib
+    OPTIONS
+        # The MCP server is a local HTTP/JSON server and uses no content
+        # compression. httplib's *_IF_AVAILABLE knobs (default ON) opportunistically
+        # enable an optional dependency whenever a matching target already exists in
+        # the build tree. cpptrace vendors zstd 1.5.7 (which creates the
+        # zstd::libzstd target), so httplib enabled zstd support and propagated
+        # CPPHTTPLIB_ZSTD_SUPPORT to the editor target -- but cpptrace's zstd headers
+        # are not on the editor's include path on the Android/Quest NDK build, so
+        # <zstd.h> was not found. Disable the zstd/brotli auto-enable so httplib's
+        # feature set does not depend on incidentally-present vendored targets.
+        "HTTPLIB_USE_ZSTD_IF_AVAILABLE OFF"
+        "HTTPLIB_USE_BROTLI_IF_AVAILABLE OFF"
 )
 
 include(vscode)
