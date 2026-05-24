@@ -1,0 +1,109 @@
+name: build
+
+# Trigger policy:
+#   - push to main, but skip documentation-only changes
+#   - any pull request targeting main
+#   - manual "Run workflow" button (workflow_dispatch)
+# Feature-branch pushes intentionally do NOT build, to keep noise down on a
+# high-commit repo. Open a PR against main (or trigger manually) to get CI.
+on:
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - '**.md'
+      - 'doc/**'
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+# When a newer commit is pushed to the same branch/PR, cancel the in-progress
+# run instead of letting both finish.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    env:
+      # CPM caches fetched dependency sources here; the cache step below
+      # persists it between runs so heavy deps (Jolt, Geogram, ...) are not
+      # re-downloaded every time.
+      CPM_SOURCE_CACHE: ${{ github.workspace }}/.cpm_cache
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux (Ninja / OpenGL)
+            os: ubuntu-latest
+            api: opengl
+            shell: bash
+            configure: bash scripts/configure_ninja_linux.sh
+            build_dir: build/ninja
+            config: Release
+
+          - name: Linux (Ninja / Vulkan)
+            os: ubuntu-latest
+            api: vulkan
+            shell: bash
+            configure: bash scripts/configure_ninja_linux_vulkan.sh
+            build_dir: build/ninja-vulkan
+            config: Release
+
+          - name: macOS (Xcode / Metal)
+            os: macos-latest
+            api: metal
+            shell: bash
+            configure: bash scripts/configure_xcode_metal.sh
+            build_dir: build_xcode_metal
+            config: Debug
+
+          # Visual Studio 2026 is preinstalled on the "windows-2025-vs2026"
+          # runner label (see actions/runner-images#14017). During the
+          # 2026-06-08..06-15 rollout it also becomes the default for
+          # "windows-latest" / "windows-2025"; once that completes (and the
+          # explicit "windows-2025-vs2026" label is eventually retired), switch
+          # the os lines below to "windows-latest".
+          - name: Windows (VS 2026 / OpenGL)
+            os: windows-2025-vs2026
+            api: opengl
+            shell: cmd
+            configure: call scripts\configure_vs2026_opengl.bat
+            build_dir: build_vs2026_opengl
+            config: Debug
+
+          - name: Windows (VS 2026 / Vulkan)
+            os: windows-2025-vs2026
+            api: vulkan
+            shell: cmd
+            configure: call scripts\configure_vs2026_vulkan.bat
+            build_dir: build_vs2026_vulkan
+            config: Debug
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache CPM dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.cpm_cache
+          key: cpm-${{ matrix.os }}-${{ matrix.api }}-${{ hashFiles('cmake/**', '**/CMakeLists.txt') }}
+          restore-keys: |
+            cpm-${{ matrix.os }}-${{ matrix.api }}-
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libwayland-dev libxkbcommon-dev xorg-dev libtbb-dev
+
+      - name: Configure
+        shell: ${{ matrix.shell }}
+        run: ${{ matrix.configure }}
+
+      - name: Build editor
+        shell: ${{ matrix.shell }}
+        run: cmake --build "${{ matrix.build_dir }}" --target editor --config "${{ matrix.config }}" --parallel
