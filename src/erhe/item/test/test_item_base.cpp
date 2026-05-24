@@ -132,15 +132,15 @@ TEST(ItemBase, MultipleFlagBits)
     auto item = std::make_shared<Concrete_item>();
     item->enable_flag_bits(erhe::Item_flags::visible);
     item->enable_flag_bits(erhe::Item_flags::selected);
-    item->enable_flag_bits(erhe::Item_flags::opaque);
+    item->enable_flag_bits(erhe::Item_flags::content);
     EXPECT_TRUE(item->is_visible());
     EXPECT_TRUE(item->is_selected());
-    EXPECT_EQ(item->get_flag_bits() & erhe::Item_flags::opaque, erhe::Item_flags::opaque);
+    EXPECT_EQ(item->get_flag_bits() & erhe::Item_flags::content, erhe::Item_flags::content);
 
     item->disable_flag_bits(erhe::Item_flags::selected);
     EXPECT_TRUE(item->is_visible());
     EXPECT_FALSE(item->is_selected());
-    EXPECT_EQ(item->get_flag_bits() & erhe::Item_flags::opaque, erhe::Item_flags::opaque);
+    EXPECT_EQ(item->get_flag_bits() & erhe::Item_flags::content, erhe::Item_flags::content);
 }
 
 TEST(ItemBase, CopyConstruction)

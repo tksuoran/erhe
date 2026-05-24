@@ -9,7 +9,7 @@ using erhe::Item_flags;
 
 constexpr uint64_t A = Item_flags::visible;
 constexpr uint64_t B = Item_flags::selected;
-constexpr uint64_t C = Item_flags::opaque;
+constexpr uint64_t C = Item_flags::content;
 
 TEST(ItemFilter, DefaultPassesAll)
 {
