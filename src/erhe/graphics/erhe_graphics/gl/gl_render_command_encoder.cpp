@@ -46,14 +46,15 @@ void Render_command_encoder_impl::set_render_pipeline(const Render_pipeline& pip
     const Base_render_pipeline_create_info& base          = ci.base;
     const Shader_stages*                    shader_stages = ci.shader_stages;
     OpenGL_state_tracker& tracker = m_device.get_impl().m_gl_state_tracker;
-    tracker.shader_stages  .execute(shader_stages);
-    tracker.vertex_input   .execute(ci.vertex_input);
-    tracker.input_assembly .execute(base.input_assembly);
-    tracker.rasterization  .execute(base.rasterization);
-    tracker.multisample    .execute(base.multisample);
-    tracker.depth_stencil  .execute(base.depth_stencil);
+    tracker.shader_stages       .execute(shader_stages);
+    tracker.vertex_input        .execute(ci.vertex_input);
+    tracker.input_assembly      .execute(base.input_assembly);
+    tracker.rasterization       .execute(base.rasterization);
+    tracker.multisample         .execute(base.multisample);
+    tracker.viewport_depth_range.execute(base.viewport_depth_range);
+    tracker.depth_stencil       .execute(base.depth_stencil);
     const Color_blend_state& color_blend = (base.color_blend != nullptr) ? *base.color_blend : Color_blend_state::color_blend_disabled;
-    tracker.color_blend    .execute(color_blend);
+    tracker.color_blend         .execute(color_blend);
 }
 
 void Render_command_encoder_impl::set_render_pipeline_state(const Render_pipeline_state& pipeline)
