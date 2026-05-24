@@ -37,8 +37,8 @@ See [doc/building.md](doc/building.md) for all backends, CMake options, and IDE 
 | :--- | :--- | :--- |
 | Windows | OpenGL, Vulkan | Primary |
 | Linux | OpenGL, Vulkan | Supported |
-| macOS | OpenGL (4.1), Metal | Supported |
-| Meta Quest / Android | Vulkan + OpenXR | Experimental |
+| macOS | OpenGL (4.1), Vulkan, Metal | Supported |
+| Meta Quest / Android | Vulkan + OpenXR | Supported |
 
 The OpenGL backend requires OpenGL 4.1 at minimum (the maximum available on macOS); 4.6 is recommended. See [doc/opengl41_compatibility.md](doc/opengl41_compatibility.md) for the compatibility layer.
 
