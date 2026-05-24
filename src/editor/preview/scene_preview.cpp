@@ -90,13 +90,13 @@ Scene_preview::Scene_preview(
         }
     );
 
-    static_cast<void>(reverse_depth);
     // The dummy shadowmap is sampled by Forward_renderer's standard shaders
-    // even though Scene_preview never renders into it. Without an explicit
-    // transition it stays in VK_IMAGE_LAYOUT_UNDEFINED, and binding it as a
-    // sampled descriptor trips VUID-vkCmdDraw-None-09600. Forward_renderer
-    // expects shadowmaps in shader_read_only_optimal.
-    init_command_buffer.transition_texture_layout(*m_shadow_texture.get(), erhe::graphics::Image_layout::depth_stencil_read_only_optimal);
+    // even though Scene_preview never renders into it. Clear it to the
+    // far-plane depth so the shadow comparison reports "not in shadow" for
+    // every fragment; clear_texture also leaves the texture in
+    // depth_stencil_read_only_optimal, satisfying VUID-vkCmdDraw-None-09600.
+    const double depth_clear_value = reverse_depth ? 0.0 : 1.0;
+    init_command_buffer.clear_texture(*m_shadow_texture.get(), { depth_clear_value, 0.0, 0.0, 0.0 });
 }
 
 Scene_preview::~Scene_preview() noexcept
