@@ -3,7 +3,7 @@
 #if defined(__ANDROID__)
 #   include <android/log.h>
 #   include <string>
-#else
+#elif defined(ERHE_WINDOW_LIBRARY_SDL)
 #   include <SDL3/SDL_clipboard.h>
 #   include <string>
 #endif
@@ -26,9 +26,13 @@ void copy_to_clipboard(std::string_view text)
         }
         start = end + 1;
     }
-#else
+#elif defined(ERHE_WINDOW_LIBRARY_SDL)
     const std::string null_terminated{text};
     SDL_SetClipboardText(null_terminated.c_str());
+#else
+    // No SDL clipboard backend for the selected window library (glfw / none):
+    // copy_to_clipboard() is a no-op.
+    static_cast<void>(text);
 #endif
 }
 

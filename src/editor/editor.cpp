@@ -163,7 +163,9 @@
 #include "erhe_ui/ui_log.hpp"
 #include "erhe_utility/clipboard.hpp"
 
-#include <SDL3/SDL.h>
+#if defined(ERHE_WINDOW_LIBRARY_SDL)
+#   include <SDL3/SDL.h>
+#endif
 #include <taskflow/taskflow.hpp>
 
 #if defined(ERHE_PROFILE_LIBRARY_NVTX)

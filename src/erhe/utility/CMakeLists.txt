@@ -22,7 +22,10 @@ target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 if (ERHE_TARGET_OS_ANDROID)
     target_link_libraries(${_target} PRIVATE log)
-else ()
+elseif (${ERHE_WINDOW_LIBRARY} STREQUAL "sdl")
+    # clipboard.cpp routes copy_to_clipboard() through SDL_SetClipboardText
+    # only when SDL is the selected window library. For glfw / none there is
+    # no SDL3 target to link and clipboard.cpp compiles a no-op fallback.
     target_link_libraries(${_target} PRIVATE SDL3::SDL3-static)
 endif ()
 

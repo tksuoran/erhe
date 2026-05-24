@@ -1,6 +1,8 @@
 #include "editor.hpp"
 
-#include <SDL3/SDL_main.h>
+#if defined(ERHE_WINDOW_LIBRARY_SDL)
+#   include <SDL3/SDL_main.h>
+#endif
 
 #if defined(ERHE_OS_ANDROID)
 #   include "erhe_file/file.hpp"
