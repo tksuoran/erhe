@@ -114,25 +114,27 @@ void Render_command_encoder_impl::set_render_pipeline(const Render_pipeline& pip
     }
 
     // Rasterization state from create info
-    const Render_pipeline_create_info& create_info = pipeline.get_create_info();
-    encoder->setFrontFacingWinding(to_mtl_winding(create_info.rasterization.front_face_direction));
-    encoder->setCullMode(to_mtl_cull_mode(create_info.rasterization.face_cull_enable, create_info.rasterization.cull_face_mode));
-    encoder->setTriangleFillMode(to_mtl_triangle_fill_mode(create_info.rasterization.polygon_mode));
-    encoder->setDepthClipMode(to_mtl_depth_clip_mode(create_info.rasterization.depth_clamp_enable));
+    const Render_pipeline_create_info&      create_info = pipeline.get_create_info();
+    const Base_render_pipeline_create_info& base        = create_info.base;
+    encoder->setFrontFacingWinding(to_mtl_winding(base.rasterization.front_face_direction));
+    encoder->setCullMode(to_mtl_cull_mode(base.rasterization.face_cull_enable, base.rasterization.cull_face_mode));
+    encoder->setTriangleFillMode(to_mtl_triangle_fill_mode(base.rasterization.polygon_mode));
+    encoder->setDepthClipMode(to_mtl_depth_clip_mode(base.rasterization.depth_clamp_enable));
 
     // Blend constant color (used when blend factors reference constant_color/alpha)
+    const Color_blend_state& color_blend = (base.color_blend != nullptr) ? *base.color_blend : erhe::graphics::Color_blend_state::color_blend_disabled;
     encoder->setBlendColor(
-        create_info.color_blend.constant[0],
-        create_info.color_blend.constant[1],
-        create_info.color_blend.constant[2],
-        create_info.color_blend.constant[3]
+        color_blend.constant[0],
+        color_blend.constant[1],
+        color_blend.constant[2],
+        color_blend.constant[3]
     );
 
     // Stencil reference values
-    if (create_info.depth_stencil.stencil_test_enable) {
+    if (base.depth_stencil.stencil_test_enable) {
         encoder->setStencilReferenceValues(
-            create_info.depth_stencil.stencil_front.reference,
-            create_info.depth_stencil.stencil_back.reference
+            base.depth_stencil.stencil_front.reference,
+            base.depth_stencil.stencil_back.reference
         );
     }
 }

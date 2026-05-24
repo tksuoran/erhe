@@ -35,6 +35,8 @@ Render_pipeline_impl::Render_pipeline_impl(Device& device, const Render_pipeline
     MTL::Device* mtl_device = m_device_impl.get_mtl_device();
     ERHE_VERIFY(mtl_device != nullptr);
 
+    const Base_render_pipeline_create_info& base = create_info.base;
+
     // --- Render pipeline state ---
     MTL::RenderPipelineDescriptor* desc = MTL::RenderPipelineDescriptor::alloc()->init();
     desc->setVertexFunction(vertex_function);
@@ -57,8 +59,8 @@ Render_pipeline_impl::Render_pipeline_impl(Device& device, const Render_pipeline
 
     // Multisample coverage/one state (pipeline-descriptor state, applies
     // even when sample_count == 1 - Metal ignores the flags in that case).
-    desc->setAlphaToCoverageEnabled(create_info.multisample.alpha_to_coverage_enable);
-    desc->setAlphaToOneEnabled(create_info.multisample.alpha_to_one_enable);
+    desc->setAlphaToCoverageEnabled(base.multisample.alpha_to_coverage_enable);
+    desc->setAlphaToOneEnabled(base.multisample.alpha_to_one_enable);
 
     // Depth/stencil pixel formats
     if (create_info.depth_attachment_format != erhe::dataformat::Format::format_undefined) {
@@ -100,23 +102,24 @@ Render_pipeline_impl::Render_pipeline_impl(Device& device, const Render_pipeline
     }
 
     // Color blend state
+    const Color_blend_state& color_blend = (base.color_blend != nullptr) ? *base.color_blend : erhe::graphics::Color_blend_state::color_blend_disabled;
     for (unsigned int i = 0; i < std::max(1u, create_info.color_attachment_count); ++i) {
         MTL::RenderPipelineColorAttachmentDescriptor* color_att = desc->colorAttachments()->object(static_cast<NS::UInteger>(i));
-        if (create_info.color_blend.enabled) {
+        if (color_blend.enabled) {
             color_att->setBlendingEnabled(true);
-            color_att->setSourceRGBBlendFactor(to_mtl_blend_factor(create_info.color_blend.rgb.source_factor));
-            color_att->setDestinationRGBBlendFactor(to_mtl_blend_factor(create_info.color_blend.rgb.destination_factor));
-            color_att->setRgbBlendOperation(to_mtl_blend_operation(create_info.color_blend.rgb.equation_mode));
-            color_att->setSourceAlphaBlendFactor(to_mtl_blend_factor(create_info.color_blend.alpha.source_factor));
-            color_att->setDestinationAlphaBlendFactor(to_mtl_blend_factor(create_info.color_blend.alpha.destination_factor));
-            color_att->setAlphaBlendOperation(to_mtl_blend_operation(create_info.color_blend.alpha.equation_mode));
+            color_att->setSourceRGBBlendFactor(to_mtl_blend_factor(color_blend.rgb.source_factor));
+            color_att->setDestinationRGBBlendFactor(to_mtl_blend_factor(color_blend.rgb.destination_factor));
+            color_att->setRgbBlendOperation(to_mtl_blend_operation(color_blend.rgb.equation_mode));
+            color_att->setSourceAlphaBlendFactor(to_mtl_blend_factor(color_blend.alpha.source_factor));
+            color_att->setDestinationAlphaBlendFactor(to_mtl_blend_factor(color_blend.alpha.destination_factor));
+            color_att->setAlphaBlendOperation(to_mtl_blend_operation(color_blend.alpha.equation_mode));
         }
 
         MTL::ColorWriteMask mask = MTL::ColorWriteMaskNone;
-        if (create_info.color_blend.write_mask.red)   mask |= MTL::ColorWriteMaskRed;
-        if (create_info.color_blend.write_mask.green) mask |= MTL::ColorWriteMaskGreen;
-        if (create_info.color_blend.write_mask.blue)  mask |= MTL::ColorWriteMaskBlue;
-        if (create_info.color_blend.write_mask.alpha) mask |= MTL::ColorWriteMaskAlpha;
+        if (color_blend.write_mask.red)   mask |= MTL::ColorWriteMaskRed;
+        if (color_blend.write_mask.green) mask |= MTL::ColorWriteMaskGreen;
+        if (color_blend.write_mask.blue)  mask |= MTL::ColorWriteMaskBlue;
+        if (color_blend.write_mask.alpha) mask |= MTL::ColorWriteMaskAlpha;
         color_att->setWriteMask(mask);
     }
 
@@ -137,16 +140,16 @@ Render_pipeline_impl::Render_pipeline_impl(Device& device, const Render_pipeline
 
     MTL::DepthStencilDescriptor* ds_desc = MTL::DepthStencilDescriptor::alloc()->init();
 
-    if (has_depth && create_info.depth_stencil.depth_write_enable) {
+    if (has_depth && base.depth_stencil.depth_write_enable) {
         ds_desc->setDepthWriteEnabled(true);
     }
-    if (has_depth && create_info.depth_stencil.depth_test_enable) {
-        ds_desc->setDepthCompareFunction(to_mtl_compare_function(create_info.depth_stencil.depth_compare_op));
+    if (has_depth && base.depth_stencil.depth_test_enable) {
+        ds_desc->setDepthCompareFunction(to_mtl_compare_function(base.depth_stencil.depth_compare_op));
     } else {
         ds_desc->setDepthCompareFunction(MTL::CompareFunctionAlways);
     }
 
-    if (has_stencil && create_info.depth_stencil.stencil_test_enable) {
+    if (has_stencil && base.depth_stencil.stencil_test_enable) {
         auto configure_stencil = [](MTL::StencilDescriptor* stencil_desc, const Stencil_op_state& state) {
             stencil_desc->setStencilCompareFunction(to_mtl_compare_function(state.function));
             stencil_desc->setStencilFailureOperation(to_mtl_stencil_operation(state.stencil_fail_op));
@@ -155,8 +158,8 @@ Render_pipeline_impl::Render_pipeline_impl(Device& device, const Render_pipeline
             stencil_desc->setReadMask(state.test_mask);
             stencil_desc->setWriteMask(state.write_mask);
         };
-        configure_stencil(ds_desc->frontFaceStencil(), create_info.depth_stencil.stencil_front);
-        configure_stencil(ds_desc->backFaceStencil(),  create_info.depth_stencil.stencil_back);
+        configure_stencil(ds_desc->frontFaceStencil(), base.depth_stencil.stencil_front);
+        configure_stencil(ds_desc->backFaceStencil(),  base.depth_stencil.stencil_back);
     }
 
     m_depth_stencil = mtl_device->newDepthStencilState(ds_desc);
