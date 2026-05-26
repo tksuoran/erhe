@@ -52,6 +52,11 @@ private:
     int                                              m_render_target_width{0};
     int                                              m_render_target_height{0};
     uint32_t                                         m_view_mask{0};
+    // Fragment density map attachment (fixed foveated rendering), or nullptr.
+    // Non-owning; the texture is owned by the OpenXR Swapchain. Deliberately
+    // kept out of m_color_attachments/m_depth_attachment so it is excluded from
+    // the layout-transition and barrier machinery.
+    const Texture*                                   m_fragment_density_map_texture{nullptr};
     erhe::utility::Debug_label                       m_debug_label;
     erhe::utility::Debug_label                       m_debug_group_name;
     bool                                             m_uses_multisample_resolve{false};

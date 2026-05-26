@@ -757,6 +757,9 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
             render_pass_descriptor.render_target_width  = static_cast<int>(frame.width);
             render_pass_descriptor.render_target_height = static_cast<int>(frame.height);
             render_pass_descriptor.view_mask            = frame.view_mask;
+            // Fixed foveated rendering: attach the shared (2D-array) fragment
+            // density map when present (nullptr otherwise; ignored on non-Vulkan).
+            render_pass_descriptor.fragment_density_map_texture = frame.shared_fragment_density_map_texture;
             render_pass_descriptor.debug_label          = erhe::utility::Debug_label{"XR multiview"};
 
             erhe::graphics::Render_pass multiview_render_pass{*m_app_context.graphics_device, render_pass_descriptor};

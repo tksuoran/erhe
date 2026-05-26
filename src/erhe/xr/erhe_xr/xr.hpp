@@ -36,6 +36,10 @@ public:
     // wrappers; valid for the lifetime of the Xr_session.
     erhe::graphics::Texture* color_texture        {nullptr};
     erhe::graphics::Texture* depth_stencil_texture{nullptr};
+    // Fragment density map for fixed foveated rendering, or nullptr when the
+    // swapchain was not created with foveation. Non-owning, same lifetime as
+    // color_texture (the acquired swapchain image).
+    erhe::graphics::Texture* fragment_density_map_texture{nullptr};
     erhe::dataformat::Format color_format;
     erhe::dataformat::Format depth_stencil_format;
     uint32_t                 width;

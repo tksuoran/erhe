@@ -102,6 +102,9 @@ Headset_view_resources::Headset_view_resources(
         render_pass_descriptor.stencil_attachment.usage_after   = erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment;
         render_pass_descriptor.stencil_attachment.layout_after  = erhe::graphics::Image_layout::depth_stencil_attachment_optimal;
     }
+    // Fixed foveated rendering: attach the per-view fragment density map when the
+    // swapchain provided one (nullptr otherwise; ignored on non-Vulkan backends).
+    render_pass_descriptor.fragment_density_map_texture = render_view.fragment_density_map_texture;
     render_pass_descriptor.render_target_width  = m_width;
     render_pass_descriptor.render_target_height = m_height;
     render_pass_descriptor.debug_label = erhe::utility::Debug_label{fmt::format("XR {}", slot)};
