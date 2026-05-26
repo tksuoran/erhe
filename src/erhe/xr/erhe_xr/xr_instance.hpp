@@ -149,6 +149,10 @@ public:
         bool META_performance_metrics            {false};
         bool VARJO_quad_views                  {false};
         bool VARJO_environment_depth_estimation{false};
+        bool FB_swapchain_update_state         {false};
+        bool FB_foveation                      {false};
+        bool FB_foveation_configuration        {false};
+        bool FB_foveation_vulkan               {false};
     };
     Extensions extensions{};
 
@@ -192,6 +196,13 @@ public:
     PFN_xrSetPerformanceMetricsStateMETA              xrSetPerformanceMetricsStateMETA             {nullptr};
     PFN_xrGetPerformanceMetricsStateMETA              xrGetPerformanceMetricsStateMETA             {nullptr};
     PFN_xrQueryPerformanceMetricsCounterMETA          xrQueryPerformanceMetricsCounterMETA         {nullptr};
+
+    // XR_FB_foveation / XR_FB_swapchain_update_state (fixed foveated rendering).
+    // Function types are graphics-API agnostic (declared in openxr.h); the
+    // extensions themselves are only enabled on Vulkan builds.
+    PFN_xrCreateFoveationProfileFB         xrCreateFoveationProfileFB        {nullptr};
+    PFN_xrDestroyFoveationProfileFB        xrDestroyFoveationProfileFB       {nullptr};
+    PFN_xrUpdateSwapchainFB                xrUpdateSwapchainFB               {nullptr};
 
     [[nodiscard]] auto debug_utils_messenger_callback(
         XrDebugUtilsMessageSeverityFlagsEXT         message_severity,
