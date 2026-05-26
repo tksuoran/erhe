@@ -549,6 +549,24 @@ auto Xr_session::create_swapchains() -> bool
         erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment |
         erhe::graphics::Image_usage_flag_bit_mask::sampled;
 
+    // Fixed foveated rendering (issue #208): request a fragment-density-map on the
+    // COLOR swapchains when the config knob, the OpenXR foveation extensions, and
+    // the Vulkan device's FDM capability all line up. Vulkan-only; on other
+    // backends use_foveation stays false and swapchains are created exactly as
+    // before. The FDM is requested only on color (never depth). chaining the
+    // create-info is harmless if the runtime ignores it, but it is gated anyway.
+    bool use_foveation = false;
+#if defined(XR_USE_GRAPHICS_API_VULKAN)
+    use_foveation = m_instance.extensions.FB_foveation && m_graphics_device.get_info().fragment_density_map;
+#endif
+    const XrSwapchainCreateInfoFoveationFB color_foveation_create_info{
+        .type  = XR_TYPE_SWAPCHAIN_CREATE_INFO_FOVEATION_FB,
+        .next  = nullptr,
+        .flags = XR_SWAPCHAIN_CREATE_FOVEATION_FRAGMENT_DENSITY_MAP_BIT_FB
+    };
+    const void* const color_swapchain_next = use_foveation ? &color_foveation_create_info : nullptr;
+    log_xr->info("OpenXR fixed foveated rendering: use_foveation={}", use_foveation);
+
     // On Vulkan the depth swapchain creation is currently disabled (see
     // doc/vulkan_backend.md). On GL the runtime accepts the depth format
     // and the editor uses the resulting depth texture for the projection
@@ -591,7 +609,7 @@ auto Xr_session::create_swapchains() -> bool
 
         const XrSwapchainCreateInfo color_swapchain_create_info{
             .type        = XR_TYPE_SWAPCHAIN_CREATE_INFO,
-            .next        = nullptr,
+            .next        = color_swapchain_next,
             .createFlags = 0,
             .usageFlags  = XR_SWAPCHAIN_USAGE_SAMPLED_BIT | XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT,
             .format      = native_color_format,
@@ -660,6 +678,7 @@ auto Xr_session::create_swapchains() -> bool
             view.recommendedSwapchainSampleCount,
             view_count,
             color_texture_usage,
+            use_foveation,
             "XR multiview color"
         );
         if (depth_stencil_xr_swapchain != XR_NULL_HANDLE) {
@@ -672,6 +691,7 @@ auto Xr_session::create_swapchains() -> bool
                 view.recommendedSwapchainSampleCount,
                 view_count,
                 depth_stencil_texture_usage,
+                /*want_fragment_density_map*/ false,
                 "XR multiview depth stencil"
             );
         }
@@ -709,7 +729,7 @@ auto Xr_session::create_swapchains() -> bool
         const auto& view = views[view_index];
         const XrSwapchainCreateInfo color_swapchain_create_info{
             .type        = XR_TYPE_SWAPCHAIN_CREATE_INFO,
-            .next        = nullptr,
+            .next        = color_swapchain_next,
             .createFlags = 0,
             .usageFlags  = XR_SWAPCHAIN_USAGE_SAMPLED_BIT | XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT,
             .format      = native_color_format,
@@ -762,6 +782,7 @@ auto Xr_session::create_swapchains() -> bool
                 view.recommendedSwapchainSampleCount,
                 /*array_layer_count*/ 1,
                 color_texture_usage,
+                use_foveation,
                 fmt::format("XR color view {}", view_index)
             },
             Swapchain{
@@ -773,6 +794,7 @@ auto Xr_session::create_swapchains() -> bool
                 view.recommendedSwapchainSampleCount,
                 /*array_layer_count*/ 1,
                 depth_stencil_texture_usage,
+                /*want_fragment_density_map*/ false,
                 fmt::format("XR depth stencil view {}", view_index)
             }
         );
@@ -1824,6 +1846,7 @@ auto Xr_session::create_quad_layer(uint32_t width, uint32_t height, const std::s
         /*sample_count*/      1,
         /*array_layer_count*/ 1,
         color_texture_usage,
+        /*want_fragment_density_map*/ false,
         debug_label
     };
 

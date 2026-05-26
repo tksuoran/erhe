@@ -73,6 +73,13 @@ auto Swapchain_image::get_texture() const -> erhe::graphics::Texture*
     return m_swapchain->get_texture(m_image_index);
 }
 
+auto Swapchain_image::get_fragment_density_map_texture() const -> erhe::graphics::Texture*
+{
+    ERHE_VERIFY(m_swapchain != nullptr);
+
+    return m_swapchain->get_fragment_density_map_texture(m_image_index);
+}
+
 Swapchain::Swapchain(
     erhe::graphics::Device&        device,
     XrSwapchain                    xr_swapchain,
@@ -82,6 +89,7 @@ Swapchain::Swapchain(
     uint32_t                       sample_count,
     uint32_t                       array_layer_count,
     uint64_t                       texture_usage_mask,
+    bool                           want_fragment_density_map,
     const std::string&             debug_label
 )
     : m_xr_swapchain     {xr_swapchain}
@@ -90,7 +98,7 @@ Swapchain::Swapchain(
     ERHE_PROFILE_FUNCTION();
 
     if (xr_swapchain != XR_NULL_HANDLE) {
-        if (!enumerate_images(device, pixelformat, width, height, sample_count, m_array_layer_count, texture_usage_mask, debug_label)) {
+        if (!enumerate_images(device, pixelformat, width, height, sample_count, m_array_layer_count, texture_usage_mask, want_fragment_density_map, debug_label)) {
             log_xr->warn("Swapchain::enumerate_images() failed");
         }
     }
@@ -110,6 +118,7 @@ Swapchain::Swapchain(Swapchain&& other) noexcept
     : m_xr_swapchain     {other.m_xr_swapchain}
     , m_array_layer_count{other.m_array_layer_count}
     , m_textures         {std::move(other.m_textures)}
+    , m_textures_fdm     {std::move(other.m_textures_fdm)}
 {
     other.m_xr_swapchain      = XR_NULL_HANDLE;
     other.m_array_layer_count = 1;
@@ -125,6 +134,7 @@ void Swapchain::operator=(Swapchain&& other) noexcept
     m_xr_swapchain            = other.m_xr_swapchain;
     m_array_layer_count       = other.m_array_layer_count;
     m_textures                = std::move(other.m_textures);
+    m_textures_fdm            = std::move(other.m_textures_fdm);
     other.m_xr_swapchain      = XR_NULL_HANDLE;
     other.m_array_layer_count = 1;
 }
@@ -204,6 +214,16 @@ auto Swapchain::get_texture(const uint32_t image_index) const -> erhe::graphics:
     return m_textures[image_index].get();
 }
 
+auto Swapchain::get_fragment_density_map_texture(const uint32_t image_index) const -> erhe::graphics::Texture*
+{
+    // m_textures_fdm is empty unless the swapchain was created with foveation;
+    // return nullptr for any index in that case (and for out-of-range indices).
+    if (image_index >= m_textures_fdm.size()) {
+        return nullptr;
+    }
+    return m_textures_fdm[image_index].get();
+}
+
 auto Swapchain::get_xr_swapchain() const -> XrSwapchain
 {
     return m_xr_swapchain;
@@ -259,6 +279,7 @@ auto Swapchain::enumerate_images(
     uint32_t                       sample_count,
     uint32_t                       array_layer_count,
     uint64_t                       texture_usage_mask,
+    bool                           want_fragment_density_map,
     const std::string&             debug_label
 ) -> bool
 {
@@ -276,6 +297,8 @@ auto Swapchain::enumerate_images(
     m_textures.resize(image_count);
 
 #if defined(XR_USE_GRAPHICS_API_OPENGL)
+    // Fixed foveated rendering is Vulkan-only; the OpenGL path never requests it.
+    static_cast<void>(want_fragment_density_map);
     std::vector<XrSwapchainImageOpenGLKHR> swapchain_images(image_count);
     for (uint32_t i = 0; i < image_count; i++) {
         swapchain_images[i].type  = XR_TYPE_SWAPCHAIN_IMAGE_OPENGL_KHR;
@@ -307,10 +330,26 @@ auto Swapchain::enumerate_images(
     }
 #elif defined(XR_USE_GRAPHICS_API_VULKAN)
     std::vector<XrSwapchainImageVulkanKHR> swapchain_images(image_count);
+    // Fixed foveated rendering: a parallel fragment-density-map image struct per
+    // swapchain image, chained into each color image struct's next so
+    // xrEnumerateSwapchainImages fills in the FDM VkImage and its dimensions.
+    // Only built when the swapchain was created with the foveation flag.
+    std::vector<XrSwapchainImageFoveationVulkanFB> fdm_images;
+    if (want_fragment_density_map) {
+        fdm_images.resize(image_count);
+    }
     for (uint32_t i = 0; i < image_count; i++) {
         swapchain_images[i].type  = XR_TYPE_SWAPCHAIN_IMAGE_VULKAN_KHR;
         swapchain_images[i].next  = nullptr;
         swapchain_images[i].image = VK_NULL_HANDLE;
+        if (want_fragment_density_map) {
+            fdm_images[i].type       = XR_TYPE_SWAPCHAIN_IMAGE_FOVEATION_VULKAN_FB;
+            fdm_images[i].next       = nullptr;
+            fdm_images[i].image      = VK_NULL_HANDLE;
+            fdm_images[i].width      = 0;
+            fdm_images[i].height     = 0;
+            swapchain_images[i].next = &fdm_images[i];
+        }
     }
     ERHE_XR_CHECK(
         xrEnumerateSwapchainImages(
@@ -321,6 +360,9 @@ auto Swapchain::enumerate_images(
         )
     );
 
+    if (want_fragment_density_map) {
+        m_textures_fdm.resize(image_count);
+    }
     for (uint32_t i = 0; i < image_count; i++) {
         const VkImage vk_image = swapchain_images[i].image;
         uint64_t wrap_handle = 0;
@@ -337,6 +379,36 @@ auto Swapchain::enumerate_images(
             texture_usage_mask,
             debug_label + " " + std::to_string(i)
         );
+
+        if (want_fragment_density_map) {
+            const VkImage fdm_vk_image = fdm_images[i].image;
+            if (fdm_vk_image != VK_NULL_HANDLE) {
+                uint64_t fdm_wrap_handle = 0;
+                std::memcpy(&fdm_wrap_handle, &fdm_vk_image, sizeof(fdm_vk_image));
+                // FDM images are VK_FORMAT_R8G8_UNORM at tile resolution (much
+                // smaller than the color image); use the runtime-reported FDM
+                // dimensions. Same array layer count as the color swapchain (one
+                // FDM layer per view for multiview). Non-MSAA. Usage is
+                // fragment-density-map only.
+                m_textures_fdm[i] = wrap_swapchain_texture(
+                    device,
+                    fdm_wrap_handle,
+                    erhe::dataformat::Format::format_8_vec2_unorm,
+                    fdm_images[i].width,
+                    fdm_images[i].height,
+                    1,
+                    array_layer_count,
+                    erhe::graphics::Image_usage_flag_bit_mask::fragment_density_map,
+                    debug_label + " FDM " + std::to_string(i)
+                );
+                log_xr->info(
+                    "OpenXR FDM image {}: {}x{} layers {}",
+                    i, fdm_images[i].width, fdm_images[i].height, array_layer_count
+                );
+            } else {
+                log_xr->warn("OpenXR FDM image {} is VK_NULL_HANDLE; foveation inactive for this image", i);
+            }
+        }
     }
 #else
     static_cast<void>(device);
@@ -346,6 +418,7 @@ auto Swapchain::enumerate_images(
     static_cast<void>(sample_count);
     static_cast<void>(array_layer_count);
     static_cast<void>(texture_usage_mask);
+    static_cast<void>(want_fragment_density_map);
     static_cast<void>(debug_label);
 #endif
 
