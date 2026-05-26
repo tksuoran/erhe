@@ -45,11 +45,13 @@ erhe_codegen_generate(
     DEFINITIONS
         "${_xr_config_defs}/headset_config.py"
         "${_xr_config_defs}/perf_settings_level.py"
+        "${_xr_config_defs}/foveation_level.py"
 )
 
 set(_xr_config_hpps
     ${_xr_config_out}/headset_config.hpp
     ${_xr_config_out}/perf_settings_level.hpp
+    ${_xr_config_out}/foveation_level.hpp
 )
 set_source_files_properties(${_xr_config_hpps} PROPERTIES GENERATED TRUE)
 target_sources(${_target} PRIVATE ${_xr_config_hpps})

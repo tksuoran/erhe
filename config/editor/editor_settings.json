@@ -24,6 +24,7 @@
         "cell_count":   100
     },
     "headset": {
+        "_version":                   2,
         "openxr":                     false,
         "openxr_mirror":              false,
         "swapchain_depth_attachment": true,
@@ -39,7 +40,10 @@
         "composition_alpha":          false,
         "cpu_performance_level":      "e_unset",
         "gpu_performance_level":      "e_unset",
-        "boost_on_thermal_warning":   false
+        "boost_on_thermal_warning":   false,
+        "foveation":                  false,
+        "foveation_level":            "e_high",
+        "foveation_dynamic":          true
     },
     "hotbar": {
         "enabled": true,
