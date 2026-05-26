@@ -5,6 +5,7 @@
 #include <openxr/openxr.h>
 
 #include <functional>
+#include <memory>
 #include <optional>
 #include <span>
 #include <string>
@@ -15,6 +16,7 @@ namespace erhe::window   { class Context_window; }
 
 namespace erhe::xr {
 
+class Quad_layer;
 class Xr_instance;
 
 // One XR_FB_performance_metrics counter the runtime exposes (e.g.
@@ -77,6 +79,16 @@ public:
     [[nodiscard]] auto render_frame_multiview      (erhe::graphics::Command_buffer& command_buffer, std::function<bool(const Render_views_frame&, erhe::graphics::Command_buffer&)> render_views_callback) -> bool;
     [[nodiscard]] auto end_frame                   (const bool rendered) -> bool;
     [[nodiscard]] auto is_multiview_enabled        () const -> bool;
+
+    // Quad composition layers. create_quad_layer() creates a dedicated color
+    // swapchain (using the session's selected swapchain color format) and a
+    // Quad_layer that registers itself with this session; end_frame() then
+    // submits every visible, rendered quad layer as an XrCompositionLayerQuad
+    // after the projection layer. Returns nullptr if the swapchain could not
+    // be created (the caller is expected to fall back to scene-mesh rendering).
+    [[nodiscard]] auto create_quad_layer(uint32_t width, uint32_t height, const std::string& debug_label) -> std::unique_ptr<Quad_layer>;
+    void register_quad_layer  (Quad_layer* quad_layer);
+    void unregister_quad_layer(Quad_layer* quad_layer);
     [[nodiscard]] auto get_view_count              () const -> uint32_t;
     [[nodiscard]] auto get_xr_session              () const -> XrSession;
     // Swapchain formats picked by enumerate_swapchain_formats() during
@@ -170,6 +182,15 @@ private:
     std::vector<XrView>                           m_xr_views;
     std::vector<XrCompositionLayerProjectionView> m_xr_composition_layer_projection_views;
     std::vector<XrCompositionLayerDepthInfoKHR>   m_xr_composition_layer_depth_infos;
+    // Non-owning. Quad_layer registers/unregisters itself here via
+    // register_quad_layer()/unregister_quad_layer(); end_frame() iterates this
+    // to append XrCompositionLayerQuad entries.
+    std::vector<Quad_layer*>                      m_quad_layers;
+    // Set each rendered frame in render_frame_multiview(): true when the projection
+    // layer submitted per-view depth to the compositor (usable depth swapchain AND
+    // KHR_composition_layer_depth enabled). end_frame() gates the FB quad depth
+    // test on this, since the test compares against the projection layer's depth.
+    bool                                          m_projection_depth_submitted{false};
     std::vector<XrReferenceSpaceType>             m_xr_reference_space_types;
     XrSpace                                       m_xr_reference_space_local{XR_NULL_HANDLE};
     XrSpace                                       m_xr_reference_space_stage{XR_NULL_HANDLE};

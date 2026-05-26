@@ -102,6 +102,14 @@ The `editor` executable is the main application. Entry point is `src/editor/main
 - `scene/` - Scene management and content library
 - `res/` - Resources: TOML configuration files and GLSL shaders
 
+#### Part construction and `App_context` (IMPORTANT)
+
+The editor is composed of "parts" (tools, windows, renderers, scene managers, etc.). `App_context` holds pointers to all parts and shared resources (`graphics_device`, `imgui_renderer`, `rendergraph`, `mesh_memory`, `scene_builder`, `headset_view`, `editor_settings`, ...).
+
+**A part constructor must NEVER access `App_context` members other than to store the `App_context&` itself into a member variable.** The `App_context` pointers are only assigned *after all parts have been constructed*, so reading e.g. `context.graphics_device` from inside a part constructor yields `nullptr` (or a stale value) and will crash. (Exception: a few fields populated earlier in init, such as `current_command_buffer`, but do not rely on this - prefer explicit arguments.)
+
+Each part constructor must receive the other parts and resources it needs as explicit `Part&` / resource-reference constructor arguments, and use those (not `App_context`) during construction. `App_context` may be used freely *after* construction (in per-frame / runtime methods). Helper/owned objects created by a part (e.g. `Quad_view`) must follow the same rule: pass them the needed references explicitly rather than having them read from `App_context` at construction time.
+
 ### CMake Conventions
 
 - Follow modern CMake best practices. Do not use deprecated CMake features.
@@ -127,6 +135,8 @@ Many systems have swappable backends selected at CMake configure time via `#ifde
 The editor and other apps write their spdlog output to `logs/` relative to the working directory (typically the repo root): `logs/log.txt` is the main log, `logs/vulkan.txt` and `logs/openxr.txt` capture backend-specific traces. Redirecting `stdout` of `editor.exe` is not enough -- the file sink writes via spdlog and a redirected stdout will be empty even when the app is running fine. Always `grep` / `findstr` against `logs/log.txt` to verify init-time and runtime behavior. On Android / Quest, the same log lines flow through the `android_sink` and are visible via `adb logcat` (tag `erhe`).
 
 ## Quest device launches
+
+**ALWAYS prompt the user to put the headset on and activate the controllers immediately before EVERY launch, with no exceptions.** Never skip this prompt and never assume the user is still wearing the headset - the user may remove it after any single test, and an earlier "I'm ready / proceed" confirmation applies ONLY to that one launch, never to a later one. Each `adb shell am start` (or `... quest run`) must be preceded by its own fresh prompt and explicit confirmation. This holds even when launches come back-to-back in an iteration loop.
 
 Do the install (`scripts\install_android.bat quest`) FIRST, while the user can keep their hands free. **Only after the APK is on the device**, prompt the user to put the headset on and pick up / activate the Touch controllers, and wait for explicit confirmation before running the launch (`adb shell am start -n org.libsdl.app.quest/...` or `scripts\install_android.bat quest run`). Quest's `RequiresControllersLaunchInterceptor` shows a system "Controllers Required" dialog that blocks the immersive app from coming to the foreground until controllers are detected as in-hand; launching while the headset is off the user's head wastes the attempt and we have to retry. Pure builds and installs (no app start) do not need the prompt.
 
@@ -159,6 +169,36 @@ bash scripts/quest_logcat.sh filter logs/quest_<YYYYMMDD>_<HHMMSS>.log
 ```
 
 The filter is a single grep on ` erhe +:` (space, literal tag, optional padding, colon) anchored to logcat's threadtime tag column, so it does not match the substring "erhe" inside other tags or message bodies. Always work from the filtered file for analysis; reach for the unfiltered capture only when you need to correlate against OS-level events (e.g. `OpenXR`, `VrApi`, `MRSS`, `[CT]` tags from the Horizon runtime, or `WLAN`/`battery` for thermal-throttle context).
+
+### Knowing when the editor is ready (NEVER blind-sleep before capturing)
+
+The editor takes ~15-20 s to initialize on Quest and the exact time varies per run. `sleep N` before looking once wastes runs: too short misses the window, too long and the user may have removed the headset or exited. ALWAYS poll/stream for a definite readiness signal and act the instant it appears.
+
+Pick the signal that matches the state you need:
+
+- **XR session is up / projection depth is being submitted**: poll the live disk capture (from `scripts/quest_logcat.sh`) for a stable session line, e.g. `OpenXR submitted projection depth` or `OpenXR multiview depth swapchain`. Use the disk file, not the in-memory ring, so the line is not evicted before you grep it.
+- **Editor is actively rendering AND a specific compositor layer is present** (e.g. the HUD quad is open): enable the compositor layer dump and stream it through a watcher that exits the instant the editor's own block contains the layer you need. This is the robust trigger for any compositor-layer / depth-submission diagnostic, and the captured block itself carries the data (per-layer `Depth SwapChain` valid vs `BAD`, and `Depth Info min/max/near/far`):
+
+```bash
+ADB="$LOCALAPPDATA/Android/Sdk/platform-tools/adb.exe"
+"$ADB" shell setprop debug.oculus.logLayers 1   # enable per-frame layer dump (CompositorClient tag)
+# Stream the dump; exit the moment OUR app's block contains a QUAD (HUD open).
+# Replace "Type QUAD" with the condition you need; raise timeout for slow init.
+timeout 150 "$ADB" logcat -s CompositorClient | awk '
+  /LogLayers: Client/ {
+    if (cap && hit) { printf "%s", buf; found=1; exit }
+    cap = (index($0, "org.libsdl.app.quest") > 0); buf=""; hit=0
+  }
+  cap { buf = buf $0 "\n"; if (index($0,"Type QUAD")>0) hit=1 }
+  END { if (!found) print "[watcher] target block not seen (editor not rendering / HUD not open / headset off-head)" }
+'
+"$ADB" shell setprop debug.oculus.logLayers 0   # ALWAYS turn the flood back off when done
+```
+
+Two gotchas, both learned the hard way:
+
+- **`logLayers` floods logcat** at compositor framerate, so the editor's `erhe`-tagged startup lines are evicted from the in-memory ring within seconds. While `logLayers` is on, do NOT use `adb logcat -d -s erhe` to detect readiness -- use the streaming watcher above (event-driven) or the persistent disk capture.
+- **An off-head headset pauses the OpenXR session**: the app stops submitting and only `com.oculus.vrshell` (`FocusPlaceholderActivity`) appears in the dump / as the resumed activity. So "only vrshell in the dump" means "headset off-head or app backgrounded," NOT "editor broken." The editor being `topResumedActivity` is necessary but not sufficient -- it must also be submitting frames (its block present in the dump).
 
 ### Locating Android tools in shell commands
 

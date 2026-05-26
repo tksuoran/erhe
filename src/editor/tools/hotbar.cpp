@@ -19,7 +19,7 @@
 #include "scene/viewport_scene_views.hpp"
 #include "tools/tool.hpp"
 #include "tools/tools.hpp"
-#include "rendertarget_mesh.hpp"
+#include "quad_view.hpp"
 #include "rendertarget_imgui_host.hpp"
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/headset_view.hpp"
@@ -312,6 +312,8 @@ Hotbar::Hotbar(
     );
 }
 
+Hotbar::~Hotbar() noexcept = default;
+
 void Hotbar::init_hotbar()
 {
     if (m_slots.empty()) {
@@ -320,35 +322,38 @@ void Hotbar::init_hotbar()
     const int icon_size = m_context.app_settings->icon_settings.hotbar_icon_size;
     const int width     = icon_size * static_cast<int>(m_slots.size());
 
-    m_rendertarget_mesh.reset();
-    m_rendertarget_node.reset();
-    m_rendertarget_imgui_host.reset();
+    m_quad_view.reset();
 
+    // init_hotbar runs after construction (driven by set_slots / rebuild), so
+    // the App_context resource pointers are populated here; pass them to
+    // Quad_view explicitly.
     ERHE_VERIFY(m_context.current_command_buffer != nullptr);
-    m_rendertarget_mesh = std::make_shared<Rendertarget_mesh>(
+    ERHE_VERIFY(m_context.graphics_device        != nullptr);
+    ERHE_VERIFY(m_context.mesh_memory            != nullptr);
+    ERHE_VERIFY(m_context.imgui_renderer         != nullptr);
+    ERHE_VERIFY(m_context.rendergraph            != nullptr);
+    ERHE_VERIFY(m_context.scene_builder          != nullptr);
+    const std::shared_ptr<Scene_root> scene_root = m_context.scene_builder->get_scene_root();
+    ERHE_VERIFY(scene_root);
+    m_quad_view = std::make_unique<Quad_view>(
+        m_context,
         *m_context.graphics_device,
         *m_context.current_command_buffer,
         *m_context.mesh_memory,
-        width,
-        icon_size,
-        4000.0f
-    );
-    const auto scene_root = m_context.scene_builder->get_scene_root();
-    m_rendertarget_mesh->layer_id = scene_root->layers().rendertarget()->id;
-    m_rendertarget_mesh->enable_flag_bits(erhe::Item_flags::visible);
-
-    m_rendertarget_imgui_host = std::make_shared<editor::Rendertarget_imgui_host>(
         *m_context.imgui_renderer,
         *m_context.rendergraph,
-        m_context,
-        m_rendertarget_mesh.get(),
+        *scene_root,
+        m_headset_view,
+        width,
+        icon_size,
+        4000.0f,
         "Hotbar imgui host",
         false
     );
-    m_rendertarget_node = std::make_shared<erhe::scene::Node>("Hotbar RT node");
-    m_rendertarget_node->attach(m_rendertarget_mesh);
 
-    ImGuiStyle& style = m_rendertarget_imgui_host->get_mutable_style();
+    Rendertarget_imgui_host* imgui_host = m_quad_view->get_imgui_host();
+
+    ImGuiStyle& style = imgui_host->get_mutable_style();
     style.FrameRounding    = 0.0f;
     style.WindowRounding   = 0.0f;
     style.ChildRounding    = 0.0f;
@@ -357,10 +362,7 @@ void Hotbar::init_hotbar()
     style.ItemInnerSpacing = ImVec2{0.0f, 0.0f};
     style.MouseCursorScale = 2.0f;
 
-    m_window.set_imgui_host(m_rendertarget_imgui_host.get());
-
-    m_rendertarget_mesh->enable_flag_bits(erhe::Item_flags::show_in_developer_ui);
-    m_rendertarget_node->enable_flag_bits(erhe::Item_flags::show_in_developer_ui);
+    m_window.set_imgui_host(imgui_host);
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     // In OpenXR mode the Headset_view_node must be the rendergraph sink
@@ -376,7 +378,7 @@ void Hotbar::init_hotbar()
         if (headset_node != nullptr) {
             m_context.rendergraph->connect(
                 erhe::rendergraph::Rendergraph_node_key::rendertarget_texture,
-                m_rendertarget_imgui_host.get(),
+                imgui_host,
                 headset_node
             );
             m_connected_consumer_node = headset_node;
@@ -518,12 +520,13 @@ void Hotbar::on_hover_scene_view_message(Hover_scene_view_message& message)
             // create a duplicate edge.
             if (new_node != m_connected_consumer_node) {
                 erhe::rendergraph::Rendergraph& rendergraph = *m_context.rendergraph;
-                if (m_connected_consumer_node != nullptr) {
-                    rendergraph.disconnect(erhe::rendergraph::Rendergraph_node_key::rendertarget_texture, m_rendertarget_imgui_host.get(), m_connected_consumer_node);
+                Rendertarget_imgui_host* imgui_host = (m_quad_view != nullptr) ? m_quad_view->get_imgui_host() : nullptr;
+                if ((m_connected_consumer_node != nullptr) && (imgui_host != nullptr)) {
+                    rendergraph.disconnect(erhe::rendergraph::Rendergraph_node_key::rendertarget_texture, imgui_host, m_connected_consumer_node);
                 }
                 set_mesh_visibility(static_cast<bool>(new_node));
-                if (new_node != nullptr) {
-                    rendergraph.connect(erhe::rendergraph::Rendergraph_node_key::rendertarget_texture, m_rendertarget_imgui_host.get(), new_node);
+                if ((new_node != nullptr) && (imgui_host != nullptr)) {
+                    rendergraph.connect(erhe::rendergraph::Rendergraph_node_key::rendertarget_texture, imgui_host, new_node);
                 }
                 m_connected_consumer_node = new_node;
             }
@@ -620,9 +623,8 @@ void Hotbar::update_node_transform()
         root_node = scene->get_root_node();
     }();
 
-    if (m_rendertarget_node) {
-        m_rendertarget_node->set_parent         (root_node);
-        m_rendertarget_node->set_world_from_node(world_from_node);
+    if (m_quad_view) {
+        m_quad_view->set_world_from_quad(root_node, world_from_node);
     }
 
     if (m_radial_menu_node) {
@@ -651,9 +653,9 @@ auto Hotbar::window_flags() -> ImGuiWindowFlags
 
 void Hotbar::window_on_begin()
 {
-    if (m_rendertarget_mesh) {
-        const float w = static_cast<float>(m_rendertarget_mesh->get_width());
-        const float h = static_cast<float>(m_rendertarget_mesh->get_height());
+    if (m_quad_view) {
+        const float w = m_quad_view->get_width();
+        const float h = m_quad_view->get_height();
         m_window.set_min_size(w, h);
         m_window.set_max_size(w, h);
     }
@@ -878,14 +880,10 @@ auto Hotbar::toggle_mesh_visibility() -> bool
 
 void Hotbar::set_mesh_visibility(const bool value)
 {
-    if (m_rendertarget_node) {
-        m_rendertarget_node->set_visible(value);
-    }
     m_window.set_window_visibility(value);
 
-    if (m_rendertarget_mesh) {
-        m_rendertarget_imgui_host->set_enabled(value);
-        m_rendertarget_mesh->set_visible(value);
+    if (m_quad_view) {
+        m_quad_view->set_visible(value);
         log_hud->trace("Horizontal menu visibility set to {}", value);
     }
 

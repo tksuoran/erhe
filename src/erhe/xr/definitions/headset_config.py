@@ -136,6 +136,38 @@ struct("Headset_config",
             developer=True
         ),
         field(
+            "composition_quad_layers",
+            Bool,
+            added_in=1,
+            default="true",
+            short_desc="Use OpenXR quad composition layers for UI",
+            long_desc=("When enabled (and OpenXR is active), the Hud and Hotbar "
+                       "are submitted as XrCompositionLayerQuad composition "
+                       "layers rendered at native swapchain resolution instead "
+                       "of being drawn as scene-mesh quads. Falls back to the "
+                       "scene-mesh path automatically if the quad swapchain "
+                       "cannot be created."),
+            visible=True,
+            developer=False
+        ),
+        field(
+            "composition_quad_layers_depth",
+            Bool,
+            added_in=1,
+            default="true",
+            short_desc="Depth-test quad composition layers against the scene",
+            long_desc=("When enabled, the runtime supports it "
+                       "(XR_KHR_composition_layer_depth + "
+                       "XR_FB_composition_layer_depth_test), and a usable depth "
+                       "swapchain exists, the UI quad composition layers are "
+                       "depth-tested against the rendered 3D scene so scene "
+                       "geometry can occlude them. Set false to force the test "
+                       "off. Has no effect unless the runtime prerequisites are "
+                       "met."),
+            visible=True,
+            developer=False
+        ),
+        field(
             "cpu_performance_level",
             EnumRef("Perf_settings_level"),
             added_in=1,

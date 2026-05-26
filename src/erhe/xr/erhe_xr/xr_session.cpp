@@ -11,9 +11,12 @@
 #include "erhe_xr/xr.hpp"
 #include "erhe_xr/xr_instance.hpp"
 #include "erhe_xr/xr_log.hpp"
+#include "erhe_xr/xr_quad_layer.hpp"
 #include "erhe_xr/xr_swapchain_image.hpp"
 
 #include <fmt/format.h>
+
+#include <algorithm>
 
 #if defined(ERHE_OS_WINDOWS)
 #   include <unknwn.h>
@@ -609,11 +612,23 @@ auto Xr_session::create_swapchains() -> bool
 
         XrSwapchain depth_stencil_xr_swapchain{XR_NULL_HANDLE};
         if (create_depth_stencil_swapchain && (native_depth_stencil_format != 0)) {
+            // Submit the depth swapchain as a plain depth-stencil attachment, the
+            // OpenXR-standard usage for XR_KHR_composition_layer_depth: the runtime
+            // owns the underlying image and reads it for the depth-based composition
+            // / XR_FB_composition_layer_depth_test itself, so the app does not request
+            // storage or sampled usage. (An earlier attempt OR-ed in
+            // XR_SWAPCHAIN_USAGE_UNORDERED_ACCESS_BIT on the theory that the compositor
+            // reads depth as a storage image; that did not enable occlusion and is not
+            // what Meta's depth-submission docs describe. Removed while diagnosing why
+            // the HUD quad is not occluded by the submitted scene depth even though the
+            // depth swapchain and ENABLE_DEPTH_TEST flag both reach the compositor. See
+            // doc/hud_hotbar_depth_test_plan.md.)
+            const uint64_t depth_usage_flags = XR_SWAPCHAIN_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
             const XrSwapchainCreateInfo depth_stencil_swapchain_create_info{
                 .type        = XR_TYPE_SWAPCHAIN_CREATE_INFO,
                 .next        = nullptr,
                 .createFlags = 0,
-                .usageFlags  = XR_SWAPCHAIN_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+                .usageFlags  = depth_usage_flags,
                 .format      = native_depth_stencil_format,
                 .sampleCount = view.recommendedSwapchainSampleCount,
                 .width       = view.recommendedImageRectWidth,
@@ -625,9 +640,14 @@ auto Xr_session::create_swapchains() -> bool
             check_gl_context_in_current_in_this_thread();
             const XrResult depth_stencil_result = xrCreateSwapchain(m_xr_session, &depth_stencil_swapchain_create_info, &depth_stencil_xr_swapchain);
             if (depth_stencil_result != XR_SUCCESS) {
-                log_xr->error("xrCreateSwapchain() (multiview depth) failed with error {}", c_str(depth_stencil_result));
-                check(xrDestroySwapchain(color_xr_swapchain));
-                return false;
+                // Non-fatal: some runtimes/drivers (e.g. Vulkan over Meta Link)
+                // cannot provide the depth swapchain format/usage the runtime
+                // requires. Continue without composition-layer depth -- the quad
+                // depth test then self-disables (condition 1, see
+                // doc/hud_hotbar_depth_test_plan.md). Do NOT abort the session or
+                // destroy the color swapchain.
+                log_xr->warn("xrCreateSwapchain() (multiview depth) failed with error {}; continuing without composition-layer depth", c_str(depth_stencil_result));
+                depth_stencil_xr_swapchain = XR_NULL_HANDLE;
             }
         }
 
@@ -658,6 +678,18 @@ auto Xr_session::create_swapchains() -> bool
         log_xr->info("OpenXR multiview swapchain created: {}x{}, {} views, sampleCount {}",
             view.recommendedImageRectWidth, view.recommendedImageRectHeight,
             view_count, view.recommendedSwapchainSampleCount);
+        // Depth swapchain usability (condition 1 of the quad depth-test gate, see
+        // doc/hud_hotbar_depth_test_plan.md). On Quest this should be usable; on
+        // Vulkan/Meta-Link the runtime's required depth format/usage is typically
+        // unavailable, so it is not created.
+        log_xr->info("OpenXR multiview depth swapchain: requested={} native_depth_format={} usable={}",
+            create_depth_stencil_swapchain, native_depth_stencil_format,
+            m_shared_depth_stencil_swapchain.has_value());
+        // Convention of the depth we submit to the compositor (drives the
+        // XrCompositionLayerDepthInfoKHR nearZ/farZ mapping and how the FB quad
+        // depth test interprets the scene depth). Logged so the on-device value is
+        // unambiguous even after a config migration.
+        log_xr->info("OpenXR submitted projection depth: reverse_depth={}", m_graphics_device.get_reverse_depth());
 
         // Skip the per-eye swapchain creation loop below.
         if (m_instance.extensions.FB_passthrough) {
@@ -1474,6 +1506,12 @@ auto Xr_session::render_frame(erhe::graphics::Command_buffer& command_buffer, st
             }
         }
 
+        // nearZ/farZ are the world-space distances that minDepth/maxDepth map to.
+        // Reverse-Z maps minDepth(0) to the far plane and maxDepth(1) to the near
+        // plane; forward-Z is the opposite. nearZ > farZ is also how the spec flags
+        // a reversed-Z buffer to the runtime, so this must follow the device's
+        // actual depth convention or the compositor mis-linearizes our depth.
+        const bool reverse_depth = m_graphics_device.get_reverse_depth();
         m_xr_composition_layer_depth_infos[i] = {
             .type     = XR_TYPE_COMPOSITION_LAYER_DEPTH_INFO_KHR,
             .next     = nullptr,
@@ -1490,8 +1528,8 @@ auto Xr_session::render_frame(erhe::graphics::Command_buffer& command_buffer, st
             },
             .minDepth = 0.0f,
             .maxDepth = 1.0f,
-            .nearZ    = render_view.far_depth,
-            .farZ     = render_view.near_depth
+            .nearZ    = reverse_depth ? render_view.far_depth  : render_view.near_depth,
+            .farZ     = reverse_depth ? render_view.near_depth : render_view.far_depth
         };
 
         m_xr_composition_layer_projection_views[i] = {
@@ -1603,6 +1641,11 @@ auto Xr_session::render_frame_multiview(
             log_xr->debug("multiview: no shared depth swapchain image");
         }
     }
+    // Projection depth is submitted to the compositor only when a depth image was
+    // acquired AND KHR_composition_layer_depth is enabled. The FB quad depth test
+    // (end_frame) is gated on this, and chaining the KHR depth info below is gated
+    // on it too so we never chain a KHR struct when the extension is disabled.
+    m_projection_depth_submitted = use_depth_image && m_instance.extensions.KHR_composition_layer_depth;
 
     erhe::graphics::Texture* color_texture = acquired_color->get_texture();
     if (color_texture == nullptr) {
@@ -1677,6 +1720,12 @@ auto Xr_session::render_frame_multiview(
     // Build composition layer projection views; both views point to the
     // same shared swapchain with imageArrayIndex selecting the per-eye
     // layer.
+    // nearZ/farZ are the world-space distances that minDepth/maxDepth map to.
+    // Reverse-Z maps minDepth(0) to the far plane and maxDepth(1) to the near
+    // plane; forward-Z is the opposite. nearZ > farZ is also how the spec flags a
+    // reversed-Z buffer to the runtime, so this must follow the device's actual
+    // depth convention or the compositor mis-linearizes our depth.
+    const bool reverse_depth = m_graphics_device.get_reverse_depth();
     for (uint32_t i = 0; i < view_count; ++i) {
         m_xr_composition_layer_depth_infos[i] = {
             .type     = XR_TYPE_COMPOSITION_LAYER_DEPTH_INFO_KHR,
@@ -1696,13 +1745,13 @@ auto Xr_session::render_frame_multiview(
             },
             .minDepth = 0.0f,
             .maxDepth = 1.0f,
-            .nearZ    = frame.views[i].far_depth,
-            .farZ     = frame.views[i].near_depth
+            .nearZ    = reverse_depth ? frame.views[i].far_depth  : frame.views[i].near_depth,
+            .farZ     = reverse_depth ? frame.views[i].near_depth : frame.views[i].far_depth
         };
 
         m_xr_composition_layer_projection_views[i] = {
             .type = XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW,
-            .next = use_depth_image ? &m_xr_composition_layer_depth_infos[i] : nullptr,
+            .next = m_projection_depth_submitted ? &m_xr_composition_layer_depth_infos[i] : nullptr,
             .pose = m_xr_views[i].pose,
             .fov  = m_xr_views[i].fov,
             .subImage = {
@@ -1726,6 +1775,78 @@ auto Xr_session::render_frame_multiview(
     }
 
     return true;
+}
+
+auto Xr_session::create_quad_layer(uint32_t width, uint32_t height, const std::string& debug_label) -> std::unique_ptr<Quad_layer>
+{
+    if (m_xr_session == XR_NULL_HANDLE) {
+        return nullptr;
+    }
+
+    const int64_t native_color_format = erhe::graphics::dataformat_to_native_swapchain_format(m_swapchain_color_format);
+    if (native_color_format == 0) {
+        log_xr->warn("create_quad_layer(): no native color swapchain format");
+        return nullptr;
+    }
+
+    const XrSwapchainCreateInfo color_swapchain_create_info{
+        .type        = XR_TYPE_SWAPCHAIN_CREATE_INFO,
+        .next        = nullptr,
+        .createFlags = 0,
+        .usageFlags  = XR_SWAPCHAIN_USAGE_SAMPLED_BIT | XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT,
+        .format      = native_color_format,
+        .sampleCount = 1,
+        .width       = width,
+        .height      = height,
+        .faceCount   = 1,
+        .arraySize   = 1,
+        .mipCount    = 1
+    };
+
+    XrSwapchain color_xr_swapchain{XR_NULL_HANDLE};
+    check_gl_context_in_current_in_this_thread();
+    const XrResult color_result = xrCreateSwapchain(m_xr_session, &color_swapchain_create_info, &color_xr_swapchain);
+    if (color_result != XR_SUCCESS) {
+        log_xr->error("create_quad_layer(): xrCreateSwapchain() failed with error {}", c_str(color_result));
+        return nullptr;
+    }
+
+    constexpr uint64_t color_texture_usage =
+        erhe::graphics::Image_usage_flag_bit_mask::color_attachment |
+        erhe::graphics::Image_usage_flag_bit_mask::sampled;
+
+    Swapchain swapchain{
+        m_graphics_device,
+        color_xr_swapchain,
+        m_swapchain_color_format,
+        width,
+        height,
+        /*sample_count*/      1,
+        /*array_layer_count*/ 1,
+        color_texture_usage,
+        debug_label
+    };
+
+    log_xr->info("create_quad_layer(): created {}x{} quad swapchain '{}'", width, height, debug_label);
+    return std::make_unique<Quad_layer>(*this, std::move(swapchain), width, height);
+}
+
+void Xr_session::register_quad_layer(Quad_layer* quad_layer)
+{
+    if (quad_layer == nullptr) {
+        return;
+    }
+    if (std::find(m_quad_layers.begin(), m_quad_layers.end(), quad_layer) == m_quad_layers.end()) {
+        m_quad_layers.push_back(quad_layer);
+    }
+}
+
+void Xr_session::unregister_quad_layer(Quad_layer* quad_layer)
+{
+    m_quad_layers.erase(
+        std::remove(m_quad_layers.begin(), m_quad_layers.end(), quad_layer),
+        m_quad_layers.end()
+    );
 }
 
 auto Xr_session::end_frame(const bool rendered) -> bool
@@ -1765,12 +1886,122 @@ auto Xr_session::end_frame(const bool rendered) -> bool
         .views      = m_xr_composition_layer_projection_views.data()
     };
 
+    // XR_FB_composition_layer_depth_test: the compositor's shared depth buffer is
+    // cleared to "infinitely far" at the start of composition, and a layer writes
+    // its depth into that buffer ONLY when it carries an XrCompositionLayerDepthTestFB
+    // with depthMask=XR_TRUE. The depth-tested quads below compare against this shared
+    // buffer, so the PROJECTION layer (whose per-pixel depth comes from the chained
+    // XR_KHR_composition_layer_depth info) must itself write the scene depth into it --
+    // otherwise the buffer stays at "far" and the quads are never occluded (the bug we
+    // chased: depth swapchain + ENABLE_DEPTH_TEST flag both reach the compositor, yet
+    // nothing populates the test buffer). The projection is the opaque base, so it
+    // writes unconditionally (compareOp ALWAYS). Lives until the xrEndFrame call below.
+    // Gated like the quad tests: FB extension present AND projection depth submitted.
+    XrCompositionLayerDepthTestFB projection_depth_test{
+        .type      = XR_TYPE_COMPOSITION_LAYER_DEPTH_TEST_FB,
+        .next      = nullptr,
+        .depthMask = XR_TRUE,
+        .compareOp = XR_COMPARE_OP_ALWAYS_FB
+    };
+    if (m_instance.extensions.FB_composition_layer_depth_test && m_projection_depth_submitted) {
+        projection_layer.next = &projection_depth_test;
+    }
+
+    // Quad composition layers. Built into stable local storage (reserved so the
+    // pointers pushed into `layers` stay valid) and appended after the
+    // projection layer so the runtime composites the UI on top of the scene.
+    // Both this vector and `layers` outlive the xrEndFrame call below.
+    std::vector<XrCompositionLayerQuad>        quad_layers;
+    std::vector<XrCompositionLayerDepthTestFB> quad_depth_tests;
+
     std::vector<XrCompositionLayerBaseHeader*> layers;
     if (rendered) {
         if (m_instance.extensions.FB_passthrough) {
             layers.push_back(reinterpret_cast<XrCompositionLayerBaseHeader*>(&passthrough_fb_layer));
         }
         layers.push_back(reinterpret_cast<XrCompositionLayerBaseHeader*>(&projection_layer));
+
+        // Submit quad layers in composition order (ascending: a higher order
+        // composites later, i.e. on top) so e.g. the Hud stays in front of the
+        // Hotbar. Each visible quad contributes a front quad, plus a back-facing
+        // quad when double-sided.
+        std::vector<Quad_layer*> ordered_quad_layers = m_quad_layers;
+        std::stable_sort(
+            ordered_quad_layers.begin(), ordered_quad_layers.end(),
+            [](const Quad_layer* a, const Quad_layer* b) {
+                return a->get_composition_order() < b->get_composition_order();
+            }
+        );
+
+        // quad_is_depth_tested[i] mirrors quad_layers[i]. Both quad_layers and
+        // quad_depth_tests are reserved up front so they never reallocate, since
+        // the depth-test structs are chained into quads by address below.
+        quad_layers.reserve(ordered_quad_layers.size() * 2);
+        std::vector<bool> quad_is_depth_tested;
+        quad_is_depth_tested.reserve(ordered_quad_layers.size() * 2);
+        for (Quad_layer* quad_layer : ordered_quad_layers) {
+            const bool depth_tested = quad_layer->is_depth_tested();
+            XrCompositionLayerQuad quad{};
+            if (quad_layer->build_layer(m_xr_reference_space_stage, quad)) {
+                quad_layers.push_back(quad);
+                quad_is_depth_tested.push_back(depth_tested);
+            }
+            if (quad_layer->is_double_sided()) {
+                XrCompositionLayerQuad back_quad{};
+                if (quad_layer->build_back_layer(m_xr_reference_space_stage, back_quad)) {
+                    quad_layers.push_back(back_quad);
+                    quad_is_depth_tested.push_back(depth_tested);
+                }
+            }
+        }
+
+        // Depth-test the flagged quads (e.g. the Hud) against the scene by
+        // chaining an XrCompositionLayerDepthTestFB, but only when the runtime
+        // supports it AND the projection layer submitted depth this frame.
+        const bool depth_test_quads =
+            m_instance.extensions.FB_composition_layer_depth_test &&
+            m_projection_depth_submitted;
+        if (depth_test_quads) {
+            std::size_t depth_tested_count = 0;
+            for (std::size_t i = 0; i < quad_is_depth_tested.size(); ++i) {
+                if (quad_is_depth_tested[i]) {
+                    ++depth_tested_count;
+                }
+            }
+            quad_depth_tests.reserve(depth_tested_count);
+            for (std::size_t i = 0; i < quad_layers.size(); ++i) {
+                if (!quad_is_depth_tested[i]) {
+                    continue;
+                }
+                quad_depth_tests.push_back(
+                    XrCompositionLayerDepthTestFB{
+                        .type      = XR_TYPE_COMPOSITION_LAYER_DEPTH_TEST_FB,
+                        .next      = nullptr,
+                        .depthMask = XR_FALSE, // UI quads do not write depth
+                        // The quad passes (is drawn) where it is at or nearer than
+                        // the scene depth. Determined empirically on Quest: the FB
+                        // depth test compares such that a nearer quad needs
+                        // LESS_OR_EQUAL (GREATER_OR_EQUAL rejected the near HUD
+                        // against the far/empty scene; ALWAYS confirmed the
+                        // mechanism is otherwise fine). See
+                        // doc/hud_hotbar_depth_test_plan.md.
+                        .compareOp = XR_COMPARE_OP_LESS_OR_EQUAL_FB
+                    }
+                );
+                quad_layers[i].next = &quad_depth_tests.back();
+            }
+        }
+
+        for (XrCompositionLayerQuad& quad : quad_layers) {
+            layers.push_back(reinterpret_cast<XrCompositionLayerBaseHeader*>(&quad));
+        }
+    }
+
+    // Clear per-frame render state for every quad layer, regardless of whether
+    // this frame was rendered, so a deferred/non-rendered frame cannot submit a
+    // stale image on a later frame.
+    for (Quad_layer* quad_layer : m_quad_layers) {
+        quad_layer->reset_frame_state();
     }
 
     XrFrameEndInfo frame_end_info{

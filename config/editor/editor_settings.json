@@ -32,6 +32,7 @@
         "validation":                 false,
         "api_dump":                   false,
         "composition_depth_layer":    false,
+        "composition_quad_layers_depth": true,
         "visibility_mask":            false,
         "hand_tracking":              false,
         "passthrough_fb":             false,

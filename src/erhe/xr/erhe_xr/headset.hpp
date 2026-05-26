@@ -15,6 +15,7 @@ namespace erhe::window { class Context_window; }
 
 namespace erhe::xr {
 
+class Quad_layer;
 class Render_view;
 class Render_views_frame;
 class Xr_session;
@@ -51,6 +52,10 @@ public:
     // caller is expected to check that and otherwise fall back to render().
     auto render_multiview(erhe::graphics::Command_buffer& command_buffer, std::function<bool(const Render_views_frame&, erhe::graphics::Command_buffer&)> render_views_callback) -> bool;
     auto end_frame     (bool rendered) -> bool;
+    // Create a quad composition layer backed by its own color swapchain.
+    // Returns nullptr when no session exists or the swapchain cannot be
+    // created (the caller is expected to fall back to scene-mesh rendering).
+    [[nodiscard]] auto create_quad_layer(uint32_t width, uint32_t height, const std::string& debug_label) -> std::unique_ptr<Quad_layer>;
     [[nodiscard]] auto get_actions_left        ()       ->       Xr_actions*;
     [[nodiscard]] auto get_actions_left        () const -> const Xr_actions*;
     [[nodiscard]] auto get_actions_right       ()       ->       Xr_actions*;
@@ -60,6 +65,7 @@ public:
     [[nodiscard]] auto get_headset_pose        (glm::vec3& position, glm::quat& orientation) const -> bool;
     [[nodiscard]] auto get_xr_instance         () -> Xr_instance*;
     [[nodiscard]] auto get_xr_session          () -> Xr_session*;
+    [[nodiscard]] auto get_configuration       () const -> const Headset_config& { return m_configuration; }
 
 private:
     erhe::window::Context_window& m_context_window;

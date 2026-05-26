@@ -47,8 +47,7 @@ struct Tool_select_message;
 class Brush;
 class Hotbar;
 class Icon_set;
-class Rendertarget_imgui_host;
-class Rendertarget_mesh;
+class Quad_view;
 class Scene_builder;
 class Scene_root;
 class Tools;
@@ -126,6 +125,7 @@ public:
         Scene_builder&                     scene_builder,
         Tools&                             tools
     );
+    ~Hotbar() noexcept;
 
     void get_all_tools();
     void set_slots             (const std::vector<Slot_entry>& slots);
@@ -180,9 +180,7 @@ private:
     Headset_view*                                   m_headset_view{nullptr};
     erhe::rendergraph::Rendergraph_node*            m_connected_consumer_node{nullptr};
 
-    std::shared_ptr<erhe::scene::Node>              m_rendertarget_node;
-    std::shared_ptr<Rendertarget_mesh>              m_rendertarget_mesh;
-    std::shared_ptr<Rendertarget_imgui_host>        m_rendertarget_imgui_host;
+    std::unique_ptr<Quad_view>                      m_quad_view;
 
     std::shared_ptr<erhe::scene::Node>              m_radial_menu_node;
     std::shared_ptr<erhe::scene::Mesh>              m_radial_menu_background_mesh;

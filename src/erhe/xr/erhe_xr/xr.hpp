@@ -63,6 +63,26 @@ inline auto to_glm(const XrPosef& p) -> glm::mat4
     return translation * orientation;
 }
 
+inline auto from_glm(const glm::quat& q) -> XrQuaternionf
+{
+    return XrQuaternionf{q.x, q.y, q.z, q.w};
+}
+
+inline auto from_glm(const glm::vec3& v) -> XrVector3f
+{
+    return XrVector3f{v.x, v.y, v.z};
+}
+
+// Decompose a rigid (translation + rotation, no shear) transform into an
+// XrPosef. Any scale present in the upper-left 3x3 is dropped; glm::quat_cast
+// normalizes, so uniformly scaled rotations still produce a valid orientation.
+inline auto from_glm(const glm::mat4& m) -> XrPosef
+{
+    const glm::quat orientation = glm::normalize(glm::quat_cast(glm::mat3{m}));
+    const glm::vec3 position    = glm::vec3{m[3]};
+    return XrPosef{from_glm(orientation), from_glm(position)};
+}
+
 auto to_string_message_severity(XrDebugUtilsMessageSeverityFlagsEXT severity_flags) -> std::string;
 auto to_string_message_type    (XrDebugUtilsMessageTypeFlagsEXT     type_flags)     -> std::string;
 

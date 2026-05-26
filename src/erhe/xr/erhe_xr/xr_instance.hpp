@@ -138,6 +138,7 @@ public:
 
     struct Extensions {
         bool KHR_composition_layer_depth       {false};
+        bool FB_composition_layer_depth_test   {false};
         bool KHR_visibility_mask               {false};
         bool EXT_debug_utils                   {false};
         bool EXT_hand_tracking                 {false};

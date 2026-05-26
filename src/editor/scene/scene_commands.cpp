@@ -12,6 +12,7 @@
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/node_attach_operation.hpp"
 #include "operations/operation_stack.hpp"
+#include "mesh_rendertarget_view.hpp"
 #include "rendertarget_mesh.hpp"
 #include "rendertarget_imgui_host.hpp"
 #include "scene/scene_builder.hpp"
@@ -555,18 +556,23 @@ auto Scene_commands::create_new_rendertarget(erhe::scene::Node* parent) -> std::
         erhe::Item_flags::show_in_ui
     );
 
-    // Rendertarget_imgui_host is host for ImGui windows, uses texture from mesh
-    // It is also rendergraph node
+    // Rendertarget_imgui_host is host for ImGui windows, drawing into the mesh
+    // texture (scene-mesh path). It is also a rendergraph node. The host renders
+    // through a Rendertarget_view; for a standalone scene rendertarget that view
+    // is a Mesh_rendertarget_view wrapping the mesh and node.
+    auto rendertarget_view = std::make_shared<Mesh_rendertarget_view>(mesh, node);
     auto rendertarget_imgui_host = std::make_shared<Rendertarget_imgui_host>(
         *m_context.imgui_renderer,
         *m_context.rendergraph,
         m_context,
-        mesh.get(),
+        *rendertarget_view,
         "Rendertarget ImGui host",
         true
     );
-    // Unless the shared_ptr is kept somewhere, rendertarget_imgui_host gets destroyed as soon
-    // as the scope is excited.. TODO This is a temp hack, figure out who should be the owner.
+    // Unless the shared_ptrs are kept somewhere, these get destroyed as soon as
+    // the scope is exited. TODO This is a temp hack, figure out who should be
+    // the owner.
+    m_keep_alive_views.push_back(rendertarget_view);
     m_keep_alive.push_back(rendertarget_imgui_host);
 
     rendertarget_imgui_host->set_begin_callback(

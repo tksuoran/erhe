@@ -17,6 +17,8 @@ if (${ERHE_XR_LIBRARY} STREQUAL "openxr")
         erhe_xr/xr_instance.hpp
         erhe_xr/xr_log.cpp
         erhe_xr/xr_log.hpp
+        erhe_xr/xr_quad_layer.cpp
+        erhe_xr/xr_quad_layer.hpp
         erhe_xr/xr_session.cpp
         erhe_xr/xr_session.hpp
         erhe_xr/xr_swapchain_image.cpp

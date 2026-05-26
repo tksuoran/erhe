@@ -1,6 +1,7 @@
 #include "erhe_xr/headset.hpp"
 #include "erhe_xr/xr_log.hpp"
 #include "erhe_xr/xr_instance.hpp"
+#include "erhe_xr/xr_quad_layer.hpp"
 #include "erhe_xr/xr_session.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_utility/clipboard.hpp"
@@ -233,6 +234,14 @@ auto Headset::end_frame(const bool rendered) -> bool
     }
 
     return m_xr_session->end_frame(rendered);
+}
+
+auto Headset::create_quad_layer(uint32_t width, uint32_t height, const std::string& debug_label) -> std::unique_ptr<Quad_layer>
+{
+    if (!m_xr_session) {
+        return nullptr;
+    }
+    return m_xr_session->create_quad_layer(width, height, debug_label);
 }
 
 } // namespace erhe::xr

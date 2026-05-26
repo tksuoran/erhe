@@ -4,7 +4,7 @@
 
 #include "app_context.hpp"
 #include "editor_log.hpp"
-#include "rendertarget_mesh.hpp"
+#include "rendertarget_view.hpp"
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/headset_view.hpp"
@@ -35,7 +35,7 @@ Rendertarget_imgui_host::Rendertarget_imgui_host(
     erhe::imgui::Imgui_renderer&    imgui_renderer,
     erhe::rendergraph::Rendergraph& rendergraph,
     App_context&                    app_context,
-    Rendertarget_mesh*              rendertarget_mesh,
+    Rendertarget_view&              view,
     erhe::utility::Debug_label      debug_label,
     const bool                      imgui_ini
 )
@@ -46,8 +46,8 @@ Rendertarget_imgui_host::Rendertarget_imgui_host(
         imgui_ini,
         imgui_renderer.get_font_atlas()
     }
-    , m_app_context      {app_context}
-    , m_rendertarget_mesh{rendertarget_mesh}
+    , m_app_context{app_context}
+    , m_view       {&view}
 {
     register_output("rendertarget texture", erhe::rendergraph::Rendergraph_node_key::rendertarget_texture);
 
@@ -56,7 +56,7 @@ Rendertarget_imgui_host::Rendertarget_imgui_host(
     ImGuiIO& io = m_imgui_context->IO;
     IM_ASSERT(io.BackendPlatformUserData == NULL && "Already initialized a platform backend!");
     io.ConfigFlags             = io.ConfigFlags & ~ImGuiConfigFlags_DockingEnable;
-    io.DisplaySize             = ImVec2{m_rendertarget_mesh->get_width(), m_rendertarget_mesh->get_height()};
+    io.DisplaySize             = ImVec2{m_view->get_width(), m_view->get_height()};
     io.FontDefault             = imgui_renderer.vr_primary_font();
     io.DisplayFramebufferScale = ImVec2{1.0f, 1.0f};
     io.MouseDrawCursor         = app_context.OpenXR;
@@ -77,11 +77,6 @@ template <typename T>
 [[nodiscard]] inline auto as_span(const T& value) -> std::span<const T>
 {
     return std::span<const T>(&value, 1);
-}
-
-auto Rendertarget_imgui_host::rendertarget_mesh() -> Rendertarget_mesh*
-{
-    return m_rendertarget_mesh;
 }
 
 auto Rendertarget_imgui_host::get_mutable_style() -> ImGuiStyle&
@@ -220,18 +215,18 @@ auto Rendertarget_imgui_host::is_visible() const -> bool
 
 void Rendertarget_imgui_host::begin_imgui_frame()
 {
-    if (m_rendertarget_mesh == nullptr) {
+    if (m_view == nullptr) {
         m_is_visible = false;
         return;
     }
     m_is_visible = true;
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-    m_rendertarget_mesh->update_headset_hand_tracking();
+    m_view->update_headset_hand_tracking();
 
     auto& headset_view = *m_app_context.headset_view;
 #endif
-    const auto pointer = m_rendertarget_mesh->get_pointer();
+    const auto pointer = m_view->get_pointer();
     ImGuiIO& io = m_imgui_context->IO;
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
@@ -320,8 +315,6 @@ void Rendertarget_imgui_host::begin_imgui_frame()
     if (m_app_context.OpenXR) {
         erhe::xr::Headset* headset = headset_view.get_headset();
         ERHE_VERIFY(headset != nullptr);
-        const erhe::scene::Node* node = m_rendertarget_mesh->get_node();
-        ERHE_VERIFY(node != nullptr);
         erhe::xr::Xr_actions* actions_left  = headset->get_actions_left();
         erhe::xr::Xr_actions* actions_right = headset->get_actions_right();
         erhe::xr::Xr_action_pose* left_aim_pose  = (actions_left  != nullptr) ? actions_left ->aim_pose : nullptr;
@@ -329,15 +322,15 @@ void Rendertarget_imgui_host::begin_imgui_frame()
         const bool use_right = (right_aim_pose != nullptr) && (right_aim_pose->location.locationFlags != 0);
 
         auto* pose = use_right ? right_aim_pose : left_aim_pose;
-        if ((pose != nullptr) && node->is_visible()) {
+        if ((pose != nullptr) && m_view->is_quad_visible()) {
             const auto controller_orientation = glm::mat4_cast(pose->orientation);
             const auto controller_direction   = glm::vec3{controller_orientation * glm::vec4{0.0f, 0.0f, -1.0f, 0.0f}};
 
             const glm::vec3 camera_offset = headset_view.get_camera_offset();
             glm::vec3 ray_origin = pose->position + camera_offset;
             const auto intersection = erhe::math::intersect_plane<float>(
-                glm::vec3{node->direction_in_world()},
-                glm::vec3{node->position_in_world()},
+                m_view->get_plane_world_normal(),
+                m_view->get_plane_world_origin(),
                 ray_origin,
                 controller_direction
             );
@@ -346,7 +339,7 @@ void Rendertarget_imgui_host::begin_imgui_frame()
             // TODO Duplication with Rendertarget_mesh::update_pointer()
             if (intersection.has_value() && intersection.value() > 0.0f) {
                 const auto world_position      = ray_origin + intersection.value() * controller_direction;
-                const auto window_position_opt = m_rendertarget_mesh->get_world_to_window(world_position);
+                const auto window_position_opt = m_view->world_to_window(world_position);
                 if (window_position_opt.has_value()) {
                     if (!has_cursor()) {
                         on_cursor_enter_event(
@@ -507,26 +500,28 @@ void Rendertarget_imgui_host::execute_rendergraph_node(erhe::graphics::Command_b
     m_app_context.imgui_renderer->update_draw_data_textures(command_buffer);
 
     erhe::graphics::Device& graphics_device = m_rendergraph.get_graphics_device();
-    erhe::graphics::Render_pass* render_pass = m_rendertarget_mesh->get_render_pass();
-    ERHE_VERIFY(render_pass != nullptr);
-    {
+    // Path A returns the Rendertarget_mesh render pass; Path B acquires the
+    // quad swapchain image and builds a transient render pass over it.
+    erhe::graphics::Render_pass* render_pass = m_view->acquire_render_pass(command_buffer);
+    if (render_pass != nullptr) {
         erhe::graphics::Render_command_encoder render_encoder = graphics_device.make_render_command_encoder(command_buffer);
         erhe::graphics::Scoped_render_pass scoped_render_pass{*render_pass, command_buffer};
         m_app_context.imgui_renderer->render_draw_data(render_encoder, *render_pass);
     }
-    // render_done() issues a blit (generate_mipmaps), which cannot be recorded
-    // inside an active Vulkan render pass -- must run after scoped_render_pass ends.
-    m_rendertarget_mesh->render_done(command_buffer, m_app_context);
+    // finish_render() may issue a blit (generate_mipmaps) or release the
+    // swapchain image; neither can be recorded inside an active Vulkan render
+    // pass -- must run after scoped_render_pass ends.
+    m_view->finish_render(command_buffer, m_app_context);
 }
 
 auto Rendertarget_imgui_host::get_consumer_input_texture(int, int) const -> std::shared_ptr<erhe::graphics::Texture>
 {
-    return m_rendertarget_mesh->get_texture();
+    return m_view->get_output_texture();
 }
 
 auto Rendertarget_imgui_host::get_producer_output_texture(int, int) const -> std::shared_ptr<erhe::graphics::Texture>
 {
-    return m_rendertarget_mesh->get_texture();
+    return m_view->get_output_texture();
 }
 
 }  // namespace editor

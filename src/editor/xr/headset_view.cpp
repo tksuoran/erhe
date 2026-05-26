@@ -743,6 +743,11 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
             if (depth_stencil_texture != nullptr) {
                 render_pass_descriptor.depth_attachment.texture       = depth_stencil_texture;
                 render_pass_descriptor.depth_attachment.load_action   = erhe::graphics::Load_action::Clear;
+                // Clear to the convention's far value (reverse-Z 0.0, forward-Z 1.0).
+                // Without this it defaults to 0.0, which under forward-Z is the near
+                // plane, so every fragment fails the depth test and only the clear
+                // color shows (no 3D scene).
+                render_pass_descriptor.depth_attachment.clear_value[0] = get_reverse_depth() ? 0.0 : 1.0;
                 render_pass_descriptor.depth_attachment.store_action  = erhe::graphics::Store_action::Store;
                 render_pass_descriptor.depth_attachment.usage_before  = erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment;
                 render_pass_descriptor.depth_attachment.layout_before = erhe::graphics::Image_layout::depth_stencil_attachment_optimal;

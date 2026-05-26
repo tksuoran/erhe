@@ -374,16 +374,32 @@ auto Xr_instance::create_instance() -> bool
         extensions.VARJO_quad_views = true;
         enabled_extensions.push_back(XR_VARJO_QUAD_VIEWS_EXTENSION_NAME);
     }
-    if (m_configuration.composition_depth_layer) {
-        if (has_extension(XR_KHR_COMPOSITION_LAYER_DEPTH_EXTENSION_NAME)) {
-            extensions.KHR_composition_layer_depth = true;
-            enabled_extensions.push_back(XR_KHR_COMPOSITION_LAYER_DEPTH_EXTENSION_NAME);
-        }
-        if (has_extension(XR_VARJO_ENVIRONMENT_DEPTH_ESTIMATION_EXTENSION_NAME)) {
-            extensions.VARJO_environment_depth_estimation = true;
-            enabled_extensions.push_back(XR_VARJO_ENVIRONMENT_DEPTH_ESTIMATION_EXTENSION_NAME);
-        }
-        //XR_VARJO_COMPOSITION_LAYER_DEPTH_TEST_EXTENSION_NAME,
+    // Depth-tested quad composition layers (see doc/hud_hotbar_depth_test_plan.md):
+    // enable the quad depth-test (FB) extension and its prerequisite projection
+    // depth (KHR) when not force-disabled and the runtime advertises both. Whether
+    // depth is actually submitted/tested each frame is further gated at runtime on
+    // a usable depth swapchain (Xr_session); enabling-but-not-submitting is
+    // harmless, so these are enabled here where the extension set is fixed even
+    // though the depth swapchain's usability is only known later.
+    const bool want_quad_depth_test =
+        m_configuration.composition_quad_layers_depth &&
+        has_extension(XR_KHR_COMPOSITION_LAYER_DEPTH_EXTENSION_NAME) &&
+        has_extension(XR_FB_COMPOSITION_LAYER_DEPTH_TEST_EXTENSION_NAME);
+    if (want_quad_depth_test) {
+        extensions.FB_composition_layer_depth_test = true;
+        enabled_extensions.push_back(XR_FB_COMPOSITION_LAYER_DEPTH_TEST_EXTENSION_NAME);
+    }
+    // Projection-layer depth (KHR) is the prerequisite for the quad depth test, and
+    // can also be requested explicitly via composition_depth_layer.
+    if ((m_configuration.composition_depth_layer || want_quad_depth_test) &&
+        has_extension(XR_KHR_COMPOSITION_LAYER_DEPTH_EXTENSION_NAME)) {
+        extensions.KHR_composition_layer_depth = true;
+        enabled_extensions.push_back(XR_KHR_COMPOSITION_LAYER_DEPTH_EXTENSION_NAME);
+    }
+    if (m_configuration.composition_depth_layer &&
+        has_extension(XR_VARJO_ENVIRONMENT_DEPTH_ESTIMATION_EXTENSION_NAME)) {
+        extensions.VARJO_environment_depth_estimation = true;
+        enabled_extensions.push_back(XR_VARJO_ENVIRONMENT_DEPTH_ESTIMATION_EXTENSION_NAME);
     }
     if (m_configuration.visibility_mask && has_extension(XR_KHR_VISIBILITY_MASK_EXTENSION_NAME)) {
         extensions.KHR_visibility_mask = true;
@@ -402,6 +418,23 @@ auto Xr_instance::create_instance() -> bool
         extensions.FB_color_space = true;
         enabled_extensions.push_back(XR_FB_COLOR_SPACE_EXTENSION_NAME);
     }
+
+    // Composition-layer depth capabilities (see doc/hud_hotbar_depth_test_plan.md).
+    // Logged so the runtime gating for depth-tested quad layers can be confirmed
+    // on-device: KHR submits the projection-layer depth, FB depth-tests the quad
+    // layers against it. ('supported' = runtime advertises the extension;
+    // 'enabled' = the editor turned it on this run.)
+    log_xr->info(
+        "OpenXR composition depth: cfg composition_quad_layers_depth={} composition_depth_layer={} swapchain_depth_attachment={}; "
+        "KHR_composition_layer_depth supported={} enabled={}; FB_composition_layer_depth_test supported={} enabled={}",
+        m_configuration.composition_quad_layers_depth,
+        m_configuration.composition_depth_layer,
+        m_configuration.swapchain_depth_attachment,
+        has_extension(XR_KHR_COMPOSITION_LAYER_DEPTH_EXTENSION_NAME),
+        extensions.KHR_composition_layer_depth,
+        has_extension(XR_FB_COMPOSITION_LAYER_DEPTH_TEST_EXTENSION_NAME),
+        extensions.FB_composition_layer_depth_test
+    );
     if (has_extension(XR_FB_DISPLAY_REFRESH_RATE_EXTENSION_NAME)) {
         extensions.FB_display_refresh_rate = true;
         enabled_extensions.push_back(XR_FB_DISPLAY_REFRESH_RATE_EXTENSION_NAME);

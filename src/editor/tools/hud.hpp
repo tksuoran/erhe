@@ -26,8 +26,8 @@ class App_message_bus;
 class App_windows;
 class Headset_view;
 class Icon_set;
+class Quad_view;
 class Rendertarget_imgui_host;
-class Rendertarget_mesh;
 class Scene_builder;
 class Tools;
 class Scene_views;
@@ -74,6 +74,7 @@ public:
         Scene_builder&                     scene_builder,
         Tools&                             tools
     );
+    ~Hud() noexcept;
 
     // Implements Tool
     void tool_render(const Render_context& context) override;
@@ -110,9 +111,7 @@ private:
     std::weak_ptr<erhe::scene::Node>          m_drag_node;
     bool                                      m_mesh_visible{true};
 
-    std::shared_ptr<erhe::scene::Node>        m_rendertarget_node;
-    std::shared_ptr<Rendertarget_mesh>        m_rendertarget_mesh;
-    std::shared_ptr<Rendertarget_imgui_host>  m_rendertarget_imgui_viewport;
+    std::unique_ptr<Quad_view>                m_quad_view;
     glm::mat4                                 m_world_from_hud{1.0f};
     float m_x       {-0.09f};
     float m_y       { 0.0f};
@@ -120,6 +119,13 @@ private:
     bool  m_enabled {true};
 
     std::optional<glm::mat4> m_node_from_control;
+
+    // Path B (composition layer) drag state: there is no scene node to grab, so
+    // the quad is attached rigidly to the controller and its pose updated via
+    // Quad_view. m_drag_control_from_quad is the quad transform in the
+    // controller frame, captured at grab time.
+    bool                     m_path_b_dragging{false};
+    glm::mat4                m_drag_control_from_quad{1.0f};
 };
 
 }

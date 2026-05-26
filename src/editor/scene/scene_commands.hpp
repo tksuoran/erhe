@@ -39,6 +39,7 @@ namespace editor {
 
 class App_context;
 class Headset_view;
+class Mesh_rendertarget_view;
 class Operation_stack;
 class Rendertarget_mesh;
 class Rendertarget_imgui_host;
@@ -226,7 +227,10 @@ private:
     Add_chain_command               m_add_chain_command;
     Add_toruses_command             m_add_toruses_command;
 
-    // TODO Figure out who should have ownership of these
+    // TODO Figure out who should have ownership of these. The views are
+    // declared before the hosts so that, at destruction, the hosts (which hold
+    // a non-owning Rendertarget_view*) are destroyed before the views.
+    std::vector<std::shared_ptr<Mesh_rendertarget_view>>  m_keep_alive_views;
     std::vector<std::shared_ptr<Rendertarget_imgui_host>> m_keep_alive;
 };
 

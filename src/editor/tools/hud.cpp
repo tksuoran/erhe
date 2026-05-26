@@ -7,6 +7,7 @@
 #include "scene/scene_builder.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/tools.hpp"
+#include "quad_view.hpp"
 #include "rendertarget_mesh.hpp"
 #include "rendertarget_imgui_host.hpp"
 
@@ -145,33 +146,47 @@ Hud::Hud(
     static_cast<void>(headset_view);
 #endif
 
+    // App_context pointers are not yet initialized during part construction, so
+    // Quad_view is given the resources explicitly (current_command_buffer is the
+    // init command buffer, populated before parts are constructed).
     ERHE_VERIFY(app_context.current_command_buffer != nullptr);
-    m_rendertarget_mesh = std::make_shared<Rendertarget_mesh>(graphics_device, *app_context.current_command_buffer, mesh_memory, width, height, ppm);
     auto scene_root = scene_builder.get_scene_root();
-    m_rendertarget_mesh->layer_id = scene_root->layers().rendertarget()->id;
-    m_rendertarget_mesh->enable_flag_bits(
-        erhe::Item_flags::rendertarget |
-        erhe::Item_flags::visible      |
-        erhe::Item_flags::show_in_developer_ui
-    );
-
-    m_rendertarget_node = std::make_shared<erhe::scene::Node>("Hud RT node");
-    m_rendertarget_node->set_parent(scene_root->get_scene().get_root_node());
-    m_rendertarget_node->attach(m_rendertarget_mesh);
-    m_rendertarget_node->enable_flag_bits(
-        erhe::Item_flags::rendertarget |
-        erhe::Item_flags::visible      |
-        erhe::Item_flags::show_in_developer_ui
-    );
-
-    m_rendertarget_imgui_viewport = std::make_shared<editor::Rendertarget_imgui_host>(
+    ERHE_VERIFY(scene_root);
+    m_quad_view = std::make_unique<Quad_view>(
+        app_context,
+        graphics_device,
+        *app_context.current_command_buffer,
+        mesh_memory,
         imgui_renderer,
         rendergraph,
-        app_context,
-        m_rendertarget_mesh.get(),
+        *scene_root,
+        &headset_view,
+        width,
+        height,
+        ppm,
         "Hud Viewport",
         true
     );
+
+    // The Hud is placed at a fixed world pose (not billboarded toward the user
+    // like the Hotbar), so make it double-sided to stay visible when viewed
+    // from behind. (Interim: the back face is readable but horizontally flipped
+    // in world space; a true two-sided mirror would need a flipped image copy.)
+    m_quad_view->set_double_sided(true);
+
+    // Depth-test the Hud against the scene so geometry can occlude it, and keep
+    // it composited in front of the Hotbar (higher composition order = on top;
+    // the Hotbar uses the default order 0).
+    m_quad_view->set_depth_tested(true);
+    m_quad_view->set_composition_order(1);
+
+    // The Hud parents its node once to the scene root and only updates the
+    // world transform thereafter (see update_node_transform).
+    if (erhe::scene::Node* node = m_quad_view->get_node()) {
+        node->set_parent(scene_root->get_scene().get_root_node());
+    }
+
+    Rendertarget_imgui_host* host = m_quad_view->get_imgui_host();
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     // In OpenXR mode the Headset_view_node must be the rendergraph sink
@@ -185,14 +200,14 @@ Hud::Hud(
         if (headset_node != nullptr) {
             rendergraph.connect(
                 erhe::rendergraph::Rendergraph_node_key::rendertarget_texture,
-                m_rendertarget_imgui_viewport.get(),
+                host,
                 headset_node
             );
         }
     }
 #endif
 
-    m_rendertarget_imgui_viewport->set_begin_callback(
+    host->set_begin_callback(
         [&app_windows](erhe::imgui::Imgui_host& imgui_host) {
             app_windows.viewport_menu(imgui_host);
         }
@@ -207,21 +222,27 @@ Hud::Hud(
     );
 }
 
+Hud::~Hud() noexcept = default;
+
 auto Hud::get_rendertarget_imgui_viewport() const -> std::shared_ptr<Rendertarget_imgui_host>
 {
-    return m_rendertarget_imgui_viewport;
+    return (m_quad_view != nullptr) ? m_quad_view->get_imgui_host_shared() : nullptr;
 }
 
 auto Hud::world_from_node() const -> glm::mat4
 {
-    ERHE_VERIFY(m_rendertarget_node);
-    return m_rendertarget_node->world_from_node();
+    ERHE_VERIFY(m_quad_view != nullptr);
+    erhe::scene::Node* node = m_quad_view->get_node();
+    ERHE_VERIFY(node != nullptr);
+    return node->world_from_node();
 }
 
 auto Hud::node_from_world() const -> glm::mat4
 {
-    ERHE_VERIFY(m_rendertarget_node);
-    return m_rendertarget_node->node_from_world();
+    ERHE_VERIFY(m_quad_view != nullptr);
+    erhe::scene::Node* node = m_quad_view->get_node();
+    ERHE_VERIFY(node != nullptr);
+    return node->node_from_world();
 }
 
 auto Hud::intersect_ray(const glm::vec3& ray_origin_in_world, const glm::vec3& ray_direction_in_world) -> std::optional<glm::vec3>
@@ -239,8 +260,12 @@ auto Hud::intersect_ray(const glm::vec3& ray_origin_in_world, const glm::vec3& r
     }
     const glm::vec3 position_in_node = ray_origin_in_hud + intersection.value() * ray_direction_in_hud;
 
-    const auto half_width  = 0.5f * m_rendertarget_mesh->get_width();
-    const auto half_height = 0.5f * m_rendertarget_mesh->get_height();
+    Rendertarget_mesh* rendertarget_mesh = (m_quad_view != nullptr) ? m_quad_view->get_rendertarget_mesh() : nullptr;
+    if (rendertarget_mesh == nullptr) {
+        return {};
+    }
+    const auto half_width  = 0.5f * rendertarget_mesh->get_width();
+    const auto half_height = 0.5f * rendertarget_mesh->get_height();
 
     if (
         (position_in_node.x < -half_width ) ||
@@ -259,6 +284,7 @@ auto Hud::intersect_ray(const glm::vec3& ray_origin_in_world, const glm::vec3& r
 auto Hud::try_begin_drag() -> bool
 {
     m_node_from_control.reset();
+    m_path_b_dragging = false;
 
     Scene_view* scene_view = get_hover_scene_view();
     if (scene_view == nullptr) {
@@ -268,6 +294,21 @@ auto Hud::try_begin_drag() -> bool
     const auto world_from_control_opt = scene_view->get_world_from_control();
     if (!world_from_control_opt.has_value()) {
         return false;
+    }
+
+    if ((m_quad_view != nullptr) && m_quad_view->uses_composition_layer()) {
+        // Path B: there is no scene mesh to hover. Grab the quad when the
+        // controller ray points at it, then attach it rigidly to the controller
+        // for the duration of the drag.
+        const glm::mat4 world_from_control = world_from_control_opt.value();
+        const glm::vec3 ray_origin    = glm::vec3{world_from_control[3]};
+        const glm::vec3 ray_direction = glm::vec3{world_from_control * glm::vec4{0.0f, 0.0f, -1.0f, 0.0f}};
+        if (!m_quad_view->intersect_ray(ray_origin, ray_direction).has_value()) {
+            return false;
+        }
+        m_drag_control_from_quad = glm::inverse(world_from_control) * m_quad_view->get_world_from_quad();
+        m_path_b_dragging = true;
+        return true;
     }
 
     const auto* drag_entry = scene_view->get_nearest_hover(Hover_entry::rendertarget_bit);
@@ -304,6 +345,16 @@ void Hud::on_drag()
         return;
     }
 
+    if (m_path_b_dragging) {
+        const auto world_from_control_opt = scene_view->get_world_from_control();
+        if (!world_from_control_opt.has_value() || (m_quad_view == nullptr)) {
+            return;
+        }
+        const glm::mat4 world_from_quad = world_from_control_opt.value() * m_drag_control_from_quad;
+        m_quad_view->set_world_from_node(world_from_quad);
+        return;
+    }
+
     const auto control_from_world_opt = scene_view->get_control_from_world();
     if (!control_from_world_opt.has_value() || !m_node_from_control.has_value()) {
         return;
@@ -323,18 +374,19 @@ void Hud::end_drag()
 {
     m_node_from_control.reset();
     m_drag_node.reset();
+    m_path_b_dragging = false;
 }
 
 void Hud::update_node_transform(const glm::mat4& world_from_hud)
 {
-    if (!m_rendertarget_node) {
+    if (!m_quad_view) {
         return;
     }
 
     m_world_from_hud = world_from_hud;
     const glm::mat4 offset = erhe::math::create_translation(m_x, m_y, m_z);
     const glm::mat4 final_transform = m_world_from_hud * offset;
-    m_rendertarget_node->set_world_from_node(final_transform);
+    m_quad_view->set_world_from_node(final_transform);
 }
 
 void Hud::tool_render(const Render_context&)
@@ -371,7 +423,7 @@ auto Hud::toggle_mesh_visibility() -> bool
 
 void Hud::set_mesh_visibility(const bool value)
 {
-    if (!m_enabled || !m_rendertarget_mesh) {
+    if (!m_enabled || !m_quad_view) {
         return;
     }
 
@@ -385,8 +437,7 @@ void Hud::set_mesh_visibility(const bool value)
         }
     }
 
-    m_rendertarget_imgui_viewport->set_enabled(m_mesh_visible);
-    m_rendertarget_node->set_visible(m_mesh_visible);
+    m_quad_view->set_visible(m_mesh_visible);
 }
 
 }

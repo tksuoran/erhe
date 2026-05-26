@@ -267,6 +267,8 @@ erhe_target_sources_grouped(
     preview/material_preview.hpp
     preview/scene_preview.cpp
     preview/scene_preview.hpp
+    quad_view.cpp
+    quad_view.hpp
     renderable.hpp
     renderers/composer.cpp
     renderers/composer.hpp
@@ -292,10 +294,13 @@ erhe_target_sources_grouped(
     rendergraph/post_processing.hpp
     rendergraph/shadow_render_node.cpp
     rendergraph/shadow_render_node.hpp
+    mesh_rendertarget_view.cpp
+    mesh_rendertarget_view.hpp
     rendertarget_imgui_host.cpp
     rendertarget_imgui_host.hpp
     rendertarget_mesh.cpp
     rendertarget_mesh.hpp
+    rendertarget_view.hpp
     robin_hood.h
     scene/debug_draw.cpp
     scene/debug_draw.hpp
