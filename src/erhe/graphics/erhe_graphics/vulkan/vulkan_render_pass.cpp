@@ -62,6 +62,7 @@ auto image_layout_str(Image_layout layout) -> const char*
         case Image_layout::color_attachment_optimal:         return "color_attachment_optimal";
         case Image_layout::depth_stencil_attachment_optimal: return "depth_stencil_attachment_optimal";
         case Image_layout::depth_stencil_read_only_optimal:  return "depth_stencil_read_only_optimal";
+        case Image_layout::fragment_density_map_optimal:     return "fragment_density_map_optimal";
         case Image_layout::present_src:                      return "present_src";
         default:                                             return "unknown";
     }
@@ -126,6 +127,7 @@ auto vk_layout_str(VkImageLayout layout) -> const char*
         case VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL:          return "DEPTH_READ_ONLY_OPTIMAL";
         case VK_IMAGE_LAYOUT_STENCIL_READ_ONLY_OPTIMAL:        return "STENCIL_READ_ONLY_OPTIMAL";
         case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR:                  return "PRESENT_SRC_KHR";
+        case VK_IMAGE_LAYOUT_FRAGMENT_DENSITY_MAP_OPTIMAL_EXT: return "FRAGMENT_DENSITY_MAP_OPTIMAL_EXT";
         default:                                                return "?";
     }
 }
