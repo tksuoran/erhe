@@ -54,7 +54,7 @@ Shadow_renderer::Shadow_renderer(
             .debug_label       = erhe::utility::Debug_label{"Shadow Renderer"},
             .input_assembly    = Input_assembly_state::triangle,
             .rasterization     = Rasterization_state::cull_mode_none,
-            .depth_stencil     = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(graphics_device.get_graphics_config().reverse_depth),
+            .depth_stencil     = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(graphics_device.get_reverse_depth()),
             .bind_group_layout = m_bind_group_layout
         }
     }

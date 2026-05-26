@@ -42,17 +42,6 @@ void Render_target::reconfigure(int sample_count)
     m_render_pass.reset();
 }
 
-void Render_target::set_reverse_depth(const bool reverse_depth)
-{
-    if (m_reverse_depth == reverse_depth) {
-        return;
-    }
-    m_reverse_depth = reverse_depth;
-    // Force render pass recreation to update depth clear value
-    m_color_texture.reset();
-    m_render_pass.reset();
-}
-
 void Render_target::update(int width, int height, erhe::graphics::Swapchain* swapchain)
 {
     using erhe::graphics::Render_pass;
@@ -193,7 +182,7 @@ void Render_target::update(int width, int height, erhe::graphics::Swapchain* swa
                     render_pass_descriptor.depth_attachment.texture         = m_depth_stencil_texture.get();
                     render_pass_descriptor.depth_attachment.load_action     = erhe::graphics::Load_action::Clear;
                     render_pass_descriptor.depth_attachment.store_action    = erhe::graphics::Store_action::Dont_care;
-                    render_pass_descriptor.depth_attachment.clear_value[0]  = m_reverse_depth ? 0.0 : 1.0;
+                    render_pass_descriptor.depth_attachment.clear_value[0]  = m_graphics_device.get_reverse_depth() ? 0.0 : 1.0;
                     render_pass_descriptor.depth_attachment.usage_before    = erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment;
                     render_pass_descriptor.depth_attachment.layout_before  = erhe::graphics::Image_layout::depth_stencil_attachment_optimal;
                     render_pass_descriptor.depth_attachment.usage_after     = erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment;

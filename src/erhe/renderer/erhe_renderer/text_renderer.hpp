@@ -79,7 +79,6 @@ public:
         erhe::math::Viewport                    viewport,
         bool                                    multiview = false
     );
-    void rebuild_depth_state(bool reverse_depth);
 
 private:
     auto build_shader_stages          () -> erhe::graphics::Shader_stages_prototype;

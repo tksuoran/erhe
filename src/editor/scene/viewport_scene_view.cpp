@@ -338,11 +338,6 @@ void Viewport_scene_view::set_camera(const std::shared_ptr<erhe::scene::Camera>&
     m_camera = camera;
 }
 
-void Viewport_scene_view::set_reverse_depth(const bool reverse_depth)
-{
-    m_render_target.set_reverse_depth(reverse_depth);
-}
-
 auto Viewport_scene_view::is_scene_view_hovered() const -> bool
 {
     // log_frame->debug("{}->is_scene_view_hovered() = {}", get_name(), m_is_scene_view_hovered);

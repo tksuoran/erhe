@@ -125,6 +125,10 @@ void Init_status_display::render_text_overlay(
         render_pass_descriptor.depth_attachment.texture       = depth_stencil_texture;
         render_pass_descriptor.depth_attachment.texture_layer = texture_layer;
         render_pass_descriptor.depth_attachment.load_action   = erhe::graphics::Load_action::Clear;
+        // Clear to the convention's far value (reverse-Z 0.0, forward-Z 1.0) for
+        // consistency with every other depth attachment; the default 0.0 is the
+        // near plane under forward-Z.
+        render_pass_descriptor.depth_attachment.clear_value[0] = m_graphics_device.get_reverse_depth() ? 0.0 : 1.0;
         render_pass_descriptor.depth_attachment.store_action  = erhe::graphics::Store_action::Store;
         render_pass_descriptor.depth_attachment.usage_before  = erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment;
         render_pass_descriptor.depth_attachment.layout_before = erhe::graphics::Image_layout::depth_stencil_attachment_optimal;

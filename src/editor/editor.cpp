@@ -1408,24 +1408,19 @@ public:
             {
                 ERHE_GET_GL_CONTEXT
                 {
-                    const auto& conventions = m_graphics_device->get_info().coordinate_conventions;
-                    const bool  can_reverse = (conventions.native_depth_range == erhe::math::Depth_range::zero_to_one);
-                    const bool  reverse_depth = m_app_settings->graphics.current_graphics_preset.reverse_depth && can_reverse;
                     m_material_preview = std::make_unique<Material_preview>(
                         *m_graphics_device.get(),
                         *m_app_context.current_command_buffer,
                         m_app_context,
                         *m_mesh_memory.get(),
-                        *m_programs.get(),
-                        reverse_depth
+                        *m_programs.get()
                     );
                     m_brush_preview = std::make_unique<Brush_preview>(
                         *m_graphics_device.get(),
                         *m_app_context.current_command_buffer,
                         m_app_context,
                         *m_mesh_memory.get(),
-                        *m_programs.get(),
-                        reverse_depth
+                        *m_programs.get()
                     );
                 }
             }

@@ -3,7 +3,7 @@
     "renderdoc_capture_support": false,
     "shader_monitor_enabled": false,
     "force_disable_vsync": false,
-    "reverse_depth": true,
+    "force_disable_reverse_depth": false,
     "use_draw_list_renderer": false,
     "opengl": {
         "force_bindless_textures_off": false,

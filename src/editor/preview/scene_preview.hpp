@@ -49,8 +49,7 @@ public:
         erhe::graphics::Command_buffer&    init_command_buffer,
         App_context&                       app_context,
         erhe::scene_renderer::Mesh_memory& mesh_memory,
-        Programs&                          programs,
-        bool                               reverse_depth
+        Programs&                          programs
     );
     ~Scene_preview() noexcept;
 
@@ -68,7 +67,7 @@ public:
     void set_color_texture      (const std::shared_ptr<erhe::graphics::Texture>& color_texture);
     void set_color_texture_layer(unsigned int layer);
     void set_clear_color        (glm::vec4 clear_color);
-    void update_rendertarget    (erhe::graphics::Device& graphics_device, bool reverse_depth);
+    void update_rendertarget    (erhe::graphics::Device& graphics_device);
 
     // Init-time prewarm. Drives Forward_renderer::prewarm_standard_variants
     // against this preview's own scene_root + content_library, so the

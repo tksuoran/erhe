@@ -46,13 +46,16 @@ private:
 class Pipeline_renderpasses
 {
 public:
+    // reverse_depth is the static device value (Device::get_reverse_depth()),
+    // queried once by the owner and passed here so the init-list can bake the
+    // depth state. There is no runtime rebuild -- reverse-Z never changes while
+    // the editor runs.
     Pipeline_renderpasses(
         erhe::graphics::Device&            graphics_device,
         erhe::scene_renderer::Mesh_memory& mesh_memory,
         Programs&                          programs,
-        bool                               reverse_depth = true
+        bool                               reverse_depth
     );
-    void rebuild_depth_state(bool reverse_depth);
 
     bool                                 m_y_flip;
     erhe::graphics::Vertex_input_state   m_empty_vertex_input;

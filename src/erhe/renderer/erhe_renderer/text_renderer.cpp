@@ -220,7 +220,7 @@ Text_renderer::Text_renderer(
             .debug_label    = erhe::utility::Debug_label{"Text renderer"},
             .input_assembly = erhe::graphics::Input_assembly_state::triangle,
             .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
-            .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled(),
+            .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled(graphics_device.get_reverse_depth()),
         }
     }
 {
@@ -468,11 +468,6 @@ void Text_renderer::render(
     m_texture_heap->unbind(encoder.get_command_buffer());
 
     m_vertex_buffer_ranges.clear();
-}
-
-void Text_renderer::rebuild_depth_state(const bool reverse_depth)
-{
-    m_pipeline.data.depth_stencil = erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth);
 }
 
 } // namespace erhe::renderer

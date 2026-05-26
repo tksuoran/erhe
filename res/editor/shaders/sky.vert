@@ -32,6 +32,14 @@ void main()
 
     mat4 world_from_clip = camera.cameras[c_view_index].world_from_clip;
 
-    gl_Position = positions[gl_VertexID];
-    v_position = world_from_clip * gl_Position;
+    // Place the fullscreen triangle at the far plane so it composites behind the
+    // scene. The far-plane clip-space z depends on the depth convention: 0 for
+    // reverse-Z, 1 for forward-Z. clip_depth_direction is -1 for reverse-Z and
+    // +1 for forward-Z, so pick the far value accordingly (previously hard-coded
+    // to 0, which is the near plane under forward-Z -> the sky was rejected).
+    float far_clip_z = (camera.cameras[c_view_index].clip_depth_direction < 0.0) ? 0.0 : 1.0;
+    vec4 clip_position = vec4(positions[gl_VertexID].xy, far_clip_z, 1.0);
+
+    gl_Position = clip_position;
+    v_position = world_from_clip * clip_position;
 }

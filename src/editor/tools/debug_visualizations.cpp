@@ -125,7 +125,7 @@ Debug_visualizations::Debug_visualizations(
             //.shader_stages  = programs.debug_shadow.shader_stages(),
             .input_assembly = erhe::graphics::Input_assembly_state::triangle,
             .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
-            .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled()
+            .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled(graphics_device.get_reverse_depth())
         }
     }
 {
@@ -136,16 +136,9 @@ Debug_visualizations::Debug_visualizations(
             m_hover_scene_view = message.scene_view;
         }
     );
-    m_graphics_settings_subscription = app_message_bus.graphics_settings.subscribe(
-        [&](Graphics_settings_message& message) {
-            if (message.graphics_preset != nullptr) {
-                const auto& conventions   = m_context.graphics_device->get_info().coordinate_conventions;
-                const bool  can_reverse   = (conventions.native_depth_range == erhe::math::Depth_range::zero_to_one);
-                const bool  reverse_depth = message.graphics_preset->reverse_depth && can_reverse;
-                rebuild_depth_state(reverse_depth);
-            }
-        }
-    );
+    // Reverse-Z is static; the shadow-texel pipeline's depth state is baked from
+    // Device::get_reverse_depth() above, so there is no graphics-settings
+    // subscription to rebuild it.
 }
 
 Debug_visualizations::~Debug_visualizations() noexcept = default;
@@ -1535,10 +1528,6 @@ void Debug_visualizations::world_axes_visualization(const Render_context& render
     line_renderer.add_lines(blue,  {{o, 100.0f * z}});
 }
 
-void Debug_visualizations::rebuild_depth_state(const bool reverse_depth)
-{
-    m_shadow_texel_pipeline.data.depth_stencil = erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth);
-}
 
 void Debug_visualizations::render(const Render_context& context)
 {

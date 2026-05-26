@@ -31,8 +31,7 @@ public:
         Scene_view&                     scene_view,
         int                             resolution,
         int                             light_count,
-        int                             depth_bits,
-        bool                            reverse_depth
+        int                             depth_bits
     );
     ~Shadow_render_node() noexcept override;
 
@@ -44,7 +43,7 @@ public:
     auto inputs_allowed() const -> bool override;
 
     // Public API
-    void reconfigure(erhe::graphics::Device& graphics_device, erhe::graphics::Command_buffer& command_buffer, int resolution, int light_count, int depth_bits, bool reverse_depth);
+    void reconfigure(erhe::graphics::Device& graphics_device, erhe::graphics::Command_buffer& command_buffer, int resolution, int light_count, int depth_bits);
 
     [[nodiscard]] auto get_scene_view       () -> Scene_view&;
     [[nodiscard]] auto get_scene_view       () const -> const Scene_view&;
@@ -63,7 +62,6 @@ public:
 private:
     App_context&                                              m_context;
     Scene_view&                                               m_scene_view;
-    bool                                                      m_reverse_depth{true};
     std::shared_ptr<erhe::graphics::Texture>                  m_texture;
     std::vector<std::unique_ptr<erhe::graphics::Render_pass>> m_render_passes;
     std::vector<std::string>                                  m_gpu_timer_labels;

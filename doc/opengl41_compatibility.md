@@ -183,7 +183,7 @@ When `use_clip_control` is true:
 - `glClipControl(lower_left, zero_to_one)` sets [0,1] range
 - Reverse-Z with swapped near/far for better precision
 
-`reverse_depth` is clamped at preset application: `preset.reverse_depth && use_clip_control`. All depth state is propagated via `rebuild_depth_state()` methods.
+The effective reverse-Z choice is derived once at device init by `erhe::graphics::Device::get_reverse_depth()` as `!Graphics_config::force_disable_reverse_depth && (native_depth_range == zero_to_one)`. It is a static value for the device's lifetime: pipeline depth state, projection matrices, depth clear values and shadow comparison samplers all query it at construction. There is no runtime rebuild and `glClipControl` is set once (to `zero_to_one` whenever supported) rather than per preset.
 
 ## Texture View Fallback
 

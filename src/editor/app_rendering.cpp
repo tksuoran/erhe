@@ -75,7 +75,7 @@ App_rendering::App_rendering(
 )
     : m_context              {app_context}
     , m_capture_frame_command{commands, app_context}
-    , m_pipeline_passes      {graphics_device, mesh_memory, programs}
+    , m_pipeline_passes      {graphics_device, mesh_memory, programs, graphics_device.get_reverse_depth()}
     , m_composer             {"Main Composer"}
 {
     ERHE_PROFILE_FUNCTION();
@@ -377,14 +377,11 @@ auto App_rendering::create_shadow_node_for_scene_view(
 ) -> std::shared_ptr<Shadow_render_node>
 {
     const auto& preset        = app_settings.graphics.current_graphics_preset;
-    const auto& conventions   = graphics_device.get_info().coordinate_conventions;
-    const bool  can_reverse   = (conventions.native_depth_range == erhe::math::Depth_range::zero_to_one);
     const int   resolution    = preset.shadow_enable ? preset.shadow_resolution  : 1;
     const int   light_count   = preset.shadow_enable ? preset.shadow_light_count : 1;
-    const bool  reverse_depth = preset.reverse_depth && can_reverse;
     log_startup->info(
-        "Creating shadow render node from preset '{}': shadow_enable={} -> light_count={} resolution={} depth_bits={} reverse_depth={}",
-        preset.name, preset.shadow_enable, light_count, resolution, preset.shadow_depth_bits, reverse_depth
+        "Creating shadow render node from preset '{}': shadow_enable={} -> light_count={} resolution={} depth_bits={}",
+        preset.name, preset.shadow_enable, light_count, resolution, preset.shadow_depth_bits
     );
     ERHE_VERIFY(m_context.current_command_buffer != nullptr);
     auto shadow_render_node = std::make_shared<Shadow_render_node>(
@@ -395,8 +392,7 @@ auto App_rendering::create_shadow_node_for_scene_view(
         scene_view,
         resolution,
         light_count,
-        preset.shadow_depth_bits,
-        reverse_depth
+        preset.shadow_depth_bits
     );
     m_all_shadow_render_nodes.push_back(shadow_render_node);
     return shadow_render_node;
@@ -404,40 +400,25 @@ auto App_rendering::create_shadow_node_for_scene_view(
 
 void App_rendering::handle_graphics_settings_changed(Graphics_preset_entry* graphics_preset)
 {
-    const auto& conventions   = m_context.graphics_device->get_info().coordinate_conventions;
-    const bool  can_reverse   = (conventions.native_depth_range == erhe::math::Depth_range::zero_to_one);
-    const int   resolution    = (graphics_preset != nullptr) && graphics_preset->shadow_enable ? graphics_preset->shadow_resolution  : 1;
-    const int   light_count   = (graphics_preset != nullptr) && graphics_preset->shadow_enable ? graphics_preset->shadow_light_count : 1;
-    const bool  reverse_depth = (graphics_preset != nullptr) && (graphics_preset->reverse_depth && can_reverse);
+    const int resolution  = (graphics_preset != nullptr) && graphics_preset->shadow_enable ? graphics_preset->shadow_resolution  : 1;
+    const int light_count = (graphics_preset != nullptr) && graphics_preset->shadow_enable ? graphics_preset->shadow_light_count : 1;
 
     if (graphics_preset != nullptr) {
         log_startup->info(
-            "Reconfiguring {} shadow render node(s) from preset '{}': shadow_enable={} -> light_count={} resolution={} depth_bits={} reverse_depth={}",
+            "Reconfiguring {} shadow render node(s) from preset '{}': shadow_enable={} -> light_count={} resolution={} depth_bits={}",
             m_all_shadow_render_nodes.size(),
-            graphics_preset->name, graphics_preset->shadow_enable, light_count, resolution, graphics_preset->shadow_depth_bits, reverse_depth
+            graphics_preset->name, graphics_preset->shadow_enable, light_count, resolution, graphics_preset->shadow_depth_bits
         );
     }
 
+    // Reverse-Z is a static device property (Device::get_reverse_depth()), not a
+    // runtime-mutable setting, so depth state is baked at construction and there
+    // is nothing to rebuild here. clip_control is likewise set once at device /
+    // editor init to match native_depth_range (zero_to_one when supported); it
+    // must not be toggled per preset.
     ERHE_VERIFY(m_context.current_command_buffer != nullptr);
     for (const auto& node : m_all_shadow_render_nodes) {
-        node->reconfigure(*m_context.graphics_device, *m_context.current_command_buffer, resolution, light_count, graphics_preset->shadow_depth_bits, reverse_depth);
-    }
-
-    if (graphics_preset != nullptr) {
-#if defined(ERHE_GRAPHICS_API_OPENGL)
-        if (m_context.graphics_device->get_info().use_clip_control) {
-            gl::clip_control(
-                gl::Clip_control_origin::lower_left,
-                reverse_depth ? gl::Clip_control_depth::zero_to_one : gl::Clip_control_depth::negative_one_to_one
-            );
-        }
-#endif
-        m_pipeline_passes.rebuild_depth_state(reverse_depth);
-        m_context.id_renderer->rebuild_depth_state(reverse_depth);
-        m_context.tools->rebuild_depth_state(reverse_depth);
-        if (m_context.text_renderer != nullptr) {
-            m_context.text_renderer->rebuild_depth_state(reverse_depth);
-        }
+        node->reconfigure(*m_context.graphics_device, *m_context.current_command_buffer, resolution, light_count, graphics_preset->shadow_depth_bits);
     }
 }
 
@@ -829,8 +810,10 @@ Pipeline_renderpasses::Pipeline_renderpasses(
             .debug_label          = erhe::utility::Debug_label{"Sky"},
             .input_assembly       = Input_assembly_state::triangle,
             .viewport_depth_range = Viewport_depth_range_state{
-                .min_depth = 0.0f, // Reverse Z far plane
-                .max_depth = 0.0f  // Reverse Z far plane
+                // Far-plane depth: 0.0 for reverse-Z, 1.0 for forward-Z. The sky
+                // draws only where depth equals the (cleared) far plane.
+                .min_depth = reverse_depth ? 0.0f : 1.0f,
+                .max_depth = reverse_depth ? 0.0f : 1.0f
             },
             .rasterization  = Rasterization_state::cull_mode_none,
             .depth_stencil  = Depth_stencil_state{
@@ -893,30 +876,6 @@ Pipeline_renderpasses::Pipeline_renderpasses(
         }
     }
 {
-}
-
-void Pipeline_renderpasses::rebuild_depth_state(const bool reverse_depth)
-{
-    using erhe::graphics::Compare_operation;
-    const auto depth_less          = erhe::graphics::get_depth_function(Compare_operation::less,          reverse_depth);
-    const auto depth_less_or_equal = erhe::graphics::get_depth_function(Compare_operation::less_or_equal, reverse_depth);
-    const auto depth_greater       = erhe::graphics::get_depth_function(Compare_operation::greater,       reverse_depth);
-    const auto depth_default       = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth);
-
-    polygon_fill_standard_positive_determinant         .data.depth_stencil = depth_default;
-    polygon_fill_standard_negative_determinant         .data.depth_stencil = depth_default;
-    polygon_fill_standard_selected_positive_determinant.data.depth_stencil.depth_compare_op = depth_less;
-    polygon_fill_standard_selected_negative_determinant.data.depth_stencil.depth_compare_op = depth_less;
-    line_hidden_blend                                  .data.depth_stencil.depth_compare_op = depth_greater;
-    brush_back                                         .data.depth_stencil = depth_default;
-    brush_front                                        .data.depth_stencil = depth_default;
-    edge_lines                                         .data.depth_stencil.depth_compare_op = depth_less_or_equal;
-    const float far_depth = reverse_depth ? 0.0f : 1.0f;
-    sky.data.viewport_depth_range = erhe::graphics::Viewport_depth_range_state{ .min_depth = far_depth, .max_depth = far_depth };
-    outline                                            .data.depth_stencil.depth_compare_op = depth_less_or_equal;
-    corner_points                                      .data.depth_stencil = depth_default;
-    polygon_centroids                                  .data.depth_stencil = depth_default;
-    grid                                               .data.depth_stencil.depth_compare_op = depth_less_or_equal;
 }
 
 void App_rendering::trigger_capture()

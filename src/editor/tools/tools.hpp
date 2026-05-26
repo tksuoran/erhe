@@ -47,14 +47,15 @@ class Scene_views;
 class Tools_pipeline_renderpasses
 {
 public:
+    // reverse_depth is the static device value (Device::get_reverse_depth()),
+    // queried once by Tools and passed here so the init-list can bake the depth
+    // state. There is no runtime rebuild.
     Tools_pipeline_renderpasses(
         erhe::graphics::Device&            graphics_device,
         erhe::scene_renderer::Mesh_memory& mesh_memory,
         Programs&                          programs,
-        bool                               reverse_depth = true
+        bool                               reverse_depth
     );
-
-    void rebuild_depth_state(bool reverse_depth);
 
     bool                                 m_y_flip;
     erhe::graphics::Base_render_pipeline tool1_hidden_stencil;
@@ -85,7 +86,6 @@ public:
     void render_viewport_tools(const Render_context& context);
     void register_tool        (Tool* tool);
     void set_priority_tool    (Tool* tool);
-    void rebuild_depth_state  (bool reverse_depth);
     [[nodiscard]] auto get_priority_tool  () const -> Tool*;
     [[nodiscard]] auto get_tools          () const -> const std::vector<Tool*>&;
     [[nodiscard]] auto get_tool_scene_root() -> std::shared_ptr<Scene_root>;

@@ -86,7 +86,6 @@ public:
     };
     void render            (const Render_parameters& parameters);
     void next_frame        ();
-    void rebuild_depth_state(bool reverse_depth);
 
     [[nodiscard]] auto get(int x, int y, uint32_t& out_id, float& out_depth, uint64_t& out_frame_number) -> bool;
     [[nodiscard]] auto get(int x, int y) -> Id_query_result;

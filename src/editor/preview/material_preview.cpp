@@ -38,15 +38,14 @@ Material_preview::Material_preview(
     erhe::graphics::Command_buffer&    init_command_buffer,
     App_context&                       app_context,
     erhe::scene_renderer::Mesh_memory& mesh_memory,
-    Programs&                          programs,
-    const bool                         reverse_depth
+    Programs&                          programs
 )
-    : Scene_preview{graphics_device, init_command_buffer, app_context, mesh_memory, programs, reverse_depth}
+    : Scene_preview{graphics_device, init_command_buffer, app_context, mesh_memory, programs}
 {
     make_preview_scene(mesh_memory);
 
     resize(256, 256);
-    update_rendertarget(graphics_device, reverse_depth);
+    update_rendertarget(graphics_device);
 }
 
 Material_preview::~Material_preview() noexcept
@@ -154,7 +153,7 @@ void Material_preview::render_preview(
     set_color_texture(texture);
     resize(texture->get_width(), texture->get_height());
     set_clear_color(glm::vec4{0.0f, 0.0f, 0.0f, 0.0f});
-    update_rendertarget(*m_context.graphics_device, get_reverse_depth());
+    update_rendertarget(*m_context.graphics_device);
     render_preview(material);
 }
 

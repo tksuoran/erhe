@@ -35,8 +35,7 @@ Scene_preview::Scene_preview(
     erhe::graphics::Command_buffer&    init_command_buffer,
     App_context&                       context,
     erhe::scene_renderer::Mesh_memory& /*mesh_memory*/,
-    Programs&                          /*programs*/,
-    const bool                         reverse_depth
+    Programs&                          /*programs*/
 )
     : Scene_view{context, Viewport_config{}}
     , m_context{context}
@@ -47,7 +46,7 @@ Scene_preview::Scene_preview(
             .debug_label    = erhe::utility::Debug_label{"Scene Preview"},
             .input_assembly = Input_assembly_state::triangle,
             .rasterization  = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
-            .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth)
+            .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(graphics_device.get_reverse_depth())
         }
     }
     , m_render_pipelines{&m_render_pipeline}
@@ -91,12 +90,18 @@ Scene_preview::Scene_preview(
     );
 
     // The dummy shadowmap is sampled by Forward_renderer's standard shaders
-    // even though Scene_preview never renders into it. Clear it to the
-    // far-plane depth so the shadow comparison reports "not in shadow" for
-    // every fragment; clear_texture also leaves the texture in
-    // depth_stencil_read_only_optimal, satisfying VUID-vkCmdDraw-None-09600.
-    const double depth_clear_value = reverse_depth ? 0.0 : 1.0;
-    init_command_buffer.clear_texture(*m_shadow_texture.get(), { depth_clear_value, 0.0, 0.0, 0.0 });
+    // even though Scene_preview never renders into it. Clear it to the depth
+    // convention's far value (reverse-Z 0.0, forward-Z 1.0) so the shadow
+    // comparison reads "no occluder" (fully lit). Relying on the undefined
+    // initial contents left it at 0.0, which under forward-Z is a near occluder
+    // and put the entire preview in shadow. clear_texture also transitions the
+    // image out of VK_IMAGE_LAYOUT_UNDEFINED into depth_stencil_read_only_optimal,
+    // which Forward_renderer requires (binding it sampled otherwise trips
+    // VUID-vkCmdDraw-None-09600).
+    init_command_buffer.clear_texture(
+        *m_shadow_texture.get(),
+        { graphics_device.get_reverse_depth() ? 0.0 : 1.0, 0.0, 0.0, 0.0 }
+    );
 }
 
 Scene_preview::~Scene_preview() noexcept
@@ -131,7 +136,7 @@ void Scene_preview::set_clear_color(glm::vec4 clear_color)
     m_clear_color = clear_color;
 }
 
-void Scene_preview::update_rendertarget(erhe::graphics::Device& graphics_device, const bool reverse_depth)
+void Scene_preview::update_rendertarget(erhe::graphics::Device& graphics_device)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -207,7 +212,7 @@ void Scene_preview::update_rendertarget(erhe::graphics::Device& graphics_device,
     render_pass_descriptor.color_attachments[0].layout_after  = erhe::graphics::Image_layout::shader_read_only_optimal;
     render_pass_descriptor.depth_attachment.texture          = m_depth_texture.get();
     render_pass_descriptor.depth_attachment.load_action      = erhe::graphics::Load_action::Clear;
-    render_pass_descriptor.depth_attachment.clear_value[0]   = reverse_depth ? 0.0 : 1.0;
+    render_pass_descriptor.depth_attachment.clear_value[0]   = graphics_device.get_reverse_depth() ? 0.0 : 1.0;
     render_pass_descriptor.depth_attachment.store_action     = erhe::graphics::Store_action::Dont_care;
     render_pass_descriptor.depth_attachment.usage_before     = erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment;
     render_pass_descriptor.depth_attachment.layout_before    = erhe::graphics::Image_layout::depth_stencil_attachment_optimal;

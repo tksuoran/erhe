@@ -202,6 +202,12 @@ auto Device::get_graphics_config() const -> const Graphics_config&
 {
     return m_impl->get_graphics_config();
 }
+auto Device::get_reverse_depth() const -> bool
+{
+    const bool api_supports_reverse_depth =
+        (get_info().coordinate_conventions.native_depth_range == erhe::math::Depth_range::zero_to_one);
+    return !get_graphics_config().force_disable_reverse_depth && api_supports_reverse_depth;
+}
 auto Device::get_impl() -> Device_impl&
 {
     return *m_impl.get();

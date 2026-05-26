@@ -72,9 +72,9 @@ auto Scene_view::get_scene_root() const -> std::shared_ptr<Scene_root>
 
 auto Scene_view::get_reverse_depth() const -> bool
 {
-    const auto& conventions = m_context.graphics_device->get_info().coordinate_conventions;
-    const bool can_reverse = (conventions.native_depth_range == erhe::math::Depth_range::zero_to_one);
-    return m_context.app_settings->graphics.current_graphics_preset.reverse_depth && can_reverse;
+    // Single source of truth: the device derives the effective reverse-Z
+    // choice from Graphics_config::force_disable_reverse_depth and API support.
+    return m_context.graphics_device->get_reverse_depth();
 }
 
 auto Scene_view::get_depth_range() const -> erhe::math::Depth_range

@@ -423,6 +423,17 @@ public:
     [[nodiscard]] auto get_shader_monitor                 () -> Shader_monitor&;
     [[nodiscard]] auto get_info                           () const -> const Device_info&;
     [[nodiscard]] auto get_graphics_config                () const -> const Graphics_config&;
+
+    // The single source of truth for the reverse-Z choice. Returns true when
+    // reverse-Z (near=1.0, far=0.0) should be used: the API must natively
+    // support it (native_depth_range == zero_to_one -- Vulkan/Metal always,
+    // OpenGL only with glClipControl) AND the user must not have set
+    // Graphics_config::force_disable_reverse_depth. The value is fixed for the
+    // lifetime of the device; every reverse-depth-dependent decision (pipeline
+    // depth compare op, depth clear value, projection matrices, shadow
+    // comparison samplers, clip_depth_direction) must derive from this query
+    // rather than caching its own copy.
+    [[nodiscard]] auto get_reverse_depth                  () const -> bool;
     [[nodiscard]] auto get_impl                           () -> Device_impl&;
     [[nodiscard]] auto get_impl                           () const -> const Device_impl&;
 #if defined(ERHE_SPIRV)

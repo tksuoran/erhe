@@ -76,7 +76,7 @@ public:
 
     // Returns the dedicated shadow sampler for the named role. The
     // comparison-enabled variant uses the comparison op that matches the
-    // engine-wide reverse_depth choice (Graphics_config::reverse_depth);
+    // engine-wide reverse_depth choice (Device::get_reverse_depth());
     // there is no per-call override because both Vulkan portability subset
     // (MoltenVK) and the immutable-sampler descriptor wiring require the
     // direction to be fixed at engine init.

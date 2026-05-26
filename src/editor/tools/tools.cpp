@@ -118,8 +118,9 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(
             .debug_label          = erhe::utility::Debug_label{"Tool pass 3: Set depth to fixed value"},
             .input_assembly       = Input_assembly_state::triangle,
             .viewport_depth_range = Viewport_depth_range_state{
-                .min_depth = 0.0f,
-                .max_depth = 0.0f
+                // Fixed tool depth at the far plane: 0.0 reverse-Z, 1.0 forward-Z.
+                .min_depth = reverse_depth ? 0.0f : 1.0f,
+                .max_depth = reverse_depth ? 0.0f : 1.0f
             },
             .rasterization        = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
             .depth_stencil        = Depth_stencil_state::depth_test_always_stencil_test_disabled,
@@ -232,22 +233,6 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(
 {
 }
 
-void Tools_pipeline_renderpasses::rebuild_depth_state(const bool reverse_depth)
-{
-    using erhe::graphics::Compare_operation;
-    const auto depth_greater       = erhe::graphics::get_depth_function(Compare_operation::greater,       reverse_depth);
-    const auto depth_less_or_equal = erhe::graphics::get_depth_function(Compare_operation::less_or_equal, reverse_depth);
-    const auto depth_default       = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth);
-
-    tool1_hidden_stencil .data.depth_stencil.depth_compare_op = depth_greater;
-    tool2_visible_stencil.data.depth_stencil.depth_compare_op = depth_less_or_equal;
-    const float far_depth = reverse_depth ? 0.0f : 1.0f;
-    tool3_depth_clear    .data.viewport_depth_range = Viewport_depth_range_state{ .min_depth = far_depth, .max_depth = far_depth };
-    tool4_depth          .data.depth_stencil                  = depth_default;
-    tool5_visible_color  .data.depth_stencil.depth_compare_op = depth_less_or_equal;
-    tool6_hidden_color   .data.depth_stencil.depth_compare_op = depth_less_or_equal;
-}
-
 Tools::Tools(
     erhe::graphics::Device&            graphics_device,
     erhe::imgui::Imgui_renderer&       imgui_renderer,
@@ -259,7 +244,7 @@ Tools::Tools(
     Programs&                          programs
 )
     : m_context              {app_context}
-    , m_pipeline_renderpasses{graphics_device, mesh_memory, programs}
+    , m_pipeline_renderpasses{graphics_device, mesh_memory, programs, graphics_device.get_reverse_depth()}
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -414,11 +399,6 @@ void Tools::set_priority_tool(Tool* priority_tool)
 auto Tools::get_priority_tool() const -> Tool*
 {
     return m_priority_tool;
-}
-
-void Tools::rebuild_depth_state(const bool reverse_depth)
-{
-    m_pipeline_renderpasses.rebuild_depth_state(reverse_depth);
 }
 
 auto Tools::get_tools() const -> const std::vector<Tool*>&

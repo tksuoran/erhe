@@ -68,7 +68,7 @@ Light_interface::Light_interface(erhe::graphics::Device& graphics_device, const 
             // an immutable sampler -- the Vulkan portability subset on
             // MoltenVK refuses comparison samplers via push descriptors, so
             // direction has to be fixed at engine init.
-            .compare_operation = graphics_device.get_graphics_config().reverse_depth
+            .compare_operation = graphics_device.get_reverse_depth()
                 ? erhe::graphics::Compare_operation::greater_or_equal
                 : erhe::graphics::Compare_operation::less_or_equal,
             .lod_bias     = 0.0f,

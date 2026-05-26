@@ -34,8 +34,7 @@ Shadow_render_node::Shadow_render_node(
     Scene_view&                     scene_view,
     const int                       resolution,
     const int                       light_count,
-    const int                       depth_bits,
-    const bool                      reverse_depth
+    const int                       depth_bits
 )
     // TODO fmt::format("Shadow render {}", viewport_scene_view->name())
     : erhe::rendergraph::Rendergraph_node{rendergraph, "shadow_maps"}
@@ -44,15 +43,17 @@ Shadow_render_node::Shadow_render_node(
 {
     register_output("shadow_maps", erhe::rendergraph::Rendergraph_node_key::shadow_maps);
 
-    reconfigure(graphics_device, init_command_buffer, resolution, light_count, depth_bits, reverse_depth);
+    reconfigure(graphics_device, init_command_buffer, resolution, light_count, depth_bits);
 }
 
 Shadow_render_node::~Shadow_render_node() noexcept
 {
 }
 
-void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, erhe::graphics::Command_buffer& command_buffer, const int resolution, const int light_count, const int requested_depth_bits, const bool reverse_depth)
+void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, erhe::graphics::Command_buffer& command_buffer, const int resolution, const int light_count, const int requested_depth_bits)
 {
+    // Reverse-Z is the static device value; query it rather than caching.
+    const bool reverse_depth = graphics_device.get_reverse_depth();
     std::vector<erhe::dataformat::Format> formats = graphics_device.get_supported_depth_stencil_formats();
     std::stable_sort(
         formats.begin(),
@@ -99,8 +100,7 @@ void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, er
         (m_texture->get_width()             == resolution) &&
         (m_texture->get_height()            == resolution) &&
         (m_texture->get_array_layer_count() == std::max(1, light_count)) &&
-        (m_texture->get_pixelformat()       == depth_format) &&
-        (m_reverse_depth                    == reverse_depth)
+        (m_texture->get_pixelformat()       == depth_format)
     ) {
         log_render->debug(
             "Reconfigure shadow resolution = {}, light count = {}, format = {} - match old settings, skip",
@@ -108,7 +108,6 @@ void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, er
         );
         return;
     }
-    m_reverse_depth = reverse_depth;
     log_render->debug("Reconfigure shadow resolution = {}, light count = {}", resolution, light_count);
 
     //// TODO device.wait_for_idle()
@@ -272,11 +271,10 @@ auto Shadow_render_node::get_render_passes() const -> std::span<const std::uniqu
 
 auto Shadow_render_node::get_reverse_depth() const -> bool
 {
-    // Match the value the runtime feeds Shadow_renderer::Render_parameters
-    // (see execute_rendergraph_node above): the scene_view's live setting,
-    // not the cached m_reverse_depth that reconfigure() last sized the
-    // shadow texture against. The cache lookup the prewarm drives is
-    // keyed on this value, so prewarmed entries must use the same source.
+    // The single static device value (Scene_view::get_reverse_depth() delegates
+    // to Device::get_reverse_depth()). This matches the value fed to
+    // Shadow_renderer::Render_parameters in execute_rendergraph_node and the
+    // depth clear value reconfigure() bakes, and is the key the prewarm uses.
     return m_scene_view.get_reverse_depth();
 }
 

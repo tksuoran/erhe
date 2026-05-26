@@ -69,7 +69,7 @@ Id_renderer::Id_renderer(
             .debug_label    = erhe::utility::Debug_label{"ID Renderer"},
             .input_assembly = Input_assembly_state::triangle,
             .rasterization  = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
-            .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(),
+            .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(graphics_device.get_reverse_depth()),
             .color_blend    = &Color_blend_state::color_blend_disabled
         }
     }
@@ -94,11 +94,6 @@ Id_renderer::Id_renderer(
 
 Id_renderer::~Id_renderer() noexcept
 {
-}
-
-void Id_renderer::rebuild_depth_state(const bool reverse_depth)
-{
-    m_pipeline.data.depth_stencil = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth);
 }
 
 auto Id_renderer::get_current_transfer_entry() -> Transfer_entry&
@@ -174,6 +169,10 @@ void Id_renderer::update_framebuffer(const erhe::math::Viewport viewport)
         render_pass_descriptor.color_attachments[0].layout_after = erhe::graphics::Image_layout::transfer_src_optimal;
         render_pass_descriptor.depth_attachment.texture          = m_depth_texture.get();
         render_pass_descriptor.depth_attachment.load_action      = erhe::graphics::Load_action::Clear;
+        // Clear to the convention's far value (reverse-Z 0.0, forward-Z 1.0); the
+        // default 0.0 is the near plane under forward-Z, so all geometry fails the
+        // depth test and nothing is written to the ID buffer (picking stops working).
+        render_pass_descriptor.depth_attachment.clear_value[0]   = m_graphics_device.get_reverse_depth() ? 0.0 : 1.0;
         render_pass_descriptor.depth_attachment.store_action     = erhe::graphics::Store_action::Store;
         render_pass_descriptor.depth_attachment.usage_before     = erhe::graphics::Image_usage_flag_bit_mask::transfer_src;
         render_pass_descriptor.depth_attachment.layout_before    = erhe::graphics::Image_layout::transfer_src_optimal;

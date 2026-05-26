@@ -112,13 +112,11 @@ Scene_views::~Scene_views() noexcept
 void Scene_views::handle_graphics_settings_changed(Graphics_preset_entry* graphics_preset)
 {
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
-    const auto& conventions       = m_app_context.graphics_device->get_info().coordinate_conventions;
-    const bool  can_reverse       = (conventions.native_depth_range == erhe::math::Depth_range::zero_to_one);
-    const int  msaa_sample_count = (graphics_preset != nullptr) ? graphics_preset->msaa_sample_count : 0;
-    const bool reverse_depth     = (graphics_preset != nullptr) ? (graphics_preset->reverse_depth && can_reverse) : can_reverse;
+    const int msaa_sample_count = (graphics_preset != nullptr) ? graphics_preset->msaa_sample_count : 0;
+    // Reverse-Z is static (Device::get_reverse_depth()); the render target reads
+    // it directly when (re)building its render pass, so only MSAA is applied here.
     for (const std::shared_ptr<Viewport_scene_view>& viewport_scene_view : m_viewport_scene_views) {
         viewport_scene_view->get_render_target().reconfigure(msaa_sample_count);
-        viewport_scene_view->set_reverse_depth(reverse_depth); // in Scene_view + Texture_rendergraph_node
     }
 }
 

@@ -12,8 +12,7 @@ public:
         erhe::graphics::Command_buffer&    init_command_buffer,
         App_context&                       app_context,
         erhe::scene_renderer::Mesh_memory& mesh_memory,
-        Programs&                          programs,
-        bool                               reverse_depth
+        Programs&                          programs
     );
     ~Material_preview() noexcept;
 
