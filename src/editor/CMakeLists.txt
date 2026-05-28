@@ -218,8 +218,11 @@ erhe_target_sources_grouped(
     mcp/mcp_server.hpp
     operations/ambient_light_operation.cpp
     operations/ambient_light_operation.hpp
+    operations/async_raytrace_kickoff_operation.cpp
+    operations/async_raytrace_kickoff_operation.hpp
     operations/compound_operation.cpp
     operations/compound_operation.hpp
+    operations/content_library_attach_operation.hpp
     operations/geometry_operations.cpp
     operations/geometry_operations.hpp
     operations/operation.cpp

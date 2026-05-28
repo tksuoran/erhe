@@ -64,6 +64,9 @@ public:
     void add(const std::shared_ptr<T>& entry);
 
     template <typename T>
+    void add(const std::shared_ptr<T>& entry, const Gltf_source_reference& gltf_source);
+
+    template <typename T>
     auto remove(const std::shared_ptr<T>& entry) -> bool;
 
     // template <typename T>
@@ -248,6 +251,34 @@ void Content_library_node::add(const std::shared_ptr<T>& entry)
         return;
     }
     auto node = std::make_shared<Content_library_node>(entry);
+    node->set_parent(this);
+    invalidate_cache<T>();
+}
+
+template <typename T>
+void Content_library_node::add(const std::shared_ptr<T>& entry, const Gltf_source_reference& gltf_source)
+{
+    ERHE_VERIFY(entry);
+    const auto i = std::find_if(
+        m_children.begin(),
+        m_children.end(),
+        [&entry](const std::shared_ptr<Hierarchy>& hierarchy) {
+            std::shared_ptr<Content_library_node> node = std::dynamic_pointer_cast<Content_library_node>(hierarchy);
+            if (!node) {
+                return false;
+            }
+            return std::dynamic_pointer_cast<T>(node->item) == entry;
+        }
+    );
+    if (i != m_children.end()) {
+        std::shared_ptr<Content_library_node> existing = std::dynamic_pointer_cast<Content_library_node>(*i);
+        if (existing) {
+            existing->gltf_source = gltf_source;
+        }
+        return;
+    }
+    auto node = std::make_shared<Content_library_node>(entry);
+    node->gltf_source = gltf_source;
     node->set_parent(this);
     invalidate_cache<T>();
 }

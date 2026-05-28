@@ -103,7 +103,7 @@ void Scene_open_operation::execute(App_context& context)
                 },
                 .buffer_info = context.mesh_memory->make_primitive_buffer_info()
             },
-            *m_scene_root.get(),
+            m_scene_root,
             m_path
         );
     }
@@ -332,7 +332,7 @@ auto Asset_browser::try_import(const std::shared_ptr<Asset_file_gltf>& gltf) -> 
                 },
                 .buffer_info = m_context.mesh_memory->make_primitive_buffer_info()
             },
-            *m_context.scene_builder->get_scene_root().get(),
+            m_context.scene_builder->get_scene_root(),
             *gltf->get_source_path()
         );
         return true;
