@@ -15,6 +15,7 @@ add_subdirectory(utility)
 add_subdirectory(item)
 
 add_subdirectory(buffer)
+add_subdirectory(circular_ring_buffer)
 add_subdirectory(codegen)
 add_subdirectory(commands)
 add_subdirectory(dataformat)

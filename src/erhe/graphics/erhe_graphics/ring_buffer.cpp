@@ -5,9 +5,6 @@
 #include "erhe_graphics/device.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
-#include "erhe_utility/align.hpp"
-
-#include <algorithm>
 
 namespace erhe::graphics {
 
@@ -66,8 +63,7 @@ Ring_buffer::Ring_buffer(
             }
         )
     }
-    , m_read_wrap_count{0}
-    , m_read_offset    {m_buffer->get_capacity_byte_count()}
+    , m_algorithm{create_info.size}
 {
     // CPU read/write buffers are persistently mapped when persistent buffers are available.
     // Otherwise, use a CPU shadow buffer and upload via glBufferSubData.
@@ -80,7 +76,7 @@ Ring_buffer::~Ring_buffer() noexcept
 {
     ERHE_PROFILE_FUNCTION();
 
-    sanity_check();
+    m_algorithm.assert_invariants();
 }
 
 void Ring_buffer::get_size_available_for_write(
@@ -90,57 +86,12 @@ void Ring_buffer::get_size_available_for_write(
     std::size_t& out_available_byte_count_with_wrap
 ) const
 {
-    // Initial situation:
-    //   +--------------------------+
-    //   ^                          ^
-    //   w1                         r0
-
-    //  CPU progress:
-    //   +------+---------------+---+
-    //                          ^   ^
-    //                          w1  r0
-
-    //  GPU progress:
-    //   +------+---------------+---+
-    //          ^               ^    
-    //          r1              w1   
-
-    //  CPU progress:
-    //   +----+---+---+--------------+-+
-    //        ^   ^                     
-    //        w2  r1                    
-    const std::size_t aligned_write_position = erhe::utility::align_offset_power_of_two(m_write_position, required_alignment);
-    ERHE_VERIFY(aligned_write_position >= m_write_position);
-    out_alignment_byte_count_without_wrap    = aligned_write_position - m_write_position;
-
-    if (m_write_wrap_count == m_read_wrap_count + 1) {
-        ERHE_VERIFY(m_read_offset >= m_write_position);
-        out_available_byte_count_without_wrap = m_read_offset - m_write_position;
-        out_available_byte_count_with_wrap = 0; // cannot wrap because GPU is still using the buffer from this point
-        if (out_available_byte_count_without_wrap > out_alignment_byte_count_without_wrap) {
-            out_available_byte_count_without_wrap -= out_alignment_byte_count_without_wrap;
-        } else {
-            out_alignment_byte_count_without_wrap = 0;
-            out_available_byte_count_without_wrap = 0;
-        }
-        return;
-    } else if (m_read_wrap_count == m_write_wrap_count) {
-        ERHE_VERIFY(m_write_position >= m_read_offset);
-        out_available_byte_count_without_wrap = m_buffer->get_capacity_byte_count() - m_write_position;
-        out_available_byte_count_with_wrap = m_read_offset;
-        if (out_available_byte_count_without_wrap > out_alignment_byte_count_without_wrap) {
-            out_available_byte_count_without_wrap -= out_alignment_byte_count_without_wrap;
-        } else {
-            out_alignment_byte_count_without_wrap = 0;
-            out_available_byte_count_without_wrap = 0;
-        }
-        return;
-    } else {
-        ERHE_FATAL("buffer issue");
-        out_available_byte_count_without_wrap = 0;
-        out_available_byte_count_with_wrap = 0;
-        return;
-    }
+    m_algorithm.get_size_available_for_write(
+        required_alignment,
+        out_alignment_byte_count_without_wrap,
+        out_available_byte_count_without_wrap,
+        out_available_byte_count_with_wrap
+    );
 }
 
 auto Ring_buffer::acquire(std::size_t required_alignment, Ring_buffer_usage ring_buffer_usage, std::size_t byte_count) -> Ring_buffer_range
@@ -149,65 +100,32 @@ auto Ring_buffer::acquire(std::size_t required_alignment, Ring_buffer_usage ring
 
     ERHE_VERIFY(ring_buffer_usage == m_ring_buffer_usage); // TODO Cleanup this API
 
-    sanity_check();
+    const std::optional<erhe::circular_ring_buffer::Circular_ring_buffer_algorithm::Allocation> opt_allocation =
+        m_algorithm.acquire(required_alignment, byte_count);
+    if (!opt_allocation.has_value()) {
+        return {};
+    }
+    const erhe::circular_ring_buffer::Circular_ring_buffer_algorithm::Allocation& allocation = opt_allocation.value();
 
-    std::size_t alignment_byte_count_without_wrap{0};
-    std::size_t available_byte_count_without_wrap{0};
-    std::size_t available_byte_count_with_wrap   {0};
-    bool wrap{false};
-
-    sanity_check();
-
-    get_size_available_for_write(required_alignment, alignment_byte_count_without_wrap, available_byte_count_without_wrap, available_byte_count_with_wrap);
-
-    if (byte_count == 0) {
-        byte_count = std::max(available_byte_count_without_wrap, available_byte_count_with_wrap);
+    const bool make_span = (ring_buffer_usage != Ring_buffer_usage::GPU_access);
+    std::span<std::byte> span{};
+    if (make_span) {
+        if (m_device.get_info().use_persistent_buffers) {
+            //// TODO size_t buffer_mapped_span_byte_count = m_buffer->get_map().size_bytes();
+            //// ERHE_VERIFY(allocation.byte_offset + allocation.byte_count <= buffer_mapped_span_byte_count);
+            span = m_buffer->get_map().subspan(allocation.byte_offset, allocation.byte_count);
+        } else {
+            span = std::span<std::byte>{m_cpu_buffer.data() + allocation.byte_offset, allocation.byte_count};
+        }
     }
 
-    wrap = (byte_count > available_byte_count_without_wrap);
-    if (wrap && (byte_count > available_byte_count_with_wrap)) {
-        return {}; // Not enough space currently available
-    }
-
-    if (wrap) {
-        wrap_write();
-    } else {
-        m_write_position += alignment_byte_count_without_wrap;
-    }
-
-    sanity_check();
-
-    if (!m_device.get_info().use_persistent_buffers) {
-        // Non-persistent mode: hand out spans from CPU shadow buffer.
-        // Data is uploaded to GPU via glBufferSubData in close().
-        Ring_buffer_range result{
-            *this,
-            ring_buffer_usage,
-            (ring_buffer_usage != Ring_buffer_usage::GPU_access)
-                ? std::span<std::byte>{m_cpu_buffer.data() + m_write_position, byte_count}
-                : std::span<std::byte>{},
-            m_write_wrap_count,
-            m_write_position
-        };
-        m_write_position += byte_count;
-        sanity_check();
-        return result;
-    } else {
-        //// TODO size_t buffer_mapped_span_byte_count = m_buffer->get_map().size_bytes();
-        //// ERHE_VERIFY(m_write_position + byte_count <= buffer_mapped_span_byte_count);
-        Ring_buffer_range result{
-            *this,
-            ring_buffer_usage,
-            (ring_buffer_usage != Ring_buffer_usage::GPU_access)
-                ? m_buffer->get_map().subspan(m_write_position, byte_count)
-                : std::span<std::byte>{},
-            m_write_wrap_count,
-            m_write_position
-        };
-        m_write_position += byte_count;
-        sanity_check();
-        return result;
-    }
+    return Ring_buffer_range{
+        *this,
+        ring_buffer_usage,
+        span,
+        allocation.wrap_count,
+        allocation.byte_offset
+    };
 }
 
 auto Ring_buffer::match(const Ring_buffer_usage ring_buffer_usage) const -> bool
@@ -219,7 +137,7 @@ void Ring_buffer::flush(const std::size_t byte_offset, const std::size_t byte_co
 {
     ERHE_PROFILE_FUNCTION();
 
-    sanity_check();
+    m_algorithm.assert_invariants();
 
     ERHE_VERIFY(m_ring_buffer_usage == Ring_buffer_usage::CPU_write);
     if (!m_device.get_info().use_persistent_buffers) {
@@ -237,7 +155,7 @@ void Ring_buffer::close(std::size_t byte_offset, std::size_t byte_write_count)
 {
     ERHE_PROFILE_FUNCTION();
 
-    sanity_check();
+    m_algorithm.assert_invariants();
 
     if (m_ring_buffer_usage == Ring_buffer_usage::CPU_write) {
         if (!m_device.get_info().use_persistent_buffers) {
@@ -255,31 +173,7 @@ void Ring_buffer::make_sync_entry(std::size_t wrap_count, std::size_t byte_offse
 {
     ERHE_PROFILE_FUNCTION();
 
-    sanity_check();
-
-    // Merge to existing sync
-    for (Ring_buffer_sync_entry& entry : m_sync_entries) {
-        if (
-            (entry.waiting_for_frame == m_device.get_frame_index()) &&
-            (entry.wrap_count == wrap_count)
-        ) {
-            if (byte_offset + byte_count > entry.byte_offset + entry.byte_count) {
-                entry.byte_offset = byte_offset;
-                entry.byte_count  = byte_count;
-            }
-            return;
-        }
-    }
-
-    // Make new sync entry
-    m_sync_entries.push_back(
-        Ring_buffer_sync_entry{
-            .waiting_for_frame = m_device.get_frame_index(),
-            .wrap_count        = wrap_count,
-            .byte_offset       = byte_offset,
-            .byte_count        = byte_count
-        }
-    );
+    m_algorithm.make_sync_entry(m_device.get_frame_index(), wrap_count, byte_offset, byte_count);
 }
 
 auto Ring_buffer::get_buffer() -> Buffer*
@@ -291,67 +185,7 @@ void Ring_buffer::frame_completed(const uint64_t completed_frame)
 {
     ERHE_PROFILE_FUNCTION();
 
-    sanity_check();
-
-    for (Ring_buffer_sync_entry& entry : m_sync_entries) {
-        if (entry.waiting_for_frame == completed_frame) {
-            if (
-                (entry.wrap_count > m_read_wrap_count) ||
-                (
-                    (entry.wrap_count == m_read_wrap_count) &&
-                    (entry.byte_offset + entry.byte_count > m_read_offset)
-                )
-            ) {
-                size_t new_read_wrap_count = entry.wrap_count;
-                size_t new_read_offset     = entry.byte_offset + entry.byte_count;
-                if (m_write_wrap_count == new_read_wrap_count + 1) {
-                    ERHE_VERIFY(new_read_offset >= m_write_position);
-                } else if (new_read_wrap_count == m_write_wrap_count) {
-                    ERHE_VERIFY(m_write_position >= new_read_offset);
-                } else {
-                    ERHE_FATAL("buffer issue");
-                }
-
-                m_read_wrap_count = new_read_wrap_count;
-                m_read_offset = new_read_offset;
-                sanity_check();
-            }
-        }
-    }
-
-    auto i = std::remove_if(
-        m_sync_entries.begin(),
-        m_sync_entries.end(),
-        [completed_frame](Ring_buffer_sync_entry& entry) { return entry.waiting_for_frame == completed_frame; }
-    );
-    if (i != m_sync_entries.end()) {
-        m_sync_entries.erase(i, m_sync_entries.end());
-    }
-}
-
-void Ring_buffer::sanity_check()
-{
-    ERHE_VERIFY(m_write_position <= m_buffer->get_capacity_byte_count());
-
-    if (m_write_wrap_count == m_read_wrap_count + 1) {
-        ERHE_VERIFY(m_read_offset >= m_write_position);
-    } else if (m_read_wrap_count == m_write_wrap_count) {
-        ERHE_VERIFY(m_write_position >= m_read_offset);
-    } else {
-        ERHE_FATAL("buffer issue");
-    }
-}
-
-void Ring_buffer::wrap_write()
-{
-    ERHE_PROFILE_FUNCTION();
-
-    sanity_check();
-
-    ++m_write_wrap_count;
-    m_write_position = 0;
-
-    sanity_check();
+    m_algorithm.frame_completed(completed_frame);
 }
 
 } // namespace erhe::graphics

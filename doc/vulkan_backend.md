@@ -60,7 +60,6 @@ the `VK_ENABLE_BETA_EXTENSIONS` private compile definition on the
 | `vulkan_texture_heap.cpp/.hpp` | Bindless material textures via descriptor indexing (set 1) |
 | `vulkan_buffer.cpp/.hpp` | VMA-backed `VkBuffer`, persistent mapping |
 | `vulkan_sampler.cpp/.hpp` | `VkSampler` |
-| `vulkan_ring_buffer.cpp/.hpp` | Host-coherent streaming ring buffer with frame-fence sync entries |
 | `vulkan_surface.cpp/.hpp` | `VkSurfaceKHR`, surface-format / present-mode scoring, swapchain create-info |
 | `vulkan_swapchain.cpp/.hpp` | `VkSwapchainKHR`, per-frame acquire/present semaphores, app-managed depth image, present history, recreation |
 | `vulkan_vertex_input_state.cpp/.hpp` | Vertex attribute / binding descriptions |
@@ -430,11 +429,15 @@ only when the caller requests them explicitly.
 filter, mipmap mode, address modes, compare op, LOD range, and anisotropy come
 from `Sampler_create_info`.
 
-**Ring buffers** (`vulkan_ring_buffer.cpp`). A single host-coherent VMA buffer
-written through a moving cursor. Each closed range records a
-`Ring_buffer_sync_entry` (target frame, wrap count, byte range); `frame_completed`
-reclaims bytes once the GPU has consumed the owning frame. This is the streaming
-path for per-frame camera / light / material / post-processing parameter data.
+**Ring buffers** (`erhe_graphics/ring_buffer.cpp`). The Vulkan backend uses the
+backend-agnostic `Ring_buffer`: a single host-coherent VMA buffer (via
+`vulkan_buffer.cpp`) written through a moving cursor. The position / wrap-count
+bookkeeping (including `frame_completed` reclamation of bytes once the GPU has
+consumed the owning frame) lives in
+`erhe::circular_ring_buffer::Circular_ring_buffer_algorithm`
+(`src/erhe/circular_ring_buffer/`), which has no GPU dependency and is unit
+tested in isolation. This is the streaming path for per-frame camera / light /
+material / post-processing parameter data.
 
 ## Shaders
 
