@@ -329,6 +329,20 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         gl::enable(gl::Enable_cap::debug_output_synchronous);
     }
 
+    if (m_info.use_debug_groups) {
+        GLint max_debug_message_length = 0;
+        gl::get_integer_v(gl::Get_p_name::max_debug_message_length, &max_debug_message_length);
+        Scoped_debug_group_impl::s_max_message_length = max_debug_message_length;
+        // NVIDIA driver bug workaround: see gl_scoped_debug_group.cpp and
+        // https://developer.nvidia.com/bugs/6216668
+        Scoped_debug_group_impl::s_clamp_to_max_length = (m_info.vendor == Vendor::Nvidia);
+        log_startup->info(
+            "GL_MAX_DEBUG_MESSAGE_LENGTH: {} (clamp: {})",
+            max_debug_message_length,
+            Scoped_debug_group_impl::s_clamp_to_max_length
+        );
+    }
+
     gl::get_integer_v(gl::Get_p_name::max_uniform_block_size,             &m_info.max_uniform_block_size);
     gl::get_integer_v(gl::Get_p_name::max_uniform_buffer_bindings,        &m_info.max_uniform_buffer_bindings);
     gl::get_integer_v(gl::Get_p_name::max_vertex_uniform_blocks,          &m_info.max_vertex_uniform_blocks);
