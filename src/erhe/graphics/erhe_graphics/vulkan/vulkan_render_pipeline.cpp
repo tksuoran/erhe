@@ -272,6 +272,7 @@ Render_pipeline_impl::Render_pipeline_impl(Device& device, const Render_pipeline
         create_info.stencil_attachment_format,
         create_info.sample_count,
         create_info.view_mask,
+        create_info.fragment_density_map,
         incoming_src_stage,
         incoming_src_access,
         incoming_dst_stage,

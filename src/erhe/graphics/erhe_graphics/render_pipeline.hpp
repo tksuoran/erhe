@@ -67,6 +67,14 @@ public:
     // driver silently runs the pipeline in single-view mode and only view 0
     // receives the broadcast draws.
     uint32_t                                view_mask                {0};
+    // VK_EXT_fragment_density_map: presence of an FDM attachment in the
+    // in-use render pass must match the pipeline's compatibility render pass
+    // for the pipeline to be render-pass-compatible per
+    // VK_EXT_fragment_density_map. The actual FDM texture is not part of the
+    // pipeline; only its presence (boolean) participates in format
+    // compatibility, and only on the Vulkan backend. set_format_from_render_pass
+    // derives this from desc.fragment_density_map_texture != nullptr.
+    bool                                    fragment_density_map     {false};
 
     // Attachment usage flags for render pass dependency derivation
     std::array<uint64_t, 4>                 color_usage_before       {};

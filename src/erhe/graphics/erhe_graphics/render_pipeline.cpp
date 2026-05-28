@@ -26,6 +26,11 @@ void Render_pipeline_create_info::set_format_from_render_pass(const Render_pass_
     stencil_attachment_format = erhe::dataformat::Format::format_undefined;
     sample_count = 1;
     view_mask    = desc.view_mask;
+    // FDM presence participates in render-pass compatibility on Vulkan
+    // (VK_EXT_fragment_density_map). Identical for swapchain and off-screen
+    // descriptors -- the actual texture is set on Render_pass_descriptor
+    // regardless of swapchain/offscreen, so derive once up front.
+    fragment_density_map = (desc.fragment_density_map_texture != nullptr);
 
     // Swapchain render passes: color/depth formats come from the swapchain, not textures
     if (desc.swapchain != nullptr) {
@@ -195,6 +200,11 @@ auto Base_render_pipeline::operator=(Base_render_pipeline&& other) noexcept -> B
     v = erhe::hash::hash(static_cast<uint8_t>(stencil_attachment_format), v);
     v = erhe::hash::hash(static_cast<uint8_t>(sample_count), v);
     v = erhe::hash::hash(static_cast<uint8_t>(view_mask), v);
+    // FDM presence: VK_EXT_fragment_density_map renderpass compatibility
+    // requires the pipeline's compat-RP to have an FDM attachment iff the
+    // in-use RP does. Different pipeline variants for FDM vs non-FDM
+    // contexts -- include the bool in the variant cache key.
+    v = erhe::hash::hash(static_cast<uint8_t>(fragment_density_map ? 1u : 0u), v);
 
     // Usage before and after does not affect hash on purpose.
     return v;

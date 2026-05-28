@@ -252,6 +252,7 @@ public:
         erhe::dataformat::Format                       stencil_attachment_format,
         unsigned int                                   sample_count,
         uint32_t                                       view_mask,
+        bool                                           fragment_density_map,
         VkPipelineStageFlags                           incoming_src_stage  = 0,
         VkAccessFlags                                  incoming_src_access = 0,
         VkPipelineStageFlags                           incoming_dst_stage  = 0,
