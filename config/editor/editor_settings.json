@@ -41,7 +41,7 @@
         "cpu_performance_level":      "e_unset",
         "gpu_performance_level":      "e_unset",
         "boost_on_thermal_warning":   false,
-        "foveation":                  false,
+        "foveation":                  true,
         "foveation_level":            "e_high",
         "foveation_dynamic":          true
     },
