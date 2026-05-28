@@ -847,6 +847,12 @@ auto Device_impl::query_device_extensions(
     // purely on availability; the FFR feature query/enable and the runtime decision
     // to actually request a foveated swapchain happen later and independently.
     check_device_extension(VK_EXT_FRAGMENT_DENSITY_MAP_EXTENSION_NAME,           device_extensions_out.m_VK_EXT_fragment_density_map          , 2.0f);
+    // VK_EXT_fragment_density_map2: Meta lists this as a required device extension for
+    // native OpenXR FFR on Quest ("Improved latency for reading fragment density maps
+    // on Qualcomm hardware"). We enable it for parity with that requirement; we use no
+    // v2-specific features (subsampled images, deferred subpasses) and therefore do
+    // not chain VkPhysicalDeviceFragmentDensityMap2FeaturesEXT.
+    check_device_extension(VK_EXT_FRAGMENT_DENSITY_MAP_2_EXTENSION_NAME,         device_extensions_out.m_VK_EXT_fragment_density_map2         , 2.0f);
 
     // VK_KHR_portability_subset must be enabled whenever the physical device
     // advertises it (Vulkan spec VUID-VkDeviceCreateInfo-pProperties-04451).

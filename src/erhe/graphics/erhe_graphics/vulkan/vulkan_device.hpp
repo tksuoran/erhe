@@ -64,6 +64,7 @@ public:
     bool m_VK_KHR_push_descriptor               {false};
     bool m_VK_KHR_portability_subset            {false};
     bool m_VK_EXT_fragment_density_map          {false};
+    bool m_VK_EXT_fragment_density_map2         {false};
 };
 class Capabilities
 {
