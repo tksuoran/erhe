@@ -45,6 +45,8 @@
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene_renderer/content_wide_line_renderer.hpp"
+#include "erhe_scene_renderer/forward_renderer.hpp"
+#include "erhe_scene_renderer/joint_buffer.hpp"
 #include "erhe_scene_renderer/primitive_buffer.hpp"
 #include "erhe_utility/bit_helpers.hpp"
 
@@ -265,13 +267,38 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
             }
 
             {
-                erhe::graphics::Compute_command_encoder compute_encoder = graphics_device.make_compute_command_encoder(command_buffer);
-                m_context.content_wide_line_renderer->compute(
-                    compute_encoder, context.viewport, *context.camera,
-                    get_reverse_depth(),
-                    get_depth_range(),
-                    get_conventions()
-                );
+                // Update + bind the joint UBO/SSBO so skinned edge dispatches
+                // can apply linear-blend skinning. Forward_renderer's later
+                // render() will call update() again with its own debug joint
+                // indices/colors; both updates allocate disjoint ring ranges,
+                // and the bind here only persists within this compute encoder.
+                erhe::scene_renderer::Joint_buffer* joint_buffer       = nullptr;
+                erhe::graphics::Ring_buffer_range   joint_buffer_range;
+                const auto                          scene_root_joints  = context.scene_view.get_scene_root();
+                erhe::scene::Scene*                 scene_for_joints   = scene_root_joints ? scene_root_joints->get_hosted_scene() : nullptr;
+                if ((scene_for_joints != nullptr) && (m_context.forward_renderer != nullptr)) {
+                    joint_buffer        = &m_context.forward_renderer->get_joint_buffer();
+                    joint_buffer_range  = joint_buffer->update(glm::uvec4{0, 0, 0, 0}, {}, scene_for_joints->get_skins());
+                }
+                {
+                    erhe::graphics::Compute_command_encoder compute_encoder = graphics_device.make_compute_command_encoder(command_buffer);
+                    m_context.content_wide_line_renderer->compute(
+                        compute_encoder, context.viewport, *context.camera,
+                        joint_buffer,
+                        joint_buffer ? &joint_buffer_range : nullptr,
+                        get_reverse_depth(),
+                        get_depth_range(),
+                        get_conventions()
+                    );
+                }
+                // Release the joint range now that the compute encoder is
+                // closed. Ring_buffer_range destructor asserts that the
+                // range was either released or cancelled, mirroring the
+                // pattern Forward_renderer uses for material/joint/light
+                // ranges (see forward_renderer.cpp ~line 302).
+                if (joint_buffer != nullptr) {
+                    joint_buffer_range.release();
+                }
             }
             // Compute -> vertex-attribute barrier; must be emitted
             // after the compute encoder scope ends.

@@ -21,9 +21,11 @@
 #include "erhe_gltf/gltf.hpp"
 #include "erhe_gltf/image_transfer.hpp"
 #include "erhe_verify/verify.hpp"
+#include "erhe_geometry/geometry.hpp"
 #include "erhe_primitive/build_info.hpp"
 #include "erhe_primitive/primitive.hpp"
 #include "erhe_primitive/material.hpp"
+#include "erhe_scene_renderer/mesh_memory.hpp"
 #include "erhe_scene/animation.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/light.hpp"
@@ -148,6 +150,21 @@ void import_gltf(
     }
     log_parsers->info("Processing {} nodes, {} meshes, {} primitives", gltf_data.nodes.size(), mesh_count, primitive_count);
 
+    // Build_info variant for skinned meshes -- same as the caller's
+    // build_info but with vertex_format_skinned so the GPU vertex buffer
+    // carries joint_indices + joint_weights. Without this, Shader_key::derive
+    // won't set USE_SKINNING (it checks the vertex_format for joint
+    // attributes), and the standard.vert skinning branch is dead code.
+    const erhe::primitive::Build_info skinned_build_info{
+        .primitive_types = build_info.primitive_types,
+        .buffer_info     = context.mesh_memory->make_skinned_primitive_buffer_info(),
+        .constant_color  = build_info.constant_color,
+        .keep_geometry   = build_info.keep_geometry,
+        .normal_style    = build_info.normal_style,
+        .vertex_id_vec3  = build_info.vertex_id_vec3,
+        .autocolor       = build_info.autocolor
+    };
+
     std::vector<std::shared_ptr<erhe::Item_base>> mesh_node_items;
 
     for (const std::shared_ptr<erhe::scene::Node>& node : gltf_data.nodes) {
@@ -168,10 +185,29 @@ void import_gltf(
         if (mesh) {
             mesh_node_items.push_back(node);
 
+            // Skinned meshes need joint_indices + joint_weights in the GPU
+            // vertex buffer so the standard.vert skinning branch can read
+            // them via a_joint_indices_0 / a_joint_weights_0. Pick the
+            // build_info accordingly; the rest of the build flow is
+            // identical.
+            const erhe::primitive::Build_info& mesh_build_info = mesh->skin ? skinned_build_info : build_info;
             std::vector<erhe::scene::Mesh_primitive>& mesh_primitives = mesh->get_mutable_primitives();
             for (erhe::scene::Mesh_primitive& mesh_primitive : mesh_primitives) {
                 erhe::primitive::Primitive& primitive = *mesh_primitive.primitive.get();
-                ERHE_VERIFY(primitive.make_renderable_mesh(build_info, erhe::primitive::Normal_style::corner_normals));
+                // glTF arrives with facets + vertices but no edges. Build edges
+                // (and the smooth vertex normals used for wireframe bias) so
+                // the content wide-line renderer has something to draw.
+                if (primitive.render_shape) {
+                    const std::shared_ptr<erhe::geometry::Geometry>& geometry = primitive.render_shape->get_geometry();
+                    if (geometry) {
+                        geometry->process(
+                            erhe::geometry::Geometry::process_flag_connect                       |
+                            erhe::geometry::Geometry::process_flag_build_edges                   |
+                            erhe::geometry::Geometry::process_flag_compute_smooth_vertex_normals
+                        );
+                    }
+                }
+                ERHE_VERIFY(primitive.make_renderable_mesh(mesh_build_info, erhe::primitive::Normal_style::corner_normals));
             }
 
             mesh->update_rt_primitives();

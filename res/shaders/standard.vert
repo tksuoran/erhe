@@ -1,4 +1,5 @@
 #include "erhe_camera_view.glsl"
+#include "erhe_skinning.glsl"
 #include "erhe_standard_variant.glsl"
 
 #define a_valency_edge_count a_custom_2
@@ -67,16 +68,13 @@ void main()
         world_from_node        = primitive.primitives[ERHE_DRAW_ID].world_from_node;
         world_from_node_normal = primitive.primitives[ERHE_DRAW_ID].world_from_node_normal;
     } else {
-        world_from_node =
-            a_joint_weights_0.x * joint.joints[int(a_joint_indices_0.x) + primitive.primitives[ERHE_DRAW_ID].base_joint_index].world_from_bind +
-            a_joint_weights_0.y * joint.joints[int(a_joint_indices_0.y) + primitive.primitives[ERHE_DRAW_ID].base_joint_index].world_from_bind +
-            a_joint_weights_0.z * joint.joints[int(a_joint_indices_0.z) + primitive.primitives[ERHE_DRAW_ID].base_joint_index].world_from_bind +
-            a_joint_weights_0.w * joint.joints[int(a_joint_indices_0.w) + primitive.primitives[ERHE_DRAW_ID].base_joint_index].world_from_bind;
-        world_from_node_normal =
-            a_joint_weights_0.x * joint.joints[int(a_joint_indices_0.x) + primitive.primitives[ERHE_DRAW_ID].base_joint_index].world_from_bind_normal +
-            a_joint_weights_0.y * joint.joints[int(a_joint_indices_0.y) + primitive.primitives[ERHE_DRAW_ID].base_joint_index].world_from_bind_normal +
-            a_joint_weights_0.z * joint.joints[int(a_joint_indices_0.z) + primitive.primitives[ERHE_DRAW_ID].base_joint_index].world_from_bind_normal +
-            a_joint_weights_0.w * joint.joints[int(a_joint_indices_0.w) + primitive.primitives[ERHE_DRAW_ID].base_joint_index].world_from_bind_normal;
+        erhe_skin_matrices(
+            primitive.primitives[ERHE_DRAW_ID].base_joint_index,
+            a_joint_indices_0,
+            a_joint_weights_0,
+            world_from_node,
+            world_from_node_normal
+        );
     }
 #else
     world_from_node        = primitive.primitives[ERHE_DRAW_ID].world_from_node;

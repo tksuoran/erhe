@@ -697,11 +697,16 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
                 {
                     erhe::graphics::Compute_command_encoder compute_encoder = m_app_context.graphics_device->make_compute_command_encoder(views_cb);
                     if (drive_wide_lines) {
+                        // TODO: thread joint buffer + range through here for
+                        // skinned content edge lines in XR. Without it, skinned
+                        // meshes' edges render in bind pose.
                         content_wide_line_renderer->compute(
                             compute_encoder,
                             viewport_xy,
                             nullptr,
                             std::span<const erhe::scene_renderer::Camera_view_input>{view_inputs},
+                            nullptr,
+                            nullptr,
                             get_reverse_depth(),
                             get_depth_range(),
                             get_conventions()

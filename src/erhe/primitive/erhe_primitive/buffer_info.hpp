@@ -23,6 +23,14 @@ public:
     // edge-line vertex buffer is allocated; consumers without a wide-line
     // path (e.g. CPU-buffer test sinks) leave this nullptr.
     const erhe::dataformat::Vertex_stream* edge_line_vertex_stream{nullptr};
+
+    // Optional parallel stream descriptor for the edge-line joint side
+    // buffer (uvec4 joint_indices + vec4 joint_weights per endpoint).
+    // Primitive_builder allocates Buffer_mesh::edge_line_joint_buffer_range
+    // from this stream only when the source GEO::Mesh has joint
+    // attributes (skinned mesh). Leave nullptr to disable skinned edge
+    // lines entirely.
+    const erhe::dataformat::Vertex_stream* edge_line_joint_stream{nullptr};
 };
 
 } // namesapce erhe::primitive

@@ -800,6 +800,8 @@ void Rendering_test::tick(erhe::graphics::Command_buffer& command_buffer)
             const bool reverse_depth = (conventions.native_depth_range == erhe::math::Depth_range::zero_to_one);
             m_content_wide_line_renderer->compute(
                 compute_encoder, ref_tile, *m_camera.get(),
+                nullptr, // no joint buffer client (rendering_test has no skinned meshes)
+                nullptr, // no joint buffer range
                 reverse_depth,
                 conventions.native_depth_range,
                 conventions

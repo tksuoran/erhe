@@ -13,15 +13,16 @@
 namespace erhe::scene_renderer {
 
 Buffer_pool::Buffer_pool(
-    erhe::graphics::Device&         graphics_device,
-    uint64_t                        pool_id,
-    erhe::dataformat::Vertex_stream vertex_stream,
-    Buffer_pool_block_create_info   block_create_info
+    erhe::graphics::Device&                graphics_device,
+    uint64_t                               pool_id,
+    const erhe::dataformat::Vertex_stream& vertex_stream,
+    Buffer_pool_block_create_info          block_create_info
 )
-    : m_graphics_device  {graphics_device}
-    , m_vertex_stream    {vertex_stream}
-    , m_block_create_info{std::move(block_create_info)}
-    , m_pool_id          {pool_id}
+    : m_graphics_device      {graphics_device}
+    , m_vertex_stream        {vertex_stream}
+    , m_source_vertex_stream {&vertex_stream}
+    , m_block_create_info    {std::move(block_create_info)}
+    , m_pool_id              {pool_id}
 {
     log_mesh_memory->trace(
         "Buffer_pool::Buffer_pool() pool_id = {}, stream = {}",
@@ -55,7 +56,28 @@ Buffer_pool::~Buffer_pool() = default;
 auto Buffer_pool::is_compatible(const erhe::dataformat::Vertex_stream& vertex_stream) const -> bool
 {
     ERHE_VERIFY(m_index_format == erhe::dataformat::Format::format_undefined);
-    return m_vertex_stream.is_buffer_compatible(vertex_stream);
+
+    // Pointer-identity compatibility -- two Vertex_streams with the same
+    // byte layout but coming from different Vertex_format instances are
+    // NOT compatible here, by design. See the class-level comment in
+    // buffer_pool.hpp for the lockstep-invariant rationale. The two
+    // currently relevant cases this distinguishes are:
+    //
+    //   vertex_format_skinned    .streams[1]  (normal/tangent/texcoord/color)
+    //   vertex_format_not_skinned.streams[1]  (normal/tangent/texcoord/color)
+    //
+    // -- byte-identical layouts, but they MUST live in different pools
+    // because their containing formats use a stream-0 with different
+    // strides. A pool shared between them would advance for both
+    // formats' meshes and break the per-mesh
+    //     byte_offset_K / stride_K = const
+    // invariant that the indirect draw command's vertexOffset relies on.
+    //
+    // If a future change reintroduces layout-equality comparison here,
+    // the symptom will be skinned-mesh polygon fill reading
+    // normals/tangents/etc. from another mesh's bytes (positions stay
+    // correct, every other stream-1+ attribute is garbage).
+    return m_source_vertex_stream == &vertex_stream;
 }
 
 auto Buffer_pool::is_compatible(const erhe::dataformat::Format index_format) const -> bool

@@ -49,6 +49,7 @@ public:
     void calculate_bounding_volume      ();
     void allocate_vertex_buffers        ();
     void allocate_edge_line_vertex_buffer();
+    void allocate_edge_line_joint_buffer ();
     void allocate_index_buffer          ();
     void allocate_index_range           (Primitive_type primitive_type, std::size_t index_count, Index_range& out_range);
 

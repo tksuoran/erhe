@@ -33,8 +33,10 @@ allocations come in; nothing is reserved up front.
   entry's index in the vector and is what `Buffer_mesh::vertex_input_key`
   stores.
 - `std::vector<Buffer_pool> m_vertex_pools` -- one pool per
-  buffer-compatible `Vertex_stream`. Grown lazily by
-  `allocate_vertex_buffer_range`.
+  `Vertex_stream` INSTANCE (by address), grown lazily by
+  `allocate_vertex_buffer_range`. Note: two Vertex_streams with the same
+  byte layout but belonging to different Vertex_formats do NOT share a
+  pool; see "Lockstep invariant" below for why.
 - `std::vector<Buffer_pool> m_index_pools` -- one pool per index `Format`.
   Grown lazily by `allocate_index_buffer_range`.
 - `erhe::graphics::Buffer_transfer_queue m_buffer_transfer_queue` -- collects
@@ -68,11 +70,13 @@ The allocation returns a `Buffer_sink_allocation` containing:
   allocator that releases the bytes when the owning `Buffer_mesh` is
   destroyed.
 
-`is_compatible(const Vertex_stream&)` delegates to
-`erhe::dataformat::Vertex_stream::is_buffer_compatible`, which compares stride
-and per-attribute `(format, offset)`. It does NOT compare `binding` or `step`;
-two streams that share GPU layout but differ in binding index are pooled
-together.
+`is_compatible(const Vertex_stream&)` checks pointer identity against the
+Vertex_stream the pool was constructed from. It does NOT compare layout
+fields. Two `Vertex_stream` instances that are byte-for-byte identical
+but live in different `Vertex_format` objects therefore land in different
+pools -- this is required for the lockstep invariant described below,
+not an optimisation. The class-level comment in `buffer_pool.hpp` spells
+out the failure mode if the check is loosened.
 
 `is_compatible(Format)` matches the index format exactly.
 
@@ -164,8 +168,58 @@ existing bucket whose `accept()` returns true or starts a new bucket.
   primitive request includes edge lines and `Buffer_info::edge_line_vertex_stream`
   is set (which `Mesh_memory::make_primitive_buffer_info()` points at
   `vertex_format_edge_line.streams.front()`). Because pools key on
-  `Vertex_stream` layout, the edge-line stream (vec4 position + vec4
-  smooth normal) naturally lives in its own dedicated pool, distinct
-  from the main mesh vertex pools. `Content_wide_line_renderer::add_mesh`
+  `Vertex_stream` pointer identity, the edge-line stream (vec4 position +
+  vec4 smooth normal) lives in its own dedicated pool, distinct from
+  the main mesh vertex pools. `Content_wide_line_renderer::add_mesh`
   consumes the range via `Mesh_memory::get_vertex_buffer(range)` to
   resolve the underlying `Buffer*`.
+
+## Lockstep invariant
+
+The forward renderer issues `multi_draw_indexed_primitives_indirect`.
+Each indirect draw command carries a single scalar `vertexOffset` (a.k.a.
+`base_vertex`) that the GPU applies uniformly to every vertex binding:
+
+    byte_read_K = (vertexOffset + N) * stride_K
+
+`Buffer_mesh::base_vertex()` (see `src/erhe/primitive/erhe_primitive/buffer_mesh.cpp`)
+computes that scalar from stream 0 only:
+`vertex_buffer_ranges[0].byte_offset / element_size`. For the GPU's
+reads on streams 1, 2, ... to land on the same mesh's bytes, the
+quantity `byte_offset_K / stride_K` must be identical for every stream
+K of the mesh. We call this the **lockstep invariant**.
+
+Within a single Vertex_format, lockstep holds automatically: every mesh
+visits every stream pool in sequence, so all that format's pools advance
+by the same vertex count per mesh.
+
+It breaks the moment two Vertex_formats share a pool for some streams
+but not for others. Concretely: `vertex_format_skinned.streams[1]` and
+`vertex_format_not_skinned.streams[1]` are byte-identical. If they
+shared a pool, the shared pool would advance for both formats' meshes,
+while each format's private stream-0 pool would advance only for its
+own meshes. A skinned mesh allocated after a batch of non-skinned
+cubes would end up with:
+
+- stream 0 starting at the beginning of the skinned-stream-0 pool
+  (logical vertex offset 0)
+- stream 1 starting after all the cubes' stream-1 data in the shared
+  pool (logical vertex offset = cumulative cube vertex count)
+
+`vertexOffset` derived from stream 0 would then read stream 1 from the
+cubes' bytes -- positions land correctly, normals / tangents /
+tex_coords / colors come back as garbage from another mesh.
+
+To make this class of bug impossible, `Buffer_pool::is_compatible`
+keys on `Vertex_stream` pointer identity (not layout equality). The
+cost is one buffer pool per (Vertex_format, stream-index) tuple
+instead of one per unique layout. Memory waste is bounded and small
+(a few MB across the editor's current formats); the invariant is
+preserved by construction.
+
+There are alternative ways to escape the invariant -- moving per-mesh
+offsets into per-binding `set_vertex_buffer` offsets, or padding all
+pools to advance globally -- but the first is incompatible with
+multi-draw indirect and the second wastes more memory than the
+current approach. See the long-form rationale in the `Buffer_pool`
+class comment in `src/erhe/scene_renderer/erhe_scene_renderer/buffer_pool.hpp`.

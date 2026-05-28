@@ -970,15 +970,17 @@ public:
                 ERHE_GET_GL_CONTEXT
                 m_content_wide_line_renderer = std::make_unique<erhe::scene_renderer::Content_wide_line_renderer>(
                     *m_graphics_device.get(),
-                    nullptr,
-                    nullptr,
+                    nullptr, // compute_shader_stages         (set via set_shader_stages() after compile)
+                    nullptr, // compute_shader_stages_skinned (set via set_shader_stages() after compile)
+                    nullptr, // graphics_shader_stages        (set via set_shader_stages() after compile)
+                    &m_program_interface->joint_interface.joint_block,
                     xr_view_count
                 );
                 if (m_graphics_device->get_info().use_compute_shader) {
                     const std::filesystem::path shader_path = std::filesystem::path{"res"} / std::filesystem::path{"shaders"};
 
                     using namespace erhe::graphics;
-                    // Compute shader
+                    // Compute shader (non-skinned variant)
                     {
                         Shader_stages_create_info create_info{
                             .name             = "compute_before_content_line",
@@ -998,6 +1000,35 @@ public:
                         Shader_stages_prototype prototype = build_shader_stages(*m_graphics_device, create_info);
                         if (prototype.is_valid()) {
                             m_content_wide_line_compute_stages = std::make_unique<Shader_stages>(*m_graphics_device, std::move(prototype));
+                        }
+                    }
+                    // Compute shader (skinned variant). Same source compiled with
+                    // ERHE_USE_SKINNING; declares the joint side buffer and the
+                    // global `joint` block in addition to the regular bindings.
+                    if (m_content_wide_line_renderer->get_skinned_bind_group_layout() != nullptr) {
+                        Shader_stages_create_info create_info{
+                            .name             = "compute_before_content_line_skinned",
+                            .defines          = { { "ERHE_USE_SKINNING", "1" } },
+                            .struct_types     = {
+                                m_content_wide_line_renderer->get_edge_line_vertex_struct(),
+                                m_content_wide_line_renderer->get_edge_line_joint_vertex_struct(),
+                                m_content_wide_line_renderer->get_triangle_vertex_struct(),
+                                m_content_wide_line_renderer->get_view_camera_struct(),
+                                &m_program_interface->joint_interface.joint_struct
+                            },
+                            .interface_blocks = {
+                                m_content_wide_line_renderer->get_edge_line_vertex_buffer_block(),
+                                m_content_wide_line_renderer->get_edge_line_joint_vertex_buffer_block(),
+                                m_content_wide_line_renderer->get_triangle_vertex_buffer_block(),
+                                m_content_wide_line_renderer->get_view_block(),
+                                &m_program_interface->joint_interface.joint_block
+                            },
+                            .shaders           = { { Shader_type::compute_shader, shader_path / "compute_before_content_line.comp" } },
+                            .bind_group_layout = m_content_wide_line_renderer->get_skinned_bind_group_layout(),
+                        };
+                        Shader_stages_prototype prototype = build_shader_stages(*m_graphics_device, create_info);
+                        if (prototype.is_valid()) {
+                            m_content_wide_line_compute_stages_skinned = std::make_unique<Shader_stages>(*m_graphics_device, std::move(prototype));
                         }
                     }
                     // Graphics shader (renders compute output).
@@ -1071,6 +1102,7 @@ public:
                     if (m_content_wide_line_compute_stages && m_content_wide_line_graphics_stages) {
                         m_content_wide_line_renderer->set_shader_stages(
                             m_content_wide_line_compute_stages.get(),
+                            m_content_wide_line_compute_stages_skinned.get(), // may be null if joint block missing
                             m_content_wide_line_graphics_stages.get(),
                             m_content_wide_line_multiview_graphics_stages.get()
                         );
@@ -2256,6 +2288,7 @@ public:
     std::unique_ptr<erhe::scene_renderer::Mesh_memory     >           m_mesh_memory;
     std::unique_ptr<erhe::scene_renderer::Content_wide_line_renderer> m_content_wide_line_renderer;
     std::unique_ptr<erhe::graphics::Shader_stages>                    m_content_wide_line_compute_stages;
+    std::unique_ptr<erhe::graphics::Shader_stages>                    m_content_wide_line_compute_stages_skinned;
     std::unique_ptr<erhe::graphics::Shader_stages>                    m_content_wide_line_graphics_stages;
     std::unique_ptr<erhe::graphics::Shader_stages>                    m_content_wide_line_multiview_graphics_stages;
 

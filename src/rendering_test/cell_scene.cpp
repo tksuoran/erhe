@@ -75,7 +75,9 @@ void Rendering_test::make_content_wide_line_renderer()
     m_content_wide_line_renderer = std::make_unique<erhe::scene_renderer::Content_wide_line_renderer>(
         m_graphics_device,
         nullptr,
-        nullptr
+        nullptr,
+        nullptr,
+        nullptr  // joint_block - skinned variant disabled for rendering tests
     );
 
     // Build compute shader using renderer's resource definitions
@@ -136,9 +138,12 @@ void Rendering_test::make_content_wide_line_renderer()
     }
 
     if (m_compute_shader_stages && m_graphics_shader_stages) {
-        // Now set the shader stages on the existing renderer
+        // Now set the shader stages on the existing renderer. The
+        // rendering_test does not exercise skinning, so no skinned
+        // compute variant is wired up here.
         m_content_wide_line_renderer->set_shader_stages(
             m_compute_shader_stages.get(),
+            nullptr,
             m_graphics_shader_stages.get()
         );
 

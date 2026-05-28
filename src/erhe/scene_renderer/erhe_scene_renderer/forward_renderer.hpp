@@ -165,6 +165,13 @@ public:
     // (0 when warmup_targets is empty); useful for the prewarm log.
     auto prewarm_standard_variants(const Prewarm_parameters& parameters) -> std::size_t;
 
+    // The forward renderer owns the per-frame joint UBO/SSBO ring buffer.
+    // Other renderers that run in the same frame (e.g. the content
+    // wide-line compute pre-pass for skinned edge lines) can update +
+    // bind through this same Joint_buffer instead of allocating a
+    // duplicate ring buffer.
+    [[nodiscard]] auto get_joint_buffer() -> Joint_buffer& { return m_joint_buffer; }
+
     static const std::vector<std::span<const std::shared_ptr<erhe::scene::Mesh>>> empty_mesh_spans;
 
 private:

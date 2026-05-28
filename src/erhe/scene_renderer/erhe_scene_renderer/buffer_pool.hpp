@@ -41,14 +41,56 @@ public:
     std::string                  debug_label_prefix                {};
 };
 
+// Buffer_pool owns one slab of GPU buffer memory (one or more Pool_block
+// instances) and hands out byte ranges to mesh builds via allocate().
+//
+// IMPORTANT -- pool identity is intentionally per Vertex_stream INSTANCE,
+// not per Vertex_stream layout. Two Vertex_formats whose stream layouts
+// happen to be byte-for-byte identical (e.g. vertex_format_skinned and
+// vertex_format_not_skinned both carry the same {normal, tangent,
+// texcoord, color} layout on stream 1) still get their own dedicated
+// pools. This is required for correctness, not an optimisation.
+//
+// Why: the forward renderer issues multi-draw indexed indirect, and each
+// indirect command carries a single scalar `vertexOffset` (a.k.a.
+// base_vertex). The GPU applies that one scalar to every binding:
+//
+//     byte_read_K = (vertexOffset + N) * stride_K
+//
+// For all bindings of a mesh to land on its own data, the per-stream
+// quantity `byte_offset_K / stride_K` must be IDENTICAL across every
+// stream K of that mesh. We call this the lockstep invariant.
+//
+// Buffer_mesh::base_vertex() (buffer_mesh.cpp:11-14) computes the
+// indirect command's vertexOffset from stream 0 only, on the assumption
+// that the invariant holds. If two Vertex_formats share a pool for one
+// stream but not for another, the shared pool advances for both formats'
+// meshes while the non-shared pool only advances for one of them. The
+// next mesh of the format whose private pool is "behind" then sees
+// different `byte_offset_K / stride_K` values across streams, breaking
+// the invariant. At draw time the GPU reads stream 0 from the right
+// place but reads stream 1 / stream 2 from some other mesh's data --
+// the symptom is correct positions but garbage normals / tangents /
+// tex_coords / colors.
+//
+// Keying pools by Vertex_stream pointer identity eliminates this class
+// of bug at the cost of a small amount of buffer duplication: each
+// Vertex_format keeps its own copy of each stream pool even when other
+// formats share the same byte layout. The waste is bounded by
+// (num_formats * stride_K) per stream layout -- a few MB at most.
 class Buffer_pool
 {
 public:
+    // The vertex-stream constructor stores the address of the passed
+    // Vertex_stream as the pool's identity. The caller must ensure the
+    // Vertex_stream object outlives the pool (in practice, callers pass
+    // streams that are stable members of long-lived Vertex_format
+    // objects owned by Mesh_memory).
     Buffer_pool(
-        erhe::graphics::Device&         graphics_device,
-        uint64_t                        pool_id,
-        erhe::dataformat::Vertex_stream vertex_stream,
-        Buffer_pool_block_create_info   block_create_info
+        erhe::graphics::Device&                graphics_device,
+        uint64_t                               pool_id,
+        const erhe::dataformat::Vertex_stream& vertex_stream,
+        Buffer_pool_block_create_info          block_create_info
     );
 
     Buffer_pool(
@@ -78,7 +120,14 @@ private:
     [[nodiscard]] auto describe() const -> std::string;
 
     erhe::graphics::Device&                  m_graphics_device;
+    // Local copy of the stream's layout (stride / attributes), used for
+    // allocate() sizing and debug/logging.
     erhe::dataformat::Vertex_stream          m_vertex_stream;
+    // Address of the originating Vertex_stream instance. The pool's
+    // is_compatible(stream) check is pointer equality against this
+    // member, NOT a layout-equality test. See the class-level comment
+    // for the lockstep invariant this enforces.
+    const erhe::dataformat::Vertex_stream*   m_source_vertex_stream{nullptr};
     erhe::dataformat::Format                 m_index_format{erhe::dataformat::Format::format_undefined};
     Buffer_pool_block_create_info            m_block_create_info;
     std::vector<std::unique_ptr<Pool_block>> m_blocks;

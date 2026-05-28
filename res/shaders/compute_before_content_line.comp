@@ -1,4 +1,8 @@
 
+#ifdef ERHE_USE_SKINNING
+#include "erhe_skinning.glsl"
+#endif
+
 layout(local_size_x = 32) in;
 
 float get_line_width(vec4 position, float thickness, vec4 fov, vec4 viewport)
@@ -80,15 +84,44 @@ void do_wide_line(uint view_index, uint in_line_index, uint out_triangle_index)
     vec3 local_normal0   = edge_line_vertex_buffer.vertices[in_i0].normal.xyz;
     vec3 local_normal1   = edge_line_vertex_buffer.vertices[in_i1].normal.xyz;
 
+    mat4 clip_from_world = view.cameras[view_index].clip_from_world;
+
+#ifdef ERHE_USE_SKINNING
+    // Per-endpoint linear-blend skinning. Each edge endpoint carries its own
+    // weighted matrix sum because two endpoints of the same edge often span
+    // different bones. The joint side buffer is indexed by the same in_i0 /
+    // in_i1 pair as the position/normal buffer.
+    mat4 world_from_bind_0, world_from_bind_normal_0;
+    mat4 world_from_bind_1, world_from_bind_normal_1;
+    erhe_skin_matrices(
+        view.base_joint_index,
+        edge_line_joint_buffer.vertices[in_i0].joint_indices,
+        edge_line_joint_buffer.vertices[in_i0].joint_weights,
+        world_from_bind_0,
+        world_from_bind_normal_0
+    );
+    erhe_skin_matrices(
+        view.base_joint_index,
+        edge_line_joint_buffer.vertices[in_i1].joint_indices,
+        edge_line_joint_buffer.vertices[in_i1].joint_weights,
+        world_from_bind_1,
+        world_from_bind_normal_1
+    );
+    vec4 world_pos0    = world_from_bind_0 * vec4(local_position0, 1.0);
+    vec4 world_pos1    = world_from_bind_1 * vec4(local_position1, 1.0);
+    vec3 world_normal0 = normalize(vec3(world_from_bind_normal_0 * vec4(local_normal0, 0.0)));
+    vec3 world_normal1 = normalize(vec3(world_from_bind_normal_1 * vec4(local_normal1, 0.0)));
+    vec3 world_normal  = normalize(world_normal0 + world_normal1);
+#else
     // Transform to world space using per-primitive transform
     mat4 world_from_node = view.world_from_node;
-    mat4 clip_from_world = view.cameras[view_index].clip_from_world;
     vec4 world_pos0      = world_from_node * vec4(local_position0, 1.0);
     vec4 world_pos1      = world_from_node * vec4(local_position1, 1.0);
     mat3 normal_matrix   = mat3(world_from_node);
     vec3 world_normal0   = normalize(normal_matrix * local_normal0);
     vec3 world_normal1   = normalize(normal_matrix * local_normal1);
     vec3 world_normal    = normalize(world_normal0 + world_normal1);
+#endif
 
     // Transform to clip space
     vec4 v0 = clip_from_world * world_pos0;

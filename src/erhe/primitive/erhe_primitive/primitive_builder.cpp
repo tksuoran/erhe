@@ -38,6 +38,7 @@ Build_context_root::Build_context_root(
     get_vertex_attributes          ();
     allocate_vertex_buffers        ();
     allocate_edge_line_vertex_buffer();
+    allocate_edge_line_joint_buffer ();
     allocate_index_buffer          ();
 }
 
@@ -156,6 +157,46 @@ void Build_context_root::allocate_edge_line_vertex_buffer()
     }
     buffer_mesh.edge_line_vertex_buffer_range = sink_allocation.range;
     buffer_mesh.edge_line_vertex_allocation   = std::move(sink_allocation.allocation);
+}
+
+void Build_context_root::allocate_edge_line_joint_buffer()
+{
+    // Companion to allocate_edge_line_vertex_buffer: holds per-endpoint
+    // joint indices + weights so the skinned variant of the wide-line
+    // compute shader can skin edges on the GPU. Allocated only when the
+    // source mesh actually carries joint attributes (i.e. is skinned)
+    // and the caller has provided an edge_line_joint_stream.
+    if (build_failed) {
+        return;
+    }
+    if (!build_info.primitive_types.edge_lines) {
+        return;
+    }
+    if (mesh_info.edge_count == 0) {
+        return;
+    }
+    if (build_info.buffer_info.edge_line_joint_stream == nullptr) {
+        return;
+    }
+    const GEO::AttributesManager& vertex_attrs = mesh.vertices.attributes();
+    if (
+        !vertex_attrs.is_defined(erhe::geometry::c_joint_indices_0) ||
+        !vertex_attrs.is_defined(erhe::geometry::c_joint_weights_0)
+    ) {
+        return;
+    }
+
+    const std::size_t edge_line_vertex_count = mesh_info.edge_count * 2;
+    Buffer_sink_allocation sink_allocation = build_info.buffer_info.vertex_buffer_sink.allocate_vertex_buffer_range(
+        *build_info.buffer_info.edge_line_joint_stream,
+        edge_line_vertex_count
+    );
+    if (sink_allocation.range.count == 0) {
+        build_failed = true;
+        return;
+    }
+    buffer_mesh.edge_line_joint_buffer_range = sink_allocation.range;
+    buffer_mesh.edge_line_joint_allocation   = std::move(sink_allocation.allocation);
 }
 
 void Build_context_root::allocate_index_buffer()
@@ -765,6 +806,18 @@ void Build_context::build_edge_lines()
     }
     std::size_t edge_vertex_write_offset = 0;
 
+    // Companion joint side buffer for skinned edge lines: uvec4 joint indices
+    // + vec4 joint weights per endpoint. Allocated only when the mesh has
+    // joint attributes (see Build_context_root::allocate_edge_line_joint_buffer).
+    const bool has_edge_line_joint_buffer = (root.buffer_mesh.edge_line_joint_buffer_range.count > 0);
+    std::vector<uint8_t> edge_line_joint_data;
+    const std::size_t    joint_element_size = 4 * sizeof(uint32_t) + 4 * sizeof(float); // uvec4 + vec4
+    if (has_edge_line_joint_buffer) {
+        const std::size_t edge_count = root.mesh_info.edge_count;
+        edge_line_joint_data.resize(edge_count * 2 * joint_element_size);
+    }
+    std::size_t edge_joint_write_offset = 0;
+
     for (GEO::index_t mesh_edge : root.mesh.edges) {
         const GEO::index_t mesh_vertex_a  = root.mesh.edges.vertex(mesh_edge, 0);
         const GEO::index_t mesh_vertex_b  = root.mesh.edges.vertex(mesh_edge, 1);
@@ -794,12 +847,45 @@ void Build_context::build_edge_lines()
             memcpy(edge_line_vertex_data.data() + edge_vertex_write_offset, data_b, vertex_element_size);
             edge_vertex_write_offset += vertex_element_size;
         }
+
+        if (has_edge_line_joint_buffer) {
+            const GEO::vec4u fallback_indices{0u, 0u, 0u, 0u};
+            const GEO::vec4f fallback_weights{1.0f, 0.0f, 0.0f, 0.0f};
+            const std::optional<GEO::vec4u> joint_indices_a = mesh_attributes.vertex_joint_indices_0.try_get(mesh_vertex_a);
+            const std::optional<GEO::vec4u> joint_indices_b = mesh_attributes.vertex_joint_indices_0.try_get(mesh_vertex_b);
+            const std::optional<GEO::vec4f> joint_weights_a = mesh_attributes.vertex_joint_weights_0.try_get(mesh_vertex_a);
+            const std::optional<GEO::vec4f> joint_weights_b = mesh_attributes.vertex_joint_weights_0.try_get(mesh_vertex_b);
+            const GEO::vec4u indices_a = joint_indices_a.has_value() ? joint_indices_a.value() : fallback_indices;
+            const GEO::vec4u indices_b = joint_indices_b.has_value() ? joint_indices_b.value() : fallback_indices;
+            const GEO::vec4f weights_a = joint_weights_a.has_value() ? joint_weights_a.value() : fallback_weights;
+            const GEO::vec4f weights_b = joint_weights_b.has_value() ? joint_weights_b.value() : fallback_weights;
+
+            const uint32_t idx_a[4] = { indices_a.x, indices_a.y, indices_a.z, indices_a.w };
+            const uint32_t idx_b[4] = { indices_b.x, indices_b.y, indices_b.z, indices_b.w };
+            const float    wgt_a[4] = { weights_a.x, weights_a.y, weights_a.z, weights_a.w };
+            const float    wgt_b[4] = { weights_b.x, weights_b.y, weights_b.z, weights_b.w };
+            memcpy(edge_line_joint_data.data() + edge_joint_write_offset, idx_a, sizeof(idx_a));
+            edge_joint_write_offset += sizeof(idx_a);
+            memcpy(edge_line_joint_data.data() + edge_joint_write_offset, wgt_a, sizeof(wgt_a));
+            edge_joint_write_offset += sizeof(wgt_a);
+            memcpy(edge_line_joint_data.data() + edge_joint_write_offset, idx_b, sizeof(idx_b));
+            edge_joint_write_offset += sizeof(idx_b);
+            memcpy(edge_line_joint_data.data() + edge_joint_write_offset, wgt_b, sizeof(wgt_b));
+            edge_joint_write_offset += sizeof(wgt_b);
+        }
     }
 
     if (has_edge_line_vertex_buffer && (edge_vertex_write_offset > 0)) {
         root.build_info.buffer_info.vertex_buffer_sink.enqueue_vertex_data(
             root.buffer_mesh.edge_line_vertex_buffer_range,
             std::move(edge_line_vertex_data)
+        );
+    }
+
+    if (has_edge_line_joint_buffer && (edge_joint_write_offset > 0)) {
+        root.build_info.buffer_info.vertex_buffer_sink.enqueue_vertex_data(
+            root.buffer_mesh.edge_line_joint_buffer_range,
+            std::move(edge_line_joint_data)
         );
     }
 }

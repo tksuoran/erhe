@@ -89,7 +89,12 @@ public:
 
     [[nodiscard]] auto get_vertex_input(size_t vertex_input_key) const -> const Vertex_input_entry&;
 
-    [[nodiscard]] auto make_primitive_buffer_info() -> erhe::primitive::Buffer_info;
+    [[nodiscard]] auto make_primitive_buffer_info        () -> erhe::primitive::Buffer_info;
+    // Same as make_primitive_buffer_info but uses vertex_format_skinned, so
+    // skinned meshes get joint_indices + joint_weights vertex attributes in
+    // the GPU vertex buffer. Required for the standard.vert skinning path
+    // (Shader_key::derive checks the vertex_format for joint attributes).
+    [[nodiscard]] auto make_skinned_primitive_buffer_info() -> erhe::primitive::Buffer_info;
     void flush(erhe::graphics::Command_buffer& command_buffer);
 
     [[nodiscard]] auto get_vertex_buffer(const erhe::primitive::Buffer_range& buffer_range) -> erhe::graphics::Buffer*;
@@ -123,6 +128,14 @@ public:
     // stream naturally lives in its own pool independent of the
     // main mesh vertex pools.
     erhe::dataformat::Vertex_format vertex_format_edge_line;
+
+    // Parallel single-stream format for the joint side buffer that
+    // skinned edge lines need. Layout matches the compute shader's
+    // skinned-variant SSBO struct
+    //   struct edge_line_joint { uvec4 joint_indices; vec4 joint_weights; }.
+    // Allocated only for meshes that carry joint attributes; lives in
+    // its own Buffer_pool keyed on this stream.
+    erhe::dataformat::Vertex_format vertex_format_edge_line_joints;
 
 private:
     Mesh_memory_config                    m_mesh_memory_config;

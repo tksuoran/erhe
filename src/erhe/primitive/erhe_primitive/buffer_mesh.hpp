@@ -40,12 +40,20 @@ public:
     // Edge line vertex pairs (consecutive pairs of vec4 positions in object-local space)
     Buffer_range              edge_line_vertex_buffer_range{};
 
+    // Optional side buffer holding per-edge-endpoint joint indices + weights
+    // (uvec4 + vec4 per vertex), populated only when the source mesh has joint
+    // attributes. The Content_wide_line_renderer's skinned compute pipeline
+    // reads it alongside edge_line_vertex_buffer_range to apply skinning to
+    // edge endpoints. Empty range = mesh has no skinning data.
+    Buffer_range              edge_line_joint_buffer_range{};
+
     size_t                    vertex_input_key{0};
 
     // RAII allocation handles - freed back to allocator on destruction
     std::vector<erhe::buffer::Buffer_allocation> vertex_allocations{};
     erhe::buffer::Buffer_allocation              index_allocation  {};
     erhe::buffer::Buffer_allocation              edge_line_vertex_allocation{};
+    erhe::buffer::Buffer_allocation              edge_line_joint_allocation {};
 };
 
 } // namespace erhe::primitive

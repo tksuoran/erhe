@@ -92,6 +92,17 @@ Mesh_memory::Mesh_memory(
             }
         }
     }
+    , vertex_format_edge_line_joints{
+        erhe::dataformat::Vertex_format{
+            {
+                0,
+                {
+                    { Format::format_32_vec4_uint,  Vertex_attribute_usage::joint_indices, 0},
+                    { Format::format_32_vec4_float, Vertex_attribute_usage::joint_weights, 0}
+                }
+            }
+        }
+    }
     , m_mesh_memory_config   {mesh_memory_config}
     , m_graphics_device      {graphics_device}
     , m_buffer_transfer_queue{graphics_device}
@@ -100,6 +111,7 @@ Mesh_memory::Mesh_memory(
     get_vertex_input_from_vertex_format(vertex_format_skinned);
     get_vertex_input_from_vertex_format(vertex_format_not_skinned);
     get_vertex_input_from_vertex_format(vertex_format_edge_line);
+    get_vertex_input_from_vertex_format(vertex_format_edge_line_joints);
 }
 
 Mesh_memory::~Mesh_memory() noexcept = default;
@@ -107,6 +119,39 @@ Mesh_memory::~Mesh_memory() noexcept = default;
 constexpr std::size_t kilo = 1024;
 constexpr std::size_t mega = 1024 * kilo;
 
+// Pool selection rule: one Buffer_pool per Vertex_stream INSTANCE address
+// (NOT per Vertex_stream byte layout). The Vertex_format objects whose
+// streams we pass here -- vertex_format_skinned, vertex_format_not_skinned,
+// vertex_format_edge_line, vertex_format_edge_line_joints, etc. -- are
+// stable members of this Mesh_memory and own their Vertex_stream
+// instances for the lifetime of the renderer, so pointer identity is a
+// safe discriminator.
+//
+// Two distinct Vertex_formats whose stream layouts happen to be byte-
+// for-byte identical (vertex_format_skinned.streams[1] and
+// vertex_format_not_skinned.streams[1] both encode normal/tangent/
+// texcoord/color the same way) still allocate from DIFFERENT pools.
+// This duplicates a small amount of buffer memory but is required for
+// correctness:
+//
+//   The forward renderer's multi-draw indexed indirect commands carry a
+//   single `vertexOffset` scalar per draw, applied uniformly to every
+//   binding. That scalar is computed from stream 0 only
+//   (Buffer_mesh::base_vertex()). For the read to land on the right
+//   bytes in every binding, per-mesh `byte_offset_K / stride_K` must be
+//   identical for all streams K of that mesh.
+//
+//   If two formats with different stream-0 strides shared a pool for
+//   stream 1, the shared pool would advance for BOTH formats' meshes
+//   while each format's private stream-0 pool would only advance for
+//   that format's meshes. The invariant would then fail for the
+//   second-allocated format's meshes -- stream 0 reads at the correct
+//   byte but stream 1 reads from some other mesh's data. The visible
+//   symptom is correct vertex positions with garbage normals / tangents /
+//   tex_coords / colors. See buffer_pool.hpp for the long-form
+//   explanation.
+//
+// is_compatible() does the pointer check; the lookup below relies on it.
 auto Mesh_memory::allocate_vertex_buffer_range(
     const erhe::dataformat::Vertex_stream& vertex_stream,
     const std::size_t                      vertex_count
@@ -307,7 +352,21 @@ auto Mesh_memory::make_primitive_buffer_info() -> erhe::primitive::Buffer_info
         .vertex_buffer_sink      = *this,
         .index_buffer_sink       = *this,
         .vertex_input_key        = get_vertex_input_from_vertex_format(vertex_format_not_skinned).key,
-        .edge_line_vertex_stream = &vertex_format_edge_line.streams.front()
+        .edge_line_vertex_stream = &vertex_format_edge_line       .streams.front(),
+        .edge_line_joint_stream  = &vertex_format_edge_line_joints.streams.front()
+    };
+}
+
+auto Mesh_memory::make_skinned_primitive_buffer_info() -> erhe::primitive::Buffer_info
+{
+    return erhe::primitive::Buffer_info{
+        .index_type              = erhe::dataformat::Format::format_32_scalar_uint,
+        .vertex_format           = vertex_format_skinned,
+        .vertex_buffer_sink      = *this,
+        .index_buffer_sink       = *this,
+        .vertex_input_key        = get_vertex_input_from_vertex_format(vertex_format_skinned).key,
+        .edge_line_vertex_stream = &vertex_format_edge_line       .streams.front(),
+        .edge_line_joint_stream  = &vertex_format_edge_line_joints.streams.front()
     };
 }
 

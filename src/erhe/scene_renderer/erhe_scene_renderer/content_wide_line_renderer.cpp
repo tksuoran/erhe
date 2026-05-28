@@ -20,6 +20,7 @@
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/projection.hpp"
+#include "erhe_scene/skin.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <glm/gtc/type_ptr.hpp>
@@ -27,10 +28,12 @@
 namespace erhe::scene_renderer {
 
 Content_wide_line_renderer::Content_wide_line_renderer(
-    erhe::graphics::Device&        graphics_device,
-    erhe::graphics::Shader_stages* compute_shader_stages,
-    erhe::graphics::Shader_stages* graphics_shader_stages,
-    int                            view_count
+    erhe::graphics::Device&          graphics_device,
+    erhe::graphics::Shader_stages*   compute_shader_stages,
+    erhe::graphics::Shader_stages*   compute_shader_stages_skinned,
+    erhe::graphics::Shader_stages*   graphics_shader_stages,
+    erhe::graphics::Shader_resource* joint_block,
+    int                              view_count
 )
     : m_graphics_device {graphics_device}
     , m_view_count      {std::max(1, view_count)}
@@ -51,8 +54,10 @@ Content_wide_line_renderer::Content_wide_line_renderer(
             }
         }
     }
-    , m_compute_shader_stages {compute_shader_stages}
-    , m_graphics_shader_stages{graphics_shader_stages}
+    , m_joint_block                 {joint_block}
+    , m_compute_shader_stages        {compute_shader_stages}
+    , m_compute_shader_stages_skinned{compute_shader_stages_skinned}
+    , m_graphics_shader_stages       {graphics_shader_stages}
     , m_vertex_input{
         graphics_device,
         erhe::graphics::Vertex_input_state_data::make(m_triangle_vertex_format)
@@ -90,6 +95,25 @@ Content_wide_line_renderer::Content_wide_line_renderer(
         }
     );
     m_edge_line_vertex_buffer_block->add_struct("vertices", m_edge_line_vertex_struct.get(), erhe::graphics::Shader_resource::unsized_array);
+
+    // Skinned variant only: parallel SSBO holding per-endpoint joint
+    // indices + weights. Matches vertex_format_edge_line_joints layout
+    // in mesh_memory.cpp and the data layout written by
+    // primitive_builder.cpp::build_edge_lines.
+    m_edge_line_joint_vertex_struct = std::make_unique<erhe::graphics::Shader_resource>(graphics_device, "edge_line_joint_vertex");
+    m_edge_line_joint_vertex_struct->add_uvec4("joint_indices");
+    m_edge_line_joint_vertex_struct->add_vec4 ("joint_weights");
+
+    m_edge_line_joint_vertex_buffer_block = std::make_unique<erhe::graphics::Shader_resource>(
+        graphics_device,
+        erhe::graphics::Shader_resource::Block_create_info{
+            .name          = "edge_line_joint_buffer",
+            .binding_point = 2,
+            .type          = erhe::graphics::Shader_resource::Type::shader_storage_block,
+            .readonly      = true
+        }
+    );
+    m_edge_line_joint_vertex_buffer_block->add_struct("vertices", m_edge_line_joint_vertex_struct.get(), erhe::graphics::Shader_resource::unsized_array);
 
     // Triangle output SSBO
     m_triangle_vertex_struct = std::make_unique<erhe::graphics::Shader_resource>(graphics_device, "triangle_vertex");
@@ -135,7 +159,8 @@ Content_wide_line_renderer::Content_wide_line_renderer(
     //   uint   stride_per_view;               // padded_edge_count * 6 vertices
     //   float  vp_y_sign;
     //   float  clip_depth_direction;
-    //   float  _padding[2];
+    //   uint   base_joint_index;              // per-dispatch, skinned variant only
+    //   float  _padding;                      // pad to 16-byte boundary
     //
     // Per-eye data is grouped into cameras[] so the multiview compute
     // shader can write one triangle set per view in a single dispatch
@@ -162,8 +187,12 @@ Content_wide_line_renderer::Content_wide_line_renderer(
     m_stride_per_view_offset      = m_view_block->add_uint ("stride_per_view"     )->get_offset_in_parent();
     m_vp_y_sign_offset            = m_view_block->add_float("vp_y_sign"           )->get_offset_in_parent();
     m_clip_depth_direction_offset = m_view_block->add_float("clip_depth_direction")->get_offset_in_parent();
+    // base_joint_index is read only by the skinned compute variant
+    // (compute_before_content_line.comp under ERHE_USE_SKINNING); the
+    // non-skinned variant ignores it. Keeping the field in the shared
+    // view block avoids two view layouts.
+    m_base_joint_index_offset     = m_view_block->add_uint ("base_joint_index"    )->get_offset_in_parent();
     m_padding0_offset             = m_view_block->add_float("_padding0"           )->get_offset_in_parent();
-    m_padding1_offset             = m_view_block->add_float("_padding1"           )->get_offset_in_parent();
 
     m_bind_group_layout = std::make_unique<erhe::graphics::Bind_group_layout>(
         graphics_device,
@@ -180,6 +209,38 @@ Content_wide_line_renderer::Content_wide_line_renderer(
             .uses_texture_heap = false
         }
     );
+
+    // Skinned variant bind group layout: same bindings as the non-skinned
+    // one, plus the joint side-buffer SSBO and the global `joint` block.
+    // Only built when both skinned shader stages and a joint_block are
+    // provided; otherwise stays nullptr and the skinned compute pipeline
+    // is not constructed.
+    if (m_joint_block != nullptr) {
+        m_skinned_bind_group_layout = std::make_unique<erhe::graphics::Bind_group_layout>(
+            graphics_device,
+            erhe::graphics::Bind_group_layout_create_info{
+                .bindings = {
+                    {m_edge_line_vertex_buffer_block      ->get_binding_point(), erhe::graphics::Binding_type::storage_buffer},
+                    {m_triangle_vertex_buffer_block       ->get_binding_point(), erhe::graphics::Binding_type::storage_buffer},
+                    {m_edge_line_joint_vertex_buffer_block->get_binding_point(), erhe::graphics::Binding_type::storage_buffer},
+                    {
+                        m_view_block->get_binding_point(),
+                        (m_view_block->get_type() == erhe::graphics::Shader_resource::Type::shader_storage_block)
+                            ? erhe::graphics::Binding_type::storage_buffer
+                            : erhe::graphics::Binding_type::uniform_buffer
+                    },
+                    {
+                        m_joint_block->get_binding_point(),
+                        (m_joint_block->get_type() == erhe::graphics::Shader_resource::Type::shader_storage_block)
+                            ? erhe::graphics::Binding_type::storage_buffer
+                            : erhe::graphics::Binding_type::uniform_buffer
+                    },
+                },
+                .debug_label       = "Content wide line skinned",
+                .uses_texture_heap = false
+            }
+        );
+    }
 
     // Multiview graphics-pipeline layout. Triangle SSBO bound here
     // read-only (vertex stage indexes it via gl_VertexID + gl_ViewIndex
@@ -224,6 +285,19 @@ Content_wide_line_renderer::Content_wide_line_renderer(
         );
         m_enabled = true;
     }
+    if (
+        (m_compute_shader_stages_skinned != nullptr) && m_compute_shader_stages_skinned->is_valid() &&
+        (m_skinned_bind_group_layout != nullptr)
+    ) {
+        m_compute_pipeline_skinned.emplace(
+            m_graphics_device,
+            erhe::graphics::Compute_pipeline_data{
+                .name              = "compute_before_content_line_skinned",
+                .shader_stages     = m_compute_shader_stages_skinned,
+                .bind_group_layout = m_skinned_bind_group_layout.get()
+            }
+        );
+    }
 }
 
 Content_wide_line_renderer::~Content_wide_line_renderer() noexcept = default;
@@ -235,11 +309,13 @@ auto Content_wide_line_renderer::is_enabled() const -> bool
 
 void Content_wide_line_renderer::set_shader_stages(
     erhe::graphics::Shader_stages* compute_shader_stages,
+    erhe::graphics::Shader_stages* compute_shader_stages_skinned,
     erhe::graphics::Shader_stages* graphics_shader_stages,
     erhe::graphics::Shader_stages* multiview_graphics_shader_stages
 )
 {
     m_compute_shader_stages            = compute_shader_stages;
+    m_compute_shader_stages_skinned    = compute_shader_stages_skinned;
     m_graphics_shader_stages           = graphics_shader_stages;
     m_multiview_graphics_shader_stages = multiview_graphics_shader_stages;
 
@@ -257,10 +333,26 @@ void Content_wide_line_renderer::set_shader_stages(
         );
         m_enabled = true;
     }
+    if (
+        (m_compute_shader_stages_skinned != nullptr) && m_compute_shader_stages_skinned->is_valid() &&
+        (m_skinned_bind_group_layout != nullptr)
+    ) {
+        m_compute_pipeline_skinned.emplace(
+            m_graphics_device,
+            erhe::graphics::Compute_pipeline_data{
+                .name              = "compute_before_content_line_skinned",
+                .shader_stages     = m_compute_shader_stages_skinned,
+                .bind_group_layout = m_skinned_bind_group_layout.get()
+            }
+        );
+    }
 }
 
 auto Content_wide_line_renderer::get_edge_line_vertex_struct             () const -> erhe::graphics::Shader_resource*   { return m_edge_line_vertex_struct.get(); }
 auto Content_wide_line_renderer::get_edge_line_vertex_buffer_block       () const -> erhe::graphics::Shader_resource*   { return m_edge_line_vertex_buffer_block.get(); }
+auto Content_wide_line_renderer::get_edge_line_joint_vertex_struct       () const -> erhe::graphics::Shader_resource*   { return m_edge_line_joint_vertex_struct.get(); }
+auto Content_wide_line_renderer::get_edge_line_joint_vertex_buffer_block () const -> erhe::graphics::Shader_resource*   { return m_edge_line_joint_vertex_buffer_block.get(); }
+auto Content_wide_line_renderer::get_skinned_bind_group_layout           () const -> erhe::graphics::Bind_group_layout* { return m_skinned_bind_group_layout.get(); }
 auto Content_wide_line_renderer::get_triangle_vertex_struct              () const -> erhe::graphics::Shader_resource*   { return m_triangle_vertex_struct.get(); }
 auto Content_wide_line_renderer::get_triangle_vertex_buffer_block        () const -> erhe::graphics::Shader_resource*   { return m_triangle_vertex_buffer_block.get(); }
 auto Content_wide_line_renderer::get_triangle_vertex_buffer_read_block   () const -> erhe::graphics::Shader_resource*   { return m_triangle_vertex_buffer_read_block.get(); }
@@ -301,6 +393,17 @@ void Content_wide_line_renderer::add_mesh(
 
     const glm::mat4 world_from_node = node->world_from_node();
 
+    // Skinned-edge dispatch is only emitted when the skinned compute
+    // pipeline was compiled (skinned shader stages + joint_block were
+    // supplied at construction) AND the mesh actually carries a Skin.
+    // Otherwise the mesh falls back to the non-skinned dispatch path
+    // (which transforms edges by world_from_node only -- correct for
+    // unskinned meshes, but in bind pose for skinned meshes).
+    const bool                     skinned_path_available = m_compute_pipeline_skinned.has_value();
+    const std::shared_ptr<erhe::scene::Skin>& skin        = mesh.skin;
+    const bool                     use_skinned            = skinned_path_available && (skin != nullptr);
+    const uint32_t                 base_joint_index       = use_skinned ? skin->skin_data.joint_buffer_index : 0u;
+
     for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh.get_primitives()) {
         if (!mesh_primitive.primitive) {
             continue;
@@ -321,6 +424,24 @@ void Content_wide_line_renderer::add_mesh(
         }
 
         const std::size_t edge_count = edge_range.count / 2;
+
+        // Joint side-buffer lookup. Only meaningful when the mesh carries
+        // a Skin AND primitive_builder allocated the joint side-buffer
+        // (i.e. the source GEO::Mesh had joint attributes). Either being
+        // absent forces the dispatch back to the non-skinned path.
+        erhe::graphics::Buffer* joint_buffer            = nullptr;
+        std::size_t             joint_buffer_byte_offset = 0;
+        std::size_t             joint_buffer_byte_size   = 0;
+        const erhe::primitive::Buffer_range& joint_range = buffer_mesh->edge_line_joint_buffer_range;
+        if (use_skinned && (joint_range.count > 0)) {
+            joint_buffer = mesh_memory.get_vertex_buffer(joint_range);
+            if (joint_buffer != nullptr) {
+                joint_buffer_byte_offset = joint_range.byte_offset;
+                joint_buffer_byte_size   = joint_range.count * joint_range.element_size;
+            }
+        }
+        const bool dispatch_is_skinned = (joint_buffer != nullptr);
+
         m_dispatches.push_back(Dispatch_entry{
             .edge_buffer             = edge_buffer,
             .edge_buffer_byte_offset = edge_range.byte_offset,
@@ -328,7 +449,12 @@ void Content_wide_line_renderer::add_mesh(
             .world_from_node         = world_from_node,
             .color                   = color,
             .line_width              = line_width,
-            .group                   = group
+            .group                   = group,
+            .skinned                 = dispatch_is_skinned,
+            .joint_buffer            = joint_buffer,
+            .joint_buffer_byte_offset = joint_buffer_byte_offset,
+            .joint_buffer_byte_size  = joint_buffer_byte_size,
+            .base_joint_index        = dispatch_is_skinned ? base_joint_index : 0u
         });
     }
 }
@@ -337,12 +463,24 @@ void Content_wide_line_renderer::compute(
     erhe::graphics::Compute_command_encoder&  command_encoder,
     const erhe::math::Viewport&               viewport,
     const erhe::scene::Camera&                camera,
+    erhe::graphics::Ring_buffer_client*       joint_buffer_client,
+    erhe::graphics::Ring_buffer_range*        joint_buffer_range,
     const bool                                reverse_depth,
     const erhe::math::Depth_range             depth_range,
     const erhe::math::Coordinate_conventions& conventions
 )
 {
-    compute(command_encoder, viewport, &camera, std::span<const Camera_view_input>{}, reverse_depth, depth_range, conventions);
+    compute(
+        command_encoder,
+        viewport,
+        &camera,
+        std::span<const Camera_view_input>{},
+        joint_buffer_client,
+        joint_buffer_range,
+        reverse_depth,
+        depth_range,
+        conventions
+    );
 }
 
 namespace {
@@ -389,6 +527,8 @@ void Content_wide_line_renderer::compute(
     const erhe::math::Viewport&               viewport,
     const erhe::scene::Camera*                camera,
     std::span<const Camera_view_input>        multiview_views,
+    erhe::graphics::Ring_buffer_client*       joint_buffer_client,
+    erhe::graphics::Ring_buffer_range*        joint_buffer_range,
     const bool                                reverse_depth,
     const erhe::math::Depth_range             depth_range,
     const erhe::math::Coordinate_conventions& conventions
@@ -411,6 +551,16 @@ void Content_wide_line_renderer::compute(
     };
 
     ERHE_VERIFY(m_compute_pipeline.has_value());
+
+    // Choose the starting pipeline based on whether the first queued
+    // dispatch is skinned. The per-dispatch loop below switches
+    // bind_group_layout + pipeline whenever the skinned-ness flips.
+    // Skinned dispatches additionally require the caller to have
+    // provided a joint buffer client + range; without one we silently
+    // demote the dispatch to non-skinned (renders in bind pose).
+    const bool have_joint_data = (joint_buffer_client != nullptr) && (joint_buffer_range != nullptr) && m_compute_pipeline_skinned.has_value();
+
+    bool current_skinned = false;
     command_encoder.set_bind_group_layout(m_bind_group_layout.get());
     command_encoder.set_compute_pipeline(m_compute_pipeline.value());
 
@@ -455,6 +605,34 @@ void Content_wide_line_renderer::compute(
     std::size_t             prev_edge_buffer_size   = 0;
 
     for (Dispatch_entry& dispatch : m_dispatches) {
+        // Demote skinned dispatch to non-skinned when the caller did
+        // not provide joint data; the edge lines will render in bind
+        // pose, matching the legacy behaviour.
+        const bool dispatch_skinned = dispatch.skinned && have_joint_data;
+
+        // Switch pipeline + bind group layout when skinned-ness flips
+        // across consecutive dispatches. Vulkan requires the new
+        // descriptor set layout to be applied before any further
+        // bindings; OpenGL accepts the redundant set without cost.
+        // Rebind the joint UBO/SSBO each time we enter the skinned
+        // layout because Vulkan invalidates all descriptors when the
+        // pipeline layout changes.
+        if (dispatch_skinned != current_skinned) {
+            if (dispatch_skinned) {
+                command_encoder.set_bind_group_layout(m_skinned_bind_group_layout.get());
+                command_encoder.set_compute_pipeline(m_compute_pipeline_skinned.value());
+                joint_buffer_client->bind(command_encoder, *joint_buffer_range);
+            } else {
+                command_encoder.set_bind_group_layout(m_bind_group_layout.get());
+                command_encoder.set_compute_pipeline(m_compute_pipeline.value());
+            }
+            current_skinned = dispatch_skinned;
+            // Layout change invalidates previously-bound edge SSBOs.
+            prev_edge_buffer        = nullptr;
+            prev_edge_buffer_offset = 0;
+            prev_edge_buffer_size   = 0;
+        }
+
         const std::size_t view_size = m_view_block->get_size_bytes();
         erhe::graphics::Ring_buffer_range view_buffer_range = m_view_buffer.acquire(
             erhe::graphics::Ring_buffer_usage::CPU_write,
@@ -495,8 +673,8 @@ void Content_wide_line_renderer::compute(
         const float zero      = 0.0f;
         write(view_data, m_vp_y_sign_offset,            as_span(vp_y_sign));
         write(view_data, m_clip_depth_direction_offset, as_span(clip_depth_direction));
+        write(view_data, m_base_joint_index_offset,     as_span(dispatch.base_joint_index));
         write(view_data, m_padding0_offset,             as_span(zero));
-        write(view_data, m_padding1_offset,             as_span(zero));
 
         view_buffer_range.bytes_written(view_size);
         view_buffer_range.close();
@@ -528,6 +706,20 @@ void Content_wide_line_renderer::compute(
             prev_edge_buffer        = dispatch.edge_buffer;
             prev_edge_buffer_offset = dispatch.edge_buffer_byte_offset;
             prev_edge_buffer_size   = edge_buffer_size;
+        }
+
+        if (dispatch_skinned) {
+            // Joint side-buffer for this mesh's per-endpoint indices +
+            // weights. Bound per-dispatch (no de-dup) because there is
+            // no expectation that consecutive skinned meshes share a
+            // pool block here.
+            command_encoder.set_buffer(
+                erhe::graphics::Buffer_target::storage,
+                dispatch.joint_buffer,
+                dispatch.joint_buffer_byte_offset,
+                dispatch.joint_buffer_byte_size,
+                m_edge_line_joint_vertex_buffer_block->get_binding_point()
+            );
         }
 
         // Triangle SSBO holds view_count_runtime contiguous slabs, each
