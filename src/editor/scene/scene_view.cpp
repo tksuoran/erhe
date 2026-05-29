@@ -107,6 +107,39 @@ void Scene_view::set_hover(const std::size_t slot, const Hover_entry& entry)
     }
 }
 
+void Scene_view::merge_hover(const std::size_t slot, const Hover_entry& candidate)
+{
+    // Invalid candidates never override what is already in the slot --
+    // an empty Hover_entry from the path that did not hit must not erase
+    // a valid hit from the path that did.
+    if (!candidate.valid || !candidate.position.has_value()) {
+        return;
+    }
+
+    const Hover_entry& current = m_hover_entries[slot];
+    if (!current.valid || !current.position.has_value()) {
+        // Slot is empty (or was just cleared): take the candidate.
+        set_hover(slot, candidate);
+        return;
+    }
+
+    // Both have a hit -- keep whichever is closer along the picking ray.
+    // ray.direction is unit-length (set_world_from_control normalizes
+    // far - near), so the dot product yields a signed metric distance.
+    const std::optional<glm::vec3> ray_origin_opt    = get_control_ray_origin_in_world();
+    const std::optional<glm::vec3> ray_direction_opt = get_control_ray_direction_in_world();
+    if (!ray_origin_opt.has_value() || !ray_direction_opt.has_value()) {
+        return;
+    }
+    const glm::vec3 ray_origin    = ray_origin_opt.value();
+    const glm::vec3 ray_direction = ray_direction_opt.value();
+    const float current_t   = glm::dot(current.position.value()   - ray_origin, ray_direction);
+    const float candidate_t = glm::dot(candidate.position.value() - ray_origin, ray_direction);
+    if (candidate_t < current_t) {
+        set_hover(slot, candidate);
+    }
+}
+
 auto Scene_view::get_config() -> Viewport_config&
 {
     return m_viewport_config;
@@ -404,6 +437,12 @@ void Scene_view::update_hover_with_raytrace()
         } else {
             SPDLOG_LOGGER_TRACE(log_controller_ray, "{}: no hit", Hover_entry::slot_names[slot]);
         }
+        // Raytrace is the primary path: it fully owns the slot it writes
+        // to, overwriting whatever the previous frame left. The ID
+        // renderer runs after this and merges its (possibly closer)
+        // candidate via merge_hover. Headset_view also calls
+        // update_hover_with_raytrace as its only picker and relies on
+        // the overwrite semantic.
         set_hover(slot, entry);
     }
 }

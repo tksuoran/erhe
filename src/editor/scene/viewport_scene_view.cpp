@@ -164,7 +164,12 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
             : std::span<const erhe::scene_renderer::Camera_view_input>{}
     };
 
-    if (do_render && m_is_scene_view_hovered && m_context.id_renderer->enabled) {
+    // The ID renderer always runs when the viewport is hovered -- it is
+    // the only source of correct picks for skinned meshes (the raytrace
+    // BVH is rest-pose only). The id_renderer.enabled config knob is
+    // repurposed inside App_rendering::render_id to switch the ID pass
+    // between skinned-only (default) and skinned + static (force-id).
+    if (do_render && m_is_scene_view_hovered) {
         m_context.app_rendering->render_id(context);
     }
 
@@ -549,10 +554,18 @@ void Viewport_scene_view::update_hover(bool ray_only)
         scene_root->update_pointer_for_rendertarget_meshes(this);
     }
 
-    if (m_context.id_renderer && m_context.id_renderer->enabled) {
+    // Hybrid picker: raytrace handles static meshes (its BVH is correct
+    // for the rest-pose surface which equals the displayed surface for
+    // non-skinned content), the ID renderer handles skinned meshes
+    // (rasterizing the posed surface that the user actually sees). Both
+    // paths run every frame and the per-slot result is merged by ray-t
+    // so the closer hit wins. With id_renderer.enabled set to true the
+    // ID pass additionally covers static meshes; the merge then chooses
+    // whichever path returns the closer hit (they should agree on the
+    // same surface).
+    update_hover_with_raytrace();
+    if (m_context.id_renderer != nullptr) {
         update_hover_with_id_render();
-    } else {
-        update_hover_with_raytrace();
     }
 
     update_grid_hover();
@@ -643,10 +656,15 @@ void Viewport_scene_view::update_hover_with_id_render()
     //     hover_rendertarget ? "rendertarget " : ""
     // );
 
-    set_hover(Hover_entry::content_slot     , hover_content      ? entry : Hover_entry{});
-    set_hover(Hover_entry::tool_slot        , hover_tool         ? entry : Hover_entry{});
-    set_hover(Hover_entry::brush_slot       , hover_brush        ? entry : Hover_entry{});
-    set_hover(Hover_entry::rendertarget_slot, hover_rendertarget ? entry : Hover_entry{});
+    // Merge into the slot the mesh's role flag matches. The raytrace
+    // path ran first and may have populated other slots; merge_hover
+    // only overrides them when the candidate is closer along the
+    // picking ray. Slots where the candidate role does not match are
+    // intentionally left alone so the raytrace result stands.
+    if (hover_content     ) { merge_hover(Hover_entry::content_slot     , entry); }
+    if (hover_tool        ) { merge_hover(Hover_entry::tool_slot        , entry); }
+    if (hover_brush       ) { merge_hover(Hover_entry::brush_slot       , entry); }
+    if (hover_rendertarget) { merge_hover(Hover_entry::rendertarget_slot, entry); }
 }
 
 auto Viewport_scene_view::get_position_in_viewport() const -> std::optional<glm::vec2>

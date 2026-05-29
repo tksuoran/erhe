@@ -132,7 +132,15 @@ public:
     [[nodiscard]] auto get_nearest_hover                        (uint32_t slot_mask) const -> const Hover_entry*;
 
 protected:
-    void set_hover(std::size_t slot, const Hover_entry& entry);
+    void set_hover  (std::size_t slot, const Hover_entry& entry);
+    // Set the slot to `candidate` only when it is closer (smaller ray-t)
+    // than what is already there, or when there is no valid hit yet.
+    // Invalid / position-less candidates never override. Used by the
+    // hybrid picker that runs both raytrace (static meshes) and the
+    // ID renderer (skinned meshes by default; everything when the
+    // id_renderer.enabled config is true) per frame and keeps whichever
+    // result is closest to the camera along the picking ray.
+    void merge_hover(std::size_t slot, const Hover_entry& candidate);
 
     App_context&              m_context;
     std::optional<glm::mat4>  m_world_from_control;

@@ -117,7 +117,12 @@ void main()
     return;
 #endif
 
-#if !defined(ERHE_VARIANT_DEPTH_ONLY)
+// The lit-path locals + light loops reference v_material_index,
+// v_position, v_texcoord, the material/light/camera blocks, and the
+// BxDF/light/srgb/texture includes -- all gated on POSITION_PASS at the
+// top of this file. Gate the body on POSITION_PASS too so the ID-render
+// variant does not pull them in.
+#if !defined(ERHE_VARIANT_POSITION_PASS)
     Material material   = material.materials[v_material_index];
     vec3     base_color = material.base_color.rgb;
 

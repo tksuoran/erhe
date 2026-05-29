@@ -1066,6 +1066,16 @@ void App_rendering::render_id(const Render_context& context)
 
     // TODO listen to viewport changes in msg bus?
     ERHE_VERIFY(context.command_buffer != nullptr);
+    // id_renderer.enabled is repurposed under the hybrid picker: false
+    // (the default) means the ID pass covers only skinned meshes and the
+    // raytrace path covers static meshes; true means the ID pass covers
+    // everything (legacy "all-id" behaviour) and the raytrace path's
+    // contribution becomes whichever per-slot hit it returns sooner. The
+    // viewport_scene_view merge picks the closer hit per slot either way.
+    const Id_renderer::Skinning_filter skinning_filter = m_context.id_renderer->enabled
+        ? Id_renderer::Skinning_filter::all
+        : Id_renderer::Skinning_filter::skinned_only;
+
     m_context.id_renderer->render(
         Id_renderer::Render_parameters{
             .command_buffer     = *context.command_buffer,
@@ -1080,9 +1090,7 @@ void App_rendering::render_id(const Render_context& context)
             .conventions        = context.scene_view.get_conventions(),
             .joint_buffer       = joint_buffer,
             .skins              = skins,
-            // skinning_filter defaults to Skinning_filter::all -- the
-            // hybrid switch to skinned_only / raytrace for static lands
-            // with the merge logic in viewport_scene_view.
+            .skinning_filter    = skinning_filter,
         }
     );
 }
