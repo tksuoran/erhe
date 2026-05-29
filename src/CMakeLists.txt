@@ -41,7 +41,7 @@ endif ()
 if (NOT ERHE_TARGET_OS_ANDROID)
     add_subdirectory(example)
     add_subdirectory(hello_swap)
-    add_subdirectory(rendering_test)
+    #add_subdirectory(rendering_test)
 
     if (${ERHE_GUI_LIBRARY} STREQUAL "imgui")
         message(STATUS "Adding subdirectory 'hextiles'.")
