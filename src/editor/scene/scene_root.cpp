@@ -11,6 +11,7 @@
 #include "scene/node_physics.hpp"
 #include "scene/scene_commands.hpp"
 #include "scene/node_raytrace.hpp"
+#include "scene/node_raytrace_mask.hpp"
 #include "windows/item_tree_window.hpp"
 
 #include "erhe_physics/iworld.hpp"
@@ -427,9 +428,24 @@ void Scene_root::begin_mesh_rt_update(const std::shared_ptr<erhe::scene::Mesh>& 
     mesh->detach_rt_from_scene();
 }
 
+auto Scene_root::get_mesh_rt_mask(erhe::scene::Mesh* mesh) -> uint32_t
+{
+    if ((mesh != nullptr) && mesh->skin) {
+        // GPU-skinned mesh: the raytrace BVH was built from rest-pose
+        // vertices and is never refit, so any hit here would correspond
+        // to the unposed surface. Drop the role bits the node would
+        // otherwise contribute and carry only the `skinned` marker so
+        // picking-tool rays (which mask on role bits) skip the instance.
+        // The ID renderer covers skinned meshes correctly. To raytrace
+        // a skinned mesh on purpose, set ray.mask |= Raytrace_node_mask::skinned.
+        return Raytrace_node_mask::skinned;
+    }
+    return get_node_rt_mask(mesh ? mesh->get_node() : nullptr);
+}
+
 void Scene_root::end_mesh_rt_update(const std::shared_ptr<erhe::scene::Mesh>& mesh)
 {
-    mesh->set_rt_mask(get_node_rt_mask(mesh->get_node()));
+    mesh->set_rt_mask(get_mesh_rt_mask(mesh.get()));
     mesh->attach_rt_to_scene(m_raytrace_scene.get());
 }
 
@@ -440,7 +456,7 @@ void Scene_root::register_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
     log_scene->debug("Registering Mesh '{}' into scene", mesh->get_name());
 
     mesh->attach_rt_to_scene(m_raytrace_scene.get());
-    mesh->set_rt_mask(get_node_rt_mask(mesh->get_node())); // TODO If scene changes, the mesh/node masks need to be updated somehow
+    mesh->set_rt_mask(get_mesh_rt_mask(mesh.get())); // TODO If scene changes, the mesh/node masks need to be updated somehow
 
     if (m_scene) {
         m_scene->register_mesh(mesh);

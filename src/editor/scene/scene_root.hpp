@@ -171,6 +171,12 @@ public:
 
 private:
     [[nodiscard]] auto get_node_rt_mask(erhe::scene::Node* node) -> uint32_t;
+    // Returns the raytrace IInstance mask for a mesh. Skinned meshes get
+    // the Raytrace_node_mask::skinned bit in lieu of the role bits the
+    // node would otherwise contribute, so picking-tool rays (which use
+    // role bits) skip them and the ID renderer handles them instead. See
+    // Raytrace_node_mask::skinned.
+    [[nodiscard]] auto get_mesh_rt_mask(erhe::scene::Mesh* mesh) -> uint32_t;
 
     erhe::message_bus::Subscription<Selection_message> m_selection_subscription;
 

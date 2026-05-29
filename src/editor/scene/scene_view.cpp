@@ -299,6 +299,8 @@ void Scene_view::update_hover_with_raytrace()
 
     // Optimization: Check if there are any hits. This helps to avoid doing
     // multiple masked raycasts later in case there are no hits at all.
+    // Skips skinned meshes (mask bit Raytrace_node_mask::skinned) because
+    // their BVH is rest-pose only -- they are picked by the ID renderer.
     const bool any_hit = [&]() {
         erhe::raytrace::Ray ray{
             .origin    = ray_origin,
@@ -306,7 +308,7 @@ void Scene_view::update_hover_with_raytrace()
             .direction = ray_direction,
             .time      = 0.0f,
             .t_far     = 9999.0f,
-            .mask      = std::numeric_limits<uint32_t>::max(),
+            .mask      = Raytrace_node_mask::pickable_static,
             .id        = 0,
             .flags     = 0
         };
