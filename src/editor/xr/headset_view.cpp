@@ -879,16 +879,23 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
                 .height = static_cast<int>(render_view.height)
             };
 
+            erhe::scene::Camera* view_camera = view_resources->get_camera();
+            const erhe::scene_renderer::Camera_view_input single_view_input{
+                .projection = view_camera->projection(),
+                .node       = view_camera->get_node(),
+                .viewport   = viewport
+            };
             Render_context render_context {
                 .command_buffer      = &view_cb,
                 .encoder             = nullptr, // filled in later once we start render pass
                 .app_context         = m_context,
                 .scene_view          = *this,
                 .viewport_config     = m_viewport_config,
-                .camera              = view_resources->get_camera(),
+                .camera              = view_camera,
                 .viewport_scene_view = nullptr,
                 .viewport            = viewport,
                 .shader_debug        = static_cast<erhe::scene_renderer::Shader_debug>(m_selected_shader_debug),
+                .views               = std::span<const erhe::scene_renderer::Camera_view_input>(&single_view_input, 1)
             };
             const erhe::renderer::View debug_view = erhe::renderer::Debug_renderer::view_from_camera(
                 *render_context.camera,

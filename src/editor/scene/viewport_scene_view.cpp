@@ -136,6 +136,19 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
         do_render = false;
     }
 
+    // 1-element views span for the single-view path. Declared in this
+    // outer scope so the backing object outlives every use of
+    // context.views (Render_context's views field is a span pointing
+    // here; it is read by Forward_renderer, Content_wide_line_renderer,
+    // and downstream renderables for the rest of this function).
+    erhe::scene_renderer::Camera_view_input single_view_input{};
+    if (camera) {
+        single_view_input = erhe::scene_renderer::Camera_view_input{
+            .projection = camera->projection(),
+            .node       = camera->get_node(),
+            .viewport   = m_projection_viewport
+        };
+    }
     Render_context context{
         .command_buffer      = &command_buffer,
         .encoder             = nullptr, // filled in later once we start render pass
@@ -145,10 +158,10 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
         .camera              = camera.get(),
         .viewport_scene_view = this,
         .viewport            = m_projection_viewport,
-        .shader_debug        = m_shader_debug
-        // .views left empty; Forward_renderer's single-view path keys
-        // off views.empty(). The follow-up Forward_renderer unification
-        // will start populating this with a 1-element single-view span.
+        .shader_debug        = m_shader_debug,
+        .views               = camera
+            ? std::span<const erhe::scene_renderer::Camera_view_input>(&single_view_input, 1)
+            : std::span<const erhe::scene_renderer::Camera_view_input>{}
     };
 
     if (do_render && m_is_scene_view_hovered && m_context.id_renderer->enabled) {
@@ -291,14 +304,9 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
                 }
                 {
                     erhe::graphics::Compute_command_encoder compute_encoder = graphics_device.make_compute_command_encoder(command_buffer);
-                    const erhe::scene_renderer::Camera_view_input view_input{
-                        .projection = context.camera->projection(),
-                        .node       = context.camera->get_node(),
-                        .viewport   = context.viewport,
-                    };
                     m_context.content_wide_line_renderer->compute(
                         compute_encoder,
-                        std::span<const erhe::scene_renderer::Camera_view_input>(&view_input, 1),
+                        context.views,
                         joint_buffer,
                         joint_buffer ? &joint_buffer_range : nullptr,
                         get_reverse_depth(),

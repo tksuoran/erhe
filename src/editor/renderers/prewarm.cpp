@@ -60,7 +60,7 @@ void prewarm_all(
     }
 
     // Collect the view counts the runtime forward path will encounter.
-    // Single-view (view_count = 0, matches base.views.empty() at runtime) is
+    // Single-view (view_count = 0, matches base.views.size() == 1 at runtime) is
     // always present. OpenXR builds with multiview also walk
     // Xr_session::get_view_count() (typically 2 for stereo).
     std::vector<uint32_t> multiview_view_counts{ 0u };

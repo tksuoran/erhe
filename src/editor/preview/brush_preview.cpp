@@ -247,6 +247,11 @@ void Brush_preview::render_preview(
     {
         erhe::graphics::Render_command_encoder render_encoder = m_context.graphics_device->make_render_command_encoder(command_buffer);
         erhe::graphics::Scoped_render_pass scoped_render_pass{*m_render_pass.get(), command_buffer};
+        const erhe::scene_renderer::Camera_view_input single_view_input{
+            .projection = m_camera->projection(),
+            .node       = m_camera->get_node(),
+            .viewport   = viewport
+        };
         const Render_context context{
             .command_buffer      = &command_buffer,
             .encoder             = &render_encoder,
@@ -256,7 +261,8 @@ void Brush_preview::render_preview(
             .viewport_config     = m_viewport_config,
             .camera              = m_camera.get(),
             .viewport_scene_view = nullptr,
-            .viewport            = viewport
+            .viewport            = viewport,
+            .views               = std::span<const erhe::scene_renderer::Camera_view_input>(&single_view_input, 1)
         };
         m_composer.render(context);
     }

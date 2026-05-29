@@ -416,13 +416,19 @@ public:
         erhe::graphics::Render_command_encoder render_encoder = m_graphics_device.make_render_command_encoder(command_buffer);
         erhe::graphics::Scoped_render_pass scoped_render_pass{*m_render_pass.get(), command_buffer};
 
+        const erhe::scene_renderer::Camera_view_input single_view_input{
+            .projection = m_camera->projection(),
+            .node       = m_camera->get_node(),
+            .viewport   = viewport
+        };
         m_forward_renderer.render(
             erhe::scene_renderer::Forward_renderer::Render_parameters{
                 .base = erhe::scene_renderer::Forward_renderer::Base_render_parameters{
                     .render_encoder    = render_encoder,
                     .render_pass       = m_render_pass.get(),
                     .viewport          = viewport,
-                    .camera            = m_camera.get(),
+                    .views             = std::span<const erhe::scene_renderer::Camera_view_input>(&single_view_input, 1),
+                    .exposure          = m_camera->get_exposure(),
                     .ambient_light     = glm::vec3{0.1f, 0.1f, 0.1f},
                     .light_projections = &m_light_projections,
                     .lights            = lights,

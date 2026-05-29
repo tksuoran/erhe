@@ -115,16 +115,17 @@ void Forward_renderer::render(const Render_parameters& parameters)
     using Ring_buffer_range = erhe::graphics::Ring_buffer_range;
     std::optional<Ring_buffer_range> camera_buffer_range{};
 
-    // TODO Single path ERHE_VERIFY(!parameters.views.empty());
-    if (!base.views.empty()) {
-        // Multiview path: write one Camera UBO entry per view. The
-        // exposure/grid/frame state is shared across views; FOV and
-        // pose come from each Camera_view_input. Shaders compiled with
-        // enable_multiview() pick the per-eye entry via gl_ViewIndex.
-        const float exposure = (base.camera != nullptr) ? base.camera->get_exposure() : 1.0f;
+    ERHE_VERIFY(!base.views.empty());
+    // Single-view passes (size 1) call update() so the trailing
+    // cameras[] entries get zero-filled when the program was built
+    // with view_count > 1 (XR build running a non-multiview pass).
+    // Multiview passes (size >= 2) call update_views() which writes
+    // every entry; its internal verify guards size against the
+    // compile-time view_count.
+    if (base.views.size() >= 2) {
         camera_buffer_range = m_camera_buffer.update_views(
             base.views,
-            exposure,
+            base.exposure,
             base.grid_size,
             base.grid_line_width,
             base.frame_number,
@@ -132,14 +133,15 @@ void Forward_renderer::render(const Render_parameters& parameters)
             base.depth_range,
             base.conventions
         );
-        m_camera_buffer.bind(render_encoder, camera_buffer_range.value());
-    } 
-    else if (base.camera != nullptr) {
+    } else {
+        const Camera_view_input& view = base.views[0];
+        ERHE_VERIFY(view.projection != nullptr);
+        ERHE_VERIFY(view.node       != nullptr);
         camera_buffer_range = m_camera_buffer.update(
-            *base.camera->projection(),
-            *base.camera->get_node(),
-            base.viewport,
-            base.camera->get_exposure(),
+            *view.projection,
+            *view.node,
+            view.viewport,
+            base.exposure,
             base.grid_size,
             base.grid_line_width,
             base.frame_number,
@@ -147,8 +149,8 @@ void Forward_renderer::render(const Render_parameters& parameters)
             base.depth_range,
             base.conventions
         );
-        m_camera_buffer.bind(render_encoder, camera_buffer_range.value());
     }
+    m_camera_buffer.bind(render_encoder, camera_buffer_range.value());
 
     m_texture_heap->reset_heap(render_encoder.get_command_buffer());
 
@@ -179,7 +181,12 @@ void Forward_renderer::render(const Render_parameters& parameters)
     environment_key.set(Shader_int::LIGHT_COUNT_POINT_NOT_SHADOWMAPPED,       static_cast<uint32_t>(partition.per_type_nonshadow[2]));
     environment_key.set(Shader_int::LIGHT_COUNT_POINT_SHADOWMAPPED,           static_cast<uint32_t>(partition.per_type_shadow   [2]));
     environment_key.set(Shader_int::SHADER_DEBUG,                             static_cast<uint32_t>(parameters.shader_debug)); // TODO proper conversion
-    environment_key.set(Shader_int::SHADER_MULTIVIEW_COUNT,                   static_cast<uint16_t>(base.views.size()));
+    // SHADER_MULTIVIEW_COUNT: 0 for single-view (views.size() == 1),
+    // N for multiview (views.size() >= 2). This matches the prewarm
+    // convention (multiview_view_counts uses 0u for the single-view
+    // bucket) so the runtime get() lookup hits the prewarmed entry.
+    const uint16_t shader_multiview_count = (base.views.size() >= 2) ? static_cast<uint16_t>(base.views.size()) : uint16_t{0};
+    environment_key.set(Shader_int::SHADER_MULTIVIEW_COUNT,                   shader_multiview_count);
 
     for (auto* render_pipeline_state : parameters.base_render_pipelines) {
         erhe::graphics::Scoped_debug_group pipeline_scope{
@@ -324,12 +331,18 @@ void Forward_renderer::draw_primitives(
         m_material_buffer.bind(render_encoder, material_range);
     }
 
+    // draw_primitives() is used for both scene-camera passes (composer
+    // fullscreen passes with a Render_context camera) and bare full-
+    // screen passes that do not source any state from the Camera UBO
+    // (BRDF slice preview, depth-visualization window). The latter
+    // group has no camera at all, so we skip the camera buffer bind
+    // when views is empty -- the descriptor that came in from a prior
+    // pass remains in place, and the shader does not read it.
     std::optional<Ring_buffer_range> camera_range;
-    if (!base.views.empty()) {
-        const float exposure = (base.camera != nullptr) ? base.camera->get_exposure() : 1.0f;
+    if (base.views.size() >= 2) {
         camera_range = m_camera_buffer.update_views(
             base.views,
-            exposure,
+            base.exposure,
             base.grid_size,
             base.grid_line_width,
             base.frame_number,
@@ -338,13 +351,15 @@ void Forward_renderer::draw_primitives(
             base.conventions
         );
         m_camera_buffer.bind(render_encoder, camera_range.value());
-    }
-    else if (base.camera != nullptr) {
+    } else if (!base.views.empty()) {
+        const Camera_view_input& view = base.views[0];
+        ERHE_VERIFY(view.projection != nullptr);
+        ERHE_VERIFY(view.node       != nullptr);
         camera_range = m_camera_buffer.update(
-            *base.camera->projection(),
-            *base.camera->get_node(),
-            base.viewport,
-            base.camera->get_exposure(),
+            *view.projection,
+            *view.node,
+            view.viewport,
+            base.exposure,
             base.grid_size,
             base.grid_line_width,
             base.frame_number,
@@ -413,7 +428,7 @@ auto Forward_renderer::prewarm_standard_variants(const Prewarm_parameters& param
     ERHE_PROFILE_FUNCTION();
 
     // Empty multiview_view_counts means "single view" (SHADER_MULTIVIEW_COUNT = 0),
-    // which matches the runtime base.views.empty() single-camera path.
+    // which matches the runtime views.size() == 1 single-camera path.
     static constexpr uint32_t single_view_default[] = { 0u };
     const std::span<const uint32_t> view_counts = parameters.multiview_view_counts.empty()
         ? std::span<const uint32_t>{single_view_default}

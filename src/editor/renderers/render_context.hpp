@@ -44,11 +44,14 @@ public:
     Viewport_scene_view*                                     viewport_scene_view   {nullptr};
     erhe::math::Viewport                                     viewport              {0, 0, 0, 0};
     erhe::scene_renderer::Shader_debug                       shader_debug          {erhe::scene_renderer::Shader_debug::none};
-    // Per-eye render inputs for multiview rendering. N (>= 2) elements
-    // when this is a multiview pass (headset / XR); empty for single-view
-    // viewports (the `camera` field above carries the active camera in
-    // that case). Forward_renderer / Content_wide_line_renderer pick the
-    // multiview path when this span is non-empty.
+    // Per-eye render inputs. Size 1 for single-view passes (desktop
+    // viewports, previews, XR single-view fallback), size N (>= 2) for
+    // multiview (XR stereo). Forward_renderer /
+    // Content_wide_line_renderer feed this directly to the camera
+    // buffer; the multiview pipeline is selected when size >= 2.
+    // The backing Camera_view_input(s) must outlive every use of this
+    // span -- callers declare them in the same stack frame as the
+    // Render_context.
     std::span<const erhe::scene_renderer::Camera_view_input> views;
 };
 

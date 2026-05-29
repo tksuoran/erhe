@@ -71,8 +71,19 @@ public:
         erhe::graphics::Render_command_encoder&                            render_encoder;
         const erhe::graphics::Render_pass*                                 render_pass      {nullptr};
         const erhe::math::Viewport&                                        viewport;
-        const erhe::scene::Camera*                                         camera           {nullptr};
-        std::span<const Camera_view_input>                                 views            {};
+        // Per-eye render inputs. Always non-empty when render actually
+        // happens: size 1 for single-view passes (desktop viewports,
+        // previews, ID render), size N (>= 2) for multiview (XR).
+        // Forward_renderer's internals (Camera_buffer::update_views,
+        // SHADER_MULTIVIEW_COUNT environment key) read directly from
+        // this span; the multiview shader pipeline kicks in when
+        // views.size() >= 2.
+        std::span<const Camera_view_input>                                 views;
+        // Camera exposure applied to all entries written to the Camera
+        // UBO this pass. Per-camera, not per-view (both eyes share the
+        // same exposure), so it lives in Base_render_parameters rather
+        // than Camera_view_input.
+        float                                                              exposure         {1.0f};
         const glm::vec3                                                    ambient_light    {0.0f};
         const Light_projections*                                           light_projections{nullptr};
         const std::span<const std::shared_ptr<erhe::scene::Light>>&        lights           {};

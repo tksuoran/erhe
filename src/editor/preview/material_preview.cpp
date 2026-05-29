@@ -186,6 +186,17 @@ void Material_preview::render_preview(const std::shared_ptr<erhe::primitive::Mat
     );
     erhe::graphics::Render_command_encoder render_encoder = m_context.graphics_device->make_render_command_encoder(command_buffer);
     erhe::graphics::Scoped_render_pass scoped_render_pass{*m_render_pass.get(), command_buffer};
+    const erhe::math::Viewport context_viewport{
+        .x      = 0,
+        .y      = 0,
+        .width  = m_width,
+        .height = m_height
+    };
+    const erhe::scene_renderer::Camera_view_input single_view_input{
+        .projection = m_camera->projection(),
+        .node       = m_camera->get_node(),
+        .viewport   = context_viewport
+    };
     const Render_context context{
         .command_buffer      = &command_buffer,
         .encoder             = &render_encoder,
@@ -195,12 +206,8 @@ void Material_preview::render_preview(const std::shared_ptr<erhe::primitive::Mat
         .viewport_config     = m_viewport_config,
         .camera              = m_camera.get(),
         .viewport_scene_view = nullptr,
-        .viewport = erhe::math::Viewport{
-            .x      = 0,
-            .y      = 0,
-            .width  = m_width,
-            .height = m_height
-        }
+        .viewport            = context_viewport,
+        .views               = std::span<const erhe::scene_renderer::Camera_view_input>(&single_view_input, 1)
     };
     m_composer.render(context);
 }

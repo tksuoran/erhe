@@ -19,6 +19,7 @@
 #include "erhe_item/item.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_scene/camera.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene_renderer/forward_renderer.hpp"
@@ -127,8 +128,8 @@ void Composition_pass::render(const Render_context& context)
                     .render_encoder    = *context.encoder,
                     .render_pass       = context.render_pass,
                     .viewport          = context.viewport,
-                    .camera            = context.camera,
                     .views             = context.views,
+                    .exposure          = (context.camera != nullptr) ? context.camera->get_exposure() : 1.0f,
                     .light_projections = nullptr,
                     .lights            = {},
                     .skins             = {},
@@ -182,7 +183,7 @@ void Composition_pass::render(const Render_context& context)
             // multiview render pass distributes the single draw across
             // both layers; under single-view the existing
             // vertex-attribute path runs.
-            const bool multiview = !context.views.empty();
+            const bool multiview = (context.views.size() >= 2);
             for (auto* base_render_pipeline : data.base_render_pipelines) {
                 content_wide_line_renderer->render(
                     *context.encoder,
@@ -200,8 +201,8 @@ void Composition_pass::render(const Render_context& context)
                         .render_encoder    = *context.encoder,
                         .render_pass       = context.render_pass,
                         .viewport          = context.viewport,
-                        .camera            = context.camera,
                         .views             = context.views,
+                        .exposure          = (context.camera != nullptr) ? context.camera->get_exposure() : 1.0f,
                         .ambient_light     = layers.light()->ambient_light,
                         .light_projections = context.scene_view.get_light_projections(),
                         .lights            = layers.light()->lights,
