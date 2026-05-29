@@ -188,7 +188,7 @@ Debug_renderer_program_interface::Debug_renderer_program_interface(
 
         bind_group_layout = make_bind_group_layout();
 
-        multiview_graphics_bind_group_layout = std::make_unique<erhe::graphics::Bind_group_layout>(
+        graphics_bind_group_layout = std::make_unique<erhe::graphics::Bind_group_layout>(
             graphics_device,
             erhe::graphics::Bind_group_layout_create_info{
                 .bindings = {
@@ -198,7 +198,7 @@ Debug_renderer_program_interface::Debug_renderer_program_interface(
                             ? erhe::graphics::Binding_type::storage_buffer
                             : erhe::graphics::Binding_type::uniform_buffer},
                 },
-                .debug_label       = "Debug renderer multiview graphics",
+                .debug_label       = "Debug renderer graphics",
                 .uses_texture_heap = false
             }
         );
@@ -225,20 +225,27 @@ Debug_renderer_program_interface::Debug_renderer_program_interface(
             }
         }
         // Triangle rendering shader (reads triangle vertices produced by compute shader)
+        //
+        // Both the single-view and multiview compiles read pre-transformed
+        // triangles from the triangle SSBO and the per-eye viewport from
+        // the view UBO. They differ only in ERHE_MULTIVIEW (which resolves
+        // c_view_index to gl_ViewIndex vs 0u) and the multiview render
+        // pass's viewMask on the pipeline; the bind group layout and
+        // bindings are identical.
         {
             const std::filesystem::path vert_path = shader_path / std::filesystem::path{"line_after_compute.vert"};
             const std::filesystem::path frag_path = shader_path / std::filesystem::path{"line_after_compute.frag"};
             Shader_stages_create_info create_info{
                 .name             = "line_after_compute",
-                .struct_types     = { view_camera_struct.get() },
-                .interface_blocks = { view_block.get() },
+                .struct_types     = { triangle_vertex_struct.get(), view_camera_struct.get() },
+                .interface_blocks = { triangle_vertex_buffer_read_block.get(), view_block.get() },
                 .fragment_outputs = &fragment_outputs,
-                .vertex_format    = &triangle_vertex_format,
+                .no_vertex_input  = true, // reads the triangle SSBO, not the input assembler
                 .shaders = {
                     { Shader_type::vertex_shader,   vert_path },
                     { Shader_type::fragment_shader, frag_path }
                 },
-                .bind_group_layout = bind_group_layout.get(),
+                .bind_group_layout = graphics_bind_group_layout.get(),
             };
 
             Shader_stages_prototype prototype = build_shader_stages(graphics_device, create_info);
@@ -282,7 +289,7 @@ Debug_renderer_program_interface::Debug_renderer_program_interface(
                         { Shader_type::vertex_shader,   vert_path },
                         { Shader_type::fragment_shader, frag_path }
                     },
-                    .bind_group_layout = multiview_graphics_bind_group_layout.get(),
+                    .bind_group_layout = graphics_bind_group_layout.get(),
                 };
                 create_info.view_count = view_count;
 
@@ -363,10 +370,6 @@ Debug_renderer_program_interface::Debug_renderer_program_interface(
 Debug_renderer::Debug_renderer(erhe::graphics::Device& graphics_device, const int view_count)
     : m_graphics_device  {graphics_device}
     , m_program_interface{graphics_device, view_count}
-    , m_vertex_input{
-        graphics_device,
-        erhe::graphics::Vertex_input_state_data::make(m_program_interface.triangle_vertex_format)
-    }
     , m_line_vertex_input{
         graphics_device,
         erhe::graphics::Vertex_input_state_data::make(m_program_interface.line_vertex_format)

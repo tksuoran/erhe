@@ -285,7 +285,6 @@ void Rendering_test::dispatch_subtest(
             m_content_wide_line_renderer->render(
                 encoder,
                 *m_compute_edge_lines_pipeline,
-                *m_swapchain_render_pass.get(),
                 nullptr
             );
         }
@@ -310,7 +309,6 @@ void Rendering_test::dispatch_subtest(
             m_content_wide_line_renderer->render(
                 encoder,
                 *m_compute_edge_lines_stencil_pipeline,
-                *m_swapchain_render_pass.get(),
                 nullptr
             );
         }
@@ -335,7 +333,6 @@ void Rendering_test::dispatch_subtest(
             m_content_wide_line_renderer->render(
                 encoder,
                 *m_compute_edge_lines_pipeline,
-                *m_swapchain_render_pass.get(),
                 nullptr,
                 0
             );
@@ -356,7 +353,6 @@ void Rendering_test::dispatch_subtest(
             m_content_wide_line_renderer->render(
                 encoder,
                 *m_compute_edge_lines_pipeline,
-                *m_swapchain_render_pass.get(),
                 nullptr,
                 1
             );
@@ -409,7 +405,6 @@ void Rendering_test::dispatch_subtest(
             m_content_wide_line_renderer->render(
                 encoder,
                 *m_compute_edge_lines_stencil_pipeline,
-                *m_swapchain_render_pass.get(),
                 nullptr,
                 0
             );
@@ -456,7 +451,6 @@ void Rendering_test::dispatch_subtest(
             m_content_wide_line_renderer->render(
                 encoder,
                 *m_compute_edge_lines_stencil_pipeline,
-                *m_swapchain_render_pass.get(),
                 nullptr,
                 1
             );

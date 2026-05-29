@@ -6,6 +6,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **erhe** is a C++ graphics library and editor for OpenGL, vulkan and metal. It features a render graph system, full 3D scene graph, physics (Jolt), geometry manipulation (Catmull-Clark, Conway operators via Geogram), and an ImGui-based editor application.
 
+## `src/rendering_test/` is rotten
+
+`src/rendering_test/` (the standalone `rendering_test` executable, its own duplicated shaders under `res/rendering_test/shaders/`, and its `cell_*.cpp` files) is in a known-bad state and slated for re-implementation. Do not invest effort in keeping it consistent when refactoring shared code (e.g. `erhe::scene_renderer`). Acceptable failure modes when touching shared infrastructure:
+
+- `rendering_test` no longer builds or runs.
+- Its duplicated shaders fall out of sync with the editor's.
+- Its `Rendering_test` class wiring breaks.
+
+Focus refactors on the `editor` executable and the `erhe::*` libraries. If a change in shared infrastructure would otherwise require parallel updates to `src/rendering_test/`, skip the rendering_test side and leave it broken; it will be replaced wholesale, so coherent partial fixes there are wasted work.
+
 ## Building
 
 ### Windows (Visual Studio 2026)

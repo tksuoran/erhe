@@ -11,17 +11,14 @@ void main(void)
     // so the line distance test is correct regardless of where the
     // viewport sits inside the framebuffer.
     //
-    // Single-view: read from program_interface's camera UBO (bound by
-    // the surrounding forward_renderer flow). Multiview: read from
-    // the wide-line renderer's per-eye view UBO instead - the
-    // multiview bind_group_layout intentionally does NOT include the
-    // program_interface camera UBO so we cannot rely on it being
-    // bound at draw time.
-#ifdef ERHE_MULTIVIEW
+    // Both single-view and multiview read from the wide-line renderer's
+    // per-eye view UBO (binding 3). c_view_index is 0 for single-view
+    // and gl_ViewIndex for multiview. The wide-line graphics layout
+    // intentionally does NOT include the program_interface camera UBO
+    // (we cannot rely on it staying bound across a descriptor-set-layout
+    // switch from forward_renderer), so the view UBO carries the per-eye
+    // viewport.xy that this shader needs.
     vec2  vp_offset  = view.cameras[c_view_index].viewport.xy;
-#else
-    vec2  vp_offset  = camera.cameras[c_view_index].viewport.xy;
-#endif
     vec2  frag_xy    = gl_FragCoord.xy - vp_offset;
     vec2  start      = v_start_end.xy;
     vec2  end        = v_start_end.zw;

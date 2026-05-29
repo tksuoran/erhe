@@ -142,6 +142,7 @@
 #include "erhe_primitive/primitive_log.hpp"
 #include "erhe_raytrace/raytrace_log.hpp"
 #include "erhe_renderer/debug_renderer.hpp"
+#include "erhe_scene_renderer/content_wide_line_interface.hpp"
 #include "erhe_scene_renderer/content_wide_line_renderer.hpp"
 #include "erhe_renderer/renderer_log.hpp"
 #include "erhe_renderer/text_renderer.hpp"
@@ -968,15 +969,13 @@ public:
             ERHE_TASK_HEADER(content_wide_line_renderer_task)
             {
                 ERHE_GET_GL_CONTEXT
-                m_content_wide_line_renderer = std::make_unique<erhe::scene_renderer::Content_wide_line_renderer>(
-                    *m_graphics_device.get(),
-                    nullptr, // compute_shader_stages         (set via set_shader_stages() after compile)
-                    nullptr, // compute_shader_stages_skinned (set via set_shader_stages() after compile)
-                    nullptr, // graphics_shader_stages        (set via set_shader_stages() after compile)
-                    &m_program_interface->joint_interface.joint_block,
-                    xr_view_count
-                );
                 if (m_graphics_device->get_info().use_compute_shader) {
+                    m_content_wide_line_interface = std::make_unique<erhe::scene_renderer::Content_wide_line_interface>(
+                        *m_graphics_device,
+                        &m_program_interface->joint_interface.joint_block,
+                        xr_view_count
+                    );
+
                     const std::filesystem::path shader_path = std::filesystem::path{"res"} / std::filesystem::path{"shaders"};
 
                     using namespace erhe::graphics;
@@ -985,17 +984,17 @@ public:
                         Shader_stages_create_info create_info{
                             .name             = "compute_before_content_line",
                             .struct_types     = {
-                                m_content_wide_line_renderer->get_edge_line_vertex_struct(),
-                                m_content_wide_line_renderer->get_triangle_vertex_struct(),
-                                m_content_wide_line_renderer->get_view_camera_struct()
+                                &m_content_wide_line_interface->edge_line_vertex_struct,
+                                &m_content_wide_line_interface->triangle_vertex_struct,
+                                &m_content_wide_line_interface->view_camera_struct
                             },
                             .interface_blocks = {
-                                m_content_wide_line_renderer->get_edge_line_vertex_buffer_block(),
-                                m_content_wide_line_renderer->get_triangle_vertex_buffer_block(),
-                                m_content_wide_line_renderer->get_view_block()
+                                &m_content_wide_line_interface->edge_line_vertex_buffer_block,
+                                &m_content_wide_line_interface->triangle_vertex_buffer_block,
+                                &m_content_wide_line_interface->view_block
                             },
                             .shaders = { { Shader_type::compute_shader, shader_path / "compute_before_content_line.comp" } },
-                            .bind_group_layout = m_content_wide_line_renderer->get_bind_group_layout(),
+                            .bind_group_layout = &m_content_wide_line_interface->bind_group_layout,
                         };
                         Shader_stages_prototype prototype = build_shader_stages(*m_graphics_device, create_info);
                         if (prototype.is_valid()) {
@@ -1005,56 +1004,66 @@ public:
                     // Compute shader (skinned variant). Same source compiled with
                     // ERHE_USE_SKINNING; declares the joint side buffer and the
                     // global `joint` block in addition to the regular bindings.
-                    if (m_content_wide_line_renderer->get_skinned_bind_group_layout() != nullptr) {
+                    if (m_content_wide_line_interface->skinned_bind_group_layout != nullptr) {
                         Shader_stages_create_info create_info{
                             .name             = "compute_before_content_line_skinned",
                             .defines          = { { "ERHE_USE_SKINNING", "1" } },
                             .struct_types     = {
-                                m_content_wide_line_renderer->get_edge_line_vertex_struct(),
-                                m_content_wide_line_renderer->get_edge_line_joint_vertex_struct(),
-                                m_content_wide_line_renderer->get_triangle_vertex_struct(),
-                                m_content_wide_line_renderer->get_view_camera_struct(),
+                                &m_content_wide_line_interface->edge_line_vertex_struct,
+                                &m_content_wide_line_interface->edge_line_joint_vertex_struct,
+                                &m_content_wide_line_interface->triangle_vertex_struct,
+                                &m_content_wide_line_interface->view_camera_struct,
                                 &m_program_interface->joint_interface.joint_struct
                             },
                             .interface_blocks = {
-                                m_content_wide_line_renderer->get_edge_line_vertex_buffer_block(),
-                                m_content_wide_line_renderer->get_edge_line_joint_vertex_buffer_block(),
-                                m_content_wide_line_renderer->get_triangle_vertex_buffer_block(),
-                                m_content_wide_line_renderer->get_view_block(),
+                                &m_content_wide_line_interface->edge_line_vertex_buffer_block,
+                                &m_content_wide_line_interface->edge_line_joint_vertex_buffer_block,
+                                &m_content_wide_line_interface->triangle_vertex_buffer_block,
+                                &m_content_wide_line_interface->view_block,
                                 &m_program_interface->joint_interface.joint_block
                             },
                             .shaders           = { { Shader_type::compute_shader, shader_path / "compute_before_content_line.comp" } },
-                            .bind_group_layout = m_content_wide_line_renderer->get_skinned_bind_group_layout(),
+                            .bind_group_layout = m_content_wide_line_interface->skinned_bind_group_layout.get(),
                         };
                         Shader_stages_prototype prototype = build_shader_stages(*m_graphics_device, create_info);
                         if (prototype.is_valid()) {
                             m_content_wide_line_compute_stages_skinned = std::make_unique<Shader_stages>(*m_graphics_device, std::move(prototype));
                         }
                     }
-                    // Graphics shader (renders compute output).
+                    // Graphics shader (renders compute output, single-view).
                     //
-                    // Uses the SHARED program_interface bind_group_layout (the
-                    // same one forward_renderer/debug_renderer use) so the
-                    // descriptor set bound by surrounding renderers (camera
-                    // buffer at camera_buffer_binding_point, etc.) remains
-                    // compatible. Wide-line render() therefore doesn't need
-                    // to bind anything for the graphics path -- it relies on
-                    // the camera_buffer being already bound by an earlier
-                    // forward_renderer call in the same render pass, and the
-                    // fragment shader reads camera.cameras[0].viewport.xy to
-                    // convert gl_FragCoord into viewport-relative pixel coords.
+                    // Reads pre-transformed triangle vertices from the
+                    // triangle SSBO (binding 1) and the per-eye viewport
+                    // from the view UBO (binding 3) -- same bindings as
+                    // the multiview variant below; the only difference is
+                    // ERHE_MULTIVIEW + the multiview render pass's view
+                    // mask. The wide-line graphics bind group layout
+                    // intentionally does NOT inherit forward_renderer's
+                    // camera UBO; switching descriptor-set layouts inside
+                    // the render pass invalidates any descriptors bound
+                    // by upstream renderers, so the renderer binds
+                    // everything it needs itself.
                     {
                         Shader_stages_create_info create_info{
                             .name             = "content_line_after_compute",
-                            .struct_types     = { &m_program_interface->camera_interface.camera_struct },
-                            .interface_blocks = { &m_program_interface->camera_interface.camera_block  },
-                            .fragment_outputs = &m_content_wide_line_renderer->get_fragment_outputs(),
-                            .vertex_format    = &m_content_wide_line_renderer->get_triangle_vertex_format(),
+                            .struct_types     = {
+                                &m_content_wide_line_interface->triangle_vertex_struct,
+                                &m_content_wide_line_interface->view_camera_struct
+                            },
+                            .interface_blocks = {
+                                &m_content_wide_line_interface->triangle_vertex_buffer_read_block,
+                                &m_content_wide_line_interface->view_block
+                            },
+                            .fragment_outputs = &m_content_wide_line_interface->fragment_outputs,
+                            // No vertex_format: the vertex shader reads
+                            // the triangle SSBO instead of input-assembler
+                            // attributes.
+                            .no_vertex_input  = true,
                             .shaders = {
                                 { Shader_type::vertex_shader,   shader_path / "line_after_compute.vert"        },
                                 { Shader_type::fragment_shader, shader_path / "content_line_after_compute.frag" }
                             },
-                            .bind_group_layout = m_program_interface->bind_group_layout.get(),
+                            .bind_group_layout = &m_content_wide_line_interface->graphics_bind_group_layout,
                         };
                         Shader_stages_prototype prototype = build_shader_stages(*m_graphics_device, create_info);
                         if (prototype.is_valid()) {
@@ -1074,14 +1083,14 @@ public:
                         Shader_stages_create_info create_info{
                             .name             = "content_line_after_compute_multiview",
                             .struct_types     = {
-                                m_content_wide_line_renderer->get_triangle_vertex_struct(),
-                                m_content_wide_line_renderer->get_view_camera_struct()
+                                &m_content_wide_line_interface->triangle_vertex_struct,
+                                &m_content_wide_line_interface->view_camera_struct
                             },
                             .interface_blocks = {
-                                m_content_wide_line_renderer->get_triangle_vertex_buffer_read_block(),
-                                m_content_wide_line_renderer->get_view_block()
+                                &m_content_wide_line_interface->triangle_vertex_buffer_read_block,
+                                &m_content_wide_line_interface->view_block
                             },
-                            .fragment_outputs = &m_content_wide_line_renderer->get_fragment_outputs(),
+                            .fragment_outputs = &m_content_wide_line_interface->fragment_outputs,
                             // No vertex_format: the multiview vertex
                             // shader reads the triangle SSBO instead of
                             // input-assembler attributes.
@@ -1090,7 +1099,7 @@ public:
                                 { Shader_type::vertex_shader,   shader_path / "line_after_compute.vert"        },
                                 { Shader_type::fragment_shader, shader_path / "content_line_after_compute.frag" }
                             },
-                            .bind_group_layout = m_content_wide_line_renderer->get_multiview_graphics_bind_group_layout(),
+                            .bind_group_layout = &m_content_wide_line_interface->graphics_bind_group_layout,
                             .view_count        = static_cast<uint32_t>(xr_view_count)
                         };
                         Shader_stages_prototype prototype = build_shader_stages(*m_graphics_device, create_info);
@@ -1100,7 +1109,9 @@ public:
                     }
 
                     if (m_content_wide_line_compute_stages && m_content_wide_line_graphics_stages) {
-                        m_content_wide_line_renderer->set_shader_stages(
+                        m_content_wide_line_renderer = std::make_unique<erhe::scene_renderer::Content_wide_line_renderer>(
+                            *m_graphics_device,
+                            *m_content_wide_line_interface,
                             m_content_wide_line_compute_stages.get(),
                             m_content_wide_line_compute_stages_skinned.get(), // may be null if joint block missing
                             m_content_wide_line_graphics_stages.get(),
@@ -2286,7 +2297,8 @@ public:
     std::unique_ptr<erhe::scene_renderer::Forward_renderer>           m_forward_renderer;
     std::unique_ptr<erhe::scene_renderer::Shadow_renderer >           m_shadow_renderer;
     std::unique_ptr<erhe::scene_renderer::Mesh_memory     >           m_mesh_memory;
-    std::unique_ptr<erhe::scene_renderer::Content_wide_line_renderer> m_content_wide_line_renderer;
+    std::unique_ptr<erhe::scene_renderer::Content_wide_line_interface> m_content_wide_line_interface;
+    std::unique_ptr<erhe::scene_renderer::Content_wide_line_renderer>  m_content_wide_line_renderer;
     std::unique_ptr<erhe::graphics::Shader_stages>                    m_content_wide_line_compute_stages;
     std::unique_ptr<erhe::graphics::Shader_stages>                    m_content_wide_line_compute_stages_skinned;
     std::unique_ptr<erhe::graphics::Shader_stages>                    m_content_wide_line_graphics_stages;

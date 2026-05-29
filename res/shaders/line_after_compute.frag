@@ -8,25 +8,13 @@ void main(void)
 {
     // v_start_end is in VIEWPORT-RELATIVE pixel coordinates (the
     // compute shader writes screen_from_ndc results in [0..vp_size]).
-    //
-    // Multiview: subtract the per-eye viewport.xy from gl_FragCoord so
-    // the line-distance math is consistent across both layers of the
-    // multiview attachment. On Quest the swapchain shares one
-    // attachment across views and the per-eye xy origin is constant 0
-    // in practice, so the math is identical to single-view; reading
-    // through view.cameras[c_view_index] keeps the path symmetric with
-    // content_line_after_compute.frag.
-    //
-    // Single-view: skip the offset subtraction and use gl_FragCoord
-    // directly. Viewports with non-zero xy origin would produce
-    // misaligned line distances; that pre-dates the multiview port and
-    // is intentionally not changed here.
-#ifdef ERHE_MULTIVIEW
+    // Subtract the (per-eye) viewport.xy from gl_FragCoord so the
+    // line-distance math is correct regardless of where the viewport
+    // sits inside the framebuffer. c_view_index is 0 for single-view
+    // and gl_ViewIndex for multiview, indexing the per-eye ViewCamera
+    // entry that the wide-line view UBO carries.
     vec2 vp_offset = view.cameras[c_view_index].viewport.xy;
     vec2 frag_xy   = gl_FragCoord.xy - vp_offset;
-#else
-    vec2 frag_xy   = gl_FragCoord.xy;
-#endif
     vec2  start = v_start_end.xy;
     vec2  end   = v_start_end.zw;
     vec2  line  = end - start;

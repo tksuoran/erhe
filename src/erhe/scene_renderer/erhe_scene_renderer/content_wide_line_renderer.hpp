@@ -1,14 +1,8 @@
 #pragma once
 
-#include "erhe_graphics/bind_group_layout.hpp"
 #include "erhe_graphics/compute_pipeline_state.hpp"
-#include "erhe_graphics/fragment_outputs.hpp"
-#include "erhe_graphics/render_pipeline_state.hpp"
 #include "erhe_graphics/ring_buffer.hpp"
 #include "erhe_graphics/ring_buffer_client.hpp"
-#include "erhe_graphics/shader_resource.hpp"
-#include "erhe_graphics/state/vertex_input_state.hpp"
-#include "erhe_dataformat/vertex_format.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_math/viewport.hpp"
 #include "erhe_scene_renderer/camera_buffer.hpp"
@@ -16,127 +10,82 @@
 #include <glm/glm.hpp>
 
 #include <cstdint>
-#include <memory>
 #include <optional>
 #include <span>
 #include <vector>
 
 namespace erhe::graphics {
     class Buffer;
+    class Color_blend_state;
     class Compute_command_encoder;
     class Device;
     class Base_render_pipeline;
     class Render_command_encoder;
-    class Render_pass;
     class Shader_stages;
-}
-namespace erhe::primitive {
-    class Buffer_mesh;
 }
 namespace erhe::scene {
     class Camera;
     class Mesh;
-    class Node;
 }
 
 namespace erhe::scene_renderer {
 
+class Content_wide_line_interface;
 class Mesh_memory;
 
-// Dispatches one compute per mesh primitive, expanding edge line
-// vertex pairs to triangle quads for wide line rendering.
-// Used on Metal (and other backends without geometry shaders).
+// Dispatches one compute per mesh primitive, expanding edge line vertex
+// pairs to triangle quads for wide line rendering. Used on Metal (and
+// other backends without geometry shaders).
 //
-// The app provides compute_shader_stages and graphics_shader_stages.
-// The compute shader must match the interface defined by this class
-// (edge_line_vertex_buffer SSBO, triangle_vertex_buffer SSBO, view UBO).
+// All shader-interface description (Shader_resources, bind group layouts,
+// view UBO offsets, vertex format, fragment outputs) lives on the
+// companion Content_wide_line_interface, mirroring the
+// Camera_interface+Camera_buffer / Joint_interface+Joint_buffer pattern in
+// this same library.
+//
+// Lifetime:
+//  1. App constructs Content_wide_line_interface.
+//  2. App compiles compute + graphics shader stages against the interface's
+//     public fields.
+//  3. App constructs Content_wide_line_renderer with the interface and the
+//     compiled shader stages. If shader compilation fails, the runtime
+//     renderer is simply not constructed -- there is no internal disabled
+//     state to query.
 class Content_wide_line_renderer
 {
 public:
-    // view_count: size N of the cameras[N] array inside the view
-    //   UBO block (and the per-view stride of the triangle SSBO).
-    //   1 = single-view (default). >= 2 = stereo / OpenXR multiview.
-    //   Mirrors Camera_interface::view_count; pass through from the
-    //   editor's Program_interface_config.
-    // joint_block: shader resource describing the global `joint`
-    //   interface block (binding point 7) that the skinned compute
-    //   variant reads to apply linear-blend skinning. Pass the same
-    //   Shader_resource that Joint_interface owns; nullptr disables
-    //   the skinned compute path entirely (non-skinned dispatches
-    //   still work).
+    // multiview_graphics_shader_stages: multiview-compiled sibling of
+    //   graphics_shader_stages. It reads the triangle SSBO (instead of
+    //   vertex attributes) at gl_VertexID + gl_ViewIndex * stride_per_view
+    //   so a single draw inside a multiview render pass produces correct
+    //   stereo output. Pass nullptr for single-view-only builds; the
+    //   multiview render path will then no-op.
+    // compute_shader_stages_skinned: skinned compute variant. Pass nullptr
+    //   when the interface was built without a joint_block (skinned path
+    //   disabled). When non-null, skinned dispatches transform edges via
+    //   the joint matrices read from the global `joint` block.
     Content_wide_line_renderer(
-        erhe::graphics::Device&          graphics_device,
-        erhe::graphics::Shader_stages*   compute_shader_stages,
-        erhe::graphics::Shader_stages*   compute_shader_stages_skinned,
-        erhe::graphics::Shader_stages*   graphics_shader_stages,
-        erhe::graphics::Shader_resource* joint_block = nullptr,
-        int                              view_count = 1
-    );
-    ~Content_wide_line_renderer() noexcept;
-
-    [[nodiscard]] auto is_enabled() const -> bool;
-
-    // Set shader stages after construction (for two-phase init).
-    // multiview_graphics_shader_stages is the multiview-compiled
-    // sibling of graphics_shader_stages: it reads the triangle SSBO
-    // (instead of vertex attributes) at gl_VertexID + gl_ViewIndex *
-    // stride_per_view so a single draw inside a multiview render pass
-    // produces correct stereo output. Pass nullptr for single-view-only
-    // builds; the multiview render path will then fall back to the
-    // single-view shader and only the first view will look correct.
-    void set_shader_stages(
+        erhe::graphics::Device&        graphics_device,
+        Content_wide_line_interface&   interface_,
         erhe::graphics::Shader_stages* compute_shader_stages,
         erhe::graphics::Shader_stages* compute_shader_stages_skinned,
         erhe::graphics::Shader_stages* graphics_shader_stages,
-        erhe::graphics::Shader_stages* multiview_graphics_shader_stages = nullptr
+        erhe::graphics::Shader_stages* multiview_graphics_shader_stages
     );
+    ~Content_wide_line_renderer() noexcept;
 
-    // Shader resource accessors - app needs these to build shader create_info
-    [[nodiscard]] auto get_edge_line_vertex_struct      () const -> erhe::graphics::Shader_resource*;
-    [[nodiscard]] auto get_edge_line_vertex_buffer_block() const -> erhe::graphics::Shader_resource*;
-    // Joint side-buffer for the skinned compute variant. Returns nullptr
-    // when no joint_block was provided at construction (skinned variant
-    // disabled). The app links these into the skinned compute shader
-    // create_info alongside the regular edge-line buffer.
-    [[nodiscard]] auto get_edge_line_joint_vertex_struct      () const -> erhe::graphics::Shader_resource*;
-    [[nodiscard]] auto get_edge_line_joint_vertex_buffer_block() const -> erhe::graphics::Shader_resource*;
-    [[nodiscard]] auto get_triangle_vertex_struct       () const -> erhe::graphics::Shader_resource*;
-    [[nodiscard]] auto get_triangle_vertex_buffer_block () const -> erhe::graphics::Shader_resource*;
-    // Same binding as get_triangle_vertex_buffer_block() but declared
-    // with readonly qualifier instead of writeonly. The compute shader
-    // uses the writeonly block (cannot be read); the multiview vertex
-    // shader uses this read-only block to fetch the per-view triangle
-    // it must emit. Different declarations of the same descriptor set
-    // binding are legal in Vulkan.
-    [[nodiscard]] auto get_triangle_vertex_buffer_read_block() const -> erhe::graphics::Shader_resource*;
-    [[nodiscard]] auto get_view_camera_struct           () const -> erhe::graphics::Shader_resource*;
-    [[nodiscard]] auto get_view_block                   () const -> erhe::graphics::Shader_resource*;
-    [[nodiscard]] auto get_bind_group_layout            () const -> erhe::graphics::Bind_group_layout*;
-    // Skinned-variant bind group layout (adds edge-line joint side
-    // buffer SSBO + the `joint` block at binding 7). nullptr when the
-    // skinned compute variant is disabled.
-    [[nodiscard]] auto get_skinned_bind_group_layout    () const -> erhe::graphics::Bind_group_layout*;
-    // Multiview graphics pipeline layout: triangle SSBO (binding 1,
-    // read by vertex stage), view UBO (binding 3, read by vertex
-    // stage for stride_per_view), camera UBO (binding 4, read by
-    // fragment stage for camera.cameras[c_view_index].viewport.xy).
-    // Distinct from the compute layout because the compute side also
-    // needs the line-vertex SSBO at binding 0 and writes the triangle
-    // SSBO; this graphics-side layout omits the line input and binds
-    // the triangle buffer read-only.
-    [[nodiscard]] auto get_multiview_graphics_bind_group_layout() const -> erhe::graphics::Bind_group_layout*;
-    [[nodiscard]] auto get_fragment_outputs             () -> erhe::graphics::Fragment_outputs&;
-    [[nodiscard]] auto get_triangle_vertex_format       () -> erhe::dataformat::Vertex_format&;
-    [[nodiscard]] auto get_vertex_input                 () -> erhe::graphics::Vertex_input_state*;
-    [[nodiscard]] auto get_graphics_shader_stages       () -> erhe::graphics::Shader_stages*;
+    // Trivially true: the renderer is only constructed when compute is
+    // supported and the required shader stages compiled successfully, so
+    // its mere existence implies it is enabled. Kept as a callable so
+    // caller sites can stay on `if (renderer && renderer->is_enabled())`.
+    [[nodiscard]] auto is_enabled() const -> bool { return true; }
 
     // Per-frame lifecycle
     void begin_frame();
 
-    // Add edge lines from a mesh for compute expansion.
-    // group identifies which render pass this mesh belongs to.
-    // mesh_memory is used to resolve the edge-line buffer range's
-    // (pool_id, buffer_id) into the underlying graphics buffer.
+    // Add edge lines from a mesh for compute expansion. group identifies
+    // which render pass this mesh belongs to. mesh_memory resolves the
+    // edge-line buffer range to the underlying graphics buffer.
     void add_mesh(
         Mesh_memory&             mesh_memory,
         const erhe::scene::Mesh& mesh,
@@ -147,19 +96,14 @@ public:
 
     // Dispatch compute shader to expand lines to triangles (call before
     // render pass). Single-view path: pass camera + viewport, leave
-    // multiview_views empty; the compute writes one set of triangles
-    // per dispatch. Multiview path: pass a non-empty span of per-view
-    // inputs (size must equal view_count from construction) and
-    // leave camera nullptr; the compute writes view_count sets of
-    // triangles per dispatch, laid out [view][line][vertex] in the
-    // triangle SSBO. The viewport argument is shared by all views (the
-    // OpenXR multiview path uses the same per-eye recommended extent).
-    // joint_buffer_client / joint_buffer_range: optional pair that
-    //   describes the per-frame joint UBO/SSBO contents (typically
-    //   produced by Joint_buffer::update()). Required when any
-    //   skinned dispatch is queued; pass nullptr/nullptr for scenes
-    //   with no skinned meshes. The renderer binds it at binding
-    //   point 7 inside the skinned compute pipeline scope.
+    // multiview_views empty. Multiview path: pass a non-empty span of
+    // per-view inputs (size must equal interface.view_count) and leave
+    // camera nullptr.
+    //
+    // joint_buffer_client / joint_buffer_range: optional pair describing
+    //   the per-frame joint UBO/SSBO contents (typically produced by
+    //   Joint_buffer::update()). Required when any skinned dispatch is
+    //   queued; pass nullptr/nullptr for scenes with no skinned meshes.
     void compute(
         erhe::graphics::Compute_command_encoder&  command_encoder,
         const erhe::math::Viewport&               viewport,
@@ -185,16 +129,22 @@ public:
     );
 
     // Render the expanded triangles for a specific group (call inside
-    // render pass). multiview = true binds the multiview-compiled
-    // graphics shader (which reads the triangle SSBO via
-    // gl_ViewIndex-strided indexing instead of vertex attributes) and
-    // issues one draw per dispatch entry; the surrounding multiview
-    // render pass distributes the draw across both layers. multiview =
-    // false uses the existing vertex-attribute path.
+    // render pass). multiview = true binds the multiview-compiled graphics
+    // shader (which reads the triangle SSBO via gl_ViewIndex-strided
+    // indexing instead of vertex attributes) and issues one draw per
+    // dispatch entry; the surrounding multiview render pass distributes
+    // the draw across both layers. multiview = false uses the
+    // vertex-attribute path.
+    //
+    // pipeline_state supplies caller-controlled state (debug_label,
+    // input_assembly, multisample, viewport_depth_range, rasterization,
+    // depth_stencil); the renderer overrides shader stages, vertex input,
+    // and bind group layout per path. color_blend_state overrides
+    // pipeline_state's blend. The caller's pipeline_state.data.shader_stages
+    // / vertex_input / bind_group_layout are ignored.
     void render(
         erhe::graphics::Render_command_encoder& render_encoder,
         erhe::graphics::Base_render_pipeline&   pipeline_state,
-        const erhe::graphics::Render_pass&      render_pass,
         erhe::graphics::Color_blend_state*      color_blend_state,
         uint32_t                                group = 0,
         bool                                    multiview = false
@@ -202,14 +152,18 @@ public:
 
     void end_frame();
 
+    // Accessors for callers that still need to reference the shader
+    // interface or graphics shader stages (e.g. building Base_render_pipeline).
+    [[nodiscard]] auto get_interface             () -> Content_wide_line_interface&;
+    [[nodiscard]] auto get_graphics_shader_stages() -> erhe::graphics::Shader_stages*;
+
 private:
-    struct Dispatch_entry
+    class Dispatch_entry
     {
+    public:
         // Source GPU buffer holding the edge-line vertex pairs for this
         // mesh. With lazy edge-line pool growth, different meshes may live
-        // in different GPU buffers, so each dispatch records its own
-        // source buffer pointer rather than reading from a single shared
-        // one held by the renderer.
+        // in different GPU buffers.
         erhe::graphics::Buffer* edge_buffer            {nullptr};
         std::size_t edge_buffer_byte_offset{0};
         std::size_t edge_count             {0};
@@ -221,9 +175,9 @@ private:
         // Skinned dispatch state (skinned == false leaves the joint
         // fields unused). joint_buffer/_byte_offset/_byte_size identify
         // the GPU joint side buffer holding per-endpoint indices +
-        // weights for this mesh; base_joint_index is the offset into
-        // the global joint UBO/SSBO that maps the mesh's local joint
-        // indices to global joint matrices.
+        // weights for this mesh; base_joint_index is the offset into the
+        // global joint UBO/SSBO that maps the mesh's local joint indices
+        // to global joint matrices.
         bool                    skinned                 {false};
         erhe::graphics::Buffer* joint_buffer            {nullptr};
         std::size_t             joint_buffer_byte_offset{0};
@@ -237,70 +191,29 @@ private:
         // and stride_per_view (= padded_edge_count * 6 vertices) is
         // mirrored into the view UBO. view_buffer_range is held across
         // the compute encoder + the render encoder so the multiview
-        // vertex shader can read stride_per_view at draw time without
-        // a separate push constant; release happens in end_frame()
-        // after the GPU is done with the draw.
+        // vertex shader can read stride_per_view at draw time; release
+        // happens in end_frame() after the GPU is done with the draw.
         std::size_t                       padded_edge_count    {0};
         erhe::graphics::Ring_buffer_range triangle_buffer_range{};
         erhe::graphics::Ring_buffer_range view_buffer_range    {};
         bool                              dispatched{false};
     };
 
-    erhe::graphics::Device&                                m_graphics_device;
-    int                                                    m_view_count{1};
+    erhe::graphics::Device&            m_graphics_device;
+    Content_wide_line_interface&       m_interface;
 
-    // Shader resources (define the interface contract for shaders)
-    erhe::graphics::Fragment_outputs                       m_fragment_outputs;
-    std::unique_ptr<erhe::graphics::Shader_resource>       m_edge_line_vertex_struct;
-    std::unique_ptr<erhe::graphics::Shader_resource>       m_edge_line_vertex_buffer_block;
-    std::unique_ptr<erhe::graphics::Shader_resource>       m_edge_line_joint_vertex_struct;
-    std::unique_ptr<erhe::graphics::Shader_resource>       m_edge_line_joint_vertex_buffer_block;
-    std::unique_ptr<erhe::graphics::Shader_resource>       m_triangle_vertex_struct;
-    std::unique_ptr<erhe::graphics::Shader_resource>       m_triangle_vertex_buffer_block;
-    std::unique_ptr<erhe::graphics::Shader_resource>       m_triangle_vertex_buffer_read_block;
-    std::unique_ptr<erhe::graphics::Shader_resource>       m_view_camera_struct;
-    std::unique_ptr<erhe::graphics::Shader_resource>       m_view_block;
-    erhe::graphics::Shader_resource*                       m_joint_block{nullptr}; // not owned; lifetime managed by Joint_interface
-    std::unique_ptr<erhe::graphics::Bind_group_layout>     m_bind_group_layout;
-    std::unique_ptr<erhe::graphics::Bind_group_layout>     m_skinned_bind_group_layout;
-    std::unique_ptr<erhe::graphics::Bind_group_layout>     m_multiview_graphics_bind_group_layout;
-    erhe::dataformat::Vertex_format                        m_triangle_vertex_format;
+    erhe::graphics::Shader_stages*     m_compute_shader_stages           {nullptr};
+    erhe::graphics::Shader_stages*     m_compute_shader_stages_skinned   {nullptr};
+    erhe::graphics::Shader_stages*     m_graphics_shader_stages          {nullptr};
+    erhe::graphics::Shader_stages*     m_multiview_graphics_shader_stages{nullptr};
 
-    // Offsets inside the per-view ViewCamera struct (same struct
-    // repeated view_count times at the start of the view block).
-    std::size_t                                            m_view_camera_clip_from_world_offset       {0};
-    std::size_t                                            m_view_camera_viewport_offset              {0};
-    std::size_t                                            m_view_camera_fov_offset                   {0};
-    std::size_t                                            m_view_camera_view_position_in_world_offset{0};
-    std::size_t                                            m_view_camera_stride                       {0};
+    std::optional<erhe::graphics::Compute_pipeline> m_compute_pipeline;
+    std::optional<erhe::graphics::Compute_pipeline> m_compute_pipeline_skinned;
 
-    // Offsets in the outer view block, after the cameras[] array.
-    std::size_t                                            m_world_from_node_offset      {0};
-    std::size_t                                            m_line_color_offset           {0};
-    std::size_t                                            m_edge_count_offset           {0};
-    std::size_t                                            m_view_count_offset           {0};
-    std::size_t                                            m_stride_per_view_offset      {0};
-    std::size_t                                            m_vp_y_sign_offset            {0};
-    std::size_t                                            m_clip_depth_direction_offset {0};
-    std::size_t                                            m_base_joint_index_offset     {0};
-    std::size_t                                            m_padding0_offset             {0};
+    erhe::graphics::Ring_buffer_client m_view_buffer;
+    erhe::graphics::Ring_buffer_client m_triangle_vertex_buffer_client;
 
-    // Shader stages provided by app
-    erhe::graphics::Shader_stages*                         m_compute_shader_stages          {nullptr};
-    erhe::graphics::Shader_stages*                         m_compute_shader_stages_skinned  {nullptr};
-    erhe::graphics::Shader_stages*                         m_graphics_shader_stages         {nullptr};
-    erhe::graphics::Shader_stages*                         m_multiview_graphics_shader_stages{nullptr};
-    std::optional<erhe::graphics::Compute_pipeline>         m_compute_pipeline;
-    std::optional<erhe::graphics::Compute_pipeline>         m_compute_pipeline_skinned;
-    erhe::graphics::Vertex_input_state                     m_vertex_input;
-
-    // Ring buffer clients
-    erhe::graphics::Ring_buffer_client                     m_view_buffer;
-    erhe::graphics::Ring_buffer_client                     m_triangle_vertex_buffer_client;
-
-    // Per-frame state
-    std::vector<Dispatch_entry>                            m_dispatches;
-    bool                                                   m_enabled{false};
+    std::vector<Dispatch_entry>        m_dispatches;
 };
 
 } // namespace erhe::scene_renderer

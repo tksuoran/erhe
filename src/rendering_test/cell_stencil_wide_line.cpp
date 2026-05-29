@@ -122,7 +122,6 @@ void Rendering_test::render_stencil_wide_line_cell(
     m_content_wide_line_renderer->render(
         render_encoder,
         *m_compute_edge_lines_stencil_pipeline,
-        *active_render_pass,
         &erhe::graphics::Color_blend_state::color_blend_premultiplied,
         /*group=*/1
     );

@@ -187,7 +187,6 @@ void Composition_pass::render(const Render_context& context)
                 content_wide_line_renderer->render(
                     *context.encoder,
                     *base_render_pipeline,
-                    *context.render_pass,
                     &erhe::graphics::Color_blend_state::color_blend_premultiplied, // TODO configurable?
                     data.content_wide_line_group,
                     multiview

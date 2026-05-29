@@ -1007,9 +1007,8 @@ void App_rendering::remove(Renderable* renderable)
 
 void App_rendering::update_content_wide_line_pipeline_states(erhe::scene_renderer::Content_wide_line_renderer& renderer)
 {
-    erhe::graphics::Shader_stages*      shader_stages = renderer.get_graphics_shader_stages();
-    erhe::graphics::Vertex_input_state* vertex_input  = renderer.get_vertex_input();
-    if ((shader_stages == nullptr) || (vertex_input == nullptr)) {
+    erhe::graphics::Shader_stages* shader_stages = renderer.get_graphics_shader_stages();
+    if (shader_stages == nullptr) {
         return;
     }
 

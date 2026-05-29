@@ -26,6 +26,7 @@
 #include "erhe_scene_renderer/light_buffer.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "erhe_scene_renderer/program_interface.hpp"
+#include "erhe_scene_renderer/content_wide_line_interface.hpp"
 #include "erhe_scene_renderer/content_wide_line_renderer.hpp"
 #include "erhe_scene_renderer/shader_variant_cache.hpp"
 #include "erhe_window/window.hpp"
@@ -287,7 +288,8 @@ public:
     bool                                                        m_minimal_triangle_range_valid{false};
 
     // Content wide line renderer (compute path - Metal)
-    std::unique_ptr<erhe::scene_renderer::Content_wide_line_renderer> m_content_wide_line_renderer;
+    std::unique_ptr<erhe::scene_renderer::Content_wide_line_interface> m_content_wide_line_interface;
+    std::unique_ptr<erhe::scene_renderer::Content_wide_line_renderer>  m_content_wide_line_renderer;
     std::unique_ptr<erhe::graphics::Shader_stages>              m_compute_shader_stages;
     std::unique_ptr<erhe::graphics::Shader_stages>              m_graphics_shader_stages;
     std::unique_ptr<erhe::graphics::Base_render_pipeline>       m_compute_edge_lines_pipeline;

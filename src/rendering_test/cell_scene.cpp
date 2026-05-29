@@ -69,35 +69,33 @@ void Rendering_test::make_content_wide_line_renderer()
         return;
     }
 
-    // First create the renderer without shaders to get the shader resource
-    // definitions (SSBO structs, UBO layout). Then compile shaders using
-    // those definitions. The renderer stays alive so the resources remain valid.
-    m_content_wide_line_renderer = std::make_unique<erhe::scene_renderer::Content_wide_line_renderer>(
+    // Build the shader interface first so we have the SSBO structs / UBO
+    // layout / bind group layouts ready to feed into shader compilation.
+    // Rendering test passes nullptr for joint_block (skinned variant disabled).
+    m_content_wide_line_interface = std::make_unique<erhe::scene_renderer::Content_wide_line_interface>(
         m_graphics_device,
         nullptr,
-        nullptr,
-        nullptr,
-        nullptr  // joint_block - skinned variant disabled for rendering tests
+        1 // view_count
     );
 
-    // Build compute shader using renderer's resource definitions
+    // Build compute shader using the interface's resource definitions.
     {
         using namespace erhe::graphics;
         const std::filesystem::path shader_path = std::filesystem::path{"res"} / std::filesystem::path{"rendering_test"} / std::filesystem::path{"shaders"};
         Shader_stages_create_info create_info{
             .name             = "compute_before_content_line",
             .struct_types     = {
-                m_content_wide_line_renderer->get_edge_line_vertex_struct(),
-                m_content_wide_line_renderer->get_triangle_vertex_struct(),
-                m_content_wide_line_renderer->get_view_camera_struct()
+                &m_content_wide_line_interface->edge_line_vertex_struct,
+                &m_content_wide_line_interface->triangle_vertex_struct,
+                &m_content_wide_line_interface->view_camera_struct
             },
             .interface_blocks = {
-                m_content_wide_line_renderer->get_edge_line_vertex_buffer_block(),
-                m_content_wide_line_renderer->get_triangle_vertex_buffer_block(),
-                m_content_wide_line_renderer->get_view_block()
+                &m_content_wide_line_interface->edge_line_vertex_buffer_block,
+                &m_content_wide_line_interface->triangle_vertex_buffer_block,
+                &m_content_wide_line_interface->view_block
             },
             .shaders = { { Shader_type::compute_shader, shader_path / "compute_before_content_line.comp" } },
-            .bind_group_layout = m_content_wide_line_renderer->get_bind_group_layout(),
+            .bind_group_layout = &m_content_wide_line_interface->bind_group_layout,
         };
         Shader_stages_prototype prototype = build_shader_stages(m_graphics_device, create_info);
         if (prototype.is_valid()) {
@@ -123,8 +121,8 @@ void Rendering_test::make_content_wide_line_renderer()
             .name             = "content_line_after_compute",
             .struct_types     = { &m_program_interface.camera_interface.camera_struct },
             .interface_blocks = { &m_program_interface.camera_interface.camera_block  },
-            .fragment_outputs = &m_content_wide_line_renderer->get_fragment_outputs(),
-            .vertex_format    = &m_content_wide_line_renderer->get_triangle_vertex_format(),
+            .fragment_outputs = &m_content_wide_line_interface->fragment_outputs,
+            .vertex_format    = &m_content_wide_line_interface->triangle_vertex_format,
             .shaders = {
                 { Shader_type::vertex_shader,   shader_path / "line_after_compute.vert"        },
                 { Shader_type::fragment_shader, shader_path / "content_line_after_compute.frag" }
@@ -138,13 +136,15 @@ void Rendering_test::make_content_wide_line_renderer()
     }
 
     if (m_compute_shader_stages && m_graphics_shader_stages) {
-        // Now set the shader stages on the existing renderer. The
-        // rendering_test does not exercise skinning, so no skinned
-        // compute variant is wired up here.
-        m_content_wide_line_renderer->set_shader_stages(
+        // Rendering test does not exercise skinning or multiview, so the
+        // skinned compute variant and multiview graphics variant stay null.
+        m_content_wide_line_renderer = std::make_unique<erhe::scene_renderer::Content_wide_line_renderer>(
+            m_graphics_device,
+            *m_content_wide_line_interface,
             m_compute_shader_stages.get(),
             nullptr,
-            m_graphics_shader_stages.get()
+            m_graphics_shader_stages.get(),
+            nullptr
         );
 
         // Create pipeline state for rendering compute output.
@@ -162,7 +162,7 @@ void Rendering_test::make_content_wide_line_renderer()
         );
         log_test->info("Content wide line renderer enabled (compute path)");
     } else {
-        m_content_wide_line_renderer.reset();
+        m_content_wide_line_interface.reset();
         log_test->warn("Failed to create compute/graphics shaders for content wide line renderer");
     }
 }

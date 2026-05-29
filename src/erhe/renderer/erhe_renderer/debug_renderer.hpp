@@ -76,11 +76,11 @@ public:
 
     // Multiview graphics stage: line_after_compute.{vert,frag}
     // recompiled with ERHE_MULTIVIEW so c_view_index resolves to
-    // gl_ViewIndex, the dormant SSBO-read branch in
-    // line_after_compute.vert activates, and the fragment stage
-    // subtracts the per-eye viewport.xy from gl_FragCoord. Built only
-    // when view_count >= 2; single-view callers keep using
-    // graphics_shader_stages from the Phase 1 path.
+    // gl_ViewIndex (graphics_shader_stages uses c_view_index = 0).
+    // Built only when view_count >= 2; both variants read pre-transformed
+    // triangles from the triangle SSBO + per-eye viewport from the view
+    // UBO -- they differ only in the ERHE_MULTIVIEW define and the
+    // multiview render pass's viewMask.
     //
     // No multiview compute stage: compute_before_line.comp is already
     // view-count agnostic (loops over view.view_count, indexes
@@ -108,14 +108,15 @@ public:
     std::unique_ptr<erhe::graphics::Shader_resource>   view_block;
     std::unique_ptr<erhe::graphics::Bind_group_layout> bind_group_layout;
 
-    // Multiview graphics-pipeline layout. Triangle SSBO bound here
-    // read-only (vertex stage indexes it via gl_VertexID + gl_ViewIndex
-    // * stride_per_view). View UBO bound at binding 3 for both vertex
-    // (stride_per_view) and fragment (per-eye viewport.xy) reads. This
-    // layout omits the line-input SSBO at binding 0 because the
-    // multiview vertex shader reads pre-transformed triangles directly
-    // from binding 1, never touching the original line vertices.
-    std::unique_ptr<erhe::graphics::Bind_group_layout> multiview_graphics_bind_group_layout;
+    // Graphics-pipeline layout used by both single-view and multiview
+    // compute-path render. Triangle SSBO bound here read-only (vertex
+    // stage indexes it via gl_VertexID + c_view_index * stride_per_view).
+    // View UBO bound at binding 3 for both vertex (stride_per_view) and
+    // fragment (per-eye viewport.xy) reads. This layout omits the
+    // line-input SSBO at binding 0 because the vertex shader reads
+    // pre-transformed triangles directly from binding 1, never touching
+    // the original line vertices.
+    std::unique_ptr<erhe::graphics::Bind_group_layout> graphics_bind_group_layout;
 
     // Offsets inside one ViewCamera entry (repeated view_count times
     // at the start of view_block).
@@ -192,7 +193,6 @@ public:
 
     // API for Debug_renderer_bucket
     auto get_program_interface() const -> const Debug_renderer_program_interface& { return m_program_interface; }
-    auto get_vertex_input     () -> erhe::graphics::Vertex_input_state* { return &m_vertex_input; }
     auto get_line_vertex_input() -> erhe::graphics::Vertex_input_state* { return &m_line_vertex_input; }
     auto use_compute          () const -> bool { return m_program_interface.use_compute; }
     auto use_geometry_shader  () const -> bool { return m_program_interface.use_geometry_shader; }
@@ -207,7 +207,6 @@ public:
 private:
     erhe::graphics::Device&                         m_graphics_device;
     Debug_renderer_program_interface                m_program_interface;
-    erhe::graphics::Vertex_input_state              m_vertex_input;      // triangle path
     erhe::graphics::Vertex_input_state              m_line_vertex_input; // simple line path
     std::optional<erhe::graphics::Compute_pipeline> m_lines_to_triangles_compute_pipeline;
     std::stack<View>                                m_view_stack{};

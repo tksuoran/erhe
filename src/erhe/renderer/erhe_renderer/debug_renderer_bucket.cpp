@@ -301,28 +301,21 @@ void Debug_renderer_bucket::dispatch_compute(erhe::graphics::Compute_command_enc
     const std::size_t triangle_vertex_stride = m_debug_renderer.get_program_interface().triangle_vertex_format.streams.front().stride;
 
     for (Debug_draw_view_span& view_span : m_view_spans) {
-        const bool        is_multiview = (view_span.views.size() >= 2);
-        const std::size_t view_count   = view_span.views.size();
+        const std::size_t view_count = view_span.views.size();
 
-        // Single-view: bind one view UBO per span (same stride_per_view
-        // = 0 across all draws inside). Multiview: stride_per_view
-        // depends on the per-draw primitive_count, so bind a fresh UBO
-        // per draw and hold it on the Debug_draw_entry so render() can
-        // re-bind it on the multiview graphics path.
-        erhe::graphics::Ring_buffer_range view_buffer_range{};
-        if (!is_multiview) {
-            view_buffer_range = update_view_buffer(view_span.views, /*primitive_count_for_stride*/ 0);
-            m_view_buffer.bind(encoder, view_buffer_range);
-        }
-
+        // Always populate a per-draw view UBO range and hold it on the
+        // Debug_draw_entry. Single-view fills stride_per_view with the
+        // draw's primitive_count (matching multiview's layout) so the
+        // vertex shader's gl_VertexID + c_view_index * stride_per_view
+        // expression resolves to gl_VertexID with c_view_index = 0.
+        // render() re-binds the same per-draw range on the graphics
+        // encoder so the fragment shader can read the per-eye viewport.
         for (size_t i = view_span.begin; i < view_span.end; ++i) {
             Debug_draw_entry& draw = m_draws[i];
             ERHE_VERIFY(draw.primitive_count > 0);
 
-            if (is_multiview) {
-                draw.view_buffer_range = update_view_buffer(view_span.views, draw.primitive_count);
-                m_view_buffer.bind(encoder, draw.view_buffer_range);
-            }
+            draw.view_buffer_range = update_view_buffer(view_span.views, draw.primitive_count);
+            m_view_buffer.bind(encoder, draw.view_buffer_range);
 
             draw.input_buffer_range.close();
             m_vertex_ssbo_buffer->bind(encoder, draw.input_buffer_range);
@@ -348,9 +341,6 @@ void Debug_renderer_bucket::dispatch_compute(erhe::graphics::Compute_command_enc
 
             draw.input_buffer_range.release();
             draw.compute_dispatched = true;
-        }
-        if (!is_multiview) {
-            view_buffer_range.release();
         }
     }
 }
@@ -380,110 +370,65 @@ void Debug_renderer_bucket::render(
     bool                                    multiview
 )
 {
-    if (m_use_compute && multiview) {
-        // Multiview compute path. The pipeline_visible/hidden caches
-        // are keyed on the single-view shader stages and vertex
-        // format; bypass them entirely and build a per-call
-        // Render_pipeline_state that uses the multiview graphics
-        // shader stages with vertex_input = nullptr (the multiview
-        // vertex shader reads triangles from the SSBO directly,
-        // indexed by gl_VertexID + gl_ViewIndex * stride_per_view).
+    if (m_use_compute) {
+        // Compute path. Both single-view and multiview read pre-transformed
+        // triangle vertices from the triangle SSBO (binding 1, read-only
+        // declaration) and per-eye viewport from the view UBO (binding 3).
+        // The multiview vertex shader resolves c_view_index to
+        // gl_ViewIndex; the single-view variant uses 0u. The Base_render_pipeline
+        // cache (m_pipeline_visible/hidden) is keyed on single-view shader
+        // stages, so both compiles bypass it via set_render_pipeline_state()
+        // -- the encoder's internal pipeline cache handles VkPipeline reuse.
         const Debug_renderer_program_interface& pi = m_debug_renderer.get_program_interface();
-        if ((pi.multiview_graphics_shader_stages == nullptr) ||
-            !pi.multiview_graphics_shader_stages->is_valid())
-        {
+        erhe::graphics::Shader_stages* shader_stages = multiview
+            ? pi.multiview_graphics_shader_stages.get()
+            : pi.graphics_shader_stages.get();
+        if ((shader_stages == nullptr) || !shader_stages->is_valid()) {
             return;
         }
 
-        auto render_multiview_compute_draws = [&](erhe::graphics::Base_render_pipeline& pipeline) {
-            // Build a temp pipeline state mirroring the cached
-            // single-view pipeline (depth/stencil/blend etc. carry over)
-            // but with multiview shader stages and no vertex input.
-            // Note: pipeline.data is Render_pipeline_create_info (the
-            // Lazy cache key); it has no scissor field, so the temp
+        auto render_compute_draws = [&](const bool visible, erhe::graphics::Base_render_pipeline& pipeline) {
+            // Temp pipeline state mirrors the cached pipeline's
+            // depth/stencil/blend etc. but overrides shader_stages.
+            // pipeline.data is Render_pipeline_create_info (the cache
+            // key); it has no scissor field, so the temp
             // Render_pipeline_data leaves scissor default-initialised.
             erhe::graphics::Render_pipeline_state temp_state{
                 erhe::graphics::Render_pipeline_data{
                     .debug_label          = pipeline.data.debug_label,
-                    .shader_stages        = pi.multiview_graphics_shader_stages.get(),
-                    .vertex_input         = nullptr,
+                    .shader_stages        = shader_stages,
+                    .vertex_input         = nullptr, // triangles come from the SSBO, not the input assembler
                     .input_assembly       = pipeline.data.input_assembly,
                     .multisample          = pipeline.data.multisample,
                     .viewport_depth_range = pipeline.data.viewport_depth_range,
                     .rasterization        = pipeline.data.rasterization,
                     .depth_stencil        = pipeline.data.depth_stencil,
-                    //.color_blend          = pipeline.data.color_blend
+                    .color_blend          = visible ? pi.color_blend_visible : pi.color_blend_xray
                 }
             };
 
-            render_encoder.set_bind_group_layout(pi.multiview_graphics_bind_group_layout.get());
+            render_encoder.set_bind_group_layout(pi.graphics_bind_group_layout.get());
             render_encoder.set_render_pipeline_state(temp_state);
 
-            for (Debug_draw_entry& draw : m_draws) {
+            for (const Debug_draw_entry& draw : m_draws) {
                 if (!draw.compute_dispatched) {
                     continue;
                 }
                 // Re-bind the per-draw view UBO carried across from
-                // dispatch_compute(): the multiview vertex shader reads
-                // stride_per_view from it, and the fragment shader
-                // reads view.cameras[c_view_index].viewport.xy.
+                // dispatch_compute(): the vertex shader reads
+                // stride_per_view from it, and the fragment shader reads
+                // view.cameras[c_view_index].viewport.xy.
                 m_view_buffer.bind(render_encoder, draw.view_buffer_range);
-                // Triangle SSBO read-only at binding 1. The same
-                // descriptor binding the compute side wrote to;
-                // pi.triangle_vertex_buffer_read_block declares it
-                // readonly so the multiview vertex shader can index
-                // into it without colliding with the compute's
-                // writeonly declaration.
+                // Triangle SSBO at binding 1 (read-only declaration).
+                // Same descriptor binding the compute side wrote to;
+                // triangle_vertex_buffer_read_block declares it readonly
+                // so the vertex shader can index without colliding with
+                // the compute's writeonly declaration.
                 m_triangle_vertex_buffer->bind(render_encoder, draw.draw_buffer_range);
                 render_encoder.draw_primitives(
                     pipeline.data.input_assembly.primitive_topology,
                     0,
                     static_cast<uint32_t>(6 * draw.primitive_count)
-                );
-            }
-        };
-
-        if (draw_hidden && m_config.draw_hidden) {
-            render_multiview_compute_draws(m_pipeline_hidden);
-        }
-        if (draw_visible && m_config.draw_visible) {
-            render_multiview_compute_draws(m_pipeline_visible);
-        }
-        return;
-    }
-
-    if (m_use_compute) {
-        // Compute path: render triangles from compute-generated triangle vertex buffer
-        auto render_compute_draws = [&](const bool visible, erhe::graphics::Base_render_pipeline& pipeline) {
-            erhe::graphics::Shader_stages* shader_stages = m_debug_renderer.get_program_interface().graphics_shader_stages.get();
-            if (shader_stages == nullptr) {
-                return;
-            }
-            erhe::graphics::Render_pipeline* render_pipeline = pipeline.get_pipeline_for(
-                render_pass.get_descriptor(),
-                visible
-                    ? &m_debug_renderer.get_program_interface().color_blend_visible
-                    : &m_debug_renderer.get_program_interface().color_blend_xray,
-                shader_stages,
-                m_debug_renderer.get_vertex_input(),
-                &m_debug_renderer.get_program_interface().triangle_vertex_format
-            );
-            if (render_pipeline == nullptr) {
-                return;
-            }
-            render_encoder.set_bind_group_layout(m_debug_renderer.get_program_interface().bind_group_layout.get());
-            render_encoder.set_render_pipeline(*render_pipeline);
-            for (const Debug_draw_entry& draw : m_draws) {
-                if (!draw.compute_dispatched) {
-                    continue;
-                }
-                erhe::graphics::Buffer* triangle_vertex_buffer        = draw.draw_buffer_range.get_buffer()->get_buffer();
-                size_t                  triangle_vertex_buffer_offset = draw.draw_buffer_range.get_byte_start_offset_in_buffer();
-                render_encoder.set_vertex_buffer(triangle_vertex_buffer, triangle_vertex_buffer_offset, 0);
-                render_encoder.draw_primitives(
-                    pipeline.data.input_assembly.primitive_topology,
-                    0,
-                    6 * draw.primitive_count
                 );
             }
         };
