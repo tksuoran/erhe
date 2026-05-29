@@ -177,7 +177,12 @@ auto Mesh_memory::allocate_vertex_buffer_range(
         m_vertex_pools.size(),
         vertex_stream,
         Buffer_pool_block_create_info{
-            .usage                              = erhe::graphics::Buffer_usage::vertex,
+            // `storage` is required because Content_wide_line_compute_renderer
+            // reads vertex data as an SSBO in its compute pre-pass; without
+            // it Vulkan validation fires VUID-VkWriteDescriptorSet-descriptorType-00331
+            // ("buffer was created with VK_BUFFER_USAGE_VERTEX_BUFFER_BIT but
+            // descriptorType is VK_DESCRIPTOR_TYPE_STORAGE_BUFFER").
+            .usage                              = erhe::graphics::Buffer_usage::vertex | erhe::graphics::Buffer_usage::storage,
             .required_memory_property_bit_mask  = erhe::graphics::Memory_property_flag_bit_mask::device_local,
             .preferred_memory_property_bit_mask = erhe::graphics::Memory_property_flag_bit_mask::none,
             .block_size_bytes                   = static_cast<std::size_t>(m_mesh_memory_config.vertex_pool_block_size_mb) * mega,
