@@ -43,6 +43,11 @@ public:
     std::vector<Render_view> views;
     erhe::graphics::Texture* shared_color_texture        {nullptr};
     erhe::graphics::Texture* shared_depth_stencil_texture{nullptr};
+    // Shared fragment density map (fixed foveated rendering) spanning every
+    // view (one 2D-array layer per view), or nullptr when the swapchain was
+    // not created with foveation. Non-owning, same lifetime as
+    // shared_color_texture.
+    erhe::graphics::Texture* shared_fragment_density_map_texture{nullptr};
     uint32_t                 view_mask                   {0};
     uint32_t                 width                       {0};
     uint32_t                 height                      {0};

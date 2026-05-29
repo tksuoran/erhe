@@ -62,6 +62,7 @@ auto image_layout_str(Image_layout layout) -> const char*
         case Image_layout::color_attachment_optimal:         return "color_attachment_optimal";
         case Image_layout::depth_stencil_attachment_optimal: return "depth_stencil_attachment_optimal";
         case Image_layout::depth_stencil_read_only_optimal:  return "depth_stencil_read_only_optimal";
+        case Image_layout::fragment_density_map_optimal:     return "fragment_density_map_optimal";
         case Image_layout::present_src:                      return "present_src";
         default:                                             return "unknown";
     }
@@ -126,6 +127,7 @@ auto vk_layout_str(VkImageLayout layout) -> const char*
         case VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL:          return "DEPTH_READ_ONLY_OPTIMAL";
         case VK_IMAGE_LAYOUT_STENCIL_READ_ONLY_OPTIMAL:        return "STENCIL_READ_ONLY_OPTIMAL";
         case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR:                  return "PRESENT_SRC_KHR";
+        case VK_IMAGE_LAYOUT_FRAGMENT_DENSITY_MAP_OPTIMAL_EXT: return "FRAGMENT_DENSITY_MAP_OPTIMAL_EXT";
         default:                                                return "?";
     }
 }
@@ -325,6 +327,7 @@ Render_pass_impl::Render_pass_impl(Device& device, const Render_pass_descriptor&
     , m_render_target_width {descriptor.render_target_width}
     , m_render_target_height{descriptor.render_target_height}
     , m_view_mask            {descriptor.view_mask}
+    , m_fragment_density_map_texture{descriptor.fragment_density_map_texture}
     , m_debug_label         {descriptor.debug_label}
     , m_debug_group_name    {fmt::format("Render pass: {}", descriptor.debug_label.string_view())}
 {
@@ -912,6 +915,60 @@ Render_pass_impl::Render_pass_impl(Device& device, const Render_pass_descriptor&
             }
         }
 
+        // Fragment density map attachment (VK_EXT_fragment_density_map, fixed
+        // foveated rendering). When present, append a VkAttachmentDescription2 for
+        // the runtime-provided FDM image and reference it through a
+        // VkRenderPassFragmentDensityMapCreateInfoEXT chained into the render pass
+        // create-info pNext (it holds a v1 VkAttachmentReference -- the
+        // spec-sanctioned mix under RenderPass2). The FDM is read-only during
+        // rasterization: loadOp LOAD (preserve the runtime-written density
+        // values), storeOp DONT_CARE. It must NOT take part in the normal
+        // layout-transition machinery -- the runtime hands the image in
+        // FRAGMENT_DENSITY_MAP_OPTIMAL and expects it untouched -- so
+        // initialLayout == finalLayout and the FDM is excluded from
+        // m_color_attachments/m_depth_attachment (it is a bare pointer here).
+        VkRenderPassFragmentDensityMapCreateInfoEXT fdm_create_info{
+            .sType                        = VK_STRUCTURE_TYPE_RENDER_PASS_FRAGMENT_DENSITY_MAP_CREATE_INFO_EXT,
+            .pNext                        = nullptr,
+            .fragmentDensityMapAttachment = VkAttachmentReference{
+                .attachment = VK_ATTACHMENT_UNUSED,
+                .layout     = VK_IMAGE_LAYOUT_FRAGMENT_DENSITY_MAP_OPTIMAL_EXT
+            }
+        };
+        const bool has_fragment_density_map = (m_fragment_density_map_texture != nullptr);
+        if (has_fragment_density_map) {
+            const Texture* fdm = m_fragment_density_map_texture;
+            attachment_descriptions.push_back(VkAttachmentDescription2{
+                .sType          = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
+                .pNext          = nullptr,
+                .flags          = 0,
+                .format         = to_vulkan(fdm->get_pixelformat()),
+                .samples        = VK_SAMPLE_COUNT_1_BIT,
+                .loadOp         = VK_ATTACHMENT_LOAD_OP_LOAD,
+                .storeOp        = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+                .stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+                .initialLayout  = VK_IMAGE_LAYOUT_FRAGMENT_DENSITY_MAP_OPTIMAL_EXT,
+                .finalLayout    = VK_IMAGE_LAYOUT_FRAGMENT_DENSITY_MAP_OPTIMAL_EXT
+            });
+            fdm_create_info.fragmentDensityMapAttachment.attachment = attachment_index;
+            // FDM image view: COLOR aspect, spanning the same layers as color/depth
+            // (one FDM layer per view under multiview), base layer 0, level 0.
+            VkImageView fdm_view = const_cast<Texture_impl&>(fdm->get_impl()).get_vk_image_view(
+                VK_IMAGE_ASPECT_COLOR_BIT, 0, multiview_layer_count, 0, 1
+            );
+            image_views.push_back(fdm_view);
+            // Keep m_clear_values index-aligned with the attachment array. The FDM
+            // uses loadOp LOAD so its clear value is ignored, but
+            // VkRenderPassBeginInfo indexes clear values by attachment.
+            m_clear_values.push_back(VkClearValue{});
+            ERHE_VULKAN_SYNC_TRACE(
+                "[RP_ATTACHMENT] pass=\"{}\" role=fragment_density_map tex=\"{}\" samples=1 loadOp=LOAD storeOp=DONT_CARE initialLayout=FRAGMENT_DENSITY_MAP_OPTIMAL_EXT finalLayout=FRAGMENT_DENSITY_MAP_OPTIMAL_EXT",
+                m_debug_label.data(), fdm->get_debug_label().data()
+            );
+            ++attachment_index;
+        }
+
         // VkSubpassDescriptionDepthStencilResolve is chained into pNext only if
         // the user requested a depth or stencil resolve. The struct must remain
         // alive through the vkCreateRenderPass2 call below.
@@ -948,7 +1005,7 @@ Render_pass_impl::Render_pass_impl(Device& device, const Render_pass_descriptor&
         make_canonical_subpass_dependencies2(has_color_attachments, has_depth_stencil, canonical_dependencies);
         const VkRenderPassCreateInfo2 render_pass_create_info{
             .sType                   = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO_2,
-            .pNext                   = nullptr,
+            .pNext                   = has_fragment_density_map ? &fdm_create_info : nullptr,
             .flags                   = 0,
             .attachmentCount         = static_cast<uint32_t>(attachment_descriptions.size()),
             .pAttachments            = attachment_descriptions.empty() ? nullptr : attachment_descriptions.data(),

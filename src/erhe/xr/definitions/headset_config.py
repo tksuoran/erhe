@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Headset_config",
-    version=1,
+    version=2,
     short_desc="Virtual Reality Headset",
     long_desc="",
     developer=False,
@@ -194,6 +194,45 @@ struct("Headset_config",
             default="false",
             short_desc="Step Down Level on Thermal Warning",
             long_desc="When the runtime sends a thermal warning event, automatically step the affected domain's level down by one notch.",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "foveation",
+            Bool,
+            added_in=2,
+            default="false",
+            short_desc="Enable Fixed Foveated Rendering",
+            long_desc=("Enable OpenXR fixed foveated rendering (FFR) via "
+                       "XR_FB_foveation + VK_EXT_fragment_density_map: the "
+                       "periphery of each eye is rendered at lower resolution to "
+                       "save GPU fill and power. Requires the runtime and Vulkan "
+                       "device to support the foveation extensions; no-ops "
+                       "cleanly otherwise. Vulkan backend only."),
+            visible=True,
+            developer=False
+        ),
+        field(
+            "foveation_level",
+            EnumRef("Foveation_level"),
+            added_in=2,
+            default="Foveation_level::e_high",
+            short_desc="Fixed Foveation Level",
+            long_desc=("Foveation level (none/low/medium/high). With dynamic "
+                       "foveation enabled this is the maximum level the runtime "
+                       "scales down from based on GPU load."),
+            visible=True,
+            developer=False
+        ),
+        field(
+            "foveation_dynamic",
+            Bool,
+            added_in=2,
+            default="true",
+            short_desc="Dynamic Foveation",
+            long_desc=("Let the runtime dynamically scale the applied foveation "
+                       "level up to foveation_level based on GPU load, instead of "
+                       "always applying the fixed level."),
             visible=True,
             developer=False
         ),

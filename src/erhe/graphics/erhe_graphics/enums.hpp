@@ -441,6 +441,11 @@ public:
     // declared next use. The caller is responsible for inserting an
     // explicit barrier via Device::cmd_texture_barrier() instead.
     static constexpr uint64_t user_synchronized        = 12;
+
+    // Fragment density map attachment (VK_EXT_fragment_density_map). Used by
+    // OpenXR fixed foveated rendering: the runtime-owned FDM image controls
+    // per-tile render resolution. Maps to VK_IMAGE_USAGE_FRAGMENT_DENSITY_MAP_BIT_EXT.
+    static constexpr uint64_t fragment_density_map     = 13;
 };
 
 class Image_usage_flag_bit_mask
@@ -459,6 +464,7 @@ public:
     static constexpr uint64_t host_transfer            = uint64_t{1} << Image_usage_flag_bit::host_transfer           ;
     static constexpr uint64_t present                  = uint64_t{1} << Image_usage_flag_bit::present                 ;
     static constexpr uint64_t user_synchronized        = uint64_t{1} << Image_usage_flag_bit::user_synchronized       ;
+    static constexpr uint64_t fragment_density_map     = uint64_t{1} << Image_usage_flag_bit::fragment_density_map    ;
 };
 
 enum class Image_layout : unsigned int {
@@ -470,6 +476,7 @@ enum class Image_layout : unsigned int {
     color_attachment_optimal,
     depth_stencil_attachment_optimal,
     depth_stencil_read_only_optimal,
+    fragment_density_map_optimal,
     present_src
 };
 

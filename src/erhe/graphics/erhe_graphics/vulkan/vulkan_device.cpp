@@ -419,6 +419,7 @@ auto Device_impl::get_or_create_compatible_render_pass(
     const erhe::dataformat::Format                 stencil_attachment_format,
     const unsigned int                             sample_count,
     const uint32_t                                 view_mask,
+    const bool                                     fragment_density_map,
     VkPipelineStageFlags                           incoming_src_stage,
     VkAccessFlags                                  incoming_src_access,
     VkPipelineStageFlags                           incoming_dst_stage,
@@ -443,6 +444,7 @@ auto Device_impl::get_or_create_compatible_render_pass(
     hash_combine(hash, static_cast<std::size_t>(stencil_attachment_format));
     hash_combine(hash, static_cast<std::size_t>(sample_count));
     hash_combine(hash, static_cast<std::size_t>(view_mask));
+    hash_combine(hash, static_cast<std::size_t>(fragment_density_map ? 1u : 0u));
     hash_combine(hash, static_cast<std::size_t>(incoming_src_stage));
     hash_combine(hash, static_cast<std::size_t>(incoming_src_access));
     hash_combine(hash, static_cast<std::size_t>(incoming_dst_stage));
@@ -523,6 +525,37 @@ auto Device_impl::get_or_create_compatible_render_pass(
             (has_stencil ? VK_IMAGE_ASPECT_STENCIL_BIT : 0u);
     }
 
+    // Fragment density map attachment for render-pass compatibility under
+    // VK_EXT_fragment_density_map. The spec requires the pipeline's
+    // compatibility render pass to either both have or both lack an FDM
+    // attachment as the in-use render pass; when both have it, the FDM
+    // attachment descriptions must match in format and sample count, and
+    // both must chain VkRenderPassFragmentDensityMapCreateInfoEXT. Push a
+    // matching FDM attachment that mirrors the in-use render pass at
+    // vulkan_render_pass.cpp -- samples=1, loadOp LOAD, storeOp DONT_CARE,
+    // initial=final=FRAGMENT_DENSITY_MAP_OPTIMAL_EXT, format R8G8_UNORM
+    // (the OpenXR-required FDM format).
+    VkAttachmentReference fdm_attachment_reference{
+        .attachment = VK_ATTACHMENT_UNUSED,
+        .layout     = VK_IMAGE_LAYOUT_FRAGMENT_DENSITY_MAP_OPTIMAL_EXT
+    };
+    if (fragment_density_map) {
+        attachments.push_back(VkAttachmentDescription2{
+            .sType          = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
+            .pNext          = nullptr,
+            .flags          = 0,
+            .format         = VK_FORMAT_R8G8_UNORM,
+            .samples        = VK_SAMPLE_COUNT_1_BIT,
+            .loadOp         = VK_ATTACHMENT_LOAD_OP_LOAD,
+            .storeOp        = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+            .stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+            .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+            .initialLayout  = VK_IMAGE_LAYOUT_FRAGMENT_DENSITY_MAP_OPTIMAL_EXT,
+            .finalLayout    = VK_IMAGE_LAYOUT_FRAGMENT_DENSITY_MAP_OPTIMAL_EXT
+        });
+        fdm_attachment_reference.attachment = static_cast<uint32_t>(attachments.size() - 1);
+    }
+
     // Vulkan render-pass compatibility requires the pipeline's compatibility
     // render pass to have the same subpass viewMask as the in-use render
     // pass. With viewMask hardcoded to 0, multiview render passes (viewMask
@@ -595,9 +628,17 @@ auto Device_impl::get_or_create_compatible_render_pass(
     VkSubpassDependency2 canonical_dependencies[2];
     make_canonical_subpass_dependencies2(color_attachment_count > 0, has_depth || has_stencil, canonical_dependencies);
 
+    // VK_EXT_fragment_density_map: chain the FDM-create-info into pNext when
+    // the in-use render pass does the same. Mirrors vulkan_render_pass.cpp.
+    const VkRenderPassFragmentDensityMapCreateInfoEXT fdm_create_info{
+        .sType                        = VK_STRUCTURE_TYPE_RENDER_PASS_FRAGMENT_DENSITY_MAP_CREATE_INFO_EXT,
+        .pNext                        = nullptr,
+        .fragmentDensityMapAttachment = fdm_attachment_reference
+    };
+
     const VkRenderPassCreateInfo2 render_pass_create_info{
         .sType                   = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO_2,
-        .pNext                   = nullptr,
+        .pNext                   = fragment_density_map ? &fdm_create_info : nullptr,
         .flags                   = 0,
         .attachmentCount         = static_cast<uint32_t>(attachments.size()),
         .pAttachments            = attachments.empty() ? nullptr : attachments.data(),
@@ -842,6 +883,17 @@ auto Device_impl::query_device_extensions(
     check_device_extension(VK_KHR_LOAD_STORE_OP_NONE_EXTENSION_NAME,             device_extensions_out.m_VK_KHR_load_store_op_none            , 2.0f);
     check_device_extension(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME,                device_extensions_out.m_VK_KHR_push_descriptor               , 1.0f);
     check_device_extension(VK_KHR_PRESENT_MODE_FIFO_LATEST_READY_EXTENSION_NAME, device_extensions_out.m_VK_KHR_present_mode_fifo_latest_ready, 3.0f);
+
+    // VK_EXT_fragment_density_map: backs OpenXR fixed foveated rendering. Enabled
+    // purely on availability; the FFR feature query/enable and the runtime decision
+    // to actually request a foveated swapchain happen later and independently.
+    check_device_extension(VK_EXT_FRAGMENT_DENSITY_MAP_EXTENSION_NAME,           device_extensions_out.m_VK_EXT_fragment_density_map          , 2.0f);
+    // VK_EXT_fragment_density_map2: Meta lists this as a required device extension for
+    // native OpenXR FFR on Quest ("Improved latency for reading fragment density maps
+    // on Qualcomm hardware"). We enable it for parity with that requirement; we use no
+    // v2-specific features (subsampled images, deferred subpasses) and therefore do
+    // not chain VkPhysicalDeviceFragmentDensityMap2FeaturesEXT.
+    check_device_extension(VK_EXT_FRAGMENT_DENSITY_MAP_2_EXTENSION_NAME,         device_extensions_out.m_VK_EXT_fragment_density_map2         , 2.0f);
 
     // VK_KHR_portability_subset must be enabled whenever the physical device
     // advertises it (Vulkan spec VUID-VkDeviceCreateInfo-pProperties-04451).

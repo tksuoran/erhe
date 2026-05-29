@@ -448,6 +448,39 @@ auto Xr_instance::create_instance() -> bool
         enabled_extensions.push_back(XR_META_PERFORMANCE_METRICS_EXTENSION_NAME);
     }
 
+#if defined(XR_USE_GRAPHICS_API_VULKAN)
+    // OpenXR fixed foveated rendering (issue #208). All-or-nothing: FFR needs the
+    // swapchain-update-state + foveation + foveation-configuration + Vulkan FDM
+    // extensions together. XR_FB_foveation_vulkan is Vulkan-only, so the whole
+    // block is Vulkan-guarded (FFR is a Vulkan-only feature in erhe). Actually
+    // requesting a foveated swapchain is further gated at runtime on the Vulkan
+    // device's fragment-density-map capability (Xr_session); enabling-but-not-
+    // requesting is harmless.
+    if (m_configuration.foveation &&
+        has_extension(XR_FB_SWAPCHAIN_UPDATE_STATE_EXTENSION_NAME) &&
+        has_extension(XR_FB_FOVEATION_EXTENSION_NAME) &&
+        has_extension(XR_FB_FOVEATION_CONFIGURATION_EXTENSION_NAME) &&
+        has_extension(XR_FB_FOVEATION_VULKAN_EXTENSION_NAME)) {
+        extensions.FB_swapchain_update_state  = true;
+        extensions.FB_foveation               = true;
+        extensions.FB_foveation_configuration = true;
+        extensions.FB_foveation_vulkan        = true;
+        enabled_extensions.push_back(XR_FB_SWAPCHAIN_UPDATE_STATE_EXTENSION_NAME);
+        enabled_extensions.push_back(XR_FB_FOVEATION_EXTENSION_NAME);
+        enabled_extensions.push_back(XR_FB_FOVEATION_CONFIGURATION_EXTENSION_NAME);
+        enabled_extensions.push_back(XR_FB_FOVEATION_VULKAN_EXTENSION_NAME);
+    }
+    log_xr->info(
+        "OpenXR fixed foveated rendering: cfg foveation={}; supported: FB_swapchain_update_state={} FB_foveation={} FB_foveation_configuration={} FB_foveation_vulkan={}; enabled={}",
+        m_configuration.foveation,
+        has_extension(XR_FB_SWAPCHAIN_UPDATE_STATE_EXTENSION_NAME),
+        has_extension(XR_FB_FOVEATION_EXTENSION_NAME),
+        has_extension(XR_FB_FOVEATION_CONFIGURATION_EXTENSION_NAME),
+        has_extension(XR_FB_FOVEATION_VULKAN_EXTENSION_NAME),
+        extensions.FB_foveation
+    );
+#endif
+
     // XR_META_passthrough_layer_resumed_event
     // XR_META_passthrough_color_lut
     // XR_META_passthrough_preferences
@@ -639,6 +672,15 @@ auto Xr_instance::create_instance() -> bool
         xrSetPerformanceMetricsStateMETA              = get_proc_addr<PFN_xrSetPerformanceMetricsStateMETA             >("xrSetPerformanceMetricsStateMETA");
         xrGetPerformanceMetricsStateMETA              = get_proc_addr<PFN_xrGetPerformanceMetricsStateMETA             >("xrGetPerformanceMetricsStateMETA");
         xrQueryPerformanceMetricsCounterMETA          = get_proc_addr<PFN_xrQueryPerformanceMetricsCounterMETA         >("xrQueryPerformanceMetricsCounterMETA");
+    }
+
+    // XR_FB_foveation + XR_FB_swapchain_update_state. extensions.FB_foveation is
+    // only ever set on Vulkan builds (the enable block above is Vulkan-guarded),
+    // so this is dead on other backends; the PFN types are universal.
+    if (extensions.FB_foveation) {
+        xrCreateFoveationProfileFB  = get_proc_addr<PFN_xrCreateFoveationProfileFB >("xrCreateFoveationProfileFB");
+        xrDestroyFoveationProfileFB = get_proc_addr<PFN_xrDestroyFoveationProfileFB>("xrDestroyFoveationProfileFB");
+        xrUpdateSwapchainFB         = get_proc_addr<PFN_xrUpdateSwapchainFB        >("xrUpdateSwapchainFB");
     }
 
     return true;

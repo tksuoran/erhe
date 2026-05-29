@@ -549,6 +549,74 @@ auto Xr_session::create_swapchains() -> bool
         erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment |
         erhe::graphics::Image_usage_flag_bit_mask::sampled;
 
+    // Fixed foveated rendering (issue #208): request a fragment-density-map on the
+    // COLOR swapchains when the config knob, the OpenXR foveation extensions, and
+    // the Vulkan device's FDM capability all line up. Vulkan-only; on other
+    // backends use_foveation stays false and swapchains are created exactly as
+    // before. The FDM is requested only on color (never depth). chaining the
+    // create-info is harmless if the runtime ignores it, but it is gated anyway.
+    bool use_foveation = false;
+#if defined(XR_USE_GRAPHICS_API_VULKAN)
+    use_foveation = m_instance.extensions.FB_foveation && m_graphics_device.get_info().fragment_density_map;
+#endif
+    const XrSwapchainCreateInfoFoveationFB color_foveation_create_info{
+        .type  = XR_TYPE_SWAPCHAIN_CREATE_INFO_FOVEATION_FB,
+        .next  = nullptr,
+        .flags = XR_SWAPCHAIN_CREATE_FOVEATION_FRAGMENT_DENSITY_MAP_BIT_FB
+    };
+    const void* const color_swapchain_next = use_foveation ? &color_foveation_create_info : nullptr;
+    log_xr->info("OpenXR fixed foveated rendering: use_foveation={}", use_foveation);
+
+    // Create and apply the FFR foveation profile to a color swapchain. Shared by
+    // the multiview and per-eye paths. Every failure is non-fatal: a color
+    // swapchain with an FDM attachment but no (or a failed) profile simply renders
+    // at full density (no foveation), which is safe. No-op unless FFR is active and
+    // the entry points were loaded (so it is inert on non-Vulkan / unsupported
+    // runtimes).
+    const auto apply_foveation_profile = [&](XrSwapchain color_xr_swapchain) {
+        if (!use_foveation ||
+            (m_instance.xrCreateFoveationProfileFB == nullptr) ||
+            (m_instance.xrUpdateSwapchainFB        == nullptr)) {
+            return;
+        }
+        const Headset_config& config = m_instance.get_configuration();
+        // Non-const: XrFoveationProfileCreateInfoFB::next is void* (not const void*),
+        // so it cannot point at a const object.
+        XrFoveationLevelProfileCreateInfoFB level_profile{
+            .type           = XR_TYPE_FOVEATION_LEVEL_PROFILE_CREATE_INFO_FB,
+            .next           = nullptr,
+            // Foveation_level maps 1:1 to XrFoveationLevelFB (none/low/medium/high).
+            .level          = static_cast<XrFoveationLevelFB>(static_cast<int>(config.foveation_level)),
+            .verticalOffset = 0.0f,
+            .dynamic        = config.foveation_dynamic ? XR_FOVEATION_DYNAMIC_LEVEL_ENABLED_FB : XR_FOVEATION_DYNAMIC_DISABLED_FB
+        };
+        const XrFoveationProfileCreateInfoFB profile_create_info{
+            .type = XR_TYPE_FOVEATION_PROFILE_CREATE_INFO_FB,
+            .next = &level_profile
+        };
+        XrFoveationProfileFB foveation_profile{XR_NULL_HANDLE};
+        const XrResult create_result = m_instance.xrCreateFoveationProfileFB(m_xr_session, &profile_create_info, &foveation_profile);
+        if (create_result != XR_SUCCESS) {
+            log_xr->warn("xrCreateFoveationProfileFB() failed with error {}; foveation inactive for this swapchain", c_str(create_result));
+            return;
+        }
+        const XrSwapchainStateFoveationFB foveation_state{
+            .type    = XR_TYPE_SWAPCHAIN_STATE_FOVEATION_FB,
+            .next    = nullptr,
+            .flags   = 0,
+            .profile = foveation_profile
+        };
+        const XrResult update_result = m_instance.xrUpdateSwapchainFB(color_xr_swapchain, reinterpret_cast<const XrSwapchainStateBaseHeaderFB*>(&foveation_state));
+        if (update_result != XR_SUCCESS) {
+            log_xr->warn("xrUpdateSwapchainFB() failed with error {}; foveation inactive for this swapchain", c_str(update_result));
+        } else {
+            log_xr->info("OpenXR foveation profile applied: level={} dynamic={}", static_cast<int>(config.foveation_level), config.foveation_dynamic);
+        }
+        if (m_instance.xrDestroyFoveationProfileFB != nullptr) {
+            m_instance.xrDestroyFoveationProfileFB(foveation_profile);
+        }
+    };
+
     // On Vulkan the depth swapchain creation is currently disabled (see
     // doc/vulkan_backend.md). On GL the runtime accepts the depth format
     // and the editor uses the resulting depth texture for the projection
@@ -591,7 +659,7 @@ auto Xr_session::create_swapchains() -> bool
 
         const XrSwapchainCreateInfo color_swapchain_create_info{
             .type        = XR_TYPE_SWAPCHAIN_CREATE_INFO,
-            .next        = nullptr,
+            .next        = color_swapchain_next,
             .createFlags = 0,
             .usageFlags  = XR_SWAPCHAIN_USAGE_SAMPLED_BIT | XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT,
             .format      = native_color_format,
@@ -660,8 +728,10 @@ auto Xr_session::create_swapchains() -> bool
             view.recommendedSwapchainSampleCount,
             view_count,
             color_texture_usage,
+            use_foveation,
             "XR multiview color"
         );
+        apply_foveation_profile(color_xr_swapchain);
         if (depth_stencil_xr_swapchain != XR_NULL_HANDLE) {
             m_shared_depth_stencil_swapchain.emplace(
                 m_graphics_device,
@@ -672,6 +742,7 @@ auto Xr_session::create_swapchains() -> bool
                 view.recommendedSwapchainSampleCount,
                 view_count,
                 depth_stencil_texture_usage,
+                /*want_fragment_density_map*/ false,
                 "XR multiview depth stencil"
             );
         }
@@ -709,7 +780,7 @@ auto Xr_session::create_swapchains() -> bool
         const auto& view = views[view_index];
         const XrSwapchainCreateInfo color_swapchain_create_info{
             .type        = XR_TYPE_SWAPCHAIN_CREATE_INFO,
-            .next        = nullptr,
+            .next        = color_swapchain_next,
             .createFlags = 0,
             .usageFlags  = XR_SWAPCHAIN_USAGE_SAMPLED_BIT | XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT,
             .format      = native_color_format,
@@ -762,6 +833,7 @@ auto Xr_session::create_swapchains() -> bool
                 view.recommendedSwapchainSampleCount,
                 /*array_layer_count*/ 1,
                 color_texture_usage,
+                use_foveation,
                 fmt::format("XR color view {}", view_index)
             },
             Swapchain{
@@ -773,9 +845,11 @@ auto Xr_session::create_swapchains() -> bool
                 view.recommendedSwapchainSampleCount,
                 /*array_layer_count*/ 1,
                 depth_stencil_texture_usage,
+                /*want_fragment_density_map*/ false,
                 fmt::format("XR depth stencil view {}", view_index)
             }
         );
+        apply_foveation_profile(color_xr_swapchain);
     }
     } // if (!m_use_multiview)
 
@@ -1490,6 +1564,7 @@ auto Xr_session::render_frame(erhe::graphics::Command_buffer& command_buffer, st
             .fov_down              = m_xr_views[i].fov.angleDown,
             .color_texture         = color_texture,
             .depth_stencil_texture = depth_stencil_texture,
+            .fragment_density_map_texture = acquired_color_imgs[i]->get_fragment_density_map_texture(),
             .color_format          = m_swapchain_color_format,
             .depth_stencil_format  = m_swapchain_depth_stencil_format,
             .width                 = view_configuration_views[i].recommendedImageRectWidth,
@@ -1678,6 +1753,7 @@ auto Xr_session::render_frame_multiview(
     Render_views_frame frame;
     frame.shared_color_texture         = color_texture;
     frame.shared_depth_stencil_texture = depth_stencil_texture;
+    frame.shared_fragment_density_map_texture = acquired_color->get_fragment_density_map_texture();
     frame.width                        = view_configuration_views[0].recommendedImageRectWidth;
     frame.height                       = view_configuration_views[0].recommendedImageRectHeight;
     frame.view_mask                    = (view_count >= 32) ? 0xFFFFFFFFu : ((1u << view_count) - 1u);
@@ -1824,6 +1900,7 @@ auto Xr_session::create_quad_layer(uint32_t width, uint32_t height, const std::s
         /*sample_count*/      1,
         /*array_layer_count*/ 1,
         color_texture_usage,
+        /*want_fragment_density_map*/ false,
         debug_label
     };
 

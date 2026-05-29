@@ -771,6 +771,21 @@ Device_impl::Device_impl(
         query_features_chain_last        = query_features_chain_last->pNext;
     }
 
+    // VK_EXT_fragment_density_map (OpenXR fixed foveated rendering). Unlike the
+    // 1.1-core features above this is a non-core extension, so the feature struct
+    // is chained only when the device advertises the extension.
+    VkPhysicalDeviceFragmentDensityMapFeaturesEXT query_fragment_density_map_features{
+        .sType                                 = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_DENSITY_MAP_FEATURES_EXT,
+        .pNext                                 = nullptr,
+        .fragmentDensityMap                    = VK_FALSE,
+        .fragmentDensityMapDynamic             = VK_FALSE,
+        .fragmentDensityMapNonSubsampledImages = VK_FALSE,
+    };
+    if (m_device_extensions.m_VK_EXT_fragment_density_map) {
+        query_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&query_fragment_density_map_features);
+        query_features_chain_last        = query_features_chain_last->pNext;
+    }
+
     // When VK_KHR_portability_subset is NOT advertised the device is fully
     // featured by definition, so we synthesise an all-VK_TRUE struct here.
     // When it IS advertised we chain into the features2 query and the driver
@@ -1109,6 +1124,28 @@ Device_impl::Device_impl(
     log_startup->info("  shaderFloat16                  = {}", query_shader_float16_int8_features.shaderFloat16 == VK_TRUE);
     log_startup->info("  shaderInt8                     = {}", query_shader_float16_int8_features.shaderInt8    == VK_TRUE);
 
+    // VK_EXT_fragment_density_map: enable exactly the bits the device advertised.
+    // Only chain it when the extension is present and fragmentDensityMap is
+    // supported; enabling an unsupported feature would fail device creation.
+    VkPhysicalDeviceFragmentDensityMapFeaturesEXT set_fragment_density_map_features{
+        .sType                                 = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_DENSITY_MAP_FEATURES_EXT,
+        .pNext                                 = nullptr,
+        .fragmentDensityMap                    = query_fragment_density_map_features.fragmentDensityMap,
+        .fragmentDensityMapDynamic             = query_fragment_density_map_features.fragmentDensityMapDynamic,
+        .fragmentDensityMapNonSubsampledImages = query_fragment_density_map_features.fragmentDensityMapNonSubsampledImages,
+    };
+    if (m_device_extensions.m_VK_EXT_fragment_density_map && (set_fragment_density_map_features.fragmentDensityMap == VK_TRUE)) {
+        set_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&set_fragment_density_map_features);
+        set_features_chain_last        = set_features_chain_last->pNext;
+        log_debug->debug("Enabled feature fragmentDensityMap");
+        if (set_fragment_density_map_features.fragmentDensityMapNonSubsampledImages == VK_TRUE) {
+            log_debug->debug("Enabled feature fragmentDensityMapNonSubsampledImages");
+        }
+    }
+    log_startup->info("  fragmentDensityMap                    = {}", query_fragment_density_map_features.fragmentDensityMap                    == VK_TRUE);
+    log_startup->info("  fragmentDensityMapDynamic             = {}", query_fragment_density_map_features.fragmentDensityMapDynamic             == VK_TRUE);
+    log_startup->info("  fragmentDensityMapNonSubsampledImages = {}", query_fragment_density_map_features.fragmentDensityMapNonSubsampledImages == VK_TRUE);
+
     // 16bit storage and multiview feature flags are folded into
     // set_vulkan_11_features above; the granular VkPhysicalDevice16BitStorageFeatures
     // and VkPhysicalDeviceMultiviewFeatures structs would alias the same
@@ -1315,6 +1352,10 @@ Device_impl::Device_impl(
     m_info.multiview_tessellation_shader           = (set_vulkan_11_features.multiviewTessellationShader        == VK_TRUE);
     m_info.max_multiview_view_count                = query_multiview_properties.maxMultiviewViewCount;
     m_info.max_multiview_instance_index            = query_multiview_properties.maxMultiviewInstanceIndex;
+    // Core (non-subsampled) FFR needs both fragmentDensityMap and
+    // fragmentDensityMapNonSubsampledImages; gate the capability on both.
+    m_info.fragment_density_map                    = (set_fragment_density_map_features.fragmentDensityMap                    == VK_TRUE) &&
+                                                     (set_fragment_density_map_features.fragmentDensityMapNonSubsampledImages == VK_TRUE);
 
     // Vulkan coordinate conventions
     m_info.coordinate_conventions.native_depth_range = erhe::math::Depth_range::zero_to_one;

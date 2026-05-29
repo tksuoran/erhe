@@ -1072,6 +1072,7 @@ auto to_vk_image_layout(const Image_layout layout) -> VkImageLayout
         case Image_layout::color_attachment_optimal:         return VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         case Image_layout::depth_stencil_attachment_optimal: return VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
         case Image_layout::depth_stencil_read_only_optimal:  return VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+        case Image_layout::fragment_density_map_optimal:     return VK_IMAGE_LAYOUT_FRAGMENT_DENSITY_MAP_OPTIMAL_EXT;
         case Image_layout::present_src:                      return VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
         default:                                             return VK_IMAGE_LAYOUT_UNDEFINED;
     }
@@ -1108,6 +1109,9 @@ auto get_vulkan_image_usage_flags(const uint64_t usage_mask) -> VkImageUsageFlag
     }
     if (test_bit_set(usage_mask, Image_usage_flag_bit_mask::host_transfer)) {
         flags |= VK_IMAGE_USAGE_HOST_TRANSFER_BIT;
+    }
+    if (test_bit_set(usage_mask, Image_usage_flag_bit_mask::fragment_density_map)) {
+        flags |= VK_IMAGE_USAGE_FRAGMENT_DENSITY_MAP_BIT_EXT;
     }
     return flags;
 }

@@ -693,6 +693,7 @@ set(_xr_ser_sources
     ${_xr_gen}/headset_config_serialization.hpp
     ${_xr_gen}/headset_config.cpp
     ${_xr_gen}/perf_settings_level.cpp
+    ${_xr_gen}/foveation_level.cpp
 )
 set_source_files_properties(${_xr_ser_sources} PROPERTIES GENERATED TRUE)
 target_sources(${_target} PRIVATE ${_xr_ser_sources})

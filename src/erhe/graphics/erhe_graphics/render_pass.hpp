@@ -76,6 +76,14 @@ public:
     // reads the actual per-view layers from the view mask). Ignored on
     // non-Vulkan backends (OpenGL multiview is not supported).
     uint32_t                                         view_mask           {0};
+    // Fragment density map attachment for fixed foveated rendering (Vulkan
+    // VK_EXT_fragment_density_map). When non-null, the Vulkan backend attaches
+    // this texture as the render pass's fragment-density-map attachment. A bare
+    // pointer (not a Render_pass_attachment_descriptor) deliberately keeps it
+    // out of the color/depth load/store/layout-transition machinery: the
+    // runtime hands the FDM image in FRAGMENT_DENSITY_MAP_OPTIMAL layout and it
+    // must not be transitioned. Ignored on non-Vulkan backends.
+    const Texture*                                   fragment_density_map_texture{nullptr};
     erhe::utility::Debug_label                       debug_label;
 };
 

@@ -161,6 +161,14 @@ public:
     // minimum for max_multiview_view_count is 6.
     uint32_t max_multiview_view_count               {0};
     uint32_t max_multiview_instance_index           {0};
+
+    // Reflect VkPhysicalDeviceFragmentDensityMapFeaturesEXT
+    // (VK_EXT_fragment_density_map). Drives OpenXR fixed foveated rendering.
+    // True only when the device advertises and enables BOTH fragmentDensityMap
+    // AND fragmentDensityMapNonSubsampledImages: the core (non-subsampled) FFR
+    // path attaches the FDM to non-subsampled runtime swapchain color images,
+    // which requires the non-subsampled feature.
+    bool     fragment_density_map                   {false};
 #endif
 
     bool use_clip_control            {false};
