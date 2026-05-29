@@ -397,7 +397,11 @@ void Debug_renderer_bucket::render(
                 erhe::graphics::Render_pipeline_data{
                     .debug_label          = pipeline.data.debug_label,
                     .shader_stages        = shader_stages,
-                    .vertex_input         = nullptr, // triangles come from the SSBO, not the input assembler
+                    // Empty (no attributes) but non-null: OpenGL core
+                    // profile requires a non-default VAO bound for the
+                    // draw to fire. The triangles are read from the SSBO
+                    // via gl_VertexID, not through the input assembler.
+                    .vertex_input         = m_debug_renderer.get_empty_vertex_input(),
                     .input_assembly       = pipeline.data.input_assembly,
                     .multisample          = pipeline.data.multisample,
                     .viewport_depth_range = pipeline.data.viewport_depth_range,

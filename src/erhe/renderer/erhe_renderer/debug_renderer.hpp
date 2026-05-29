@@ -200,6 +200,11 @@ public:
     // API for Debug_renderer_bucket
     auto get_program_interface() const -> const Debug_renderer_program_interface& { return m_program_interface; }
     auto get_line_vertex_input() -> erhe::graphics::Vertex_input_state* { return &m_line_vertex_input; }
+    // Empty (no attributes) vertex input state for SSBO-read triangle
+    // draws. OpenGL core profile requires a non-default VAO bound for
+    // the draw to fire, even when the vertex shader reads its data via
+    // gl_VertexID instead of input attributes.
+    auto get_empty_vertex_input() -> erhe::graphics::Vertex_input_state* { return &m_empty_vertex_input; }
     auto use_compute          () const -> bool { return m_program_interface.use_compute; }
     auto use_geometry_shader  () const -> bool { return m_program_interface.use_geometry_shader; }
     // True only when there are at least two views; matches the
@@ -213,7 +218,8 @@ public:
 private:
     erhe::graphics::Device&                         m_graphics_device;
     Debug_renderer_program_interface                m_program_interface;
-    erhe::graphics::Vertex_input_state              m_line_vertex_input; // simple line path
+    erhe::graphics::Vertex_input_state              m_line_vertex_input;  // simple line path
+    erhe::graphics::Vertex_input_state              m_empty_vertex_input; // SSBO-read triangle path
     std::optional<erhe::graphics::Compute_pipeline> m_lines_to_triangles_compute_pipeline;
     std::stack<View>                                m_view_stack{};
     View                                            m_view      {};

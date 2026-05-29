@@ -125,6 +125,7 @@ Content_wide_line_renderer::Content_wide_line_renderer(
     , m_compute_shader_stages_skinned   {compute_shader_stages_skinned}
     , m_graphics_shader_stages          {graphics_shader_stages}
     , m_multiview_graphics_shader_stages{multiview_graphics_shader_stages}
+    , m_empty_vertex_input              {graphics_device, erhe::graphics::Vertex_input_state_data{}}
     , m_view_buffer{
         graphics_device,
         erhe::graphics::Buffer_target::uniform,
@@ -495,7 +496,11 @@ void Content_wide_line_renderer::render(
         erhe::graphics::Render_pipeline_data{
             .debug_label          = pipeline_state.data.debug_label,
             .shader_stages        = shader_stages,
-            .vertex_input         = nullptr, // triangles come from the SSBO, not the input assembler
+            // Empty (no attributes) but non-null: OpenGL core profile
+            // requires a non-default VAO to be bound for the draw to
+            // actually fire. The triangles are read from the SSBO via
+            // gl_VertexID, not through the input assembler.
+            .vertex_input         = &m_empty_vertex_input,
             .input_assembly       = pipeline_state.data.input_assembly,
             .multisample          = pipeline_state.data.multisample,
             .viewport_depth_range = pipeline_state.data.viewport_depth_range,

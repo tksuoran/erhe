@@ -3,6 +3,7 @@
 #include "erhe_graphics/compute_pipeline_state.hpp"
 #include "erhe_graphics/ring_buffer.hpp"
 #include "erhe_graphics/ring_buffer_client.hpp"
+#include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_math/viewport.hpp"
 #include "erhe_scene_renderer/camera_buffer.hpp"
@@ -196,6 +197,14 @@ private:
 
     std::optional<erhe::graphics::Compute_pipeline> m_compute_pipeline;
     std::optional<erhe::graphics::Compute_pipeline> m_compute_pipeline_skinned;
+
+    // Empty Vertex_input_state used by the graphics pipeline. The vertex
+    // shader reads from the triangle SSBO via gl_VertexID so no actual
+    // attribute bindings are needed, but OpenGL core profile requires a
+    // non-default VAO to be bound for glDrawArrays to draw. Passing
+    // nullptr to Render_pipeline_data::vertex_input would bind VAO 0
+    // and the draw would silently fail.
+    erhe::graphics::Vertex_input_state m_empty_vertex_input;
 
     erhe::graphics::Ring_buffer_client m_view_buffer;
     erhe::graphics::Ring_buffer_client m_triangle_vertex_buffer_client;
