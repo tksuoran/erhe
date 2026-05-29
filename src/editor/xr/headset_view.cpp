@@ -914,10 +914,15 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
                     erhe::graphics::Compute_command_encoder compute_encoder = graphics_device.make_compute_command_encoder(view_cb);
                     m_context.debug_renderer->compute(compute_encoder);
                 }
-                // Compute -> vertex-attribute barrier; must be emitted
-                // after the compute encoder scope ends.
+                // Compute -> vertex barrier. The unified debug-line
+                // vertex shader reads pre-transformed triangles via SSBO
+                // (shader_storage_barrier_bit); legacy debug-line paths
+                // may still consume the vertex buffer through the input
+                // assembler (vertex_attrib_array_barrier_bit). Must be
+                // emitted after the compute encoder scope ends.
                 view_cb.memory_barrier(
-                    erhe::graphics::Memory_barrier_mask::vertex_attrib_array_barrier_bit
+                    erhe::graphics::Memory_barrier_mask::vertex_attrib_array_barrier_bit |
+                    erhe::graphics::Memory_barrier_mask::shader_storage_barrier_bit
                 );
             }
 

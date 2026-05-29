@@ -815,7 +815,15 @@ auto Shader_resource::get_layout_string(const uint32_t sampler_binding_offset) c
         }
     }
     ss << ") ";
-    if (m_device.get_info().glsl_version >= 420) {
+    // GLSL memory qualifiers (readonly / writeonly) are valid on shader
+    // storage blocks and image variables, NOT on uniform blocks. When the
+    // SSBO path falls back to uniform blocks (devices / configs with
+    // use_shader_storage_buffers = false), the readonly / writeonly flag
+    // set on the Shader_resource is intentionally ignored at emission
+    // time -- emitting `readonly uniform foo { ... }` is a compile error
+    // ("OpenGL does not allow memory qualifiers on '<undefined>' storage
+    // block" on NVIDIA).
+    if ((m_device.get_info().glsl_version >= 420) && (m_type == Type::shader_storage_block)) {
         if (m_readonly) {
             ss << "readonly ";
         }

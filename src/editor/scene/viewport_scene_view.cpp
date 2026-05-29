@@ -194,13 +194,17 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
                 erhe::graphics::Compute_command_encoder compute_encoder = graphics_device.make_compute_command_encoder(command_buffer);
                 m_context.debug_renderer->compute(compute_encoder);
             }
-            // Compute -> vertex-attribute barrier paired with the
-            // dispatches inside debug_renderer->compute(). Must be
-            // emitted after the compute encoder scope ends; on Metal
-            // the cb cannot be split while the compute encoder is
-            // open.
+            // Compute -> vertex barrier paired with the dispatches
+            // inside debug_renderer->compute(). Both bits required: the
+            // post-unification debug-line vertex shader reads triangles
+            // via SSBO (shader_storage_barrier_bit), and some debug-line
+            // paths still consume the vertex buffer through the input
+            // assembler (vertex_attrib_array_barrier_bit). Must be
+            // emitted after the compute encoder scope ends; on Metal the
+            // cb cannot be split while the compute encoder is open.
             command_buffer.memory_barrier(
-                erhe::graphics::Memory_barrier_mask::vertex_attrib_array_barrier_bit
+                erhe::graphics::Memory_barrier_mask::vertex_attrib_array_barrier_bit |
+                erhe::graphics::Memory_barrier_mask::shader_storage_barrier_bit
             );
         }
 
@@ -323,10 +327,15 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
                     joint_buffer_range.release();
                 }
             }
-            // Compute -> vertex-attribute barrier; must be emitted
-            // after the compute encoder scope ends.
+            // Compute -> vertex barrier. The unified content-line
+            // vertex shader reads pre-transformed triangles via SSBO
+            // (shader_storage_barrier_bit); legacy / non-content-wide-
+            // line paths may still read through the input assembler
+            // (vertex_attrib_array_barrier_bit). Must be emitted after
+            // the compute encoder scope ends.
             command_buffer.memory_barrier(
-                erhe::graphics::Memory_barrier_mask::vertex_attrib_array_barrier_bit
+                erhe::graphics::Memory_barrier_mask::vertex_attrib_array_barrier_bit |
+                erhe::graphics::Memory_barrier_mask::shader_storage_barrier_bit
             );
         }
     }
