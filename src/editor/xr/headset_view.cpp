@@ -576,8 +576,7 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
             }
             m_app_context.debug_renderer->begin_frame(
                 viewport_xy,
-                std::span<const erhe::renderer::View>{debug_views},
-                get_conventions()
+                std::span<const erhe::renderer::View>{debug_views}
             );
 
             // Render_context shared by the wide-line feed (below) and the
@@ -598,7 +597,7 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
                 .camera              = primary_camera,
                 .viewport_scene_view = nullptr,
                 .viewport            = viewport_xy,
-                .multiview_views     = std::span<const erhe::scene_renderer::Camera_view_input>{view_inputs}
+                .views               = std::span<const erhe::scene_renderer::Camera_view_input>{view_inputs}
             };
 
             // Content wide-line compute path. Mirror viewport_scene_view's
@@ -782,7 +781,7 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
                     .viewport_scene_view = nullptr,
                     .viewport            = viewport_xy,
                     .shader_debug        = static_cast<erhe::scene_renderer::Shader_debug>(m_selected_shader_debug),
-                    .multiview_views     = std::span<const erhe::scene_renderer::Camera_view_input>{view_inputs}
+                    .views               = std::span<const erhe::scene_renderer::Camera_view_input>{view_inputs}
                 };
                 m_app_context.app_rendering->render_composer(render_context);
 
@@ -891,9 +890,14 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
                 .viewport            = viewport,
                 .shader_debug        = static_cast<erhe::scene_renderer::Shader_debug>(m_selected_shader_debug),
             };
-            m_context.debug_renderer->begin_frame(
-                render_context.viewport, *render_context.camera,
+            const erhe::renderer::View debug_view = erhe::renderer::Debug_renderer::view_from_camera(
+                *render_context.camera,
+                render_context.viewport,
                 m_context.graphics_device->get_info().coordinate_conventions
+            );
+            m_context.debug_renderer->begin_frame(
+                render_context.viewport,
+                std::span<const erhe::renderer::View>(&debug_view, 1)
             );
             m_context.tools         ->render_viewport_tools(render_context);
             m_context.app_rendering ->render_viewport_renderables(render_context);

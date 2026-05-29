@@ -44,7 +44,12 @@ public:
     Viewport_scene_view*                                     viewport_scene_view   {nullptr};
     erhe::math::Viewport                                     viewport              {0, 0, 0, 0};
     erhe::scene_renderer::Shader_debug                       shader_debug          {erhe::scene_renderer::Shader_debug::none};
-    std::span<const erhe::scene_renderer::Camera_view_input> multiview_views;
+    // Per-eye render inputs for multiview rendering. N (>= 2) elements
+    // when this is a multiview pass (headset / XR); empty for single-view
+    // viewports (the `camera` field above carries the active camera in
+    // that case). Forward_renderer / Content_wide_line_renderer pick the
+    // multiview path when this span is non-empty.
+    std::span<const erhe::scene_renderer::Camera_view_input> views;
 };
 
 }

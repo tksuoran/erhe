@@ -146,6 +146,9 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
         .viewport_scene_view = this,
         .viewport            = m_projection_viewport,
         .shader_debug        = m_shader_debug
+        // .views left empty; Forward_renderer's single-view path keys
+        // off views.empty(). The follow-up Forward_renderer unification
+        // will start populating this with a 1-element single-view span.
     };
 
     if (do_render && m_is_scene_view_hovered && m_context.id_renderer->enabled) {
@@ -155,7 +158,13 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
     erhe::graphics::Device& graphics_device = m_rendergraph.get_graphics_device();
 
     if (do_render) {
-        m_context.debug_renderer->begin_frame(context.viewport, *context.camera, get_conventions());
+        const erhe::renderer::View debug_view = erhe::renderer::Debug_renderer::view_from_camera(
+            *context.camera, context.viewport, get_conventions()
+        );
+        m_context.debug_renderer->begin_frame(
+            context.viewport,
+            std::span<const erhe::renderer::View>(&debug_view, 1)
+        );
         if (
             (m_context.content_wide_line_renderer != nullptr) &&
             m_context.content_wide_line_renderer->is_enabled()

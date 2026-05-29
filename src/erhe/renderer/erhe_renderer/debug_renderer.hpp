@@ -150,20 +150,26 @@ public:
 
     // Public API
     auto get        (const Debug_renderer_config& config) -> Primitive_renderer;
+    // Begin a debug-renderer frame. `views` size must equal view_count
+    // from construction; single-view callers pass a 1-element span built
+    // via view_from_camera(). The shared `viewport` matches the
+    // (multiview) swapchain extent (same (w, h) for every eye);
+    // per-eye projection differences are captured in each View's
+    // clip_from_world.
     void begin_frame(
-        erhe::math::Viewport                      viewport,
+        erhe::math::Viewport  viewport,
+        std::span<const View> views
+    );
+
+    // Helper: derive a single View from a Camera, viewport, and depth
+    // conventions. Callers that drive Debug_renderer with a Camera (no
+    // explicit per-eye View setup) use this to build the 1-element span
+    // for begin_frame().
+    [[nodiscard]] static auto view_from_camera(
         const erhe::scene::Camera&                camera,
-        const erhe::math::Coordinate_conventions& conventions = erhe::math::Coordinate_conventions{}
-    );
-    // Multiview overload. `views` size must equal view_count from
-    // construction. The shared `viewport` matches the multiview
-    // swapchain extent (same (w, h) for every eye); per-eye projection
-    // differences are captured in each View's clip_from_world.
-    void begin_frame(
         erhe::math::Viewport                      viewport,
-        std::span<const View>                     views,
         const erhe::math::Coordinate_conventions& conventions = erhe::math::Coordinate_conventions{}
-    );
+    ) -> View;
     void compute    (erhe::graphics::Compute_command_encoder& command_encoder);
     void render     (
         erhe::graphics::Render_command_encoder& encoder,

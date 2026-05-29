@@ -128,7 +128,7 @@ void Composition_pass::render(const Render_context& context)
                     .render_pass       = context.render_pass,
                     .viewport          = context.viewport,
                     .camera            = context.camera,
-                    .views             = context.multiview_views,
+                    .views             = context.views,
                     .light_projections = nullptr,
                     .lights            = {},
                     .skins             = {},
@@ -182,7 +182,7 @@ void Composition_pass::render(const Render_context& context)
             // multiview render pass distributes the single draw across
             // both layers; under single-view the existing
             // vertex-attribute path runs.
-            const bool multiview = !context.multiview_views.empty();
+            const bool multiview = !context.views.empty();
             for (auto* base_render_pipeline : data.base_render_pipelines) {
                 content_wide_line_renderer->render(
                     *context.encoder,
@@ -201,7 +201,7 @@ void Composition_pass::render(const Render_context& context)
                         .render_pass       = context.render_pass,
                         .viewport          = context.viewport,
                         .camera            = context.camera,
-                        .views             = context.multiview_views,
+                        .views             = context.views,
                         .ambient_light     = layers.light()->ambient_light,
                         .light_projections = context.scene_view.get_light_projections(),
                         .lights            = layers.light()->lights,

@@ -417,17 +417,12 @@ auto Debug_renderer::get(const Debug_renderer_config& config) -> Primitive_rende
 
 static constexpr std::string_view c_line_renderer_render{"Debug_renderer::render()"};
 
-void Debug_renderer::begin_frame(
-    const erhe::math::Viewport                viewport,
+auto Debug_renderer::view_from_camera(
     const erhe::scene::Camera&                camera,
+    const erhe::math::Viewport                viewport,
     const erhe::math::Coordinate_conventions& conventions
-)
+) -> View
 {
-    // No Scoped_debug_group here: this path only sets up CPU-side view
-    // state (camera projection, view stack); no GPU commands are
-    // recorded. The bracketing belongs around Debug_renderer::compute /
-    // Debug_renderer::render which actually issue work.
-
     const erhe::scene::Node* camera_node = camera.get_node();
     ERHE_VERIFY(camera_node != nullptr);
 
@@ -437,41 +432,35 @@ void Debug_renderer::begin_frame(
     const glm::mat4                                 world_from_node       = camera_node->world_from_node();
     const glm::vec4                                 view_position_in_world{world_from_node[3]};
 
-    for (size_t i = 0, end = m_view_stack.size(); i < end; ++i) {
-        m_view_stack.pop();
-    }
-
-    push_view(
-        {
-            .clip_from_world = clip_from_world,
-            .viewport        = glm::vec4{
-                static_cast<float>(viewport.x),
-                static_cast<float>(viewport.y),
-                static_cast<float>(viewport.width),
-                static_cast<float>(viewport.height)
-            },
-            .fov_sides = glm::vec4{
-                fov_sides.left,
-                fov_sides.right,
-                fov_sides.up,
-                fov_sides.down
-            },
-            .view_position_in_world = view_position_in_world
-        }
-    );
-
-    m_multiview_views.clear();
+    return View{
+        .clip_from_world = clip_from_world,
+        .viewport        = glm::vec4{
+            static_cast<float>(viewport.x),
+            static_cast<float>(viewport.y),
+            static_cast<float>(viewport.width),
+            static_cast<float>(viewport.height)
+        },
+        .fov_sides = glm::vec4{
+            fov_sides.left,
+            fov_sides.right,
+            fov_sides.up,
+            fov_sides.down
+        },
+        .view_position_in_world = view_position_in_world
+    };
 }
 
 void Debug_renderer::begin_frame(
-    const erhe::math::Viewport                viewport,
-    std::span<const View>                     views,
-    const erhe::math::Coordinate_conventions& /*conventions*/
+    const erhe::math::Viewport viewport,
+    std::span<const View>      views
 )
 {
-    // No Scoped_debug_group here for the same reason as the single-view
-    // begin_frame above: CPU-only multiview setup, no GPU commands.
+    // No Scoped_debug_group here: this path only sets up CPU-side view
+    // state (per-eye Views, view stack); no GPU commands are recorded.
+    // The bracketing belongs around Debug_renderer::compute /
+    // Debug_renderer::render which actually issue work.
 
+    ERHE_VERIFY(!views.empty());
     ERHE_VERIFY(static_cast<int>(views.size()) == m_program_interface.view_count);
 
     // Reset both single-view and multiview state.
@@ -479,12 +468,12 @@ void Debug_renderer::begin_frame(
         m_view_stack.pop();
     }
 
-    // Push a representative single-view View (cameras[0]) so legacy
+    // Push a representative single-view View (views[0]) so legacy
     // single-camera Tool / Renderable submissions still work; the
     // multiview UBO write path uses m_multiview_views directly. The
     // shared (x, y, w, h) viewport rect goes into View::viewport so the
-    // single-view fallback keeps the multiview swapchain extent.
-    View representative = views.empty() ? View{} : views[0];
+    // single-view fallback keeps the swapchain extent.
+    View representative = views[0];
     representative.viewport = glm::vec4{
         static_cast<float>(viewport.x),
         static_cast<float>(viewport.y),
