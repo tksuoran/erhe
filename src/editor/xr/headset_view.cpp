@@ -753,6 +753,22 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
                 render_pass_descriptor.depth_attachment.layout_before = erhe::graphics::Image_layout::depth_stencil_attachment_optimal;
                 render_pass_descriptor.depth_attachment.usage_after   = erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment;
                 render_pass_descriptor.depth_attachment.layout_after  = erhe::graphics::Image_layout::depth_stencil_attachment_optimal;
+                // When the depth swapchain format carries a stencil aspect (d24_s8,
+                // d32_s8), declare the stencil attachment so stencilLoadOp = CLEAR
+                // and the per-frame stencil starts at 0. Without this the Vulkan
+                // render pass leaves stencilLoadOp = DONT_CARE and stencil contents
+                // leak across frames, breaking the selection-outline scheme that
+                // tests bit 7 written by polygon_fill_standard_selected_*. The
+                // per-eye path mirrors this in headset_view_resources.cpp.
+                if (erhe::dataformat::get_stencil_size_bits(depth_stencil_texture->get_pixelformat()) > 0) {
+                    render_pass_descriptor.stencil_attachment.texture       = depth_stencil_texture;
+                    render_pass_descriptor.stencil_attachment.load_action   = erhe::graphics::Load_action::Clear;
+                    render_pass_descriptor.stencil_attachment.store_action  = erhe::graphics::Store_action::Dont_care;
+                    render_pass_descriptor.stencil_attachment.usage_before  = erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment;
+                    render_pass_descriptor.stencil_attachment.layout_before = erhe::graphics::Image_layout::depth_stencil_attachment_optimal;
+                    render_pass_descriptor.stencil_attachment.usage_after   = erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment;
+                    render_pass_descriptor.stencil_attachment.layout_after  = erhe::graphics::Image_layout::depth_stencil_attachment_optimal;
+                }
             }
             render_pass_descriptor.render_target_width  = static_cast<int>(frame.width);
             render_pass_descriptor.render_target_height = static_cast<int>(frame.height);
