@@ -190,14 +190,7 @@ void Content_wide_line_renderer::add_mesh(
         return;
     }
 
-    const glm::mat4 world_from_node = node->world_from_node();
-
-    // Skinned-edge dispatch is only emitted when the skinned compute
-    // pipeline was compiled (skinned shader stages + joint_block were
-    // supplied) AND the mesh actually carries a Skin. Otherwise the mesh
-    // falls back to the non-skinned dispatch path (which transforms edges
-    // by world_from_node only -- correct for unskinned meshes, but in
-    // bind pose for skinned meshes).
+    const glm::mat4                           world_from_node        = node->world_from_node();
     const bool                                skinned_path_available = m_compute_pipeline_skinned.has_value();
     const std::shared_ptr<erhe::scene::Skin>& skin                   = mesh.skin;
     const bool                                use_skinned            = skinned_path_available && (skin != nullptr);
@@ -222,12 +215,7 @@ void Content_wide_line_renderer::add_mesh(
             continue;
         }
 
-        const std::size_t edge_count = edge_range.count / 2;
-
-        // Joint side-buffer lookup. Only meaningful when the mesh carries
-        // a Skin AND primitive_builder allocated the joint side-buffer
-        // (the source GEO::Mesh had joint attributes). Either being absent
-        // forces the dispatch back to the non-skinned path.
+        const std::size_t       edge_count               = edge_range.count / 2;
         erhe::graphics::Buffer* joint_buffer             = nullptr;
         std::size_t             joint_buffer_byte_offset = 0;
         std::size_t             joint_buffer_byte_size   = 0;
@@ -260,33 +248,7 @@ void Content_wide_line_renderer::add_mesh(
 
 void Content_wide_line_renderer::compute(
     erhe::graphics::Compute_command_encoder&  command_encoder,
-    const erhe::math::Viewport&               viewport,
-    const erhe::scene::Camera&                camera,
-    erhe::graphics::Ring_buffer_client*       joint_buffer_client,
-    erhe::graphics::Ring_buffer_range*        joint_buffer_range,
-    const bool                                reverse_depth,
-    const erhe::math::Depth_range             depth_range,
-    const erhe::math::Coordinate_conventions& conventions
-)
-{
-    compute(
-        command_encoder,
-        viewport,
-        &camera,
-        std::span<const Camera_view_input>{},
-        joint_buffer_client,
-        joint_buffer_range,
-        reverse_depth,
-        depth_range,
-        conventions
-    );
-}
-
-void Content_wide_line_renderer::compute(
-    erhe::graphics::Compute_command_encoder&  command_encoder,
-    const erhe::math::Viewport&               viewport,
-    const erhe::scene::Camera*                camera,
-    std::span<const Camera_view_input>        multiview_views,
+    std::span<const Camera_view_input>        views,
     erhe::graphics::Ring_buffer_client*       joint_buffer_client,
     erhe::graphics::Ring_buffer_range*        joint_buffer_range,
     const bool                                reverse_depth,
@@ -298,12 +260,8 @@ void Content_wide_line_renderer::compute(
         return;
     }
 
-    const bool multiview_path = !multiview_views.empty();
-    if (multiview_path) {
-        ERHE_VERIFY(static_cast<int>(multiview_views.size()) == m_interface.view_count);
-    } else {
-        ERHE_VERIFY(camera != nullptr);
-    }
+    ERHE_VERIFY(!views.empty());
+    ERHE_VERIFY(views.size() <= static_cast<std::size_t>(m_interface.view_count));
 
     erhe::graphics::Scoped_debug_group debug_scope{
         command_encoder.get_command_buffer(),
@@ -312,12 +270,6 @@ void Content_wide_line_renderer::compute(
 
     ERHE_VERIFY(m_compute_pipeline.has_value());
 
-    // Choose the starting pipeline based on whether the first queued
-    // dispatch is skinned. The per-dispatch loop below switches
-    // bind_group_layout + pipeline whenever the skinned-ness flips.
-    // Skinned dispatches additionally require the caller to have provided
-    // a joint buffer client + range; without one we silently demote the
-    // dispatch to non-skinned (renders in bind pose).
     const bool have_joint_data =
         (joint_buffer_client != nullptr) &&
         (joint_buffer_range  != nullptr) &&
@@ -327,38 +279,30 @@ void Content_wide_line_renderer::compute(
     command_encoder.set_compute_pipeline(m_compute_pipeline.value());
 
     // Pre-compute per-view camera data once for the whole dispatch batch
-    // (does not depend on the per-mesh primitive transform).
+    // (does not depend on the per-mesh primitive transform). Pad the
+    // cameras[] tail with copies of the first entry when views is shorter
+    // than the shader's compile-time view_count so the compute shader's
+    // view loop never reads uninitialised UBO entries.
     std::vector<Per_view_camera> per_view_cameras;
     per_view_cameras.reserve(static_cast<std::size_t>(m_interface.view_count));
-    if (multiview_path) {
-        for (const Camera_view_input& view : multiview_views) {
-            ERHE_VERIFY(view.projection != nullptr);
-            ERHE_VERIFY(view.node != nullptr);
-            per_view_cameras.push_back(build_per_view_camera(
-                *view.projection, *view.node, viewport, reverse_depth, depth_range, conventions
-            ));
-        }
-    } else {
-        const erhe::scene::Node* camera_node = camera->get_node();
-        ERHE_VERIFY(camera_node != nullptr);
+    for (const Camera_view_input& view : views) {
+        ERHE_VERIFY(view.projection != nullptr);
+        ERHE_VERIFY(view.node != nullptr);
         per_view_cameras.push_back(build_per_view_camera(
-            *camera->projection(), *camera_node, viewport, reverse_depth, depth_range, conventions
+            *view.projection, *view.node, view.viewport, reverse_depth, depth_range, conventions
         ));
-        // Pad the cameras[] tail with copies so the compute shader loop
-        // (which always runs view_count iterations from the UBO) does not
-        // read uninitialised entries when view_count > 1 but the current
-        // call is single-view.
-        while (per_view_cameras.size() < static_cast<std::size_t>(m_interface.view_count)) {
-            per_view_cameras.push_back(per_view_cameras.front());
-        }
     }
+    while (per_view_cameras.size() < static_cast<std::size_t>(m_interface.view_count)) {
+        per_view_cameras.push_back(per_view_cameras.front());
+    }
+    const std::size_t view_count_runtime = views.size();
 
     const bool  top_left  = (m_graphics_device.get_info().coordinate_conventions.framebuffer_origin == erhe::math::Framebuffer_origin::top_left);
     const float vp_y_sign = top_left ? -1.0f : 1.0f;
 
     const Dispatch_per_frame_params frame_params{
         .per_view_cameras     = per_view_cameras,
-        .view_count_runtime   = static_cast<uint32_t>(multiview_path ? multiview_views.size() : std::size_t{1}),
+        .view_count_runtime   = static_cast<uint32_t>(view_count_runtime),
         .vp_y_sign            = vp_y_sign,
         .clip_depth_direction = reverse_depth ? -1.0f : 1.0f,
     };

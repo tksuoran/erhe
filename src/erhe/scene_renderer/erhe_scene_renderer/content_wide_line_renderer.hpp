@@ -95,10 +95,11 @@ public:
     );
 
     // Dispatch compute shader to expand lines to triangles (call before
-    // render pass). Single-view path: pass camera + viewport, leave
-    // multiview_views empty. Multiview path: pass a non-empty span of
-    // per-view inputs (size must equal interface.view_count) and leave
-    // camera nullptr.
+    // render pass). views: one Camera_view_input per eye. Single-view
+    // callers pass a 1-element span; multiview callers pass interface.view_count
+    // entries. Each entry carries its own viewport; the per-view camera
+    // data the compute shader reads is derived from view.projection,
+    // view.node and view.viewport.
     //
     // joint_buffer_client / joint_buffer_range: optional pair describing
     //   the per-frame joint UBO/SSBO contents (typically produced by
@@ -106,21 +107,7 @@ public:
     //   queued; pass nullptr/nullptr for scenes with no skinned meshes.
     void compute(
         erhe::graphics::Compute_command_encoder&  command_encoder,
-        const erhe::math::Viewport&               viewport,
-        const erhe::scene::Camera*                camera,
-        std::span<const Camera_view_input>        multiview_views,
-        erhe::graphics::Ring_buffer_client*       joint_buffer_client,
-        erhe::graphics::Ring_buffer_range*        joint_buffer_range,
-        bool                                      reverse_depth,
-        erhe::math::Depth_range                   depth_range,
-        const erhe::math::Coordinate_conventions& conventions = erhe::math::Coordinate_conventions{}
-    );
-
-    // Single-view convenience overload (kept for non-XR callers).
-    void compute(
-        erhe::graphics::Compute_command_encoder&  command_encoder,
-        const erhe::math::Viewport&               viewport,
-        const erhe::scene::Camera&                camera,
+        std::span<const Camera_view_input>        views,
         erhe::graphics::Ring_buffer_client*       joint_buffer_client,
         erhe::graphics::Ring_buffer_range*        joint_buffer_range,
         bool                                      reverse_depth,

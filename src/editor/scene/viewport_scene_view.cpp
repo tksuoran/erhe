@@ -282,8 +282,14 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
                 }
                 {
                     erhe::graphics::Compute_command_encoder compute_encoder = graphics_device.make_compute_command_encoder(command_buffer);
+                    const erhe::scene_renderer::Camera_view_input view_input{
+                        .projection = context.camera->projection(),
+                        .node       = context.camera->get_node(),
+                        .viewport   = context.viewport,
+                    };
                     m_context.content_wide_line_renderer->compute(
-                        compute_encoder, context.viewport, *context.camera,
+                        compute_encoder,
+                        std::span<const erhe::scene_renderer::Camera_view_input>(&view_input, 1),
                         joint_buffer,
                         joint_buffer ? &joint_buffer_range : nullptr,
                         get_reverse_depth(),

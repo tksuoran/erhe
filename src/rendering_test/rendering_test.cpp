@@ -792,8 +792,14 @@ void Rendering_test::tick(erhe::graphics::Command_buffer& command_buffer)
         {
             erhe::graphics::Compute_command_encoder compute_encoder = m_graphics_device.make_compute_command_encoder(command_buffer);
             const bool reverse_depth = (conventions.native_depth_range == erhe::math::Depth_range::zero_to_one);
+            const erhe::scene_renderer::Camera_view_input view_input{
+                .projection = m_camera->projection(),
+                .node       = m_camera->get_node(),
+                .viewport   = ref_tile,
+            };
             m_content_wide_line_renderer->compute(
-                compute_encoder, ref_tile, *m_camera.get(),
+                compute_encoder,
+                std::span<const erhe::scene_renderer::Camera_view_input>(&view_input, 1),
                 nullptr, // no joint buffer client (rendering_test has no skinned meshes)
                 nullptr, // no joint buffer range
                 reverse_depth,
