@@ -18,6 +18,16 @@
 // compiling them without going through Shader_variant_cache -- fix the
 // call site, do not reintroduce fallback macros.
 
+// ERHE_VARIANT_POSITION_PASS is a derived gate. Both ERHE_VARIANT_DEPTH_ONLY
+// and ERHE_VARIANT_ID_RENDER skip the lit / debug varyings -- the vertex
+// shader only needs gl_Position and (for ID render) two tiny flat outputs;
+// the fragment shader either has no body (depth-only) or emits a packed
+// ID color directly. Use this gate at every "skip lit machinery" #if so
+// both variants stay in lock-step.
+#if defined(ERHE_VARIANT_DEPTH_ONLY) || defined(ERHE_VARIANT_ID_RENDER)
+#  define ERHE_VARIANT_POSITION_PASS 1
+#endif
+
 // Bxdf_model enum values. Keep in sync with erhe::primitive::Bxdf_model.
 #define ERHE_BXDF_MODEL_UNLIT                    0
 #define ERHE_BXDF_MODEL_ISOTROPIC_BRDF           1

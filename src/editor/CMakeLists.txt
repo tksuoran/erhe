@@ -63,8 +63,6 @@ erhe_target_sources_grouped(
     res/shaders/erhe_tonemap.glsl
     #res/shaders/error.frag
     #res/shaders/error.vert
-    res/shaders/id.frag
-    res/shaders/id.vert
     res/shaders/line_after_compute.frag
     res/shaders/line_after_compute.vert
     res/shaders/content_edge_lines.frag

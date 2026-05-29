@@ -94,7 +94,6 @@ void Programs::load_programs(
     //add_shader(brush     , CI{ .name = "brush"     } );
     //add_shader(textured  , CI{ .name = "textured"  } );
     //add_shader(points    , CI{ .name = "points"    } );
-    //add_shader(id        , CI{ .name = "id"        } );
 
     // Compile shaders
 

@@ -500,7 +500,7 @@ auto Id_renderer::get(const int x, const int y, uint32_t& out_id, float& out_dep
                     const uint8_t  r      = entry.data[x_ * 4 + y_ * stride + 0];
                     const uint8_t  g      = entry.data[x_ * 4 + y_ * stride + 1];
                     const uint8_t  b      = entry.data[x_ * 4 + y_ * stride + 2];
-                    // if ((r == 255u) && (g == 255u) && (b == 255u)) { // overflow detected in id.vert
+                    // if ((r == 255u) && (g == 255u) && (b == 255u)) { // overflow detected in standard.frag ID variant
                     //     static int counter = 0;
                     //     ++counter; // breakpoint placeholder
                     // }

@@ -40,7 +40,6 @@ public:
 
     // TODO remove - use variants
     //erhe::graphics::Reloadable_shader_stages error;
-    //erhe::graphics::Reloadable_shader_stages id;
     //erhe::graphics::Reloadable_shader_stages brush;
     //erhe::graphics::Reloadable_shader_stages textured;
     erhe::graphics::Reloadable_shader_stages depth_to_color;

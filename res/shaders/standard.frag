@@ -1,49 +1,70 @@
+// erhe_standard_variant.glsl declares ERHE_VARIANT_POSITION_PASS when
+// either ERHE_VARIANT_DEPTH_ONLY or ERHE_VARIANT_ID_RENDER is set, so it
+// must come before the BxDF / light includes below (the ID-render variant
+// skips them entirely).
+#include "erhe_standard_variant.glsl"
+#if !defined(ERHE_VARIANT_POSITION_PASS)
 #include "erhe_bxdf.glsl"
 #include "erhe_camera_view.glsl"
 #include "erhe_light.glsl"
 #include "erhe_srgb.glsl"
 #include "erhe_texture.glsl"
-#include "erhe_standard_variant.glsl"
+#endif
 
-#if !defined(ERHE_VARIANT_DEPTH_ONLY)
+#if defined(ERHE_VARIANT_ID_RENDER)
+// Matching the layout locations standard.vert assigns under the
+// ID-render variant.
+layout(location = 0) flat in int v_draw_id;
+layout(location = 1) flat in int v_primitive_id;
+
+vec3 vec3_from_uint(uint i)
+{
+    uint r = (i >> 16u) & 0xffu;
+    uint g = (i >>  8u) & 0xffu;
+    uint b = (i >>  0u) & 0xffu;
+    return vec3(float(r) / 255.0, float(g) / 255.0, float(b) / 255.0);
+}
+#endif
+
+#if !defined(ERHE_VARIANT_POSITION_PASS)
 layout(location = 0) in vec4      v_position;
 #endif
 
 // TODO In the future we might have alpha test which would need texcoord
 //      to be passed to fragment shader
-#if defined(ERHE_USE_VERTEX_VARYING_TEXCOORD0) && !defined(ERHE_VARIANT_DEPTH_ONLY)
+#if defined(ERHE_USE_VERTEX_VARYING_TEXCOORD0) && !defined(ERHE_VARIANT_POSITION_PASS)
 layout(location = 1) in vec2      v_texcoord;
-#else
+#elif !defined(ERHE_VARIANT_POSITION_PASS)
 const  vec2 v_texcoord = vec2(0.5, 0.5);
 #endif
 
-#if defined(ERHE_USE_VERTEX_VARYING_COLOR) && !defined(ERHE_VARIANT_DEPTH_ONLY)
+#if defined(ERHE_USE_VERTEX_VARYING_COLOR) && !defined(ERHE_VARIANT_POSITION_PASS)
 layout(location = 2) in vec4      v_color;
-#else
+#elif !defined(ERHE_VARIANT_POSITION_PASS)
 const  vec4 v_color = vec4(1.0);
 #endif
 
-#if defined(ERHE_USE_VERTEX_VARYING_ANISO_CONTROL) && !defined(ERHE_VARIANT_DEPTH_ONLY)
+#if defined(ERHE_USE_VERTEX_VARYING_ANISO_CONTROL) && !defined(ERHE_VARIANT_POSITION_PASS)
 layout(location = 3) in vec2      v_aniso_control;
-#else
+#elif !defined(ERHE_VARIANT_POSITION_PASS)
 const  vec2 v_aniso_control = vec2(0.0);
 #endif
 
-#if defined(ERHE_USE_VERTEX_VARYING_TANGENT) && !defined(ERHE_VARIANT_DEPTH_ONLY)
+#if defined(ERHE_USE_VERTEX_VARYING_TANGENT) && !defined(ERHE_VARIANT_POSITION_PASS)
 layout(location = 4) in vec3      v_T;
 #endif
 
-#if defined(ERHE_USE_VERTEX_VARYING_BITANGENT) && !defined(ERHE_VARIANT_DEPTH_ONLY)
+#if defined(ERHE_USE_VERTEX_VARYING_BITANGENT) && !defined(ERHE_VARIANT_POSITION_PASS)
 layout(location = 5) in vec3      v_B;
 #endif
 
-#if defined(ERHE_USE_VERTEX_VARYING_NORMAL) && !defined(ERHE_VARIANT_DEPTH_ONLY)
+#if defined(ERHE_USE_VERTEX_VARYING_NORMAL) && !defined(ERHE_VARIANT_POSITION_PASS)
 layout(location = 6) in vec3      v_N;
 #endif
 
 // TODO In the future we might have alpha test which would need material_index
 //      to be passed to fragment shader
-#if !defined(ERHE_VARIANT_DEPTH_ONLY)
+#if !defined(ERHE_VARIANT_POSITION_PASS)
 layout(location = 7) flat in uint v_material_index;
 #endif
 
@@ -51,7 +72,7 @@ layout(location = 7) flat in uint v_material_index;
 // so the link succeeds even when the mesh lacks the underlying
 // attributes. Missing attributes fall back to neutral values so the
 // debug overrides degrade gracefully.
-#if (ERHE_SHADER_DEBUG != 0) && !defined(ERHE_VARIANT_DEPTH_ONLY)
+#if (ERHE_SHADER_DEBUG != 0) && !defined(ERHE_VARIANT_POSITION_PASS)
 #  ifdef ERHE_ATTRIBUTE_a_tangent
 layout(location =  8) in float      v_tangent_scale;
 #  else
@@ -80,6 +101,22 @@ const uvec2 v_valency_edge_count = uvec2(0u);
 
 void main()
 {
+#if defined(ERHE_VARIANT_ID_RENDER)
+    // Pack draw_id + per-triangle index into RGB. The draw_id contribution
+    // comes from a per-primitive color offset assigned by
+    // erhe::scene_renderer::Primitive_buffer when color_source =
+    // id_offset; the triangle index is the per-vertex flat output from
+    // standard.vert. Id_renderer::get() unpacks (r << 16) | (g << 8) | b
+    // and walks the range table to recover (mesh, primitive_index,
+    // triangle_id). No lighting, no varyings, no UBO reads beyond the
+    // shared primitive block.
+    uint triangle_id = uint(v_primitive_id);
+    vec3 id_rgb      = vec3_from_uint(triangle_id);
+    vec3 id          = id_rgb + primitive.primitives[v_draw_id].color.xyz;
+    out_color        = vec4(id, 1.0);
+    return;
+#endif
+
 #if !defined(ERHE_VARIANT_DEPTH_ONLY)
     Material material   = material.materials[v_material_index];
     vec3     base_color = material.base_color.rgb;
