@@ -36,8 +36,6 @@ public:
     erhe::graphics::Reloadable_shader_stages brdf_slice;
     erhe::graphics::Reloadable_shader_stages sky;
     erhe::graphics::Reloadable_shader_stages grid;
-    erhe::graphics::Reloadable_shader_stages wide_lines_draw_color;
-    erhe::graphics::Reloadable_shader_stages wide_lines_vertex_color;
     //erhe::graphics::Reloadable_shader_stages points;
 
     // TODO remove - use variants

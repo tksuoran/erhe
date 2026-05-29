@@ -149,8 +149,6 @@ public:
     void imgui();
     void request_renderdoc_capture();
 
-    void update_content_wide_line_pipeline_states(erhe::scene_renderer::Content_wide_line_renderer& renderer);
-
     glm::uvec4                        debug_joint_indices{0, 0, 0, 0};
     std::vector<glm::vec4>            debug_joint_colors;
     std::shared_ptr<Composition_pass> selection_outline;
@@ -180,9 +178,6 @@ private:
     Pipeline_renderpasses             m_pipeline_passes;
     Composer                          m_composer;
     std::shared_ptr<Composition_pass> m_grid_composition_pass;
-
-    // Compute wide line pipeline states (created when Content_wide_line_renderer is ready)
-    std::vector<std::unique_ptr<erhe::graphics::Base_render_pipeline>> m_compute_wide_line_pipeline_states;
 
     // TODO Re-add per-render-pass GPU timers when the composer's pipeline
     // passes own their own Render_pass objects.

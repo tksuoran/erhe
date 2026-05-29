@@ -48,45 +48,6 @@ Content_wide_line_interface::Content_wide_line_interface(
             }
         }
     }
-    , edge_line_vertex_struct{graphics_device, "edge_line_vertex"}
-    , edge_line_vertex_buffer_block{
-        graphics_device,
-        erhe::graphics::Shader_resource::Block_create_info{
-            .name          = "edge_line_vertex_buffer",
-            .binding_point = c_edge_line_vertex_binding_point,
-            .type          = erhe::graphics::Shader_resource::Type::shader_storage_block,
-            .readonly      = true
-        }
-    }
-    , edge_line_joint_vertex_struct{graphics_device, "edge_line_joint_vertex"}
-    , edge_line_joint_vertex_buffer_block{
-        graphics_device,
-        erhe::graphics::Shader_resource::Block_create_info{
-            .name          = "edge_line_joint_buffer",
-            .binding_point = c_edge_line_joint_vertex_binding_point,
-            .type          = erhe::graphics::Shader_resource::Type::shader_storage_block,
-            .readonly      = true
-        }
-    }
-    , triangle_vertex_struct{graphics_device, "triangle_vertex"}
-    , triangle_vertex_buffer_block{
-        graphics_device,
-        erhe::graphics::Shader_resource::Block_create_info{
-            .name          = "triangle_vertex_buffer",
-            .binding_point = c_triangle_vertex_binding_point,
-            .type          = erhe::graphics::Shader_resource::Type::shader_storage_block,
-            .writeonly     = true
-        }
-    }
-    , triangle_vertex_buffer_read_block{
-        graphics_device,
-        erhe::graphics::Shader_resource::Block_create_info{
-            .name          = "triangle_vertex_buffer",
-            .binding_point = c_triangle_vertex_binding_point,
-            .type          = erhe::graphics::Shader_resource::Type::shader_storage_block,
-            .readonly      = true
-        }
-    }
     , view_camera_struct{graphics_device, "ContentLineViewCamera"}
     , view_block{
         graphics_device,
@@ -94,26 +55,13 @@ Content_wide_line_interface::Content_wide_line_interface(
         c_view_binding_point,
         erhe::graphics::Shader_resource::Type::uniform_block
     }
-    , bind_group_layout{
+    , geometry_bind_group_layout_not_skinned{
         graphics_device,
         erhe::graphics::Bind_group_layout_create_info{
             .bindings = {
-                {c_edge_line_vertex_binding_point, erhe::graphics::Binding_type::storage_buffer},
-                {c_triangle_vertex_binding_point,  erhe::graphics::Binding_type::storage_buffer},
                 make_block_binding(view_block)
             },
-            .debug_label       = "Content wide line",
-            .uses_texture_heap = false
-        }
-    }
-    , graphics_bind_group_layout{
-        graphics_device,
-        erhe::graphics::Bind_group_layout_create_info{
-            .bindings = {
-                {c_triangle_vertex_binding_point, erhe::graphics::Binding_type::storage_buffer},
-                make_block_binding(view_block)
-            },
-            .debug_label       = "Content wide line graphics",
+            .debug_label       = "Content wide line geometry",
             .uses_texture_heap = false
         }
     }
@@ -121,29 +69,6 @@ Content_wide_line_interface::Content_wide_line_interface(
     , joint_block{joint_block_}
 {
     ERHE_VERIFY(view_count_ >= 1);
-
-    // Edge line vertex struct for the input SSBO.
-    edge_line_vertex_struct.add_vec4("position");
-    edge_line_vertex_struct.add_vec4("normal");
-    edge_line_vertex_buffer_block.add_struct("vertices", &edge_line_vertex_struct, erhe::graphics::Shader_resource::unsized_array);
-
-    // Skinned-variant parallel SSBO holding per-endpoint joint indices +
-    // weights. Matches vertex_format_edge_line_joints layout in
-    // mesh_memory.cpp and the data layout written by
-    // primitive_builder.cpp::build_edge_lines.
-    edge_line_joint_vertex_struct.add_uvec4("joint_indices");
-    edge_line_joint_vertex_struct.add_vec4 ("joint_weights");
-    edge_line_joint_vertex_buffer_block.add_struct("vertices", &edge_line_joint_vertex_struct, erhe::graphics::Shader_resource::unsized_array);
-
-    // Triangle output SSBO: structure is mirrored from triangle_vertex_format
-    // by add_vertex_stream so the GLSL block members align with the C++
-    // vertex layout.
-    erhe::graphics::add_vertex_stream(
-        triangle_vertex_format.streams.front(),
-        triangle_vertex_struct,
-        triangle_vertex_buffer_block
-    );
-    triangle_vertex_buffer_read_block.add_struct("vertices", &triangle_vertex_struct, erhe::graphics::Shader_resource::unsized_array);
 
     // ViewCamera struct (one entry per element of cameras[view_count]).
     offsets.clip_from_world        = view_camera_struct.add_mat4("clip_from_world"       )->get_offset_in_parent();
@@ -176,11 +101,117 @@ Content_wide_line_interface::Content_wide_line_interface(
     offsets.stride_per_view      = view_block.add_uint ("stride_per_view"     )->get_offset_in_parent();
     offsets.vp_y_sign            = view_block.add_float("vp_y_sign"           )->get_offset_in_parent();
     offsets.clip_depth_direction = view_block.add_float("clip_depth_direction")->get_offset_in_parent();
-    // base_joint_index is read only by the skinned compute variant under
-    // ERHE_USE_SKINNING; the non-skinned variant ignores it. Keeping the
-    // field in the shared view block avoids two view layouts.
+    // base_joint_index is read only by the skinned variants under
+    // ERHE_USE_SKINNING or ERHE_ATTRIBUTE_a_joint_weights_0; the non-
+    // skinned variants ignore it. Keeping the field in the shared view
+    // block avoids two view layouts.
     offsets.base_joint_index     = view_block.add_uint ("base_joint_index"    )->get_offset_in_parent();
     offsets.padding0             = view_block.add_float("_padding0"           )->get_offset_in_parent();
+
+    // Skinned geometry-shader bind group layout: view UBO + global joint
+    // block. The vertex shader reads a_joint_indices_0 + a_joint_weights_0
+    // through the input assembler and indexes joint.joints[] with them;
+    // no SSBO bindings, so this layout is built whenever joint_block is
+    // supplied regardless of whether SSBOs are available.
+    if (joint_block != nullptr) {
+        geometry_bind_group_layout_skinned = std::make_unique<erhe::graphics::Bind_group_layout>(
+            graphics_device,
+            erhe::graphics::Bind_group_layout_create_info{
+                .bindings = {
+                    make_block_binding(view_block),
+                    make_block_binding(*joint_block)
+                },
+                .debug_label       = "Content wide line geometry skinned",
+                .uses_texture_heap = false
+            }
+        );
+    }
+
+    // SSBO-backed compute resources are only built on devices that
+    // support shader storage buffers. The geometry-shader backend never
+    // touches these; it uses only the view UBO + joint UBO above.
+    if (!graphics_device.get_info().use_shader_storage_buffers) {
+        return;
+    }
+
+    edge_line_vertex_struct = std::make_unique<erhe::graphics::Shader_resource>(graphics_device, "edge_line_vertex");
+    edge_line_vertex_buffer_block = std::make_unique<erhe::graphics::Shader_resource>(
+        graphics_device,
+        erhe::graphics::Shader_resource::Block_create_info{
+            .name          = "edge_line_vertex_buffer",
+            .binding_point = c_edge_line_vertex_binding_point,
+            .type          = erhe::graphics::Shader_resource::Type::shader_storage_block,
+            .readonly      = true
+        }
+    );
+    edge_line_vertex_struct->add_vec4("position");
+    edge_line_vertex_struct->add_vec4("normal");
+    edge_line_vertex_buffer_block->add_struct("vertices", edge_line_vertex_struct.get(), erhe::graphics::Shader_resource::unsized_array);
+
+    edge_line_joint_vertex_struct = std::make_unique<erhe::graphics::Shader_resource>(graphics_device, "edge_line_joint_vertex");
+    edge_line_joint_vertex_buffer_block = std::make_unique<erhe::graphics::Shader_resource>(
+        graphics_device,
+        erhe::graphics::Shader_resource::Block_create_info{
+            .name          = "edge_line_joint_buffer",
+            .binding_point = c_edge_line_joint_vertex_binding_point,
+            .type          = erhe::graphics::Shader_resource::Type::shader_storage_block,
+            .readonly      = true
+        }
+    );
+    edge_line_joint_vertex_struct->add_uvec4("joint_indices");
+    edge_line_joint_vertex_struct->add_vec4 ("joint_weights");
+    edge_line_joint_vertex_buffer_block->add_struct("vertices", edge_line_joint_vertex_struct.get(), erhe::graphics::Shader_resource::unsized_array);
+
+    triangle_vertex_struct = std::make_unique<erhe::graphics::Shader_resource>(graphics_device, "triangle_vertex");
+    triangle_vertex_buffer_block = std::make_unique<erhe::graphics::Shader_resource>(
+        graphics_device,
+        erhe::graphics::Shader_resource::Block_create_info{
+            .name          = "triangle_vertex_buffer",
+            .binding_point = c_triangle_vertex_binding_point,
+            .type          = erhe::graphics::Shader_resource::Type::shader_storage_block,
+            .writeonly     = true
+        }
+    );
+    erhe::graphics::add_vertex_stream(
+        triangle_vertex_format.streams.front(),
+        *triangle_vertex_struct,
+        *triangle_vertex_buffer_block
+    );
+    triangle_vertex_buffer_read_block = std::make_unique<erhe::graphics::Shader_resource>(
+        graphics_device,
+        erhe::graphics::Shader_resource::Block_create_info{
+            .name          = "triangle_vertex_buffer",
+            .binding_point = c_triangle_vertex_binding_point,
+            .type          = erhe::graphics::Shader_resource::Type::shader_storage_block,
+            .readonly      = true
+        }
+    );
+    triangle_vertex_buffer_read_block->add_struct("vertices", triangle_vertex_struct.get(), erhe::graphics::Shader_resource::unsized_array);
+
+    bind_group_layout = std::make_unique<erhe::graphics::Bind_group_layout>(
+        graphics_device,
+        erhe::graphics::Bind_group_layout_create_info{
+            .bindings = {
+                {c_edge_line_vertex_binding_point, erhe::graphics::Binding_type::storage_buffer},
+                {c_triangle_vertex_binding_point,  erhe::graphics::Binding_type::storage_buffer},
+                make_block_binding(view_block)
+            },
+            .debug_label       = "Content wide line",
+            .uses_texture_heap = false
+        }
+    );
+
+    graphics_bind_group_layout = std::make_unique<erhe::graphics::Bind_group_layout>(
+        graphics_device,
+        erhe::graphics::Bind_group_layout_create_info{
+            .bindings = {
+                {c_triangle_vertex_binding_point, erhe::graphics::Binding_type::storage_buffer},
+                make_block_binding(view_block)
+            },
+            .debug_label       = "Content wide line graphics",
+            .uses_texture_heap = false
+        }
+    );
 
     // Skinned bind group layout: same bindings as bind_group_layout plus
     // the joint side-buffer SSBO and the global `joint` block. Built only

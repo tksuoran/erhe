@@ -172,17 +172,18 @@ void Composition_pass::render(const Render_context& context)
 
         log_composer->debug("calling render with {} render pipelines", data.base_render_pipelines.size());
 
-        // Use content wide line renderer (compute path) when geometry shaders are unavailable.
-        // Meshes were already added and compute dispatched in viewport_scene_view.cpp before the render pass.
+        // Edge-line composition passes go through Content_wide_line_renderer
+        // (both the compute backend on devices with compute shaders and the
+        // geometry-shader backend without). Meshes were already added and
+        // any compute pre-pass dispatched in viewport_scene_view.cpp /
+        // headset_view.cpp before the render pass began.
         erhe::scene_renderer::Content_wide_line_renderer* content_wide_line_renderer = context.app_context.content_wide_line_renderer;
-        if (data.use_content_wide_line_renderer && (content_wide_line_renderer != nullptr) && content_wide_line_renderer->is_enabled()) {
+        if (
+            (data.primitive_mode == erhe::primitive::Primitive_mode::edge_lines) &&
+            (content_wide_line_renderer != nullptr) &&
+            content_wide_line_renderer->is_enabled()
+        ) {
             ERHE_VERIFY(context.render_pass != nullptr);
-            // Render the compute-expanded triangles with the outline
-            // pipeline state. Under multiview the renderer binds its
-            // sibling SSBO-read graphics shader and the surrounding
-            // multiview render pass distributes the single draw across
-            // both layers; under single-view the existing
-            // vertex-attribute path runs.
             const bool multiview = (context.views.size() >= 2);
             for (auto* base_render_pipeline : data.base_render_pipelines) {
                 content_wide_line_renderer->render(

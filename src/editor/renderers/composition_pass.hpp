@@ -26,7 +26,6 @@ class Composition_pass_data
 {
 public:
     bool                                                                   enabled{true}; // TODO consider using Item visibility flag
-    bool                                                                   use_content_wide_line_renderer{false};
     uint32_t                                                               content_wide_line_group{0};
     std::vector<erhe::scene::Layer_id>                                     mesh_layers;
     std::size_t                                                            non_mesh_vertex_count{0};

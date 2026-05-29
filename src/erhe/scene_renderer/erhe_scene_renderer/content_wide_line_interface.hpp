@@ -68,35 +68,49 @@ public:
     erhe::graphics::Fragment_outputs fragment_outputs;
     erhe::dataformat::Vertex_format  triangle_vertex_format;
 
-    erhe::graphics::Shader_resource  edge_line_vertex_struct;
-    erhe::graphics::Shader_resource  edge_line_vertex_buffer_block;
-    erhe::graphics::Shader_resource  edge_line_joint_vertex_struct;
-    erhe::graphics::Shader_resource  edge_line_joint_vertex_buffer_block;
-    erhe::graphics::Shader_resource  triangle_vertex_struct;
-    erhe::graphics::Shader_resource  triangle_vertex_buffer_block;
+    // SSBO resources used only by the compute backend. nullptr when the
+    // device does not support shader storage buffers (forced no-compute
+    // builds, fallback / driver-limited builds). The geometry-shader
+    // backend never touches these.
+    std::unique_ptr<erhe::graphics::Shader_resource> edge_line_vertex_struct;
+    std::unique_ptr<erhe::graphics::Shader_resource> edge_line_vertex_buffer_block;
+    std::unique_ptr<erhe::graphics::Shader_resource> edge_line_joint_vertex_struct;
+    std::unique_ptr<erhe::graphics::Shader_resource> edge_line_joint_vertex_buffer_block;
+    std::unique_ptr<erhe::graphics::Shader_resource> triangle_vertex_struct;
+    std::unique_ptr<erhe::graphics::Shader_resource> triangle_vertex_buffer_block;
     // Same descriptor set binding as triangle_vertex_buffer_block but
     // declared readonly. The compute shader uses the writeonly block
     // (cannot be read); the multiview vertex shader uses this read-only
     // block to fetch the per-view triangle it must emit. Different
     // declarations of the same descriptor set binding are legal in Vulkan.
-    erhe::graphics::Shader_resource  triangle_vertex_buffer_read_block;
+    std::unique_ptr<erhe::graphics::Shader_resource>  triangle_vertex_buffer_read_block;
     erhe::graphics::Shader_resource  view_camera_struct;
     erhe::graphics::Shader_resource  view_block;
 
-    erhe::graphics::Bind_group_layout                  bind_group_layout;
+    // Compute backend bind group layout: contains the line SSBO, the
+    // triangle SSBO, and the view UBO. nullptr when SSBOs are not
+    // supported.
+    std::unique_ptr<erhe::graphics::Bind_group_layout> bind_group_layout;
     // Skinned-variant bind group layout: adds the edge-line joint side
-    // buffer SSBO + the `joint` block at binding 7. nullptr when
-    // joint_block was nullptr at construction (skinned compute path disabled).
+    // buffer SSBO + the `joint` block. nullptr when joint_block was
+    // nullptr at construction (skinned compute path disabled) OR when
+    // SSBOs are not supported.
     std::unique_ptr<erhe::graphics::Bind_group_layout> skinned_bind_group_layout;
     // Graphics pipeline layout used by both single-view and multiview
-    // render paths: triangle SSBO (binding 1, read by vertex stage), view
-    // UBO (binding 3, read by vertex stage for stride_per_view and by
-    // fragment stage for cameras[c_view_index].viewport.xy). Distinct
-    // from the compute layout because the compute side also needs the
-    // line-vertex SSBO at binding 0 and writes the triangle SSBO; this
-    // graphics-side layout omits the line input and binds the triangle
-    // buffer read-only.
-    erhe::graphics::Bind_group_layout                  graphics_bind_group_layout;
+    // SSBO-read render paths: triangle SSBO + view UBO. nullptr when
+    // SSBOs are not supported.
+    std::unique_ptr<erhe::graphics::Bind_group_layout> graphics_bind_group_layout;
+
+    // Geometry-shader backend bind group layouts. The geometry-shader
+    // path expands lines into quads inside the vertex/geom stages of an
+    // ordinary indexed draw, so the vertex shader reads a_position /
+    // a_normal_1 (and a_joint_* under the skinned variant) through the
+    // input assembler -- no SSBOs. Only the view UBO is bound through
+    // the descriptor set (and the joint UBO under the skinned variant).
+    erhe::graphics::Bind_group_layout                  geometry_bind_group_layout_not_skinned;
+    // nullptr when joint_block was null at construction (no skinning
+    // support).
+    std::unique_ptr<erhe::graphics::Bind_group_layout> geometry_bind_group_layout_skinned;
 
     Content_wide_line_view_offsets   offsets;
     int                              view_count{1};

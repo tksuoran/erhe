@@ -67,6 +67,9 @@ erhe_target_sources_grouped(
     res/shaders/id.vert
     res/shaders/line_after_compute.frag
     res/shaders/line_after_compute.vert
+    res/shaders/content_edge_lines.frag
+    res/shaders/content_edge_lines.geom
+    res/shaders/content_edge_lines.vert
     res/shaders/content_line_after_compute.frag
     res/shaders/debug_line.geom
     res/shaders/debug_line.vert
@@ -78,9 +81,6 @@ erhe_target_sources_grouped(
     res/shaders/text.vert
     res/shaders/textured.frag
     res/shaders/textured.vert
-    res/shaders/wide_lines.frag
-    res/shaders/wide_lines.geom
-    res/shaders/wide_lines.vert
 )
 
 erhe_target_sources_grouped(

@@ -969,32 +969,33 @@ public:
             ERHE_TASK_HEADER(content_wide_line_renderer_task)
             {
                 ERHE_GET_GL_CONTEXT
+                m_content_wide_line_interface = std::make_unique<erhe::scene_renderer::Content_wide_line_interface>(
+                    *m_graphics_device,
+                    &m_program_interface->joint_interface.joint_block,
+                    xr_view_count
+                );
+
+                const std::filesystem::path shader_path = std::filesystem::path{"res"} / std::filesystem::path{"shaders"};
+
+                using namespace erhe::graphics;
+
                 if (m_graphics_device->get_info().use_compute_shader) {
-                    m_content_wide_line_interface = std::make_unique<erhe::scene_renderer::Content_wide_line_interface>(
-                        *m_graphics_device,
-                        &m_program_interface->joint_interface.joint_block,
-                        xr_view_count
-                    );
-
-                    const std::filesystem::path shader_path = std::filesystem::path{"res"} / std::filesystem::path{"shaders"};
-
-                    using namespace erhe::graphics;
                     // Compute shader (non-skinned variant)
                     {
                         Shader_stages_create_info create_info{
                             .name             = "compute_before_content_line",
                             .struct_types     = {
-                                &m_content_wide_line_interface->edge_line_vertex_struct,
-                                &m_content_wide_line_interface->triangle_vertex_struct,
+                                m_content_wide_line_interface->edge_line_vertex_struct.get(),
+                                m_content_wide_line_interface->triangle_vertex_struct.get(),
                                 &m_content_wide_line_interface->view_camera_struct
                             },
                             .interface_blocks = {
-                                &m_content_wide_line_interface->edge_line_vertex_buffer_block,
-                                &m_content_wide_line_interface->triangle_vertex_buffer_block,
+                                m_content_wide_line_interface->edge_line_vertex_buffer_block.get(),
+                                m_content_wide_line_interface->triangle_vertex_buffer_block.get(),
                                 &m_content_wide_line_interface->view_block
                             },
                             .shaders = { { Shader_type::compute_shader, shader_path / "compute_before_content_line.comp" } },
-                            .bind_group_layout = &m_content_wide_line_interface->bind_group_layout,
+                            .bind_group_layout = m_content_wide_line_interface->bind_group_layout.get(),
                         };
                         Shader_stages_prototype prototype = build_shader_stages(*m_graphics_device, create_info);
                         if (prototype.is_valid()) {
@@ -1009,16 +1010,16 @@ public:
                             .name             = "compute_before_content_line_skinned",
                             .defines          = { { "ERHE_USE_SKINNING", "1" } },
                             .struct_types     = {
-                                &m_content_wide_line_interface->edge_line_vertex_struct,
-                                &m_content_wide_line_interface->edge_line_joint_vertex_struct,
-                                &m_content_wide_line_interface->triangle_vertex_struct,
+                                m_content_wide_line_interface->edge_line_vertex_struct.get(),
+                                m_content_wide_line_interface->edge_line_joint_vertex_struct.get(),
+                                m_content_wide_line_interface->triangle_vertex_struct.get(),
                                 &m_content_wide_line_interface->view_camera_struct,
                                 &m_program_interface->joint_interface.joint_struct
                             },
                             .interface_blocks = {
-                                &m_content_wide_line_interface->edge_line_vertex_buffer_block,
-                                &m_content_wide_line_interface->edge_line_joint_vertex_buffer_block,
-                                &m_content_wide_line_interface->triangle_vertex_buffer_block,
+                                m_content_wide_line_interface->edge_line_vertex_buffer_block.get(),
+                                m_content_wide_line_interface->edge_line_joint_vertex_buffer_block.get(),
+                                m_content_wide_line_interface->triangle_vertex_buffer_block.get(),
                                 &m_content_wide_line_interface->view_block,
                                 &m_program_interface->joint_interface.joint_block
                             },
@@ -1047,11 +1048,11 @@ public:
                         Shader_stages_create_info create_info{
                             .name             = "content_line_after_compute",
                             .struct_types     = {
-                                &m_content_wide_line_interface->triangle_vertex_struct,
+                                m_content_wide_line_interface->triangle_vertex_struct.get(),
                                 &m_content_wide_line_interface->view_camera_struct
                             },
                             .interface_blocks = {
-                                &m_content_wide_line_interface->triangle_vertex_buffer_read_block,
+                                m_content_wide_line_interface->triangle_vertex_buffer_read_block.get(),
                                 &m_content_wide_line_interface->view_block
                             },
                             .fragment_outputs = &m_content_wide_line_interface->fragment_outputs,
@@ -1063,7 +1064,7 @@ public:
                                 { Shader_type::vertex_shader,   shader_path / "line_after_compute.vert"        },
                                 { Shader_type::fragment_shader, shader_path / "content_line_after_compute.frag" }
                             },
-                            .bind_group_layout = &m_content_wide_line_interface->graphics_bind_group_layout,
+                            .bind_group_layout = m_content_wide_line_interface->graphics_bind_group_layout.get(),
                         };
                         Shader_stages_prototype prototype = build_shader_stages(*m_graphics_device, create_info);
                         if (prototype.is_valid()) {
@@ -1083,11 +1084,11 @@ public:
                         Shader_stages_create_info create_info{
                             .name             = "content_line_after_compute_multiview",
                             .struct_types     = {
-                                &m_content_wide_line_interface->triangle_vertex_struct,
+                                m_content_wide_line_interface->triangle_vertex_struct.get(),
                                 &m_content_wide_line_interface->view_camera_struct
                             },
                             .interface_blocks = {
-                                &m_content_wide_line_interface->triangle_vertex_buffer_read_block,
+                                m_content_wide_line_interface->triangle_vertex_buffer_read_block.get(),
                                 &m_content_wide_line_interface->view_block
                             },
                             .fragment_outputs = &m_content_wide_line_interface->fragment_outputs,
@@ -1099,7 +1100,7 @@ public:
                                 { Shader_type::vertex_shader,   shader_path / "line_after_compute.vert"        },
                                 { Shader_type::fragment_shader, shader_path / "content_line_after_compute.frag" }
                             },
-                            .bind_group_layout = &m_content_wide_line_interface->graphics_bind_group_layout,
+                            .bind_group_layout = m_content_wide_line_interface->graphics_bind_group_layout.get(),
                             .view_count        = static_cast<uint32_t>(xr_view_count)
                         };
                         Shader_stages_prototype prototype = build_shader_stages(*m_graphics_device, create_info);
@@ -1108,16 +1109,76 @@ public:
                         }
                     }
 
-                    if (m_content_wide_line_compute_stages && m_content_wide_line_graphics_stages) {
-                        m_content_wide_line_renderer = std::make_unique<erhe::scene_renderer::Content_wide_line_renderer>(
-                            *m_graphics_device,
-                            *m_content_wide_line_interface,
-                            m_content_wide_line_compute_stages.get(),
-                            m_content_wide_line_compute_stages_skinned.get(), // may be null if joint block missing
-                            m_content_wide_line_graphics_stages.get(),
-                            m_content_wide_line_multiview_graphics_stages.get()
-                        );
+                    m_content_wide_line_renderer = erhe::scene_renderer::make_content_wide_line_compute_renderer(
+                        *m_graphics_device,
+                        *m_content_wide_line_interface,
+                        m_content_wide_line_compute_stages.get(),
+                        m_content_wide_line_compute_stages_skinned.get(), // may be null if joint block missing
+                        m_content_wide_line_graphics_stages.get(),
+                        m_content_wide_line_multiview_graphics_stages.get()
+                    );
+                } else {
+                    // Geometry-shader backend (used when the device does not
+                    // expose compute shaders). Both variants share
+                    // content_edge_lines.{vert,geom,frag}; they differ only
+                    // in the vertex_format passed to attributes_source(),
+                    // which emits the ERHE_ATTRIBUTE_a_joint_* defines the
+                    // vert shader's skinning branch keys on.
+                    {
+                        Shader_stages_create_info create_info{
+                            .name             = "content_edge_lines",
+                            .struct_types     = {
+                                &m_content_wide_line_interface->view_camera_struct
+                            },
+                            .interface_blocks = {
+                                &m_content_wide_line_interface->view_block
+                            },
+                            .fragment_outputs  = &m_content_wide_line_interface->fragment_outputs,
+                            .vertex_format     = &m_mesh_memory->vertex_format_not_skinned,
+                            .shaders = {
+                                { Shader_type::vertex_shader,   shader_path / "content_edge_lines.vert" },
+                                { Shader_type::geometry_shader, shader_path / "content_edge_lines.geom" },
+                                { Shader_type::fragment_shader, shader_path / "content_edge_lines.frag" }
+                            },
+                            .bind_group_layout = &m_content_wide_line_interface->geometry_bind_group_layout_not_skinned,
+                        };
+                        Shader_stages_prototype prototype = build_shader_stages(*m_graphics_device, create_info);
+                        if (prototype.is_valid()) {
+                            m_content_wide_line_geometry_stages_not_skinned = std::make_unique<Shader_stages>(*m_graphics_device, std::move(prototype));
+                        }
                     }
+                    if (m_content_wide_line_interface->geometry_bind_group_layout_skinned != nullptr) {
+                        Shader_stages_create_info create_info{
+                            .name             = "content_edge_lines_skinned",
+                            .struct_types     = {
+                                &m_content_wide_line_interface->view_camera_struct,
+                                &m_program_interface->joint_interface.joint_struct
+                            },
+                            .interface_blocks = {
+                                &m_content_wide_line_interface->view_block,
+                                &m_program_interface->joint_interface.joint_block
+                            },
+                            .fragment_outputs  = &m_content_wide_line_interface->fragment_outputs,
+                            .vertex_format     = &m_mesh_memory->vertex_format_skinned,
+                            .shaders = {
+                                { Shader_type::vertex_shader,   shader_path / "content_edge_lines.vert" },
+                                { Shader_type::geometry_shader, shader_path / "content_edge_lines.geom" },
+                                { Shader_type::fragment_shader, shader_path / "content_edge_lines.frag" }
+                            },
+                            .bind_group_layout = m_content_wide_line_interface->geometry_bind_group_layout_skinned.get(),
+                        };
+                        Shader_stages_prototype prototype = build_shader_stages(*m_graphics_device, create_info);
+                        if (prototype.is_valid()) {
+                            m_content_wide_line_geometry_stages_skinned = std::make_unique<Shader_stages>(*m_graphics_device, std::move(prototype));
+                        }
+                    }
+
+                    m_content_wide_line_renderer = erhe::scene_renderer::make_content_wide_line_geometry_renderer(
+                        *m_graphics_device,
+                        *m_content_wide_line_interface,
+                        m_content_wide_line_geometry_stages_not_skinned.get(),
+                        m_content_wide_line_geometry_stages_skinned    .get()  // may be null if joint block missing
+                    );
                 }
             }
             ERHE_TASK_FOOTER(.name("Content_wide_line_renderer"));
@@ -1973,9 +2034,6 @@ public:
         m_app_context.brush_preview            = m_brush_preview         .get();
         m_app_context.mesh_memory              = m_mesh_memory           .get();
         m_app_context.content_wide_line_renderer = m_content_wide_line_renderer.get();
-        if (m_content_wide_line_renderer && m_content_wide_line_renderer->is_enabled() && m_app_rendering) {
-            m_app_rendering->update_content_wide_line_pipeline_states(*m_content_wide_line_renderer);
-        }
         m_app_context.move_tool                = m_move_tool             .get();
         m_app_context.operation_stack          = m_operation_stack       .get();
         m_app_context.paint_tool               = m_paint_tool            .get();
@@ -2303,6 +2361,8 @@ public:
     std::unique_ptr<erhe::graphics::Shader_stages>                    m_content_wide_line_compute_stages_skinned;
     std::unique_ptr<erhe::graphics::Shader_stages>                    m_content_wide_line_graphics_stages;
     std::unique_ptr<erhe::graphics::Shader_stages>                    m_content_wide_line_multiview_graphics_stages;
+    std::unique_ptr<erhe::graphics::Shader_stages>                    m_content_wide_line_geometry_stages_not_skinned;
+    std::unique_ptr<erhe::graphics::Shader_stages>                    m_content_wide_line_geometry_stages_skinned;
 
     std::unique_ptr<erhe::imgui::Imgui_windows>              m_imgui_windows;
     std::unique_ptr<App_scenes             >                 m_app_scenes;

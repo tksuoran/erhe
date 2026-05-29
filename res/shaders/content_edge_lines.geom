@@ -1,6 +1,10 @@
+// Geometry stage of the content-edge-lines geometry-shader backend.
+// Expands each input line into a screen-space-oriented quad. Reads the
+// per-eye viewport from the renderer's own view UBO (binding 3)
+// instead of the standard scene camera UBO so the renderer stays
+// self-contained.
+
 #include "erhe_camera_view.glsl"
-// uniform vec4 _viewport;
-// uniform vec2 _line_width;
 
 #define SHOW_DEBUG_LINES        0
 #define PASSTHROUGH_BASIC_LINES 0
@@ -25,16 +29,6 @@ layout(location = 4) out float v_line_width;
 
 void main(void)
 {
-    //  a - - - - - - - - - - - - - - - - b
-    //  |      |                   |      |
-    //  |      |                   |      |
-    //  |      |                   |      |
-    //  | - - -start - - - - - - end- - - |
-    //  |      |                   |      |
-    //  |      |                   |      |
-    //  |      |                   |      |
-    //  d - - - - - - - - - - - - - - - - c
-
     vec4 start = gl_in[0].gl_Position;
     vec4 end   = gl_in[1].gl_Position;
 
@@ -45,39 +39,14 @@ void main(void)
     return;
 #endif
 
-    // It is necessary to manually clip the line before homogenization.
-    // For reference: OpenGL specification 13.7.
-    // Using clip control depth mode zero to one (not default in OpenGL)
-    // View volume in depth is 0 < z < w.
-    // Clipping against near plane when z < 0
-    // Clipping against far  plane when z > w
-    //{  Mear plane clipping
-    //    float t0 = start.z + start.w;
-    //    float t1 = end.z   + end.w;
-    //    if (start.z < 0.0)
-    //    {
-    //        if (end.z < 0.0)
-    //        {
-    //            return;
-    //        }
-    //        start = mix(start, end, (0 - t0) / (t1 - t0));
-    //    }
-    //    if (end.z < 0.0)
-    //    {
-    //        end = mix(start, end, (0 - t0) / (t1 - t0));
-    //    }
-    //}
-
     // Assume reverse Z - we only need to clip against 'far' = near plane
     {
         float t0 = start.z - start.w;
         float t1 = end.z   - end.w;
-        if (t0 > 0) {// start.z > start.w
-            if (t1 > 0) { // end.w > end.w
+        if (t0 > 0) {
+            if (t1 > 0) {
                 return;
             }
-            //  mix(x, y, a) = (1 - a)x + ay
-            // t0 = Az - Aw; t1 = Bz - Bw; t = t0 / (t0 - t1)
             start = mix(start, end, t0 / (t0 - t1));
         }
         if (t1 > 0.0) {
@@ -85,21 +54,20 @@ void main(void)
         }
     }
 
-    vec2 vpSize         = camera.cameras[c_view_index].viewport.zw;
+    vec2 vpSize         = view.cameras[c_view_index].viewport.zw;
 
-    // Compute line axis and side vector in screen space
-    vec2 startInNDC     = start.xy / start.w;       //  clip to NDC: homogenize and drop z
+    vec2 startInNDC     = start.xy / start.w;
     vec2 endInNDC       = end.xy   / end.w;
     vec2 lineInNDC      = endInNDC - startInNDC;
-    vec2 startInScreen  = (0.5 * startInNDC + vec2(0.5)) * vpSize + camera.cameras[c_view_index].viewport.xy;
-    vec2 endInScreen    = (0.5 * endInNDC   + vec2(0.5)) * vpSize + camera.cameras[c_view_index].viewport.xy;
-    vec2 lineInScreen   = lineInNDC * vpSize;       //  NDC to window (direction vector)
+    vec2 startInScreen  = (0.5 * startInNDC + vec2(0.5)) * vpSize + view.cameras[c_view_index].viewport.xy;
+    vec2 endInScreen    = (0.5 * endInNDC   + vec2(0.5)) * vpSize + view.cameras[c_view_index].viewport.xy;
+    vec2 lineInScreen   = lineInNDC * vpSize;
     vec2 axisInScreen   = normalize(lineInScreen);
-    vec2 sideInScreen   = vec2(-axisInScreen.y, axisInScreen.x);    // rotate
-    vec2 axisInNDC      = axisInScreen / vpSize;                    // screen to NDC
+    vec2 sideInScreen   = vec2(-axisInScreen.y, axisInScreen.x);
+    vec2 axisInNDC      = axisInScreen / vpSize;
     vec2 sideInNDC      = sideInScreen / vpSize;
-    vec4 axis_start     = vec4(axisInNDC, 0.0, 0.0) * vs_line_width[0];  // NDC to clip (delta vector)
-    vec4 axis_end       = vec4(axisInNDC, 0.0, 0.0) * vs_line_width[1];  // NDC to clip (delta vector)
+    vec4 axis_start     = vec4(axisInNDC, 0.0, 0.0) * vs_line_width[0];
+    vec4 axis_end       = vec4(axisInNDC, 0.0, 0.0) * vs_line_width[1];
     vec4 side_start     = vec4(sideInNDC, 0.0, 0.0) * vs_line_width[0];
     vec4 side_end       = vec4(sideInNDC, 0.0, 0.0) * vs_line_width[1];
 
@@ -135,10 +103,6 @@ void main(void)
 
 #else
     // CCW Triangle strip indices: 0123 = adbc
-    // CCW Triangles indices:      012, 213 = adb, bdc
-    // a-b  0-2
-    // |/|  |/|
-    // d-c  1-3
 #if STRIP
     gl_Position = a; v_color = vs_color[0]; v_line_width = vs_line_width[0]; EmitVertex();
     gl_Position = d; v_color = vs_color[0]; v_line_width = vs_line_width[0]; EmitVertex();

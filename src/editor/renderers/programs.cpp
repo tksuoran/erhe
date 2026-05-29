@@ -40,8 +40,6 @@ Programs::Programs(erhe::graphics::Device& graphics_device, erhe::scene_renderer
     //, textured               {graphics_device, "textured-not_loaded"}
     , sky                    {graphics_device, "sky-not_loaded"}
     , grid                   {graphics_device, "grid-not_loaded"}
-    , wide_lines_draw_color  {graphics_device, "wide_lines_draw_color-not_loaded"}
-    , wide_lines_vertex_color{graphics_device, "wide_lines_vertex_color-not_loaded"}
     //, points                 {graphics_device, "points-not_loaded"}
     , depth_to_color         {graphics_device, "depth_to_color-not_loaded"}
     //, id                     {graphics_device, "id-not_loaded"}
@@ -97,25 +95,6 @@ void Programs::load_programs(
     //add_shader(textured  , CI{ .name = "textured"  } );
     //add_shader(points    , CI{ .name = "points"    } );
     //add_shader(id        , CI{ .name = "id"        } );
-
-    if (!graphics_device.get_info().use_compute_shader) {
-        add_shader(
-            wide_lines_draw_color,
-            CI{ 
-                .name          = "wide_lines", 
-                .defines       = {{"ERHE_USE_DRAW_COLOR",   "1"}},
-                .vertex_format = &mesh_memory.vertex_format_not_skinned // TODO skinned variant?
-            }
-        );
-        add_shader(
-            wide_lines_vertex_color,
-            CI{
-                .name          = "wide_lines",
-                .defines       = {{"ERHE_USE_VERTEX_COLOR", "1"}},
-                .vertex_format = &mesh_memory.vertex_format_not_skinned // TODO skinned variant?
-            }
-        );
-    }
 
     // Compile shaders
 

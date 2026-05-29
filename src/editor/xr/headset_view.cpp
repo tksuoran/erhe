@@ -622,7 +622,7 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
                             return;
                         }
                         auto& data = pass->data;
-                        if (!data.use_content_wide_line_renderer || !data.enabled) {
+                        if ((data.primitive_mode != erhe::primitive::Primitive_mode::edge_lines) || !data.enabled) {
                             return;
                         }
                         // Pass settings resolution mirrors Composition_pass /
@@ -696,18 +696,16 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
                 {
                     erhe::graphics::Compute_command_encoder compute_encoder = m_app_context.graphics_device->make_compute_command_encoder(views_cb);
                     if (drive_wide_lines) {
-                        // TODO: thread joint buffer + range through here for
-                        // skinned content edge lines in XR. Without it, skinned
-                        // meshes' edges render in bind pose.
-                        content_wide_line_renderer->compute(
-                            compute_encoder,
+                        content_wide_line_renderer->set_view_params(
                             std::span<const erhe::scene_renderer::Camera_view_input>{view_inputs},
-                            nullptr,
-                            nullptr,
                             get_reverse_depth(),
                             get_depth_range(),
                             get_conventions()
                         );
+                        // TODO: thread joint buffer + range through here for
+                        // skinned content edge lines in XR. Without it, skinned
+                        // meshes' edges render in bind pose.
+                        content_wide_line_renderer->compute(compute_encoder);
                     }
                     // Debug_renderer::compute() early-returns when
                     // use_compute is false, so calling it

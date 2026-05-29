@@ -1,3 +1,7 @@
+// Fragment stage of the content-edge-lines geometry-shader backend.
+// Computes the per-fragment distance to the line and writes a
+// premultiplied-alpha color with a 0.5 alpha threshold.
+
 layout(location = 0) in vec2  v_start;
 layout(location = 1) in vec2  v_line;
 layout(location = 2) in vec4  v_color;

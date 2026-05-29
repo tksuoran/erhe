@@ -197,28 +197,14 @@ App_rendering::App_rendering(
         selected, negative_determinant
     );
 
-    const bool use_compute_wide_lines = graphics_device.get_info().use_compute_shader;
-
-    // On backends without compute (macOS GL 4.1) the edge_lines passes go
-    // through Forward_renderer instead of Content_wide_line_renderer; in
-    // that path the variant cache would pick the standard mesh shader,
-    // which has no line-expansion logic. Override with the wide_lines
-    // geometry-shader program (loaded in programs.cpp only on the same
-    // !use_compute_shader condition).
-    erhe::graphics::Shader_stages* const wide_lines_shader_stages = use_compute_wide_lines
-        ? nullptr
-        : &programs.wide_lines_draw_color.shader_stages;
-
     edge_lines_not_selected = make_composition_pass(
         "Content edge lines not selected",
         Composition_pass_data{
-            .use_content_wide_line_renderer{use_compute_wide_lines},
             .content_wide_line_group       {0},
             .mesh_layers                   {Mesh_layer_id::content},
             .blending_mode_policy          {Blending_mode_policy::override_with_base_render_pipeline},
             .primitive_mode                {Primitive_mode::edge_lines},
             .filter                        {filter_not_selected},
-            .shader_stages                 {wide_lines_shader_stages},
             .get_render_style              {render_style_not_selected}
         }, not_selected, positive_determinant
     );
@@ -226,13 +212,11 @@ App_rendering::App_rendering(
     edge_lines_selected = make_composition_pass(
         "Content edge lines opaque selected",
         Composition_pass_data{
-            .use_content_wide_line_renderer{use_compute_wide_lines},
             .content_wide_line_group       {1},
             .mesh_layers                   {Mesh_layer_id::content},
             .blending_mode_policy          {Blending_mode_policy::override_with_base_render_pipeline},
             .primitive_mode                {Primitive_mode::edge_lines},
             .filter                        {filter_selected},
-            .shader_stages                 {wide_lines_shader_stages},
             .get_render_style              {render_style_selected}
         }, selected, positive_determinant
     );
@@ -240,13 +224,11 @@ App_rendering::App_rendering(
     selection_outline = make_composition_pass(
         "Content outline opaque selected",
         Composition_pass_data{
-            .use_content_wide_line_renderer{use_compute_wide_lines},
             .content_wide_line_group       {2},
             .mesh_layers                   {Mesh_layer_id::content},
             .blending_mode_policy          {Blending_mode_policy::override_with_base_render_pipeline},
             .primitive_mode                {Primitive_mode::edge_lines},
             .filter                        {filter_selected_or_hovered},
-            .shader_stages                 {wide_lines_shader_stages},
             .primitive_settings{
                 erhe::scene_renderer::Primitive_interface_settings{
                     .constant_color0 = glm::vec4{1.0f, 0.75f, 0.0f, 1.0f},
@@ -657,7 +639,6 @@ Pipeline_renderpasses::Pipeline_renderpasses(
         graphics_device,
         erhe::graphics::Base_render_pipeline_create_info{
             .debug_label             = erhe::utility::Debug_label{"Hidden lines with blending"},
-            //.shader_stages           = programs.wide_lines_draw_color.shader_stages(),
             .input_assembly          = Input_assembly_state::line,
             .multisample             = Multisample_state{
                 .alpha_to_coverage_enable = true
@@ -716,7 +697,6 @@ Pipeline_renderpasses::Pipeline_renderpasses(
 
     , edge_lines{graphics_device, erhe::graphics::Base_render_pipeline_create_info{
         .debug_label    = erhe::utility::Debug_label{"Edge Lines"},
-        //.shader_stages  = programs.wide_lines_draw_color.shader_stages(),
         .input_assembly = Input_assembly_state::line,
         .rasterization  = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
         .depth_stencil = {
@@ -749,7 +729,6 @@ Pipeline_renderpasses::Pipeline_renderpasses(
         graphics_device,
         erhe::graphics::Base_render_pipeline_create_info{
             .debug_label    = erhe::utility::Debug_label{"Outline (selection/hover)"},
-            //.shader_stages  = programs.wide_lines_draw_color.shader_stages(),
             .input_assembly = Input_assembly_state::line,
             .multisample    = Multisample_state{
                 .alpha_to_coverage_enable = true
@@ -1003,47 +982,6 @@ void App_rendering::remove(Renderable* renderable)
         return;
     }
     m_renderables.erase(i);
-}
-
-void App_rendering::update_content_wide_line_pipeline_states(erhe::scene_renderer::Content_wide_line_renderer& renderer)
-{
-    erhe::graphics::Shader_stages* shader_stages = renderer.get_graphics_shader_stages();
-    if (shader_stages == nullptr) {
-        return;
-    }
-
-    // For each composition pass that uses content_wide_line_renderer,
-    // create a new pipeline state with the renderer's shader stages and vertex input
-    // but keep the original depth/stencil/blend settings.
-    auto update_pass = [&](Composition_pass* pass) {
-        if ((pass == nullptr) || !pass->data.use_content_wide_line_renderer) {
-            return;
-        }
-        std::vector<erhe::graphics::Base_render_pipeline*> new_states;
-        for (erhe::graphics::Base_render_pipeline* original : pass->data.base_render_pipelines) {
-            auto pipeline = std::make_unique<erhe::graphics::Base_render_pipeline>(
-                *m_context.graphics_device,
-                erhe::graphics::Base_render_pipeline_create_info{
-                    .debug_label    = original->data.debug_label,
-                    //.shader_stages  = shader_stages,
-                    //.vertex_input   = vertex_input,
-                    .input_assembly = erhe::graphics::Input_assembly_state::triangle,
-                    .multisample    = original->data.multisample,
-                    .rasterization  = original->data.rasterization,
-                    .depth_stencil  = original->data.depth_stencil,
-                    .color_blend    = original->data.color_blend
-                }
-            );
-            new_states.push_back(pipeline.get());
-            m_compute_wide_line_pipeline_states.push_back(std::move(pipeline));
-        }
-        pass->data.base_render_pipelines = new_states;
-    };
-
-    update_pass(edge_lines_not_selected.get());
-    update_pass(edge_lines_selected.get());
-    update_pass(selection_outline.get());
-    update_pass(translucent_outline.get());
 }
 
 void App_rendering::render_viewport_main(const Render_context& context)
