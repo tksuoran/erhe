@@ -28,8 +28,10 @@ namespace erhe::graphics {
 namespace erhe::scene {
     class Camera;
     class Mesh;
+    class Skin;
 }
 namespace erhe::scene_renderer {
+    class Joint_buffer;
     class Mesh_memory;
     class Program_interface;
     class Shader_variant_cache;
@@ -69,6 +71,19 @@ public:
     ~Id_renderer() noexcept;
 
     // Public API
+
+    // Which meshes the ID pass actually rasterizes. Skinned-only is the
+    // hybrid default: a separate raytrace pass covers static meshes (it
+    // does so correctly because the rest-pose BVH equals the displayed
+    // surface) and the ID pass only carries the meshes that GPU skinning
+    // posed away from rest. `all` is the legacy "ID renderer covers
+    // everything" mode used by the force-id config knob.
+    enum class Skinning_filter
+    {
+        skinned_only,
+        all
+    };
+
     class Render_parameters
     {
     public:
@@ -83,6 +98,16 @@ public:
         bool                               reverse_depth{true};
         erhe::math::Depth_range            depth_range{erhe::math::Depth_range::zero_to_one};
         erhe::math::Coordinate_conventions conventions;
+
+        // Joint UBO/SSBO that standard.{vert,frag} reads under
+        // ERHE_USE_SKINNING; the id pass uses the same shader pair via
+        // ERHE_VARIANT_ID_RENDER, so it needs the same joint binding when
+        // any of its buckets contain a skinned mesh. Pass the same
+        // Joint_buffer that Forward_renderer uses (Forward_renderer::get_joint_buffer())
+        // so both updates allocate disjoint ring ranges.
+        erhe::scene_renderer::Joint_buffer*                          joint_buffer{nullptr};
+        std::span<const std::shared_ptr<erhe::scene::Skin>>          skins{};
+        Skinning_filter                                              skinning_filter{Skinning_filter::all};
     };
     void render            (const Render_parameters& parameters);
     void next_frame        ();

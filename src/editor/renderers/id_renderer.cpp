@@ -24,6 +24,7 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/mesh.hpp"
+#include "erhe_scene_renderer/joint_buffer.hpp"
 #include "erhe_scene_renderer/program_interface.hpp"
 #include "erhe_scene_renderer/shader_variant_cache.hpp"
 
@@ -215,6 +216,25 @@ void Id_renderer::render_meshes(
 
     const erhe::primitive::Primitive_mode primitive_mode{erhe::primitive::Primitive_mode::polygon_fill};
 
+    // Pre-filter the input mesh span when the caller asked for skinned-only
+    // (the hybrid picker delegates static meshes to the raytrace path).
+    // A pointer-vector copy is cheap; doing it here keeps the
+    // bucket_primitives() / Item_filter API surface unchanged.
+    std::vector<std::shared_ptr<erhe::scene::Mesh>> filtered_meshes;
+    std::span<const std::shared_ptr<erhe::scene::Mesh>> meshes_to_render = meshes;
+    if (parameters.skinning_filter == Skinning_filter::skinned_only) {
+        filtered_meshes.reserve(meshes.size());
+        for (const std::shared_ptr<erhe::scene::Mesh>& mesh : meshes) {
+            if (mesh && mesh->skin) {
+                filtered_meshes.push_back(mesh);
+            }
+        }
+        meshes_to_render = filtered_meshes;
+    }
+    if (meshes_to_render.empty()) {
+        return;
+    }
+
     using namespace erhe::scene_renderer;
     std::vector<Render_bucket> buckets;
     const uint32_t boolean_mask_force_enable = erhe::scene_renderer::make_shader_bool_mask(
@@ -227,7 +247,7 @@ void Id_renderer::render_meshes(
         boolean_mask_force_disable,
         m_mesh_memory,
         Shader_key{},
-        meshes,
+        meshes_to_render,
         id_filter,
         primitive_mode,
         Blending_mode_policy::override_with_base_render_pipeline // TODO
@@ -360,11 +380,31 @@ void Id_renderer::render(const Render_parameters& parameters)
         parameters.depth_range
     );
 
+    // Joint UBO/SSBO upload. Required for the ID variant of standard.vert
+    // when any rasterized mesh is skinned, because the shader takes the
+    // GPU skinning branch off the per-primitive `skinning_factor`. Static
+    // scenes pass joint_buffer = nullptr and the bind is skipped. Allocates
+    // a disjoint ring range from the one Forward_renderer's later
+    // render() will request, the same way Content_wide_line_renderer does
+    // (see Viewport_scene_view::execute_rendergraph_node).
+    Ring_buffer_range joint_range{};
+    const bool        bind_joint_buffer = (parameters.joint_buffer != nullptr);
+    if (bind_joint_buffer) {
+        joint_range = parameters.joint_buffer->update(
+            glm::uvec4{0u, 0u, 0u, 0u},
+            {},
+            parameters.skins
+        );
+    }
+
     // Render
     {
         Render_command_encoder encoder = m_graphics_device.make_render_command_encoder(parameters.command_buffer);
         erhe::graphics::Scoped_render_pass scoped_render_pass{*m_render_pass.get(), parameters.command_buffer};
         m_camera_buffers.bind(encoder, camera_range);
+        if (bind_joint_buffer) {
+            parameters.joint_buffer->bind(encoder, joint_range);
+        }
 
         if (m_use_scissor) {
             encoder.set_scissor_rect(entry.x_offset, entry.y_offset, s_extent, s_extent);
@@ -467,6 +507,9 @@ void Id_renderer::render(const Render_parameters& parameters)
     }
 
     camera_range.release();
+    if (bind_joint_buffer) {
+        joint_range.release();
+    }
 }
 
 template<typename T>

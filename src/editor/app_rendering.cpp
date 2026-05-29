@@ -10,6 +10,8 @@
 #include "renderers/id_renderer.hpp"
 #include "erhe_renderer/text_renderer.hpp"
 #include "erhe_scene_renderer/content_wide_line_renderer.hpp"
+#include "erhe_scene_renderer/forward_renderer.hpp"
+#include "erhe_scene_renderer/joint_buffer.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "erhe_scene_renderer/shader_key.hpp"
 #include "renderers/programs.hpp"
@@ -1044,6 +1046,24 @@ void App_rendering::render_id(const Render_context& context)
 
     const Scene_layers& tool_layers = tool_scene_root->layers();
 
+    // Joint UBO/SSBO: the id pass shares standard.{vert,frag} with
+    // Forward_renderer and takes the same GPU skinning branch off
+    // primitive.skinning_factor, so it needs the joint buffer bound when
+    // a skinned mesh is in any of its buckets. Pass the same Joint_buffer
+    // Forward_renderer uses; both updates allocate disjoint ring ranges.
+    erhe::scene_renderer::Joint_buffer* joint_buffer{nullptr};
+    std::span<const std::shared_ptr<erhe::scene::Skin>> skins{};
+    if (m_context.forward_renderer != nullptr) {
+        erhe::scene::Scene* hosted_scene = scene_root->get_hosted_scene();
+        if (hosted_scene != nullptr) {
+            const std::vector<std::shared_ptr<erhe::scene::Skin>>& scene_skins = hosted_scene->get_skins();
+            if (!scene_skins.empty()) {
+                joint_buffer = &m_context.forward_renderer->get_joint_buffer();
+                skins        = std::span<const std::shared_ptr<erhe::scene::Skin>>{scene_skins.data(), scene_skins.size()};
+            }
+        }
+    }
+
     // TODO listen to viewport changes in msg bus?
     ERHE_VERIFY(context.command_buffer != nullptr);
     m_context.id_renderer->render(
@@ -1057,7 +1077,12 @@ void App_rendering::render_id(const Render_context& context)
             .y                  = static_cast<int>(position.y),
             .reverse_depth      = context.scene_view.get_reverse_depth(),
             .depth_range        = context.scene_view.get_depth_range(),
-            .conventions        = context.scene_view.get_conventions()
+            .conventions        = context.scene_view.get_conventions(),
+            .joint_buffer       = joint_buffer,
+            .skins              = skins,
+            // skinning_filter defaults to Skinning_filter::all -- the
+            // hybrid switch to skinned_only / raytrace for static lands
+            // with the merge logic in viewport_scene_view.
         }
     );
 }
