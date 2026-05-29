@@ -403,15 +403,25 @@ auto Xr_session::depth_stencil_format_score(const erhe::dataformat::Format pixel
     }
 #endif
 #if defined(XR_USE_GRAPHICS_API_VULKAN)
-    // Vulkan does not meet DS+SAMPLED+TSRC+TDST+STORAGE requirements, only DS+SAMPLED
+    // Stencil-bearing formats are preferred so the editor's selection-outline
+    // stencil scheme (Pipeline_renderpasses::polygon_fill_standard_selected_*
+    // writes bit 7 of stencil; Pipeline_renderpasses::outline tests bit 7)
+    // works on the headset. The actual swapchain usage is DS+SAMPLED only
+    // (XR_SWAPCHAIN_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT in create_swapchains;
+    // depth_stencil_texture_usage = DS|SAMPLED). enumerate_swapchain_formats
+    // probes each candidate against that mask and falls back if the local
+    // Vulkan device cannot honour a stencil-bearing format with those
+    // flags. Previously d24/d32_s8 were hard-zeroed citing the full
+    // DS+SAMPLED+TSRC+TDST+STORAGE mask, but that mask is never requested
+    // for the XR depth swapchain.
     switch (pixelformat) {
         //using enum gl::Internal_format;
         case erhe::dataformat::Format::format_s8_uint:             return 0;
         case erhe::dataformat::Format::format_d16_unorm:           return 1;
         case erhe::dataformat::Format::format_x8_d24_unorm_pack32: return 0; // runtime requirements not met
         case erhe::dataformat::Format::format_d32_sfloat:          return 3;
-        case erhe::dataformat::Format::format_d24_unorm_s8_uint:   return 0; // runtime requirements not met
-        case erhe::dataformat::Format::format_d32_sfloat_s8_uint:  return 0; // runtime requirements not met
+        case erhe::dataformat::Format::format_d24_unorm_s8_uint:   return 4;
+        case erhe::dataformat::Format::format_d32_sfloat_s8_uint:  return 5;
         default:                                                   return 0;
     }
 #endif
@@ -435,8 +445,7 @@ auto Xr_session::enumerate_swapchain_formats() -> bool
 
     log_xr->info("Swapchain formats:");
     int best_color_format_score{0};
-    int best_depth_stencil_score{0};
-    std::vector<erhe::dataformat::Format> depth_candidates;
+    std::vector<std::pair<int, erhe::dataformat::Format>> depth_candidates;
     for (const int64_t swapchain_format : swapchain_formats) {
         const erhe::dataformat::Format pixelformat = erhe::graphics::native_swapchain_format_to_dataformat(swapchain_format);
         const std::string              native_name = erhe::graphics::native_swapchain_format_c_str(swapchain_format);
@@ -451,20 +460,21 @@ auto Xr_session::enumerate_swapchain_formats() -> bool
             best_color_format_score = color_score;
             m_swapchain_color_format = pixelformat;
         }
-        if (depth_stencil_score > best_depth_stencil_score) {
-            best_depth_stencil_score = depth_stencil_score;
-            m_swapchain_depth_stencil_format = pixelformat;
-        }
         if (depth_stencil_score > 0) {
-            depth_candidates.push_back(pixelformat);
+            depth_candidates.push_back(std::pair<int, erhe::dataformat::Format>{depth_stencil_score, pixelformat});
         }
     }
 
-    // Diagnostic: probe each depth-capable format from the XR format list
-    // against the usage-mask superset we have seen the runtime actually
-    // expand to internally on Vulkan. On GL, probe_image_format_support
-    // returns true unconditionally so every entry reports PASS. See
-    // doc/vulkan_backend.md log for context.
+    // Probe each depth candidate against the actual XR depth swapchain
+    // usage (DS+SAMPLED) and pick the highest-scoring format the device
+    // says it can create with that usage. This gates out e.g. d24_s8 on
+    // a Vulkan device that does not advertise sampled-image support for
+    // it, while preferring stencil-bearing formats so the selection
+    // outline stencil scheme works on the headset. The full mask
+    // (DS+SAMPLED+TSRC+TDST+STORAGE) is logged for diagnostic context
+    // only; on GL probe_image_format_support returns true unconditionally
+    // so the highest-scored candidate always wins. See
+    // doc/vulkan_backend.md log.
     {
         constexpr uint64_t full_usage_mask =
             erhe::graphics::Image_usage_flag_bit_mask::depth_stencil_attachment |
@@ -481,17 +491,25 @@ auto Xr_session::enumerate_swapchain_formats() -> bool
         );
         std::size_t full_pass_count = 0;
         std::size_t min_pass_count  = 0;
-        for (const erhe::dataformat::Format candidate : depth_candidates) {
+        int best_depth_stencil_score{0};
+        for (const std::pair<int, erhe::dataformat::Format>& candidate_entry : depth_candidates) {
+            const int                      score     = candidate_entry.first;
+            const erhe::dataformat::Format candidate = candidate_entry.second;
             const bool full_ok = m_graphics_device.probe_image_format_support(candidate, full_usage_mask);
             const bool min_ok  = m_graphics_device.probe_image_format_support(candidate, min_usage_mask);
             if (full_ok) { ++full_pass_count; }
             if (min_ok)  { ++min_pass_count; }
             log_xr->info(
-                "    {} -> full={} min={}",
+                "    {} -> full={} min={} score={}",
                 erhe::dataformat::c_str(candidate),
                 full_ok ? "PASS" : "FAIL",
-                min_ok  ? "PASS" : "FAIL"
+                min_ok  ? "PASS" : "FAIL",
+                score
             );
+            if (min_ok && (score > best_depth_stencil_score)) {
+                best_depth_stencil_score = score;
+                m_swapchain_depth_stencil_format = candidate;
+            }
         }
         log_xr->info(
             "Depth probe summary: {}/{} pass full usage, {}/{} pass min usage",
