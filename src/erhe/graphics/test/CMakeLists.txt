@@ -8,20 +8,60 @@ CPMAddPackage(
         "INSTALL_GTEST OFF"
 )
 
-set(_target "erhe_graphics_tests")
-add_executable(${_target}
+include(GoogleTest)
+
+# Deviceless tests: pure std140/std430 layout math, no graphics Device.
+# Built in every configuration (CI-friendly, GPU-less).
+set(_deviceless_target "erhe_graphics_tests")
+add_executable(${_deviceless_target}
     main.cpp
     test_shader_resource_size.cpp
 )
 
-target_link_libraries(${_target}
+target_link_libraries(${_deviceless_target}
     PRIVATE
         erhe::graphics
         erhe::verify
         GTest::gtest
 )
 
-erhe_target_settings(${_target} "erhe/tests")
+erhe_target_settings(${_deviceless_target} "erhe/tests")
 
-include(GoogleTest)
-gtest_discover_tests(${_target})
+gtest_discover_tests(${_deviceless_target})
+
+# Real-GPU tests: construct a headless Device and run actual render / compute
+# work, then read results back and assert. Only added when the configuration
+# can bring up a headless Device: the null Context_window exists only when
+# ERHE_WINDOW_LIBRARY=none, and today only the Vulkan backend has a validated
+# headless path. Widen the API list as other backends gain one.
+set(_gpu_tests_supported OFF)
+if ((ERHE_WINDOW_LIBRARY STREQUAL "none") AND (ERHE_GRAPHICS_API STREQUAL "vulkan"))
+    set(_gpu_tests_supported ON)
+endif ()
+
+if (_gpu_tests_supported)
+    set(_gpu_target "erhe_graphics_gpu_tests")
+    add_executable(${_gpu_target}
+        main.cpp
+        gpu_test_environment.cpp
+        gpu_test_fixture.cpp
+        test_m1_device_up.cpp
+    )
+
+    target_link_libraries(${_gpu_target}
+        PRIVATE
+            erhe::graphics
+            erhe::window
+            erhe::dataformat
+            erhe::verify
+            GTest::gtest
+    )
+
+    erhe_target_settings(${_gpu_target} "erhe/tests")
+
+    # The binary creates a VkInstance, so it must not be executed at build
+    # time on a GPU-less builder. Defer enumeration to ctest time.
+    gtest_discover_tests(${_gpu_target} DISCOVERY_MODE PRE_TEST)
+else ()
+    message(STATUS "erhe_graphics_gpu_tests skipped (needs ERHE_WINDOW_LIBRARY=none + ERHE_GRAPHICS_API=vulkan)")
+endif ()
