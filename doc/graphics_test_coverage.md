@@ -59,7 +59,7 @@ Legend: `[x]` covered, `[~]` partial, `[ ]` gap.
 | `fill_buffer` | `[x]` | fill_buffer_constant |
 | vertex buffer (`set_vertex_buffer`) | `[x]` | indexed_quad_draw |
 | index buffer (`set_index_buffer`) | `[x]` | indexed_quad_draw |
-| uniform buffer (UBO) | `[ ]` | - |
+| uniform buffer (UBO) | `[x]` | compute_uniform_buffer_input |
 
 ## Render_pass (`render_pass.hpp`)
 
@@ -92,7 +92,7 @@ Legend: `[x]` covered, `[~]` partial, `[ ]` gap.
 |---|---|---|
 | set_compute_pipeline + dispatch_compute | `[x]` | compute_writes_ssbo_pattern |
 | storage buffer binding | `[x]` | compute_writes_ssbo_pattern |
-| uniform buffer input | `[ ]` | - |
+| uniform buffer input | `[x]` | compute_uniform_buffer_input |
 | multi-dimensional workgroups | `[ ]` | - |
 
 ## Pipeline state (`state/*.hpp`)
@@ -122,7 +122,7 @@ Legend: `[x]` covered, `[~]` partial, `[ ]` gap.
 | fragment_outputs (single) | `[x]` | triangle/blend/depth |
 | fragment_outputs (multiple, MRT) | `[x]` | multiple_render_targets |
 | interface_blocks (SSBO) | `[x]` | compute_writes_ssbo_pattern |
-| interface_blocks (UBO) | `[ ]` | - |
+| interface_blocks (UBO) | `[x]` | compute_uniform_buffer_input |
 | struct_types | `[ ]` | - |
 | no_vertex_input | `[x]` | triangle/blend/depth |
 | vertex_format / vertex attributes | `[x]` | indexed_quad_draw |
@@ -144,6 +144,6 @@ Legend: `[x]` covered, `[~]` partial, `[ ]` gap.
 |---|---|---|
 | Bind_group_layout: empty | `[x]` | triangle/blend/depth |
 | Bind_group_layout: storage_buffer | `[x]` | compute_writes_ssbo_pattern |
-| Bind_group_layout: uniform_buffer | `[ ]` | - |
+| Bind_group_layout: uniform_buffer | `[x]` | compute_uniform_buffer_input |
 | Bind_group_layout: combined_image_sampler | `[x]` | texture_sample_nearest |
 | Sampler create + filter/address modes | `[~]` | texture_sample_nearest (nearest/clamp only) |
