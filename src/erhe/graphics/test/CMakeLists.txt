@@ -55,6 +55,7 @@ if (_gpu_tests_supported)
         test_raster_state.cpp
         test_mrt.cpp
         test_texture_sample.cpp
+        test_vertex_index.cpp
     )
 
     target_link_libraries(${_gpu_target}

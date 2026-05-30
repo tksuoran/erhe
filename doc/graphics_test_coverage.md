@@ -57,8 +57,8 @@ Legend: `[x]` covered, `[~]` partial, `[ ]` gap.
 | `upload_to_buffer` | `[x]` | buffer_upload_download |
 | buffer-to-buffer copy (`copy_from_buffer`) | `[x]` | buffer_to_buffer_copy |
 | `fill_buffer` | `[x]` | fill_buffer_constant |
-| vertex buffer (`set_vertex_buffer`) | `[ ]` | - |
-| index buffer (`set_index_buffer`) | `[ ]` | - |
+| vertex buffer (`set_vertex_buffer`) | `[x]` | indexed_quad_draw |
+| index buffer (`set_index_buffer`) | `[x]` | indexed_quad_draw |
 | uniform buffer (UBO) | `[ ]` | - |
 
 ## Render_pass (`render_pass.hpp`)
@@ -81,8 +81,8 @@ Legend: `[x]` covered, `[~]` partial, `[ ]` gap.
 | set_bind_group_layout | `[x]` | triangle/blend/depth |
 | draw_primitives (triangle) | `[x]` | triangle/blend/depth |
 | draw_primitives instanced | `[ ]` | - |
-| draw_indexed_primitives | `[ ]` | - |
-| set_vertex_buffer / set_index_buffer | `[ ]` | - |
+| draw_indexed_primitives | `[x]` | indexed_quad_draw |
+| set_vertex_buffer / set_index_buffer | `[x]` | indexed_quad_draw |
 | set_sampled_image | `[x]` | texture_sample_nearest |
 | other primitive types (points/lines/strips) | `[ ]` | - |
 
@@ -125,7 +125,7 @@ Legend: `[x]` covered, `[~]` partial, `[ ]` gap.
 | interface_blocks (UBO) | `[ ]` | - |
 | struct_types | `[ ]` | - |
 | no_vertex_input | `[x]` | triangle/blend/depth |
-| vertex_format / vertex attributes | `[ ]` | - |
+| vertex_format / vertex attributes | `[x]` | indexed_quad_draw |
 
 ## Blit_command_encoder (`blit_command_encoder.hpp`)
 
