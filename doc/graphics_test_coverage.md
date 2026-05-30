@@ -42,7 +42,7 @@ Legend: `[x]` covered, `[~]` partial, `[ ]` gap.
 | depth target (d32_sfloat) | `[x]` | depth_test_nearer_wins |
 | `upload_to_texture` | `[ ]` | - |
 | `clear_texture` | `[ ]` | - |
-| sample in shader (`set_sampled_image`) | `[ ]` | - |
+| sample in shader (`set_sampled_image`) | `[x]` | texture_sample_nearest |
 | other color formats (float, snorm, ...) | `[ ]` | - |
 | mipmaps / `generate_mipmaps` | `[ ]` | - |
 | array / 3D / cube textures | `[ ]` | - |
@@ -83,7 +83,7 @@ Legend: `[x]` covered, `[~]` partial, `[ ]` gap.
 | draw_primitives instanced | `[ ]` | - |
 | draw_indexed_primitives | `[ ]` | - |
 | set_vertex_buffer / set_index_buffer | `[ ]` | - |
-| set_sampled_image | `[ ]` | - |
+| set_sampled_image | `[x]` | texture_sample_nearest |
 | other primitive types (points/lines/strips) | `[ ]` | - |
 
 ## Compute_command_encoder (`compute_command_encoder.hpp`)
@@ -145,5 +145,5 @@ Legend: `[x]` covered, `[~]` partial, `[ ]` gap.
 | Bind_group_layout: empty | `[x]` | triangle/blend/depth |
 | Bind_group_layout: storage_buffer | `[x]` | compute_writes_ssbo_pattern |
 | Bind_group_layout: uniform_buffer | `[ ]` | - |
-| Bind_group_layout: combined_image_sampler | `[ ]` | - |
-| Sampler create + filter/address modes | `[ ]` | - |
+| Bind_group_layout: combined_image_sampler | `[x]` | texture_sample_nearest |
+| Sampler create + filter/address modes | `[~]` | texture_sample_nearest (nearest/clamp only) |
