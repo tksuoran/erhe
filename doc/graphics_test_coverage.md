@@ -68,7 +68,7 @@ Legend: `[x]` covered, `[~]` partial, `[ ]` gap.
 | color attachment Clear/Store + readback | `[x]` | clear_color_offscreen_readback |
 | depth attachment + clear | `[x]` | depth_test_nearer_wins |
 | stencil attachment | `[ ]` | - |
-| multiple color attachments (MRT) | `[ ]` | - |
+| multiple color attachments (MRT) | `[x]` | multiple_render_targets |
 | Load_action::Load (preserve) | `[ ]` | - |
 | MSAA resolve attachment | `[ ]` | - |
 
@@ -120,7 +120,7 @@ Legend: `[x]` covered, `[~]` partial, `[ ]` gap.
 | inline GLSL compute | `[x]` | compute_writes_ssbo_pattern |
 | defines | `[x]` | compute (ELEMENT_COUNT), depth (NEAR/FAR_Z) |
 | fragment_outputs (single) | `[x]` | triangle/blend/depth |
-| fragment_outputs (multiple, MRT) | `[ ]` | - |
+| fragment_outputs (multiple, MRT) | `[x]` | multiple_render_targets |
 | interface_blocks (SSBO) | `[x]` | compute_writes_ssbo_pattern |
 | interface_blocks (UBO) | `[ ]` | - |
 | struct_types | `[ ]` | - |
