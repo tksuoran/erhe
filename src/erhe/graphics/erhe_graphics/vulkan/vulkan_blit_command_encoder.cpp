@@ -355,25 +355,49 @@ void Blit_command_encoder_impl::copy_from_texture(
 
     Recording_scope scope{m_device.get_impl(), m_command_buffer};
 
+    // Aspect must match the source image's format. The previous code
+    // hardcoded COLOR, which is wrong for a depth/stencil source (e.g.
+    // the Id_renderer depth texture copied right after its color image).
+    const erhe::dataformat::Format pixelformat = source_texture->get_pixelformat();
+    const bool has_depth   = erhe::dataformat::get_depth_size_bits  (pixelformat) > 0;
+    const bool has_stencil = erhe::dataformat::get_stencil_size_bits(pixelformat) > 0;
+    VkImageAspectFlags aspect_mask = VK_IMAGE_ASPECT_COLOR_BIT;
+    if (has_depth || has_stencil) {
+        aspect_mask = 0;
+        if (has_depth)   { aspect_mask |= VK_IMAGE_ASPECT_DEPTH_BIT;   }
+        if (has_stencil) { aspect_mask |= VK_IMAGE_ASPECT_STENCIL_BIT; }
+    }
+
+    // The source's current layout is not necessarily SHADER_READ_ONLY:
+    // the Id_renderer attachments are color_attachment|transfer_src (no
+    // sampled usage) and the render pass leaves them in
+    // TRANSFER_SRC_OPTIMAL. Hardcoding SHADER_READ_ONLY here transitions
+    // from a layout the image is not in AND requires SAMPLED usage the
+    // image lacks (VUID-VkImageMemoryBarrier2-oldLayout-01211). Read the
+    // tracked layout instead, and restore it afterwards so the tracked
+    // state stays valid. Mirrors generate_mipmaps().
+    const VkImageLayout current_layout  = source_texture->get_impl().get_current_layout();
+    const bool          from_shader_read = (current_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
     // Transition source to transfer src
     const VkImageMemoryBarrier2 pre_barrier{
         .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
         .pNext               = nullptr,
-        .srcStageMask        = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-        .srcAccessMask       = VK_ACCESS_2_SHADER_READ_BIT,
+        .srcStageMask        = from_shader_read ? VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT : VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT,
+        .srcAccessMask       = from_shader_read ? VK_ACCESS_2_SHADER_READ_BIT : VK_ACCESS_2_TRANSFER_WRITE_BIT,
         .dstStageMask        = VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT,
         .dstAccessMask       = VK_ACCESS_2_TRANSFER_READ_BIT,
-        .oldLayout           = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        .oldLayout           = current_layout,
         .newLayout           = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
         .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
         .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
         .image               = src_image,
-        .subresourceRange    = {VK_IMAGE_ASPECT_COLOR_BIT, static_cast<uint32_t>(source_level), 1, static_cast<uint32_t>(source_slice), 1}
+        .subresourceRange    = {aspect_mask, static_cast<uint32_t>(source_level), 1, static_cast<uint32_t>(source_slice), 1}
     };
     cmd_pipeline_image_barriers2(scope.cb, 1, &pre_barrier);
 
     // bufferRowLength is in texels, not bytes; bufferImageHeight is in rows, not bytes
-    const std::size_t bytes_per_pixel     = erhe::dataformat::get_format_size_bytes(source_texture->get_pixelformat());
+    const std::size_t bytes_per_pixel     = erhe::dataformat::get_format_size_bytes(pixelformat);
     const uint32_t    buffer_row_length   = (bytes_per_pixel > 0) ? static_cast<uint32_t>(destination_bytes_per_row / bytes_per_pixel) : 0;
     const uint32_t    buffer_image_height = (destination_bytes_per_row > 0) ? static_cast<uint32_t>(destination_bytes_per_image / destination_bytes_per_row) : 0;
 
@@ -381,26 +405,28 @@ void Blit_command_encoder_impl::copy_from_texture(
         .bufferOffset      = static_cast<VkDeviceSize>(destination_offset),
         .bufferRowLength   = buffer_row_length,
         .bufferImageHeight = buffer_image_height,
-        .imageSubresource  = {VK_IMAGE_ASPECT_COLOR_BIT, static_cast<uint32_t>(source_level), static_cast<uint32_t>(source_slice), 1},
+        .imageSubresource  = {aspect_mask, static_cast<uint32_t>(source_level), static_cast<uint32_t>(source_slice), 1},
         .imageOffset       = {source_origin.x, source_origin.y, source_origin.z},
         .imageExtent       = {static_cast<uint32_t>(source_size.x), static_cast<uint32_t>(source_size.y), static_cast<uint32_t>(source_size.z)}
     };
     vkCmdCopyImageToBuffer(scope.cb, src_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dst_buffer, 1, &region);
 
-    // Transition source back to shader read
+    // Transition source back to the layout it had on entry, so the
+    // tracked layout remains valid and we do not move the image into a
+    // layout its usage flags forbid.
     const VkImageMemoryBarrier2 post_barrier{
         .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
         .pNext               = nullptr,
         .srcStageMask        = VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT,
         .srcAccessMask       = VK_ACCESS_2_TRANSFER_READ_BIT,
-        .dstStageMask        = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-        .dstAccessMask       = VK_ACCESS_2_SHADER_READ_BIT,
+        .dstStageMask        = from_shader_read ? VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT : VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT,
+        .dstAccessMask       = from_shader_read ? VK_ACCESS_2_SHADER_READ_BIT : VK_ACCESS_2_TRANSFER_READ_BIT,
         .oldLayout           = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        .newLayout           = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        .newLayout           = current_layout,
         .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
         .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
         .image               = src_image,
-        .subresourceRange    = {VK_IMAGE_ASPECT_COLOR_BIT, static_cast<uint32_t>(source_level), 1, static_cast<uint32_t>(source_slice), 1}
+        .subresourceRange    = {aspect_mask, static_cast<uint32_t>(source_level), 1, static_cast<uint32_t>(source_slice), 1}
     };
     cmd_pipeline_image_barriers2(scope.cb, 1, &post_barrier);
 }
