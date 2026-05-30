@@ -42,11 +42,25 @@ public:
     void frame_completed(uint64_t completed_frame);
 
 private:
+    // Non-persistent CPU_read readback: the GPU writes the buffer during a
+    // frame; once that frame's fence signals we download the written region
+    // into m_cpu_buffer (the shadow the acquired span points into) so the
+    // consumer's completion handler can read it. Tracked at acquire time
+    // because the range is not released until inside that handler.
+    class Pending_read
+    {
+    public:
+        uint64_t    frame      {0};
+        std::size_t byte_offset {0};
+        std::size_t byte_count {0};
+    };
+
     Device&                                                  m_device;
     Ring_buffer_usage                                        m_ring_buffer_usage;
 
     std::unique_ptr<Buffer>                                  m_buffer;
     std::vector<std::byte>                                   m_cpu_buffer; // Shadow buffer for non-persistent mode
+    std::vector<Pending_read>                                m_pending_reads; // Non-persistent CPU_read downloads
 
     erhe::circular_ring_buffer::Circular_ring_buffer_algorithm m_algorithm;
 };

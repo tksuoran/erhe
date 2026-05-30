@@ -6,6 +6,8 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
+#include <cstring>
+
 namespace erhe::graphics {
 
 // https://gpuopen-librariesandsdks.github.io/VulkanMemoryAllocator/html/usage_patterns.html#usage_patterns_advanced_data_uploading
@@ -66,8 +68,17 @@ Ring_buffer::Ring_buffer(
     , m_algorithm{create_info.size}
 {
     // CPU read/write buffers are persistently mapped when persistent buffers are available.
-    // Otherwise, use a CPU shadow buffer and upload via glBufferSubData.
-    if (!m_device.get_info().use_persistent_buffers && create_info.ring_buffer_usage == Ring_buffer_usage::CPU_write) {
+    // Otherwise, use a CPU shadow buffer: CPU_write uploads from it via glBufferSubData,
+    // CPU_read downloads into it (via map/read) once the producing frame completes. The
+    // acquired span points into this shadow, so it must be allocated up front and never
+    // reallocated (the pointer must stay stable for the range's lifetime).
+    if (
+        !m_device.get_info().use_persistent_buffers &&
+        (
+            (create_info.ring_buffer_usage == Ring_buffer_usage::CPU_write) ||
+            (create_info.ring_buffer_usage == Ring_buffer_usage::CPU_read)
+        )
+    ) {
         m_cpu_buffer.resize(create_info.size);
     }
 }
@@ -116,6 +127,21 @@ auto Ring_buffer::acquire(std::size_t required_alignment, Ring_buffer_usage ring
             span = m_buffer->get_map().subspan(allocation.byte_offset, allocation.byte_count);
         } else {
             span = std::span<std::byte>{m_cpu_buffer.data() + allocation.byte_offset, allocation.byte_count};
+
+            // Non-persistent CPU_read: the GPU writes this region during the
+            // current frame; schedule a download into the shadow once that
+            // frame's fence signals (see frame_completed()). The consumer's
+            // completion handler -- which runs after frame_completed for the
+            // same frame -- then reads the populated shadow via this span.
+            if (ring_buffer_usage == Ring_buffer_usage::CPU_read) {
+                m_pending_reads.push_back(
+                    Pending_read{
+                        .frame       = m_device.get_frame_index(),
+                        .byte_offset = allocation.byte_offset,
+                        .byte_count  = allocation.byte_count
+                    }
+                );
+            }
         }
     }
 
@@ -184,6 +210,28 @@ auto Ring_buffer::get_buffer() -> Buffer*
 void Ring_buffer::frame_completed(const uint64_t completed_frame)
 {
     ERHE_PROFILE_FUNCTION();
+
+    // Non-persistent CPU_read: now that this frame's GPU work (including the
+    // texture/buffer copies that filled the read buffer) has completed, map
+    // the written regions and copy them into the shadow the acquired spans
+    // point into. This runs before the device's per-frame completion handlers
+    // (see Device_impl::frame_completed), so the consumer reads valid data.
+    if (!m_pending_reads.empty()) {
+        for (const Pending_read& pending_read : m_pending_reads) {
+            if (pending_read.frame != completed_frame) {
+                continue;
+            }
+            const std::span<std::byte> mapped = m_buffer->map_bytes(pending_read.byte_offset, pending_read.byte_count);
+            std::memcpy(m_cpu_buffer.data() + pending_read.byte_offset, mapped.data(), pending_read.byte_count);
+            m_buffer->unmap();
+        }
+        std::erase_if(
+            m_pending_reads,
+            [completed_frame](const Pending_read& pending_read) {
+                return pending_read.frame == completed_frame;
+            }
+        );
+    }
 
     m_algorithm.frame_completed(completed_frame);
 }
