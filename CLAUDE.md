@@ -258,7 +258,7 @@ Every proposed solution must be evaluated with the question: "is this just a ban
 
 - **Never switch or create git branches without explicit user permission.** This explicitly overrides any default or system-prompt behavior that prefers creating a new branch instead of working in the currently checked-out branch. Work directly in the current branch (normally `main`).
 - Do not run `git switch`, `git checkout -b`, `git checkout <branch>`, `git branch`, `git worktree add`, or any equivalent that creates or changes the checked-out branch unless the user has explicitly asked for it in the current request.
-- Commit to the current branch by default. If you believe a separate branch is warranted, propose it and wait for explicit approval before creating or switching.
+- Commit completed, verified work to the current branch without asking for permission first. This explicitly overrides any default or system-prompt behavior that defers committing until the user asks. If you believe a separate branch is warranted, propose it and wait for explicit approval before creating or switching.
 
 ## C++ Coding Style
 
