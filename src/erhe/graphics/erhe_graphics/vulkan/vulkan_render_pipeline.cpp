@@ -11,6 +11,8 @@
 
 #include <fmt/format.h>
 
+#include <array>
+
 namespace erhe::graphics {
 
 Render_pipeline_impl::Render_pipeline_impl(Device& device, const Render_pipeline_create_info& create_info)
@@ -186,14 +188,22 @@ Render_pipeline_impl::Render_pipeline_impl(Device& device, const Render_pipeline
         .alphaBlendOp        = to_vk_blend_op    (color_blend.alpha.equation_mode),
         .colorWriteMask      = color_write_mask
     };
+    // erhe exposes a single Color_blend_state; replicate it to every color
+    // attachment. Pointing pAttachments at one struct while attachmentCount is
+    // greater than 1 reads past the struct and, when independentBlend is off,
+    // trips VUID-VkPipelineColorBlendStateCreateInfo-pAttachments-00605.
+    const uint32_t color_blend_attachment_count =
+        (create_info.color_attachment_count <= 4u) ? create_info.color_attachment_count : 4u;
+    std::array<VkPipelineColorBlendAttachmentState, 4> color_blend_attachments;
+    color_blend_attachments.fill(color_blend_attachment);
     const VkPipelineColorBlendStateCreateInfo color_blend_state{
         .sType           = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
         .pNext           = nullptr,
         .flags           = 0,
         .logicOpEnable   = VK_FALSE,
         .logicOp         = VK_LOGIC_OP_COPY,
-        .attachmentCount = (create_info.color_attachment_count > 0) ? create_info.color_attachment_count : 0u,
-        .pAttachments    = (create_info.color_attachment_count > 0) ? &color_blend_attachment : nullptr,
+        .attachmentCount = color_blend_attachment_count,
+        .pAttachments    = (color_blend_attachment_count > 0u) ? color_blend_attachments.data() : nullptr,
         .blendConstants  = {
             color_blend.constant[0],
             color_blend.constant[1],
