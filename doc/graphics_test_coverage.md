@@ -80,11 +80,11 @@ Legend: `[x]` covered, `[~]` partial, `[ ]` gap.
 | set_render_pipeline | `[x]` | triangle/blend/depth |
 | set_bind_group_layout | `[x]` | triangle/blend/depth |
 | draw_primitives (triangle) | `[x]` | triangle/blend/depth |
-| draw_primitives instanced | `[ ]` | - |
+| draw_primitives instanced | `[x]` | instanced_triangle_strip_columns |
 | draw_indexed_primitives | `[x]` | indexed_quad_draw |
 | set_vertex_buffer / set_index_buffer | `[x]` | indexed_quad_draw |
 | set_sampled_image | `[x]` | texture_sample_nearest |
-| other primitive types (points/lines/strips) | `[ ]` | - |
+| other primitive types (points/lines/strips) | `[~]` | instanced_triangle_strip_columns (triangle_strip); points/lines `[ ]` |
 
 ## Compute_command_encoder (`compute_command_encoder.hpp`)
 
@@ -100,7 +100,7 @@ Legend: `[x]` covered, `[~]` partial, `[ ]` gap.
 | Feature | Status | Test(s) |
 |---|---|---|
 | Input_assembly: triangle | `[x]` | triangle/blend/depth |
-| Input_assembly: strip/line/point | `[ ]` | - |
+| Input_assembly: strip/line/point | `[~]` | instanced_triangle_strip_columns (triangle_strip); line/point `[ ]` |
 | Rasterization: cull none | `[x]` | triangle/blend/depth |
 | Rasterization: cull back/front, front face | `[x]` | rasterization_face_culling |
 | Rasterization: polygon mode line/point | `[ ]` | - |
