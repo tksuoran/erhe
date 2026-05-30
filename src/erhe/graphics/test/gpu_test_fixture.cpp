@@ -99,16 +99,17 @@ auto Gpu_test::make_color_target(
     return texture;
 }
 
-auto Gpu_test::make_readback_buffer(const std::size_t byte_count, const char* debug_label)
-    -> std::shared_ptr<erhe::graphics::Buffer>
+auto Gpu_test::make_host_buffer(
+    const std::size_t            byte_count,
+    erhe::graphics::Buffer_usage usage,
+    const char*                  debug_label
+) -> std::shared_ptr<erhe::graphics::Buffer>
 {
     erhe::graphics::Device& graphics_device = device();
     const erhe::graphics::Buffer_create_info create_info{
         .capacity_byte_count                    = byte_count,
         .memory_allocation_create_flag_bit_mask = erhe::graphics::Memory_allocation_create_flag_bit_mask::mapped,
-        .usage                                  =
-            erhe::graphics::Buffer_usage::transfer_dst |
-            erhe::graphics::Buffer_usage::storage,
+        .usage                                  = usage,
         .required_memory_property_bit_mask      =
             erhe::graphics::Memory_property_flag_bit_mask::host_read  |
             erhe::graphics::Memory_property_flag_bit_mask::host_write |
@@ -116,6 +117,16 @@ auto Gpu_test::make_readback_buffer(const std::size_t byte_count, const char* de
         .debug_label = erhe::utility::Debug_label{debug_label}
     };
     return std::make_shared<erhe::graphics::Buffer>(graphics_device, create_info);
+}
+
+auto Gpu_test::make_readback_buffer(const std::size_t byte_count, const char* debug_label)
+    -> std::shared_ptr<erhe::graphics::Buffer>
+{
+    return make_host_buffer(
+        byte_count,
+        erhe::graphics::Buffer_usage::transfer_dst | erhe::graphics::Buffer_usage::storage,
+        debug_label
+    );
 }
 
 auto Gpu_test::read_buffer(erhe::graphics::Buffer& buffer, std::size_t byte_count)

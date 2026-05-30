@@ -54,9 +54,9 @@ Legend: `[x]` covered, `[~]` partial, `[ ]` gap.
 |---|---|---|
 | host-visible mappable + map/unmap readback | `[x]` | harness `read_buffer` |
 | storage (SSBO) write from compute | `[x]` | compute_writes_ssbo_pattern |
-| `upload_to_buffer` | `[ ]` | - |
-| buffer-to-buffer copy (`copy_from_buffer`) | `[ ]` | - |
-| `fill_buffer` | `[ ]` | - |
+| `upload_to_buffer` | `[x]` | buffer_upload_download |
+| buffer-to-buffer copy (`copy_from_buffer`) | `[x]` | buffer_to_buffer_copy |
+| `fill_buffer` | `[x]` | fill_buffer_constant |
 | vertex buffer (`set_vertex_buffer`) | `[ ]` | - |
 | index buffer (`set_index_buffer`) | `[ ]` | - |
 | uniform buffer (UBO) | `[ ]` | - |
@@ -132,10 +132,10 @@ Legend: `[x]` covered, `[~]` partial, `[ ]` gap.
 | Feature | Status | Test(s) |
 |---|---|---|
 | copy_from_texture (texture -> buffer) | `[x]` | harness `read_texture_rgba8` |
-| copy_from_buffer (buffer -> buffer) | `[ ]` | - |
+| copy_from_buffer (buffer -> buffer) | `[x]` | buffer_to_buffer_copy |
 | copy_from_buffer (buffer -> texture) | `[ ]` | - |
 | copy_from_texture (texture -> texture) | `[ ]` | - |
-| fill_buffer | `[ ]` | - |
+| fill_buffer | `[x]` | fill_buffer_constant |
 | generate_mipmaps | `[ ]` | - |
 
 ## Sampler (`sampler.hpp`) / Bind_group_layout (`bind_group_layout.hpp`)

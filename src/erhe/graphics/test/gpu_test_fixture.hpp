@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_dataformat/dataformat.hpp"
+#include "erhe_graphics/enums.hpp"
 
 #include <gtest/gtest.h>
 
@@ -45,6 +46,10 @@ protected:
         int                      height,
         erhe::dataformat::Format format = erhe::dataformat::Format::format_8_vec4_unorm
     ) -> std::shared_ptr<erhe::graphics::Texture>;
+
+    // Host-visible mappable buffer with the requested usage.
+    [[nodiscard]] auto make_host_buffer(std::size_t byte_count, erhe::graphics::Buffer_usage usage, const char* debug_label)
+        -> std::shared_ptr<erhe::graphics::Buffer>;
 
     // Host-visible mappable buffer, usage transfer_dst | storage.
     [[nodiscard]] auto make_readback_buffer(std::size_t byte_count, const char* debug_label)

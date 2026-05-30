@@ -51,6 +51,7 @@ if (_gpu_tests_supported)
         test_m4_compute_ssbo.cpp
         test_m5_blend.cpp
         test_m5_depth.cpp
+        test_buffer_transfer.cpp
     )
 
     target_link_libraries(${_gpu_target}
