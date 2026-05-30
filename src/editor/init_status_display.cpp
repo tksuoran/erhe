@@ -232,7 +232,15 @@ void Init_status_display::render_present_desktop()
         return;
     }
     erhe::graphics::Swapchain* const swapchain = surface->get_swapchain();
-    if (swapchain == nullptr) {
+#if defined(ERHE_GRAPHICS_API_VULKAN)
+    // Headless (surfaceless) Vulkan has no public Swapchain; the init present
+    // still drives the device frame lifecycle and renders into the emulated
+    // swapchain (the render pass resolves it from the surface below).
+    const bool headless = !m_window.has_vulkan_surface();
+#else
+    const bool headless = false;
+#endif
+    if ((swapchain == nullptr) && !headless) {
         return;
     }
 
@@ -273,6 +281,7 @@ void Init_status_display::render_present_desktop()
         swap_cb.begin();
         erhe::graphics::Render_pass_descriptor render_pass_descriptor{};
         render_pass_descriptor.swapchain                          = swapchain;
+        render_pass_descriptor.surface                            = surface;
         render_pass_descriptor.color_attachments[0].load_action   = erhe::graphics::Load_action::Clear;
         render_pass_descriptor.color_attachments[0].clear_value   = m_render_clear_color;
         render_pass_descriptor.color_attachments[0].usage_before  = erhe::graphics::Image_usage_flag_bit_mask::present;

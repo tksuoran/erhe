@@ -13,6 +13,7 @@
 namespace erhe::graphics {
 
 class Device_impl;
+class Emulated_swapchain_impl;
 
 class Render_pass_impl final
 {
@@ -46,6 +47,9 @@ private:
 
     Device&                                          m_device;
     Swapchain*                                       m_swapchain{nullptr};
+    // Headless (surfaceless) swapchain target, resolved from
+    // Render_pass_descriptor::surface when m_swapchain is null. Non-owning.
+    Emulated_swapchain_impl*                         m_emulated_swapchain{nullptr};
     std::array<Render_pass_attachment_descriptor, 4> m_color_attachments;
     Render_pass_attachment_descriptor                m_depth_attachment;
     Render_pass_attachment_descriptor                m_stencil_attachment;

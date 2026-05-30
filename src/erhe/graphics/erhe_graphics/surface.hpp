@@ -1,5 +1,7 @@
 #pragma once
 
+#include "erhe_dataformat/dataformat.hpp"
+
 #include <memory>
 
 namespace erhe::window { class Context_window; }
@@ -26,6 +28,15 @@ public:
     ~Surface() noexcept;
 
     [[nodiscard]] auto get_swapchain() -> Swapchain*;
+
+#if defined(ERHE_GRAPHICS_API_VULKAN)
+    // Current backbuffer formats. The headless (surfaceless) emulated swapchain
+    // has no public Swapchain, so pipeline format derivation
+    // (Render_pipeline_create_info::set_format_from_render_pass) queries these
+    // from the Surface. Vulkan-only feature.
+    [[nodiscard]] auto get_color_format() -> erhe::dataformat::Format;
+    [[nodiscard]] auto get_depth_format() -> erhe::dataformat::Format;
+#endif
 
     [[nodiscard]] auto get_impl() -> Surface_impl&;
     [[nodiscard]] auto get_impl() const -> const Surface_impl&;

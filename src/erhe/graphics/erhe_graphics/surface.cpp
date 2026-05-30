@@ -29,6 +29,18 @@ auto Surface::get_swapchain() -> Swapchain*
     return m_impl->get_swapchain();
 }
 
+#if defined(ERHE_GRAPHICS_API_VULKAN)
+auto Surface::get_color_format() -> erhe::dataformat::Format
+{
+    return m_impl->get_color_format();
+}
+
+auto Surface::get_depth_format() -> erhe::dataformat::Format
+{
+    return m_impl->get_depth_format();
+}
+#endif
+
 auto Surface::get_impl() -> Surface_impl&
 {
     return *m_impl;

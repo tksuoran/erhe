@@ -17,6 +17,7 @@ class Render_command_encoder;
 class Renderbuffer;
 class Texture;
 class Swapchain;
+class Surface;
 
 enum class Load_action : unsigned int {
     Dont_care = 0,
@@ -63,6 +64,11 @@ public:
     ~Render_pass_descriptor() noexcept;
 
     Swapchain*                                       swapchain           {nullptr};
+    // Headless / surfaceless target: when `swapchain` is null and this is set
+    // to a headless Surface, the Vulkan backend resolves and renders into that
+    // surface's Emulated_swapchain_impl. Ignored when `swapchain` is non-null
+    // (real WSI path) and on non-Vulkan backends.
+    Surface*                                         surface             {nullptr};
     std::array<Render_pass_attachment_descriptor, 4> color_attachments   {};
     Render_pass_attachment_descriptor                depth_attachment    {};
     Render_pass_attachment_descriptor                stencil_attachment  {};

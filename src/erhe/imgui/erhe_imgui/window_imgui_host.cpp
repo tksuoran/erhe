@@ -81,6 +81,10 @@ void Window_imgui_host::update_render_pass(int width, int height)
     m_render_pass.reset();
     erhe::graphics::Render_pass_descriptor render_pass_descriptor;
     render_pass_descriptor.swapchain = m_graphics_device.get_surface()->get_swapchain();
+    // Headless (surfaceless) builds have no public Swapchain; the Vulkan
+    // backend resolves the emulated swapchain from this surface instead. The
+    // real WSI path keeps using the non-null swapchain above and ignores this.
+    render_pass_descriptor.surface   = m_graphics_device.get_surface();
     render_pass_descriptor.color_attachments[0].load_action    = erhe::graphics::Load_action::Clear;
     render_pass_descriptor.color_attachments[0].clear_value[0] = 0.0;
     render_pass_descriptor.color_attachments[0].clear_value[1] = 0.0;

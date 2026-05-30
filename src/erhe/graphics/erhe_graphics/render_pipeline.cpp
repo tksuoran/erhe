@@ -1,5 +1,6 @@
 #include "erhe_graphics/render_pipeline.hpp"
 #include "erhe_graphics/render_pass.hpp"
+#include "erhe_graphics/surface.hpp"
 #include "erhe_graphics/swapchain.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
@@ -60,6 +61,29 @@ void Render_pipeline_create_info::set_format_from_render_pass(const Render_pass_
         }
         return;
     }
+
+#if defined(ERHE_GRAPHICS_API_VULKAN)
+    // Headless (surfaceless) emulated swapchain: there is no public Swapchain,
+    // so the backbuffer color/depth formats come from the Surface instead.
+    // Mirrors the swapchain branch above so the pipeline's compatibility render
+    // pass matches the emulated swapchain render pass (VUID-vkCmdDraw-renderPass-02684).
+    if (desc.surface != nullptr) {
+        const erhe::dataformat::Format color_fmt = desc.surface->get_color_format();
+        if (color_fmt != erhe::dataformat::Format::format_undefined) {
+            color_attachment_formats[0] = color_fmt;
+            color_attachment_count = 1;
+            color_usage_before[0] = desc.color_attachments[0].usage_before;
+            color_usage_after [0] = desc.color_attachments[0].usage_after;
+            const erhe::dataformat::Format depth_fmt = desc.surface->get_depth_format();
+            if (depth_fmt != erhe::dataformat::Format::format_undefined) {
+                depth_attachment_format = depth_fmt;
+                depth_usage_before     = desc.depth_attachment.usage_before;
+                depth_usage_after      = desc.depth_attachment.usage_after;
+            }
+            return;
+        }
+    }
+#endif
 
     // Off-screen render passes: formats come from attachment textures
     for (std::size_t i = 0; i < desc.color_attachments.size(); ++i) {

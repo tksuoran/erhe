@@ -2,7 +2,9 @@
 #include "erhe_graphics/vulkan/vulkan_buffer.hpp"
 #include "erhe_graphics/vulkan/vulkan_device.hpp"
 #include "erhe_graphics/vulkan/vulkan_device_sync_pool.hpp"
+#include "erhe_graphics/vulkan/vulkan_emulated_swapchain.hpp"
 #include "erhe_graphics/vulkan/vulkan_helpers.hpp"
+#include "erhe_graphics/vulkan/vulkan_surface.hpp"
 #include "erhe_graphics/vulkan/vulkan_swapchain.hpp"
 #include "erhe_graphics/vulkan/vulkan_texture.hpp"
 #include "erhe_graphics/buffer.hpp"
@@ -746,15 +748,23 @@ auto Command_buffer_impl::wait_for_swapchain(Frame_state& out_frame_state) -> bo
     ERHE_VERIFY(m_device_impl != nullptr);
     Surface* surface = m_device_impl->get_surface();
     if (surface != nullptr) {
-        Swapchain* swapchain = surface->get_swapchain();
-        if (swapchain != nullptr) {
-            const bool ok = swapchain->get_impl().wait_frame(out_frame_state);
-            log_swapchain->trace(
-                "Command_buffer_impl::wait_for_swapchain() ok={}",
-                ok
-            );
-            if (ok) {
+        if (surface->get_impl().is_headless()) {
+            // Headless: drive the emulated swapchain instead of a real one.
+            Emulated_swapchain_impl* emulated_swapchain = surface->get_impl().get_emulated_swapchain();
+            if ((emulated_swapchain != nullptr) && emulated_swapchain->wait_frame(out_frame_state)) {
                 return true;
+            }
+        } else {
+            Swapchain* swapchain = surface->get_swapchain();
+            if (swapchain != nullptr) {
+                const bool ok = swapchain->get_impl().wait_frame(out_frame_state);
+                log_swapchain->trace(
+                    "Command_buffer_impl::wait_for_swapchain() ok={}",
+                    ok
+                );
+                if (ok) {
+                    return true;
+                }
             }
         }
     }
@@ -777,6 +787,21 @@ auto Command_buffer_impl::begin_swapchain(const Frame_begin_info& frame_begin_in
         log_swapchain->warn("Command_buffer_impl::begin_swapchain() no surface");
         return false;
     }
+
+    if (surface->get_impl().is_headless()) {
+        Emulated_swapchain_impl* emulated_swapchain = surface->get_impl().get_emulated_swapchain();
+        if (emulated_swapchain == nullptr) {
+            out_frame_state.should_render = false;
+            return false;
+        }
+        const bool ok = emulated_swapchain->begin_frame(frame_begin_info);
+        out_frame_state.should_render = ok;
+        // Intentionally do NOT set m_swapchain_used / m_had_swapchain_frame:
+        // the emulated frame submits as an ordinary no-present device frame
+        // (no acquire/present semaphores, no vkQueuePresentKHR).
+        return ok;
+    }
+
     Swapchain* swapchain = surface->get_swapchain();
     if (swapchain == nullptr) {
         out_frame_state.should_render = false;

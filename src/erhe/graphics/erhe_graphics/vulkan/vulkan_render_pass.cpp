@@ -2,9 +2,11 @@
 #include "erhe_graphics/vulkan/vulkan_command_buffer.hpp"
 #include "erhe_graphics/vulkan/vulkan_device.hpp"
 #include "erhe_graphics/vulkan/vulkan_helpers.hpp"
+#include "erhe_graphics/vulkan/vulkan_emulated_swapchain.hpp"
 #include "erhe_graphics/vulkan/vulkan_surface.hpp"
 #include "erhe_graphics/vulkan/vulkan_swapchain.hpp"
 #include "erhe_graphics/vulkan/vulkan_texture.hpp"
+#include "erhe_graphics/surface.hpp"
 #include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/enums.hpp"
 #include "erhe_graphics/graphics_log.hpp"
@@ -331,19 +333,35 @@ Render_pass_impl::Render_pass_impl(Device& device, const Render_pass_descriptor&
     , m_debug_label         {descriptor.debug_label}
     , m_debug_group_name    {fmt::format("Render pass: {}", descriptor.debug_label.string_view())}
 {
+    // Resolve an emulated (headless) swapchain from the descriptor's surface
+    // when there is no real WSI swapchain. The real path keeps using
+    // descriptor.swapchain; descriptor.surface is ignored there.
+    if ((m_swapchain == nullptr) && (descriptor.surface != nullptr) && descriptor.surface->get_impl().is_headless()) {
+        m_emulated_swapchain = descriptor.surface->get_impl().get_emulated_swapchain();
+    }
+
     VkDevice vulkan_device = m_device_impl.get_vulkan_device();
     VkResult result        = VK_SUCCESS;
 
-    if (m_swapchain != nullptr) {
-        // Swapchain render pass
-        Surface_impl&                 surface_impl        = m_swapchain->get_impl().get_surface_impl();
+    if ((m_swapchain != nullptr) || (m_emulated_swapchain != nullptr)) {
+        // Swapchain render pass (real WSI swapchain or emulated headless one).
+        Surface_impl&                 surface_impl        = (m_swapchain != nullptr)
+            ? m_swapchain->get_impl().get_surface_impl()
+            : m_emulated_swapchain->get_surface_impl();
         const Surface_create_info&    surface_create_info = surface_impl.get_surface_create_info();
         erhe::window::Context_window* context_window      = surface_create_info.context_window;
         ERHE_VERIFY(context_window != nullptr);
 
         const erhe::window::Window_configuration& window_configuration = context_window->get_window_configuration();
 
-        Swapchain_impl& swapchain_impl = m_swapchain->get_impl();
+        // Depth attachment view / format come from whichever swapchain backs
+        // this pass.
+        const VkImageView swapchain_depth_image_view = (m_swapchain != nullptr)
+            ? m_swapchain->get_impl().get_depth_image_view()
+            : m_emulated_swapchain->get_depth_image_view();
+        const VkFormat swapchain_depth_format_vk = (m_swapchain != nullptr)
+            ? m_swapchain->get_impl().get_vk_depth_format()
+            : m_emulated_swapchain->get_vk_depth_format();
         const VkSampleCountFlagBits sample_count = get_vulkan_sample_count(window_configuration.msaa_sample_count);
         const Render_pass_attachment_descriptor& color_att = descriptor.color_attachments[0];
 
@@ -364,7 +382,13 @@ Render_pass_impl::Render_pass_impl(Device& device, const Render_pass_descriptor&
             (swapchain_color_load_op == VK_ATTACHMENT_LOAD_OP_LOAD)
                 ? to_vk_image_layout(color_att.layout_before)
                 : VK_IMAGE_LAYOUT_UNDEFINED;
-        const VkImageLayout color_final_layout = to_vk_image_layout(color_att.layout_after);
+        // Headless (emulated) target: PRESENT_SRC_KHR is invalid without
+        // VK_KHR_swapchain. End the color image in TRANSFER_SRC_OPTIMAL so it
+        // is valid surfaceless and ready for a future readback / export.
+        VkImageLayout color_final_layout = to_vk_image_layout(color_att.layout_after);
+        if ((m_emulated_swapchain != nullptr) && (color_final_layout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)) {
+            color_final_layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        }
         std::vector<VkAttachmentDescription2> attachment_descriptions;
         attachment_descriptions.push_back(
             VkAttachmentDescription2{
@@ -413,7 +437,7 @@ Render_pass_impl::Render_pass_impl(Device& device, const Render_pass_descriptor&
         });
 
         // Depth attachment -- only if swapchain has a depth image
-        const bool has_depth = swapchain_impl.get_depth_image_view() != VK_NULL_HANDLE;
+        const bool has_depth = swapchain_depth_image_view != VK_NULL_HANDLE;
         VkAttachmentReference2 depth_attachment_reference{
             .sType      = VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
             .pNext      = nullptr,
@@ -433,7 +457,7 @@ Render_pass_impl::Render_pass_impl(Device& device, const Render_pass_descriptor&
                     .sType          = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
                     .pNext          = nullptr,
                     .flags          = 0,
-                    .format         = swapchain_impl.get_vk_depth_format(),
+                    .format         = swapchain_depth_format_vk,
                     .samples        = sample_count,
                     .loadOp         = swapchain_depth_load_op,
                     .storeOp        = to_vk_store_op(m_depth_attachment.store_action),
@@ -1109,7 +1133,7 @@ void Render_pass_impl::create()
 
 auto Render_pass_impl::get_color_attachment_count() const -> unsigned int
 {
-    if (m_swapchain != nullptr) {
+    if ((m_swapchain != nullptr) || (m_emulated_swapchain != nullptr)) {
         return 1;
     }
     unsigned int count = 0;
@@ -1252,10 +1276,10 @@ void Render_pass_impl::start_render_pass(Command_buffer& command_buffer, Render_
         log_image_layout_transition(b, "render_pass depth");
     }
 
-    if (m_swapchain != nullptr) {
-        // Swapchain render pass. Record into the user-supplied cb;
-        // Swapchain_impl just supplies the framebuffer for the
-        // currently-acquired image and the swapchain extent.
+    if ((m_swapchain != nullptr) || (m_emulated_swapchain != nullptr)) {
+        // Swapchain render pass (real WSI or emulated headless). Record into
+        // the user-supplied cb; the swapchain just supplies the framebuffer
+        // for the currently-acquired image and the swapchain extent.
         m_command_buffer = command_buffer.get_impl().get_vulkan_command_buffer();
         if (m_command_buffer == VK_NULL_HANDLE) {
             log_render_pass->error("Command_buffer has no VkCommandBuffer bound (swapchain pass)");
@@ -1263,20 +1287,24 @@ void Render_pass_impl::start_render_pass(Command_buffer& command_buffer, Render_
             return;
         }
 
-        Swapchain_impl& swapchain_impl = m_swapchain->get_impl();
-        VkFramebuffer   framebuffer    = swapchain_impl.acquire_swapchain_framebuffer(m_render_pass);
+        const VkFramebuffer framebuffer = (m_swapchain != nullptr)
+            ? m_swapchain->get_impl().acquire_swapchain_framebuffer(m_render_pass)
+            : m_emulated_swapchain->acquire_swapchain_framebuffer(m_render_pass);
         if (framebuffer == VK_NULL_HANDLE) {
             log_render_pass->error("acquire_swapchain_framebuffer() returned VK_NULL_HANDLE");
             m_device_impl.set_active_render_pass_impl(nullptr);
             return;
         }
+        const VkExtent2D swapchain_extent = (m_swapchain != nullptr)
+            ? m_swapchain->get_impl().get_swapchain_extent()
+            : m_emulated_swapchain->get_swapchain_extent();
 
         const VkRenderPassBeginInfo render_pass_begin_info{
             .sType           = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
             .pNext           = nullptr,
             .renderPass      = m_render_pass,
             .framebuffer     = framebuffer,
-            .renderArea      = VkRect2D{{0, 0}, swapchain_impl.get_swapchain_extent()},
+            .renderArea      = VkRect2D{{0, 0}, swapchain_extent},
             .clearValueCount = m_any_load_op_clear ? static_cast<uint32_t>(m_clear_values.size()) : 0u,
             .pClearValues    = m_any_load_op_clear ? m_clear_values.data() : nullptr
         };
@@ -1293,7 +1321,11 @@ void Render_pass_impl::start_render_pass(Command_buffer& command_buffer, Render_
             render_pass_begin_info.renderArea.extent.height
         );
         vkCmdBeginRenderPass2(m_command_buffer, &render_pass_begin_info, &subpass_begin_info);
-        swapchain_impl.mark_render_pass_recorded();
+        if (m_swapchain != nullptr) {
+            m_swapchain->get_impl().mark_render_pass_recorded();
+        } else {
+            m_emulated_swapchain->mark_render_pass_recorded();
+        }
     } else {
         // Non-swapchain render pass. Record into the explicit
         // Command_buffer the caller handed to start_render_pass. The
@@ -1479,7 +1511,7 @@ void Render_pass_impl::end_render_pass(Command_buffer& command_buffer, Render_pa
     static_cast<void>(render_pass_after);
 #endif
 
-    if (m_swapchain != nullptr) {
+    if ((m_swapchain != nullptr) || (m_emulated_swapchain != nullptr)) {
         // Mirror of the swapchain branch in start_render_pass: record
         // vkCmdEndRenderPass2 directly into the user cb. Submit
         // remains the responsibility of Device::submit_command_buffers.
