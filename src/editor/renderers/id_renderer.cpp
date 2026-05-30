@@ -57,9 +57,10 @@ Id_renderer::Id_renderer(
     Programs&                                   programs
 )
     : m_graphics_device      {graphics_device}
-    , m_mesh_memory          {mesh_memory}   
+    , m_mesh_memory          {mesh_memory}
     , m_shader_variant_cache {shader_variant_cache}
     , m_programs             {programs}
+    , m_bind_group_layout    {program_interface.bind_group_layout.get()}
     , m_y_flip               {graphics_device.get_info().coordinate_conventions.clip_space_y_flip == erhe::math::Clip_space_y_flip::enabled}
     , m_camera_buffers       {graphics_device, program_interface.camera_interface}
     , m_draw_indirect_buffers{graphics_device, program_interface.config.max_draw_count}
@@ -275,8 +276,12 @@ void Id_renderer::render_meshes(
         }
         const erhe::graphics::Shader_stages* shader_stages = &reloadable_shader_stages->shader_stages;
 
+        // The active render pass is the Id_renderer's own internal pass
+        // (see Scoped_render_pass in render()); the pipeline format must
+        // match that pass, not an externally supplied one. The caller has
+        // no knowledge of this internal framebuffer.
         erhe::graphics::Render_pipeline* render_pipeline = pipeline.get_pipeline_for(
-            parameters.render_pass->get_descriptor(),
+            m_render_pass->get_descriptor(),
             nullptr,
             shader_stages,
             vertex_input.vertex_input.get(),
@@ -307,14 +312,37 @@ void Id_renderer::render_meshes(
             }
         };
 
-        erhe::graphics::Ring_buffer_range primitive_range = m_primitive_buffers.update(bucket, primitive_mode, primitive_settings);
+        // Bind the resolved pipeline and the bucket's geometry before the
+        // draw. Without these the encoder has no program / vertex input /
+        // index buffer bound and records no actual draw (the bucket shows
+        // up in a capture but produces zero draw calls). Mirrors
+        // Forward_renderer::render().
+        render_encoder.set_render_pipeline(*render_pipeline);
+
+        erhe::graphics::Buffer* index_buffer = m_mesh_memory.get_index_buffer(bucket.buffer_set.index_buffer);
+        render_encoder.set_index_buffer(index_buffer);
+        for (std::size_t stream_index = 0; stream_index < bucket.buffer_set.vertex_buffers.size(); ++stream_index) {
+            erhe::graphics::Buffer* vertex_buffer = m_mesh_memory.get_vertex_buffer(bucket.buffer_set.vertex_buffers[stream_index]);
+            render_encoder.set_vertex_buffer(
+                vertex_buffer,
+                0,
+                static_cast<uint32_t>(stream_index)
+            );
+        }
+
+        // use_id_ranges = true records the (id_offset .. id_offset+count,
+        // mesh, primitive) table that Id_renderer::get() walks to turn the
+        // GPU-written id back into a (mesh, primitive, triangle) hit. Without
+        // it the readback yields a valid id but id_ranges() is empty, so no
+        // hover is ever produced.
+        erhe::graphics::Ring_buffer_range primitive_range = m_primitive_buffers.update(bucket, primitive_mode, primitive_settings, true);
         erhe::scene_renderer::Draw_indirect_buffer_range draw_indirect_buffer_range = m_draw_indirect_buffers.update(bucket, primitive_mode);
         ERHE_VERIFY(draw_indirect_buffer_range.draw_indirect_count == bucket.entries.size());
 
         m_primitive_buffers    .bind(render_encoder, primitive_range);
         m_draw_indirect_buffers.bind(render_encoder, draw_indirect_buffer_range.range);
         render_encoder.multi_draw_indexed_primitives_indirect(
-            m_pipeline.data.input_assembly.primitive_topology,
+            pipeline.data.input_assembly.primitive_topology,
             m_mesh_memory.get_index_format(bucket.buffer_set.index_buffer),
             draw_indirect_buffer_range.range.get_byte_start_offset_in_buffer(),
             draw_indirect_buffer_range.draw_indirect_count,
@@ -368,6 +396,13 @@ void Id_renderer::render(const Render_parameters& parameters)
     entry.y_offset        = std::max(y - (static_cast<int>(s_extent / 2)), 0);
     entry.clip_from_world = clip_from_world;
 
+    // log_id_render->info(
+    //     "render(): pointer=({},{}) offset=({},{}) slot={} frame={} viewport={}x{}",
+    //     x, y, entry.x_offset, entry.y_offset,
+    //     m_current_transfer_entry_slot, m_graphics_device.get_frame_index(),
+    //     viewport.width, viewport.height
+    // );
+
     Ring_buffer_range camera_range = m_camera_buffers.update(
         *camera.projection(),
         *camera.get_node(),
@@ -401,13 +436,30 @@ void Id_renderer::render(const Render_parameters& parameters)
     {
         Render_command_encoder encoder = m_graphics_device.make_render_command_encoder(parameters.command_buffer);
         erhe::graphics::Scoped_render_pass scoped_render_pass{*m_render_pass.get(), parameters.command_buffer};
+        // The bind group layout (Vulkan pipeline layout) must be set before
+        // any buffer bind; set_buffer() asserts on it. On OpenGL this is a
+        // no-op. Mirrors Forward_renderer::render().
+        encoder.set_bind_group_layout(m_bind_group_layout);
         m_camera_buffers.bind(encoder, camera_range);
         if (bind_joint_buffer) {
             parameters.joint_buffer->bind(encoder, joint_range);
         }
 
+        // Viewport AND scissor are dynamic state that must be set before
+        // the first draw (Vulkan leaves them undefined otherwise). The
+        // ID framebuffer is the full viewport size, so the geometry must
+        // be transformed through the full viewport to match the on-screen
+        // image; the scissor is the only thing that restricts rasterization
+        // to the pointer rect. This mirrors Forward_renderer::render(),
+        // which always sets both. The content loop previously set neither,
+        // so it rendered with stale/undefined viewport state.
+        encoder.set_viewport_rect(viewport.x, viewport.y, viewport.width, viewport.height);
         if (m_use_scissor) {
+            // Optimization: only rasterize the s_extent rect around the
+            // pointer (the only region the readback blit copies).
             encoder.set_scissor_rect(entry.x_offset, entry.y_offset, s_extent, s_extent);
+        } else {
+            encoder.set_scissor_rect(viewport.x, viewport.y, viewport.width, viewport.height);
         }
 
         //// TODO Abstraction for partial clear
@@ -489,7 +541,7 @@ void Id_renderer::render(const Render_parameters& parameters)
         entry.state        = Transfer_entry::State::Waiting_for_read;
         entry.frame_number = m_graphics_device.get_frame_index();
         entry.slot         = m_current_transfer_entry_slot;
-        // log_id_render->debug("id submit draw & read slot = {}, frame = {}", entry.slot, entry.frame_number);
+        // log_id_render->info("submit draw & read: slot={} frame={}", entry.slot, entry.frame_number);
         m_graphics_device.add_completion_handler(
             [&entry]() {
                 std::span<std::byte> gpu_data = entry.buffer_range.get_span();
@@ -498,9 +550,19 @@ void Id_renderer::render(const Render_parameters& parameters)
                 entry.buffer_range.close();
                 entry.buffer_range.release();
                 entry.state = Transfer_entry::State::Read_complete;
-                // log_id_render->debug(
-                //     "completed id: slot = {}, frame = {} size = {} dst = {}",
-                //     entry.slot, entry.frame_number, gpu_data.size_bytes(), fmt::ptr(&entry.data[0])
+                // Diagnostic: sample the center texel (the pointer position).
+                // x_/y_ = s_extent/2 maps to the pointer when scissor / full
+                // viewport rendering is correct. Capture [this] as well when
+                // re-enabling (needed for s_extent / the logger).
+                // const uint32_t stride = s_extent * 4;
+                // const int      cx     = static_cast<int>(s_extent / 2);
+                // const int      cy     = static_cast<int>(s_extent / 2);
+                // const uint8_t  r      = entry.data[cx * 4 + cy * stride + 0];
+                // const uint8_t  g      = entry.data[cx * 4 + cy * stride + 1];
+                // const uint8_t  b      = entry.data[cx * 4 + cy * stride + 2];
+                // log_id_render->info(
+                //     "completed: slot={} frame={} bytes={} center_rgb=({},{},{})",
+                //     entry.slot, entry.frame_number, gpu_data.size_bytes(), r, g, b
                 // );
             }
         );
@@ -535,6 +597,14 @@ auto Id_renderer::get(const int x, const int y, uint32_t& out_id, float& out_dep
 
         Transfer_entry& entry = m_transfer_entries[slot];
         if (entry.state == Transfer_entry::State::Read_complete) {
+            // const int rel_x = x - entry.x_offset;
+            // const int rel_y = y - entry.y_offset;
+            // log_id_render->info(
+            //     "get(): slot={} READ_COMPLETE frame={} query=({},{}) offset=({},{}) rel=({},{}) in_rect={}",
+            //     slot, entry.frame_number, x, y, entry.x_offset, entry.y_offset, rel_x, rel_y,
+            //     (x >= entry.x_offset) && (y >= entry.y_offset) &&
+            //     (static_cast<size_t>(rel_x) < s_extent) && (static_cast<size_t>(rel_y) < s_extent)
+            // );
             if ((x >= entry.x_offset) && (y >= entry.y_offset)) {
                 const int x_ = x - entry.x_offset;
                 const int y_ = y - entry.y_offset;
@@ -555,12 +625,18 @@ auto Id_renderer::get(const int x, const int y, uint32_t& out_id, float& out_dep
                         used_slot = slot;
                     }
                     ERHE_VERIFY(entry.slot == slot);
-                    // log_id_render->debug("id get candidate: r = {:>3} g = {:>3} b = {:>3} id = {} depth = {} slot {} frame = {}", r, g, b, out_id, out_depth, slot, out_frame_number);
+                    // log_id_render->info(
+                    //     "get() candidate: slot={} rgb=({},{},{}) id={} depth={} frame={}",
+                    //     slot, r, g, b, (r << 16u) | (g << 8u) | b, read_as<float>(depth_ptr), entry.frame_number
+                    // );
                 }
             }
         }
     }
-    // log_id_render->debug("id get: id = {} depth = {} slot {} frame = {}", out_id, out_depth, used_slot, out_frame_number);
+    // log_id_render->info(
+    //     "get() result: id={} depth={} used_slot={} frame={} ok={}",
+    //     out_id, out_depth, used_slot, out_frame_number, out_frame_number > 0
+    // );
     return out_frame_number > 0;
 }
 
@@ -572,7 +648,18 @@ auto Id_renderer::get(const int x, const int y) -> Id_query_result
         return result;
     }
 
-    for (auto& r : m_primitive_buffers.id_ranges()) {
+    // id 0 is the background sentinel (color attachment clear value). Valid
+    // ranges start at 1 (see Primitive_buffer::reset_id_ranges), so id 0 is
+    // never a real hit.
+    if (result.id == 0) {
+        return result;
+    }
+
+    for (const erhe::scene_renderer::Primitive_buffer::Id_range& r : m_primitive_buffers.id_ranges()) {
+        // log_id_render->info(
+        //     "  id_range: offset={} length={} mesh={}",
+        //     r.offset, r.length, (r.mesh != nullptr) ? r.mesh->get_name() : std::string{"(null)"}
+        // );
         if (
             (result.id >= r.offset) &&
             (result.id < (r.offset + r.length))

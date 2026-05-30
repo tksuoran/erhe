@@ -19,6 +19,7 @@
 typedef struct __GLsync *GLsync;
 
 namespace erhe::graphics {
+    class Bind_group_layout;
     class Command_buffer;
     class Render_pass;
     class Gpu_timer;
@@ -88,7 +89,6 @@ public:
     {
     public:
         erhe::graphics::Command_buffer&    command_buffer;
-        const erhe::graphics::Render_pass* render_pass{nullptr};
         const erhe::math::Viewport&        viewport;
         const erhe::scene::Camera&         camera;
         const std::initializer_list<const std::span<const std::shared_ptr<erhe::scene::Mesh>>>& content_mesh_spans;
@@ -151,6 +151,10 @@ private:
     erhe::scene_renderer::Mesh_memory&           m_mesh_memory;
     erhe::scene_renderer::Shader_variant_cache&  m_shader_variant_cache;
     Programs&                                    m_programs;
+    // The bind group layout (Vulkan pipeline layout) shared by all
+    // standard.{vert,frag} variants. Must be set on the render command
+    // encoder before any buffer bind (Forward_renderer does the same).
+    const erhe::graphics::Bind_group_layout*     m_bind_group_layout;
     bool                                         m_y_flip;
 
     erhe::scene_renderer::Camera_buffer          m_camera_buffers;
@@ -185,6 +189,11 @@ private:
     );
 
     std::vector<Range> m_ranges;
+    // Scissor optimization: restrict rasterization to the s_extent rect
+    // around the pointer (the only region the readback blit copies). The
+    // viewport is always set to the full size (see render()), so geometry
+    // is transformed identically whether or not the scissor is enabled --
+    // the scissor only clips fragments outside the pointer rect.
     bool               m_use_scissor{true};
 };
 

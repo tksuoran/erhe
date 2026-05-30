@@ -69,7 +69,12 @@ Primitive_buffer::Primitive_buffer(erhe::graphics::Device& graphics_device, Prim
 
 void Primitive_buffer::reset_id_ranges()
 {
-    m_id_offset = 0;
+    // Start at 1, not 0: the Id_renderer clears its color attachment to 0,
+    // so id 0 is the "background / no hit" sentinel. If the first range
+    // began at offset 0 every background pixel would falsely match it.
+    // Range offsets only ever increase from here (the per-mesh alignment
+    // below only adds), so no range can include 0.
+    m_id_offset = 1;
     m_id_ranges.clear();
 }
 
