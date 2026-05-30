@@ -76,16 +76,19 @@ void Gpu_test::submit_and_wait(const std::function<void(erhe::graphics::Command_
 auto Gpu_test::make_color_target(
     const int                      width,
     const int                      height,
-    const erhe::dataformat::Format format
+    const erhe::dataformat::Format format,
+    const bool                     include_transfer_dst
 ) -> std::shared_ptr<erhe::graphics::Texture>
 {
     erhe::graphics::Device& graphics_device = device();
+    const uint64_t usage_mask =
+        erhe::graphics::Image_usage_flag_bit_mask::color_attachment |
+        erhe::graphics::Image_usage_flag_bit_mask::sampled          |
+        erhe::graphics::Image_usage_flag_bit_mask::transfer_src      |
+        (include_transfer_dst ? erhe::graphics::Image_usage_flag_bit_mask::transfer_dst : uint64_t{0});
     const erhe::graphics::Texture_create_info create_info{
         .device      = graphics_device,
-        .usage_mask  =
-            erhe::graphics::Image_usage_flag_bit_mask::color_attachment |
-            erhe::graphics::Image_usage_flag_bit_mask::sampled          |
-            erhe::graphics::Image_usage_flag_bit_mask::transfer_src,
+        .usage_mask  = usage_mask,
         .type        = erhe::graphics::Texture_type::texture_2d,
         .pixelformat = format,
         .width       = width,

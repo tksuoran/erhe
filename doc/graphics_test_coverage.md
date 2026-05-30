@@ -40,8 +40,8 @@ Legend: `[x]` covered, `[~]` partial, `[ ]` gap.
 |---|---|---|
 | 2D color target (8_vec4_unorm) | `[x]` | make_color_target (M2+) |
 | depth target (d32_sfloat) | `[x]` | depth_test_nearer_wins |
-| `upload_to_texture` | `[ ]` | - |
-| `clear_texture` | `[ ]` | - |
+| `upload_to_texture` | `[x]` | texture_upload_roundtrip |
+| `clear_texture` | `[x]` | texture_clear_constant |
 | sample in shader (`set_sampled_image`) | `[x]` | texture_sample_nearest |
 | other color formats (float, snorm, ...) | `[ ]` | - |
 | mipmaps / `generate_mipmaps` | `[ ]` | - |

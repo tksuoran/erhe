@@ -43,11 +43,17 @@ protected:
     void submit_and_wait(const std::function<void(erhe::graphics::Command_buffer&)>& record_fn);
 
     // 2D color render target, usage color_attachment | sampled | transfer_src
-    // (transfer_src so read_texture_rgba8 can copy it out).
+    // (transfer_src so read_texture_rgba8 can copy it out). When
+    // include_transfer_dst is true the texture additionally gets transfer_dst
+    // usage, required for upload_to_texture / clear_texture targets (without it
+    // the image lacks VK_IMAGE_USAGE_TRANSFER_DST_BIT and validation rejects the
+    // transfer). The fresh texture is pre-transitioned to transfer_src_optimal
+    // either way.
     [[nodiscard]] auto make_color_target(
         int                      width,
         int                      height,
-        erhe::dataformat::Format format = erhe::dataformat::Format::format_8_vec4_unorm
+        erhe::dataformat::Format format               = erhe::dataformat::Format::format_8_vec4_unorm,
+        bool                     include_transfer_dst = false
     ) -> std::shared_ptr<erhe::graphics::Texture>;
 
     // Host-visible mappable buffer with the requested usage.
