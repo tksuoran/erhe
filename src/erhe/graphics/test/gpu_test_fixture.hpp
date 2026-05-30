@@ -5,6 +5,7 @@
 
 #include <gtest/gtest.h>
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -13,8 +14,10 @@
 
 namespace erhe::graphics {
     class Buffer;
+    class Color_blend_state;
     class Command_buffer;
     class Device;
+    class Rasterization_state;
     class Texture;
 }
 
@@ -66,6 +69,20 @@ protected:
     // contents (and with the texture left in transfer_src_optimal).
     [[nodiscard]] auto read_texture_rgba8(const erhe::graphics::Texture& texture)
         -> std::vector<uint8_t>;
+
+    // Render a fullscreen (oversized) triangle of a constant color into a fresh
+    // RGBA8 color target with the given rasterization + blend state, then return
+    // the read-back pixels. The color is GLSL injected as the fragment output,
+    // e.g. "vec4(0.0, 1.0, 0.0, 1.0)". Shared by the pipeline-state coverage
+    // tests (cull, color write mask, blend variants, ...).
+    [[nodiscard]] auto draw_fullscreen_triangle(
+        const char*                                fragment_color_glsl,
+        const erhe::graphics::Rasterization_state& rasterization,
+        const erhe::graphics::Color_blend_state&   color_blend,
+        std::array<double, 4>                      clear_value,
+        int                                        width  = 16,
+        int                                        height = 16
+    ) -> std::vector<uint8_t>;
 };
 
 } // namespace erhe::graphics::test

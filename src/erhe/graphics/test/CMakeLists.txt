@@ -52,6 +52,7 @@ if (_gpu_tests_supported)
         test_m5_blend.cpp
         test_m5_depth.cpp
         test_buffer_transfer.cpp
+        test_raster_state.cpp
     )
 
     target_link_libraries(${_gpu_target}

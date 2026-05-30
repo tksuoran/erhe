@@ -102,14 +102,14 @@ Legend: `[x]` covered, `[~]` partial, `[ ]` gap.
 | Input_assembly: triangle | `[x]` | triangle/blend/depth |
 | Input_assembly: strip/line/point | `[ ]` | - |
 | Rasterization: cull none | `[x]` | triangle/blend/depth |
-| Rasterization: cull back/front, front face | `[ ]` | - |
+| Rasterization: cull back/front, front face | `[x]` | rasterization_face_culling |
 | Rasterization: polygon mode line/point | `[ ]` | - |
 | Depth_stencil: depth test | `[x]` | depth_test_nearer_wins |
 | Depth_stencil: stencil test | `[ ]` | - |
 | Color_blend: disabled | `[x]` | triangle/depth |
 | Color_blend: alpha over | `[x]` | blend_alpha_over |
 | Color_blend: premultiplied / other | `[ ]` | - |
-| Color_blend: write mask | `[ ]` | - |
+| Color_blend: write mask | `[x]` | color_write_mask |
 | Multisample | `[ ]` | - |
 
 ## Shader_stages (`shader_stages.hpp`)
