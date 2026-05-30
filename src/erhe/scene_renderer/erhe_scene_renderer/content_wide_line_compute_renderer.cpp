@@ -47,6 +47,7 @@ public:
         erhe::graphics::Shader_stages* multiview_graphics_shader_stages
     );
 
+    [[nodiscard]] auto uses_compute() const -> bool override { return true; }
     void compute(erhe::graphics::Compute_command_encoder& command_encoder) override;
     void render (
         erhe::graphics::Render_command_encoder& render_encoder,

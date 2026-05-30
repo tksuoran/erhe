@@ -691,11 +691,16 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
             // which compute ran. Skipping when neither needs compute
             // avoids a stray Compute_command_encoder + barrier on
             // backends that gate compute.
-            const bool need_compute = drive_wide_lines || m_app_context.debug_renderer->use_compute();
+            // Wide lines only dispatch compute on the compute backend; the
+            // geometry-shader backend expands lines at render time (compute()
+            // is a no-op) and runs on devices without glMemoryBarrier, so it
+            // must not drive the compute encoder / barrier here.
+            const bool wide_lines_compute = drive_wide_lines && content_wide_line_renderer->uses_compute();
+            const bool need_compute = wide_lines_compute || m_app_context.debug_renderer->use_compute();
             if (need_compute) {
                 {
                     erhe::graphics::Compute_command_encoder compute_encoder = m_app_context.graphics_device->make_compute_command_encoder(views_cb);
-                    if (drive_wide_lines) {
+                    if (wide_lines_compute) {
                         content_wide_line_renderer->set_view_params(
                             std::span<const erhe::scene_renderer::Camera_view_input>{view_inputs},
                             get_reverse_depth(),

@@ -50,6 +50,7 @@ public:
         erhe::graphics::Shader_stages* geometry_shader_stages_skinned
     );
 
+    [[nodiscard]] auto uses_compute() const -> bool override { return false; }
     void compute(erhe::graphics::Compute_command_encoder& command_encoder) override;
     void render (
         erhe::graphics::Render_command_encoder& render_encoder,

@@ -325,19 +325,30 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
                     m_context.content_wide_line_renderer->set_joint_buffer(&joint_buffer, std::move(joint_buffer_range));
                 }
 
-                erhe::graphics::Compute_command_encoder compute_encoder = graphics_device.make_compute_command_encoder(command_buffer);
-                m_context.content_wide_line_renderer->compute(compute_encoder);
+                // Compute pre-pass + compute->vertex barrier only on the
+                // compute backend. The geometry-shader backend (used when
+                // the device does not expose compute shaders, e.g. OpenGL
+                // 4.1 on macOS) expands lines in its geometry shader at
+                // render time: compute() is a no-op, there is no
+                // compute->vertex hazard, and glMemoryBarrier does not
+                // exist there.
+                if (m_context.content_wide_line_renderer->uses_compute()) {
+                    {
+                        erhe::graphics::Compute_command_encoder compute_encoder = graphics_device.make_compute_command_encoder(command_buffer);
+                        m_context.content_wide_line_renderer->compute(compute_encoder);
+                    }
+                    // Compute -> vertex barrier. The unified content-line
+                    // vertex shader reads pre-transformed triangles via SSBO
+                    // (shader_storage_barrier_bit); legacy / non-content-wide-
+                    // line paths may still read through the input assembler
+                    // (vertex_attrib_array_barrier_bit). Must be emitted after
+                    // the compute encoder scope ends.
+                    command_buffer.memory_barrier(
+                        erhe::graphics::Memory_barrier_mask::vertex_attrib_array_barrier_bit |
+                        erhe::graphics::Memory_barrier_mask::shader_storage_barrier_bit
+                    );
+                }
             }
-            // Compute -> vertex barrier. The unified content-line
-            // vertex shader reads pre-transformed triangles via SSBO
-            // (shader_storage_barrier_bit); legacy / non-content-wide-
-            // line paths may still read through the input assembler
-            // (vertex_attrib_array_barrier_bit). Must be emitted after
-            // the compute encoder scope ends.
-            command_buffer.memory_barrier(
-                erhe::graphics::Memory_barrier_mask::vertex_attrib_array_barrier_bit |
-                erhe::graphics::Memory_barrier_mask::shader_storage_barrier_bit
-            );
         }
     }
 
