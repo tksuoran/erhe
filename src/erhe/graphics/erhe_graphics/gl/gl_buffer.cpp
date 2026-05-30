@@ -192,7 +192,12 @@ auto Buffer_impl::get_gl_access_mask() const -> gl::Map_buffer_access_mask
         if (coherent) {
             ERHE_VERIFY(persistent); // GL requires persistent for coherent buffers
             gl_access_mask = gl_access_mask | gl::Map_buffer_access_mask::map_coherent_bit;
-        } else {
+        } else if (test_bit_set(memory_properties, Memory_property_flag_bit_mask::host_write)) {
+            // MAP_FLUSH_EXPLICIT_BIT may only be used together with MAP_WRITE_BIT (see the GL
+            // spec note above). A read-only mapping (e.g. a GPU->CPU readback buffer that is
+            // host_read + host_persistent but not host_write) that also set this bit would make
+            // glMapNamedBufferRange fail with GL_INVALID_OPERATION, so only request explicit
+            // flushing when the mapping is actually written by the client.
             gl_access_mask = gl_access_mask | gl::Map_buffer_access_mask::map_flush_explicit_bit;
         }
     } else {
