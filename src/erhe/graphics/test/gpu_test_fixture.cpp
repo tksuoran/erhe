@@ -124,11 +124,12 @@ auto Gpu_test::read_buffer(erhe::graphics::Buffer& buffer, std::size_t byte_coun
     if (byte_count == 0) {
         byte_count = buffer.get_capacity_byte_count();
     }
-    // Map first, then invalidate the mapped range so GPU writes are visible to
-    // the host (a no-op on host-coherent memory, required on non-coherent).
-    // invalidate() asserts the buffer is currently mapped.
+    // make_readback_buffer allocates host_coherent memory, so GPU writes are
+    // visible to the host once the GPU is idle -- no vkInvalidateMappedMemoryRanges
+    // is needed. (Calling invalidate would additionally require the range size to
+    // be a multiple of VkPhysicalDeviceLimits::nonCoherentAtomSize, which an
+    // arbitrary byte_count is not -- VUID-VkMappedMemoryRange-size-01390.)
     const std::span<std::byte> mapped = buffer.map_bytes(0, byte_count);
-    buffer.invalidate(0, byte_count);
     std::vector<std::byte> out(byte_count);
     std::memcpy(out.data(), mapped.data(), byte_count);
     buffer.unmap();

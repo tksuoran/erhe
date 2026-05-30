@@ -89,8 +89,10 @@ a `VkInstance`) must not be executed on a GPU-less builder (use `DISCOVERY_MODE 
   usage `color_attachment | sampled | transfer_src` (mirrors `thumbnails.cpp:42-59`).
 - `read_texture_rgba8(texture) -> std::vector<uint8_t>` -- runs its own blit frame
   (`Blit_command_encoder::copy_from_texture` into a host-visible buffer), then maps.
-- `read_buffer(buffer, byte_count = 0) -> std::vector<std::byte>` -- `invalidate()` +
-  `map_bytes()` + copy; assumes GPU idle.
+- `read_buffer(buffer, byte_count = 0) -> std::vector<std::byte>` -- `map_bytes()` +
+  copy; assumes GPU idle. No `invalidate()`: `make_readback_buffer` uses host_coherent
+  memory (and an unaligned invalidate size trips
+  `VUID-VkMappedMemoryRange-size-01390`).
 - `make_readback_buffer(byte_count, label)` -- host-visible mappable buffer, usage
   `transfer_dst | storage`.
 
@@ -301,9 +303,9 @@ be created. Keep targets tiny (16x16, N~1000). Optionally enable
   Transitions to `transfer_src_optimal` emit a non-fatal best-practices warning
   (`TRANSFER_WRITE` vs `TRANSFER_READ`) intrinsic to erhe's readback path (the
   Id_renderer does the same); the fixture surfaces it without failing.
-- R2: `wait_idle()` makes a plain mappable buffer readable without a completion handler
-  (strongly indicated by `device.hpp:319-321`); fall back to the `id_renderer`
-  completion-handler pattern if not.
+- R2 (resolved): `wait_idle()` makes a host_coherent mappable buffer readable with no
+  completion handler and no invalidate (M2/M4 confirm). A completion handler is only
+  needed to pipeline reads across frames (the `id_renderer` pattern).
 - R3: whether a trivial single-output fragment shader requires `Fragment_outputs`
   (plan supplies one to be safe).
 - R4: compute SSBO declaration -- inline `buffer{}` vs a `Shader_resource` block +

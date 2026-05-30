@@ -48,6 +48,7 @@ if (_gpu_tests_supported)
         test_m1_device_up.cpp
         test_m2_clear_color.cpp
         test_m3_triangle.cpp
+        test_m4_compute_ssbo.cpp
     )
 
     target_link_libraries(${_gpu_target}
