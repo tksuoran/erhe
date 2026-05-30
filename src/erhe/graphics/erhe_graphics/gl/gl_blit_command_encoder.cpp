@@ -4,6 +4,7 @@
 #include "erhe_graphics/gl/gl_render_pass.hpp"
 #include "erhe_graphics/gl/gl_texture.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
+#include "erhe_dataformat/dataformat.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <optional>
@@ -421,14 +422,60 @@ void Blit_command_encoder_impl::copy_from_texture(
             reinterpret_cast<void *>(destination_offset)
         );
     } else {
-        // Pre-DSA: bind and use glGetTexImage (reads entire mip level)
-        constexpr GLuint scratch_unit = Gl_binding_state::s_max_texture_units - 1;
-        auto guard = m_device.get_impl().get_binding_state().push_texture(
-            scratch_unit, gl_source_texture_target, source_texture->get_impl().gl_name()
+        // Pre-DSA (e.g. OpenGL 4.1 on macOS, which has neither DSA nor
+        // glGetTextureSubImage): glGetTexImage cannot read a sub-rectangle
+        // -- it always reads the whole mip level, which overflows a
+        // destination buffer sized for source_size and raises
+        // GL_INVALID_OPERATION. Attach the source level to a scratch read
+        // framebuffer and use glReadPixels, which honors the (x, y, w, h)
+        // region. glReadPixels is inherently 2D and cannot resolve
+        // multisample attachments, so this path handles single-sample,
+        // single-slice reads only.
+        ERHE_VERIFY(source_texture->get_sample_count() == 0);
+        ERHE_VERIFY(gl_depth == 1);
+
+        const erhe::dataformat::Format format    = source_texture->get_pixelformat();
+        const bool                     is_depth   = erhe::dataformat::get_depth_size_bits  (format) > 0;
+        const bool                     is_stencil = erhe::dataformat::get_stencil_size_bits(format) > 0;
+        const gl::Framebuffer_attachment attachment =
+            is_depth
+                ? (is_stencil
+                    ? gl::Framebuffer_attachment::depth_stencil_attachment
+                    : gl::Framebuffer_attachment::depth_attachment)
+                : gl::Framebuffer_attachment::color_attachment0;
+
+        Gl_framebuffer scratch_framebuffer = m_device.get_impl().create_framebuffer();
+        auto fb_guard = m_device.get_impl().get_binding_state().push_framebuffer(
+            gl::Framebuffer_target::read_framebuffer, scratch_framebuffer.gl_name()
         );
-        gl::get_tex_image(
-            gl_source_texture_target,
-            static_cast<GLint>(source_level),
+
+        // texture_2d uses framebuffer_texture_2d; array / 3D targets select
+        // the slice (gl_source_z) via framebuffer_texture_layer.
+        if (gl_source_texture_target == gl::Texture_target::texture_2d) {
+            gl::framebuffer_texture_2d(
+                gl::Framebuffer_target::read_framebuffer,
+                attachment,
+                gl_source_texture_target,
+                source_texture->get_impl().gl_name(),
+                static_cast<GLint>(source_level)
+            );
+        } else {
+            gl::framebuffer_texture_layer(
+                gl::Framebuffer_target::read_framebuffer,
+                attachment,
+                source_texture->get_impl().gl_name(),
+                static_cast<GLint>(source_level),
+                gl_source_z
+            );
+        }
+
+        // glReadPixels reads color from the current read buffer; for depth /
+        // stencil reads the read buffer is irrelevant, so set it to none to
+        // avoid expecting an (absent) color attachment.
+        gl::read_buffer(is_depth ? gl::Read_buffer_mode::none : gl::Read_buffer_mode::color_attachment0);
+
+        gl::read_pixels(
+            gl_source_x, gl_source_y, gl_width, gl_height,
             gl_format, gl_type,
             reinterpret_cast<void *>(destination_offset)
         );
