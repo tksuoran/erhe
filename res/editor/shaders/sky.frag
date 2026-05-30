@@ -13,8 +13,16 @@ highp float checkerboard(highp vec2 coord, highp vec2 frequency, highp float a, 
 
     highp float result;
     if (fuzz_max < 0.5) {
-        highp vec2 t0 = smoothstep(vec2(0.5), fuzz + vec2(0.5), check_pos);
-        highp vec2 t1 = smoothstep(vec2(0.0), fuzz, check_pos);
+        // At the zenith/nadir heading is pinned to 0 across the quad so
+        // dFdx/dFdy of coord.x are zero and fuzz.x is zero. Without the
+        // floor, the two smoothsteps below would collapse to
+        // smoothstep(e, e, x), which is undefined per the GLSL spec
+        // (zero-width edge -> NaN on macOS Metal-backed GL). The NaN
+        // then propagates through the bloom pyramid and turns the
+        // post-processed sky black.
+        highp vec2 fuzz_safe = max(fuzz, vec2(1e-6));
+        highp vec2 t0 = smoothstep(vec2(0.5), fuzz_safe + vec2(0.5), check_pos);
+        highp vec2 t1 = smoothstep(vec2(0.0), fuzz_safe, check_pos);
         highp vec2 t = t0 + (1.0 - t1);
         result = mix(a, b, t.x * t.y + (1.0 - t.x) * (1.0 - t.y));
         result = mix(result, average, smoothstep(0.125, 0.5, fuzz_max));
