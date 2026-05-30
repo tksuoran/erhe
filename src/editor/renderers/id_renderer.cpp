@@ -552,8 +552,8 @@ void Id_renderer::render(const Render_parameters& parameters)
                 entry.state = Transfer_entry::State::Read_complete;
                 // Diagnostic: sample the center texel (the pointer position).
                 // x_/y_ = s_extent/2 maps to the pointer when scissor / full
-                // viewport rendering is correct. Capture [this] as well when
-                // re-enabling (needed for s_extent / the logger).
+                // viewport rendering is correct. s_extent is static constexpr
+                // and log_id_render is a global, so no [this] capture is needed.
                 // const uint32_t stride = s_extent * 4;
                 // const int      cx     = static_cast<int>(s_extent / 2);
                 // const int      cy     = static_cast<int>(s_extent / 2);

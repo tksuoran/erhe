@@ -68,9 +68,9 @@ public:
 
     // Called from MTL::CommandBuffer addCompletedHandler lambdas (which
     // run on an arbitrary Metal dispatch thread) to enqueue a frame
-    // index for completion processing. begin_frame() drains the queue
-    // under m_completion_mutex on the next frame and recycles ring
-    // buffer ranges pinned to those frames.
+    // index for completion processing. end_frame() (and begin_frame())
+    // drain the queue under m_completion_mutex and recycle ring buffer
+    // ranges pinned to those frames.
     void notify_command_buffer_completed(uint64_t frame_index);
 
     void resize_swapchain_to_window();
@@ -133,6 +133,16 @@ public:
 private:
     void frame_completed(uint64_t completed_frame);
 
+    // Drain m_pending_completed_frames (frame indices reported done by
+    // MTL::CommandBuffer addCompletedHandler) and run frame_completed()
+    // for each. Called every frame from end_frame() -- mirroring the
+    // Vulkan backend, whose end_frame()/update_frame_completion() drives
+    // frame_completed() -- and also from begin_frame() for contract
+    // symmetry. The editor's per-frame loop calls end_frame() but not
+    // begin_frame(), so the end_frame() drain is the one that actually
+    // recycles ring buffers and fires completion handlers per frame.
+    void drain_completed_frames();
+
     class Completion_handler
     {
     public:
@@ -170,7 +180,7 @@ private:
     // GPU-completion tracking driven by MTL::CommandBuffer
     // addCompletedHandler callbacks (which run on an arbitrary Metal
     // dispatch thread). Each frame that successfully commits its
-    // device cb enqueues its frame index here; begin_frame drains the
+    // device cb enqueues its frame index here; end_frame() drains the
     // list and calls frame_completed() on each, which recycles the
     // ring buffer ranges pinned to that frame. Replaces the previous
     // "2-frame delay" heuristic that assumed frame N-2 was GPU-done.

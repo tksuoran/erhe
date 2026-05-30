@@ -258,10 +258,8 @@ auto Device_impl::wait_frame() -> bool
     return true;
 }
 
-auto Device_impl::begin_frame() -> bool
+void Device_impl::drain_completed_frames()
 {
-    ERHE_VERIFY(m_state == Device_frame_state::waited);
-
     // Drain frames whose cbs have signalled GPU completion via
     // Command_buffer_impl's addCompletedHandler. Ring buffer ranges
     // pinned to those frames become safe to recycle; per-frame
@@ -277,6 +275,13 @@ auto Device_impl::begin_frame() -> bool
         }
         frame_completed(completed_frame);
     }
+}
+
+auto Device_impl::begin_frame() -> bool
+{
+    ERHE_VERIFY(m_state == Device_frame_state::waited);
+
+    drain_completed_frames();
 
     m_state = Device_frame_state::recording;
     return true;
@@ -291,15 +296,27 @@ auto Device_impl::begin_frame(const Frame_begin_info& frame_begin_info) -> bool
 
 auto Device_impl::end_frame() -> bool
 {
-    // CONTRACT: end_frame advances the frame index. That is its ONLY
-    // job. It does not submit, it does not present. See
+    // CONTRACT: end_frame advances the frame index and drives per-frame
+    // GPU-completion processing (frame_completed) for frames the GPU has
+    // reported done. It does not submit, it does not present. See
     // erhe_graphics/notes.md ("Frame lifecycle") and the Vulkan
-    // implementation for the rationale.
+    // implementation, whose end_frame()/update_frame_completion() does the
+    // same, for the rationale.
     ERHE_VERIFY(
         (m_state == Device_frame_state::in_swapchain_frame) ||
         (m_state == Device_frame_state::recording) ||
         (m_state == Device_frame_state::waited)
     );
+
+    // Recycle ring buffer ranges and fire completion handlers for any
+    // frame the GPU has reported done. This must run from end_frame()
+    // because the editor's per-frame loop calls end_frame() but never
+    // begin_frame(); mirrors Vulkan's end_frame()/update_frame_completion(),
+    // which drives frame_completed() the same way. Without this the
+    // completion-handler queue (and m_pending_completed_frames) grow
+    // unbounded and GPU->CPU readbacks (e.g. Id_renderer picking) never
+    // complete.
+    drain_completed_frames();
 
     ++m_frame_index;
     m_state = Device_frame_state::idle;
