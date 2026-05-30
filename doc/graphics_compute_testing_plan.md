@@ -95,10 +95,14 @@ a `VkInstance`) must not be executed on a GPU-less builder (use `DISCOVERY_MODE 
   `transfer_dst | storage`.
 
 The per-test `SetUp` clears the validation-message buffer; `TearDown` calls
-`wait_idle()` and fails the case (via `ADD_FAILURE`) for any validation
-warning/error, so messages are attributed to the right test. The Device-message
-callback appends (it does NOT `ERHE_FATAL` like the editor) so the runner fails one
-case and continues.
+`wait_idle()` and, matching the editor's device-message policy, fails the case (via
+`ADD_FAILURE`) for validation **errors** (correctness VUIDs) while surfacing
+**warnings** (best-practices advisories) non-fatally as `[ vk-warn ]`. The
+Device-message callback records rather than `ERHE_FATAL`-ing (unlike the editor) so a
+bad case is named precisely and the run continues. `make_color_target` also
+pre-transitions the fresh texture to `transfer_src_optimal`, so render passes can
+declare `usage_before/after = transfer_src` uniformly (the Id_renderer readback
+pattern).
 
 ### Device lifetime: one shared device for the whole process
 
@@ -183,11 +187,14 @@ Goal: one offscreen render pass that only clears an RGBA8 target to a known colo
 read back; assert every pixel matches.
 
 - File `test_m2_clear_color.cpp`, `TEST_F(Gpu_test, ...)`.
-- `make_color_target(16, 16)`; `Render_pass_descriptor` with
-  `color_attachments[0] = { texture, clear_value, Load_action::Clear,
-  Store_action::Store, layout_after = transfer_src_optimal }`, target w/h, no
-  swapchain/surface; `submit_and_wait` records `Render_pass` + `Scoped_render_pass`
-  only (the clear happens on render-pass begin -- no draw); `read_texture_rgba8`.
+- `make_color_target(16, 16)`; default-construct `Render_pass_descriptor` and set
+  `color_attachments[0]` fields individually (it has a user-declared ctor, so no
+  designated init): `texture`, `clear_value`, `load_action=Clear`,
+  `store_action=Store`, and `usage_before/after = transfer_src` +
+  `layout_before/after = transfer_src_optimal` (required -- the render-pass layer
+  errors on an unset `usage_before/after`). No swapchain/surface. `submit_and_wait`
+  records `Render_pass` + `Scoped_render_pass` only (the clear fires on render-pass
+  begin -- no draw); then `read_texture_rgba8`.
 - Assertion: for clear `{1.0, 0.5, 0.25, 1.0}` expect bytes ~`{255,128,64,255}`
   (`EXPECT_NEAR(..., 1)` for unorm rounding) across all texels, with explicit
   corner/center spot checks.
@@ -280,16 +287,20 @@ be created. Keep targets tiny (16x16, N~1000). Optionally enable
   `Gpu_test` suite, not the target name). Or run the executable directly:
   `build_vs2026_vulkan_headless/src/erhe/graphics/test/Debug/erhe_graphics_gpu_tests.exe`.
   Each milestone is a separate test case, so milestones can be run/added one at a time.
-- Per milestone: assertions pass AND zero validation warnings/errors (the fixture
-  fails the case on any). For extra assurance, run once with
-  `vulkan_validation_layers` enabled.
+- Validation is on by default (the default `Graphics_config` enables
+  `VK_LAYER_KHRONOS_validation` when loadable). Per milestone: assertions pass AND no
+  validation **errors** (the fixture fails on errors; best-practices **warnings** are
+  printed as `[ vk-warn ]` but do not fail, matching the editor).
 - Keep `ctest -R erhe_graphics_tests` (deviceless) green in all configs.
 
 ## Risks / unknowns to verify during implementation
 
-- R1: offscreen `Render_pass` (clear-only, fresh UNDEFINED texture) passes validation
-  with `layout_before` defaulted -- `Load_action::Clear` does not load, so expected
-  clean; confirm no load-from-undefined VUID.
+- R1 (resolved in M2): the render-pass layer errors if `usage_before/after` is left
+  unset, so both must be provided; `make_color_target` pre-transitions the fresh
+  texture to `transfer_src_optimal` and the pass declares `transfer_src` before/after.
+  Transitions to `transfer_src_optimal` emit a non-fatal best-practices warning
+  (`TRANSFER_WRITE` vs `TRANSFER_READ`) intrinsic to erhe's readback path (the
+  Id_renderer does the same); the fixture surfaces it without failing.
 - R2: `wait_idle()` makes a plain mappable buffer readable without a completion handler
   (strongly indicated by `device.hpp:319-321`); fall back to the `id_renderer`
   completion-handler pattern if not.

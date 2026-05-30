@@ -69,11 +69,10 @@ void Gpu_test_environment::SetUp()
 
     erhe::graphics::Device_message_callback message_callback =
         [this](erhe::graphics::Message_severity severity, const std::string& message, const std::string&) {
-            if (
-                (severity == erhe::graphics::Message_severity::warning) ||
-                (severity == erhe::graphics::Message_severity::error)
-            ) {
-                add_message(message);
+            if (severity == erhe::graphics::Message_severity::error) {
+                add_message(true, message);
+            } else if (severity == erhe::graphics::Message_severity::warning) {
+                add_message(false, message);
             }
         };
 
@@ -109,15 +108,15 @@ auto Gpu_test_environment::is_available() const -> bool
     return m_available;
 }
 
-auto Gpu_test_environment::setup_messages() const -> const std::vector<std::string>&
+auto Gpu_test_environment::setup_messages() const -> const std::vector<Message>&
 {
     return m_setup_messages;
 }
 
-void Gpu_test_environment::add_message(const std::string& message)
+void Gpu_test_environment::add_message(const bool is_error, const std::string& message)
 {
     std::lock_guard<std::mutex> lock{m_messages_mutex};
-    m_messages.push_back(message);
+    m_messages.emplace_back(is_error, message);
 }
 
 void Gpu_test_environment::clear_messages()
@@ -126,10 +125,10 @@ void Gpu_test_environment::clear_messages()
     m_messages.clear();
 }
 
-auto Gpu_test_environment::take_messages() -> std::vector<std::string>
+auto Gpu_test_environment::take_messages() -> std::vector<Message>
 {
     std::lock_guard<std::mutex> lock{m_messages_mutex};
-    std::vector<std::string> out;
+    std::vector<Message> out;
     out.swap(m_messages);
     return out;
 }

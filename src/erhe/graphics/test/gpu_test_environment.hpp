@@ -5,6 +5,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace erhe::window   { class Context_window; }
@@ -33,22 +34,28 @@ public:
     [[nodiscard]] auto device      () -> erhe::graphics::Device&;
     [[nodiscard]] auto is_available() const -> bool;
 
-    // Validation messages collected while the device was being created
-    // (snapshotted at the end of SetUp). M1 asserts this is empty.
-    [[nodiscard]] auto setup_messages() const -> const std::vector<std::string>&;
+    // A validation message: is_error (true = Message_severity::error, i.e. a
+    // correctness VUID; false = a warning / best-practices advisory) plus the
+    // text. The fixture fails the case on errors and surfaces warnings without
+    // failing, matching the editor's device-message policy.
+    using Message = std::pair<bool, std::string>;
 
-    // Runtime (per-test) validation messages. The fixture clears these in
-    // its SetUp and asserts they are empty in its TearDown.
-    void               add_message   (const std::string& message);
+    // Messages collected while the device was being created (snapshotted at
+    // the end of SetUp). M1 asserts there were no errors.
+    [[nodiscard]] auto setup_messages() const -> const std::vector<Message>&;
+
+    // Runtime (per-test) validation messages. The fixture clears these in its
+    // SetUp and drains them in its TearDown.
+    void               add_message   (bool is_error, const std::string& message);
     void               clear_messages();
-    [[nodiscard]] auto take_messages () -> std::vector<std::string>;
+    [[nodiscard]] auto take_messages () -> std::vector<Message>;
 
 private:
     std::unique_ptr<erhe::window::Context_window> m_window;
     std::unique_ptr<erhe::graphics::Device>       m_device;
     std::mutex                                    m_messages_mutex;
-    std::vector<std::string>                      m_messages;
-    std::vector<std::string>                      m_setup_messages;
+    std::vector<Message>                          m_messages;
+    std::vector<Message>                          m_setup_messages;
     bool                                          m_available{false};
 };
 

@@ -11,8 +11,10 @@
 #include <glm/glm.hpp>
 
 #include <cstring>
+#include <iostream>
 #include <span>
 #include <string>
+#include <vector>
 
 namespace erhe::graphics::test {
 
@@ -25,9 +27,16 @@ void Gpu_test::TearDown()
 {
     erhe::graphics::Device& graphics_device = device();
     graphics_device.wait_idle();
-    const std::vector<std::string> messages = Gpu_test_environment::get().take_messages();
-    for (const std::string& message : messages) {
-        ADD_FAILURE() << "Device validation message during test: " << message;
+    const std::vector<Gpu_test_environment::Message> messages = Gpu_test_environment::get().take_messages();
+    for (const Gpu_test_environment::Message& message : messages) {
+        if (message.first) {
+            ADD_FAILURE() << "Device validation error during test: " << message.second;
+        } else {
+            // Best-practices / advisory warnings are surfaced but not fatal,
+            // matching the editor's device-message policy (error -> fatal,
+            // warning -> log).
+            std::cerr << "[ vk-warn  ] " << message.second << "\n";
+        }
     }
 }
 
@@ -75,7 +84,19 @@ auto Gpu_test::make_color_target(
         .height      = height,
         .debug_label = erhe::utility::Debug_label{"gpu_test color target"}
     };
-    return std::make_shared<erhe::graphics::Texture>(graphics_device, create_info);
+    std::shared_ptr<erhe::graphics::Texture> texture =
+        std::make_shared<erhe::graphics::Texture>(graphics_device, create_info);
+
+    // Move the fresh texture from UNDEFINED into transfer_src_optimal so render
+    // passes can uniformly declare usage_before / layout_before = transfer_src /
+    // transfer_src_optimal (the Id_renderer readback pattern), and so
+    // read_texture_rgba8's blit always finds it in transfer_src_optimal.
+    submit_and_wait(
+        [&](erhe::graphics::Command_buffer& command_buffer) {
+            command_buffer.transition_texture_layout(*texture, erhe::graphics::Image_layout::transfer_src_optimal);
+        }
+    );
+    return texture;
 }
 
 auto Gpu_test::make_readback_buffer(const std::size_t byte_count, const char* debug_label)
@@ -103,8 +124,11 @@ auto Gpu_test::read_buffer(erhe::graphics::Buffer& buffer, std::size_t byte_coun
     if (byte_count == 0) {
         byte_count = buffer.get_capacity_byte_count();
     }
-    buffer.invalidate(0, byte_count);
+    // Map first, then invalidate the mapped range so GPU writes are visible to
+    // the host (a no-op on host-coherent memory, required on non-coherent).
+    // invalidate() asserts the buffer is currently mapped.
     const std::span<std::byte> mapped = buffer.map_bytes(0, byte_count);
+    buffer.invalidate(0, byte_count);
     std::vector<std::byte> out(byte_count);
     std::memcpy(out.data(), mapped.data(), byte_count);
     buffer.unmap();

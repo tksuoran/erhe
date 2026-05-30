@@ -25,9 +25,11 @@ TEST_F(Gpu_test, device_up_clean)
     const erhe::graphics::Device_info& info = graphics_device.get_info();
     EXPECT_FALSE(info.api_info.empty()) << "Device should report a backend API string";
 
-    const std::vector<std::string>& setup_messages = Gpu_test_environment::get().setup_messages();
-    for (const std::string& message : setup_messages) {
-        ADD_FAILURE() << "Validation message during device creation: " << message;
+    const std::vector<Gpu_test_environment::Message>& setup_messages = Gpu_test_environment::get().setup_messages();
+    for (const Gpu_test_environment::Message& message : setup_messages) {
+        if (message.first) {
+            ADD_FAILURE() << "Validation error during device creation: " << message.second;
+        }
     }
 }
 

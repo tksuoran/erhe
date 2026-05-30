@@ -46,6 +46,7 @@ if (_gpu_tests_supported)
         gpu_test_environment.cpp
         gpu_test_fixture.cpp
         test_m1_device_up.cpp
+        test_m2_clear_color.cpp
     )
 
     target_link_libraries(${_gpu_target}
