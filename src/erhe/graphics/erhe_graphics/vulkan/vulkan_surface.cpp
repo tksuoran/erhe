@@ -2,6 +2,7 @@
 
 #include "erhe_graphics/vulkan/vulkan_surface.hpp"
 #include "erhe_graphics/vulkan/vulkan_device.hpp"
+#include "erhe_graphics/vulkan/vulkan_emulated_swapchain.hpp"
 #include "erhe_graphics/vulkan/vulkan_helpers.hpp"
 #include "erhe_graphics/vulkan/vulkan_swapchain.hpp"
 #include "erhe_graphics/graphics_log.hpp"
@@ -19,7 +20,7 @@ namespace erhe::graphics {
 // https://gist.github.com/nanokatze/bb03a486571e13a7b6a8709368bd87cf#handling-window-resize
 // https://github.com/KhronosGroup/Vulkan-Samples/tree/main/samples/api/swapchain_recreation
 
-Surface_impl::Surface_impl(Device_impl& device_impl, const Surface_create_info& create_info)
+Surface_impl::Surface_impl(Device_impl& device_impl, const Surface_create_info& create_info, const bool headless)
     : m_device_impl        {device_impl}
     , m_surface_create_info{create_info}
     , m_surface_format{
@@ -27,8 +28,18 @@ Surface_impl::Surface_impl(Device_impl& device_impl, const Surface_create_info& 
         .colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR
     }
     , m_present_mode      {VK_PRESENT_MODE_FIFO_KHR}
+    , m_headless          {headless}
 {
     ERHE_VERIFY(create_info.context_window != nullptr);
+
+    if (m_headless) {
+        // Surfaceless: no VkSurfaceKHR. A dedicated Emulated_swapchain_impl
+        // provides offscreen images in place of a real swapchain; the real
+        // WSI Swapchain_impl is not constructed.
+        m_emulated_swapchain = std::make_unique<Emulated_swapchain_impl>(m_device_impl, *this);
+        return;
+    }
+
     const VkInstance vulkan_instance = device_impl.get_vulkan_instance();
     void* surface = create_info.context_window->create_vulkan_surface(static_cast<void*>(vulkan_instance));
     m_surface = static_cast<VkSurfaceKHR>(surface);
@@ -48,8 +59,46 @@ auto Surface_impl::get_swapchain() -> Swapchain*
     return m_swapchain.get();
 }
 
+auto Surface_impl::is_headless() const -> bool
+{
+    return m_headless;
+}
+
+auto Surface_impl::get_emulated_swapchain() const -> Emulated_swapchain_impl*
+{
+    return m_emulated_swapchain.get();
+}
+
+auto Surface_impl::get_color_format() -> erhe::dataformat::Format
+{
+    if (m_headless) {
+        return m_emulated_swapchain->get_color_format();
+    }
+    if (m_swapchain != nullptr) {
+        return m_swapchain->get_color_format();
+    }
+    return erhe::dataformat::Format::format_undefined;
+}
+
+auto Surface_impl::get_depth_format() -> erhe::dataformat::Format
+{
+    if (m_headless) {
+        return m_emulated_swapchain->get_depth_format();
+    }
+    if (m_swapchain != nullptr) {
+        return m_swapchain->get_depth_format();
+    }
+    return erhe::dataformat::Format::format_undefined;
+}
+
 auto Surface_impl::can_use_physical_device(VkPhysicalDevice physical_device) -> bool
 {
+    if (m_headless) {
+        // Surfaceless: any graphics-capable device is acceptable; there are no
+        // surface formats / present modes to query.
+        static_cast<void>(physical_device);
+        return true;
+    }
     if (m_surface == VK_NULL_HANDLE) {
         fail();
         return false;
@@ -102,6 +151,31 @@ auto Surface_impl::can_use_physical_device(VkPhysicalDevice physical_device) -> 
 
 auto Surface_impl::use_physical_device(VkPhysicalDevice physical_device) -> bool
 {
+    if (m_headless) {
+        m_physical_device = physical_device;
+        // Pick an _SRGB color format so the emulated swapchain image carries
+        // the sRGB OETF erhe's linear shader output relies on. Prefer
+        // B8G8R8A8_SRGB, fall back to R8G8B8A8_SRGB.
+        m_surface_format = VkSurfaceFormatKHR{
+            .format     = VK_FORMAT_R8G8B8A8_SRGB,
+            .colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR
+        };
+        for (const VkFormat candidate : {VK_FORMAT_B8G8R8A8_SRGB, VK_FORMAT_R8G8B8A8_SRGB}) {
+            VkFormatProperties format_properties{};
+            vkGetPhysicalDeviceFormatProperties(physical_device, candidate, &format_properties);
+            if ((format_properties.optimalTilingFeatures & VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT) != 0) {
+                m_surface_format.format = candidate;
+                break;
+            }
+        }
+        m_present_mode = VK_PRESENT_MODE_FIFO_KHR;
+        m_image_count  = 3;
+        log_context->info(
+            "Headless surface: emulated swapchain format {} image count {}",
+            c_str(m_surface_format.format), m_image_count
+        );
+        return true;
+    }
     if (m_surface == VK_NULL_HANDLE) {
         fail();
         return false;
@@ -605,6 +679,11 @@ Surface_impl::~Surface_impl() noexcept
 auto Surface_impl::recreate_for_new_window() -> bool
 {
     log_context->info("Surface_impl::recreate_for_new_window()");
+
+    if (m_headless) {
+        log_context->error("Surface_impl::recreate_for_new_window() called on a headless surface");
+        return false;
+    }
 
     if (m_surface_create_info.context_window == nullptr) {
         log_context->error("Surface_impl::recreate_for_new_window() with no Context_window");

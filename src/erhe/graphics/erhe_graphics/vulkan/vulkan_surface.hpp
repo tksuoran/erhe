@@ -12,6 +12,7 @@ namespace erhe::window { class Context_window; }
 namespace erhe::graphics {
 
 class Device_impl;
+class Emulated_swapchain_impl;
 class Surface_create_info;
 class Swapchain;
 class Vulkan_swapchain_create_info;
@@ -28,12 +29,16 @@ public:
 class Surface_impl final
 {
 public:
-    Surface_impl(Device_impl& device, const Surface_create_info& create_info);
+    Surface_impl(Device_impl& device, const Surface_create_info& create_info, bool headless);
     ~Surface_impl() noexcept;
 
     [[nodiscard]] auto is_empty() -> bool;
     [[nodiscard]] auto is_valid() -> bool;
+    [[nodiscard]] auto is_headless           () const -> bool;
     [[nodiscard]] auto get_swapchain          () -> Swapchain*;
+    [[nodiscard]] auto get_emulated_swapchain () const -> Emulated_swapchain_impl*;
+    [[nodiscard]] auto get_color_format       () -> erhe::dataformat::Format;
+    [[nodiscard]] auto get_depth_format       () -> erhe::dataformat::Format;
     [[nodiscard]] auto can_use_physical_device(VkPhysicalDevice physical_device) -> bool;
     [[nodiscard]] auto use_physical_device    (VkPhysicalDevice physical_device) -> bool;
 
@@ -80,7 +85,9 @@ private:
     uint32_t                        m_image_count     {0};
     VkExtent2D                      m_swapchain_extent{0, 0};
     VkSwapchainKHR                  m_vulkan_swapchain{VK_NULL_HANDLE};
-    std::unique_ptr<Swapchain>      m_swapchain;
+    std::unique_ptr<Swapchain>               m_swapchain;
+    std::unique_ptr<Emulated_swapchain_impl> m_emulated_swapchain;
+    bool                            m_headless{false};
     bool                            m_is_empty{true};
     bool                            m_is_valid{false};
 };

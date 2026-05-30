@@ -198,6 +198,8 @@ if (ERHE_GRAPHICS_API_VULKAN)
         erhe_graphics/vulkan/vulkan_shader_stages_prototype.cpp
         erhe_graphics/vulkan/vulkan_device_sync_pool.cpp
         erhe_graphics/vulkan/vulkan_device_sync_pool.hpp
+        erhe_graphics/vulkan/vulkan_emulated_swapchain.cpp
+        erhe_graphics/vulkan/vulkan_emulated_swapchain.hpp
         erhe_graphics/vulkan/vulkan_surface.cpp
         erhe_graphics/vulkan/vulkan_surface.hpp
         erhe_graphics/vulkan/vulkan_swapchain.cpp
