@@ -31,6 +31,19 @@ doc plans milestones 1-4 in detail and sketches 5-6 (deferred detail).
   `build_vs2026_vulkan_headless` (`ERHE_GRAPHICS_API=vulkan`,
   `ERHE_WINDOW_LIBRARY=none`). Build/run the relevant build after each change.
 
+## Status
+
+Implemented on branch `headless-vulkan` (target `erhe_graphics_gpu_tests`, 6 tests,
+green via `ctest -C Debug -R Gpu_test` on `build_vs2026_vulkan_headless`):
+
+- M1 device-up, M2 clear-color readback, M3 triangle draw, M4 compute SSBO -- done.
+- M5 state coverage: alpha-blend and depth-test done; stencil, multiple color
+  attachments, samplers/textures, buffer up/download, and MSAA resolve remain as
+  future increments.
+- M6 CI: deferred (see M6). The tests run locally via `ctest -R Gpu_test`; no CI job
+  exists yet. The CI matrix has no `window=none + api=vulkan` entry, so M6 needs a new
+  Linux headless-Vulkan configure script plus a software-Vulkan (lavapipe) job.
+
 ## Load-bearing facts (confirmed against source)
 
 - Headless detection: a `Device` is headless when `context_window == nullptr` OR
@@ -263,7 +276,10 @@ live in `src/rendering_test/`:
   (`copy_from_buffer`), MSAA resolve (multisampled target + resolve texture; guard on
   `msaa_sample_counts`).
 
-### M6 -- CI ctest job (sketch; detail deferred)
+### M6 -- CI ctest job (DEFERRED -- future work)
+
+Deferred by decision: it cannot be developed/verified from the (Windows) dev machine
+and needs new infrastructure. The sketch below stands as the implementation guide.
 
 `.github/workflows/build.yml` currently only builds the editor and runs no ctest.
 Add a job that configures `-DERHE_BUILD_TESTS=ON -DERHE_GRAPHICS_API=vulkan
