@@ -365,6 +365,11 @@ Device_impl::Device_impl(
     // On macOS SDL also returns VK_KHR_portability_enumeration, which the loader only advertises on portability-subset
     // drivers (e.g. MoltenVK) and which the RenderDoc capture layer does not pass through. Filter SDL's list against
     // what the loader actually advertises so we don't request an extension that will make vkCreateInstance() fail.
+    // Headless (no native window surface): run Vulkan surfaceless with an
+    // emulated swapchain. Skip all surface / swapchain instance + device
+    // extensions and the present queue.
+    const bool headless = (m_context_window == nullptr) || !m_context_window->has_vulkan_surface();
+
     std::vector<const char*> enabled_instance_extensions_c_str{};
     bool portability_enumeration_enabled = false;
     if (m_context_window != nullptr) {
@@ -406,23 +411,33 @@ Device_impl::Device_impl(
         );
     }
 
-    // First check extensions that have not been deprecated / promoted to cor
-    check_instance_extension(VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME, m_instance_extensions.m_VK_KHR_get_surface_capabilities2);
-    check_instance_extension(VK_KHR_SURFACE_MAINTENANCE_1_EXTENSION_NAME     , m_instance_extensions.m_VK_KHR_surface_maintenance1     );
+    // First check extensions that have not been deprecated / promoted to core.
+    // Surface-capability / swapchain-colorspace extensions are surface-dependent
+    // and must not be requested in headless (surfaceless) mode.
+    if (!headless) {
+        check_instance_extension(VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME, m_instance_extensions.m_VK_KHR_get_surface_capabilities2);
+        check_instance_extension(VK_KHR_SURFACE_MAINTENANCE_1_EXTENSION_NAME     , m_instance_extensions.m_VK_KHR_surface_maintenance1     );
+    }
     check_instance_extension(VK_EXT_DEBUG_UTILS_EXTENSION_NAME               , m_instance_extensions.m_VK_EXT_debug_utils              );
-    check_instance_extension(VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME     , m_instance_extensions.m_VK_EXT_swapchain_colorspace     );
+    if (!headless) {
+        check_instance_extension(VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME     , m_instance_extensions.m_VK_EXT_swapchain_colorspace     );
+    }
 
     // Check extensions which are promoted to core or deprecated
     if (application_info.apiVersion < VK_API_VERSION_1_1) {
         check_instance_extension(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME, m_instance_extensions.m_VK_KHR_get_physical_device_properties2);
     } else {
-        m_instance_extensions.m_VK_KHR_get_surface_capabilities2       = true;
+        // VK_KHR_get_surface_capabilities2 is surface-dependent (not core in 1.1);
+        // do not assume it in headless mode.
+        if (!headless) {
+            m_instance_extensions.m_VK_KHR_get_surface_capabilities2 = true;
+        }
         m_instance_extensions.m_VK_KHR_get_physical_device_properties2 = true;
     }
 
     m_capabilities.m_surface_capabilities2 = m_instance_extensions.m_VK_KHR_get_surface_capabilities2;
 
-    if (!m_instance_extensions.m_VK_KHR_surface_maintenance1) {
+    if (!headless && !m_instance_extensions.m_VK_KHR_surface_maintenance1) {
         check_instance_extension(VK_EXT_SURFACE_MAINTENANCE_1_EXTENSION_NAME, m_instance_extensions.m_VK_EXT_surface_maintenance1);
     }
 
@@ -530,7 +545,7 @@ Device_impl::Device_impl(
     std::unique_ptr<Surface_impl> surface_impl{};
     VkSurfaceKHR vulkan_surface{VK_NULL_HANDLE};
     if (m_context_window != nullptr) {
-        surface_impl   = std::make_unique<Surface_impl>(*this, surface_create_info);
+        surface_impl   = std::make_unique<Surface_impl>(*this, surface_create_info, headless);
         vulkan_surface = surface_impl->get_vulkan_surface();
     }
 
@@ -539,6 +554,14 @@ Device_impl::Device_impl(
     if (!physical_device_ok) {
         log_context->critical("vkCreateInstance() failed with {} {}", static_cast<int32_t>(result), c_str(result));
         abort();
+    }
+
+    if (headless) {
+        // No present queue exists in headless; alias its family index to the
+        // graphics family so the device-frame command pool (created on the
+        // present family in ensure_device_frame_command_buffer) lands on the
+        // graphics family.
+        m_present_queue_family_index = m_graphics_queue_family_index;
     }
 
     m_memory_properties = VkPhysicalDeviceMemoryProperties2{
@@ -1225,7 +1248,7 @@ Device_impl::Device_impl(
     }
     s_device_impl = this;
 
-    if (m_surface) {
+    if (m_surface && !headless) {
         vkGetDeviceQueue(m_vulkan_device, m_present_queue_family_index, 0, &m_vulkan_present_queue);
         if (m_vulkan_present_queue == VK_NULL_HANDLE) {
             log_context->critical("vkGetDeviceQueue() returned VK_NULL_HANDLE for present queue");

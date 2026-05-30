@@ -725,7 +725,8 @@ auto Device_impl::choose_physical_device(
         return false;
     }
 
-    query_device_extensions(m_vulkan_physical_device, m_device_extensions, &device_extensions_c_str);
+    const bool headless = (surface_impl == nullptr) || surface_impl->is_headless();
+    query_device_extensions(m_vulkan_physical_device, m_device_extensions, &device_extensions_c_str, headless);
     return true;
 }
 
@@ -752,7 +753,8 @@ auto Device_impl::get_physical_device_score(VkPhysicalDevice vulkan_physical_dev
     }
 
     Device_extensions device_extensions{};
-    const float extension_score = query_device_extensions(vulkan_physical_device, device_extensions, nullptr);
+    const bool headless = (surface_impl == nullptr) || surface_impl->is_headless();
+    const float extension_score = query_device_extensions(vulkan_physical_device, device_extensions, nullptr, headless);
 
     return device_type_score + extension_score;
 }
@@ -819,8 +821,11 @@ auto Device_impl::query_device_queue_family_indices(
         return false;
     }
 
+    // Only require a graphics queue that also supports present when there is a
+    // real VkSurfaceKHR. Headless (emulated swapchain) is surfaceless, so a
+    // present queue is not needed and present-family stays UINT32_MAX.
     if (
-        (surface_impl != nullptr) &&
+        (vulkan_surface != VK_NULL_HANDLE) &&
         (graphics_queue_family_index != present_queue_family_index)
     ) {
         return false;
@@ -839,7 +844,8 @@ auto Device_impl::query_device_queue_family_indices(
 auto Device_impl::query_device_extensions(
     VkPhysicalDevice          vulkan_physical_device,
     Device_extensions&        device_extensions_out,
-    std::vector<const char*>* device_extensions_c_str
+    std::vector<const char*>* device_extensions_c_str,
+    const bool                headless
 ) -> float
 {
     float total_score = 0.0f;
@@ -878,11 +884,17 @@ auto Device_impl::query_device_extensions(
         }
     };
 
-    check_device_extension(VK_KHR_SWAPCHAIN_EXTENSION_NAME,                      device_extensions_out.m_VK_KHR_swapchain                     , 1.0f);
-    check_device_extension(VK_KHR_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME,        device_extensions_out.m_VK_KHR_swapchain_maintenance1        , 2.0f);
+    // Swapchain / present extensions are surface-dependent: skip them entirely
+    // in headless (surfaceless + emulated swapchain) mode.
+    if (!headless) {
+        check_device_extension(VK_KHR_SWAPCHAIN_EXTENSION_NAME,                      device_extensions_out.m_VK_KHR_swapchain                     , 1.0f);
+        check_device_extension(VK_KHR_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME,        device_extensions_out.m_VK_KHR_swapchain_maintenance1        , 2.0f);
+    }
     check_device_extension(VK_KHR_LOAD_STORE_OP_NONE_EXTENSION_NAME,             device_extensions_out.m_VK_KHR_load_store_op_none            , 2.0f);
     check_device_extension(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME,                device_extensions_out.m_VK_KHR_push_descriptor               , 1.0f);
-    check_device_extension(VK_KHR_PRESENT_MODE_FIFO_LATEST_READY_EXTENSION_NAME, device_extensions_out.m_VK_KHR_present_mode_fifo_latest_ready, 3.0f);
+    if (!headless) {
+        check_device_extension(VK_KHR_PRESENT_MODE_FIFO_LATEST_READY_EXTENSION_NAME, device_extensions_out.m_VK_KHR_present_mode_fifo_latest_ready, 3.0f);
+    }
 
     // VK_EXT_fragment_density_map: backs OpenXR fixed foveated rendering. Enabled
     // purely on availability; the FFR feature query/enable and the runtime decision
@@ -905,10 +917,10 @@ auto Device_impl::query_device_extensions(
     if (!device_extensions_out.m_VK_KHR_load_store_op_none) {
         check_device_extension(VK_EXT_LOAD_STORE_OP_NONE_EXTENSION_NAME,             device_extensions_out.m_VK_EXT_load_store_op_none            , 2.0f);
     }
-    if (!device_extensions_out.m_VK_KHR_swapchain_maintenance1) {
+    if (!headless && !device_extensions_out.m_VK_KHR_swapchain_maintenance1) {
         check_device_extension(VK_EXT_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME,        device_extensions_out.m_VK_EXT_swapchain_maintenance1        , 2.0f);
     }
-    if (!device_extensions_out.m_VK_KHR_present_mode_fifo_latest_ready) {
+    if (!headless && !device_extensions_out.m_VK_KHR_present_mode_fifo_latest_ready) {
         check_device_extension(VK_EXT_PRESENT_MODE_FIFO_LATEST_READY_EXTENSION_NAME, device_extensions_out.m_VK_EXT_present_mode_fifo_latest_ready, 3.0f);
     }
     return total_score;

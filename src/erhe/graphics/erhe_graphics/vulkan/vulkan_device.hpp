@@ -327,7 +327,8 @@ private:
     static auto query_device_extensions(
         VkPhysicalDevice          vulkan_physical_device,
         Device_extensions&        device_extensions_out,
-        std::vector<const char*>* device_extensions_c_str
+        std::vector<const char*>* device_extensions_c_str,
+        bool                      headless
     ) -> float;
     [[nodiscard]] auto choose_physical_device(Surface_impl* surface_impl, std::vector<const char*>& device_extensions_c_str) -> bool;
 
