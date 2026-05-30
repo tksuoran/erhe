@@ -600,6 +600,13 @@ auto Context_window::create_vulkan_surface(void* vulkan_instance) -> void*
     }
     return static_cast<void*>(vulkan_surface);
 }
+
+auto Context_window::has_vulkan_surface() const -> bool
+{
+    // A real SDL window can create a VkSurfaceKHR, so the Vulkan backend
+    // uses a real surface + swapchain.
+    return true;
+}
 #endif
 
 void Context_window::poll_events(float wait_time)

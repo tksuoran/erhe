@@ -108,6 +108,7 @@ public:
 #if defined(ERHE_GRAPHICS_API_VULKAN)
     [[nodiscard]] auto get_required_vulkan_instance_extensions() -> const std::vector<std::string>&;
     [[nodiscard]] auto create_vulkan_surface(void* vulkan_instance) -> void*;
+    [[nodiscard]] auto has_vulkan_surface() const -> bool;
 #endif
 
 private:

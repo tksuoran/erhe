@@ -278,6 +278,13 @@ auto Context_window::create_vulkan_surface(void* vulkan_instance) -> void*
     static_cast<void>(vulkan_instance);
     return nullptr;
 }
+
+auto Context_window::has_vulkan_surface() const -> bool
+{
+    // The null (headless) window has no native surface, so the Vulkan
+    // backend runs surfaceless with an emulated swapchain.
+    return false;
+}
 #endif
 
 } // namespace erhe::window
