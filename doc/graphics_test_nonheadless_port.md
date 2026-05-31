@@ -5,10 +5,11 @@
 - The `erhe_graphics_gpu_tests` target builds and runs on non-headless OpenGL
   (`build_vs2026_opengl`: ERHE_GRAPHICS_API=opengl + a real window library).
 - Headless Vulkan: **41/41 green** (unchanged; this is the hard gate -- never regress it).
-- OpenGL: **40 passed + 1 skipped, 0 failures, 0 aborts** -- effectively complete.
-  The skip is `snorm_color_render_readback`, a legitimate device-capability skip
-  (`format_8_vec4_snorm` is not color-renderable on this GL device; the test
-  `GTEST_SKIP`s with that reason).
+- OpenGL: **40 passed + 1 skipped, 0 failures, 0 aborts** -- complete, in both the
+  default DSA mode and the opt-in non-DSA mode (`ERHE_TEST_OPENGL_NO_DSA=1`; see the
+  Non-DSA section below). The skip is `snorm_color_render_readback`, a legitimate
+  device-capability skip (`format_8_vec4_snorm` is not color-renderable on this GL
+  device; the test `GTEST_SKIP`s with that reason).
 
 The test device is built from a default `Graphics_config{}` (it does not read
 `config/editor/erhe_graphics.json`), so it uses native GL capabilities and every
@@ -47,8 +48,9 @@ fix below is an engine fix, not a config toggle.
   backend now honors the abstraction's Vulkan-style cube representation
   (`array_layer_count == 6`): `convert_texture_dimensions_to_gl` folds the layer
   count into depth, `convert_texture_offset_to_gl` selects the face via the z offset,
-  and `copy_from_buffer` uses 3D sub-image addressing for cubes (2D storage but
-  z = face for uploads).
+  and `copy_from_buffer` uses 3D sub-image addressing for cubes on the DSA path (2D
+  storage but z = face for uploads). The classic non-DSA path instead uploads each
+  face via its per-face 2D target -- see Non-DSA OpenGL below.
 
 ### Tests
 - **Point Y-mapping** (`test_topology.cpp`): `topology_point_list` queries the
@@ -64,25 +66,34 @@ the suite. Set `ERHE_TEST_OPENGL_NO_DSA=1` to force the non-DSA OpenGL path (whi
 also disables persistent buffers, since erhe ties persistent mapping to
 `glNamedBufferStorage`); the default (unset) keeps DSA.
 
-Two changes make the suite mode-agnostic:
+Three changes make the suite mode-agnostic:
 - The fixture's `make_host_buffer` uses the `Ring_buffer` required/preferred split
   (`host_read|host_write` required; `host_coherent|host_persistent` preferred)
   instead of requiring coherent, which aborted in non-DSA mode ("coherent buffers
   required but not supported").
 - The Vulkan `Buffer::unmap` is persistent-aware (mirrors `map_bytes` and the GL
   backend), needed because the fixture now requests a persistent mapping.
+- `copy_from_buffer` (`gl_blit_command_encoder.cpp`) uploads a plain cube-map face
+  through its per-face 2D target (`GL_TEXTURE_CUBE_MAP_POSITIVE_X + face`) on the
+  classic path, instead of `glTexSubImage3D(GL_TEXTURE_CUBE_MAP, ...)` -- which is
+  `GL_INVALID_ENUM` in classic GL and left every face unwritten. The DSA path keeps
+  using `glTextureSubImage3D` by texture name (z = face). The generated
+  `gl::Texture_target` already exposes the six per-face cube enums (they are
+  contiguous and in Vulkan layer order +X,-X,+Y,-Y,+Z,-Z, so `positive_x + face`
+  selects the right face); no gl-binding regeneration is needed. The per-face 2D
+  path uploads a single face, so it asserts `gl_depth == 1`. `texture_cube_map_array`
+  is unaffected: its GL target accepts 3D sub-image addressing on both paths, so it
+  keeps flowing through `storage_dimensions == 3`.
 
-Result with `ERHE_TEST_OPENGL_NO_DSA=1`: **39 passed + 1 skipped + 1 failed**. The
-failure is `texture_cube_sample_faces`: classic GL must upload cube faces via the
-per-face 2D target (`GL_TEXTURE_CUBE_MAP_POSITIVE_X + face`), but the generated gl
-wrapper's `gl::Texture_target` does not expose the per-face cube enums (the DSA path
-uses `glTextureSubImage3D` with the texture name and works). Exposing those enums
-(a gl-binding regeneration) is the remaining work for non-DSA cube support; the
-editor does not use cube maps, so this path is otherwise unexercised.
+Result with `ERHE_TEST_OPENGL_NO_DSA=1`: **40 passed + 1 skipped, 0 failed** -- full
+parity with the DSA run (the same legitimate `snorm_color_render_readback` skip) and
+with headless Vulkan. `texture_cube_sample_faces`, previously the lone non-DSA
+failure, now passes.
 
 ## Metal
 
 The CMake gate enables the Metal build, but Metal cannot be built or run on the
 Windows dev machine. Validate on macOS (Xcode); the same classes of issue may apply.
-The cube-map sub-image path has a macOS (`__APPLE__`) branch that mirrors the same
-3D-addressing fix but is unverified there.
+The cube-map upload path's macOS (`__APPLE__`) GL branch uploads each face through
+its per-face 2D target (`GL_TEXTURE_CUBE_MAP_POSITIVE_X + face`), matching the non-DSA
+path, but is unverified there.
