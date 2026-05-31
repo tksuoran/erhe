@@ -65,6 +65,7 @@ if (_gpu_tests_supported)
         test_copy.cpp
         test_load_action.cpp
         test_blend_premultiplied.cpp
+        test_sampler_modes.cpp
     )
 
     target_link_libraries(${_gpu_target}

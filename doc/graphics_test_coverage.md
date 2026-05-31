@@ -37,6 +37,8 @@ or more `TEST_F(Gpu_test, ...)` cases. `[x]` = covered, `[ ]` = gap.
 - [x] Buffer upload + copy + fill (`test_buffer_transfer.cpp`)
 - [x] Texture upload roundtrip + constant clear (`test_texture_upload.cpp`)
 - [x] Texture sampling, nearest filter (`test_texture_sample.cpp`)
+- [x] Sampler linear filter, two-texel midpoint interpolation (`test_sampler_modes.cpp`)
+- [x] Sampler address modes: clamp_to_edge / repeat / mirrored_repeat (`test_sampler_modes.cpp`)
 - [x] copy_from_buffer (buffer -> texture) (`test_copy.cpp`)
 
 ## Known gaps (not yet covered)
