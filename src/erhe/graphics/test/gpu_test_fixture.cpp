@@ -191,6 +191,86 @@ auto Gpu_test::read_texture_rgba8(const erhe::graphics::Texture& texture)
     return out;
 }
 
+auto Gpu_test::read_texture_color_bytes(const erhe::graphics::Texture& texture, const std::size_t bytes_per_texel)
+    -> std::vector<std::byte>
+{
+    const int         width         = texture.get_width();
+    const int         height        = texture.get_height();
+    const std::size_t bytes_per_row = static_cast<std::size_t>(width) * bytes_per_texel;
+    const std::size_t byte_count    = bytes_per_row * static_cast<std::size_t>(height);
+
+    std::shared_ptr<erhe::graphics::Buffer> readback = make_readback_buffer(byte_count, "read_texture_color_bytes");
+
+    submit_and_wait(
+        [&](erhe::graphics::Command_buffer& command_buffer) {
+            erhe::graphics::Blit_command_encoder blit = device().make_blit_command_encoder(command_buffer);
+            blit.copy_from_texture(
+                &texture,
+                0,                              // source_slice
+                0,                              // source_level
+                glm::ivec3{0, 0, 0},            // source_origin
+                glm::ivec3{width, height, 1},   // source_size
+                readback.get(),                 // destination_buffer
+                0,                              // destination_offset
+                static_cast<std::uintptr_t>(bytes_per_row),
+                static_cast<std::uintptr_t>(byte_count)
+            );
+        }
+    );
+
+    return read_buffer(*readback, byte_count);
+}
+
+auto Gpu_test::read_texture_rgba32f(const erhe::graphics::Texture& texture)
+    -> std::vector<float>
+{
+    const int                    width  = texture.get_width();
+    const int                    height = texture.get_height();
+    const std::size_t            texels = static_cast<std::size_t>(width) * static_cast<std::size_t>(height);
+    const std::vector<std::byte> raw    = read_texture_color_bytes(texture, 4u * sizeof(float));
+    std::vector<float> out(texels * 4u);
+    std::memcpy(out.data(), raw.data(), out.size() * sizeof(float));
+    return out;
+}
+
+auto Gpu_test::read_texture_depth32f(const erhe::graphics::Texture& texture)
+    -> std::vector<float>
+{
+    const int         width         = texture.get_width();
+    const int         height        = texture.get_height();
+    const std::size_t texels        = static_cast<std::size_t>(width) * static_cast<std::size_t>(height);
+    const std::size_t bytes_per_row = static_cast<std::size_t>(width) * sizeof(float);
+    const std::size_t byte_count    = bytes_per_row * static_cast<std::size_t>(height);
+
+    std::shared_ptr<erhe::graphics::Buffer> readback = make_readback_buffer(byte_count, "read_texture_depth32f");
+
+    // The texture->buffer copy_from_texture overload picks VK_IMAGE_ASPECT_DEPTH
+    // for depth formats and reads the tracked layout, so the depth texture must
+    // already be in transfer_src_optimal (set via the render pass usage_after /
+    // layout_after).
+    submit_and_wait(
+        [&](erhe::graphics::Command_buffer& command_buffer) {
+            erhe::graphics::Blit_command_encoder blit = device().make_blit_command_encoder(command_buffer);
+            blit.copy_from_texture(
+                &texture,
+                0,                              // source_slice
+                0,                              // source_level
+                glm::ivec3{0, 0, 0},            // source_origin
+                glm::ivec3{width, height, 1},   // source_size
+                readback.get(),                 // destination_buffer
+                0,                              // destination_offset
+                static_cast<std::uintptr_t>(bytes_per_row),
+                static_cast<std::uintptr_t>(byte_count)
+            );
+        }
+    );
+
+    const std::vector<std::byte> raw = read_buffer(*readback, byte_count);
+    std::vector<float> out(texels);
+    std::memcpy(out.data(), raw.data(), out.size() * sizeof(float));
+    return out;
+}
+
 auto Gpu_test::draw_fullscreen_triangle(
     const char*                                fragment_color_glsl,
     const erhe::graphics::Rasterization_state& rasterization,

@@ -40,6 +40,7 @@ or more `TEST_F(Gpu_test, ...)` cases. `[x]` = covered, `[ ]` = gap.
 - [x] Sampler linear filter, two-texel midpoint interpolation (`test_sampler_modes.cpp`)
 - [x] Sampler address modes: clamp_to_edge / repeat / mirrored_repeat (`test_sampler_modes.cpp`)
 - [x] copy_from_buffer (buffer -> texture) (`test_copy.cpp`)
+- [x] Depth-texture readback: depth-only pass writes a known NDC depth, depth aspect copied to host (`test_depth_readback.cpp`)
 
 ## Known gaps (not yet covered)
 

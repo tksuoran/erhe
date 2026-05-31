@@ -76,6 +76,32 @@ protected:
     [[nodiscard]] auto read_texture_rgba8(const erhe::graphics::Texture& texture)
         -> std::vector<uint8_t>;
 
+    // Copy a texture's level 0 (color aspect) to a mappable buffer and return
+    // the raw bytes, tightly packed at width * bytes_per_texel bytes per row.
+    // bytes_per_texel must match the texture's pixel format size. Same framing
+    // contract as read_texture_rgba8 (texture must be in transfer_src_optimal).
+    // The byte-level workhorse the typed color readbacks build on; also used
+    // directly when the caller wants to reinterpret texels as signed bytes
+    // (snorm8) etc.
+    [[nodiscard]] auto read_texture_color_bytes(const erhe::graphics::Texture& texture, std::size_t bytes_per_texel)
+        -> std::vector<std::byte>;
+
+    // Copy a format_32_vec4_float color texture's level 0 to a mappable buffer
+    // and return the texels as floats (4 floats per texel, tightly packed).
+    // Same framing contract as read_texture_rgba8.
+    [[nodiscard]] auto read_texture_rgba32f(const erhe::graphics::Texture& texture)
+        -> std::vector<float>;
+
+    // Copy a depth texture's level 0 (depth aspect) to a mappable buffer and
+    // return one 32-bit float depth value per texel, tightly packed at width
+    // floats per row. Requires a format_d32_sfloat texture left in
+    // transfer_src_optimal (the render pass must set usage_after / layout_after
+    // = transfer_src / transfer_src_optimal so the depth aspect is readable).
+    // The Blit_command_encoder texture->buffer overload selects the depth aspect
+    // for depth formats.
+    [[nodiscard]] auto read_texture_depth32f(const erhe::graphics::Texture& texture)
+        -> std::vector<float>;
+
     // Render a fullscreen (oversized) triangle of a constant color into a fresh
     // RGBA8 color target with the given rasterization + blend state, then return
     // the read-back pixels. The color is GLSL injected as the fragment output,
