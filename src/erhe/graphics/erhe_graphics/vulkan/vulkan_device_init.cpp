@@ -1402,6 +1402,13 @@ Device_impl::Device_impl(
     m_info.max_compute_shader_storage_blocks         = cap(limits.maxPerStageDescriptorStorageBuffers);
     m_info.max_compute_uniform_blocks                = cap(limits.maxPerStageDescriptorUniformBuffers);
     m_info.max_compute_shared_memory_size            = cap(limits.maxComputeSharedMemorySize);
+    m_info.max_compute_workgroup_count[0]            = cap(limits.maxComputeWorkGroupCount[0]);
+    m_info.max_compute_workgroup_count[1]            = cap(limits.maxComputeWorkGroupCount[1]);
+    m_info.max_compute_workgroup_count[2]            = cap(limits.maxComputeWorkGroupCount[2]);
+    m_info.max_compute_workgroup_size[0]             = cap(limits.maxComputeWorkGroupSize[0]);
+    m_info.max_compute_workgroup_size[1]             = cap(limits.maxComputeWorkGroupSize[1]);
+    m_info.max_compute_workgroup_size[2]             = cap(limits.maxComputeWorkGroupSize[2]);
+    m_info.max_compute_work_group_invocations        = cap(limits.maxComputeWorkGroupInvocations);
     m_info.max_vertex_shader_storage_blocks          = cap(limits.maxPerStageDescriptorStorageBuffers);
     m_info.max_vertex_uniform_blocks                 = cap(limits.maxPerStageDescriptorUniformBuffers);
     m_info.max_fragment_shader_storage_blocks        = cap(limits.maxPerStageDescriptorStorageBuffers);
