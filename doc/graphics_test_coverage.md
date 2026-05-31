@@ -45,6 +45,7 @@ or more `TEST_F(Gpu_test, ...)` cases. `[x]` = covered, `[ ]` = gap.
 ## Color formats
 
 - [x] float32 color render + readback: out-of-[0,1] values into format_32_vec4_float survive unclamped (`test_float32_render.cpp`)
+- [x] snorm color render + readback: signed-normalized values into format_8_vec4_snorm decode to the written signs (`test_snorm_render.cpp`)
 
 ## Known gaps (not yet covered)
 
