@@ -64,6 +64,7 @@ if (_gpu_tests_supported)
         test_stencil.cpp
         test_copy.cpp
         test_load_action.cpp
+        test_blend_premultiplied.cpp
     )
 
     target_link_libraries(${_gpu_target}
