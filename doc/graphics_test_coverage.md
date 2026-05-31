@@ -42,6 +42,10 @@ or more `TEST_F(Gpu_test, ...)` cases. `[x]` = covered, `[ ]` = gap.
 - [x] copy_from_buffer (buffer -> texture) (`test_copy.cpp`)
 - [x] Depth-texture readback: depth-only pass writes a known NDC depth, depth aspect copied to host (`test_depth_readback.cpp`)
 
+## Color formats
+
+- [x] float32 color render + readback: out-of-[0,1] values into format_32_vec4_float survive unclamped (`test_float32_render.cpp`)
+
 ## Known gaps (not yet covered)
 
 - [ ] copy_from_texture (texture -> texture): the Vulkan blit encoder's image-to-image copy transitions both images to SHADER_READ_ONLY_OPTIMAL but does not update the tracked layout (unlike the buffer<->image paths), so a subsequent readback uses a stale tracked layout. Blocked on an engine fix to keep the tracked layout in sync; covering it now would require working around that staleness in the test.
