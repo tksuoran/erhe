@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_graphics/device.hpp"
+#include "erhe_graphics/metal/metal_pixel_format_table.hpp"
 #include "erhe_graphics/ring_buffer.hpp"
 #include "erhe_graphics/shader_monitor.hpp"
 
@@ -174,6 +175,8 @@ private:
     Shader_monitor                   m_shader_monitor;
     Device_info                      m_info;
     Graphics_config                  m_graphics_config;
+    // Resolved once at construction; indexes the pixel-format capability table.
+    metal::Gpu_family                m_gpu_family{metal::Gpu_family::metal3};
     uint64_t                         m_frame_index{1};
     Device_frame_state               m_state{Device_frame_state::idle};
     std::vector<Completion_handler>  m_completion_handlers;

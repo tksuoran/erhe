@@ -5,6 +5,7 @@
 #include "erhe_graphics/metal/metal_helpers.hpp"
 #include "erhe_graphics/metal/metal_surface.hpp"
 #include "erhe_graphics/metal/metal_texture.hpp"
+#include "erhe_graphics/metal/metal_pixel_format_table.hpp"
 #include "erhe_graphics/blit_command_encoder.hpp"
 #include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/compute_command_encoder.hpp"
@@ -56,6 +57,12 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
         );
         abort();
     }
+
+    // Resolve the device's GPU family once; the pixel-format capability table
+    // (metal_pixel_format_table, a translation of Metal-Feature-Set-Tables.pdf)
+    // is indexed by it in get_format_properties().
+    m_gpu_family = metal::metal_resolve_gpu_family(m_mtl_device);
+    log_startup->info("Metal GPU family: {}", metal::metal_gpu_family_name(m_gpu_family));
 
     m_mtl_command_queue = m_mtl_device->newCommandQueue();
 
@@ -648,21 +655,43 @@ auto Device_impl::get_format_properties(const erhe::dataformat::Format format) c
     }
     properties.supported = true;
 
-    // Derive renderability from the format's aspect bits (per erhe::dataformat).
-    // Every color format Metal exposes is color-renderable, and every
-    // depth/stencil format is depth/stencil-renderable on Metal 3 hardware, so
-    // the aspect bits are the authoritative signal -- mirroring the Vulkan
-    // backend, which also gates depth_renderable/stencil_renderable on the
-    // dataformat depth/stencil bit counts.
+    // Depth/stencil renderability follows the format's aspect bits (per
+    // erhe::dataformat); it is implicit for depth/stencil formats and is not
+    // part of the color-side capability table. Mirrors the Vulkan backend.
     const std::size_t depth_bits   = erhe::dataformat::get_depth_size_bits(format);
     const std::size_t stencil_bits = erhe::dataformat::get_stencil_size_bits(format);
     const bool        is_color     = erhe::dataformat::has_color(format);
 
-    properties.color_renderable   = is_color;
-    properties.depth_renderable   = (depth_bits > 0);
+    properties.depth_renderable   = (depth_bits   > 0);
     properties.stencil_renderable = (stencil_bits > 0);
-    properties.filter             = is_color; // color formats are linearly filterable on Metal 3
-    properties.framebuffer_blend  = is_color;
+
+    // Color-side capabilities (color render target, linear filtering, blend and
+    // MSAA) come from Apple's "Texture capabilities by pixel format" tables,
+    // evaluated for this device's resolved GPU family. The table in
+    // metal_pixel_format_table.{hpp,cpp} is a direct translation of
+    // Metal-Feature-Set-Tables.pdf. Using it lets us correctly reject linear
+    // filtering of integer and 32-bit-float formats, and blending of integer
+    // formats -- all of which the previous "every color format is
+    // filterable/blendable" heuristic reported wrongly.
+    const std::uint64_t raw_pixel_format = static_cast<std::uint64_t>(pixel_format);
+    const bool          format_in_table  = metal::metal_pixel_format_is_known(raw_pixel_format);
+    const std::uint32_t caps =
+        format_in_table
+            ? metal::metal_pixel_format_texture_capabilities(raw_pixel_format, m_gpu_family)
+            : metal::texture_capability_none;
+    if (format_in_table) {
+        properties.color_renderable  = (caps & metal::texture_capability_color)  != 0;
+        properties.filter            = (caps & metal::texture_capability_filter) != 0;
+        properties.framebuffer_blend = (caps & metal::texture_capability_blend)  != 0;
+    } else {
+        // Maps to a real MTLPixelFormat but is absent from the table (e.g. a
+        // format added to to_mtl_pixel_format but not yet transcribed). Fall
+        // back to the conservative aspect-based heuristic so behavior never
+        // regresses below the previous implementation.
+        properties.color_renderable  = is_color;
+        properties.filter            = is_color;
+        properties.framebuffer_blend = is_color;
+    }
 
     properties.red_size         = static_cast<int>(erhe::dataformat::get_red_size_bits    (format));
     properties.green_size       = static_cast<int>(erhe::dataformat::get_green_size_bits  (format));
@@ -672,12 +701,19 @@ auto Device_impl::get_format_properties(const erhe::dataformat::Format format) c
     properties.stencil_size     = static_cast<int>(stencil_bits);
     properties.image_texel_size = static_cast<int>(erhe::dataformat::get_format_size_bytes(format));
 
-    // MSAA sample counts: only renderable formats can be multisampled. 1x is
-    // always present; higher counts are gated on device support.
+    // MSAA sample counts. 1x is always present. A format is multisampleable if
+    // the capability table grants MSAA, or -- for depth/stencil formats, whose
+    // MSAA renderability is implicit -- if it is depth/stencil renderable.
+    // Untabled but renderable formats keep the previous behavior.
     properties.texture_2d_sample_counts.push_back(1);
     const bool is_renderable =
         properties.color_renderable || properties.depth_renderable || properties.stencil_renderable;
-    if (is_renderable) {
+    const bool multisampleable =
+        properties.depth_renderable   ||
+        properties.stencil_renderable ||
+        ((caps & metal::texture_capability_msaa) != 0) ||
+        (!format_in_table && is_renderable);
+    if (multisampleable) {
         for (int count : {2, 4, 8}) {
             if (m_mtl_device->supportsTextureSampleCount(static_cast<NS::UInteger>(count))) {
                 properties.texture_2d_sample_counts.push_back(count);
