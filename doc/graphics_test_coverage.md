@@ -25,6 +25,7 @@ or more `TEST_F(Gpu_test, ...)` cases. `[x]` = covered, `[ ]` = gap.
 ## Render pass
 
 - [x] Load_action::Load preserves prior pass across two passes (`test_load_action.cpp`)
+- [x] Multisample (4x MSAA) color render + average resolve to single-sample target (`test_msaa_resolve.cpp`)
 
 ## Compute
 
@@ -52,5 +53,4 @@ or more `TEST_F(Gpu_test, ...)` cases. `[x]` = covered, `[ ]` = gap.
 
 - [ ] copy_from_texture (texture -> texture): the Vulkan blit encoder's image-to-image copy transitions both images to SHADER_READ_ONLY_OPTIMAL but does not update the tracked layout (unlike the buffer<->image paths), so a subsequent readback uses a stale tracked layout. Blocked on an engine fix to keep the tracked layout in sync; covering it now would require working around that staleness in the test.
 - [ ] Mipmap generation / sampling across levels
-- [ ] Multisample (MSAA) render + resolve
 - [ ] Texture array / 3D texture sampling
