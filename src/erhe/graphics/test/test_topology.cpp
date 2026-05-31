@@ -18,6 +18,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -35,23 +36,39 @@ void main()
 }
 )glsl";
 
-// Four 1-pixel points. gl_PointSize is written (via the explicit gl_PerVertex out
-// block) so the Vulkan rasterizer produces a defined single-pixel point. The
-// centre point (0,0) is independent of the framebuffer Y orientation.
+// Four 1-pixel points placed at exact target pixel centres. gl_PointSize is
+// written (via the explicit gl_PerVertex out block) so the Vulkan rasterizer
+// produces a defined single-pixel point.
+//
+// Each point is emitted from a target pixel coordinate (TARGET_X<i>, TARGET_Y<i>)
+// in image-memory space (row 0 == first row returned by read_texture_rgba8) via
+// the pixel-centre mapping. For a target of size TARGET_SIZE and target pixel
+// (px, py) the NDC that lands on that pixel's centre is:
+//     ndc_x =  ((px + 0.5) / TARGET_SIZE) * 2 - 1
+//     ndc_y = -(((py + 0.5) / TARGET_SIZE) * 2 - 1)
+// The Y term is negated to match the render encoder's negative-height viewport
+// (VK_KHR_maintenance1 Y-flip), so increasing py moves down in image memory.
+// Mapping to pixel centres (offset +0.5) removes the half-pixel rasterization
+// ambiguity, so each point lands on exactly one unambiguous texel.
 constexpr const char* c_point_vertex_source = R"glsl(
 out gl_PerVertex {
     vec4  gl_Position;
     float gl_PointSize;
 };
+float pixel_center_ndc(float pixel)
+{
+    return ((pixel + 0.5) / float(TARGET_SIZE)) * 2.0 - 1.0;
+}
 void main()
 {
-    vec2 positions[4] = vec2[4](
-        vec2( 0.0,  0.0),
-        vec2(-0.5, -0.5),
-        vec2( 0.5, -0.5),
-        vec2( 0.5,  0.5)
+    vec2 target_pixels[4] = vec2[4](
+        vec2(float(TARGET_X0), float(TARGET_Y0)),
+        vec2(float(TARGET_X1), float(TARGET_Y1)),
+        vec2(float(TARGET_X2), float(TARGET_Y2)),
+        vec2(float(TARGET_X3), float(TARGET_Y3))
     );
-    gl_Position  = vec4(positions[gl_VertexIndex], 0.0, 1.0);
+    vec2 p = target_pixels[gl_VertexIndex];
+    gl_Position  = vec4(pixel_center_ndc(p.x), -pixel_center_ndc(p.y), 0.0, 1.0);
     gl_PointSize = 1.0;
 }
 )glsl";
@@ -91,6 +108,17 @@ TEST_F(Gpu_test, topology_point_list)
 {
     const std::shared_ptr<erhe::graphics::Texture> color_target = make_color_target(c_size, c_size);
 
+    // Target pixel centres (image-memory coordinates: row 0 == first row returned
+    // by read_texture_rgba8) for the four points. Chosen interior pixels so the
+    // 1-pixel point cannot be clipped and the lit texels are unambiguous.
+    struct Target_pixel { int x; int y; };
+    constexpr std::array<Target_pixel, 4> target_pixels{
+        Target_pixel{ 8,  8},
+        Target_pixel{ 4,  4},
+        Target_pixel{12,  4},
+        Target_pixel{12, 12}
+    };
+
     const erhe::graphics::Bind_group_layout empty_layout{
         device(),
         erhe::graphics::Bind_group_layout_create_info{
@@ -105,6 +133,17 @@ TEST_F(Gpu_test, topology_point_list)
 
     erhe::graphics::Shader_stages_create_info shader_create_info{
         .name             = "topology_point",
+        .defines          = {
+            { "TARGET_SIZE", std::to_string(c_size)                },
+            { "TARGET_X0",   std::to_string(target_pixels[0].x)    },
+            { "TARGET_Y0",   std::to_string(target_pixels[0].y)    },
+            { "TARGET_X1",   std::to_string(target_pixels[1].x)    },
+            { "TARGET_Y1",   std::to_string(target_pixels[1].y)    },
+            { "TARGET_X2",   std::to_string(target_pixels[2].x)    },
+            { "TARGET_Y2",   std::to_string(target_pixels[2].y)    },
+            { "TARGET_X3",   std::to_string(target_pixels[3].x)    },
+            { "TARGET_Y3",   std::to_string(target_pixels[3].y)    }
+        },
         .fragment_outputs = &fragment_outputs,
         .no_vertex_input  = true,
         .shaders = {
@@ -163,10 +202,17 @@ TEST_F(Gpu_test, topology_point_list)
     // Four 1-pixel points -> exactly four lit texels.
     EXPECT_EQ(count_lit_texels(pixels, c_size, c_size), 4);
 
-    // The centre point (NDC 0,0) is Y-orientation independent; it must be lit.
-    const std::size_t center_index =
-        ((static_cast<std::size_t>(c_size) / 2u) * static_cast<std::size_t>(c_size) + (static_cast<std::size_t>(c_size) / 2u)) * 4u;
-    EXPECT_GT(pixels[center_index + 0u], 127u);
+    // Each point was placed at the centre of its chosen target pixel, so exactly
+    // those four texels (and no others, per the count above) must be lit. This is
+    // unambiguous: the pixel-centre mapping removes the half-pixel boundary case.
+    auto is_lit = [&](const int x, const int y) -> bool {
+        const std::size_t index = (static_cast<std::size_t>(y) * static_cast<std::size_t>(c_size) + static_cast<std::size_t>(x)) * 4u;
+        return pixels[index + 0u] > 127u;
+    };
+    for (const Target_pixel& target : target_pixels) {
+        EXPECT_TRUE(is_lit(target.x, target.y))
+            << "point at target pixel (" << target.x << ", " << target.y << ") was not lit";
+    }
 }
 
 // Primitive topology: line_list. Draws one horizontal segment through the centre
