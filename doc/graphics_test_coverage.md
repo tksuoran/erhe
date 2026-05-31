@@ -31,6 +31,7 @@ or more `TEST_F(Gpu_test, ...)` cases. `[x]` = covered, `[ ]` = gap.
 - [x] Compute writing an SSBO, 1D dispatch (`test_m4_compute_ssbo.cpp`)
 - [x] Compute reading a uniform buffer (`test_m4_compute_ubo.cpp`)
 - [x] Compute 2D dispatch, group counts > 1 per dim over non-multiple extents (`test_compute_2d.cpp`)
+- [x] User struct (`add_struct`) in a UBO interface block, `struct_types` wiring + std140 member offsets (`test_struct_types.cpp`)
 
 ## Buffers / transfer
 

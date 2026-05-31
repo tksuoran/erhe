@@ -69,6 +69,7 @@ if (_gpu_tests_supported)
         test_depth_readback.cpp
         test_float32_render.cpp
         test_snorm_render.cpp
+        test_struct_types.cpp
     )
 
     target_link_libraries(${_gpu_target}
