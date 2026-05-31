@@ -44,6 +44,9 @@ or more `TEST_F(Gpu_test, ...)` cases. `[x]` = covered, `[ ]` = gap.
 - [x] Sampler address modes: clamp_to_edge / repeat / mirrored_repeat (`test_sampler_modes.cpp`)
 - [x] copy_from_buffer (buffer -> texture) (`test_copy.cpp`)
 - [x] Depth-texture readback: depth-only pass writes a known NDC depth, depth aspect copied to host (`test_depth_readback.cpp`)
+- [x] Mipmap generation: generate_mipmaps linear-downsamples level 0 (half-black/half-white split averages to mid-gray at the 1x1 level; the 4x4 level keeps the vertical split) (`test_mipmaps.cpp`)
+- [x] 2D array texture sampling: texture_2d_array with 3 distinct per-layer solid colors filled via copy_from_buffer destination_slice, each layer sampled through a sampler2DArray (layer via GLSL define) and verified (`test_texture_array.cpp`)
+- [x] 3D texture sampling: 2x2x2 texture_3d filled in one copy_from_buffer, each voxel center sampled through a sampler3D (nearest) and verified against its distinct color (`test_texture_3d.cpp`)
 
 ## Color formats
 
@@ -53,6 +56,4 @@ or more `TEST_F(Gpu_test, ...)` cases. `[x]` = covered, `[ ]` = gap.
 ## Known gaps (not yet covered)
 
 - [ ] copy_from_texture (texture -> texture): the Vulkan blit encoder's image-to-image copy transitions both images to SHADER_READ_ONLY_OPTIMAL but does not update the tracked layout (unlike the buffer<->image paths), so a subsequent readback uses a stale tracked layout. Blocked on an engine fix to keep the tracked layout in sync; covering it now would require working around that staleness in the test.
-- [x] Mipmap generation: generate_mipmaps linear-downsamples level 0 (half-black/half-white split averages to mid-gray at the 1x1 level; the 4x4 level keeps the vertical split) (`test_mipmaps.cpp`)
-- [x] 2D array texture sampling: texture_2d_array with 3 distinct per-layer solid colors filled via copy_from_buffer destination_slice, each layer sampled through a sampler2DArray (layer via GLSL define) and verified (`test_texture_array.cpp`)
-- [ ] 3D texture sampling
+- [ ] Cube map (texture_cube_map) sampling: needs a 6-layer CUBE-compatible image and a samplerCube view sampled by a direction vector; not yet covered.
