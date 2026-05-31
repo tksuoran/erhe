@@ -87,13 +87,16 @@ namespace erhe::graphics {
     }
 
     if (m_device.get_info().use_persistent_buffers) {
-        const bool persistent = test_bit_set(memory_properties, Memory_property_flag_bit_mask::host_persistent);
-        const bool coherent   = test_bit_set(memory_properties, Memory_property_flag_bit_mask::host_coherent);
+        const bool coherent = test_bit_set(memory_properties, Memory_property_flag_bit_mask::host_coherent);
+        // GL requires MAP_PERSISTENT_BIT whenever MAP_COHERENT_BIT is set. The Vulkan-style
+        // abstraction treats coherence and persistent mapping as independent properties, so a
+        // caller may request host_coherent without host_persistent; on GL coherence subsumes
+        // persistence, so imply the persistent mapping here rather than rejecting the request.
+        const bool persistent = test_bit_set(memory_properties, Memory_property_flag_bit_mask::host_persistent) || coherent;
         if (persistent) {
             gl_storage = gl_storage | gl::Buffer_storage_mask::map_persistent_bit;
         }
         if (coherent) {
-            ERHE_VERIFY(persistent); // GL requires persistent for coherent buffers
             gl_storage = gl_storage | gl::Buffer_storage_mask::map_coherent_bit;
         }
     } else {
@@ -184,13 +187,13 @@ auto Buffer_impl::get_gl_access_mask() const -> gl::Map_buffer_access_mask
 
     if (m_device.get_info().use_persistent_buffers) {
         // Persistent buffers are available - we can support both required and preferred persistent/coherent
-        const bool persistent = test_bit_set(memory_properties, Memory_property_flag_bit_mask::host_persistent);
-        const bool coherent   = test_bit_set(memory_properties, Memory_property_flag_bit_mask::host_coherent);
+        const bool coherent = test_bit_set(memory_properties, Memory_property_flag_bit_mask::host_coherent);
+        // Coherent implies a persistent mapping on GL (see get_gl_storage_mask).
+        const bool persistent = test_bit_set(memory_properties, Memory_property_flag_bit_mask::host_persistent) || coherent;
         if (persistent) {
             gl_access_mask = gl_access_mask | gl::Map_buffer_access_mask::map_persistent_bit;
         }
         if (coherent) {
-            ERHE_VERIFY(persistent); // GL requires persistent for coherent buffers
             gl_access_mask = gl_access_mask | gl::Map_buffer_access_mask::map_coherent_bit;
         } else if (test_bit_set(memory_properties, Memory_property_flag_bit_mask::host_write)) {
             // MAP_FLUSH_EXPLICIT_BIT may only be used together with MAP_WRITE_BIT (see the GL
@@ -492,7 +495,6 @@ auto Buffer_impl::map_bytes(const std::size_t byte_offset, const std::size_t byt
     ERHE_PROFILE_FUNCTION();
 
     ERHE_VERIFY(byte_count > 0);
-    ERHE_VERIFY(m_map.empty());
     ERHE_VERIFY(gl_name() != 0);
 
     log_buffer->trace(
@@ -504,6 +506,21 @@ auto Buffer_impl::map_bytes(const std::size_t byte_offset, const std::size_t byt
     );
 
     ERHE_VERIFY(byte_offset + byte_count <= m_capacity_byte_count);
+
+    // A persistently mapped buffer (host_persistent, or host_coherent which implies
+    // persistent on GL) is mapped once in allocate_storage and stays mapped for its
+    // lifetime. Hand back a view into that existing mapping rather than mapping again,
+    // mirroring begin_write()/end_write(); unmap() is correspondingly a no-op while the
+    // buffer remains persistently mapped. The initial allocate_storage map (m_map still
+    // empty) falls through to perform the real mapping below.
+    const gl::Buffer_storage_mask gl_storage_mask = get_gl_storage_mask();
+    const bool map_persistent = erhe::utility::test_bit_set(gl_storage_mask, gl::Buffer_storage_mask::map_persistent_bit);
+    if (m_device.get_info().use_persistent_buffers && map_persistent && !m_map.empty()) {
+        ERHE_VERIFY(m_map_byte_offset == 0);
+        return m_map.subspan(byte_offset, byte_count);
+    }
+
+    ERHE_VERIFY(m_map.empty());
 
     m_map_byte_offset = static_cast<GLsizeiptr>(byte_offset);
 
@@ -611,6 +628,15 @@ void Buffer_impl::unmap() noexcept
 
     ERHE_VERIFY(!m_map.empty());
     ERHE_VERIFY(gl_name() != 0);
+
+    // A persistently mapped buffer (host_persistent, or host_coherent which implies
+    // persistent on GL) keeps its mapping for its lifetime (see map_bytes()): there is
+    // nothing to unmap and the persistent pointer in m_map must stay valid.
+    const gl::Buffer_storage_mask gl_storage_mask = get_gl_storage_mask();
+    const bool map_persistent = erhe::utility::test_bit_set(gl_storage_mask, gl::Buffer_storage_mask::map_persistent_bit);
+    if (m_device.get_info().use_persistent_buffers && map_persistent) {
+        return;
+    }
 
     log_buffer->trace(
         "Buffer_impl::unmap() byte_offset = {}, byte_count = {}, pointer = {}, name = {} {}",
