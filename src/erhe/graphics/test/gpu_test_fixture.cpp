@@ -121,10 +121,16 @@ auto Gpu_test::make_host_buffer(
         .capacity_byte_count                    = byte_count,
         .memory_allocation_create_flag_bit_mask = erhe::graphics::Memory_allocation_create_flag_bit_mask::mapped,
         .usage                                  = usage,
+        // host_read/host_write are required; host_coherent + host_persistent are
+        // only preferred (the proven Ring_buffer split). Requiring coherent aborts
+        // on backends/modes that cannot provide it -- e.g. OpenGL without direct
+        // state access, where persistent mapping (and thus coherent) is unavailable.
         .required_memory_property_bit_mask      =
-            erhe::graphics::Memory_property_flag_bit_mask::host_read  |
-            erhe::graphics::Memory_property_flag_bit_mask::host_write |
-            erhe::graphics::Memory_property_flag_bit_mask::host_coherent,
+            erhe::graphics::Memory_property_flag_bit_mask::host_read |
+            erhe::graphics::Memory_property_flag_bit_mask::host_write,
+        .preferred_memory_property_bit_mask     =
+            erhe::graphics::Memory_property_flag_bit_mask::host_coherent |
+            erhe::graphics::Memory_property_flag_bit_mask::host_persistent,
         .debug_label = erhe::utility::Debug_label{debug_label}
     };
     return std::make_shared<erhe::graphics::Buffer>(graphics_device, create_info);
@@ -146,11 +152,14 @@ auto Gpu_test::read_buffer(erhe::graphics::Buffer& buffer, std::size_t byte_coun
     if (byte_count == 0) {
         byte_count = buffer.get_capacity_byte_count();
     }
-    // make_readback_buffer allocates host_coherent memory, so GPU writes are
-    // visible to the host once the GPU is idle -- no vkInvalidateMappedMemoryRanges
-    // is needed. (Calling invalidate would additionally require the range size to
-    // be a multiple of VkPhysicalDeviceLimits::nonCoherentAtomSize, which an
-    // arbitrary byte_count is not -- VUID-VkMappedMemoryRange-size-01390.)
+    // make_readback_buffer prefers host_coherent + host_persistent: when the device
+    // honors them, GPU writes are visible once the GPU is idle and map_bytes hands
+    // back the persistent mapping -- no vkInvalidateMappedMemoryRanges is needed (and
+    // invalidate would require the range to be a multiple of nonCoherentAtomSize,
+    // which an arbitrary byte_count is not -- VUID-VkMappedMemoryRange-size-01390).
+    // When persistent/coherent mapping is unavailable (e.g. OpenGL without direct
+    // state access), map_bytes performs a fresh transient mapping that reads the
+    // committed data after the GPU is idle.
     const std::span<std::byte> mapped = buffer.map_bytes(0, byte_count);
     std::vector<std::byte> out(byte_count);
     std::memcpy(out.data(), mapped.data(), byte_count);
