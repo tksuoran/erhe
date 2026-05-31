@@ -56,6 +56,30 @@ fix below is an engine fix, not a config toggle.
   instead of hardcoding Vulkan's negative-height-viewport assumption -- tests must
   respect device coordinate conventions like all application code does.
 
+## Non-DSA OpenGL (opt-in)
+
+The test device builds a default `Graphics_config` and does not read
+`erhe_graphics.json`, so the editor's `force_no_direct_state_access` does not affect
+the suite. Set `ERHE_TEST_OPENGL_NO_DSA=1` to force the non-DSA OpenGL path (which
+also disables persistent buffers, since erhe ties persistent mapping to
+`glNamedBufferStorage`); the default (unset) keeps DSA.
+
+Two changes make the suite mode-agnostic:
+- The fixture's `make_host_buffer` uses the `Ring_buffer` required/preferred split
+  (`host_read|host_write` required; `host_coherent|host_persistent` preferred)
+  instead of requiring coherent, which aborted in non-DSA mode ("coherent buffers
+  required but not supported").
+- The Vulkan `Buffer::unmap` is persistent-aware (mirrors `map_bytes` and the GL
+  backend), needed because the fixture now requests a persistent mapping.
+
+Result with `ERHE_TEST_OPENGL_NO_DSA=1`: **39 passed + 1 skipped + 1 failed**. The
+failure is `texture_cube_sample_faces`: classic GL must upload cube faces via the
+per-face 2D target (`GL_TEXTURE_CUBE_MAP_POSITIVE_X + face`), but the generated gl
+wrapper's `gl::Texture_target` does not expose the per-face cube enums (the DSA path
+uses `glTextureSubImage3D` with the texture name and works). Exposing those enums
+(a gl-binding regeneration) is the remaining work for non-DSA cube support; the
+editor does not use cube maps, so this path is otherwise unexercised.
+
 ## Metal
 
 The CMake gate enables the Metal build, but Metal cannot be built or run on the
