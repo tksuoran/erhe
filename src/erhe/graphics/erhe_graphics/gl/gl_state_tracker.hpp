@@ -18,6 +18,7 @@
 
 namespace erhe::graphics {
 
+class Device;
 class Gl_binding_state;
 class Render_pipeline_state;
 class Compute_pipeline_state;
@@ -101,11 +102,13 @@ public:
 
     void set_use_dsa      (bool use_dsa);
     void set_binding_state(Gl_binding_state* binding_state);
+    void set_device       (Device* device);
 
 private:
     std::vector<Vertex_input_attribute> m_attributes;
     std::vector<Vertex_input_binding>   m_bindings;
     const Vertex_input_state*           m_last_state    {nullptr};
+    Device*                             m_device        {nullptr};
     Gl_binding_state*                   m_binding_state {nullptr};
     bool                                m_use_dsa       {true};
 };

@@ -569,6 +569,11 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
 
     m_gl_state_tracker.vertex_input.set_use_dsa(m_info.use_direct_state_access);
 
+    // The vertex-input tracker binds a persistent empty VAO for pipelines that
+    // declare no vertex input (core-profile GL rejects glDraw* with VAO 0). The
+    // VAO is created lazily on first use; see get_default_vertex_input_state().
+    m_gl_state_tracker.vertex_input.set_device(&m_device);
+
     if (surface_create_info.context_window != nullptr) {
         if (initial_clear) {
             gl::clear_color(0.2f, 0.2f, 0.2f, 0.2f);
@@ -1981,6 +1986,18 @@ auto Device_impl::get_draw_id_uniform_location() const -> GLint
 auto Device_impl::get_binding_state() -> Gl_binding_state&
 {
     return m_gl_binding_state;
+}
+
+auto Device_impl::get_default_vertex_input_state() -> const Vertex_input_state*
+{
+    // Lazily created on first use (a draw), by which point the public Device's
+    // m_impl is wired so Vertex_input_state_impl::create() can reach get_impl().
+    // Owned here so the per-thread VAO migration manages it and it is destroyed
+    // while the GL context is still current.
+    if (!m_default_vertex_input_state) {
+        m_default_vertex_input_state = std::make_unique<Vertex_input_state>(m_device);
+    }
+    return m_default_vertex_input_state.get();
 }
 
 // GL object creation

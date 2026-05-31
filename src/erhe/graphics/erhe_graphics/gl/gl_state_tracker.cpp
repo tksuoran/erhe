@@ -1,6 +1,7 @@
 #include "erhe_graphics/gl/gl_state_tracker.hpp"
 #include "erhe_graphics/gl/gl_binding_state.hpp"
 #include "erhe_graphics/gl/gl_buffer.hpp"
+#include "erhe_graphics/gl/gl_device.hpp"
 #include "erhe_graphics/gl/gl_helpers.hpp"
 #include "erhe_graphics/gl/gl_render_pass.hpp"
 #include "erhe_graphics/gl/gl_gpu_timer.hpp"
@@ -472,20 +473,28 @@ void Vertex_input_state_tracker::reset()
 void Vertex_input_state_tracker::execute(const Vertex_input_state* const state)
 {
     ERHE_VERIFY(m_binding_state != nullptr);
-    const unsigned int name = (state != nullptr) ? state->get_impl().gl_name() : 0;
+    // Core-profile GL requires a non-zero vertex array object bound for every draw,
+    // even when the pipeline declares no vertex input (e.g. a gl_VertexID-driven
+    // fullscreen triangle). Substitute the device's persistent empty VAO for the
+    // null state so glDraw* does not raise GL_INVALID_OPERATION on VAO 0.
+    const Vertex_input_state* const effective_state =
+        (state != nullptr)
+            ? state
+            : ((m_device != nullptr) ? m_device->get_impl().get_default_vertex_input_state() : nullptr);
+    const unsigned int name = (effective_state != nullptr) ? effective_state->get_impl().gl_name() : 0;
     m_binding_state->bind_vertex_array(name);
 
     // For set_vertex_buffer() and set_index_buffer().
     // Update only when the logical state changes; the cached attribute /
     // binding vectors are tied to the Vertex_input_state instance, not to
     // the GL VAO name.
-    if (m_last_state == state) {
+    if (m_last_state == effective_state) {
         return;
     }
-    m_last_state = state;
-    if (state != nullptr) {
-        m_attributes = state->get_data().attributes;
-        m_bindings   = state->get_data().bindings;
+    m_last_state = effective_state;
+    if (effective_state != nullptr) {
+        m_attributes = effective_state->get_data().attributes;
+        m_bindings   = effective_state->get_data().bindings;
     } else {
         m_attributes.clear();
         m_bindings.clear();
@@ -640,6 +649,11 @@ void Vertex_input_state_tracker::set_use_dsa(const bool use_dsa)
 void Vertex_input_state_tracker::set_binding_state(Gl_binding_state* const binding_state)
 {
     m_binding_state = binding_state;
+}
+
+void Vertex_input_state_tracker::set_device(Device* const device)
+{
+    m_device = device;
 }
 
 void Viewport_rect_state_tracker::reset()

@@ -124,6 +124,14 @@ public:
     [[nodiscard]] auto push_program(unsigned int program) -> Program_binding_guard;
     [[nodiscard]] auto get_binding_state() -> Gl_binding_state&;
 
+    // Lazily-created persistent empty VAO (wrapped in a Vertex_input_state so the
+    // per-thread VAO migration machinery manages it), bound by the vertex-input
+    // tracker for draws whose pipeline declares no vertex input. Created on first
+    // use rather than in the constructor: Vertex_input_state_impl::create() reaches
+    // back through the public Device, whose m_impl is not yet wired while this
+    // Device_impl constructor runs.
+    [[nodiscard]] auto get_default_vertex_input_state() -> const Vertex_input_state*;
+
     // GL object creation
     [[nodiscard]] auto create_texture     (gl::Texture_target target) -> Gl_texture;
     [[nodiscard]] auto create_texture_view(gl::Texture_target target) -> Gl_texture;
@@ -156,6 +164,13 @@ private:
     Gl_context_provider           m_gl_context_provider;
     Device_info                   m_info;
     erhe::window::Context_window* m_context_window{nullptr};
+
+    // Persistent empty VAO bound for draws whose pipeline declares no vertex
+    // input (core-profile GL rejects glDraw* with VAO 0). Owned here so the
+    // existing per-thread VAO migration (Vertex_input_state_impl) manages it;
+    // declared after m_gl_context_provider so it is destroyed while the GL
+    // context is still current.
+    std::unique_ptr<Vertex_input_state> m_default_vertex_input_state;
 
     std::unordered_map<gl::Internal_format, Format_properties> format_properties;
 
