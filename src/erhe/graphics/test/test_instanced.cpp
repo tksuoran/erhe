@@ -26,9 +26,9 @@ namespace erhe::graphics::test {
 
 namespace {
 
-// One instance per column. gl_InstanceIndex selects the column; the
+// One instance per column. gl_InstanceID selects the column; the
 // triangle-strip quad (4 vertices) is sized to one column wide and full
-// height, then translated to column gl_InstanceIndex. The fragment color
+// height, then translated to column gl_InstanceID. The fragment color
 // encodes the instance index in the red channel so the readback can verify
 // each column was drawn by its own instance (not just "something filled the
 // target"). INSTANCE_COUNT columns tile the whole [-1,1] NDC width.
@@ -38,14 +38,14 @@ void main()
 {
     // Unit quad as a triangle strip: (0,0) (1,0) (0,1) (1,1) in [0,1]^2.
     vec2 corners[4] = vec2[4](vec2(0.0, 0.0), vec2(1.0, 0.0), vec2(0.0, 1.0), vec2(1.0, 1.0));
-    vec2 c = corners[gl_VertexIndex];
+    vec2 c = corners[gl_VertexID];
 
     float column_width = 2.0 / float(INSTANCE_COUNT);
-    float x0 = -1.0 + (float(gl_InstanceIndex) * column_width);
+    float x0 = -1.0 + (float(gl_InstanceID) * column_width);
     float x  = x0 + (c.x * column_width);
     float y  = -1.0 + (c.y * 2.0);
     gl_Position = vec4(x, y, 0.0, 1.0);
-    v_instance = gl_InstanceIndex;
+    v_instance = gl_InstanceID;
 }
 )glsl";
 
@@ -64,8 +64,8 @@ void main()
 
 // Instanced draw with a triangle-strip topology. Draws INSTANCE_COUNT
 // instances of a 4-vertex strip quad, each translated to its own column via
-// gl_InstanceIndex, tiling the viewport. Exercises draw_primitives with an
-// instance_count > 1, gl_InstanceIndex, and Input_assembly_state::triangle_strip.
+// gl_InstanceID, tiling the viewport. Exercises draw_primitives with an
+// instance_count > 1, gl_InstanceID, and Input_assembly_state::triangle_strip.
 TEST_F(Gpu_test, instanced_triangle_strip_columns)
 {
     constexpr int      width          = 16;

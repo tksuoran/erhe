@@ -28,7 +28,7 @@ namespace {
 
 constexpr int c_size = 16;
 
-// White, no vertex input. Both topology tests emit positions from gl_VertexIndex.
+// White, no vertex input. Both topology tests emit positions from gl_VertexID.
 constexpr const char* c_fragment_source = R"glsl(
 void main()
 {
@@ -67,7 +67,7 @@ void main()
         vec2(float(TARGET_X2), float(TARGET_Y2)),
         vec2(float(TARGET_X3), float(TARGET_Y3))
     );
-    vec2 p = target_pixels[gl_VertexIndex];
+    vec2 p = target_pixels[gl_VertexID];
     gl_Position  = vec4(pixel_center_ndc(p.x), -pixel_center_ndc(p.y), 0.0, 1.0);
     gl_PointSize = 1.0;
 }
@@ -82,7 +82,7 @@ void main()
         vec2(-0.9, 0.0),
         vec2( 0.9, 0.0)
     );
-    gl_Position = vec4(positions[gl_VertexIndex], 0.0, 1.0);
+    gl_Position = vec4(positions[gl_VertexID], 0.0, 1.0);
 }
 )glsl";
 

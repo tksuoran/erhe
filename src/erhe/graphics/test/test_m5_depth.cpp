@@ -27,7 +27,7 @@ namespace erhe::graphics::test {
 
 namespace {
 
-// Two fullscreen triangles in one 6-vertex draw. Triangle 0 (gl_VertexIndex
+// Two fullscreen triangles in one 6-vertex draw. Triangle 0 (gl_VertexID
 // 0..2) is the near triangle at NEAR_Z; triangle 1 (3..5) is the far triangle
 // at FAR_Z. A flat per-triangle index is forwarded so the fragment shader
 // colors triangle 0 green and triangle 1 red.
@@ -40,8 +40,8 @@ void main()
         vec2( 3.0, -1.0),
         vec2(-1.0,  3.0)
     );
-    int tri = gl_VertexIndex / 3;
-    int v   = gl_VertexIndex - (tri * 3);
+    int tri = gl_VertexID / 3;
+    int v   = gl_VertexID - (tri * 3);
     float z = (tri == 0) ? NEAR_Z : FAR_Z;
     gl_Position = vec4(positions[v], z, 1.0);
     v_tri = tri;

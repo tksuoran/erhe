@@ -26,7 +26,7 @@ namespace {
 
 // No #version and no vertex-input declarations: erhe injects #version, and
 // with no_vertex_input = true it injects no vertex attributes, so the triangle
-// is emitted from gl_VertexIndex. erhe injects the out_color declaration from
+// is emitted from gl_VertexID. erhe injects the out_color declaration from
 // fragment_outputs. The triangle covers the half-plane x + y < 0 in clip space
 // (vertices at three corners), i.e. roughly half the target.
 constexpr const char* c_vertex_source = R"glsl(
@@ -37,7 +37,7 @@ void main()
         vec2( 1.0, -1.0),
         vec2(-1.0,  1.0)
     );
-    gl_Position = vec4(positions[gl_VertexIndex], 0.0, 1.0);
+    gl_Position = vec4(positions[gl_VertexID], 0.0, 1.0);
 }
 )glsl";
 
