@@ -78,7 +78,13 @@ void erhe_opengl_callback(
         case gl::Debug_severity::debug_severity_high:
         case gl::Debug_severity::debug_severity_medium: {
 #if defined(WIN32)
-            DebugBreak();
+            // Only break when a debugger is actually attached. Firing DebugBreak()
+            // with no debugger turns the (already logged) GL message into a silent
+            // process termination (exit 3, no callstack), which is hostile to
+            // headless / test / CI runs.
+            if (IsDebuggerPresent()) {
+                DebugBreak();
+            }
 #else
             static int counter = 0;
             ++counter; // breakpoint placeholder
