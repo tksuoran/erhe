@@ -19,7 +19,7 @@ or more `TEST_F(Gpu_test, ...)` cases. `[x]` = covered, `[ ]` = gap.
 - [x] Indexed vertex-buffer draw (`test_vertex_index.cpp`)
 - [x] Instanced draw, triangle_strip topology (`test_instanced.cpp`)
 - [x] Primitive topology: point_list and line_list (`test_topology.cpp`)
-- [ ] Stencil: two-draw mask/test in a single render pass (`test_stencil.cpp`)
+- [x] Stencil: two-draw mask/test in a single render pass (`test_stencil.cpp`)
 
 ## Compute
 

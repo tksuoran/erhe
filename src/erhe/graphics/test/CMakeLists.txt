@@ -61,6 +61,7 @@ if (_gpu_tests_supported)
         test_texture_upload.cpp
         test_compute_2d.cpp
         test_topology.cpp
+        test_stencil.cpp
     )
 
     target_link_libraries(${_gpu_target}
