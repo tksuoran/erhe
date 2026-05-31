@@ -7,6 +7,7 @@ or more `TEST_F(Gpu_test, ...)` cases. `[x]` = covered, `[ ]` = gap.
 ## Device / infrastructure
 
 - [x] Device creation and info query (`test_device.cpp`)
+- [x] Device capability audit: depth/stencil format selection, format-properties vs probe agreement, Device_info self-consistency (`test_device_caps.cpp`)
 - [x] Color attachment clear (`test_clear.cpp`)
 
 ## Rasterization / draw

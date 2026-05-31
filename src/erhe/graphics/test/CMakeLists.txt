@@ -71,6 +71,7 @@ if (_gpu_tests_supported)
         test_snorm_render.cpp
         test_struct_types.cpp
         test_msaa_resolve.cpp
+        test_device_caps.cpp
     )
 
     target_link_libraries(${_gpu_target}
