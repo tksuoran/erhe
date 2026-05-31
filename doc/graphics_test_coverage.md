@@ -21,6 +21,10 @@ or more `TEST_F(Gpu_test, ...)` cases. `[x]` = covered, `[ ]` = gap.
 - [x] Primitive topology: point_list and line_list (`test_topology.cpp`)
 - [x] Stencil: two-draw mask/test in a single render pass (`test_stencil.cpp`)
 
+## Render pass
+
+- [x] Load_action::Load preserves prior pass across two passes (`test_load_action.cpp`)
+
 ## Compute
 
 - [x] Compute writing an SSBO, 1D dispatch (`test_m4_compute_ssbo.cpp`)
