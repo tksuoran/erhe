@@ -1753,10 +1753,13 @@ auto Device_impl::get_format_properties(const erhe::dataformat::Format format) c
         return {};
     }
 
-    // format_x8_d24_unorm_pack32 maps to depth24_stencil8
+    // format_x8_d24_unorm_pack32 maps to depth24_stencil8, which advertises a
+    // stencil aspect the abstraction's format does not have. Keep the reported
+    // stencil aspect (size and renderable flag) consistent with the abstraction.
     Format_properties result = i->second;
     if (erhe::dataformat::get_stencil_size_bits(format) == 0) {
-        result.stencil_size = 0;
+        result.stencil_size       = 0;
+        result.stencil_renderable = false;
     }
     return result;
 }
@@ -1766,9 +1769,9 @@ auto Device_impl::probe_image_format_support(const erhe::dataformat::Format form
     // OpenGL has no direct equivalent of vkGetPhysicalDeviceImageFormatProperties2.
     // The probe concept is Vulkan-specific; on GL we conservatively report "supported"
     // and let downstream texture creation fail if the combination is not renderable.
-    static_cast<void>(format);
+    // The undefined format is never a usable image format, so reject it explicitly.
     static_cast<void>(usage_mask);
-    return true;
+    return format != erhe::dataformat::Format::format_undefined;
 }
 
 void Device_impl::clear_texture(const Texture& texture, const std::array<double, 4> value)
