@@ -1,181 +1,270 @@
 #include "gpu_test_fixture.hpp"
 
-#include "erhe_dataformat/dataformat.hpp"
+#include "erhe_graphics/bind_group_layout.hpp"
+#include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/device.hpp"
-#include "erhe_graphics/render_pass.hpp"
-#include "erhe_graphics/render_pipeline_state.hpp"
+#include "erhe_graphics/enums.hpp"
+#include "erhe_graphics/fragment_output.hpp"
+#include "erhe_graphics/fragment_outputs.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
+#include "erhe_graphics/render_pass.hpp"
+#include "erhe_graphics/render_pipeline.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/texture.hpp"
-
-#include <glm/glm.hpp>
 
 #include <gtest/gtest.h>
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
+#include <memory>
+#include <string_view>
 #include <vector>
 
 namespace erhe::graphics::test {
+
 namespace {
 
-constexpr int target_size = 16;
+constexpr int c_size = 16;
 
-// Count texels whose RGB is not (near) black. The clear colour is opaque black, so
-// any lit fragment is detectable by a non-zero red channel (all draws emit white).
-auto count_lit_texels(const std::vector<uint8_t>& pixels, int width, int height) -> int
+// White, no vertex input. Both topology tests emit positions from gl_VertexIndex.
+constexpr const char* c_fragment_source = R"glsl(
+void main()
+{
+    out_color = vec4(1.0, 1.0, 1.0, 1.0);
+}
+)glsl";
+
+// Four 1-pixel points. gl_PointSize is written (via the explicit gl_PerVertex out
+// block) so the Vulkan rasterizer produces a defined single-pixel point. The
+// centre point (0,0) is independent of the framebuffer Y orientation.
+constexpr const char* c_point_vertex_source = R"glsl(
+out gl_PerVertex {
+    vec4  gl_Position;
+    float gl_PointSize;
+};
+void main()
+{
+    vec2 positions[4] = vec2[4](
+        vec2( 0.0,  0.0),
+        vec2(-0.5, -0.5),
+        vec2( 0.5, -0.5),
+        vec2( 0.5,  0.5)
+    );
+    gl_Position  = vec4(positions[gl_VertexIndex], 0.0, 1.0);
+    gl_PointSize = 1.0;
+}
+)glsl";
+
+// A single horizontal segment through y = 0 (NDC), spanning most of the width.
+// y = 0 maps to the centre row regardless of Y orientation.
+constexpr const char* c_line_vertex_source = R"glsl(
+void main()
+{
+    vec2 positions[2] = vec2[2](
+        vec2(-0.9, 0.0),
+        vec2( 0.9, 0.0)
+    );
+    gl_Position = vec4(positions[gl_VertexIndex], 0.0, 1.0);
+}
+)glsl";
+
+// Count texels whose red channel is lit (all draws emit white over a black clear).
+auto count_lit_texels(const std::vector<uint8_t>& pixels, const int width, const int height) -> int
 {
     int count = 0;
-    for (int y = 0; y < height; ++y) {
-        for (int x = 0; x < width; ++x) {
-            const size_t index = (static_cast<size_t>(y) * static_cast<size_t>(width) + static_cast<size_t>(x)) * 4u;
-            if (pixels[index + 0] > 127u) {
-                ++count;
-            }
+    for (int i = 0; i < width * height; ++i) {
+        if (pixels[(static_cast<std::size_t>(i) * 4u) + 0u] > 127u) {
+            ++count;
         }
     }
     return count;
 }
 
-auto make_topology_pipeline(
-    erhe::graphics::Device&             device,
-    const erhe::graphics::Input_assembly_state& input_assembly,
-    const char*                         vs_source
-) -> std::shared_ptr<erhe::graphics::Render_pipeline_state>
-{
-    static const char* fs_source =
-        "void main() {\n"
-        "    out_color = vec4(1.0, 1.0, 1.0, 1.0);\n"
-        "}\n";
-
-    erhe::graphics::Shader_stages_create_info shader_stages_create_info{
-        .device = device,
-        .pipeline_stages = {
-            { erhe::graphics::Shader_type::vertex_shader,   vs_source },
-            { erhe::graphics::Shader_type::fragment_shader, fs_source }
-        },
-        .name = "topology test pipeline"
-    };
-    erhe::graphics::Fragment_outputs fragment_outputs;
-    fragment_outputs.add("out_color", erhe::dataformat::Format::format_8_vec4_unorm, 0);
-    shader_stages_create_info.fragment_outputs = &fragment_outputs;
-    erhe::graphics::Shader_stages shader_stages{device, shader_stages_create_info};
-
-    erhe::graphics::Render_pipeline_state pipeline_state{
-        erhe::graphics::Render_pipeline_state::Create_info{
-            .name           = "topology test pipeline",
-            .shader_stages  = &shader_stages,
-            .vertex_input   = nullptr,
-            .input_assembly = input_assembly,
-            .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
-            .depth_stencil  = erhe::graphics::Depth_stencil_state{
-                .depth_test_enable   = false,
-                .depth_write_enable  = false,
-                .depth_compare_op    = erhe::graphics::Compare_operation::always,
-                .stencil_test_enable = false
-            },
-            .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled
-        }
-    };
-    return std::make_shared<erhe::graphics::Render_pipeline_state>(std::move(pipeline_state));
-}
-
 } // namespace
 
-// Render a small set of points and assert that exactly that many texels are lit:
-// each 1-pixel point should light exactly one texel. gl_PointSize is written so the
-// Vulkan rasterizer produces a defined 1-pixel point.
+// Primitive topology: point_list. Draws four 1-pixel points and asserts that
+// exactly four texels are lit (one per point), including the Y-orientation
+// independent centre texel. Exercises Input_assembly_state::point +
+// Primitive_type::point.
 TEST_F(Gpu_test, topology_point_list)
 {
-    erhe::graphics::Device& device = device();
+    const std::shared_ptr<erhe::graphics::Texture> color_target = make_color_target(c_size, c_size);
 
-    // Four points at distinct positions. The centre point (0,0) is independent of the
-    // framebuffer Y orientation, the others are simply spread out so each lands on its
-    // own texel.
-    static const char* vs_source =
-        "void main() {\n"
-        "    vec2 positions[4] = vec2[4](\n"
-        "        vec2( 0.0,  0.0),\n"
-        "        vec2(-0.5, -0.5),\n"
-        "        vec2( 0.5, -0.5),\n"
-        "        vec2( 0.5,  0.5)\n"
-        "    );\n"
-        "    gl_Position  = vec4(positions[gl_VertexIndex], 0.0, 1.0);\n"
-        "    gl_PointSize = 1.0;\n"
-        "}\n";
+    const erhe::graphics::Bind_group_layout empty_layout{
+        device(),
+        erhe::graphics::Bind_group_layout_create_info{
+            .bindings          = {},
+            .debug_label       = erhe::utility::Debug_label{"topology point layout"},
+            .uses_texture_heap = false
+        }
+    };
+    const erhe::graphics::Fragment_outputs fragment_outputs{
+        { erhe::graphics::Fragment_output{ .name = "out_color", .type = erhe::graphics::Glsl_type::float_vec4, .location = 0 } }
+    };
 
-    std::shared_ptr<erhe::graphics::Texture> color_texture = make_color_target(target_size, target_size);
-    std::shared_ptr<erhe::graphics::Render_pass> render_pass = make_single_color_render_pass(color_texture.get(), 0.0, 0.0, 0.0, 1.0);
+    erhe::graphics::Shader_stages_create_info shader_create_info{
+        .name             = "topology_point",
+        .fragment_outputs = &fragment_outputs,
+        .no_vertex_input  = true,
+        .shaders = {
+            { erhe::graphics::Shader_type::vertex_shader,   std::string_view{c_point_vertex_source} },
+            { erhe::graphics::Shader_type::fragment_shader, std::string_view{c_fragment_source}     }
+        },
+        .bind_group_layout = &empty_layout
+    };
+    erhe::graphics::Shader_stages_prototype prototype = erhe::graphics::build_shader_stages(device(), shader_create_info);
+    ASSERT_TRUE(prototype.is_valid()) << "topology point shader failed to compile/link";
+    erhe::graphics::Shader_stages shader_stages{device(), std::move(prototype)};
 
-    std::shared_ptr<erhe::graphics::Render_pipeline_state> pipeline = make_topology_pipeline(device, erhe::graphics::Input_assembly_state::points, vs_source);
+    erhe::graphics::Render_pass_descriptor descriptor{};
+    descriptor.color_attachments[0].texture       = color_target.get();
+    descriptor.color_attachments[0].clear_value   = std::array<double, 4>{ 0.0, 0.0, 0.0, 1.0 };
+    descriptor.color_attachments[0].load_action   = erhe::graphics::Load_action::Clear;
+    descriptor.color_attachments[0].store_action  = erhe::graphics::Store_action::Store;
+    descriptor.color_attachments[0].usage_before  = erhe::graphics::Image_usage_flag_bit_mask::transfer_src;
+    descriptor.color_attachments[0].layout_before = erhe::graphics::Image_layout::transfer_src_optimal;
+    descriptor.color_attachments[0].usage_after   = erhe::graphics::Image_usage_flag_bit_mask::transfer_src;
+    descriptor.color_attachments[0].layout_after  = erhe::graphics::Image_layout::transfer_src_optimal;
+    descriptor.render_target_width  = c_size;
+    descriptor.render_target_height = c_size;
+    descriptor.debug_label = erhe::utility::Debug_label{"topology point"};
 
-    erhe::graphics::Render_command_encoder encoder = device.make_render_command_encoder(*render_pass);
-    encoder.set_render_pipeline_state(*pipeline);
-    encoder.draw_primitives(erhe::graphics::Primitive_type::points, 0, 4);
-    device.flush_render_command_encoder(encoder);
-    device.wait_for_idle();
+    erhe::graphics::Render_pipeline_create_info pipeline_create_info;
+    pipeline_create_info.base.input_assembly                    = erhe::graphics::Input_assembly_state::point;
+    pipeline_create_info.base.rasterization                     = erhe::graphics::Rasterization_state::cull_mode_none;
+    pipeline_create_info.base.depth_stencil.depth_test_enable   = false;
+    pipeline_create_info.base.depth_stencil.depth_write_enable  = false;
+    pipeline_create_info.base.depth_stencil.stencil_test_enable = false;
+    pipeline_create_info.base.bind_group_layout                 = &empty_layout;
+    pipeline_create_info.base.color_blend                       = &erhe::graphics::Color_blend_state::color_blend_disabled;
+    pipeline_create_info.shader_stages                          = &shader_stages;
+    pipeline_create_info.vertex_input                           = nullptr;
+    pipeline_create_info.set_format_from_render_pass(descriptor);
+    const erhe::graphics::Render_pipeline pipeline{device(), pipeline_create_info};
+    ASSERT_TRUE(pipeline.is_valid()) << "topology point pipeline is not valid";
 
-    std::vector<uint8_t> pixels = read_texture_rgba8(color_texture.get());
+    submit_and_wait(
+        [&](erhe::graphics::Command_buffer& command_buffer) {
+            erhe::graphics::Render_pass            render_pass{device(), descriptor};
+            erhe::graphics::Render_command_encoder encoder = device().make_render_command_encoder(command_buffer);
+            const erhe::graphics::Scoped_render_pass scoped{render_pass, command_buffer};
+            encoder.set_viewport_rect(0, 0, c_size, c_size);
+            encoder.set_scissor_rect (0, 0, c_size, c_size);
+            encoder.set_bind_group_layout(&empty_layout);
+            encoder.set_render_pipeline(pipeline);
+            encoder.draw_primitives(erhe::graphics::Primitive_type::point, 0, 4);
+        }
+    );
 
-    // Exactly four 1-pixel points -> exactly four lit texels.
-    EXPECT_EQ(count_lit_texels(pixels, target_size, target_size), 4);
+    const std::vector<uint8_t> pixels = read_texture_rgba8(*color_target);
+    ASSERT_EQ(pixels.size(), static_cast<std::size_t>(c_size) * static_cast<std::size_t>(c_size) * 4u);
 
-    // The centre point is Y-orientation independent; it must be lit.
-    const size_t center_index = ((static_cast<size_t>(target_size) / 2u) * static_cast<size_t>(target_size) + (static_cast<size_t>(target_size) / 2u)) * 4u;
-    EXPECT_GT(pixels[center_index + 0], 127u);
+    // Four 1-pixel points -> exactly four lit texels.
+    EXPECT_EQ(count_lit_texels(pixels, c_size, c_size), 4);
+
+    // The centre point (NDC 0,0) is Y-orientation independent; it must be lit.
+    const std::size_t center_index =
+        ((static_cast<std::size_t>(c_size) / 2u) * static_cast<std::size_t>(c_size) + (static_cast<std::size_t>(c_size) / 2u)) * 4u;
+    EXPECT_GT(pixels[center_index + 0u], 127u);
 }
 
-// Render a single horizontal line through the vertical centre of the target and assert
-// coarse coverage: many texels along the row are lit, and rows far from the centre stay
-// dark.
+// Primitive topology: line_list. Draws one horizontal segment through the centre
+// row and asserts coarse coverage along the run while the top and bottom rows stay
+// dark (confirming a thin line, not a filled region). Exercises
+// Input_assembly_state::line + Primitive_type::line.
 TEST_F(Gpu_test, topology_line_list)
 {
-    erhe::graphics::Device& device = device();
+    const std::shared_ptr<erhe::graphics::Texture> color_target = make_color_target(c_size, c_size);
 
-    // A horizontal segment at y = 0 (NDC) spanning most of the width. y = 0 maps to the
-    // centre row regardless of Y orientation.
-    static const char* vs_source =
-        "void main() {\n"
-        "    vec2 positions[2] = vec2[2](\n"
-        "        vec2(-0.9, 0.0),\n"
-        "        vec2( 0.9, 0.0)\n"
-        "    );\n"
-        "    gl_Position = vec4(positions[gl_VertexIndex], 0.0, 1.0);\n"
-        "}\n";
+    const erhe::graphics::Bind_group_layout empty_layout{
+        device(),
+        erhe::graphics::Bind_group_layout_create_info{
+            .bindings          = {},
+            .debug_label       = erhe::utility::Debug_label{"topology line layout"},
+            .uses_texture_heap = false
+        }
+    };
+    const erhe::graphics::Fragment_outputs fragment_outputs{
+        { erhe::graphics::Fragment_output{ .name = "out_color", .type = erhe::graphics::Glsl_type::float_vec4, .location = 0 } }
+    };
 
-    std::shared_ptr<erhe::graphics::Texture> color_texture = make_color_target(target_size, target_size);
-    std::shared_ptr<erhe::graphics::Render_pass> render_pass = make_single_color_render_pass(color_texture.get(), 0.0, 0.0, 0.0, 1.0);
+    erhe::graphics::Shader_stages_create_info shader_create_info{
+        .name             = "topology_line",
+        .fragment_outputs = &fragment_outputs,
+        .no_vertex_input  = true,
+        .shaders = {
+            { erhe::graphics::Shader_type::vertex_shader,   std::string_view{c_line_vertex_source} },
+            { erhe::graphics::Shader_type::fragment_shader, std::string_view{c_fragment_source}    }
+        },
+        .bind_group_layout = &empty_layout
+    };
+    erhe::graphics::Shader_stages_prototype prototype = erhe::graphics::build_shader_stages(device(), shader_create_info);
+    ASSERT_TRUE(prototype.is_valid()) << "topology line shader failed to compile/link";
+    erhe::graphics::Shader_stages shader_stages{device(), std::move(prototype)};
 
-    std::shared_ptr<erhe::graphics::Render_pipeline_state> pipeline = make_topology_pipeline(device, erhe::graphics::Input_assembly_state::lines, vs_source);
+    erhe::graphics::Render_pass_descriptor descriptor{};
+    descriptor.color_attachments[0].texture       = color_target.get();
+    descriptor.color_attachments[0].clear_value   = std::array<double, 4>{ 0.0, 0.0, 0.0, 1.0 };
+    descriptor.color_attachments[0].load_action   = erhe::graphics::Load_action::Clear;
+    descriptor.color_attachments[0].store_action  = erhe::graphics::Store_action::Store;
+    descriptor.color_attachments[0].usage_before  = erhe::graphics::Image_usage_flag_bit_mask::transfer_src;
+    descriptor.color_attachments[0].layout_before = erhe::graphics::Image_layout::transfer_src_optimal;
+    descriptor.color_attachments[0].usage_after   = erhe::graphics::Image_usage_flag_bit_mask::transfer_src;
+    descriptor.color_attachments[0].layout_after  = erhe::graphics::Image_layout::transfer_src_optimal;
+    descriptor.render_target_width  = c_size;
+    descriptor.render_target_height = c_size;
+    descriptor.debug_label = erhe::utility::Debug_label{"topology line"};
 
-    erhe::graphics::Render_command_encoder encoder = device.make_render_command_encoder(*render_pass);
-    encoder.set_render_pipeline_state(*pipeline);
-    encoder.draw_primitives(erhe::graphics::Primitive_type::lines, 0, 2);
-    device.flush_render_command_encoder(encoder);
-    device.wait_for_idle();
+    erhe::graphics::Render_pipeline_create_info pipeline_create_info;
+    pipeline_create_info.base.input_assembly                    = erhe::graphics::Input_assembly_state::line;
+    pipeline_create_info.base.rasterization                     = erhe::graphics::Rasterization_state::cull_mode_none;
+    pipeline_create_info.base.depth_stencil.depth_test_enable   = false;
+    pipeline_create_info.base.depth_stencil.depth_write_enable  = false;
+    pipeline_create_info.base.depth_stencil.stencil_test_enable = false;
+    pipeline_create_info.base.bind_group_layout                 = &empty_layout;
+    pipeline_create_info.base.color_blend                       = &erhe::graphics::Color_blend_state::color_blend_disabled;
+    pipeline_create_info.shader_stages                          = &shader_stages;
+    pipeline_create_info.vertex_input                           = nullptr;
+    pipeline_create_info.set_format_from_render_pass(descriptor);
+    const erhe::graphics::Render_pipeline pipeline{device(), pipeline_create_info};
+    ASSERT_TRUE(pipeline.is_valid()) << "topology line pipeline is not valid";
 
-    std::vector<uint8_t> pixels = read_texture_rgba8(color_texture.get());
+    submit_and_wait(
+        [&](erhe::graphics::Command_buffer& command_buffer) {
+            erhe::graphics::Render_pass            render_pass{device(), descriptor};
+            erhe::graphics::Render_command_encoder encoder = device().make_render_command_encoder(command_buffer);
+            const erhe::graphics::Scoped_render_pass scoped{render_pass, command_buffer};
+            encoder.set_viewport_rect(0, 0, c_size, c_size);
+            encoder.set_scissor_rect (0, 0, c_size, c_size);
+            encoder.set_bind_group_layout(&empty_layout);
+            encoder.set_render_pipeline(pipeline);
+            encoder.draw_primitives(erhe::graphics::Primitive_type::line, 0, 2);
+        }
+    );
+
+    const std::vector<uint8_t> pixels = read_texture_rgba8(*color_target);
+    ASSERT_EQ(pixels.size(), static_cast<std::size_t>(c_size) * static_cast<std::size_t>(c_size) * 4u);
 
     // The segment spans ~0.9 of the half-width on each side -> ~0.9 * 16 ~= 14 texels.
     // Assert coarse coverage rather than an exact run to stay rasterizer-tolerant.
-    const int lit = count_lit_texels(pixels, target_size, target_size);
+    const int lit = count_lit_texels(pixels, c_size, c_size);
     EXPECT_GE(lit, 8);
-    EXPECT_LE(lit, target_size + 2);
+    EXPECT_LE(lit, c_size + 2);
 
-    // All lit texels must lie on (at most) the two centre rows: rows at the very top and
-    // bottom must be dark. This confirms the lit run is a thin horizontal line, not a
-    // filled region.
-    auto row_is_dark = [&](int y) -> bool {
-        for (int x = 0; x < target_size; ++x) {
-            const size_t index = (static_cast<size_t>(y) * static_cast<size_t>(target_size) + static_cast<size_t>(x)) * 4u;
-            if (pixels[index + 0] > 127u) {
+    // All lit texels must lie on (at most) the centre rows: the very top and bottom
+    // rows must be dark. This confirms the lit run is a thin horizontal line.
+    auto row_is_dark = [&](const int y) -> bool {
+        for (int x = 0; x < c_size; ++x) {
+            const std::size_t index = (static_cast<std::size_t>(y) * static_cast<std::size_t>(c_size) + static_cast<std::size_t>(x)) * 4u;
+            if (pixels[index + 0u] > 127u) {
                 return false;
             }
         }
         return true;
     };
     EXPECT_TRUE(row_is_dark(0));
-    EXPECT_TRUE(row_is_dark(target_size - 1));
+    EXPECT_TRUE(row_is_dark(c_size - 1));
 }
 
 } // namespace erhe::graphics::test

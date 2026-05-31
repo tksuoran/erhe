@@ -59,6 +59,8 @@ if (_gpu_tests_supported)
         test_compute_ubo.cpp
         test_instanced.cpp
         test_texture_upload.cpp
+        test_compute_2d.cpp
+        test_topology.cpp
     )
 
     target_link_libraries(${_gpu_target}
