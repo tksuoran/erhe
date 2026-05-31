@@ -11,6 +11,7 @@
 #include "erhe_graphics/render_pipeline.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/texture.hpp"
+#include "erhe_math/math_util.hpp"
 
 #include <gtest/gtest.h>
 
@@ -37,19 +38,21 @@ void main()
 )glsl";
 
 // Four 1-pixel points placed at exact target pixel centres. gl_PointSize is
-// written (via the explicit gl_PerVertex out block) so the Vulkan rasterizer
-// produces a defined single-pixel point.
+// written (via the explicit gl_PerVertex out block) so the rasterizer produces a
+// defined single-pixel point.
 //
 // Each point is emitted from a target pixel coordinate (TARGET_X<i>, TARGET_Y<i>)
 // in image-memory space (row 0 == first row returned by read_texture_rgba8) via
 // the pixel-centre mapping. For a target of size TARGET_SIZE and target pixel
 // (px, py) the NDC that lands on that pixel's centre is:
-//     ndc_x =  ((px + 0.5) / TARGET_SIZE) * 2 - 1
-//     ndc_y = -(((py + 0.5) / TARGET_SIZE) * 2 - 1)
-// The Y term is negated to match the render encoder's negative-height viewport
-// (VK_KHR_maintenance1 Y-flip), so increasing py moves down in image memory.
-// Mapping to pixel centres (offset +0.5) removes the half-pixel rasterization
-// ambiguity, so each point lands on exactly one unambiguous texel.
+//     ndc_x =        ((px + 0.5) / TARGET_SIZE) * 2 - 1
+//     ndc_y = Y_SIGN ((py + 0.5) / TARGET_SIZE) * 2 - 1)
+// Y_SIGN is queried from the device's coordinate-space conventions (texture_origin),
+// like all application code must do: it is -1 when read-back row 0 is the image top
+// (top_left, Vulkan/Metal) and +1 when row 0 is the image bottom (bottom_left,
+// OpenGL), so increasing py always moves toward later read-back rows regardless of
+// backend. Mapping to pixel centres (offset +0.5) removes the half-pixel
+// rasterization ambiguity, so each point lands on exactly one unambiguous texel.
 constexpr const char* c_point_vertex_source = R"glsl(
 out gl_PerVertex {
     vec4  gl_Position;
@@ -68,7 +71,7 @@ void main()
         vec2(float(TARGET_X3), float(TARGET_Y3))
     );
     vec2 p = target_pixels[gl_VertexID];
-    gl_Position  = vec4(pixel_center_ndc(p.x), -pixel_center_ndc(p.y), 0.0, 1.0);
+    gl_Position  = vec4(pixel_center_ndc(p.x), float(Y_SIGN) * pixel_center_ndc(p.y), 0.0, 1.0);
     gl_PointSize = 1.0;
 }
 )glsl";
@@ -131,9 +134,17 @@ TEST_F(Gpu_test, topology_point_list)
         { erhe::graphics::Fragment_output{ .name = "out_color", .type = erhe::graphics::Glsl_type::float_vec4, .location = 0 } }
     };
 
+    // Respect the device's coordinate-space conventions (like application code):
+    // a top_left texture origin puts read-back row 0 at the image top (negate Y),
+    // a bottom_left origin puts it at the image bottom (do not negate).
+    const erhe::math::Coordinate_conventions& conventions = device().get_info().coordinate_conventions;
+    const char* const y_sign =
+        (conventions.texture_origin == erhe::math::Texture_origin::top_left) ? "-1.0" : "1.0";
+
     erhe::graphics::Shader_stages_create_info shader_create_info{
         .name             = "topology_point",
         .defines          = {
+            { "Y_SIGN",      y_sign                                },
             { "TARGET_SIZE", std::to_string(c_size)                },
             { "TARGET_X0",   std::to_string(target_pixels[0].x)    },
             { "TARGET_Y0",   std::to_string(target_pixels[0].y)    },
