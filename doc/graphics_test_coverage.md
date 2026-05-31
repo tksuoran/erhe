@@ -50,6 +50,7 @@ testable on this device (a device/engine limitation, not a coverage gap to fill)
 - [x] Mipmap generation: generate_mipmaps linear-downsamples level 0 (half-black/half-white split averages to mid-gray at the 1x1 level; the 4x4 level keeps the vertical split) (`test_mipmaps.cpp`)
 - [x] 2D array texture sampling: texture_2d_array with 3 distinct per-layer solid colors filled via copy_from_buffer destination_slice, each layer sampled through a sampler2DArray (layer via GLSL define) and verified (`test_texture_array.cpp`)
 - [x] 3D texture sampling: 2x2x2 texture_3d filled in one copy_from_buffer, each voxel center sampled through a sampler3D (nearest) and verified against its distinct color (`test_texture_3d.cpp`)
+- [x] Cube map (texture_cube_map) sampling: 6-face CUBE-compatible image (1x1 per face) with a distinct per-face color filled via copy_from_buffer destination_slice (Vulkan face order +X,-X,+Y,-Y,+Z,-Z), each face sampled through a samplerCube by its center direction vector (baked as a GLSL define) and verified; set_sampled_image builds a VK_IMAGE_VIEW_TYPE_CUBE view spanning all 6 layers (`test_texture_cube.cpp`)
 
 ## Color formats
 
@@ -58,4 +59,4 @@ testable on this device (a device/engine limitation, not a coverage gap to fill)
 
 ## Known gaps (not yet covered)
 
-- [ ] Cube map (texture_cube_map) sampling: needs a 6-layer CUBE-compatible image and a samplerCube view sampled by a direction vector; not yet covered.
+None remaining.

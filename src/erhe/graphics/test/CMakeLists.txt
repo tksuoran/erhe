@@ -76,6 +76,7 @@ if (_gpu_tests_supported)
         test_mipmaps.cpp
         test_texture_array.cpp
         test_texture_3d.cpp
+        test_texture_cube.cpp
     )
 
     target_link_libraries(${_gpu_target}
