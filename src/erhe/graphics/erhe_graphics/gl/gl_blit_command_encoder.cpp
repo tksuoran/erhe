@@ -192,17 +192,18 @@ void Blit_command_encoder_impl::copy_from_buffer(
         return;
     }
 
-    // Cube maps are allocated with 2D storage (texture_storage_2d) but their faces
-    // are addressed as the third dimension (z = face, set by convert_texture_offset_to_gl)
-    // by the sub-image upload calls, so a cube needs 3D sub-image addressing even though
-    // its storage dimension is 2.
-    int upload_dimensions = destination_texture->get_impl().get_storage_dimensions(gl_destination_texture_target);
-    if (
-        (gl_destination_texture_target == gl::Texture_target::texture_cube_map) ||
-        (gl_destination_texture_target == gl::Texture_target::texture_cube_map_array)
-    ) {
-        upload_dimensions = 3;
-    }
+    // A plain cube map stores its six faces as 2D storage (texture_storage_2d) but
+    // the three buffer->image upload APIs disagree on how to address a face, so it
+    // gets a dedicated branch below instead of the dimension switch:
+    //   - DSA     glTextureSubImage3D(name, ..., zoffset = face)       : valid (z == face).
+    //   - classic glTexSubImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + face): valid (per face).
+    //   - classic glTexSubImage3D(GL_TEXTURE_CUBE_MAP, ...)            : GL_INVALID_ENUM.
+    // texture_cube_map_array is NOT special here: its GL target accepts 3D sub-image
+    // addressing (z == 6 * layer + face) on both the DSA and the classic path, so it
+    // flows through storage_dimensions == 3 like a 2D array. convert_texture_offset_to_gl
+    // sets gl_destination_z to the face index for a cube map.
+    const int  storage_dimensions = destination_texture->get_impl().get_storage_dimensions(gl_destination_texture_target);
+    const bool is_cube_map        = (gl_destination_texture_target == gl::Texture_target::texture_cube_map);
 
 #if defined(__APPLE__)
     // macOS OpenGL driver does not reliably support PBO-based texture uploads.
@@ -232,38 +233,58 @@ void Blit_command_encoder_impl::copy_from_buffer(
         scratch_unit, gl_destination_texture_target, destination_texture->get_impl().gl_name()
     );
 
-    switch (upload_dimensions) {
-        case 1: {
-            gl::tex_sub_image_1d(
-                gl_destination_texture_target,
-                static_cast<GLint>(destination_level),
-                gl_destination_x, gl_width, gl_format, gl_type, cpu_data
-            );
-            break;
-        }
+    if (is_cube_map) {
+        // Classic GL (the only path on macOS GL 4.1): a cube face is uploaded
+        // through its per-face 2D target with the cube bound to GL_TEXTURE_CUBE_MAP;
+        // GL_TEXTURE_CUBE_MAP itself is not a valid glTexSubImage3D target. This
+        // uploads exactly one face; a multi-face copy (gl_depth > 1) is not supported
+        // on the per-face 2D path, so require a single face here rather than silently
+        // writing only the first.
+        ERHE_VERIFY(gl_depth == 1);
+        const gl::Texture_target face_target = static_cast<gl::Texture_target>(
+            static_cast<unsigned int>(gl::Texture_target::texture_cube_map_positive_x) +
+            static_cast<unsigned int>(gl_destination_z)
+        );
+        gl::tex_sub_image_2d(
+            face_target,
+            static_cast<GLint>(destination_level),
+            gl_destination_x, gl_destination_y,
+            gl_width, gl_height, gl_format, gl_type, cpu_data
+        );
+    } else {
+        switch (storage_dimensions) {
+            case 1: {
+                gl::tex_sub_image_1d(
+                    gl_destination_texture_target,
+                    static_cast<GLint>(destination_level),
+                    gl_destination_x, gl_width, gl_format, gl_type, cpu_data
+                );
+                break;
+            }
 
-        case 2: {
-            gl::tex_sub_image_2d(
-                gl_destination_texture_target,
-                static_cast<GLint>(destination_level),
-                gl_destination_x, gl_destination_y,
-                gl_width, gl_height, gl_format, gl_type, cpu_data
-            );
-            break;
-        }
+            case 2: {
+                gl::tex_sub_image_2d(
+                    gl_destination_texture_target,
+                    static_cast<GLint>(destination_level),
+                    gl_destination_x, gl_destination_y,
+                    gl_width, gl_height, gl_format, gl_type, cpu_data
+                );
+                break;
+            }
 
-        case 3: {
-            gl::tex_sub_image_3d(
-                gl_destination_texture_target,
-                static_cast<GLint>(destination_level),
-                gl_destination_x, gl_destination_y, gl_destination_z,
-                gl_width, gl_height, gl_depth, gl_format, gl_type, cpu_data
-            );
-            break;
-        }
+            case 3: {
+                gl::tex_sub_image_3d(
+                    gl_destination_texture_target,
+                    static_cast<GLint>(destination_level),
+                    gl_destination_x, gl_destination_y, gl_destination_z,
+                    gl_width, gl_height, gl_depth, gl_format, gl_type, cpu_data
+                );
+                break;
+            }
 
-        default: {
-            ERHE_FATAL("Bad texture target");
+            default: {
+                ERHE_FATAL("Bad texture target");
+            }
         }
     }
 #else
@@ -286,64 +307,95 @@ void Blit_command_encoder_impl::copy_from_buffer(
         );
     }
 
-    switch (upload_dimensions) {
-        case 1: {
-            if (use_dsa) {
-                gl::texture_sub_image_1d(
-                    destination_texture->get_impl().gl_name(),
-                    static_cast<GLint>(destination_level),
-                    gl_destination_x, gl_width, gl_format, gl_type, data_pointer
-                );
-            } else {
-                gl::tex_sub_image_1d(
-                    gl_destination_texture_target,
-                    static_cast<GLint>(destination_level),
-                    gl_destination_x, gl_width, gl_format, gl_type, data_pointer
-                );
-            }
-            break;
+    if (is_cube_map) {
+        if (use_dsa) {
+            // DSA addresses a cube face as the z layer of a 3D sub-image by texture name.
+            gl::texture_sub_image_3d(
+                destination_texture->get_impl().gl_name(),
+                static_cast<GLint>(destination_level),
+                gl_destination_x, gl_destination_y, gl_destination_z,
+                gl_width, gl_height, gl_depth, gl_format, gl_type, data_pointer
+            );
+        } else {
+            // Classic GL: a cube face is uploaded through its per-face 2D target with
+            // the cube bound to GL_TEXTURE_CUBE_MAP (the texture_guard above); the 3D
+            // target GL_TEXTURE_CUBE_MAP is not a valid glTexSubImage3D target. This
+            // uploads exactly one face; a multi-face copy (gl_depth > 1) is not
+            // supported on the per-face 2D path (the DSA branch above handles it via
+            // depth), so require a single face here rather than silently writing only
+            // the first.
+            ERHE_VERIFY(gl_depth == 1);
+            const gl::Texture_target face_target = static_cast<gl::Texture_target>(
+                static_cast<unsigned int>(gl::Texture_target::texture_cube_map_positive_x) +
+                static_cast<unsigned int>(gl_destination_z)
+            );
+            gl::tex_sub_image_2d(
+                face_target,
+                static_cast<GLint>(destination_level),
+                gl_destination_x, gl_destination_y,
+                gl_width, gl_height, gl_format, gl_type, data_pointer
+            );
         }
-
-        case 2: {
-            if (use_dsa) {
-                gl::texture_sub_image_2d(
-                    destination_texture->get_impl().gl_name(),
-                    static_cast<GLint>(destination_level),
-                    gl_destination_x, gl_destination_y,
-                    gl_width, gl_height, gl_format, gl_type, data_pointer
-                );
-            } else {
-                gl::tex_sub_image_2d(
-                    gl_destination_texture_target,
-                    static_cast<GLint>(destination_level),
-                    gl_destination_x, gl_destination_y,
-                    gl_width, gl_height, gl_format, gl_type, data_pointer
-                );
+    } else {
+        switch (storage_dimensions) {
+            case 1: {
+                if (use_dsa) {
+                    gl::texture_sub_image_1d(
+                        destination_texture->get_impl().gl_name(),
+                        static_cast<GLint>(destination_level),
+                        gl_destination_x, gl_width, gl_format, gl_type, data_pointer
+                    );
+                } else {
+                    gl::tex_sub_image_1d(
+                        gl_destination_texture_target,
+                        static_cast<GLint>(destination_level),
+                        gl_destination_x, gl_width, gl_format, gl_type, data_pointer
+                    );
+                }
+                break;
             }
-            break;
-        }
 
-        case 3: {
-            if (use_dsa) {
-                gl::texture_sub_image_3d(
-                    destination_texture->get_impl().gl_name(),
-                    static_cast<GLint>(destination_level),
-                    gl_destination_x, gl_destination_y, gl_destination_z,
-                    gl_width, gl_height, gl_depth, gl_format, gl_type, data_pointer
-                );
-            } else {
-                gl::tex_sub_image_3d(
-                    gl_destination_texture_target,
-                    static_cast<GLint>(destination_level),
-                    gl_destination_x, gl_destination_y, gl_destination_z,
-                    gl_width, gl_height, gl_depth, gl_format, gl_type, data_pointer
-                );
+            case 2: {
+                if (use_dsa) {
+                    gl::texture_sub_image_2d(
+                        destination_texture->get_impl().gl_name(),
+                        static_cast<GLint>(destination_level),
+                        gl_destination_x, gl_destination_y,
+                        gl_width, gl_height, gl_format, gl_type, data_pointer
+                    );
+                } else {
+                    gl::tex_sub_image_2d(
+                        gl_destination_texture_target,
+                        static_cast<GLint>(destination_level),
+                        gl_destination_x, gl_destination_y,
+                        gl_width, gl_height, gl_format, gl_type, data_pointer
+                    );
+                }
+                break;
             }
-            break;
-        }
 
-        default: {
-            ERHE_FATAL("Bad texture target");
+            case 3: {
+                if (use_dsa) {
+                    gl::texture_sub_image_3d(
+                        destination_texture->get_impl().gl_name(),
+                        static_cast<GLint>(destination_level),
+                        gl_destination_x, gl_destination_y, gl_destination_z,
+                        gl_width, gl_height, gl_depth, gl_format, gl_type, data_pointer
+                    );
+                } else {
+                    gl::tex_sub_image_3d(
+                        gl_destination_texture_target,
+                        static_cast<GLint>(destination_level),
+                        gl_destination_x, gl_destination_y, gl_destination_z,
+                        gl_width, gl_height, gl_depth, gl_format, gl_type, data_pointer
+                    );
+                }
+                break;
+            }
+
+            default: {
+                ERHE_FATAL("Bad texture target");
+            }
         }
     }
 #endif
