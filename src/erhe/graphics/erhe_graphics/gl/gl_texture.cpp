@@ -311,10 +311,16 @@ void convert_texture_dimensions_to_gl(const gl::Texture_target target, int& widt
             return;
         }
         case gl::Texture_target::texture_cube_map: {
+            // A cube map is six faces. The Vulkan-style abstraction expresses them
+            // as array layers (array_layer_count == 6 at creation; the face count
+            // being copied otherwise), so fold that count into the GL depth like the
+            // array cases. GL cube storage is 2D (texture_storage_2d), so depth is
+            // unused at creation, but copy_image_sub_data / texture_sub_image use it
+            // as the number of faces written.
             ERHE_VERIFY(width >= 1);
             ERHE_VERIFY(height >= 1);
-            ERHE_VERIFY(depth == 6); // TODO Is this correct?
-            ERHE_VERIFY(array_layer_count == 0);
+            ERHE_VERIFY(array_layer_count >= 1);
+            depth = array_layer_count;
             return;
         }
 
@@ -372,6 +378,9 @@ void convert_texture_offset_to_gl(const gl::Texture_target target, int& x, int& 
             return;
         }
         case gl::Texture_target::texture_cube_map: {
+            // The cube face (Vulkan-style array layer 0..5 == +X,-X,+Y,-Y,+Z,-Z)
+            // is selected by the z offset for glTextureSubImage3D / copy_image_sub_data.
+            z = array_layer;
             return;
         }
 

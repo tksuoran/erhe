@@ -192,6 +192,18 @@ void Blit_command_encoder_impl::copy_from_buffer(
         return;
     }
 
+    // Cube maps are allocated with 2D storage (texture_storage_2d) but their faces
+    // are addressed as the third dimension (z = face, set by convert_texture_offset_to_gl)
+    // by the sub-image upload calls, so a cube needs 3D sub-image addressing even though
+    // its storage dimension is 2.
+    int upload_dimensions = destination_texture->get_impl().get_storage_dimensions(gl_destination_texture_target);
+    if (
+        (gl_destination_texture_target == gl::Texture_target::texture_cube_map) ||
+        (gl_destination_texture_target == gl::Texture_target::texture_cube_map_array)
+    ) {
+        upload_dimensions = 3;
+    }
+
 #if defined(__APPLE__)
     // macOS OpenGL driver does not reliably support PBO-based texture uploads.
     // Read the data from the GPU buffer back to CPU, then upload directly.
@@ -220,7 +232,7 @@ void Blit_command_encoder_impl::copy_from_buffer(
         scratch_unit, gl_destination_texture_target, destination_texture->get_impl().gl_name()
     );
 
-    switch (destination_texture->get_impl().get_storage_dimensions(gl_destination_texture_target)) {
+    switch (upload_dimensions) {
         case 1: {
             gl::tex_sub_image_1d(
                 gl_destination_texture_target,
@@ -274,7 +286,7 @@ void Blit_command_encoder_impl::copy_from_buffer(
         );
     }
 
-    switch (destination_texture->get_impl().get_storage_dimensions(gl_destination_texture_target)) {
+    switch (upload_dimensions) {
         case 1: {
             if (use_dsa) {
                 gl::texture_sub_image_1d(
