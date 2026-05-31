@@ -287,12 +287,17 @@ void Buffer_impl::unmap() noexcept
     ERHE_VERIFY(m_vma_allocation != VK_NULL_HANDLE);
 
     ERHE_VERIFY(m_map.data() != nullptr);
-    VmaAllocator& allocator = m_device_impl.get_allocator();
-    vmaUnmapMemory(allocator, m_vma_allocation);
+    // A persistently mapped allocation keeps its mapping (established once at
+    // creation); map_bytes() does not re-map it, so unmap() must not vmaUnmapMemory
+    // it either -- doing so trips VMA's "Unmapping allocation not previously mapped"
+    // assertion. Only the transient (non-persistent) mapping is released here.
+    if (!m_persistently_mapped) {
+        VmaAllocator& allocator = m_device_impl.get_allocator();
+        vmaUnmapMemory(allocator, m_vma_allocation);
+        m_map_all = {};
+    }
     m_map = {};
-    m_map_all = {};
     m_map_byte_offset = 0;
-
 }
 
 void Buffer_impl::invalidate(const std::size_t byte_offset, const std::size_t byte_count) noexcept
