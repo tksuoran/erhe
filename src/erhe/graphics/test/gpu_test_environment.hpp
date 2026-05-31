@@ -13,12 +13,14 @@ namespace erhe::graphics { class Device; }
 
 namespace erhe::graphics::test {
 
-// Process-wide GPU context for the real-GPU test target. One headless
-// Vulkan VkInstance / VkDevice is created once (Environment::SetUp) and
-// destroyed once (Environment::TearDown), mirroring the editor's proven
-// single-device lifetime. The device is brought up under
-// VK_LAYER_KHRONOS_validation (the default Graphics_config enables it when
-// the layer is loadable); validation warnings/errors are routed through the
+// Process-wide GPU context for the real-GPU test target. One Device is created
+// once (Environment::SetUp) and destroyed once (Environment::TearDown),
+// mirroring the editor's proven single-device lifetime. The backend is whatever
+// the build was configured with (headless Vulkan, or OpenGL / Metal / windowed
+// Vulkan on a hidden show=false window); the tests render offscreen and read
+// back, so they are backend-neutral. When the backend exposes a debug/validation
+// channel (e.g. Vulkan's VK_LAYER_KHRONOS_validation, enabled by the default
+// Graphics_config when loadable), warnings/errors are routed through the
 // Device_message_callback into a message list so a failing test can be
 // attributed precisely instead of aborting the whole run.
 class Gpu_test_environment final : public ::testing::Environment

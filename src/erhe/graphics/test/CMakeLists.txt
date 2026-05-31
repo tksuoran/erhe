@@ -29,14 +29,25 @@ erhe_target_settings(${_deviceless_target} "erhe/tests")
 
 gtest_discover_tests(${_deviceless_target})
 
-# Real-GPU tests: construct a headless Device and run actual render / compute
-# work, then read results back and assert. Only added when the configuration
-# can bring up a headless Device: the null Context_window exists only when
-# ERHE_WINDOW_LIBRARY=none, and today only the Vulkan backend has a validated
-# headless path. Widen the API list as other backends gain one.
+# Real-GPU tests: construct a Device and run actual render / compute work, then
+# read results back and assert. The tests render to offscreen textures and never
+# present to a swapchain, so they run identically headless or windowed; the only
+# requirement is that a Device can be brought up for the configured (api, window)
+# pair. The bring-up is the same generic Context_window + Surface + Device path
+# the editor uses (a hidden show=false window suffices when a window is needed):
+#   - Vulkan brings up a Device with no window (ERHE_WINDOW_LIBRARY=none ->
+#     surfaceless headless) OR with a real window, so it is supported for any
+#     window library.
+#   - OpenGL and Metal need a real context/surface, which requires a real window
+#     library (sdl/glfw); they have no validated windowless path, so
+#     ERHE_WINDOW_LIBRARY=none is not supported for them.
 set(_gpu_tests_supported OFF)
-if ((ERHE_WINDOW_LIBRARY STREQUAL "none") AND (ERHE_GRAPHICS_API STREQUAL "vulkan"))
+if (ERHE_GRAPHICS_API STREQUAL "vulkan")
     set(_gpu_tests_supported ON)
+elseif ((ERHE_GRAPHICS_API STREQUAL "opengl") OR (ERHE_GRAPHICS_API STREQUAL "metal"))
+    if (NOT (ERHE_WINDOW_LIBRARY STREQUAL "none"))
+        set(_gpu_tests_supported ON)
+    endif ()
 endif ()
 
 if (_gpu_tests_supported)
@@ -94,5 +105,5 @@ if (_gpu_tests_supported)
     # time on a GPU-less builder. Defer enumeration to ctest time.
     gtest_discover_tests(${_gpu_target} DISCOVERY_MODE PRE_TEST)
 else ()
-    message(STATUS "erhe_graphics_gpu_tests skipped (needs ERHE_WINDOW_LIBRARY=none + ERHE_GRAPHICS_API=vulkan)")
+    message(STATUS "erhe_graphics_gpu_tests skipped: no Device bring-up path for ERHE_GRAPHICS_API='${ERHE_GRAPHICS_API}' + ERHE_WINDOW_LIBRARY='${ERHE_WINDOW_LIBRARY}' (need vulkan with any window library, or opengl/metal with a non-none window library)")
 endif ()

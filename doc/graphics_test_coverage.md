@@ -1,9 +1,13 @@
 # erhe::graphics GPU test coverage
 
-This matrix tracks real-GPU coverage exercised by `erhe_graphics_gpu_tests`
-(headless Vulkan / lavapipe in CI, also runnable on OpenGL). Each row maps to one
-or more `TEST_F(Gpu_test, ...)` cases. `[x]` = covered, `[ ]` = gap, `[-]` = not
-testable on this device (a device/engine limitation, not a coverage gap to fill).
+This matrix tracks real-GPU coverage exercised by `erhe_graphics_gpu_tests`. The
+target builds on headless Vulkan and on non-headless OpenGL / Metal (a real window
+library), but the coverage below is currently validated on headless Vulkan / lavapipe;
+the OpenGL / Metal runtime is a work in progress (see
+[`graphics_test_nonheadless_port.md`](graphics_test_nonheadless_port.md) for the
+remaining blockers). Each row maps to one or more `TEST_F(Gpu_test, ...)` cases.
+`[x]` = covered, `[ ]` = gap, `[-]` = not testable on this device (a device/engine
+limitation, not a coverage gap to fill).
 
 ## Device / infrastructure
 
