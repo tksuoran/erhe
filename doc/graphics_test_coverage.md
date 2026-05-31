@@ -32,10 +32,11 @@ or more `TEST_F(Gpu_test, ...)` cases. `[x]` = covered, `[ ]` = gap.
 - [x] Buffer upload + copy + fill (`test_buffer_transfer.cpp`)
 - [x] Texture upload roundtrip + constant clear (`test_texture_upload.cpp`)
 - [x] Texture sampling, nearest filter (`test_texture_sample.cpp`)
+- [x] copy_from_buffer (buffer -> texture) (`test_copy.cpp`)
 
 ## Known gaps (not yet covered)
 
-- [ ] copy_from_buffer (buffer -> texture) and copy_from_texture (texture -> texture) on transfer-only textures
+- [ ] copy_from_texture (texture -> texture): the Vulkan blit encoder's image-to-image copy transitions both images to SHADER_READ_ONLY_OPTIMAL but does not update the tracked layout (unlike the buffer<->image paths), so a subsequent readback uses a stale tracked layout. Blocked on an engine fix to keep the tracked layout in sync; covering it now would require working around that staleness in the test.
 - [ ] Mipmap generation / sampling across levels
 - [ ] Multisample (MSAA) render + resolve
 - [ ] Texture array / 3D texture sampling
