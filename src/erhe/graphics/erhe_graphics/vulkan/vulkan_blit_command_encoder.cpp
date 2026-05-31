@@ -118,15 +118,24 @@ void Blit_command_encoder_impl::copy_from_texture(
 
     Recording_scope scope{m_device.get_impl(), m_command_buffer};
 
+    // The source's current layout is not necessarily SHADER_READ_ONLY:
+    // hardcoding it transitions from a layout the image is not in AND
+    // requires SAMPLED usage the image may lack
+    // (VUID-VkImageMemoryBarrier2-oldLayout-01211). Read the tracked layout
+    // instead, and restore it afterwards so the tracked state stays valid.
+    // Mirrors the texture->buffer copy_from_texture overload.
+    const VkImageLayout src_layout       = source_texture->get_impl().get_current_layout();
+    const bool          from_shader_read = (src_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
     // Transition source to transfer src
     const VkImageMemoryBarrier2 src_barrier{
         .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
         .pNext               = nullptr,
-        .srcStageMask        = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
-        .srcAccessMask       = VK_ACCESS_2_SHADER_READ_BIT,
+        .srcStageMask        = from_shader_read ? VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT : VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT,
+        .srcAccessMask       = from_shader_read ? VK_ACCESS_2_SHADER_READ_BIT : VK_ACCESS_2_TRANSFER_WRITE_BIT,
         .dstStageMask        = VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT,
         .dstAccessMask       = VK_ACCESS_2_TRANSFER_READ_BIT,
-        .oldLayout           = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        .oldLayout           = src_layout,
         .newLayout           = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
         .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
         .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
@@ -172,16 +181,18 @@ void Blit_command_encoder_impl::copy_from_texture(
     };
     vkCmdCopyImage(scope.cb, src_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dst_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
-    // Transition both back to shader read
+    // Transition the source back to the layout it had on entry (so the
+    // tracked layout remains valid and we do not move the image into a
+    // layout its usage flags forbid), and the destination to shader read.
     const VkImageMemoryBarrier2 src_post{
         .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
         .pNext               = nullptr,
         .srcStageMask        = VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT,
         .srcAccessMask       = VK_ACCESS_2_TRANSFER_READ_BIT,
-        .dstStageMask        = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-        .dstAccessMask       = VK_ACCESS_2_SHADER_READ_BIT,
+        .dstStageMask        = from_shader_read ? VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT : VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT,
+        .dstAccessMask       = from_shader_read ? VK_ACCESS_2_SHADER_READ_BIT : VK_ACCESS_2_TRANSFER_READ_BIT,
         .oldLayout           = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        .newLayout           = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        .newLayout           = src_layout,
         .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
         .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
         .image               = src_image,
@@ -215,6 +226,12 @@ void Blit_command_encoder_impl::copy_from_texture(
         image_layout_str(dst_post.oldLayout), image_layout_str(dst_post.newLayout),
         pipeline_stage_flags_str(dst_post.srcStageMask), pipeline_stage_flags_str(dst_post.dstStageMask)
     );
+
+    // The source layout is restored to src_layout by src_post, so its tracked
+    // layout is unchanged. The destination was fully overwritten and left in
+    // SHADER_READ_ONLY_OPTIMAL by dst_post, so update its tracked layout to
+    // match (mirrors the buffer->texture copy_from_buffer overload).
+    const_cast<Texture*>(destination_texture)->get_impl().set_layout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 }
 
 // Buffer to texture copy
