@@ -86,6 +86,16 @@ protected:
     [[nodiscard]] auto read_texture_color_bytes(const erhe::graphics::Texture& texture, std::size_t bytes_per_texel)
         -> std::vector<std::byte>;
 
+    // Copy a single mip level (color aspect) of a texture to a mappable buffer
+    // and return the raw bytes, tightly packed at get_width(level) *
+    // bytes_per_texel bytes per row. The Blit_command_encoder texture->buffer
+    // overload takes source_level + reads the tracked layout, so this works for
+    // any level the caller has populated (e.g. after generate_mipmaps, which
+    // leaves every level in shader_read_only_optimal). bytes_per_texel must
+    // match the texture's pixel format size.
+    [[nodiscard]] auto read_texture_level_bytes(const erhe::graphics::Texture& texture, unsigned int level, std::size_t bytes_per_texel)
+        -> std::vector<std::byte>;
+
     // Copy a format_32_vec4_float color texture's level 0 to a mappable buffer
     // and return the texels as floats (4 floats per texel, tightly packed).
     // Same framing contract as read_texture_rgba8.
