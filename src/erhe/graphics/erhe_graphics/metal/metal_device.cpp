@@ -2,6 +2,7 @@
 #include "erhe_graphics/metal/metal_buffer.hpp"
 #include "erhe_graphics/metal/metal_command_buffer.hpp"
 #include "erhe_graphics/metal/metal_scoped_debug_group.hpp"
+#include "erhe_graphics/metal/metal_helpers.hpp"
 #include "erhe_graphics/metal/metal_surface.hpp"
 #include "erhe_graphics/metal/metal_texture.hpp"
 #include "erhe_graphics/blit_command_encoder.hpp"
@@ -635,13 +636,52 @@ auto Device_impl::make_render_command_encoder(Command_buffer& command_buffer) ->
 
 auto Device_impl::get_format_properties(const erhe::dataformat::Format format) const -> Format_properties
 {
-    static_cast<void>(format);
     Format_properties properties{};
-    properties.supported                    = true;
+
+    // A format is usable on this Metal device only if it maps to a real
+    // MTLPixelFormat. format_undefined and any format with no Metal equivalent
+    // map to PixelFormatInvalid and report unsupported (all flags false), which
+    // matches the Vulkan backend's VK_FORMAT_UNDEFINED early-out.
+    const MTL::PixelFormat pixel_format = to_mtl_pixel_format(format);
+    if (pixel_format == MTL::PixelFormatInvalid) {
+        return properties;
+    }
+    properties.supported = true;
+
+    // Derive renderability from the format's aspect bits (per erhe::dataformat).
+    // Every color format Metal exposes is color-renderable, and every
+    // depth/stencil format is depth/stencil-renderable on Metal 3 hardware, so
+    // the aspect bits are the authoritative signal -- mirroring the Vulkan
+    // backend, which also gates depth_renderable/stencil_renderable on the
+    // dataformat depth/stencil bit counts.
+    const std::size_t depth_bits   = erhe::dataformat::get_depth_size_bits(format);
+    const std::size_t stencil_bits = erhe::dataformat::get_stencil_size_bits(format);
+    const bool        is_color     = erhe::dataformat::has_color(format);
+
+    properties.color_renderable   = is_color;
+    properties.depth_renderable   = (depth_bits > 0);
+    properties.stencil_renderable = (stencil_bits > 0);
+    properties.filter             = is_color; // color formats are linearly filterable on Metal 3
+    properties.framebuffer_blend  = is_color;
+
+    properties.red_size         = static_cast<int>(erhe::dataformat::get_red_size_bits    (format));
+    properties.green_size       = static_cast<int>(erhe::dataformat::get_green_size_bits  (format));
+    properties.blue_size        = static_cast<int>(erhe::dataformat::get_blue_size_bits   (format));
+    properties.alpha_size       = static_cast<int>(erhe::dataformat::get_alpha_size_bits  (format));
+    properties.depth_size       = static_cast<int>(depth_bits);
+    properties.stencil_size     = static_cast<int>(stencil_bits);
+    properties.image_texel_size = static_cast<int>(erhe::dataformat::get_format_size_bytes(format));
+
+    // MSAA sample counts: only renderable formats can be multisampled. 1x is
+    // always present; higher counts are gated on device support.
     properties.texture_2d_sample_counts.push_back(1);
-    for (int count : {2, 4, 8}) {
-        if (m_mtl_device->supportsTextureSampleCount(static_cast<NS::UInteger>(count))) {
-            properties.texture_2d_sample_counts.push_back(count);
+    const bool is_renderable =
+        properties.color_renderable || properties.depth_renderable || properties.stencil_renderable;
+    if (is_renderable) {
+        for (int count : {2, 4, 8}) {
+            if (m_mtl_device->supportsTextureSampleCount(static_cast<NS::UInteger>(count))) {
+                properties.texture_2d_sample_counts.push_back(count);
+            }
         }
     }
     properties.texture_2d_array_max_width   = 16384;
@@ -652,11 +692,29 @@ auto Device_impl::get_format_properties(const erhe::dataformat::Format format) c
 
 auto Device_impl::probe_image_format_support(const erhe::dataformat::Format format, const uint64_t usage_mask) const -> bool
 {
-    // Metal has no direct equivalent of vkGetPhysicalDeviceImageFormatProperties2.
-    // The probe concept is Vulkan-specific; on Metal we conservatively report
-    // "supported" and let texture creation fail if the combination is not valid.
-    static_cast<void>(format);
-    static_cast<void>(usage_mask);
+    // Metal has no direct equivalent of vkGetPhysicalDeviceImageFormatProperties2,
+    // so derive the answer from get_format_properties (which is itself grounded
+    // in the MTLPixelFormat mapping and the format's aspect bits). An undefined /
+    // unmappable format is never a usable image format -- matching the Vulkan
+    // backend's VK_FORMAT_UNDEFINED -> false early-out.
+    const Format_properties properties = get_format_properties(format);
+    if (!properties.supported) {
+        return false;
+    }
+
+    // Each requested attachment usage must be backed by the matching
+    // renderability. Non-attachment usages (sampled, storage, transfer) are
+    // available for any supported format on Metal 3.
+    if ((usage_mask & Image_usage_flag_bit_mask::color_attachment) != 0) {
+        if (!properties.color_renderable) {
+            return false;
+        }
+    }
+    if ((usage_mask & Image_usage_flag_bit_mask::depth_stencil_attachment) != 0) {
+        if (!properties.depth_renderable && !properties.stencil_renderable) {
+            return false;
+        }
+    }
     return true;
 }
 

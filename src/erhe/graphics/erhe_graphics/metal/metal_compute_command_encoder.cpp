@@ -123,6 +123,7 @@ void Compute_command_encoder_impl::set_compute_pipeline_state(const Compute_pipe
         log_startup->error("Metal: no compute function for '{}'", data.shader_stages->name());
         ERHE_FATAL("Metal: no compute function");
     }
+    m_threadgroup_size = stages_impl.get_compute_workgroup_size();
 
     Device_impl& device_impl = m_device.get_impl();
     MTL::Device* mtl_device = device_impl.get_mtl_device();
@@ -170,6 +171,13 @@ void Compute_command_encoder_impl::set_compute_pipeline(const Compute_pipeline& 
     m_pipeline_state      = mtl_pipeline;
     m_owns_pipeline_state = false;
     m_encoder->setComputePipelineState(m_pipeline_state);
+
+    // Carry the shader's declared local workgroup size so dispatch_compute can
+    // supply it to dispatchThreadgroups() (the erhe API passes group counts).
+    const Shader_stages* shader_stages = pipeline.get_data().shader_stages;
+    if (shader_stages != nullptr) {
+        m_threadgroup_size = shader_stages->get_impl().get_compute_workgroup_size();
+    }
 }
 
 void Compute_command_encoder_impl::dispatch_compute(
@@ -181,11 +189,20 @@ void Compute_command_encoder_impl::dispatch_compute(
     ERHE_VERIFY(m_encoder != nullptr);
     ERHE_VERIFY(m_pipeline_state != nullptr);
 
-    NS::UInteger thread_execution_width = m_pipeline_state->threadExecutionWidth();
-    NS::UInteger max_total_threads      = m_pipeline_state->maxTotalThreadsPerThreadgroup();
-
-    MTL::Size threads_per_grid        = MTL::Size(static_cast<NS::UInteger>(x_size), static_cast<NS::UInteger>(y_size), static_cast<NS::UInteger>(z_size));
-    MTL::Size threads_per_threadgroup = MTL::Size(std::min(thread_execution_width, max_total_threads), 1, 1);
+    // x_size/y_size/z_size are workgroup COUNTS (GL/Vulkan dispatch semantics).
+    // The per-group thread dimensions come from the shader's declared
+    // layout(local_size_*), captured into m_threadgroup_size when the pipeline
+    // was set. Metal's dispatchThreadgroups multiplies the two to get the grid.
+    MTL::Size threads_per_grid = MTL::Size(
+        static_cast<NS::UInteger>(x_size),
+        static_cast<NS::UInteger>(y_size),
+        static_cast<NS::UInteger>(z_size)
+    );
+    MTL::Size threads_per_threadgroup = MTL::Size(
+        static_cast<NS::UInteger>(m_threadgroup_size[0]),
+        static_cast<NS::UInteger>(m_threadgroup_size[1]),
+        static_cast<NS::UInteger>(m_threadgroup_size[2])
+    );
 
     m_encoder->dispatchThreadgroups(threads_per_grid, threads_per_threadgroup);
 }

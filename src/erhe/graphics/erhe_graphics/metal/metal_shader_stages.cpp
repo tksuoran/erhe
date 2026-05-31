@@ -26,6 +26,7 @@ Shader_stages_impl::Shader_stages_impl(Shader_stages_impl&& from) noexcept
     , m_vertex_function  {from.m_vertex_function}
     , m_fragment_function{from.m_fragment_function}
     , m_compute_function {from.m_compute_function}
+    , m_compute_workgroup_size{from.m_compute_workgroup_size}
 {
     from.m_vertex_function   = nullptr;
     from.m_fragment_function = nullptr;
@@ -41,6 +42,7 @@ Shader_stages_impl& Shader_stages_impl::operator=(Shader_stages_impl&& from) noe
         m_vertex_function   = from.m_vertex_function;
         m_fragment_function = from.m_fragment_function;
         m_compute_function  = from.m_compute_function;
+        m_compute_workgroup_size = from.m_compute_workgroup_size;
         from.m_vertex_function   = nullptr;
         from.m_fragment_function = nullptr;
         from.m_compute_function  = nullptr;
@@ -89,6 +91,7 @@ void Shader_stages_impl::reload(Shader_stages_prototype&& prototype)
     m_vertex_function   = proto_impl.get_vertex_function();
     m_fragment_function = proto_impl.get_fragment_function();
     m_compute_function  = proto_impl.get_compute_function();
+    m_compute_workgroup_size = proto_impl.get_compute_workgroup_size();
     // Retain since prototype destructor will release
     if (m_vertex_function != nullptr) {
         m_vertex_function->retain();
@@ -145,6 +148,11 @@ auto Shader_stages_impl::get_fragment_function() const -> MTL::Function*
 auto Shader_stages_impl::get_compute_function() const -> MTL::Function*
 {
     return m_compute_function;
+}
+
+auto Shader_stages_impl::get_compute_workgroup_size() const -> std::array<uint32_t, 3>
+{
+    return m_compute_workgroup_size;
 }
 
 auto operator==(const Shader_stages_impl& lhs, const Shader_stages_impl& rhs) noexcept -> bool { return &lhs == &rhs; }

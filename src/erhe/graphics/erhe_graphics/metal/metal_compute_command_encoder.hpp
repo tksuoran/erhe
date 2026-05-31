@@ -3,6 +3,9 @@
 #include "erhe_graphics/compute_command_encoder.hpp"
 #include "erhe_graphics/metal/metal_command_encoder.hpp"
 
+#include <array>
+#include <cstdint>
+
 namespace MTL { class CommandBuffer; }
 namespace MTL { class ComputeCommandEncoder; }
 namespace MTL { class ComputePipelineState; }
@@ -32,6 +35,10 @@ private:
     MTL::ComputeCommandEncoder*  m_encoder             {nullptr};
     MTL::ComputePipelineState*   m_pipeline_state      {nullptr};
     bool                         m_owns_pipeline_state {false};
+    // Per-group thread dimensions for dispatchThreadgroups(), taken from the
+    // bound shader's layout(local_size_*). Defaults to 1x1x1 until a pipeline
+    // is set.
+    std::array<uint32_t, 3>      m_threadgroup_size    {1, 1, 1};
     // Non-owning borrow of the cb's MTL::CommandBuffer (for setting the
     // debug label) and inter-encoder fence (for ordering against other
     // encoders on the same cb).

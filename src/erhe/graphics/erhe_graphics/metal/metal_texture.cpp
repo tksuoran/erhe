@@ -108,7 +108,20 @@ Texture_impl::Texture_impl(Device& device, const Texture_create_info& create_inf
     desc->setHeight(static_cast<NS::UInteger>(std::max(1, m_height)));
     desc->setDepth(static_cast<NS::UInteger>(std::max(1, m_depth)));
     desc->setMipmapLevelCount(static_cast<NS::UInteger>(std::max(1, m_level_count)));
-    if (m_array_layer_count > 0) {
+    // erhe follows the Vulkan convention where a cube's six faces count as six
+    // array layers (and a cube-map array has 6*N layers). Metal instead treats a
+    // cube as a single slice-group: MTLTextureDescriptor.arrayLength counts whole
+    // cubes, not faces, and MUST be 1 for MTLTextureTypeCube. Translate the layer
+    // count into Metal's units so a cube map created with array_layer_count == 6
+    // does not trip the "arrayLength (6) greater than the maximum allowed size of
+    // 1" texture-descriptor validation assertion.
+    const bool is_cube =
+        (m_type == Texture_type::texture_cube_map) ||
+        (m_type == Texture_type::texture_cube_map_array);
+    if (is_cube) {
+        const int cube_count = std::max(1, m_array_layer_count / 6);
+        desc->setArrayLength(static_cast<NS::UInteger>(cube_count));
+    } else if (m_array_layer_count > 0) {
         desc->setArrayLength(static_cast<NS::UInteger>(m_array_layer_count));
     }
     if (m_sample_count > 1) {

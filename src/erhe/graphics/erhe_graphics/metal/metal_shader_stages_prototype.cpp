@@ -11,6 +11,9 @@
 #include <fmt/format.h>
 #include <spirv_msl.hpp>
 
+#include <algorithm>
+#include <array>
+
 namespace erhe::graphics {
 
 namespace {
@@ -22,7 +25,8 @@ auto compile_spirv_to_mtl_function(
     const std::string&               shader_name,
     const char*                      stage_name,
     const Bind_group_layout*         bind_group_layout,
-    MTL::Library*&                   out_library
+    MTL::Library*&                   out_library,
+    std::array<uint32_t, 3>*         out_workgroup_size = nullptr
 ) -> MTL::Function*
 {
     if (spirv.empty()) {
@@ -54,6 +58,19 @@ auto compile_spirv_to_mtl_function(
     static constexpr uint32_t metal_push_constant_index = 15;
 
     spv::ExecutionModel exec_model = compiler.get_execution_model();
+
+    // Capture the compute local workgroup size from the SPIR-V execution mode.
+    // erhe's dispatch_compute() takes workgroup COUNTS (GL/Vulkan
+    // glDispatchCompute semantics) and relies on the shader's declared
+    // layout(local_size_*) for the per-group thread dimensions. Metal does not
+    // bake the threadgroup size into the pipeline; it must be supplied to
+    // dispatchThreadgroups() at dispatch time. Read it here (where the SPIR-V is
+    // available) so the encoder can forward it.
+    if ((exec_model == spv::ExecutionModelGLCompute) && (out_workgroup_size != nullptr)) {
+        (*out_workgroup_size)[0] = std::max(1u, compiler.get_execution_mode_argument(spv::ExecutionModeLocalSize, 0));
+        (*out_workgroup_size)[1] = std::max(1u, compiler.get_execution_mode_argument(spv::ExecutionModeLocalSize, 1));
+        (*out_workgroup_size)[2] = std::max(1u, compiler.get_execution_mode_argument(spv::ExecutionModeLocalSize, 2));
+    }
 
     {
         spirv_cross::ShaderResources pre_resources = compiler.get_shader_resources();
@@ -395,7 +412,8 @@ auto Shader_stages_prototype_impl::link_program() -> bool
         m_create_info.name,
         "Compute",
         m_create_info.bind_group_layout,
-        m_compute_library
+        m_compute_library,
+        &m_compute_workgroup_size
     );
 
     if ((m_vertex_function == nullptr) && (m_compute_function == nullptr)) {
@@ -443,6 +461,11 @@ auto Shader_stages_prototype_impl::get_fragment_function() const -> MTL::Functio
 auto Shader_stages_prototype_impl::get_compute_function() const -> MTL::Function*
 {
     return m_compute_function;
+}
+
+auto Shader_stages_prototype_impl::get_compute_workgroup_size() const -> std::array<uint32_t, 3>
+{
+    return m_compute_workgroup_size;
 }
 
 

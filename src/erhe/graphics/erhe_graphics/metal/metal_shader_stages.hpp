@@ -3,6 +3,8 @@
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/glsl_to_spirv.hpp"
 
+#include <array>
+#include <cstdint>
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -41,6 +43,7 @@ public:
     [[nodiscard]] auto get_vertex_function  () const -> MTL::Function*;
     [[nodiscard]] auto get_fragment_function() const -> MTL::Function*;
     [[nodiscard]] auto get_compute_function () const -> MTL::Function*;
+    [[nodiscard]] auto get_compute_workgroup_size() const -> std::array<uint32_t, 3>;
 
 private:
     friend class Shader_stages_impl;
@@ -59,6 +62,7 @@ private:
     MTL::Function*            m_vertex_function     {nullptr};
     MTL::Function*            m_fragment_function   {nullptr};
     MTL::Function*            m_compute_function    {nullptr};
+    std::array<uint32_t, 3>   m_compute_workgroup_size{1, 1, 1};
 };
 
 class Shader_stages_impl
@@ -80,6 +84,7 @@ public:
     [[nodiscard]] auto get_vertex_function  () const -> MTL::Function*;
     [[nodiscard]] auto get_fragment_function() const -> MTL::Function*;
     [[nodiscard]] auto get_compute_function () const -> MTL::Function*;
+    [[nodiscard]] auto get_compute_workgroup_size() const -> std::array<uint32_t, 3>;
 
 private:
     void defer_release_functions();
@@ -90,6 +95,7 @@ private:
     MTL::Function*     m_vertex_function  {nullptr};
     MTL::Function*     m_fragment_function{nullptr};
     MTL::Function*     m_compute_function {nullptr};
+    std::array<uint32_t, 3> m_compute_workgroup_size{1, 1, 1};
 };
 
 [[nodiscard]] auto operator==(const Shader_stages_impl& lhs, const Shader_stages_impl& rhs) noexcept -> bool;
