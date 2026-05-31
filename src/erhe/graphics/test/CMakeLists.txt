@@ -73,6 +73,7 @@ if (_gpu_tests_supported)
         test_msaa_resolve.cpp
         test_device_caps.cpp
         test_mipmaps.cpp
+        test_texture_array.cpp
     )
 
     target_link_libraries(${_gpu_target}
