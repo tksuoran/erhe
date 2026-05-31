@@ -2,71 +2,101 @@
 
 ## Status
 
-- The `erhe_graphics_gpu_tests` target now BUILDS on non-headless OpenGL and Metal
-  (the CMake gate in `src/erhe/graphics/test/CMakeLists.txt` was widened: Vulkan with
-  any window library, or OpenGL / Metal with a real window library).
-- Headless Vulkan: **41/41 green** (unchanged).
-- OpenGL (and presumably Metal): the target builds and the device comes up, but the
-  suite does **not** yet run green. Runtime enablement is deferred; the concrete
-  blockers are below. Do not assume a green GL run until these are fixed.
+- The `erhe_graphics_gpu_tests` target builds and runs on non-headless OpenGL
+  (`build_vs2026_opengl`: ERHE_GRAPHICS_API=opengl + a real window library).
+- Headless Vulkan: **41/41 green** (unchanged; this is the hard gate -- never regress it).
+- OpenGL: **37/41 green**. The two original blockers (host-buffer map pattern and
+  the silent render-path abort) are RESOLVED; see "Resolved blockers" below. Four
+  cases remain, each a distinct pre-existing GL-backend gap exposed by the suite
+  (see "Remaining failures").
+
+The test device is built from a default `Graphics_config{}` (it does not read
+`config/editor/erhe_graphics.json`), so it uses native GL capabilities and every
+fix below is an engine fix, not a config toggle.
 
 ## What already works on OpenGL
 
-- Device bring-up: a hidden (`show=false`) SDL window + GL context + `erhe::graphics::Device`
-  via the same `Surface_create_info` path the editor uses. `Gpu_test.device_up_clean`
-  passes on `build_vs2026_opengl`.
-- Shader compilation: test shaders now use the portable `gl_VertexID` / `gl_InstanceID`
-  convention (erhe remaps these to `gl_VertexIndex` / `gl_InstanceIndex` for Vulkan/Metal;
-  OpenGL uses them natively). Previously the tests used Vulkan's `gl_VertexIndex` directly,
-  which does not compile on the GL backend.
+- Device bring-up; shader compilation (portable `gl_VertexID` / `gl_InstanceID`);
+  and all buffer / compute / clear / readback / blend / depth / stencil / MSAA /
+  color-format / device-capability cases, plus attribute-less (fullscreen-triangle)
+  draws.
 
-## Blockers to a green OpenGL run
+## Resolved blockers
 
-### 1. Buffer readback / host-buffer map pattern (fixture)
+### 1. Host/readback buffer coherent map (FIXED)
 
-`Gpu_test::read_buffer` / `make_host_buffer` (`src/erhe/graphics/test/gpu_test_fixture.cpp`)
-create a host-visible buffer with `host_read | host_write | host_coherent` and then do a
-transient `map_bytes` -> memcpy -> `unmap` per access. That pattern is contradictory on GL:
+The fixture creates a host-visible coherent buffer and uses transient
+`map_bytes -> memcpy -> unmap`. The GL backend rejected this
+(`ERHE_VERIFY(persistent)` for a coherent buffer, then `ERHE_VERIFY(m_map.empty())`
+once persistently mapped). Fixed in `gl_buffer.cpp`: a coherent request implies a
+persistent mapping at the GL level, and `map_bytes`/`unmap` are persistent-aware
+(mirroring the existing `begin_write`/`end_write`).
 
-- A coherent mapping legally requires `MAP_PERSISTENT_BIT` -- `gl_buffer.cpp:96`
-  (`get_gl_storage_mask`) aborts via `ERHE_VERIFY(persistent)` when coherent is requested
-  without persistent.
-- Making it persistent (so the VERIFY passes) causes the buffer to be mapped once at
-  creation (`gl_buffer.cpp:293-296`), after which the fixture's explicit `map_bytes` trips
-  `ERHE_VERIFY(m_map.empty())` at `gl_buffer.cpp:495`.
+### 2. Render-path silent abort (FIXED)
 
-erhe's own `ring_buffer` (`src/erhe/graphics/erhe_graphics/ring_buffer.cpp:29-41`) avoids
-this: it puts `host_read`/`host_write` in the *required* mask and `host_persistent`
-(+ `host_coherent` / `host_cached`) in the *preferred* mask, maps persistently once, keeps
-the pointer, and flushes/invalidates explicitly for the non-coherent case.
+Two causes, fixed separately:
+- Core-profile GL rejects `glDraw*` with VAO 0; pipelines with no vertex input
+  (fullscreen triangles) bound VAO 0. Fixed by binding a device-owned persistent
+  empty VAO (`gl_state_tracker.cpp` / `gl_device.cpp`), created lazily on first use.
+- The underlying GL error was masked by a `DebugBreak()` in the GL debug callback,
+  which silently terminated the debugger-less test process. Fixed by gating it on
+  `IsDebuggerPresent()` (`gl_debug.cpp`).
 
-**Fix direction:** rework the fixture's buffer helpers to mirror the proven persistent-map
-pattern (map once, expose the persistent span instead of re-mapping; this likely needs a
-`Buffer` accessor for the existing mapping), keeping the Vulkan path green. Avoid the
-band-aid of just toggling memory-property flags -- that only moves the abort.
+Also resolved: GL format-capability reporting in `gl_device.cpp`
+(`probe_image_format_support` now rejects `format_undefined`; `stencil_renderable`
+is kept consistent with the abstraction's stencil aspect for
+`format_x8_d24_unorm_pack32`).
 
-### 2. Render-path silent abort
+## Remaining failures (4) -- careful, editor-critical follow-ups
 
-`Gpu_test.blend_premultiplied_over` (and likely every render test) aborts with exit code 3
-and **no callstack and no log output** -- a `std::terminate`, not an `ERHE_VERIFY` (those
-print a callstack, as the buffer abort above does) and not a GL-backend `throw` (there are
-none in `src/erhe/graphics/erhe_graphics/gl/`). It must be diagnosed with a debugger; `cdb`
-is not installed on the dev machine. Run e.g. under the Visual Studio debugger or install
-the Windows SDK Debugging Tools, break on the abort/terminate, and capture the stack:
+These touch intricate, editor-critical GL code (texture dimension conventions and
+render Y-orientation). Each needs a deliberate fix verified against BOTH the editor
+and the headless Vulkan suite -- do not guess; a wrong fix regresses the editor.
 
-```
-cdb -c "sxe -c \"kb 40;q\" eh; sxe -c \"kb 40;q\" 80000003; g" \
-    build_vs2026_opengl\src\erhe\graphics\test\Debug\erhe_graphics_gpu_tests.exe \
-    --gtest_filter=Gpu_test.blend_premultiplied_over
-```
+### A. Render Y-orientation -- `topology_point_list` (FAIL)
+
+Four 1-pixel points render (the lit-texel count is exactly 4) but vertically
+flipped: read-back lit pixel `y == (height - 1) - expected_y`. The test emits raw
+NDC and negates Y "to match the render encoder's negative-height viewport" (a
+Vulkan-specific assumption); erhe's GL backend orients Y via `glClipControl`
+instead, so raw-NDC geometry lands Y-flipped relative to Vulkan. Settle this before
+fixing: does the abstraction guarantee a consistent raw-NDC -> framebuffer
+orientation across backends (then the GL path is wrong), or only at the
+projection-matrix level (then the test's raw-NDC Y assumption is backend-specific
+and the test should adapt)? No currently-passing render test is Y-asymmetric, so
+this is the first case to exercise the question.
+
+### B. Texture layer/depth convention -- `texture_cube_sample_faces`, `texture_2d_array_sample_layers`, `copy_from_texture_sub_rect` (ABORT)
+
+All three abort in `convert_texture_dimensions_to_gl` (`gl_texture.cpp`) on a
+GL-vs-Vulkan dimension-convention mismatch:
+- Cube creation: the abstraction creates a cube with `array_layer_count = 6`,
+  `width/height = 1`, depth unset (Vulkan style: 6 faces as array layers); the GL
+  `texture_cube_map` case asserts `depth == 6 && array_layer_count == 0` (a
+  GL-centric layout).
+- `copy_from_buffer` to a 2D array passes a hardcoded `array_layer_count = 0`
+  (`gl_blit_command_encoder.cpp:156`), but the `texture_2d_array` case requires `>= 1`.
+- `copy_from_texture` (9-arg) passes a hardcoded `array_layer_count = 1`
+  (`gl_blit_command_encoder.cpp:100`), but a plain `texture_2d` requires `0`.
+
+Root cause: `convert_texture_dimensions_to_gl` is designed for texture *creation*
+(it folds `array_layer_count` into `depth` and asserts per-target invariants) but
+is reused for *copy regions* with a hardcoded layer count. A correct fix must
+reconcile the cube/array/3D convention across creation, copy, and
+`convert_to_gl_texture_target` (which keys cube-vs-cube-array off
+`get_array_layer_count() != 0`) without regressing the editor's working texture
+paths or the already-passing texture tests (whole-image copy, 2D
+`copy_from_buffer`, `texture_3d`). Determine the editor's canonical cube/array
+representation first (grep how the editor creates `texture_cube_map` /
+`texture_2d_array`).
 
 ## Metal
 
-The gate enables the Metal build, but Metal cannot be built or run on the Windows dev
-machine. It needs a macOS (Xcode) build + run to validate; the same two blocker classes
-(buffer map pattern, render path) should be re-checked there.
+The gate enables the Metal build, but Metal cannot be built or run on the Windows
+dev machine. Validate on macOS (Xcode); the same classes of issue may apply.
 
 ## Bisection snapshot (OpenGL, build_vs2026_opengl)
 
-`device_up_clean` PASS; every test that creates a host/readback buffer or renders ABORTs
-(exit 3). Buffer-path aborts show an `ERHE_VERIFY` callstack; render-path aborts are silent.
+37/41 pass. Remaining: `topology_point_list` (FAIL, render Y-flip);
+`copy_from_texture_sub_rect`, `texture_2d_array_sample_layers`,
+`texture_cube_sample_faces` (ABORT, texture dimension convention).
