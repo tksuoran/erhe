@@ -242,6 +242,15 @@ Example:
 py -3 src/erhe/codegen/generate.py <definitions_dir> <output_dir>
 ```
 
+## Shell process hygiene (find.exe)
+
+On this Windows machine `find` resolves to Git Bash's `C:\Program Files\Git\usr\bin\find.exe`. A broad search such as `find / -name <file>` walks the entire Windows filesystem and effectively hangs, leaving an orphaned `find.exe` running in the background. Prefer the dedicated Glob/Grep tools, or scope `find` to a specific directory -- never `/`. Every now and then, and especially right after you have used `find`, verify that no leftover `find.exe` processes remain and kill any that do:
+
+```powershell
+Get-CimInstance Win32_Process -Filter "Name='find.exe'" | Select-Object ProcessId, CommandLine | Format-List
+Get-CimInstance Win32_Process -Filter "Name='find.exe'" | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+```
+
 ## Editor Improvement Plan
 
 See [`doc/editor_improvements.md`](doc/editor_improvements.md) for the prioritized list of architectural improvements to `src/editor/`.
