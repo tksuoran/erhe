@@ -97,7 +97,13 @@ void Blit_command_encoder_impl::copy_from_texture(
     int gl_width  = source_size.x;
     int gl_height = source_size.y;
     int gl_depth  = source_size.z;
-    convert_texture_dimensions_to_gl(gl_source_texture_target, gl_width, gl_height, gl_depth, 1);
+    // convert_texture_dimensions_to_gl folds the array-layer count into gl_depth for
+    // layered targets (array / cube) and requires it to be 0 for non-layered targets
+    // (2D / 3D, where source_size.z already carries the slice count). Pass the copy
+    // region's layer count (source_size.z) for layered source textures, 0 otherwise,
+    // so gl_depth ends up as the number of slices copied for every target.
+    const int gl_source_array_layer_count = (source_texture->get_array_layer_count() != 0) ? source_size.z : 0;
+    convert_texture_dimensions_to_gl(gl_source_texture_target, gl_width, gl_height, gl_depth, gl_source_array_layer_count);
     int gl_source_x = source_origin.x;
     int gl_source_y = source_origin.y;
     int gl_source_z = source_origin.z;
@@ -153,7 +159,12 @@ void Blit_command_encoder_impl::copy_from_buffer(
     int gl_width  = source_size.x;
     int gl_height = source_size.y;
     int gl_depth  = source_size.z;
-    convert_texture_dimensions_to_gl(gl_destination_texture_target, gl_width, gl_height, gl_depth, 0);
+    // See copy_from_texture: pass the copy region's layer count for layered
+    // destination targets (array / cube), 0 for non-layered (2D / 3D), so gl_depth
+    // becomes the number of slices written. The specific destination layer/face is
+    // applied as the z offset by convert_texture_offset_to_gl(destination_slice).
+    const int gl_destination_array_layer_count = (destination_texture->get_array_layer_count() != 0) ? source_size.z : 0;
+    convert_texture_dimensions_to_gl(gl_destination_texture_target, gl_width, gl_height, gl_depth, gl_destination_array_layer_count);
     int gl_destination_x = destination_origin.x;
     int gl_destination_y = destination_origin.y;
     int gl_destination_z = destination_origin.z;
