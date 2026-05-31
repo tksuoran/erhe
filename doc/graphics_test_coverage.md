@@ -2,7 +2,8 @@
 
 This matrix tracks real-GPU coverage exercised by `erhe_graphics_gpu_tests`
 (headless Vulkan / lavapipe in CI, also runnable on OpenGL). Each row maps to one
-or more `TEST_F(Gpu_test, ...)` cases. `[x]` = covered, `[ ]` = gap.
+or more `TEST_F(Gpu_test, ...)` cases. `[x]` = covered, `[ ]` = gap, `[-]` = not
+testable on this device (a device/engine limitation, not a coverage gap to fill).
 
 ## Device / infrastructure
 
@@ -22,6 +23,7 @@ or more `TEST_F(Gpu_test, ...)` cases. `[x]` = covered, `[ ]` = gap.
 - [x] Instanced draw, triangle_strip topology (`test_instanced.cpp`)
 - [x] Primitive topology: point_list and line_list (`test_topology.cpp`)
 - [x] Stencil: two-draw mask/test in a single render pass (`test_stencil.cpp`)
+- [-] Polygon mode line/point - NOT testable here: lavapipe (the headless CI device) has `fillModeNonSolid` disabled, so `VK_POLYGON_MODE_LINE`/`VK_POLYGON_MODE_POINT` fail pipeline creation. This is an engine/device limitation, not a coverage gap to fill; no engine feature should be added solely to test it.
 
 ## Render pass
 
