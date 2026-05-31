@@ -13,6 +13,8 @@
 
 #include <glm/glm.hpp>
 
+#include <cstdlib>
+
 namespace erhe::graphics::test {
 
 namespace {
@@ -65,7 +67,16 @@ void Gpu_test_environment::SetUp()
     // Graphics_config is generated into the global namespace (see
     // erhe_graphics/generated/graphics_config.hpp); device.hpp references it
     // unqualified for the same reason.
-    const Graphics_config graphics_config{};
+    Graphics_config graphics_config{};
+    // The test device does not read erhe_graphics.json (no working-directory
+    // dependency). To exercise the non-DSA OpenGL path on demand -- the editor's
+    // config disables direct state access -- honor an environment variable:
+    // ERHE_TEST_OPENGL_NO_DSA=1 forces DSA (and thus persistent buffers) off.
+    // Unset keeps the default DSA path. Ignored on non-OpenGL backends.
+    const char* const no_dsa_env = std::getenv("ERHE_TEST_OPENGL_NO_DSA");
+    if ((no_dsa_env != nullptr) && (no_dsa_env[0] == '1')) {
+        graphics_config.opengl.force_no_direct_state_access = true;
+    }
 
     erhe::graphics::Device_message_callback message_callback =
         [this](erhe::graphics::Message_severity severity, const std::string& message, const std::string&) {
