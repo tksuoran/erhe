@@ -177,6 +177,10 @@ private:
     Graphics_config                  m_graphics_config;
     // Resolved once at construction; indexes the pixel-format capability table.
     metal::Gpu_family                m_gpu_family{metal::Gpu_family::metal3};
+    // Runtime capability the static feature-set table cannot express: linear
+    // filtering of 32-bit float color formats (true on all Apple-silicon GPUs).
+    // Queried once and applied on top of the table in get_format_properties().
+    bool                             m_supports_32bit_float_filtering{false};
     uint64_t                         m_frame_index{1};
     Device_frame_state               m_state{Device_frame_state::idle};
     std::vector<Completion_handler>  m_completion_handlers;

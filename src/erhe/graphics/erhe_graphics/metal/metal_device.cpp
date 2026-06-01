@@ -64,6 +64,13 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
     m_gpu_family = metal::metal_resolve_gpu_family(m_mtl_device);
     log_startup->info("Metal GPU family: {}", metal::metal_gpu_family_name(m_gpu_family));
 
+    // Runtime cap the static feature-set table cannot express: the tables list
+    // 32-bit float color formats as non-filterable, with a footnote that linear
+    // filtering is gated by supports32BitFloatFiltering (true on all Apple
+    // silicon). Query it once and apply it in get_format_properties(), mirroring
+    // MoltenVK's modifyMTLFormatCapabilities runtime adjustment.
+    m_supports_32bit_float_filtering = m_mtl_device->supports32BitFloatFiltering();
+
     m_mtl_command_queue = m_mtl_device->newCommandQueue();
 
     // Metal LogState with custom log handler is disabled for now because it
@@ -691,6 +698,19 @@ auto Device_impl::get_format_properties(const erhe::dataformat::Format format) c
         properties.color_renderable  = is_color;
         properties.filter            = is_color;
         properties.framebuffer_blend = is_color;
+    }
+
+    // Runtime adjustment over the static table: the feature-set tables list the
+    // 32-bit float color formats as non-filterable (Apple footnote: gated by
+    // supports32BitFloatFiltering). On hardware that supports it -- every Apple
+    // silicon GPU -- they are filterable, so report that rather than the
+    // documented minimum. This is what MoltenVK does in modifyMTLFormatCapabilities.
+    if (!properties.filter &&
+        m_supports_32bit_float_filtering &&
+        ((pixel_format == MTL::PixelFormatR32Float)  ||
+         (pixel_format == MTL::PixelFormatRG32Float) ||
+         (pixel_format == MTL::PixelFormatRGBA32Float))) {
+        properties.filter = true;
     }
 
     properties.red_size         = static_cast<int>(erhe::dataformat::get_red_size_bits    (format));
