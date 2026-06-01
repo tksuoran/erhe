@@ -32,6 +32,7 @@
 #include "erhe_graphics/compute_command_encoder.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/render_pass.hpp"
+#include "erhe_graphics/ring_buffer_range.hpp"
 #include "erhe_graphics/scoped_debug_group.hpp"
 #include "erhe_graphics/texture.hpp"
 
@@ -895,9 +896,21 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
                             get_depth_range(),
                             get_conventions()
                         );
-                        // TODO: thread joint buffer + range through here for
-                        // skinned content edge lines in XR. Without it, skinned
-                        // meshes' edges render in bind pose.
+                        // Hand the per-frame joint UBO/SSBO range to the
+                        // renderer so the compute pre-pass poses skinned
+                        // content edge lines / selection outlines. Without
+                        // this the skinned line geometry is generated in
+                        // bind (T) pose. Mirrors viewport_scene_view: the
+                        // update allocates a disjoint ring range from the one
+                        // Forward_renderer's later render() requests.
+                        erhe::scene::Scene* scene_for_joints = scene_root->get_hosted_scene();
+                        if ((scene_for_joints != nullptr) && (m_app_context.forward_renderer != nullptr)) {
+                            erhe::scene_renderer::Joint_buffer& joint_buffer = m_app_context.forward_renderer->get_joint_buffer();
+                            erhe::graphics::Ring_buffer_range joint_buffer_range = joint_buffer.update(
+                                glm::uvec4{0, 0, 0, 0}, {}, scene_for_joints->get_skins()
+                            );
+                            content_wide_line_renderer->set_joint_buffer(&joint_buffer, std::move(joint_buffer_range));
+                        }
                         content_wide_line_renderer->compute(compute_encoder);
                     }
                     // Debug_renderer::compute() early-returns when
