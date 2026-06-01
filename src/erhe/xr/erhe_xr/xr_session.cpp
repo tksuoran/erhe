@@ -295,7 +295,18 @@ Xr_session::~Xr_session() noexcept
         }
     }
 
+    // Destroy every swapchain while the owning XrSession handle is still
+    // valid. xrDestroySession invalidates all child handles (swapchains,
+    // spaces), so any Swapchain whose ~Swapchain runs after the
+    // xrDestroySession() below would call xrDestroySwapchain() on an
+    // already-invalid handle and log XR_ERROR_HANDLE_INVALID. The per-eye
+    // m_view_swapchains were always cleared here; the multiview shared
+    // swapchains are std::optional members whose destructors would
+    // otherwise run during member teardown (after this body), so reset
+    // them explicitly too.
     m_view_swapchains.clear();
+    m_shared_color_swapchain.reset();
+    m_shared_depth_stencil_swapchain.reset();
 
     if (m_xr_session == XR_NULL_HANDLE) {
         return;
