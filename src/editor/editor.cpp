@@ -1952,6 +1952,20 @@ public:
 
     ~Editor() noexcept
     {
+        // Quiesce the GPU before tearing any part down. wait_idle() drives
+        // frame_completed() for every submitted frame and then drains any
+        // leftover completion handlers (e.g. an Id_renderer pixel read-back
+        // whose XR-submitted command buffer was never polled by a following
+        // frame at exit). Those handlers release the ring-buffer ranges held
+        // by Transfer_entry; running them here -- while Id_renderer and the
+        // other parts are still alive -- avoids both the
+        // ~Ring_buffer_range "not released / cancelled" assert and the
+        // use-after-free that would occur if the device destructor ran the
+        // same handlers after their owning parts were gone.
+        if (m_graphics_device) {
+            m_graphics_device->wait_idle();
+        }
+
         // Wait for all async tasks to complete, then clear task handles
         // and destroy the executor while m_mesh_memory is still alive.
         // Without this, implicit member destruction destroys m_mesh_memory
