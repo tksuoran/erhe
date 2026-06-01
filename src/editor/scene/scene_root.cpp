@@ -373,6 +373,14 @@ void Scene_root::unregister_from_editor_scenes(App_scenes& app_scenes)
     m_is_registered = false;
 }
 
+void Scene_root::detach_from_editor_scenes(App_scenes& app_scenes)
+{
+    ERHE_VERIFY(m_is_registered == true);
+    ERHE_VERIFY(m_app_scenes == &app_scenes);
+    m_app_scenes    = nullptr;
+    m_is_registered = false;
+}
+
 auto Scene_root::get_host_name() const -> const char*
 {
     return "Scene_root";

@@ -22,9 +22,17 @@ App_scenes::~App_scenes() noexcept
 {
     // ~Scene_root calls unregister_from_editor_scenes() which modifies
     // m_scene_roots. Swap to a local so the member is empty before any
-    // element destructors run; unregister on the empty member is a no-op.
+    // element destructors run, avoiding mutation of m_scene_roots while it
+    // is being torn down.
     std::vector<std::shared_ptr<Scene_root>> roots;
     roots.swap(m_scene_roots);
+    // Detach each scene_root from this registry up front. Without this the
+    // later ~Scene_root would still believe it is registered and call
+    // unregister_scene_root() on the now-empty member, which fails the
+    // lookup and logs a spurious "not registered in App_scenes" error.
+    for (const std::shared_ptr<Scene_root>& scene_root : roots) {
+        scene_root->detach_from_editor_scenes(*this);
+    }
 }
 
 void App_scenes::register_scene_root(const std::shared_ptr<Scene_root>& scene_root)

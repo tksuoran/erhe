@@ -126,6 +126,11 @@ public:
 
     void register_to_editor_scenes    (App_scenes& app_scenes);
     void unregister_from_editor_scenes(App_scenes& app_scenes);
+    // Clears this scene_root's registration state without touching the
+    // App_scenes registry. Called by ~App_scenes while it tears down its
+    // own list, so that the later ~Scene_root does not try to unregister
+    // from a registry that has already released it.
+    void detach_from_editor_scenes    (App_scenes& app_scenes);
 
     void register_node    (const std::shared_ptr<erhe::scene::Node>&   node)   override;
     void unregister_node  (const std::shared_ptr<erhe::scene::Node>&   node)   override;
