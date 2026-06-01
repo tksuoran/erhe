@@ -1,5 +1,67 @@
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_geometry/geometry_log.hpp"
+#include "erhe_log/log.hpp"
+
+// TEMPORARY diagnostic for the intermittent main-loop hang -- see
+// doc/intermittent_main_loop_hang.md. Set to 1 to validate each mesh's
+// structural sanity right after process() (on the worker thread) and log +
+// name a mesh corrupted during parallel init, the moment it happens, instead
+// of waiting for that geometry's thumbnail to hang in build_polygon_fill().
+//
+// NOTE: a timing "amplifier" (sleeps / a rendezvous barrier around the Geogram
+// ops) was tried here to make the race reproduce more often; it instead
+// SUPPRESSED it (8/8 clean on Quest, 8/8 clean on desktop even with forced
+// 4-thread overlap) -- a heisenbug. So this now only validates, at natural
+// timing. REMOVE before merging.
+#define ERHE_DEBUG_VALIDATE_GEOMETRY 1
+#if ERHE_DEBUG_VALIDATE_GEOMETRY
+namespace {
+
+// Validate the mesh's structural sanity right after process(). The
+// intermittent hang is a build_polygon_fill() spin over a corrupt GEO::Mesh;
+// this catches that corruption the moment it is produced -- on the worker
+// thread, naming the geometry -- regardless of whether that geometry's
+// thumbnail is the one that later hangs. The bound check runs BEFORE any
+// per-facet iteration so an absurd facet count cannot make the validator
+// itself spin. TEMPORARY -- remove with the amplifier.
+void debug_validate_mesh(const GEO::Mesh& mesh, const std::string& name)
+{
+    const GEO::index_t     facet_count  = mesh.facets.nb();
+    const GEO::index_t     vertex_count = mesh.vertices.nb();
+    const GEO::index_t     corner_count = mesh.facet_corners.nb();
+    constexpr GEO::index_t sane_bound   = 50u * 1000u * 1000u; // 50M
+    if ((facet_count >= sane_bound) || (vertex_count >= sane_bound) || (corner_count >= sane_bound)) {
+        erhe::geometry::log_geometry->error(
+            "MESH CORRUPT (absurd counts) after process(): geometry '{}' facets={} verts={} corners={} -- "
+            "intermittent-hang culprit; see doc/intermittent_main_loop_hang.md",
+            name, facet_count, vertex_count, corner_count
+        );
+        return;
+    }
+    uint64_t corner_sum = 0;
+    for (GEO::index_t f = 0; f < facet_count; ++f) {
+        const GEO::index_t nc = mesh.facets.nb_corners(f);
+        if ((nc < 3u) || (nc > 100000u)) {
+            erhe::geometry::log_geometry->error(
+                "MESH CORRUPT (facet {} corner count {}) after process(): geometry '{}' facets={} verts={} corners={} -- "
+                "intermittent-hang culprit; see doc/intermittent_main_loop_hang.md",
+                f, nc, name, facet_count, vertex_count, corner_count
+            );
+            return;
+        }
+        corner_sum += nc;
+    }
+    if (corner_sum != static_cast<uint64_t>(corner_count)) {
+        erhe::geometry::log_geometry->error(
+            "MESH CORRUPT (corner sum {} != facet_corners.nb() {}) after process(): geometry '{}' facets={} verts={} -- "
+            "intermittent-hang culprit; see doc/intermittent_main_loop_hang.md",
+            corner_sum, corner_count, name, facet_count, vertex_count
+        );
+    }
+}
+
+} // namespace
+#endif
 #include "erhe_log/log_geogram.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -1072,20 +1134,30 @@ void Geometry::process(const uint64_t flags)
 {
     //GEO::mesh_reorder(m_mesh);
 
+    // Breadcrumbs localize which mesh-processing step a spinning thread is
+    // stuck in. update_connectivity()/build_extra_connectivity() and the
+    // smoothing steps walk corner rings and can loop on degenerate /
+    // non-manifold geometry. See doc/intermittent_main_loop_hang.md.
+    erhe::log::set_breadcrumb("geometry: process");
+
     if (flags & process_flag_connect) {
+        erhe::log::set_breadcrumb("geometry: facets.connect");
         m_mesh.facets.connect();
     }
 
     if (flags & process_flag_merge_coplanar_neighbors) {
+        erhe::log::set_breadcrumb("geometry: merge_coplanar + update_connectivity");
         merge_coplanar_neighbors();
         update_connectivity();
         build_edges();
     } else if (flags & process_flag_build_edges) {
+        erhe::log::set_breadcrumb("geometry: update_connectivity + build_edges");
         update_connectivity();
         build_edges();
     }
 
     if (flags & process_flag_compute_smooth_vertex_normals) {
+        erhe::log::set_breadcrumb("geometry: compute_smooth_vertex_normals");
         compute_mesh_vertex_normal_smooth(m_mesh, m_attributes);
     }
     if (flags & process_flag_compute_facet_centroids) {
@@ -1103,6 +1175,13 @@ void Geometry::process(const uint64_t flags)
     if (flags & process_flag_debug_trace) {
         debug_trace();
     }
+
+#if ERHE_DEBUG_VALIDATE_GEOMETRY
+    // Catch + name a mesh corrupted during (concurrent) processing, the moment
+    // it happens, so we do not have to wait for that geometry's thumbnail to
+    // hang in build_polygon_fill(). See doc/intermittent_main_loop_hang.md.
+    debug_validate_mesh(m_mesh, m_name);
+#endif
 }
 
 void Geometry::generate_mesh_facet_texture_coordinates()

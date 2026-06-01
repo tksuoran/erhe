@@ -19,6 +19,7 @@
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/texture.hpp"
+#include "erhe_log/log.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_primitive/primitive_builder.hpp"
@@ -149,6 +150,10 @@ void Brush_preview::render_preview(
 
     ERHE_VERIFY(m_context.current_command_buffer != nullptr);
     erhe::graphics::Command_buffer& command_buffer = *m_context.current_command_buffer;
+    // Breadcrumb names the brush whose preview primitive is being (lazily)
+    // built, so the watchdog can identify the culprit if build_polygon_fill
+    // spins on a corrupt mesh. See doc/intermittent_main_loop_hang.md.
+    erhe::log::set_breadcrumb(fmt::format("thumbnail: brush '{}'", brush->get_name()));
     const Brush::Scaled& brush_scaled = brush->get_scaled(1.0);
     m_context.mesh_memory->flush(command_buffer);
 

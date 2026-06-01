@@ -45,6 +45,7 @@ std::shared_ptr<spdlog::logger> log_trs_tool_frame;
 std::shared_ptr<spdlog::logger> log_xr;
 std::shared_ptr<spdlog::logger> log_graph_editor;
 std::shared_ptr<spdlog::logger> log_mcp;
+std::shared_ptr<spdlog::logger> log_watchdog;
 
 void initialize_logging()
 {
@@ -91,6 +92,7 @@ void initialize_logging()
     log_tree_frame                 = make_frame_logger("editor.tree_frame"                );
     log_graph_editor               = make_frame_logger("editor.graph_editor"              );
     log_mcp                        = make_logger      ("editor.mcp"                       );
+    log_watchdog                   = make_logger      ("editor.watchdog"                  );
 }
 
 }

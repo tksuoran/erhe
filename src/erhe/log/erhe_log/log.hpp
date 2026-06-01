@@ -4,10 +4,13 @@
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/base_sink.h>
 
+#include <cstdint>
 #include <deque>
 #include <memory>
 #include <mutex>
 #include <string>
+#include <string_view>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -70,6 +73,33 @@ private:
     uint64_t           m_serial{0};
     std::deque<Entry>  m_entries;
 };
+
+// --- Diagnostic breadcrumbs ---------------------------------------------
+//
+// A lightweight, mutex-guarded record of the most recent named execution
+// phase, plus a small ring of recent phases (with thread id and a monotonic
+// timestamp). Intended for a watchdog thread to report WHERE a stalled or
+// CPU-spinning thread last was: the spinning thread cannot log for itself
+// (it never returns to a logging point), so the watchdog reads the last
+// breadcrumb and the recent ring instead. See
+// doc/intermittent_main_loop_hang.md.
+//
+// set_breadcrumb() is cheap (one uncontended mutex lock; the current text
+// reuses its buffer) and safe to call from any thread.
+class Breadcrumb
+{
+public:
+    std::string  text;
+    std::size_t  thread_hash {0};  // std::hash<std::thread::id>
+    std::int64_t monotonic_ns{0};  // steady_clock since process start-ish
+};
+
+void set_breadcrumb         (std::string_view text);
+[[nodiscard]] auto get_current_breadcrumb() -> Breadcrumb;
+[[nodiscard]] auto get_recent_breadcrumbs() -> std::vector<Breadcrumb>;
+// steady_clock "now" in the same units as Breadcrumb::monotonic_ns, so a
+// watchdog can compute how long the current breadcrumb has been stuck.
+[[nodiscard]] auto breadcrumb_now_ns      () -> std::int64_t;
 
 [[nodiscard]] auto get_tail_store_log () -> Store_log_sink&;
 [[nodiscard]] auto get_frame_store_log() -> Store_log_sink&;

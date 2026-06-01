@@ -10,6 +10,7 @@
 #include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/scoped_debug_group.hpp"
+#include "erhe_log/log.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -98,6 +99,10 @@ void Rendergraph::execute(erhe::graphics::Command_buffer& command_buffer)
     for (const auto& node : m_nodes) {
         if (node->is_enabled()) {
             SPDLOG_LOGGER_TRACE(log_frame, "Execute render graph node '{}'", node->get_name());
+            // Breadcrumb so the main-loop watchdog can name the node a spinning
+            // tick is stuck in. get_name() returns a stored string, so passing
+            // it as string_view does not allocate.
+            erhe::log::set_breadcrumb(node->get_name());
             erhe::graphics::Scoped_debug_group node_scope{command_buffer, node->get_debug_label()};
             node->execute_rendergraph_node(command_buffer);
         }

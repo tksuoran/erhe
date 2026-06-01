@@ -48,6 +48,7 @@ extern std::shared_ptr<spdlog::logger> log_trs_tool_frame;
 extern std::shared_ptr<spdlog::logger> log_xr;
 extern std::shared_ptr<spdlog::logger> log_graph_editor;
 extern std::shared_ptr<spdlog::logger> log_mcp;
+extern std::shared_ptr<spdlog::logger> log_watchdog;
 
 void initialize_logging();
 

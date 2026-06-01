@@ -185,9 +185,11 @@
 #include <geogram/basic/logger.h>
 
 #include <atomic>
+#include <condition_variable>
 #include <cstdlib>
 #include <filesystem>
 #include <stdexcept>
+#include <thread>
 
 #if defined(ERHE_OS_LINUX)
 #   include <unistd.h>
@@ -271,6 +273,20 @@ public:
         ERHE_PROFILE_FUNCTION();
         m_frame_log_window->on_frame_begin();
 
+        // Record which thread runs tick() so the watchdog can attribute the
+        // stuck breadcrumb to this thread (worker threads also set breadcrumbs
+        // during init). Set once; the lock is taken only on the first tick.
+        if (m_tick_thread_hash == 0) {
+            const std::size_t tick_thread_hash = std::hash<std::thread::id>{}(std::this_thread::get_id());
+            std::lock_guard<std::mutex> watchdog_lock{m_watchdog_mutex};
+            m_tick_thread_hash = tick_thread_hash;
+        }
+
+        // Breadcrumbs mark the current main-loop phase so the watchdog can
+        // report where a spinning tick is stuck. See
+        // doc/intermittent_main_loop_hang.md.
+        erhe::log::set_breadcrumb("tick: wait_frame");
+
         // log_frame->trace("tick() begin");
         const bool wait_ok = m_graphics_device->wait_frame();
         ERHE_VERIFY(wait_ok);
@@ -331,8 +347,11 @@ public:
         // - updates controller visualization nodes
         if (m_app_context.OpenXR) {
             ERHE_PROFILE_SCOPE("OpenXR update events");
+            erhe::log::set_breadcrumb("tick: xr poll_events");
             bool headset_poll_ok           = m_headset_view->poll_events();
+            erhe::log::set_breadcrumb("tick: xr begin_frame");
             bool headset_begin_frame_ok    = headset_poll_ok        && m_headset_view->begin_frame();
+            erhe::log::set_breadcrumb("tick: xr update_actions");
             bool headset_update_actions_ok = headset_begin_frame_ok && m_headset_view->update_actions();
             if (headset_update_actions_ok) {
                 m_viewport_config_window->set_edit_data(&m_headset_view->get_config());
@@ -345,6 +364,7 @@ public:
         }
 #endif
 
+        erhe::log::set_breadcrumb("tick: fixed_step (physics)");
         m_app_scenes->before_physics_simulation_steps();
 
         float host_system_dt_s = 0.0f;
@@ -359,6 +379,7 @@ public:
             }
         );
         m_app_scenes   ->after_physics_simulation_steps();
+        erhe::log::set_breadcrumb("tick: imgui process_events + commands");
         m_imgui_windows->process_events(host_system_dt_s, host_system_time_ns);
         m_commands     ->tick(host_system_time_ns, input_events);
 
@@ -376,6 +397,7 @@ public:
         m_hover_tool->reset_item_tree_hover();
         m_hotbar->rebuild_if_needed();
 
+        erhe::log::set_breadcrumb("tick: draw_imgui_windows");
         m_imgui_windows->begin_frame();
         m_imgui_windows->draw_imgui_windows();
         m_imgui_windows->end_frame();
@@ -426,10 +448,12 @@ public:
         }
 
         if (should_render) {
+            erhe::log::set_breadcrumb("tick: thumbnails update");
             m_thumbnails->update();
         }
 
         // Update scene transforms
+        erhe::log::set_breadcrumb("tick: update_transforms");
         m_tools->update_transforms();
         m_viewport_scene_views->update_transforms();
         if (m_app_context.OpenXR) {
@@ -438,17 +462,20 @@ public:
 
         // Execute rendergraph
         if (should_render) {
+            erhe::log::set_breadcrumb("tick: rendergraph execute");
             m_rendergraph->execute(command_buffer);
         }
 
         if (should_render) {
             m_imgui_renderer->next_frame();
 #if defined(ERHE_XR_LIBRARY_OPENXR)
+            erhe::log::set_breadcrumb("tick: headset end_frame");
             m_headset_view->end_frame();
 #endif
 
             m_id_renderer->next_frame();
         }
+        erhe::log::set_breadcrumb("tick: submit + end_frame");
 
         const erhe::graphics::Frame_end_info frame_end_info{
             .requested_display_time = 0
@@ -506,6 +533,94 @@ public:
         m_app_rendering->process_end_capture();
 
         m_in_tick.store(false);
+    }
+
+    // Start the main-loop stall watchdog. Call once, after init completes and
+    // before the redraw callback begins driving tick().
+    void start_main_loop_watchdog()
+    {
+        m_watchdog_thread = std::thread([this]() {
+            // A tick taking longer than this is treated as a stall. Normal
+            // frames are sub-20 ms; the in-tick OpenXR throttle sleep is
+            // 250 ms; both are far below this, so this only fires on a genuine
+            // spin / deadlock.
+            constexpr std::int64_t stall_threshold_ns = 5'000'000'000;  // 5 s
+            constexpr std::int64_t report_interval_ns = 5'000'000'000;  // re-report cadence while stuck
+            std::int64_t last_reported_ns = -1;
+
+            for (;;) {
+                {
+                    std::unique_lock<std::mutex> lock{m_watchdog_mutex};
+                    m_watchdog_cv.wait_for(lock, std::chrono::seconds{1}, [this]{ return m_watchdog_stop; });
+                    if (m_watchdog_stop) {
+                        break;
+                    }
+                }
+
+                // Only a tick that has entered but not returned can be the
+                // spinning one. Between frames m_in_tick is false (idle /
+                // throttled) and must NOT trip the watchdog.
+                if (!m_in_tick.load()) {
+                    last_reported_ns = -1; // re-arm so the next real stall reports promptly
+                    continue;
+                }
+
+                std::size_t tick_thread_hash = 0;
+                {
+                    std::lock_guard<std::mutex> lock{m_watchdog_mutex};
+                    tick_thread_hash = m_tick_thread_hash;
+                }
+
+                // Find the newest breadcrumb set by the tick thread; that is
+                // the phase the spinning tick is stuck in. Worker-thread
+                // breadcrumbs (e.g. background geometry processing) are ignored.
+                const std::vector<erhe::log::Breadcrumb> recent = erhe::log::get_recent_breadcrumbs();
+                const erhe::log::Breadcrumb* stuck = nullptr;
+                for (const erhe::log::Breadcrumb& b : recent) {
+                    if ((tick_thread_hash == 0) || (b.thread_hash == tick_thread_hash)) {
+                        stuck = &b; // recent is oldest -> newest, so this keeps the newest match
+                    }
+                }
+                if (stuck == nullptr) {
+                    continue; // no breadcrumb from the tick thread yet
+                }
+
+                const std::int64_t now_ns   = erhe::log::breadcrumb_now_ns();
+                const std::int64_t stuck_ns = now_ns - stuck->monotonic_ns;
+                if (stuck_ns < stall_threshold_ns) {
+                    continue;
+                }
+                if ((last_reported_ns >= 0) && ((now_ns - last_reported_ns) < report_interval_ns)) {
+                    continue; // already reported this stall recently
+                }
+                last_reported_ns = now_ns;
+
+                log_watchdog->error(
+                    "Main loop STALLED: tick has not progressed for {:.1f} s. Stuck in phase: '{}' (tick thread {:#x}).",
+                    static_cast<double>(stuck_ns) / 1e9, stuck->text, stuck->thread_hash
+                );
+                // Dump the recent breadcrumb ring (oldest -> newest) so the
+                // phase sequence leading into the stall is visible in the log.
+                for (const erhe::log::Breadcrumb& b : recent) {
+                    log_watchdog->error(
+                        "  breadcrumb t={:.3f}s thread={:#x}: {}",
+                        static_cast<double>(b.monotonic_ns) / 1e9, b.thread_hash, b.text
+                    );
+                }
+            }
+        });
+    }
+
+    void stop_main_loop_watchdog()
+    {
+        {
+            std::lock_guard<std::mutex> lock{m_watchdog_mutex};
+            m_watchdog_stop = true;
+        }
+        m_watchdog_cv.notify_all();
+        if (m_watchdog_thread.joinable()) {
+            m_watchdog_thread.join();
+        }
     }
 
     [[nodiscard]] static auto get_imgui_config_path(bool openxr) -> std::string
@@ -1926,6 +2041,10 @@ public:
         ERHE_VERIFY(init_end_frame_ok);
         log_startup->info("Init: editor ready, entering main loop");
 
+        // Watch for a main-loop tick that spins / deadlocks and never returns;
+        // the watchdog logs the last breadcrumb so the stuck phase is known.
+        start_main_loop_watchdog();
+
         m_last_window_width  = m_window->get_width();
         m_last_window_height = m_window->get_height();
 
@@ -1952,6 +2071,9 @@ public:
 
     ~Editor() noexcept
     {
+        // Stop the watchdog first so it cannot touch members during teardown.
+        stop_main_loop_watchdog();
+
         // Quiesce the GPU before tearing any part down. wait_idle() drives
         // frame_completed() for every submitted frame and then drains any
         // leftover completion handlers (e.g. an Id_renderer pixel read-back
@@ -2328,6 +2450,18 @@ public:
     bool                                    m_run_started{false};
     std::atomic<bool>                       m_in_tick    {false};
     bool m_run_stopped    {false};
+
+    // Main-loop stall watchdog. The render thread executes tick() under
+    // m_mutex with m_in_tick == true; if a single tick spins (CPU-bound loop)
+    // it never returns, so it cannot log where it is stuck. This background
+    // thread watches the diagnostic breadcrumb (erhe::log::set_breadcrumb) and
+    // reports the last phase when a tick fails to progress past a threshold.
+    // See doc/intermittent_main_loop_hang.md.
+    std::thread             m_watchdog_thread;
+    std::mutex              m_watchdog_mutex;
+    std::condition_variable m_watchdog_cv;
+    bool                    m_watchdog_stop{false};
+    std::size_t             m_tick_thread_hash{0}; // guarded by m_watchdog_mutex; set once in tick()
 
 
     Graphics_config                     m_graphics_config;

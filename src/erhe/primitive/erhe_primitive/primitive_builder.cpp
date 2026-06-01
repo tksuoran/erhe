@@ -6,9 +6,12 @@
 #include "erhe_primitive/buffer_writer.hpp"
 #include "erhe_primitive/index_range.hpp"
 #include "erhe_primitive/primitive_log.hpp"
+#include "erhe_log/log.hpp"
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_profile/profile.hpp"
+
+#include <fmt/format.h>
 #include "erhe_verify/verify.hpp"
 
 using erhe::geometry::get_mesh_info;
@@ -284,16 +287,29 @@ auto Primitive_builder::build() -> bool
         return false;
     }
 
+    // Breadcrumbs localize which build sub-step a spinning render thread is
+    // stuck in (these walk mesh corners/edges and can loop forever on
+    // degenerate / non-manifold geometry). See doc/intermittent_main_loop_hang.md.
     const Primitive_types& primitive_types = m_build_info.primitive_types;
     if (primitive_types.fill_triangles) {
+        // Include mesh counts so the watchdog dump reveals whether the mesh is
+        // corrupt/absurdly sized (the build_polygon_fill spin walks these).
+        erhe::log::set_breadcrumb(
+            fmt::format(
+                "primitive: build_polygon_fill facets={} verts={} corners={}",
+                m_mesh.facets.nb(), m_mesh.vertices.nb(), m_mesh.facet_corners.nb()
+            )
+        );
         build_context.build_polygon_fill();
     }
 
     if (primitive_types.edge_lines) {
+        erhe::log::set_breadcrumb("primitive: build_edge_lines");
         build_context.build_edge_lines();
     }
 
     if (primitive_types.centroid_points) {
+        erhe::log::set_breadcrumb("primitive: build_centroid_points");
         build_context.build_centroid_points();
     }
     return true;

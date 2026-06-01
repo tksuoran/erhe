@@ -22,11 +22,93 @@
 #   include <unistd.h>
 #endif
 
+#include <array>
+#include <chrono>
 #include <cstdio>
+#include <thread>
 #include <unordered_map>
 #include <vector>
 
 namespace erhe::log {
+
+// --- Diagnostic breadcrumbs ---------------------------------------------
+
+namespace {
+
+constexpr std::size_t c_breadcrumb_ring_size = 32;
+
+class Breadcrumb_state
+{
+public:
+    std::mutex                                     mutex;
+    Breadcrumb                                     current;
+    std::array<Breadcrumb, c_breadcrumb_ring_size> ring;
+    std::size_t                                    ring_next {0};
+    std::size_t                                    ring_count{0};
+    std::chrono::steady_clock::time_point          epoch{std::chrono::steady_clock::now()};
+};
+
+auto get_breadcrumb_state() -> Breadcrumb_state&
+{
+    static Breadcrumb_state state;
+    return state;
+}
+
+} // namespace
+
+auto breadcrumb_now_ns() -> std::int64_t
+{
+    Breadcrumb_state& state = get_breadcrumb_state();
+    return std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::steady_clock::now() - state.epoch
+    ).count();
+}
+
+void set_breadcrumb(std::string_view text)
+{
+    Breadcrumb_state& state = get_breadcrumb_state();
+    const std::size_t  thread_hash  = std::hash<std::thread::id>{}(std::this_thread::get_id());
+    const std::int64_t monotonic_ns = breadcrumb_now_ns();
+
+    std::lock_guard<std::mutex> lock{state.mutex};
+    // assign() reuses the string's existing capacity, so steady-state calls
+    // do not allocate.
+    state.current.text.assign(text);
+    state.current.thread_hash  = thread_hash;
+    state.current.monotonic_ns = monotonic_ns;
+
+    Breadcrumb& slot = state.ring[state.ring_next];
+    slot.text.assign(text);
+    slot.thread_hash  = thread_hash;
+    slot.monotonic_ns = monotonic_ns;
+    state.ring_next = (state.ring_next + 1) % c_breadcrumb_ring_size;
+    if (state.ring_count < c_breadcrumb_ring_size) {
+        ++state.ring_count;
+    }
+}
+
+auto get_current_breadcrumb() -> Breadcrumb
+{
+    Breadcrumb_state& state = get_breadcrumb_state();
+    std::lock_guard<std::mutex> lock{state.mutex};
+    return state.current;
+}
+
+auto get_recent_breadcrumbs() -> std::vector<Breadcrumb>
+{
+    Breadcrumb_state& state = get_breadcrumb_state();
+    std::lock_guard<std::mutex> lock{state.mutex};
+    std::vector<Breadcrumb> result;
+    result.reserve(state.ring_count);
+    // Walk oldest -> newest.
+    const std::size_t start = (state.ring_count < c_breadcrumb_ring_size)
+        ? 0
+        : state.ring_next;
+    for (std::size_t i = 0; i < state.ring_count; ++i) {
+        result.push_back(state.ring[(start + i) % c_breadcrumb_ring_size]);
+    }
+    return result;
+}
 
 static auto get_log_level_map() -> std::unordered_map<std::string, std::string>&
 {
