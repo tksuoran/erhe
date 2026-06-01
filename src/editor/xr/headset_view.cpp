@@ -11,7 +11,10 @@
 #include "app_rendering.hpp"
 #include "app_scenes.hpp"
 #include "rendertarget_imgui_host.hpp"
+#include "renderers/id_renderer.hpp"
 #include "erhe_scene_renderer/content_wide_line_renderer.hpp"
+#include "erhe_scene_renderer/forward_renderer.hpp"
+#include "erhe_scene_renderer/joint_buffer.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "renderers/composition_pass.hpp"
 #include "renderers/render_context.hpp"
@@ -32,6 +35,9 @@
 #include "erhe_graphics/scoped_debug_group.hpp"
 #include "erhe_graphics/texture.hpp"
 
+#include "erhe_geometry/geometry.hpp"
+#include "erhe_math/math_util.hpp"
+#include "erhe_primitive/primitive.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_renderer/debug_renderer.hpp"
 #include "erhe_renderer/primitive_renderer.hpp"
@@ -39,8 +45,12 @@
 #include "erhe_rendergraph/rendergraph.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/mesh.hpp"
+#include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
+#include "erhe_scene/skin.hpp"
 #include "erhe_graphics/device.hpp"
+
+#include <glm/gtx/matrix_operation.hpp>
 #include "erhe_xr/headset.hpp"
 #include "erhe_xr/xr_instance.hpp"
 #include "erhe_xr/xr_log.hpp"
@@ -440,7 +450,174 @@ void Headset_view::update_pointer_context_from_controller()
 
     this->Scene_view::set_world_from_control(m);
     this->Scene_view::update_hover_with_raytrace();
+    // Hybrid picker: raytrace (above) owns static meshes; the ID renderer
+    // covers skinned meshes (its rest-pose BVH cannot). This reads the ID
+    // buffer rendered from the controller-aligned pick camera in the
+    // previous frame's update_id_render() and merges any closer hit.
+    update_hover_with_id_render();
     this->Scene_view::update_grid_hover();
+}
+
+void Headset_view::update_id_render(erhe::graphics::Command_buffer& command_buffer)
+{
+    if ((m_context.id_renderer == nullptr) || !m_pointer_pick_camera || !m_pointer_pick_node) {
+        return;
+    }
+    const std::optional<glm::mat4> world_from_control = get_world_from_control();
+    if (!world_from_control.has_value()) {
+        return;
+    }
+    const std::shared_ptr<Scene_root> scene_root = get_scene_root();
+    if (!scene_root) {
+        return;
+    }
+    Scene_root* tool_scene_root = m_context.tools->get_tool_scene_root().get();
+    if (tool_scene_root == nullptr) {
+        return;
+    }
+
+    // Place the pick camera at the controller aim pose. world_from_control
+    // already looks down -Z along the control ray (see
+    // get_control_ray_direction_in_world), which matches the camera's own
+    // -Z view direction, so it can be used directly as the node transform.
+    m_pointer_pick_node->set_parent_from_node(world_from_control.value());
+
+    // Node world transforms (incl. the pick camera) and the joint matrices
+    // the ID skinning variant samples must be current before the pass runs.
+    scene_root->get_scene().update_node_transforms();
+    tool_scene_root->get_hosted_scene()->update_node_transforms();
+
+    // Joint UBO/SSBO, exactly as App_rendering::render_id: bind the same
+    // Joint_buffer Forward_renderer uses so the ID skinning branch reads
+    // posed joint matrices. Static-only scenes leave it null.
+    erhe::scene_renderer::Joint_buffer*                 joint_buffer{nullptr};
+    std::span<const std::shared_ptr<erhe::scene::Skin>> skins{};
+    if (m_context.forward_renderer != nullptr) {
+        erhe::scene::Scene* hosted_scene = scene_root->get_hosted_scene();
+        if (hosted_scene != nullptr) {
+            const std::vector<std::shared_ptr<erhe::scene::Skin>>& scene_skins = hosted_scene->get_skins();
+            if (!scene_skins.empty()) {
+                joint_buffer = &m_context.forward_renderer->get_joint_buffer();
+                skins        = std::span<const std::shared_ptr<erhe::scene::Skin>>{scene_skins.data(), scene_skins.size()};
+            }
+        }
+    }
+
+    const int                  extent = Id_renderer::get_extent();
+    const erhe::math::Viewport viewport{.x = 0, .y = 0, .width = extent, .height = extent};
+
+    const auto& layers      = scene_root->layers();
+    const auto& tool_layers = tool_scene_root->layers();
+
+    m_context.id_renderer->render(
+        Id_renderer::Render_parameters{
+            .command_buffer     = command_buffer,
+            .viewport           = viewport,
+            .camera             = *m_pointer_pick_camera,
+            .content_mesh_spans = { layers.content()->meshes, layers.rendertarget()->meshes },
+            .tool_mesh_spans    = { tool_layers.tool()->meshes },
+            .x                  = extent / 2,
+            .y                  = extent / 2,
+            .reverse_depth      = get_reverse_depth(),
+            .depth_range        = get_depth_range(),
+            .conventions        = get_conventions(),
+            .joint_buffer       = joint_buffer,
+            .skins              = skins,
+            // Same repurposing of id_renderer.enabled as the desktop path:
+            // false -> ID pass covers skinned meshes only (raytrace covers
+            // static), true -> ID pass covers everything.
+            .skinning_filter    = m_context.id_renderer->enabled
+                ? Id_renderer::Skinning_filter::all
+                : Id_renderer::Skinning_filter::skinned_only,
+        }
+    );
+}
+
+auto Headset_view::get_pick_position_in_world(const float depth) const -> std::optional<glm::vec3>
+{
+    if (!m_pointer_pick_camera) {
+        return {};
+    }
+    const int                  extent = Id_renderer::get_extent();
+    const erhe::math::Viewport viewport{.x = 0, .y = 0, .width = extent, .height = extent};
+    const erhe::scene::Camera_projection_transforms projection_transforms =
+        m_pointer_pick_camera->projection_transforms(viewport, get_reverse_depth(), get_depth_range(), get_conventions());
+    const glm::mat4 world_from_clip = projection_transforms.clip_from_world.get_inverse_matrix();
+
+    // The pick is read at the framebuffer centre (the control ray); unproject
+    // that window position at the sampled depth back into world space.
+    return erhe::math::unproject<float>(
+        world_from_clip,
+        glm::vec3{static_cast<float>(extent) * 0.5f, static_cast<float>(extent) * 0.5f, depth},
+        0.0f,
+        1.0f,
+        0.0f,
+        0.0f,
+        static_cast<float>(extent),
+        static_cast<float>(extent),
+        get_conventions()
+    );
+}
+
+void Headset_view::update_hover_with_id_render()
+{
+    if (m_context.id_renderer == nullptr) {
+        return;
+    }
+    const int extent = Id_renderer::get_extent();
+    const Id_renderer::Id_query_result id_query = m_context.id_renderer->get(extent / 2, extent / 2);
+    if (!id_query.valid) {
+        return;
+    }
+
+    Hover_entry entry{
+        .valid                      = id_query.valid,
+        .scene_mesh_weak            = id_query.mesh,
+        .scene_mesh_primitive_index = id_query.index_of_gltf_primitive_in_mesh,
+        .position                   = get_pick_position_in_world(id_query.depth),
+        .triangle                   = static_cast<uint32_t>(id_query.triangle_id)
+    };
+
+    std::shared_ptr<erhe::scene::Mesh> scene_mesh = entry.scene_mesh_weak.lock();
+    if (scene_mesh) {
+        const erhe::scene::Node* node = scene_mesh->get_node();
+        ERHE_VERIFY(node != nullptr);
+        const erhe::scene::Mesh_primitive& mesh_primitive = scene_mesh->get_primitives()[entry.scene_mesh_primitive_index];
+        const erhe::primitive::Primitive&  primitive      = *mesh_primitive.primitive.get();
+        const std::shared_ptr<erhe::primitive::Primitive_shape> shape = primitive.get_shape_for_raytrace();
+        if (shape) {
+            entry.geometry = shape->get_geometry();
+            if (entry.geometry) {
+                const GEO::Mesh& geo_mesh = entry.geometry->get_mesh();
+                entry.facet = shape->get_mesh_facet_from_triangle(entry.triangle);
+                if (entry.facet != GEO::NO_INDEX) {
+                    const bool       negative_determinant   = (node->get_flag_bits() & erhe::Item_flags::negative_determinant) == erhe::Item_flags::negative_determinant;
+                    const GEO::vec3f facet_normal           = erhe::geometry::mesh_facet_normalf(geo_mesh, entry.facet);
+                    const glm::vec3  local_normal           = erhe::geometry::to_glm_vec3(facet_normal);
+                    const glm::mat4  world_from_node        = node->world_from_node();
+                    const glm::mat4  normal_world_from_node = glm::transpose(glm::adjugate(world_from_node));
+                    const glm::vec3  normal_in_world        = glm::vec3{normal_world_from_node * glm::vec4{local_normal, 0.0f}};
+                    const glm::vec3  unit_normal            = glm::normalize(normal_in_world);
+                    entry.normal = negative_determinant ? -unit_normal : unit_normal;
+                }
+            }
+        }
+    }
+
+    using namespace erhe::utility;
+    const uint64_t flags = (id_query.mesh != nullptr) && scene_mesh ? scene_mesh->get_flag_bits() : 0;
+    const bool hover_content      = id_query.mesh && test_bit_set(flags, erhe::Item_flags::content     );
+    const bool hover_tool         = id_query.mesh && test_bit_set(flags, erhe::Item_flags::tool        );
+    const bool hover_brush        = id_query.mesh && test_bit_set(flags, erhe::Item_flags::brush       );
+    const bool hover_rendertarget = id_query.mesh && test_bit_set(flags, erhe::Item_flags::rendertarget);
+
+    // Merge into the slot the mesh's role flag matches; merge_hover only
+    // overrides a raytrace result when this candidate is closer along the
+    // control ray. Mirrors Viewport_scene_view::update_hover_with_id_render.
+    if (hover_content     ) { merge_hover(Hover_entry::content_slot     , entry); }
+    if (hover_tool        ) { merge_hover(Hover_entry::tool_slot        , entry); }
+    if (hover_brush       ) { merge_hover(Hover_entry::brush_slot       , entry); }
+    if (hover_rendertarget) { merge_hover(Hover_entry::rendertarget_slot, entry); }
 }
 
 auto Headset_view::begin_frame() -> bool
@@ -482,6 +659,16 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
         m_request_renderdoc_capture = false;
     }
 
+    // Skinned-mesh pick. Rendered once per frame (NOT per view) from the
+    // controller-aligned pick camera into the Id_renderer's own offscreen
+    // 2D target, before the eye / multiview passes are recorded. The result
+    // is read back next frame in update_hover_with_id_render(). Independent
+    // of the multiview vs per-eye choice below: the ID pass is single-view
+    // and writes its own framebuffer.
+    if (m_frame_timing.should_render) {
+        update_id_render(command_buffer);
+    }
+
     // Multiview render path. Acquires the shared layered swapchain,
     // opens a single Render_pass with view_mask = (1 << view_count) -
     // 1, builds per-view Camera_view_inputs, and drives composer.render
@@ -490,8 +677,9 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
     // resolves and each eye reads its own camera entry from
     // cameras[gl_ViewIndex]. Content_wide_line_renderer and
     // Debug_renderer feed the same multiview pass via per-view-strided
-    // compute (see doc/debug_renderer_multiview.md). Mirror mode and
-    // ID rendering are still skipped under multiview.
+    // compute (see doc/debug_renderer_multiview.md). Mirror mode is still
+    // skipped under multiview; the ID pick pass runs once above,
+    // independent of this path.
     if (m_frame_timing.should_render && m_use_multiview) {
         auto multiview_callback = [this](const erhe::xr::Render_views_frame& frame_in, erhe::graphics::Command_buffer& views_cb) -> bool {
             erhe::graphics::Texture* color_texture         = frame_in.shared_color_texture;
@@ -1080,6 +1268,27 @@ void Headset_view::setup_root_camera()
     projection.z_near          = 0.03f;
     projection.z_far           = 200.0f;
     m_headset_node->attach(m_root_camera);
+
+    setup_pointer_pick_camera();
+}
+
+void Headset_view::setup_pointer_pick_camera()
+{
+    // Dedicated single-view camera used only as a projection source for the
+    // Id_renderer skinned-mesh pick (see update_id_render). It is placed at
+    // the controller aim pose each frame and looks down the control ray
+    // (-Z). A narrow vertical fov concentrates angular resolution around the
+    // ray so the centre texel samples the surface the controller points at.
+    // No content / visible flags: it must never be composited or listed.
+    m_pointer_pick_node   = std::make_shared<erhe::scene::Node>("Pointer Pick Camera Node");
+    m_pointer_pick_camera = std::make_shared<erhe::scene::Camera>("Pointer Pick Camera");
+    erhe::scene::Projection& projection = *m_pointer_pick_camera->projection();
+    projection.projection_type = erhe::scene::Projection::Type::perspective_vertical;
+    projection.fov_y           = glm::radians(10.0f);
+    projection.z_near          = 0.03f;
+    projection.z_far           = 200.0f;
+    m_pointer_pick_node->attach(m_pointer_pick_camera);
+    m_pointer_pick_node->set_parent(m_root_node);
 }
 
 void Headset_view::update_camera_node()

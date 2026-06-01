@@ -115,6 +115,12 @@ public:
     [[nodiscard]] auto get(int x, int y, uint32_t& out_id, float& out_depth, uint64_t& out_frame_number) -> bool;
     [[nodiscard]] auto get(int x, int y) -> Id_query_result;
 
+    // Side length of the square readback region (and the natural size for a
+    // dedicated pick framebuffer). Callers that render the ID pass from a
+    // ray-aligned camera size their viewport to this and query the centre
+    // texel (get(get_extent()/2, get_extent()/2)).
+    [[nodiscard]] static constexpr auto get_extent() -> int { return s_extent; }
+
 
 private:
     static constexpr int s_transfer_entry_count = 4;

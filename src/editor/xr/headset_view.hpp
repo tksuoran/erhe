@@ -159,8 +159,21 @@ private:
     [[nodiscard]] auto get_multiview_view_resources(erhe::xr::Render_view& render_view) -> std::shared_ptr<Headset_view_resources>;
 
     void setup_root_camera();
+    void setup_pointer_pick_camera();
     void update_camera_node();
     void update_pointer_context_from_controller();
+
+    // VR skinned-mesh picking. The raytrace BVH used by
+    // update_hover_with_raytrace() is rest-pose only, so it cannot pick the
+    // GPU-skinned (posed) surface the user sees. update_id_render() drives
+    // the Id_renderer once per frame from a dedicated single-view camera
+    // placed at the controller aim pose (looking down the control ray);
+    // update_hover_with_id_render() reads the resulting ID buffer at the
+    // ray (the framebuffer centre) and merges the hit into the matching
+    // hover slot. Mirrors the desktop hybrid picker in Viewport_scene_view.
+    void update_id_render(erhe::graphics::Command_buffer& command_buffer);
+    void update_hover_with_id_render();
+    [[nodiscard]] auto get_pick_position_in_world(float depth) const -> std::optional<glm::vec3>;
 
     erhe::math::Input_axis                               m_translate_x;
     erhe::math::Input_axis                               m_translate_y;
@@ -181,6 +194,12 @@ private:
     std::shared_ptr<erhe::scene::Node>                   m_root_node; // scene root node
     std::shared_ptr<erhe::scene::Node>                   m_headset_node; // transform set by headset
     std::shared_ptr<erhe::scene::Camera>                 m_root_camera;
+    // Single-view camera positioned at the controller aim pose each frame,
+    // used solely to drive the Id_renderer for skinned-mesh picking (see
+    // update_id_render). Not flagged visible / show_in_ui -- it is never
+    // composited, only used as a projection source.
+    std::shared_ptr<erhe::scene::Camera>                 m_pointer_pick_camera;
+    std::shared_ptr<erhe::scene::Node>                   m_pointer_pick_node;
     std::vector<std::shared_ptr<Headset_view_resources>> m_view_resources;
     // Indexed by Render_view::slot; entries are created lazily on first
     // use. Disjoint from m_view_resources so the per-eye fallback path
@@ -206,8 +225,9 @@ private:
     // 0b11) instead of the per-eye render_frame() loop. The multiview
     // callback drives forward composition, content wide lines, and
     // debug lines through the multiview pipeline pair so all three
-    // appear in both eyes from one render pass; mirror mode and ID
-    // rendering are still gated to the per-eye path.
+    // appear in both eyes from one render pass; mirror mode is still gated
+    // to the per-eye path. The ID pick pass (update_id_render) is single-
+    // view and runs once per frame regardless of this flag.
     bool                                                 m_use_multiview{false};
     erhe::xr::Frame_timing                               m_frame_timing{};
     uint64_t                                             m_frame_number{0};
