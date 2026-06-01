@@ -16,12 +16,16 @@
 #include "erhe_verify/verify.hpp"
 #include "erhe_window/window.hpp"
 #if defined(ERHE_XR_LIBRARY_OPENXR)
+#  include "erhe_math/math_util.hpp"
 #  include "erhe_xr/headset.hpp"
 #  include "erhe_xr/xr.hpp"
+#  include "erhe_xr/xr_quad_layer.hpp"
 #  include "erhe_xr/xr_session.hpp"
 #endif
 
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/quaternion.hpp>
 
 #include <array>
 #include <cstdint>
@@ -59,6 +63,12 @@ constexpr std::array<double, 4> c_clear_color_text_enabled{0.01, 0.02, 0.06, 1.0
 // visibly less blue -- a signal that the loading screen is alive but
 // cannot draw text, distinct from a hang on a solid blue background.
 constexpr std::array<double, 4> c_clear_color_text_disabled = desaturate(c_clear_color_text_enabled, 0.8);
+
+// Transparent clear for the XR projection background when the status text is
+// rendered onto the world-placed quad layer instead. With passthrough /
+// source-alpha blending only the opaque quad panel remains visible, so the
+// surrounding room shows through ("floating panel" look).
+constexpr std::array<double, 4> c_clear_color_transparent{0.0, 0.0, 0.0, 0.0};
 
 } // namespace
 
@@ -105,7 +115,9 @@ void Init_status_display::render_text_overlay(
     const int                       width,
     const int                       height,
     const unsigned int              view_mask,
-    const char* const               debug_label
+    const char* const               debug_label,
+    const bool                      draw_text,
+    const std::array<double, 4>&    clear_color
 )
 {
     // texture_layer is fixed at 0; the XR callers always operate on
@@ -120,7 +132,7 @@ void Init_status_display::render_text_overlay(
     render_pass_descriptor.color_attachments[0].layout_before = erhe::graphics::Image_layout::color_attachment_optimal;
     render_pass_descriptor.color_attachments[0].usage_after   = erhe::graphics::Image_usage_flag_bit_mask::color_attachment;
     render_pass_descriptor.color_attachments[0].layout_after  = erhe::graphics::Image_layout::color_attachment_optimal;
-    render_pass_descriptor.color_attachments[0].clear_value   = m_render_clear_color;
+    render_pass_descriptor.color_attachments[0].clear_value   = clear_color;
     if (depth_stencil_texture != nullptr) {
         render_pass_descriptor.depth_attachment.texture       = depth_stencil_texture;
         render_pass_descriptor.depth_attachment.texture_layer = texture_layer;
@@ -150,37 +162,43 @@ void Init_status_display::render_text_overlay(
 
         const erhe::math::Viewport viewport{0, 0, width, height};
 
-        const float       font_size   = m_text_renderer.font_size();
-        const float       line_height = font_size * 1.5f;
-        const float       center_y    = static_cast<float>(height) * 0.5f;
-        const std::size_t line_count  = m_render_lines.size();
+        // draw_text = false performs only the clear (e.g. clearing the XR
+        // projection background to transparent while the text lives on the
+        // world-placed quad). The scoped render pass above already cleared
+        // the color attachment, so there is nothing else to do.
+        if (draw_text) {
+            const float       font_size   = m_text_renderer.font_size();
+            const float       line_height = font_size * 1.5f;
+            const float       center_y    = static_cast<float>(height) * 0.5f;
+            const std::size_t line_count  = m_render_lines.size();
 
-        const bool top_left = (
-            m_graphics_device.get_info().coordinate_conventions.framebuffer_origin
-            == erhe::math::Framebuffer_origin::top_left
-        );
-        const float dir = top_left ? +1.0f : -1.0f;
+            const bool top_left = (
+                m_graphics_device.get_info().coordinate_conventions.framebuffer_origin
+                == erhe::math::Framebuffer_origin::top_left
+            );
+            const float dir = top_left ? +1.0f : -1.0f;
 
-        for (std::size_t i = 0; i < line_count; ++i) {
-            const std::string& line = m_render_lines[i];
-            if (line.empty()) {
-                continue;
+            for (std::size_t i = 0; i < line_count; ++i) {
+                const std::string& line = m_render_lines[i];
+                if (line.empty()) {
+                    continue;
+                }
+                const erhe::ui::Rectangle bounds = m_text_renderer.measure(line);
+                const float text_width  = static_cast<float>(bounds.size().x);
+                const float x           = (static_cast<float>(width) - text_width) * 0.5f;
+                const float offset_from_center =
+                    (static_cast<float>(i) - (static_cast<float>(line_count - 1) * 0.5f)) * line_height;
+                const float y = center_y + dir * (offset_from_center + line_height * 0.5f);
+                m_text_renderer.print(glm::vec3{x, y, 0.0f}, c_text_color_abgr, line);
+                log_startup->info("Init: {}", line);
             }
-            const erhe::ui::Rectangle bounds = m_text_renderer.measure(line);
-            const float text_width  = static_cast<float>(bounds.size().x);
-            const float x           = (static_cast<float>(width) - text_width) * 0.5f;
-            const float offset_from_center =
-                (static_cast<float>(i) - (static_cast<float>(line_count - 1) * 0.5f)) * line_height;
-            const float y = center_y + dir * (offset_from_center + line_height * 0.5f);
-            m_text_renderer.print(glm::vec3{x, y, 0.0f}, c_text_color_abgr, line);
-            log_startup->info("Init: {}", line);
-        }
 
-        // Pass through multiview = (view_mask != 0). The multiview
-        // render pass broadcasts a single screen-space draw to every
-        // layer; the per-layer fallback (view_mask = 0) renders into
-        // one array slice at a time.
-        m_text_renderer.render(encoder, xr_render_pass, viewport, view_mask != 0u);
+            // Pass through multiview = (view_mask != 0). The multiview
+            // render pass broadcasts a single screen-space draw to every
+            // layer; the per-layer fallback (view_mask = 0) renders into
+            // one array slice at a time.
+            m_text_renderer.render(encoder, xr_render_pass, viewport, view_mask != 0u);
+        }
     }
 }
 
@@ -377,6 +395,14 @@ void Init_status_display::render_present_xr()
     if (m_headset->poll_events()) {
         const erhe::xr::Frame_timing timing = m_headset->begin_frame_();
         if (timing.begin_ok) {
+            // Refresh actions + view pose so get_headset_pose() reports a valid
+            // initial head pose this tick. Safe no-op until the session is
+            // RUNNING; must run after begin_frame_() so update_view_pose() sees
+            // the frame's predictedDisplayTime.
+            m_headset->update_actions();
+            // Create the world-placed loading quad once the session exists.
+            xr_ensure_quad_layer();
+
             erhe::xr::Xr_session* const session = m_headset->get_xr_session();
             const bool multiview_ok = (session != nullptr) && session->is_multiview_enabled();
             if (timing.should_render && multiview_ok) {
@@ -400,11 +426,27 @@ void Init_status_display::render_present_xr()
                     if (color_texture == nullptr) {
                         return false;
                     }
-                    render_text_overlay(
-                        views_cb, color_texture, depth_stencil_texture,
-                        static_cast<int>(frame.width), static_cast<int>(frame.height),
-                        frame.view_mask, "Init_status_display (XR multiview)"
-                    );
+                    if ((m_quad_layer != nullptr) && xr_try_capture_initial_pose()) {
+                        // World-placed quad carries the text; clear the
+                        // projection background to transparent so only the
+                        // opaque quad panel is visible (room shows around it).
+                        render_text_overlay(
+                            views_cb, color_texture, depth_stencil_texture,
+                            static_cast<int>(frame.width), static_cast<int>(frame.height),
+                            frame.view_mask, "Init_status_display background (XR multiview)",
+                            /*draw_text*/ false, c_clear_color_transparent
+                        );
+                        xr_render_text_into_quad(views_cb);
+                    } else {
+                        // Quad not ready yet (or unavailable): fall back to the
+                        // head-locked screen-space text overlay.
+                        render_text_overlay(
+                            views_cb, color_texture, depth_stencil_texture,
+                            static_cast<int>(frame.width), static_cast<int>(frame.height),
+                            frame.view_mask, "Init_status_display (XR multiview)",
+                            /*draw_text*/ true, m_render_clear_color
+                        );
+                    }
                     return true;
                 };
                 xr_rendered = m_headset->render_multiview(*init_cb, callback);
@@ -429,11 +471,29 @@ void Init_status_display::render_present_xr()
                     // Drop depth on the init overlay (see comment in the
                     // multiview callback above for the reverse-depth /
                     // compare-op rationale).
-                    render_text_overlay(
-                        view_cb, view.color_texture, /*depth_stencil_texture*/ nullptr,
-                        static_cast<int>(view.width), static_cast<int>(view.height),
-                        0u, "Init_status_display (XR per-eye)"
-                    );
+                    if ((m_quad_layer != nullptr) && xr_try_capture_initial_pose()) {
+                        // Clear each eye's projection background to transparent;
+                        // the text lives on the world-placed quad.
+                        render_text_overlay(
+                            view_cb, view.color_texture, /*depth_stencil_texture*/ nullptr,
+                            static_cast<int>(view.width), static_cast<int>(view.height),
+                            0u, "Init_status_display background (XR per-eye)",
+                            /*draw_text*/ false, c_clear_color_transparent
+                        );
+                        // Acquire/render/release the single quad swapchain image
+                        // once per frame only -- not once per eye -- so the second
+                        // eye does not double-acquire it.
+                        if (view.slot == 0) {
+                            xr_render_text_into_quad(view_cb);
+                        }
+                    } else {
+                        render_text_overlay(
+                            view_cb, view.color_texture, /*depth_stencil_texture*/ nullptr,
+                            static_cast<int>(view.width), static_cast<int>(view.height),
+                            0u, "Init_status_display (XR per-eye)",
+                            /*draw_text*/ true, m_render_clear_color
+                        );
+                    }
                     return true;
                 };
                 xr_rendered = m_headset->render(*init_cb, callback);
@@ -484,6 +544,90 @@ void Init_status_display::render_present_xr()
     erhe::graphics::Command_buffer& new_init_cb = m_graphics_device.get_command_buffer(0);
     new_init_cb.begin();
     m_init_command_buffer = &new_init_cb;
+}
+
+void Init_status_display::xr_ensure_quad_layer()
+{
+    if (m_quad_creation_attempted) {
+        return;
+    }
+    // create_quad_layer() needs the XrSession handle, which exists once the
+    // session has been created (it does not need the session to be RUNNING).
+    // Until then, keep retrying on subsequent ticks.
+    if (m_headset->get_xr_session() == nullptr) {
+        return;
+    }
+    m_quad_creation_attempted = true;
+    m_quad_layer = m_headset->create_quad_layer(kQuadWidthPx, kQuadHeightPx, "Init_status_display");
+    // On failure m_quad_layer stays null and the XR path falls back to the
+    // head-locked screen-space text overlay for the rest of init.
+}
+
+auto Init_status_display::xr_try_capture_initial_pose() -> bool
+{
+    if (m_quad_pose_captured) {
+        return true;
+    }
+    if (!m_quad_layer) {
+        return false;
+    }
+
+    glm::vec3 head_position{0.0f};
+    glm::quat head_orientation{1.0f, 0.0f, 0.0f, 0.0f};
+    if (!m_headset->get_headset_pose(head_position, head_orientation)) {
+        return false; // No valid head pose yet -- try again next tick.
+    }
+
+    // world_from_head: head orientation + position. camera_offset is 0 during
+    // init (Headset_view does not exist yet), so XR stage space == world space.
+    const glm::mat4 world_from_head =
+        glm::translate(glm::mat4{1.0f}, head_position) * glm::mat4_cast(head_orientation);
+
+    // Place the quad center kQuadDistanceM along the head's forward (-Z) direction.
+    const glm::vec3 forward = glm::normalize(glm::vec3{world_from_head * glm::vec4{0.0f, 0.0f, -1.0f, 0.0f}});
+    const glm::vec3 up      = glm::vec3{0.0f, 1.0f, 0.0f}; // world up: keep the panel level (ignore head roll)
+    const glm::vec3 eye     = head_position + (kQuadDistanceM * forward);
+
+    // Same convention as the Hotbar: create_look_at builds a transform whose
+    // local -Z points from eye toward the target (the head); the rotate flip
+    // (diag(-1, 1, -1)) turns the panel's +Z front face (where the text is) to
+    // face the user.
+    constexpr glm::mat4 rotate{
+        -1.0f, 0.0f, 0.0f, 0.0f,
+         0.0f, 1.0f, 0.0f, 0.0f,
+         0.0f, 0.0f,-1.0f, 0.0f,
+         0.0f, 0.0f, 0.0f, 1.0f
+    };
+    m_quad_world_from_quad = erhe::math::create_look_at(eye, head_position, up) * rotate;
+
+    m_quad_layer->set_pose(erhe::xr::from_glm(m_quad_world_from_quad));
+    m_quad_layer->set_size(XrExtent2Df{kQuadWidthM, kQuadHeightM});
+    m_quad_layer->set_composition_order(kQuadCompositionOrder);
+    m_quad_layer->set_visible(true);
+    m_quad_pose_captured = true;
+    return true;
+}
+
+void Init_status_display::xr_render_text_into_quad(erhe::graphics::Command_buffer& command_buffer)
+{
+    if (!m_quad_layer) {
+        return;
+    }
+    erhe::graphics::Texture* const quad_texture = m_quad_layer->acquire();
+    if (quad_texture == nullptr) {
+        // Not visible / acquire failed this frame: nothing submitted, no stale
+        // image (build_layer() requires rendered_this_frame, set by release()).
+        return;
+    }
+    // Opaque dark panel (m_render_clear_color, alpha 1.0) so the text is
+    // readable; single view (view_mask = 0).
+    render_text_overlay(
+        command_buffer, quad_texture, /*depth_stencil_texture*/ nullptr,
+        static_cast<int>(m_quad_layer->get_width()), static_cast<int>(m_quad_layer->get_height()),
+        0u, "Init_status_display (quad text)",
+        /*draw_text*/ true, m_render_clear_color
+    );
+    m_quad_layer->release();
 }
 #else
 void Init_status_display::render_present_xr()
