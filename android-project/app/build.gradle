@@ -100,24 +100,32 @@ android {
         into stagedAssets
         from(file('../../res'))    { into 'res' }
         from(file('../../config')) { into 'config' }
-        // After staging, write a manifest of every file under config/.
-        // The Android first-launch migrator reads this manifest from the APK
-        // assets (via SDL_IOFromFile) and copies each listed file into the
-        // app's writable internal storage, so that erhe_codegen save_config
-        // round-trips correctly. The manifest itself sits at the assets root
-        // (NOT under config/) so it is never migrated to writable storage --
-        // each launch re-reads the bundled manifest from the APK so that a
-        // future build that adds new config files migrates them cleanly.
+        // After staging, write a manifest of every file under the directories
+        // that must live in writable internal storage. The Android first-launch
+        // migrator reads this manifest from the APK assets (via SDL_IOFromFile)
+        // and copies each listed file into the app's writable internal storage:
+        //   - config/           so that erhe_codegen save_config round-trips.
+        //   - res/editor/assets/ because this is an editor -- assets are
+        //     read/write and can be created or modified at runtime, and the
+        //     asset browser enumerates them with std::filesystem (which only
+        //     sees real files, not APK assets).
+        // The manifest itself sits at the assets root (NOT under a migrated
+        // directory) so it is never migrated to writable storage -- each launch
+        // re-reads the bundled manifest from the APK so that a future build
+        // which adds new files migrates them cleanly (existing destinations are
+        // never overwritten, preserving user edits).
         doLast {
             def root = stagedAssets.get().asFile
-            def configDir = new File(root, 'config')
-            def manifest = new File(root, 'erhe_config_manifest.txt')
+            def manifest = new File(root, 'erhe_migrate_manifest.txt')
             def lines = []
-            if (configDir.exists()) {
-                configDir.eachFileRecurse { f ->
-                    if (f.isFile()) {
-                        def rel = root.toPath().relativize(f.toPath()).toString().replace('\\', '/')
-                        lines << rel
+            ['config', 'res/editor/assets'].each { sub ->
+                def dir = new File(root, sub)
+                if (dir.exists()) {
+                    dir.eachFileRecurse { f ->
+                        if (f.isFile()) {
+                            def rel = root.toPath().relativize(f.toPath()).toString().replace('\\', '/')
+                            lines << rel
+                        }
                     }
                 }
             }

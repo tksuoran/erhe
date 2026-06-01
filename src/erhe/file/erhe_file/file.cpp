@@ -46,18 +46,20 @@ auto from_string(const std::string& path) -> std::filesystem::path
 ) -> bool
 {
 #if defined(ERHE_OS_ANDROID)
-    // Filesystem-first for paths under config/: prefer a writable copy
-    // migrated from the APK on first launch (see
+    // Filesystem-first for migrated paths (config/ and res/editor/assets/):
+    // prefer a writable copy migrated from the APK on first launch (see
     // migrate_android_assets_to_writable). For everything else (res/
     // shaders, etc.) keep the existing direct-to-APK behavior. If the
     // filesystem probe is inconclusive, fall back to SDL3's IO layer,
     // which routes relative paths to AAssetManager and absolute paths to
     // the filesystem.
     const std::string path_str = to_string(path);
-    const bool is_migrated_config =
-        (path_str.rfind("config/",  0) == 0) ||
-        (path_str.rfind("config\\", 0) == 0);
-    if (is_migrated_config) {
+    const bool is_migrated =
+        (path_str.rfind("config/",            0) == 0) ||
+        (path_str.rfind("config\\",           0) == 0) ||
+        (path_str.rfind("res/editor/assets/",  0) == 0) ||
+        (path_str.rfind("res\\editor\\assets\\", 0) == 0);
+    if (is_migrated) {
         std::error_code error_code;
         if (std::filesystem::is_regular_file(path, error_code)) {
             const std::uintmax_t size = std::filesystem::file_size(path, error_code);
@@ -139,20 +141,23 @@ auto from_string(const std::string& path) -> std::filesystem::path
 auto read(const std::string_view description, const std::filesystem::path& path) -> std::optional<std::string>
 {
 #if defined(ERHE_OS_ANDROID)
-    // Filesystem-first for paths under config/: prefer the writable copy
-    // migrated from the APK on first launch. This is what makes
-    // save_config -> load_config round-trip on Android: configs live in
-    // writable storage after migrate_android_assets_to_writable, and
-    // subsequent saves overwrite them in place. For all other paths
-    // (res/ shaders, anything we deliberately did not migrate) skip the
-    // filesystem probe and go straight to SDL_IOFromFile, which on
-    // Android routes relative paths to AAssetManager (the bundled APK
-    // assets) and absolute paths to the filesystem.
+    // Filesystem-first for migrated paths (config/ and res/editor/assets/):
+    // prefer the writable copy migrated from the APK on first launch. This
+    // is what makes save_config -> load_config round-trip on Android, and
+    // what makes editor asset edits persist: migrated files live in writable
+    // storage after migrate_android_assets_to_writable, and subsequent saves
+    // overwrite them in place. For all other paths (res/ shaders, anything we
+    // deliberately did not migrate) skip the filesystem probe and go straight
+    // to SDL_IOFromFile, which on Android routes relative paths to
+    // AAssetManager (the bundled APK assets) and absolute paths to the
+    // filesystem.
     const std::string path_str = to_string(path);
-    const bool is_migrated_config =
-        (path_str.rfind("config/",  0) == 0) ||
-        (path_str.rfind("config\\", 0) == 0);
-    if (is_migrated_config) {
+    const bool is_migrated =
+        (path_str.rfind("config/",            0) == 0) ||
+        (path_str.rfind("config\\",           0) == 0) ||
+        (path_str.rfind("res/editor/assets/",  0) == 0) ||
+        (path_str.rfind("res\\editor\\assets\\", 0) == 0);
+    if (is_migrated) {
         std::FILE* fs = std::fopen(path_str.c_str(), "rb");
         if (fs != nullptr) {
             std::fseek(fs, 0, SEEK_END);
