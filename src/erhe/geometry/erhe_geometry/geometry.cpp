@@ -673,8 +673,14 @@ auto make_convex_hull(const GEO::Mesh& source, GEO::Mesh& destination) -> bool
                 points.push_back(static_cast<double>(p[c]));
             }
         }
-        GEO::CmdLine::set_arg("algo:delaunay", "PDEL");
-        GEO::Delaunay_var delaunay = GEO::Delaunay::create(GEO::coord_index_t(dim));
+        // Parallel 3D Delaunay ("PDEL"). Passing the algorithm to create()
+        // avoids mutating the process-global "algo:delaunay" CmdLine state.
+        // NOTE: geogram MUST be built with -ffp-contract=off (see the geogram
+        // section of the top-level CMakeLists.txt and doc/intermittent_main_loop_hang.md);
+        // otherwise FMA contraction breaks its exact predicates and this call
+        // spins forever in locate_inexact() on degenerate input such as a cone's
+        // coplanar base ring (ARM-only, intermittent).
+        GEO::Delaunay_var delaunay = GEO::Delaunay::create(GEO::coord_index_t(dim), "PDEL");
         delaunay->set_keeps_infinite(true);
         delaunay->set_vertices(nb_pts, points.data());
         destination.vertices.set_dimension(dim);

@@ -24,8 +24,10 @@ void make_convex_hull(GEO::Mesh& mesh, const std::vector<glm::vec3>& in_points)
         ++point_count;
     }
 
-    GEO::CmdLine::set_arg("algo:delaunay", "PDEL");
-    GEO::Delaunay_var delaunay = GEO::Delaunay::create(3);
+    // Parallel 3D Delaunay ("PDEL"); create(dim, name) avoids the process-global
+    // set_arg. Requires geogram built with -ffp-contract=off (see CMakeLists.txt
+    // and the twin call in erhe_geometry/geometry.cpp).
+    GEO::Delaunay_var delaunay = GEO::Delaunay::create(3, "PDEL");
     delaunay->set_keeps_infinite(true); // keep "vertex at infinity" (makes it easier to find the convex hull
     delaunay->set_vertices(point_count, points.data());
     GEO::vector<GEO::index_t> triangles_indices;

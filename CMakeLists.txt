@@ -189,6 +189,27 @@ CPMAddPackage(
               "GEOGRAM_WITH_GARGANTUA OFF"
                     "GEOGRAM_WITH_TBB OFF"
 )
+
+# Geogram's exact geometric predicates REQUIRE that the compiler not fuse their
+# arithmetic into FMAs: an FMA changes the rounding of a near-zero orientation
+# determinant (and breaks Shewchuk's error-free transformations in the
+# multi-precision expansions) -- it "would break exact predicates" in geogram's
+# own words. Geogram's Linux platform files set -frounding-math -ffp-contract=off
+# for exactly this, but its Android-generic / Darwin platform configs are empty
+# and omit it. So on clang (arm64 especially) the default -ffp-contract=on fuses
+# the predicates and Geogram's Delaunay locate_inexact() walk loops forever on
+# degenerate input (a cone's coplanar base ring) -- the intermittent, ARM-only
+# main-loop hang (reproduced headless ~2/10 on arm64, 0/30 on x86/MSVC which does
+# not contract by default). Restore geogram's intended flag on every non-MSVC
+# compiler. See doc/intermittent_main_loop_hang.md.
+if (NOT MSVC)
+    foreach (geo_target geogram geogram_third_party geogram_num_3rdparty)
+        if (TARGET ${geo_target})
+            target_compile_options(${geo_target} PRIVATE -ffp-contract=off)
+        endif ()
+    endforeach ()
+endif ()
+
 if (geogram_SOURCE_DIR AND EXISTS "${geogram_SOURCE_DIR}/.git")
     execute_process(
         COMMAND git rev-parse HEAD
