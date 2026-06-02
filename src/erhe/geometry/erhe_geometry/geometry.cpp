@@ -4,64 +4,20 @@
 
 // TEMPORARY diagnostic for the intermittent main-loop hang -- see
 // doc/intermittent_main_loop_hang.md. Set to 1 to validate each mesh's
-// structural sanity right after process() (on the worker thread) and log +
-// name a mesh corrupted during parallel init, the moment it happens, instead
-// of waiting for that geometry's thumbnail to hang in build_polygon_fill().
+// structural sanity right after process() (on the worker thread) via the
+// public validate_mesh_structure() helper, logging + naming a mesh corrupted
+// during parallel init the moment it happens, instead of waiting for that
+// geometry's thumbnail to hang in build_polygon_fill(). The structural check
+// itself now lives in validate_mesh_structure() (below, always compiled) so
+// the geogram_soak repro harness can reuse it.
 //
 // NOTE: a timing "amplifier" (sleeps / a rendezvous barrier around the Geogram
 // ops) was tried here to make the race reproduce more often; it instead
 // SUPPRESSED it (8/8 clean on Quest, 8/8 clean on desktop even with forced
-// 4-thread overlap) -- a heisenbug. So this now only validates, at natural
-// timing. REMOVE before merging.
-#define ERHE_DEBUG_VALIDATE_GEOMETRY 1
-#if ERHE_DEBUG_VALIDATE_GEOMETRY
-namespace {
-
-// Validate the mesh's structural sanity right after process(). The
-// intermittent hang is a build_polygon_fill() spin over a corrupt GEO::Mesh;
-// this catches that corruption the moment it is produced -- on the worker
-// thread, naming the geometry -- regardless of whether that geometry's
-// thumbnail is the one that later hangs. The bound check runs BEFORE any
-// per-facet iteration so an absurd facet count cannot make the validator
-// itself spin. TEMPORARY -- remove with the amplifier.
-void debug_validate_mesh(const GEO::Mesh& mesh, const std::string& name)
-{
-    const GEO::index_t     facet_count  = mesh.facets.nb();
-    const GEO::index_t     vertex_count = mesh.vertices.nb();
-    const GEO::index_t     corner_count = mesh.facet_corners.nb();
-    constexpr GEO::index_t sane_bound   = 50u * 1000u * 1000u; // 50M
-    if ((facet_count >= sane_bound) || (vertex_count >= sane_bound) || (corner_count >= sane_bound)) {
-        erhe::geometry::log_geometry->error(
-            "MESH CORRUPT (absurd counts) after process(): geometry '{}' facets={} verts={} corners={} -- "
-            "intermittent-hang culprit; see doc/intermittent_main_loop_hang.md",
-            name, facet_count, vertex_count, corner_count
-        );
-        return;
-    }
-    uint64_t corner_sum = 0;
-    for (GEO::index_t f = 0; f < facet_count; ++f) {
-        const GEO::index_t nc = mesh.facets.nb_corners(f);
-        if ((nc < 3u) || (nc > 100000u)) {
-            erhe::geometry::log_geometry->error(
-                "MESH CORRUPT (facet {} corner count {}) after process(): geometry '{}' facets={} verts={} corners={} -- "
-                "intermittent-hang culprit; see doc/intermittent_main_loop_hang.md",
-                f, nc, name, facet_count, vertex_count, corner_count
-            );
-            return;
-        }
-        corner_sum += nc;
-    }
-    if (corner_sum != static_cast<uint64_t>(corner_count)) {
-        erhe::geometry::log_geometry->error(
-            "MESH CORRUPT (corner sum {} != facet_corners.nb() {}) after process(): geometry '{}' facets={} verts={} -- "
-            "intermittent-hang culprit; see doc/intermittent_main_loop_hang.md",
-            corner_sum, corner_count, name, facet_count, vertex_count
-        );
-    }
-}
-
-} // namespace
-#endif
+// 4-thread overlap) -- a heisenbug. Validating right after process() on the
+// worker likewise perturbs the race, so this is OFF by default. REMOVE once
+// the root cause is fixed.
+#define ERHE_DEBUG_VALIDATE_GEOMETRY 0
 #include "erhe_log/log_geogram.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -339,6 +295,53 @@ auto get_mesh_info(const GEO::Mesh& mesh) -> Mesh_info
         .index_count_corner_points   = corner_count,
         .index_count_centroid_points = facet_count
     };
+}
+
+auto c_str(Mesh_structure_error error) -> const char*
+{
+    switch (error) {
+        case Mesh_structure_error::none:                   return "none";
+        case Mesh_structure_error::absurd_counts:          return "absurd_counts";
+        case Mesh_structure_error::bad_facet_corner_count: return "bad_facet_corner_count";
+        case Mesh_structure_error::corner_sum_mismatch:    return "corner_sum_mismatch";
+        default:                                           return "?";
+    }
+}
+
+auto validate_mesh_structure(const GEO::Mesh& mesh) -> Mesh_structure_check
+{
+    Mesh_structure_check result;
+    result.facet_count  = mesh.facets.nb();
+    result.vertex_count = mesh.vertices.nb();
+    result.corner_count = mesh.facet_corners.nb();
+
+    // Bound check FIRST: an absurd facet count must not make the per-facet walk
+    // below spin, since the whole point is to be safe to run on a corrupt mesh.
+    constexpr GEO::index_t sane_bound = 50u * 1000u * 1000u; // 50M
+    if ((result.facet_count  >= sane_bound) ||
+        (result.vertex_count >= sane_bound) ||
+        (result.corner_count >= sane_bound)) {
+        result.error = Mesh_structure_error::absurd_counts;
+        return result;
+    }
+
+    std::uint64_t corner_sum = 0;
+    for (GEO::index_t facet = 0; facet < result.facet_count; ++facet) {
+        const GEO::index_t corner_count = mesh.facets.nb_corners(facet);
+        if ((corner_count < 3u) || (corner_count > 100000u)) {
+            result.error                  = Mesh_structure_error::bad_facet_corner_count;
+            result.bad_facet              = facet;
+            result.bad_facet_corner_count = corner_count;
+            return result;
+        }
+        corner_sum += corner_count;
+    }
+    if (corner_sum != static_cast<std::uint64_t>(result.corner_count)) {
+        result.error      = Mesh_structure_error::corner_sum_mismatch;
+        result.corner_sum = corner_sum;
+        return result;
+    }
+    return result;
 }
 
 void compute_facet_normals(GEO::Mesh& mesh, Mesh_attributes& attributes)
@@ -1186,7 +1189,17 @@ void Geometry::process(const uint64_t flags)
     // Catch + name a mesh corrupted during (concurrent) processing, the moment
     // it happens, so we do not have to wait for that geometry's thumbnail to
     // hang in build_polygon_fill(). See doc/intermittent_main_loop_hang.md.
-    debug_validate_mesh(m_mesh, m_name);
+    // OFF by default: validating here on the worker perturbs the race.
+    const Mesh_structure_check check = validate_mesh_structure(m_mesh);
+    if (!check.ok()) {
+        log_geometry->error(
+            "MESH CORRUPT after process(): geometry '{}' error={} facets={} verts={} corners={} "
+            "bad_facet={} bad_facet_corner_count={} corner_sum={} -- intermittent-hang culprit; "
+            "see doc/intermittent_main_loop_hang.md",
+            m_name, c_str(check.error), check.facet_count, check.vertex_count, check.corner_count,
+            check.bad_facet, check.bad_facet_corner_count, check.corner_sum
+        );
+    }
 #endif
 }
 

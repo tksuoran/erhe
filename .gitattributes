@@ -1,0 +1,4 @@
+# wrap.sh is exec'd by the device's /system/bin/sh (HWASan -Phwasan builds); a
+# CRLF in the shebang would break it, so force LF line endings for the bundled
+# Android wrap-script tree regardless of the checkout's core.autocrlf setting.
+android-project/app/hwasan/** text eol=lf

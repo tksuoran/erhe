@@ -2,6 +2,13 @@ plugins {
      id 'com.android.application'
 }
 
+// Opt-in HWAddressSanitizer build (diagnostic; see
+// doc/intermittent_main_loop_hang.md). Enable with `-Phwasan`. HWASan requires
+// c++_shared (the NDK toolchain rejects hwaddress + c++_static), a debuggable
+// build with extracted native libs so the platform honors lib/<abi>/wrap.sh
+// (LD_HWASAN=1), and the hwasan runtime .so bundled into the APK.
+def hwasanEnabled = project.hasProperty('hwasan')
+
 android {
     namespace = "org.libsdl.app"
     compileSdkVersion 35
@@ -37,7 +44,15 @@ android {
                 // android-21, quest raises to android-33). Keeping it out
                 // of defaultConfig means flavors don't have to fight a
                 // baseline that's wrong for them.
-                def cmakeArgs = ["-DANDROID_STL=c++_static"]
+                def cmakeArgs = [hwasanEnabled ? "-DANDROID_STL=c++_shared" : "-DANDROID_STL=c++_static"]
+                if (hwasanEnabled) {
+                    // The NDK toolchain expands this to
+                    // -fsanitize=hwaddress -fno-omit-frame-pointer (compile) and
+                    // -fsanitize=hwaddress (link) for every target, instrumenting
+                    // erhe + all CPM deps so the corrupting write is caught wherever
+                    // it originates.
+                    cmakeArgs << "-DANDROID_SANITIZE=hwaddress"
+                }
                 if (pythonExe) {
                     cmakeArgs << "-DPython3_EXECUTABLE=${pythonExe}"
                 }
@@ -88,7 +103,26 @@ android {
             // keystore. NOT suitable for store submission - replace with a
             // real signingConfig before publishing.
             signingConfig signingConfigs.debug
+            if (hwasanEnabled) {
+                // wrap.sh is only honored for debuggable apps on stock (user)
+                // devices like the S23. Kept optimized (RelWithDebInfo) -- the
+                // hang reproduces on the optimized build, not the debug one.
+                debuggable true
+            }
         }
+    }
+
+    if (hwasanEnabled) {
+        // Extract native libs to disk so the platform can exec lib/<abi>/wrap.sh.
+        packaging {
+            jniLibs {
+                useLegacyPackaging = true
+            }
+        }
+        // wrap.sh (LD_HWASAN=1 exec "$@") makes Bionic load the HWASan-instrumented
+        // libc in-process. AGP packages a resources tree's lib/<abi>/wrap.sh into the
+        // APK lib dir. Kept in a dedicated dir so non-hwasan builds never see it.
+        sourceSets.main.resources.srcDir 'hwasan/resources'
     }
     // The editor reads via paths like "config/editor/editor_settings.json"
     // and "res/shaders/standard.vert"; SDL_IOFromFile on Android resolves
@@ -240,6 +274,37 @@ android {
                 .dependsOn(fetchValidationLayer)
         }
     }
+    // Bundle the NDK HWASan runtime .so into the APK for -Phwasan builds: the
+    // instrumented libs DT_NEEDED libclang_rt.hwasan-aarch64-android.so. Mirrors
+    // the validation-layer staging (jniLibs.srcDir 'libs' packages it).
+    def hwasanRuntimeDest = file("libs/arm64-v8a/libclang_rt.hwasan-aarch64-android.so")
+    if (hwasanEnabled) {
+        def stageHwasanRuntime = tasks.register("stageHwasanRuntime") {
+            outputs.file(hwasanRuntimeDest)
+            doLast {
+                def prebuilt = new File(android.ndkDirectory, "toolchains/llvm/prebuilt")
+                def matches = fileTree(dir: prebuilt,
+                    include: "**/lib/clang/*/lib/linux/libclang_rt.hwasan-aarch64-android.so").files
+                if (matches.isEmpty()) {
+                    throw new GradleException("HWASan runtime not found under ${prebuilt}")
+                }
+                hwasanRuntimeDest.parentFile.mkdirs()
+                copy {
+                    from matches.iterator().next()
+                    into hwasanRuntimeDest.parentFile
+                }
+                logger.lifecycle("Staged HWASan runtime ${hwasanRuntimeDest}")
+            }
+        }
+        applicationVariants.all { variant ->
+            def variantName = variant.name.capitalize()
+            tasks["merge${variantName}JniLibFolders"].dependsOn(stageHwasanRuntime)
+        }
+    } else if (hwasanRuntimeDest.exists()) {
+        // Don't let a previously-staged runtime leak into normal builds.
+        hwasanRuntimeDest.delete()
+    }
+
     lint {
         abortOnError = false
     }

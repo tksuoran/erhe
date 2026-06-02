@@ -7,6 +7,7 @@
 #include <glm/glm.hpp>
 
 #include <array>
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -291,6 +292,39 @@ public:
 
 [[nodiscard]] auto count_mesh_facet_triangles(const GEO::Mesh& mesh) -> std::size_t;
 [[nodiscard]] auto get_mesh_info             (const GEO::Mesh& mesh) -> Mesh_info;
+
+// Result of validate_mesh_structure(). See doc/intermittent_main_loop_hang.md.
+enum class Mesh_structure_error {
+    none,                   // mesh is structurally sane
+    absurd_counts,          // facets/vertices/corners count is implausibly large
+    bad_facet_corner_count, // a facet's corner count is < 3 or implausibly large
+    corner_sum_mismatch     // sum of per-facet corner counts != facet_corners.nb()
+};
+
+[[nodiscard]] auto c_str(Mesh_structure_error error) -> const char*;
+
+// Cheap structural sanity check for a GEO::Mesh. Detects the intermittent
+// parallel-init corruption (a facet whose corner range is wrong, or absurd
+// counts) BEFORE any unbounded per-facet walk can spin on it. The count bound
+// is checked first so an absurd facet count cannot make the check itself spin.
+// Pure (no logging) so callers can format their own context; see
+// doc/intermittent_main_loop_hang.md.
+class Mesh_structure_check
+{
+public:
+    [[nodiscard]] auto ok() const -> bool { return error == Mesh_structure_error::none; }
+
+    Mesh_structure_error error                  {Mesh_structure_error::none};
+    GEO::index_t         facet_count            {0};
+    GEO::index_t         vertex_count           {0};
+    GEO::index_t         corner_count           {0};
+    GEO::index_t         bad_facet              {GEO::NO_INDEX}; // set for bad_facet_corner_count
+    GEO::index_t         bad_facet_corner_count {0};             // set for bad_facet_corner_count
+    std::uint64_t        corner_sum             {0};            // set for corner_sum_mismatch
+};
+
+[[nodiscard]] auto validate_mesh_structure(const GEO::Mesh& mesh) -> Mesh_structure_check;
+
 void transform_mesh(
     const GEO::Mesh&       source_mesh,
     const Mesh_attributes& source_attributes,

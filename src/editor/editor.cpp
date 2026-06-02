@@ -532,6 +532,22 @@ public:
 
         m_app_rendering->process_end_capture();
 
+        // Soak / hang-detection signal: log the first main-loop frames so a
+        // batch run can positively confirm the editor reached steady-state
+        // content rendering. get_frame_number() advances only via
+        // Time::prepare_update() at the top of tick(); init drives the loading
+        // screen through pump(), not tick(), so this counts main-loop frames
+        // only. Bounded to the first frames so it never floods the log. A run
+        // that hangs during the early thumbnail builds stops emitting these
+        // before reaching the target, and the watchdog then names the stuck
+        // phase. See doc/intermittent_main_loop_hang.md.
+        {
+            const uint64_t main_loop_frame = m_time->get_frame_number();
+            if (main_loop_frame <= 12) {
+                log_startup->info("Main loop: completed frame {}", main_loop_frame);
+            }
+        }
+
         m_in_tick.store(false);
     }
 

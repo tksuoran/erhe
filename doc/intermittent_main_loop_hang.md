@@ -1,11 +1,118 @@
 # Intermittent main-loop hang (render thread CPU spin)
 
+## ROOT CAUSE IDENTIFIED (2026-06-02): Geogram FMA contraction on Android/clang
+
+**The hang is Geogram's 3D Delaunay `locate_inexact()` point-location walk
+looping forever, because Geogram's geometric predicates are compiled WITH
+floating-point FMA contraction on Android (clang).**
+
+Native backtrace of the spinning tick thread (from a forced-crash tombstone on
+the S23 -- see "Getting a native backtrace" below):
+
+```
+Editor::tick -> Thumbnails::update -> Brush_preview::render_preview
+  -> Brush::get_scaled -> Brush::late_initialize
+  -> erhe::geometry::make_convex_hull(GEO::Mesh, GEO::Mesh)
+  -> GEO::Delaunay::set_vertices -> ... -> GEO::Delaunay3d::locate_inexact  [SPIN]
+```
+
+Evidence chain (every earlier observation is now explained):
+- `make_convex_hull` (geometry.cpp) runs a Geogram 3D Delaunay over a brush's
+  vertices. The **cone** is the trigger: its base is a ring of **coplanar**
+  points -- a degenerate 3D-Delaunay configuration.
+- Geogram's predicates use Shewchuk-style error-free FP transformations + exact
+  orientation tests. **An FMA (`a*b+c` fused, single rounding) breaks them** --
+  it changes the sign of a near-zero orientation determinant. Geogram knows this:
+  its Linux platform CMake sets `-frounding-math -ffp-contract=off` ("disable
+  automatic generation of FMAs ... would break exact predicates"), and
+  `delaunay_3d.cpp` literally comments `// locate_inexact() loops forever !`.
+- Geogram's **`Android-generic` (and `Darwin`) platform configs are empty** and
+  omit those flags; erhe did not add them either. So on the NDK clang (arm64) the
+  default `-ffp-contract=on` fuses Geogram's predicate arithmetic -> wrong signs
+  on the cone's degenerate points -> the Delaunay walk never terminates.
+- **ARM-only**: clang contracts to FMA; **MSVC (x86 desktop) does not** by default
+  -> x86 never reproduced. Confirmed: the headless repro spins ~2/10 on the S23
+  arm64 but **0/30 on x86/MSVC**.
+- **Intermittent**: Geogram randomizes Delaunay insertion order (BRIO), re-seeded
+  per process; only some orders build the cycle-triggering tetrahedralization.
+- **HWASan-silent**: the walk reads in-bounds memory -- an FP/logic
+  non-termination, not memory corruption. HWASan reproduced it as a *spin* with no
+  tag-mismatch, ruling out the earlier heap-OOB/UAF hypothesis.
+- **`geogram_soak` was clean** earlier because it exercised `process()`, never
+  `make_convex_hull`/Delaunay.
+- The earlier "`build_polygon_fill`" localization was a **stale breadcrumb**:
+  `get_scaled()` builds the render primitive (breadcrumb `build_polygon_fill`) and
+  *then* calls `late_initialize()` -> `make_convex_hull` (which sets no breadcrumb)
+  -- that is where it actually spins.
+
+**Fix:** restore Geogram's intended FP flag on non-MSVC compilers --
+`target_compile_options(geogram PRIVATE -ffp-contract=off)` in the top-level
+`CMakeLists.txt` after the geogram `CPMAddPackage`. This makes Geogram's
+predicates correct (as Geogram itself requires on Linux). It is NOT the
+`PDEL -> BDEL` change tried first (a workaround on a wrong "parallel race"
+hypothesis -- serial BDEL spins too, so that change does not help and should be
+reverted).
+
+**Status: root cause confirmed + fix verified on device (2026-06-02).** Building
+geogram with `-ffp-contract=off` takes the headless repro
+(`geogram_soak --convex-hull`, `src/geogram_soak/main.cpp`) from ~25% spin (15/60
+fresh runs) to **0/100** fresh runs (both BDEL and PDEL) plus 5000 clean builds
+in one process -- a decisive A/B on the same S23, same session. x86/MSVC is 0/30
+either way. The editor soaks **0 hangs** end-to-end (150/150, then 100/100 after
+the cleanup below; the unfixed editor hung ~1/24). Cleanup is done:
+`make_convex_hull` restored to the original PDEL via `Delaunay::create(dim, name)`
+(no global set_arg), and the temporary build_polygon_fill guard / corner-walk
+iteration cap / make_brushes post-join validator removed. The main-loop watchdog
++ breadcrumbs are kept as general infrastructure.
+
+---
+
+*The sections below are the investigation trail that led here. Several interim
+hypotheses in them (parallel-Geogram race, heap OOB/UAF, `build_polygon_fill`)
+were SUPERSEDED by the root cause above.*
+
 ## Status
 
-Open. **Localized** to `Build_context::build_polygon_fill()` via the watchdog
-(see "Confirmed observation" below); root cause not yet fixed. Intermittent.
+**Reproduced under controlled conditions (2026-06-02)** -- see "Controlled
+reproduction" below. **Localized** to `build_polygon_fill()` via the watchdog;
+the corrupt `GEO::Mesh` is produced earlier, during parallel brush init. Root
+cause not yet fixed. The `ERHE_DEBUG_VALIDATE_GEOMETRY` validator was found to
+be the **timing suppressor** that hid the bug for 58 clean runs; with it OFF and
+an optimized (release) build the hang reproduces at ~1/8 on Quest.
+
+**UPDATE 2026-06-02 (continued) -- headless / cross-device investigation.** See
+"Headless reproduction & cross-device investigation" below. Key results:
+
+- A standalone headless harness (`src/geogram_soak/`) that mirrors
+  `make_brushes()` exactly -- same shapes, `process()` flags, the ~92 Johnson
+  solids each running `GEO::mesh_repair`, a shared parsed JSON document read
+  concurrently, oversubscribed -- ran **>1.3M concurrent builds and ~1000 fresh-
+  process cold trials on both an S23 phone and the Quest with NO reproduction**.
+  Strong evidence **against** "independent per-thread `GEO::Mesh` builds corrupt
+  on their own" (Geogram-only bug).
+- The **full editor reproduces it on a non-Quest ARM phone (Samsung S23)** when
+  built as the flat `mobile` flavor: 1 hang in 40 cold launches, identical
+  signature (`build_polygon_fill`, `facets=801`). So the bug is **not** Quest- or
+  immersive-specific, and a **headset-free repro path exists** (soak the `mobile`
+  editor on a phone). The culprit brush is the **`cone`** (the detail-4 cone has
+  801 facets; the doc's earlier "sphere" guess was wrong -- the sphere is 768).
+- Together: the corruption needs the **editor's broader concurrent-init context**,
+  not `make_brushes()`' Geogram calls in isolation.
+- The culprit is **deterministically the `cone` brush** (all three captured
+  reproductions stall in `build_polygon_fill facets=801 verts=801 corners=3200`,
+  preceded by `thumbnail: brush 'cone'`; the 801-facet mesh is the detail-4 cone,
+  not the sphere=768).
+- An instrumented soak then showed the spinning cone mesh is **count-sane**
+  (neither the post-join validator nor the `build_polygon_fill` guard fired). With
+  bounded loops and no looping callees, that means **intermittent memory
+  corruption of the cone mesh** -- NOT a static `make_brushes` defect, NOT generic
+  concurrent Geogram (1.3M isolated builds are clean), and NOT the in-place
+  `transform` aliasing (handled, and deterministic anyway). **Recommended next
+  step: a HWASan/ASan editor build on a phone** to catch the corrupting write at
+  its source. See "Findings from the instrumented soak" below.
+
 This document describes the symptom, how to confirm it, the diagnostic logging
-that pinpoints it, and the candidate causes.
+that pinpoints it, the controlled reproduction, and the candidate causes.
 
 ## Confirmed observation (2026-06-01, Quest 3, Vulkan/OpenXR)
 
@@ -79,6 +186,209 @@ perturb init timing) will catch any hang and name the phase + mesh counts, and
 the validator names a corrupt brush during init when it fires. When it next
 happens, read this doc and analyze the captured log. The non-perturbing
 watchdog is the primary detector; the validator is a bonus early namer.
+
+**REVISED 2026-06-02:** the "do NOT brute-force it" conclusion above was based on
+soaking *with the validator active*. The validator itself was the suppressor;
+once removed, a brute-force soak reproduced the hang at ~1/8. See "Controlled
+reproduction" immediately below.
+
+## Controlled reproduction (2026-06-02, Quest 3, Vulkan)
+
+The bug was reproduced on demand by removing the suppressor and using an
+optimized build, then soaking with a scripted clean-reinstall harness
+(`scripts/soak_quest.py`).
+
+- **Repro build:** Quest *release* (Android `release` -> CMake RelWithDebInfo,
+  optimized) with `ERHE_DEBUG_VALIDATE_GEOMETRY 0` (validator OFF). It hung on
+  run 8 of a clean-reinstall soak (HANG=1, PASS=7) -- consistent with the
+  original ~1/9 rate. The 40 runs immediately before (debug, validator on) were
+  all clean.
+- **The validator was the suppressor.** Timeline: the original hang reproduced
+  *with* the watchdog + breadcrumbs present but *before* the
+  `ERHE_DEBUG_VALIDATE_GEOMETRY` validator was added. After it was added: 58
+  consecutive clean runs (18 noted on 2026-06-01 + 40 on 2026-06-02, all debug).
+  With it removed (+ release): hung at run 8. The validator does a full mesh walk
+  per brush *on the worker thread*, inside the suspected concurrent-Geogram
+  window, so it perturbs the timing -- a heisenbug, exactly like the rendezvous
+  amplifier tried on 2026-06-01.
+- **Captured signature** (`logs/soak_iter48_*.log`):
+
+  ```
+  [editor.startup] Init: editor ready, entering main loop          (tick thread)
+  [erhe.primitive.primitive_builder] Warning: Used fallback smooth normal
+  ... tick thread goes silent (spinning in build_polygon_fill) ...
+  [editor.watchdog] Main loop STALLED: ... Stuck in phase:
+      'primitive: build_polygon_fill facets=801 verts=801 corners=3200'
+  ```
+
+  It hung before completing frame 1 (first-frame thumbnail build). The mesh
+  counts are **sane** (801 facets / 801 verts / 3200 corners ~= a quad mesh), so
+  the spin is **internal per-facet `facet_ptr` corruption** (one facet's corner
+  range is wrong), not a blown `nb()` -- confirming the "sane counts" prediction.
+  The preceding `Used fallback smooth normal` shows the same mesh is already
+  degenerate when normals are computed.
+
+- **Detection harness** (`scripts/soak_quest.py`): clean-reinstall each run
+  (cold SPIR-V), phase-aware watch (generous init/SPIR-V ceiling, tight
+  post-init window), with `editor.cpp` emitting `Main loop: completed frame N`
+  as the PASS signal; the watchdog `Main loop STALLED` line is the authoritative
+  hang signal and it lingers 8 s after a stall to capture the breadcrumb ring.
+  Healthy cold-start baselines measured: debug init ~6.5 s / post ~1.0 s; release
+  init ~2.6 s / post ~0.5 s.
+
+## Headless reproduction & cross-device investigation (2026-06-02, continued)
+
+Goal: a minimal, headset-free ARM repro to decide *editor-misuse-of-Geogram* vs
+*a Geogram bug*. Two tools were built.
+
+### 1. `src/geogram_soak/` -- standalone headless harness (does NOT reproduce)
+
+A tiny executable (built on desktop and Android) that mirrors
+`Scene_builder::make_brushes()` with no rendering / SDL / Vulkan / headset: N
+taskflow workers each build a brush-shape on their own `GEO::Mesh` and run the
+same `Geometry::process()` flags, then validate after the join. It can also build
+all ~92 Johnson solids (`--johnson <johnson.json>`) exactly as the editor does --
+a single shared parsed `rapidjson::Document` read concurrently, and per solid the
+`Json_library::make_geometry` body including `GEO::mesh_repair()` (the one Geogram
+call the basic shapes never make). Run it on a device with
+`scripts/run_geogram_soak.py` (pushes the arm64 ELF, runs via `adb shell`).
+
+Knobs: `--workers N` (1 = sequential), `--multithread on|off` (Geogram
+`sys:multithread`), `--johnson PATH`, `--iters`, `--batch`, `--detail`.
+
+**Result: no reproduction.** >1.3M concurrent builds and ~1000 fresh-process cold
+trials, on both the S23 and the Quest, with workers 8 and oversubscribed 24,
+`multithread on`, with and without the Johnson/`mesh_repair` workload. This is
+strong evidence **against** bucket (b) "independent per-thread `GEO::Mesh` builds
+corrupt on their own" -- the isolated brush-build concurrency is clean.
+
+### 2. Full `mobile` editor on a phone -- DOES reproduce (headset-free)
+
+The `mobile` Gradle flavor builds the editor flat (no OpenXR). On a Samsung S23
+(Snapdragon 8 Gen 2, ARM) it runs normally, and **soaking it reproduced the hang:
+1 in 40 cold launches**, identical signature -- `build_polygon_fill` spin on
+`facets=801 verts=801 corners=3200`. The breadcrumb ring names the culprit brush
+as **`cone`** (the detail-4 cone is 801 facets; the sphere alongside it is 768,
+so the doc's earlier "sphere" guess was wrong). Soak it with:
+
+```
+scripts\build_android.bat mobile assembleMobileRelease
+ANDROID_SERIAL=<phone> py -3 scripts/soak_quest.py batch --start 1 --end 80 \
+    --flavor mobile --build-type release --init-ceiling 90 --post-window 30
+```
+
+`soak_quest.py` was generalized for `--flavor mobile|quest`. A phone must be awake
++ unlocked (`adb shell svc power stayon true`) for the flat activity to stay
+resumed. Rate is ~1/40 on S23 vs ~1/8 on Quest, but it is the same bug.
+
+**The `mobile` editor does NOT run on the Quest**: the Quest's window manager
+sleeps a flat 2D activity ~0.7 s into init (`SDL onStop()`, `isSleeping=true`),
+and `Android_Vulkan_CreateSurface` then dereferences the torn-down window ->
+SIGSEGV at `erhe::window::Context_window::create_vulkan_surface`. So the flat
+editor can only be soaked on a phone, not the Quest.
+
+### What this tells us about the cause
+
+The isolated harness is clean (1.3M+ builds) but the **full editor reproduces it**
+(both Quest immersive and S23 flat). The differentiator is the editor's broader
+concurrent init: `make_brushes()` runs its nested brush taskflow on the **same
+executor** that is simultaneously running ~20 other Layer-1 init tasks. The
+corruption needs that contention (shared executor / heap / some process-global),
+which the isolated harness lacks. This argues bucket (a) editor-misuse over (b),
+and reopens whether the corrupt mesh is even produced inside `make_brushes` or
+only damaged afterwards (e.g. heap corruption from a concurrent Layer-1 task).
+
+### Instrumentation added to localize the corruption window
+
+Two temporary validators (both reuse the new public
+`erhe::geometry::validate_mesh_structure()`, a bounded structural check):
+
+- **`Primitive_builder::build_polygon_fill` guard** -- validates the mesh at the
+  spin site; on corruption logs `MESH CORRUPT at build_polygon_fill ...` (naming
+  the bad facet) and **skips the fill** so the editor no longer hangs.
+- **`Scene_builder::make_brushes` post-join validator** -- walks every brush mesh
+  on the main thread right after the parallel build joins; logs `MESH CORRUPT
+  after make_brushes join ...` if a mesh is already corrupt there.
+
+If the post-join validator fires, the corruption happened **during** the parallel
+brush build; if it stays silent but the fill guard fires, the corruption happened
+**after** `make_brushes`. `soak_quest.py` now treats a `MESH CORRUPT` log line as
+a reproduction (the guard prevents the spin, so detection is log-based, not the
+watchdog stall). These validators are TEMPORARY -- remove once the root cause is
+fixed.
+
+### Findings from the instrumented soak (2026-06-02, late)
+
+Re-soaked the instrumented `mobile` editor on the S23 via warm-relaunch
+(`soak_quest.py batch --no-reinstall`, which relaunches the already-installed app
+each iteration -- fresh process, no `adb install`, so it dodges the Samsung Auto
+Blocker "Send app for a security check?" dialog and is faster). It reproduced
+again. Key results:
+
+- **The culprit is deterministically the `cone` brush.** All three captured
+  reproductions (original Quest + both S23) stall in `build_polygon_fill
+  facets=801 verts=801 corners=3200`, immediately after `thumbnail: brush 'cone'`.
+  The 801-facet mesh is the detail-4 cone (the sphere is 768). Every other brush
+  preview builds fine first. (Note: startup builds two cone geometries -- the
+  unnamed `Handle_visualizations::make_arrow_cone()` and the named brush "cone";
+  the breadcrumb `thumbnail: brush 'cone'` is the brush one.)
+- **Neither validator fired.** The mesh's counts, per-facet corner counts, and
+  corner sum are all SANE when `build_polygon_fill` spins.
+- `build_polygon_fill`'s loops are bounded by exactly those (sane) counts, and its
+  callees are straight-line attribute lookups (verified: `build_tangent_frame`,
+  `build_vertex_normal`, etc. have no loops). So a spin on a count-sane mesh means
+  either (a) the mesh is mutated *during* the walk, or (b) a corner's vertex index
+  is out of range -- which `validate_mesh_structure` does NOT currently check --
+  so `build_polygon_fill`'s `mesh_vertex_to_vertex_buffer_index[vertex]` write
+  goes OOB and corrupts the heap (possibly the mesh's own arrays) mid-walk.
+
+### What the evidence rules OUT
+
+- **Not a standalone Geogram thread-safety bug.** The isolated `geogram_soak`
+  harness did 1.3M+ concurrent independent `process()` builds (incl. `mesh_repair`,
+  Johnson solids, oversubscribed) with zero corruption. Generic concurrent Geogram
+  use is fine.
+- **Not the in-place `transform(*cone, *cone, swap_xy)` aliasing.** `transform_mesh`
+  guards every copy with `&source_mesh != &destination_mesh` (so `src==dst` skips
+  the copy) and transforms points/attributes element-wise (alias-safe). And an
+  aliasing bug is a deterministic code path -- it would hang every launch, not
+  ~1/40.
+- **Not any purely deterministic defect** in the cone build (a bad constant, a
+  fixed off-by-one): intermittency (~1/40 S23, ~1/8 Quest) excludes them.
+
+### Leading hypothesis + recommended next step
+
+Intermittency + full-editor-only + deterministic cone *victim* + count-sane mesh
+together point to **the cone mesh's memory being intermittently corrupted by
+something OUTSIDE its own build**: one of (1) a *specific* unsynchronized write to
+the cone mesh / a shared structure (not generic Geogram), (2) uninitialized
+memory, or (3) a heap OOB / use-after-free from another init task that lands on
+the cone mesh's allocation.
+
+The decisive instrument for intermittent memory corruption in the full app is a
+**HWASan (arm64) or ASan editor build run on the S23** -- it catches the bad
+write/read at its source and names the culprit, instead of inferring from the
+downstream spin. The Android CMake currently forces `ERHE_USE_ASAN OFF` (root
+`CMakeLists.txt`), so that override must be lifted and the NDK sanitizer runtime
+bundled into the APK. Cheaper interim steps: (a) tighten `validate_mesh_structure`
+to bounds-check each corner's vertex index (the gap above) so the guard /
+post-join validator can catch a bad-index form; (b) run the `build_polygon_fill`
+iteration-cap soak -- the cap logs live-vs-entry mesh counts on overrun, so
+*differing* counts prove concurrent mutation while *stable* counts point to a
+pre-existing bad index / heap corruption.
+
+### Tooling added this session (all on `main`)
+
+- `src/geogram_soak/` + `scripts/run_geogram_soak.py` -- headless harness.
+- `erhe::geometry::validate_mesh_structure()` -- shared bounded structural check.
+- `scripts/soak_quest.py` -- generalized `--flavor mobile|quest`, added
+  `--no-reinstall` (warm relaunch, dodges the install dialog), `MESH CORRUPT`
+  detection (the guard prevents the spin, so detection is log-based), and an
+  install-timeout guard.
+- Temporary validators: `Primitive_builder::build_polygon_fill` guard + iteration
+  cap, and the `Scene_builder::make_brushes` post-join validator.
+- `CLAUDE.md` -- how to disable the mobile Auto Blocker / Play Protect install
+  dialog (or use `--no-reinstall`).
 
 ## Symptom
 
@@ -328,15 +638,22 @@ use is confirmed. Because Geogram is not thread-safe, guarding it is the
 
 ## Notes / next steps
 
+- **Next direction (2026-06-02):** build a minimal, head-less ARM repro to
+  separate editor-misuse-of-Geogram from a bug in Geogram itself; see
+  `next_prompt.txt` for the plan handoff. Cheapest decisive test: set
+  `threading.thread_count` to 1 (sequential `make_brushes()`) and soak -- if the
+  hang vanishes, it is a concurrency issue.
 - The watchdog + breadcrumbs are diagnostics only; they do not fix the hang.
   Once the log identifies the stuck phase on a recurrence, fix the actual loop
   (no band-aids).
 - **Recommended:** prototype the guarded/serialized Geogram variant above and
   soak-test it (see "Decisive test").
 - The `ERHE_DEBUG_VALIDATE_GEOMETRY` mesh validator
-  (`src/erhe/geometry/erhe_geometry/geometry.cpp`) is a TEMPORARY diagnostic
-  left active to name a corrupt brush during init; remove it once the root
-  cause is fixed.
+  (`src/erhe/geometry/erhe_geometry/geometry.cpp`) is now set to **0 (OFF)**: it
+  was found to be the timing suppressor (see "Controlled reproduction"). For a
+  non-perturbing detector, validate meshes AFTER the parallel join in
+  `Scene_builder::make_brushes()` rather than inside `process()` on the worker
+  thread. It remains a TEMPORARY diagnostic; remove once the root cause is fixed.
 - A timing amplifier (rendezvous barrier forcing concurrent Geogram entry) was
   tried and REMOVED -- it suppressed the race rather than amplifying it, which
   is itself evidence the race is real but timing-subtle.

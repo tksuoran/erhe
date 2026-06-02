@@ -146,7 +146,9 @@ The editor and other apps write their spdlog output to `logs/` relative to the w
 
 ## Quest device launches
 
-**ALWAYS prompt the user to put the headset on and activate the controllers immediately before EVERY launch, with no exceptions.** Never skip this prompt and never assume the user is still wearing the headset - the user may remove it after any single test, and an earlier "I'm ready / proceed" confirmation applies ONLY to that one launch, never to a later one. Each `adb shell am start` (or `... quest run`) must be preceded by its own fresh prompt and explicit confirmation. This holds even when launches come back-to-back in an iteration loop.
+**For an individual / one-off launch, ALWAYS prompt the user to put the headset on and activate the controllers immediately before that launch.** Never assume the user is still wearing the headset for a one-off launch - the user may remove it after any single test, and an earlier "I'm ready / proceed" confirmation applies ONLY to that one launch, never to a later one. Each one-off `adb shell am start` (or `... quest run`) must be preceded by its own fresh prompt and explicit confirmation.
+
+**Batch / soak runs are the exception to the per-launch prompt:** a single headset-readiness confirmation at the START of the batch is sufficient for the whole sweep - do NOT prompt between iterations. The user keeps the headset on for the duration while an automated loop (clean reinstall + launch + watch per iteration) runs unattended. If a batch detects that the headset has gone off-head mid-run (e.g. repeated INCONCLUSIVE results / no ticks), stop and re-confirm rather than silently burning iterations.
 
 Do the install (`scripts\install_android.bat quest`) FIRST, while the user can keep their hands free. **Only after the APK is on the device**, prompt the user to put the headset on and pick up / activate the Touch controllers, and wait for explicit confirmation before running the launch (`adb shell am start -n org.libsdl.app.quest/...` or `scripts\install_android.bat quest run`). Quest's `RequiresControllersLaunchInterceptor` shows a system "Controllers Required" dialog that blocks the immersive app from coming to the foreground until controllers are detected as in-hand; launching while the headset is off the user's head wastes the attempt and we have to retry. Pure builds and installs (no app start) do not need the prompt.
 
@@ -218,6 +220,24 @@ The scripts in `scripts\` (`install_android.bat`, `run_android.bat`, `build_andr
 - **`JAVA_HOME`** (only needed for direct gradle / gradlew calls; the scripts above set it for you): use `$JAVA_HOME` if set, else fall back to `C:\Program Files\Android\Android Studio\jbr` (Android Studio's bundled JDK 21). Gradle 8.12 + AGP do not support JDK 25.
 
 Prefer the wrapper scripts when possible -- they handle both probes plus device-state checks. Drop to direct invocations only when a script does not cover the case (e.g. passing a `-P` gradle property the script's bat-arg parser mangles; see "Vulkan validation layer on Quest / Android" below).
+
+### Disabling the sideload security-check dialog on mobile (non-Quest) Android
+
+When running on a regular Android phone via the `mobile` flavor (e.g. soaking the editor with `scripts/soak_quest.py --flavor mobile`, or any sideloaded APK), Play Protect / Samsung Auto Blocker pops a "Send app for a security check?" dialog on each `adb install`. It blocks the install until dismissed, which stalls and can crash an unattended clean-reinstall soak. **Always disable it before a mobile Android run**, and restore it afterward (these are global settings):
+
+```bash
+ADB="$LOCALAPPDATA/Android/Sdk/platform-tools/adb.exe"
+# disable for the soak:
+"$ADB" -s <serial> shell settings put global verifier_verify_adb_installs 0
+"$ADB" -s <serial> shell settings put global upload_apk_enable 0
+"$ADB" -s <serial> shell settings put global package_verifier_user_consent -1
+# restore afterward:
+"$ADB" -s <serial> shell settings put global verifier_verify_adb_installs 1
+"$ADB" -s <serial> shell settings put global upload_apk_enable 1
+"$ADB" -s <serial> shell settings put global package_verifier_user_consent 1
+```
+
+If the dialog still appears, it is Samsung Auto Blocker rather than Play Protect: toggle it off in Settings > Security and privacy > Auto Blocker. (The Quest never shows this dialog, but the `mobile` editor cannot run on the Quest anyway -- the Quest sleeps flat 2D activities and the editor then SIGSEGVs at Vulkan surface creation; soak the `mobile` editor on a phone instead. Alternatively, `scripts/soak_quest.py batch --no-reinstall` relaunches the already-installed app each iteration, dodging the install dialog entirely.)
 
 ### Vulkan validation layer on Quest / Android
 

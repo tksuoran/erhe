@@ -33,6 +33,11 @@ add_subdirectory(quickhull)
 
 add_subdirectory(erhe)
 
+# Headless ARM soak harness for the intermittent main-loop hang
+# (doc/intermittent_main_loop_hang.md). Built on desktop AND Android -- the
+# corruption is ARM-only, so the useful runs are on-device via `adb shell`.
+add_subdirectory(geogram_soak)
+
 if (${ERHE_GUI_LIBRARY} STREQUAL "imgui")
     message(STATUS "Adding subdirectory 'editor'.")
     add_subdirectory(editor)
