@@ -146,6 +146,7 @@ private:
     Mouse_cursor               m_current_mouse_cursor          {Mouse_cursor_Arrow};
     bool                       m_is_mouse_relative_hold_enabled{false};
     bool                       m_is_window_visible             {false};
+    bool                       m_mouse_inside_window           {false};
     bool                       m_use_raw_mouse                 {false};
     Window_configuration       m_configuration;
     float                      m_pixel_density             {1.0f};

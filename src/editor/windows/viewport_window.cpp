@@ -13,6 +13,7 @@
 #include "ImViewGuizmo.h"
 
 #include "scene/viewport_scene_view.hpp"
+#include "scene/viewport_scene_views.hpp"
 #include "tools/material_paint_tool.hpp"
 
 #include "erhe_defer/defer.hpp"
@@ -305,9 +306,15 @@ void Viewport_window::imgui_viewport()
             }
         );
 
-        m_viewport_child_window_hovered = ImGui::IsWindowHovered(
+        const bool imgui_hovered = ImGui::IsWindowHovered(
             ImGuiHoveredFlags_AllowWhenBlockedByActiveItem | ImGuiHoveredFlags_AllowWhenBlockedByPopup
         );
+        // Keep reporting as hovered while this viewport holds the mouse-drag pointer capture,
+        // so a drag that started here keeps tracking the cursor after it leaves the rect.
+        const bool owns_pointer_capture =
+            (m_app_context.scene_views != nullptr) &&
+            m_app_context.scene_views->owns_pointer_capture(viewport_scene_view.get());
+        m_viewport_child_window_hovered = imgui_hovered || owns_pointer_capture;
         m_viewport_child_window_focused = ImGui::IsWindowFocused();
 
         viewport_scene_view->set_is_scene_view_hovered(m_viewport_child_window_hovered);

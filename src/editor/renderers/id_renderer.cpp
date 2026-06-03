@@ -392,8 +392,23 @@ void Id_renderer::render(const Render_parameters& parameters)
         log_id_render->warn("Id_renderer::render(): Transfer_entry slot busy");
         return;
     }
-    entry.x_offset        = std::max(x - (static_cast<int>(s_extent / 2)), 0);
-    entry.y_offset        = std::max(y - (static_cast<int>(s_extent / 2)), 0);
+    // Keep the s_extent readback rect fully inside the framebuffer. The low end is clamped to 0
+    // (pointer left/above the viewport); the high end must be clamped too. Otherwise a pointer to
+    // the right/below the viewport (e.g. a gizmo drag carried past the window edge) pushes the
+    // offset past the framebuffer and the copy region below computes a negative extent -> invalid
+    // GPU copy -> VK_ERROR_DEVICE_LOST. get() still validates the query against this rect, so a
+    // pointer outside the rect correctly returns "no hit".
+    const int half_extent  = static_cast<int>(s_extent / 2);
+    const int max_x_offset = std::max(static_cast<int>(viewport.width)  - static_cast<int>(s_extent), 0);
+    const int max_y_offset = std::max(static_cast<int>(viewport.height) - static_cast<int>(s_extent), 0);
+    entry.x_offset        = std::clamp(x - half_extent, 0, max_x_offset);
+    entry.y_offset        = std::clamp(y - half_extent, 0, max_y_offset);
+    // Size of the readback rect that actually lies inside the framebuffer. Equals s_extent in the
+    // common case, but shrinks to the viewport when the viewport is smaller than s_extent (so the
+    // scissor and the GPU copy below never exceed the framebuffer). Both are >= 1 here because the
+    // width == 0 / height == 0 viewport is rejected above.
+    const int read_width  = std::min(static_cast<int>(s_extent), static_cast<int>(viewport.width)  - entry.x_offset);
+    const int read_height = std::min(static_cast<int>(s_extent), static_cast<int>(viewport.height) - entry.y_offset);
     entry.clip_from_world = clip_from_world;
 
     // log_id_render->info(
@@ -455,9 +470,11 @@ void Id_renderer::render(const Render_parameters& parameters)
         // so it rendered with stale/undefined viewport state.
         encoder.set_viewport_rect(viewport.x, viewport.y, viewport.width, viewport.height);
         if (m_use_scissor) {
-            // Optimization: only rasterize the s_extent rect around the
-            // pointer (the only region the readback blit copies).
-            encoder.set_scissor_rect(entry.x_offset, entry.y_offset, s_extent, s_extent);
+            // Optimization: only rasterize the readback rect around the
+            // pointer (the only region the readback blit copies). Use the
+            // framebuffer-clamped extent so a viewport smaller than s_extent
+            // does not produce a scissor larger than the framebuffer.
+            encoder.set_scissor_rect(entry.x_offset, entry.y_offset, read_width, read_height);
         } else {
             encoder.set_scissor_rect(viewport.x, viewport.y, viewport.width, viewport.height);
         }
@@ -499,13 +516,7 @@ void Id_renderer::render(const Render_parameters& parameters)
         std::uintptr_t source_slice   = 0;
         std::uintptr_t source_level   = 0;
         glm::ivec3     source_origin  = glm::ivec3{entry.x_offset, entry.y_offset, 0};
-        glm::ivec3     source_min     = source_origin;
-        glm::ivec3     source_max     = glm::ivec3{
-            std::min(entry.x_offset + s_extent, parameters.viewport.width),
-            std::min(entry.y_offset + s_extent, parameters.viewport.height),
-            1
-        };
-        glm::ivec3     source_size                 = source_max - source_min;
+        glm::ivec3     source_size    = glm::ivec3{read_width, read_height, 1};
         const Buffer*  destination_buffer          = entry.buffer_range.get_buffer()->get_buffer();
         std::uintptr_t destination_offset          = entry.buffer_range.get_byte_start_offset_in_buffer();
         std::uintptr_t destination_bytes_per_row   = s_extent * erhe::dataformat::get_format_size_bytes(m_color_texture->get_pixelformat());

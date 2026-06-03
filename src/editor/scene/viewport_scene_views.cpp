@@ -35,6 +35,8 @@
 
 #include <imgui/imgui.h>
 
+#include <cfloat>
+
 namespace editor{
 
 using erhe::graphics::Vertex_input_state;
@@ -91,6 +93,7 @@ Scene_views::~Scene_views() noexcept
     // Reset all references to Viewport_scene_view before destroying vectors.
     m_hover_scene_view.reset();
     m_last_scene_view.reset();
+    m_pointer_capture_scene_view.reset();
     m_hover_stack.clear();
 
     // ~Viewport_scene_view calls erase() which modifies m_viewport_scene_views.
@@ -150,6 +153,9 @@ void Scene_views::destroy_viewport_scene_view(
     }
     if (m_last_scene_view.lock() == viewport_scene_view) {
         m_last_scene_view.reset();
+    }
+    if (m_pointer_capture_scene_view.lock() == viewport_scene_view) {
+        m_pointer_capture_scene_view.reset();
     }
     const auto hover_end = std::remove_if(
         m_hover_stack.begin(),
@@ -435,13 +441,50 @@ void Scene_views::update_pointer(erhe::imgui::Imgui_host* imgui_host)
     std::shared_ptr<Viewport_scene_view> old_scene_view = m_hover_scene_view;
     m_hover_stack.clear();
 
-    // Pull mouse position
-    {
-        //const auto mouse_position = m_app_context.input_state->mouse_position;
-        const glm::vec2 mouse_position = imgui_host->get_mouse_position();
-        // if (mouse_position.x >= 0.0f && mouse_position.y >= 0.0f) {
-        //     log_scene_view->info("mouse_position: {}, {}", mouse_position.x, mouse_position.y);
-        //  }
+    const glm::vec2 mouse_position = imgui_host->get_mouse_position();
+
+    // While a mouse-drag command is active, the viewport that started the drag keeps the
+    // pointer even after the cursor leaves its rect (e.g. moves over another panel), so the
+    // drag is never interrupted and keeps tracking the cursor until the button is released.
+    const bool mouse_drag_active =
+        (m_app_context.commands != nullptr) &&
+        (m_app_context.commands->get_active_mouse_command() != nullptr);
+
+    std::shared_ptr<Viewport_scene_view> capture_target;
+    if (mouse_drag_active) {
+        capture_target = m_pointer_capture_scene_view.lock();
+        if (!capture_target) {
+            // Drag just became active: lock onto the viewport that was hovered at drag start.
+            // m_last_scene_view is null-guarded - if no viewport was hovered we do not capture.
+            capture_target = m_last_scene_view.lock();
+            m_pointer_capture_scene_view = capture_target;
+        }
+    } else {
+        m_pointer_capture_scene_view.reset();
+    }
+
+    if (capture_target) {
+        // Pointer-capture path: route only to the capturing viewport, bypassing
+        // is_viewport_hovered(). Skip the normal hover scan so a second viewport cannot steal
+        // the pointer mid-drag. io.MousePos is the (-FLT_MAX, -FLT_MAX) sentinel only while the
+        // cursor is outside the OS window (see Imgui_host::on_cursor_enter_event); feed any real
+        // in-window position so the gizmo keeps tracking over other panels, and skip the
+        // sentinel so it freezes (rather than jumping) until the cursor returns. Do NOT gate on
+        // Imgui_host::has_cursor() here - it is driven only by cursor-enter events, which are
+        // not reliably delivered, so it can read false while the cursor is genuinely inside the
+        // window (which would wrongly freeze the drag).
+        const bool mouse_position_valid = (mouse_position.x > -FLT_MAX) && (mouse_position.y > -FLT_MAX);
+        for (const std::shared_ptr<Viewport_window>& window : m_viewport_windows) {
+            if ((window->get_imgui_host() == imgui_host) && (window->viewport_scene_view() == capture_target)) {
+                if (mouse_position_valid) {
+                    window->on_mouse_move(mouse_position);
+                }
+                m_hover_stack.push_back(capture_target);
+                break;
+            }
+        }
+    } else {
+        // Normal hover path.
         for (const std::shared_ptr<Viewport_window>& window : m_viewport_windows) {
             if (window->get_imgui_host() == imgui_host) {
                 if (window->is_viewport_hovered()) {
@@ -449,9 +492,8 @@ void Scene_views::update_pointer(erhe::imgui::Imgui_host* imgui_host)
                 }
             }
         }
+        update_pointer_from_imgui_viewport_windows(imgui_host);
     }
-
-    update_pointer_from_imgui_viewport_windows(imgui_host);
 
     m_hover_scene_view = m_hover_stack.empty()
         ? std::shared_ptr<Viewport_scene_view>{}
@@ -518,6 +560,15 @@ auto Scene_views::hover_scene_view() -> std::shared_ptr<Viewport_scene_view>
 auto Scene_views::last_scene_view() -> std::shared_ptr<Viewport_scene_view>
 {
     return m_last_scene_view.lock();
+}
+
+auto Scene_views::owns_pointer_capture(const Viewport_scene_view* scene_view) const -> bool
+{
+    if (scene_view == nullptr) {
+        return false;
+    }
+    // m_pointer_capture_scene_view is non-empty only while a mouse-drag is in progress.
+    return m_pointer_capture_scene_view.lock().get() == scene_view;
 }
 
 auto Scene_views::get_post_processing_nodes() const -> const std::vector<std::shared_ptr<Post_processing_node>>&

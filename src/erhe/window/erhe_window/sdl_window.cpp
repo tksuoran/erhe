@@ -737,6 +737,17 @@ void Context_window::poll_events(float wait_time)
     //    glfwPollEvents();
     //}
 
+    // SDL only emits MOUSE_ENTER / MOUSE_LEAVE on boundary crossings, so the initial ENTER can
+    // be missed (e.g. the window appears under an already-stationary cursor, or the event lands
+    // before the imgui host starts processing input). Reconcile against the authoritative
+    // SDL_WINDOW_MOUSE_FOCUS flag each poll so has_cursor() is correct from the first frame and
+    // self-heals from any missed enter/leave event. handle_cursor_enter_event() de-duplicates,
+    // so this is a no-op when the state already matches.
+    handle_cursor_enter_event(
+        static_cast<int64_t>(SDL_GetTicksNS()),
+        (SDL_GetWindowFlags(window) & SDL_WINDOW_MOUSE_FOCUS) != 0
+    );
+
     if (m_input_event_synthesizer_callback) {
         m_input_event_synthesizer_callback(*this);
     }
@@ -963,6 +974,12 @@ void Context_window::handle_window_focus_event(int64_t timestamp, bool focused)
 
 void Context_window::handle_cursor_enter_event(int64_t timestamp, bool entered)
 {
+    // Only emit on an actual change. This avoids redundant events and lets the
+    // SDL_WINDOW_MOUSE_FOCUS reconciliation in poll_events() share this path safely.
+    if (entered == m_mouse_inside_window) {
+        return;
+    }
+    m_mouse_inside_window = entered;
     m_input_events[m_input_event_queue_write].push_back(
         Input_event{
             .type = Input_event_type::cursor_enter_event,

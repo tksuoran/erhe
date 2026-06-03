@@ -314,11 +314,16 @@ void Handle_visualizations::update_mesh_visibility(bool precondition, const std:
 
     const auto& material = get_handle_material(handle, mode);
 
-    mesh->get_mutable_primitives().front().material = material;
+    // get_handle_material() returns null for handles with no mapped material (its default
+    // case). Never store a null material into the primitive - keep the existing one - so the
+    // renderer is not handed a null material to dereference.
+    if (material) {
+        mesh->get_mutable_primitives().front().material = material;
+    }
 
     log_trs_tool->trace(
         "{}->set_visible({}) mode = {}, material = {}",
-        node->get_name(), visible, c_str(mode), material->get_name()
+        node->get_name(), visible, c_str(mode), material ? material->get_name() : std::string{"<no material>"}
     );
 }
 

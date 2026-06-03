@@ -125,6 +125,11 @@ public:
     // Returns the Viewport_scene_view instance which is currently under pointer (mouse cursor).
     [[nodiscard]] auto hover_scene_view() -> std::shared_ptr<Viewport_scene_view>;
     [[nodiscard]] auto last_scene_view () -> std::shared_ptr<Viewport_scene_view>;
+
+    // True while the given viewport holds the mouse-drag pointer capture (a drag that
+    // started inside it is in progress). Used to keep the viewport "hovered" so the drag
+    // keeps tracking the cursor even after it leaves the viewport rect.
+    [[nodiscard]] auto owns_pointer_capture(const Viewport_scene_view* scene_view) const -> bool;
     [[nodiscard]] auto get_post_processing_nodes() const -> const std::vector<std::shared_ptr<Post_processing_node>>&;
 
 private:
@@ -146,6 +151,10 @@ private:
     std::vector<std::weak_ptr<Viewport_scene_view>>     m_hover_stack;
     std::shared_ptr<Viewport_scene_view>                m_hover_scene_view;
     std::weak_ptr<Viewport_scene_view>                  m_last_scene_view;
+
+    // Viewport that owns the pointer while a mouse-drag command is active. Empty when no
+    // drag is in progress. weak_ptr so it self-expires if the viewport is destroyed.
+    std::weak_ptr<Viewport_scene_view>                  m_pointer_capture_scene_view;
 };
 
 }
