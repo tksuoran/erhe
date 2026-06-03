@@ -39,7 +39,7 @@
         "timeline": true,
         "tool_properties": false,
         "tools_content_library": false,
-        "transform": false,
+        "transform": true,
         "viewport_config": false
     }
 }
