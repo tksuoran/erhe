@@ -453,7 +453,9 @@ public:
             m_thumbnails->update();
         }
 
-        // Update scene transforms
+        // Arrange layout-node children, then update scene transforms.
+        erhe::log::set_breadcrumb("tick: update_layout_nodes");
+        m_app_scenes->update_layout_nodes();
         erhe::log::set_breadcrumb("tick: update_transforms");
         m_tools->update_transforms();
         m_viewport_scene_views->update_transforms();

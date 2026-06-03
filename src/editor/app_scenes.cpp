@@ -7,9 +7,14 @@
 #include "scene/scene_root.hpp"
 
 #include "erhe_profile/profile.hpp"
+#include "erhe_scene/layout.hpp"
+#include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
 
 #include <imgui/imgui.h>
+
+#include <algorithm>
+#include <utility>
 
 namespace editor {
 
@@ -113,6 +118,45 @@ void App_scenes::update_node_transforms()
     Scene_root& scene_root = *m_context.tools->get_tool_scene_root().get();
     // TODO ? std::lock_guard<std::mutex> scene_lock{scene_root.item_host_mutex};
     scene_root.get_hosted_scene()->update_node_transforms();
+}
+
+void App_scenes::update_layout_nodes()
+{
+    ERHE_PROFILE_FUNCTION();
+
+    for (const std::shared_ptr<Scene_root>& scene_root : m_scene_roots) {
+        const std::shared_ptr<erhe::scene::Node> root = scene_root->get_scene().get_root_node();
+        if (!root) {
+            continue;
+        }
+
+        // Collect layout nodes together with their hierarchy depth.
+        std::vector<std::pair<std::size_t, erhe::scene::Node*>> layout_nodes;
+        root->for_each<erhe::scene::Node>(
+            [&layout_nodes](erhe::scene::Node& node) -> bool {
+                const std::shared_ptr<erhe::scene::Layout> layout = erhe::scene::get_attachment<erhe::scene::Layout>(&node);
+                if (layout) {
+                    layout_nodes.emplace_back(node.get_depth(), &node);
+                }
+                return true;
+            }
+        );
+
+        // Shallow-to-deep so a parent layout runs before any nested child layout;
+        // a nested layout then re-runs later in this same pass.
+        std::stable_sort(
+            layout_nodes.begin(),
+            layout_nodes.end(),
+            [](const std::pair<std::size_t, erhe::scene::Node*>& lhs, const std::pair<std::size_t, erhe::scene::Node*>& rhs) -> bool {
+                return lhs.first < rhs.first;
+            }
+        );
+
+        for (const std::pair<std::size_t, erhe::scene::Node*>& entry : layout_nodes) {
+            const std::shared_ptr<erhe::scene::Layout> layout = erhe::scene::get_attachment<erhe::scene::Layout>(entry.second);
+            layout->update();
+        }
+    }
 }
 
 void App_scenes::after_physics_simulation_steps()

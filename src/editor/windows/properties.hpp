@@ -19,6 +19,8 @@ namespace erhe::imgui {
 namespace erhe::scene {
     class Animation;
     class Camera;
+    class Layout;
+    class Layout_item;
     class Light;
     class Mesh;
     class Node;
@@ -56,6 +58,8 @@ private:
     void animation_properties         (erhe::scene::Animation& animation);
     void camera_properties            (erhe::scene::Camera& camera);
     void light_properties             (erhe::scene::Light& light);
+    void layout_properties            (erhe::scene::Layout& layout);
+    void layout_item_properties       (erhe::scene::Layout_item& layout_item);
     void texture_properties           (const std::shared_ptr<erhe::graphics::Texture>& texture);
     void geometry_properties          (erhe::geometry::Geometry& geometry);
     void buffer_mesh_properties       (const char* label, const erhe::primitive::Buffer_mesh* buffer_mesh);

@@ -7,6 +7,10 @@ erhe_target_sources_grouped(
     erhe_scene/animation.hpp
     erhe_scene/camera.cpp
     erhe_scene/camera.hpp
+    erhe_scene/layout.cpp
+    erhe_scene/layout.hpp
+    erhe_scene/layout_item.cpp
+    erhe_scene/layout_item.hpp
     erhe_scene/light.cpp
     erhe_scene/light.hpp
     erhe_scene/mesh.cpp

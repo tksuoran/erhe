@@ -38,6 +38,8 @@
 #include "erhe_raytrace/iinstance.hpp"
 #include "erhe_scene/animation.hpp"
 #include "erhe_scene/camera.hpp"
+#include "erhe_scene/layout.hpp"
+#include "erhe_scene/layout_item.hpp"
 #include "erhe_scene/light.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/mesh_raytrace.hpp"
@@ -264,6 +266,49 @@ void Properties::light_properties(erhe::scene::Light& light)
             );
         }
     }
+}
+
+void Properties::layout_properties(erhe::scene::Layout& layout)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    add_entry("Type", [&layout]() {
+        erhe::imgui::make_combo(
+            "##",
+            layout.type,
+            erhe::scene::Layout::c_type_strings,
+            IM_ARRAYSIZE(erhe::scene::Layout::c_type_strings)
+        );
+    });
+    add_entry("Volume Min", [&layout]() { ImGui::DragFloat3("##", &layout.volume.min.x, 0.01f); });
+    add_entry("Volume Max", [&layout]() { ImGui::DragFloat3("##", &layout.volume.max.x, 0.01f); });
+    add_entry("Primary", [&layout]() {
+        erhe::imgui::make_combo("##", layout.primary, erhe::scene::Layout::c_axis_direction_strings, IM_ARRAYSIZE(erhe::scene::Layout::c_axis_direction_strings));
+    });
+    add_entry("Secondary", [&layout]() {
+        erhe::imgui::make_combo("##", layout.secondary, erhe::scene::Layout::c_axis_direction_strings, IM_ARRAYSIZE(erhe::scene::Layout::c_axis_direction_strings));
+    });
+    add_entry("Tertiary", [&layout]() {
+        erhe::imgui::make_combo("##", layout.tertiary, erhe::scene::Layout::c_axis_direction_strings, IM_ARRAYSIZE(erhe::scene::Layout::c_axis_direction_strings));
+    });
+    add_entry("Gap", [&layout]() { ImGui::DragFloat3("##", &layout.gap.x, 0.01f, 0.0f, 10000.0f); });
+}
+
+void Properties::layout_item_properties(erhe::scene::Layout_item& layout_item)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    add_entry("Align X", [&layout_item]() {
+        erhe::imgui::make_combo("##", layout_item.alignment[0], erhe::scene::Layout_item::c_alignment_strings, IM_ARRAYSIZE(erhe::scene::Layout_item::c_alignment_strings));
+    });
+    add_entry("Align Y", [&layout_item]() {
+        erhe::imgui::make_combo("##", layout_item.alignment[1], erhe::scene::Layout_item::c_alignment_strings, IM_ARRAYSIZE(erhe::scene::Layout_item::c_alignment_strings));
+    });
+    add_entry("Align Z", [&layout_item]() {
+        erhe::imgui::make_combo("##", layout_item.alignment[2], erhe::scene::Layout_item::c_alignment_strings, IM_ARRAYSIZE(erhe::scene::Layout_item::c_alignment_strings));
+    });
+    add_entry("Margin Min", [&layout_item]() { ImGui::DragFloat3("##", &layout_item.margin_min.x, 0.01f); });
+    add_entry("Margin Max", [&layout_item]() { ImGui::DragFloat3("##", &layout_item.margin_max.x, 0.01f); });
 }
 
 void Properties::skin_properties(erhe::scene::Skin& skin)
@@ -767,6 +812,8 @@ void Properties::item_properties(const std::shared_ptr<erhe::Item_base>& item_in
     const auto& node_physics    = std::dynamic_pointer_cast<Node_physics           >(item);
     const auto& rendertarget    = std::dynamic_pointer_cast<Rendertarget_mesh      >(item);
     const auto& camera          = std::dynamic_pointer_cast<erhe::scene::Camera    >(item);
+    const auto& layout          = std::dynamic_pointer_cast<erhe::scene::Layout    >(item);
+    const auto& layout_item     = std::dynamic_pointer_cast<erhe::scene::Layout_item>(item);
     const auto& light           = std::dynamic_pointer_cast<erhe::scene::Light     >(item);
     const auto& mesh            = std::dynamic_pointer_cast<erhe::scene::Mesh      >(item);
     const auto& node            = std::dynamic_pointer_cast<erhe::scene::Node      >(item);
@@ -900,6 +947,14 @@ void Properties::item_properties(const std::shared_ptr<erhe::Item_base>& item_in
 
     if (light) {
         light_properties(*light);
+    }
+
+    if (layout) {
+        layout_properties(*layout);
+    }
+
+    if (layout_item) {
+        layout_item_properties(*layout_item);
     }
 
     if (mesh) {

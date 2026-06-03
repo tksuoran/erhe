@@ -30,6 +30,7 @@ namespace erhe::rendergraph {
 }
 namespace erhe::scene {
     class Camera;
+    class Layout;
     class Light;
     class Mesh;
     class Node;
@@ -82,6 +83,16 @@ class Create_new_rendertarget_command : public erhe::commands::Command
 {
 public:
     Create_new_rendertarget_command(erhe::commands::Commands& commands, App_context& context);
+    auto try_call() -> bool override;
+
+private:
+    App_context& m_context;
+};
+
+class Create_new_layout_command : public erhe::commands::Command
+{
+public:
+    Create_new_layout_command(erhe::commands::Commands& commands, App_context& context);
     auto try_call() -> bool override;
 
 private:
@@ -198,6 +209,7 @@ public:
     auto create_new_camera      (erhe::scene::Node* parent = nullptr) -> std::shared_ptr<erhe::scene::Camera>;
     auto create_new_empty_node  (erhe::scene::Node* parent = nullptr) -> std::shared_ptr<erhe::scene::Node>;
     auto create_new_light       (erhe::scene::Node* parent = nullptr) -> std::shared_ptr<erhe::scene::Light>;
+    auto create_new_layout      (erhe::scene::Node* parent = nullptr) -> std::shared_ptr<erhe::scene::Layout>;
     auto create_new_rendertarget(erhe::scene::Node* parent = nullptr) -> std::shared_ptr<Rendertarget_mesh>;
     auto get_scene_root         (erhe::scene::Node* parent) const -> Scene_root*;
     auto get_scene_root         (erhe::primitive::Material* material) const -> Scene_root*;
@@ -217,6 +229,7 @@ private:
     Create_new_camera_command       m_create_new_camera_command;
     Create_new_empty_node_command   m_create_new_empty_node_command;
     Create_new_light_command        m_create_new_light_command;
+    Create_new_layout_command       m_create_new_layout_command;
     Create_new_rendertarget_command m_create_new_rendertarget_command;
     Add_cameras_command             m_add_cameras_command;
     Add_room_command                m_add_room_command;

@@ -114,7 +114,9 @@ public:
     static constexpr uint64_t index_graph_node             = 33;
     static constexpr uint64_t index_graph_link             = 34;
     static constexpr uint64_t index_rendergraph_node       = 35;
-    static constexpr uint64_t count                        = 36;
+    static constexpr uint64_t index_layout                 = 36;
+    static constexpr uint64_t index_layout_item            = 37;
+    static constexpr uint64_t count                        = 38;
 
     static constexpr uint64_t none                   =  uint64_t{0};
     static constexpr uint64_t animation              = (uint64_t{1} << index_animation             );
@@ -152,6 +154,8 @@ public:
     static constexpr uint64_t graph_node             = (uint64_t{1} << index_graph_node            );
     static constexpr uint64_t graph_link             = (uint64_t{1} << index_graph_link            );
     static constexpr uint64_t rendergraph_node       = (uint64_t{1} << index_rendergraph_node      );
+    static constexpr uint64_t layout                 = (uint64_t{1} << index_layout                );
+    static constexpr uint64_t layout_item            = (uint64_t{1} << index_layout_item           );
 
     // NOTE: The names here must match the C++ class names
     static constexpr const char* c_bit_labels[] = {
@@ -190,7 +194,9 @@ public:
         "Graph",
         "Graph_node",
         "Graph_link",
-        "Rendergraph_node"
+        "Rendergraph_node",
+        "Layout",
+        "Layout_item"
     };
 };
 

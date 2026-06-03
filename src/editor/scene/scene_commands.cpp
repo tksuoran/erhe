@@ -30,6 +30,7 @@
 #include "erhe_math/math_util.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_scene/camera.hpp"
+#include "erhe_scene/layout.hpp"
 #include "erhe_scene/light.hpp"
 #include "erhe_scene/scene.hpp"
 
@@ -82,6 +83,17 @@ Create_new_rendertarget_command::Create_new_rendertarget_command(erhe::commands:
 auto Create_new_rendertarget_command::try_call() -> bool
 {
     return m_context.scene_commands->create_new_rendertarget().operator bool();
+}
+
+Create_new_layout_command::Create_new_layout_command(erhe::commands::Commands& commands, App_context& context)
+    : Command  {commands, "scene.create_new_layout"}
+    , m_context{context}
+{
+}
+
+auto Create_new_layout_command::try_call() -> bool
+{
+    return m_context.scene_commands->create_new_layout().operator bool();
 }
 
 Add_cameras_command::Add_cameras_command(erhe::commands::Commands& commands, App_context& context)
@@ -280,6 +292,7 @@ Scene_commands::Scene_commands(erhe::commands::Commands& commands, App_context& 
     , m_create_new_camera_command      {commands, context}
     , m_create_new_empty_node_command  {commands, context}
     , m_create_new_light_command       {commands, context}
+    , m_create_new_layout_command      {commands, context}
     , m_create_new_rendertarget_command{commands, context}
     , m_add_cameras_command            {commands, context}
     , m_add_room_command               {commands, context}
@@ -293,6 +306,7 @@ Scene_commands::Scene_commands(erhe::commands::Commands& commands, App_context& 
     commands.register_command   (&m_create_new_camera_command);
     commands.register_command   (&m_create_new_empty_node_command);
     commands.register_command   (&m_create_new_light_command);
+    commands.register_command   (&m_create_new_layout_command);
     commands.register_command   (&m_create_new_rendertarget_command);
     commands.register_command   (&m_add_cameras_command);
     commands.register_command   (&m_add_room_command);
@@ -306,9 +320,11 @@ Scene_commands::Scene_commands(erhe::commands::Commands& commands, App_context& 
     commands.bind_command_to_key(&m_create_new_empty_node_command,   erhe::window::Key_f3, true);
     commands.bind_command_to_key(&m_create_new_light_command,        erhe::window::Key_f4, true);
     commands.bind_command_to_key(&m_create_new_rendertarget_command, erhe::window::Key_f5, true);
+    commands.bind_command_to_key(&m_create_new_layout_command,       erhe::window::Key_f6, true);
     commands.bind_command_to_menu(&m_create_new_camera_command,       "Create.Camera");
     commands.bind_command_to_menu(&m_create_new_empty_node_command,   "Create.Empty Node");
     commands.bind_command_to_menu(&m_create_new_light_command,        "Create.Light");
+    commands.bind_command_to_menu(&m_create_new_layout_command,       "Create.Layout");
     commands.bind_command_to_menu(&m_create_new_rendertarget_command, "Create.Rendertarget");
 }
 
@@ -497,6 +513,40 @@ auto Scene_commands::create_new_light(erhe::scene::Node* parent) -> std::shared_
     );
 
     return new_light;
+}
+
+auto Scene_commands::create_new_layout(erhe::scene::Node* parent) -> std::shared_ptr<erhe::scene::Layout>
+{
+    Scene_root* scene_root = get_scene_root(parent);
+    if (scene_root == nullptr) {
+        return {};
+    }
+
+    auto new_node   = std::make_shared<erhe::scene::Node>("new layout node");
+    auto new_layout = std::make_shared<erhe::scene::Layout>("new layout");
+    new_node  ->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
+    new_layout->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
+    m_context.operation_stack->queue(
+        std::make_shared<Compound_operation>(
+            Compound_operation::Parameters{
+                .operations = {
+                    std::make_shared<Item_insert_remove_operation>(
+                        Item_insert_remove_operation::Parameters{
+                            .context = m_context,
+                            .item    = new_node,
+                            .parent  = (parent != nullptr)
+                                ? std::static_pointer_cast<erhe::scene::Node>(parent->shared_from_this())
+                                : scene_root->get_hosted_scene()->get_root_node(),
+                            .mode    = Item_insert_remove_operation::Mode::insert
+                        }
+                    ),
+                    std::make_shared<Node_attach_operation>(new_layout, new_node)
+                }
+            }
+        )
+    );
+
+    return new_layout;
 }
 
 auto Scene_commands::create_new_rendertarget(erhe::scene::Node* parent) -> std::shared_ptr<Rendertarget_mesh>

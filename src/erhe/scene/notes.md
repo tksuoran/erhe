@@ -10,6 +10,8 @@ A glTF-like 3D scene graph providing hierarchical transforms, node attachments (
 - `Mesh` -- Node attachment holding a vector of `Mesh_primitive` (Primitive + Material pairs). Supports raytrace primitives for CPU-side picking.
 - `Camera` -- Node attachment with a `Projection` (perspective/orthogonal/XR). Computes `clip_from_world` transforms.
 - `Light` -- Node attachment for directional, point, and spot lights. Computes shadow projection transforms.
+- `Layout` -- Node attachment that owns a volume (an `Aabb` in the node's local space) and arranges its node's direct children inside that volume by computing each child's `parent_from_node` (`Layout::update()`). A single class selects between `Layout_type::stack` / `grid` / `flow` (currently only `stack` is implemented). The layout owns each child's translation and (for `stretch` alignment) scale; child rotation is forced to identity. A child's footprint is measured via `compute_content_local_aabb()` (its own mesh primitives plus descendants); a child that is itself a `Layout` contributes its declared `volume` instead, which both matches intent and breaks the recursion cycle.
+- `Layout_item` -- Optional per-child node attachment holding alignment (`negative`/`positive`/`stretch` per axis), margins, and grid cell/span. A child without one is laid out using default values.
 - `Projection` -- Camera projection configuration supporting many types (perspective vertical/horizontal, orthogonal, XR asymmetric, generic frustum).
 - `Transform` -- Matrix + inverse matrix pair with factory methods for projection setups.
 - `Trs_transform` -- Extends `Transform` with decomposed translation, rotation, scale, and skew. Supports interpolation.

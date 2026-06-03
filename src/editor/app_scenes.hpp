@@ -25,6 +25,7 @@ public:
     void before_physics_simulation_steps     ();
     void update_physics_simulation_fixed_step(const Time_context& time);
     void after_physics_simulation_steps      ();
+    void update_layout_nodes                 ();
     void update_node_transforms              ();
 
     [[nodiscard]] auto get_scene_roots() -> const std::vector<std::shared_ptr<Scene_root>>&;
