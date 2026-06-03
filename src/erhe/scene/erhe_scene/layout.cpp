@@ -7,8 +7,10 @@
 
 #include <glm/gtc/quaternion.hpp>
 
+#include <algorithm>
 #include <array>
 #include <memory>
+#include <vector>
 
 namespace erhe::scene {
 
@@ -147,6 +149,66 @@ namespace {
     return compute_content_local_aabb(child);
 }
 
+// Build the n+1 track boundary positions along one axis, from low to high.
+// When 'extents' has exactly 'count' entries they are honored as absolute track
+// sizes accumulated from 'lo'; otherwise the range [lo, hi] is divided into
+// 'count' equal tracks. The track count is clamped to at least 1.
+[[nodiscard]] auto build_track_edges(
+    const float               lo,
+    const float               hi,
+    const int                 count,
+    const std::vector<float>& extents
+) -> std::vector<float>
+{
+    const int n = (count > 1) ? count : 1;
+    std::vector<float> edges;
+    edges.reserve(static_cast<std::size_t>(n) + 1);
+    edges.push_back(lo);
+    if (extents.size() == static_cast<std::size_t>(n)) {
+        float edge = lo;
+        for (int k = 0; k < n; ++k) {
+            edge += std::max(0.0f, extents[static_cast<std::size_t>(k)]); // a track cannot have negative size
+            edges.push_back(edge);
+        }
+    } else {
+        const float step = (hi - lo) / static_cast<float>(n);
+        for (int k = 1; k <= n; ++k) {
+            edges.push_back(lo + (step * static_cast<float>(k)));
+        }
+    }
+    return edges;
+}
+
+// Per-child layout parameters resolved from an optional Layout_item attachment;
+// a child without one uses these defaults. Shared by all layout algorithms.
+class Resolved_item
+{
+public:
+    std::array<Layout_alignment, 3> alignment{
+        Layout_alignment::negative,
+        Layout_alignment::negative,
+        Layout_alignment::negative
+    };
+    glm::vec3  margin_min{0.0f, 0.0f, 0.0f};
+    glm::vec3  margin_max{0.0f, 0.0f, 0.0f};
+    glm::ivec3 grid_cell {0, 0, 0};
+    glm::ivec3 grid_span {1, 1, 1};
+};
+
+[[nodiscard]] auto resolve_item(const Node& child) -> Resolved_item
+{
+    Resolved_item result;
+    const std::shared_ptr<Layout_item> item = get_attachment<Layout_item>(&child);
+    if (item) {
+        result.alignment  = item->alignment;
+        result.margin_min = item->margin_min;
+        result.margin_max = item->margin_max;
+        result.grid_cell  = item->grid_cell;
+        result.grid_span  = item->grid_span;
+    }
+    return result;
+}
+
 } // anonymous namespace
 
 auto compute_content_local_aabb(const Node& node) -> erhe::math::Aabb
@@ -206,7 +268,7 @@ void Layout::update()
             break;
         }
         case Type::grid: {
-            // TODO Step 2: layout_grid(*layout_node);
+            layout_grid(*layout_node);
             break;
         }
         case Type::flow: {
@@ -256,22 +318,56 @@ void Layout::layout_stack(Node& layout_node)
             cursor = cell.min[primary_axis] - primary_gap;
         }
 
-        // Resolve per-child parameters (defaults when no Layout_item is present).
-        std::array<Layout_alignment, 3> alignment{
-            Layout_alignment::negative,
-            Layout_alignment::negative,
-            Layout_alignment::negative
-        };
-        glm::vec3 margin_min{0.0f, 0.0f, 0.0f};
-        glm::vec3 margin_max{0.0f, 0.0f, 0.0f};
-        const std::shared_ptr<Layout_item> item = get_attachment<Layout_item>(child.get());
-        if (item) {
-            alignment  = item->alignment;
-            margin_min = item->margin_min;
-            margin_max = item->margin_max;
+        const Resolved_item params = resolve_item(*child);
+        const Trs_transform placement = compute_child_placement(cell, content, params.alignment, params.margin_min, params.margin_max);
+        child->set_parent_from_node(placement);
+    }
+}
+
+void Layout::layout_grid(Node& layout_node)
+{
+    const std::vector<float> edges_x = build_track_edges(volume.min.x, volume.max.x, grid_track_count.x, grid_track_extent[0]);
+    const std::vector<float> edges_y = build_track_edges(volume.min.y, volume.max.y, grid_track_count.y, grid_track_extent[1]);
+    const std::vector<float> edges_z = build_track_edges(volume.min.z, volume.max.z, grid_track_count.z, grid_track_extent[2]);
+    const int track_count_x = static_cast<int>(edges_x.size()) - 1;
+    const int track_count_y = static_cast<int>(edges_y.size()) - 1;
+    const int track_count_z = static_cast<int>(edges_z.size()) - 1;
+
+    for (const std::shared_ptr<erhe::Hierarchy>& child_item : layout_node.get_children()) {
+        const std::shared_ptr<Node> child = std::dynamic_pointer_cast<Node>(child_item);
+        if (!child) {
+            continue;
         }
 
-        const Trs_transform placement = compute_child_placement(cell, content, alignment, margin_min, margin_max);
+        erhe::math::Aabb content = measure_child_content(*child);
+        if (is_empty(content)) {
+            content.min = glm::vec3{0.0f, 0.0f, 0.0f};
+            content.max = glm::vec3{0.0f, 0.0f, 0.0f};
+        }
+
+        const Resolved_item params = resolve_item(*child);
+
+        // Clamp the cell index and span into the available track range.
+        const int cx = std::clamp(params.grid_cell.x, 0, track_count_x - 1);
+        const int cy = std::clamp(params.grid_cell.y, 0, track_count_y - 1);
+        const int cz = std::clamp(params.grid_cell.z, 0, track_count_z - 1);
+        const int sx = std::clamp(params.grid_span.x, 1, track_count_x - cx);
+        const int sy = std::clamp(params.grid_span.y, 1, track_count_y - cy);
+        const int sz = std::clamp(params.grid_span.z, 1, track_count_z - cz);
+
+        erhe::math::Aabb cell;
+        cell.min = glm::vec3{
+            edges_x[static_cast<std::size_t>(cx)],
+            edges_y[static_cast<std::size_t>(cy)],
+            edges_z[static_cast<std::size_t>(cz)]
+        };
+        cell.max = glm::vec3{
+            edges_x[static_cast<std::size_t>(cx + sx)],
+            edges_y[static_cast<std::size_t>(cy + sy)],
+            edges_z[static_cast<std::size_t>(cz + sz)]
+        };
+
+        const Trs_transform placement = compute_child_placement(cell, content, params.alignment, params.margin_min, params.margin_max);
         child->set_parent_from_node(placement);
     }
 }

@@ -292,6 +292,38 @@ void Properties::layout_properties(erhe::scene::Layout& layout)
         erhe::imgui::make_combo("##", layout.tertiary, erhe::scene::Layout::c_axis_direction_strings, IM_ARRAYSIZE(erhe::scene::Layout::c_axis_direction_strings));
     });
     add_entry("Gap", [&layout]() { ImGui::DragFloat3("##", &layout.gap.x, 0.01f, 0.0f, 10000.0f); });
+
+    if (layout.type == erhe::scene::Layout_type::grid) {
+        add_entry("Grid Tracks", [&layout]() { ImGui::DragInt3("##", &layout.grid_track_count.x, 0.1f, 1, 1000); });
+
+        static const char* const c_grid_size_labels[] = { "Sizes X", "Sizes Y", "Sizes Z" };
+        for (int axis = 0; axis < 3; ++axis) {
+            add_entry(c_grid_size_labels[axis], [&layout, axis]() {
+                std::vector<float>& extents = layout.grid_track_extent[static_cast<std::size_t>(axis)];
+                const int count = (layout.grid_track_count[axis] > 1) ? layout.grid_track_count[axis] : 1;
+                bool custom = !extents.empty();
+                if (ImGui::Checkbox("Custom", &custom)) {
+                    if (custom) {
+                        const float total = layout.volume.max[axis] - layout.volume.min[axis];
+                        const float per   = (total > 0.0f) ? (total / static_cast<float>(count)) : 0.0f;
+                        extents.assign(static_cast<std::size_t>(count), per);
+                    } else {
+                        extents.clear();
+                    }
+                }
+                if (!extents.empty()) {
+                    extents.resize(static_cast<std::size_t>(count), 0.0f); // keep in sync with track count
+                    for (int k = 0; k < count; ++k) {
+                        ImGui::PushID(k);
+                        ImGui::SameLine();
+                        ImGui::SetNextItemWidth(48.0f);
+                        ImGui::DragFloat("##e", &extents[static_cast<std::size_t>(k)], 0.01f, 0.0f, 10000.0f);
+                        ImGui::PopID();
+                    }
+                }
+            });
+        }
+    }
 }
 
 void Properties::layout_item_properties(erhe::scene::Layout_item& layout_item)
@@ -309,6 +341,8 @@ void Properties::layout_item_properties(erhe::scene::Layout_item& layout_item)
     });
     add_entry("Margin Min", [&layout_item]() { ImGui::DragFloat3("##", &layout_item.margin_min.x, 0.01f); });
     add_entry("Margin Max", [&layout_item]() { ImGui::DragFloat3("##", &layout_item.margin_max.x, 0.01f); });
+    add_entry("Grid Cell",  [&layout_item]() { ImGui::DragInt3  ("##", &layout_item.grid_cell.x, 0.1f, 0, 1000); });
+    add_entry("Grid Span",  [&layout_item]() { ImGui::DragInt3  ("##", &layout_item.grid_span.x, 0.1f, 1, 1000); });
 }
 
 void Properties::skin_properties(erhe::scene::Skin& skin)

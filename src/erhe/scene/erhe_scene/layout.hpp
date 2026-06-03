@@ -89,7 +89,8 @@ public:
 
 private:
     void layout_stack(Node& layout_node);
-    // layout_grid / layout_flow are added in later steps.
+    void layout_grid (Node& layout_node);
+    // layout_flow is added in a later step.
 };
 
 // Content bounding box of a node expressed in that node's own local space:
