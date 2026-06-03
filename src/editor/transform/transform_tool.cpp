@@ -471,17 +471,10 @@ void Transform_tool::adjust_scale(const vec3 center_of_scale, const vec3 scale)
         }
         shared.world_from_anchor = erhe::scene::scale(shared.world_from_anchor_initial_state, scale);
     } else {
+        const mat4 translate   = erhe::math::create_translation<float>(vec3{-center_of_scale});
+        const mat4 untranslate = erhe::math::create_translation<float>(vec3{ center_of_scale});
         adjust(
-            glm::translate(
-                glm::scale(
-                    glm::translate(
-                        shared.world_from_anchor_initial_state.get_matrix(),
-                        center_of_scale
-                    ),
-                    scale
-                ),
-                -center_of_scale
-            )
+            untranslate * glm::scale(mat4{1.0f}, scale) * translate * shared.world_from_anchor_initial_state.get_matrix()
         );
     }
     update_transforms();
