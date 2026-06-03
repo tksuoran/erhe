@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <array>
 #include <memory>
+#include <utility>
 #include <vector>
 
 namespace erhe::scene {
@@ -209,6 +210,45 @@ public:
     return result;
 }
 
+// Advance a signed cursor by 'size', returning the [lo, hi] interval consumed
+// and moving the cursor to the far edge (in the axis-sign direction).
+[[nodiscard]] auto advance(float& cursor, const float sign, const float size) -> std::pair<float, float>
+{
+    float lo = 0.0f;
+    float hi = 0.0f;
+    if (sign > 0.0f) {
+        lo = cursor;
+        hi = cursor + size;
+        cursor = hi;
+    } else {
+        hi = cursor;
+        lo = cursor - size;
+        cursor = lo;
+    }
+    return std::pair<float, float>{lo, hi};
+}
+
+// A flow "line": children packed along the primary axis. cross_s / cross_t are
+// the maximum child sizes along the secondary / tertiary axes in this line.
+class Flow_line
+{
+public:
+    std::vector<std::size_t> members;
+    float used_p {0.0f};
+    float cross_s{0.0f};
+    float cross_t{0.0f};
+};
+
+// A flow "sheet": lines stacked along the secondary axis. cross_t is the maximum
+// line tertiary size in this sheet.
+class Flow_sheet
+{
+public:
+    std::vector<std::size_t> line_indices;
+    float used_s {0.0f};
+    float cross_t{0.0f};
+};
+
 } // anonymous namespace
 
 auto compute_content_local_aabb(const Node& node) -> erhe::math::Aabb
@@ -272,7 +312,7 @@ void Layout::update()
             break;
         }
         case Type::flow: {
-            // TODO Step 3: layout_flow(*layout_node);
+            layout_flow(*layout_node);
             break;
         }
         default: {
@@ -369,6 +409,113 @@ void Layout::layout_grid(Node& layout_node)
 
         const Trs_transform placement = compute_child_placement(cell, content, params.alignment, params.margin_min, params.margin_max);
         child->set_parent_from_node(placement);
+    }
+}
+
+void Layout::layout_flow(Node& layout_node)
+{
+    // primary / secondary / tertiary should select three distinct axes. The cell
+    // is seeded from the full volume so a misconfiguration (duplicate axis) leaves
+    // the unset axis at full extent rather than producing an invalid cell.
+    const int   primary_axis   = axis_index(primary);
+    const int   secondary_axis = axis_index(secondary);
+    const int   tertiary_axis  = axis_index(tertiary);
+    const float primary_sign   = axis_sign(primary);
+    const float secondary_sign = axis_sign(secondary);
+    const float tertiary_sign  = axis_sign(tertiary);
+    const float primary_gap    = gap[primary_axis];
+    const float secondary_gap  = gap[secondary_axis];
+    const float tertiary_gap   = gap[tertiary_axis];
+    const float cap_primary    = volume.max[primary_axis]   - volume.min[primary_axis];
+    const float cap_secondary  = volume.max[secondary_axis] - volume.min[secondary_axis];
+    const float epsilon        = 1.0e-4f;
+
+    // Collect direct Node children with their measured content boxes.
+    std::vector<std::shared_ptr<Node>> children;
+    std::vector<erhe::math::Aabb>      contents;
+    for (const std::shared_ptr<erhe::Hierarchy>& child_item : layout_node.get_children()) {
+        const std::shared_ptr<Node> child = std::dynamic_pointer_cast<Node>(child_item);
+        if (!child) {
+            continue;
+        }
+        erhe::math::Aabb content = measure_child_content(*child);
+        if (is_empty(content)) {
+            content.min = glm::vec3{0.0f, 0.0f, 0.0f};
+            content.max = glm::vec3{0.0f, 0.0f, 0.0f};
+        }
+        children.push_back(child);
+        contents.push_back(content);
+    }
+
+    // Pass 1a: group children into lines along the primary axis (wrap on cap_primary).
+    std::vector<Flow_line> lines;
+    Flow_line current_line;
+    for (std::size_t i = 0; i < children.size(); ++i) {
+        const float primary_len   = contents[i].max[primary_axis]   - contents[i].min[primary_axis];
+        const float secondary_len = contents[i].max[secondary_axis] - contents[i].min[secondary_axis];
+        const float tertiary_len  = contents[i].max[tertiary_axis]  - contents[i].min[tertiary_axis];
+        float add_primary = (current_line.members.empty() ? 0.0f : primary_gap) + primary_len;
+        if (!current_line.members.empty() && ((current_line.used_p + add_primary) > (cap_primary + epsilon))) {
+            lines.push_back(current_line);
+            current_line = Flow_line{};
+            add_primary = primary_len;
+        }
+        current_line.used_p  += add_primary;
+        current_line.cross_s  = std::max(current_line.cross_s, secondary_len);
+        current_line.cross_t  = std::max(current_line.cross_t, tertiary_len);
+        current_line.members.push_back(i);
+    }
+    if (!current_line.members.empty()) {
+        lines.push_back(current_line);
+    }
+
+    // Pass 1b: group lines into sheets along the secondary axis (wrap on cap_secondary).
+    std::vector<Flow_sheet> sheets;
+    Flow_sheet current_sheet;
+    for (std::size_t line_index = 0; line_index < lines.size(); ++line_index) {
+        const float line_cross_s = lines[line_index].cross_s;
+        float add_secondary = (current_sheet.line_indices.empty() ? 0.0f : secondary_gap) + line_cross_s;
+        if (!current_sheet.line_indices.empty() && ((current_sheet.used_s + add_secondary) > (cap_secondary + epsilon))) {
+            sheets.push_back(current_sheet);
+            current_sheet = Flow_sheet{};
+            add_secondary = line_cross_s;
+        }
+        current_sheet.used_s  += add_secondary;
+        current_sheet.cross_t  = std::max(current_sheet.cross_t, lines[line_index].cross_t);
+        current_sheet.line_indices.push_back(line_index);
+    }
+    if (!current_sheet.line_indices.empty()) {
+        sheets.push_back(current_sheet);
+    }
+
+    // Pass 2: assign each child a cell and place it. Sheets stack along the
+    // tertiary axis (no further wrapping; overflow past the volume is allowed).
+    float tertiary_cursor = (tertiary_sign > 0.0f) ? volume.min[tertiary_axis] : volume.max[tertiary_axis];
+    for (const Flow_sheet& sheet : sheets) {
+        const std::pair<float, float> tertiary_interval = advance(tertiary_cursor, tertiary_sign, sheet.cross_t);
+        float secondary_cursor = (secondary_sign > 0.0f) ? volume.min[secondary_axis] : volume.max[secondary_axis];
+        for (const std::size_t line_index : sheet.line_indices) {
+            const Flow_line& line = lines[line_index];
+            const std::pair<float, float> secondary_interval = advance(secondary_cursor, secondary_sign, line.cross_s);
+            float primary_cursor = (primary_sign > 0.0f) ? volume.min[primary_axis] : volume.max[primary_axis];
+            for (const std::size_t i : line.members) {
+                const float primary_len = contents[i].max[primary_axis] - contents[i].min[primary_axis];
+                const std::pair<float, float> primary_interval = advance(primary_cursor, primary_sign, primary_len);
+
+                erhe::math::Aabb cell = volume;
+                cell.min[primary_axis]   = primary_interval.first;   cell.max[primary_axis]   = primary_interval.second;
+                cell.min[secondary_axis] = secondary_interval.first; cell.max[secondary_axis] = secondary_interval.second;
+                cell.min[tertiary_axis]  = tertiary_interval.first;  cell.max[tertiary_axis]  = tertiary_interval.second;
+
+                const Resolved_item params = resolve_item(*children[i]);
+                const Trs_transform placement = compute_child_placement(cell, contents[i], params.alignment, params.margin_min, params.margin_max);
+                children[i]->set_parent_from_node(placement);
+
+                primary_cursor += (primary_sign > 0.0f) ? primary_gap : -primary_gap;
+            }
+            secondary_cursor += (secondary_sign > 0.0f) ? secondary_gap : -secondary_gap;
+        }
+        tertiary_cursor += (tertiary_sign > 0.0f) ? tertiary_gap : -tertiary_gap;
     }
 }
 
