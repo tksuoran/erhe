@@ -1,4 +1,4 @@
-﻿#include "ImViewGuizmo.h"
+#include "ImViewGuizmo.h"
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -84,21 +84,132 @@ void Context::BeginFrame()
 	}
 }
 
-bool Context::Rotate(int64_t timeNs, glm::vec3& cameraPos, glm::quat& cameraRot, ImVec2 position, float sensitivity, float focusDistance)
+auto Context::get_region() const -> Region
+{
+	if (m_isZoomButtonHovered) {
+		return Region::zoom;
+	}
+	if (m_isPanButtonHovered) {
+		return Region::pan;
+	}
+	if (m_hoveredAxisID == 6) {
+		return Region::center;
+	}
+	if ((m_hoveredAxisID >= 0) && (m_hoveredAxisID <= 5)) {
+		return Region::axis;
+	}
+	return Region::none;
+}
+
+auto Context::get_hovered_axis() const -> int
+{
+	return ((m_hoveredAxisID >= 0) && (m_hoveredAxisID <= 5)) ? m_hoveredAxisID : -1;
+}
+
+void Context::begin_tool(Region region)
+{
+	switch (region) {
+		case Region::center: m_activeTool = TOOL_GIZMO; break;
+		case Region::zoom:   m_activeTool = TOOL_ZOOM;  break;
+		case Region::pan:    m_activeTool = TOOL_PAN;   break;
+		case Region::axis:   // fallthrough - axis handle uses click-snap, not a drag tool
+		case Region::none:   // fallthrough
+		default:             m_activeTool = TOOL_NONE;  break;
+	}
+	m_isAnimating = false;
+}
+
+void Context::end_tool()
+{
+	m_activeTool = TOOL_NONE;
+}
+
+bool Context::drag(glm::vec3& cameraPos, glm::quat& cameraRot, glm::vec2 relative)
+{
+	switch (m_activeTool) {
+		case TOOL_GIZMO: {
+			constexpr float sensitivity = 0.01f;
+			const float     yawAngle      = -relative.x * sensitivity;
+			const float     pitchAngle    = -relative.y * sensitivity;
+			const glm::quat yawRotation   = glm::angleAxis(yawAngle, dirUp);
+			const glm::vec3 rightAxis     = cameraRot * dirXPos;
+			const glm::quat pitchRotation = glm::angleAxis(pitchAngle, rightAxis);
+			const glm::quat totalRotation = yawRotation * pitchRotation;
+			cameraPos = totalRotation * cameraPos;
+			cameraRot = totalRotation * cameraRot;
+			return true;
+		}
+		case TOOL_ZOOM: {
+			constexpr float zoomSpeed = 0.005f;
+			if (relative.y != 0.0f) {
+				const glm::vec3 cameraForward = cameraRot * dirZNeg;
+				cameraPos += cameraForward * -relative.y * zoomSpeed;
+				return true;
+			}
+			return false;
+		}
+		case TOOL_PAN: {
+			constexpr float panSpeed = 0.001f;
+			if ((relative.x != 0.0f) || (relative.y != 0.0f)) {
+				cameraPos += cameraRot * dirXPos * -relative.x * panSpeed; // Inverted horizontal
+				cameraPos += cameraRot * dirYPos *  relative.y * panSpeed; // Natural vertical
+				return true;
+			}
+			return false;
+		}
+		default:
+			return false;
+	}
+}
+
+bool Context::snap(glm::vec3& cameraPos, glm::quat& cameraRot, int axisId, int64_t timeNs, float focusDistance)
+{
+	if ((axisId < 0) || (axisId > 5)) {
+		return false;
+	}
+
+	Style& style = GetStyle();
+
+	const LookAtOrientation& targetOrientation = orientations[axisId];
+	glm::quat targetRotation = glm::quatLookAt(targetOrientation.lookAt, targetOrientation.up);
+	const float rotationDiff = std::abs(glm::dot(glm::normalize(targetRotation), glm::normalize(cameraRot)));
+	if (rotationDiff > 0.999f) {
+		targetRotation = glm::quatLookAt(-targetOrientation.lookAt, targetOrientation.up);
+	}
+	glm::vec3 targetDir      = targetRotation * dirZNeg;
+	glm::vec3 cameraForward  = cameraRot * dirZNeg;
+	glm::vec3 lookAtPosition = cameraPos + cameraForward * focusDistance;
+	glm::vec3 targetPosition = lookAtPosition - focusDistance * targetDir;
+
+	if (style.animateSnap && (style.snapAnimationDurationNs > 0.0)) {
+		bool pos_is_different = glm::length2(cameraPos - targetPosition) > 0.0001f;
+		bool rot_is_different = (1.0f - glm::abs(glm::dot(cameraRot, targetRotation))) > 0.0001f;
+
+		if (pos_is_different || rot_is_different) {
+			m_isAnimating          = true;
+			m_animationStartTimeNs = timeNs;
+			m_startPos             = cameraPos;
+			m_targetPos            = targetPosition;
+			m_lookAtPos            = lookAtPosition;
+			m_focusDistance        = focusDistance;
+			m_startRot             = glm::normalize(cameraRot);
+			m_targetRot            = glm::normalize(targetRotation);
+		}
+		// Camera is moved over subsequent frames by draw_rotate's animation step.
+		return false;
+	}
+
+	cameraRot = targetRotation;
+	cameraPos = targetPosition;
+	return true;
+}
+
+bool Context::draw_rotate(int64_t timeNs, glm::vec3& cameraPos, glm::quat& cameraRot, ImVec2 position)
 {
 	ImGuiIO&    io          = ImGui::GetIO();
 	ImDrawList* drawList    = ImGui::GetWindowDrawList();
 	Style&      style       = GetStyle();
 	bool        wasModified = false;
-
-	// Global release check
-	const bool allowMouse = ImGui::IsWindowFocused();
-	const bool leftMouseButtonDown = allowMouse && ImGui::IsMouseDown(ImGuiMouseButton_Left);
-	const bool leftMouseButtonReleased = allowMouse && ImGui::IsMouseReleased(ImGuiMouseButton_Left);
-	const bool leftMouseButtonDragging = allowMouse && ImGui::IsMouseDragging(ImGuiMouseButton_Left);
-	if (!leftMouseButtonDown && (m_activeTool != TOOL_NONE)) {
-		m_activeTool = TOOL_NONE;
-	}
 
 	// Animation logic
 	if (m_isAnimating) {
@@ -157,6 +268,9 @@ bool Context::Rotate(int64_t timeNs, glm::vec3& cameraPos, glm::quat& cameraRot,
 		};
 	};
 
+	// Hover detection (read-only; uses the ImGui cursor position for highlighting and
+	// for the region query that erhe::commands reads). Not computed while a tool is
+	// active or while the snap animation is playing.
 	if ((m_activeTool == TOOL_NONE) && !m_isAnimating) {
 		const float halfGizmoSize  = gizmoDiameter / 2.f;
 		ImVec2      mousePos       = io.MousePos;
@@ -227,68 +341,14 @@ bool Context::Rotate(int64_t timeNs, glm::vec3& cameraPos, glm::quat& cameraRot,
 		drawList->AddText(font, scaledFontSize,{textPos.x - textSize.x * 0.5f, textPos.y - textSize.y * 0.5f}, isPos ? style.labelColorPos : style.labelColorNeg, label);
 	}
 
-	// Drag logic
-
-	// Snap
-	if (leftMouseButtonReleased && (m_hoveredAxisID >= 0) && (m_hoveredAxisID <= 5) && !leftMouseButtonDragging) {
-		const LookAtOrientation& targetOrientation = orientations[m_hoveredAxisID];
-		glm::quat targetRotation = glm::quatLookAt(targetOrientation.lookAt, targetOrientation.up);
-		const float rotationDiff = std::abs(glm::dot(glm::normalize(targetRotation), glm::normalize(cameraRot)));
-		if (rotationDiff > 0.999f) {
-			targetRotation = glm::quatLookAt(-targetOrientation.lookAt, targetOrientation.up);
-		}
-		glm::vec3 targetDir      = targetRotation * dirZNeg;
-		glm::vec3 cameraForward  = cameraRot * dirZNeg;
-		glm::vec3 lookAtPosition = cameraPos + cameraForward * focusDistance;
-		glm::vec3 targetPosition = lookAtPosition - focusDistance * targetDir;
-
-		if (style.animateSnap && (style.snapAnimationDurationNs > 0.0)) {
-			bool pos_is_different = glm::length2(cameraPos - targetPosition) > 0.0001f;
-			bool rot_is_different = (1.0f - glm::abs(glm::dot(cameraRot, targetRotation))) > 0.0001f;
-
-			if (pos_is_different || rot_is_different) {
-				m_isAnimating          = true;
-				m_animationStartTimeNs = timeNs;
-				m_startPos             = cameraPos;
-				m_targetPos            = targetPosition;
-				m_lookAtPos            = lookAtPosition;
-				m_focusDistance        = focusDistance;
-				m_startRot             = glm::normalize(cameraRot);
-				m_targetRot            = glm::normalize(targetRotation);
-			}
-		} else {
-			cameraRot = targetRotation;
-			cameraPos = targetPosition;
-			wasModified = true;
-		}
-	} else if (leftMouseButtonDown) {
-		if ((m_activeTool == TOOL_NONE) && (m_hoveredAxisID == 6)) {
-			m_activeTool = TOOL_GIZMO;
-			m_isAnimating = false;
-		}
-	}
-
-	if (m_activeTool == TOOL_GIZMO) {
-		float     yawAngle      = -io.MouseDelta.x * sensitivity;
-		float     pitchAngle    = -io.MouseDelta.y * sensitivity;
-		glm::quat yawRotation   = glm::angleAxis(yawAngle, dirUp);
-		glm::vec3 rightAxis     = cameraRot * dirXPos;
-		glm::quat pitchRotation = angleAxis(pitchAngle, rightAxis);
-		glm::quat totalRotation = yawRotation * pitchRotation;
-		cameraPos = totalRotation * cameraPos;
-		cameraRot = totalRotation * cameraRot;
-		wasModified = true;
-	}
-
 	return wasModified;
 }
 
-bool Context::Zoom(glm::vec3& cameraPos, const glm::quat& cameraRot, ImVec2 position, float zoomSpeed)
+void Context::draw_zoom(ImVec2 position)
 {
-	ImGuiIO&    io          = ImGui::GetIO();
-	ImDrawList* drawList    = ImGui::GetWindowDrawList();
-	Style&      style       = GetStyle();
-	bool        wasModified = false;
+	ImGuiIO&    io       = ImGui::GetIO();
+	ImDrawList* drawList = ImGui::GetWindowDrawList();
+	Style&      style    = GetStyle();
 
 	const float  radius = style.toolButtonRadius * style.scale;
 	const ImVec2 center = ImVec2{position.x + radius, position.y + radius};
@@ -301,24 +361,6 @@ bool Context::Zoom(glm::vec3& cameraPos, const glm::quat& cameraRot, ImVec2 posi
 	}
 
 	m_isZoomButtonHovered = isHovered;
-
-	// Start Drag
-	const bool allowMouse = ImGui::IsWindowFocused();
-	const bool leftMouseButtonDown = allowMouse && ImGui::IsMouseDown(ImGuiMouseButton_Left);
-	if (isHovered && leftMouseButtonDown && (m_activeTool == TOOL_NONE)) {
-		m_activeTool = TOOL_ZOOM;
-		m_isAnimating = false;
-	}
-
-	// Perform Zoom
-	if (m_activeTool == TOOL_ZOOM) {
-		if (io.MouseDelta.y != 0.0f) {
-			// Use the camera's local forward vector for zooming
-			glm::vec3 cameraForward = cameraRot * dirZNeg;
-			cameraPos += cameraForward * -io.MouseDelta.y * zoomSpeed;
-			wasModified = true;
-		}
-	}
 
 	// Draw
 	ImU32 bgColor = style.toolButtonColor;
@@ -351,16 +393,13 @@ bool Context::Zoom(glm::vec3& cameraPos, const glm::quat& cameraRot, ImVec2 posi
 	ImVec2 plusHorizStart = { center.x + (-radius / 2.0f + p / 2.0f) * iconScale, center.y - (p / 2.0f) * iconScale };
 	ImVec2 plusHorizEnd   = { center.x + ( radius / 2.0f - p * 1.5f) * iconScale, center.y - (p / 2.0f) * iconScale };
 	drawList->AddLine(plusHorizStart, plusHorizEnd, iconColor, th);
-
-	return wasModified;
 }
 
-bool Context::Pan(glm::vec3& cameraPos, const glm::quat& cameraRot, ImVec2 position, float panSpeed)
+void Context::draw_pan(ImVec2 position)
 {
-	ImGuiIO&    io          = ImGui::GetIO();
-	ImDrawList* drawList    = ImGui::GetWindowDrawList();
-	Style&      style       = GetStyle();
-	bool        wasModified = false;
+	ImGuiIO&    io       = ImGui::GetIO();
+	ImDrawList* drawList = ImGui::GetWindowDrawList();
+	Style&      style    = GetStyle();
 
 	const float  radius = style.toolButtonRadius * style.scale;
 	const ImVec2 center = ImVec2{position.x + radius, position.y + radius};
@@ -373,24 +412,6 @@ bool Context::Pan(glm::vec3& cameraPos, const glm::quat& cameraRot, ImVec2 posit
 		}
 	}
 	m_isPanButtonHovered = isHovered;
-
-	// Start Drag
-	const bool allowMouse = ImGui::IsWindowFocused();
-	const bool leftMouseButtonDown = allowMouse && ImGui::IsMouseDown(ImGuiMouseButton_Left);
-	if (isHovered && leftMouseButtonDown && (m_activeTool == TOOL_NONE)) {
-		m_activeTool = TOOL_PAN;
-		m_isAnimating = false;
-	}
-
-	// Perform Pan
-	if (m_activeTool == TOOL_PAN) {
-		if ((io.MouseDelta.x != 0.0f) || (io.MouseDelta.y != 0.0f)) {
-			// Pan along the camera's local axes with natural "drag" controls
-			cameraPos += cameraRot * dirXPos * -io.MouseDelta.x * panSpeed; // Inverted horizontal
-			cameraPos += cameraRot * dirYPos *  io.MouseDelta.y * panSpeed; // Natural vertical
-			wasModified = true;
-		}
-	}
 
 	// Drawing
 
@@ -424,8 +445,6 @@ bool Context::Pan(glm::vec3& cameraPos, const glm::quat& cameraRot, ImVec2 posit
 	const ImVec2 rightTip = { center.x + size, center.y };
 	drawList->AddLine({ rightTip.x - arm, rightTip.y - arm }, rightTip, iconColor, th);
 	drawList->AddLine({ rightTip.x - arm, rightTip.y + arm }, rightTip, iconColor, th);
-
-	return wasModified;
 }
 
 } // namespace ImViewGuizmo

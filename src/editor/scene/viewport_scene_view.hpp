@@ -40,6 +40,10 @@ namespace erhe::scene_renderer {
     class Light_projections;
 }
 
+namespace ImViewGuizmo {
+    class Context;
+}
+
 struct Viewport_config_data;
 
 namespace editor {
@@ -136,6 +140,10 @@ public:
     [[nodiscard]] auto get_show_navigation_gizmo           () const -> bool;
     [[nodiscard]] auto get_cursor_relative_hold            () const -> bool;
 
+    // Per-viewport navigation gizmo (ImGui overlay). Drawn by Viewport_window and
+    // driven (orbit/zoom/pan/snap) by Navigation_gizmo_tool via erhe::commands.
+    [[nodiscard]] auto get_navigation_gizmo                () -> ImViewGuizmo::Context&;
+
 private:
     void update_hover_with_id_render();
 
@@ -159,6 +167,7 @@ private:
     bool                               m_is_scene_view_hovered{false};
     bool                               m_show_navigation_gizmo{true};
     bool                               m_relative_hold_enable{false};
+    std::unique_ptr<ImViewGuizmo::Context> m_navigation_gizmo;
 };
 
 }

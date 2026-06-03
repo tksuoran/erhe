@@ -73,6 +73,7 @@ class Jolt_debug_renderer;
 class Material_paint_tool;
 class Material_preview;
 class Move_tool;
+class Navigation_gizmo_tool;
 class Operation_stack;
 class Paint_tool;
 class Physics_tool;
@@ -166,6 +167,7 @@ public:
     Brush_preview*                          brush_preview         {nullptr};
     erhe::scene_renderer::Mesh_memory*      mesh_memory           {nullptr};
     Move_tool*                              move_tool             {nullptr};
+    Navigation_gizmo_tool*                  navigation_gizmo_tool {nullptr};
     Operation_stack*                        operation_stack       {nullptr};
     Paint_tool*                             paint_tool            {nullptr};
     Physics_tool*                           physics_tool          {nullptr};

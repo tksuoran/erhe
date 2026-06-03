@@ -98,6 +98,17 @@ enum ActiveTool {
 	TOOL_PAN
 };
 
+// Interactive region of the gizmo currently under the pointer. Computed during the
+// draw_* calls (read-only from io.MousePos) and queried by erhe::commands to decide
+// what a press/drag/click over the gizmo should do.
+enum class Region {
+	none,
+	axis,    // one of the six axis handles (snap-to-view on click); get_hovered_axis()
+	center,  // big center circle (orbit drag)
+	zoom,    // zoom tool button (dolly drag)
+	pan      // pan tool button (pan drag)
+};
+
 class Context {
 public:
 	bool IsHoveringGizmo() const;
@@ -105,9 +116,23 @@ public:
 	bool IsUsing        () const;
 	bool IsOver         () const;
 	void BeginFrame     ();
-	bool Rotate         (int64_t frameTimeNs, glm::vec3& cameraPos, glm::quat& cameraRot, ImVec2 position, float sensitivity, float focusDistance = 5.f);
-	bool Zoom           (glm::vec3& cameraPos, const glm::quat& cameraRot, ImVec2 position, float zoomSpeed = 0.005f);
-	bool Pan            (glm::vec3& cameraPos, const glm::quat& cameraRot, ImVec2 position, float panSpeed = 0.001f);
+
+	// Draw + hover only. These never read mouse buttons or deltas; all actionable
+	// input is driven through erhe::commands (see Navigation_gizmo_tool). draw_rotate
+	// also advances the snap animation and returns true when it moved the camera.
+	bool draw_rotate    (int64_t frameTimeNs, glm::vec3& cameraPos, glm::quat& cameraRot, ImVec2 position);
+	void draw_zoom      (ImVec2 position);
+	void draw_pan       (ImVec2 position);
+
+	// Hover queries (reflect the most recent draw_* pass).
+	[[nodiscard]] auto get_region       () const -> Region;
+	[[nodiscard]] auto get_hovered_axis () const -> int;
+
+	// Actions, invoked by erhe::commands.
+	void begin_tool(Region region);
+	bool drag      (glm::vec3& cameraPos, glm::quat& cameraRot, glm::vec2 relative);
+	void end_tool  ();
+	bool snap      (glm::vec3& cameraPos, glm::quat& cameraRot, int axisId, int64_t frameTimeNs, float focusDistance);
 
 private:
 	int        m_hoveredAxisID       = -1;

@@ -81,6 +81,7 @@
 #include "scene/scene_root.hpp"
 #include "scene/viewport_scene_views.hpp"
 #include "tools/clipboard.hpp"
+#include "tools/navigation_gizmo_tool.hpp"
 #include "tools/tools.hpp"
 #include "transform/move_tool.hpp"
 #include "transform/rotate_tool.hpp"
@@ -1427,6 +1428,12 @@ public:
                     *m_app_message_bus.get(),
                     *m_tools.get()
                 );
+                m_navigation_gizmo_tool = std::make_unique<Navigation_gizmo_tool>(
+                    *m_commands.get(),
+                    m_app_context,
+                    *m_app_message_bus.get(),
+                    *m_tools.get()
+                );
             }
             ERHE_TASK_FOOTER(
                 .name("Tools")
@@ -2170,6 +2177,7 @@ public:
         m_app_context.editor_settings          = &m_editor_settings;
         m_app_context.app_windows              = m_app_windows           .get();
         m_app_context.fly_camera_tool          = m_fly_camera_tool       .get();
+        m_app_context.navigation_gizmo_tool    = m_navigation_gizmo_tool .get();
         m_app_context.grid_tool                = m_grid_tool             .get();
 #if defined(ERHE_XR_LIBRARY_OPENXR)
         m_app_context.hand_tracker             = m_hand_tracker          .get();
@@ -2573,6 +2581,7 @@ public:
     std::unique_ptr<Tools            >                       m_tools;
     std::unique_ptr<Scene_builder    >                       m_scene_builder;
     std::unique_ptr<Fly_camera_tool  >                       m_fly_camera_tool;
+    std::unique_ptr<Navigation_gizmo_tool>                   m_navigation_gizmo_tool;
     std::unique_ptr<Headset_view     >                       m_headset_view;
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     std::unique_ptr<erhe::xr::Headset>                       m_headset;

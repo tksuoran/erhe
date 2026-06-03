@@ -47,7 +47,6 @@ Viewport_window::Viewport_window(
     , m_app_context            {app_context}
     , m_viewport_scene_view    {viewport_scene_view}
     , m_rendergraph_output_node{rendergraph_output_node}
-    , m_nagivation_gizmo       {std::make_unique<ImViewGuizmo::Context>()}
 {
     show_window();
 
@@ -223,25 +222,19 @@ void Viewport_window::imgui()
         bool modified = false;
         const int64_t time_ns = m_app_context.time->get_host_system_time_ns();
 
-        const erhe::math::Aabb& framed_aabb = m_app_context.fly_camera_tool->get_framed_aabb();
-        const float focus_distance = framed_aabb.is_valid()
-            ? glm::distance(framed_aabb.center(), camera_position)
-            : 2.0f;
-
-        m_nagivation_gizmo->BeginFrame();
-        if (m_nagivation_gizmo->Rotate(time_ns, camera_position, camera_rotation, position, 0.01f, focus_distance)) {
+        // Draw + hover only. Input (orbit/zoom/pan/snap) is driven through erhe::commands
+        // by Navigation_gizmo_tool, which writes the camera directly. The only camera
+        // change applied here is the snap animation advanced inside draw_rotate.
+        ImViewGuizmo::Context& gizmo = viewport_scene_view->get_navigation_gizmo();
+        gizmo.BeginFrame();
+        if (gizmo.draw_rotate(time_ns, camera_position, camera_rotation, position)) {
             modified = true;
         }
         position.y += rotate_radius;
         position.x = window_position.x + window_size.x - 2.0f * button_radius;
-        if (m_nagivation_gizmo->Zoom(camera_position, camera_rotation, position)) {
-            modified = true;
-        }
+        gizmo.draw_zoom(position);
         position.y += 2.0f * button_radius;
-        if (m_nagivation_gizmo->Pan(camera_position, camera_rotation, position)) {
-            modified = true;
-            node->set_world_from_node(transform);
-        }
+        gizmo.draw_pan(position);
 
         if (modified) {
             transform.set_translation(camera_position);
@@ -255,8 +248,7 @@ void Viewport_window::imgui()
             );
         }
 
-        const bool using_navigation_gizmo = m_nagivation_gizmo->IsUsing();
-        m_request_cursor_relative_hold = using_navigation_gizmo;
+        m_request_cursor_relative_hold = gizmo.IsUsing();
     }
     ImGui::EndChild();
 }

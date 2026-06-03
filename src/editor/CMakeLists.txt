@@ -345,6 +345,8 @@ erhe_target_sources_grouped(
     tools/hud.hpp
     tools/material_paint_tool.cpp
     tools/material_paint_tool.hpp
+    tools/navigation_gizmo_tool.cpp
+    tools/navigation_gizmo_tool.hpp
     tools/paint_tool.cpp
     tools/paint_tool.hpp
     tools/selection_tool.cpp

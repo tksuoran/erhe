@@ -9,9 +9,6 @@
 
 #include <memory>
 
-namespace ImViewGuizmo {
-    class Context;
-}
 namespace erhe::imgui {
     class Imgui_host;
     class Imgui_windows;
@@ -76,7 +73,6 @@ private:
     bool                                               m_viewport_child_window_focused{false};
     bool                                               m_viewport_child_window_hovered{false};
 
-    std::unique_ptr<ImViewGuizmo::Context>             m_nagivation_gizmo;
     bool                                               m_request_cursor_relative_hold{false};
 };
 

@@ -2,6 +2,7 @@
 
 #include "scene/viewport_scene_view.hpp"
 
+#include "ImViewGuizmo.h"
 #include "config/generated/viewport_config_data.hpp"
 #include "app_context.hpp"
 #include "editor_log.hpp"
@@ -105,6 +106,8 @@ Viewport_scene_view::Viewport_scene_view(
     , m_camera         {camera}
 {
     set_scene_root(scene_root);
+
+    m_navigation_gizmo = std::make_unique<ImViewGuizmo::Context>();
 
     // We need shadows rendered before
     register_input("shadow_maps", erhe::rendergraph::Rendergraph_node_key::shadow_maps);
@@ -724,6 +727,11 @@ auto Viewport_scene_view::get_shadow_render_node() const -> Shadow_render_node*
 auto Viewport_scene_view::get_show_navigation_gizmo() const -> bool
 {
     return m_show_navigation_gizmo;
+}
+
+auto Viewport_scene_view::get_navigation_gizmo() -> ImViewGuizmo::Context&
+{
+    return *m_navigation_gizmo;
 }
 
 void Viewport_scene_view::viewport_toolbar()
