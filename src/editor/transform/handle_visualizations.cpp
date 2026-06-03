@@ -26,9 +26,12 @@
 #include "erhe_primitive/primitive.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/mesh.hpp"
+#include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_hash/xxhash.hpp"
 #include "erhe_profile/profile.hpp"
+
+#include <glm/gtc/quaternion.hpp>
 
 namespace editor {
 
@@ -50,6 +53,11 @@ namespace {
 
     constexpr float arrow_tip_render = arrow_cylinder_length + arrow_cone_length_render;
     constexpr float arrow_tip_collision = arrow_cylinder_length + arrow_cone_length_collision;
+
+    constexpr float box_scale_cone_half_length_render    = 0.3f;
+    constexpr float box_scale_cone_radius_render         = 0.2f;
+    constexpr float box_scale_cone_half_length_collision = box_scale_cone_half_length_render * 1.5f;
+    constexpr float box_scale_cone_radius_collision      = box_scale_cone_radius_render * 2.0f;
 }
 
 auto Handle_visualizations::c_str(const Mode mode) -> const char*
@@ -72,11 +80,13 @@ Handle_visualizations::Handle_visualizations(
     ERHE_PROFILE_FUNCTION();
 
     m_tool_node = std::make_shared<erhe::scene::Node>("Trs");
+    m_box_node  = std::make_shared<erhe::scene::Node>("Trs box");
     const auto scene_root = tools.get_tool_scene_root();
 
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{scene_root->item_host_mutex};
 
     m_tool_node->set_parent(scene_root->get_hosted_scene()->get_root_node());
+    m_box_node ->set_parent(scene_root->get_hosted_scene()->get_root_node());
 
     m_pos_x_material        = make_material(tools, "X+",        glm::vec3{1.00f, 0.00f, 0.0f}, Mode::Normal);
     m_pos_y_material        = make_material(tools, "Y+",        glm::vec3{0.23f, 1.00f, 0.0f}, Mode::Normal);
@@ -122,6 +132,7 @@ Handle_visualizations::Handle_visualizations(
     const auto thin_box       = make_box           (mesh_memory, false);
     ////const auto uniform_box    = make_box           (mesh_memory, true);
     const auto rotate_ring    = make_rotate_ring   (mesh_memory);
+    const auto box_scale_cone = make_box_scale_cone(mesh_memory);
 
     m_x_arrow_pos_cylinder_mesh  = make_mesh(tools, "+X arrow cylinder", m_pos_x_material, arrow_cylinder);
     m_x_arrow_neg_cylinder_mesh  = make_mesh(tools, "-X arrow cylinder", m_pos_x_material, arrow_cylinder);
@@ -150,6 +161,28 @@ Handle_visualizations::Handle_visualizations(
     m_xy_scale_box_mesh          = make_mesh(tools, "XY scale box",      m_pos_z_material, thin_box      );
     m_xz_scale_box_mesh          = make_mesh(tools, "XZ scale box",      m_pos_y_material, thin_box      );
     m_yz_scale_box_mesh          = make_mesh(tools, "YZ scale box",      m_pos_x_material, thin_box      );
+    m_box_scale_pos_x_mesh       = make_mesh(tools, "+X box scale cone", m_pos_x_material, box_scale_cone);
+    m_box_scale_neg_x_mesh       = make_mesh(tools, "-X box scale cone", m_neg_x_material, box_scale_cone);
+    m_box_scale_pos_y_mesh       = make_mesh(tools, "+Y box scale cone", m_pos_y_material, box_scale_cone);
+    m_box_scale_neg_y_mesh       = make_mesh(tools, "-Y box scale cone", m_neg_y_material, box_scale_cone);
+    m_box_scale_pos_z_mesh       = make_mesh(tools, "+Z box scale cone", m_pos_z_material, box_scale_cone);
+    m_box_scale_neg_z_mesh       = make_mesh(tools, "-Z box scale cone", m_neg_z_material, box_scale_cone);
+
+    // The bounding-box cones live in world space (sized to the selection bounding box),
+    // so they hang off m_box_node rather than the view-scaled m_tool_node.
+    m_box_scale_pos_x_mesh->get_node()->set_parent(m_box_node);
+    m_box_scale_neg_x_mesh->get_node()->set_parent(m_box_node);
+    m_box_scale_pos_y_mesh->get_node()->set_parent(m_box_node);
+    m_box_scale_neg_y_mesh->get_node()->set_parent(m_box_node);
+    m_box_scale_pos_z_mesh->get_node()->set_parent(m_box_node);
+    m_box_scale_neg_z_mesh->get_node()->set_parent(m_box_node);
+
+    m_handles[m_box_scale_pos_x_mesh.get()] = Handle::e_handle_box_scale_pos_x;
+    m_handles[m_box_scale_neg_x_mesh.get()] = Handle::e_handle_box_scale_neg_x;
+    m_handles[m_box_scale_pos_y_mesh.get()] = Handle::e_handle_box_scale_pos_y;
+    m_handles[m_box_scale_neg_y_mesh.get()] = Handle::e_handle_box_scale_neg_y;
+    m_handles[m_box_scale_pos_z_mesh.get()] = Handle::e_handle_box_scale_pos_z;
+    m_handles[m_box_scale_neg_z_mesh.get()] = Handle::e_handle_box_scale_neg_z;
 
     m_handles[m_x_arrow_pos_cylinder_mesh.get()] = Handle::e_handle_translate_pos_x;
     m_handles[m_x_arrow_neg_cylinder_mesh.get()] = Handle::e_handle_translate_neg_x;
@@ -329,9 +362,11 @@ void Handle_visualizations::update_mesh_visibility(bool precondition, const std:
 
 void Handle_visualizations::update_visibility(Transform_tool_settings& settings)
 {
-    const bool translate = settings.show_translate;
-    const bool rotate    = settings.show_rotate;
-    const bool scale     = settings.show_scale;
+    const bool translate  = settings.show_translate;
+    const bool rotate     = settings.show_rotate;
+    const bool scale      = settings.show_scale;
+    const bool scale_box  = scale && (settings.scale_gizmo_mode == Scale_gizmo_mode::bounding_box);
+    const bool scale_axis = scale && (settings.scale_gizmo_mode == Scale_gizmo_mode::basic);
     update_mesh_visibility(translate, m_x_arrow_pos_cylinder_mesh);
     update_mesh_visibility(translate, m_x_arrow_neg_cylinder_mesh);
     update_mesh_visibility(translate, m_x_arrow_pos_cone_mesh);
@@ -350,16 +385,21 @@ void Handle_visualizations::update_visibility(Transform_tool_settings& settings)
     update_mesh_visibility(rotate,    m_x_rotate_ring_mesh   );
     update_mesh_visibility(rotate,    m_y_rotate_ring_mesh   );
     update_mesh_visibility(rotate,    m_z_rotate_ring_mesh   );
-    update_mesh_visibility(scale,     m_x_neg_scale_mesh     );
-    update_mesh_visibility(scale,     m_x_pos_scale_mesh     );
-    update_mesh_visibility(scale,     m_y_neg_scale_mesh     );
-    update_mesh_visibility(scale,     m_y_pos_scale_mesh     );
-    update_mesh_visibility(scale,     m_z_neg_scale_mesh     );
-    update_mesh_visibility(scale,     m_z_pos_scale_mesh     );
-    update_mesh_visibility(scale,     m_xy_scale_box_mesh    );
-    update_mesh_visibility(scale,     m_xz_scale_box_mesh    );
-    update_mesh_visibility(scale,     m_yz_scale_box_mesh    );
-
+    update_mesh_visibility(scale_axis, m_x_neg_scale_mesh     );
+    update_mesh_visibility(scale_axis, m_x_pos_scale_mesh     );
+    update_mesh_visibility(scale_axis, m_y_neg_scale_mesh     );
+    update_mesh_visibility(scale_axis, m_y_pos_scale_mesh     );
+    update_mesh_visibility(scale_axis, m_z_neg_scale_mesh     );
+    update_mesh_visibility(scale_axis, m_z_pos_scale_mesh     );
+    update_mesh_visibility(scale_axis, m_xy_scale_box_mesh    );
+    update_mesh_visibility(scale_axis, m_xz_scale_box_mesh    );
+    update_mesh_visibility(scale_axis, m_yz_scale_box_mesh    );
+    update_mesh_visibility(scale_box,  m_box_scale_pos_x_mesh );
+    update_mesh_visibility(scale_box,  m_box_scale_neg_x_mesh );
+    update_mesh_visibility(scale_box,  m_box_scale_pos_y_mesh );
+    update_mesh_visibility(scale_box,  m_box_scale_neg_y_mesh );
+    update_mesh_visibility(scale_box,  m_box_scale_pos_z_mesh );
+    update_mesh_visibility(scale_box,  m_box_scale_neg_z_mesh );
 }
 
 auto Handle_visualizations::get_mode_material(
@@ -395,6 +435,12 @@ auto Handle_visualizations::get_handle_material(const Handle handle, const Mode 
         case Handle::e_handle_scale_x        : return get_mode_material(mode, m_pos_x_active_material, m_pos_x_hover_material, m_pos_x_material);
         case Handle::e_handle_scale_y        : return get_mode_material(mode, m_pos_y_active_material, m_pos_y_hover_material, m_pos_y_material);
         case Handle::e_handle_scale_z        : return get_mode_material(mode, m_pos_z_active_material, m_pos_z_hover_material, m_pos_z_material);
+        case Handle::e_handle_box_scale_pos_x: return get_mode_material(mode, m_pos_x_active_material, m_pos_x_hover_material, m_pos_x_material);
+        case Handle::e_handle_box_scale_neg_x: return get_mode_material(mode, m_neg_x_active_material, m_neg_x_hover_material, m_neg_x_material);
+        case Handle::e_handle_box_scale_pos_y: return get_mode_material(mode, m_pos_y_active_material, m_pos_y_hover_material, m_pos_y_material);
+        case Handle::e_handle_box_scale_neg_y: return get_mode_material(mode, m_neg_y_active_material, m_neg_y_hover_material, m_neg_y_material);
+        case Handle::e_handle_box_scale_pos_z: return get_mode_material(mode, m_pos_z_active_material, m_pos_z_hover_material, m_pos_z_material);
+        case Handle::e_handle_box_scale_neg_z: return get_mode_material(mode, m_neg_z_active_material, m_neg_z_hover_material, m_neg_z_material);
         // TODO
         default: return {};
     }
@@ -531,6 +577,33 @@ auto Handle_visualizations::make_box(erhe::scene_renderer::Mesh_memory& mesh_mem
     return Part{mesh_memory, render_geometry, raytrace_geometry};
 }
 
+auto Handle_visualizations::make_box_scale_cone(erhe::scene_renderer::Mesh_memory& mesh_memory) -> Part
+{
+    ERHE_PROFILE_FUNCTION();
+
+    auto render_geometry   = std::make_shared<erhe::geometry::Geometry>();
+    auto raytrace_geometry = std::make_shared<erhe::geometry::Geometry>();
+    erhe::geometry::shapes::make_cone(
+        render_geometry->get_mesh(),
+        -box_scale_cone_half_length_render,
+         box_scale_cone_half_length_render,
+        box_scale_cone_radius_render,
+        true,
+        32,
+        4
+    );
+    erhe::geometry::shapes::make_cone(
+        raytrace_geometry->get_mesh(),
+        -box_scale_cone_half_length_collision,
+         box_scale_cone_half_length_collision,
+        box_scale_cone_radius_collision,
+        true,
+        22,
+        1
+    );
+    return Part{mesh_memory, render_geometry, raytrace_geometry};
+}
+
 auto Handle_visualizations::make_rotate_ring(erhe::scene_renderer::Mesh_memory& mesh_memory) -> Part
 {
     ERHE_PROFILE_FUNCTION();
@@ -627,6 +700,105 @@ void Handle_visualizations::update_transforms() //const uint64_t serial)
     const glm::vec3 origin = glm::vec3{world_from_anchor * glm::vec4{0.0f, 0.0, 0.0f, 1.0}};
 
     m_tool_node->set_parent_from_node(world_from_anchor * scale);
+
+    compute_selection_box();
+    update_box_handles();
+}
+
+void Handle_visualizations::compute_selection_box()
+{
+    m_box_valid = false;
+
+    // Use a rigid box frame (translation + rotation, no scale). This keeps the frame
+    // invertible even when the selection has a zero scale component, and makes the box
+    // AABB measure true world-space extents (so the drag math and the degenerate-recovery
+    // path both work in world units).
+    const Transform_tool_shared&   shared    = m_context.transform_tool->shared;
+    const Transform_tool_settings& settings  = shared.settings;
+    const glm::mat4                box_frame = settings.local
+        ? erhe::math::create_translation<float>(shared.world_from_anchor.get_translation()) * glm::mat4_cast(shared.world_from_anchor.get_rotation())
+        : erhe::math::create_translation<float>(shared.world_from_anchor.get_translation());
+    const glm::mat4 box_inv = glm::inverse(box_frame);
+    m_box_frame = box_frame;
+
+    erhe::math::Aabb aabb{};
+    bool             any{false};
+    for (const Transform_entry& entry : shared.entries) {
+        const std::shared_ptr<erhe::scene::Node>& node = entry.node;
+        if (!node) {
+            continue;
+        }
+        const glm::mat4 box_from_node = box_inv * node->world_from_node();
+        std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
+        if (mesh) {
+            for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh->get_primitives()) {
+                if (!mesh_primitive.primitive) {
+                    continue;
+                }
+                const erhe::math::Aabb local = mesh_primitive.primitive->get_bounding_box();
+                if (!local.is_valid()) {
+                    continue;
+                }
+                aabb.include(local.transformed_by(box_from_node));
+                any = true;
+            }
+        } else {
+            aabb.include(glm::vec3{box_from_node * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}});
+            any = true;
+        }
+    }
+
+    m_box_aabb  = aabb;
+    m_box_valid = any && aabb.is_valid();
+}
+
+void Handle_visualizations::update_box_handles()
+{
+    if (!m_box_valid || (m_scene_view == nullptr)) {
+        return;
+    }
+
+    const Transform_tool_shared&   shared   = m_context.transform_tool->shared;
+    const Transform_tool_settings& settings = shared.settings;
+
+    const float     distance_scale    = m_scene_view->get_config().gizmo_scale * m_view_distance / 100.0f;
+    const float     perspective_scale = m_scene_view->get_perspective_scale();
+    const float     scalar_scale      = distance_scale * perspective_scale;
+    const glm::mat4 cone_scale         = erhe::math::create_scale<float>(scalar_scale);
+    const glm::mat4 orient             = settings.local
+        ? glm::mat4_cast(shared.world_from_anchor.get_rotation())
+        : glm::mat4{1.0f};
+
+    using erhe::math::create_rotation;
+    const glm::mat4 r_pos_x{1.0f};
+    const glm::mat4 r_neg_x = create_rotation<float>(-glm::pi<float>(),         glm::vec3{0.0f, 1.0f, 0.0f});
+    const glm::mat4 r_pos_y = create_rotation<float>( glm::pi<float>() / 2.0f,  glm::vec3{0.0f, 0.0f, 1.0f});
+    const glm::mat4 r_neg_y = create_rotation<float>(-glm::pi<float>() / 2.0f,  glm::vec3{0.0f, 0.0f, 1.0f});
+    const glm::mat4 r_pos_z = create_rotation<float>(-glm::pi<float>() / 2.0f,  glm::vec3{0.0f, 1.0f, 0.0f});
+    const glm::mat4 r_neg_z = create_rotation<float>( glm::pi<float>() / 2.0f,  glm::vec3{0.0f, 1.0f, 0.0f});
+
+    const glm::vec3 center = m_box_aabb.center();
+    const glm::vec3 mn     = m_box_aabb.min;
+    const glm::vec3 mx     = m_box_aabb.max;
+
+    // The cone geometry is centered on its local origin (base at -half, apex at +half along
+    // +X). Offset it outward by half its length so the base rests on the bounding-box face
+    // and the tip points away from the box.
+    const glm::mat4 cone_base_on_face = erhe::math::create_translation<float>(
+        glm::vec3{box_scale_cone_half_length_render, 0.0f, 0.0f}
+    );
+    const auto place = [&](const std::shared_ptr<erhe::scene::Mesh>& mesh, const glm::vec3 face_center_box, const glm::mat4& r_axis) {
+        const glm::vec3 world_pos = glm::vec3{m_box_frame * glm::vec4{face_center_box, 1.0f}};
+        const glm::mat4 m         = erhe::math::create_translation<float>(world_pos) * orient * r_axis * cone_scale * cone_base_on_face;
+        mesh->get_node()->set_parent_from_node(m);
+    };
+
+    place(m_box_scale_pos_x_mesh, glm::vec3{mx.x,     center.y, center.z}, r_pos_x);
+    place(m_box_scale_neg_x_mesh, glm::vec3{mn.x,     center.y, center.z}, r_neg_x);
+    place(m_box_scale_pos_y_mesh, glm::vec3{center.x, mx.y,     center.z}, r_pos_y);
+    place(m_box_scale_neg_y_mesh, glm::vec3{center.x, mn.y,     center.z}, r_neg_y);
+    place(m_box_scale_pos_z_mesh, glm::vec3{center.x, center.y, mx.z    }, r_pos_z);
+    place(m_box_scale_neg_z_mesh, glm::vec3{center.x, center.y, mn.z    }, r_neg_z);
 }
 
 void Handle_visualizations::set_anchor(const erhe::scene::Trs_transform& world_from_anchor)

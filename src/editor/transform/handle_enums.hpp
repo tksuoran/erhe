@@ -24,7 +24,13 @@ enum class Handle : unsigned int {
     e_handle_scale_xy        = 16,
     e_handle_scale_xz        = 17,
     e_handle_scale_yz        = 18,
-    e_handle_scale_xyz       = 19 
+    e_handle_scale_xyz       = 19,
+    e_handle_box_scale_pos_x = 20,
+    e_handle_box_scale_neg_x = 21,
+    e_handle_box_scale_pos_y = 22,
+    e_handle_box_scale_neg_y = 23,
+    e_handle_box_scale_pos_z = 24,
+    e_handle_box_scale_neg_z = 25
 };
 
 enum class Handle_tool : unsigned int {
@@ -63,6 +69,7 @@ enum class Handle_type : unsigned int {
     e_handle_type_scale_axis      = 4,
     e_handle_type_scale_plane     = 5,
     e_handle_type_scale_uniform   = 6,
+    e_handle_type_box_scale       = 7,
 };
 
 class Axis_mask

@@ -226,6 +226,7 @@ private:
     void on_render_scene_view(Render_scene_view_message& message);
     void update_for_view    (Scene_view* scene_view);
     void update_hover       ();
+    auto update_box_face_hover(Scene_view* scene_view) -> bool;
     void render_rays    (erhe::scene::Node& node);
 
     Tool_window                         m_window;
@@ -240,6 +241,9 @@ private:
     erhe::commands::Drag_enable_command m_drag_enable_command;
     Handle                              m_hover_handle {Handle::e_handle_none};
     Handle                              m_active_handle{Handle::e_handle_none};
+    Handle                              m_box_face_hover_handle  {Handle::e_handle_none};
+    glm::vec3                           m_box_face_hover_position{0.0f};
+    bool                                m_box_face_hover_active   {false};
     std::shared_ptr<erhe::scene::Node>  m_tool_node;
     Subtool*                            m_hover_tool      {nullptr};
     Subtool*                            m_active_tool     {nullptr};

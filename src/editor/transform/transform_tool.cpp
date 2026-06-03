@@ -40,6 +40,9 @@
 
 #include <imgui/imgui.h>
 
+#include <cmath>
+#include <limits>
+
 namespace editor {
 
 using glm::normalize;
@@ -266,6 +269,33 @@ void Transform_tool::window_imgui()
         settings.local = false;
     }
 
+    ImGui::TextUnformatted("Scale gizmo");
+    if (
+        erhe::imgui::make_button(
+            "Basic",
+            (settings.scale_gizmo_mode == Scale_gizmo_mode::basic) ? erhe::imgui::Item_mode::active : erhe::imgui::Item_mode::normal,
+            button_size
+        )
+    ) {
+        if (settings.scale_gizmo_mode != Scale_gizmo_mode::basic) {
+            settings.scale_gizmo_mode = Scale_gizmo_mode::basic;
+            update_visibility();
+        }
+    }
+    ImGui::SameLine();
+    if (
+        erhe::imgui::make_button(
+            "Bounding box",
+            (settings.scale_gizmo_mode == Scale_gizmo_mode::bounding_box) ? erhe::imgui::Item_mode::active : erhe::imgui::Item_mode::normal,
+            button_size
+        )
+    ) {
+        if (settings.scale_gizmo_mode != Scale_gizmo_mode::bounding_box) {
+            settings.scale_gizmo_mode = Scale_gizmo_mode::bounding_box;
+            update_visibility();
+        }
+    }
+
     // ImGui::TextUnformatted(is_transform_tool_active() ? "Active" : "Inactive");
 
     //const bool show_translate = settings.show_translate;
@@ -485,25 +515,27 @@ void Transform_tool::update_hover()
     auto* scene_view = get_hover_scene_view();
     if (scene_view == nullptr) {
         log_trs_tool->debug("scene_view == nullptr");
-        if (m_hover_handle != Handle::e_handle_none) {
-            m_hover_handle = Handle::e_handle_none;
-        }
+        m_hover_handle          = Handle::e_handle_none;
+        m_box_face_hover_active = false;
         return;
     }
+
+    Handle new_handle = Handle::e_handle_none;
 
     const auto& tool = scene_view->get_hover(Hover_entry::tool_slot);
     std::shared_ptr<erhe::scene::Mesh> scene_mesh = tool.scene_mesh_weak.lock();
-    if (!tool.valid || !scene_mesh) {
-        if (m_hover_handle != Handle::e_handle_none) {
-            m_hover_handle = Handle::e_handle_none;
-        }
-        return;
+    if (tool.valid && scene_mesh) {
+        new_handle = get_handle(scene_mesh.get());
     }
 
-    const auto new_handle = get_handle(scene_mesh.get());
-    if (m_hover_handle == new_handle) {
-        return;
+    // When no gizmo mesh (e.g. a bounding-box cone) is hovered, fall back to a custom
+    // ray vs bounding-box-face test so every face is draggable without face meshes.
+    m_box_face_hover_active = false;
+    if ((new_handle == Handle::e_handle_none) && update_box_face_hover(scene_view)) {
+        new_handle              = m_box_face_hover_handle;
+        m_box_face_hover_active = true;
     }
+
     m_hover_handle = new_handle;
 
     m_hover_tool = [&]() -> Subtool* {
@@ -515,6 +547,78 @@ void Transform_tool::update_hover()
             default                                  : return nullptr;
         }
     }();
+}
+
+auto Transform_tool::update_box_face_hover(Scene_view* scene_view) -> bool
+{
+    if (
+        !shared.settings.show_scale ||
+        (shared.settings.scale_gizmo_mode != Scale_gizmo_mode::bounding_box)
+    ) {
+        return false;
+    }
+    Handle_visualizations* visualizations = shared.get_visualizations();
+    if ((visualizations == nullptr) || !visualizations->is_box_valid()) {
+        return false;
+    }
+
+    const std::optional<glm::vec3> origin_opt    = scene_view->get_control_ray_origin_in_world();
+    const std::optional<glm::vec3> direction_opt = scene_view->get_control_ray_direction_in_world();
+    if (!origin_opt.has_value() || !direction_opt.has_value()) {
+        return false;
+    }
+
+    const glm::mat4         box_frame = visualizations->get_box_frame();
+    const glm::mat4         box_inv   = glm::inverse(box_frame);
+    const erhe::math::Aabb& aabb      = visualizations->get_box_aabb();
+    const glm::vec3         o_box     = glm::vec3{box_inv * glm::vec4{origin_opt.value(),    1.0f}};
+    const glm::vec3         d_box     = glm::vec3{box_inv * glm::vec4{direction_opt.value(), 0.0f}};
+
+    const Handle pos_handles[3] = {
+        Handle::e_handle_box_scale_pos_x,
+        Handle::e_handle_box_scale_pos_y,
+        Handle::e_handle_box_scale_pos_z
+    };
+    const Handle neg_handles[3] = {
+        Handle::e_handle_box_scale_neg_x,
+        Handle::e_handle_box_scale_neg_y,
+        Handle::e_handle_box_scale_neg_z
+    };
+
+    float  best_t     {std::numeric_limits<float>::max()};
+    Handle best_handle{Handle::e_handle_none};
+    for (int axis = 0; axis < 3; ++axis) {
+        if (std::abs(d_box[axis]) < 1e-6f) {
+            continue;
+        }
+        const int axis_b = (axis + 1) % 3;
+        const int axis_c = (axis + 2) % 3;
+        for (int sign = 0; sign < 2; ++sign) {
+            const float face_coord = (sign == 0) ? aabb.max[axis] : aabb.min[axis];
+            const float t          = (face_coord - o_box[axis]) / d_box[axis];
+            if (t <= 0.0f) {
+                continue;
+            }
+            const glm::vec3 hit_box = o_box + (t * d_box);
+            if (
+                (hit_box[axis_b] < aabb.min[axis_b]) || (hit_box[axis_b] > aabb.max[axis_b]) ||
+                (hit_box[axis_c] < aabb.min[axis_c]) || (hit_box[axis_c] > aabb.max[axis_c])
+            ) {
+                continue;
+            }
+            if (t < best_t) {
+                best_t      = t;
+                best_handle = (sign == 0) ? pos_handles[axis] : neg_handles[axis];
+                m_box_face_hover_position = glm::vec3{box_frame * glm::vec4{hit_box, 1.0f}};
+            }
+        }
+    }
+
+    if (best_handle == Handle::e_handle_none) {
+        return false;
+    }
+    m_box_face_hover_handle = best_handle;
+    return true;
 }
 
 auto Transform_tool::on_drag() -> bool
@@ -563,17 +667,25 @@ auto Transform_tool::on_drag_ready() -> bool
         return false;
     }
 
-    const auto& hover_entry = scene_view->get_hover(Hover_entry::tool_slot);
-    std::shared_ptr<erhe::scene::Mesh> hover_scene_mesh = hover_entry.scene_mesh_weak.lock();
-    if (!hover_entry.valid || !hover_scene_mesh) {
-        log_trs_tool->trace("Transform tool cannot start drag - Pointer is not hovering over tool handle");
-        return false;
+    glm::vec3 initial_drag_position_in_world{0.0f};
+    if (m_box_face_hover_active) {
+        // Drag started on a bounding-box face picked via ray-face intersection; there is
+        // no gizmo mesh under the pointer, so use the stored face hit position.
+        initial_drag_position_in_world = m_box_face_hover_position;
+    } else {
+        const auto& hover_entry = scene_view->get_hover(Hover_entry::tool_slot);
+        std::shared_ptr<erhe::scene::Mesh> hover_scene_mesh = hover_entry.scene_mesh_weak.lock();
+        if (!hover_entry.valid || !hover_scene_mesh) {
+            log_trs_tool->trace("Transform tool cannot start drag - Pointer is not hovering over tool handle");
+            return false;
+        }
+        initial_drag_position_in_world = hover_entry.position.value();
     }
 
-    shared.set_initial_drag_position_in_world(hover_entry.position.value());
+    shared.set_initial_drag_position_in_world(initial_drag_position_in_world);
     shared.initial_drag_position_distance_to_camera = distance(
         vec3{camera_node->position_in_world()},
-        hover_entry.position.value()
+        initial_drag_position_in_world
     );
 
     if (shared.entries.empty()) {
@@ -683,6 +795,26 @@ void Transform_tool::tool_render(const Render_context& context)
             render_rays(*node.get());
         }
     }
+
+    if (
+        shared.settings.show_scale &&
+        (shared.settings.scale_gizmo_mode == Scale_gizmo_mode::bounding_box)
+    ) {
+        Handle_visualizations* visualizations = shared.get_visualizations();
+        if ((visualizations != nullptr) && visualizations->is_box_valid()) {
+            const erhe::math::Aabb& aabb = visualizations->get_box_aabb();
+            erhe::renderer::Primitive_renderer line_renderer = m_context.debug_renderer->get(
+                {erhe::graphics::Primitive_type::line, 2, true, true}
+            );
+            line_renderer.add_cube(
+                visualizations->get_box_frame(),
+                glm::vec4{1.0f, 0.7f, 0.1f, 1.0f},
+                aabb.min,
+                aabb.max
+            );
+        }
+    }
+
     m_context.rotate_tool->render(context);
 }
 #pragma endregion Render

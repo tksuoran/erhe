@@ -8,7 +8,27 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
+#include <cmath>
+
 namespace erhe::scene {
+
+namespace {
+
+// A transform whose world transform is the identity (the usual scene-root case) lets a
+// child's world transform be stored as parent-relative verbatim - no matrix round-trip and
+// no glm::decompose, which is numerically unstable for small scales (it can drift one axis,
+// e.g. 0.001 -> 0.4, across the repeated set/decompose round-trips that parenting forces).
+[[nodiscard]] auto is_identity_transform(const Trs_transform& t) -> bool
+{
+    constexpr float eps = 1e-5f;
+    return
+        (glm::length(t.get_translation())                  < eps) &&
+        (glm::length(t.get_scale() - glm::vec3{1.0f})      < eps) &&
+        (glm::length(t.get_skew())                         < eps) &&
+        (std::abs(std::abs(t.get_rotation().w) - 1.0f)     < eps);
+}
+
+}
 
 using namespace erhe;
 
@@ -354,16 +374,16 @@ void Node::update_transform(uint64_t serial)
 void Node::update_world_from_node()
 {
     const auto& current_parent = get_parent_node();
-    if (current_parent) {
+    if (current_parent && !is_identity_transform(current_parent->world_from_node_transform())) {
         node_data.transforms.world_from_node.set(
             current_parent->world_from_node() * parent_from_node(),
             node_from_parent() * current_parent->node_from_world()
         );
     } else {
-        node_data.transforms.world_from_node.set(
-            parent_from_node(),
-            node_from_parent()
-        );
+        // No parent, or an identity parent: world_from_node == parent_from_node. Copy the
+        // TRS components rather than re-decomposing the matrix, so scale and rotation are
+        // preserved exactly at (near) zero scale (glm::decompose is unstable there).
+        node_data.transforms.world_from_node = node_data.transforms.parent_from_node;
     }
 }
 
@@ -527,6 +547,18 @@ void Node::set_parent_from_node(const Transform& parent_from_node)
     handle_transform_update(Node_transforms::get_next_serial());
 }
 
+void Node::set_parent_from_node(const Trs_transform& parent_from_node)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    // Copy the TRS components directly instead of going through the matrix. Re-decomposing
+    // a matrix would lose the rotation when the scale is (near) zero (a rank-deficient
+    // matrix has no recoverable rotation); copying preserves it.
+    node_data.transforms.parent_from_node = parent_from_node;
+    update_world_from_node();
+    handle_transform_update(Node_transforms::get_next_serial());
+}
+
 void Node::set_node_from_parent(const glm::mat4 node_from_parent)
 {
     node_data.transforms.parent_from_node.set(
@@ -565,6 +597,22 @@ void Node::set_world_from_node(const Transform& world_from_node)
             current_parent->node_from_world() * world_from_node.get_matrix()
         );
     } else {
+        set_parent_from_node(world_from_node);
+    }
+}
+
+void Node::set_world_from_node(const Trs_transform& world_from_node)
+{
+    const auto& current_parent = get_parent_node();
+    if (current_parent && !is_identity_transform(current_parent->world_from_node_transform())) {
+        // Non-identity parent: parent-relative requires composition through matrices.
+        set_parent_from_node(
+            current_parent->node_from_world() * world_from_node.get_matrix()
+        );
+    } else {
+        // No parent, or an identity parent (the scene root): store the TRS components
+        // directly. No matrix round-trip and no glm::decompose, so scale and rotation
+        // survive (near) zero scale intact.
         set_parent_from_node(world_from_node);
     }
 }

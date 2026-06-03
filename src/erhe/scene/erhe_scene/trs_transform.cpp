@@ -20,6 +20,9 @@ Trs_transform::Trs_transform(const mat4 m)
 
 void Trs_transform::decompose()
 {
+    const glm::quat previous_rotation = m_rotation;
+    const glm::vec3 previous_skew     = m_skew;
+
     glm::vec4 perspective;
     glm::decompose(
         m_matrix,
@@ -29,6 +32,30 @@ void Trs_transform::decompose()
         m_skew,
         perspective
     );
+
+    // A rank-deficient matrix (a zero, or near-zero, scale component) cannot be decomposed
+    // reliably: glm::decompose orthogonalizes the basis (Gram-Schmidt) to extract rotation,
+    // and when one column is ~zero that process yields an arbitrary rotation AND corrupts the
+    // OTHER axes' scale (e.g. a collapsed X axis poisons the Y/Z scale). Detect this from the
+    // raw column lengths and, in that case, take the scale directly from those lengths
+    // (uncoupled, robust) and keep the prior rotation/skew (which the matrix can no longer
+    // provide). This lets an object collapse to (near) zero on one axis and be scaled back up
+    // without its other axes' scale or its orientation being corrupted in the meantime.
+    constexpr float scale_epsilon = 1e-6f;
+    const glm::vec3 column_lengths{
+        glm::length(glm::vec3{m_matrix[0]}),
+        glm::length(glm::vec3{m_matrix[1]}),
+        glm::length(glm::vec3{m_matrix[2]})
+    };
+    const bool degenerate =
+        (column_lengths.x < scale_epsilon) ||
+        (column_lengths.y < scale_epsilon) ||
+        (column_lengths.z < scale_epsilon);
+    if (degenerate) {
+        m_scale    = column_lengths;
+        m_rotation = previous_rotation;
+        m_skew     = previous_skew;
+    }
 }
 
 Trs_transform::Trs_transform(const mat4 matrix, const mat4 inverse_matrix)

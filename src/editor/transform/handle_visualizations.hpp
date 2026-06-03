@@ -1,6 +1,7 @@
 #pragma once
 
 #include "transform/transform_tool_settings.hpp"
+#include "erhe_math/aabb.hpp"
 #include "erhe_primitive/primitive.hpp"
 #include "erhe_primitive/buffer_mesh.hpp"
 #include "erhe_scene/trs_transform.hpp"
@@ -61,6 +62,12 @@ public:
     [[nodiscard]] auto get_handle           (erhe::scene::Mesh* mesh) const -> Handle;
     [[nodiscard]] auto get_handle_material  (Handle handle, Mode mode) -> std::shared_ptr<erhe::primitive::Material>;
     [[nodiscard]] auto get_handle_visibility(Handle handle) const -> bool;
+
+    // Bounding-box scale gizmo
+    [[nodiscard]] auto is_box_valid () const -> bool             { return m_box_valid; }
+    [[nodiscard]] auto get_box_frame() const -> const glm::mat4& { return m_box_frame; }
+    [[nodiscard]] auto get_box_aabb () const -> const erhe::math::Aabb& { return m_box_aabb; }
+
     void viewport_toolbar ();
     void update_visibility(Transform_tool_settings& settings);
     void update_for_view  (Scene_view* scene_view);
@@ -74,7 +81,11 @@ private:
     [[nodiscard]] auto make_arrow_cylinder(erhe::scene_renderer::Mesh_memory& mesh_memory) -> Part;
     [[nodiscard]] auto make_arrow_cone    (erhe::scene_renderer::Mesh_memory& mesh_memory) -> Part;
     [[nodiscard]] auto make_box           (erhe::scene_renderer::Mesh_memory& mesh_memory, bool uniform) -> Part;
+    [[nodiscard]] auto make_box_scale_cone(erhe::scene_renderer::Mesh_memory& mesh_memory) -> Part;
     [[nodiscard]] auto make_rotate_ring   (erhe::scene_renderer::Mesh_memory& mesh_memory) -> Part;
+
+    void compute_selection_box();
+    void update_box_handles   ();
 
     [[nodiscard]] auto make_material(
         Tools&           tools,
@@ -150,6 +161,16 @@ private:
     std::shared_ptr<erhe::scene::Mesh>               m_xy_scale_box_mesh;
     std::shared_ptr<erhe::scene::Mesh>               m_xz_scale_box_mesh;
     std::shared_ptr<erhe::scene::Mesh>               m_yz_scale_box_mesh;
+    std::shared_ptr<erhe::scene::Node>               m_box_node;
+    std::shared_ptr<erhe::scene::Mesh>               m_box_scale_pos_x_mesh;
+    std::shared_ptr<erhe::scene::Mesh>               m_box_scale_neg_x_mesh;
+    std::shared_ptr<erhe::scene::Mesh>               m_box_scale_pos_y_mesh;
+    std::shared_ptr<erhe::scene::Mesh>               m_box_scale_neg_y_mesh;
+    std::shared_ptr<erhe::scene::Mesh>               m_box_scale_pos_z_mesh;
+    std::shared_ptr<erhe::scene::Mesh>               m_box_scale_neg_z_mesh;
+    glm::mat4                                        m_box_frame{1.0f};
+    erhe::math::Aabb                                 m_box_aabb{};
+    bool                                             m_box_valid{false};
     std::vector<std::shared_ptr<Raytrace_primitive>> m_rt_primitives;
 };
 

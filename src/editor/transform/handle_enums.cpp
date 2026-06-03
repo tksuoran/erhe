@@ -26,6 +26,12 @@ auto get_handle_class(const Handle handle) -> Handle_class
         case Handle::e_handle_scale_xz       : return Handle_class::e_handle_class_plane;
         case Handle::e_handle_scale_yz       : return Handle_class::e_handle_class_plane;
         case Handle::e_handle_scale_xyz      : return Handle_class::e_handle_class_uniform;
+        case Handle::e_handle_box_scale_pos_x: return Handle_class::e_handle_class_axis;
+        case Handle::e_handle_box_scale_neg_x: return Handle_class::e_handle_class_axis;
+        case Handle::e_handle_box_scale_pos_y: return Handle_class::e_handle_class_axis;
+        case Handle::e_handle_box_scale_neg_y: return Handle_class::e_handle_class_axis;
+        case Handle::e_handle_box_scale_pos_z: return Handle_class::e_handle_class_axis;
+        case Handle::e_handle_box_scale_neg_z: return Handle_class::e_handle_class_axis;
         default:                               return Handle_class::e_handle_class_none;
     };
 }
@@ -53,6 +59,12 @@ auto get_handle_axis(const Handle handle) -> Handle_axis
         case Handle::e_handle_scale_xz       : return Handle_axis::e_handle_axis_none;
         case Handle::e_handle_scale_yz       : return Handle_axis::e_handle_axis_none;
         case Handle::e_handle_scale_xyz      : return Handle_axis::e_handle_axis_none;
+        case Handle::e_handle_box_scale_pos_x: return Handle_axis::e_handle_axis_x;
+        case Handle::e_handle_box_scale_neg_x: return Handle_axis::e_handle_axis_x;
+        case Handle::e_handle_box_scale_pos_y: return Handle_axis::e_handle_axis_y;
+        case Handle::e_handle_box_scale_neg_y: return Handle_axis::e_handle_axis_y;
+        case Handle::e_handle_box_scale_pos_z: return Handle_axis::e_handle_axis_z;
+        case Handle::e_handle_box_scale_neg_z: return Handle_axis::e_handle_axis_z;
         default:                               return Handle_axis::e_handle_axis_none;
     };
 }
@@ -80,6 +92,12 @@ auto get_handle_plane(const Handle handle) -> Handle_plane
         case Handle::e_handle_scale_xz       : return Handle_plane::e_handle_plane_xz;
         case Handle::e_handle_scale_yz       : return Handle_plane::e_handle_plane_yz;
         case Handle::e_handle_scale_xyz      : return Handle_plane::e_handle_plane_none;
+        case Handle::e_handle_box_scale_pos_x: return Handle_plane::e_handle_plane_none;
+        case Handle::e_handle_box_scale_neg_x: return Handle_plane::e_handle_plane_none;
+        case Handle::e_handle_box_scale_pos_y: return Handle_plane::e_handle_plane_none;
+        case Handle::e_handle_box_scale_neg_y: return Handle_plane::e_handle_plane_none;
+        case Handle::e_handle_box_scale_pos_z: return Handle_plane::e_handle_plane_none;
+        case Handle::e_handle_box_scale_neg_z: return Handle_plane::e_handle_plane_none;
         default:                               return Handle_plane::e_handle_plane_none;
     };
 }
@@ -107,6 +125,12 @@ auto get_handle_tool(const Handle handle) -> Handle_tool
         case Handle::e_handle_scale_xz:        return Handle_tool::e_handle_tool_scale;
         case Handle::e_handle_scale_yz:        return Handle_tool::e_handle_tool_scale;
         case Handle::e_handle_scale_xyz:       return Handle_tool::e_handle_tool_scale;
+        case Handle::e_handle_box_scale_pos_x: return Handle_tool::e_handle_tool_scale;
+        case Handle::e_handle_box_scale_neg_x: return Handle_tool::e_handle_tool_scale;
+        case Handle::e_handle_box_scale_pos_y: return Handle_tool::e_handle_tool_scale;
+        case Handle::e_handle_box_scale_neg_y: return Handle_tool::e_handle_tool_scale;
+        case Handle::e_handle_box_scale_pos_z: return Handle_tool::e_handle_tool_scale;
+        case Handle::e_handle_box_scale_neg_z: return Handle_tool::e_handle_tool_scale;
         case Handle::e_handle_none:            return Handle_tool::e_handle_tool_none;
         default: {
             ERHE_FATAL("bad handle %04x", static_cast<unsigned int>(handle));
@@ -137,6 +161,12 @@ auto get_handle_type(const Handle handle) -> Handle_type
         case Handle::e_handle_scale_xz:        return Handle_type::e_handle_type_scale_plane;
         case Handle::e_handle_scale_yz:        return Handle_type::e_handle_type_scale_plane;
         case Handle::e_handle_scale_xyz:       return Handle_type::e_handle_type_scale_uniform;
+        case Handle::e_handle_box_scale_pos_x: return Handle_type::e_handle_type_box_scale;
+        case Handle::e_handle_box_scale_neg_x: return Handle_type::e_handle_type_box_scale;
+        case Handle::e_handle_box_scale_pos_y: return Handle_type::e_handle_type_box_scale;
+        case Handle::e_handle_box_scale_neg_y: return Handle_type::e_handle_type_box_scale;
+        case Handle::e_handle_box_scale_pos_z: return Handle_type::e_handle_type_box_scale;
+        case Handle::e_handle_box_scale_neg_z: return Handle_type::e_handle_type_box_scale;
         case Handle::e_handle_none:            return Handle_type::e_handle_type_none;
         default: {
             ERHE_FATAL("bad handle %04x", static_cast<unsigned int>(handle));
@@ -167,6 +197,12 @@ auto get_axis_mask(const Handle handle) -> unsigned int
         case Handle::e_handle_scale_xz:        return Axis_mask::x | Axis_mask::z;
         case Handle::e_handle_scale_yz:        return Axis_mask::y | Axis_mask::z;
         case Handle::e_handle_scale_xyz:       return Axis_mask::x | Axis_mask::y | Axis_mask::z;
+        case Handle::e_handle_box_scale_pos_x: return Axis_mask::x;
+        case Handle::e_handle_box_scale_neg_x: return Axis_mask::x;
+        case Handle::e_handle_box_scale_pos_y: return Axis_mask::y;
+        case Handle::e_handle_box_scale_neg_y: return Axis_mask::y;
+        case Handle::e_handle_box_scale_pos_z: return Axis_mask::z;
+        case Handle::e_handle_box_scale_neg_z: return Axis_mask::z;
         case Handle::e_handle_none:            return 0;
         default: {
             ERHE_FATAL("bad handle %04x", static_cast<unsigned int>(handle));
@@ -197,6 +233,12 @@ auto c_str(const Handle handle) -> const char*
         case Handle::e_handle_scale_xz       : return "Scale YZ";
         case Handle::e_handle_scale_yz       : return "Scale YZ";
         case Handle::e_handle_scale_xyz      : return "Scale XYZ";
+        case Handle::e_handle_box_scale_pos_x: return "Box Scale +X";
+        case Handle::e_handle_box_scale_neg_x: return "Box Scale -X";
+        case Handle::e_handle_box_scale_pos_y: return "Box Scale +Y";
+        case Handle::e_handle_box_scale_neg_y: return "Box Scale -Y";
+        case Handle::e_handle_box_scale_pos_z: return "Box Scale +Z";
+        case Handle::e_handle_box_scale_neg_z: return "Box Scale -Z";
         default: return "?";
     };
 }
