@@ -8,11 +8,13 @@ Font rasterization and text layout utilities. Renders TrueType/OpenType fonts in
 - `Bitmap` -- CPU-side pixel buffer with multi-component support (1-4 channels). Provides `put()`, `get()`, `blit()` (with optional max-blend and rotation), `fill()`, `post_process()` (premultiplied alpha), and `as_span()`.
 - `Glyph` -- (FreeType only) Represents a single rasterized glyph with its metrics, bitmap layout, and atlas rectangle placement.
 - `Rectangle` -- 2D axis-aligned bounding box with min/max corners. Supports hit testing, extend, clip, shrink, and grow operations.
+- `Glyph_outline_set` / `Glyph_outline` / `Glyph_curve` -- Plain CPU-side glyph outline data (quadratic bezier curves in em units, per-glyph metrics) produced by `extract_glyph_outlines()`. GPU-free; consumed by `erhe::scene_renderer::Glyph_buffer` for GPU curve-based text rendering (e.g. grid axis labels). Contour conversion adapted from gpu-font-rendering (MIT).
 
 ## Public API
 - Construct `Font(device, path, size, outline_thickness)`, then call `render()` to rasterize.
 - `font.print(buffer, text, position, color, out_bounds)` writes glyph quads.
 - `font.measure(text)` returns the bounding `Rectangle`.
+- `extract_glyph_outlines(font_path, codepoints)` returns quadratic bezier outlines for the given codepoints in slot order; missing glyphs yield `curve_count == 0` entries. Returns `valid == false` without FreeType.
 - `Bitmap` is used internally for glyph atlas composition.
 
 ## Dependencies

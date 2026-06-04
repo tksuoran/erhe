@@ -139,6 +139,7 @@ void Composition_pass::render(const Render_context& context)
                     .reverse_depth     = context.scene_view.get_reverse_depth(),
                     .depth_range       = context.scene_view.get_depth_range(),
                     .conventions       = context.scene_view.get_conventions(),
+                    .grid_label        = data.grid_label,
                     .debug_label       = get_debug_label().string_view()
                 },
                 .vertex_count         = data.non_mesh_vertex_count,

@@ -6,6 +6,7 @@
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_scene_renderer/camera_buffer.hpp"
 #include "erhe_scene_renderer/cube_instance_buffer.hpp"
+#include "erhe_scene_renderer/glyph_buffer.hpp"
 #include "erhe_scene_renderer/joint_buffer.hpp"
 #include "erhe_scene_renderer/light_buffer.hpp"
 #include "erhe_scene_renderer/material_buffer.hpp"
@@ -60,6 +61,7 @@ public:
     Program_interface_config                           config;
     Camera_interface                                   camera_interface;
     Cube_interface                                     cube_interface;
+    Glyph_interface                                    glyph_interface;
     Joint_interface                                    joint_interface;
     Light_interface                                    light_interface;
     Material_interface                                 material_interface;

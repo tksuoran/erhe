@@ -119,6 +119,7 @@ void Cube_renderer::render(const Render_parameters& parameters)
         camera->get_exposure(),
         glm::vec4{0.0f},
         glm::vec4{0.0f},
+        glm::vec4{0.0f}, // grid label
         parameters.frame_number,
         true, // reverse_depth
         erhe::math::Depth_range::zero_to_one

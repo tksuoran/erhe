@@ -16,4 +16,6 @@ namespace erhe::scene_renderer {
 
 #define joint_buffer_binding_point         7
 
+#define glyph_buffer_binding_point         8
+
 } // namespace erhe::scene_renderer

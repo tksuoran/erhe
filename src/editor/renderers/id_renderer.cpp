@@ -425,6 +425,7 @@ void Id_renderer::render(const Render_parameters& parameters)
         1.0f,
         glm::vec4{0.0f},
         glm::vec4{0.0f},
+        glm::vec4{0.0f}, // grid label
         0,
         parameters.reverse_depth,
         parameters.depth_range

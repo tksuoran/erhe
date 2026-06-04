@@ -8,6 +8,8 @@ erhe_target_sources_grouped(
     erhe_ui/font.hpp
     erhe_ui/glyph.cpp
     erhe_ui/glyph.hpp
+    erhe_ui/glyph_outlines.cpp
+    erhe_ui/glyph_outlines.hpp
     erhe_ui/ui_log.cpp
     erhe_ui/ui_log.hpp
     erhe_ui/rectangle.hpp

@@ -33,17 +33,19 @@ namespace erhe::scene_renderer {
 const std::vector<std::span<const std::shared_ptr<erhe::scene::Mesh>>> Forward_renderer::empty_mesh_spans{};
 
 Forward_renderer::Forward_renderer(
-    erhe::graphics::Device&         graphics_device,
-    erhe::graphics::Command_buffer& init_command_buffer,
-    Mesh_memory&                    mesh_memory,
-    Program_interface&              program_interface,
-    Shader_variant_cache&           shader_variant_cache
+    erhe::graphics::Device&            graphics_device,
+    erhe::graphics::Command_buffer&    init_command_buffer,
+    Mesh_memory&                       mesh_memory,
+    Program_interface&                 program_interface,
+    Shader_variant_cache&              shader_variant_cache,
+    const erhe::ui::Glyph_outline_set& glyph_outline_set
 )
     : m_graphics_device     {graphics_device}
-    , m_mesh_memory         {mesh_memory}   
+    , m_mesh_memory         {mesh_memory}
     , m_program_interface   {program_interface}
     , m_shader_variant_cache{shader_variant_cache}
     , m_camera_buffer       {graphics_device, program_interface.camera_interface}
+    , m_glyph_buffer        {graphics_device, program_interface.glyph_interface, glyph_outline_set}
     , m_draw_indirect_buffer{graphics_device, program_interface.config.max_draw_count}
     , m_joint_buffer        {graphics_device, program_interface.joint_interface}
     , m_light_buffer        {graphics_device, init_command_buffer, program_interface.light_interface}
@@ -128,6 +130,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
             base.exposure,
             base.grid_size,
             base.grid_line_width,
+            base.grid_label,
             base.frame_number,
             base.reverse_depth,
             base.depth_range,
@@ -144,6 +147,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
             base.exposure,
             base.grid_size,
             base.grid_line_width,
+            base.grid_label,
             base.frame_number,
             base.reverse_depth,
             base.depth_range,
@@ -151,6 +155,10 @@ void Forward_renderer::render(const Render_parameters& parameters)
         );
     }
     m_camera_buffer.bind(render_encoder, camera_buffer_range.value());
+
+    // Static glyph curve data (grid axis labels); bound unconditionally
+    // so the shared bind group is always complete.
+    m_glyph_buffer.bind(render_encoder);
 
     m_texture_heap->reset_heap(render_encoder.get_command_buffer());
 
@@ -323,6 +331,10 @@ void Forward_renderer::draw_primitives(
     erhe::graphics::Render_command_encoder& render_encoder = base.render_encoder;
     render_encoder.set_bind_group_layout(m_program_interface.bind_group_layout.get());
 
+    // Static glyph curve data (grid axis labels); bound unconditionally
+    // so the shared bind group is always complete.
+    m_glyph_buffer.bind(render_encoder);
+
     m_texture_heap->reset_heap(render_encoder.get_command_buffer());
 
     using Ring_buffer_range = erhe::graphics::Ring_buffer_range;
@@ -345,6 +357,7 @@ void Forward_renderer::draw_primitives(
             base.exposure,
             base.grid_size,
             base.grid_line_width,
+            base.grid_label,
             base.frame_number,
             base.reverse_depth,
             base.depth_range,
@@ -362,6 +375,7 @@ void Forward_renderer::draw_primitives(
             base.exposure,
             base.grid_size,
             base.grid_line_width,
+            base.grid_label,
             base.frame_number,
             base.reverse_depth,
             base.depth_range,

@@ -1,4 +1,5 @@
 #include "erhe_camera_view.glsl"
+#include "erhe_glyph_coverage.glsl"
 
 layout(location = 0) in vec4 v_position;
 
@@ -42,6 +43,42 @@ bool intersect_plane(vec3 plane_normal, vec3 point_on_plane, vec3 ray_origin, ve
     return true;
 }
 
+#if defined(ERHE_GRID_LABELS)
+
+// Number of character cells in the decimal representation of value
+// (digits plus an optional leading minus sign).
+int grid_label_char_count(int value)
+{
+    int count = (value < 0) ? 2 : 1;
+    int a = abs(value);
+    if (a >= 10)     { count += 1; }
+    if (a >= 100)    { count += 1; }
+    if (a >= 1000)   { count += 1; }
+    if (a >= 10000)  { count += 1; }
+    if (a >= 100000) { count += 1; }
+    return count;
+}
+
+// Glyph slot for character cell `cell` of the decimal representation of
+// value: slots 0..9 are digits '0'..'9', slot 10 is '-'.
+int grid_label_slot(int value, int char_count, int cell)
+{
+    bool negative = (value < 0);
+    if (negative && (cell == 0)) {
+        return 10; // '-'
+    }
+    int a           = abs(value);
+    int digit_count = char_count - (negative ? 1 : 0);
+    int digit_index = cell       - (negative ? 1 : 0);
+    int divisor     = 1;
+    for (int i = 0; i < (digit_count - 1 - digit_index); ++i) {
+        divisor *= 10;
+    }
+    return (a / divisor) % 10;
+}
+
+#endif // ERHE_GRID_LABELS
+
 void main()
 {
     vec3 view_position_in_world = vec3(
@@ -59,6 +96,10 @@ void main()
     vec3  pos               = ro + t * rd;
     vec2  uv                = pos.xz;
 
+    // Derivatives must be computed in uniform control flow, before any
+    // divergent branching below.
+    vec2 uv_fw = fwidth(uv);
+
     float epsilon = 0.0001;
 
     float grid_l0_cell_size  = camera.cameras[c_view_index].grid_size      [0];
@@ -73,21 +114,94 @@ void main()
     float grid_l1 = PristineGrid(uv / grid_l1_cell_size, vec2(grid_l1_line_width));
     float grid_l2 = PristineGrid(uv / grid_l2_cell_size, vec2(grid_l2_line_width));
     float grid_l3 = PristineGrid(uv / grid_l3_cell_size, vec2(grid_l3_line_width));
+
+    vec4 grid_color = vec4(0.0);
     if (grid_l0 > epsilon) {
-        out_color = vec4(0.0, 0.0, 0.01 * grid_l0, grid_l0);
-        return;
+        grid_color = vec4(0.0, 0.0, 0.01 * grid_l0, grid_l0);
+    } else if (grid_l1 > epsilon) {
+        grid_color = vec4(0.0, 0.0, 0.0, grid_l1);
+    } else if (grid_l2 > epsilon) {
+        grid_color = vec4(0.01 * grid_l2, 0.0, 0.0, grid_l2);
+    } else { //if (grid_l3 > epsilon) {
+        grid_color = vec4(0.0, 0.01 * grid_l3, 0.0, grid_l3);
     }
-    if (grid_l1 > epsilon) {
-        out_color = vec4(0.0, 0.0, 0.0, grid_l1);
-        return;
+
+    float label_alpha = 0.0;
+
+#if defined(ERHE_GRID_LABELS)
+    // Axis coordinate labels: grid_label.x = enable, .y = text height as a
+    // fraction of label spacing, .z = label spacing in world units (integer
+    // values >= 1 expected), .w = reserved.
+    vec4 grid_label = camera.cameras[c_view_index].grid_label;
+
+    // Fade labels in once a glyph covers enough pixels to be legible.
+    float pixel_size     = max(max(uv_fw.x, uv_fw.y), 0.0000001);
+    float spacing        = max(grid_label.z, 0.000001);
+    float text_h         = grid_label.y * spacing; // em size in world units
+    float pixels_per_em  = text_h / pixel_size;
+    float label_fade     = smoothstep(6.0, 12.0, pixels_per_em);
+
+    if ((grid_label.x > 0.5) && (label_fade > 0.0)) {
+        float cell_w  = glyph.glyphs[0].advance * text_h; // monospace: every slot has the same advance
+        float margin  = 0.25 * text_h;
+
+        int  slot = -1;
+        vec2 glyph_uv = vec2(0.0);
+
+        // X axis: labels below the axis line (positive z side), centered
+        // on each tick. Glyph u maps to +x, glyph v maps to -z so text
+        // reads left to right when viewed from +Y.
+        {
+            float k    = round(uv.x / spacing);
+            float tick = k * spacing;
+            if (abs(tick) < 100000.0) {
+                int   value      = int(round(tick));
+                int   char_count = grid_label_char_count(value);
+                float width      = float(char_count) * cell_w;
+                float x_start    = tick - (0.5 * width);
+                float z_base     = margin + (0.75 * text_h);
+                int   cell       = int(floor((uv.x - x_start) / cell_w));
+                bool  in_band    = (uv.y > 0.0) && (uv.y < (z_base + (0.3 * text_h)));
+                if ((cell >= 0) && (cell < char_count) && in_band) {
+                    slot     = grid_label_slot(value, char_count, cell);
+                    glyph_uv = vec2(uv.x - (x_start + (float(cell) * cell_w)), z_base - uv.y) / text_h;
+                }
+            }
+        }
+
+        // Z axis: labels to the right of the axis line (positive x side),
+        // vertically centered on each tick. Skip the origin; the X axis
+        // already labels it.
+        if (slot < 0) {
+            float k    = round(uv.y / spacing);
+            float tick = k * spacing;
+            if ((k != 0.0) && (abs(tick) < 100000.0)) {
+                int   value      = int(round(tick));
+                int   char_count = grid_label_char_count(value);
+                float x_start    = margin;
+                float z_base     = tick + (0.35 * text_h);
+                int   cell       = int(floor((uv.x - x_start) / cell_w));
+                bool  in_band    = (uv.y > (z_base - text_h)) && (uv.y < (z_base + (0.3 * text_h)));
+                if ((cell >= 0) && (cell < char_count) && in_band) {
+                    slot     = grid_label_slot(value, char_count, cell);
+                    glyph_uv = vec2(uv.x - (x_start + (float(cell) * cell_w)), z_base - uv.y) / text_h;
+                }
+            }
+        }
+
+        if (slot >= 0) {
+            vec2 inverse_diameter = text_h / max(uv_fw, vec2(0.0000001));
+            label_alpha = erhe_glyph_coverage(slot, glyph_uv, inverse_diameter, true) * label_fade;
+        }
     }
-    if (grid_l2 > epsilon) {
-        out_color = vec4(0.01 * grid_l2, 0.0, 0.0, grid_l2);
-        return;
+#endif // ERHE_GRID_LABELS
+
+    // Composite labels over grid lines (both are dark; premultiplied output).
+    out_color = vec4(
+        grid_color.rgb * (1.0 - label_alpha),
+        (grid_color.a * (1.0 - label_alpha)) + label_alpha
+    );
+    if (out_color.a < epsilon) {
+        discard;
     }
-    if (grid_l3 > epsilon) {
-        out_color = vec4(0.0, 0.01 * grid_l3, 0.0, grid_l3);
-        return;
-    }
-    discard;
 }

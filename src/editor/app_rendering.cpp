@@ -933,6 +933,13 @@ void App_rendering::set_grid_visibility(bool visible)
     }
 }
 
+void App_rendering::set_grid_label(const glm::vec4& grid_label)
+{
+    if (m_grid_composition_pass != nullptr) {
+        m_grid_composition_pass->data.grid_label = grid_label;
+    }
+}
+
 void App_rendering::process_end_capture()
 {
     ERHE_PROFILE_FUNCTION();

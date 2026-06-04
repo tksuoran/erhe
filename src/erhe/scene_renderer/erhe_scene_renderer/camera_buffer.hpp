@@ -33,6 +33,7 @@ public:
     std::size_t exposure;             // float
     std::size_t grid_size;            // vec4
     std::size_t grid_line_width;      // vec4
+    std::size_t grid_label;           // vec4 x = enable, y = text height fraction, z = label spacing, w = reserved
     std::size_t frame_number;         // uvec2
     std::size_t padding;              // uvec2
 };
@@ -76,6 +77,7 @@ public:
         float                                     exposure,
         glm::vec4                                 grid_size,
         glm::vec4                                 grid_line_width,
+        glm::vec4                                 grid_label,
         uint64_t                                  frame_number,
         bool                                      reverse_depth,
         erhe::math::Depth_range                   depth_range,
@@ -97,6 +99,7 @@ public:
         float                                     exposure,
         glm::vec4                                 grid_size,
         glm::vec4                                 grid_line_width,
+        glm::vec4                                 grid_label,
         uint64_t                                  frame_number,
         bool                                      reverse_depth,
         erhe::math::Depth_range                   depth_range,
@@ -113,6 +116,7 @@ public:
         float                                     exposure,
         glm::vec4                                 grid_size,
         glm::vec4                                 grid_line_width,
+        glm::vec4                                 grid_label,
         uint64_t                                  frame_number,
         bool                                      reverse_depth,
         erhe::math::Depth_range                   depth_range,

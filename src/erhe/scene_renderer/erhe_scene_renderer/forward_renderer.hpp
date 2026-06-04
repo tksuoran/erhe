@@ -4,6 +4,7 @@
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_scene_renderer/draw_indirect_buffer.hpp"
 #include "erhe_scene_renderer/camera_buffer.hpp"
+#include "erhe_scene_renderer/glyph_buffer.hpp"
 #include "erhe_scene_renderer/joint_buffer.hpp"
 #include "erhe_scene_renderer/light_buffer.hpp"
 #include "erhe_scene_renderer/material_buffer.hpp"
@@ -43,6 +44,9 @@ namespace erhe::scene {
     class Mesh;
     class Mesh_layer;
 }
+namespace erhe::ui {
+    class Glyph_outline_set;
+}
 
 namespace erhe::scene_renderer {
 
@@ -56,11 +60,12 @@ public:
     using Mesh_layer_collection = std::vector<const erhe::scene::Mesh_layer*>;
 
     Forward_renderer(
-        erhe::graphics::Device&         graphics_device,
-        erhe::graphics::Command_buffer& init_command_buffer,
-        Mesh_memory&                    mesh_memory,
-        Program_interface&              program_interface,
-        Shader_variant_cache&           shader_variant_cache
+        erhe::graphics::Device&            graphics_device,
+        erhe::graphics::Command_buffer&    init_command_buffer,
+        Mesh_memory&                       mesh_memory,
+        Program_interface&                 program_interface,
+        Shader_variant_cache&              shader_variant_cache,
+        const erhe::ui::Glyph_outline_set& glyph_outline_set
     );
     ~Forward_renderer() noexcept;
 
@@ -97,6 +102,9 @@ public:
         erhe::math::Coordinate_conventions                                 conventions;
         const glm::vec4                                                    grid_size        {10.0f,  1.0f,  0.1f,  0.01f};
         const glm::vec4                                                    grid_line_width  { 0.006, 0.02f, 0.02f, 0.02f};
+        // x = enable, y = text height as fraction of label spacing,
+        // z = label spacing in world units, w = reserved.
+        const glm::vec4                                                    grid_label       { 1.0f,  0.15f, 1.0f,  0.0f};
         const std::string_view                                             debug_label;
     };
 
@@ -191,6 +199,7 @@ private:
     Program_interface&                            m_program_interface;
     Shader_variant_cache&                         m_shader_variant_cache;
     Camera_buffer                                 m_camera_buffer;
+    Glyph_buffer                                  m_glyph_buffer;
     erhe::scene_renderer::Draw_indirect_buffer    m_draw_indirect_buffer;
     Joint_buffer                                  m_joint_buffer;
     Light_buffer                                  m_light_buffer;

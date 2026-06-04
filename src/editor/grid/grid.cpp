@@ -19,6 +19,9 @@
 
 #include <glm/gtx/matrix_operation.hpp>
 
+#include <algorithm>
+#include <cmath>
+
 namespace editor {
 
 using glm::vec3;
@@ -90,6 +93,14 @@ void Grid::render(const Render_context& context)
     //      If Gr\id overrided handle_flag_bits_update(), it could handle visibility
     //      changes more directly, but it would then need access to App_rendering.
     context.app_context.app_rendering->set_grid_visibility(is_visible());
+    context.app_context.app_rendering->set_grid_label(
+        glm::vec4{
+            m_label_enable ? 1.0f : 0.0f,
+            m_label_text_fraction,
+            std::max(1.0f, std::round(m_label_spacing)), // shader formats integer values only
+            0.0f
+        }
+    );
 
     if (!is_visible()) {
         return;
@@ -208,6 +219,9 @@ void Grid::imgui(App_context& context)
     ImGui::SliderFloat("Minor Width",      &m_minor_width,  -100.0f, 100.0f);
     ImGui::ColorEdit4 ("Major Color",      &m_major_color.x, ImGuiColorEditFlags_Float);
     ImGui::ColorEdit4 ("Minor Color",      &m_minor_color.x, ImGuiColorEditFlags_Float);
+    ImGui::Checkbox   ("Axis Labels",      &m_label_enable);
+    ImGui::SliderFloat("Label Size",       &m_label_text_fraction, 0.05f, 0.5f);
+    ImGui::SliderFloat("Label Spacing",    &m_label_spacing,       1.0f,  100.0f, "%.0f");
 
     erhe::imgui::make_combo("Plane", m_plane_type, grid_plane_type_strings, IM_ARRAYSIZE(grid_plane_type_strings));
 

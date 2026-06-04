@@ -31,6 +31,7 @@ Program_interface::Program_interface(
     , config             {config}
     , camera_interface   {graphics_device, config.max_camera_count, config.view_count}
     , cube_interface     {graphics_device}
+    , glyph_interface    {graphics_device}
     , joint_interface    {graphics_device, config.max_joint_count}
     , light_interface    {graphics_device, config.max_light_count}
     , material_interface {graphics_device, config.max_material_count}
@@ -61,6 +62,7 @@ Program_interface::Program_interface(
             {cube_instance_buffer_binding_point, to_binding_type(cube_interface.cube_instance_block)},
             {cube_control_buffer_binding_point,  to_binding_type(cube_interface.cube_control_block)},
             {joint_buffer_binding_point,         to_binding_type(joint_interface.joint_block)},
+            {glyph_buffer_binding_point,         to_binding_type(glyph_interface.glyph_block)},
             // The shadow samplers are wired in as immutable samplers in the
             // descriptor set layout. The Vulkan portability subset on
             // MoltenVK rejects comparison samplers via push descriptors
@@ -122,6 +124,7 @@ auto Program_interface::make_prototype(
     create_info.struct_types.push_back(&cube_interface.cube_control_struct);
     create_info.struct_types.push_back(&primitive_interface.primitive_struct);
     create_info.struct_types.push_back(&joint_interface.joint_struct);
+    create_info.struct_types.push_back(&glyph_interface.glyph_meta_struct);
     // TODO: This will be (eventually) for compute shaders.
     // create_info.struct_types.push_back(&g_mesh_memory->get_vertex_data_in());
     // create_info.struct_types.push_back(&g_mesh_memory->get_vertex_data_out());
@@ -133,8 +136,14 @@ auto Program_interface::make_prototype(
     create_info.add_interface_block(&cube_interface.cube_control_block);
     create_info.add_interface_block(&primitive_interface.primitive_block);
     create_info.add_interface_block(&joint_interface.joint_block);
+    create_info.add_interface_block(&glyph_interface.glyph_block);
     create_info.bind_group_layout = bind_group_layout.get();
     create_info.defines.emplace_back("ERHE_SHADOW_MAPS", "1");
+    if (glyph_interface.supported) {
+        // GPU curve-based glyph rendering (grid axis labels) needs the
+        // unsized std430 curves array, so it is SSBO-only.
+        create_info.defines.emplace_back("ERHE_GRID_LABELS", "1");
+    }
 
     bool found = false;
     auto process_shader = [&create_info, &found](erhe::graphics::Shader_type shader_type, const std::filesystem::path& path) -> void

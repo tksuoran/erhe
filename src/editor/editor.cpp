@@ -162,6 +162,7 @@
 #include "erhe_window/window_log.hpp"
 #include "erhe_window/window.hpp"
 #include "erhe_window/window_event_handler.hpp"
+#include "erhe_ui/glyph_outlines.hpp"
 #include "erhe_ui/ui_log.hpp"
 #include "erhe_utility/clipboard.hpp"
 
@@ -185,6 +186,7 @@
 #include <geogram/basic/geometry.h>
 #include <geogram/basic/logger.h>
 
+#include <array>
 #include <atomic>
 #include <condition_variable>
 #include <cstdlib>
@@ -1077,12 +1079,23 @@ public:
             ERHE_TASK_HEADER(forward_renderer_task)
             {
                 ERHE_GET_GL_CONTEXT
+                // Glyph curve data for GPU curve-based grid axis labels.
+                // Codepoint order defines the glyph slot convention shared
+                // with the shaders: slots 0..9 = '0'..'9', 10 = '-', 11 = '.'.
+                const std::array<char32_t, 12> glyph_codepoints{
+                    U'0', U'1', U'2', U'3', U'4', U'5', U'6', U'7', U'8', U'9', U'-', U'.'
+                };
+                const erhe::ui::Glyph_outline_set glyph_outline_set = erhe::ui::extract_glyph_outlines(
+                    std::filesystem::path{"res"} / std::filesystem::path{"fonts"} / std::filesystem::path{"SourceCodePro-Semibold.otf"},
+                    glyph_codepoints
+                );
                 m_forward_renderer = std::make_unique<erhe::scene_renderer::Forward_renderer>(
                     *m_graphics_device.get(),
                     *m_app_context.current_command_buffer,
                     *m_mesh_memory.get(),
                     *m_program_interface.get(),
-                    *m_shader_variant_cache.get()
+                    *m_shader_variant_cache.get(),
+                    glyph_outline_set
                 );
             }
             ERHE_TASK_FOOTER( .name("Forward_renderer") );

@@ -115,6 +115,7 @@ public:
     void process_start_capture      ();
     void process_end_capture        ();
     void set_grid_visibility        (bool visible);
+    void set_grid_label             (const glm::vec4& grid_label);
 
     void add   (Renderable* renderable);
     void remove(Renderable* renderable);

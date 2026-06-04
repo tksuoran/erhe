@@ -74,6 +74,9 @@ private:
     float           m_cell_size       {1.0f};
     int             m_cell_div        {2};
     int             m_cell_count      {10};
+    bool            m_label_enable       {true};  // grid.frag axis coordinate labels
+    float           m_label_text_fraction{0.15f}; // text height as fraction of label spacing
+    float           m_label_spacing      {1.0f};  // label spacing in world units (integer >= 1)
     float           m_major_width     {4.0f};
     float           m_minor_width     {2.0f};
     glm::vec4       m_major_color     {0.0f, 0.0f, 0.0f, 0.729f};

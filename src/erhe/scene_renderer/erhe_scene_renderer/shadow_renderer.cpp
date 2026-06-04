@@ -199,6 +199,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
             1.0f,                      // exposure
             glm::vec4{0.0f},           // grid size
             glm::vec4{0.0f},           // grid line width
+            glm::vec4{0.0f},           // grid label
             0,                         // frame number
             parameters.reverse_depth,
             parameters.depth_range
