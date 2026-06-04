@@ -53,25 +53,31 @@ void main()
     } else {
         heading = atan(V.x, V.z) / pi; // -pi/2 .. pi/2
     }
+    // Sky parameters from the camera UBO:
+    //   sky_checker:          x, y = frequency, z = intensity a, w = intensity b
+    //   sky_horizon_color:    rgb, w = horizon-to-zenith falloff power
+    //   ground_horizon_color: rgb, w = horizon-to-nadir falloff power
+    highp vec4 sky_checker          = camera.cameras[c_view_index].sky_checker;
+    highp vec4 sky_horizon_color    = camera.cameras[c_view_index].sky_horizon_color;
+    highp vec4 sky_zenith_color     = camera.cameras[c_view_index].sky_zenith_color;
+    highp vec4 ground_horizon_color = camera.cameras[c_view_index].ground_horizon_color;
+    highp vec4 ground_nadir_color   = camera.cameras[c_view_index].ground_nadir_color;
+
     highp float intensity = checkerboard(
         vec2(heading, elevation),
-        vec2(18.0, 18.0), 
-        0.92,
-        1.0
+        sky_checker.xy,
+        sky_checker.z,
+        sky_checker.w
     );
 
     highp vec3 sky_color;
     // V.y must be clamped or pow() can result NaN
     if (V.y > 0) {
-        highp float ground_factor        = 1.0 - pow(1.0 - max(V.y, 0.0), 8.0);
-        highp vec3  ground_nadir_color   = vec3(0.1, 0.1, 0.1);
-        highp vec3  ground_horizon_color = vec3(0.2, 0.2, 0.2);
-        sky_color = mix(ground_horizon_color, ground_nadir_color, ground_factor);
+        highp float ground_factor = 1.0 - pow(1.0 - max(V.y, 0.0), ground_horizon_color.w);
+        sky_color = mix(ground_horizon_color.rgb, ground_nadir_color.rgb, ground_factor);
     } else {
-        highp float sky_factor           = 1.0 - pow(1.0 - max(-V.y, 0.0), 10.0);
-        highp vec3  sky_horizon_color    = vec3(0.3, 0.3, 0.33);
-        highp vec3  sky_zenith_color     = vec3(0.2, 0.2, 0.22);
-        sky_color = mix(sky_horizon_color, sky_zenith_color, sky_factor);
+        highp float sky_factor    = 1.0 - pow(1.0 - max(-V.y, 0.0), sky_horizon_color.w);
+        sky_color = mix(sky_horizon_color.rgb, sky_zenith_color.rgb, sky_factor);
     }
     out_color.rgb = intensity * sky_color * camera.cameras[c_view_index].exposure;
     out_color.a = 1.0;

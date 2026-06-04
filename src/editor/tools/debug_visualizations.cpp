@@ -1,5 +1,7 @@
 #include "tools/debug_visualizations.hpp"
 
+#include "config/generated/debug_visualizations_settings.hpp"
+
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
 #include "app_rendering.hpp"
@@ -80,13 +82,13 @@ constexpr vec3 axis_z         { 0.0f,  0.0f, 1.0f};
 
 [[nodiscard]] auto should_visualize(const Visualization_mode mode, const bool is_selected, const bool is_hovered)
 {
-    if (mode == Visualization_mode::All) {
+    if (mode == Visualization_mode::all) {
         return true;
     }
-    if (is_selected && (mode == Visualization_mode::Selected)) {
+    if (is_selected && (mode == Visualization_mode::selected)) {
         return true;
     }
-    if (is_hovered && (mode == Visualization_mode::Hovered)) {
+    if (is_hovered && (mode == Visualization_mode::hovered)) {
         return true;
     }
     return false;
@@ -113,7 +115,8 @@ Debug_visualizations::Debug_visualizations(
     App_context&                             context,
     App_message_bus&                         app_message_bus,
     App_rendering&                           app_rendering,
-    Programs&                                /*programs*/
+    Programs&                                /*programs*/,
+    const Debug_visualizations_settings&     settings
 )
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Debug Visualizations", "debug_visualizations"}
     , m_context{context}
@@ -132,6 +135,8 @@ Debug_visualizations::Debug_visualizations(
 {
     app_rendering.add(this);
 
+    read_config(settings);
+
     m_hover_scene_view_subscription = app_message_bus.hover_scene_view.subscribe(
         [&](Hover_scene_view_message& message) {
             m_hover_scene_view = message.scene_view;
@@ -143,6 +148,130 @@ Debug_visualizations::Debug_visualizations(
 }
 
 Debug_visualizations::~Debug_visualizations() noexcept = default;
+
+void Debug_visualizations::read_config(const Debug_visualizations_settings& settings)
+{
+    m_lights                            = settings.lights;
+    m_cameras                           = settings.cameras;
+    m_layouts                           = settings.layouts;
+    m_skins                             = settings.skins;
+    m_node_axis_visualization           = settings.node_axises;
+    m_physics_visualization             = settings.physics;
+    m_raytrace_visualization            = settings.raytrace;
+    m_vertex_labels                     = settings.vertex_labels;
+    m_facet_labels                      = settings.facet_labels;
+    m_edge_labels                       = settings.edge_labels;
+    m_corner_labels                     = settings.corner_labels;
+    m_world_axes                        = settings.world_axes;
+    m_shadow_debug                      = settings.shadow_debug;
+    m_selection                         = settings.selection;
+    m_selection_bounding_points_visible = settings.selection_bounding_points;
+    m_selection_box                     = settings.selection_box;
+    m_selection_sphere                  = settings.selection_sphere;
+    m_selection_parts                   = settings.selection_parts;
+    m_selection_convex_hull             = settings.selection_convex_hull;
+    m_selection_convex_hull_projected   = settings.selection_convex_hull_projected;
+    m_debug_convex_hull                 = settings.debug_convex_hull;
+    m_convex_hull_edge                  = settings.convex_hull_edge;
+    m_selection_major_color             = settings.selection_major_color;
+    m_selection_minor_color             = settings.selection_minor_color;
+    m_group_selection_major_color       = settings.group_selection_major_color;
+    m_group_selection_minor_color       = settings.group_selection_minor_color;
+    m_selection_major_width             = settings.selection_major_width;
+    m_selection_minor_width             = settings.selection_minor_width;
+    m_sphere_step_count                 = settings.sphere_step_count;
+    m_gap                               = settings.gap;
+    m_tool_hide                         = settings.tool_hide;
+    m_frustum_box                       = settings.frustum_box;
+    m_frustum_planes                    = settings.frustum_planes;
+    m_light_visualization_width         = settings.light_line_width;
+    m_camera_cull_test                  = settings.camera_cull_test;
+    m_camera_visualization_width        = settings.camera_line_width;
+    m_camera_line_color                 = settings.camera_line_color;
+    m_layout_visualization_width        = settings.layout_line_width;
+    m_layout_line_color                 = settings.layout_line_color;
+    m_max_labels                        = settings.max_labels;
+    m_vertex_positions                  = settings.vertex_positions;
+    m_vertex_label_text_color           = settings.vertex_label_text_color;
+    m_vertex_label_line_color           = settings.vertex_label_line_color;
+    m_vertex_label_line_width           = settings.vertex_label_line_width;
+    m_vertex_label_line_length          = settings.vertex_label_line_length;
+    m_edge_label_text_color             = settings.edge_label_text_color;
+    m_edge_label_text_offset            = settings.edge_label_text_offset;
+    m_edge_label_line_color             = settings.edge_label_line_color;
+    m_edge_label_line_width             = settings.edge_label_line_width;
+    m_edge_label_line_length            = settings.edge_label_line_length;
+    m_facet_label_text_color            = settings.facet_label_text_color;
+    m_facet_label_line_color            = settings.facet_label_line_color;
+    m_facet_label_line_width            = settings.facet_label_line_width;
+    m_facet_label_line_length           = settings.facet_label_line_length;
+    m_corner_label_text_color           = settings.corner_label_text_color;
+    m_corner_label_line_color           = settings.corner_label_line_color;
+    m_corner_label_line_width           = settings.corner_label_line_width;
+    m_corner_label_line_length          = settings.corner_label_line_length;
+}
+
+void Debug_visualizations::write_config(Debug_visualizations_settings& settings) const
+{
+    settings.lights                          = m_lights;
+    settings.cameras                         = m_cameras;
+    settings.layouts                         = m_layouts;
+    settings.skins                           = m_skins;
+    settings.node_axises                     = m_node_axis_visualization;
+    settings.physics                         = m_physics_visualization;
+    settings.raytrace                        = m_raytrace_visualization;
+    settings.vertex_labels                   = m_vertex_labels;
+    settings.facet_labels                    = m_facet_labels;
+    settings.edge_labels                     = m_edge_labels;
+    settings.corner_labels                   = m_corner_labels;
+    settings.world_axes                      = m_world_axes;
+    settings.shadow_debug                    = m_shadow_debug;
+    settings.selection                       = m_selection;
+    settings.selection_bounding_points       = m_selection_bounding_points_visible;
+    settings.selection_box                   = m_selection_box;
+    settings.selection_sphere                = m_selection_sphere;
+    settings.selection_parts                 = m_selection_parts;
+    settings.selection_convex_hull           = m_selection_convex_hull;
+    settings.selection_convex_hull_projected = m_selection_convex_hull_projected;
+    settings.debug_convex_hull               = m_debug_convex_hull;
+    settings.convex_hull_edge                = m_convex_hull_edge;
+    settings.selection_major_color           = m_selection_major_color;
+    settings.selection_minor_color           = m_selection_minor_color;
+    settings.group_selection_major_color     = m_group_selection_major_color;
+    settings.group_selection_minor_color     = m_group_selection_minor_color;
+    settings.selection_major_width           = m_selection_major_width;
+    settings.selection_minor_width           = m_selection_minor_width;
+    settings.sphere_step_count               = m_sphere_step_count;
+    settings.gap                             = m_gap;
+    settings.tool_hide                       = m_tool_hide;
+    settings.frustum_box                     = m_frustum_box;
+    settings.frustum_planes                  = m_frustum_planes;
+    settings.light_line_width                = m_light_visualization_width;
+    settings.camera_cull_test                = m_camera_cull_test;
+    settings.camera_line_width               = m_camera_visualization_width;
+    settings.camera_line_color               = m_camera_line_color;
+    settings.layout_line_width               = m_layout_visualization_width;
+    settings.layout_line_color               = m_layout_line_color;
+    settings.max_labels                      = m_max_labels;
+    settings.vertex_positions                = m_vertex_positions;
+    settings.vertex_label_text_color         = m_vertex_label_text_color;
+    settings.vertex_label_line_color         = m_vertex_label_line_color;
+    settings.vertex_label_line_width         = m_vertex_label_line_width;
+    settings.vertex_label_line_length        = m_vertex_label_line_length;
+    settings.edge_label_text_color           = m_edge_label_text_color;
+    settings.edge_label_text_offset          = m_edge_label_text_offset;
+    settings.edge_label_line_color           = m_edge_label_line_color;
+    settings.edge_label_line_width           = m_edge_label_line_width;
+    settings.edge_label_line_length          = m_edge_label_line_length;
+    settings.facet_label_text_color          = m_facet_label_text_color;
+    settings.facet_label_line_color          = m_facet_label_line_color;
+    settings.facet_label_line_width          = m_facet_label_line_width;
+    settings.facet_label_line_length         = m_facet_label_line_length;
+    settings.corner_label_text_color         = m_corner_label_text_color;
+    settings.corner_label_line_color         = m_corner_label_line_color;
+    settings.corner_label_line_width         = m_corner_label_line_width;
+    settings.corner_label_line_length        = m_corner_label_line_length;
+}
 
 auto Debug_visualizations::get_selected_camera(const Render_context& render_context) -> std::shared_ptr<erhe::scene::Camera>
 {
@@ -845,7 +974,7 @@ void Debug_visualizations::selection_visualization(const Render_context& context
             if (node->get_scene() != scene) {
                 continue;
             }
-            if (m_node_axis_visualization == Visualization_mode::Selected) {
+            if (m_node_axis_visualization == Visualization_mode::selected) {
                 const glm::vec4 red  {1.0f, 0.0f, 0.0f, 1.0f};
                 const glm::vec4 green{0.0f, 1.0f, 0.0f, 1.0f};
                 const glm::vec4 blue {0.0f, 0.0f, 1.0f, 1.0f};
@@ -1270,7 +1399,7 @@ void Debug_visualizations::physics_nodes_visualization(const Render_context& con
 
 void Debug_visualizations::raytrace_nodes_visualization(const Render_context& context)
 {
-    if (m_raytrace_visualization == Visualization_mode::None) {
+    if (m_raytrace_visualization == Visualization_mode::off) {
         return;
     }
 
@@ -1622,7 +1751,7 @@ void Debug_visualizations::render(const Render_context& context)
         }
     }
 
-    if (m_layouts != Visualization_mode::None) {
+    if (m_layouts != Visualization_mode::off) {
         for (const auto& node : scene_root->get_hosted_scene()->get_flat_nodes()) {
             if (!node) {
                 continue;
@@ -1638,7 +1767,7 @@ void Debug_visualizations::render(const Render_context& context)
 
     // Skins can be shared by multiple meshes.
     // Visualize each skin only once.
-    if (m_skins != Visualization_mode::None) {
+    if (m_skins != Visualization_mode::off) {
         std::set<erhe::scene::Skin*> skins;
         for (erhe::scene::Mesh_layer* layer : scene_root->layers().mesh_layers()) {
             for (const auto& mesh : layer->meshes) {
@@ -1733,18 +1862,18 @@ void Debug_visualizations::imgui()
     p.add_entry("Frustum Box",       [this](){ ImGui::Checkbox("##", &m_frustum_box); });
     p.add_entry("Frustum Planes",    [this](){ ImGui::Checkbox("##", &m_frustum_planes); });
     p.add_entry("Lights",            [this](){ make_combo("##", m_lights); });
-    if (m_lights != Visualization_mode::None) {
+    if (m_lights != Visualization_mode::off) {
         p.add_entry("Light Line Width", [this](){ ImGui::SliderFloat("##", &m_light_visualization_width, 0.1f, 100.0f); });
     }
     p.add_entry("Cameras",           [this](){ make_combo("##", m_cameras); });
-    if (m_cameras != Visualization_mode::None) {
+    if (m_cameras != Visualization_mode::off) {
         p.add_entry("Camera Cull Test",  [this](){ ImGui::Checkbox   ("##", &m_camera_cull_test); });
         p.add_entry("Camera Line Width", [this](){ ImGui::SliderFloat("##", &m_camera_visualization_width, 0.1f, 100.0f); });
         p.add_entry("Camera Line Color", [this](){ ImGui::ColorEdit4 ("##", &m_camera_line_color.x, ImGuiColorEditFlags_Float); });
     }
 
     p.add_entry("Layouts",           [this](){ make_combo("##", m_layouts); });
-    if (m_layouts != Visualization_mode::None) {
+    if (m_layouts != Visualization_mode::off) {
         p.add_entry("Layout Line Width", [this](){ ImGui::SliderFloat("##", &m_layout_visualization_width, 0.1f, 100.0f); });
         p.add_entry("Layout Line Color", [this](){ ImGui::ColorEdit4 ("##", &m_layout_line_color.x, ImGuiColorEditFlags_Float); });
     }

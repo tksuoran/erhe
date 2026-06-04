@@ -1,4 +1,5 @@
 {
+    "_version": 3,
     "camera_controls": {
         "invert_x": false,
         "invert_y": false,
@@ -9,41 +10,112 @@
         "move_speed": 2,
         "turn_speed": 1
     },
+    "debug_visualizations": {
+        "lights": "all",
+        "cameras": "selected",
+        "layouts": "all",
+        "skins": "off",
+        "node_axises": "selected",
+        "physics": "off",
+        "raytrace": "off",
+        "vertex_labels": "off",
+        "facet_labels": "off",
+        "edge_labels": "off",
+        "corner_labels": "off",
+        "world_axes": false,
+        "shadow_debug": false,
+        "selection": true,
+        "selection_bounding_points": false,
+        "selection_box": false,
+        "selection_sphere": false,
+        "selection_parts": false,
+        "selection_convex_hull": false,
+        "selection_convex_hull_projected": false,
+        "debug_convex_hull": false,
+        "convex_hull_edge": 0,
+        "selection_major_color": [2,1.6,0.1,1],
+        "selection_minor_color": [2,1.6,0.1,0.5],
+        "group_selection_major_color": [2,1.2,0.1,1],
+        "group_selection_minor_color": [2,1.2,0.1,0.5],
+        "selection_major_width": 4,
+        "selection_minor_width": 2,
+        "sphere_step_count": 80,
+        "gap": 0.003,
+        "tool_hide": false,
+        "frustum_box": false,
+        "frustum_planes": false,
+        "light_line_width": 8,
+        "camera_cull_test": false,
+        "camera_line_width": 8,
+        "camera_line_color": [1,1,1,1],
+        "layout_line_width": 2,
+        "layout_line_color": [0.2,0.8,1,1],
+        "max_labels": 400,
+        "vertex_positions": false,
+        "vertex_label_text_color": [0.3,1,0.3,1],
+        "vertex_label_line_color": [0,0.8,0,1],
+        "vertex_label_line_width": 1,
+        "vertex_label_line_length": 0.1,
+        "edge_label_text_color": [1,0.3,0.3,1],
+        "edge_label_text_offset": 0.1,
+        "edge_label_line_color": [0.8,0,0,1],
+        "edge_label_line_width": 1,
+        "edge_label_line_length": 0.5,
+        "facet_label_text_color": [1,1,5,1],
+        "facet_label_line_color": [1,0.5,0,1],
+        "facet_label_line_width": 1,
+        "facet_label_line_length": 0.1,
+        "corner_label_text_color": [0.5,1,1,1],
+        "corner_label_line_color": [0,0.5,0.5,1],
+        "corner_label_line_width": 1,
+        "corner_label_line_length": 0.05
+    },
     "developer": {
         "enable": true
     },
     "grid": {
+        "_version": 2,
         "snap_enabled": true,
-        "visible":      true,
-        "major_color":  [0,0,0,1],
-        "minor_color":  [0,0,0,0.5],
-        "major_width":  4,
-        "minor_width":  0.75,
-        "cell_size":    1,
-        "cell_div":     2,
-        "cell_count":   100
+        "visible": true,
+        "major_color": [0,0,0,1],
+        "minor_color": [0,0,0,0.5],
+        "major_width": 4,
+        "minor_width": 0.75,
+        "cell_size": 1,
+        "cell_div": 2,
+        "cell_count": 100,
+        "label_enable": true,
+        "label_text_fraction": 0.205,
+        "label_spacing": 1,
+        "label_fade": 0.5,
+        "label_color": [0.90819675,0.90819675,0.90819675,1],
+        "level0_color": [0,0,0.01,1],
+        "level1_color": [0,0,0,1],
+        "level2_color": [0.01,0,0,1],
+        "level3_color": [0,0.01,0,1]
     },
     "headset": {
-        "_version":                   2,
-        "openxr":                     false,
-        "openxr_mirror":              false,
+        "_version": 2,
+        "openxr": false,
+        "openxr_mirror": false,
+        "quad_view": false,
+        "debug": false,
+        "validation": false,
+        "api_dump": false,
+        "composition_depth_layer": false,
         "swapchain_depth_attachment": true,
-        "quad_view":                  false,
-        "debug":                      false,
-        "validation":                 false,
-        "api_dump":                   false,
-        "composition_depth_layer":    false,
+        "visibility_mask": false,
+        "hand_tracking": false,
+        "passthrough_fb": false,
+        "composition_alpha": false,
+        "composition_quad_layers": true,
         "composition_quad_layers_depth": true,
-        "visibility_mask":            false,
-        "hand_tracking":              false,
-        "passthrough_fb":             false,
-        "composition_alpha":          false,
-        "cpu_performance_level":      "e_unset",
-        "gpu_performance_level":      "e_unset",
-        "boost_on_thermal_warning":   false,
-        "foveation":                  true,
-        "foveation_level":            "e_high",
-        "foveation_dynamic":          true
+        "cpu_performance_level": "e_unset",
+        "gpu_performance_level": "e_unset",
+        "boost_on_thermal_warning": false,
+        "foveation": true,
+        "foveation_level": "e_high",
+        "foveation_dynamic": true
     },
     "hotbar": {
         "enabled": true,
@@ -70,7 +142,191 @@
     "inventory": {
         "column_count": 9,
         "row_count": 3,
-        "hotbar_slot_count": 9
+        "hotbar_slot_count": 9,
+        "grid_slots": [
+            {
+                "tool_name": "",
+                "brush_name": "",
+                "material_name": ""
+            },
+            {
+                "tool_name": "",
+                "brush_name": "",
+                "material_name": ""
+            },
+            {
+                "tool_name": "",
+                "brush_name": "",
+                "material_name": ""
+            },
+            {
+                "tool_name": "",
+                "brush_name": "",
+                "material_name": ""
+            },
+            {
+                "tool_name": "",
+                "brush_name": "",
+                "material_name": ""
+            },
+            {
+                "tool_name": "",
+                "brush_name": "",
+                "material_name": ""
+            },
+            {
+                "tool_name": "",
+                "brush_name": "",
+                "material_name": ""
+            },
+            {
+                "tool_name": "",
+                "brush_name": "",
+                "material_name": ""
+            },
+            {
+                "tool_name": "",
+                "brush_name": "",
+                "material_name": ""
+            },
+            {
+                "tool_name": "",
+                "brush_name": "",
+                "material_name": ""
+            },
+            {
+                "tool_name": "",
+                "brush_name": "",
+                "material_name": ""
+            },
+            {
+                "tool_name": "",
+                "brush_name": "",
+                "material_name": ""
+            },
+            {
+                "tool_name": "",
+                "brush_name": "",
+                "material_name": ""
+            },
+            {
+                "tool_name": "",
+                "brush_name": "",
+                "material_name": ""
+            },
+            {
+                "tool_name": "",
+                "brush_name": "",
+                "material_name": ""
+            },
+            {
+                "tool_name": "",
+                "brush_name": "",
+                "material_name": ""
+            },
+            {
+                "tool_name": "",
+                "brush_name": "",
+                "material_name": ""
+            },
+            {
+                "tool_name": "",
+                "brush_name": "",
+                "material_name": ""
+            },
+            {
+                "tool_name": "",
+                "brush_name": "",
+                "material_name": ""
+            },
+            {
+                "tool_name": "",
+                "brush_name": "",
+                "material_name": ""
+            },
+            {
+                "tool_name": "",
+                "brush_name": "",
+                "material_name": ""
+            },
+            {
+                "tool_name": "",
+                "brush_name": "",
+                "material_name": ""
+            },
+            {
+                "tool_name": "",
+                "brush_name": "",
+                "material_name": ""
+            },
+            {
+                "tool_name": "",
+                "brush_name": "",
+                "material_name": ""
+            },
+            {
+                "tool_name": "",
+                "brush_name": "",
+                "material_name": ""
+            },
+            {
+                "tool_name": "",
+                "brush_name": "",
+                "material_name": ""
+            },
+            {
+                "tool_name": "",
+                "brush_name": "",
+                "material_name": ""
+            }
+        ],
+        "hotbar_slots": [
+            {
+                "tool_name": "Move Tool",
+                "brush_name": "",
+                "material_name": ""
+            },
+            {
+                "tool_name": "Rotate",
+                "brush_name": "",
+                "material_name": ""
+            },
+            {
+                "tool_name": "Scale",
+                "brush_name": "",
+                "material_name": ""
+            },
+            {
+                "tool_name": "Brush Tool",
+                "brush_name": "",
+                "material_name": ""
+            },
+            {
+                "tool_name": "Material Paint Tool (command host)",
+                "brush_name": "",
+                "material_name": ""
+            },
+            {
+                "tool_name": "Paint Tool",
+                "brush_name": "",
+                "material_name": ""
+            },
+            {
+                "tool_name": "Physics Tool",
+                "brush_name": "",
+                "material_name": ""
+            },
+            {
+                "tool_name": "Selection Tool",
+                "brush_name": "",
+                "material_name": ""
+            },
+            {
+                "tool_name": "",
+                "brush_name": "",
+                "material_name": ""
+            }
+        ]
     },
     "network": {
         "upstream_address": "127.0.0.1",
@@ -91,6 +347,17 @@
         "make_johnson_solid_brushes": true,
         "make_platonic_solid_brushes": true,
         "make_curved_brushes": true
+    },
+    "sky": {
+        "sky_horizon_color": [0.4295082,0.7923785,1,1],
+        "sky_zenith_color": [0,2.1105905e-08,0.08852458,1],
+        "sky_power": 10,
+        "ground_horizon_color": [0.34391835,0.3770492,0.21139479,1],
+        "ground_nadir_color": [0.28196722,0.15531309,0,1],
+        "ground_power": 6.26,
+        "checker_frequency": [18,18],
+        "checker_intensity_a": 1.1,
+        "checker_intensity_b": 1
     },
     "thumbnails": {
         "capacity": 200,
@@ -118,10 +385,10 @@
     "imgui": {
         "primary_font": "res/fonts/SourceSansPro-Regular.otf",
         "mono_font": "res/fonts/SourceCodePro-Semibold.otf",
-        "font_size": 16.0,
-        "vr_font_size": 24.0,
-        "material_design_font_size": 16.0,
-        "icon_font_size": 16.0
+        "font_size": 16,
+        "vr_font_size": 24,
+        "material_design_font_size": 16,
+        "icon_font_size": 16
     },
     "icons": {
         "small_icon_size": 16,
@@ -131,6 +398,6 @@
     "threading": {
         "thread_count": 8
     },
-    "post_processing": true,
+    "post_processing": false,
     "quit_after_frames": 0
 }

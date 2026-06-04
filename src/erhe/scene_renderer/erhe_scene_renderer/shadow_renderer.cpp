@@ -198,6 +198,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
             parameters.light_camera_viewport,
             1.0f,                      // exposure
             Grid_parameters{},         // unused by shadow pass shaders
+            Sky_parameters{},          // unused by shadow pass shaders
             0,                         // frame number
             parameters.reverse_depth,
             parameters.depth_range

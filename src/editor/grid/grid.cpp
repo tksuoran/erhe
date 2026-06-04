@@ -2,6 +2,7 @@
 
 #include "app_context.hpp"
 #include "app_rendering.hpp"
+#include "config/generated/grid_config.hpp"
 #include "items.hpp"
 #include "renderers/render_context.hpp"
 #include "tools/selection_tool.hpp"
@@ -29,6 +30,50 @@ using glm::vec3;
 Grid::Grid()
 {
     update();
+}
+
+void Grid::read_config(const Grid_config& config)
+{
+    set_visible(config.visible);
+    m_snap_enabled        = config.snap_enabled;
+    m_cell_size           = config.cell_size;
+    m_cell_div            = config.cell_div;
+    m_cell_count          = config.cell_count;
+    m_major_color         = config.major_color;
+    m_minor_color         = config.minor_color;
+    m_major_width         = config.major_width;
+    m_minor_width         = config.minor_width;
+    m_label_enable        = config.label_enable;
+    m_label_text_fraction = config.label_text_fraction;
+    m_label_spacing       = config.label_spacing;
+    m_label_fade          = config.label_fade;
+    m_label_color         = config.label_color;
+    m_level_colors[0]     = config.level0_color;
+    m_level_colors[1]     = config.level1_color;
+    m_level_colors[2]     = config.level2_color;
+    m_level_colors[3]     = config.level3_color;
+}
+
+void Grid::write_config(Grid_config& config) const
+{
+    config.visible             = is_visible();
+    config.snap_enabled        = m_snap_enabled;
+    config.cell_size           = m_cell_size;
+    config.cell_div            = m_cell_div;
+    config.cell_count          = m_cell_count;
+    config.major_color         = m_major_color;
+    config.minor_color         = m_minor_color;
+    config.major_width         = m_major_width;
+    config.minor_width         = m_minor_width;
+    config.label_enable        = m_label_enable;
+    config.label_text_fraction = m_label_text_fraction;
+    config.label_spacing       = m_label_spacing;
+    config.label_fade          = m_label_fade;
+    config.label_color         = m_label_color;
+    config.level0_color        = m_level_colors[0];
+    config.level1_color        = m_level_colors[1];
+    config.level2_color        = m_level_colors[2];
+    config.level3_color        = m_level_colors[3];
 }
 
 auto Grid::snap_world_position(const glm::vec3& position_in_world) const -> glm::vec3

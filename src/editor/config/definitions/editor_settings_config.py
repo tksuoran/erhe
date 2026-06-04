@@ -1,12 +1,13 @@
 from erhe_codegen import *
 
 struct("Editor_settings_config",
-    version=1,
+    version=3,
     short_desc="Editor settings",
     long_desc="Runtime-editable settings saved to editor_settings.json.",
     developer=False,
     fields=[
         field("camera_controls",      StructRef("Camera_controls_config"), added_in=1),
+        field("debug_visualizations", StructRef("Debug_visualizations_settings"), added_in=2),
         field("developer",            StructRef("Developer_config"),       added_in=1),
         field("grid",                 StructRef("Grid_config"),            added_in=1),
         field("headset",              StructRef("Headset_config"),         added_in=1),
@@ -17,6 +18,7 @@ struct("Editor_settings_config",
         field("network",              StructRef("Network_config"),         added_in=1),
         field("physics",              StructRef("Physics_config"),         added_in=1),
         field("scene",                StructRef("Scene_config"),           added_in=1),
+        field("sky",                  StructRef("Sky_config"),             added_in=3),
         field("thumbnails",           StructRef("Thumbnails_config"),      added_in=1),
         field("transform_tool",       StructRef("Transform_tool_config"), added_in=1),
         field("viewport",             StructRef("Viewport_config_data"),  added_in=1),

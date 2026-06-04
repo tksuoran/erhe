@@ -43,6 +43,9 @@ public:
     // Grid settings (cell sizes, line widths, per-level colors, axis
     // label settings) forwarded to the camera UBO; read by grid.frag.
     erhe::scene_renderer::Grid_parameters                                  grid_parameters{};
+    // Sky settings (horizon / zenith / ground colors, checker pattern)
+    // forwarded to the camera UBO; read by sky.frag.
+    erhe::scene_renderer::Sky_parameters                                   sky_parameters{};
     std::optional<erhe::scene_renderer::Primitive_interface_settings>      primitive_settings;
     std::function<void()>                                                  begin;
     std::function<void()>                                                  end; 

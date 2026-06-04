@@ -104,6 +104,10 @@ public:
         // per-level colors, axis label settings) written to the camera
         // UBO; ignored by passes that do not draw the grid.
         const Grid_parameters                                              grid_parameters  {};
+        // Sky composition pass settings (horizon / zenith / ground colors,
+        // checker pattern) written to the camera UBO; ignored by passes
+        // that do not draw the sky.
+        const Sky_parameters                                               sky_parameters   {};
         const std::string_view                                             debug_label;
     };
 

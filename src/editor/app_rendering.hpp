@@ -118,6 +118,9 @@ public:
     void set_grid_visibility        (bool visible);
     void set_grid_label             (const glm::vec4& grid_label);
     void set_grid_colors            (const std::array<glm::vec4, 4>& level_colors, const glm::vec4& label_color);
+    // Refreshes the sky composition pass parameters from
+    // Editor_settings_config::sky (edited in the Settings window).
+    void update_sky_parameters      ();
 
     void add   (Renderable* renderable);
     void remove(Renderable* renderable);
@@ -181,6 +184,7 @@ private:
     Pipeline_renderpasses             m_pipeline_passes;
     Composer                          m_composer;
     std::shared_ptr<Composition_pass> m_grid_composition_pass;
+    std::shared_ptr<Composition_pass> m_sky_composition_pass;
 
     // TODO Re-add per-render-pass GPU timers when the composer's pipeline
     // passes own their own Render_pass objects.

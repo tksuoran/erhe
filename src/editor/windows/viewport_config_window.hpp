@@ -17,9 +17,11 @@ class App_context;
 class Viewport_config_window : public erhe::imgui::Imgui_window
 {
 public:
+    // Indexed by Visualization_mode (off, selected, hovered, all).
     static constexpr const char* c_visualization_mode_strings[] = {
         "Off",
         "Selected",
+        "Hovered",
         "All"
     };
 

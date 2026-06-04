@@ -14,6 +14,8 @@
 
 #include <fmt/format.h>
 
+#include <algorithm>
+
 namespace editor {
 
 using glm::vec3;
@@ -45,17 +47,21 @@ Grid_tool::Grid_tool(
     std::shared_ptr<Grid> grid = std::make_shared<Grid>();
     // TODO Move config to editor ?
     // grid->name        = "Default Grid";
-    grid->set_visible     (grid_config.visible);
-    grid->set_snap_enabled(grid_config.snap_enabled);
-    grid->set_cell_size   (config.cell_size);
-    grid->set_cell_div    (config.cell_div);
-    grid->set_cell_count  (config.cell_count);
-    grid->set_major_color (config.major_color);
-    grid->set_minor_color (config.minor_color);
-    grid->set_major_width (config.major_width);
-    grid->set_minor_width (config.minor_width);
+    grid->read_config(grid_config);
 
     m_grids.push_back(grid);
+}
+
+void Grid_tool::write_config(Grid_config& grid_config) const
+{
+    if (m_grids.empty()) {
+        return;
+    }
+    const std::size_t index = std::min(
+        static_cast<std::size_t>(std::max(m_grid_index, 0)),
+        m_grids.size() - 1
+    );
+    m_grids[index]->write_config(grid_config);
 }
 
 void Grid_tool::tool_render(const Render_context& context)

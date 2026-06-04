@@ -37,6 +37,11 @@ public:
     std::size_t grid_label;           // vec4 x = enable, y = text height fraction, z = label spacing, w = fade threshold (pixels per em)
     std::size_t grid_color;           // vec4[4] per-LOD-level line color (rgb, a = opacity)
     std::size_t grid_label_color;     // vec4 axis label color (rgb, a = opacity)
+    std::size_t sky_checker;          // vec4 x, y = checker frequency, z = intensity a, w = intensity b
+    std::size_t sky_horizon_color;    // vec4 rgb, w = horizon-to-zenith falloff power
+    std::size_t sky_zenith_color;     // vec4 rgb, w unused
+    std::size_t ground_horizon_color; // vec4 rgb, w = horizon-to-nadir falloff power
+    std::size_t ground_nadir_color;   // vec4 rgb, w unused
     std::size_t frame_number;         // uvec2
     std::size_t padding;              // uvec2
 };
@@ -67,6 +72,25 @@ public:
     };
     // Axis label color (rgb, a = opacity).
     glm::vec4                grid_label_color{0.0f, 0.0f, 0.0f, 1.0f};
+};
+
+// Sky rendering parameters written to the camera UBO; read by the
+// editor's sky composition pass fragment shader (sky.frag). Other
+// passes ignore these fields, so renderers that do not draw the sky
+// can pass a default-constructed instance. Defaults match the
+// historical hardcoded sky shader values.
+class Sky_parameters
+{
+public:
+    // x, y = checkerboard frequency in heading and elevation,
+    // z = checker intensity a, w = checker intensity b.
+    glm::vec4 sky_checker         {18.0f, 18.0f, 0.92f, 1.0f};
+    // rgb = color at the horizon, w = horizon-to-zenith falloff power.
+    glm::vec4 sky_horizon_color   { 0.3f,  0.3f, 0.33f, 10.0f};
+    glm::vec4 sky_zenith_color    { 0.2f,  0.2f, 0.22f,  0.0f};
+    // rgb = color at the horizon, w = horizon-to-nadir falloff power.
+    glm::vec4 ground_horizon_color{ 0.2f,  0.2f, 0.2f,   8.0f};
+    glm::vec4 ground_nadir_color  { 0.1f,  0.1f, 0.1f,   0.0f};
 };
 
 class Camera_interface
@@ -107,6 +131,7 @@ public:
         erhe::math::Viewport                      viewport,
         float                                     exposure,
         const Grid_parameters&                    grid_parameters,
+        const Sky_parameters&                     sky_parameters,
         uint64_t                                  frame_number,
         bool                                      reverse_depth,
         erhe::math::Depth_range                   depth_range,
@@ -127,6 +152,7 @@ public:
         erhe::math::Viewport                      viewport,
         float                                     exposure,
         const Grid_parameters&                    grid_parameters,
+        const Sky_parameters&                     sky_parameters,
         uint64_t                                  frame_number,
         bool                                      reverse_depth,
         erhe::math::Depth_range                   depth_range,
@@ -142,6 +168,7 @@ public:
         std::span<const Camera_view_input>        views,
         float                                     exposure,
         const Grid_parameters&                    grid_parameters,
+        const Sky_parameters&                     sky_parameters,
         uint64_t                                  frame_number,
         bool                                      reverse_depth,
         erhe::math::Depth_range                   depth_range,

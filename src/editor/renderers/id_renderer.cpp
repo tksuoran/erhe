@@ -424,6 +424,7 @@ void Id_renderer::render(const Render_parameters& parameters)
         viewport,
         1.0f,
         erhe::scene_renderer::Grid_parameters{}, // unused by id pass shaders
+        erhe::scene_renderer::Sky_parameters{},  // unused by id pass shaders
         0,
         parameters.reverse_depth,
         parameters.depth_range

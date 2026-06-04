@@ -1,6 +1,8 @@
 #include "app_rendering.hpp"
 
 #include "app_context.hpp"
+#include "config/generated/editor_settings_config.hpp"
+#include "config/generated/sky_config.hpp"
 #include "editor_log.hpp"
 #include "app_message_bus.hpp"
 #include "app_settings.hpp"
@@ -245,7 +247,7 @@ App_rendering::App_rendering(
     // This gets overridden in Composition_pass::render()
     // TODO Figure out a good way to route the settings
 
-    auto sky = make_composition_pass(
+    m_sky_composition_pass = make_composition_pass(
         "Sky",
         Composition_pass_data{
             .non_mesh_vertex_count{3}, // Fullscreen quad
@@ -948,6 +950,20 @@ void App_rendering::set_grid_colors(const std::array<glm::vec4, 4>& level_colors
     }
 }
 
+void App_rendering::update_sky_parameters()
+{
+    if ((m_sky_composition_pass == nullptr) || (m_context.editor_settings == nullptr)) {
+        return;
+    }
+    const Sky_config& sky = m_context.editor_settings->sky;
+    erhe::scene_renderer::Sky_parameters& parameters = m_sky_composition_pass->data.sky_parameters;
+    parameters.sky_checker          = glm::vec4{sky.checker_frequency.x, sky.checker_frequency.y, sky.checker_intensity_a, sky.checker_intensity_b};
+    parameters.sky_horizon_color    = glm::vec4{glm::vec3{sky.sky_horizon_color},    sky.sky_power};
+    parameters.sky_zenith_color     = glm::vec4{glm::vec3{sky.sky_zenith_color},     0.0f};
+    parameters.ground_horizon_color = glm::vec4{glm::vec3{sky.ground_horizon_color}, sky.ground_power};
+    parameters.ground_nadir_color   = glm::vec4{glm::vec3{sky.ground_nadir_color},   0.0f};
+}
+
 void App_rendering::process_end_capture()
 {
     ERHE_PROFILE_FUNCTION();
@@ -1030,6 +1046,8 @@ void App_rendering::render_composer(const Render_context& context)
     //ERHE_PROFILE_GPU_SCOPE(c_id_main);
     ERHE_VERIFY(context.command_buffer != nullptr);
     erhe::graphics::Scoped_debug_group pass_scope{*context.command_buffer, "App_rendering::render_composer()"};
+
+    update_sky_parameters();
 
     m_composer.render(context);
 

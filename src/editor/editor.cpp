@@ -32,6 +32,7 @@
 #include "items.hpp"
 #include "editor_default_layout.hpp"
 #include "editor_log.hpp"
+#include "editor_settings_store.hpp"
 #include "app_message_bus.hpp"
 #include "app_rendering.hpp"
 #include "app_scenes.hpp"
@@ -405,6 +406,17 @@ public:
         m_imgui_windows->draw_imgui_windows();
         m_imgui_windows->end_frame();
 
+        // Autosave editor settings when they have changed. Defer while a
+        // mouse button is held so dragging a slider results in a single
+        // write when the drag ends.
+        {
+            bool any_mouse_button_down = false;
+            for (const bool button_down : m_input_state->mouse_button) {
+                any_mouse_button_down = any_mouse_button_down || button_down;
+            }
+            m_editor_settings_store.update(!any_mouse_button_down);
+        }
+
         // - Apply all command bindings (OpenXR bindings were already executed above)
 
         //m_fly_camera_tool->update_once_per_frame(timestamp);
@@ -731,7 +743,7 @@ public:
         , m_renderer_config     {erhe::codegen::load_config<Renderer_config>       ("config/editor/renderer.json")}
         , m_text_renderer_config{erhe::codegen::load_config<Text_renderer_config>  ("config/editor/text_renderer.json")}
         , m_window_config       {erhe::codegen::load_config<Window_config>         ("config/editor/window.json")}
-        , m_editor_settings     {erhe::codegen::load_config<Editor_settings_config>("config/editor/editor_settings.json")}
+        , m_editor_settings     {erhe::codegen::load_config<Editor_settings_config>(c_editor_settings_file_path)}
     {
 #if defined(ERHE_OS_ANDROID) && defined(ERHE_XR_LIBRARY_OPENXR)
         // On Android the only flavor that links OpenXR is `quest` (Meta Quest 3).
@@ -1644,7 +1656,8 @@ public:
                     m_app_context,
                     *m_app_message_bus.get(),
                     *m_app_rendering.get(),
-                    *m_programs.get()
+                    *m_programs.get(),
+                    m_editor_settings.debug_visualizations
                 );
             }
             ERHE_TASK_FOOTER(
@@ -2190,6 +2203,7 @@ public:
         m_app_context.text_renderer_config     = &m_text_renderer_config;
         m_app_context.window_config            = &m_window_config;
         m_app_context.editor_settings          = &m_editor_settings;
+        m_app_context.editor_settings_store    = &m_editor_settings_store;
         m_app_context.app_windows              = m_app_windows           .get();
         m_app_context.fly_camera_tool          = m_fly_camera_tool       .get();
         m_app_context.navigation_gizmo_tool    = m_navigation_gizmo_tool .get();
@@ -2231,6 +2245,26 @@ public:
         m_app_context.viewport_config_window   = m_viewport_config_window.get();
         m_app_context.scene_view_config_window = m_scene_view_config_window.get();
         m_app_context.scene_views              = m_viewport_scene_views  .get();
+
+        // Subsystems whose live state lives outside Editor_settings_config
+        // provide collect callbacks; the store copies their state into the
+        // config before change detection / saving. Sections edited directly
+        // in the config struct (Settings window) need no callback.
+        m_editor_settings_store.register_collect_callback(
+            [this](Editor_settings_config& settings) {
+                m_grid_tool->write_config(settings.grid);
+            }
+        );
+        m_editor_settings_store.register_collect_callback(
+            [this](Editor_settings_config& settings) {
+                m_inventory_window->write_config(settings.inventory);
+            }
+        );
+        m_editor_settings_store.register_collect_callback(
+            [this](Editor_settings_config& settings) {
+                m_debug_visualizations->write_config(settings.debug_visualizations);
+            }
+        );
     }
 
     auto on_key_event(const erhe::window::Input_event& input_event) -> bool override
@@ -2509,6 +2543,7 @@ public:
     Text_renderer_config                m_text_renderer_config;
     Window_config                       m_window_config;
     Editor_settings_config              m_editor_settings;
+    Editor_settings_store               m_editor_settings_store{m_editor_settings};
 
     std::unique_ptr<tf::Executor>       m_executor;
     Item_async_task_guard               m_item_task_guard; // destroyed before m_executor

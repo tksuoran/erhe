@@ -72,6 +72,7 @@ void Texel_renderer::render(const Render_parameters& parameters)
         viewport,
         camera->get_exposure(),
         Grid_parameters{}, // unused by texel pass shaders
+        Sky_parameters{},  // unused by texel pass shaders
         0, // frame_number -- ignored here
         true, // reverse_depth
         erhe::math::Depth_range::zero_to_one

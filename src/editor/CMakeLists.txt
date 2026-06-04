@@ -160,6 +160,8 @@ erhe_target_sources_grouped(
     editor_default_layout.hpp
     editor_log.cpp
     editor_log.hpp
+    editor_settings_store.cpp
+    editor_settings_store.hpp
     experiments/gradient_editor.cpp
     experiments/gradient_editor.hpp
     experiments/network_window.cpp
@@ -544,6 +546,7 @@ erhe_codegen_generate(
         "${_config_defs}/physics_config.py"
         "${_config_defs}/renderer_config.py"
         "${_config_defs}/scene_config.py"
+        "${_config_defs}/sky_config.py"
         "${_config_defs}/text_renderer_config.py"
         "${_config_defs}/threading_config.py"
         "${_config_defs}/thumbnails_config.py"
@@ -558,6 +561,7 @@ erhe_codegen_generate(
         "${_config_defs}/fly_camera_config.py"
         "${_config_defs}/render_style_data.py"
         "${_config_defs}/debug_visualizations_config.py"
+        "${_config_defs}/debug_visualizations_settings.py"
         "${_config_defs}/default_viewport_config.py"
         "${_config_defs}/make_mesh_args.py"
         "${_config_defs}/add_lights_args.py"
@@ -602,6 +606,9 @@ set(_config_sources
     ${_config_out}/scene_config.hpp
     ${_config_out}/scene_config_serialization.hpp
     ${_config_out}/scene_config.cpp
+    ${_config_out}/sky_config.hpp
+    ${_config_out}/sky_config_serialization.hpp
+    ${_config_out}/sky_config.cpp
     ${_config_out}/text_renderer_config.hpp
     ${_config_out}/text_renderer_config_serialization.hpp
     ${_config_out}/text_renderer_config.cpp
@@ -647,6 +654,9 @@ set(_config_sources
     ${_config_out}/debug_visualizations_config.hpp
     ${_config_out}/debug_visualizations_config_serialization.hpp
     ${_config_out}/debug_visualizations_config.cpp
+    ${_config_out}/debug_visualizations_settings.hpp
+    ${_config_out}/debug_visualizations_settings_serialization.hpp
+    ${_config_out}/debug_visualizations_settings.cpp
     ${_config_out}/make_mesh_args.hpp
     ${_config_out}/make_mesh_args_serialization.hpp
     ${_config_out}/make_mesh_args.cpp

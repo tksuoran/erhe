@@ -118,6 +118,7 @@ void Cube_renderer::render(const Render_parameters& parameters)
         viewport,
         camera->get_exposure(),
         Grid_parameters{}, // unused by cube pass shaders
+        Sky_parameters{},  // unused by cube pass shaders
         parameters.frame_number,
         true, // reverse_depth
         erhe::math::Depth_range::zero_to_one

@@ -57,6 +57,11 @@ public:
 
     auto update_hover(glm::vec3 ray_origin, glm::vec3 ray_direction) const -> Grid_hover_position;
 
+    // Copies the currently selected grid's settings into config.
+    // Persistence is owned by Editor_settings_store, which calls this
+    // through a registered collect callback.
+    void write_config(Grid_config& config) const;
+
 private:
     void window_imgui();
 

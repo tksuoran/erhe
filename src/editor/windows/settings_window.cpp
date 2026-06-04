@@ -4,6 +4,7 @@
 #include "app_message_bus.hpp"
 #include "app_settings.hpp"
 #include "windows/inventory_window.hpp"
+#include "editor_settings_store.hpp"
 #include "config/generated/developer_config.hpp"
 #include "config/generated/editor_settings_config.hpp"
 #include "erhe_scene_renderer/generated/mesh_memory_config.hpp"
@@ -17,6 +18,7 @@
 #include "config/generated/editor_settings_config_serialization.hpp"
 #include "erhe_codegen/config_io.hpp"
 #include "config/generated/camera_controls_config_serialization.hpp"
+#include "config/generated/debug_visualizations_settings_serialization.hpp"
 #include "config/generated/developer_config_serialization.hpp"
 #include "config/generated/grid_config_serialization.hpp"
 #include "erhe_xr/generated/headset_config_serialization.hpp"
@@ -30,6 +32,7 @@
 #include "config/generated/physics_config_serialization.hpp"
 #include "config/generated/renderer_config_serialization.hpp"
 #include "config/generated/scene_config_serialization.hpp"
+#include "config/generated/sky_config_serialization.hpp"
 #include "config/generated/text_renderer_config_serialization.hpp"
 #include "config/generated/threading_config_serialization.hpp"
 #include "config/generated/thumbnails_config_serialization.hpp"
@@ -534,6 +537,7 @@ void Settings_window::imgui()
             ImGui::Checkbox("##", &settings.post_processing);
         }, "Enable Post Processing. Takes effect on next viewport creation.");
         add_config_section(settings.camera_controls);
+        add_config_section(settings.debug_visualizations);
         add_config_section(settings.developer);
         add_config_section(settings.grid);
         add_config_section(settings.headset);
@@ -544,16 +548,16 @@ void Settings_window::imgui()
         add_config_section(settings.network);
         add_config_section(settings.physics);
         add_config_section(settings.scene);
+        add_config_section(settings.sky);
         add_config_section(settings.thumbnails);
         add_config_section(settings.transform_tool);
         add_config_section(settings.viewport);
 
         add_entry("", [this, button_size, &settings](){
             if (ImGui::Button("Save Settings", button_size)) {
-                if (m_context.inventory_window != nullptr) {
-                    m_context.inventory_window->write_config(settings.inventory);
+                if (m_context.editor_settings_store != nullptr) {
+                    m_context.editor_settings_store->save();
                 }
-                erhe::codegen::save_config(settings, "config/editor/editor_settings.json");
             }
         });
         pop_group();

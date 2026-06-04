@@ -6,11 +6,14 @@
 #include "erhe_graphics/render_pipeline.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_imgui/imgui_window.hpp"
+#include "erhe_renderer/generated/visualization_mode.hpp"
 #include "app_message.hpp"
 #include "erhe_message_bus/message_bus.hpp"
 #include "erhe_math/math_util.hpp"
 
 #include <memory>
+
+struct Debug_visualizations_settings;
 
 namespace erhe::graphics {
     class Command_buffer;
@@ -40,15 +43,11 @@ class Programs;
 class Scene_root;
 class Scene_view;
 
-enum class Visualization_mode {
-    None     = 0,
-    Selected = 1,
-    Hovered  = 2,
-    All      = 3
-};
-
+// Visualization_mode is the codegen enum from
+// erhe_renderer/generated/visualization_mode.hpp (off, selected, hovered,
+// all) so the modes can be serialized in editor settings.
 static constexpr const char* c_visualization_mode_strings[] = {
-    "None",
+    "Off",
     "Selected",
     "Hovered",
     "All"
@@ -68,7 +67,8 @@ public:
         App_context&                             context,
         App_message_bus&                         app_message_bus,
         App_rendering&                           app_rendering,
-        Programs&                                programs
+        Programs&                                programs,
+        const Debug_visualizations_settings&     settings
     );
     ~Debug_visualizations() noexcept;
 
@@ -77,6 +77,12 @@ public:
 
     // Implements Imgui_window
     void imgui() override;
+
+    // Copies settings into / out of the live window state. Persistence is
+    // owned by Editor_settings_store, which calls write_config through a
+    // registered collect callback.
+    void read_config (const Debug_visualizations_settings& settings);
+    void write_config(Debug_visualizations_settings& settings) const;
 
 private:
     [[nodiscard]] auto get_selected_camera(const Render_context& render_context) -> std::shared_ptr<erhe::scene::Camera>;
@@ -129,17 +135,17 @@ private:
     Scene_view*                          m_hover_scene_view{nullptr};
     erhe::math::Bounding_volume_combiner m_selection_bounding_volume;
 
-    Visualization_mode m_lights                 {Visualization_mode::All};
-    Visualization_mode m_cameras                {Visualization_mode::Selected};
-    Visualization_mode m_layouts                {Visualization_mode::All};
-    Visualization_mode m_skins                  {Visualization_mode::None};
-    Visualization_mode m_node_axis_visualization{Visualization_mode::None};
-    Visualization_mode m_physics_visualization  {Visualization_mode::None};
-    Visualization_mode m_vertex_labels          {Visualization_mode::None};
-    Visualization_mode m_facet_labels           {Visualization_mode::None};
-    Visualization_mode m_edge_labels            {Visualization_mode::None};
-    Visualization_mode m_corner_labels          {Visualization_mode::None};
-    Visualization_mode m_raytrace_visualization {Visualization_mode::None};
+    Visualization_mode m_lights                 {Visualization_mode::all};
+    Visualization_mode m_cameras                {Visualization_mode::selected};
+    Visualization_mode m_layouts                {Visualization_mode::all};
+    Visualization_mode m_skins                  {Visualization_mode::off};
+    Visualization_mode m_node_axis_visualization{Visualization_mode::off};
+    Visualization_mode m_physics_visualization  {Visualization_mode::off};
+    Visualization_mode m_vertex_labels          {Visualization_mode::off};
+    Visualization_mode m_facet_labels           {Visualization_mode::off};
+    Visualization_mode m_edge_labels            {Visualization_mode::off};
+    Visualization_mode m_corner_labels          {Visualization_mode::off};
+    Visualization_mode m_raytrace_visualization {Visualization_mode::off};
 
     Property_editor m_property_editor;
 
