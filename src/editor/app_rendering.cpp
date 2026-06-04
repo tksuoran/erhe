@@ -936,7 +936,15 @@ void App_rendering::set_grid_visibility(bool visible)
 void App_rendering::set_grid_label(const glm::vec4& grid_label)
 {
     if (m_grid_composition_pass != nullptr) {
-        m_grid_composition_pass->data.grid_label = grid_label;
+        m_grid_composition_pass->data.grid_parameters.grid_label = grid_label;
+    }
+}
+
+void App_rendering::set_grid_colors(const std::array<glm::vec4, 4>& level_colors, const glm::vec4& label_color)
+{
+    if (m_grid_composition_pass != nullptr) {
+        m_grid_composition_pass->data.grid_parameters.grid_color       = level_colors;
+        m_grid_composition_pass->data.grid_parameters.grid_label_color = label_color;
     }
 }
 

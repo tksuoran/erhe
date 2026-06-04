@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_renderer/enums.hpp"
+#include "erhe_scene_renderer/camera_buffer.hpp"
 #include "erhe_scene_renderer/primitive_buffer.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
 
@@ -39,10 +40,9 @@ public:
     uint32_t                                                               shader_key_force_enable_mask{0};
     uint32_t                                                               shader_key_force_disable_mask{0};
     erhe::graphics::Shader_stages*                                         shader_stages{nullptr};
-    // Grid axis label settings forwarded to the camera UBO (read by
-    // grid.frag): x = enable, y = text height as fraction of spacing,
-    // z = label spacing in world units, w = reserved.
-    glm::vec4                                                              grid_label{1.0f, 0.15f, 1.0f, 0.0f};
+    // Grid settings (cell sizes, line widths, per-level colors, axis
+    // label settings) forwarded to the camera UBO; read by grid.frag.
+    erhe::scene_renderer::Grid_parameters                                  grid_parameters{};
     std::optional<erhe::scene_renderer::Primitive_interface_settings>      primitive_settings;
     std::function<void()>                                                  begin;
     std::function<void()>                                                  end; 

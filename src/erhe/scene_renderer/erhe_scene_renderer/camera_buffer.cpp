@@ -32,6 +32,8 @@ Camera_interface::Camera_interface(erhe::graphics::Device& graphics_device, cons
         .grid_size            = camera_struct.add_vec4 ("grid_size"           )->get_offset_in_parent(),
         .grid_line_width      = camera_struct.add_vec4 ("grid_line_width"     )->get_offset_in_parent(),
         .grid_label           = camera_struct.add_vec4 ("grid_label"          )->get_offset_in_parent(),
+        .grid_color           = camera_struct.add_vec4 ("grid_color", 4       )->get_offset_in_parent(),
+        .grid_label_color     = camera_struct.add_vec4 ("grid_label_color"    )->get_offset_in_parent(),
         .frame_number         = camera_struct.add_uvec2("frame_number"        )->get_offset_in_parent(),
         .padding              = camera_struct.add_uvec2("padding"             )->get_offset_in_parent(),
     }
@@ -64,9 +66,7 @@ void write_camera_entry(
     const glm::mat4&                          node_from_world,
     erhe::math::Viewport                      viewport,
     float                                     exposure,
-    glm::vec4                                 grid_size,
-    glm::vec4                                 grid_line_width,
-    glm::vec4                                 grid_label,
+    const Grid_parameters&                    grid_parameters,
     uint64_t                                  frame_number,
     const bool                                reverse_depth,
     const erhe::math::Depth_range             depth_range,
@@ -98,9 +98,14 @@ void write_camera_entry(
     write(gpu_data, write_offset + offsets.view_depth_near,      as_span(view_depth_near     ));
     write(gpu_data, write_offset + offsets.view_depth_far,       as_span(view_depth_far      ));
     write(gpu_data, write_offset + offsets.exposure,             as_span(exposure            ));
-    write(gpu_data, write_offset + offsets.grid_size,            as_span(grid_size           ));
-    write(gpu_data, write_offset + offsets.grid_line_width,      as_span(grid_line_width     ));
-    write(gpu_data, write_offset + offsets.grid_label,           as_span(grid_label          ));
+    write(gpu_data, write_offset + offsets.grid_size,            as_span(grid_parameters.grid_size       ));
+    write(gpu_data, write_offset + offsets.grid_line_width,      as_span(grid_parameters.grid_line_width ));
+    write(gpu_data, write_offset + offsets.grid_label,           as_span(grid_parameters.grid_label      ));
+    for (std::size_t i = 0; i < grid_parameters.grid_color.size(); ++i) {
+        // std140 vec4 array: 16 byte element stride
+        write(gpu_data, write_offset + offsets.grid_color + (i * sizeof(glm::vec4)), as_span(grid_parameters.grid_color[i]));
+    }
+    write(gpu_data, write_offset + offsets.grid_label_color,     as_span(grid_parameters.grid_label_color));
     write(gpu_data, write_offset + offsets.frame_number,         as_span(frame_number        ));
     write(gpu_data, write_offset + offsets.padding,              as_span(frame_number        ));
 }
@@ -113,9 +118,7 @@ void write_camera_entry(
     const erhe::scene::Node&                  camera_node,
     erhe::math::Viewport                      viewport,
     float                                     exposure,
-    glm::vec4                                 grid_size,
-    glm::vec4                                 grid_line_width,
-    glm::vec4                                 grid_label,
+    const Grid_parameters&                    grid_parameters,
     uint64_t                                  frame_number,
     const bool                                reverse_depth,
     const erhe::math::Depth_range             depth_range,
@@ -128,7 +131,7 @@ void write_camera_entry(
         camera_node.world_from_node(),
         camera_node.node_from_world(),
         viewport,
-        exposure, grid_size, grid_line_width, grid_label, frame_number,
+        exposure, grid_parameters, frame_number,
         reverse_depth, depth_range, conventions
     );
 }
@@ -140,9 +143,7 @@ auto Camera_buffer::update(
     const erhe::scene::Node&                  camera_node,
     erhe::math::Viewport                      viewport,
     float                                     exposure,
-    glm::vec4                                 grid_size,
-    glm::vec4                                 grid_line_width,
-    glm::vec4                                 grid_label,
+    const Grid_parameters&                    grid_parameters,
     uint64_t                                  frame_number,
     const bool                                reverse_depth,
     const erhe::math::Depth_range             depth_range,
@@ -166,7 +167,7 @@ auto Camera_buffer::update(
     write_camera_entry(
         gpu_data, 0, offsets,
         camera_projection, camera_node, viewport,
-        exposure, grid_size, grid_line_width, grid_label, frame_number,
+        exposure, grid_parameters, frame_number,
         reverse_depth, depth_range, conventions
     );
     if (block_size > entry_size) {
@@ -184,9 +185,7 @@ auto Camera_buffer::update(
     const erhe::scene::Transform&             world_from_camera,
     erhe::math::Viewport                      viewport,
     float                                     exposure,
-    glm::vec4                                 grid_size,
-    glm::vec4                                 grid_line_width,
-    glm::vec4                                 grid_label,
+    const Grid_parameters&                    grid_parameters,
     uint64_t                                  frame_number,
     const bool                                reverse_depth,
     const erhe::math::Depth_range             depth_range,
@@ -208,7 +207,7 @@ auto Camera_buffer::update(
         world_from_camera.get_matrix(),
         world_from_camera.get_inverse_matrix(),
         viewport,
-        exposure, grid_size, grid_line_width, grid_label, frame_number,
+        exposure, grid_parameters, frame_number,
         reverse_depth, depth_range, conventions
     );
     if (block_size > entry_size) {
@@ -224,9 +223,7 @@ auto Camera_buffer::update(
 auto Camera_buffer::update_views(
     std::span<const Camera_view_input>        views,
     float                                     exposure,
-    glm::vec4                                 grid_size,
-    glm::vec4                                 grid_line_width,
-    glm::vec4                                 grid_label,
+    const Grid_parameters&                    grid_parameters,
     uint64_t                                  frame_number,
     const bool                                reverse_depth,
     const erhe::math::Depth_range             depth_range,
@@ -254,7 +251,7 @@ auto Camera_buffer::update_views(
         write_camera_entry(
             gpu_data, write_offset, offsets,
             *view.projection, *view.node, view.viewport,
-            exposure, grid_size, grid_line_width, grid_label, frame_number,
+            exposure, grid_parameters, frame_number,
             reverse_depth, depth_range, conventions
         );
         write_offset += entry_size;

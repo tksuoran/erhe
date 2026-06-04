@@ -100,11 +100,10 @@ public:
         bool                                                               reverse_depth    {true};
         erhe::math::Depth_range                                            depth_range      {erhe::math::Depth_range::zero_to_one};
         erhe::math::Coordinate_conventions                                 conventions;
-        const glm::vec4                                                    grid_size        {10.0f,  1.0f,  0.1f,  0.01f};
-        const glm::vec4                                                    grid_line_width  { 0.006, 0.02f, 0.02f, 0.02f};
-        // x = enable, y = text height as fraction of label spacing,
-        // z = label spacing in world units, w = reserved.
-        const glm::vec4                                                    grid_label       { 1.0f,  0.15f, 1.0f,  0.0f};
+        // Grid composition pass settings (cell sizes, line widths,
+        // per-level colors, axis label settings) written to the camera
+        // UBO; ignored by passes that do not draw the grid.
+        const Grid_parameters                                              grid_parameters  {};
         const std::string_view                                             debug_label;
     };
 

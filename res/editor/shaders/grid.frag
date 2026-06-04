@@ -115,23 +115,32 @@ void main()
     float grid_l2 = PristineGrid(uv / grid_l2_cell_size, vec2(grid_l2_line_width));
     float grid_l3 = PristineGrid(uv / grid_l3_cell_size, vec2(grid_l3_line_width));
 
-    vec4 grid_color = vec4(0.0);
-    if (grid_l0 > epsilon) {
-        grid_color = vec4(0.0, 0.0, 0.01 * grid_l0, grid_l0);
-    } else if (grid_l1 > epsilon) {
-        grid_color = vec4(0.0, 0.0, 0.0, grid_l1);
-    } else if (grid_l2 > epsilon) {
-        grid_color = vec4(0.01 * grid_l2, 0.0, 0.0, grid_l2);
-    } else { //if (grid_l3 > epsilon) {
-        grid_color = vec4(0.0, 0.01 * grid_l3, 0.0, grid_l3);
-    }
+    // Composite all levels with the premultiplied "over" operator
+    // (finer levels under coarser ones) so that crossing lines from
+    // different levels blend their coverage instead of one level
+    // replacing the other. Per-level colors come from the camera UBO
+    // (rgb = line color, a = line opacity multiplied into coverage).
+    vec4 grid_l0_tint  = camera.cameras[c_view_index].grid_color[0];
+    vec4 grid_l1_tint  = camera.cameras[c_view_index].grid_color[1];
+    vec4 grid_l2_tint  = camera.cameras[c_view_index].grid_color[2];
+    vec4 grid_l3_tint  = camera.cameras[c_view_index].grid_color[3];
+    vec4 grid_l0_color = vec4(grid_l0_tint.rgb, 1.0) * (grid_l0 * grid_l0_tint.a);
+    vec4 grid_l1_color = vec4(grid_l1_tint.rgb, 1.0) * (grid_l1 * grid_l1_tint.a);
+    vec4 grid_l2_color = vec4(grid_l2_tint.rgb, 1.0) * (grid_l2 * grid_l2_tint.a);
+    vec4 grid_l3_color = vec4(grid_l3_tint.rgb, 1.0) * (grid_l3 * grid_l3_tint.a);
+    vec4 grid_color = grid_l3_color;
+    grid_color = grid_l2_color + (grid_color * (1.0 - grid_l2_color.a));
+    grid_color = grid_l1_color + (grid_color * (1.0 - grid_l1_color.a));
+    grid_color = grid_l0_color + (grid_color * (1.0 - grid_l0_color.a));
 
     float label_alpha = 0.0;
+    vec3  label_rgb   = vec3(0.0);
 
 #if defined(ERHE_GRID_LABELS)
     // Axis coordinate labels: grid_label.x = enable, .y = text height as a
     // fraction of label spacing, .z = label spacing in world units (integer
-    // values >= 1 expected), .w = reserved.
+    // values >= 1 expected), .w = fade threshold: glyph size in pixels per
+    // em at which labels are fully visible (fade starts at half of it).
     vec4 grid_label = camera.cameras[c_view_index].grid_label;
 
     // Fade labels in once a glyph covers enough pixels to be legible.
@@ -139,7 +148,8 @@ void main()
     float spacing        = max(grid_label.z, 0.000001);
     float text_h         = grid_label.y * spacing; // em size in world units
     float pixels_per_em  = text_h / pixel_size;
-    float label_fade     = smoothstep(6.0, 12.0, pixels_per_em);
+    float fade_full      = max(grid_label.w, 0.0001);
+    float label_fade     = smoothstep(0.5 * fade_full, fade_full, pixels_per_em);
 
     if ((grid_label.x > 0.5) && (label_fade > 0.0)) {
         float cell_w  = glyph.glyphs[0].advance * text_h; // monospace: every slot has the same advance
@@ -191,14 +201,16 @@ void main()
 
         if (slot >= 0) {
             vec2 inverse_diameter = text_h / max(uv_fw, vec2(0.0000001));
-            label_alpha = erhe_glyph_coverage(slot, glyph_uv, inverse_diameter, true) * label_fade;
+            vec4 label_color      = camera.cameras[c_view_index].grid_label_color;
+            label_alpha = erhe_glyph_coverage(slot, glyph_uv, inverse_diameter, true) * label_fade * label_color.a;
+            label_rgb   = label_color.rgb;
         }
     }
 #endif // ERHE_GRID_LABELS
 
-    // Composite labels over grid lines (both are dark; premultiplied output).
+    // Composite labels over grid lines (premultiplied output).
     out_color = vec4(
-        grid_color.rgb * (1.0 - label_alpha),
+        (label_rgb * label_alpha) + (grid_color.rgb * (1.0 - label_alpha)),
         (grid_color.a * (1.0 - label_alpha)) + label_alpha
     );
     if (out_color.a < epsilon) {

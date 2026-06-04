@@ -6,6 +6,8 @@
 
 #include <glm/glm.hpp>
 
+#include <array>
+
 namespace erhe::renderer { class Line_renderer_set; }
 
 namespace editor {
@@ -77,6 +79,16 @@ private:
     bool            m_label_enable       {true};  // grid.frag axis coordinate labels
     float           m_label_text_fraction{0.15f}; // text height as fraction of label spacing
     float           m_label_spacing      {1.0f};  // label spacing in world units (integer >= 1)
+    float           m_label_fade         {4.0f};  // pixels per em for full label visibility (smaller = visible further)
+    // Per-LOD-level line colors and axis label color for the grid
+    // composition pass (grid.frag). Defaults match Grid_parameters.
+    std::array<glm::vec4, 4> m_level_colors{
+        glm::vec4{0.0f,  0.0f,  0.01f, 1.0f},
+        glm::vec4{0.0f,  0.0f,  0.0f,  1.0f},
+        glm::vec4{0.01f, 0.0f,  0.0f,  1.0f},
+        glm::vec4{0.0f,  0.01f, 0.0f,  1.0f}
+    };
+    glm::vec4       m_label_color        {0.0f, 0.0f, 0.0f, 1.0f};
     float           m_major_width     {4.0f};
     float           m_minor_width     {2.0f};
     glm::vec4       m_major_color     {0.0f, 0.0f, 0.0f, 0.729f};

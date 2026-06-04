@@ -12,6 +12,7 @@
 
 #include <glm/glm.hpp>
 
+#include <array>
 #include <memory>
 
 namespace erhe::commands       { class Commands; }
@@ -116,6 +117,7 @@ public:
     void process_end_capture        ();
     void set_grid_visibility        (bool visible);
     void set_grid_label             (const glm::vec4& grid_label);
+    void set_grid_colors            (const std::array<glm::vec4, 4>& level_colors, const glm::vec4& label_color);
 
     void add   (Renderable* renderable);
     void remove(Renderable* renderable);

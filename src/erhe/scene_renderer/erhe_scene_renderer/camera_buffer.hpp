@@ -6,6 +6,7 @@
 #include "erhe_math/math_util.hpp"
 #include "erhe_math/viewport.hpp"
 
+#include <array>
 #include <span>
 
 namespace erhe::graphics {
@@ -33,9 +34,39 @@ public:
     std::size_t exposure;             // float
     std::size_t grid_size;            // vec4
     std::size_t grid_line_width;      // vec4
-    std::size_t grid_label;           // vec4 x = enable, y = text height fraction, z = label spacing, w = reserved
+    std::size_t grid_label;           // vec4 x = enable, y = text height fraction, z = label spacing, w = fade threshold (pixels per em)
+    std::size_t grid_color;           // vec4[4] per-LOD-level line color (rgb, a = opacity)
+    std::size_t grid_label_color;     // vec4 axis label color (rgb, a = opacity)
     std::size_t frame_number;         // uvec2
     std::size_t padding;              // uvec2
+};
+
+// Grid rendering parameters written to the camera UBO; read by the
+// editor's grid composition pass fragment shader (grid.frag). Other
+// passes ignore these fields, so renderers that do not draw the grid
+// can pass a default-constructed instance.
+class Grid_parameters
+{
+public:
+    // Cell size for each of the 4 grid LOD levels, in world units.
+    glm::vec4                grid_size      {10.0f,   1.0f,  0.1f,  0.01f};
+    // Line width for each of the 4 grid LOD levels.
+    glm::vec4                grid_line_width{ 0.006f, 0.02f, 0.02f, 0.02f};
+    // Axis coordinate labels: x = enable, y = text height as a fraction
+    // of label spacing, z = label spacing in world units, w = fade
+    // threshold: glyph size in pixels per em at which labels are fully
+    // visible (fade starts at half of it; smaller = visible further).
+    glm::vec4                grid_label     { 1.0f,   0.15f, 1.0f,  4.0f};
+    // Per-LOD-level line colors (rgb, a = line opacity). Defaults match
+    // the historical hardcoded grid shader tints.
+    std::array<glm::vec4, 4> grid_color{
+        glm::vec4{0.0f,  0.0f,  0.01f, 1.0f},
+        glm::vec4{0.0f,  0.0f,  0.0f,  1.0f},
+        glm::vec4{0.01f, 0.0f,  0.0f,  1.0f},
+        glm::vec4{0.0f,  0.01f, 0.0f,  1.0f}
+    };
+    // Axis label color (rgb, a = opacity).
+    glm::vec4                grid_label_color{0.0f, 0.0f, 0.0f, 1.0f};
 };
 
 class Camera_interface
@@ -75,9 +106,7 @@ public:
         const erhe::scene::Node&                  camera_node,
         erhe::math::Viewport                      viewport,
         float                                     exposure,
-        glm::vec4                                 grid_size,
-        glm::vec4                                 grid_line_width,
-        glm::vec4                                 grid_label,
+        const Grid_parameters&                    grid_parameters,
         uint64_t                                  frame_number,
         bool                                      reverse_depth,
         erhe::math::Depth_range                   depth_range,
@@ -97,9 +126,7 @@ public:
         const erhe::scene::Transform&             world_from_camera,
         erhe::math::Viewport                      viewport,
         float                                     exposure,
-        glm::vec4                                 grid_size,
-        glm::vec4                                 grid_line_width,
-        glm::vec4                                 grid_label,
+        const Grid_parameters&                    grid_parameters,
         uint64_t                                  frame_number,
         bool                                      reverse_depth,
         erhe::math::Depth_range                   depth_range,
@@ -114,9 +141,7 @@ public:
     auto update_views(
         std::span<const Camera_view_input>        views,
         float                                     exposure,
-        glm::vec4                                 grid_size,
-        glm::vec4                                 grid_line_width,
-        glm::vec4                                 grid_label,
+        const Grid_parameters&                    grid_parameters,
         uint64_t                                  frame_number,
         bool                                      reverse_depth,
         erhe::math::Depth_range                   depth_range,

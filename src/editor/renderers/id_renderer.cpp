@@ -423,9 +423,7 @@ void Id_renderer::render(const Render_parameters& parameters)
         *camera.get_node(),
         viewport,
         1.0f,
-        glm::vec4{0.0f},
-        glm::vec4{0.0f},
-        glm::vec4{0.0f}, // grid label
+        erhe::scene_renderer::Grid_parameters{}, // unused by id pass shaders
         0,
         parameters.reverse_depth,
         parameters.depth_range

@@ -197,9 +197,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
             light_projection_transform->world_from_light_camera,
             parameters.light_camera_viewport,
             1.0f,                      // exposure
-            glm::vec4{0.0f},           // grid size
-            glm::vec4{0.0f},           // grid line width
-            glm::vec4{0.0f},           // grid label
+            Grid_parameters{},         // unused by shadow pass shaders
             0,                         // frame number
             parameters.reverse_depth,
             parameters.depth_range

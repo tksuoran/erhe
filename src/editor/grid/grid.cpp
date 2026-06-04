@@ -98,9 +98,10 @@ void Grid::render(const Render_context& context)
             m_label_enable ? 1.0f : 0.0f,
             m_label_text_fraction,
             std::max(1.0f, std::round(m_label_spacing)), // shader formats integer values only
-            0.0f
+            m_label_fade
         }
     );
+    context.app_context.app_rendering->set_grid_colors(m_level_colors, m_label_color);
 
     if (!is_visible()) {
         return;
@@ -219,9 +220,18 @@ void Grid::imgui(App_context& context)
     ImGui::SliderFloat("Minor Width",      &m_minor_width,  -100.0f, 100.0f);
     ImGui::ColorEdit4 ("Major Color",      &m_major_color.x, ImGuiColorEditFlags_Float);
     ImGui::ColorEdit4 ("Minor Color",      &m_minor_color.x, ImGuiColorEditFlags_Float);
+    ImGui::ColorEdit4 ("Level 0 Color",    &m_level_colors[0].x, ImGuiColorEditFlags_Float);
+    ImGui::ColorEdit4 ("Level 1 Color",    &m_level_colors[1].x, ImGuiColorEditFlags_Float);
+    ImGui::ColorEdit4 ("Level 2 Color",    &m_level_colors[2].x, ImGuiColorEditFlags_Float);
+    ImGui::ColorEdit4 ("Level 3 Color",    &m_level_colors[3].x, ImGuiColorEditFlags_Float);
     ImGui::Checkbox   ("Axis Labels",      &m_label_enable);
     ImGui::SliderFloat("Label Size",       &m_label_text_fraction, 0.05f, 0.5f);
     ImGui::SliderFloat("Label Spacing",    &m_label_spacing,       1.0f,  100.0f, "%.0f");
+    ImGui::SliderFloat("Label Fade",       &m_label_fade,          0.5f,  24.0f);
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Glyph size in pixels at which labels are fully visible.\nSmaller values keep labels visible further away.");
+    }
+    ImGui::ColorEdit4 ("Label Color",      &m_label_color.x, ImGuiColorEditFlags_Float);
 
     erhe::imgui::make_combo("Plane", m_plane_type, grid_plane_type_strings, IM_ARRAYSIZE(grid_plane_type_strings));
 
