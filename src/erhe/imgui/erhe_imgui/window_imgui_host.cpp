@@ -198,8 +198,12 @@ void Window_imgui_host::begin_imgui_frame()
         ImGuiWindowFlags_MenuBar;
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    // Zero padding so content (dockspace + status bar) fits the window exactly;
+    // with non-zero padding the root window overflows by the padding amount and
+    // becomes scrollable with the mouse wheel.
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{0.0f, 0.0f});
     ImGui::Begin("erhe root window", nullptr, window_flags);
-    ImGui::PopStyleVar(2);
+    ImGui::PopStyleVar(3);
 
     // Menu
     if (m_begin_callback) {

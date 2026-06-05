@@ -1360,7 +1360,7 @@ void Item_tree::imgui_tree(float ui_scale)
     ImGui::TextUnformatted(ICON_MDI_FILTER);
     ImGui::PopFont();
     ImGui::SameLine();
-    m_text_filter.Draw("Filter:", -FLT_MIN);
+    m_text_filter.Draw("##Filter", -FLT_MIN);
 
     ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2{0.0f, 0.0f});
     ERHE_DEFER( ImGui::PopStyleVar(1); );

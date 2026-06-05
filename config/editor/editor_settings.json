@@ -78,21 +78,21 @@
         "snap_enabled": true,
         "visible": true,
         "cell_size": 1,
-        "cell_div": 2,
-        "cell_count": 100,
+        "cell_div": 10,
+        "cell_count": 15,
         "label_enable": true,
-        "label_text_fraction": 0.09,
+        "label_text_fraction": 0.1,
         "label_spacing": 1,
-        "label_fade": 0.5,
+        "label_fade": 4,
         "label_color": [1,1,1,1],
-        "level0_color": [0,0,0.01,1],
+        "level0_color": [0,0,0,1],
         "level1_color": [0,0,0,1],
-        "level2_color": [0.01,0,0,1],
-        "level3_color": [0,0.01,0,1],
-        "level0_width": 0.006,
-        "level1_width": 0.02,
-        "level2_width": 0.02,
-        "level3_width": 0.02
+        "level2_color": [0,0,0,1],
+        "level3_color": [0,0,0,1],
+        "level0_width": 0.001,
+        "level1_width": 0.003,
+        "level2_width": 0.005,
+        "level3_width": 0.006
     },
     "headset": {
         "_version": 2,
@@ -349,14 +349,14 @@
         "make_curved_brushes": true
     },
     "sky": {
-        "sky_horizon_color": [0.4295082,0.7923785,1,1],
-        "sky_zenith_color": [0,2.1105905e-08,0.08852458,1],
+        "sky_horizon_color": [0.3,0.3,0.33,1],
+        "sky_zenith_color": [0.2,0.2,0.22,1],
         "sky_power": 10,
-        "ground_horizon_color": [0.34391835,0.3770492,0.21139479,1],
-        "ground_nadir_color": [0.28196722,0.15531309,0,1],
-        "ground_power": 6.26,
+        "ground_horizon_color": [0.2,0.2,0.2,1],
+        "ground_nadir_color": [0.1,0.1,0.1,1],
+        "ground_power": 8,
         "checker_frequency": [18,18],
-        "checker_intensity_a": 1.1,
+        "checker_intensity_a": 0.92,
         "checker_intensity_b": 1
     },
     "thumbnails": {
@@ -398,6 +398,6 @@
     "threading": {
         "thread_count": 8
     },
-    "post_processing": false,
+    "post_processing": true,
     "quit_after_frames": 0
 }
