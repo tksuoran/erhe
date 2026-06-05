@@ -530,7 +530,7 @@ auto Scene_commands::create_new_layout(erhe::scene::Node* parent) -> std::shared
     auto new_node   = std::make_shared<erhe::scene::Node>("new layout node");
     auto new_layout = std::make_shared<erhe::scene::Layout>("new layout");
     new_node  ->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
-    new_layout->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
+    new_layout->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui | Item_flags::show_debug_visualizations);
     m_context.operation_stack->queue(
         std::make_shared<Compound_operation>(
             Compound_operation::Parameters{

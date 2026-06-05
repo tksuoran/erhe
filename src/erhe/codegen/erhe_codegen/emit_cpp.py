@@ -70,6 +70,8 @@ def _serialize_value_code(t: TypeBase, expr: str, indent: str) -> list[str]:
             lines.append(f"{indent}erhe::codegen::serialize_vec4(out, {expr});")
         elif t.name == "IVec2":
             lines.append(f"{indent}erhe::codegen::serialize_ivec2(out, {expr});")
+        elif t.name == "IVec3":
+            lines.append(f"{indent}erhe::codegen::serialize_ivec3(out, {expr});")
         elif t.name == "Mat4":
             lines.append(f"{indent}erhe::codegen::serialize_mat4(out, {expr});")
     elif isinstance(t, VectorType):

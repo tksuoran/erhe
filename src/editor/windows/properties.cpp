@@ -11,6 +11,7 @@
 #include "editor_log.hpp"
 #include "items.hpp"
 #include "operations/material_change_operation.hpp"
+#include "operations/node_attach_operation.hpp"
 #include "operations/operation_stack.hpp"
 
 #include "preview/material_preview.hpp"
@@ -341,7 +342,10 @@ void Properties::layout_item_properties(erhe::scene::Layout_item& layout_item)
     });
     add_entry("Margin Min", [&layout_item]() { ImGui::DragFloat3("##", &layout_item.margin_min.x, 0.01f); });
     add_entry("Margin Max", [&layout_item]() { ImGui::DragFloat3("##", &layout_item.margin_max.x, 0.01f); });
-    add_entry("Grid Cell",  [&layout_item]() { ImGui::DragInt3  ("##", &layout_item.grid_cell.x, 0.1f, 0, 1000); });
+    add_entry("Auto Cell",  [&layout_item]() { ImGui::Checkbox  ("##", &layout_item.grid_cell_auto); });
+    if (!layout_item.grid_cell_auto) {
+        add_entry("Grid Cell", [&layout_item]() { ImGui::DragInt3("##", &layout_item.grid_cell.x, 0.1f, 0, 1000); });
+    }
     add_entry("Grid Span",  [&layout_item]() { ImGui::DragInt3  ("##", &layout_item.grid_span.x, 0.1f, 1, 1000); });
 }
 
@@ -1021,6 +1025,26 @@ void Properties::item_properties(const std::shared_ptr<erhe::Item_base>& item_in
             item_properties(attachment);
         }
         //pop_group();
+
+        // A child of a layout node without per-child layout parameters:
+        // offer creating the Layout_item attachment (undoable).
+        const std::shared_ptr<erhe::scene::Node> parent_node = node->get_parent_node();
+        const bool parent_is_layout =
+            parent_node &&
+            static_cast<bool>(erhe::scene::get_attachment<erhe::scene::Layout>(parent_node.get()));
+        const bool has_layout_item =
+            static_cast<bool>(erhe::scene::get_attachment<erhe::scene::Layout_item>(node.get()));
+        if (parent_is_layout && !has_layout_item) {
+            add_entry("Layout Item", [this, node]() {
+                if (ImGui::Button("Add Layout Item")) {
+                    std::shared_ptr<erhe::scene::Layout_item> new_layout_item = std::make_shared<erhe::scene::Layout_item>("layout item");
+                    new_layout_item->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
+                    m_context.operation_stack->queue(
+                        std::make_shared<Node_attach_operation>(new_layout_item, node)
+                    );
+                }
+            });
+        }
     }
 
     pop_group();

@@ -441,6 +441,7 @@ erhe_codegen_generate(
         "${_codegen_defs}/collision_shape_type_serial.py"
         "${_codegen_defs}/compound_child_data.py"
         "${_codegen_defs}/gltf_source_reference.py"
+        "${_codegen_defs}/layout_data.py"
         "${_codegen_defs}/light_data.py"
         "${_codegen_defs}/mesh_reference.py"
         "${_codegen_defs}/mesh_source_type.py"
@@ -467,6 +468,18 @@ set(_codegen_sources
     ${_codegen_out}/gltf_source_reference.hpp
     ${_codegen_out}/gltf_source_reference_serialization.hpp
     ${_codegen_out}/gltf_source_reference.cpp
+    ${_codegen_out}/axis_direction_serial.hpp
+    ${_codegen_out}/axis_direction_serial.cpp
+    ${_codegen_out}/layout_alignment_serial.hpp
+    ${_codegen_out}/layout_alignment_serial.cpp
+    ${_codegen_out}/layout_data.hpp
+    ${_codegen_out}/layout_data_serialization.hpp
+    ${_codegen_out}/layout_data.cpp
+    ${_codegen_out}/layout_item_data.hpp
+    ${_codegen_out}/layout_item_data_serialization.hpp
+    ${_codegen_out}/layout_item_data.cpp
+    ${_codegen_out}/layout_type_serial.hpp
+    ${_codegen_out}/layout_type_serial.cpp
     ${_codegen_out}/light_data.hpp
     ${_codegen_out}/light_data_serialization.hpp
     ${_codegen_out}/light_data.cpp

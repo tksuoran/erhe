@@ -109,6 +109,15 @@ void serialize_ivec2(std::string& out, const glm::ivec2& value)
     out += ']';
 }
 
+void serialize_ivec3(std::string& out, const glm::ivec3& value)
+{
+    out += '[';
+    serialize_int(out, value.x); out += ',';
+    serialize_int(out, value.y); out += ',';
+    serialize_int(out, value.z);
+    out += ']';
+}
+
 void serialize_mat4(std::string& out, const glm::mat4& value)
 {
     out += '[';

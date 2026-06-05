@@ -33,6 +33,7 @@
 #include "erhe_renderer/primitive_renderer.hpp"
 #include "erhe_renderer/text_renderer.hpp"
 #include "erhe_scene/camera.hpp"
+#include "erhe_scene/layout.hpp"
 #include "erhe_scene/light.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/mesh_raytrace.hpp"
@@ -803,6 +804,25 @@ void Debug_visualizations::camera_visualization(const Render_context& render_con
             }
         }
     }
+}
+
+void Debug_visualizations::layout_visualization(const Render_context& render_context, const erhe::scene::Node& node, const erhe::scene::Layout& layout)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    using namespace erhe::utility;
+    if (!test_bit_set(layout.get_flag_bits(), erhe::Item_flags::show_debug_visualizations)) {
+        return;
+    }
+
+    erhe::renderer::Primitive_renderer line_renderer = render_context.get({erhe::graphics::Primitive_type::line, 2, true, true});
+    line_renderer.set_thickness(m_layout_visualization_width);
+    line_renderer.add_cube(
+        node.world_from_node(),
+        m_layout_line_color,
+        layout.volume.min,
+        layout.volume.max
+    );
 }
 
 void Debug_visualizations::selection_visualization(const Render_context& context)
@@ -1602,6 +1622,20 @@ void Debug_visualizations::render(const Render_context& context)
         }
     }
 
+    if (m_layouts != Visualization_mode::None) {
+        for (const auto& node : scene_root->get_hosted_scene()->get_flat_nodes()) {
+            if (!node) {
+                continue;
+            }
+            for (const auto& attachment : node->get_attachments()) {
+                const auto& layout = std::dynamic_pointer_cast<erhe::scene::Layout>(attachment);
+                if (layout && (should_visualize(m_layouts, layout) || should_visualize(m_layouts, node))) {
+                    layout_visualization(context, *node, *layout);
+                }
+            }
+        }
+    }
+
     // Skins can be shared by multiple meshes.
     // Visualize each skin only once.
     if (m_skins != Visualization_mode::None) {
@@ -1707,6 +1741,12 @@ void Debug_visualizations::imgui()
         p.add_entry("Camera Cull Test",  [this](){ ImGui::Checkbox   ("##", &m_camera_cull_test); });
         p.add_entry("Camera Line Width", [this](){ ImGui::SliderFloat("##", &m_camera_visualization_width, 0.1f, 100.0f); });
         p.add_entry("Camera Line Color", [this](){ ImGui::ColorEdit4 ("##", &m_camera_line_color.x, ImGuiColorEditFlags_Float); });
+    }
+
+    p.add_entry("Layouts",           [this](){ make_combo("##", m_layouts); });
+    if (m_layouts != Visualization_mode::None) {
+        p.add_entry("Layout Line Width", [this](){ ImGui::SliderFloat("##", &m_layout_visualization_width, 0.1f, 100.0f); });
+        p.add_entry("Layout Line Color", [this](){ ImGui::ColorEdit4 ("##", &m_layout_line_color.x, ImGuiColorEditFlags_Float); });
     }
 
     p.add_entry("Skins",          [this](){ make_combo("##", m_skins); });

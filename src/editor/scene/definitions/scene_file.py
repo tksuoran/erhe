@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Scene_file",
-    version=1,
+    version=2,
     fields=[
         field("name",            String,                                    added_in=1, default='""'),
         field("enable_physics",  Bool,                                      added_in=1, default="true"),
@@ -10,5 +10,7 @@ struct("Scene_file",
         field("lights",          Vector(StructRef("Light_data")),           added_in=1),
         field("mesh_references", Vector(StructRef("Mesh_reference")),       added_in=1),
         field("node_physics",    Vector(StructRef("Node_physics_data")),    added_in=1),
+        field("layouts",         Vector(StructRef("Layout_data")),          added_in=2),
+        field("layout_items",    Vector(StructRef("Layout_item_data")),     added_in=2),
     ],
 )

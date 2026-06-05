@@ -190,10 +190,11 @@ public:
         Layout_alignment::negative,
         Layout_alignment::negative
     };
-    glm::vec3  margin_min{0.0f, 0.0f, 0.0f};
-    glm::vec3  margin_max{0.0f, 0.0f, 0.0f};
-    glm::ivec3 grid_cell {0, 0, 0};
-    glm::ivec3 grid_span {1, 1, 1};
+    glm::vec3  margin_min    {0.0f, 0.0f, 0.0f};
+    glm::vec3  margin_max    {0.0f, 0.0f, 0.0f};
+    bool       grid_cell_auto{true};
+    glm::ivec3 grid_cell     {0, 0, 0};
+    glm::ivec3 grid_span     {1, 1, 1};
 };
 
 [[nodiscard]] auto resolve_item(const Node& child) -> Resolved_item
@@ -201,11 +202,12 @@ public:
     Resolved_item result;
     const std::shared_ptr<Layout_item> item = get_attachment<Layout_item>(&child);
     if (item) {
-        result.alignment  = item->alignment;
-        result.margin_min = item->margin_min;
-        result.margin_max = item->margin_max;
-        result.grid_cell  = item->grid_cell;
-        result.grid_span  = item->grid_span;
+        result.alignment      = item->alignment;
+        result.margin_min     = item->margin_min;
+        result.margin_max     = item->margin_max;
+        result.grid_cell_auto = item->grid_cell_auto;
+        result.grid_cell      = item->grid_cell;
+        result.grid_span      = item->grid_span;
     }
     return result;
 }
@@ -372,6 +374,23 @@ void Layout::layout_grid(Node& layout_node)
     const int track_count_x = static_cast<int>(edges_x.size()) - 1;
     const int track_count_y = static_cast<int>(edges_y.size()) - 1;
     const int track_count_z = static_cast<int>(edges_z.size()) - 1;
+    const glm::ivec3 track_count{track_count_x, track_count_y, track_count_z};
+
+    // Auto placement: children without an explicit cell flow into successive
+    // cells in document order - primary axis fastest, wrapping into the
+    // secondary axis, then into the tertiary axis (like the flow layout but on
+    // cell indices). A negative axis direction walks that axis from the last
+    // cell towards the first. Each auto child consumes its span along the
+    // primary axis; a wrap advances by the largest secondary/tertiary span
+    // seen in the completed row/sheet. Explicitly placed children do not move
+    // the cursor and are not tracked for occupancy, so mixing explicit and
+    // auto children can overlap.
+    const int p_axis  = axis_index(primary);
+    const int s_axis  = axis_index(secondary);
+    const int t_axis  = axis_index(tertiary);
+    glm::ivec3 logical_cursor{0, 0, 0}; // (primary, secondary, tertiary) positions, sign-independent
+    int row_advance_s  = 1; // secondary advance when the current row wraps
+    int sheet_advance_t = 1; // tertiary advance when the current sheet wraps
 
     for (const std::shared_ptr<erhe::Hierarchy>& child_item : layout_node.get_children()) {
         const std::shared_ptr<Node> child = std::dynamic_pointer_cast<Node>(child_item);
@@ -387,10 +406,43 @@ void Layout::layout_grid(Node& layout_node)
 
         const Resolved_item params = resolve_item(*child);
 
+        glm::ivec3 child_cell = params.grid_cell;
+        if (params.grid_cell_auto) {
+            const int span_p = std::clamp(params.grid_span[p_axis], 1, track_count[p_axis]);
+            const int span_s = std::clamp(params.grid_span[s_axis], 1, track_count[s_axis]);
+            const int span_t = std::clamp(params.grid_span[t_axis], 1, track_count[t_axis]);
+            if ((logical_cursor[0] + span_p) > track_count[p_axis]) {
+                logical_cursor[0]  = 0;
+                logical_cursor[1] += row_advance_s;
+                row_advance_s      = 1;
+            }
+            if ((logical_cursor[1] + span_s) > track_count[s_axis]) {
+                logical_cursor[1]  = 0;
+                logical_cursor[2] += sheet_advance_t;
+                sheet_advance_t    = 1;
+            }
+            if ((logical_cursor[2] + span_t) > track_count[t_axis]) {
+                logical_cursor[2] = 0; // grid full: wrap around (overlaps from the start)
+            }
+            // Convert sign-independent logical positions into cell indices:
+            // a positive direction counts up from the first cell, a negative
+            // direction counts down from the last cell (span occupies the
+            // cells below the converted start index).
+            const auto to_cell = [](const Axis_direction direction, const int logical, const int span, const int count) -> int {
+                return (axis_sign(direction) > 0.0f) ? logical : (count - logical - span);
+            };
+            child_cell[p_axis] = to_cell(primary,   logical_cursor[0], span_p, track_count[p_axis]);
+            child_cell[s_axis] = to_cell(secondary, logical_cursor[1], span_s, track_count[s_axis]);
+            child_cell[t_axis] = to_cell(tertiary,  logical_cursor[2], span_t, track_count[t_axis]);
+            row_advance_s      = std::max(row_advance_s,   span_s);
+            sheet_advance_t    = std::max(sheet_advance_t, span_t);
+            logical_cursor[0] += span_p;
+        }
+
         // Clamp the cell index and span into the available track range.
-        const int cx = std::clamp(params.grid_cell.x, 0, track_count_x - 1);
-        const int cy = std::clamp(params.grid_cell.y, 0, track_count_y - 1);
-        const int cz = std::clamp(params.grid_cell.z, 0, track_count_z - 1);
+        const int cx = std::clamp(child_cell.x, 0, track_count_x - 1);
+        const int cy = std::clamp(child_cell.y, 0, track_count_y - 1);
+        const int cz = std::clamp(child_cell.z, 0, track_count_z - 1);
         const int sx = std::clamp(params.grid_span.x, 1, track_count_x - cx);
         const int sy = std::clamp(params.grid_span.y, 1, track_count_y - cy);
         const int sz = std::clamp(params.grid_span.z, 1, track_count_z - cz);

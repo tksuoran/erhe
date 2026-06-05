@@ -34,6 +34,11 @@ volume (a 3D analogue of CSS flexbox/grid).
 - Parameters: number of columns / rows / slices, and the extent of each.
 - Each node selects: cell, cell span, alignment (pos/neg/stretch per axis),
   margin (per axis).
+- Auto placement: a child without an explicit cell (no `Layout_item`, or
+  `grid_cell_auto` true) flows into successive cells in document order -
+  primary axis fastest, wrapping into secondary, then tertiary; spans are
+  honored. Explicitly placed children do not move the auto cursor and there is
+  no occupancy tracking, so mixing explicit and auto children can overlap.
 
 ### Stack layout
 - Children are distributed along a single axis: the (primary) flow direction,
@@ -118,9 +123,14 @@ cell + span); a child without one uses default values.
 - Build (Windows): `scripts\configure_vs2026_opengl.bat` then build the `editor`
   target (e.g. `cmake --build build_vs2026_opengl --target editor --config Debug`).
 - Verified so far: all three steps compile; the editor boots and the per-frame
-  driver runs with no errors in `logs/log.txt`.
-- Visual verification (still to be done in the GUI):
-  1. Run the editor; Create > Layout (or F6) creates a layout node.
+  driver runs with no errors in `logs/log.txt`. Verified in the GUI
+  (2026-06-04): Stack and Flow arrange children as expected.
+- Visual verification (remaining: Grid with auto + explicit cells, nesting):
+  1. Run the editor; Commands > Create > Layout in the main menu bar (or F6, or
+     right-click a node in the Hierarchy window and pick Create > Layout) creates
+     a layout node. Note: the Hierarchy context menu's Create list is hardcoded in
+     `Scene_root::make_browser_window` (`src/editor/scene/scene_root.cpp`), separate
+     from the `bind_command_to_menu` registry that feeds the Commands menu.
   2. Parent a few meshes under it; with default Stack/+X they line up along X.
   3. Select the layout node in Properties: change Type (Stack/Grid/Flow), Volume
      Min/Max, primary/secondary/tertiary axes, Gap; for Grid set Grid Tracks and
@@ -129,14 +139,26 @@ cell + span); a child without one uses default values.
   4. Nest a layout under another layout and confirm the inner one arranges its own
      children (re-entrancy / shallow-to-deep ordering check).
 
+## Follow-up work landed after the initial three commits (2026-06-04)
+
+- Layout entry in the Hierarchy context menu Create list (separate hardcoded
+  list from the Commands menu bindings).
+- Always-on (default All, adjustable) layout volume visualization in
+  Debug_visualizations; `create_new_layout` sets `show_debug_visualizations`.
+- Single-scene fallback for target-scene resolution so create commands work
+  before any viewport hover (`App_scenes::get_single_scene_root`).
+- Grid auto placement (`Layout_item::grid_cell_auto`, default true) and an
+  "Add Layout Item" button in Properties shown for children of layout nodes.
+- Scene serialization: codegen `Layout_data` / `Layout_item_data` structs
+  (`scene/definitions/layout_data.py`), `Scene_file` bumped to version 2 with
+  `layouts` / `layout_items` vectors (added_in=2; v1 files load with empty
+  defaults), save/load wiring in `scene_serialization.cpp` (converters for the
+  three serial enums, attach by node id). `erhe_codegen` gained an `IVec3`
+  type for this. GUI-verified 2026-06-04: layouts round-trip across
+  save/load.
+
 ## Deferred / TODO
 
-- **Scene serialization (next)**: add codegen `Layout_data` / `Layout_item_data`
-  structs (see `src/editor/scene/definitions/*.py` and `scene_file.py`), reference
-  them from `Scene_file`, and add convert + load wiring in
-  `src/editor/scene/scene_serialization.cpp`. All `Layout` / `Layout_item` fields
-  are POD/glm/enum/vector and map directly. Until this lands, layout nodes are not
-  persisted across save/load.
 - **Dirty / serial optimization**: the driver recomputes every layout each frame.
   A correct dirty scheme must re-flow on child add/remove/reorder, child content
   resize, and param edits - but NOT merely when the layout node's own transform

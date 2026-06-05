@@ -58,8 +58,9 @@ public:
     };
     glm::vec3  margin_min{0.0f, 0.0f, 0.0f}; // inset at the cell minimum face
     glm::vec3  margin_max{0.0f, 0.0f, 0.0f}; // inset at the cell maximum face
-    glm::ivec3 grid_cell {0, 0, 0};          // grid: cell index (i, j, k)
-    glm::ivec3 grid_span {1, 1, 1};          // grid: cells spanned per axis (>= 1)
+    bool       grid_cell_auto{true};         // grid: true = auto-placed into the next free cell; false = use grid_cell
+    glm::ivec3 grid_cell {0, 0, 0};          // grid: explicit cell index (i, j, k); used when grid_cell_auto is false
+    glm::ivec3 grid_span {1, 1, 1};          // grid: cells spanned per axis (>= 1); honored for auto placement too
 };
 
 } // namespace erhe::scene

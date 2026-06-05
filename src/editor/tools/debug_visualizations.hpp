@@ -20,8 +20,10 @@ namespace erhe::imgui {
 }
 namespace erhe::scene {
     class Camera;
+    class Layout;
     class Light;
     class Mesh;
+    class Node;
     class Skin;
 }
 namespace erhe::scene_renderer {
@@ -105,6 +107,7 @@ private:
     void point_light_visualization      (const Light_visualization_context& context);
     void spot_light_visualization       (const Light_visualization_context& context);
     void camera_visualization           (const Render_context& render_context, const erhe::scene::Camera* camera);
+    void layout_visualization           (const Render_context& render_context, const erhe::scene::Node& node, const erhe::scene::Layout& layout);
     void selection_visualization        (const Render_context& context);
     void physics_nodes_visualization    (const Render_context& context);
     void raytrace_nodes_visualization   (const Render_context& context);
@@ -128,6 +131,7 @@ private:
 
     Visualization_mode m_lights                 {Visualization_mode::All};
     Visualization_mode m_cameras                {Visualization_mode::Selected};
+    Visualization_mode m_layouts                {Visualization_mode::All};
     Visualization_mode m_skins                  {Visualization_mode::None};
     Visualization_mode m_node_axis_visualization{Visualization_mode::None};
     Visualization_mode m_physics_visualization  {Visualization_mode::None};
@@ -163,6 +167,9 @@ private:
     float     m_camera_visualization_width       {8.0f};
     glm::vec4 m_camera_line_color                {1.0f, 1.0f, 1.0f, 1.0f};
     bool      m_camera_cull_test                 {false};
+
+    float     m_layout_visualization_width       {2.0f};
+    glm::vec4 m_layout_line_color                {0.2f, 0.8f, 1.0f, 1.0f};
 
     bool      m_debug_convex_hull                {false};
     int       m_convex_hull_edge                 {0};

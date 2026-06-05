@@ -343,6 +343,14 @@ auto Scene_root::make_browser_window(
                     );
                     close = true;
                 }
+                if (ImGui::MenuItem("Layout")) {
+                    deferred_operations.push_back(
+                        [&context, parent_node]() {
+                            context.scene_commands->create_new_layout(parent_node.get());
+                        }
+                    );
+                    close = true;
+                }
                 ImGui::EndMenu();
             }
         }

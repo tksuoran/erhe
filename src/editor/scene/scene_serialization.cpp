@@ -19,6 +19,8 @@
 #include "erhe_primitive/material.hpp"
 #include "erhe_primitive/primitive.hpp"
 #include "erhe_scene/camera.hpp"
+#include "erhe_scene/layout.hpp"
+#include "erhe_scene/layout_item.hpp"
 #include "erhe_scene/light.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
@@ -120,6 +122,72 @@ auto from_light_type_serial(Light_type_serial type) -> erhe::scene::Light_type
         case Light_type_serial::point:       return erhe::scene::Light_type::point;
         case Light_type_serial::spot:        return erhe::scene::Light_type::spot;
         default:                             return erhe::scene::Light_type::directional;
+    }
+}
+
+auto to_layout_type_serial(erhe::scene::Layout_type type) -> Layout_type_serial
+{
+    switch (type) {
+        case erhe::scene::Layout_type::stack: return Layout_type_serial::stack;
+        case erhe::scene::Layout_type::grid:  return Layout_type_serial::grid;
+        case erhe::scene::Layout_type::flow:  return Layout_type_serial::flow;
+        default:                              return Layout_type_serial::stack;
+    }
+}
+
+auto from_layout_type_serial(Layout_type_serial type) -> erhe::scene::Layout_type
+{
+    switch (type) {
+        case Layout_type_serial::stack: return erhe::scene::Layout_type::stack;
+        case Layout_type_serial::grid:  return erhe::scene::Layout_type::grid;
+        case Layout_type_serial::flow:  return erhe::scene::Layout_type::flow;
+        default:                        return erhe::scene::Layout_type::stack;
+    }
+}
+
+auto to_axis_direction_serial(erhe::scene::Axis_direction direction) -> Axis_direction_serial
+{
+    switch (direction) {
+        case erhe::scene::Axis_direction::pos_x: return Axis_direction_serial::pos_x;
+        case erhe::scene::Axis_direction::neg_x: return Axis_direction_serial::neg_x;
+        case erhe::scene::Axis_direction::pos_y: return Axis_direction_serial::pos_y;
+        case erhe::scene::Axis_direction::neg_y: return Axis_direction_serial::neg_y;
+        case erhe::scene::Axis_direction::pos_z: return Axis_direction_serial::pos_z;
+        case erhe::scene::Axis_direction::neg_z: return Axis_direction_serial::neg_z;
+        default:                                 return Axis_direction_serial::pos_x;
+    }
+}
+
+auto from_axis_direction_serial(Axis_direction_serial direction) -> erhe::scene::Axis_direction
+{
+    switch (direction) {
+        case Axis_direction_serial::pos_x: return erhe::scene::Axis_direction::pos_x;
+        case Axis_direction_serial::neg_x: return erhe::scene::Axis_direction::neg_x;
+        case Axis_direction_serial::pos_y: return erhe::scene::Axis_direction::pos_y;
+        case Axis_direction_serial::neg_y: return erhe::scene::Axis_direction::neg_y;
+        case Axis_direction_serial::pos_z: return erhe::scene::Axis_direction::pos_z;
+        case Axis_direction_serial::neg_z: return erhe::scene::Axis_direction::neg_z;
+        default:                           return erhe::scene::Axis_direction::pos_x;
+    }
+}
+
+auto to_layout_alignment_serial(erhe::scene::Layout_alignment alignment) -> Layout_alignment_serial
+{
+    switch (alignment) {
+        case erhe::scene::Layout_alignment::negative: return Layout_alignment_serial::negative;
+        case erhe::scene::Layout_alignment::positive: return Layout_alignment_serial::positive;
+        case erhe::scene::Layout_alignment::stretch:  return Layout_alignment_serial::stretch;
+        default:                                      return Layout_alignment_serial::negative;
+    }
+}
+
+auto from_layout_alignment_serial(Layout_alignment_serial alignment) -> erhe::scene::Layout_alignment
+{
+    switch (alignment) {
+        case Layout_alignment_serial::negative: return erhe::scene::Layout_alignment::negative;
+        case Layout_alignment_serial::positive: return erhe::scene::Layout_alignment::positive;
+        case Layout_alignment_serial::stretch:  return erhe::scene::Layout_alignment::stretch;
+        default:                                return erhe::scene::Layout_alignment::negative;
     }
 }
 
@@ -454,6 +522,45 @@ auto save_scene(
         scene_file.node_physics.push_back(std::move(physics_data));
     }
 
+    // Serialize layouts and layout items
+    for (const auto& node : flat_nodes) {
+        const auto layout = erhe::scene::get_attachment<erhe::scene::Layout>(node.get());
+        if (layout) {
+            Layout_data layout_data{
+                .node_id             = node_id_map[node.get()],
+                .name                = layout->get_name(),
+                .type                = to_layout_type_serial(layout->type),
+                .volume_min          = layout->volume.min,
+                .volume_max          = layout->volume.max,
+                .primary             = to_axis_direction_serial(layout->primary),
+                .secondary           = to_axis_direction_serial(layout->secondary),
+                .tertiary            = to_axis_direction_serial(layout->tertiary),
+                .gap                 = layout->gap,
+                .grid_track_count    = layout->grid_track_count,
+                .grid_track_extent_x = layout->grid_track_extent[0],
+                .grid_track_extent_y = layout->grid_track_extent[1],
+                .grid_track_extent_z = layout->grid_track_extent[2],
+            };
+            scene_file.layouts.push_back(std::move(layout_data));
+        }
+        const auto layout_item = erhe::scene::get_attachment<erhe::scene::Layout_item>(node.get());
+        if (layout_item) {
+            Layout_item_data item_data{
+                .node_id        = node_id_map[node.get()],
+                .name           = layout_item->get_name(),
+                .align_x        = to_layout_alignment_serial(layout_item->alignment[0]),
+                .align_y        = to_layout_alignment_serial(layout_item->alignment[1]),
+                .align_z        = to_layout_alignment_serial(layout_item->alignment[2]),
+                .margin_min     = layout_item->margin_min,
+                .margin_max     = layout_item->margin_max,
+                .grid_cell_auto = layout_item->grid_cell_auto,
+                .grid_cell      = layout_item->grid_cell,
+                .grid_span      = layout_item->grid_span,
+            };
+            scene_file.layout_items.push_back(std::move(item_data));
+        }
+    }
+
     // Serialize mesh references and save geometry files
     bool has_any_meshes  = false;
     int  mesh_index      = 0;
@@ -659,6 +766,51 @@ auto load_scene(
             auto node_it = node_map.find(light_data.node_id);
             if (node_it != node_map.end()) {
                 node_it->second->attach(light);
+            }
+        }
+    }
+
+    // Create layouts
+    for (const auto& layout_data : scene_file.layouts) {
+        auto layout = std::make_shared<erhe::scene::Layout>(layout_data.name);
+        layout->type                 = from_layout_type_serial(layout_data.type);
+        layout->volume.min           = layout_data.volume_min;
+        layout->volume.max           = layout_data.volume_max;
+        layout->primary              = from_axis_direction_serial(layout_data.primary);
+        layout->secondary            = from_axis_direction_serial(layout_data.secondary);
+        layout->tertiary             = from_axis_direction_serial(layout_data.tertiary);
+        layout->gap                  = layout_data.gap;
+        layout->grid_track_count     = layout_data.grid_track_count;
+        layout->grid_track_extent[0] = layout_data.grid_track_extent_x;
+        layout->grid_track_extent[1] = layout_data.grid_track_extent_y;
+        layout->grid_track_extent[2] = layout_data.grid_track_extent_z;
+        layout->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui | erhe::Item_flags::show_debug_visualizations);
+
+        if (layout_data.node_id != 0) {
+            auto node_it = node_map.find(layout_data.node_id);
+            if (node_it != node_map.end()) {
+                node_it->second->attach(layout);
+            }
+        }
+    }
+
+    // Create layout items
+    for (const auto& item_data : scene_file.layout_items) {
+        auto layout_item = std::make_shared<erhe::scene::Layout_item>(item_data.name);
+        layout_item->alignment[0]   = from_layout_alignment_serial(item_data.align_x);
+        layout_item->alignment[1]   = from_layout_alignment_serial(item_data.align_y);
+        layout_item->alignment[2]   = from_layout_alignment_serial(item_data.align_z);
+        layout_item->margin_min     = item_data.margin_min;
+        layout_item->margin_max     = item_data.margin_max;
+        layout_item->grid_cell_auto = item_data.grid_cell_auto;
+        layout_item->grid_cell      = item_data.grid_cell;
+        layout_item->grid_span      = item_data.grid_span;
+        layout_item->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
+
+        if (item_data.node_id != 0) {
+            auto node_it = node_map.find(item_data.node_id);
+            if (node_it != node_map.end()) {
+                node_it->second->attach(layout_item);
             }
         }
     }

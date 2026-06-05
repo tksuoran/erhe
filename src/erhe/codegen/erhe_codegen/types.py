@@ -165,6 +165,7 @@ Vec2  = GlmType("Vec2",  "glm::vec2",  2)
 Vec3  = GlmType("Vec3",  "glm::vec3",  3)
 Vec4  = GlmType("Vec4",  "glm::vec4",  4)
 IVec2 = GlmType("IVec2", "glm::ivec2", 2)
+IVec3 = GlmType("IVec3", "glm::ivec3", 3)
 Mat4  = GlmType("Mat4",  "glm::mat4",  16)
 
 # Composite type constructors

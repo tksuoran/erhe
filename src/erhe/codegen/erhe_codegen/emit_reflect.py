@@ -44,6 +44,7 @@ _GLM_FIELD_TYPE_MAP = {
     "Vec3":  "erhe::codegen::Field_type::vec3",
     "Vec4":  "erhe::codegen::Field_type::vec4",
     "IVec2": "erhe::codegen::Field_type::ivec2",
+    "IVec3": "erhe::codegen::Field_type::ivec3",
     "Mat4":  "erhe::codegen::Field_type::mat4",
 }
 

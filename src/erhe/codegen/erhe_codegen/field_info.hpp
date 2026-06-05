@@ -27,6 +27,7 @@ enum class Field_type : uint8_t
     vec3,
     vec4,
     ivec2,
+    ivec3,
     mat4,
     vector,
     array,

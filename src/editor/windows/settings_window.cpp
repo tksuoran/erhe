@@ -112,6 +112,9 @@ void imgui_field(void* base, const erhe::codegen::Field_info& field)
         case Field_type::ivec2:
             ImGui::DragInt2("##", static_cast<int*>(ptr));
             break;
+        case Field_type::ivec3:
+            ImGui::DragInt3("##", static_cast<int*>(ptr));
+            break;
         case Field_type::mat4:
         case Field_type::vector:
         case Field_type::array:
