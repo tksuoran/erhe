@@ -134,6 +134,10 @@ private:
     [[nodiscard]] auto count_selected_meshes() const -> size_t;
     [[nodiscard]] auto mesh_context() -> Mesh_operation_parameters;
 
+    // Scene root of the last hovered scene view; before any viewport has been
+    // hovered, falls back to the sole scene when exactly one exists.
+    [[nodiscard]] auto get_target_scene_root() -> std::shared_ptr<Scene_root>;
+
     template<typename T> void async_mesh_operation();
 
     erhe::message_bus::Subscription<Hover_scene_view_message> m_hover_scene_view_subscription;

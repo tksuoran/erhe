@@ -177,6 +177,16 @@ auto App_scenes::get_scene_roots() -> const std::vector<std::shared_ptr<Scene_ro
     return m_scene_roots;
 }
 
+auto App_scenes::get_single_scene_root() -> std::shared_ptr<Scene_root>
+{
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
+
+    if (m_scene_roots.size() == 1) {
+        return m_scene_roots.front();
+    }
+    return {};
+}
+
 void App_scenes::sanity_check()
 {
 #if !defined(NDEBUG)

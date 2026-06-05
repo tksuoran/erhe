@@ -4,6 +4,7 @@
 #include "config/generated/graphics_preset_entry.hpp"
 
 #include "app_context.hpp"
+#include "app_scenes.hpp"
 #include "app_settings.hpp"
 #include "app_windows.hpp"
 #include "editor_log.hpp"
@@ -389,7 +390,9 @@ auto Scene_commands::get_scene_root(erhe::scene::Node* parent) const -> Scene_ro
         return viewport_scene_view->get_scene_root().get();
     }
     if (item_host == nullptr) {
-        return nullptr;
+        // Nothing selected and no viewport hovered yet: when exactly one
+        // scene exists, use it as the target.
+        return m_context.app_scenes->get_single_scene_root().get();
     }
     Scene_root* scene_root = static_cast<Scene_root*>(item_host);
     return scene_root;
@@ -415,7 +418,9 @@ auto Scene_commands::get_scene_root(erhe::primitive::Material* material) const -
         return viewport_scene_view->get_scene_root().get();
     }
     if (item_host == nullptr) {
-        return nullptr;
+        // Nothing selected and no viewport hovered yet: when exactly one
+        // scene exists, use it as the target.
+        return m_context.app_scenes->get_single_scene_root().get();
     }
     Scene_root* scene_root = static_cast<Scene_root*>(item_host);
     return scene_root;

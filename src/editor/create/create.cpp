@@ -1,6 +1,7 @@
 #include "create/create.hpp"
 
 #include "app_context.hpp"
+#include "app_scenes.hpp"
 #include "app_settings.hpp"
 #include "items.hpp"
 #include "brushes/brush.hpp"
@@ -81,6 +82,11 @@ auto Create::find_parent() -> std::shared_ptr<erhe::scene::Node>
             : (scene_view != nullptr)
                 ? scene_view->get_scene_root().get()
                 : nullptr;
+    if (item_host == nullptr) {
+        // Nothing selected and no viewport hovered yet: when exactly one
+        // scene exists, use it as the target.
+        item_host = m_context.app_scenes->get_single_scene_root().get();
+    }
     if (item_host == nullptr) {
         return {};
     }

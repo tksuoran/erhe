@@ -29,6 +29,11 @@ public:
     void update_node_transforms              ();
 
     [[nodiscard]] auto get_scene_roots() -> const std::vector<std::shared_ptr<Scene_root>>&;
+
+    // Returns the sole registered scene root when exactly one is registered,
+    // nullptr otherwise. Used as a fallback target for commands that look for
+    // a scene before any viewport has been hovered or anything is selected.
+    [[nodiscard]] auto get_single_scene_root() -> std::shared_ptr<Scene_root>;
     [[nodiscard]] auto scene_combo(const char* label, std::shared_ptr<Scene_root>& in_out_selected_entry, bool empty_option) const -> bool;
 
     void imgui();

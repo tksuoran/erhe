@@ -1,6 +1,7 @@
 #include "operations/operations_window.hpp"
 
 #include "app_context.hpp"
+#include "app_scenes.hpp"
 #include "app_message_bus.hpp"
 #include "brushes/brush.hpp"
 #include "app_settings.hpp"
@@ -863,6 +864,19 @@ void Operations::chamfer3()
     );
 }
 
+auto Operations::get_target_scene_root() -> std::shared_ptr<Scene_root>
+{
+    Scene_view* scene_view = (m_last_hover_scene_view != nullptr) ? m_last_hover_scene_view : m_hover_scene_view;
+    if (scene_view != nullptr) {
+        std::shared_ptr<Scene_root> scene_root = scene_view->get_scene_root();
+        if (scene_root) {
+            return scene_root;
+        }
+    }
+    // No viewport hovered yet: when exactly one scene exists, use it.
+    return m_context.app_scenes->get_single_scene_root();
+}
+
 #if defined(ERHE_WINDOW_LIBRARY_SDL)
 static void s_export_callback(void* userdata, const char* const* filelist, int filter)
 {
@@ -886,11 +900,7 @@ void Operations::export_callback(const char* const* filelist, int filter)
     //std::optional<std::filesystem::path> path = erhe::file::select_file_for_write();
     std::optional<std::filesystem::path> path = std::filesystem::path{file};
 
-    if (m_last_hover_scene_view == nullptr) {
-        return;
-    }
-
-    std::shared_ptr<Scene_root> scene_root = m_last_hover_scene_view->get_scene_root();
+    std::shared_ptr<Scene_root> scene_root = get_target_scene_root();
     if (!scene_root) {
         return;
     }
@@ -947,10 +957,7 @@ void Operations::export_gltf()
 
 void Operations::save_scene()
 {
-    if (m_last_hover_scene_view == nullptr) {
-        return;
-    }
-    std::shared_ptr<Scene_root> scene_root = m_last_hover_scene_view->get_scene_root();
+    std::shared_ptr<Scene_root> scene_root = get_target_scene_root();
     if (!scene_root) {
         return;
     }
@@ -986,7 +993,7 @@ void Operations::load_scene()
 
 void Operations::create_material()
 {
-    std::shared_ptr<Scene_root> scene_root = m_last_hover_scene_view->get_scene_root();
+    std::shared_ptr<Scene_root> scene_root = get_target_scene_root();
     if (!scene_root) {
         return;
     }
@@ -1053,11 +1060,7 @@ void Operations::create_brush()
         return;
     }
 
-    Scene_view* scene_view = m_last_hover_scene_view ? m_last_hover_scene_view : m_hover_scene_view;
-    if (scene_view == nullptr) {
-        return;
-    }
-    std::shared_ptr<Scene_root> scene_root = scene_view->get_scene_root();
+    std::shared_ptr<Scene_root> scene_root = get_target_scene_root();
     if (!scene_root) {
         return;
     }

@@ -103,11 +103,10 @@ void Physics_window::imgui()
     //// }
 
     const auto viewport_scene_view = m_context.scene_views->last_scene_view();
-    if (!viewport_scene_view) {
-        return;
-    }
-
-    const auto scene_root = viewport_scene_view->get_scene_root();
+    const auto scene_root = viewport_scene_view
+        ? viewport_scene_view->get_scene_root()
+        // No viewport hovered yet: when exactly one scene exists, use it.
+        : m_context.app_scenes->get_single_scene_root();
     if (!scene_root) {
         return;
     }
