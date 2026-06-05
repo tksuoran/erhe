@@ -19,10 +19,7 @@ void main()
         vec4( 1.0, 0.0,  0.0, 0.0)  // 1
     );
 
-    mat4 clip_from_world = camera.cameras[c_view_index].clip_from_world;
-    vec4 position        = vertex[gl_VertexID];
-
-    gl_Position = clip_from_world * position;
-    v_position = position;
+    v_position  = camera.cameras[c_view_index].world_from_grid * vertex[gl_VertexID];
+    gl_Position = camera.cameras[c_view_index].clip_from_world_for_grid * v_position;
 }
 

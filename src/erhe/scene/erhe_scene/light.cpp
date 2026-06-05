@@ -233,7 +233,8 @@ auto Light::stable_directional_light_projection_transforms(
     SPDLOG_LOGGER_TRACE(log, "snapped view camera position in light {}", snapped_view_camera_position_in_light);
     SPDLOG_LOGGER_TRACE(log, "snapped view camera position in world {}", snapped_view_camera_position);
 
-    const Transform world_from_light_camera{
+    // TODO Could we use Trs_transform more directly without going through mat4?
+    const Trs_transform world_from_light_camera{
         snapped_world_from_light,
         snapped_light_from_world
     };

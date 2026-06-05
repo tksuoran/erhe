@@ -12,6 +12,7 @@
 #include "erhe_scene_renderer/scene_renderer_log.hpp"
 #include "erhe_verify/verify.hpp"
 
+#include <cmath>
 #include <cstring>
 
 namespace erhe::scene_renderer {
@@ -20,27 +21,33 @@ Camera_interface::Camera_interface(erhe::graphics::Device& graphics_device, cons
     : camera_block{graphics_device, "camera", camera_buffer_binding_point, erhe::graphics::Shader_resource::Type::uniform_block}
     , camera_struct{graphics_device, "Camera"}
     , offsets{
-        .world_from_node      = camera_struct.add_mat4 ("world_from_node"     )->get_offset_in_parent(),
-        .world_from_clip      = camera_struct.add_mat4 ("world_from_clip"     )->get_offset_in_parent(),
-        .clip_from_world      = camera_struct.add_mat4 ("clip_from_world"     )->get_offset_in_parent(),
-        .viewport             = camera_struct.add_vec4 ("viewport"            )->get_offset_in_parent(),
-        .fov                  = camera_struct.add_vec4 ("fov"                 )->get_offset_in_parent(),
-        .clip_depth_direction = camera_struct.add_float("clip_depth_direction")->get_offset_in_parent(),
-        .view_depth_near      = camera_struct.add_float("view_depth_near"     )->get_offset_in_parent(),
-        .view_depth_far       = camera_struct.add_float("view_depth_far"      )->get_offset_in_parent(),
-        .exposure             = camera_struct.add_float("exposure"            )->get_offset_in_parent(),
-        .grid_size            = camera_struct.add_vec4 ("grid_size"           )->get_offset_in_parent(),
-        .grid_line_width      = camera_struct.add_vec4 ("grid_line_width"     )->get_offset_in_parent(),
-        .grid_label           = camera_struct.add_vec4 ("grid_label"          )->get_offset_in_parent(),
-        .grid_color           = camera_struct.add_vec4 ("grid_color", 4       )->get_offset_in_parent(),
-        .grid_label_color     = camera_struct.add_vec4 ("grid_label_color"    )->get_offset_in_parent(),
-        .sky_checker          = camera_struct.add_vec4 ("sky_checker"         )->get_offset_in_parent(),
-        .sky_horizon_color    = camera_struct.add_vec4 ("sky_horizon_color"   )->get_offset_in_parent(),
-        .sky_zenith_color     = camera_struct.add_vec4 ("sky_zenith_color"    )->get_offset_in_parent(),
-        .ground_horizon_color = camera_struct.add_vec4 ("ground_horizon_color")->get_offset_in_parent(),
-        .ground_nadir_color   = camera_struct.add_vec4 ("ground_nadir_color"  )->get_offset_in_parent(),
-        .frame_number         = camera_struct.add_uvec2("frame_number"        )->get_offset_in_parent(),
-        .padding              = camera_struct.add_uvec2("padding"             )->get_offset_in_parent(),
+        .world_from_node          = camera_struct.add_mat4 ("world_from_node"         )->get_offset_in_parent(),
+        .world_from_clip          = camera_struct.add_mat4 ("world_from_clip"         )->get_offset_in_parent(),
+        .clip_from_world          = camera_struct.add_mat4 ("clip_from_world"         )->get_offset_in_parent(),
+        .world_from_node_for_grid = camera_struct.add_mat4 ("world_from_node_for_grid")->get_offset_in_parent(),
+        .world_from_clip_for_grid = camera_struct.add_mat4 ("world_from_clip_for_grid")->get_offset_in_parent(),
+        .clip_from_world_for_grid = camera_struct.add_mat4 ("clip_from_world_for_grid")->get_offset_in_parent(),
+        .world_from_grid          = camera_struct.add_mat4 ("world_from_grid"         )->get_offset_in_parent(),
+        .viewport                 = camera_struct.add_vec4 ("viewport"                )->get_offset_in_parent(),
+        .fov                      = camera_struct.add_vec4 ("fov"                     )->get_offset_in_parent(),
+        .clip_depth_direction     = camera_struct.add_float("clip_depth_direction"    )->get_offset_in_parent(),
+        .view_depth_near          = camera_struct.add_float("view_depth_near"         )->get_offset_in_parent(),
+        .view_depth_far           = camera_struct.add_float("view_depth_far"          )->get_offset_in_parent(),
+        .exposure                 = camera_struct.add_float("exposure"                )->get_offset_in_parent(),
+        .grid_size                = camera_struct.add_vec4 ("grid_size"               )->get_offset_in_parent(),
+        .grid_line_width          = camera_struct.add_vec4 ("grid_line_width"         )->get_offset_in_parent(),
+        .grid_label               = camera_struct.add_vec4 ("grid_label"              )->get_offset_in_parent(),
+        .grid_color               = camera_struct.add_vec4 ("grid_color", 4           )->get_offset_in_parent(),
+        .grid_label_color         = camera_struct.add_vec4 ("grid_label_color"        )->get_offset_in_parent(),
+        .grid_offset              = camera_struct.add_vec4 ("grid_offset"             )->get_offset_in_parent(),
+        .grid_view_position       = camera_struct.add_vec4 ("grid_view_position"      )->get_offset_in_parent(),
+        .sky_checker              = camera_struct.add_vec4 ("sky_checker"             )->get_offset_in_parent(),
+        .sky_horizon_color        = camera_struct.add_vec4 ("sky_horizon_color"       )->get_offset_in_parent(),
+        .sky_zenith_color         = camera_struct.add_vec4 ("sky_zenith_color"        )->get_offset_in_parent(),
+        .ground_horizon_color     = camera_struct.add_vec4 ("ground_horizon_color"    )->get_offset_in_parent(),
+        .ground_nadir_color       = camera_struct.add_vec4 ("ground_nadir_color"      )->get_offset_in_parent(),
+        .frame_number             = camera_struct.add_uvec2("frame_number"            )->get_offset_in_parent(),
+        .padding                  = camera_struct.add_uvec2("padding"                 )->get_offset_in_parent(),
     }
     , max_camera_count{static_cast<std::size_t>(max_camera_count)}
     , view_count{static_cast<std::size_t>(view_count)}
@@ -67,8 +74,7 @@ void write_camera_entry(
     std::size_t                               write_offset,
     const Camera_struct&                      offsets,
     const erhe::scene::Projection&            camera_projection,
-    const glm::mat4&                          world_from_node,
-    const glm::mat4&                          node_from_world,
+    const erhe::scene::Trs_transform&         world_from_camera,
     erhe::math::Viewport                      viewport,
     float                                     exposure,
     const Grid_parameters&                    grid_parameters,
@@ -79,10 +85,12 @@ void write_camera_entry(
     const erhe::math::Coordinate_conventions& conventions
 )
 {
-    const auto      clip_from_camera     = camera_projection.clip_from_node_transform(viewport, reverse_depth, depth_range, conventions);
-    const glm::mat4 world_from_clip      = world_from_node * clip_from_camera.get_inverse_matrix();
-    const glm::mat4 clip_from_world      = clip_from_camera.get_matrix() * node_from_world;
-    const float     viewport_floats[4]   {
+    const glm::mat4&              world_from_camera_node     = world_from_camera.get_matrix();
+    const glm::mat4&              camera_node_from_world     = world_from_camera.get_inverse_matrix();
+    const erhe::scene::Transform& clip_from_camera_transform = camera_projection.clip_from_node_transform(viewport, reverse_depth, depth_range, conventions);
+    const glm::mat4               world_from_clip            = world_from_camera_node * clip_from_camera_transform.get_inverse_matrix();
+    const glm::mat4               clip_from_world            = clip_from_camera_transform.get_matrix() * camera_node_from_world;
+    const float     viewport_floats[4] {
         static_cast<float>(viewport.x),
         static_cast<float>(viewport.y),
         static_cast<float>(viewport.width),
@@ -93,59 +101,57 @@ void write_camera_entry(
     const float     clip_depth_direction = reverse_depth ? -1.0f : 1.0f;
     const float     view_depth_near      = camera_projection.z_near;
     const float     view_depth_far       = camera_projection.z_far;
+
+    const glm::mat4 grid_from_world       = glm::mat4{1.0f}; // TODO
+    const glm::mat4 world_from_grid       = glm::mat4{1.0f}; // TODO
+    const glm::vec4 camera_in_world       = glm::vec4{world_from_camera.get_translation(), 1.0f};
+    const glm::vec4 camera_in_grid        = grid_from_world * camera_in_world;
+    const double    level0_cell_size      = static_cast<double>(grid_parameters.grid_size.x);
+    const double    grid_offset_x_in_grid = level0_cell_size * std::round(static_cast<double>(camera_in_grid.x) / level0_cell_size);
+    //const double    grid_offset_y_in_grid = level0_cell_size * std::floor(static_cast<double>(camera_in_grid.y) / level0_cell_size);
+    const double    grid_offset_z_in_grid = level0_cell_size * std::round(static_cast<double>(camera_in_grid.z) / level0_cell_size);
+    const glm::vec3 grid_offset_in_world  = world_from_grid * glm::vec4{static_cast<float>(grid_offset_x_in_grid), 0.0f, static_cast<float>(grid_offset_z_in_grid), 0.0f};
+    const erhe::scene::Trs_transform world_from_camera_node_transform_for_grid{
+        world_from_camera.get_translation() - grid_offset_in_world,
+        world_from_camera.get_rotation()
+    };
+    const glm::vec3 grid_view_position              = world_from_camera_node_transform_for_grid.get_translation();
+    const glm::mat4 world_from_node_matrix_for_grid = world_from_camera_node_transform_for_grid.get_matrix();
+    const glm::mat4 world_from_clip_matrix_for_grid = world_from_node_matrix_for_grid * clip_from_camera_transform.get_inverse_matrix();
+    const glm::mat4 clip_from_world_for_grid        = glm::inverse(world_from_clip_matrix_for_grid);
+
     using erhe::graphics::as_span;
     using erhe::graphics::write;
-    write(gpu_data, write_offset + offsets.world_from_node,      as_span(world_from_node     ));
-    write(gpu_data, write_offset + offsets.world_from_clip,      as_span(world_from_clip     ));
-    write(gpu_data, write_offset + offsets.clip_from_world,      as_span(clip_from_world     ));
-    write(gpu_data, write_offset + offsets.viewport,             as_span(viewport_floats     ));
-    write(gpu_data, write_offset + offsets.fov,                  as_span(fov_floats          ));
-    write(gpu_data, write_offset + offsets.clip_depth_direction, as_span(clip_depth_direction));
-    write(gpu_data, write_offset + offsets.view_depth_near,      as_span(view_depth_near     ));
-    write(gpu_data, write_offset + offsets.view_depth_far,       as_span(view_depth_far      ));
-    write(gpu_data, write_offset + offsets.exposure,             as_span(exposure            ));
-    write(gpu_data, write_offset + offsets.grid_size,            as_span(grid_parameters.grid_size       ));
-    write(gpu_data, write_offset + offsets.grid_line_width,      as_span(grid_parameters.grid_line_width ));
-    write(gpu_data, write_offset + offsets.grid_label,           as_span(grid_parameters.grid_label      ));
+    write(gpu_data, write_offset + offsets.world_from_node,          as_span(world_from_camera_node         ));
+    write(gpu_data, write_offset + offsets.world_from_clip,          as_span(world_from_clip                ));
+    write(gpu_data, write_offset + offsets.clip_from_world,          as_span(clip_from_world                ));
+    write(gpu_data, write_offset + offsets.world_from_node_for_grid, as_span(world_from_node_matrix_for_grid));
+    write(gpu_data, write_offset + offsets.world_from_clip_for_grid, as_span(world_from_clip_matrix_for_grid));
+    write(gpu_data, write_offset + offsets.clip_from_world_for_grid, as_span(clip_from_world_for_grid       ));
+    write(gpu_data, write_offset + offsets.world_from_grid,          as_span(world_from_grid                ));
+    write(gpu_data, write_offset + offsets.viewport,                 as_span(viewport_floats                ));
+    write(gpu_data, write_offset + offsets.fov,                      as_span(fov_floats                     ));
+    write(gpu_data, write_offset + offsets.clip_depth_direction,     as_span(clip_depth_direction           ));
+    write(gpu_data, write_offset + offsets.view_depth_near,          as_span(view_depth_near                ));
+    write(gpu_data, write_offset + offsets.view_depth_far,           as_span(view_depth_far                 ));
+    write(gpu_data, write_offset + offsets.exposure,                 as_span(exposure                       ));
+    write(gpu_data, write_offset + offsets.grid_size,                as_span(grid_parameters.grid_size      ));
+    write(gpu_data, write_offset + offsets.grid_line_width,          as_span(grid_parameters.grid_line_width));
+    write(gpu_data, write_offset + offsets.grid_label,               as_span(grid_parameters.grid_label     ));
     for (std::size_t i = 0; i < grid_parameters.grid_color.size(); ++i) {
         // std140 vec4 array: 16 byte element stride
         write(gpu_data, write_offset + offsets.grid_color + (i * sizeof(glm::vec4)), as_span(grid_parameters.grid_color[i]));
     }
-    write(gpu_data, write_offset + offsets.grid_label_color,     as_span(grid_parameters.grid_label_color));
-    write(gpu_data, write_offset + offsets.sky_checker,          as_span(sky_parameters.sky_checker         ));
-    write(gpu_data, write_offset + offsets.sky_horizon_color,    as_span(sky_parameters.sky_horizon_color   ));
-    write(gpu_data, write_offset + offsets.sky_zenith_color,     as_span(sky_parameters.sky_zenith_color    ));
-    write(gpu_data, write_offset + offsets.ground_horizon_color, as_span(sky_parameters.ground_horizon_color));
-    write(gpu_data, write_offset + offsets.ground_nadir_color,   as_span(sky_parameters.ground_nadir_color  ));
-    write(gpu_data, write_offset + offsets.frame_number,         as_span(frame_number        ));
-    write(gpu_data, write_offset + offsets.padding,              as_span(frame_number        ));
-}
-
-void write_camera_entry(
-    std::span<std::byte>                      gpu_data,
-    std::size_t                               write_offset,
-    const Camera_struct&                      offsets,
-    const erhe::scene::Projection&            camera_projection,
-    const erhe::scene::Node&                  camera_node,
-    erhe::math::Viewport                      viewport,
-    float                                     exposure,
-    const Grid_parameters&                    grid_parameters,
-    const Sky_parameters&                     sky_parameters,
-    uint64_t                                  frame_number,
-    const bool                                reverse_depth,
-    const erhe::math::Depth_range             depth_range,
-    const erhe::math::Coordinate_conventions& conventions
-)
-{
-    write_camera_entry(
-        gpu_data, write_offset, offsets,
-        camera_projection,
-        camera_node.world_from_node(),
-        camera_node.node_from_world(),
-        viewport,
-        exposure, grid_parameters, sky_parameters, frame_number,
-        reverse_depth, depth_range, conventions
-    );
+    write(gpu_data, write_offset + offsets.grid_label_color,     as_span(grid_parameters.grid_label_color    ));
+    write(gpu_data, write_offset + offsets.grid_offset,          as_span(grid_offset_in_world                ));
+    write(gpu_data, write_offset + offsets.grid_view_position,   as_span(grid_view_position                  ));
+    write(gpu_data, write_offset + offsets.sky_checker,          as_span(sky_parameters.sky_checker          ));
+    write(gpu_data, write_offset + offsets.sky_horizon_color,    as_span(sky_parameters.sky_horizon_color    ));
+    write(gpu_data, write_offset + offsets.sky_zenith_color,     as_span(sky_parameters.sky_zenith_color     ));
+    write(gpu_data, write_offset + offsets.ground_horizon_color, as_span(sky_parameters.ground_horizon_color ));
+    write(gpu_data, write_offset + offsets.ground_nadir_color,   as_span(sky_parameters.ground_nadir_color   ));
+    write(gpu_data, write_offset + offsets.frame_number,         as_span(frame_number                        ));
+    write(gpu_data, write_offset + offsets.padding,              as_span(frame_number                        ));
 }
 
 } // anonymous namespace
@@ -179,7 +185,8 @@ auto Camera_buffer::update(
 
     write_camera_entry(
         gpu_data, 0, offsets,
-        camera_projection, camera_node, viewport,
+        camera_projection, camera_node.world_from_node_transform(),
+        viewport,
         exposure, grid_parameters, sky_parameters, frame_number,
         reverse_depth, depth_range, conventions
     );
@@ -195,7 +202,7 @@ auto Camera_buffer::update(
 
 auto Camera_buffer::update(
     const erhe::scene::Projection&            camera_projection,
-    const erhe::scene::Transform&             world_from_camera,
+    const erhe::scene::Trs_transform&         world_from_camera,
     erhe::math::Viewport                      viewport,
     float                                     exposure,
     const Grid_parameters&                    grid_parameters,
@@ -218,8 +225,7 @@ auto Camera_buffer::update(
     write_camera_entry(
         gpu_data, 0, offsets,
         camera_projection,
-        world_from_camera.get_matrix(),
-        world_from_camera.get_inverse_matrix(),
+        world_from_camera,
         viewport,
         exposure, grid_parameters, sky_parameters, frame_number,
         reverse_depth, depth_range, conventions
@@ -265,7 +271,9 @@ auto Camera_buffer::update_views(
         ERHE_VERIFY(view.node != nullptr);
         write_camera_entry(
             gpu_data, write_offset, offsets,
-            *view.projection, *view.node, view.viewport,
+            *view.projection,
+            view.node->world_from_node_transform(),
+            view.viewport,
             exposure, grid_parameters, sky_parameters, frame_number,
             reverse_depth, depth_range, conventions
         );

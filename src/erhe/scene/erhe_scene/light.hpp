@@ -2,7 +2,7 @@
 
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/node_attachment.hpp"
-#include "erhe_scene/transform.hpp"
+#include "erhe_scene/trs_transform.hpp"
 
 #include <memory>
 #include <string>
@@ -32,13 +32,13 @@ class Light;
 class Light_projection_transforms
 {
 public:
-    const Light* light       {nullptr};
-    std::size_t  index       {0}; // index in lights block shader resource (all lights)
-    std::size_t  shadow_index{0}; // shadow texture array layer / render pass index (equals index when partitioned)
-    Transform    world_from_light_camera;
-    Transform    clip_from_light_camera;
-    Transform    clip_from_world;
-    Transform    texture_from_world;
+    const Light*  light       {nullptr};
+    std::size_t   index       {0}; // index in lights block shader resource (all lights)
+    std::size_t   shadow_index{0}; // shadow texture array layer / render pass index (equals index when partitioned)
+    Trs_transform world_from_light_camera;
+    Transform     clip_from_light_camera;
+    Transform     clip_from_world;
+    Transform     texture_from_world;
 };
 
 class Light : public erhe::Item<Item_base, Node_attachment, Light>

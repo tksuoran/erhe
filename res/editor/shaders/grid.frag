@@ -87,16 +87,21 @@ int grid_label_slot(int value, int char_count, int cell)
 
 void main()
 {
-    vec3 view_position_in_world = vec3(
-        camera.cameras[c_view_index].world_from_node[3][0],
-        camera.cameras[c_view_index].world_from_node[3][1],
-        camera.cameras[c_view_index].world_from_node[3][2]
-    );
+    // v_position is in wrapped world space: world minus the camera XZ
+    // position snapped to the level-0 grid (grid_offset, see grid.vert).
+    // grid_view_position is the camera position in that same wrapped
+    // space, computed in double on the CPU, so the whole ray setup and
+    // all grid line math below run on small exact coordinates; fp32
+    // precision at large distances from the origin would otherwise make
+    // the lines jitter. The grid plane (y = 0) is unaffected by the
+    // wrap: grid_offset.y = 0.
+    vec3  grid_offset            = camera.cameras[c_view_index].grid_offset.xyz;
+    vec3  view_position_in_world = camera.cameras[c_view_index].grid_view_position.xyz;
     vec3  fragment_position = v_position.xyz / v_position.w;
     vec3  ro                = view_position_in_world;
     vec3  rd                = normalize(fragment_position - view_position_in_world);
-    vec3  grid_plane_normal = vec3(0.0, 1.0, 0.0);
-    vec3  grid_plane_point  = vec3(0.0, 0.0, 0.0);
+    vec3  grid_plane_normal = vec3(camera.cameras[c_view_index].world_from_grid * vec4(0.0, 1.0, 0.0, 0.0));
+    vec3  grid_plane_point  = vec3(camera.cameras[c_view_index].world_from_grid * vec4(0.0, 0.0, 0.0, 1.0));
     float t;
     bool  intersects_plane  = intersect_plane(grid_plane_normal, grid_plane_point, ro, rd, t);
     vec3  pos               = ro + t * rd;
@@ -161,6 +166,14 @@ void main()
         float cell_w  = glyph.glyphs[0].advance * text_h; // monospace: every slot has the same advance
         float margin  = 0.25 * text_h;
 
+        // Labels show world coordinates and sit on the world axes: undo
+        // the wrap (uv is in wrapped world space, see grid.vert). uvw is
+        // a stable function of the exact wrapped uv plus an offset that
+        // is constant until the camera crosses a level-0 cell, so labels
+        // do not jitter; their spatial quantization at large coordinates
+        // is far below glyph scale.
+        vec2 uvw = uv + grid_offset.xz;
+
         int  slot = -1;
         vec2 glyph_uv = vec2(0.0);
 
@@ -168,7 +181,7 @@ void main()
         // on each tick. Glyph u maps to +x, glyph v maps to -z so text
         // reads left to right when viewed from +Y.
         {
-            float k    = round(uv.x / spacing);
+            float k    = round(uvw.x / spacing);
             float tick = k * spacing;
             if (abs(tick) < 100000.0) {
                 int   value      = int(round(tick));
@@ -176,11 +189,11 @@ void main()
                 float width      = float(char_count) * cell_w;
                 float x_start    = tick - (0.5 * width);
                 float z_base     = margin + (0.75 * text_h);
-                int   cell       = int(floor((uv.x - x_start) / cell_w));
-                bool  in_band    = (uv.y > 0.0) && (uv.y < (z_base + (0.3 * text_h)));
+                int   cell       = int(floor((uvw.x - x_start) / cell_w));
+                bool  in_band    = (uvw.y > 0.0) && (uvw.y < (z_base + (0.3 * text_h)));
                 if ((cell >= 0) && (cell < char_count) && in_band) {
                     slot     = grid_label_slot(value, char_count, cell);
-                    glyph_uv = vec2(uv.x - (x_start + (float(cell) * cell_w)), z_base - uv.y) / text_h;
+                    glyph_uv = vec2(uvw.x - (x_start + (float(cell) * cell_w)), z_base - uvw.y) / text_h;
                 }
             }
         }
@@ -189,18 +202,18 @@ void main()
         // vertically centered on each tick. Skip the origin; the X axis
         // already labels it.
         if (slot < 0) {
-            float k    = round(uv.y / spacing);
+            float k    = round(uvw.y / spacing);
             float tick = k * spacing;
             if ((k != 0.0) && (abs(tick) < 100000.0)) {
                 int   value      = int(round(tick));
                 int   char_count = grid_label_char_count(value);
                 float x_start    = margin;
                 float z_base     = tick + (0.35 * text_h);
-                int   cell       = int(floor((uv.x - x_start) / cell_w));
-                bool  in_band    = (uv.y > (z_base - text_h)) && (uv.y < (z_base + (0.3 * text_h)));
+                int   cell       = int(floor((uvw.x - x_start) / cell_w));
+                bool  in_band    = (uvw.y > (z_base - text_h)) && (uvw.y < (z_base + (0.3 * text_h)));
                 if ((cell >= 0) && (cell < char_count) && in_band) {
                     slot     = grid_label_slot(value, char_count, cell);
-                    glyph_uv = vec2(uv.x - (x_start + (float(cell) * cell_w)), z_base - uv.y) / text_h;
+                    glyph_uv = vec2(uvw.x - (x_start + (float(cell) * cell_w)), z_base - uvw.y) / text_h;
                 }
             }
         }

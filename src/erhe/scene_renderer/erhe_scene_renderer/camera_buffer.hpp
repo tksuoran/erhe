@@ -9,13 +9,11 @@
 #include <array>
 #include <span>
 
-namespace erhe::graphics {
-    class Device;
-}
+namespace erhe::graphics { class Device; }
 namespace erhe::scene {
     class Node;
     class Projection;
-    class Transform;
+    class Trs_transform;
 }
 
 namespace erhe::scene_renderer {
@@ -23,20 +21,39 @@ namespace erhe::scene_renderer {
 class Camera_struct
 {
 public:
-    std::size_t world_from_node;      // mat4
-    std::size_t world_from_clip;      // mat4
-    std::size_t clip_from_world;      // mat4
-    std::size_t viewport;             // vec4
-    std::size_t fov;                  // vec4
-    std::size_t clip_depth_direction; // float 1.0 = forward depth, -1.0 = reverse depth
-    std::size_t view_depth_near;      // float
-    std::size_t view_depth_far;       // float
-    std::size_t exposure;             // float
-    std::size_t grid_size;            // vec4
-    std::size_t grid_line_width;      // vec4
-    std::size_t grid_label;           // vec4 x = enable, y = text height fraction, z = label spacing, w = fade threshold (pixels per em)
-    std::size_t grid_color;           // vec4[4] per-LOD-level line color (rgb, a = opacity)
-    std::size_t grid_label_color;     // vec4 axis label color (rgb, a = opacity)
+    std::size_t world_from_node;          // mat4
+    std::size_t world_from_clip;          // mat4
+    std::size_t clip_from_world;          // mat4
+    std::size_t world_from_node_for_grid; // mat4
+    std::size_t world_from_clip_for_grid; // mat4
+    std::size_t clip_from_world_for_grid; // mat4
+    std::size_t world_from_grid;          // mat4
+    std::size_t viewport;                 // vec4
+    std::size_t fov;                      // vec4
+    std::size_t clip_depth_direction;     // float 1.0 = forward depth, -1.0 = reverse depth
+    std::size_t view_depth_near;          // float
+    std::size_t view_depth_far;           // float
+    std::size_t exposure;                 // float
+    std::size_t grid_size;                // vec4
+    std::size_t grid_line_width;          // vec4
+    std::size_t grid_label;               // vec4 x = enable, y = text height fraction, z = label spacing, w = fade threshold (pixels per em)
+    std::size_t grid_color;               // vec4[4] per-LOD-level line color (rgb, a = opacity)
+    std::size_t grid_label_color;         // vec4 axis label color (rgb, a = opacity)
+    // World-space translation snapped to the level-0 grid (xyz, y = 0,
+    // w unused). The grid pass runs all line math in wrapped world space
+    // (world - grid_offset) so coordinates stay small near the camera
+    // (fp32 jitter fix far from origin): grid.vert adds the offset to
+    // its wrapped-space plane geometry to get world positions for
+    // gl_Position, grid.frag adds it back when computing axis label
+    // world coordinates. A multiple of the level-0 cell size keeps
+    // every LOD level's line pattern invariant under the shift
+    // (level k cell size = level0 / div^k).
+    std::size_t grid_offset;          // vec4
+    // Camera position in wrapped world space (xyz = camera position
+    // minus grid_offset, w unused), computed in double on the CPU so
+    // the grid shader gets a small, exact ray origin without doing the
+    // large-magnitude subtraction itself.
+    std::size_t grid_view_position;   // vec4
     std::size_t sky_checker;          // vec4 x, y = checker frequency, z = intensity a, w = intensity b
     std::size_t sky_horizon_color;    // vec4 rgb, w = horizon-to-zenith falloff power
     std::size_t sky_zenith_color;     // vec4 rgb, w unused
@@ -148,7 +165,7 @@ public:
     // the SAME snapped transform, not from the raw light node.
     auto update(
         const erhe::scene::Projection&            camera_projection,
-        const erhe::scene::Transform&             world_from_camera,
+        const erhe::scene::Trs_transform&         world_from_camera,
         erhe::math::Viewport                      viewport,
         float                                     exposure,
         const Grid_parameters&                    grid_parameters,
