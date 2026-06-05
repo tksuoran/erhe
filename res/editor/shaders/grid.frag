@@ -9,10 +9,16 @@ float PristineGrid(vec2 uv, vec2 lineWidth)
     vec2 uvDDX = dFdx(uv);
     vec2 uvDDY = dFdy(uv);
     float epsilon = 0.00001;
-    vec2 uvDeriv = vec2(length(vec2(uvDDX.x, uvDDY.x)), length(vec2(uvDDX.y, uvDDY.y)));
-    if ((abs(uvDeriv.x) < epsilon) || (abs(uvDeriv.y) < epsilon)) {
-        return 0.0;
-    }
+    // Clamp the derivative away from zero instead of early-outing: a
+    // tiny derivative is normal when the camera is close to the plane
+    // and a coarse level's uv changes slowly per pixel (an early-out
+    // here made the coarsest level's lines vanish on close-ups). The
+    // clamp keeps drawWidth > 0 so targetWidth / drawWidth below stays
+    // finite even for a zero derivative.
+    vec2 uvDeriv = max(
+        vec2(length(vec2(uvDDX.x, uvDDY.x)), length(vec2(uvDDX.y, uvDDY.y))),
+        vec2(epsilon)
+    );
     bvec2 invertLine = bvec2(lineWidth.x > 0.5, lineWidth.y > 0.5);
     vec2 targetWidth = vec2(
         invertLine.x ? 1.0 - lineWidth.x : lineWidth.x,
