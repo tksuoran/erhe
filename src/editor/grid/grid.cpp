@@ -77,7 +77,7 @@ auto Grid::snap_world_position(const glm::vec3& position_in_world) const -> glm:
     if (!m_snap_enabled) {
         return position_in_world;
     }
-    const float     snap_size        = m_cell_size / m_cell_div;
+    const float     snap_size        = m_cell_size / static_cast<float>(std::max(1, m_cell_div));
     const glm::vec3 position_in_grid = glm::vec3{grid_from_world() * glm::vec4{position_in_world, 1.0}};
     const glm::vec3 snapped_position_in_grid{
         std::floor((position_in_grid.x + snap_size * 0.5) / snap_size) * snap_size,
@@ -96,7 +96,7 @@ auto Grid::snap_grid_position(const glm::vec3& position_in_grid) const -> glm::v
         return position_in_grid;
     }
 
-    const float     snap_size        = m_cell_size / m_cell_div;
+    const float     snap_size        = m_cell_size / static_cast<float>(std::max(1, m_cell_div));
     const glm::vec3 snapped_position_in_grid{
         std::floor((position_in_grid.x + snap_size * 0.5f) / snap_size) * snap_size,
         std::floor((position_in_grid.y + snap_size * 0.5f) / snap_size) * snap_size,
@@ -146,6 +146,18 @@ void Grid::render(const Render_context& context)
     context.app_context.app_rendering->set_grid_line_widths(
         glm::vec4{m_level_widths[0], m_level_widths[1], m_level_widths[2], m_level_widths[3]}
     );
+
+    // Derive the 4 grid LOD level cell sizes from cell size and cell div,
+    // preserving the old CPU grid semantics: level1 = cell size (major
+    // lines), level2 = cell size / cell div (minor lines = snap step),
+    // extended geometrically to level0 (super-major) and level3
+    // (sub-minor). Defaults (size 1, div 10) reproduce the historical
+    // shader level sizes {10, 1, 0.1, 0.01}.
+    const float div  = static_cast<float>(std::max(1, m_cell_div));
+    const float size = std::max(0.001f, m_cell_size);
+    context.app_context.app_rendering->set_grid_sizes(
+        glm::vec4{size * div, size, size / div, size / (div * div)}
+    );
 }
 
 void Grid::update()
@@ -172,9 +184,8 @@ void Grid::imgui(App_context& context)
     
     ImGui::Checkbox   ("Intersect enable", &m_intersect_enable);
     ImGui::Checkbox   ("Snap enable",      &m_snap_enabled);
-    ImGui::SliderFloat("Cell Size",        &m_cell_size,       0.0f, 10.0f);
-    ImGui::SliderInt  ("Cell Div",         &m_cell_div,        0,    10);
-    ImGui::SliderInt  ("Cell Count",       &m_cell_count,      1,    100);
+    ImGui::SliderFloat("Cell Size",        &m_cell_size,       0.01f, 10.0f, "%.3f", ImGuiSliderFlags_Logarithmic);
+    ImGui::SliderInt  ("Cell Div",         &m_cell_div,        1,     10);
     ImGui::ColorEdit4 ("Level 0 Color",    &m_level_colors[0].x, ImGuiColorEditFlags_Float);
     ImGui::ColorEdit4 ("Level 1 Color",    &m_level_colors[1].x, ImGuiColorEditFlags_Float);
     ImGui::ColorEdit4 ("Level 2 Color",    &m_level_colors[2].x, ImGuiColorEditFlags_Float);

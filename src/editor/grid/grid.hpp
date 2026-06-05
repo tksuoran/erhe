@@ -72,7 +72,9 @@ private:
     glm::vec3       m_center          {0.0f}; // Used only if plane type != node
     float           m_cell_size       {1.0f};
     int             m_cell_div        {2};
-    int             m_cell_count      {10};
+    // Bounds the ray-intersection (snap) region; the rendered grid is
+    // infinite. Config-only, not exposed in the UI.
+    int             m_cell_count      {100};
     bool            m_label_enable       {true};  // grid.frag axis coordinate labels
     float           m_label_text_fraction{0.15f}; // text height as fraction of label spacing
     float           m_label_spacing      {1.0f};  // label spacing in world units (integer >= 1)

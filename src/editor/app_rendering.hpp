@@ -119,6 +119,7 @@ public:
     void set_grid_label             (const glm::vec4& grid_label);
     void set_grid_colors            (const std::array<glm::vec4, 4>& level_colors, const glm::vec4& label_color);
     void set_grid_line_widths       (const glm::vec4& level_widths);
+    void set_grid_sizes             (const glm::vec4& level_cell_sizes);
     // Refreshes the sky composition pass parameters from
     // Editor_settings_config::sky (edited in the Settings window).
     void update_sky_parameters      ();

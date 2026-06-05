@@ -94,10 +94,10 @@ struct("Grid_config",
             "cell_count",
             Int,
             added_in=1,
-            default="2",
+            default="100",
             short_desc="Grid Cell Count per Coordinate Axis",
-            long_desc="",
-            visible=True,
+            long_desc="Bounds the grid ray-intersection (snap) region; the rendered grid is infinite. Not exposed in the UI.",
+            visible=False,
             developer=False
         ),
         field(
