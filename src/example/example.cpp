@@ -137,7 +137,7 @@ public:
         , m_program_interface   {m_graphics_device, m_mesh_memory, m_program_interface_config}
         , m_shader_variant_cache{m_graphics_device, m_program_interface}
         , m_programs            {m_graphics_device, m_shader_variant_cache}
-        , m_forward_renderer    {m_graphics_device, m_init_command_buffer, m_mesh_memory, m_program_interface, m_shader_variant_cache}
+        , m_forward_renderer    {m_graphics_device, m_init_command_buffer, m_mesh_memory, m_program_interface, m_shader_variant_cache, nullptr}
         , m_scene               {"example scene", nullptr}
     {
         m_window.set_title(

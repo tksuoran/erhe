@@ -133,7 +133,7 @@ Rendering_test::Rendering_test(std::string_view config_path)
     // the constructor body before the run loop starts.
     create_test_scene(m_init_command_buffer);
     m_forward_renderer = std::make_unique<erhe::scene_renderer::Forward_renderer>(
-        m_graphics_device, m_init_command_buffer, m_mesh_memory, m_program_interface, m_shader_variant_cache
+        m_graphics_device, m_init_command_buffer, m_mesh_memory, m_program_interface, m_shader_variant_cache, nullptr
     );
 
     m_last_window_width  = m_window.get_width();

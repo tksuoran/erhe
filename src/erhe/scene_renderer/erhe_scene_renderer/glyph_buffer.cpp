@@ -52,14 +52,14 @@ namespace {
 auto build_glyph_buffer_data(
     erhe::graphics::Device&            graphics_device,
     Glyph_interface&                   glyph_interface,
-    const erhe::ui::Glyph_outline_set& glyph_outline_set
+    const erhe::ui::Glyph_outline_set* glyph_outline_set
 ) -> std::vector<std::byte>
 {
     // Block size already accounts for one (unsized) curve array element
     // and device offset alignment padding; use it as the minimum so the
     // whole declared block always fits in the buffer.
     const std::size_t block_byte_count = glyph_interface.glyph_block.get_size_bytes();
-    if (!glyph_interface.supported || !glyph_outline_set.valid) {
+    if (!glyph_interface.supported || (glyph_outline_set == nullptr) || !glyph_outline_set->valid) {
         return std::vector<std::byte>(block_byte_count, std::byte{0});
     }
 
@@ -69,7 +69,7 @@ auto build_glyph_buffer_data(
 
     const std::size_t curves_offset     = glyph_interface.curves_member->get_offset_in_parent();
     const std::size_t curve_vec2_stride = glyph_interface.curves_member->get_size_bytes(layout);
-    const std::size_t vec2_count        = glyph_outline_set.curves.size() * 3;
+    const std::size_t vec2_count        = glyph_outline_set->curves.size() * 3;
     const std::size_t byte_count        = std::max(block_byte_count, curves_offset + (vec2_count * curve_vec2_stride));
 
     std::vector<std::byte> data(byte_count, std::byte{0});
@@ -83,9 +83,9 @@ auto build_glyph_buffer_data(
     const Glyph_meta_struct& offsets       = glyph_interface.glyph_meta_offsets;
     const std::size_t        glyphs_offset = glyph_interface.glyphs_member->get_offset_in_parent();
     const std::size_t        glyph_stride  = glyph_interface.glyph_meta_struct.get_size_bytes(layout);
-    const std::size_t        glyph_count   = std::min(glyph_outline_set.glyphs.size(), Glyph_interface::glyph_slot_count);
+    const std::size_t        glyph_count   = std::min(glyph_outline_set->glyphs.size(), Glyph_interface::glyph_slot_count);
     for (std::size_t slot = 0; slot < glyph_count; ++slot) {
-        const erhe::ui::Glyph_outline& outline     = glyph_outline_set.glyphs[slot];
+        const erhe::ui::Glyph_outline& outline     = glyph_outline_set->glyphs[slot];
         const std::size_t              slot_offset = glyphs_offset + (slot * glyph_stride);
         // The shader indexes curves[] in vec2 units: curve i of a
         // glyph spans curves[3 * (start + i) + 0..2].
@@ -100,7 +100,7 @@ auto build_glyph_buffer_data(
 
     // Curve control points: 3 consecutive vec2 entries per curve.
     std::size_t write_offset = curves_offset;
-    for (const erhe::ui::Glyph_curve& curve : glyph_outline_set.curves) {
+    for (const erhe::ui::Glyph_curve& curve : glyph_outline_set->curves) {
         write(data_span, write_offset, as_span(curve.p0)); write_offset += curve_vec2_stride;
         write(data_span, write_offset, as_span(curve.p1)); write_offset += curve_vec2_stride;
         write(data_span, write_offset, as_span(curve.p2)); write_offset += curve_vec2_stride;
@@ -114,7 +114,7 @@ auto build_glyph_buffer_data(
 Glyph_buffer::Glyph_buffer(
     erhe::graphics::Device&            graphics_device,
     Glyph_interface&                   glyph_interface,
-    const erhe::ui::Glyph_outline_set& glyph_outline_set
+    const erhe::ui::Glyph_outline_set* glyph_outline_set
 )
     : m_glyph_interface{glyph_interface}
     , m_buffer{graphics_device}

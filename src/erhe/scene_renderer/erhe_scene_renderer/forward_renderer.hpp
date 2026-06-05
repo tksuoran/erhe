@@ -59,13 +59,16 @@ class Forward_renderer
 public:
     using Mesh_layer_collection = std::vector<const erhe::scene::Mesh_layer*>;
 
+    // glyph_outline_set is optional: pass nullptr from executables that
+    // never draw glyphs (the Glyph_buffer falls back to an empty but
+    // bindable buffer, same as when the outline set is invalid).
     Forward_renderer(
         erhe::graphics::Device&            graphics_device,
         erhe::graphics::Command_buffer&    init_command_buffer,
         Mesh_memory&                       mesh_memory,
         Program_interface&                 program_interface,
         Shader_variant_cache&              shader_variant_cache,
-        const erhe::ui::Glyph_outline_set& glyph_outline_set
+        const erhe::ui::Glyph_outline_set* glyph_outline_set
     );
     ~Forward_renderer() noexcept;
 

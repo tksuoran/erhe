@@ -1107,7 +1107,7 @@ public:
                     *m_mesh_memory.get(),
                     *m_program_interface.get(),
                     *m_shader_variant_cache.get(),
-                    glyph_outline_set
+                    &glyph_outline_set
                 );
             }
             ERHE_TASK_FOOTER( .name("Forward_renderer") );

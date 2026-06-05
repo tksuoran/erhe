@@ -38,7 +38,7 @@ Forward_renderer::Forward_renderer(
     Mesh_memory&                       mesh_memory,
     Program_interface&                 program_interface,
     Shader_variant_cache&              shader_variant_cache,
-    const erhe::ui::Glyph_outline_set& glyph_outline_set
+    const erhe::ui::Glyph_outline_set* glyph_outline_set
 )
     : m_graphics_device     {graphics_device}
     , m_mesh_memory         {mesh_memory}

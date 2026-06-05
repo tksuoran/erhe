@@ -54,15 +54,16 @@ public:
 // Static GPU buffer holding the glyph metadata and curve data described by
 // Glyph_interface. Built once at init from erhe::ui::Glyph_outline_set
 // (slot order = codepoint order used at extraction). Always creates a
-// bindable buffer - empty when unsupported or when the outline set is
-// invalid - so bind() is unconditionally legal.
+// bindable buffer - empty when unsupported, when the outline set is
+// invalid, or when glyph_outline_set is nullptr (executables that never
+// draw glyphs) - so bind() is unconditionally legal.
 class Glyph_buffer
 {
 public:
     Glyph_buffer(
         erhe::graphics::Device&            graphics_device,
         Glyph_interface&                   glyph_interface,
-        const erhe::ui::Glyph_outline_set& glyph_outline_set
+        const erhe::ui::Glyph_outline_set* glyph_outline_set
     );
 
     void bind(erhe::graphics::Render_command_encoder& encoder);
