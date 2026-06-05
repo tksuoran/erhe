@@ -130,9 +130,10 @@ auto place_brush_in_scene(
     Scene_root&                                       scene_root,
     const glm::mat4&                                  world_from_node,
     const std::shared_ptr<erhe::primitive::Material>& material,
-    double                                            scale       = 1.0,
-    erhe::physics::Motion_mode                        motion_mode = erhe::physics::Motion_mode::e_dynamic,
-    std::shared_ptr<erhe::scene::Node>                parent      = {}
+    double                                            scale           = 1.0,
+    erhe::physics::Motion_mode                        motion_mode     = erhe::physics::Motion_mode::e_dynamic,
+    std::shared_ptr<erhe::scene::Node>                parent          = {},
+    std::size_t                                       index_in_parent = 0
 ) -> std::shared_ptr<erhe::scene::Node>;
 
 }

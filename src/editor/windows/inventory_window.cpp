@@ -1,4 +1,5 @@
 #include "windows/inventory_window.hpp"
+#include "windows/inventory_slot_payload.hpp"
 
 #include "app_context.hpp"
 #include "app_scenes.hpp"
@@ -28,18 +29,7 @@ namespace {
 
 constexpr float c_slot_size = 48.0f;
 
-enum class Slot_section : int { palette = 0, grid = 1, hotbar = 2 };
-
-// POD payload for drag-and-drop (safe for memcpy by ImGui)
-class Slot_drag_payload
-{
-public:
-    Tool*                      tool    {nullptr};
-    Brush*                     brush   {nullptr};
-    erhe::primitive::Material* material{nullptr};
-    Slot_section               section {Slot_section::palette};
-    int                        index   {-1};
-};
+using Slot_section = Slot_drag_payload::Section;
 
 } // anonymous namespace
 
@@ -223,7 +213,7 @@ auto Inventory_window::render_slot(const int id, Slot_entry& slot, const bool is
                 .section  = static_cast<Slot_section>(section),
                 .index    = slot_index
             };
-            ImGui::SetDragDropPayload("Inventory_Slot", &drag, sizeof(Slot_drag_payload));
+            ImGui::SetDragDropPayload(c_inventory_slot_payload_type, &drag, sizeof(Slot_drag_payload));
             if (slot.brush) {
                 ImGui::Text("%s", slot.brush->get_name().c_str());
             } else if (slot.material) {
@@ -247,7 +237,7 @@ auto Inventory_window::render_slot(const int id, Slot_entry& slot, const bool is
     if (is_target) {
         if (ImGui::BeginDragDropTarget()) {
             // Accept inventory slot drops (swap)
-            const ImGuiPayload* slot_payload = ImGui::AcceptDragDropPayload("Inventory_Slot");
+            const ImGuiPayload* slot_payload = ImGui::AcceptDragDropPayload(c_inventory_slot_payload_type);
             if (slot_payload != nullptr) {
                 const Slot_drag_payload& source = *static_cast<const Slot_drag_payload*>(slot_payload->Data);
 

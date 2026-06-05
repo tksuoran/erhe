@@ -375,7 +375,8 @@ auto place_brush_in_scene(
     const std::shared_ptr<erhe::primitive::Material>& material,
     double                                            scale,
     erhe::physics::Motion_mode                        motion_mode,
-    std::shared_ptr<erhe::scene::Node>                parent
+    std::shared_ptr<erhe::scene::Node>                parent,
+    std::size_t                                       index_in_parent
 ) -> std::shared_ptr<erhe::scene::Node>
 {
     constexpr uint64_t mesh_flags =
@@ -418,10 +419,11 @@ auto place_brush_in_scene(
 
     auto op = std::make_shared<Item_insert_remove_operation>(
         Item_insert_remove_operation::Parameters{
-            .context = context,
-            .item    = instance_node,
-            .parent  = parent,
-            .mode    = Item_insert_remove_operation::Mode::insert
+            .context         = context,
+            .item            = instance_node,
+            .parent          = parent,
+            .mode            = Item_insert_remove_operation::Mode::insert,
+            .index_in_parent = index_in_parent
         }
     );
     context.operation_stack->queue(op);

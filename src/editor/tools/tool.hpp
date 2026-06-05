@@ -49,6 +49,11 @@ public:
     static constexpr uint64_t allow_secondary = (1u << 4); ///< When this is the priority tool, secondary tools stay enabled
 };
 
+// Returns the material to use for newly created mesh content: the last
+// selected material if any, otherwise the first material in the scene's
+// content library.
+[[nodiscard]] auto get_default_material(App_context& context, Scene_root& scene_root) -> std::shared_ptr<erhe::primitive::Material>;
+
 class Tool : public erhe::commands::Command_host
 {
 public:

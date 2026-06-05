@@ -125,13 +125,13 @@ auto Tool::get_content_library() const -> std::shared_ptr<Content_library>
     return scene_root->get_content_library();
 }
 
-auto Tool::get_material() const -> std::shared_ptr<erhe::primitive::Material>
+auto get_default_material(App_context& context, Scene_root& scene_root) -> std::shared_ptr<erhe::primitive::Material>
 {
-    const std::shared_ptr<Content_library>& content_library = get_content_library();
+    const std::shared_ptr<Content_library>& content_library = scene_root.get_content_library();
     if (!content_library) {
         return {};
     }
-    std::shared_ptr<erhe::primitive::Material> material = m_context.selection->get_last_selected<erhe::primitive::Material>();
+    std::shared_ptr<erhe::primitive::Material> material = context.selection->get_last_selected<erhe::primitive::Material>();
     if (!material) {
         content_library->materials->for_each<Content_library_node>(
             [&material](const Content_library_node& node) {
@@ -145,6 +145,15 @@ auto Tool::get_material() const -> std::shared_ptr<erhe::primitive::Material>
         );
     }
     return material;
+}
+
+auto Tool::get_material() const -> std::shared_ptr<erhe::primitive::Material>
+{
+    const std::shared_ptr<Scene_root>& scene_root = get_scene_root();
+    if (!scene_root) {
+        return {};
+    }
+    return get_default_material(m_context, *scene_root);
 }
 
 // If Node is currently selected, returns it.

@@ -1,6 +1,7 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "windows/item_tree_window.hpp"
+#include "windows/inventory_slot_payload.hpp"
 
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
@@ -19,6 +20,7 @@
 #include "scene/scene_root.hpp"
 #include "tools/clipboard.hpp"
 #include "tools/selection_tool.hpp"
+#include "tools/tool.hpp"
 
 #include "erhe_defer/defer.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
@@ -32,6 +34,8 @@
 
 #include <imgui/imgui.h>
 #include <imgui/imgui_internal.h>
+
+#include <limits>
 
 #define ICON_MDI_FILTER                                   "\xf3\xb0\x88\xb2" // U+F0232
 
@@ -512,6 +516,7 @@ auto Item_tree::drag_and_drop_target(const std::shared_ptr<erhe::Item_base>& ite
 
     const bool payload_is_node = payload_peek->IsDataType("Node");
     std::shared_ptr<erhe::primitive::Material> material{};
+    std::shared_ptr<Brush>                     brush{};
 
     if (!payload_is_node && payload_peek->IsDataType("Content_library_node")){
         erhe::Item_base* payload_item_base = *(static_cast<erhe::Item_base**>(payload_peek->Data));
@@ -521,9 +526,32 @@ auto Item_tree::drag_and_drop_target(const std::shared_ptr<erhe::Item_base>& ite
         );
         if (content_library_node) {
             material = std::dynamic_pointer_cast<erhe::primitive::Material>(content_library_node->item);
+            brush    = std::dynamic_pointer_cast<Brush>(content_library_node->item);
         }
     }
-    if (material) {
+    if (!payload_is_node && payload_peek->IsDataType(c_inventory_slot_payload_type)) {
+        // An inventory slot can define a brush, a material, or both.
+        const Slot_drag_payload& slot_payload = *static_cast<const Slot_drag_payload*>(payload_peek->Data);
+        if (slot_payload.brush != nullptr) {
+            brush = std::dynamic_pointer_cast<Brush>(slot_payload.brush->shared_from_this());
+        }
+        if (slot_payload.material != nullptr) {
+            material = std::dynamic_pointer_cast<erhe::primitive::Material>(slot_payload.material->shared_from_this());
+        }
+    }
+
+    // Accept either payload type that can carry a brush / material
+    const auto accept_brush_or_material_payload = []() -> const ImGuiPayload* {
+        const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("Content_library_node", ImGuiDragDropFlags_AcceptNoDrawDefaultRect);
+        if (payload == nullptr) {
+            payload = ImGui::AcceptDragDropPayload(c_inventory_slot_payload_type, ImGuiDragDropFlags_AcceptNoDrawDefaultRect);
+        }
+        return payload;
+    };
+
+    // When an inventory slot defines both brush and material, the brush wins:
+    // a new node is created and the slot material is applied to its mesh.
+    if (material && !brush) {
         const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
         if (mesh) {
             std::vector<erhe::scene::Mesh_primitive>& mesh_primitives = mesh->get_mutable_primitives();
@@ -534,6 +562,11 @@ auto Item_tree::drag_and_drop_target(const std::shared_ptr<erhe::Item_base>& ite
                     const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(
                         "Content_library_node", ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect
                     );
+                    if (payload == nullptr) {
+                        payload = ImGui::AcceptDragDropPayload(
+                            c_inventory_slot_payload_type, ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect
+                        );
+                    }
                     if (payload != nullptr) {
                         // TODO payload->Preview
                         if (payload->Delivery) {
@@ -546,6 +579,75 @@ auto Item_tree::drag_and_drop_target(const std::shared_ptr<erhe::Item_base>& ite
                     return true;
                 }
             }
+        }
+    } else if (brush) {
+        // Brush drop onto a scene node: create a new node with a mesh instance of the brush.
+        Scene_root* scene_root = static_cast<Scene_root*>(node->get_item_host());
+        if (scene_root == nullptr) {
+            return false;
+        }
+        const auto insert_brush_instance = [this, &brush, &material, scene_root](
+            const std::shared_ptr<erhe::scene::Node>& parent,
+            const std::size_t                         index_in_parent
+        ) {
+            if (!parent) {
+                return;
+            }
+            // Material priority: payload material (inventory slot) > brush material > default
+            std::shared_ptr<erhe::primitive::Material> brush_material = material ? material : brush->get_material();
+            if (!brush_material) {
+                brush_material = get_default_material(m_context, *scene_root);
+            }
+            if (!brush_material) {
+                return;
+            }
+            place_brush_in_scene(
+                m_context,
+                *brush,
+                *scene_root,
+                parent->world_from_node(), // identity local transform under the chosen parent
+                brush_material,
+                1.0,
+                erhe::physics::Motion_mode::e_dynamic,
+                parent,
+                index_in_parent
+            );
+        };
+
+        // Insert as sibling before drop target
+        const ImRect top_rect{rect_min, ImVec2{rect_max.x, y1}};
+        if (ImGui::BeginDragDropTargetCustom(top_rect, imgui_id_top)) {
+            drag_and_drop_gradient_preview(x0, x1, y0, y2, ImGui::GetColorU32(ImGuiCol_DragDropTarget), 0);
+            const ImGuiPayload* payload = accept_brush_or_material_payload();
+            if (payload != nullptr) {
+                insert_brush_instance(node->get_parent_node(), node->get_index_in_parent());
+            }
+            ImGui::EndDragDropTarget();
+            return true;
+        }
+
+        // Insert as last child of drop target
+        const ImRect middle_rect{ImVec2{rect_min.x, y1}, ImVec2{rect_max.x, y2}};
+        if (ImGui::BeginDragDropTargetCustom(middle_rect, imgui_id_center)) {
+            drag_and_drop_rectangle_preview(middle_rect);
+            const ImGuiPayload* payload = accept_brush_or_material_payload();
+            if (payload != nullptr) {
+                insert_brush_instance(node, std::numeric_limits<std::size_t>::max());
+            }
+            ImGui::EndDragDropTarget();
+            return true;
+        }
+
+        // Insert as sibling after drop target
+        const ImRect bottom_rect{ImVec2{rect_min.x, y2}, rect_max};
+        if (ImGui::BeginDragDropTargetCustom(bottom_rect, imgui_id_bottom)) {
+            drag_and_drop_gradient_preview(x0, x1, y1, y3, 0, ImGui::GetColorU32(ImGuiCol_DragDropTarget));
+            const ImGuiPayload* payload = accept_brush_or_material_payload();
+            if (payload != nullptr) {
+                insert_brush_instance(node->get_parent_node(), node->get_index_in_parent() + 1);
+            }
+            ImGui::EndDragDropTarget();
+            return true;
         }
     } else if (payload_is_node) {
         log_tree_frame->trace("Dnd item is Node: {}", node->describe());

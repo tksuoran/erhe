@@ -377,6 +377,7 @@ erhe_target_sources_grouped(
     transform/transform_tool_settings.hpp
     transform/trs_tool.cpp
     windows/IconsMaterialDesignIcons.h
+    windows/inventory_slot_payload.hpp
     windows/inventory_window.cpp
     windows/inventory_window.hpp
     windows/item_tree_window.cpp
