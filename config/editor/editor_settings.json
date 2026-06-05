@@ -74,25 +74,25 @@
         "enable": true
     },
     "grid": {
-        "_version": 2,
+        "_version": 3,
         "snap_enabled": true,
         "visible": true,
-        "major_color": [0,0,0,1],
-        "minor_color": [0,0,0,0.5],
-        "major_width": 4,
-        "minor_width": 0.75,
         "cell_size": 1,
         "cell_div": 2,
         "cell_count": 100,
         "label_enable": true,
-        "label_text_fraction": 0.205,
+        "label_text_fraction": 0.09,
         "label_spacing": 1,
         "label_fade": 0.5,
-        "label_color": [0.90819675,0.90819675,0.90819675,1],
+        "label_color": [1,1,1,1],
         "level0_color": [0,0,0.01,1],
         "level1_color": [0,0,0,1],
         "level2_color": [0.01,0,0,1],
-        "level3_color": [0,0.01,0,1]
+        "level3_color": [0,0.01,0,1],
+        "level0_width": 0.006,
+        "level1_width": 0.02,
+        "level2_width": 0.02,
+        "level3_width": 0.02
     },
     "headset": {
         "_version": 2,

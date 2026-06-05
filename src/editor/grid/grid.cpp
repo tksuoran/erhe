@@ -9,9 +9,7 @@
 
 #include "erhe_imgui/imgui_helpers.hpp"
 #include "erhe_math/math_util.hpp"
-#include "erhe_renderer/primitive_renderer.hpp"
-#include "erhe_scene/camera.hpp"
-#include "erhe_verify/verify.hpp"
+#include "erhe_scene/node.hpp"
 
 #include <imgui/imgui.h>
 #include <imgui/misc/cpp/imgui_stdlib.h>
@@ -25,8 +23,6 @@
 
 namespace editor {
 
-using glm::vec3;
-
 Grid::Grid()
 {
     update();
@@ -39,10 +35,6 @@ void Grid::read_config(const Grid_config& config)
     m_cell_size           = config.cell_size;
     m_cell_div            = config.cell_div;
     m_cell_count          = config.cell_count;
-    m_major_color         = config.major_color;
-    m_minor_color         = config.minor_color;
-    m_major_width         = config.major_width;
-    m_minor_width         = config.minor_width;
     m_label_enable        = config.label_enable;
     m_label_text_fraction = config.label_text_fraction;
     m_label_spacing       = config.label_spacing;
@@ -52,6 +44,10 @@ void Grid::read_config(const Grid_config& config)
     m_level_colors[1]     = config.level1_color;
     m_level_colors[2]     = config.level2_color;
     m_level_colors[3]     = config.level3_color;
+    m_level_widths[0]     = config.level0_width;
+    m_level_widths[1]     = config.level1_width;
+    m_level_widths[2]     = config.level2_width;
+    m_level_widths[3]     = config.level3_width;
 }
 
 void Grid::write_config(Grid_config& config) const
@@ -61,10 +57,6 @@ void Grid::write_config(Grid_config& config) const
     config.cell_size           = m_cell_size;
     config.cell_div            = m_cell_div;
     config.cell_count          = m_cell_count;
-    config.major_color         = m_major_color;
-    config.minor_color         = m_minor_color;
-    config.major_width         = m_major_width;
-    config.minor_width         = m_minor_width;
     config.label_enable        = m_label_enable;
     config.label_text_fraction = m_label_text_fraction;
     config.label_spacing       = m_label_spacing;
@@ -74,6 +66,10 @@ void Grid::write_config(Grid_config& config) const
     config.level1_color        = m_level_colors[1];
     config.level2_color        = m_level_colors[2];
     config.level3_color        = m_level_colors[3];
+    config.level0_width        = m_level_widths[0];
+    config.level1_width        = m_level_widths[1];
+    config.level2_width        = m_level_widths[2];
+    config.level3_width        = m_level_widths[3];
 }
 
 auto Grid::snap_world_position(const glm::vec3& position_in_world) const -> glm::vec3
@@ -147,89 +143,9 @@ void Grid::render(const Render_context& context)
         }
     );
     context.app_context.app_rendering->set_grid_colors(m_level_colors, m_label_color);
-
-    if (!is_visible()) {
-        return;
-    }
-    if (context.camera == nullptr) {
-        return;
-    }
-
-    //render(context, true); // major
-    //render(context, false); // minor
-}
-
-void Grid::render(const Render_context& context, bool major)
-{
-    const erhe::scene::Node* camera_node = context.camera->get_node();
-    ERHE_VERIFY(camera_node != nullptr);
-    const glm::mat4 m = world_from_grid();
-
-    const float extent     = static_cast<float>(m_cell_count) * m_cell_size;
-    const float minor_step = m_cell_size / static_cast<float>(m_cell_div);
-    int cell;
-
-    erhe::renderer::Primitive_renderer renderer =
-        major ? context.get({erhe::graphics::Primitive_type::line, 1, true, m_see_hidden_major}) :
-                context.get({erhe::graphics::Primitive_type::line, 0, true, m_see_hidden_minor});
-
-    renderer.set_thickness (major ? m_major_width : m_minor_width);
-    renderer.set_line_color(major ? m_major_color : m_minor_color);
-
-    bool minor = !major;
-    for (cell = -m_cell_count; cell < m_cell_count; ++cell) {
-        float xz = static_cast<float>(cell) * m_cell_size;
-
-        if (major) {
-            renderer.add_lines(
-                m,
-                {
-                    {
-                        vec3{     xz, 0.0f,  -extent},
-                        vec3{     xz, 0.0f,   extent}
-                    },
-                    {
-                        vec3{-extent, 0.0f,      xz},
-                        vec3{ extent, 0.0f,      xz}
-                    }
-                }
-            );
-        }
-        if (minor) {
-            for (int i = 0; i < (m_cell_div - 1); ++i) {
-                xz += minor_step;
-                renderer.add_lines(
-                    m,
-                    {
-                        {
-                            vec3{     xz, 0.0f, -extent},
-                            vec3{     xz, 0.0f,  extent}
-                        },
-                        {
-                            vec3{-extent, 0.0f,      xz},
-                            vec3{ extent, 0.0f,      xz}
-                        }
-                    }
-                );
-            }
-        }
-    }
-    if (major) {
-        float xz = static_cast<float>(cell) * m_cell_size;
-        renderer.add_lines(
-            m,
-            {
-                {
-                    vec3{     xz, 0.0f, -extent},
-                    vec3{     xz, 0.0f,  extent}
-                },
-                {
-                    vec3{-extent, 0.0f,      xz},
-                    vec3{ extent, 0.0f,      xz}
-                }
-            }
-        );
-    }
+    context.app_context.app_rendering->set_grid_line_widths(
+        glm::vec4{m_level_widths[0], m_level_widths[1], m_level_widths[2], m_level_widths[3]}
+    );
 }
 
 void Grid::update()
@@ -256,19 +172,19 @@ void Grid::imgui(App_context& context)
     
     ImGui::Checkbox   ("Intersect enable", &m_intersect_enable);
     ImGui::Checkbox   ("Snap enable",      &m_snap_enabled);
-    ImGui::Checkbox   ("See Major Hidden", &m_see_hidden_major);
-    ImGui::Checkbox   ("See Minor Hidden", &m_see_hidden_minor);
     ImGui::SliderFloat("Cell Size",        &m_cell_size,       0.0f, 10.0f);
     ImGui::SliderInt  ("Cell Div",         &m_cell_div,        0,    10);
     ImGui::SliderInt  ("Cell Count",       &m_cell_count,      1,    100);
-    ImGui::SliderFloat("Major Width",      &m_major_width,  -100.0f, 100.0f);
-    ImGui::SliderFloat("Minor Width",      &m_minor_width,  -100.0f, 100.0f);
-    ImGui::ColorEdit4 ("Major Color",      &m_major_color.x, ImGuiColorEditFlags_Float);
-    ImGui::ColorEdit4 ("Minor Color",      &m_minor_color.x, ImGuiColorEditFlags_Float);
     ImGui::ColorEdit4 ("Level 0 Color",    &m_level_colors[0].x, ImGuiColorEditFlags_Float);
     ImGui::ColorEdit4 ("Level 1 Color",    &m_level_colors[1].x, ImGuiColorEditFlags_Float);
     ImGui::ColorEdit4 ("Level 2 Color",    &m_level_colors[2].x, ImGuiColorEditFlags_Float);
     ImGui::ColorEdit4 ("Level 3 Color",    &m_level_colors[3].x, ImGuiColorEditFlags_Float);
+    // Line width is a fraction of the level cell size (grid.frag
+    // PristineGrid line width).
+    ImGui::SliderFloat("Level 0 Width",    &m_level_widths[0], 0.0f, 0.5f, "%.4f", ImGuiSliderFlags_Logarithmic);
+    ImGui::SliderFloat("Level 1 Width",    &m_level_widths[1], 0.0f, 0.5f, "%.4f", ImGuiSliderFlags_Logarithmic);
+    ImGui::SliderFloat("Level 2 Width",    &m_level_widths[2], 0.0f, 0.5f, "%.4f", ImGuiSliderFlags_Logarithmic);
+    ImGui::SliderFloat("Level 3 Width",    &m_level_widths[3], 0.0f, 0.5f, "%.4f", ImGuiSliderFlags_Logarithmic);
     ImGui::Checkbox   ("Axis Labels",      &m_label_enable);
     ImGui::SliderFloat("Label Size",       &m_label_text_fraction, 0.05f, 0.5f);
     ImGui::SliderFloat("Label Spacing",    &m_label_spacing,       1.0f,  100.0f, "%.0f");

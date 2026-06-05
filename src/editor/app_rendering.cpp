@@ -950,6 +950,13 @@ void App_rendering::set_grid_colors(const std::array<glm::vec4, 4>& level_colors
     }
 }
 
+void App_rendering::set_grid_line_widths(const glm::vec4& level_widths)
+{
+    if (m_grid_composition_pass != nullptr) {
+        m_grid_composition_pass->data.grid_parameters.grid_line_width = level_widths;
+    }
+}
+
 void App_rendering::update_sky_parameters()
 {
     if ((m_sky_composition_pass == nullptr) || (m_context.editor_settings == nullptr)) {

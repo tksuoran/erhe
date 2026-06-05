@@ -36,14 +36,6 @@ Grid_tool::Grid_tool(
     set_description("Grid");
     set_icon       (icon_set.custom_icons, icon_set.icons.grid);
 
-    config.major_color = grid_config.major_color;
-    config.minor_color = grid_config.minor_color;
-    config.major_width = grid_config.major_width;
-    config.minor_width = grid_config.minor_width;
-    config.cell_size   = grid_config.cell_size;
-    config.cell_div    = grid_config.cell_div;
-    config.cell_count  = grid_config.cell_count;
-
     std::shared_ptr<Grid> grid = std::make_shared<Grid>();
     // TODO Move config to editor ?
     // grid->name        = "Default Grid";

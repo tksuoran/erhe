@@ -61,13 +61,8 @@ public:
     void set_cell_size   (float cell_size) { m_cell_size = cell_size; }
     void set_cell_div    (int cell_div) { m_cell_div = cell_div; }
     void set_cell_count  (int cell_count) { m_cell_count = cell_count; }
-    void set_major_color (glm::vec4 color) { m_major_color = color; }
-    void set_minor_color (glm::vec4 color) { m_minor_color = color; }
-    void set_major_width (float width) { m_major_width = width; }
-    void set_minor_width (float width) { m_minor_width = width; }
 
 private:
-    void render(const Render_context& context, bool major);
     void update();
 
     Grid_plane_type m_plane_type      {Grid_plane_type::XZ};
@@ -75,8 +70,6 @@ private:
     bool            m_snap_enabled    {true};
     float           m_rotation        {0.0f}; // Used only if plane type != node
     glm::vec3       m_center          {0.0f}; // Used only if plane type != node
-    bool            m_see_hidden_major{false};
-    bool            m_see_hidden_minor{false};
     float           m_cell_size       {1.0f};
     int             m_cell_div        {2};
     int             m_cell_count      {10};
@@ -84,19 +77,17 @@ private:
     float           m_label_text_fraction{0.15f}; // text height as fraction of label spacing
     float           m_label_spacing      {1.0f};  // label spacing in world units (integer >= 1)
     float           m_label_fade         {4.0f};  // pixels per em for full label visibility (smaller = visible further)
-    // Per-LOD-level line colors and axis label color for the grid
-    // composition pass (grid.frag). Defaults match Grid_parameters.
+    // Per-LOD-level line colors, line widths (fraction of the level cell
+    // size) and axis label color for the grid composition pass
+    // (grid.frag). Defaults match Grid_parameters.
     std::array<glm::vec4, 4> m_level_colors{
         glm::vec4{0.0f,  0.0f,  0.01f, 1.0f},
         glm::vec4{0.0f,  0.0f,  0.0f,  1.0f},
         glm::vec4{0.01f, 0.0f,  0.0f,  1.0f},
         glm::vec4{0.0f,  0.01f, 0.0f,  1.0f}
     };
+    std::array<float, 4> m_level_widths{0.006f, 0.02f, 0.02f, 0.02f};
     glm::vec4       m_label_color        {0.0f, 0.0f, 0.0f, 1.0f};
-    float           m_major_width     {4.0f};
-    float           m_minor_width     {2.0f};
-    glm::vec4       m_major_color     {0.0f, 0.0f, 0.0f, 0.729f};
-    glm::vec4       m_minor_color     {0.0f, 0.0f, 0.0f, 0.737f};
     glm::mat4       m_world_from_grid {1.0f};
     glm::mat4       m_grid_from_world {1.0f};
 };

@@ -27,19 +27,6 @@ public:
 class Grid_tool : public Tool
 {
 public:
-    class Config
-    {
-    public:
-        glm::vec4 major_color{1.0f, 1.0f, 1.0f, 1.0f};
-        glm::vec4 minor_color{0.5f, 0.5f, 0.5f, 0.5f};
-        float     major_width{4.0f};
-        float     minor_width{2.0f};
-        float     cell_size  {1.0f};
-        int       cell_div   {10};
-        int       cell_count {2};
-    };
-    Config config;
-
     Grid_tool(
         const Grid_config&           grid_config,
         erhe::imgui::Imgui_renderer& imgui_renderer,
