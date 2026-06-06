@@ -407,15 +407,21 @@ include(vscode)
 vscode_support()
 
 if (${ERHE_WINDOW_LIBRARY} STREQUAL "sdl")
+    # SDL is pinned to a commit on the "erhe" branch of the tksuoran/SDL
+    # fork. That branch carries erhe's android-project/ changes as commits
+    # on top of upstream SDL; erhe's android-project/ directory is a mirror
+    # of the branch's android-project/ at exactly this commit, kept in sync
+    # by scripts/update_sdl.py (which is also the only supported way to
+    # change this pin). To update SDL: rebase the erhe branch in the fork
+    # onto the desired upstream ref, push the branch plus a snapshot tag,
+    # then run "py -3 scripts/update_sdl.py". See doc/android.md, section
+    # "Updating SDL".
+    set(ERHE_SDL_GIT_TAG "f465099da1b0503544a1c926dbda85e5df54a369")
     CPMAddPackage(
         NAME              sdl
-        # Pinned to the commit android-project/ was copied from. The Java
-        # shim (SDLActivity.java etc.) under android-project/app/src/main/
-        # java/org/libsdl/app/ must match the SDL3 C library version - any
-        # drift triggers a "SDL version mismatch" dialog at app launch.
-        GIT_TAG           03ceaca19
+        GIT_TAG           ${ERHE_SDL_GIT_TAG}
         GIT_SHALLOW       FALSE
-        GITHUB_REPOSITORY libsdl-org/sdl
+        GITHUB_REPOSITORY tksuoran/SDL
         OPTIONS
                     "SDL_STATIC ON"
             "SDL_STATIC_DEFAULT ON"
@@ -425,6 +431,35 @@ if (${ERHE_WINDOW_LIBRARY} STREQUAL "sdl")
                      "SDL_AUDIO OFF"
                     "SDL_RENDER OFF"
     )
+    # Drift guard: android-project/ must be the mirror of the SDL commit
+    # CPM just fetched; if they disagree the Java shim and the SDL3 C
+    # library can diverge, which surfaces as a "SDL C/Java version
+    # mismatch" dialog at app launch on Android. SDL_SYNC_COMMIT is
+    # written by scripts/update_sdl.py together with ERHE_SDL_GIT_TAG.
+    file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/android-project/SDL_SYNC_COMMIT" ERHE_SDL_SYNC_LINES)
+    list(GET ERHE_SDL_SYNC_LINES 0 ERHE_SDL_SYNC_HASH)
+    if (NOT ERHE_SDL_SYNC_HASH STREQUAL ERHE_SDL_GIT_TAG)
+        message(FATAL_ERROR
+            "SDL pin mismatch: ERHE_SDL_GIT_TAG (${ERHE_SDL_GIT_TAG}) does not match "
+            "android-project/SDL_SYNC_COMMIT (${ERHE_SDL_SYNC_HASH}). The android-project/ "
+            "mirror and the SDL C library would diverge. Do not edit the pin by hand; "
+            "run: py -3 scripts/update_sdl.py")
+    endif ()
+    if (EXISTS "${sdl_SOURCE_DIR}/.git")
+        execute_process(
+            COMMAND git rev-parse HEAD
+            WORKING_DIRECTORY "${sdl_SOURCE_DIR}"
+            OUTPUT_VARIABLE ERHE_SDL_CHECKOUT_HASH
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+        )
+        if (NOT ERHE_SDL_CHECKOUT_HASH STREQUAL ERHE_SDL_SYNC_HASH)
+            message(FATAL_ERROR
+                "SDL drift: the CPM SDL checkout is at ${ERHE_SDL_CHECKOUT_HASH} but "
+                "android-project/ was synced from ${ERHE_SDL_SYNC_HASH} "
+                "(android-project/SDL_SYNC_COMMIT). The Java shim and the SDL3 C library "
+                "would diverge. Run: py -3 scripts/update_sdl.py")
+        endif ()
+    endif ()
     message(STATUS "Erhe configured to use SDL for window system integration.")
     add_definitions(-DERHE_WINDOW_LIBRARY_SDL)
 elseif (${ERHE_WINDOW_LIBRARY} STREQUAL "glfw")

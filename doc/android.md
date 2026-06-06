@@ -54,6 +54,53 @@ This is delivered in three phases:
   empty - SDL3's Java shim sources (SDLActivity.java and friends) have not
   been copied in. They must be present for the APK to build.
 
+## Updating SDL
+
+SDL is pinned (CPM `GIT_TAG` via `ERHE_SDL_GIT_TAG` in `CMakeLists.txt`) to a
+commit on the **`erhe` branch of the tksuoran/SDL fork**. That branch carries
+all of erhe's `android-project/` changes as topic commits on top of upstream
+SDL: the erhe `app/build.gradle`, the manifests, `ErheActivity.java`, the
+quest flavor manifest, the hwasan wrap script, and the removal of the
+template `app/jni/` tree. erhe's `android-project/` directory is a pure
+mirror of the branch's `android-project/` at exactly the pinned commit; the
+mirror state is recorded in `android-project/SDL_SYNC_COMMIT` and enforced at
+configure time (mismatch is a `FATAL_ERROR`).
+
+Rules:
+
+- **Never edit `android-project/` directly in the erhe repo** (the stamp file
+  is the one exception). Make the change in the fork's `erhe` branch and sync
+  it over; `scripts/update_sdl.py` deletes anything the fork does not have.
+- **Never edit `ERHE_SDL_GIT_TAG` by hand**; the script rewrites it together
+  with the stamp so the pin and the mirror cannot drift. Drift would let the
+  Java shim and the SDL3 C library diverge, which surfaces as an "SDL C/Java
+  version mismatch" dialog at app launch.
+- The SDL Java shim files (`org/libsdl/app/*.java`) stay byte-identical to
+  upstream; erhe's only shim customization is the `ErheActivity` subclass.
+
+To update SDL (assuming the fork is checked out as a sibling `../sdl` with
+remotes `origin` = tksuoran/SDL and `upstream` = libsdl-org/SDL):
+
+```bash
+git -C ../sdl fetch upstream
+git -C ../sdl rebase --onto upstream/main <old-base> erhe   # or: checkout erhe && rebase upstream/main
+git -C ../sdl tag erhe-snapshot-<date>
+git -C ../sdl push -f origin erhe
+git -C ../sdl push origin erhe-snapshot-<date>
+py -3 scripts/update_sdl.py
+```
+
+The snapshot tag is mandatory: rebasing rewrites the branch, and a
+force-push would otherwise leave previously pinned commits unreachable on
+GitHub (they get garbage-collected, breaking CPM fetches for older erhe
+revisions). The script refuses to pin a commit that is not reachable from
+`origin/erhe` or a tag.
+
+After the sync: re-run the configure script (the drift guard re-checks the
+pin), rebuild the quest APK, and launch on device - the SDL version check
+(`SDLActivity` Java constants vs `nativeGetVersion()`) passes only when shim
+and C library really came from the same commit.
+
 ## Phase 1 - Build-Only
 
 ### 1.1 Top-level CMake: add Android branch

@@ -1,0 +1,2 @@
+# wrap.sh is exec'd by the device shell; a CRLF shebang breaks it.
+* text eol=lf
