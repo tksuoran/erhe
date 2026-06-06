@@ -14,6 +14,7 @@
 #include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_graphics/texture_heap.hpp"
+#include "erhe_math/math_util.hpp"
 #include "erhe_primitive/buffer_mesh.hpp"
 //#include "erhe_primitive/primitive.hpp"
 #include "erhe_scene/light.hpp"
@@ -48,12 +49,20 @@ Shadow_renderer::Shadow_renderer(
     , m_shader_variant_cache{shader_variant_cache}
     , m_empty_fragment_outputs{}
     , m_bind_group_layout{program_interface.bind_group_layout.get()}
+    , m_y_flip{graphics_device.get_info().coordinate_conventions.clip_space_y_flip == erhe::math::Clip_space_y_flip::enabled}
     , m_pipeline{
         m_graphics_device,
         erhe::graphics::Base_render_pipeline_create_info{
             .debug_label       = erhe::utility::Debug_label{"Shadow Renderer"},
             .input_assembly    = Input_assembly_state::triangle,
-            .rasterization     = Rasterization_state::cull_mode_none,
+            // Cull front faces: only back faces write shadow depth. For
+            // closed meshes this reduces peter-panning compared to
+            // rasterizing both sides. Caveat: open / single-sided meshes
+            // no longer cast shadows from their front side. Light
+            // projections are built with the same device coordinate
+            // conventions as viewport passes, so the same y-flip winding
+            // compensation applies.
+            .rasterization     = Rasterization_state::cull_mode_front_ccw.with_winding_flip_if(m_y_flip),
             .depth_stencil     = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(graphics_device.get_reverse_depth()),
             .bind_group_layout = m_bind_group_layout
         }
@@ -263,12 +272,16 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
                 );
                 continue;
             }
+            // Mirrored (negative determinant) buckets get the front-face-
+            // flipped variant so front-face culling removes the side facing
+            // the light, same as for non-mirrored casters.
             erhe::graphics::Render_pipeline* render_pipeline = m_pipeline.get_pipeline_for(
                 parameters.render_passes[shadow_index]->get_descriptor(),
                 &erhe::graphics::Color_blend_state::color_writes_disabled,
                 &reloadable_shader_stages->shader_stages,
                 vertex_input.vertex_input.get(),
-                &vertex_input.vertex_format
+                &vertex_input.vertex_format,
+                bucket.negative_determinant
             );
             if (render_pipeline == nullptr) {
                 log_draw->warn("No render pipeline");
@@ -387,19 +400,27 @@ void Shadow_renderer::prewarm_pipelines(
         // render passes are available yet (e.g. orchestrator ran before
         // any Shadow_render_node was created); the runtime will still
         // hit a warm Shader_variant_cache.
+        //
+        // Both winding variants are warmed regardless of the bucket's
+        // determinant: mirroring a mesh is an interactive editor
+        // operation, and warming the flipped sibling here avoids a
+        // first-mirrored-mesh pipeline-compile hitch.
         for (const std::unique_ptr<erhe::graphics::Render_pass>& render_pass : render_passes) {
             if (!render_pass) {
                 continue;
             }
-            static_cast<void>(
-                m_pipeline.get_pipeline_for(
-                    render_pass->get_descriptor(),
-                    &erhe::graphics::Color_blend_state::color_writes_disabled,
-                    &reloadable_shader_stages->shader_stages,
-                    vertex_input.vertex_input.get(),
-                    &vertex_input.vertex_format
-                )
-            );
+            for (const bool front_face_flip : { false, true }) {
+                static_cast<void>(
+                    m_pipeline.get_pipeline_for(
+                        render_pass->get_descriptor(),
+                        &erhe::graphics::Color_blend_state::color_writes_disabled,
+                        &reloadable_shader_stages->shader_stages,
+                        vertex_input.vertex_input.get(),
+                        &vertex_input.vertex_format,
+                        front_face_flip
+                    )
+                );
+            }
         }
     }
 }

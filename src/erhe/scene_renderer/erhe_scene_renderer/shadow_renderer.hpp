@@ -120,6 +120,8 @@ private:
     Shader_variant_cache&                         m_shader_variant_cache;
     erhe::graphics::Fragment_outputs              m_empty_fragment_outputs;
     erhe::graphics::Bind_group_layout*            m_bind_group_layout{nullptr};
+    // Declared before m_pipeline: used in its rasterization state init.
+    bool                                          m_y_flip{false};
     erhe::graphics::Base_render_pipeline          m_pipeline;
     std::shared_ptr<erhe::graphics::Texture>      m_dummy_texture;
     erhe::graphics::Sampler                       m_fallback_sampler;
