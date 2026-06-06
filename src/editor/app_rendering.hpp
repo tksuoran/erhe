@@ -60,10 +60,12 @@ public:
 
     bool                                 m_y_flip;
     erhe::graphics::Vertex_input_state   m_empty_vertex_input;
-    erhe::graphics::Base_render_pipeline polygon_fill_standard_positive_determinant;
-    erhe::graphics::Base_render_pipeline polygon_fill_standard_negative_determinant;
-    erhe::graphics::Base_render_pipeline polygon_fill_standard_selected_positive_determinant;
-    erhe::graphics::Base_render_pipeline polygon_fill_standard_selected_negative_determinant;
+    // Mirrored (negative determinant) meshes are handled per bucket by
+    // Forward_renderer requesting the front-face-flipped pipeline variant
+    // (Base_render_pipeline::get_pipeline_for front_face_flip), so a single
+    // base pipeline per selection state suffices.
+    erhe::graphics::Base_render_pipeline polygon_fill_standard;
+    erhe::graphics::Base_render_pipeline polygon_fill_standard_selected;
     erhe::graphics::Color_blend_state    line_hidden_blend_state;
     erhe::graphics::Base_render_pipeline line_hidden_blend;
     erhe::graphics::Base_render_pipeline brush_back;
@@ -131,8 +133,7 @@ public:
     auto make_composition_pass(
         std::string_view        name,
         Composition_pass_data&& data,
-        bool                    selected,
-        bool                    negative_determinant
+        bool                    selected
     ) -> std::shared_ptr<Composition_pass>;
     auto make_composition_pass(
         std::string_view                                             name,
@@ -170,8 +171,7 @@ private:
 
     [[nodiscard]] auto get_render_pipeline_state(
         const Composition_pass& renderpass,
-        bool                    selected,
-        bool                    negative_determinant
+        bool                    selected
     ) -> erhe::graphics::Base_render_pipeline*;
 
     [[nodiscard]] auto width () const -> int;

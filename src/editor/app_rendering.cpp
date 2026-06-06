@@ -91,18 +91,12 @@ App_rendering::App_rendering(
     using Item_filter = erhe::Item_filter;
     using Item_flags  = erhe::Item_flags;
     using namespace erhe::primitive;
+    // Mirrored (negative determinant) meshes need no dedicated filters or
+    // composition passes: bucket_primitives partitions buckets by the
+    // negative-determinant flag and Forward_renderer selects the
+    // front-face-flipped pipeline variant per bucket.
     const Item_filter filter_not_selected{
         .require_all_bits_set         = Item_flags::visible,
-        .require_at_least_one_bit_set = Item_flags::content  | Item_flags::controller | Item_flags::rendertarget,
-        .require_all_bits_clear       = Item_flags::selected | Item_flags::hovered_in_item_tree
-    };
-    const Item_filter filter_not_selected_positive_determinant{
-        .require_all_bits_set         = Item_flags::visible,
-        .require_at_least_one_bit_set = Item_flags::content  | Item_flags::controller | Item_flags::rendertarget,
-        .require_all_bits_clear       = Item_flags::selected | Item_flags::hovered_in_item_tree | Item_flags::negative_determinant
-    };
-    const Item_filter filter_not_selected_negative_determinant{
-        .require_all_bits_set         = Item_flags::visible  | Item_flags::negative_determinant,
         .require_at_least_one_bit_set = Item_flags::content  | Item_flags::controller | Item_flags::rendertarget,
         .require_all_bits_clear       = Item_flags::selected | Item_flags::hovered_in_item_tree
     };
@@ -111,28 +105,8 @@ App_rendering::App_rendering(
         .require_at_least_one_bit_set = Item_flags::selected,
         .require_all_bits_clear       = 0
     };
-    const Item_filter filter_selected_positive_determinant{
-        .require_all_bits_set         = Item_flags::content | Item_flags::visible,
-        .require_at_least_one_bit_set = Item_flags::selected,
-        .require_all_bits_clear       = Item_flags::negative_determinant
-    };
-    const Item_filter filter_selected_negative_determinant{
-        .require_all_bits_set         = Item_flags::content | Item_flags::visible | Item_flags::negative_determinant,
-        .require_at_least_one_bit_set = Item_flags::selected,
-        .require_all_bits_clear       = 0
-    };
     const Item_filter filter_selected_or_hovered{
         .require_all_bits_set         = Item_flags::content  | Item_flags::visible,
-        .require_at_least_one_bit_set = Item_flags::selected | Item_flags::hovered_in_item_tree,
-        .require_all_bits_clear       = 0
-    };
-    const Item_filter filter_selected_or_hovered_positive_determinant{
-        .require_all_bits_set         = Item_flags::content  | Item_flags::visible,
-        .require_at_least_one_bit_set = Item_flags::selected | Item_flags::hovered_in_item_tree,
-        .require_all_bits_clear       = Item_flags::negative_determinant
-    };
-    const Item_filter filter_selected_or_hovered_negative_determinant{
-        .require_all_bits_set         = Item_flags::content  | Item_flags::visible | Item_flags::negative_determinant,
         .require_at_least_one_bit_set = Item_flags::selected | Item_flags::hovered_in_item_tree,
         .require_all_bits_clear       = 0
     };
@@ -146,59 +120,33 @@ App_rendering::App_rendering(
     using Blend_mode = erhe::renderer::Blend_mode;
     static constexpr bool selected = true;
     static constexpr bool not_selected = false;
-    static constexpr bool negative_determinant = true;
-    static constexpr bool positive_determinant = false;
 
-    auto content_fill_not_selected_positive_determinant = make_composition_pass(
-        "Content fill opaque not selected positive determinant",
+    auto content_fill_not_selected = make_composition_pass(
+        "Content fill opaque not selected",
         Composition_pass_data{
             .mesh_layers          {Mesh_layer_id::content, Mesh_layer_id::controller, Mesh_layer_id::rendertarget},
             .blending_mode_policy {Blending_mode_policy::opaque_primitives_only},
             .primitive_mode       {Primitive_mode::polygon_fill},
-            .filter               {filter_not_selected_positive_determinant},
+            .filter               {filter_not_selected},
             .get_render_style     {render_style_not_selected},
         },
-        not_selected, positive_determinant
-    );
-
-    auto content_fill_not_selected_negative_determinant = make_composition_pass(
-        "Content fill opaque not selected negative determinant",
-        Composition_pass_data{
-            .mesh_layers         {Mesh_layer_id::content, Mesh_layer_id::controller, Mesh_layer_id::rendertarget},
-            .blending_mode_policy{Blending_mode_policy::opaque_primitives_only},
-            .primitive_mode      {Primitive_mode::polygon_fill},
-            .filter              {filter_not_selected_negative_determinant},
-            .get_render_style    {render_style_not_selected},
-        },
-        not_selected, negative_determinant
+        not_selected
     );
 
     const auto& render_style_selected = [](const Render_context& context) -> const Render_style_data& {
         return context.viewport_config.render_style_selected;
     };
 
-    auto content_fill_selected_or_hovered_filter_positive_determinant = make_composition_pass(
-        "Content fill selected positive determinant",
+    auto content_fill_selected_or_hovered = make_composition_pass(
+        "Content fill selected",
         Composition_pass_data{
             .mesh_layers         {Mesh_layer_id::content, Mesh_layer_id::controller},
             .blending_mode_policy{Blending_mode_policy::opaque_primitives_only},
             .primitive_mode      {Primitive_mode::polygon_fill},
-            .filter              {filter_selected_or_hovered_positive_determinant},
+            .filter              {filter_selected_or_hovered},
             .get_render_style    {render_style_selected}
         },
-        selected, positive_determinant
-    );
-
-    auto content_fill_selected_or_hovered_filter_negative_determinant = make_composition_pass(
-        "Content fill selected negative determinant",
-        Composition_pass_data{
-            .mesh_layers         {Mesh_layer_id::content, Mesh_layer_id::controller},
-            .blending_mode_policy{Blending_mode_policy::opaque_primitives_only},
-            .primitive_mode      {Primitive_mode::polygon_fill},
-            .filter              {filter_selected_or_hovered_negative_determinant},
-            .get_render_style    {render_style_selected}
-        },
-        selected, negative_determinant
+        selected
     );
 
     edge_lines_not_selected = make_composition_pass(
@@ -210,7 +158,7 @@ App_rendering::App_rendering(
             .primitive_mode                {Primitive_mode::edge_lines},
             .filter                        {filter_not_selected},
             .get_render_style              {render_style_not_selected}
-        }, not_selected, positive_determinant
+        }, not_selected
     );
 
     edge_lines_selected = make_composition_pass(
@@ -222,7 +170,7 @@ App_rendering::App_rendering(
             .primitive_mode                {Primitive_mode::edge_lines},
             .filter                        {filter_selected},
             .get_render_style              {render_style_selected}
-        }, selected, positive_determinant
+        }, selected
     );
 
     selection_outline = make_composition_pass(
@@ -278,27 +226,15 @@ App_rendering::App_rendering(
         { &m_pipeline_passes.grid }
     );
 
-    auto translucent_content_fill_not_selected_positive_determinant = make_composition_pass(
-        "Content fill translucent not selected positive determinant",
-        content_fill_not_selected_positive_determinant,
+    auto translucent_content_fill_not_selected = make_composition_pass(
+        "Content fill translucent not selected",
+        content_fill_not_selected,
         erhe::scene_renderer::Blending_mode_policy::translucent_primitives_only
     );
 
-    auto translucent_content_fill_not_selected_negative_determinant = make_composition_pass(
-        "Content fill translucent not selected negative determinant",
-        content_fill_not_selected_negative_determinant,
-        erhe::scene_renderer::Blending_mode_policy::translucent_primitives_only
-    );
-
-    auto translucent_content_fill_selected_or_hovered_filter_positive_determinant = make_composition_pass(
-        "Content fill translucent selected positive determinant",
-        content_fill_selected_or_hovered_filter_positive_determinant,
-        erhe::scene_renderer::Blending_mode_policy::translucent_primitives_only
-    );
-
-    auto translucent_content_fill_selected_or_hovered_filter_negative_determinant = make_composition_pass(
-        "Content fill translucent selected negative determinant",
-        content_fill_selected_or_hovered_filter_negative_determinant,
+    auto translucent_content_fill_selected_or_hovered = make_composition_pass(
+        "Content fill translucent selected",
+        content_fill_selected_or_hovered,
         erhe::scene_renderer::Blending_mode_policy::translucent_primitives_only
     );
 
@@ -443,22 +379,15 @@ auto App_rendering::destroy_shadow_node(const std::shared_ptr<Shadow_render_node
 
 auto App_rendering::get_render_pipeline_state(
     const Composition_pass& composition_pass,
-    const bool              selected,
-    const bool              negative_determinant
+    const bool              selected
 ) -> erhe::graphics::Base_render_pipeline*
 {
     using namespace erhe::primitive;
     switch (composition_pass.data.primitive_mode) {
         case Primitive_mode::polygon_fill:
             return selected
-                ? (negative_determinant
-                    ? &m_pipeline_passes.polygon_fill_standard_selected_negative_determinant
-                    : &m_pipeline_passes.polygon_fill_standard_selected_positive_determinant
-                )
-                : (negative_determinant
-                    ? &m_pipeline_passes.polygon_fill_standard_negative_determinant
-                    : &m_pipeline_passes.polygon_fill_standard_positive_determinant
-                );
+                ? &m_pipeline_passes.polygon_fill_standard_selected
+                : &m_pipeline_passes.polygon_fill_standard;
 
         case Primitive_mode::edge_lines:
             return &m_pipeline_passes.edge_lines;
@@ -481,14 +410,13 @@ auto App_rendering::make_composition_pass(const std::string_view name) -> std::s
 auto App_rendering::make_composition_pass(
     std::string_view        name,
     Composition_pass_data&& data,
-    const bool              selected,
-    const bool              negative_determinant
+    const bool              selected
 ) -> std::shared_ptr<Composition_pass>
 {
     std::shared_ptr<Composition_pass> renderpass = make_composition_pass(name);
     renderpass->data = std::move(data);
     renderpass->data.base_render_pipelines.push_back(
-        get_render_pipeline_state(*renderpass.get(), selected, negative_determinant)
+        get_render_pipeline_state(*renderpass.get(), selected)
     );
     return renderpass;
 }
@@ -538,62 +466,21 @@ Pipeline_renderpasses::Pipeline_renderpasses(
 )
     : m_y_flip{graphics_device.get_info().coordinate_conventions.clip_space_y_flip == erhe::math::Clip_space_y_flip::enabled}
     , m_empty_vertex_input{graphics_device}
-    , polygon_fill_standard_positive_determinant{
+    , polygon_fill_standard{
         graphics_device,
         erhe::graphics::Base_render_pipeline_create_info{
-            .debug_label    = erhe::utility::Debug_label{"Polygon Fill Positive Determinant"},
+            .debug_label    = erhe::utility::Debug_label{"Polygon Fill"},
             .input_assembly = Input_assembly_state::triangle,
             .rasterization  = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
             .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth)
         }
     }
-    , polygon_fill_standard_negative_determinant{
+    , polygon_fill_standard_selected{
         graphics_device,
         erhe::graphics::Base_render_pipeline_create_info{
-            .debug_label    = erhe::utility::Debug_label{"Polygon Fill Negative Determinant"},
-            .input_assembly = Input_assembly_state::triangle,
-            .rasterization  = Rasterization_state::cull_mode_back_cw.with_winding_flip_if(m_y_flip),
-            .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
-        }
-    }
-    , polygon_fill_standard_selected_positive_determinant{
-        graphics_device,
-        erhe::graphics::Base_render_pipeline_create_info{
-            .debug_label    = erhe::utility::Debug_label{"Polygon Fill Selected Positive Determinant"},
+            .debug_label    = erhe::utility::Debug_label{"Polygon Fill Selected"},
             .input_assembly = Input_assembly_state::triangle,
             .rasterization  = Rasterization_state::cull_mode_back_ccw.with_winding_flip_if(m_y_flip),
-            .depth_stencil  = {
-                .depth_test_enable   = true,
-                .depth_write_enable  = true,
-                .depth_compare_op    = erhe::graphics::get_depth_function(erhe::graphics::Compare_operation::less, reverse_depth),
-                .stencil_test_enable = true,
-                .stencil_front = {
-                    .stencil_fail_op = erhe::graphics::Stencil_op::replace,
-                    .z_fail_op       = erhe::graphics::Stencil_op::replace,
-                    .z_pass_op       = erhe::graphics::Stencil_op::replace,
-                    .function        = erhe::graphics::Compare_operation::always,
-                    .reference       = 0b10000000u,
-                    .test_mask       = 0b00000000u, // always does not use
-                    .write_mask      = 0b10000000u  // = 0x80 = 128
-                },
-                .stencil_back = {
-                    .stencil_fail_op = erhe::graphics::Stencil_op::replace,
-                    .z_fail_op       = erhe::graphics::Stencil_op::replace,
-                    .z_pass_op       = erhe::graphics::Stencil_op::replace,
-                    .function        = erhe::graphics::Compare_operation::always,
-                    .reference       = 0b10000000u,
-                    .test_mask       = 0b00000000u,
-                    .write_mask      = 0b10000000u
-                },
-            }
-        }
-    }
-    , polygon_fill_standard_selected_negative_determinant{
-        graphics_device,
-        erhe::graphics::Base_render_pipeline_create_info{
-            .debug_label    = erhe::utility::Debug_label{"Polygon Fill Selected Negative Determinant"},
-            .input_assembly = Input_assembly_state::triangle,
-            .rasterization  = Rasterization_state::cull_mode_back_cw.with_winding_flip_if(m_y_flip),
             .depth_stencil  = {
                 .depth_test_enable   = true,
                 .depth_write_enable  = true,
