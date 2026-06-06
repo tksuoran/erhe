@@ -238,8 +238,9 @@ with Vulkan requirements:
               android:version="1" android:required="true" />
 ```
 
-Leave the `<activity android:name="SDLActivity">` element unchanged; the
-package stays as the `org.libsdl.app` placeholder for now.
+Leave the `<activity>` element unchanged (it now names `ErheActivity`,
+erhe's SDLActivity subclass); the package stays as the `org.libsdl.app`
+placeholder for now.
 
 ### 1.9 Things to monitor (not preemptive changes)
 
@@ -511,7 +512,7 @@ End-to-end on a real device:
 scripts\build_android.bat
 adb install -r android-project\app\build\outputs\apk\debug\app-debug.apk
 adb logcat -c
-adb shell am start -n org.libsdl.app/org.libsdl.app.SDLActivity
+adb shell am start -n org.libsdl.app/org.libsdl.app.ErheActivity
 adb logcat -v time --pid=$(adb shell pidof org.libsdl.app)
 ```
 

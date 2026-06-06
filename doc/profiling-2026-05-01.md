@@ -7,7 +7,7 @@
   - Built via `scripts\build_android.bat quest assembleQuestRelease`
   - Installed via `scripts\install_android.bat quest release` (no auto-launch)
   - Launched via the immersive VR intent
-    (`am start -W -a MAIN -c LAUNCHER -c com.oculus.intent.category.VR -n org.libsdl.app.quest/org.libsdl.app.SDLActivity`)
+    (`am start -W -a MAIN -c LAUNCHER -c com.oculus.intent.category.VR -n org.libsdl.app.quest/org.libsdl.app.ErheActivity`)
 - **Tooling**: `ovrgpuprofiler` real-time metrics, no detailed mode (avoids the
   documented ~10 % overhead). Two 30 s captures, first 2 samples dropped
   per-metric, n=27 per metric.
@@ -178,7 +178,7 @@ scripts\install_android.bat quest release
 :: launch (immersive VR)
 adb shell am start -W -a android.intent.action.MAIN ^
   -c android.intent.category.LAUNCHER -c com.oculus.intent.category.VR ^
-  -n org.libsdl.app.quest/org.libsdl.app.SDLActivity
+  -n org.libsdl.app.quest/org.libsdl.app.ErheActivity
 
 :: iteration 1: broad screen (26 metrics, 30 s)
 adb shell timeout 30 ovrgpuprofiler -r"3,6,7,8,9,10,16,17,18,19,20,21,22,23,24,29,31,34,35,37,38,40,64,78,79,80"

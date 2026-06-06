@@ -27,7 +27,7 @@ Build the editor APK, install it on a connected Meta Quest 3, then launch it int
 4. **Launch** only after the user acknowledges:
    ```
    $LOCALAPPDATA/Android/Sdk/platform-tools/adb.exe logcat -c
-   $LOCALAPPDATA/Android/Sdk/platform-tools/adb.exe shell am start -n org.libsdl.app.quest/org.libsdl.app.SDLActivity
+   $LOCALAPPDATA/Android/Sdk/platform-tools/adb.exe shell am start -n org.libsdl.app.quest/org.libsdl.app.ErheActivity
    ```
    Clearing logcat first makes post-launch diagnosis cleaner.
 

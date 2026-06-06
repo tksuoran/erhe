@@ -123,8 +123,8 @@ if errorlevel 1 (
 )
 
 if "%_run%"=="1" (
-    echo Launching %_app_id%/org.libsdl.app.SDLActivity ...
-    "%ADB%" %_serial% shell am start -n %_app_id%/org.libsdl.app.SDLActivity
+    echo Launching %_app_id%/org.libsdl.app.ErheActivity ...
+    "%ADB%" %_serial% shell am start -n %_app_id%/org.libsdl.app.ErheActivity
     if errorlevel 1 (
         echo Launch FAILED.
         exit /b 1

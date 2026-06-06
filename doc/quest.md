@@ -66,7 +66,7 @@ both targets:
 - `<meta-data android:name="android.app.lib_name" android:value="main"/>`.
 - Vulkan `<uses-feature>` (required) and the OpenGL ES "not required"
   declaration.
-- The `<activity android:name="SDLActivity" .../>` element with the
+- The `<activity android:name="ErheActivity" .../>` element with the
   LAUNCHER and USB_DEVICE_ATTACHED intent-filters.
 - The `VIBRATE` permission and the various non-required gamepad,
   bluetooth, USB host, mouse, and touchscreen `<uses-feature>` lines
@@ -227,7 +227,7 @@ hangs or visual corruption.
 ### 4.4 Phase 4 pass criterion
 
 Quest APK installs on a Quest 3 with developer mode + USB debugging
-enabled, the SDLActivity reaches its first ImGui frame inside the
+enabled, the activity reaches its first ImGui frame inside the
 Horizon flat 2D panel, and the activity stays alive across home /
 resume. Rendering may look squashed because there is no immersive mode
 yet - that is fine. Phase 5 brings the immersive path.
@@ -351,7 +351,7 @@ the AAR's own merge manifest at
 </queries>
 
 <application>
-    <activity android:name="SDLActivity" tools:node="merge">
+    <activity android:name="ErheActivity" tools:node="merge">
         <intent-filter>
             <category android:name="org.khronos.openxr.intent.category.IMMERSIVE_HMD" />
         </intent-filter>

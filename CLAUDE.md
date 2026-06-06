@@ -158,7 +158,7 @@ Always start `scripts/quest_logcat.sh` BEFORE the `adb shell am start ...` line.
 
 ```bash
 bash scripts/quest_logcat.sh             # prints the new capture path
-"$LOCALAPPDATA/Android/Sdk/platform-tools/adb.exe" shell am start -n org.libsdl.app.quest/org.libsdl.app.SDLActivity
+"$LOCALAPPDATA/Android/Sdk/platform-tools/adb.exe" shell am start -n org.libsdl.app.quest/org.libsdl.app.ErheActivity
 ```
 
 The script enforces these invariants -- understand them before changing it:

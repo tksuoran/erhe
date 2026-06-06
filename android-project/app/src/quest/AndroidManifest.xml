@@ -39,12 +39,12 @@
              SAME <intent-filter> element. Since manifest merger does not
              fold categories from a flavor overlay into an inherited
              intent-filter, we replace the activity wholesale here. The
-             attributes mirror main's SDLActivity element. The
+             attributes mirror main's ErheActivity element. The
              USB_DEVICE_ATTACHED intent-filter is preserved. The
              IMMERSIVE_HMD category is included alongside the Meta VR
              category for forward compatibility with Khronos OpenXR
              launchers. -->
-        <activity android:name="org.libsdl.app.SDLActivity"
+        <activity android:name="org.libsdl.app.ErheActivity"
                   android:label="@string/app_name"
                   android:alwaysRetainTaskState="true"
                   android:launchMode="singleTop"

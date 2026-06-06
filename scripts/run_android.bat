@@ -132,8 +132,8 @@ if not "%_rc%"=="0" (
 echo Build + install completed.
 
 :: --- Launch via the LAUNCHER+VR intent so Horizon enters immersive ----------
-echo Launching %_app_id%/org.libsdl.app.SDLActivity ...
-"%ADB%" %_serial% shell am start -W -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -c com.oculus.intent.category.VR -n %_app_id%/org.libsdl.app.SDLActivity
+echo Launching %_app_id%/org.libsdl.app.ErheActivity ...
+"%ADB%" %_serial% shell am start -W -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -c com.oculus.intent.category.VR -n %_app_id%/org.libsdl.app.ErheActivity
 if errorlevel 1 (
     echo Launch FAILED.
     exit /b 1

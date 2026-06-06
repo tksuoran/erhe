@@ -59,17 +59,17 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 LOGDIR = REPO_ROOT / "logs"
 # PKG/ACT are set per run from the --flavor arg (see set_flavor). The mobile
 # flavor has no applicationIdSuffix (org.libsdl.app); quest adds ".quest". Both
-# use the same SDLActivity class. The mobile flavor does NOT link OpenXR, so the
+# use the same ErheActivity class. The mobile flavor does NOT link OpenXR, so the
 # editor runs FLAT -- useful for testing whether the hang needs the immersive
 # path. (A flat 2D app on Quest still needs the headset on to be foregrounded.)
 PKG = "org.libsdl.app.quest"
-ACT = PKG + "/org.libsdl.app.SDLActivity"
+ACT = PKG + "/org.libsdl.app.ErheActivity"
 
 
 def set_flavor(flavor: str) -> None:
     global PKG, ACT
     PKG = "org.libsdl.app" if flavor == "mobile" else "org.libsdl.app.quest"
-    ACT = PKG + "/org.libsdl.app.SDLActivity"
+    ACT = PKG + "/org.libsdl.app.ErheActivity"
 
 
 def apk_for(build_type: str, flavor: str) -> Path:
