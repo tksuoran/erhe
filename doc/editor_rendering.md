@@ -71,7 +71,10 @@ Multiple viewports can exist simultaneously, each with their own shadow node, sc
 
 - Renders each light into its own array layer via a separate render pass
 - Uses a depth-only shader with `Color_writes_disabled`
-- Uses `cull_mode_none` to catch all shadow casters
+- Culls front faces: only back faces write shadow depth, which reduces peter-panning
+  for closed meshes. Caveat: open / single-sided meshes do not cast shadows from their
+  front side. Mirrored (negative-determinant) casters draw with the front-face-flipped
+  pipeline variant per bucket (see "Mirrored (negative-determinant) geometry" below)
 - Supports reverse depth (clear to 0.0) and forward depth (clear to 1.0)
 - Shadow resolution, light count, and depth bits are configurable at runtime via `reconfigure()`
 
@@ -96,22 +99,29 @@ The editor creates these passes in `App_rendering::App_rendering()`:
 
 | # | Pass | Primitive mode | Filter | Pipeline |
 | :--- | :--- | :--- | :--- | :--- |
-| 1 | Opaque fill not selected (positive det.) | polygon_fill | visible, opaque, not selected | Standard opaque, cull back CCW |
-| 2 | Opaque fill not selected (negative det.) | polygon_fill | visible, opaque, not selected, negative det. | Standard opaque, cull back CW |
-| 3 | Opaque fill selected (positive det.) | polygon_fill | visible, opaque, selected | Stencil-marking (bit 7) |
-| 4 | Opaque fill selected (negative det.) | polygon_fill | visible, opaque, selected, negative det. | Stencil-marking (bit 7) |
-| 5 | Edge lines not selected | edge_lines | visible, opaque, not selected | Edge line pipeline |
-| 6 | Edge lines selected | edge_lines | visible, opaque, selected | Edge line pipeline |
-| 7 | Selection/hover outline | polygon_fill | visible, opaque, selected or hovered | Outline (fat_triangle shader) |
-| 8 | Sky | polygon_fill | (none) | Fullscreen, depth==far, stencil==0 |
-| 9 | Grid | polygon_fill | (none) | Fullscreen, depth clamp |
-| 10 | Translucent fill | polygon_fill | visible, translucent | Premultiplied alpha |
-| 11 | Translucent edge lines | edge_lines | visible, translucent | Premultiplied alpha |
-| 12 | Brush (back faces) | polygon_fill | visible, brush | Cull front, premultiplied alpha |
-| 13 | Brush (front faces) | polygon_fill | visible, brush | Cull back, premultiplied alpha |
-| 14 | Rendertarget meshes | polygon_fill | visible, rendertarget | Textured, premultiplied alpha |
+| 1 | Opaque fill not selected | polygon_fill | visible, opaque, not selected | Standard opaque, cull back CCW |
+| 2 | Opaque fill selected | polygon_fill | visible, opaque, selected | Stencil-marking (bit 7) |
+| 3 | Edge lines not selected | edge_lines | visible, opaque, not selected | Edge line pipeline |
+| 4 | Edge lines selected | edge_lines | visible, opaque, selected | Edge line pipeline |
+| 5 | Selection/hover outline | polygon_fill | visible, opaque, selected or hovered | Outline (fat_triangle shader) |
+| 6 | Sky | polygon_fill | (none) | Fullscreen, depth==far, stencil==0 |
+| 7 | Grid | polygon_fill | (none) | Fullscreen, depth clamp |
+| 8 | Translucent fill | polygon_fill | visible, translucent | Premultiplied alpha |
+| 9 | Translucent edge lines | edge_lines | visible, translucent | Premultiplied alpha |
+| 10 | Brush (back faces) | polygon_fill | visible, brush | Cull front, premultiplied alpha |
+| 11 | Brush (front faces) | polygon_fill | visible, brush | Cull back, premultiplied alpha |
+| 12 | Rendertarget meshes | polygon_fill | visible, rendertarget | Textured, premultiplied alpha |
 
-Positive/negative determinant variants handle mirrored (negative-scale) geometry by flipping the cull direction.
+### Mirrored (negative-determinant) geometry
+
+Mirrored (negative-scale) world transforms reverse apparent triangle winding. This is
+handled per bucket, not per pass: `bucket_primitives()` partitions `Render_bucket`s by
+the mesh's `Item_flags::negative_determinant` flag (maintained by
+`Mesh::handle_node_transform_update()`), and each renderer (forward, shadow, ID) asks
+`Base_render_pipeline::get_pipeline_for()` for the front-face-flipped pipeline variant
+when drawing a negative-determinant bucket. The variant is cached alongside the
+non-flipped one because the pipeline variant hash covers the rasterization state. The
+normal-matrix flip for mirrored meshes is applied in `Primitive_buffer::update()`.
 
 ## Forward renderer
 
@@ -135,7 +145,7 @@ Key pipelines and their depth/stencil/blend configuration:
 - Depth: test enabled, write enabled
 - Stencil: disabled
 - Blend: disabled
-- Positive determinant variant: cull back CCW; negative determinant: cull back CW
+- Rasterization: cull back CCW; negative-determinant buckets draw with the front-face-flipped variant (see above)
 
 ### Opaque fill (selected)
 
