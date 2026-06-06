@@ -185,6 +185,19 @@ private:
     bool      m_frustum_box                      {false};
     bool      m_frustum_planes                   {false};
 
+    // Shadow frustum fit visualizations; drawn only when m_shadow_debug is on
+    // and the Shadow Frustum Fit setting collect_debug is enabled
+    bool      m_shadow_fit_casters               {false};
+    bool      m_shadow_fit_caster_hull           {false};
+    bool      m_shadow_fit_receivers             {false};
+    bool      m_shadow_fit_volume_planes         {true};
+    bool      m_shadow_fit_points                {true};
+    bool      m_shadow_fit_light_plane_hull      {true};
+    bool      m_shadow_fit_box_fit               {false};
+    bool      m_shadow_fit_box_frustum           {false};
+    bool      m_shadow_fit_box_cap               {false};
+    bool      m_shadow_fit_box_final             {false};
+
     int       m_sphere_step_count                {80};
     int       m_max_labels                       {400};
     glm::vec4 m_vertex_label_text_color          {0.3f, 1.0f, 0.3f, 1.0f};

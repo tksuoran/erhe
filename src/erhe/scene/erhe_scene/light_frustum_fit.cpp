@@ -143,6 +143,7 @@ auto Light::tight_directional_light_projection_transforms(const Light_projection
             casters_available = !caster_points.empty();
             if (debug_out != nullptr) {
                 debug_out->shadow_volume_planes = shadow_volume.planes;
+                debug_out->caster_hull          = caster_hull;
             }
         }
     }
@@ -172,8 +173,20 @@ auto Light::tight_directional_light_projection_transforms(const Light_projection
         }
     }
 
+    // Records the light space box after a pipeline stage for debug visualization
+    auto record_step_box = [debug_out](const Shadow_fit_step step, const Light_space_box& b) {
+        if (debug_out == nullptr) {
+            return;
+        }
+        Shadow_frustum_fit_debug_data::Step_box& out = debug_out->step_boxes[static_cast<std::size_t>(step)];
+        out.min   = glm::vec3{b.xy_min.x, b.xy_min.y, b.s_min};
+        out.max   = glm::vec3{b.xy_max.x, b.xy_max.y, b.s_max};
+        out.valid = b.valid;
+    };
+
     // Fit the light space box to the active point sets
     Light_space_box box = fit_box(primary_fit_points, light_from_world, rolled_from_light_xy, light_direction_in_light);
+    record_step_box(Shadow_fit_step::fit_points, box);
     if (casters_available && (settings.fit_to_view_frustum || settings.near_from_main_frustum)) {
         const Light_space_box frustum_box = fit_box(frustum_corner_points, light_from_world, rolled_from_light_xy, light_direction_in_light);
         if (settings.fit_to_view_frustum) {
@@ -188,6 +201,7 @@ auto Light::tight_directional_light_projection_transforms(const Light_projection
             // light rely on depth clamping in the shadow pass.
             box.s_max = std::min(box.s_max, frustum_box.s_max);
         }
+        record_step_box(Shadow_fit_step::frustum_constraint, box);
     }
 
     // Safety cap: never exceed the stable shadow-range box
@@ -200,6 +214,7 @@ auto Light::tight_directional_light_projection_transforms(const Light_projection
         box.xy_max = glm::min(box.xy_max, view_camera_xy_in_rolled + glm::vec2{shadow_range});
         box.s_min  = std::max(box.s_min, view_camera_s - shadow_range);
         box.s_max  = std::min(box.s_max, view_camera_s + shadow_range);
+        record_step_box(Shadow_fit_step::shadow_range_cap, box);
     }
 
     // Disjoint constraints mean no visible receiver / caster overlap;
@@ -260,12 +275,37 @@ auto Light::tight_directional_light_projection_transforms(const Light_projection
     };
 
     if (debug_out != nullptr) {
-        debug_out->fit_points       = primary_fit_points;
-        debug_out->light_plane_hull = light_plane_hull;
-        debug_out->obb              = obb;
+        debug_out->fit_points         = primary_fit_points;
+        debug_out->light_plane_hull   = light_plane_hull;
+        debug_out->obb                = obb;
+        debug_out->caster_aabb_points.assign(parameters.caster_world_points.begin(), parameters.caster_world_points.end());
+        debug_out->receiver_corners       = main_frustum_corners;
+        debug_out->receiver_corners_valid = true;
+
         glm::mat4 world_from_light_plane{world_from_light};
         world_from_light_plane[3] = glm::vec4{world_from_light * (box.s_max * light_direction_in_light), 1.0f};
         debug_out->world_from_light_plane = world_from_light_plane;
+
+        // Fit frame: x / y on the rolled light plane, z along the light direction
+        const glm::mat2 light_xy_from_rolled = glm::transpose(rolled_from_light_xy);
+        const glm::vec2 x_axis_in_light_xy   = light_xy_from_rolled * glm::vec2{1.0f, 0.0f};
+        const glm::vec2 y_axis_in_light_xy   = light_xy_from_rolled * glm::vec2{0.0f, 1.0f};
+        debug_out->world_from_fit_frame = glm::mat4{
+            glm::vec4{world_from_light * glm::vec3{x_axis_in_light_xy.x, x_axis_in_light_xy.y, 0.0f}, 0.0f},
+            glm::vec4{world_from_light * glm::vec3{y_axis_in_light_xy.x, y_axis_in_light_xy.y, 0.0f}, 0.0f},
+            glm::vec4{world_from_light * light_direction_in_light, 0.0f},
+            glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}
+        };
+
+        // Final (stabilized) box; matches the assembled light projection
+        Light_space_box stabilized_box{};
+        stabilized_box.xy_min = box_xy_min;
+        stabilized_box.xy_max = box_xy_max;
+        stabilized_box.s_min  = box.s_max - s_extent;
+        stabilized_box.s_max  = box.s_max;
+        stabilized_box.valid  = true;
+        record_step_box(Shadow_fit_step::stabilized, stabilized_box);
+
         debug_out->valid = true;
     }
 

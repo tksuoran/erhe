@@ -5,7 +5,7 @@ from erhe_codegen import *
 # defaults. Not to be confused with Debug_visualizations_config, the
 # per-viewport light/camera visualization modes in Viewport_config_data.
 struct("Debug_visualizations_settings",
-    version=1,
+    version=2,
     short_desc="Debug Visualizations",
     long_desc="Settings for the Debug Visualizations window",
     developer=False,
@@ -23,6 +23,21 @@ struct("Debug_visualizations_settings",
         field("corner_labels",           EnumRef("Visualization_mode"), added_in=1, default="Visualization_mode::off",      short_desc="Show Corners"),
         field("world_axes",              Bool,  added_in=1, default="false",  short_desc="World Axes"),
         field("shadow_debug",            Bool,  added_in=1, default="false",  short_desc="Shadow Debug"),
+        # Shadow frustum fit visualizations; drawn only when shadow_debug is on
+        # and the Shadow Frustum Fit setting collect_debug is enabled.
+        # Defaults for fields added in version 2 preserve the version 1 drawing
+        # behavior (volume planes, fit points and light plane hull were always
+        # drawn; the rest are new).
+        field("shadow_fit_casters",          Bool, added_in=2, default="false", short_desc="Fit Casters",          long_desc="Per-caster world AABBs gathered for the tight shadow frustum fit"),
+        field("shadow_fit_caster_hull",      Bool, added_in=2, default="false", short_desc="Fit Caster Hull",      long_desc="Convex hull around the caster bounds, before clipping to the shadow caster volume"),
+        field("shadow_fit_receivers",        Bool, added_in=2, default="false", short_desc="Fit Receivers",        long_desc="Receiver volume (main camera view frustum) used by the tight shadow frustum fit"),
+        field("shadow_fit_volume_planes",    Bool, added_in=2, default="true",  short_desc="Fit Volume Planes",    long_desc="Shadow caster volume (F_shadow) planes"),
+        field("shadow_fit_points",           Bool, added_in=2, default="true",  short_desc="Fit Points",           long_desc="Point set the light space box was fitted to (clipped caster hull or view frustum corners)"),
+        field("shadow_fit_light_plane_hull", Bool, added_in=2, default="true",  short_desc="Fit Light Plane Hull", long_desc="2D hull on the light plane with the rotating calipers OBB and its supporting edge"),
+        field("shadow_fit_box_fit",          Bool, added_in=2, default="false", short_desc="Fit Box: Points",      long_desc="Light space box after fitting to the point set"),
+        field("shadow_fit_box_frustum",      Bool, added_in=2, default="false", short_desc="Fit Box: Frustum",     long_desc="Light space box after the view frustum / near constraints"),
+        field("shadow_fit_box_cap",          Bool, added_in=2, default="false", short_desc="Fit Box: Range Cap",   long_desc="Light space box after the shadow range cap"),
+        field("shadow_fit_box_final",        Bool, added_in=2, default="false", short_desc="Fit Box: Final",       long_desc="Final light space box after quantize and texel snap; matches the light projection"),
         field("selection",               Bool,  added_in=1, default="true",   short_desc="Selection"),
         field("selection_bounding_points", Bool, added_in=1, default="false", short_desc="Bounding Points"),
         field("selection_box",           Bool,  added_in=1, default="false",  short_desc="Selection Box"),
