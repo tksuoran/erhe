@@ -131,6 +131,14 @@ public:
     void query_performance_metrics();
     [[nodiscard]] auto get_perf_counters() const -> const std::vector<Xr_perf_counter>&;
 
+    // XR_FB_passthrough lifecycle. Passthrough is created and started during
+    // session creation whenever the runtime supports it (so the init status
+    // screen shows the room, issue #214); set_passthrough_active(false) pauses
+    // it (and stops submitting the passthrough composition layer) once the
+    // editor scene takes over, unless configured to stay on for the session.
+    void set_passthrough_active(bool active);
+    [[nodiscard]] auto is_passthrough_active() const -> bool;
+
 private:
     [[nodiscard]] auto color_space_score          (const XrColorSpaceFB color_space) const -> int;
     [[nodiscard]] auto color_format_score         (const erhe::dataformat::Format pixelformat) const -> int;
@@ -207,6 +215,9 @@ private:
     Hand_tracker                                  m_hand_tracker_right;
     XrPassthroughFB                               m_passthrough_fb      {XR_NULL_HANDLE};
     XrPassthroughLayerFB                          m_passthrough_layer_fb{XR_NULL_HANDLE};
+    // True while passthrough is created, started and not paused; gates the
+    // XrCompositionLayerPassthroughFB submission in end_frame().
+    bool                                          m_passthrough_running {false};
     bool                                          m_session_running     {false};
     std::vector<Xr_perf_counter>                  m_perf_counters;
     bool                                          m_perf_metrics_enabled{false};

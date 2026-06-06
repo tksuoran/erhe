@@ -244,4 +244,20 @@ auto Headset::create_quad_layer(uint32_t width, uint32_t height, const std::stri
     return m_xr_session->create_quad_layer(width, height, debug_label);
 }
 
+void Headset::set_passthrough_active(const bool active)
+{
+    if (!m_xr_session) {
+        return;
+    }
+    m_xr_session->set_passthrough_active(active);
+}
+
+auto Headset::is_passthrough_active() const -> bool
+{
+    if (!m_xr_session) {
+        return false;
+    }
+    return m_xr_session->is_passthrough_active();
+}
+
 } // namespace erhe::xr

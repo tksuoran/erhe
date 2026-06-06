@@ -56,6 +56,12 @@ public:
     // Returns nullptr when no session exists or the swapchain cannot be
     // created (the caller is expected to fall back to scene-mesh rendering).
     [[nodiscard]] auto create_quad_layer(uint32_t width, uint32_t height, const std::string& debug_label) -> std::unique_ptr<Quad_layer>;
+    // XR_FB_passthrough lifecycle (see Xr_session::set_passthrough_active()):
+    // passthrough starts running at session creation whenever the runtime
+    // supports it; the editor pauses it once the scene takes over unless the
+    // passthrough_fb config keeps it on for the whole session.
+    void set_passthrough_active(bool active);
+    [[nodiscard]] auto is_passthrough_active() const -> bool;
     [[nodiscard]] auto get_actions_left        ()       ->       Xr_actions*;
     [[nodiscard]] auto get_actions_left        () const -> const Xr_actions*;
     [[nodiscard]] auto get_actions_right       ()       ->       Xr_actions*;

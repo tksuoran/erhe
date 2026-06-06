@@ -917,8 +917,9 @@ auto Xr_session::create_swapchains() -> bool
         // }
 
         if (passthrough_result != XR_SUCCESS) {
-            log_xr->warn("xrPassthroughLayerResumeFB() failed with error {}", c_str(passthrough_result));
+            log_xr->warn("xrPassthroughStartFB() failed with error {}", c_str(passthrough_result));
         } else {
+            m_passthrough_running = true;
             log_xr->info("Initialized XR_FB_passthrough");
         }
     }
@@ -1211,6 +1212,38 @@ void Xr_session::query_performance_metrics()
 auto Xr_session::get_perf_counters() const -> const std::vector<Xr_perf_counter>&
 {
     return m_perf_counters;
+}
+
+void Xr_session::set_passthrough_active(const bool active)
+{
+    if ((m_passthrough_fb == XR_NULL_HANDLE) || (m_passthrough_layer_fb == XR_NULL_HANDLE)) {
+        return; // Passthrough (or its layer) was never successfully created.
+    }
+    if (active == m_passthrough_running) {
+        return;
+    }
+    if (active) {
+        const XrResult result = m_instance.xrPassthroughStartFB(m_passthrough_fb);
+        if (result != XR_SUCCESS) {
+            log_xr->warn("xrPassthroughStartFB() failed with error {}", c_str(result));
+            return;
+        }
+        m_passthrough_running = true;
+        log_xr->info("XR_FB_passthrough resumed");
+    } else {
+        const XrResult result = m_instance.xrPassthroughPauseFB(m_passthrough_fb);
+        if (result != XR_SUCCESS) {
+            log_xr->warn("xrPassthroughPauseFB() failed with error {}", c_str(result));
+            return;
+        }
+        m_passthrough_running = false;
+        log_xr->info("XR_FB_passthrough paused");
+    }
+}
+
+auto Xr_session::is_passthrough_active() const -> bool
+{
+    return m_passthrough_running;
 }
 
 void Xr_session::update_view_pose()
@@ -2022,7 +2055,10 @@ auto Xr_session::end_frame(const bool rendered) -> bool
 
     std::vector<XrCompositionLayerBaseHeader*> layers;
     if (rendered) {
-        if (m_instance.extensions.FB_passthrough) {
+        // Gate on the running state, not the extension flag: passthrough may be
+        // paused (editor scene running without session passthrough), and layer
+        // creation may have failed (m_passthrough_layer_fb == XR_NULL_HANDLE).
+        if (m_passthrough_running) {
             layers.push_back(reinterpret_cast<XrCompositionLayerBaseHeader*>(&passthrough_fb_layer));
         }
         layers.push_back(reinterpret_cast<XrCompositionLayerBaseHeader*>(&projection_layer));

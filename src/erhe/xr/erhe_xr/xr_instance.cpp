@@ -409,7 +409,13 @@ auto Xr_instance::create_instance() -> bool
         extensions.EXT_hand_tracking = true;
         enabled_extensions.push_back(XR_EXT_HAND_TRACKING_EXTENSION_NAME);
     }
-    if (m_configuration.passthrough_fb && has_extension(XR_FB_PASSTHROUGH_EXTENSION_NAME)) {
+    // XR_FB_passthrough is enabled based on runtime support alone (issue #214):
+    // the init status screen shows camera passthrough whenever the runtime can
+    // provide it. The passthrough_fb config knob no longer gates the extension;
+    // it controls whether passthrough stays on for the whole session after the
+    // editor scene starts rendering (see Headset_view). get_system_info() still
+    // downgrades the flag when the system reports no passthrough capability.
+    if (has_extension(XR_FB_PASSTHROUGH_EXTENSION_NAME)) {
         extensions.FB_passthrough = true;
         enabled_extensions.push_back(XR_FB_PASSTHROUGH_EXTENSION_NAME);
     }

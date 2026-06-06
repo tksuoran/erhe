@@ -120,8 +120,15 @@ struct("Headset_config",
             Bool,
             added_in=1,
             default="false",
-            short_desc="",
-            long_desc="",
+            short_desc="Keep camera passthrough on for the whole session",
+            long_desc=("When the OpenXR runtime supports XR_FB_passthrough, the "
+                       "init status screen always shows camera passthrough "
+                       "around the loading panel, regardless of this setting. "
+                       "When enabled, passthrough stays running for the whole "
+                       "session (the passthrough composition layer is submitted "
+                       "under the projection layer every frame); when disabled, "
+                       "passthrough is paused once the editor scene starts "
+                       "rendering."),
             visible=True,
             developer=True
         ),

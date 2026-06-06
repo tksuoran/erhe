@@ -32,6 +32,7 @@ OpenXR integration for VR/AR headset support. Wraps the OpenXR API to provide in
 
 ## Notes
 - Profile-specific bindings are collected and suggested for KHR Simple, Oculus Touch, Valve Index, and HTC Vive controllers.
-- Hand tracking, FB passthrough, and visibility mask are optional extensions enabled via `Headset_config`.
+- Hand tracking and visibility mask are optional extensions enabled via `Headset_config`.
+- FB passthrough (`XR_FB_passthrough`) is enabled whenever the runtime supports it and starts running at session creation, so the editor's init status screen shows camera passthrough (issue #214). The `passthrough_fb` config knob controls whether passthrough stays on for the whole session; when it is false the editor pauses passthrough (`Headset::set_passthrough_active(false)`) once the scene starts rendering.
 - The `Xr_action` header includes full OpenXR type stubs when `ERHE_XR_LIBRARY_OPENXR` is not defined, allowing compilation without the OpenXR SDK.
 - Max 50 actions per type (boolean, float, vector2f, pose) using `etl::vector`.
