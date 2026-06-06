@@ -8,6 +8,14 @@
                   android:version="1"
                   android:required="true" />
 
+    <!-- Camera passthrough (XR_FB_passthrough): the Quest OpenXR runtime
+         hides the extension from xrEnumerateInstanceExtensionProperties
+         unless this uses-feature is declared (the runtime logs the missing
+         string under the OpenXR_Properties tag). Not required: the editor
+         falls back to a plain VR init screen without it. -->
+    <uses-feature android:name="com.oculus.feature.PASSTHROUGH"
+                  android:required="false" />
+
     <!-- OpenXR loader broker permissions. Source of truth: the merge
          manifest shipped by KhronosGroup/OpenXR-SDK-Source at
          src/loader/AndroidManifest.xml.in (CPM-fetched). We are not
@@ -15,6 +23,11 @@
          here by hand. -->
     <uses-permission android:name="org.khronos.openxr.permission.OPENXR" />
     <uses-permission android:name="org.khronos.openxr.permission.OPENXR_SYSTEM" />
+
+    <!-- Boundary visibility suppression (XR_META_boundary_visibility):
+         like passthrough above, the runtime hides the extension unless
+         this permission is declared. -->
+    <uses-permission android:name="com.oculus.permission.BOUNDARY_VISIBILITY" />
 
     <!-- Android 11+ package visibility: the loader queries for the
          OpenXR runtime broker and any installed runtimes / api layers. -->
