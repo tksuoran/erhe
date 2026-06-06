@@ -778,7 +778,8 @@ void Scene_builder::add_room(const Add_room_args& args)
             erhe::primitive::Material_create_info{
                 .name = "Floor",
                 .data = {
-                    .base_color = glm::vec3{0.07f, 0.07f, 0.07f},
+                    //.base_color = glm::vec3{0.07f, 0.07f, 0.07f},
+                    .base_color = glm::vec3{0.27f, 0.27f, 0.27f}, // temp for shadow debug with single directional light source
                     .roughness  = glm::vec2{0.9f, 0.9f},
                     .metallic   = 0.01f // TODO 0.0f ?
                 }
@@ -792,7 +793,7 @@ void Scene_builder::add_room(const Add_room_args& args)
 
     Instance_create_info floor_brush_instance_create_info{
         .node_flags      = Item_flags::visible | Item_flags::content | Item_flags::show_in_ui | Item_flags::lock_viewport_selection | Item_flags::lock_viewport_transform | Item_flags::expand,
-        .mesh_flags      = Item_flags::visible | Item_flags::content | Item_flags::id | Item_flags::show_in_ui | Item_flags::lock_viewport_selection | Item_flags::lock_viewport_transform | Item_flags::shadow_cast,
+        .mesh_flags      = Item_flags::visible | Item_flags::content | Item_flags::id | Item_flags::show_in_ui | Item_flags::lock_viewport_selection | Item_flags::lock_viewport_transform, // | Item_flags::shadow_cast,
         .scene_root      = m_scene_root.get(),
         .world_from_node = erhe::math::create_translation<float>(0.0f, -aabb.max.y - 0.001f, 0.0f),
         .material        = floor_material,

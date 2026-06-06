@@ -1,7 +1,7 @@
 {
     "render_style_not_selected": {
-        "polygon_fill": true,
-        "edge_lines": true,
+        "polygon_fill": false,
+        "edge_lines": false,
         "polygon_centroids": false,
         "corner_points": false,
         "point_size": 4,

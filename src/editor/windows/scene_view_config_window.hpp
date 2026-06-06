@@ -21,6 +21,8 @@ public:
     // Implements Imgui_window 
     void imgui() override;
 
+    static void imgui(App_context& context, Scene_view& scene_view);
+
     // Public API
     void set_scene_view(Scene_view* scene_view);
 

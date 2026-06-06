@@ -29,13 +29,9 @@ void Scene_view_config_window::set_scene_view(Scene_view* scene_view)
     m_scene_view = scene_view;
 }
 
-void Scene_view_config_window::imgui()
+void Scene_view_config_window::imgui(App_context& context, Scene_view& scene_view)
 {
-    if (m_scene_view == nullptr) {
-        return;
-    }
-
-    std::shared_ptr<Scene_root> scene_root = m_scene_view->get_scene_root();
+    std::shared_ptr<Scene_root> scene_root = scene_view.get_scene_root();
 
     if (!ImGui::BeginTable(
             "##viewport_view_settings",
@@ -58,10 +54,10 @@ void Scene_view_config_window::imgui()
     ImGui::TableNextColumn();
 
     auto old_scene_root = scene_root;
-    const bool combo_used = m_context.app_scenes->scene_combo("##Scene", scene_root, true);
+    const bool combo_used = context.app_scenes->scene_combo("##Scene", scene_root, true);
     if (combo_used && scene_root != old_scene_root) {
-        m_scene_view->set_scene_root(scene_root);
-        Viewport_scene_view* viewport_scene_view = m_scene_view->as_viewport_scene_view();
+        scene_view.set_scene_root(scene_root);
+        Viewport_scene_view* viewport_scene_view = scene_view.as_viewport_scene_view();
         if (viewport_scene_view != nullptr) {
             if (scene_root) {
                 const auto& cameras = scene_root->get_hosted_scene()->get_cameras();
@@ -76,7 +72,7 @@ void Scene_view_config_window::imgui()
         }
     }
 
-    Viewport_scene_view* viewport_scene_view = m_scene_view->as_viewport_scene_view();
+    Viewport_scene_view* viewport_scene_view = scene_view.as_viewport_scene_view();
     if (viewport_scene_view != nullptr) {
         ImGui::TableNextRow();
         ImGui::TableNextColumn();
@@ -100,10 +96,10 @@ void Scene_view_config_window::imgui()
             // When set, the shadow frustum fit (and the shadow fit debug
             // visualizations) target this camera instead of the viewport
             // camera, so the fit can be observed from outside its frustum.
-            std::weak_ptr<erhe::scene::Camera> shadow_fit_override_camera = m_scene_view->get_shadow_fit_override_camera();
+            std::weak_ptr<erhe::scene::Camera> shadow_fit_override_camera = scene_view.get_shadow_fit_override_camera();
             const bool shadow_fit_camera_combo_used = scene_root->camera_combo("##ShadowFitTargetCamera", shadow_fit_override_camera, true);
             if (shadow_fit_camera_combo_used) {
-                m_scene_view->set_shadow_fit_override_camera(shadow_fit_override_camera);
+                scene_view.set_shadow_fit_override_camera(shadow_fit_override_camera);
             }
         } else {
             ImGui::TextDisabled("(select a scene first)");
@@ -146,6 +142,15 @@ void Scene_view_config_window::imgui()
     }
 
     ImGui::EndTable();
+}
+
+void Scene_view_config_window::imgui()
+{
+    if (m_scene_view == nullptr) {
+        return;
+    }
+
+    imgui(m_context, *m_scene_view);
 }
 
 }

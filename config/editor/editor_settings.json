@@ -1,5 +1,5 @@
 {
-    "_version": 3,
+    "_version": 4,
     "camera_controls": {
         "invert_x": false,
         "invert_y": false,
@@ -11,7 +11,8 @@
         "turn_speed": 1
     },
     "debug_visualizations": {
-        "lights": "all",
+        "_version": 2,
+        "lights": "off",
         "cameras": "selected",
         "layouts": "all",
         "skins": "off",
@@ -19,11 +20,22 @@
         "physics": "off",
         "raytrace": "off",
         "vertex_labels": "off",
-        "facet_labels": "off",
+        "facet_labels": "hovered",
         "edge_labels": "off",
         "corner_labels": "off",
         "world_axes": false,
         "shadow_debug": false,
+        "shadow_fit_debug": true,
+        "shadow_fit_casters": false,
+        "shadow_fit_caster_hull": true,
+        "shadow_fit_receivers": true,
+        "shadow_fit_volume_planes": true,
+        "shadow_fit_points": false,
+        "shadow_fit_light_plane_hull": false,
+        "shadow_fit_box_fit": false,
+        "shadow_fit_box_frustum": false,
+        "shadow_fit_box_cap": false,
+        "shadow_fit_box_final": false,
         "selection": true,
         "selection_bounding_points": false,
         "selection_box": false,
@@ -348,7 +360,21 @@
         "make_platonic_solid_brushes": true,
         "make_curved_brushes": true
     },
+    "shadow_frustum_fit": {
+        "fit_to_view_frustum": true,
+        "fit_to_casters": true,
+        "optimize_rotation": true,
+        "near_from_main_frustum": true,
+        "depth_clamp": true,
+        "texel_snap": true,
+        "quantize_extents": false,
+        "quantize_step": 0,
+        "cap_by_shadow_range": true,
+        "collect_debug": true
+    },
     "sky": {
+        "_version": 2,
+        "enabled": true,
         "sky_horizon_color": [0.3,0.3,0.33,1],
         "sky_zenith_color": [0.2,0.2,0.22,1],
         "sky_power": 10,

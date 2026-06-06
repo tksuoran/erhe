@@ -92,9 +92,9 @@ Viewport_scene_view::Viewport_scene_view(
     : Scene_view              {context, make_viewport_config(viewport_config_data)}
     , Texture_rendergraph_node{
         erhe::rendergraph::Texture_rendergraph_node_create_info{
-            .rendergraph             = rendergraph,
-            .debug_label             = erhe::utility::Debug_label{fmt::format("Texture_rendergraph_node for Viewport_scene_view {}", name)},
-            .output_key              = erhe::rendergraph::Rendergraph_node_key::viewport_texture,
+            .rendergraph          = rendergraph,
+            .debug_label          = erhe::utility::Debug_label{fmt::format("Texture_rendergraph_node for Viewport_scene_view {}", name)},
+            .output_key           = erhe::rendergraph::Rendergraph_node_key::viewport_texture,
             .color_format         = erhe::dataformat::Format::format_16_vec4_float,
             .depth_stencil_format = erhe::dataformat::Format::format_d32_sfloat_s8_uint,
             .sample_count         = msaa_sample_count
@@ -783,11 +783,21 @@ void Viewport_scene_view::viewport_toolbar()
         "Show/Hide Viewport Config",
         show_viewport_config
     );
+    const ImGuiID viewport_config_id = ImGui::GetID("ViewportConfigPopup");
     if (viewport_config_pressed) {
-        m_context.viewport_config_window->set_window_visibility(show_viewport_config);
-        if (show_viewport_config) {
-            m_context.viewport_config_window->set_edit_data(&get_config());
-        }
+        ImGui::OpenPopup(viewport_config_id, ImGuiPopupFlags_None);
+        // Open the popup below the mouse cursor; without this the popup
+        // window restores the position from the previous time it was open
+        // (BeginPopupEx() does not add ImGuiWindowFlags_NoSavedSettings the
+        // way BeginPopup() does). ImGuiCond_Always because the popup window
+        // does not count as appearing when it is reopened on the same frame
+        // a click outside closed it (the button press), which blocks
+        // ImGuiCond_Appearing; this runs only on the press frame anyway.
+        ImGui::SetNextWindowPos(ImGui::GetMousePos(), ImGuiCond_Always);
+    }
+    if (ImGui::BeginPopupEx(viewport_config_id, ImGuiWindowFlags_None)) {
+        Scene_view_config_window::imgui(m_context, *this);
+        ImGui::EndPopup();
     }
 
     //// TODO Tool_flags::viewport_toolbar
