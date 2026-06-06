@@ -23,11 +23,11 @@ struct("Debug_visualizations_settings",
         field("corner_labels",           EnumRef("Visualization_mode"), added_in=1, default="Visualization_mode::off",      short_desc="Show Corners"),
         field("world_axes",              Bool,  added_in=1, default="false",  short_desc="World Axes"),
         field("shadow_debug",            Bool,  added_in=1, default="false",  short_desc="Shadow Debug"),
-        # Shadow frustum fit visualizations; drawn only when shadow_debug is on
-        # and the Shadow Frustum Fit setting collect_debug is enabled.
-        # Defaults for fields added in version 2 preserve the version 1 drawing
-        # behavior (volume planes, fit points and light plane hull were always
-        # drawn; the rest are new).
+        # Shadow frustum fit visualizations; independent of shadow_debug (which
+        # gates the shadow texel visualization). Drawn only when
+        # shadow_fit_debug is on and the Shadow Frustum Fit setting
+        # collect_debug is enabled.
+        field("shadow_fit_debug",            Bool, added_in=2, default="false", short_desc="Shadow Fit",           long_desc="Master toggle for the shadow frustum fit visualizations"),
         field("shadow_fit_casters",          Bool, added_in=2, default="false", short_desc="Fit Casters",          long_desc="Per-caster world AABBs gathered for the tight shadow frustum fit"),
         field("shadow_fit_caster_hull",      Bool, added_in=2, default="false", short_desc="Fit Caster Hull",      long_desc="Convex hull around the caster bounds, before clipping to the shadow caster volume"),
         field("shadow_fit_receivers",        Bool, added_in=2, default="false", short_desc="Fit Receivers",        long_desc="Receiver volume (main camera view frustum) used by the tight shadow frustum fit"),

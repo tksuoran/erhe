@@ -185,8 +185,11 @@ private:
     bool      m_frustum_box                      {false};
     bool      m_frustum_planes                   {false};
 
-    // Shadow frustum fit visualizations; drawn only when m_shadow_debug is on
-    // and the Shadow Frustum Fit setting collect_debug is enabled
+    // Shadow frustum fit visualizations; independent of m_shadow_debug (which
+    // gates the shadow texel visualization). Drawn only when
+    // m_shadow_fit_debug is on and the Shadow Frustum Fit setting
+    // collect_debug is enabled.
+    bool      m_shadow_fit_debug                 {false};
     bool      m_shadow_fit_casters               {false};
     bool      m_shadow_fit_caster_hull           {false};
     bool      m_shadow_fit_receivers             {false};

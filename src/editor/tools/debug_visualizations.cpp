@@ -164,6 +164,7 @@ void Debug_visualizations::read_config(const Debug_visualizations_settings& sett
     m_corner_labels                     = settings.corner_labels;
     m_world_axes                        = settings.world_axes;
     m_shadow_debug                      = settings.shadow_debug;
+    m_shadow_fit_debug                  = settings.shadow_fit_debug;
     m_shadow_fit_casters                = settings.shadow_fit_casters;
     m_shadow_fit_caster_hull            = settings.shadow_fit_caster_hull;
     m_shadow_fit_receivers              = settings.shadow_fit_receivers;
@@ -236,6 +237,7 @@ void Debug_visualizations::write_config(Debug_visualizations_settings& settings)
     settings.corner_labels                   = m_corner_labels;
     settings.world_axes                      = m_world_axes;
     settings.shadow_debug                    = m_shadow_debug;
+    settings.shadow_fit_debug                = m_shadow_fit_debug;
     settings.shadow_fit_casters              = m_shadow_fit_casters;
     settings.shadow_fit_caster_hull          = m_shadow_fit_caster_hull;
     settings.shadow_fit_receivers            = m_shadow_fit_receivers;
@@ -560,7 +562,9 @@ void Debug_visualizations::directional_light_visualization(const Light_visualiza
     // Tight shadow frustum fit intermediates; collected per light only when
     // the Shadow Frustum Fit setting "Collect Debug Data" is enabled. Each
     // element has its own toggle in the Shadow Fit group of this window.
-    if (m_shadow_debug) {
+    // Independent of m_shadow_debug, which gates the shadow texel
+    // visualization instead.
+    if (m_shadow_fit_debug) {
         const erhe::scene::Shadow_frustum_fit_debug_data* fit_debug = nullptr;
         const auto& transforms = light_projections.light_projection_transforms;
         for (std::size_t i = 0, end = transforms.size(); i < end; ++i) {
@@ -1930,9 +1934,10 @@ void Debug_visualizations::imgui()
     p.add_entry("Raytrace",    [this](){ make_combo("##", m_raytrace_visualization ); });
 
     p.add_entry("World Axes",   [this](){ ImGui::Checkbox   ("##", &m_world_axes); });
-    p.add_entry("Shadow Debug", [this](){ ImGui::Checkbox   ("##", &m_shadow_debug); });
+    p.add_entry("Shadow Debug", [this](){ ImGui::Checkbox   ("##", &m_shadow_debug); }); // shadow texel visualization
+    p.add_entry("Shadow Fit",   [this](){ ImGui::Checkbox   ("##", &m_shadow_fit_debug); });
 
-    if (m_shadow_debug) {
+    if (m_shadow_fit_debug) {
         // Shadow frustum fit visualizations; data is collected per light only
         // when the Shadow Frustum Fit setting "Collect Debug Data" is enabled.
         p.push_group("Shadow Fit", ImGuiTreeNodeFlags_None);
