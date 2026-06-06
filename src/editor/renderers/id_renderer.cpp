@@ -279,13 +279,16 @@ void Id_renderer::render_meshes(
         // The active render pass is the Id_renderer's own internal pass
         // (see Scoped_render_pass in render()); the pipeline format must
         // match that pass, not an externally supplied one. The caller has
-        // no knowledge of this internal framebuffer.
+        // no knowledge of this internal framebuffer. Mirrored (negative
+        // determinant) buckets get the front-face-flipped variant so that
+        // back-face culling removes the same faces the forward pass culls.
         erhe::graphics::Render_pipeline* render_pipeline = pipeline.get_pipeline_for(
             m_render_pass->get_descriptor(),
             nullptr,
             shader_stages,
             vertex_input.vertex_input.get(),
-            &vertex_input.vertex_format
+            &vertex_input.vertex_format,
+            bucket.negative_determinant
         );
         if (render_pipeline == nullptr) {
             log_draw->warn(
