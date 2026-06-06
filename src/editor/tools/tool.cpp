@@ -1,6 +1,8 @@
 #include "tools/tool.hpp"
 #include "editor_log.hpp"
+#include "app_context.hpp"
 #include "app_message.hpp"
+#include "app_scenes.hpp"
 #include "items.hpp"
 #include "content_library/content_library.hpp"
 #include "scene/scene_root.hpp"
@@ -109,11 +111,21 @@ void Tool::set_icon(ImFont* icon_font, const char* icon_code)
     
 auto Tool::get_scene_root() const -> std::shared_ptr<Scene_root>
 {
-    auto* scene_view = get_hover_scene_view();
-    if (scene_view == nullptr) {
-        return {};
+    Scene_view* hover_scene_view = get_hover_scene_view();
+    if (hover_scene_view != nullptr) {
+        std::shared_ptr<Scene_root> scene_root = hover_scene_view->get_scene_root();
+        if (scene_root) {
+            return scene_root;
+        }
     }
-    return scene_view->get_scene_root();
+    Scene_view* last_hover_scene_view = get_last_hover_scene_view();
+    if (last_hover_scene_view != nullptr) {
+        std::shared_ptr<Scene_root> scene_root = last_hover_scene_view->get_scene_root();
+        if (scene_root) {
+            return scene_root;
+        }
+    }
+    return m_context.app_scenes->get_single_scene_root();
 }
 
 auto Tool::get_content_library() const -> std::shared_ptr<Content_library>
