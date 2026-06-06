@@ -66,6 +66,13 @@ void Material_preview::make_preview_scene(erhe::scene_renderer::Mesh_memory& mes
         std::max(1, m_slice_count),
         std::max(1, m_stack_count)
     );
+    // The preview mesh skips Geometry::process(), so seed the per-facet
+    // circular-brushed-metal texture coordinates (texcoord set 1) here;
+    // materials sampling set 1 would otherwise see a constant fallback.
+    {
+        erhe::geometry::Mesh_attributes sphere_attributes{sphere_mesh};
+        erhe::geometry::generate_mesh_facet_texture_coordinates(sphere_mesh, sphere_attributes, 1);
+    }
     erhe::primitive::Buffer_mesh buffer_mesh{};
     const bool buffer_mesh_ok = erhe::primitive::build_buffer_mesh(
         buffer_mesh,

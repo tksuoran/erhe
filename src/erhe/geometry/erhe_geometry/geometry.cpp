@@ -460,7 +460,7 @@ auto Geometry::has_polygon_texture_coordinates() const -> bool
 }
 #endif
 
-void generate_mesh_facet_texture_coordinates(GEO::Mesh& mesh, GEO::index_t facet, Mesh_attributes& attributes)
+void generate_mesh_facet_texture_coordinates(GEO::Mesh& mesh, GEO::index_t facet, Mesh_attributes& attributes, const std::size_t usage_index)
 {
     // TODO Should cached normals centroids from attributes be used?
     const GEO::index_t corner_count = mesh.facets.nb_vertices(facet);
@@ -498,7 +498,7 @@ void generate_mesh_facet_texture_coordinates(GEO::Mesh& mesh, GEO::index_t facet
     {
         // Degenerate polygon
         for (GEO::index_t corner : mesh.facets.corners(facet)) {
-            attributes.corner_texcoord_0.set(corner, GEO::vec2f{0.0f, 0.0f});
+            attributes.corner_texcoord(usage_index).set(corner, GEO::vec2f{0.0f, 0.0f});
         }
         return;
     }
@@ -541,16 +541,16 @@ void generate_mesh_facet_texture_coordinates(GEO::Mesh& mesh, GEO::index_t facet
 
     // Second pass - generate texture coordinates
     for (const auto& unscaled_uv : unscaled_uvs) {
-        attributes.corner_texcoord_0.set(unscaled_uv.first, scale * unscaled_uv.second);
+        attributes.corner_texcoord(usage_index).set(unscaled_uv.first, scale * unscaled_uv.second);
     }
 }
 
-void generate_mesh_facet_texture_coordinates(GEO::Mesh& mesh, Mesh_attributes& attributes)
+void generate_mesh_facet_texture_coordinates(GEO::Mesh& mesh, Mesh_attributes& attributes, const std::size_t usage_index)
 {
     //compute_facet_normals(mesh, attributes);
     //compute_facet_centroids(mesh, attributes);
     for (GEO::index_t facet : mesh.facets) {
-        generate_mesh_facet_texture_coordinates(mesh, facet, attributes);
+        generate_mesh_facet_texture_coordinates(mesh, facet, attributes, usage_index);
     }
 }
 
@@ -1203,9 +1203,9 @@ void Geometry::process(const uint64_t flags)
 #endif
 }
 
-void Geometry::generate_mesh_facet_texture_coordinates()
+void Geometry::generate_mesh_facet_texture_coordinates(const std::size_t usage_index)
 {
-    erhe::geometry::generate_mesh_facet_texture_coordinates(m_mesh, m_attributes);
+    erhe::geometry::generate_mesh_facet_texture_coordinates(m_mesh, m_attributes, usage_index);
 }
 
 void build_extra_connectivity(

@@ -64,7 +64,7 @@ auto Shader_key::get_defines() const -> std::vector<std::pair<std::string, std::
     ERHE_SHADER_BOOL(ERHE_X)
 #undef ERHE_X
 
-#define ERHE_X(PARAM) ss << fmt::format("ERHE_" #PARAM, " = {}\n", get(Shader_int::PARAM));
+#define ERHE_X(PARAM) ss << fmt::format("ERHE_" #PARAM " = {}\n", get(Shader_int::PARAM));
     ERHE_SHADER_INT(ERHE_X)
 #undef ERHE_X
 
@@ -87,17 +87,17 @@ namespace {
     return static_cast<bool>(s.texture);
 }
 
-[[nodiscard]] auto any_sampler_uses_tex_coord_zero(const erhe::primitive::Material& material) -> bool
+[[nodiscard]] auto any_sampler_uses_tex_coord(const erhe::primitive::Material& material, const uint32_t tex_coord) -> bool
 {
     const erhe::primitive::Material_texture_samplers& s = material.data.texture_samplers;
-    auto uses_zero = [](const erhe::primitive::Material_texture_sampler& sampler) {
-        return sampler_is_bound(sampler) && (sampler.tex_coord == 0u);
+    auto uses = [tex_coord](const erhe::primitive::Material_texture_sampler& sampler) {
+        return sampler_is_bound(sampler) && (sampler.tex_coord == tex_coord);
     };
-    return uses_zero(s.base_color)
-        || uses_zero(s.metallic_roughness)
-        || uses_zero(s.normal)
-        || uses_zero(s.occlusion)
-        || uses_zero(s.emissive);
+    return uses(s.base_color)
+        || uses(s.metallic_roughness)
+        || uses(s.normal)
+        || uses(s.occlusion)
+        || uses(s.emissive);
 }
 
 } // anonymous namespace
@@ -116,6 +116,7 @@ auto Shader_key::derive(
     const bool has_normal_0      = (vertex_format != nullptr) && vertex_format_has_attribute(*vertex_format, usage::normal,        erhe::dataformat::normal_attribute);
     const bool has_tangent       = (vertex_format != nullptr) && vertex_format_has_attribute(*vertex_format, usage::tangent,       0);
     const bool has_texcoord_0    = (vertex_format != nullptr) && vertex_format_has_attribute(*vertex_format, usage::tex_coord,     0);
+    const bool has_texcoord_1    = (vertex_format != nullptr) && vertex_format_has_attribute(*vertex_format, usage::tex_coord,     1);
     const bool has_color_0       = (vertex_format != nullptr) && vertex_format_has_attribute(*vertex_format, usage::color,         0);
     const bool has_aniso_control = (vertex_format != nullptr) && vertex_format_has_attribute(*vertex_format, usage::custom,        erhe::dataformat::custom_attribute_aniso_control);
     const bool has_joint_indices = (vertex_format != nullptr) && vertex_format_has_attribute(*vertex_format, usage::joint_indices, 0);
@@ -144,8 +145,18 @@ auto Shader_key::derive(
         if (sampler_is_bound(samplers.occlusion))         { key.set(Shader_bool::USE_OCCLUSION_TEXTURE,          true); }
         if (sampler_is_bound(samplers.emissive))          { key.set(Shader_bool::USE_EMISSION_TEXTURE,           true); }
 
+        // Per-texture texcoord set selection, plumbed as compile-time
+        // defines. Set only for bound samplers so unbound textures do not
+        // contribute extra shader variants (the axis stays 0).
+        if (sampler_is_bound(samplers.base_color))        { key.set(Shader_int::BASE_COLOR_TEX_COORD,         samplers.base_color.tex_coord);         }
+        if (sampler_is_bound(samplers.metallic_roughness)){ key.set(Shader_int::METALLIC_ROUGHNESS_TEX_COORD, samplers.metallic_roughness.tex_coord); }
+        if (sampler_is_bound(samplers.normal))            { key.set(Shader_int::NORMAL_TEX_COORD,             samplers.normal.tex_coord);             }
+        if (sampler_is_bound(samplers.occlusion))         { key.set(Shader_int::OCCLUSION_TEX_COORD,          samplers.occlusion.tex_coord);          }
+        if (sampler_is_bound(samplers.emissive))          { key.set(Shader_int::EMISSIVE_TEX_COORD,           samplers.emissive.tex_coord);           }
+
         if (data.use_circular_brushed_metal) {
             key.set(Shader_bool::USE_CIRCULAR_BRUSHED_METAL, true);
+            key.set(Shader_int::CIRCULAR_BRUSHED_METAL_TEX_COORD, data.circular_brushed_metal_tex_coord);
         }
         key.set(Shader_int::BXDF_MODEL,             static_cast<uint32_t>(data.bxdf_model));
         key.set(Shader_int::MATERIAL_BLENDING_MODE, static_cast<uint32_t>(data.blending_mode));
@@ -167,28 +178,34 @@ auto Shader_key::derive(
             key.set(Shader_bool::USE_VERTEX_VARYING_TANGENT,   true);
             key.set(Shader_bool::USE_VERTEX_VARYING_BITANGENT, true);
         }
-        // alpha_test / screen_door sample base-color alpha for the
-        // discard threshold; force texcoord 0 to be passed even when
-        // the base color sampler itself does not use tex_coord 0
-        // (rare, but the discard path needs *some* UV; for now we
-        // gate strictly on the base-color sampler being on tex_coord 0).
-        const bool uses_alpha_cutout =
-            (data.blending_mode == erhe::primitive::Material_blending_mode::alpha_test) ||
-            (data.blending_mode == erhe::primitive::Material_blending_mode::screen_door);
-        const bool base_color_on_tex_coord_zero =
-            sampler_is_bound(samplers.base_color) &&
-            (samplers.base_color.tex_coord == 0u);
-        const bool needs_texcoord_0 =
-            any_sampler_uses_tex_coord_zero(*material) ||
-            data.use_circular_brushed_metal ||
-            (uses_alpha_cutout && base_color_on_tex_coord_zero);
-        if (has_texcoord_0 && needs_texcoord_0) {
+        // A texcoord set varying is needed when any bound sampler reads it
+        // or when the circular-brushed-metal block derives its tangent
+        // space from it. The alpha_test / screen_door discard path samples
+        // base-color alpha, which is covered by the bound-sampler check.
+        auto needs_tex_coord = [&](const uint32_t n) -> bool {
+            return any_sampler_uses_tex_coord(*material, n)
+                || (data.use_circular_brushed_metal && (data.circular_brushed_metal_tex_coord == n));
+        };
+        if (has_texcoord_0 && needs_tex_coord(0u)) {
             key.set(Shader_bool::USE_VERTEX_VARYING_TEXCOORD0, true);
+        }
+        if (has_texcoord_1 && needs_tex_coord(1u)) {
+            key.set(Shader_bool::USE_VERTEX_VARYING_TEXCOORD1, true);
         }
 
         if (has_aniso_control && data.use_aniso_control) {
             key.set(Shader_bool::USE_VERTEX_VARYING_ANISO_CONTROL, true);
         }
+    }
+
+    // Debug visualizations of the texcoord sets need the varyings even
+    // when no material texture (or material at all) requests them.
+    const uint32_t shader_debug = key.get(Shader_int::SHADER_DEBUG);
+    if (has_texcoord_0 && (shader_debug == static_cast<uint32_t>(Shader_debug::texcoord_0))) {
+        key.set(Shader_bool::USE_VERTEX_VARYING_TEXCOORD0, true);
+    }
+    if (has_texcoord_1 && (shader_debug == static_cast<uint32_t>(Shader_debug::texcoord_1))) {
+        key.set(Shader_bool::USE_VERTEX_VARYING_TEXCOORD1, true);
     }
 
     return key;

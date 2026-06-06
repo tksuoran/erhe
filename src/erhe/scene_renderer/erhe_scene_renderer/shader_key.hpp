@@ -34,28 +34,29 @@ enum class Shader_debug : uint16_t
     tangent            = 4,
     vertex_tangent_w   = 5,
     bitangent          = 6,
-    texcoord           = 7,
-    base_color_texture = 8,
-    vertex_color_rgb   = 9,
-    vertex_color_alpha = 10,
-    aniso_strength     = 11,
-    aniso_texcoord     = 12,
-    vdotn              = 13,
-    ldotn              = 14,
-    hdotv              = 15,
-    joint_indices      = 16,
-    joint_weights      = 17,
-    omega_o            = 18,
-    omega_i            = 19,
-    omega_g            = 20,
-    vertex_valency     = 21,
-    polygon_edge_count = 22,
-    metallic           = 23,
-    roughness          = 24,
-    occlusion          = 25,
-    emissive           = 26,
-    shadowmap_texels   = 27,
-    misc               = 28
+    texcoord_0         = 7,
+    texcoord_1         = 8,
+    base_color_texture = 9,
+    vertex_color_rgb   = 10,
+    vertex_color_alpha = 11,
+    aniso_strength     = 12,
+    aniso_texcoord     = 13,
+    vdotn              = 14,
+    ldotn              = 15,
+    hdotv              = 16,
+    joint_indices      = 17,
+    joint_weights      = 18,
+    omega_o            = 19,
+    omega_i            = 20,
+    omega_g            = 21,
+    vertex_valency     = 22,
+    polygon_edge_count = 23,
+    metallic           = 24,
+    roughness          = 25,
+    occlusion          = 26,
+    emissive           = 27,
+    shadowmap_texels   = 28,
+    misc               = 29
 };
 
 // User-visible display strings matching the Shader_debug enum, in
@@ -68,7 +69,8 @@ inline constexpr const char* c_shader_debug_strings[] = {
     "Tangent",
     "Vertex Tangent W",
     "Bitangent",
-    "TexCoord",
+    "TexCoord 0",
+    "TexCoord 1",
     "Base Color Texture",
     "Vertex Color RGB",
     "Vertex Color Alpha",
@@ -104,6 +106,7 @@ inline constexpr const char* c_shader_debug_strings[] = {
     X(USE_VERTEX_VARYING_TANGENT)       \
     X(USE_VERTEX_VARYING_BITANGENT)     \
     X(USE_VERTEX_VARYING_TEXCOORD0)     \
+    X(USE_VERTEX_VARYING_TEXCOORD1)     \
     X(USE_VERTEX_VARYING_COLOR)         \
     X(USE_VERTEX_VARYING_ANISO_CONTROL) \
     X(VARIANT_DEPTH_ONLY)               \
@@ -120,7 +123,13 @@ inline constexpr const char* c_shader_debug_strings[] = {
     X(BXDF_MODEL)                               \
     X(MATERIAL_BLENDING_MODE)                   \
     X(SHADER_DEBUG)                             \
-    X(SHADER_MULTIVIEW_COUNT)
+    X(SHADER_MULTIVIEW_COUNT)                   \
+    X(BASE_COLOR_TEX_COORD)                     \
+    X(METALLIC_ROUGHNESS_TEX_COORD)             \
+    X(NORMAL_TEX_COORD)                         \
+    X(OCCLUSION_TEX_COORD)                      \
+    X(EMISSIVE_TEX_COORD)                       \
+    X(CIRCULAR_BRUSHED_METAL_TEX_COORD)
 
 enum class Shader_bool : uint32_t {
 #define ERHE_X(PARAM) PARAM,

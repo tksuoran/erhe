@@ -336,8 +336,8 @@ void compute_facet_normals                   (GEO::Mesh& mesh, Mesh_attributes& 
 void compute_facet_centroids                 (GEO::Mesh& mesh, Mesh_attributes& attributes);
 void compute_mesh_vertex_normal_smooth       (GEO::Mesh& mesh, Mesh_attributes& attributes);
 auto compute_mesh_tangents                   (GEO::Mesh& mesh, bool orthonormalize, bool make_facets_flat) -> bool;
-void generate_mesh_facet_texture_coordinates (GEO::Mesh& mesh, GEO::index_t facet, Mesh_attributes& attributes);
-void generate_mesh_facet_texture_coordinates (GEO::Mesh& mesh, Mesh_attributes& attributes);
+void generate_mesh_facet_texture_coordinates (GEO::Mesh& mesh, GEO::index_t facet, Mesh_attributes& attributes, std::size_t usage_index = 1);
+void generate_mesh_facet_texture_coordinates (GEO::Mesh& mesh, Mesh_attributes& attributes, std::size_t usage_index = 1);
 
 [[nodiscard]] inline auto min_axis(const GEO::vec3f v) -> GEO::vec3f
 {
@@ -754,7 +754,7 @@ public:
     static constexpr uint64_t process_flag_generate_tangents_ortho            = (1u << 8u);
 
     void process(uint64_t flags);
-    void generate_mesh_facet_texture_coordinates();
+    void generate_mesh_facet_texture_coordinates(std::size_t usage_index = 1);
     void build_edges();
     void update_connectivity();
     void merge_coplanar_neighbors();

@@ -1164,6 +1164,14 @@ void Properties::material_properties()
     add_entry("Circular Brushed Metal", [&](){
         ImGui::Checkbox("##", &data.use_circular_brushed_metal);
     });
+    if (data.use_circular_brushed_metal) {
+        add_entry("Brushed Metal TexCoord", [&](){
+            int tex_coord = static_cast<int>(data.circular_brushed_metal_tex_coord);
+            if (ImGui::SliderInt("##", &tex_coord, 0, 1)) {
+                data.circular_brushed_metal_tex_coord = static_cast<uint32_t>(tex_coord);
+            }
+        });
+    }
     add_entry("Aniso Control", [&](){
         ImGui::Checkbox("##", &data.use_aniso_control);
     });
@@ -1182,19 +1190,38 @@ void Properties::material_properties()
             const std::shared_ptr<Content_library_node>& textures_ = content_library->textures;
             if (textures_) {
                 Content_library_node& textures = *textures_.get();
+                auto add_tex_coord_entry = [this](const char* label, erhe::primitive::Material_texture_sampler* sampler) {
+                    add_entry(label, [sampler]() {
+                        int tex_coord = static_cast<int>(sampler->tex_coord);
+                        if (ImGui::SliderInt("##", &tex_coord, 0, 1)) {
+                            sampler->tex_coord = static_cast<uint32_t>(tex_coord);
+                        }
+                    });
+                };
                 add_entry("Base Color Texture", [&, this]() { textures.combo(m_context, "##", samplers.base_color.texture, true);});
                 if (samplers.base_color.texture) {
                     add_entry("Base Color Offset",   [&](){ ImGui::SliderFloat2("##", &samplers.base_color.offset.x, -10.0f, 10.0f); });
                     add_entry("Base Color Scale",    [&](){ ImGui::SliderFloat2("##", &samplers.base_color.scale.x,  -10.0f, 10.0f); });
                     add_entry("Base Color Rotation", [&](){ ImGui::SliderFloat ("##", &samplers.base_color.rotation, -10.0f, 10.0f); });
+                    add_tex_coord_entry("Base Color TexCoord", &samplers.base_color);
                 }
                 add_entry("Metallic Roughness Texture",[&]() { textures.combo(m_context, "##", samplers.metallic_roughness.texture, true); });
+                if (samplers.metallic_roughness.texture) {
+                    add_tex_coord_entry("Metallic Roughness TexCoord", &samplers.metallic_roughness);
+                }
                 add_entry("Normal Texture",            [&]() { textures.combo(m_context, "##", samplers.normal.texture, true); } );
                 if (samplers.normal.texture) {
                     add_entry("Normal Map Scale", [&](){ ImGui::SliderFloat("##", &data.normal_texture_scale, 0.0f, 1.0f); });
+                    add_tex_coord_entry("Normal TexCoord", &samplers.normal);
                 }
                 add_entry("Occlusion Texture", [&, this]() { textures.combo(m_context, "##", samplers.occlusion.texture, true); });
+                if (samplers.occlusion.texture) {
+                    add_tex_coord_entry("Occlusion TexCoord", &samplers.occlusion);
+                }
                 add_entry("Emissive Texture",  [&, this]() { textures.combo(m_context, "##", samplers.emissive.texture, true); });
+                if (samplers.emissive.texture) {
+                    add_tex_coord_entry("Emissive TexCoord", &samplers.emissive);
+                }
             }
         }
     }

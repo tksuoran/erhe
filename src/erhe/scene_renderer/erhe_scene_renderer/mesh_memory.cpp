@@ -39,6 +39,7 @@ Mesh_memory::Mesh_memory(
                     { Format::format_32_vec3_float, Vertex_attribute_usage::normal,    erhe::dataformat::normal_attribute},
                     { Format::format_32_vec4_float, Vertex_attribute_usage::tangent,   0},
                     { Format::format_32_vec2_float, Vertex_attribute_usage::tex_coord, 0},
+                    { Format::format_32_vec2_float, Vertex_attribute_usage::tex_coord, 1},
                     { Format::format_32_vec4_float, Vertex_attribute_usage::color,     0},
                 }
             },
@@ -67,6 +68,7 @@ Mesh_memory::Mesh_memory(
                     { Format::format_32_vec3_float, Vertex_attribute_usage::normal,    erhe::dataformat::normal_attribute},
                     { Format::format_32_vec4_float, Vertex_attribute_usage::tangent,   0},
                     { Format::format_32_vec2_float, Vertex_attribute_usage::tex_coord, 0},
+                    { Format::format_32_vec2_float, Vertex_attribute_usage::tex_coord, 1},
                     { Format::format_32_vec4_float, Vertex_attribute_usage::color,     0},
                 }
             },

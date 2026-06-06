@@ -60,9 +60,9 @@ namespace erhe::gltf {
 // glTF extras carriers for erhe-specific Material_data fields that do not
 // have a standard glTF representation: bxdf_model (when not isotropic and
 // not unlit -- unlit rides on KHR_materials_unlit), use_circular_brushed
-// _metal, use_aniso_control, and the per-axis roughness_y. Round-trip
-// preservation is import-extras-read + export-extras-write keyed on the
-// glTF material index.
+// _metal, circular_brushed_metal_tex_coord, use_aniso_control, and the
+// per-axis roughness_y. Round-trip preservation is import-extras-read +
+// export-extras-write keyed on the glTF material index.
 class Material_extras
 {
 public:
@@ -70,6 +70,7 @@ public:
     std::optional<erhe::primitive::Bxdf_model>             bxdf_model;
     std::optional<erhe::primitive::Material_blending_mode> blending_mode;
     std::optional<bool>                                    use_circular_brushed_metal;
+    std::optional<uint32_t>                                circular_brushed_metal_tex_coord;
     std::optional<bool>                                    use_aniso_control;
 };
 
@@ -2063,6 +2064,14 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
                 }
             }
 
+            simdjson::dom::element circular_tex_coord_element;
+            if (extras->at_key("circular_brushed_metal_tex_coord").get(circular_tex_coord_element) == simdjson::error_code::SUCCESS) {
+                uint64_t value = 0;
+                if (circular_tex_coord_element.get_uint64().get(value) == simdjson::error_code::SUCCESS) {
+                    entry.circular_brushed_metal_tex_coord = static_cast<uint32_t>(value);
+                }
+            }
+
             simdjson::dom::element aniso_element;
             if (extras->at_key("use_aniso_control").get(aniso_element) == simdjson::error_code::SUCCESS) {
                 bool value = false;
@@ -2111,6 +2120,9 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
         }
         if (extras.use_circular_brushed_metal.has_value()) {
             material->data.use_circular_brushed_metal = extras.use_circular_brushed_metal.value();
+        }
+        if (extras.circular_brushed_metal_tex_coord.has_value()) {
+            material->data.circular_brushed_metal_tex_coord = extras.circular_brushed_metal_tex_coord.value();
         }
         if (extras.use_aniso_control.has_value()) {
             material->data.use_aniso_control = extras.use_aniso_control.value();
@@ -2904,11 +2916,15 @@ auto Gltf_exporter::export_gltf() -> std::string
                 (data.blending_mode != erhe::primitive::Material_blending_mode::opaque) &&
                 (data.blending_mode != erhe::primitive::Material_blending_mode::alpha_blend) &&
                 (data.blending_mode != erhe::primitive::Material_blending_mode::alpha_test);
+            // 1 is the round-trip default (set by Material_data).
+            const bool emit_circular_brushed_metal_tex_coord =
+                (data.circular_brushed_metal_tex_coord != 1u);
 
             if (!emit_roughness_y &&
                 !emit_bxdf_model &&
                 !emit_blending_mode &&
                 !data.use_circular_brushed_metal &&
+                !emit_circular_brushed_metal_tex_coord &&
                 !data.use_aniso_control)
             {
                 return std::nullopt;
@@ -2930,6 +2946,10 @@ auto Gltf_exporter::export_gltf() -> std::string
             }
             if (data.use_circular_brushed_metal) {
                 out += sep; out += "\"use_circular_brushed_metal\": true";
+                sep = ", ";
+            }
+            if (emit_circular_brushed_metal_tex_coord) {
+                out += sep; out += "\"circular_brushed_metal_tex_coord\": "; out += std::to_string(data.circular_brushed_metal_tex_coord);
                 sep = ", ";
             }
             if (data.use_aniso_control) {

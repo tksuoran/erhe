@@ -33,10 +33,20 @@ layout(location = 0) in vec4      v_position;
 // TODO In the future we might have alpha test which would need texcoord
 //      to be passed to fragment shader
 #if defined(ERHE_USE_VERTEX_VARYING_TEXCOORD0) && !defined(ERHE_VARIANT_POSITION_PASS)
-layout(location = 1) in vec2      v_texcoord;
+layout(location = 1) in vec2      v_texcoord_0;
 #elif !defined(ERHE_VARIANT_POSITION_PASS)
-const  vec2 v_texcoord = vec2(0.5, 0.5);
+const  vec2 v_texcoord_0 = vec2(0.5, 0.5);
 #endif
+
+#if defined(ERHE_USE_VERTEX_VARYING_TEXCOORD1) && !defined(ERHE_VARIANT_POSITION_PASS)
+layout(location = 12) in vec2     v_texcoord_1;
+#elif !defined(ERHE_VARIANT_POSITION_PASS)
+const  vec2 v_texcoord_1 = vec2(0.5, 0.5);
+#endif
+
+// Selects the texcoord set for a texture / feature from its compile-time
+// ERHE_*_TEX_COORD define; the condition folds at compile time.
+#define ERHE_SELECT_TEXCOORD(set) (((set) == 1) ? v_texcoord_1 : v_texcoord_0)
 
 #if defined(ERHE_USE_VERTEX_VARYING_COLOR) && !defined(ERHE_VARIANT_POSITION_PASS)
 layout(location = 2) in vec4      v_color;
@@ -118,7 +128,7 @@ void main()
 #endif
 
 // The lit-path locals + light loops reference v_material_index,
-// v_position, v_texcoord, the material/light/camera blocks, and the
+// v_position, v_texcoord_0/1, the material/light/camera blocks, and the
 // BxDF/light/srgb/texture includes -- all gated on POSITION_PASS at the
 // top of this file. Gate the body on POSITION_PASS too so the ID-render
 // variant does not pull them in.
@@ -134,7 +144,7 @@ void main()
     uvec2 base_color_texture = material.base_color_texture;
     vec4  base_color_sample  = sample_texture(
         base_color_texture,
-        v_texcoord,
+        ERHE_SELECT_TEXCOORD(ERHE_BASE_COLOR_TEX_COORD),
         material.base_color_rotation_scale,
         material.base_color_offset
     );
@@ -170,7 +180,7 @@ void main()
     // anisotropy_strength is 1.0 (fully anisotropic / honor
     // material.roughness.y) by default; the circular-brushed-metal
     // block below modulates it down to 0.0 (isotropic) near the
-    // UV origin so the singularity in normalize(v_texcoord) does
+    // UV origin so the singularity in normalize(brushed_uv) does
     // not flip the BRDF anisotropy axis.
     float anisotropy_strength = 1.0;
 
@@ -178,20 +188,24 @@ void main()
     {
         // Circular-brushed-metal modelling. The 8.0 multiplier was
         // chosen empirically to put the perceived "centre of the
-        // disc" at length(v_texcoord) ~ 0.125 (1/8); above that
+        // disc" at length(brushed_uv) ~ 0.125 (1/8); above that
         // the surface looks fully anisotropic, below it the
         // contribution falls off so the singularity at the UV
         // origin does not flip the tangent direction. The
         // exponent (0.25) is a perceptual softening.
         const float k_circular_scale = 8.0;
-        // length(v_texcoord) * k_circular_scale can be zero at
+        // The texcoord set holding the per-facet radial coordinates is
+        // selected per material (default set 1, where
+        // generate_mesh_facet_texture_coordinates writes them).
+        vec2  brushed_uv = ERHE_SELECT_TEXCOORD(ERHE_CIRCULAR_BRUSHED_METAL_TEX_COORD);
+        // length(brushed_uv) * k_circular_scale can be zero at
         // the UV origin; the normalize below would then be
         // undefined. Epsilon-guard the denominator and zero out
         // T_circular at the same point.
-        float circular_radius              = length(v_texcoord);
+        float circular_radius              = length(brushed_uv);
         float circular_anisotropy_magnitude = pow(circular_radius * k_circular_scale, 0.25);
         vec2  T_circular                    = (circular_radius > 1e-6)
-                                              ? (v_texcoord / circular_radius)
+                                              ? (brushed_uv / circular_radius)
                                               : vec2(0.0, 0.0);
         // X is used to modulate anisotropy level:
         //   0.0 -- Anisotropic
@@ -225,7 +239,7 @@ void main()
 #  ifdef ERHE_USE_METALLIC_ROUGHNESS_TEXTURE
     vec4 metallic_roughness = sample_texture(
         material.metallic_roughness_texture,
-        v_texcoord,
+        ERHE_SELECT_TEXCOORD(ERHE_METALLIC_ROUGHNESS_TEX_COORD),
         material.metallic_roughness_rotation_scale,
         material.metallic_roughness_offset
     );
@@ -250,7 +264,7 @@ void main()
     {
         vec3 ntex = sample_texture(
             material.normal_texture,
-            v_texcoord,
+            ERHE_SELECT_TEXCOORD(ERHE_NORMAL_TEX_COORD),
             material.normal_rotation_scale,
             material.normal_offset
         ).xyz * 2.0 - vec3(1.0);
@@ -277,7 +291,7 @@ void main()
 #  ifdef ERHE_USE_EMISSION_TEXTURE
     emissive *= sample_texture(
         material.emissive_texture,
-        v_texcoord,
+        ERHE_SELECT_TEXCOORD(ERHE_EMISSIVE_TEX_COORD),
         material.emissive_rotation_scale,
         material.emissive_offset
     ).rgb;
@@ -286,7 +300,7 @@ void main()
 #  ifdef ERHE_USE_OCCLUSION_TEXTURE
     float occlusion = sample_texture(
         material.occlusion_texture,
-        v_texcoord,
+        ERHE_SELECT_TEXCOORD(ERHE_OCCLUSION_TEX_COORD),
         material.occlusion_rotation_scale,
         material.occlusion_offset
     ).r;
@@ -421,9 +435,9 @@ void main()
     // Sampled fragment alpha for alpha-test / screen-door discards and
     // for the alpha_blend pass. The contributing factors are
     // material.opacity, the vertex color alpha (if present), and the
-    // base color texture's alpha (if sampled). v_texcoord falls back to
-    // (0.5, 0.5) when no texcoord varying is present, so the sample
-    // call is always legal.
+    // base color texture's alpha (if sampled). v_texcoord_0/1 fall back
+    // to (0.5, 0.5) when the corresponding varying is not present, so
+    // the sample call is always legal.
     float sampled_alpha = material.opacity;
 #ifdef ERHE_USE_VERTEX_VARYING_COLOR
     sampled_alpha *= v_color.a;
@@ -518,7 +532,7 @@ void main()
         out_color.rgb = srgb_to_linear(vec3(0.5) + 0.5 * N);
 #  elif ERHE_SHADER_DEBUG == 3 // normal_texture
 #    ifdef ERHE_USE_NORMAL_TEXTURE
-        out_color.rgb = srgb_to_linear(sample_texture(material.normal_texture, v_texcoord).rgb);
+        out_color.rgb = srgb_to_linear(sample_texture(material.normal_texture, ERHE_SELECT_TEXCOORD(ERHE_NORMAL_TEX_COORD)).rgb);
 #    else
         out_color.rgb = vec3(0.5);
 #    endif
@@ -528,57 +542,59 @@ void main()
         out_color.rgb = vec3(0.5 + 0.5 * v_tangent_scale);
 #  elif ERHE_SHADER_DEBUG == 6 // bitangent
         out_color.rgb = srgb_to_linear(vec3(0.5) + 0.5 * B);
-#  elif ERHE_SHADER_DEBUG == 7 // texcoord
-        out_color.rgb = srgb_to_linear(vec3(v_texcoord, 0.0));
-#  elif ERHE_SHADER_DEBUG == 8 // base_color_texture
+#  elif ERHE_SHADER_DEBUG == 7 // texcoord_0
+        out_color.rgb = srgb_to_linear(vec3(v_texcoord_0, 0.0));
+#  elif ERHE_SHADER_DEBUG == 8 // texcoord_1
+        out_color.rgb = srgb_to_linear(vec3(v_texcoord_1, 0.0));
+#  elif ERHE_SHADER_DEBUG == 9 // base_color_texture
 #    ifdef ERHE_USE_BASE_COLOR_TEXTURE
         out_color.rgb = srgb_to_linear(base_color);
 #    else
         out_color.rgb = vec3(0.0);
 #    endif
-#  elif ERHE_SHADER_DEBUG == 9 // vertex_color_rgb
+#  elif ERHE_SHADER_DEBUG == 10 // vertex_color_rgb
         out_color.rgb = srgb_to_linear(v_color.rgb);
-#  elif ERHE_SHADER_DEBUG == 10 // vertex_color_alpha
+#  elif ERHE_SHADER_DEBUG == 11 // vertex_color_alpha
         out_color.rgb = vec3(v_color.a);
-#  elif ERHE_SHADER_DEBUG == 11 // aniso_strength
+#  elif ERHE_SHADER_DEBUG == 12 // aniso_strength
         out_color.rgb = vec3(v_aniso_control.x);
-#  elif ERHE_SHADER_DEBUG == 12 // aniso_texcoord
+#  elif ERHE_SHADER_DEBUG == 13 // aniso_texcoord
         out_color.rgb = vec3(v_aniso_control.y);
-#  elif ERHE_SHADER_DEBUG == 13 // vdotn
+#  elif ERHE_SHADER_DEBUG == 14 // vdotn
         out_color.rgb = vec3(max(dot(V, N), 0.0));
-#  elif ERHE_SHADER_DEBUG == 14 // ldotn
+#  elif ERHE_SHADER_DEBUG == 15 // ldotn
         out_color.rgb = vec3(max(dot(L_dbg, N), 0.0));
-#  elif ERHE_SHADER_DEBUG == 15 // hdotv
+#  elif ERHE_SHADER_DEBUG == 16 // hdotv
         {
             vec3  H_dbg = normalize(L_dbg + V);
             out_color.rgb = vec3(max(dot(H_dbg, N), 0.0));
         }
-#  elif ERHE_SHADER_DEBUG == 16 // joint_indices
+#  elif ERHE_SHADER_DEBUG == 17 // joint_indices
         out_color.rgb = vec3(1.0);
-#  elif ERHE_SHADER_DEBUG == 17 // joint_weights
+#  elif ERHE_SHADER_DEBUG == 18 // joint_weights
         out_color.rgb = srgb_to_linear(v_bone_color.rgb);
-#  elif ERHE_SHADER_DEBUG == 18 // omega_o
+#  elif ERHE_SHADER_DEBUG == 19 // omega_o
         out_color.rgb = vec3(0.5) + 0.5 * wo;
         out_color.r = 1.0;
-#  elif ERHE_SHADER_DEBUG == 19 // omega_i
+#  elif ERHE_SHADER_DEBUG == 20 // omega_i
         out_color.rgb = vec3(0.5) + 0.5 * wi;
         out_color.g = 1.0;
-#  elif ERHE_SHADER_DEBUG == 20 // omega_g
+#  elif ERHE_SHADER_DEBUG == 21 // omega_g
         out_color.rgb = vec3(0.5) + 0.5 * wg;
         out_color.b = 1.0;
-#  elif ERHE_SHADER_DEBUG == 21 // vertex_valency
+#  elif ERHE_SHADER_DEBUG == 22 // vertex_valency
         out_color.rgb = palette[v_valency_edge_count.x % 24u];
-#  elif ERHE_SHADER_DEBUG == 22 // polygon_edge_count
+#  elif ERHE_SHADER_DEBUG == 23 // polygon_edge_count
         out_color.rgb = palette[v_valency_edge_count.y % 24u];
-#  elif ERHE_SHADER_DEBUG == 23 // metallic
+#  elif ERHE_SHADER_DEBUG == 24 // metallic
         out_color.rgb = vec3(metallic);
-#  elif ERHE_SHADER_DEBUG == 24 // roughness
+#  elif ERHE_SHADER_DEBUG == 25 // roughness
         out_color.rgb = vec3(roughness_x);
-#  elif ERHE_SHADER_DEBUG == 25 // occlusion
+#  elif ERHE_SHADER_DEBUG == 26 // occlusion
         out_color.rgb = vec3(occlusion);
-#  elif ERHE_SHADER_DEBUG == 26 // emissive
+#  elif ERHE_SHADER_DEBUG == 27 // emissive
         out_color.rgb = emissive;
-#  elif ERHE_SHADER_DEBUG == 27 // shadowmap_texels
+#  elif ERHE_SHADER_DEBUG == 28 // shadowmap_texels
         {
             uint  light_index   = 0u;
             vec4  light_pos_homog = light_block.lights[light_index].texture_from_world * v_position;
@@ -597,7 +613,7 @@ void main()
                 out_color.b += v_pat;
             }
         }
-#  elif ERHE_SHADER_DEBUG == 28 // misc
+#  elif ERHE_SHADER_DEBUG == 29 // misc
         {
             float N_dot_T = dot(N, T);
             float N_dot_B = dot(N, B);

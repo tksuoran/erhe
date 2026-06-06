@@ -20,7 +20,11 @@ layout(location = 0) out vec4      v_position;
 // TODO In the future we might have alpha test which would need texcoord
 //      to be passed to fragment shader
 #if defined(ERHE_USE_VERTEX_VARYING_TEXCOORD0) && !defined(ERHE_VARIANT_POSITION_PASS)
-layout(location = 1) out vec2      v_texcoord;
+layout(location = 1) out vec2      v_texcoord_0;
+#endif
+
+#if defined(ERHE_USE_VERTEX_VARYING_TEXCOORD1) && !defined(ERHE_VARIANT_POSITION_PASS)
+layout(location = 12) out vec2     v_texcoord_1;
 #endif
 
 #if defined(ERHE_USE_VERTEX_VARYING_COLOR) && !defined(ERHE_VARIANT_POSITION_PASS)
@@ -146,7 +150,11 @@ void main()
     v_material_index = primitive.primitives[ERHE_DRAW_ID].material_index;
 
 #   if defined(ERHE_USE_VERTEX_VARYING_TEXCOORD0)
-    v_texcoord       = a_texcoord_0;
+    v_texcoord_0     = a_texcoord_0;
+#   endif
+
+#   if defined(ERHE_USE_VERTEX_VARYING_TEXCOORD1)
+    v_texcoord_1     = a_texcoord_1;
 #   endif
 
 #   if defined(ERHE_USE_VERTEX_VARYING_COLOR)

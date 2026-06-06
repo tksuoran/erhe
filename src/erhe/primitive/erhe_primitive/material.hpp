@@ -78,6 +78,10 @@ public:
     Material_blending_mode    blending_mode             {Material_blending_mode::opaque};
     float                     alpha_cutoff              {0.5f};
     bool                      use_circular_brushed_metal{false};
+    // Texcoord set read by the in-shader circular brushed metal block
+    // (T/B derivation and isotropy falloff). Defaults to 1, matching the
+    // default target of generate_mesh_facet_texture_coordinates().
+    uint32_t                  circular_brushed_metal_tex_coord{1};
     bool                      use_aniso_control         {false};
     Material_texture_samplers texture_samplers          {};
 };
