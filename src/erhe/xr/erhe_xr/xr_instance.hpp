@@ -144,6 +144,7 @@ public:
         bool EXT_hand_tracking                 {false};
         bool EXT_performance_settings          {false};
         bool FB_passthrough                    {false};
+        bool META_boundary_visibility          {false};
         bool FB_color_space                    {false};
         bool FB_display_refresh_rate           {false};
         bool META_performance_metrics            {false};
@@ -187,6 +188,9 @@ public:
     PFN_xrCreateGeometryInstanceFB         xrCreateGeometryInstanceFB        {nullptr};
     PFN_xrDestroyGeometryInstanceFB        xrDestroyGeometryInstanceFB       {nullptr};
     PFN_xrGeometryInstanceSetTransformFB   xrGeometryInstanceSetTransformFB  {nullptr};
+
+    // XR_META_boundary_visibility
+    PFN_xrRequestBoundaryVisibilityMETA    xrRequestBoundaryVisibilityMETA   {nullptr};
 
     // XR_EXT_performance_settings
     PFN_xrPerfSettingsSetPerformanceLevelEXT xrPerfSettingsSetPerformanceLevelEXT{nullptr};

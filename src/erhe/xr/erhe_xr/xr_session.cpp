@@ -1238,12 +1238,45 @@ void Xr_session::set_passthrough_active(const bool active)
         }
         m_passthrough_running = false;
         log_xr->info("XR_FB_passthrough paused");
+        // The runtime restores the boundary on its own once passthrough stops
+        // being rendered; request it explicitly (always allowed per spec) so
+        // the state change is deterministic and visible in the log.
+        request_boundary_visibility(XR_BOUNDARY_VISIBILITY_NOT_SUPPRESSED_META);
     }
 }
 
 auto Xr_session::is_passthrough_active() const -> bool
 {
     return m_passthrough_running;
+}
+
+void Xr_session::set_boundary_visibility(const XrBoundaryVisibilityMETA boundary_visibility)
+{
+    m_boundary_visibility = boundary_visibility;
+}
+
+void Xr_session::request_boundary_visibility(const XrBoundaryVisibilityMETA boundary_visibility)
+{
+    if (!m_instance.extensions.META_boundary_visibility || (m_instance.xrRequestBoundaryVisibilityMETA == nullptr)) {
+        return;
+    }
+    const XrResult result = m_instance.xrRequestBoundaryVisibilityMETA(m_xr_session, boundary_visibility);
+    if ((result != m_last_boundary_visibility_request_result) || (boundary_visibility != m_last_boundary_visibility_request)) {
+        // XR_BOUNDARY_VISIBILITY_SUPPRESSION_NOT_ALLOWED_META is a qualified
+        // success the runtime returns until the compositor has actually seen a
+        // passthrough layer; end_frame() keeps retrying, so log it as info and
+        // only on changes (of either the requested visibility or the result)
+        // to avoid per-frame spam.
+        const char* const visibility_name =
+            (boundary_visibility == XR_BOUNDARY_VISIBILITY_SUPPRESSED_META) ? "suppressed" : "not suppressed";
+        if (XR_SUCCEEDED(result)) {
+            log_xr->info("xrRequestBoundaryVisibilityMETA({}) returned {}", visibility_name, c_str(result));
+        } else {
+            log_xr->warn("xrRequestBoundaryVisibilityMETA({}) failed with error {}", visibility_name, c_str(result));
+        }
+        m_last_boundary_visibility_request_result = result;
+        m_last_boundary_visibility_request        = boundary_visibility;
+    }
 }
 
 void Xr_session::update_view_pose()
@@ -2054,12 +2087,14 @@ auto Xr_session::end_frame(const bool rendered) -> bool
     std::vector<XrCompositionLayerDepthTestFB> quad_depth_tests;
 
     std::vector<XrCompositionLayerBaseHeader*> layers;
+    bool passthrough_layer_submitted = false;
     if (rendered) {
         // Gate on the running state, not the extension flag: passthrough may be
         // paused (editor scene running without session passthrough), and layer
         // creation may have failed (m_passthrough_layer_fb == XR_NULL_HANDLE).
         if (m_passthrough_running) {
             layers.push_back(reinterpret_cast<XrCompositionLayerBaseHeader*>(&passthrough_fb_layer));
+            passthrough_layer_submitted = true;
         }
         layers.push_back(reinterpret_cast<XrCompositionLayerBaseHeader*>(&projection_layer));
 
@@ -2161,6 +2196,17 @@ auto Xr_session::end_frame(const bool rendered) -> bool
     log_xr->trace("xrEndFrame");
     const XrResult result = xrEndFrame(m_xr_session, &frame_end_info);
     ERHE_XR_CHECK(result);
+
+    // XR_META_boundary_visibility: suppress the boundary while the passthrough
+    // layer is visible (the room already shows through, so the boundary grid
+    // is just noise). The spec only allows suppression while passthrough is
+    // rendered, so the request is retried each frame until the runtime accepts
+    // it and confirms via XrEventDataBoundaryVisibilityChangedMETA (tracked in
+    // m_boundary_visibility). Restoring is handled by set_passthrough_active()
+    // and by the runtime itself when passthrough stops.
+    if (passthrough_layer_submitted && (m_boundary_visibility != XR_BOUNDARY_VISIBILITY_SUPPRESSED_META)) {
+        request_boundary_visibility(XR_BOUNDARY_VISIBILITY_SUPPRESSED_META);
+    }
 
     return true;
 }

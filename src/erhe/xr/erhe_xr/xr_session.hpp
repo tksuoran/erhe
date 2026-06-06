@@ -139,6 +139,13 @@ public:
     void set_passthrough_active(bool active);
     [[nodiscard]] auto is_passthrough_active() const -> bool;
 
+    // XR_META_boundary_visibility: current boundary visibility as reported by
+    // the runtime via XrEventDataBoundaryVisibilityChangedMETA (dispatched in
+    // Xr_instance::poll_xr_events()). end_frame() requests suppression while
+    // the passthrough layer is being submitted; set_passthrough_active(false)
+    // requests the boundary back.
+    void set_boundary_visibility(XrBoundaryVisibilityMETA boundary_visibility);
+
 private:
     [[nodiscard]] auto color_space_score          (const XrColorSpaceFB color_space) const -> int;
     [[nodiscard]] auto color_format_score         (const erhe::dataformat::Format pixelformat) const -> int;
@@ -151,6 +158,9 @@ private:
     [[nodiscard]] auto attach_actions             () -> bool;
     [[nodiscard]] auto create_hand_tracking       () -> bool;
     void               enable_performance_metrics ();
+    // XR_META_boundary_visibility: issue a visibility request to the runtime,
+    // logging only when the result changes (see m_last_boundary_visibility_request_result).
+    void               request_boundary_visibility(XrBoundaryVisibilityMETA boundary_visibility);
 
     class Swapchains
     {
@@ -218,6 +228,15 @@ private:
     // True while passthrough is created, started and not paused; gates the
     // XrCompositionLayerPassthroughFB submission in end_frame().
     bool                                          m_passthrough_running {false};
+    // XR_META_boundary_visibility state. m_boundary_visibility mirrors the
+    // runtime's reports (boundary visibility changed events); the last request
+    // and its result are kept so the per-frame suppression retry in end_frame()
+    // logs only on changes (the runtime returns the qualified success
+    // XR_BOUNDARY_VISIBILITY_SUPPRESSION_NOT_ALLOWED_META until the compositor
+    // has seen a passthrough layer).
+    XrBoundaryVisibilityMETA                      m_boundary_visibility {XR_BOUNDARY_VISIBILITY_NOT_SUPPRESSED_META};
+    XrBoundaryVisibilityMETA                      m_last_boundary_visibility_request{XR_BOUNDARY_VISIBILITY_MAX_ENUM_META};
+    XrResult                                      m_last_boundary_visibility_request_result{XR_SUCCESS};
     bool                                          m_session_running     {false};
     std::vector<Xr_perf_counter>                  m_perf_counters;
     bool                                          m_perf_metrics_enabled{false};

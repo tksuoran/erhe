@@ -419,6 +419,15 @@ auto Xr_instance::create_instance() -> bool
         extensions.FB_passthrough = true;
         enabled_extensions.push_back(XR_FB_PASSTHROUGH_EXTENSION_NAME);
     }
+    // XR_META_boundary_visibility: suppress the boundary while passthrough is
+    // rendered (issue #214). The spec only allows suppression while a
+    // passthrough layer is visible, so without passthrough the extension is
+    // useless and is left disabled. get_system_info() further downgrades the
+    // flag when the system reports no boundary visibility support.
+    if (extensions.FB_passthrough && has_extension(XR_META_BOUNDARY_VISIBILITY_EXTENSION_NAME)) {
+        extensions.META_boundary_visibility = true;
+        enabled_extensions.push_back(XR_META_BOUNDARY_VISIBILITY_EXTENSION_NAME);
+    }
     // XR_OCULUS_recenter_event
     if (has_extension(XR_FB_COLOR_SPACE_EXTENSION_NAME)) {
         extensions.FB_color_space = true;
@@ -662,6 +671,10 @@ auto Xr_instance::create_instance() -> bool
         xrCreateGeometryInstanceFB       = get_proc_addr<PFN_xrCreateGeometryInstanceFB      >("xrCreateGeometryInstanceFB");
         xrDestroyGeometryInstanceFB      = get_proc_addr<PFN_xrDestroyGeometryInstanceFB     >("xrDestroyGeometryInstanceFB");
         xrGeometryInstanceSetTransformFB = get_proc_addr<PFN_xrGeometryInstanceSetTransformFB>("xrGeometryInstanceSetTransformFB");
+    }
+
+    if (extensions.META_boundary_visibility) {
+        xrRequestBoundaryVisibilityMETA  = get_proc_addr<PFN_xrRequestBoundaryVisibilityMETA >("xrRequestBoundaryVisibilityMETA");
     }
 
     if (extensions.FB_color_space) {
@@ -1052,6 +1065,35 @@ auto Xr_instance::get_system_info() -> bool
             if (passthrough_properties2.capabilities & XR_PASSTHROUGH_CAPABILITY_LAYER_DEPTH_BIT_FB) {
                 log_xr->info("OpenXR FB_passthrough supports capability layer depth");
             }
+        }
+    }
+
+    // Boundary visibility suppression requires passthrough rendering, so a
+    // system without passthrough capability cannot use it either; downgrade
+    // alongside the FB_passthrough flag in that case.
+    if (extensions.META_boundary_visibility && !extensions.FB_passthrough) {
+        extensions.META_boundary_visibility = false;
+    }
+    if (extensions.META_boundary_visibility) {
+        XrSystemBoundaryVisibilityPropertiesMETA boundary_visibility_properties{
+            .type                       = XR_TYPE_SYSTEM_BOUNDARY_VISIBILITY_PROPERTIES_META,
+            .next                       = nullptr,
+            .supportsBoundaryVisibility = {}
+        };
+        XrSystemProperties system_properties_{
+            .type               = XR_TYPE_SYSTEM_PROPERTIES,
+            .next               = &boundary_visibility_properties,
+            .systemId           = {},
+            .vendorId           = {},
+            .systemName         = {},
+            .graphicsProperties = {},
+            .trackingProperties = {}
+        };
+        ERHE_XR_CHECK(xrGetSystemProperties(m_xr_instance, m_xr_system_id, &system_properties_));
+
+        log_xr->info("OpenXR META_boundary_visibility supported: {}", boundary_visibility_properties.supportsBoundaryVisibility == XR_TRUE);
+        if (boundary_visibility_properties.supportsBoundaryVisibility != XR_TRUE) {
+            extensions.META_boundary_visibility = false;
         }
     }
 
@@ -1731,6 +1773,16 @@ auto Xr_instance::poll_xr_events(Xr_session& session) -> bool
                     static_cast<int>(perf_event.toLevel)
                 );
                 m_latest_thermal_warning = perf_event;
+                continue;
+            }
+
+            if (base_header->type == XR_TYPE_EVENT_DATA_BOUNDARY_VISIBILITY_CHANGED_META) {
+                const auto& boundary_visibility_event = *reinterpret_cast<const XrEventDataBoundaryVisibilityChangedMETA*>(base_header);
+                log_xr->info(
+                    "XR_META_boundary_visibility: boundary visibility changed to {}",
+                    (boundary_visibility_event.boundaryVisibility == XR_BOUNDARY_VISIBILITY_SUPPRESSED_META) ? "suppressed" : "not suppressed"
+                );
+                session.set_boundary_visibility(boundary_visibility_event.boundaryVisibility);
                 continue;
             }
 
