@@ -3,11 +3,22 @@ from erhe_codegen import *
 # Settings for the sky composition pass fragment shader (sky.frag).
 # Defaults match the previously hardcoded shader values.
 struct("Sky_config",
-    version=1,
+    version=2,
     short_desc="Sky",
     long_desc="Sky shader settings",
     developer=False,
     fields=[
+        field(
+            "enabled",
+            Bool,
+            added_in=2,
+            default="true",
+            short_desc="Enable Sky",
+            long_desc=("Render the sky background. When disabled in VR with "
+                       "camera passthrough available, the scene background "
+                       "shows the room around the scene content (mixed "
+                       "reality)."),
+        ),
         field("sky_horizon_color",    Vec4,  added_in=1, default="0.3f, 0.3f, 0.33f, 1.0f", short_desc="Sky Horizon Color"),
         field("sky_zenith_color",     Vec4,  added_in=1, default="0.2f, 0.2f, 0.22f, 1.0f", short_desc="Sky Zenith Color"),
         field("sky_power",            Float, added_in=1, default="10.0f", short_desc="Sky Power", long_desc="Falloff exponent from horizon to zenith"),

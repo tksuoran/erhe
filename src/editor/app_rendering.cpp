@@ -970,6 +970,12 @@ void App_rendering::update_sky_parameters()
         return;
     }
     const Sky_config& sky = m_context.editor_settings->sky;
+    // Applied every frame (render_composer() calls this) so the Settings
+    // window checkbox takes effect immediately; same mechanism as
+    // set_grid_visibility(). With the sky pass disabled the scene background
+    // keeps the render pass clear value (transparent in the headset path, so
+    // camera passthrough shows through; see Headset_view::render_headset()).
+    m_sky_composition_pass->data.enabled = sky.enabled;
     erhe::scene_renderer::Sky_parameters& parameters = m_sky_composition_pass->data.sky_parameters;
     parameters.sky_checker          = glm::vec4{sky.checker_frequency.x, sky.checker_frequency.y, sky.checker_intensity_a, sky.checker_intensity_b};
     parameters.sky_horizon_color    = glm::vec4{glm::vec3{sky.sky_horizon_color},    sky.sky_power};
