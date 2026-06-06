@@ -712,6 +712,7 @@ auto Scene_root::camera_combo(
     if (nullptr_option || (selected_camera == nullptr)) {
         names.push_back("(none)");
         cameras.push_back(nullptr);
+        ++index; // keep index in sync with the names / cameras entries
     }
     const auto& scene_cameras = get_scene().get_cameras();
     for (const auto& camera : scene_cameras) {
@@ -751,6 +752,7 @@ auto Scene_root::camera_combo(
     if (nullptr_option || (selected_camera == nullptr)) {
         names.push_back("(none)");
         cameras.push_back(nullptr);
+        ++index; // keep index in sync with the names / cameras entries
     }
     const auto& scene_cameras = get_scene().get_cameras();
     for (const auto& camera : scene_cameras) {
@@ -790,6 +792,7 @@ auto Scene_root::camera_combo(
     if (nullptr_option || selected_camera.expired()) {
         names.push_back("(none)");
         cameras.push_back({});
+        ++index; // keep index in sync with the names / cameras entries
     }
     const auto& scene_cameras = get_scene().get_cameras();
     for (const auto& camera : scene_cameras) {
