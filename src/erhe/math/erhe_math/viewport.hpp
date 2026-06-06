@@ -6,6 +6,8 @@
 
 namespace erhe::math {
 
+class Coordinate_conventions;
+
 class Viewport
 {
 public:
@@ -18,11 +20,17 @@ public:
         float            depth_range_far
     ) const -> std::optional<glm::vec3>;
 
+    // conventions must match the conventions clip_from_world was built with
+    // (the graphics device coordinate conventions); on top-left framebuffer
+    // origin APIs the projection matrix bakes a clip space Y flip which the
+    // window space projection must undo so window coordinates stay bottom-up
+    // on every backend.
     [[nodiscard]] auto project_to_screen_space(
-        const glm::mat4& clip_from_world,
-        const glm::vec3& position_in_world,
-        float            depth_range_near,
-        float            depth_range_far
+        const glm::mat4&              clip_from_world,
+        const glm::vec3&              position_in_world,
+        float                         depth_range_near,
+        float                         depth_range_far,
+        const Coordinate_conventions& conventions
     ) const -> glm::vec3;
 
     [[nodiscard]] auto hit_test(int px, int py) const -> bool;

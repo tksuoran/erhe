@@ -30,10 +30,11 @@ auto Viewport::unproject(
 }
 
 auto Viewport::project_to_screen_space(
-    const glm::mat4& clip_from_world,
-    const glm::vec3& position_in_world,
-    const float      depth_range_near,
-    const float      depth_range_far
+    const glm::mat4&              clip_from_world,
+    const glm::vec3&              position_in_world,
+    const float                   depth_range_near,
+    const float                   depth_range_far,
+    const Coordinate_conventions& conventions
 ) const -> glm::vec3
 {
     return erhe::math::project_to_screen_space(
@@ -44,7 +45,8 @@ auto Viewport::project_to_screen_space(
         static_cast<float>(x),
         static_cast<float>(y),
         static_cast<float>(width),
-        static_cast<float>(height)
+        static_cast<float>(height),
+        conventions
     );
 }
 

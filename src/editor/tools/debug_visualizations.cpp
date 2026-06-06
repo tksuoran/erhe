@@ -1032,7 +1032,7 @@ void Debug_visualizations::camera_visualization(const Render_context& render_con
     }
     for (size_t i = 0, end = corners.size(); i < end; ++i) {
         const glm::vec3 p          = corners[i];
-        const auto      p_window   = render_context.viewport.project_to_screen_space(view_clip_from_world, p, 0.0f, 1.0f);
+        const auto      p_window   = render_context.viewport.project_to_screen_space(view_clip_from_world, p, 0.0f, 1.0f, render_context.scene_view.get_conventions());
         const uint32_t  text_color = 0xffffccaau;
         const glm::vec3 point_in_window_z_negated{p_window.x, p_window.y, -p_window.z};
         m_context.text_renderer->print(point_in_window_z_negated, text_color, fmt::format("{}", i));
@@ -1197,7 +1197,8 @@ void Debug_visualizations::selection_visualization(const Render_context& context
                         clip_from_world,
                         point.value(),
                         0.0f,
-                        1.0f
+                        1.0f,
+                        context.scene_view.get_conventions()
                     );
                     const uint32_t  text_color = 0xff88ff88u;
                     const glm::vec3 point_in_window_z_negated{
@@ -1432,7 +1433,8 @@ void Debug_visualizations::physics_nodes_visualization(const Render_context& con
                 clip_from_world,
                 glm::vec3{p4_in_world},
                 0.0f,
-                1.0f
+                1.0f,
+                context.scene_view.get_conventions()
             );
             const auto label_text = "<" + node->describe() + ">"; // node_physics->describe();
             const glm::vec2 label_size = m_context.text_renderer->measure(label_text).size();
@@ -1751,7 +1753,8 @@ void Debug_visualizations::label(
         clip_from_world,
         glm::vec3{p4_in_world},
         0.0f,
-        1.0f
+        1.0f,
+        context.scene_view.get_conventions()
     );
     const glm::vec2 label_size = m_context.text_renderer->measure(label_text).size();
     const glm::vec3 p3_in_window_z_negated{

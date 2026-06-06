@@ -438,6 +438,7 @@ void Hover_tool::tool_render(const Render_context& context)
     erhe::geometry_renderer::debug_draw(
         context.viewport,
         clip_from_world,
+        context.scene_view.get_conventions(),
         line_renderer,
         *m_context.text_renderer,
         world_from_node,

@@ -6,13 +6,14 @@
 namespace erhe::geometry_renderer {
 
 void debug_draw(
-    const erhe::math::Viewport&         viewport,
-    const glm::mat4&                    clip_from_world,
-    erhe::renderer::Primitive_renderer& line_renderer,
-    erhe::renderer::Text_renderer&      text_renderer,
-    glm::mat4                           world_from_local,
-    erhe::geometry::Geometry&           geometry,
-    GEO::index_t                        facet_filter
+    const erhe::math::Viewport&               viewport,
+    const glm::mat4&                          clip_from_world,
+    const erhe::math::Coordinate_conventions& conventions,
+    erhe::renderer::Primitive_renderer&       line_renderer,
+    erhe::renderer::Text_renderer&            text_renderer,
+    glm::mat4                                 world_from_local,
+    erhe::geometry::Geometry&                 geometry,
+    GEO::index_t                              facet_filter
 )
 {
     geometry.access_debug_entries(
@@ -70,7 +71,8 @@ void debug_draw(
                     clip_from_world,
                     p_world,
                     0.0f,
-                    1.0f
+                    1.0f,
+                    conventions
                 );
                 const glm::vec3 p{
                      p_window.x,
