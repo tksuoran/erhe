@@ -181,6 +181,7 @@ private:
     void make_torus_brushes         (App_settings& app_settings, erhe::scene_renderer::Mesh_memory& mesh_memory);
     void make_cylinder_brushes      (App_settings& app_settings, erhe::scene_renderer::Mesh_memory& mesh_memory);
     void make_cone_brushes          (App_settings& app_settings, erhe::scene_renderer::Mesh_memory& mesh_memory);
+    void make_capsule_brushes       (App_settings& app_settings, erhe::scene_renderer::Mesh_memory& mesh_memory);
     void make_json_brushes          (App_settings& app_settings, erhe::scene_renderer::Mesh_memory& mesh_memory, tf::Taskflow* tf, Json_library& library);
     void make_mesh_nodes            (const Make_mesh_config& config, std::vector<std::shared_ptr<Brush>>& brushes);
 
@@ -200,6 +201,7 @@ private:
     std::shared_ptr<Brush>              m_torus_brush;
     std::shared_ptr<Brush>              m_cylinder_brush[2];
     std::shared_ptr<Brush>              m_cone_brush;
+    std::shared_ptr<Brush>              m_capsule_brush;
 
     std::vector<std::shared_ptr<erhe::physics::ICollision_shape>> m_collision_shapes;
 

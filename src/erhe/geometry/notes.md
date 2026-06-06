@@ -18,7 +18,7 @@ Geogram), and primitive shape generators.
 - `Geometry(name)` then `geometry.process(flags)` -- Create and process a mesh.
 - `geometry.get_mesh()` -- Access the underlying `GEO::Mesh`.
 - `geometry.get_attributes()` -- Access typed attribute wrappers.
-- Shape generators: `shapes::make_box()`, `shapes::make_sphere()`, `shapes::make_torus()`, `shapes::make_cone()`, `shapes::make_disc()`, `shapes::make_icosahedron()`, etc.
+- Shape generators: `shapes::make_box()`, `shapes::make_sphere()`, `shapes::make_capsule()`, `shapes::make_torus()`, `shapes::make_cone()`, `shapes::make_disc()`, `shapes::make_icosahedron()`, etc.
 - Conway operators: `ambo`, `chamfer`, `dual`, `gyro`, `join`, `kis`, `meta`, `subdivide`, `truncate`.
 - Subdivision: `catmull_clark_subdivision`, `sqrt3_subdivision`.
 - CSG: `difference`, `intersection`, `union_` (experimental).

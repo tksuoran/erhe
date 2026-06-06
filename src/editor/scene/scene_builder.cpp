@@ -29,6 +29,7 @@
 #include "app_context.hpp"
 #include "erhe_graphics/command_buffer.hpp"
 #include "erhe_verify/verify.hpp"
+#include "erhe_geometry/shapes/capsule.hpp"
 #include "erhe_geometry/shapes/cone.hpp"
 #include "erhe_geometry/shapes/sphere.hpp"
 #include "erhe_geometry/shapes/torus.hpp"
@@ -543,6 +544,50 @@ void Scene_builder::make_cone_brushes(
     );
 }
 
+void Scene_builder::make_capsule_brushes(
+    App_settings&                      app_settings,
+    erhe::scene_renderer::Mesh_memory& mesh_memory
+)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    Content_library_node& brushes = get_brushes();
+
+    const float radius = 1.0f;
+    const float length = 2.0f; // cylinder mid-section length; total height = length + 2 * radius
+
+    std::shared_ptr<erhe::geometry::Geometry> capsule_geometry = std::make_shared<erhe::geometry::Geometry>("capsule");
+    erhe::geometry::shapes::make_capsule( // axis = y
+        capsule_geometry->get_mesh(),
+        radius,
+        length,
+        8 * std::max(1, m_detail), // slice count
+        3 * std::max(1, m_detail)  // hemisphere stack count
+    );
+    const uint64_t flags =
+        erhe::geometry::Geometry::process_flag_connect |
+        erhe::geometry::Geometry::process_flag_build_edges |
+        erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates;
+    capsule_geometry->process(flags);
+
+    m_capsule_brush = make_brush(
+        brushes,
+        Brush_data{
+            .context         = m_context,
+            .app_settings    = app_settings,
+            .build_info      = build_info(mesh_memory),
+            .normal_style    = Normal_style::corner_normals,
+            .geometry        = capsule_geometry,
+            .density         = m_mass_scale,
+            .collision_shape = erhe::physics::ICollision_shape::create_capsule_shape_shared(
+                erhe::physics::Axis::Y,
+                radius,
+                length
+            )
+        }
+    );
+}
+
 void Scene_builder::make_json_brushes(
     App_settings&                      app_settings,
     erhe::scene_renderer::Mesh_memory& mesh_memory,
@@ -629,6 +674,7 @@ void Scene_builder::make_brushes(
             tf.emplace([this, &app_settings, &mesh_memory]() { make_torus_brushes         (app_settings, mesh_memory); }).name("Torus Brushes");
             tf.emplace([this, &app_settings, &mesh_memory]() { make_cylinder_brushes      (app_settings, mesh_memory); }).name("Cylinder Brushes");
             tf.emplace([this, &app_settings, &mesh_memory]() { make_cone_brushes          (app_settings, mesh_memory); }).name("Cone Brushes");
+            tf.emplace([this, &app_settings, &mesh_memory]() { make_capsule_brushes       (app_settings, mesh_memory); }).name("Capsule Brushes");
         }
         if (make_johnson_solid_brushes) {
             make_json_brushes(app_settings, mesh_memory, &tf, library);
@@ -645,6 +691,7 @@ void Scene_builder::make_brushes(
             make_torus_brushes         (app_settings, mesh_memory);
             make_cylinder_brushes      (app_settings, mesh_memory);
             make_cone_brushes          (app_settings, mesh_memory);
+            make_capsule_brushes       (app_settings, mesh_memory);
         }
         if (make_johnson_solid_brushes) {
             make_json_brushes(app_settings, mesh_memory, nullptr, library);
@@ -829,6 +876,7 @@ void Scene_builder::add_curved_shapes(const Make_mesh_config& config)
     brushes.push_back(m_cylinder_brush[0]);
     brushes.push_back(m_cylinder_brush[1]);
     brushes.push_back(m_cone_brush);
+    brushes.push_back(m_capsule_brush);
     brushes.push_back(m_torus_brush);
     make_mesh_nodes(config, brushes);
 }
