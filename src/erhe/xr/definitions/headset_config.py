@@ -127,8 +127,10 @@ struct("Headset_config",
                        "When enabled, passthrough stays running for the whole "
                        "session (the passthrough composition layer is submitted "
                        "under the projection layer every frame); when disabled, "
-                       "passthrough is paused once the editor scene starts "
-                       "rendering."),
+                       "passthrough runs only while sky rendering is disabled "
+                       "(the scene background is then transparent, so the room "
+                       "shows around the scene content) and is paused while the "
+                       "sky covers the background."),
             visible=True,
             developer=True
         ),

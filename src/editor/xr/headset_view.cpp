@@ -654,18 +654,24 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
         return false; // TODO Is this correct?
     }
 
-    // First rendered scene frame: the init status screen (which showed camera
-    // passthrough) is done. Pause passthrough unless the passthrough_fb
-    // config keeps it running for the whole session; pausing also restores
-    // the boundary visibility (see Xr_session::set_passthrough_active()).
-    // Gated on should_render so a non-rendered first frame (headset off-head
-    // across the init boundary) keeps passthrough until the opaque scene is
-    // actually about to replace it.
-    if (m_frame_timing.should_render && !m_passthrough_configured) {
-        m_passthrough_configured = true;
-        if (!m_headset->get_configuration().passthrough_fb) {
-            m_headset->set_passthrough_active(false);
-        }
+    // Reconcile the passthrough state with what the scene needs this frame:
+    // keep passthrough running when the sky is disabled (the scene clears its
+    // background to transparent, so the room shows around the scene content)
+    // or when the passthrough_fb config keeps it on for the whole session;
+    // pause it otherwise (the opaque sky covers the background anyway).
+    // set_passthrough_active() is a no-op when the state already matches or
+    // passthrough is unavailable, and pausing/resuming also restores or
+    // re-suppresses the boundary visibility (see Xr_session). Gated on
+    // should_render so a non-rendered frame (headset off-head, including
+    // across the init boundary) leaves passthrough untouched. This also
+    // handles the init -> scene hand-off: the init status screen always runs
+    // with passthrough, and the first rendered scene frame settles it to the
+    // state the Settings imply.
+    if (m_frame_timing.should_render) {
+        const bool want_passthrough =
+            m_headset->get_configuration().passthrough_fb ||
+            ((m_app_context.editor_settings != nullptr) && !m_app_context.editor_settings->sky.enabled);
+        m_headset->set_passthrough_active(want_passthrough);
     }
 
     if (m_request_renderdoc_capture) {
@@ -959,7 +965,13 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
             render_pass_descriptor.color_attachments[0].layout_before = erhe::graphics::Image_layout::color_attachment_optimal;
             render_pass_descriptor.color_attachments[0].usage_after   = erhe::graphics::Image_usage_flag_bit_mask::color_attachment;
             render_pass_descriptor.color_attachments[0].layout_after  = erhe::graphics::Image_layout::color_attachment_optimal;
-            render_pass_descriptor.color_attachments[0].clear_value   = {0.05, 0.10, 0.20, 1.0};
+            // Transparent clear: with the sky enabled the fullscreen sky pass
+            // covers every background pixel (sky.frag writes alpha 1.0), so
+            // this value is never visible. With the sky disabled the alpha-0
+            // background lets the camera passthrough layer (submitted under
+            // this projection layer) show through -- mixed reality editing.
+            // Without passthrough the compositor composites against black.
+            render_pass_descriptor.color_attachments[0].clear_value   = {0.0, 0.0, 0.0, 0.0};
             if (depth_stencil_texture != nullptr) {
                 render_pass_descriptor.depth_attachment.texture       = depth_stencil_texture;
                 render_pass_descriptor.depth_attachment.load_action   = erhe::graphics::Load_action::Clear;
