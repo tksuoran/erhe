@@ -124,12 +124,19 @@ public:
 
     // Get or create a graphics pipeline for the given render pass format.
     // Call this during rendering when the render pass is active.
+    // front_face_flip requests a variant with front_face_direction inverted
+    // (CCW<->CW) relative to the base rasterization state; used to render
+    // meshes whose world transform has a negative determinant (mirrored
+    // geometry reverses apparent triangle winding). The variant is cached
+    // alongside the non-flipped one because Render_pipeline_create_info::get_hash()
+    // covers the rasterization state.
     [[nodiscard]] auto get_pipeline_for(
         const Render_pass_descriptor&          render_pass_desc,
         const Color_blend_state*               color_blend,
         const Shader_stages*                   shader_stages,
         const Vertex_input_state*              vertex_input,
-        const erhe::dataformat::Vertex_format* vertex_format
+        const erhe::dataformat::Vertex_format* vertex_format,
+        bool                                   front_face_flip = false
     ) -> Render_pipeline*;
 
     [[nodiscard]] auto get_create_info() const -> const Base_render_pipeline_create_info&;

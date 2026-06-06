@@ -239,7 +239,8 @@ auto Base_render_pipeline::get_pipeline_for(
     const Color_blend_state*               color_blend,
     const Shader_stages*                   shader_stages,
     const Vertex_input_state*              vertex_input,
-    const erhe::dataformat::Vertex_format* vertex_format
+    const erhe::dataformat::Vertex_format* vertex_format,
+    const bool                             front_face_flip
 ) -> Render_pipeline*
 {
     if (m_device == nullptr) {
@@ -256,6 +257,10 @@ auto Base_render_pipeline::get_pipeline_for(
 
     if (data.color_blend == nullptr) {
         ci.base.color_blend = color_blend;
+    }
+
+    if (front_face_flip) {
+        ci.base.rasterization = ci.base.rasterization.with_winding_flip();
     }
 
     ci.set_format_from_render_pass(render_pass_desc);
