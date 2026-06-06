@@ -990,7 +990,7 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
                 // and the per-frame stencil starts at 0. Without this the Vulkan
                 // render pass leaves stencilLoadOp = DONT_CARE and stencil contents
                 // leak across frames, breaking the selection-outline scheme that
-                // tests bit 7 written by polygon_fill_standard_selected_*. The
+                // tests bit 7 written by polygon_fill_standard_selected. The
                 // per-eye path mirrors this in headset_view_resources.cpp.
                 if (erhe::dataformat::get_stencil_size_bits(depth_stencil_texture->get_pixelformat()) > 0) {
                     render_pass_descriptor.stencil_attachment.texture       = depth_stencil_texture;

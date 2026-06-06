@@ -415,7 +415,7 @@ auto Xr_session::depth_stencil_format_score(const erhe::dataformat::Format pixel
 #endif
 #if defined(XR_USE_GRAPHICS_API_VULKAN)
     // Stencil-bearing formats are preferred so the editor's selection-outline
-    // stencil scheme (Pipeline_renderpasses::polygon_fill_standard_selected_*
+    // stencil scheme (Pipeline_renderpasses::polygon_fill_standard_selected
     // writes bit 7 of stencil; Pipeline_renderpasses::outline tests bit 7)
     // works on the headset. The actual swapchain usage is DS+SAMPLED only
     // (XR_SWAPCHAIN_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT in create_swapchains;

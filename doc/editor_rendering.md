@@ -99,7 +99,7 @@ The editor creates these passes in `App_rendering::App_rendering()`:
 
 | # | Pass | Primitive mode | Filter | Pipeline |
 | :--- | :--- | :--- | :--- | :--- |
-| 1 | Opaque fill not selected | polygon_fill | visible, opaque, not selected | Standard opaque, cull back CCW |
+| 1 | Opaque fill not selected | polygon_fill | visible, opaque, not selected (content, controller and rendertarget layers) | Standard opaque, cull back CCW |
 | 2 | Opaque fill selected | polygon_fill | visible, opaque, selected | Stencil-marking (bit 7) |
 | 3 | Edge lines not selected | edge_lines | visible, opaque, not selected | Edge line pipeline |
 | 4 | Edge lines selected | edge_lines | visible, opaque, selected | Edge line pipeline |
@@ -108,9 +108,7 @@ The editor creates these passes in `App_rendering::App_rendering()`:
 | 7 | Grid | polygon_fill | (none) | Fullscreen, depth clamp |
 | 8 | Translucent fill | polygon_fill | visible, translucent | Premultiplied alpha |
 | 9 | Translucent edge lines | edge_lines | visible, translucent | Premultiplied alpha |
-| 10 | Brush (back faces) | polygon_fill | visible, brush | Cull front, premultiplied alpha |
-| 11 | Brush (front faces) | polygon_fill | visible, brush | Cull back, premultiplied alpha |
-| 12 | Rendertarget meshes | polygon_fill | visible, rendertarget | Textured, premultiplied alpha |
+| 10 | Brush | polygon_fill | visible, brush | Two pipelines in sequence: cull front then cull back, premultiplied alpha |
 
 ### Mirrored (negative-determinant) geometry
 
