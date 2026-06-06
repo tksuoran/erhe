@@ -219,6 +219,15 @@ private:
     bool                                                 m_update_actions_ok{false};
     bool                                                 m_request_renderdoc_capture{false};
     bool                                                 m_renderdoc_capture_started{false};
+    // One-shot: on the first render_headset() call with should_render the
+    // init status screen is done and the scene takes over, so pause the
+    // camera passthrough that ran during init (issue #214) unless the
+    // passthrough_fb config keeps it on for the whole session. Hooked to the
+    // first rendered scene frame (instead of the end of editor init) so
+    // passthrough stays visible right up until the opaque scene replaces
+    // it -- no black-void gap, and the boundary returns exactly when VR
+    // rendering starts.
+    bool                                                 m_passthrough_configured{false};
     // Latched at construction from Xr_session::is_multiview_enabled().
     // When true, render_headset() drives Xr_session::render_frame_multiview()
     // (single shared layered swapchain, single render pass with view_mask =

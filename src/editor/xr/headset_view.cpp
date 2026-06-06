@@ -654,6 +654,20 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
         return false; // TODO Is this correct?
     }
 
+    // First rendered scene frame: the init status screen (which showed camera
+    // passthrough) is done. Pause passthrough unless the passthrough_fb
+    // config keeps it running for the whole session; pausing also restores
+    // the boundary visibility (see Xr_session::set_passthrough_active()).
+    // Gated on should_render so a non-rendered first frame (headset off-head
+    // across the init boundary) keeps passthrough until the opaque scene is
+    // actually about to replace it.
+    if (m_frame_timing.should_render && !m_passthrough_configured) {
+        m_passthrough_configured = true;
+        if (!m_headset->get_configuration().passthrough_fb) {
+            m_headset->set_passthrough_active(false);
+        }
+    }
+
     if (m_request_renderdoc_capture) {
         m_app_context.graphics_device->start_frame_capture();
         m_renderdoc_capture_started = true;
