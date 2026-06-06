@@ -70,6 +70,16 @@ auto Scene_view::get_scene_root() const -> std::shared_ptr<Scene_root>
     return m_scene_root.lock();
 }
 
+void Scene_view::set_shadow_fit_override_camera(const std::weak_ptr<erhe::scene::Camera>& camera)
+{
+    m_shadow_fit_override_camera = camera;
+}
+
+auto Scene_view::get_shadow_fit_override_camera() const -> std::weak_ptr<erhe::scene::Camera>
+{
+    return m_shadow_fit_override_camera;
+}
+
 auto Scene_view::get_reverse_depth() const -> bool
 {
     // Single source of truth: the device derives the effective reverse-Z

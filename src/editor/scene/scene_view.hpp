@@ -109,6 +109,13 @@ public:
     [[nodiscard]] auto get_framebuffer_origin() const -> erhe::math::Framebuffer_origin;
     [[nodiscard]] auto get_conventions       () const -> erhe::math::Coordinate_conventions;
 
+    // Optional camera used instead of the view camera as the shadow frustum
+    // fit target (and thus for the shadow fit debug visualizations). Allows
+    // observing the fit for a static camera while flying around with the
+    // viewport camera. Empty / expired = use the view camera.
+    void set_shadow_fit_override_camera(const std::weak_ptr<erhe::scene::Camera>& camera);
+    [[nodiscard]] auto get_shadow_fit_override_camera() const -> std::weak_ptr<erhe::scene::Camera>;
+
     // "Pointing"
     void set_world_from_control(glm::vec3 near_position_in_world, glm::vec3 far_position_in_world);
 
@@ -142,12 +149,13 @@ protected:
     // result is closest to the camera along the picking ray.
     void merge_hover(std::size_t slot, const Hover_entry& candidate);
 
-    App_context&              m_context;
-    std::optional<glm::mat4>  m_world_from_control;
-    std::optional<glm::mat4>  m_control_from_world;
-    Viewport_config           m_viewport_config;
-    bool                      m_hover_update_pending{true};
-    std::weak_ptr<Scene_root> m_scene_root;
+    App_context&                       m_context;
+    std::optional<glm::mat4>           m_world_from_control;
+    std::optional<glm::mat4>           m_control_from_world;
+    Viewport_config                    m_viewport_config;
+    bool                               m_hover_update_pending{true};
+    std::weak_ptr<Scene_root>          m_scene_root;
+    std::weak_ptr<erhe::scene::Camera> m_shadow_fit_override_camera;
 
 private:
     std::array<Hover_entry, Hover_entry::slot_count> m_hover_entries;

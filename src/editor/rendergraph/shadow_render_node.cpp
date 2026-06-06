@@ -18,6 +18,7 @@
 #include "erhe_graphics/render_pass.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_scene_renderer/shadow_renderer.hpp"
+#include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_profile/profile.hpp"
@@ -193,9 +194,21 @@ void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer
 
     // Render shadow maps
     const auto& scene_root = m_scene_view.get_scene_root();
-    const auto& camera     = m_scene_view.get_camera();
+    std::shared_ptr<erhe::scene::Camera> camera = m_scene_view.get_camera();
     if (!scene_root || !camera) {
         return;
+    }
+
+    // Optional shadow fit target camera override (Scene View Config window):
+    // fit the shadow frustum (and collect the fit debug data) for this camera
+    // instead of the view camera, so the fit can be observed from outside.
+    // Ignored when the camera no longer exists or belongs to another scene.
+    const std::shared_ptr<erhe::scene::Camera> override_camera = m_scene_view.get_shadow_fit_override_camera().lock();
+    if (override_camera) {
+        const erhe::scene::Node* const override_camera_node = override_camera->get_node();
+        if ((override_camera_node != nullptr) && (override_camera_node->get_scene() == scene_root->get_hosted_scene())) {
+            camera = override_camera;
+        }
     }
 
     const auto& layers = scene_root->layers();

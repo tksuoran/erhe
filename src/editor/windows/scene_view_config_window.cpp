@@ -41,7 +41,7 @@ void Scene_view_config_window::imgui()
             "##viewport_view_settings",
             2,
             ImGuiTableFlags_Resizable | ImGuiTableFlags_RowBg,
-            ImVec2{600.0f, 220.0}
+            ImVec2{600.0f, 260.0}
         ))
     {
         // BeginTable can fail (e.g. clipped window, zero-size cells); calling
@@ -87,6 +87,23 @@ void Scene_view_config_window::imgui()
             bool camera_combo_used = scene_root->camera_combo("##Camera", camera);
             if (camera_combo_used) {
                 viewport_scene_view->set_camera(camera);
+            }
+        } else {
+            ImGui::TextDisabled("(select a scene first)");
+        }
+
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        ImGui::TextUnformatted("Override Shadow Fit Target Camera");
+        ImGui::TableNextColumn();
+        if (scene_root) {
+            // When set, the shadow frustum fit (and the shadow fit debug
+            // visualizations) target this camera instead of the viewport
+            // camera, so the fit can be observed from outside its frustum.
+            std::weak_ptr<erhe::scene::Camera> shadow_fit_override_camera = m_scene_view->get_shadow_fit_override_camera();
+            const bool shadow_fit_camera_combo_used = scene_root->camera_combo("##ShadowFitTargetCamera", shadow_fit_override_camera, true);
+            if (shadow_fit_camera_combo_used) {
+                m_scene_view->set_shadow_fit_override_camera(shadow_fit_override_camera);
             }
         } else {
             ImGui::TextDisabled("(select a scene first)");
