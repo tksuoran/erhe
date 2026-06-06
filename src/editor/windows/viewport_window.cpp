@@ -267,7 +267,15 @@ void Viewport_window::imgui_viewport()
 
     viewport_scene_view->set_enabled(true);
 
-    const ImVec2 size = ImGui::GetContentRegionAvail();
+    // Single source of truth for the viewport size: the same width/height
+    // ints are used for the ImGui image quad and for the scene view's window
+    // viewport (which later drives the render target texture allocation).
+    // Deriving the size a second time from the item rect would invite drift
+    // between the texture size and the quad size, which shows up as a
+    // stretched / never texel-aligned viewport image.
+    const ImVec2 size   = ImGui::GetContentRegionAvail();
+    const int    width  = static_cast<int>(size.x);
+    const int    height = static_cast<int>(size.y);
     std::shared_ptr<erhe::rendergraph::Rendergraph_node> rendergraph_output_node = m_rendergraph_output_node.lock();
     if (rendergraph_output_node) {
         SPDLOG_LOGGER_TRACE(
@@ -279,8 +287,8 @@ void Viewport_window::imgui_viewport()
         m_app_context.imgui_renderer->image(
             erhe::imgui::Draw_texture_parameters{
                 .texture_reference = rendergraph_output_node,
-                .width             = static_cast<int>(size.x),
-                .height            = static_cast<int>(size.y),
+                .width             = width,
+                .height            = height,
                 .uv0               = m_app_context.imgui_renderer->get_rtt_uv0(),
                 .uv1               = m_app_context.imgui_renderer->get_rtt_uv1(),
                 .debug_label       = "Viewport_window::imgui()"
@@ -293,10 +301,40 @@ void Viewport_window::imgui_viewport()
             erhe::math::Viewport{
                 static_cast<int>(rect_min.x),
                 static_cast<int>(rect_min.y),
-                static_cast<int>(rect_max.x - rect_min.x + 1.0f),
-                static_cast<int>(rect_max.y - rect_min.y + 1.0f)
+                width,
+                height
             }
         );
+
+#if !defined(NDEBUG)
+        // Regression guard: the output texture is reallocated later this
+        // frame (during rendergraph execution) from the viewport set above,
+        // so on a stable frame (size unchanged since last frame) it must
+        // already match width/height. A mismatch here means the texture size
+        // and the quad size have drifted apart again.
+        const erhe::graphics::Texture* output_texture = rendergraph_output_node->get_referenced_texture();
+        if (
+            (output_texture != nullptr) &&
+            (width == m_last_viewport_width) && (height == m_last_viewport_height) &&
+            ((output_texture->get_width() != width) || (output_texture->get_height() != height))
+        ) {
+            // Rate-limit: log only when the mismatching texture size changes
+            if ((output_texture->get_width() != m_reported_mismatch_width) || (output_texture->get_height() != m_reported_mismatch_height)) {
+                log_frame->warn(
+                    "Viewport_window '{}': output texture {}x{} != quad {}x{}",
+                    get_title(),
+                    output_texture->get_width(),
+                    output_texture->get_height(),
+                    width,
+                    height
+                );
+                m_reported_mismatch_width  = output_texture->get_width();
+                m_reported_mismatch_height = output_texture->get_height();
+            }
+        }
+        m_last_viewport_width  = width;
+        m_last_viewport_height = height;
+#endif
 
         const bool imgui_hovered = ImGui::IsWindowHovered(
             ImGuiHoveredFlags_AllowWhenBlockedByActiveItem | ImGuiHoveredFlags_AllowWhenBlockedByPopup
@@ -312,15 +350,14 @@ void Viewport_window::imgui_viewport()
         viewport_scene_view->set_is_scene_view_hovered(m_viewport_child_window_hovered);
         drag_and_drop_target(rect_min.x, rect_min.y, rect_max.x, rect_max.y);
     } else {
-        ImGui::Dummy(size);
+        ImGui::Dummy(ImVec2{static_cast<float>(width), static_cast<float>(height)});
         const ImVec2 rect_min = ImGui::GetItemRectMin();
-        const ImVec2 rect_max = ImGui::GetItemRectMax();
         viewport_scene_view->set_window_viewport(
             erhe::math::Viewport{
                 static_cast<int>(rect_min.x),
                 static_cast<int>(rect_min.y),
-                static_cast<int>(rect_max.x - rect_min.x + 1.0f),
-                static_cast<int>(rect_max.y - rect_min.y + 1.0f)
+                width,
+                height
             }
         );
         m_viewport_child_window_focused = ImGui::IsWindowFocused();

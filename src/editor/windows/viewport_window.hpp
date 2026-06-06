@@ -74,6 +74,15 @@ private:
     bool                                               m_viewport_child_window_hovered{false};
 
     bool                                               m_request_cursor_relative_hold{false};
+
+#if !defined(NDEBUG)
+    // Regression guard state for imgui_viewport(): detects the output
+    // texture size drifting from the image quad size on stable frames.
+    int                                                m_last_viewport_width    {0};
+    int                                                m_last_viewport_height   {0};
+    int                                                m_reported_mismatch_width {0};
+    int                                                m_reported_mismatch_height{0};
+#endif
 };
 
 }
