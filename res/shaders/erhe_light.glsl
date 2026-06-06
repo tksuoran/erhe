@@ -50,9 +50,22 @@ float sample_light_visibility(vec4 position, uint light_index, float N_dot_L) {
     float array_layer                           = float(light.shadow_index_packed.x);
     vec4  position_in_light_texture_homogeneous = light.texture_from_world * position;
     vec3  position_in_light_texture             = position_in_light_texture_homogeneous.xyz / position_in_light_texture_homogeneous.w;
-    if (position_in_light_texture.z <= 0.0) {
-        return 1.0;
-    }
+    // Receivers outside the light-space [0, 1] depth range are NOT rejected
+    // here. With tight shadow frustum fitting (Shadow_frustum_fit_settings,
+    // e.g. fit_to_casters) the far plane hugs the casters, so a visible
+    // receiver can lie beyond it while every caster above it is in the map.
+    // Clamping the reference depth to [0, 1] (after biasing, below) resolves
+    // those receivers correctly with the non-strict depth comparison:
+    //  - beyond the far plane: reference clamps to the far value; caster
+    //    texels compare shadowed (all mapped casters are nearer the light),
+    //    empty texels compare lit (equal to the far clear value).
+    //  - nearer than the near plane: reference clamps to the near value and
+    //    compares lit (nothing in the map is nearer than the near plane).
+    // The explicit clamp is required because hardware only clamps the
+    // comparison reference for unorm depth formats, not float ones.
+    // Out-of-range XY is covered by the one texel empty border the shadow
+    // pass scissor keeps around the map (clamp_to_edge then compares
+    // against the far clear value, which always resolves to lit).
 
     // What follows is based on https://renderdiagrams.org/2024/12/18/shadowmap-bias/
     // Notes:
@@ -111,10 +124,15 @@ float sample_light_visibility(vec4 position, uint light_index, float N_dot_L) {
         surfaceZ[2] += 2.0 * (-cdd) * max(0.0, (-cdd) * dot(offsets[2] * (1.0 / shadowmap_resolution) * vec2(1.0 - fracCoords.x,       fracCoords.y), dz_dUV));
         surfaceZ[3] += 2.0 * (-cdd) * max(0.0, (-cdd) * dot(offsets[3] * (1.0 / shadowmap_resolution) * vec2(      fracCoords.x,       fracCoords.y), dz_dUV));
 
-        surfaceZ += position_in_light_texture.z;
+        // Clamp into the shadow map depth range so receivers outside the
+        // fitted range compare correctly (see comment above).
+        surfaceZ = clamp(surfaceZ + position_in_light_texture.z, 0.0, 1.0);
 
-        // Compare the four surface depths with shadow map depths (direction-aware)
-        bvec4 attenuationMask = greaterThan((-cdd) * surfaceZ, (-cdd) * shadowDepths);
+        // Compare the four surface depths with shadow map depths
+        // (direction-aware, non-strict to match the gequal / lequal
+        // hardware comparison so clamped references resolve to lit on
+        // far-clear texels)
+        bvec4 attenuationMask = greaterThanEqual((-cdd) * surfaceZ, (-cdd) * shadowDepths);
         vec4 attenuation4 = vec4(attenuationMask); // convert bools to floats (0.0/1.0)
 
         // Bilinear interpolation between the four samples
@@ -137,7 +155,9 @@ float sample_light_visibility(vec4 position, uint light_index, float N_dot_L) {
         {
             float D_ref_       = position_in_light_texture.z + 2.0 * slopeBias;
             // Direction-aware rounding: reverse-Z uses ceil (toward near=1), forward-Z uses floor (toward near=0)
-            float D_ref        = (-cdd) * ceil((-cdd) * D_ref_ * 65535.0) / 65535.0;
+            // Clamp into the shadow map depth range so receivers outside the
+            // fitted range compare correctly (see comment above).
+            float D_ref        = clamp((-cdd) * ceil((-cdd) * D_ref_ * 65535.0) / 65535.0, 0.0, 1.0);
             vec4  uv_ref_layer = vec4(position_in_light_texture.xy, array_layer, D_ref);
             float hw_compare   = texture(s_shadow_compare, uv_ref_layer);
             return hw_compare;
@@ -147,8 +167,11 @@ float sample_light_visibility(vec4 position, uint light_index, float N_dot_L) {
             float D_ref         = position_in_light_texture.z + 2.0 * slopeBias;
             vec3  uv_layer      = vec3(position_in_light_texture.xy, array_layer);
             float depth_sample  = texture(s_shadow_no_compare, uv_layer).r;
-            float D_ref_rounded = (-cdd) * ceil((-cdd) * D_ref * 65535.0) / 65535.0;
-            return ((-cdd) * D_ref_rounded) > ((-cdd) * depth_sample) ? 1.0 : 0.0;
+            // Clamp into the shadow map depth range so receivers outside the
+            // fitted range compare correctly (see comment above). Non-strict
+            // comparison to match the gequal / lequal hardware sampler.
+            float D_ref_rounded = clamp((-cdd) * ceil((-cdd) * D_ref * 65535.0) / 65535.0, 0.0, 1.0);
+            return ((-cdd) * D_ref_rounded) >= ((-cdd) * depth_sample) ? 1.0 : 0.0;
         }
 #       endif
     }
