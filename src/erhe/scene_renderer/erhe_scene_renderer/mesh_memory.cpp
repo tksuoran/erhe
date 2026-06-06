@@ -392,10 +392,12 @@ Render_bucket::Render_bucket(
     const std::size_t                   mesh_primitive_index,
     const erhe::primitive::Buffer_mesh& buffer_mesh,
     const Shader_key&                   shader_key,
-    const uint64_t                      shader_key_hash
+    const uint64_t                      shader_key_hash,
+    const bool                          negative_determinant
 )
-    : shader_key     {shader_key}
-    , shader_key_hash{shader_key_hash}
+    : shader_key          {shader_key}
+    , shader_key_hash     {shader_key_hash}
+    , negative_determinant{negative_determinant}
 {
     buffer_set.vertex_input_key = buffer_mesh.vertex_input_key;
     buffer_set.index_buffer     = Pool_buffer_identity{buffer_mesh.index_buffer_range.pool_id, buffer_mesh.index_buffer_range.buffer_id};
@@ -404,7 +406,7 @@ Render_bucket::Render_bucket(
         buffer_set.vertex_buffers.emplace_back(vr.pool_id, vr.buffer_id);
     }
 
-    const bool done = accept(mesh, mesh_primitive_index, buffer_mesh, shader_key_hash);
+    const bool done = accept(mesh, mesh_primitive_index, buffer_mesh, shader_key_hash, negative_determinant);
     ERHE_VERIFY(done);
 }
 
@@ -414,9 +416,13 @@ auto Render_bucket::accept(
     erhe::scene::Mesh&                  mesh,
     const std::size_t                   mesh_primitive_index,
     const erhe::primitive::Buffer_mesh& buffer_mesh,
-    const uint64_t                      primitive_shader_key_hash
+    const uint64_t                      primitive_shader_key_hash,
+    const bool                          primitive_negative_determinant
 ) -> bool
 {
+    if (primitive_negative_determinant != negative_determinant) {
+        return false;
+    }
     if (buffer_mesh.vertex_input_key != buffer_set.vertex_input_key) {
         return false;
     }
@@ -457,6 +463,12 @@ void bucket_primitives(
             // static_cast<void>(filter(mesh->get_flag_bits()));
             continue;
         }
+
+        // Mirrored world transforms reverse apparent triangle winding;
+        // partition buckets by the flag so renderers can select a
+        // front-face-flipped pipeline variant per bucket. The flag is
+        // maintained on the Mesh item by Mesh::handle_node_transform_update().
+        const bool mesh_negative_determinant = (mesh->get_flag_bits() & erhe::Item_flags::negative_determinant) != 0u;
 
         for (size_t i = 0, count = primitives.size(); i < count; ++i) {
             const erhe::scene::Mesh_primitive& mesh_primitive = primitives[i];
@@ -530,7 +542,7 @@ void bucket_primitives(
 
             bool done = false;
             for (Render_bucket& b : buckets) {
-                if (b.accept(*mesh.get(), i, *buffer_mesh, shader_key_hash)) {
+                if (b.accept(*mesh.get(), i, *buffer_mesh, shader_key_hash, mesh_negative_determinant)) {
                     done = true;
                     break;
                 }
@@ -539,7 +551,7 @@ void bucket_primitives(
                 continue;
             }
 
-            buckets.emplace_back(*mesh.get(), i, *buffer_mesh, shader_key, shader_key_hash);
+            buckets.emplace_back(*mesh.get(), i, *buffer_mesh, shader_key, shader_key_hash, mesh_negative_determinant);
         }
     }
 }

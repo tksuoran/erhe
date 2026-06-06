@@ -182,6 +182,10 @@ public:
 
 // Each bucket is a group of Mesh_primitives that can be rendered using same render pipeline
 // state - they share the same vertex input state, index buffer, and vertex buffers.
+// Buckets are also partitioned by the negative-determinant flag of the mesh world
+// transform: mirrored geometry has reversed apparent triangle winding and must be
+// drawn with a front-face-flipped pipeline variant (see
+// Base_render_pipeline::get_pipeline_for front_face_flip).
 class Render_bucket
 {
 public:
@@ -193,20 +197,23 @@ public:
         const std::size_t                   mesh_primitive_index,
         const erhe::primitive::Buffer_mesh& buffer_mesh,
         const Shader_key&                   shader_key,
-        const uint64_t                      shader_key_hash
+        const uint64_t                      shader_key_hash,
+        const bool                          negative_determinant
     );
 
     [[nodiscard]] auto accept(
         erhe::scene::Mesh&                  mesh,
         const std::size_t                   mesh_primitive_index,
         const erhe::primitive::Buffer_mesh& buffer_mesh,
-        const uint64_t                      primitive_shader_key_hash
+        const uint64_t                      primitive_shader_key_hash,
+        const bool                          primitive_negative_determinant
     ) -> bool;
 
     Buffer_set                        buffer_set;
     std::vector<Mesh_primitive_entry> entries;
     Shader_key                        shader_key{};
     uint64_t                          shader_key_hash;
+    bool                              negative_determinant{false};
 };
 
 enum class Blending_mode_policy : uint32_t
