@@ -241,6 +241,9 @@ void Forward_renderer::render(const Render_parameters& parameters)
             }
 
             // TODO Implement other blending modes
+            // Mirrored (negative determinant) buckets get the front-face-
+            // flipped pipeline variant so face culling keeps the same
+            // visible faces as for non-mirrored meshes.
             erhe::graphics::Render_pipeline* render_pipeline = render_pipeline_state->get_pipeline_for(
                 base.render_pass->get_descriptor(),
                 (bucket.shader_key.blending_mode == erhe::primitive::Material_blending_mode::opaque)
@@ -248,7 +251,8 @@ void Forward_renderer::render(const Render_parameters& parameters)
                     : &erhe::graphics::Color_blend_state::color_blend_premultiplied, // color_blend_alpha,
                 shader_stages,
                 vertex_input.vertex_input.get(),
-                &vertex_input.vertex_format
+                &vertex_input.vertex_format,
+                bucket.negative_determinant
             );
             if (render_pipeline == nullptr) {
                 log_draw->warn(
@@ -499,28 +503,38 @@ auto Forward_renderer::prewarm_standard_variants(const Prewarm_parameters& param
 
                 // Phase 2: populate the driver-level VkPipelineCache for every
                 // (Render_pipeline_create_info, bucket-variant-key) tuple whose
-                // view_count matches this iteration.
+                // view_count matches this iteration. Both winding variants are
+                // warmed regardless of the bucket's determinant: mirroring a
+                // mesh is an interactive editor operation, and warming the
+                // flipped sibling avoids a first-mirrored-mesh pipeline-compile
+                // hitch (see Base_render_pipeline::get_pipeline_for
+                // front_face_flip).
                 for (const Warmup_target& target : parameters.warmup_targets) {
                     if (target.view_count != view_count) {
                         continue;
                     }
-                    erhe::graphics::Render_pipeline_create_info ci{
-                        .base          = render_pipeline_state->data,
-                        .shader_stages = &reloadable_shader_stages->shader_stages,
-                        .vertex_input  = vertex_input.vertex_input.get(),
-                        .vertex_format = &vertex_input.vertex_format
-                    };
-                    ci.color_attachment_count    = target.color_attachment_count;
-                    ci.color_attachment_formats  = target.color_attachment_formats;
-                    ci.color_usage_before        = target.color_usage_before;
-                    ci.color_usage_after         = target.color_usage_after;
-                    ci.depth_attachment_format   = target.depth_attachment_format;
-                    ci.stencil_attachment_format = target.stencil_attachment_format;
-                    ci.depth_usage_before        = target.depth_usage_before;
-                    ci.depth_usage_after         = target.depth_usage_after;
-                    ci.sample_count              = target.sample_count;
-                    m_graphics_device.warmup_render_pipeline(ci);
-                    ++pipeline_warmup_count;
+                    for (const bool front_face_flip : { false, true }) {
+                        erhe::graphics::Render_pipeline_create_info ci{
+                            .base          = render_pipeline_state->data,
+                            .shader_stages = &reloadable_shader_stages->shader_stages,
+                            .vertex_input  = vertex_input.vertex_input.get(),
+                            .vertex_format = &vertex_input.vertex_format
+                        };
+                        if (front_face_flip) {
+                            ci.base.rasterization = ci.base.rasterization.with_winding_flip();
+                        }
+                        ci.color_attachment_count    = target.color_attachment_count;
+                        ci.color_attachment_formats  = target.color_attachment_formats;
+                        ci.color_usage_before        = target.color_usage_before;
+                        ci.color_usage_after         = target.color_usage_after;
+                        ci.depth_attachment_format   = target.depth_attachment_format;
+                        ci.stencil_attachment_format = target.stencil_attachment_format;
+                        ci.depth_usage_before        = target.depth_usage_before;
+                        ci.depth_usage_after         = target.depth_usage_after;
+                        ci.sample_count              = target.sample_count;
+                        m_graphics_device.warmup_render_pipeline(ci);
+                        ++pipeline_warmup_count;
+                    }
                 }
             }
 
