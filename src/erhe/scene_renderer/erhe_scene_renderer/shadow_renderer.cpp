@@ -73,7 +73,11 @@ Shadow_renderer::Shadow_renderer(
         erhe::graphics::Base_render_pipeline_create_info{
             .debug_label       = erhe::utility::Debug_label{"Shadow Renderer Depth Clamp"},
             .input_assembly    = Input_assembly_state::triangle,
-            .rasterization     = Rasterization_state::cull_mode_none_depth_clamp,
+            // Same front-face culling and y-flip winding compensation as
+            // m_pipeline above, plus depth clamping: toggling
+            // Shadow_frustum_fit_settings::depth_clamp must only change
+            // depth clamping, not the culling behavior.
+            .rasterization     = Rasterization_state::cull_mode_front_ccw_depth_clamp.with_winding_flip_if(m_y_flip),
             .depth_stencil     = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(graphics_device.get_reverse_depth()),
             .bind_group_layout = m_bind_group_layout
         }

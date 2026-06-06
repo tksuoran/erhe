@@ -29,6 +29,7 @@ public:
     [[nodiscard]] auto with_winding_flip_if(bool condition) const -> Rasterization_state;
 
     static Rasterization_state cull_mode_none_depth_clamp;
+    static Rasterization_state cull_mode_front_ccw_depth_clamp;
     static Rasterization_state cull_mode_none;
     static Rasterization_state cull_mode_front_cw;
     static Rasterization_state cull_mode_front_ccw;

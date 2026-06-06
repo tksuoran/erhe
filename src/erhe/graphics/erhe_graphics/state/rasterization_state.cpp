@@ -12,12 +12,13 @@ auto Rasterization_state_hash::operator()(const Rasterization_state& rasterizati
         (static_cast<size_t>(rasterization_state.polygon_mode        ) << 5u);  // 2 bits
 }
 
-Rasterization_state Rasterization_state::cull_mode_none_depth_clamp{true,  false, Cull_face_mode::back,  Front_face_direction::ccw, Polygon_mode::fill};
-Rasterization_state Rasterization_state::cull_mode_none            {false, false, Cull_face_mode::back,  Front_face_direction::ccw, Polygon_mode::fill};
-Rasterization_state Rasterization_state::cull_mode_front_cw        {false, true,  Cull_face_mode::front, Front_face_direction::cw,  Polygon_mode::fill};
-Rasterization_state Rasterization_state::cull_mode_front_ccw       {false, true,  Cull_face_mode::front, Front_face_direction::ccw, Polygon_mode::fill};
-Rasterization_state Rasterization_state::cull_mode_back_cw         {false, true,  Cull_face_mode::back,  Front_face_direction::cw,  Polygon_mode::fill};
-Rasterization_state Rasterization_state::cull_mode_back_ccw        {false, true,  Cull_face_mode::back,  Front_face_direction::ccw, Polygon_mode::fill};
+Rasterization_state Rasterization_state::cull_mode_none_depth_clamp     {true,  false, Cull_face_mode::back,  Front_face_direction::ccw, Polygon_mode::fill};
+Rasterization_state Rasterization_state::cull_mode_front_ccw_depth_clamp{true,  true,  Cull_face_mode::front, Front_face_direction::ccw, Polygon_mode::fill};
+Rasterization_state Rasterization_state::cull_mode_none                 {false, false, Cull_face_mode::back,  Front_face_direction::ccw, Polygon_mode::fill};
+Rasterization_state Rasterization_state::cull_mode_front_cw             {false, true,  Cull_face_mode::front, Front_face_direction::cw,  Polygon_mode::fill};
+Rasterization_state Rasterization_state::cull_mode_front_ccw            {false, true,  Cull_face_mode::front, Front_face_direction::ccw, Polygon_mode::fill};
+Rasterization_state Rasterization_state::cull_mode_back_cw              {false, true,  Cull_face_mode::back,  Front_face_direction::cw,  Polygon_mode::fill};
+Rasterization_state Rasterization_state::cull_mode_back_ccw             {false, true,  Cull_face_mode::back,  Front_face_direction::ccw, Polygon_mode::fill};
 
 auto Rasterization_state::with_winding_flip() const -> Rasterization_state
 {
