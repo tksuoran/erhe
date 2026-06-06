@@ -15,7 +15,7 @@
                 "directional_light_intensity": 4,
                 "directional_light_radius": 4.5,
                 "directional_light_height": 10,
-                "directional_light_shadow_count": 1,
+                "directional_light_shadow_count": 7,
                 "directional_light_no_shadow_count": 0,
                 "spot_light_intensity": 500,
                 "spot_light_radius": 10,
