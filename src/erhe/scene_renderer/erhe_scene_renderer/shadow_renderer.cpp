@@ -14,6 +14,7 @@
 #include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_graphics/texture_heap.hpp"
+#include "erhe_math/aabb.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_primitive/buffer_mesh.hpp"
 //#include "erhe_primitive/primitive.hpp"
@@ -67,6 +68,16 @@ Shadow_renderer::Shadow_renderer(
             .bind_group_layout = m_bind_group_layout
         }
     }
+    , m_pipeline_depth_clamp{
+        m_graphics_device,
+        erhe::graphics::Base_render_pipeline_create_info{
+            .debug_label       = erhe::utility::Debug_label{"Shadow Renderer Depth Clamp"},
+            .input_assembly    = Input_assembly_state::triangle,
+            .rasterization     = Rasterization_state::cull_mode_none_depth_clamp,
+            .depth_stencil     = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(graphics_device.get_reverse_depth()),
+            .bind_group_layout = m_bind_group_layout
+        }
+    }
     , m_dummy_texture{graphics_device.create_dummy_texture(init_command_buffer, erhe::dataformat::Format::format_8_vec4_srgb)}
     , m_fallback_sampler{
         graphics_device,
@@ -108,6 +119,44 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
     ERHE_VERIFY(parameters.view_camera != nullptr);
     ERHE_VERIFY(parameters.texture);
 
+    const auto& mesh_spans = parameters.mesh_spans;
+    const auto& lights     = parameters.lights;
+
+    erhe::Item_filter shadow_filter{
+        .require_all_bits_set           = erhe::Item_flags::visible | erhe::Item_flags::shadow_cast,
+        .require_at_least_one_bit_set   = 0u,
+        .require_all_bits_clear         = 0u,
+        .require_at_least_one_bit_clear = 0u
+    };
+
+    // Gather world space shadow caster bounds (8 AABB corners per mesh) for
+    // the tight directional shadow frustum fit. Light_projections::apply()
+    // copies the points into frame-lifetime storage.
+    std::vector<glm::vec3> caster_world_points;
+    if ((parameters.fit_settings != nullptr) && parameters.fit_settings->fit_to_casters) {
+        for (const auto& meshes : mesh_spans) {
+            for (const std::shared_ptr<erhe::scene::Mesh>& mesh : meshes) {
+                if (!mesh || !shadow_filter(mesh->get_flag_bits())) {
+                    continue;
+                }
+                const erhe::math::Aabb aabb = mesh->get_aabb_world();
+                if (!aabb.is_valid()) {
+                    continue;
+                }
+                const glm::vec3& a = aabb.min;
+                const glm::vec3& b = aabb.max;
+                caster_world_points.push_back(glm::vec3{a.x, a.y, a.z});
+                caster_world_points.push_back(glm::vec3{a.x, a.y, b.z});
+                caster_world_points.push_back(glm::vec3{a.x, b.y, a.z});
+                caster_world_points.push_back(glm::vec3{a.x, b.y, b.z});
+                caster_world_points.push_back(glm::vec3{b.x, a.y, a.z});
+                caster_world_points.push_back(glm::vec3{b.x, a.y, b.z});
+                caster_world_points.push_back(glm::vec3{b.x, b.y, a.z});
+                caster_world_points.push_back(glm::vec3{b.x, b.y, b.z});
+            }
+        }
+    }
+
     // Also assigns lights slot in uniform block shader resource
     parameters.light_projections.apply(
         parameters.lights,
@@ -117,22 +166,14 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
         parameters.texture,
         parameters.reverse_depth,
         parameters.depth_range,
-        parameters.conventions
+        parameters.conventions,
+        caster_world_points,
+        parameters.fit_settings
     );
 
     erhe::graphics::Scoped_debug_group debug_group{
         parameters.command_buffer,
         erhe::utility::Debug_label{"Shadow_renderer::render()"}
-    };
-
-    const auto& mesh_spans = parameters.mesh_spans;
-    const auto& lights     = parameters.lights;
-
-    erhe::Item_filter shadow_filter{
-        .require_all_bits_set           = erhe::Item_flags::visible | erhe::Item_flags::shadow_cast,
-        .require_at_least_one_bit_set   = 0u,
-        .require_all_bits_clear         = 0u,
-        .require_at_least_one_bit_clear = 0u
     };
 
     using Ring_buffer_range          = erhe::graphics::Ring_buffer_range;
@@ -146,6 +187,11 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
     log_shadow_renderer->trace("Rendering shadow map to '{}'", parameters.texture->get_debug_label().string_view());
 
     const erhe::primitive::Primitive_mode primitive_mode{erhe::primitive::Primitive_mode::polygon_fill};
+
+    // Depth clamping preserves casters outside the (tightly fitted) light
+    // space near plane by clamping their depth instead of clipping them.
+    const bool use_depth_clamp = (parameters.fit_settings != nullptr) && parameters.fit_settings->depth_clamp;
+    erhe::graphics::Base_render_pipeline& base_pipeline = use_depth_clamp ? m_pipeline_depth_clamp : m_pipeline;
 
     erhe::graphics::Render_pass* previous_render_pass = nullptr;
     for (const auto& light : lights) {
@@ -193,16 +239,16 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
             );
         }
 
-        // For directional lights the light "camera" must be the SNAPPED
-        // pose computed by Light::stable_directional_light_projection_transforms
+        // For directional lights the light "camera" must be the FITTED pose
+        // and projection computed by Light::projection_transforms()
         // (view-camera-centred along the light direction, snapped to
         // shadow-map texels), not the raw light node. light_buffer.cpp
-        // writes texture_from_world from the same snapped clip_from_world,
+        // writes texture_from_world from the same fitted clip_from_world,
         // and the shading pass samples shadows through that matrix --
-        // rasterizing the shadow map from a different pose would make
-        // every shadow lookup miss.
+        // rasterizing the shadow map from a different pose or projection
+        // would make every shadow lookup miss.
         Ring_buffer_range camera_range = m_camera_buffer.update(
-            light->projection(parameters.light_projections.parameters),
+            light_projection_transform->projection,
             light_projection_transform->world_from_light_camera,
             parameters.light_camera_viewport,
             1.0f,                      // exposure
@@ -275,7 +321,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
             // Mirrored (negative determinant) buckets get the front-face-
             // flipped variant so front-face culling removes the side facing
             // the light, same as for non-mirrored casters.
-            erhe::graphics::Render_pipeline* render_pipeline = m_pipeline.get_pipeline_for(
+            erhe::graphics::Render_pipeline* render_pipeline = base_pipeline.get_pipeline_for(
                 parameters.render_passes[shadow_index]->get_descriptor(),
                 &erhe::graphics::Color_blend_state::color_writes_disabled,
                 &reloadable_shader_stages->shader_stages,
@@ -321,7 +367,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
             m_draw_indirect_buffer.bind(encoder, draw_indirect_buffer_range.range);
 
             encoder.multi_draw_indexed_primitives_indirect(
-                m_pipeline.data.input_assembly.primitive_topology,
+                base_pipeline.data.input_assembly.primitive_topology,
                 m_mesh_memory.get_index_format(bucket.buffer_set.index_buffer),
                 draw_indirect_buffer_range.range.get_byte_start_offset_in_buffer(),
                 draw_indirect_buffer_range.draw_indirect_count,
@@ -404,22 +450,26 @@ void Shadow_renderer::prewarm_pipelines(
         // Both winding variants are warmed regardless of the bucket's
         // determinant: mirroring a mesh is an interactive editor
         // operation, and warming the flipped sibling here avoids a
-        // first-mirrored-mesh pipeline-compile hitch.
+        // first-mirrored-mesh pipeline-compile hitch. Both the regular
+        // and the depth-clamp base pipelines are warmed so toggling
+        // Shadow_frustum_fit_settings::depth_clamp does not hitch.
         for (const std::unique_ptr<erhe::graphics::Render_pass>& render_pass : render_passes) {
             if (!render_pass) {
                 continue;
             }
-            for (const bool front_face_flip : { false, true }) {
-                static_cast<void>(
-                    m_pipeline.get_pipeline_for(
-                        render_pass->get_descriptor(),
-                        &erhe::graphics::Color_blend_state::color_writes_disabled,
-                        &reloadable_shader_stages->shader_stages,
-                        vertex_input.vertex_input.get(),
-                        &vertex_input.vertex_format,
-                        front_face_flip
-                    )
-                );
+            for (erhe::graphics::Base_render_pipeline* base_pipeline : { &m_pipeline, &m_pipeline_depth_clamp }) {
+                for (const bool front_face_flip : { false, true }) {
+                    static_cast<void>(
+                        base_pipeline->get_pipeline_for(
+                            render_pass->get_descriptor(),
+                            &erhe::graphics::Color_blend_state::color_writes_disabled,
+                            &reloadable_shader_stages->shader_stages,
+                            vertex_input.vertex_input.get(),
+                            &vertex_input.vertex_format,
+                            front_face_flip
+                        )
+                    );
+                }
             }
         }
     }

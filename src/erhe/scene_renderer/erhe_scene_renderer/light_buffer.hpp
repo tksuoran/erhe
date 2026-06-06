@@ -6,6 +6,7 @@
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/light.hpp"
+#include "erhe_scene/light_frustum_fit.hpp"
 #include "erhe_math/viewport.hpp"
 #include "erhe_scene_renderer/shader_key.hpp"
 
@@ -104,7 +105,9 @@ public:
         const std::shared_ptr<erhe::graphics::Texture>&             in_shadow_map_texture,
         bool                                                        reverse_depth,
         erhe::math::Depth_range                                     depth_range,
-        const erhe::math::Coordinate_conventions&                   conventions = erhe::math::Coordinate_conventions{}
+        const erhe::math::Coordinate_conventions&                   conventions = erhe::math::Coordinate_conventions{},
+        std::span<const glm::vec3>                                  in_caster_world_points = {},
+        const erhe::scene::Shadow_frustum_fit_settings*             fit_settings = nullptr
     );
 
     // Warning: Returns pointer to element of member vector. That pointer
@@ -116,6 +119,13 @@ public:
     erhe::scene::Light_projection_parameters              parameters;
     std::vector<erhe::scene::Light_projection_transforms> light_projection_transforms;
     std::shared_ptr<erhe::graphics::Texture>              shadow_map_texture;
+
+    // Frame-lifetime backing storage for parameters.caster_world_points and
+    // parameters.fit_debug_out; fit_debug_data is parallel to
+    // light_projection_transforms and filled only when
+    // fit_settings->collect_debug is enabled.
+    std::vector<glm::vec3>                                  caster_world_points;
+    std::vector<erhe::scene::Shadow_frustum_fit_debug_data> fit_debug_data;
 
     //Variant_counts                                        counts{};
 

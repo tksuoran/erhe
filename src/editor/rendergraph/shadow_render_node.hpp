@@ -68,6 +68,7 @@ private:
     std::vector<std::unique_ptr<erhe::graphics::Gpu_timer>>   m_gpu_timers;
     erhe::math::Viewport                                      m_viewport{0, 0, 0, 0};
     erhe::scene_renderer::Light_projections                   m_light_projections;
+    erhe::scene::Shadow_frustum_fit_settings                  m_fit_settings; // refreshed from editor settings each frame
 };
 
 }

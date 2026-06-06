@@ -13,6 +13,8 @@ erhe_target_sources_grouped(
     erhe_scene/layout_item.hpp
     erhe_scene/light.cpp
     erhe_scene/light.hpp
+    erhe_scene/light_frustum_fit.cpp
+    erhe_scene/light_frustum_fit.hpp
     erhe_scene/mesh.cpp
     erhe_scene/mesh.hpp
     erhe_scene/mesh_raytrace.cpp

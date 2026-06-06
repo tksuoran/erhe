@@ -1041,5 +1041,132 @@ auto plane_point_distance(const glm::vec4& plane, const glm::vec3& point) -> flo
    return std::min(std::min(dist01, dist23), dist45) + sphere.radius > 0.0f;
 }
 
+auto calculate_min_area_obb_2d(const std::vector<glm::vec2>& hull_points, const int debug_edge) -> Min_area_obb_2d
+{
+    Min_area_obb_2d result{};
+    const std::size_t count = hull_points.size();
+    if (count < 2) {
+        return result;
+    }
+    float min_aabb_area = std::numeric_limits<float>::max();
+    for (std::size_t i = 0; i < count; ++i) {
+        const glm::vec2& A         = hull_points[i];
+        const glm::vec2& B         = hull_points[(i + 1) % count];
+        const glm::vec2  AB        = B - A;
+        const float      ab_length = glm::length(AB);
+        if (ab_length < epsilon) {
+            continue; // skip degenerate (duplicate point) edges
+        }
+        const glm::vec2  x_axis = AB / ab_length;
+        const glm::vec2  y_axis = glm::vec2{-x_axis.y, x_axis.x};
+        const glm::mat2  original_from_edge{x_axis, y_axis};
+        const glm::mat2  edge_from_original = glm::transpose(original_from_edge);
+
+        glm::vec2 edge_aabb_min_corner{std::numeric_limits<float>::max()};
+        glm::vec2 edge_aabb_max_corner{std::numeric_limits<float>::lowest()};
+        for (const glm::vec2& p_in_original : hull_points) {
+            const glm::vec2 p_in_edge = edge_from_original * p_in_original;
+            edge_aabb_min_corner = glm::min(edge_aabb_min_corner, p_in_edge);
+            edge_aabb_max_corner = glm::max(edge_aabb_max_corner, p_in_edge);
+        }
+        const glm::vec2 edge_aabb_size = edge_aabb_max_corner - edge_aabb_min_corner;
+        const float     aabb_area     = edge_aabb_size.x * edge_aabb_size.y;
+        const bool      is_debug_edge = (debug_edge >= 0) && (static_cast<std::size_t>(debug_edge) == i);
+        if ((aabb_area < min_aabb_area) || is_debug_edge) {
+            min_aabb_area             = aabb_area;
+            result.edge_from_original = edge_from_original;
+            result.aabb_min           = edge_aabb_min_corner;
+            result.aabb_max           = edge_aabb_max_corner;
+            result.edge_a             = A;
+            result.edge_b             = B;
+            result.area               = aabb_area;
+            if (is_debug_edge) {
+                return result;
+            }
+        }
+    }
+    return result;
+}
+
+auto point_in_convex_hull(const Convex_hull& hull, const glm::vec3& point, const float tolerance) -> bool
+{
+    if (hull.triangle_indices.empty()) {
+        return false;
+    }
+    // Hull triangles are CCW seen from outside, so cross(p1 - p0, p2 - p0)
+    // points outward; the point is inside when it is not in front of any
+    // triangle plane.
+    for (const std::array<std::size_t, 3>& triangle : hull.triangle_indices) {
+        const glm::vec3& p0 = hull.points[triangle[0]];
+        const glm::vec3& p1 = hull.points[triangle[1]];
+        const glm::vec3& p2 = hull.points[triangle[2]];
+        const glm::vec3  outward_normal = glm::cross(p1 - p0, p2 - p0); // not normalized
+        if (glm::dot(outward_normal, point - p0) > (tolerance * glm::length(outward_normal))) {
+            return false;
+        }
+    }
+    return true;
+}
+
+auto clip_convex_hull_points_by_planes(const Convex_hull& hull, const std::span<const glm::vec4> planes) -> std::vector<glm::vec3>
+{
+    std::vector<glm::vec3> result;
+    std::vector<glm::vec3> polygon;
+    std::vector<glm::vec3> clipped;
+    for (const std::array<std::size_t, 3>& triangle : hull.triangle_indices) {
+        polygon.clear();
+        polygon.push_back(hull.points[triangle[0]]);
+        polygon.push_back(hull.points[triangle[1]]);
+        polygon.push_back(hull.points[triangle[2]]);
+        // Sutherland-Hodgman: clip the triangle polygon against each plane in turn
+        for (const glm::vec4& plane : planes) {
+            clipped.clear();
+            for (std::size_t i = 0, count = polygon.size(); i < count; ++i) {
+                const glm::vec3& a          = polygon[i];
+                const glm::vec3& b          = polygon[(i + 1) % count];
+                const float      distance_a = plane_point_distance(plane, a);
+                const float      distance_b = plane_point_distance(plane, b);
+                if (distance_a >= 0.0f) {
+                    clipped.push_back(a);
+                }
+                if ((distance_a >= 0.0f) != (distance_b >= 0.0f)) {
+                    const float t = distance_a / (distance_a - distance_b);
+                    clipped.push_back(a + t * (b - a));
+                }
+            }
+            polygon.swap(clipped);
+            if (polygon.empty()) {
+                break;
+            }
+        }
+        result.insert(result.end(), polygon.begin(), polygon.end());
+    }
+    return result;
+}
+
+auto build_shadow_caster_volume_planes(const std::array<glm::vec4, 6>& main_frustum_planes, const glm::vec3& light_direction) -> Shadow_volume_planes
+{
+    Shadow_volume_planes result{};
+    float min_alignment = std::numeric_limits<float>::max();
+    float max_alignment = std::numeric_limits<float>::lowest();
+    for (const glm::vec4& plane : main_frustum_planes) {
+        const float alignment = glm::dot(glm::vec3{plane}, light_direction);
+        if (alignment < min_alignment) {
+            min_alignment = alignment;
+            result.light_facing_plane = plane;
+        }
+        if (alignment > max_alignment) {
+            max_alignment = alignment;
+            result.far_cap_plane = plane;
+        }
+        if (alignment >= 0.0f) {
+            // Keep only planes which do not face away from the light; dropping
+            // light-facing planes leaves the volume open toward the light
+            // (conservative: never clips a potential caster).
+            result.planes.push_back(plane);
+        }
+    }
+    return result;
+}
 
 } // namespace erhe::math

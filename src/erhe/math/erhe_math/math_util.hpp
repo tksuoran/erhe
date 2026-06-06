@@ -7,6 +7,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <span>
 #include <vector>
 
 namespace erhe::math {
@@ -1021,5 +1022,57 @@ static constexpr size_t plane_far    = 5;
     const std::array<glm::vec4, 6>& planes,
     const Sphere&                   sphere
 ) -> bool;
+
+class Min_area_obb_2d
+{
+public:
+    glm::mat2 edge_from_original{1.0f}; // rotation from input space into the OBB-aligned frame
+    glm::vec2 aabb_min          {0.0f}; // bounding rectangle min corner in the OBB-aligned frame
+    glm::vec2 aabb_max          {0.0f}; // bounding rectangle max corner in the OBB-aligned frame
+    glm::vec2 edge_a            {0.0f}; // supporting convex hull edge start (for debug visualization)
+    glm::vec2 edge_b            {0.0f}; // supporting convex hull edge end (for debug visualization)
+    float     area              {0.0f}; // bounding rectangle area
+};
+
+// Rotating calipers: hull_points must be a convex polygon with vertices in
+// boundary order (e.g. from calculate_bounding_convex_hull()). Returns the
+// edge-aligned frame which minimizes the bounding rectangle area.
+// debug_edge >= 0 forces selection of that edge index instead of the minimum
+// area edge (used by debug visualization); pass -1 normally.
+[[nodiscard]] auto calculate_min_area_obb_2d(const std::vector<glm::vec2>& hull_points, int debug_edge = -1) -> Min_area_obb_2d;
+
+// Returns true when point is inside (or within tolerance of) the convex hull.
+// hull triangles must be CCW when seen from outside (as produced by
+// calculate_bounding_convex_hull()). Returns false for an empty hull.
+[[nodiscard]] auto point_in_convex_hull(const Convex_hull& hull, const glm::vec3& point, float tolerance = 1e-5f) -> bool;
+
+// Clips every triangle of hull against all planes (Sutherland-Hodgman) and
+// returns the resulting polygon vertices as a point cloud. Plane convention
+// matches extract_frustum_planes(): point p is inside a plane when
+// dot(glm::vec4{p, 1.0f}, plane) >= 0. Triangle topology is intentionally
+// dropped and shared hull edges produce duplicate points; the output is meant
+// for extremal queries (AABB fit, 2D convex hull) which tolerate duplicates.
+// Returns an empty vector when the hull lies entirely outside the planes.
+// NOTE: Vertices of the clipped volume formed purely by plane-plane-plane
+// intersections inside the hull are not produced; callers which need those
+// must add them separately (see point_in_convex_hull()).
+[[nodiscard]] auto clip_convex_hull_points_by_planes(const Convex_hull& hull, std::span<const glm::vec4> planes) -> std::vector<glm::vec3>;
+
+class Shadow_volume_planes
+{
+public:
+    std::vector<glm::vec4> planes;             // inward-facing planes bounding the shadow caster volume
+    glm::vec4 light_facing_plane{0.0f};        // F_main plane whose inward normal is most opposed to the light direction; defines the shadow near distance
+    glm::vec4 far_cap_plane     {0.0f};        // F_main plane whose inward normal is most aligned with the light direction; far cap of the volume
+};
+
+// Builds the shadow caster volume ("F_shadow") plane set for a directional
+// light: the main camera view frustum extruded toward the light. Keeps the
+// F_main planes whose inward normals do not face away from the light
+// (dot(normal, light_direction) >= 0); planes facing the light are dropped so
+// the volume is open toward the light and contains every potential caster.
+// main_frustum_planes must be inward-facing (from extract_frustum_planes())
+// and light_direction points from the scene toward the light.
+[[nodiscard]] auto build_shadow_caster_volume_planes(const std::array<glm::vec4, 6>& main_frustum_planes, const glm::vec3& light_direction) -> Shadow_volume_planes;
 
 } // namespace erhe::math

@@ -1,11 +1,14 @@
 #include "rendergraph/shadow_render_node.hpp"
 
 #include "app_context.hpp"
+#include "config/generated/editor_settings_config.hpp"
+#include "config/generated/shadow_frustum_fit_config.hpp"
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/scene_view.hpp"
+#include "scene/viewport_scene_view.hpp"
 
 #include "erhe_dataformat/dataformat.hpp"
 #include "erhe_rendergraph/rendergraph.hpp"
@@ -211,11 +214,40 @@ void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer
 
     scene_root->sort_lights();
 
+    // Refresh the shadow frustum fit settings from the live editor settings
+    // (edited in the Settings window). m_fit_settings must outlive the render
+    // call; Light_projection_parameters keeps a pointer to it.
+    if (m_context.editor_settings != nullptr) {
+        const Shadow_frustum_fit_config& config = m_context.editor_settings->shadow_frustum_fit;
+        m_fit_settings = erhe::scene::Shadow_frustum_fit_settings{
+            .fit_to_view_frustum    = config.fit_to_view_frustum,
+            .fit_to_casters         = config.fit_to_casters,
+            .optimize_rotation      = config.optimize_rotation,
+            .near_from_main_frustum = config.near_from_main_frustum,
+            .depth_clamp            = config.depth_clamp,
+            .texel_snap             = config.texel_snap,
+            .quantize_extents       = config.quantize_extents,
+            .quantize_step          = config.quantize_step,
+            .cap_by_shadow_range    = config.cap_by_shadow_range,
+            .collect_debug          = config.collect_debug
+        };
+    } else {
+        m_fit_settings = erhe::scene::Shadow_frustum_fit_settings{};
+    }
+
+    // The tight frustum fit needs the main camera viewport for the view
+    // frustum aspect ratio; only Viewport_scene_view has one (XR cameras use
+    // fov sides and ignore the aspect ratio).
+    const Viewport_scene_view* viewport_scene_view = m_scene_view.as_viewport_scene_view();
+    const erhe::math::Viewport view_camera_viewport = (viewport_scene_view != nullptr)
+        ? viewport_scene_view->get_projection_viewport()
+        : erhe::math::Viewport{};
+
     m_context.shadow_renderer->render(
         erhe::scene_renderer::Shadow_renderer::Render_parameters{
             .command_buffer        = command_buffer,
             .view_camera           = camera.get(),
-            .view_camera_viewport  = {},
+            .view_camera_viewport  = view_camera_viewport,
             .light_camera_viewport = m_viewport,
             .texture               = m_texture,
             .render_passes         = m_render_passes,
@@ -226,7 +258,8 @@ void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer
             .light_projections     = m_light_projections,
             .reverse_depth         = m_scene_view.get_reverse_depth(),
             .depth_range           = m_scene_view.get_depth_range(),
-            .conventions           = m_scene_view.get_conventions()
+            .conventions           = m_scene_view.get_conventions(),
+            .fit_settings          = &m_fit_settings
         }
     );
 }

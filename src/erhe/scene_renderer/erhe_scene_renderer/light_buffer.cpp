@@ -149,21 +149,35 @@ void Light_projections::apply(
     const std::shared_ptr<erhe::graphics::Texture>&             in_shadow_map_texture,
     const bool                                                  reverse_depth,
     const erhe::math::Depth_range                               depth_range,
-    const erhe::math::Coordinate_conventions&                   conventions
+    const erhe::math::Coordinate_conventions&                   conventions,
+    const std::span<const glm::vec3>                            in_caster_world_points,
+    const erhe::scene::Shadow_frustum_fit_settings*             fit_settings
 )
 {
+    // Copy caster points into member storage: parameters (and the span in
+    // it) outlives this call, so the span must not point at caller locals.
+    caster_world_points.assign(in_caster_world_points.begin(), in_caster_world_points.end());
+
     parameters = erhe::scene::Light_projection_parameters{
         .view_camera          = view_camera,
         .main_camera_viewport = view_camera_viewport,
         .shadow_map_viewport  = light_texture_viewport,
         .reverse_depth        = reverse_depth,
         .depth_range          = depth_range,
-        .conventions          = conventions
+        .conventions          = conventions,
+        .fit_settings         = fit_settings,
+        .caster_world_points  = caster_world_points
     };
     shadow_map_texture = in_shadow_map_texture;
 
     light_projection_transforms.clear();
     light_projection_transforms.reserve(lights.size());
+
+    const bool collect_fit_debug = (fit_settings != nullptr) && fit_settings->collect_debug;
+    fit_debug_data.clear();
+    if (collect_fit_debug) {
+        fit_debug_data.resize(lights.size());
+    }
 
     // Build the projection transforms in the input order first; the actual
     // UBO slot index is assigned in a second pass below so the lights can
@@ -172,9 +186,12 @@ void Light_projections::apply(
     // to split each per-type lighting loop into a shadow-sampling prefix
     // and a direct-lighting suffix, with the bounds becoming compile-time
     // constants under the variant cache.
-    for (const auto& light : lights) {
+    for (std::size_t i = 0, end = lights.size(); i < end; ++i) {
+        const std::shared_ptr<erhe::scene::Light>& light = lights[i];
+        parameters.fit_debug_out = collect_fit_debug ? &fit_debug_data[i] : nullptr;
         light_projection_transforms.push_back(light->projection_transforms(parameters));
     }
+    parameters.fit_debug_out = nullptr;
 
     auto type_index_of = [](erhe::scene::Light_type type) -> std::size_t {
         switch (type) {

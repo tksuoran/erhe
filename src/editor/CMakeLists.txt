@@ -546,6 +546,7 @@ erhe_codegen_generate(
         "${_config_defs}/physics_config.py"
         "${_config_defs}/renderer_config.py"
         "${_config_defs}/scene_config.py"
+        "${_config_defs}/shadow_frustum_fit_config.py"
         "${_config_defs}/sky_config.py"
         "${_config_defs}/text_renderer_config.py"
         "${_config_defs}/threading_config.py"
@@ -606,6 +607,9 @@ set(_config_sources
     ${_config_out}/scene_config.hpp
     ${_config_out}/scene_config_serialization.hpp
     ${_config_out}/scene_config.cpp
+    ${_config_out}/shadow_frustum_fit_config.hpp
+    ${_config_out}/shadow_frustum_fit_config_serialization.hpp
+    ${_config_out}/shadow_frustum_fit_config.cpp
     ${_config_out}/sky_config.hpp
     ${_config_out}/sky_config_serialization.hpp
     ${_config_out}/sky_config.cpp

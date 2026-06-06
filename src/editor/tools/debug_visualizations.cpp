@@ -537,6 +537,66 @@ void Debug_visualizations::directional_light_visualization(const Light_visualiza
         }
     }
 
+    // Tight shadow frustum fit intermediates; collected per light only when
+    // the Shadow Frustum Fit setting "Collect Debug Data" is enabled.
+    if (m_shadow_debug) {
+        const erhe::scene::Shadow_frustum_fit_debug_data* fit_debug = nullptr;
+        const auto& transforms = light_projections.light_projection_transforms;
+        for (std::size_t i = 0, end = transforms.size(); i < end; ++i) {
+            if ((transforms[i].light == light) && (i < light_projections.fit_debug_data.size())) {
+                fit_debug = &light_projections.fit_debug_data[i];
+                break;
+            }
+        }
+        if ((fit_debug != nullptr) && fit_debug->valid) {
+            // Shadow caster volume (F_shadow) planes
+            const glm::vec4 orange{1.0f, 0.6f, 0.0f, 0.5f};
+            line_renderer.set_thickness(m_light_visualization_width);
+            for (const glm::vec4& plane : fit_debug->shadow_volume_planes) {
+                line_renderer.add_plane(orange, plane);
+            }
+
+            // Fit point set (clipped caster hull points or view frustum corners)
+            const glm::vec4 cyan{0.2f, 1.0f, 1.0f, 1.0f};
+            const float marker_radius = 0.05f;
+            for (const glm::vec3& p : fit_debug->fit_points) {
+                line_renderer.add_line(cyan, 1.0f, p - marker_radius * axis_x, cyan, 1.0f, p + marker_radius * axis_x);
+                line_renderer.add_line(cyan, 1.0f, p - marker_radius * axis_y, cyan, 1.0f, p + marker_radius * axis_y);
+                line_renderer.add_line(cyan, 1.0f, p - marker_radius * axis_z, cyan, 1.0f, p + marker_radius * axis_z);
+            }
+
+            // Light plane hull, minimum area OBB and its supporting edge
+            // (present when Optimize Rotation is enabled)
+            const glm::mat4& world_from_light_plane = fit_debug->world_from_light_plane;
+            auto to_world = [&world_from_light_plane](const glm::vec2 p) -> glm::vec3 {
+                return glm::vec3{world_from_light_plane * glm::vec4{p.x, p.y, 0.0f, 1.0f}};
+            };
+            const glm::vec4 magenta{1.0f, 0.0f, 1.0f, 0.7f};
+            for (std::size_t i = 0, count = fit_debug->light_plane_hull.size(); i < count; ++i) {
+                line_renderer.add_line(
+                    magenta, 2.0f, to_world(fit_debug->light_plane_hull[i]),
+                    magenta, 2.0f, to_world(fit_debug->light_plane_hull[(i + 1) % count])
+                );
+            }
+            if (!fit_debug->light_plane_hull.empty()) {
+                const erhe::math::Min_area_obb_2d& obb = fit_debug->obb;
+                const glm::mat2 original_from_edge = glm::transpose(obb.edge_from_original);
+                const std::array<glm::vec3, 4> obb_corners{
+                    to_world(original_from_edge * glm::vec2{obb.aabb_min.x, obb.aabb_min.y}),
+                    to_world(original_from_edge * glm::vec2{obb.aabb_max.x, obb.aabb_min.y}),
+                    to_world(original_from_edge * glm::vec2{obb.aabb_max.x, obb.aabb_max.y}),
+                    to_world(original_from_edge * glm::vec2{obb.aabb_min.x, obb.aabb_max.y})
+                };
+                const glm::vec4 pink{1.0f, 0.3f, 0.6f, 1.0f};
+                for (std::size_t i = 0, count = obb_corners.size(); i < count; ++i) {
+                    line_renderer.add_line(pink, 1.0f, obb_corners[i], pink, 1.0f, obb_corners[(i + 1) % count]);
+                }
+                const glm::vec4 lime{0.4f, 1.0f, 0.1f, 1.0f};
+                line_renderer.add_line(lime, 3.0f, to_world(obb.edge_a), lime, 3.0f, to_world(obb.edge_b));
+            }
+        }
+    }
+
     const float projection_scale = light_projections.parameters.view_camera->get_projection_scale();
     const float r_major = light_projections.parameters.view_camera->get_shadow_range() / (40.0f * projection_scale);
     line_renderer.set_thickness(-1.0f);
@@ -1096,54 +1156,6 @@ void Debug_visualizations::selection_visualization(const Render_context& context
         }
     }
 
-    auto get_optimization_transform = [](
-        const std::vector<glm::vec2>& points,
-        glm::vec2&                    out_aabb_min,
-        glm::vec2&                    out_aabb_max,
-        int                           debug_edge,
-        glm::vec2&                    out_a,
-        glm::vec2&                    out_b
-    ) -> glm::mat2
-    {
-        std::size_t count = points.size();
-        float     min_aabb_area = std::numeric_limits<float>::max();
-        glm::mat2 rotation{1.0f};
-        for (std::size_t i = 0; i < count; ++i) {
-            const glm::vec2& A      = points[i];
-            const glm::vec2& B      = points[(i + 1) % count];
-            const glm::vec2  AB     = B - A;
-            const glm::vec2  x_axis = glm::normalize(AB);
-            const glm::vec2  y_axis = glm::vec2{-x_axis.y, x_axis.x};
-            const glm::mat2  original_from_edge{x_axis, y_axis};
-            const glm::mat2  edge_from_original = glm::transpose(original_from_edge);
-
-            glm::vec2 edge_aabb_min_corner{std::numeric_limits<float>::max()};
-            glm::vec2 edge_aabb_max_corner{std::numeric_limits<float>::lowest()};
-            for (const glm::vec2& p_in_world : points) {
-                glm::vec2 p_in_edge = edge_from_original * p_in_world;
-                if (p_in_edge.x < edge_aabb_min_corner.x) edge_aabb_min_corner.x = p_in_edge.x;
-                if (p_in_edge.y < edge_aabb_min_corner.y) edge_aabb_min_corner.y = p_in_edge.y;
-                if (p_in_edge.x > edge_aabb_max_corner.x) edge_aabb_max_corner.x = p_in_edge.x;
-                if (p_in_edge.y > edge_aabb_max_corner.y) edge_aabb_max_corner.y = p_in_edge.y;
-            }
-            glm::vec2 edge_aabb_size = edge_aabb_max_corner - edge_aabb_min_corner;
-            float aabb_area = edge_aabb_size.x * edge_aabb_size.y;
-            const bool is_debug_edge = (debug_edge >= 0) && (static_cast<std::size_t>(debug_edge) == i);
-            if ((aabb_area < min_aabb_area) || is_debug_edge) {
-                min_aabb_area = aabb_area;
-                rotation = edge_from_original;
-                out_aabb_min = edge_aabb_min_corner;
-                out_aabb_max = edge_aabb_max_corner;
-                out_a = A;
-                out_b = B;
-                if (is_debug_edge) {
-                    return rotation;
-                }
-            }
-        }
-        return rotation;
-    };
-
     if (m_selection_convex_hull || m_selection_convex_hull_projected) {
         erhe::math::Convex_hull selection_convex_hull = erhe::math::calculate_bounding_convex_hull(m_selection_bounding_volume);
         if (m_selection_convex_hull) {
@@ -1230,19 +1242,15 @@ void Debug_visualizations::selection_visualization(const Render_context& context
                     );
                 }
 
-                glm::vec2 edge_aabb_min{0.0f};
-                glm::vec2 edge_aabb_max{0.0f};
-                glm::vec2 edge_a       {0.0f};
-                glm::vec2 edge_b       {0.0f};
-                glm::mat2 edge_from_original = get_optimization_transform(
+                const erhe::math::Min_area_obb_2d obb = erhe::math::calculate_min_area_obb_2d(
                     ndc_convex_hull,
-                    edge_aabb_min,
-                    edge_aabb_max,
-                    m_debug_convex_hull ? m_convex_hull_edge : -1,
-                    edge_a,
-                    edge_b
+                    m_debug_convex_hull ? m_convex_hull_edge : -1
                 );
-                glm::mat2 original_from_edge = glm::transpose(edge_from_original);
+                const glm::vec2 edge_aabb_min      = obb.aabb_min;
+                const glm::vec2 edge_aabb_max      = obb.aabb_max;
+                const glm::vec2 edge_a             = obb.edge_a;
+                const glm::vec2 edge_b             = obb.edge_b;
+                const glm::mat2 original_from_edge = glm::transpose(obb.edge_from_original);
 
                 std::array<glm::vec3, 4> aabb_in_world{
                     unproject_nearplane_to_world(original_from_edge * glm::vec2{edge_aabb_min.x, edge_aabb_min.y}, 1.01f),

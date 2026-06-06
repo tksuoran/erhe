@@ -90,6 +90,10 @@ public:
         bool                                                               reverse_depth{true};
         erhe::math::Depth_range                                            depth_range{erhe::math::Depth_range::zero_to_one};
         erhe::math::Coordinate_conventions                                 conventions;
+
+        // Optional tight directional shadow frustum fit settings;
+        // nullptr gives the legacy stable fit. Must outlive the render call.
+        const erhe::scene::Shadow_frustum_fit_settings*                    fit_settings{nullptr};
     };
 
     auto render(const Render_parameters& parameters) -> bool;
@@ -123,6 +127,7 @@ private:
     // Declared before m_pipeline: used in its rasterization state init.
     bool                                          m_y_flip{false};
     erhe::graphics::Base_render_pipeline          m_pipeline;
+    erhe::graphics::Base_render_pipeline          m_pipeline_depth_clamp; // selected by Shadow_frustum_fit_settings::depth_clamp
     std::shared_ptr<erhe::graphics::Texture>      m_dummy_texture;
     erhe::graphics::Sampler                       m_fallback_sampler;
 

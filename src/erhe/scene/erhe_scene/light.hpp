@@ -5,6 +5,7 @@
 #include "erhe_scene/trs_transform.hpp"
 
 #include <memory>
+#include <span>
 #include <string>
 #include <string_view>
 
@@ -16,6 +17,37 @@ enum class Light_type : unsigned int {
     spot
 };
 
+class Shadow_frustum_fit_settings
+{
+public:
+    // Tightening steps - with all of these off the fit is identical to the
+    // stable bounding-sphere fit (bounding sphere around the view camera,
+    // radius = Camera::get_shadow_range()).
+    bool  fit_to_view_frustum   {false}; // fit light-space extents to the main camera view frustum corners
+    bool  fit_to_casters        {false}; // fit to the shadow caster convex hull clipped to the extruded shadow volume (F_shadow)
+    bool  optimize_rotation     {false}; // rotating calipers roll around the light direction for minimum area coverage
+    bool  near_from_main_frustum{false}; // near distance from the F_main plane most facing the light (relies on depth_clamp for closer casters)
+    bool  depth_clamp           {false}; // depth-clamp rasterization in the shadow pass
+
+    // Stabilization
+    bool  texel_snap            {true};  // snap the light-space box to shadow map texels
+    bool  quantize_extents      {false}; // round the light-space box size up to multiples of quantize_step
+    float quantize_step         {0.0f};  // world units; 0 derives a step from the stable fit texel size
+
+    // Safety
+    bool  cap_by_shadow_range   {true};  // never exceed the stable shadow-range box extents
+
+    // Debug
+    bool  collect_debug         {false}; // emit per-step intermediates for debug visualization
+
+    [[nodiscard]] auto any_tightening_enabled() const -> bool
+    {
+        return fit_to_view_frustum || fit_to_casters;
+    }
+};
+
+class Shadow_frustum_fit_debug_data; // see light_frustum_fit.hpp
+
 class Light_projection_parameters
 {
 public:
@@ -25,6 +57,12 @@ public:
     bool                               reverse_depth       {true};
     erhe::math::Depth_range            depth_range         {erhe::math::Depth_range::zero_to_one};
     erhe::math::Coordinate_conventions conventions;
+
+    // Optional tight frustum fit inputs; defaults give the legacy stable fit.
+    // Pointers and span must outlive the use of these parameters.
+    const Shadow_frustum_fit_settings* fit_settings       {nullptr};
+    std::span<const glm::vec3>         caster_world_points{};
+    Shadow_frustum_fit_debug_data*     fit_debug_out      {nullptr};
 };
 
 class Light;
@@ -35,6 +73,7 @@ public:
     const Light*  light       {nullptr};
     std::size_t   index       {0}; // index in lights block shader resource (all lights)
     std::size_t   shadow_index{0}; // shadow texture array layer / render pass index (equals index when partitioned)
+    Projection    projection;      // resolved projection; the shadow pass must rasterize with this so it matches clip_from_world / texture_from_world
     Trs_transform world_from_light_camera;
     Transform     clip_from_light_camera;
     Transform     clip_from_world;
@@ -76,19 +115,29 @@ public:
     float       inner_spot_angle {glm::pi<float>() * 0.4f};
     float       outer_spot_angle {glm::pi<float>() * 0.5f};
     bool        cast_shadow      {true};
-    bool        tight_frustum_fit{false};
     std::size_t layer_id         {};
 
 private:
     [[nodiscard]] auto stable_directional_light_projection(const Light_projection_parameters& parameters) const -> Projection;
     [[nodiscard]] auto spot_light_projection              (const Light_projection_parameters& parameters) const -> Projection;
 
-    //// [[nodiscard]] auto tight_directional_light_projection_transforms(
-    ////     const Light_projection_parameters& parameters
-    //// ) const -> Light_projection_transforms;
+    [[nodiscard]] auto directional_light_projection_transforms       (const Light_projection_parameters& parameters) const -> Light_projection_transforms;
     [[nodiscard]] auto stable_directional_light_projection_transforms(const Light_projection_parameters& parameters) const -> Light_projection_transforms;
 
+    // Tight modular fit; defined in light_frustum_fit.cpp
+    [[nodiscard]] auto tight_directional_light_projection_transforms(const Light_projection_parameters& parameters) const -> Light_projection_transforms;
+
     [[nodiscard]] auto spot_light_projection_transforms(const Light_projection_parameters& parameters) const -> Light_projection_transforms;
+
+    // Assembles the Light_projection_transforms for a directional light from
+    // the resolved projection and the (snapped) light camera pose. Shared by
+    // the stable and tight fit paths.
+    [[nodiscard]] auto assemble_directional_light_projection_transforms(
+        const Light_projection_parameters& parameters,
+        const Projection&                  light_projection,
+        const glm::mat4&                   world_from_light_camera,
+        const glm::mat4&                   light_camera_from_world
+    ) const -> Light_projection_transforms;
 
     // Maps clip space to [0,1] texture space.
     // For zero_to_one:          z is already in [0,1], identity for z

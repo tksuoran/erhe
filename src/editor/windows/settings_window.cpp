@@ -32,6 +32,7 @@
 #include "config/generated/physics_config_serialization.hpp"
 #include "config/generated/renderer_config_serialization.hpp"
 #include "config/generated/scene_config_serialization.hpp"
+#include "config/generated/shadow_frustum_fit_config_serialization.hpp"
 #include "config/generated/sky_config_serialization.hpp"
 #include "config/generated/text_renderer_config_serialization.hpp"
 #include "config/generated/threading_config_serialization.hpp"
@@ -548,6 +549,7 @@ void Settings_window::imgui()
         add_config_section(settings.network);
         add_config_section(settings.physics);
         add_config_section(settings.scene);
+        add_config_section(settings.shadow_frustum_fit);
         add_config_section(settings.sky);
         add_config_section(settings.thumbnails);
         add_config_section(settings.transform_tool);
