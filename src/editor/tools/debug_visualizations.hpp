@@ -110,6 +110,7 @@ private:
     );
 
     void directional_light_visualization(const Light_visualization_context& context);
+    void shadow_frustum_fit_visualization(const Render_context& context);
     void point_light_visualization      (const Light_visualization_context& context);
     void spot_light_visualization       (const Light_visualization_context& context);
     void camera_visualization           (const Render_context& render_context, const erhe::scene::Camera* camera);

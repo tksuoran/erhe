@@ -559,147 +559,6 @@ void Debug_visualizations::directional_light_visualization(const Light_visualiza
         }
     }
 
-    // Tight shadow frustum fit intermediates; collected per light only when
-    // the Shadow Frustum Fit setting "Collect Debug Data" is enabled. Each
-    // element has its own toggle in the Shadow Fit group of this window.
-    // Independent of m_shadow_debug, which gates the shadow texel
-    // visualization instead.
-    if (m_shadow_fit_debug) {
-        const erhe::scene::Shadow_frustum_fit_debug_data* fit_debug = nullptr;
-        const auto& transforms = light_projections.light_projection_transforms;
-        for (std::size_t i = 0, end = transforms.size(); i < end; ++i) {
-            if ((transforms[i].light == light) && (i < light_projections.fit_debug_data.size())) {
-                fit_debug = &light_projections.fit_debug_data[i];
-                break;
-            }
-        }
-        if ((fit_debug != nullptr) && fit_debug->valid) {
-            // Per-caster world AABBs gathered for the fit (8 corners each,
-            // min corner first, max corner last)
-            if (m_shadow_fit_casters) {
-                const glm::vec4 gray{0.7f, 0.7f, 0.7f, 0.6f};
-                line_renderer.set_thickness(1.0f);
-                const std::vector<glm::vec3>& points = fit_debug->caster_aabb_points;
-                for (std::size_t i = 0, end = points.size() / 8; i < end; ++i) {
-                    line_renderer.add_cube(glm::mat4{1.0f}, gray, points[(i * 8) + 0], points[(i * 8) + 7]);
-                }
-            }
-
-            // Convex hull around the caster bounds, before clipping to F_shadow
-            if (m_shadow_fit_caster_hull) {
-                const glm::vec4 white{1.0f, 1.0f, 1.0f, 0.8f};
-                const erhe::math::Convex_hull& hull = fit_debug->caster_hull;
-                for (const std::array<std::size_t, 3>& triangle : hull.triangle_indices) {
-                    const std::size_t i0 = triangle[0];
-                    const std::size_t i1 = triangle[1];
-                    const std::size_t i2 = triangle[2];
-                    if (i0 < i1) {
-                        line_renderer.add_line(white, 1.0f, hull.points[i0], white, 1.0f, hull.points[i1]);
-                    }
-                    if (i1 < i2) {
-                        line_renderer.add_line(white, 1.0f, hull.points[i1], white, 1.0f, hull.points[i2]);
-                    }
-                    if (i2 < i0) {
-                        line_renderer.add_line(white, 1.0f, hull.points[i2], white, 1.0f, hull.points[i0]);
-                    }
-                }
-            }
-
-            // Receiver volume (main camera view frustum) used by the fit
-            if (m_shadow_fit_receivers && fit_debug->receiver_corners_valid) {
-                const glm::vec4 light_blue{0.4f, 0.8f, 1.0f, 1.0f};
-                const std::array<glm::vec3, 8>& c = fit_debug->receiver_corners;
-                // Corner order from erhe::math::extract_frustum_corners()
-                constexpr std::array<std::array<std::size_t, 2>, 12> edges{{
-                    {0, 1}, {1, 3}, {3, 2}, {2, 0}, // near rectangle
-                    {4, 5}, {5, 7}, {7, 6}, {6, 4}, // far rectangle
-                    {0, 4}, {1, 5}, {2, 6}, {3, 7}  // connecting edges
-                }};
-                for (const std::array<std::size_t, 2>& edge : edges) {
-                    line_renderer.add_line(light_blue, 2.0f, c[edge[0]], light_blue, 2.0f, c[edge[1]]);
-                }
-            }
-
-            // Shadow caster volume (F_shadow) planes
-            if (m_shadow_fit_volume_planes) {
-                const glm::vec4 orange{1.0f, 0.6f, 0.0f, 0.5f};
-                line_renderer.set_thickness(m_light_visualization_width);
-                for (const glm::vec4& plane : fit_debug->shadow_volume_planes) {
-                    line_renderer.add_plane(orange, plane);
-                }
-            }
-
-            // Fit point set (clipped caster hull points or view frustum corners)
-            if (m_shadow_fit_points) {
-                const glm::vec4 cyan{0.2f, 1.0f, 1.0f, 1.0f};
-                const float marker_radius = 0.05f;
-                for (const glm::vec3& p : fit_debug->fit_points) {
-                    line_renderer.add_line(cyan, 1.0f, p - marker_radius * axis_x, cyan, 1.0f, p + marker_radius * axis_x);
-                    line_renderer.add_line(cyan, 1.0f, p - marker_radius * axis_y, cyan, 1.0f, p + marker_radius * axis_y);
-                    line_renderer.add_line(cyan, 1.0f, p - marker_radius * axis_z, cyan, 1.0f, p + marker_radius * axis_z);
-                }
-            }
-
-            // Light plane hull, minimum area OBB and its supporting edge
-            // (present when Optimize Rotation is enabled)
-            if (m_shadow_fit_light_plane_hull) {
-                const glm::mat4& world_from_light_plane = fit_debug->world_from_light_plane;
-                auto to_world = [&world_from_light_plane](const glm::vec2 p) -> glm::vec3 {
-                    return glm::vec3{world_from_light_plane * glm::vec4{p.x, p.y, 0.0f, 1.0f}};
-                };
-                const glm::vec4 magenta{1.0f, 0.0f, 1.0f, 0.7f};
-                for (std::size_t i = 0, count = fit_debug->light_plane_hull.size(); i < count; ++i) {
-                    line_renderer.add_line(
-                        magenta, 2.0f, to_world(fit_debug->light_plane_hull[i]),
-                        magenta, 2.0f, to_world(fit_debug->light_plane_hull[(i + 1) % count])
-                    );
-                }
-                if (!fit_debug->light_plane_hull.empty()) {
-                    const erhe::math::Min_area_obb_2d& obb = fit_debug->obb;
-                    const glm::mat2 original_from_edge = glm::transpose(obb.edge_from_original);
-                    const std::array<glm::vec3, 4> obb_corners{
-                        to_world(original_from_edge * glm::vec2{obb.aabb_min.x, obb.aabb_min.y}),
-                        to_world(original_from_edge * glm::vec2{obb.aabb_max.x, obb.aabb_min.y}),
-                        to_world(original_from_edge * glm::vec2{obb.aabb_max.x, obb.aabb_max.y}),
-                        to_world(original_from_edge * glm::vec2{obb.aabb_min.x, obb.aabb_max.y})
-                    };
-                    const glm::vec4 pink{1.0f, 0.3f, 0.6f, 1.0f};
-                    for (std::size_t i = 0, count = obb_corners.size(); i < count; ++i) {
-                        line_renderer.add_line(pink, 1.0f, obb_corners[i], pink, 1.0f, obb_corners[(i + 1) % count]);
-                    }
-                    const glm::vec4 lime{0.4f, 1.0f, 0.1f, 1.0f};
-                    line_renderer.add_line(lime, 3.0f, to_world(obb.edge_a), lime, 3.0f, to_world(obb.edge_b));
-                }
-            }
-
-            // Light space box after each pipeline step, in the fit frame
-            {
-                using erhe::scene::Shadow_fit_step;
-                class Step_visualization
-                {
-                public:
-                    Shadow_fit_step step;
-                    bool            enabled;
-                    glm::vec4       color;
-                };
-                const std::array<Step_visualization, 4> step_visualizations{{
-                    { Shadow_fit_step::fit_points,         m_shadow_fit_box_fit,     glm::vec4{1.0f, 0.2f, 0.2f, 1.0f} }, // red
-                    { Shadow_fit_step::frustum_constraint, m_shadow_fit_box_frustum, glm::vec4{1.0f, 1.0f, 0.2f, 1.0f} }, // yellow
-                    { Shadow_fit_step::shadow_range_cap,   m_shadow_fit_box_cap,     glm::vec4{0.3f, 0.5f, 1.0f, 1.0f} }, // blue
-                    { Shadow_fit_step::stabilized,         m_shadow_fit_box_final,   glm::vec4{0.2f, 1.0f, 0.2f, 1.0f} }  // green
-                }};
-                line_renderer.set_thickness(2.0f);
-                for (const Step_visualization& v : step_visualizations) {
-                    const auto& box = fit_debug->step_boxes[static_cast<std::size_t>(v.step)];
-                    if (!v.enabled || !box.valid) {
-                        continue;
-                    }
-                    line_renderer.add_cube(fit_debug->world_from_fit_frame, v.color, box.min, box.max);
-                }
-            }
-        }
-    }
-
     const float projection_scale = light_projections.parameters.view_camera->get_projection_scale();
     const float r_major = light_projections.parameters.view_camera->get_shadow_range() / (40.0f * projection_scale);
     line_renderer.set_thickness(-1.0f);
@@ -728,6 +587,154 @@ void Debug_visualizations::directional_light_visualization(const Light_visualiza
         context.light_color,
         lines
     );
+}
+
+void Debug_visualizations::shadow_frustum_fit_visualization(const Render_context& context)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    // Tight shadow frustum fit intermediates; collected per light only when
+    // the Shadow Frustum Fit setting "Collect Debug Data" is enabled. Each
+    // element has its own toggle in the Shadow Fit group of this window.
+    // Gated only by m_shadow_fit_debug - independent of the lights
+    // visualization mode (which gates light_visualization()) and of
+    // m_shadow_debug (which gates the shadow texel visualization).
+    const auto shadow_render_node = m_context.app_rendering->get_shadow_node_for_view(context.scene_view);
+    if (!shadow_render_node) {
+        return;
+    }
+
+    erhe::renderer::Primitive_renderer line_renderer = context.get({erhe::graphics::Primitive_type::line, 3, true, true});
+    const auto& light_projections = shadow_render_node->get_light_projections();
+    for (const erhe::scene::Shadow_frustum_fit_debug_data& fit_debug : light_projections.fit_debug_data) {
+        if (!fit_debug.valid) {
+            continue;
+        }
+
+        // Per-caster world AABBs gathered for the fit (8 corners each,
+        // min corner first, max corner last)
+        if (m_shadow_fit_casters) {
+            const glm::vec4 gray{0.7f, 0.7f, 0.7f, 0.6f};
+            line_renderer.set_thickness(1.0f);
+            const std::vector<glm::vec3>& points = fit_debug.caster_aabb_points;
+            for (std::size_t i = 0, end = points.size() / 8; i < end; ++i) {
+                line_renderer.add_cube(glm::mat4{1.0f}, gray, points[(i * 8) + 0], points[(i * 8) + 7]);
+            }
+        }
+
+        // Convex hull around the caster bounds, before clipping to F_shadow
+        if (m_shadow_fit_caster_hull) {
+            const glm::vec4 white{1.0f, 1.0f, 1.0f, 0.8f};
+            const erhe::math::Convex_hull& hull = fit_debug.caster_hull;
+            for (const std::array<std::size_t, 3>& triangle : hull.triangle_indices) {
+                const std::size_t i0 = triangle[0];
+                const std::size_t i1 = triangle[1];
+                const std::size_t i2 = triangle[2];
+                if (i0 < i1) {
+                    line_renderer.add_line(white, 1.0f, hull.points[i0], white, 1.0f, hull.points[i1]);
+                }
+                if (i1 < i2) {
+                    line_renderer.add_line(white, 1.0f, hull.points[i1], white, 1.0f, hull.points[i2]);
+                }
+                if (i2 < i0) {
+                    line_renderer.add_line(white, 1.0f, hull.points[i2], white, 1.0f, hull.points[i0]);
+                }
+            }
+        }
+
+        // Receiver volume (main camera view frustum) used by the fit
+        if (m_shadow_fit_receivers && fit_debug.receiver_corners_valid) {
+            const glm::vec4 light_blue{0.4f, 0.8f, 1.0f, 1.0f};
+            const std::array<glm::vec3, 8>& c = fit_debug.receiver_corners;
+            // Corner order from erhe::math::extract_frustum_corners()
+            constexpr std::array<std::array<std::size_t, 2>, 12> edges{{
+                {0, 1}, {1, 3}, {3, 2}, {2, 0}, // near rectangle
+                {4, 5}, {5, 7}, {7, 6}, {6, 4}, // far rectangle
+                {0, 4}, {1, 5}, {2, 6}, {3, 7}  // connecting edges
+            }};
+            for (const std::array<std::size_t, 2>& edge : edges) {
+                line_renderer.add_line(light_blue, 2.0f, c[edge[0]], light_blue, 2.0f, c[edge[1]]);
+            }
+        }
+
+        // Shadow caster volume (F_shadow) planes
+        if (m_shadow_fit_volume_planes) {
+            const glm::vec4 orange{1.0f, 0.6f, 0.0f, 0.5f};
+            line_renderer.set_thickness(m_light_visualization_width);
+            for (const glm::vec4& plane : fit_debug.shadow_volume_planes) {
+                line_renderer.add_plane(orange, plane);
+            }
+        }
+
+        // Fit point set (clipped caster hull points or view frustum corners)
+        if (m_shadow_fit_points) {
+            const glm::vec4 cyan{0.2f, 1.0f, 1.0f, 1.0f};
+            const float marker_radius = 0.05f;
+            for (const glm::vec3& p : fit_debug.fit_points) {
+                line_renderer.add_line(cyan, 1.0f, p - marker_radius * axis_x, cyan, 1.0f, p + marker_radius * axis_x);
+                line_renderer.add_line(cyan, 1.0f, p - marker_radius * axis_y, cyan, 1.0f, p + marker_radius * axis_y);
+                line_renderer.add_line(cyan, 1.0f, p - marker_radius * axis_z, cyan, 1.0f, p + marker_radius * axis_z);
+            }
+        }
+
+        // Light plane hull, minimum area OBB and its supporting edge
+        // (present when Optimize Rotation is enabled)
+        if (m_shadow_fit_light_plane_hull) {
+            const glm::mat4& world_from_light_plane = fit_debug.world_from_light_plane;
+            auto to_world = [&world_from_light_plane](const glm::vec2 p) -> glm::vec3 {
+                return glm::vec3{world_from_light_plane * glm::vec4{p.x, p.y, 0.0f, 1.0f}};
+            };
+            const glm::vec4 magenta{1.0f, 0.0f, 1.0f, 0.7f};
+            for (std::size_t i = 0, count = fit_debug.light_plane_hull.size(); i < count; ++i) {
+                line_renderer.add_line(
+                    magenta, 2.0f, to_world(fit_debug.light_plane_hull[i]),
+                    magenta, 2.0f, to_world(fit_debug.light_plane_hull[(i + 1) % count])
+                );
+            }
+            if (!fit_debug.light_plane_hull.empty()) {
+                const erhe::math::Min_area_obb_2d& obb = fit_debug.obb;
+                const glm::mat2 original_from_edge = glm::transpose(obb.edge_from_original);
+                const std::array<glm::vec3, 4> obb_corners{
+                    to_world(original_from_edge * glm::vec2{obb.aabb_min.x, obb.aabb_min.y}),
+                    to_world(original_from_edge * glm::vec2{obb.aabb_max.x, obb.aabb_min.y}),
+                    to_world(original_from_edge * glm::vec2{obb.aabb_max.x, obb.aabb_max.y}),
+                    to_world(original_from_edge * glm::vec2{obb.aabb_min.x, obb.aabb_max.y})
+                };
+                const glm::vec4 pink{1.0f, 0.3f, 0.6f, 1.0f};
+                for (std::size_t i = 0, count = obb_corners.size(); i < count; ++i) {
+                    line_renderer.add_line(pink, 1.0f, obb_corners[i], pink, 1.0f, obb_corners[(i + 1) % count]);
+                }
+                const glm::vec4 lime{0.4f, 1.0f, 0.1f, 1.0f};
+                line_renderer.add_line(lime, 3.0f, to_world(obb.edge_a), lime, 3.0f, to_world(obb.edge_b));
+            }
+        }
+
+        // Light space box after each pipeline step, in the fit frame
+        {
+            using erhe::scene::Shadow_fit_step;
+            class Step_visualization
+            {
+            public:
+                Shadow_fit_step step;
+                bool            enabled;
+                glm::vec4       color;
+            };
+            const std::array<Step_visualization, 4> step_visualizations{{
+                { Shadow_fit_step::fit_points,         m_shadow_fit_box_fit,     glm::vec4{1.0f, 0.2f, 0.2f, 1.0f} }, // red
+                { Shadow_fit_step::frustum_constraint, m_shadow_fit_box_frustum, glm::vec4{1.0f, 1.0f, 0.2f, 1.0f} }, // yellow
+                { Shadow_fit_step::shadow_range_cap,   m_shadow_fit_box_cap,     glm::vec4{0.3f, 0.5f, 1.0f, 1.0f} }, // blue
+                { Shadow_fit_step::stabilized,         m_shadow_fit_box_final,   glm::vec4{0.2f, 1.0f, 0.2f, 1.0f} }  // green
+            }};
+            line_renderer.set_thickness(2.0f);
+            for (const Step_visualization& v : step_visualizations) {
+                const auto& box = fit_debug.step_boxes[static_cast<std::size_t>(v.step)];
+                if (!v.enabled || !box.valid) {
+                    continue;
+                }
+                line_renderer.add_cube(fit_debug.world_from_fit_frame, v.color, box.min, box.max);
+            }
+        }
+    }
 }
 
 void Debug_visualizations::point_light_visualization(const Light_visualization_context& context)
@@ -1853,6 +1860,10 @@ void Debug_visualizations::render(const Render_context& context)
         if (should_visualize(m_lights, light)) {
             light_visualization(context, selected_camera, light.get());
         }
+    }
+
+    if (m_shadow_fit_debug) {
+        shadow_frustum_fit_visualization(context);
     }
 
     //if (m_viewport_config->debug_visualizations.camera == Visualization_mode::all)
