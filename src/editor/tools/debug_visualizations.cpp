@@ -175,6 +175,27 @@ void Debug_visualizations::read_config(const Debug_visualizations_settings& sett
     m_shadow_fit_box_frustum            = settings.shadow_fit_box_frustum;
     m_shadow_fit_box_cap                = settings.shadow_fit_box_cap;
     m_shadow_fit_box_final              = settings.shadow_fit_box_final;
+    m_shadow_fit_casters_color          = settings.shadow_fit_casters_color;
+    m_shadow_fit_casters_width          = settings.shadow_fit_casters_width;
+    m_shadow_fit_caster_hull_color      = settings.shadow_fit_caster_hull_color;
+    m_shadow_fit_caster_hull_width      = settings.shadow_fit_caster_hull_width;
+    m_shadow_fit_receivers_color        = settings.shadow_fit_receivers_color;
+    m_shadow_fit_receivers_width        = settings.shadow_fit_receivers_width;
+    m_shadow_fit_volume_planes_color    = settings.shadow_fit_volume_planes_color;
+    m_shadow_fit_volume_planes_width    = settings.shadow_fit_volume_planes_width;
+    m_shadow_fit_points_color           = settings.shadow_fit_points_color;
+    m_shadow_fit_points_width           = settings.shadow_fit_points_width;
+    m_shadow_fit_light_plane_hull_color = settings.shadow_fit_light_plane_hull_color;
+    m_shadow_fit_light_plane_hull_width = settings.shadow_fit_light_plane_hull_width;
+    m_shadow_fit_obb_color              = settings.shadow_fit_obb_color;
+    m_shadow_fit_obb_width              = settings.shadow_fit_obb_width;
+    m_shadow_fit_obb_edge_color         = settings.shadow_fit_obb_edge_color;
+    m_shadow_fit_obb_edge_width         = settings.shadow_fit_obb_edge_width;
+    m_shadow_fit_box_fit_color          = settings.shadow_fit_box_fit_color;
+    m_shadow_fit_box_frustum_color      = settings.shadow_fit_box_frustum_color;
+    m_shadow_fit_box_cap_color          = settings.shadow_fit_box_cap_color;
+    m_shadow_fit_box_final_color        = settings.shadow_fit_box_final_color;
+    m_shadow_fit_box_width              = settings.shadow_fit_box_width;
     m_selection                         = settings.selection;
     m_selection_bounding_points_visible = settings.selection_bounding_points;
     m_selection_box                     = settings.selection_box;
@@ -248,6 +269,27 @@ void Debug_visualizations::write_config(Debug_visualizations_settings& settings)
     settings.shadow_fit_box_frustum          = m_shadow_fit_box_frustum;
     settings.shadow_fit_box_cap              = m_shadow_fit_box_cap;
     settings.shadow_fit_box_final            = m_shadow_fit_box_final;
+    settings.shadow_fit_casters_color        = m_shadow_fit_casters_color;
+    settings.shadow_fit_casters_width        = m_shadow_fit_casters_width;
+    settings.shadow_fit_caster_hull_color    = m_shadow_fit_caster_hull_color;
+    settings.shadow_fit_caster_hull_width    = m_shadow_fit_caster_hull_width;
+    settings.shadow_fit_receivers_color      = m_shadow_fit_receivers_color;
+    settings.shadow_fit_receivers_width      = m_shadow_fit_receivers_width;
+    settings.shadow_fit_volume_planes_color  = m_shadow_fit_volume_planes_color;
+    settings.shadow_fit_volume_planes_width  = m_shadow_fit_volume_planes_width;
+    settings.shadow_fit_points_color         = m_shadow_fit_points_color;
+    settings.shadow_fit_points_width         = m_shadow_fit_points_width;
+    settings.shadow_fit_light_plane_hull_color = m_shadow_fit_light_plane_hull_color;
+    settings.shadow_fit_light_plane_hull_width = m_shadow_fit_light_plane_hull_width;
+    settings.shadow_fit_obb_color            = m_shadow_fit_obb_color;
+    settings.shadow_fit_obb_width            = m_shadow_fit_obb_width;
+    settings.shadow_fit_obb_edge_color       = m_shadow_fit_obb_edge_color;
+    settings.shadow_fit_obb_edge_width       = m_shadow_fit_obb_edge_width;
+    settings.shadow_fit_box_fit_color        = m_shadow_fit_box_fit_color;
+    settings.shadow_fit_box_frustum_color    = m_shadow_fit_box_frustum_color;
+    settings.shadow_fit_box_cap_color        = m_shadow_fit_box_cap_color;
+    settings.shadow_fit_box_final_color      = m_shadow_fit_box_final_color;
+    settings.shadow_fit_box_width            = m_shadow_fit_box_width;
     settings.selection                       = m_selection;
     settings.selection_bounding_points       = m_selection_bounding_points_visible;
     settings.selection_box                   = m_selection_box;
@@ -614,37 +656,38 @@ void Debug_visualizations::shadow_frustum_fit_visualization(const Render_context
         // Per-caster world AABBs gathered for the fit (8 corners each,
         // min corner first, max corner last)
         if (m_shadow_fit_casters) {
-            const glm::vec4 gray{0.7f, 0.7f, 0.7f, 0.6f};
-            line_renderer.set_thickness(1.0f);
+            line_renderer.set_thickness(m_shadow_fit_casters_width);
             const std::vector<glm::vec3>& points = fit_debug.caster_aabb_points;
             for (std::size_t i = 0, end = points.size() / 8; i < end; ++i) {
-                line_renderer.add_cube(glm::mat4{1.0f}, gray, points[(i * 8) + 0], points[(i * 8) + 7]);
+                line_renderer.add_cube(glm::mat4{1.0f}, m_shadow_fit_casters_color, points[(i * 8) + 0], points[(i * 8) + 7]);
             }
         }
 
         // Convex hull around the caster bounds, before clipping to F_shadow
         if (m_shadow_fit_caster_hull) {
-            const glm::vec4 white{1.0f, 1.0f, 1.0f, 0.8f};
+            const glm::vec4 color = m_shadow_fit_caster_hull_color;
+            const float     width = m_shadow_fit_caster_hull_width;
             const erhe::math::Convex_hull& hull = fit_debug.caster_hull;
             for (const std::array<std::size_t, 3>& triangle : hull.triangle_indices) {
                 const std::size_t i0 = triangle[0];
                 const std::size_t i1 = triangle[1];
                 const std::size_t i2 = triangle[2];
                 if (i0 < i1) {
-                    line_renderer.add_line(white, 1.0f, hull.points[i0], white, 1.0f, hull.points[i1]);
+                    line_renderer.add_line(color, width, hull.points[i0], color, width, hull.points[i1]);
                 }
                 if (i1 < i2) {
-                    line_renderer.add_line(white, 1.0f, hull.points[i1], white, 1.0f, hull.points[i2]);
+                    line_renderer.add_line(color, width, hull.points[i1], color, width, hull.points[i2]);
                 }
                 if (i2 < i0) {
-                    line_renderer.add_line(white, 1.0f, hull.points[i2], white, 1.0f, hull.points[i0]);
+                    line_renderer.add_line(color, width, hull.points[i2], color, width, hull.points[i0]);
                 }
             }
         }
 
         // Receiver volume (main camera view frustum) used by the fit
         if (m_shadow_fit_receivers && fit_debug.receiver_corners_valid) {
-            const glm::vec4 light_blue{0.4f, 0.8f, 1.0f, 1.0f};
+            const glm::vec4 color = m_shadow_fit_receivers_color;
+            const float     width = m_shadow_fit_receivers_width;
             const std::array<glm::vec3, 8>& c = fit_debug.receiver_corners;
             // Corner order from erhe::math::extract_frustum_corners()
             constexpr std::array<std::array<std::size_t, 2>, 12> edges{{
@@ -653,27 +696,27 @@ void Debug_visualizations::shadow_frustum_fit_visualization(const Render_context
                 {0, 4}, {1, 5}, {2, 6}, {3, 7}  // connecting edges
             }};
             for (const std::array<std::size_t, 2>& edge : edges) {
-                line_renderer.add_line(light_blue, 2.0f, c[edge[0]], light_blue, 2.0f, c[edge[1]]);
+                line_renderer.add_line(color, width, c[edge[0]], color, width, c[edge[1]]);
             }
         }
 
         // Shadow caster volume (F_shadow) planes
         if (m_shadow_fit_volume_planes) {
-            const glm::vec4 orange{1.0f, 0.6f, 0.0f, 0.5f};
-            line_renderer.set_thickness(m_light_visualization_width);
+            line_renderer.set_thickness(m_shadow_fit_volume_planes_width);
             for (const glm::vec4& plane : fit_debug.shadow_volume_planes) {
-                line_renderer.add_plane(orange, plane);
+                line_renderer.add_plane(m_shadow_fit_volume_planes_color, plane);
             }
         }
 
         // Fit point set (clipped caster hull points or view frustum corners)
         if (m_shadow_fit_points) {
-            const glm::vec4 cyan{0.2f, 1.0f, 1.0f, 1.0f};
+            const glm::vec4 color = m_shadow_fit_points_color;
+            const float     width = m_shadow_fit_points_width;
             const float marker_radius = 0.05f;
             for (const glm::vec3& p : fit_debug.fit_points) {
-                line_renderer.add_line(cyan, 1.0f, p - marker_radius * axis_x, cyan, 1.0f, p + marker_radius * axis_x);
-                line_renderer.add_line(cyan, 1.0f, p - marker_radius * axis_y, cyan, 1.0f, p + marker_radius * axis_y);
-                line_renderer.add_line(cyan, 1.0f, p - marker_radius * axis_z, cyan, 1.0f, p + marker_radius * axis_z);
+                line_renderer.add_line(color, width, p - marker_radius * axis_x, color, width, p + marker_radius * axis_x);
+                line_renderer.add_line(color, width, p - marker_radius * axis_y, color, width, p + marker_radius * axis_y);
+                line_renderer.add_line(color, width, p - marker_radius * axis_z, color, width, p + marker_radius * axis_z);
             }
         }
 
@@ -684,11 +727,12 @@ void Debug_visualizations::shadow_frustum_fit_visualization(const Render_context
             auto to_world = [&world_from_light_plane](const glm::vec2 p) -> glm::vec3 {
                 return glm::vec3{world_from_light_plane * glm::vec4{p.x, p.y, 0.0f, 1.0f}};
             };
-            const glm::vec4 magenta{1.0f, 0.0f, 1.0f, 0.7f};
+            const glm::vec4 hull_color = m_shadow_fit_light_plane_hull_color;
+            const float     hull_width = m_shadow_fit_light_plane_hull_width;
             for (std::size_t i = 0, count = fit_debug.light_plane_hull.size(); i < count; ++i) {
                 line_renderer.add_line(
-                    magenta, 2.0f, to_world(fit_debug.light_plane_hull[i]),
-                    magenta, 2.0f, to_world(fit_debug.light_plane_hull[(i + 1) % count])
+                    hull_color, hull_width, to_world(fit_debug.light_plane_hull[i]),
+                    hull_color, hull_width, to_world(fit_debug.light_plane_hull[(i + 1) % count])
                 );
             }
             if (!fit_debug.light_plane_hull.empty()) {
@@ -700,12 +744,15 @@ void Debug_visualizations::shadow_frustum_fit_visualization(const Render_context
                     to_world(original_from_edge * glm::vec2{obb.aabb_max.x, obb.aabb_max.y}),
                     to_world(original_from_edge * glm::vec2{obb.aabb_min.x, obb.aabb_max.y})
                 };
-                const glm::vec4 pink{1.0f, 0.3f, 0.6f, 1.0f};
+                const glm::vec4 obb_color = m_shadow_fit_obb_color;
+                const float     obb_width = m_shadow_fit_obb_width;
                 for (std::size_t i = 0, count = obb_corners.size(); i < count; ++i) {
-                    line_renderer.add_line(pink, 1.0f, obb_corners[i], pink, 1.0f, obb_corners[(i + 1) % count]);
+                    line_renderer.add_line(obb_color, obb_width, obb_corners[i], obb_color, obb_width, obb_corners[(i + 1) % count]);
                 }
-                const glm::vec4 lime{0.4f, 1.0f, 0.1f, 1.0f};
-                line_renderer.add_line(lime, 3.0f, to_world(obb.edge_a), lime, 3.0f, to_world(obb.edge_b));
+                line_renderer.add_line(
+                    m_shadow_fit_obb_edge_color, m_shadow_fit_obb_edge_width, to_world(obb.edge_a),
+                    m_shadow_fit_obb_edge_color, m_shadow_fit_obb_edge_width, to_world(obb.edge_b)
+                );
             }
         }
 
@@ -720,12 +767,12 @@ void Debug_visualizations::shadow_frustum_fit_visualization(const Render_context
                 glm::vec4       color;
             };
             const std::array<Step_visualization, 4> step_visualizations{{
-                { Shadow_fit_step::fit_points,         m_shadow_fit_box_fit,     glm::vec4{1.0f, 0.2f, 0.2f, 1.0f} }, // red
-                { Shadow_fit_step::frustum_constraint, m_shadow_fit_box_frustum, glm::vec4{1.0f, 1.0f, 0.2f, 1.0f} }, // yellow
-                { Shadow_fit_step::shadow_range_cap,   m_shadow_fit_box_cap,     glm::vec4{0.3f, 0.5f, 1.0f, 1.0f} }, // blue
-                { Shadow_fit_step::stabilized,         m_shadow_fit_box_final,   glm::vec4{0.2f, 1.0f, 0.2f, 1.0f} }  // green
+                { Shadow_fit_step::fit_points,         m_shadow_fit_box_fit,     m_shadow_fit_box_fit_color     },
+                { Shadow_fit_step::frustum_constraint, m_shadow_fit_box_frustum, m_shadow_fit_box_frustum_color },
+                { Shadow_fit_step::shadow_range_cap,   m_shadow_fit_box_cap,     m_shadow_fit_box_cap_color     },
+                { Shadow_fit_step::stabilized,         m_shadow_fit_box_final,   m_shadow_fit_box_final_color   }
             }};
-            line_renderer.set_thickness(2.0f);
+            line_renderer.set_thickness(m_shadow_fit_box_width);
             for (const Step_visualization& v : step_visualizations) {
                 const auto& box = fit_debug.step_boxes[static_cast<std::size_t>(v.step)];
                 if (!v.enabled || !box.valid) {
@@ -1954,17 +2001,34 @@ void Debug_visualizations::imgui()
     if (m_shadow_fit_debug) {
         // Shadow frustum fit visualizations; data is collected per light only
         // when the Shadow Frustum Fit setting "Collect Debug Data" is enabled.
+        // Each row: enable, color, line width (negative widths are in pixels
+        // and do not scale by distance).
+        auto shadow_fit_entry = [](bool* enable, glm::vec4* color, float* width) {
+            if (enable != nullptr) {
+                ImGui::Checkbox("##v", enable);
+                ImGui::SameLine();
+            }
+            ImGui::ColorEdit4("##c", &color->x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_Float);
+            if (width != nullptr) {
+                ImGui::SameLine();
+                ImGui::SetNextItemWidth(80.0f);
+                ImGui::DragFloat("##w", width, 0.1f, -100.0f, 100.0f, "%.1f");
+            }
+        };
         p.push_group("Shadow Fit", ImGuiTreeNodeFlags_None);
-        p.add_entry("Casters",          [this](){ ImGui::Checkbox("##", &m_shadow_fit_casters); });
-        p.add_entry("Caster Hull",      [this](){ ImGui::Checkbox("##", &m_shadow_fit_caster_hull); });
-        p.add_entry("Receivers",        [this](){ ImGui::Checkbox("##", &m_shadow_fit_receivers); });
-        p.add_entry("Volume Planes",    [this](){ ImGui::Checkbox("##", &m_shadow_fit_volume_planes); });
-        p.add_entry("Fit Points",       [this](){ ImGui::Checkbox("##", &m_shadow_fit_points); });
-        p.add_entry("Light Plane Hull", [this](){ ImGui::Checkbox("##", &m_shadow_fit_light_plane_hull); });
-        p.add_entry("Box: Points",      [this](){ ImGui::Checkbox("##", &m_shadow_fit_box_fit); });
-        p.add_entry("Box: Frustum",     [this](){ ImGui::Checkbox("##", &m_shadow_fit_box_frustum); });
-        p.add_entry("Box: Range Cap",   [this](){ ImGui::Checkbox("##", &m_shadow_fit_box_cap); });
-        p.add_entry("Box: Final",       [this](){ ImGui::Checkbox("##", &m_shadow_fit_box_final); });
+        p.add_entry("Casters",          [this, shadow_fit_entry](){ shadow_fit_entry(&m_shadow_fit_casters,          &m_shadow_fit_casters_color,          &m_shadow_fit_casters_width); });
+        p.add_entry("Caster Hull",      [this, shadow_fit_entry](){ shadow_fit_entry(&m_shadow_fit_caster_hull,      &m_shadow_fit_caster_hull_color,      &m_shadow_fit_caster_hull_width); });
+        p.add_entry("Receivers",        [this, shadow_fit_entry](){ shadow_fit_entry(&m_shadow_fit_receivers,        &m_shadow_fit_receivers_color,        &m_shadow_fit_receivers_width); });
+        p.add_entry("Volume Planes",    [this, shadow_fit_entry](){ shadow_fit_entry(&m_shadow_fit_volume_planes,    &m_shadow_fit_volume_planes_color,    &m_shadow_fit_volume_planes_width); });
+        p.add_entry("Fit Points",       [this, shadow_fit_entry](){ shadow_fit_entry(&m_shadow_fit_points,           &m_shadow_fit_points_color,           &m_shadow_fit_points_width); });
+        p.add_entry("Light Plane Hull", [this, shadow_fit_entry](){ shadow_fit_entry(&m_shadow_fit_light_plane_hull, &m_shadow_fit_light_plane_hull_color, &m_shadow_fit_light_plane_hull_width); });
+        p.add_entry("OBB",              [this, shadow_fit_entry](){ shadow_fit_entry(nullptr,                        &m_shadow_fit_obb_color,              &m_shadow_fit_obb_width); });
+        p.add_entry("OBB Edge",         [this, shadow_fit_entry](){ shadow_fit_entry(nullptr,                        &m_shadow_fit_obb_edge_color,         &m_shadow_fit_obb_edge_width); });
+        p.add_entry("Box: Points",      [this, shadow_fit_entry](){ shadow_fit_entry(&m_shadow_fit_box_fit,          &m_shadow_fit_box_fit_color,          nullptr); });
+        p.add_entry("Box: Frustum",     [this, shadow_fit_entry](){ shadow_fit_entry(&m_shadow_fit_box_frustum,      &m_shadow_fit_box_frustum_color,      nullptr); });
+        p.add_entry("Box: Range Cap",   [this, shadow_fit_entry](){ shadow_fit_entry(&m_shadow_fit_box_cap,          &m_shadow_fit_box_cap_color,          nullptr); });
+        p.add_entry("Box: Final",       [this, shadow_fit_entry](){ shadow_fit_entry(&m_shadow_fit_box_final,        &m_shadow_fit_box_final_color,        nullptr); });
+        p.add_entry("Box Width",        [this](){ ImGui::SetNextItemWidth(80.0f); ImGui::DragFloat("##", &m_shadow_fit_box_width, 0.1f, -100.0f, 100.0f, "%.1f"); });
         p.pop_group();
     }
 

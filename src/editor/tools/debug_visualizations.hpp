@@ -189,7 +189,8 @@ private:
     // Shadow frustum fit visualizations; independent of m_shadow_debug (which
     // gates the shadow texel visualization). Drawn only when
     // m_shadow_fit_debug is on and the Shadow Frustum Fit setting
-    // collect_debug is enabled.
+    // collect_debug is enabled. Negative line widths are in pixels and do
+    // not scale by distance.
     bool      m_shadow_fit_debug                 {false};
     bool      m_shadow_fit_casters               {false};
     bool      m_shadow_fit_caster_hull           {false};
@@ -201,6 +202,27 @@ private:
     bool      m_shadow_fit_box_frustum           {false};
     bool      m_shadow_fit_box_cap               {false};
     bool      m_shadow_fit_box_final             {false};
+    glm::vec4 m_shadow_fit_casters_color         {0.7f, 0.7f, 0.7f, 0.6f};
+    float     m_shadow_fit_casters_width         {1.0f};
+    glm::vec4 m_shadow_fit_caster_hull_color     {1.0f, 1.0f, 1.0f, 0.8f};
+    float     m_shadow_fit_caster_hull_width     {1.0f};
+    glm::vec4 m_shadow_fit_receivers_color       {0.4f, 0.8f, 1.0f, 1.0f};
+    float     m_shadow_fit_receivers_width       {2.0f};
+    glm::vec4 m_shadow_fit_volume_planes_color   {1.0f, 0.6f, 0.0f, 0.5f};
+    float     m_shadow_fit_volume_planes_width   {8.0f};
+    glm::vec4 m_shadow_fit_points_color          {0.2f, 1.0f, 1.0f, 1.0f};
+    float     m_shadow_fit_points_width          {1.0f};
+    glm::vec4 m_shadow_fit_light_plane_hull_color{1.0f, 0.0f, 1.0f, 0.7f};
+    float     m_shadow_fit_light_plane_hull_width{2.0f};
+    glm::vec4 m_shadow_fit_obb_color             {1.0f, 0.3f, 0.6f, 1.0f};
+    float     m_shadow_fit_obb_width             {1.0f};
+    glm::vec4 m_shadow_fit_obb_edge_color        {0.4f, 1.0f, 0.1f, 1.0f};
+    float     m_shadow_fit_obb_edge_width        {3.0f};
+    glm::vec4 m_shadow_fit_box_fit_color         {1.0f, 0.2f, 0.2f, 1.0f};
+    glm::vec4 m_shadow_fit_box_frustum_color     {1.0f, 1.0f, 0.2f, 1.0f};
+    glm::vec4 m_shadow_fit_box_cap_color         {0.3f, 0.5f, 1.0f, 1.0f};
+    glm::vec4 m_shadow_fit_box_final_color       {0.2f, 1.0f, 0.2f, 1.0f};
+    float     m_shadow_fit_box_width             {2.0f};
 
     int       m_sphere_step_count                {80};
     int       m_max_labels                       {400};
