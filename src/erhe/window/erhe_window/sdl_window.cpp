@@ -689,6 +689,14 @@ void Context_window::poll_events(float wait_time)
                 handle_window_close_event(timestamp);
                 break;
             }
+            case SDL_EVENT_QUIT: {
+                // SDL posts SDL_EVENT_QUIT when the last window closes and when
+                // SIGINT / SIGTERM is received (SDL installs signal handlers by
+                // default). Map it to a window close event so Ctrl+C and
+                // `kill <pid>` shut the application down cleanly.
+                handle_window_close_event(timestamp);
+                break;
+            }
             case SDL_EVENT_JOYSTICK_AXIS_MOTION: {
                 //// log_window_event->info("SDL_EVENT_JOYSTICK_AXIS_MOTION axis = {} value = {}", poll_event.jaxis.axis, poll_event.jaxis.value);
                 handle_controller_axis_event(timestamp, poll_event.jaxis.which, poll_event.jaxis.axis, poll_event.jaxis.value);
