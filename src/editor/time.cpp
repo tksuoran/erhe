@@ -24,16 +24,21 @@ void Time::prepare_update()
     int64_t host_system_frame_duration_ns   = host_system_frame_start_time_ns - m_host_system_last_frame_start_time;
     int64_t simulation_frame_duration_ns    = host_system_frame_duration_ns;
 
+    constexpr std::size_t frame_time_window_size = 200;
     if (!m_frame_start_times.empty()) {
-        const int64_t average_frametime_duration_ns = host_system_frame_start_time_ns - m_frame_start_times.front();
-        const int64_t average_frametime_ns          = average_frametime_duration_ns / m_frame_start_times.size();
+        const std::size_t oldest_index = (m_frame_start_times.size() < frame_time_window_size) ? 0 : m_frame_start_time_index;
+        const int64_t average_frametime_duration_ns = host_system_frame_start_time_ns - m_frame_start_times[oldest_index];
+        const int64_t average_frametime_ns          = average_frametime_duration_ns / static_cast<int64_t>(m_frame_start_times.size());
         const double  average_frametime_ms          = static_cast<double>(average_frametime_ns) / 1'000'000.0;
         m_frame_time_average_ms = static_cast<float>(average_frametime_ms);
     }
-    if (m_frame_start_times.size() > 200) {
-        m_frame_start_times.pop_front();
+    if (m_frame_start_times.size() < frame_time_window_size) {
+        m_frame_start_times.reserve(frame_time_window_size); // no-op after the first frame
+        m_frame_start_times.push_back(host_system_frame_start_time_ns);
+    } else {
+        m_frame_start_times[m_frame_start_time_index] = host_system_frame_start_time_ns;
+        m_frame_start_time_index = (m_frame_start_time_index + 1) % frame_time_window_size;
     }
-    m_frame_start_times.push_back(host_system_frame_start_time_ns);
 
     m_host_system_last_frame_duration_ns = host_system_frame_duration_ns;
 

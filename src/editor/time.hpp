@@ -3,8 +3,8 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_scene/transform.hpp"
 
+#include <cstddef>
 #include <cstdint>
-#include <deque>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -73,7 +73,8 @@ private:
     ERHE_PROFILE_MUTEX(std::mutex,         m_mutex);
     std::vector<Time_context>              m_this_frame_fixed_steps;
     std::vector<Transform_animation_entry> m_transform_animations;
-    std::deque<int64_t>                    m_frame_start_times;
+    std::vector<int64_t>                   m_frame_start_times;         // ring buffer of recent frame start times
+    std::size_t                            m_frame_start_time_index{0}; // oldest entry / next slot to overwrite once full
     float                                  m_frame_time_average_ms{0.0f};
 };
 
