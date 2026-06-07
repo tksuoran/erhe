@@ -414,7 +414,7 @@ public:
             for (const bool button_down : m_input_state->mouse_button) {
                 any_mouse_button_down = any_mouse_button_down || button_down;
             }
-            m_editor_settings_store.update(!any_mouse_button_down);
+            m_app_settings.settings_store().update(!any_mouse_button_down);
         }
 
         // - Apply all command bindings (OpenXR bindings were already executed above)
@@ -743,7 +743,6 @@ public:
         , m_renderer_config     {erhe::codegen::load_config<Renderer_config>       ("config/editor/renderer.json")}
         , m_text_renderer_config{erhe::codegen::load_config<Text_renderer_config>  ("config/editor/text_renderer.json")}
         , m_window_config       {erhe::codegen::load_config<Window_config>         ("config/editor/window.json")}
-        , m_editor_settings     {erhe::codegen::load_config<Editor_settings_config>(c_editor_settings_file_path)}
     {
 #if defined(ERHE_OS_ANDROID) && defined(ERHE_XR_LIBRARY_OPENXR)
         // On Android the only flavor that links OpenXR is `quest` (Meta Quest 3).
@@ -783,8 +782,7 @@ public:
 
             m_commands          = std::make_unique<erhe::commands::Commands      >();
             m_app_message_bus   = std::make_unique<App_message_bus               >();
-            m_app_settings      = std::make_unique<App_settings                  >();
-            m_app_settings->read(m_editor_settings, m_editor_settings.headset.openxr);
+            m_app_settings.read(m_editor_settings.headset.openxr);
             m_input_state       = std::make_unique<Input_state                   >();
             m_time              = std::make_unique<Time                          >();
             auto& commands        = *m_commands       .get();
@@ -907,7 +905,7 @@ public:
             m_app_context.current_command_buffer = &m_graphics_device->get_command_buffer(0);
             m_app_context.current_command_buffer->begin();
 
-            m_app_settings->apply_limits(
+            m_app_settings.apply_limits(
                 *m_graphics_device.get(),
                 app_message_bus,
                 m_window->get_scale_factor()
@@ -1055,7 +1053,7 @@ public:
             ERHE_TASK_HEADER(imgui_renderer_task)
             {
                 ERHE_GET_GL_CONTEXT
-                m_imgui_renderer = std::make_unique<erhe::imgui::Imgui_renderer>(*m_graphics_device.get(), *m_app_context.current_command_buffer, m_app_settings->imgui);
+                m_imgui_renderer = std::make_unique<erhe::imgui::Imgui_renderer>(*m_graphics_device.get(), *m_app_context.current_command_buffer, m_app_settings.imgui);
             }
             ERHE_TASK_FOOTER( .name("Imgui_renderer") );
 
@@ -1440,7 +1438,7 @@ public:
                     *m_imgui_windows.get(),
                     m_app_context,
                     *m_app_rendering.get(),
-                    *m_app_settings.get(),
+                    m_app_settings,
                     *m_mesh_memory.get(),
                     *m_programs
                 );
@@ -1471,7 +1469,7 @@ public:
                 auto content_library = std::make_shared<Content_library>();
                 add_default_materials(*content_library.get());
 
-                const bool enable_physics = m_app_settings->physics.static_enable;
+                const bool enable_physics = m_editor_settings.physics.static_enable;
                 m_default_scene = std::make_shared<Scene_root>(
                     m_app_message_bus.get(),
                     content_library,
@@ -1487,7 +1485,7 @@ public:
                     m_default_scene->get_name()
                 );
                 m_default_scene_browser = m_default_scene->make_browser_window(
-                    *m_imgui_renderer.get(), *m_imgui_windows.get(), m_app_context, *m_app_settings.get()
+                    *m_imgui_renderer.get(), *m_imgui_windows.get(), m_app_context, m_app_settings
                 );
             }
             ERHE_TASK_FOOTER(
@@ -1504,7 +1502,7 @@ public:
                     m_default_scene,                   //std::shared_ptr<Scene_root>        scene
                     *m_executor.get(),                 //tf::Executor&                      executor
                     m_app_context,                     //App_context&                       app_context
-                    *m_app_settings.get(),             //App_settings&                      app_settings
+                    m_app_settings,                    //App_settings&                      app_settings
                     *m_mesh_memory.get()               //erhe::scene_renderer::Mesh_memory& mesh_memory
                 );
             }
@@ -1534,8 +1532,7 @@ public:
 #endif
                     m_app_context,
                     *m_app_rendering.get(),
-                    *m_app_settings.get(),
-                    m_editor_settings_store
+                    m_app_settings
                 );
 #if defined(ERHE_XR_LIBRARY_OPENXR)
                 if (m_app_context.OpenXR) {
@@ -1822,17 +1819,17 @@ public:
         m_mcp_server = std::make_unique<Mcp_server>(*m_commands.get(), m_app_context);
         m_mcp_server->start();
 
-        m_app_settings->physics.static_enable  = m_editor_settings.physics.static_enable;
-        m_app_settings->physics.dynamic_enable = m_editor_settings.physics.dynamic_enable;
-        if (!m_app_settings->physics.static_enable) {
-            m_app_settings->physics.dynamic_enable = false;
+        // Enforce the physics invariant on the single (config-owned) copy:
+        // dynamic simulation requires static collision world.
+        if (!m_editor_settings.physics.static_enable) {
+            m_editor_settings.physics.dynamic_enable = false;
         }
 
         m_hotbar->get_all_tools();
         m_inventory_window->collect_tools();
 
         // Notify ImGui renderer about current font settings
-        m_imgui_renderer->on_font_config_changed(m_app_settings->imgui);
+        m_imgui_renderer->on_font_config_changed(m_app_settings.imgui);
 
 #if defined(ERHE_GRAPHICS_API_OPENGL)
         if (m_graphics_device->get_info().use_clip_control) {
@@ -2179,7 +2176,7 @@ public:
         m_app_context.app_message_bus          = m_app_message_bus       .get();
         m_app_context.app_rendering            = m_app_rendering         .get();
         m_app_context.app_scenes               = m_app_scenes            .get();
-        m_app_context.app_settings             = m_app_settings          .get();
+        m_app_context.app_settings             = &m_app_settings;
         m_app_context.developer_config         = &m_editor_settings.developer;
         m_app_context.graphics_config          = &m_graphics_config;
         m_app_context.mesh_memory_config       = &m_mesh_memory_config;
@@ -2187,7 +2184,6 @@ public:
         m_app_context.text_renderer_config     = &m_text_renderer_config;
         m_app_context.window_config            = &m_window_config;
         m_app_context.editor_settings          = &m_editor_settings;
-        m_app_context.editor_settings_store    = &m_editor_settings_store;
         m_app_context.app_windows              = m_app_windows           .get();
         m_app_context.fly_camera_tool          = m_fly_camera_tool       .get();
         m_app_context.navigation_gizmo_tool    = m_navigation_gizmo_tool .get();
@@ -2232,12 +2228,12 @@ public:
         // provide collect callbacks; the store copies their state into the
         // config before change detection / saving. Sections edited directly
         // in the config struct (Settings window) need no callback.
-        m_editor_settings_store.register_collect_callback(
+        m_app_settings.settings_store().register_collect_callback(
             [this](Editor_settings_config& settings) {
                 m_grid_tool->write_config(settings.grid);
             }
         );
-        m_editor_settings_store.register_collect_callback(
+        m_app_settings.settings_store().register_collect_callback(
             [this](Editor_settings_config& settings) {
                 m_inventory_window->write_config(settings.inventory);
             }
@@ -2519,8 +2515,14 @@ public:
     Renderer_config                     m_renderer_config;
     Text_renderer_config                m_text_renderer_config;
     Window_config                       m_window_config;
-    Editor_settings_config              m_editor_settings;
-    Editor_settings_store               m_editor_settings_store{m_editor_settings};
+    // Settings root: owns Editor_settings_store, which owns the loaded
+    // Editor_settings_config and its autosave. Declared before all parts so
+    // it outlives every collect-callback client (e.g. Scene_view dtors
+    // unregister against the store).
+    App_settings                        m_app_settings;
+    // Convenience alias for the loaded config; same object as
+    // m_app_settings.config().
+    Editor_settings_config&             m_editor_settings{m_app_settings.config()};
 
     std::unique_ptr<tf::Executor>       m_executor;
     Item_async_task_guard               m_item_task_guard; // destroyed before m_executor
@@ -2539,7 +2541,6 @@ public:
 
     std::unique_ptr<Clipboard                              > m_clipboard;
     std::unique_ptr<erhe::window::Context_window           > m_window;
-    std::unique_ptr<App_settings                           > m_app_settings;
     std::unique_ptr<erhe::graphics::Device                 > m_graphics_device;
     std::unique_ptr<erhe::imgui::Imgui_renderer            > m_imgui_renderer;
     std::unique_ptr<erhe::renderer::Debug_renderer         > m_debug_renderer;

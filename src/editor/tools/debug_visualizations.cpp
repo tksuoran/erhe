@@ -1564,7 +1564,7 @@ void Debug_visualizations::physics_nodes_visualization(const Render_context& con
 
 #if defined(ERHE_PHYSICS_LIBRARY_JOLT) && defined(JPH_DEBUG_RENDERER)
     App_context& app_context = context.app_context;
-    if (app_context.app_settings->physics.debug_draw) {
+    if (app_context.editor_settings->physics.debug_draw) {
         glm::vec4 camera_position = camera->get_node()->position_in_world();
         const JPH::Vec3 camera_position_jolt{camera_position.x, camera_position.y, camera_position.z};
         app_context.jolt_debug_renderer->SetCameraPos(camera_position_jolt);

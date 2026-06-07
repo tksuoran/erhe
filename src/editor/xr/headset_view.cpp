@@ -5,6 +5,7 @@
 #include "erhe_xr/generated/perf_settings_level.hpp"
 #include "config/generated/viewport_config_data.hpp"
 #include "app_context.hpp"
+#include "app_settings.hpp"
 #include "erhe_imgui/windows/performance_window.hpp"
 #include "xr/xr_perf_metric_plot.hpp"
 #include "app_message_bus.hpp"
@@ -146,12 +147,11 @@ Headset_view::Headset_view(
 #endif
     App_context&                    app_context,
     App_rendering&                  app_rendering,
-    App_settings&                   app_settings,
-    Editor_settings_store&          editor_settings_store
+    App_settings&                   app_settings
 )
     : Scene_view{
         app_context,
-        &editor_settings_store,
+        &app_settings.settings_store(),
         "Headset",
         make_viewport_config(viewport_config_data)
     }

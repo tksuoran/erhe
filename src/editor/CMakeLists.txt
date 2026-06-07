@@ -554,7 +554,6 @@ erhe_codegen_generate(
         "${_config_defs}/transform_tool_config.py"
         "${_config_defs}/viewport_config_data.py"
         "${_config_defs}/window_config.py"
-        "${_config_defs}/app_settings_config.py"
         "${_config_defs}/imgui_settings_config.py"
         "${_config_defs}/icon_settings_config.py"
         "${_config_defs}/graphics_preset_entry.py"
@@ -632,9 +631,6 @@ set(_config_sources
     ${_config_out}/window_config.hpp
     ${_config_out}/window_config_serialization.hpp
     ${_config_out}/window_config.cpp
-    ${_config_out}/app_settings_config.hpp
-    ${_config_out}/app_settings_config_serialization.hpp
-    ${_config_out}/app_settings_config.cpp
     ${_config_out}/imgui_settings_config.hpp
     ${_config_out}/imgui_settings_config_serialization.hpp
     ${_config_out}/imgui_settings_config.cpp

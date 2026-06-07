@@ -240,7 +240,7 @@ void Mesh_operation::make_entries(
                 ERHE_VERIFY(renderable_ok && raytrace_ok);
                 entry.after.primitives.emplace_back(after_primitive, mesh_primitive.material);
 
-                if (m_parameters.context.app_settings->physics.static_enable) {
+                if (m_parameters.context.editor_settings->physics.static_enable) {
 
                     GEO::Mesh convex_hull{};
                     const bool convex_hull_ok = make_convex_hull(after_geometry->get_mesh(), convex_hull);

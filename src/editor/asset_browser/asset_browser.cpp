@@ -59,7 +59,7 @@ void Scene_open_operation::execute(App_context& context)
     if (first_time) {
         m_content_library = std::make_shared<Content_library>();
 
-        const bool enable_physics = context.app_settings->physics.static_enable;
+        const bool enable_physics = context.editor_settings->physics.static_enable;
         m_scene_root = std::make_shared<Scene_root>(
             context.app_message_bus,
             m_content_library,

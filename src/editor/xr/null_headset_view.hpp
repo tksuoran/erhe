@@ -42,7 +42,6 @@ class App_context;
 class App_message_bus;
 class App_rendering;
 class App_settings;
-class Editor_settings_store;
 class Hud;
 class Scene_builder;
 class Scene_root;
@@ -76,8 +75,7 @@ public:
 #endif
         App_context&                    context,
         App_rendering&                  app_rendering,
-        App_settings&                   app_settings,
-        Editor_settings_store&          editor_settings_store
+        App_settings&                   app_settings
     );
 
     // Public API

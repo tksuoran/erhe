@@ -1,28 +1,31 @@
 #pragma once
 
+#include "config/generated/editor_settings_config.hpp"
+
 #include <cstddef>
 #include <functional>
 #include <mutex>
 #include <string>
 #include <vector>
 
-struct Editor_settings_config;
-
 namespace editor {
 
 static const char* const c_editor_settings_file_path = "config/editor/editor_settings.json";
 
-// Owns persistence of Editor_settings_config (config/editor/editor_settings.json).
+// Owns Editor_settings_config and its persistence
+// (config/editor/editor_settings.json). The config is loaded at
+// construction.
 //
 // Subsystems that keep their live state outside the config struct (grid,
-// inventory, scene view debug visualizations, ...) register a collect
-// callback that copies that state into the config. The store runs the
-// callbacks, detects changes against the last saved state, and autosaves.
-// Serialization is owned here; other code only provides plain data copies.
+// inventory, scene view debug visualizations, App_settings, ...) register a
+// collect callback that copies that state into the config. The store runs
+// the callbacks, detects changes against the last saved state, and
+// autosaves. Serialization is owned here; other code only provides plain
+// data copies.
 class Editor_settings_store
 {
 public:
-    explicit Editor_settings_store(Editor_settings_config& settings);
+    Editor_settings_store();
 
     using Collect_callback = std::function<void(Editor_settings_config&)>;
 
@@ -37,8 +40,10 @@ public:
     // be called before the state captured by the callback is destroyed.
     void unregister_collect_callback(std::size_t callback_id);
 
-    // Read access to the loaded settings, for initial state at construction
-    // time (e.g. Scene_view looking up its per-view entry).
+    // The loaded settings. Sections edited directly through the mutable
+    // reference (Settings window) are autosaved by update() without a
+    // collect callback.
+    [[nodiscard]] auto get_settings()       ->       Editor_settings_config&;
     [[nodiscard]] auto get_settings() const -> const Editor_settings_config&;
 
     // Once per frame: collect, compare against the last saved state and
@@ -61,7 +66,7 @@ private:
         Collect_callback callback;
     };
 
-    Editor_settings_config&     m_settings;
+    Editor_settings_config      m_settings;
     // Parts are constructed in parallel init tasks; registration must be
     // thread safe. collect() runs on the main thread per frame.
     std::mutex                  m_callbacks_mutex;

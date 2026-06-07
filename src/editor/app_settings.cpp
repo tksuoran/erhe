@@ -14,14 +14,51 @@
 
 namespace editor {
 
+App_settings::App_settings()
+{
+    // Live state owned here persists through the store's autosave like any
+    // other collect-callback client. App_settings is an app-lifetime member
+    // of Editor, so the callback is never unregistered.
+    m_store.register_collect_callback(
+        [this](Editor_settings_config& editor_settings) {
+            if (!m_openxr) {
+                // editor_settings.graphics_preset_name only references the
+                // desktop preset list; do not write the XR preset name to it.
+                editor_settings.graphics_preset_name = graphics.current_graphics_preset.name;
+            }
 
-App_settings::App_settings() = default;
+            editor_settings.imgui.primary_font              = imgui.primary_font;
+            editor_settings.imgui.mono_font                 = imgui.mono_font;
+            editor_settings.imgui.font_size                 = imgui.font_size;
+            editor_settings.imgui.vr_font_size              = imgui.vr_font_size;
+            editor_settings.imgui.material_design_font_size = imgui.material_design_font_size;
+            editor_settings.imgui.icon_font_size            = imgui.icon_font_size;
+
+            editor_settings.icons = icon_settings;
+        }
+    );
+}
 
 void App_settings::apply_limits(erhe::graphics::Device& instance, App_message_bus& app_message_bus, const float window_scale_factor)
 {
     imgui.scale_factor = window_scale_factor;
     graphics.get_limits(instance, erhe::dataformat::Format::format_d32_sfloat); // TODO Do not hard code depth format
     graphics.select_active_graphics_preset(app_message_bus);
+}
+
+auto App_settings::settings_store() -> Editor_settings_store&
+{
+    return m_store;
+}
+
+auto App_settings::config() -> Editor_settings_config&
+{
+    return m_store.get_settings();
+}
+
+auto App_settings::config() const -> const Editor_settings_config&
+{
+    return m_store.get_settings();
 }
 
 auto App_settings::get_ui_scale() const -> float
@@ -138,9 +175,13 @@ void Graphics_settings::select_active_graphics_preset(App_message_bus& app_messa
     }
 }
 
-void App_settings::read(const Editor_settings_config& editor_settings, const bool openxr)
+void App_settings::read(const bool openxr)
 {
     log_startup->debug("App_settings::read()");
+
+    m_openxr = openxr;
+
+    const Editor_settings_config& editor_settings = m_store.get_settings();
 
     graphics.read_presets(openxr);
     if (openxr && !graphics.graphics_presets.empty()) {
@@ -161,27 +202,6 @@ void App_settings::read(const Editor_settings_config& editor_settings, const boo
     imgui.icon_font_size            = editor_settings.imgui.icon_font_size;
 
     icon_settings = editor_settings.icons;
-}
-
-void App_settings::write(Editor_settings_config& editor_settings, const bool openxr)
-{
-    log_startup->debug("App_settings::write()");
-
-    graphics.write_presets(openxr);
-    if (!openxr) {
-        // editor_settings.graphics_preset_name only references the desktop
-        // preset list; do not write the XR preset name back to it.
-        editor_settings.graphics_preset_name = graphics.current_graphics_preset.name;
-    }
-
-    editor_settings.imgui.primary_font              = imgui.primary_font;
-    editor_settings.imgui.mono_font                 = imgui.mono_font;
-    editor_settings.imgui.font_size                 = imgui.font_size;
-    editor_settings.imgui.vr_font_size              = imgui.vr_font_size;
-    editor_settings.imgui.material_design_font_size = imgui.material_design_font_size;
-    editor_settings.imgui.icon_font_size            = imgui.icon_font_size;
-
-    editor_settings.icons = icon_settings;
 }
 
 }

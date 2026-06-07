@@ -1,6 +1,5 @@
 #include "editor_settings_store.hpp"
 
-#include "config/generated/editor_settings_config.hpp"
 #include "config/generated/editor_settings_config_serialization.hpp"
 #include "erhe_codegen/config_io.hpp"
 #include "erhe_verify/verify.hpp"
@@ -9,8 +8,8 @@
 
 namespace editor {
 
-Editor_settings_store::Editor_settings_store(Editor_settings_config& settings)
-    : m_settings{settings}
+Editor_settings_store::Editor_settings_store()
+    : m_settings{erhe::codegen::load_config<Editor_settings_config>(c_editor_settings_file_path)}
 {
 }
 
@@ -34,6 +33,11 @@ void Editor_settings_store::unregister_collect_callback(const std::size_t callba
     );
     ERHE_VERIFY(i != m_collect_callbacks.end());
     m_collect_callbacks.erase(i);
+}
+
+auto Editor_settings_store::get_settings() -> Editor_settings_config&
+{
+    return m_settings;
 }
 
 auto Editor_settings_store::get_settings() const -> const Editor_settings_config&

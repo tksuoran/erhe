@@ -1385,7 +1385,7 @@ void Item_tree::imgui_tree(float ui_scale)
     if (ImGui::Button("Create Scene")) {
         auto content_library = std::make_shared<Content_library>();
         content_library->materials.make("Default");
-        const bool enable_physics = m_context.app_settings->physics.static_enable;
+        const bool enable_physics = m_context.editor_settings->physics.static_enable;
         auto scene_root = std::make_shared<Scene_root>(
             nullptr,
             content_library,

@@ -56,7 +56,6 @@ class App_rendering;
 class App_scenes;
 class App_settings;
 class App_windows;
-class Editor_settings_store;
 class Fly_camera_tool;
 class Grid_tool;
 #if defined(ERHE_XR_LIBRARY_OPENXR)
@@ -111,8 +110,9 @@ public:
     Renderer_config*        renderer_config     {nullptr};
     Text_renderer_config*   text_renderer_config{nullptr};
     Window_config*          window_config       {nullptr};
+    // Owned by App_settings (settings_store().get_settings()); exposed
+    // directly because the config data is read pervasively.
     Editor_settings_config* editor_settings      {nullptr};
-    Editor_settings_store*  editor_settings_store{nullptr};
 
     tf::Executor*                           executor              {nullptr};
     std::atomic_int                         pending_async_ops     {};

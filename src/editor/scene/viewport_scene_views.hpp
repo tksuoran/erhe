@@ -28,8 +28,7 @@ namespace editor {
 class App_context;
 class App_message_bus;
 class App_rendering;
-class App_settings; 
-class Editor_settings_store;
+class App_settings;
 class Post_processing;
 class Post_processing_node;
 class Scene_root;
@@ -72,7 +71,6 @@ public:
         erhe::imgui::Imgui_windows&                           imgui_windows,
         App_rendering&                                        app_rendering,
         App_settings&                                         app_settings,
-        Editor_settings_store&                                editor_settings_store,
         Post_processing&                                      post_processing,
         Tools&                                                tools,
         std::string_view                                      name,

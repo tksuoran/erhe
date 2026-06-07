@@ -1,14 +1,14 @@
 #pragma once
 
+#include "editor_settings_store.hpp"
+
 #include "config/generated/graphics_preset_entry.hpp"
 #include "config/generated/icon_settings_config.hpp"
-#include "config/generated/physics_config.hpp"
 #include "erhe_dataformat/dataformat.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 
 #include <string>
 
-struct Editor_settings_config;
 namespace erhe::window { class Context_window; }
 
 namespace editor {
@@ -36,25 +36,48 @@ public:
     int                                max_depth_layers{1};
 };
 
+// The editor's settings root: owns Editor_settings_store (which owns the
+// loaded Editor_settings_config and its autosave) plus live runtime state
+// that is not a plain copy of the config -- device-derived graphics limits,
+// the graphics preset list (a separate file, graphics_presets.json), the
+// erhe::imgui font settings (foreign type), and ephemeral UI state.
+//
+// Live state persists into editor_settings.json through a collect callback
+// registered at construction; explicit save calls are not needed. The
+// graphics preset list is written separately via Graphics_settings::
+// write_presets() (Settings window "Save Presets").
 class App_settings
 {
 public:
-    explicit App_settings();
+    App_settings();
 
     void apply_limits(erhe::graphics::Device& instance, App_message_bus& message_bus, float window_scale_factor);
-    void read        (const Editor_settings_config& editor_settings, bool openxr);
-    void write       (Editor_settings_config& editor_settings, bool openxr);
+
+    // Hydrates live state from the loaded config and the graphics presets
+    // file. Called once at startup (after the headset.openxr override
+    // logic) and from the Settings window "Load Presets" button.
+    void read(bool openxr);
 
     [[nodiscard]] auto get_ui_scale() const -> float;
 
-    // Node tree
+    [[nodiscard]] auto settings_store()       ->       Editor_settings_store&;
+    [[nodiscard]] auto config        ()       ->       Editor_settings_config&;
+    [[nodiscard]] auto config        () const -> const Editor_settings_config&;
+
+    // Node tree (ephemeral UI state, not persisted)
     bool node_tree_expand_attachments{false};
     bool node_tree_show_all          {false};
 
-    Physics_config              physics;
     Graphics_settings           graphics;
     Icon_settings_config        icon_settings;
     erhe::imgui::Imgui_settings imgui;
+
+private:
+    Editor_settings_store m_store;
+    // Latched in read(). When running OpenXR the active preset comes from
+    // the dedicated XR preset list, so its name must not be written back to
+    // config().graphics_preset_name, which references the desktop list.
+    bool                  m_openxr{false};
 };
 
 }

@@ -25,7 +25,7 @@ Physics_window::Physics_window(erhe::imgui::Imgui_renderer& imgui_renderer, erhe
 
 void Physics_window::viewport_toolbar(bool& hovered)
 {
-    bool physics_enabled = m_context.app_settings->physics.dynamic_enable;
+    bool physics_enabled = m_context.editor_settings->physics.dynamic_enable;
 
     ImGui::SameLine();
     const bool pressed = erhe::imgui::make_button("P", (physics_enabled) ? erhe::imgui::Item_mode::active : erhe::imgui::Item_mode::normal);
@@ -36,8 +36,8 @@ void Physics_window::viewport_toolbar(bool& hovered)
         );
     };
 
-    if (pressed && m_context.app_settings->physics.static_enable) {
-        m_context.app_settings->physics.dynamic_enable = !m_context.app_settings->physics.dynamic_enable;
+    if (pressed && m_context.editor_settings->physics.static_enable) {
+        m_context.editor_settings->physics.dynamic_enable = !m_context.editor_settings->physics.dynamic_enable;
     }
 }
 
@@ -45,12 +45,12 @@ void Physics_window::imgui()
 {
     ERHE_PROFILE_FUNCTION();
 
-    if (!m_context.app_settings->physics.static_enable) {
+    if (!m_context.editor_settings->physics.static_enable) {
         ImGui::BeginDisabled();
     }
-    ImGui::Checkbox("Physics enabled", &m_context.app_settings->physics.dynamic_enable);
-    ImGui::Checkbox("Debug draw", &m_context.app_settings->physics.debug_draw);
-    if (!m_context.app_settings->physics.static_enable) {
+    ImGui::Checkbox("Physics enabled", &m_context.editor_settings->physics.dynamic_enable);
+    ImGui::Checkbox("Debug draw", &m_context.editor_settings->physics.debug_draw);
+    if (!m_context.editor_settings->physics.static_enable) {
         ImGui::EndDisabled();
         if (ImGui::IsItemHovered()) {
             ImGui::SetTooltip("erhe.json has physics static_enable = false");

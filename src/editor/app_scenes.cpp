@@ -81,8 +81,8 @@ void App_scenes::update_physics_simulation_fixed_step(const Time_context& time_c
     ERHE_PROFILE_FUNCTION();
 
     if (
-        !m_context.app_settings->physics.static_enable ||
-        !m_context.app_settings->physics.dynamic_enable
+        !m_context.editor_settings->physics.static_enable ||
+        !m_context.editor_settings->physics.dynamic_enable
     ) {
         return;
     }
@@ -96,7 +96,7 @@ void App_scenes::before_physics_simulation_steps()
 {
     ERHE_PROFILE_FUNCTION();
 
-    if (!m_context.app_settings->physics.static_enable || !m_context.app_settings->physics.dynamic_enable) {
+    if (!m_context.editor_settings->physics.static_enable || !m_context.editor_settings->physics.dynamic_enable) {
         return;
     }
 
@@ -163,7 +163,7 @@ void App_scenes::after_physics_simulation_steps()
 {
     ERHE_PROFILE_FUNCTION();
 
-    if (!m_context.app_settings->physics.static_enable || !m_context.app_settings->physics.dynamic_enable) {
+    if (!m_context.editor_settings->physics.static_enable || !m_context.editor_settings->physics.dynamic_enable) {
         return;
     }
 

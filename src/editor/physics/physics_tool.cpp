@@ -399,7 +399,7 @@ auto Physics_tool::on_drag() -> bool
     if (m_physics_world == nullptr) {
         return false;
     }
-    if (!m_context.app_settings->physics.dynamic_enable) {
+    if (!m_context.editor_settings->physics.dynamic_enable) {
         return false;
     }
 

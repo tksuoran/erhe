@@ -439,17 +439,16 @@ void Settings_window::imgui()
     });
     pop_group();
 
+    // Everything stored in editor_settings.json autosaves through the
+    // settings store; these buttons only cover the graphics preset list,
+    // which lives in its own file (graphics_presets.json).
     add_entry("", [this, button_size](){
-        if (ImGui::Button("Load", button_size)) {
-            if (m_context.editor_settings != nullptr) {
-                m_context.app_settings->read(*m_context.editor_settings, m_context.OpenXR);
-            }
+        if (ImGui::Button("Load Presets", button_size)) {
+            m_context.app_settings->read(m_context.OpenXR);
         }
         ImGui::SameLine();
-        if (ImGui::Button("Save", button_size)) {
-            if (m_context.editor_settings != nullptr) {
-                m_context.app_settings->write(*m_context.editor_settings, m_context.OpenXR);
-            }
+        if (ImGui::Button("Save Presets", button_size)) {
+            m_context.app_settings->graphics.write_presets(m_context.OpenXR);
         }
     });
 
@@ -557,8 +556,8 @@ void Settings_window::imgui()
 
         add_entry("", [this, button_size, &settings](){
             if (ImGui::Button("Save Settings", button_size)) {
-                if (m_context.editor_settings_store != nullptr) {
-                    m_context.editor_settings_store->save();
+                if (m_context.app_settings != nullptr) {
+                    m_context.app_settings->settings_store().save();
                 }
             }
         });
