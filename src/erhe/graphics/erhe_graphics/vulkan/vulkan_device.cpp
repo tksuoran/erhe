@@ -114,6 +114,9 @@ void Device_impl::ensure_device_frame_slot(size_t index)
                     abort();
                 }
             }
+            // All handles are back in the initial state; hand them out
+            // again from the start of vk_command_buffers.
+            thread_pool.next_handle_index = 0;
         }
         df.submit_fence = VK_NULL_HANDLE;
     }
@@ -1272,6 +1275,9 @@ auto Device_impl::wait_frame() -> bool
                 abort();
             }
         }
+        // All handles are back in the initial state; hand them out
+        // again from the start of vk_command_buffers.
+        thread_pool.next_handle_index = 0;
     }
 
     // Read GPU timer results from the slice we are about to reuse. The
@@ -1865,28 +1871,43 @@ auto Device_impl::get_command_buffer(unsigned int thread_slot) -> Command_buffer
     Per_thread_command_pool& pool = m_command_pools[frame_slot][thread_slot];
     ERHE_VERIFY(pool.command_pool != VK_NULL_HANDLE);
 
-    const VkCommandBufferAllocateInfo allocate_info{
-        .sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-        .pNext              = nullptr,
-        .commandPool        = pool.command_pool,
-        .level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-        .commandBufferCount = 1
-    };
+    // Reuse a handle recycled by the slot's vkResetCommandPool() when one
+    // is available; allocate (and label) a new one only when this cycle
+    // needs more cbs than any previous cycle of this pool. Allocating a
+    // fresh handle every frame would accumulate cbs in the pool forever:
+    // pool reset returns cbs to the initial state but never frees them.
     VkCommandBuffer vk_command_buffer{VK_NULL_HANDLE};
-    const VkResult result = vkAllocateCommandBuffers(m_vulkan_device, &allocate_info, &vk_command_buffer);
-    if (result != VK_SUCCESS) {
-        log_context->critical(
-            "vkAllocateCommandBuffers() failed with {} {}",
-            static_cast<int32_t>(result), c_str(result)
+    const std::size_t handle_index = pool.next_handle_index;
+    if (handle_index < pool.vk_command_buffers.size()) {
+        vk_command_buffer = pool.vk_command_buffers[handle_index];
+    } else {
+        const VkCommandBufferAllocateInfo allocate_info{
+            .sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+            .pNext              = nullptr,
+            .commandPool        = pool.command_pool,
+            .level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+            .commandBufferCount = 1
+        };
+        const VkResult result = vkAllocateCommandBuffers(m_vulkan_device, &allocate_info, &vk_command_buffer);
+        if (result != VK_SUCCESS) {
+            log_context->critical(
+                "vkAllocateCommandBuffers() failed with {} {}",
+                static_cast<int32_t>(result), c_str(result)
+            );
+            abort();
+        }
+        set_debug_label(
+            VK_OBJECT_TYPE_COMMAND_BUFFER,
+            reinterpret_cast<uint64_t>(vk_command_buffer),
+            fmt::format("Device cb (frame_slot={}, thread_slot={}, handle_index={})", frame_slot, thread_slot, handle_index).c_str()
         );
-        abort();
+        pool.vk_command_buffers.push_back(vk_command_buffer);
     }
+    ++pool.next_handle_index;
 
     auto label = erhe::utility::Debug_label{
-        fmt::format("Device cb (frame_slot={}, thread_slot={}, allocation_index={})",
-            frame_slot, thread_slot, pool.allocated_command_buffers.size())
+        fmt::format("Device cb (frame_slot={}, thread_slot={}, handle_index={})", frame_slot, thread_slot, handle_index)
     };
-    set_debug_label(VK_OBJECT_TYPE_COMMAND_BUFFER, reinterpret_cast<uint64_t>(vk_command_buffer), label.data());
 
     auto command_buffer = std::make_unique<Command_buffer>(m_device, label);
     command_buffer->get_impl().set_vulkan_command_buffer(vk_command_buffer);

@@ -97,14 +97,24 @@ public:
 // One Vulkan VkCommandPool plus the list of Command_buffer instances
 // allocated from it. Owned by Device_impl (one Per_thread_command_pool
 // per (frame_in_flight, thread_slot) pair). The pool is created with
-// VK_COMMAND_POOL_CREATE_TRANSIENT_BIT and reset wholesale (with all
-// allocated cbs freed) when the owning frame-in-flight slot's submit
-// fence reports completion.
+// VK_COMMAND_POOL_CREATE_TRANSIENT_BIT and reset wholesale when the
+// owning frame-in-flight slot's previous use has retired on the GPU.
+//
+// VkCommandBuffer handles are reused across cycles: vkResetCommandPool()
+// returns every allocated cb to the initial state but keeps it owned by
+// the pool, so allocating a fresh handle each frame would grow the pool
+// without bound (handles are never freed on reset; the driver also keeps
+// each live cb's backing command-stream/upload buffers). vk_command_buffers
+// holds the handles allocated so far; next_handle_index counts how many
+// have been handed out in the current cycle and is reset to 0 together
+// with the pool.
 class Per_thread_command_pool
 {
 public:
     VkCommandPool                                command_pool{VK_NULL_HANDLE};
     std::vector<std::unique_ptr<Command_buffer>> allocated_command_buffers;
+    std::vector<VkCommandBuffer>                 vk_command_buffers;
+    std::size_t                                  next_handle_index{0};
 };
 
 // Device-frame lifecycle state (OpenXR-style three phases, plus an

@@ -144,6 +144,15 @@ Many systems have swappable backends selected at CMake configure time via `#ifde
 
 The editor and other apps write their spdlog output to `logs/` relative to the working directory (typically the repo root): `logs/log.txt` is the main log, `logs/vulkan.txt` and `logs/openxr.txt` capture backend-specific traces. Redirecting `stdout` of `editor.exe` is not enough -- the file sink writes via spdlog and a redirected stdout will be empty even when the app is running fine. Always `grep` / `findstr` against `logs/log.txt` to verify init-time and runtime behavior. On Android / Quest, the same log lines flow through the `android_sink` and are visible via `adb logcat` (tag `erhe`).
 
+## Memory growth diagnostics (Linux)
+
+Two zero-install tools. Both launch the editor in an isolated working directory (copy of `config/` with optional overrides applied, `res/` symlinked, shared spirv cache), so the user's `config/` is never touched and runs are reproducible:
+
+- `python3 scripts/idle_memory_check.py --duration 300` -- launches the editor, samples VmRSS / smaps_rollup / per-process DRM fdinfo GPU counters (GTT/VRAM) once a second, fits Theil-Sen + least-squares slopes, prints per-mapping growth attribution and a leak verdict (exit code 1 = growth). `--set 'file.json:dotted.path=value'` overrides any value in the copied config (works for logger levels in logging.json too); `--build-dir` selects other builds, including the OpenGL one.
+- `python3 scripts/vk_alloc_census.py` -- runs the editor under gdb (ptrace_scope=1 forbids attaching, so gdb must be the parent) and counts DRM `GEM_CREATE` ioctls with requested sizes and backtraces, Vulkan loader create/destroy entry points, and glibc brk/anonymous-mmap heap growth, all normalized per `vkQueuePresentKHR` frame. This sees GPU allocations the driver makes internally (command-stream / descriptor upload BOs) that never go through `vkAllocateMemory`/VMA.
+
+History: the 2026-06 idle leak (~850 MiB/min host heap + ~5 GiB/min GTT at uncapped fps) was `Device_impl::get_command_buffer()` calling `vkAllocateCommandBuffers` every frame; `vkResetCommandPool` resets but never frees pool-owned handles, so each frame leaked a `VkCommandBuffer` whose RADV command-stream/upload BOs stayed resident. Fixed by reusing handles across frame-in-flight cycles (`Per_thread_command_pool::vk_command_buffers` / `next_handle_index`). Exit-time stats (VMA dump, LSAN) looked clean because teardown's `vkDestroyCommandPool` freed everything -- steady growth needs over-time attribution, not exit-time leak checks.
+
 ## Quest device launches
 
 **For an individual / one-off launch, ALWAYS prompt the user to put the headset on and activate the controllers immediately before that launch.** Never assume the user is still wearing the headset for a one-off launch - the user may remove it after any single test, and an earlier "I'm ready / proceed" confirmation applies ONLY to that one launch, never to a later one. Each one-off `adb shell am start` (or `... quest run`) must be preceded by its own fresh prompt and explicit confirmation.
