@@ -339,14 +339,14 @@ auto Light_buffer::update(
         // check.
         shadow_map_texture_handle_compare    = m_graphics_device.get_handle(*shadow_map_texture, *compare_sampler);
         shadow_map_texture_handle_no_compare = m_graphics_device.get_handle(*shadow_map_texture, *no_compare_sampler);
-        log_render->trace(
-            "Shadow texture assigned: texture='{}' handle_compare={} handle_no_compare={}",
-            shadow_map_texture->get_debug_label().data(),
-            shadow_map_texture_handle_compare,
-            shadow_map_texture_handle_no_compare
-        );
-    } else {
-        log_render->warn("Shadow map texture is null - no shadow texture assigned");
+        // log_render->trace(
+        //     "Shadow texture assigned: texture='{}' handle_compare={} handle_no_compare={}",
+        //     shadow_map_texture->get_debug_label().data(),
+        //     shadow_map_texture_handle_compare,
+        //     shadow_map_texture_handle_no_compare
+        // );
+        // } else {
+        //     log_render->warn("Shadow map texture is null - no shadow texture assigned");
     }
 
     using erhe::graphics::as_span;

@@ -618,9 +618,9 @@ void Viewport_scene_view::update_hover_with_id_render()
         .position                   = get_position_in_world_viewport_depth(id_query.depth),
         .triangle                   = static_cast<uint32_t>(id_query.triangle_id) // TODO Consider these types
     };
-    log_controller_ray->trace("id_query.triangle_id = {}", id_query.triangle_id);
+    // log_controller_ray->trace("id_query.triangle_id = {}", id_query.triangle_id);
 
-    log_controller_ray->trace("position in world = {}", entry.position.value());
+    // log_controller_ray->trace("position in world = {}", entry.position.value());
 
     std::shared_ptr<erhe::scene::Mesh> scene_mesh = entry.scene_mesh_weak.lock();
     if (scene_mesh) {
@@ -635,7 +635,7 @@ void Viewport_scene_view::update_hover_with_id_render()
                 const GEO::Mesh& geo_mesh = entry.geometry->get_mesh();
                 entry.facet = shape->get_mesh_facet_from_triangle(entry.triangle);
                 if (entry.facet != GEO::NO_INDEX) {
-                    log_controller_ray->trace("hover facet = {}", entry.facet);
+                    // log_controller_ray->trace("hover facet = {}", entry.facet);
 
                     const bool       negative_determinant   = (node->get_flag_bits() & erhe::Item_flags::negative_determinant) == erhe::Item_flags::negative_determinant;
                     const GEO::vec3f facet_normal           = mesh_facet_normalf(geo_mesh, entry.facet);
@@ -645,9 +645,9 @@ void Viewport_scene_view::update_hover_with_id_render()
                     const glm::vec3  normal_in_world        = glm::vec3{normal_world_from_node * glm::vec4{local_normal, 0.0f}};
                     const glm::vec3  unit_normal            = glm::normalize(normal_in_world);
                     entry.normal = negative_determinant ? -unit_normal : unit_normal;
-                    log_controller_ray->trace("hover normal = {}", entry.normal.value());
-                } else {
-                    log_controller_ray->trace("hover facet = missing triangle to facet mapping");
+                    // log_controller_ray->trace("hover normal = {}", entry.normal.value());
+                //} else {
+                //    log_controller_ray->trace("hover facet = missing triangle to facet mapping");
                 }
             }
         }

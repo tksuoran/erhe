@@ -236,7 +236,7 @@ void Scene::sanity_check() const
 
 void Scene::sort_transform_nodes()
 {
-    log->trace("sorting {} nodes", m_flat_node_vector.size());
+    // log->trace("sorting {} nodes", m_flat_node_vector.size());
 
     std::sort(
         m_flat_node_vector.begin(),

@@ -134,7 +134,7 @@ void Brush_preview::render_preview(
     int64_t                                         time
 )
 {
-    log_tree->trace("Brush_preview::render_preview()");
+    //log_tree->trace("Brush_preview::render_preview()");
     set_color_texture(texture);
     set_color_texture_layer(texture_layer);
     resize(texture->get_width(), texture->get_height());

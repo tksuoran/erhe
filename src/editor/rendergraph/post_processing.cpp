@@ -643,13 +643,13 @@ void Post_processing::post_process(Post_processing_node& node, erhe::graphics::C
     const std::shared_ptr<erhe::graphics::Texture> input_texture = node.get_consumer_input_texture(erhe::rendergraph::Rendergraph_node_key::viewport_texture);
     ERHE_VERIFY(input_texture);
 
-    log_post_processing->trace(
-        "post_process input='{}' {}x{} downsample_levels={} upsample_levels={}",
-        input_texture->get_debug_label().string_view(),
-        input_texture->get_width(), input_texture->get_height(),
-        node.downsample_textures.size(),
-        node.upsample_textures.size()
-    );
+    // log_post_processing->trace(
+    //     "post_process input='{}' {}x{} downsample_levels={} upsample_levels={}",
+    //     input_texture->get_debug_label().string_view(),
+    //     input_texture->get_width(), input_texture->get_height(),
+    //     node.downsample_textures.size(),
+    //     node.upsample_textures.size()
+    // );
 
     const std::size_t level_offset_size = erhe::utility::align_offset_power_of_two(
         m_parameter_block.get_size_bytes(),

@@ -1144,14 +1144,14 @@ auto Swapchain_impl::present_image(uint32_t index) -> VkResult
         //}
     }
 
-    log_swapchain->trace(
+    ERHE_VULKAN_TRACE(
         "vkQueuePresentKHR image_index={} present_sem=0x{:x} swapchain=0x{:x}",
         index,
         reinterpret_cast<std::uintptr_t>(frame.present_semaphore),
         reinterpret_cast<std::uintptr_t>(m_vulkan_swapchain)
     );
     VkResult result = vkQueuePresentKHR(vulkan_present_queue, &present_info);
-    log_swapchain->trace("vkQueuePresentKHR returned {}", static_cast<int32_t>(result));
+    ERHE_VULKAN_TRACE("vkQueuePresentKHR returned {}", static_cast<int32_t>(result));
     if ((result == VK_ERROR_SURFACE_LOST_KHR) || (result == VK_ERROR_DEVICE_LOST)) {
         // SURFACE_LOST: the underlying ANativeWindow / NSWindow / HWND
         // backing the VkSurfaceKHR is gone. On Android this is the

@@ -188,7 +188,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
     Ring_buffer_range joint_range    = m_joint_buffer.update(glm::uvec4{0, 0, 0, 0}, {}, parameters.skins);
     Ring_buffer_range light_range    = m_light_buffer.update(lights, &parameters.light_projections, glm::vec3{0.0f});
 
-    log_shadow_renderer->trace("Rendering shadow map to '{}'", parameters.texture->get_debug_label().string_view());
+    // log_shadow_renderer->trace("Rendering shadow map to '{}'", parameters.texture->get_debug_label().string_view());
 
     const erhe::primitive::Primitive_mode primitive_mode{erhe::primitive::Primitive_mode::polygon_fill};
 
@@ -365,7 +365,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
             Draw_indirect_buffer_range draw_indirect_buffer_range = m_draw_indirect_buffer.update(bucket, primitive_mode);
             ERHE_VERIFY(bucket.entries.size() == draw_indirect_buffer_range.draw_indirect_count);
 
-            log_draw->debug("MDI - shader key = {}", bucket.shader_key.describe());
+            // log_draw->debug("MDI - shader key = {}", bucket.shader_key.describe());
 
             m_primitive_buffer.bind(encoder, primitive_range);
             m_draw_indirect_buffer.bind(encoder, draw_indirect_buffer_range.range);

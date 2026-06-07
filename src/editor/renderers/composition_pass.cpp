@@ -105,7 +105,7 @@ void Composition_pass::render(const Render_context& context)
         (render_style != nullptr) &&
         !is_primitive_mode_enabled(*render_style, data.primitive_mode)
     ) {
-        log_composer->trace("primitive mode is not enabled - skipping");
+        // log_composer->trace("primitive mode is not enabled - skipping");
         return;
     }
 
@@ -121,7 +121,7 @@ void Composition_pass::render(const Render_context& context)
     //}
 
     if (data.mesh_layers.empty()) {
-        log_composer->debug("render_fullscreen");
+        // log_composer->debug("render_fullscreen");
         context.app_context.forward_renderer->draw_primitives(
             erhe::scene_renderer::Forward_renderer::Primitive_render_parameters{
                 .base = erhe::scene_renderer::Forward_renderer::Base_render_parameters{
@@ -163,7 +163,7 @@ void Composition_pass::render(const Render_context& context)
             const auto mesh_layer = scene->get_mesh_layer_by_id(id);
             if (mesh_layer) {
                 m_mesh_spans.push_back(mesh_layer->meshes);
-                log_composer->trace("adding mesh layer {} with {} meshes", mesh_layer->name, mesh_layer->meshes.size());
+                // log_composer->trace("adding mesh layer {} with {} meshes", mesh_layer->name, mesh_layer->meshes.size());
             } else {
                 log_composer->warn("mesh layer not found for id {}", id);
             }
@@ -172,7 +172,7 @@ void Composition_pass::render(const Render_context& context)
             return;
         }
 
-        log_composer->debug("calling render with {} render pipelines", data.base_render_pipelines.size());
+        // log_composer->trace("calling render with {} render pipelines", data.base_render_pipelines.size());
 
         // Edge-line composition passes go through Content_wide_line_renderer
         // (both the compute backend on devices with compute shaders and the

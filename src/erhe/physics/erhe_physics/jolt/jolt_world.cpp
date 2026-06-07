@@ -187,7 +187,7 @@ Jolt_world::~Jolt_world() noexcept = default;
 
 void Jolt_world::update_fixed_step(const double dt)
 {
-    log_physics_frame->trace("update_fixed_step()");
+    // log_physics_frame->trace("update_fixed_step()");
     // If you take larger steps than 1 / 60th of a second you need to do
     // multiple collision steps in order to keep the simulation stable.
     // Do 1 collision step per 1 / 60th of a second (round up).

@@ -354,10 +354,10 @@ void Handle_visualizations::update_mesh_visibility(bool precondition, const std:
         mesh->get_mutable_primitives().front().material = material;
     }
 
-    log_trs_tool->trace(
-        "{}->set_visible({}) mode = {}, material = {}",
-        node->get_name(), visible, c_str(mode), material ? material->get_name() : std::string{"<no material>"}
-    );
+    // log_trs_tool->trace(
+    //     "{}->set_visible({}) mode = {}, material = {}",
+    //     node->get_name(), visible, c_str(mode), material ? material->get_name() : std::string{"<no material>"}
+    // );
 }
 
 void Handle_visualizations::update_visibility(Transform_tool_settings& settings)

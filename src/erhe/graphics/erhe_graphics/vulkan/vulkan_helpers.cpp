@@ -1520,10 +1520,12 @@ void log_image_layout_transition(
     const char*                  source
 )
 {
+    static_cast<void>(barrier);
+    static_cast<void>(source);
     if (barrier.oldLayout == barrier.newLayout) {
         return;
     }
-    log_vulkan->trace(
+    ERHE_VULKAN_TRACE(
         "{}: image=0x{:x} layout {} -> {}",
         (source != nullptr) ? source : "barrier",
         reinterpret_cast<std::uintptr_t>(barrier.image),

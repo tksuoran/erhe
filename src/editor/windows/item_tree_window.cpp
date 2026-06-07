@@ -1117,7 +1117,7 @@ auto Item_tree::item_icon_and_text(const std::shared_ptr<erhe::Item_base>& item,
             thumbnail_drawn = m_context.thumbnails->draw(
                 brush,
                 [this, brush](const std::shared_ptr<erhe::graphics::Texture>& texture, unsigned int texture_layer, int64_t time) {
-                    log_tree->trace("Rendering preview for brush {}", brush->get_name());
+                    // log_tree->trace("Rendering preview for brush {}", brush->get_name());
                     m_context.brush_preview->render_preview(texture, texture_layer, brush, time);
                 }
             );

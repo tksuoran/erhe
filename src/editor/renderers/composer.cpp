@@ -45,7 +45,7 @@ Composer::Composer(const std::string_view name)
 
 void Composer::render(const Render_context& context)
 {
-    log_composer->trace("Composer::render()");
+    //log_composer->trace("Composer::render()");
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{mutex};
 
     for (const auto& composition_pass : composition_passes) {

@@ -140,7 +140,7 @@ void Command_buffer_impl::begin()
     // pass. Subsequent cbs in the same frame find the flag already cleared
     // and skip the reset. See Device_impl::maybe_reset_gpu_timer_slice.
     m_device_impl->maybe_reset_gpu_timer_slice(m_vk_command_buffer);
-    log_swapchain->trace(
+    ERHE_VULKAN_TRACE(
         "Command_buffer_impl::begin() vk_cb=0x{:x} label='{}'",
         reinterpret_cast<std::uintptr_t>(m_vk_command_buffer),
         m_debug_label.string_view()
@@ -159,7 +159,7 @@ void Command_buffer_impl::end()
         );
         std::abort();
     }
-    log_swapchain->trace(
+    ERHE_VULKAN_TRACE(
         "Command_buffer_impl::end() vk_cb=0x{:x} label='{}'",
         reinterpret_cast<std::uintptr_t>(m_vk_command_buffer),
         m_debug_label.string_view()
@@ -758,7 +758,7 @@ auto Command_buffer_impl::wait_for_swapchain(Frame_state& out_frame_state) -> bo
             Swapchain* swapchain = surface->get_swapchain();
             if (swapchain != nullptr) {
                 const bool ok = swapchain->get_impl().wait_frame(out_frame_state);
-                log_swapchain->trace(
+                ERHE_VULKAN_TRACE(
                     "Command_buffer_impl::wait_for_swapchain() ok={}",
                     ok
                 );
@@ -774,7 +774,7 @@ auto Command_buffer_impl::wait_for_swapchain(Frame_state& out_frame_state) -> bo
     // Demoted to debug: the editor calls this every frame and a
     // not-yet-ready surface (Android background / pre-foreground
     // launch race) is a normal state, not a warning condition.
-    log_swapchain->debug("Command_buffer_impl::wait_for_swapchain() returning false (no surface or swapchain wait_frame failed)");
+    ERHE_VULKAN_TRACE("Command_buffer_impl::wait_for_swapchain() returning false (no surface or swapchain wait_frame failed)");
     return false;
 }
 
@@ -811,7 +811,7 @@ auto Command_buffer_impl::begin_swapchain(const Frame_begin_info& frame_begin_in
 
     const bool ok = swapchain->get_impl().begin_frame(frame_begin_info);
     out_frame_state.should_render = ok;
-    log_swapchain->trace(
+    ERHE_VULKAN_TRACE(
         "Command_buffer_impl::begin_swapchain() ok={} acquire_sem=0x{:x} present_sem=0x{:x}",
         ok,
         reinterpret_cast<std::uintptr_t>(swapchain->get_impl().get_active_acquire_semaphore()),

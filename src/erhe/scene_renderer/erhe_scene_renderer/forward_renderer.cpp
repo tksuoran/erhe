@@ -103,10 +103,11 @@ void Forward_renderer::render(const Render_parameters& parameters)
         }
     }
     if (all_empty) {
-        log_render->debug("Forward_renderer::render({}) - empty", base.debug_label);
+        // log_render->debug("Forward_renderer::render({}) - empty", base.debug_label);
+        return; // TODO is this ok?
     }
 
-    log_render->debug("Forward_renderer::render({})", base.debug_label);
+    // log_render->debug("Forward_renderer::render({})", base.debug_label);
 
     const auto& mesh_spans = parameters.mesh_spans;
     const auto& filter     = parameters.filter;

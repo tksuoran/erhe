@@ -884,12 +884,12 @@ void Hotbar::set_mesh_visibility(const bool value)
 
     if (m_quad_view) {
         m_quad_view->set_visible(value);
-        log_hud->trace("Horizontal menu visibility set to {}", value);
+        // log_hud->trace("Horizontal menu visibility set to {}", value);
     }
 
     if (m_radial_menu_background_mesh) {
         m_radial_menu_background_mesh->set_visible(value);
-        log_hud->trace("Radial menu visibility set to {}", value);
+        // log_hud->trace("Radial menu visibility set to {}", value);
     }
 }
 

@@ -1162,7 +1162,7 @@ void Device_impl::submit_command_buffers(std::span<Command_buffer* const> comman
         submit_fence = m_device_submit_history[slot].submit_fence;
     }
 
-    log_swapchain->trace(
+    ERHE_VULKAN_TRACE(
         "submit_command_buffers: vkQueueSubmit2 cb_count={} wait_sem_count={} signal_sem_count={} fence=0x{:x} swapchains_to_present={}",
         submit_info_aggregate.command_buffers.size(),
         submit_info_aggregate.wait_semaphores.size(),
@@ -1186,7 +1186,7 @@ void Device_impl::submit_command_buffers(std::span<Command_buffer* const> comman
     for (Swapchain_impl* swapchain : submit_info_aggregate.swapchains_to_present) {
         ERHE_VERIFY(swapchain != nullptr);
         const bool present_ok = swapchain->present();
-        log_swapchain->trace("submit_command_buffers: implicit present ok={}", present_ok);
+        ERHE_VULKAN_TRACE("submit_command_buffers: implicit present ok={}", present_ok);
         static_cast<void>(present_ok);
     }
 }
@@ -1528,7 +1528,7 @@ void Device_impl::update_frame_completion()
         .signalSemaphoreInfoCount = 1,
         .pSignalSemaphoreInfos    = &signal_semaphore_info,
     };
-    log_context->trace("vkQueueSubmit2() end of frame timeline semaphore @ frame index = {}", m_frame_index);
+    ERHE_VULKAN_TRACE("vkQueueSubmit2() end of frame timeline semaphore @ frame index = {}", m_frame_index);
     result = vkQueueSubmit2(m_vulkan_graphics_queue, 1, &submit_info, VK_NULL_HANDLE);
     if (result != VK_SUCCESS) {
         log_context->critical("vkQueueSubmit2() failed with {} {}", static_cast<int32_t>(result), c_str(result));
@@ -1548,7 +1548,7 @@ void Device_impl::update_frame_completion()
         log_context->error("vkGetSemaphoreCounterValue() failed with {} {}", static_cast<int32_t>(result), c_str(result));
     } else {
         for (; m_latest_completed_frame <= latest_completed_frame; ++m_latest_completed_frame) {
-            log_context->trace("GPU has completed frame index = {}", m_latest_completed_frame);
+            // log_context->trace("GPU has completed frame index = {}", m_latest_completed_frame);
             frame_completed(m_latest_completed_frame);
         }
     }

@@ -38,7 +38,7 @@ Scoped_debug_group_impl::Scoped_debug_group_impl(Command_buffer& command_buffer,
         .color      = {0.1f, 0.2f, 0.3f, 1.0f}
     };
 
-    log_debug->debug("begin debug group: {}", m_debug_label.string_view());
+    // log_debug->debug("begin debug group: {}", m_debug_label.string_view());
 
     m_command_buffer = vk_cb;
     vkCmdBeginDebugUtilsLabelEXT(m_command_buffer, &label_info);
@@ -51,7 +51,7 @@ Scoped_debug_group_impl::~Scoped_debug_group_impl() noexcept
         // was null. Nothing was opened, so nothing to close.
         return;
     }
-    log_debug->debug("end debug group: {}", m_debug_label.string_view());
+    // log_debug->debug("end debug group: {}", m_debug_label.string_view());
     vkCmdEndDebugUtilsLabelEXT(m_command_buffer);
 }
 

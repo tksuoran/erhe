@@ -1245,7 +1245,7 @@ void Render_pass_impl::start_render_pass(Command_buffer& command_buffer, Render_
     m_device_impl.set_active_render_pass_impl(this);
 
     // Log implicit layout transitions performed by the render pass
-    log_vulkan->trace("render_pass '{}' begin", m_debug_label.data());
+    // log_vulkan->trace("render_pass '{}' begin", m_debug_label.data());
     for (const Render_pass_attachment_descriptor& att : m_color_attachments) {
         if (!att.is_defined() || (att.texture == nullptr)) {
             continue;
@@ -1313,13 +1313,13 @@ void Render_pass_impl::start_render_pass(Command_buffer& command_buffer, Render_
             .pNext    = nullptr,
             .contents = VK_SUBPASS_CONTENTS_INLINE
         };
-        log_render_pass->trace(
-            "start_render_pass swapchain branch: vkCmdBeginRenderPass2 cb=0x{:x} fb=0x{:x} extent={}x{}",
-            reinterpret_cast<std::uintptr_t>(m_command_buffer),
-            reinterpret_cast<std::uintptr_t>(framebuffer),
-            render_pass_begin_info.renderArea.extent.width,
-            render_pass_begin_info.renderArea.extent.height
-        );
+        // log_render_pass->trace(
+        //     "start_render_pass swapchain branch: vkCmdBeginRenderPass2 cb=0x{:x} fb=0x{:x} extent={}x{}",
+        //     reinterpret_cast<std::uintptr_t>(m_command_buffer),
+        //     reinterpret_cast<std::uintptr_t>(framebuffer),
+        //     render_pass_begin_info.renderArea.extent.width,
+        //     render_pass_begin_info.renderArea.extent.height
+        // );
         vkCmdBeginRenderPass2(m_command_buffer, &render_pass_begin_info, &subpass_begin_info);
         if (m_swapchain != nullptr) {
             m_swapchain->get_impl().mark_render_pass_recorded();
@@ -1520,10 +1520,10 @@ void Render_pass_impl::end_render_pass(Command_buffer& command_buffer, Render_pa
                 .sType = VK_STRUCTURE_TYPE_SUBPASS_END_INFO,
                 .pNext = nullptr
             };
-            log_render_pass->trace(
-                "end_render_pass swapchain branch: vkCmdEndRenderPass2 cb=0x{:x}",
-                reinterpret_cast<std::uintptr_t>(m_command_buffer)
-            );
+            // log_render_pass->trace(
+            //     "end_render_pass swapchain branch: vkCmdEndRenderPass2 cb=0x{:x}",
+            //     reinterpret_cast<std::uintptr_t>(m_command_buffer)
+            // );
             vkCmdEndRenderPass2(m_command_buffer, &subpass_end_info);
         }
     } else {

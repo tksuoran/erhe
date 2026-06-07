@@ -182,7 +182,7 @@ void Thumbnails::update()
     for (size_t i = 0, end = m_thumbnails.size(); i < end; ++i) {
         Thumbnail& thumbnail = m_thumbnails[i];
         if (thumbnail.callback) {
-            log_render->trace("Updating thumbnail slot {}", i);
+            //log_render->trace("Updating thumbnail slot {}", i);
             thumbnail.callback.value()(thumbnail.texture_view, thumbnail.texture_layer, thumbnail.time);
             thumbnail.callback.reset();
         }
