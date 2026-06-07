@@ -6,7 +6,6 @@
         "commands": false,
         "composer": false,
         "create": false,
-        "debug_visualizations": false,
         "depth_visualization": false,
         "fly_camera": false,
         "frame_log": false,
@@ -31,7 +30,6 @@
         "post_processing": false,
         "properties": true,
         "rendergraph": false,
-        "scene_view_config": false,
         "selection": false,
         "settings": false,
         "sheet": false,
@@ -39,7 +37,6 @@
         "timeline": true,
         "tool_properties": false,
         "tools_content_library": false,
-        "transform": true,
-        "viewport_config": false
+        "transform": true
     }
 }
