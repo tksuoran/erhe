@@ -42,6 +42,7 @@ void Scene_builder_viewport_resources_operation::execute(App_context& context)
         *context.imgui_windows,
         *context.app_rendering,
         app_settings,
+        *context.editor_settings_store,
         *context.post_processing,
         *context.tools,
         m_parameters.name,

@@ -22,7 +22,7 @@ void make_check_box           (const char* label, bool* value, Item_mode mode = 
 void make_text_with_background(const char* text, float rounding, ImVec4 background_color);
 
 template <typename T>
-void make_combo(
+auto make_combo(
     const char*       label,
     T&                value,
     const char* const items[],
@@ -33,6 +33,7 @@ void make_combo(
     int int_value = static_cast<int>(value);
     ImGui::Combo(label, &int_value, items, items_count, popup_max_height_in_items);
     value = static_cast<T>(int_value);
+    return ImGui::IsItemDeactivatedAfterEdit();
 }
 
 class Value_edit_state

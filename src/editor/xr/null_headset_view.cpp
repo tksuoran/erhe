@@ -14,9 +14,10 @@ Headset_view::Headset_view(
 #endif
     App_context&                    app_context,
     App_rendering&                  app_rendering,
-    App_settings&                   app_settings
+    App_settings&                   app_settings,
+    Editor_settings_store&          editor_settings_store
 )
-    : Scene_view{app_context, Viewport_config{}}
+    : Scene_view{app_context, nullptr, {}, Viewport_config{}}
     , erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Headset", "headset"}
 {
     static_cast<void>(commands);
@@ -25,6 +26,7 @@ Headset_view::Headset_view(
     static_cast<void>(context_window);
     static_cast<void>(app_rendering);
     static_cast<void>(app_settings);
+    static_cast<void>(editor_settings_store);
 }
 
 void Headset_view::render(const Render_context&)

@@ -15,12 +15,8 @@
 
 struct Debug_visualizations_settings;
 
-namespace erhe::graphics {
-    class Command_buffer;
-}
-namespace erhe::imgui {
-    class Imgui_windows;
-}
+namespace erhe::graphics { class Command_buffer; }
+namespace erhe::imgui    { class Imgui_windows; }
 namespace erhe::scene {
     class Camera;
     class Layout;
@@ -54,29 +50,29 @@ static constexpr const char* c_visualization_mode_strings[] = {
 };
 
 class Debug_visualizations
-    : public erhe::imgui::Imgui_window
-    , public Renderable
+    : public Renderable
 {
 public:
-    Debug_visualizations(
-        erhe::graphics::Device&                  graphics_device,
-        erhe::graphics::Command_buffer&          init_command_buffer,
-        erhe::imgui::Imgui_renderer&             imgui_renderer,
-        erhe::imgui::Imgui_windows&              imgui_windows,
-        erhe::scene_renderer::Program_interface& program_interface,
-        App_context&                             context,
-        App_message_bus&                         app_message_bus,
-        App_rendering&                           app_rendering,
-        Programs&                                programs,
-        const Debug_visualizations_settings&     settings
-    );
-    ~Debug_visualizations() noexcept;
+    //Debug_visualizations();
+    //~Debug_visualizations() noexcept;
+    //Debug_visualizations(
+    //    erhe::graphics::Device&                  graphics_device,
+    //    erhe::graphics::Command_buffer&          init_command_buffer,
+    //    erhe::imgui::Imgui_renderer&             imgui_renderer,
+    //    erhe::imgui::Imgui_windows&              imgui_windows,
+    //    erhe::scene_renderer::Program_interface& program_interface,
+    //    App_context&                             context,
+    //    App_message_bus&                         app_message_bus,
+    //    App_rendering&                           app_rendering,
+    //    Programs&                                programs,
+    //    const Debug_visualizations_settings&     settings
+    //);
+    //~Debug_visualizations() noexcept;
 
     // Implements Renderable
     void render(const Render_context& context) override;
 
-    // Implements Imgui_window
-    void imgui() override;
+    void imgui(Scene_view& scene_view);
 
     // Copies settings into / out of the live window state. Persistence is
     // owned by Editor_settings_store, which calls write_config through a
@@ -97,7 +93,9 @@ private:
         glm::vec4                            half_light_color{0};
     };
 
+#if 0
     void shadow_debug            (const Render_context& render_context);
+#endif
     void world_axes_visualization(const Render_context& render_context);
 
     void mesh_visualization(const Render_context& render_context, erhe::scene::Mesh* mesh);
@@ -109,31 +107,31 @@ private:
         const erhe::scene::Light*            light
     );
 
-    void directional_light_visualization(const Light_visualization_context& context);
+    void directional_light_visualization (const Light_visualization_context& context);
     void shadow_frustum_fit_visualization(const Render_context& context);
-    void point_light_visualization      (const Light_visualization_context& context);
-    void spot_light_visualization       (const Light_visualization_context& context);
-    void camera_visualization           (const Render_context& render_context, const erhe::scene::Camera* camera);
-    void layout_visualization           (const Render_context& render_context, const erhe::scene::Node& node, const erhe::scene::Layout& layout);
-    void selection_visualization        (const Render_context& context);
-    void physics_nodes_visualization    (const Render_context& context);
-    void raytrace_nodes_visualization   (const Render_context& context);
-    void mesh_labels                    (const Render_context& context, erhe::scene::Mesh* mesh);
+    void point_light_visualization       (const Light_visualization_context& context);
+    void spot_light_visualization        (const Light_visualization_context& context);
+    void camera_visualization            (const Render_context& render_context, const erhe::scene::Camera* camera);
+    void layout_visualization            (const Render_context& render_context, const erhe::scene::Node& node, const erhe::scene::Layout& layout);
+    void selection_visualization         (const Render_context& context);
+    void physics_nodes_visualization     (const Render_context& context);
+    void raytrace_nodes_visualization    (const Render_context& context);
+    void mesh_labels                     (const Render_context& context, erhe::scene::Mesh* mesh);
 
     void label(
-        const Render_context&  context,
-        const glm::mat4&       clip_from_world,
-        const glm::mat4&       world_from_node,
-        const glm::vec3&       position_in_world,
-        uint32_t               text_color,
-        std::string_view       label_text
+        const Render_context& context,
+        const glm::mat4&      clip_from_world,
+        const glm::mat4&      world_from_node,
+        const glm::vec3&      position_in_world,
+        uint32_t              text_color,
+        std::string_view      label_text
     );
 
     void make_combo(const char* label, Visualization_mode& visualization);
 
-    erhe::message_bus::Subscription<Hover_scene_view_message>    m_hover_scene_view_subscription;
-    App_context&                         m_context;
-    Scene_view*                          m_hover_scene_view{nullptr};
+    //erhe::message_bus::Subscription<Hover_scene_view_message> m_hover_scene_view_subscription;
+    //App_context&                                               m_context;
+    //Scene_view*                                                m_hover_scene_view{nullptr};
     erhe::math::Bounding_volume_combiner m_selection_bounding_volume;
 
     Visualization_mode m_lights                 {Visualization_mode::all};
@@ -147,8 +145,6 @@ private:
     Visualization_mode m_edge_labels            {Visualization_mode::off};
     Visualization_mode m_corner_labels          {Visualization_mode::off};
     Visualization_mode m_raytrace_visualization {Visualization_mode::off};
-
-    Property_editor m_property_editor;
 
     bool m_vertex_positions{false};
 
@@ -244,9 +240,10 @@ private:
     float     m_corner_label_line_length         {0.05f};
     float     m_corner_label_line_width          {1.0f};
 
-    erhe::graphics::Vertex_input_state                    m_empty_vertex_input;
-    std::unique_ptr<erhe::scene_renderer::Texel_renderer> m_shadow_texel_renderer;
-    erhe::graphics::Base_render_pipeline                  m_shadow_texel_pipeline;
+    // erhe::graphics::Vertex_input_state                    m_empty_vertex_input;
+    // std::unique_ptr<erhe::scene_renderer::Texel_renderer> m_shadow_texel_renderer;
+    // erhe::graphics::Base_render_pipeline                  m_shadow_texel_pipeline;
+    Property_editor m_property_editor;
 };
 
 }

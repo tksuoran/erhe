@@ -358,7 +358,7 @@ public:
             erhe::log::set_breadcrumb("tick: xr update_actions");
             bool headset_update_actions_ok = headset_begin_frame_ok && m_headset_view->update_actions();
             if (headset_update_actions_ok) {
-                m_viewport_config_window->set_edit_data(&m_headset_view->get_config());
+                // TOOD m_viewport_config_window->set_edit_data(&m_headset_view->get_config());
                 // TODO m_scene_view_config_window
             } else{
                 ERHE_PROFILE_SCOPE("OpenXR sleep");
@@ -1419,8 +1419,6 @@ public:
                 m_properties             = std::make_unique<Properties                      >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_rendergraph_window     = std::make_unique<Rendergraph_window              >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_tool_properties_window = std::make_unique<Tool_properties_window          >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
-                m_viewport_config_window = std::make_unique<Viewport_config_window          >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
-                m_scene_view_config_window = std::make_unique<Scene_view_config_window      >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_logs                   = std::make_unique<erhe::imgui::Logs               >(*m_commands.get(),       *m_imgui_renderer.get(), "config/editor/logging.json");
                 m_log_settings_window    = std::make_unique<erhe::imgui::Log_settings_window>(*m_imgui_renderer.get(), *m_imgui_windows.get(),  *m_logs.get());
                 m_tail_log_window        = std::make_unique<erhe::imgui::Tail_log_window    >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  *m_logs.get());
@@ -1536,7 +1534,8 @@ public:
 #endif
                     m_app_context,
                     *m_app_rendering.get(),
-                    *m_app_settings.get()
+                    *m_app_settings.get(),
+                    m_editor_settings_store
                 );
 #if defined(ERHE_XR_LIBRARY_OPENXR)
                 if (m_app_context.OpenXR) {
@@ -1647,18 +1646,6 @@ public:
                     *m_mesh_memory.get(),
                     *m_programs.get()
                 );
-                m_debug_visualizations = std::make_unique<Debug_visualizations>(
-                    *m_graphics_device.get(),
-                    *m_app_context.current_command_buffer,
-                    *m_imgui_renderer.get(),
-                    *m_imgui_windows.get(),
-                    *m_program_interface.get(),
-                    m_app_context,
-                    *m_app_message_bus.get(),
-                    *m_app_rendering.get(),
-                    *m_programs.get(),
-                    m_editor_settings.debug_visualizations
-                );
             }
             ERHE_TASK_FOOTER(
                 .name("Group 1")
@@ -1682,15 +1669,12 @@ public:
                         *m_graphics_device.get(),
                         *m_app_context.current_command_buffer,
                         m_app_context,
-                        *m_mesh_memory.get(),
-                        *m_programs.get()
+                        *m_mesh_memory.get()
                     );
                     m_brush_preview = std::make_unique<Brush_preview>(
                         *m_graphics_device.get(),
                         *m_app_context.current_command_buffer,
-                        m_app_context,
-                        *m_mesh_memory.get(),
-                        *m_programs.get()
+                        m_app_context
                     );
                 }
             }
@@ -2242,8 +2226,6 @@ public:
         m_app_context.timeline_window          = m_timeline_window       .get();
         m_app_context.tools                    = m_tools                 .get();
         m_app_context.transform_tool           = m_transform_tool        .get();
-        m_app_context.viewport_config_window   = m_viewport_config_window.get();
-        m_app_context.scene_view_config_window = m_scene_view_config_window.get();
         m_app_context.scene_views              = m_viewport_scene_views  .get();
 
         // Subsystems whose live state lives outside Editor_settings_config
@@ -2258,11 +2240,6 @@ public:
         m_editor_settings_store.register_collect_callback(
             [this](Editor_settings_config& settings) {
                 m_inventory_window->write_config(settings.inventory);
-            }
-        );
-        m_editor_settings_store.register_collect_callback(
-            [this](Editor_settings_config& settings) {
-                m_debug_visualizations->write_config(settings.debug_visualizations);
             }
         );
     }
@@ -2619,8 +2596,6 @@ public:
     std::unique_ptr<Rendergraph_window              >        m_rendergraph_window;
     std::unique_ptr<Timeline_window                 >        m_timeline_window;
     std::unique_ptr<Tool_properties_window          >        m_tool_properties_window;
-    std::unique_ptr<Viewport_config_window          >        m_viewport_config_window;
-    std::unique_ptr<Scene_view_config_window        >        m_scene_view_config_window;
     std::unique_ptr<erhe::imgui::Logs               >        m_logs;
     std::unique_ptr<erhe::imgui::Log_settings_window>        m_log_settings_window;
     std::unique_ptr<erhe::imgui::Tail_log_window    >        m_tail_log_window;
@@ -2648,7 +2623,6 @@ public:
     std::unique_ptr<Brdf_slice          >                    m_brdf_slice;
     std::unique_ptr<Debug_draw          >                    m_debug_draw;
     std::unique_ptr<Depth_visualization_window>              m_debug_view_window;
-    std::unique_ptr<Debug_visualizations>                    m_debug_visualizations;
     std::unique_ptr<Material_preview    >                    m_material_preview;
     std::unique_ptr<Brush_preview       >                    m_brush_preview;
 #if defined(ERHE_XR_LIBRARY_OPENXR)

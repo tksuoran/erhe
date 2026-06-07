@@ -204,6 +204,7 @@ auto Scene_views::create_viewport_scene_view(
     erhe::imgui::Imgui_windows&                           imgui_windows,
     App_rendering&                                        app_rendering,
     App_settings&                                         app_settings,
+    Editor_settings_store&                                editor_settings_store,
     Post_processing&                                      post_processing,
     Tools&                                                tools,
     const std::string_view                                name,
@@ -215,6 +216,7 @@ auto Scene_views::create_viewport_scene_view(
 ) -> std::shared_ptr<Viewport_scene_view>
 {
     const auto new_viewport = std::make_shared<Viewport_scene_view>(
+        &editor_settings_store,
         viewport_config_data,
         m_app_context,
         rendergraph,
@@ -317,6 +319,7 @@ auto Scene_views::open_new_viewport_scene_view(
                     *m_app_context.imgui_windows,
                     *m_app_context.app_rendering,
                     *m_app_context.app_settings,
+                    *m_app_context.editor_settings_store,
                     *m_app_context.post_processing,
                     *m_app_context.tools,
                     name,
@@ -337,6 +340,7 @@ auto Scene_views::open_new_viewport_scene_view(
                 *m_app_context.imgui_windows,
                 *m_app_context.app_rendering,
                 *m_app_context.app_settings,
+                *m_app_context.editor_settings_store,
                 *m_app_context.post_processing,
                 *m_app_context.tools,
                 name,
@@ -356,6 +360,7 @@ auto Scene_views::open_new_viewport_scene_view(
         *m_app_context.imgui_windows,
         *m_app_context.app_rendering,
         *m_app_context.app_settings,
+        *m_app_context.editor_settings_store,
         *m_app_context.post_processing,
         *m_app_context.tools,
         name,

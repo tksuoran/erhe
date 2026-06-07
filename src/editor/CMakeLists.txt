@@ -563,6 +563,7 @@ erhe_codegen_generate(
         "${_config_defs}/render_style_data.py"
         "${_config_defs}/debug_visualizations_config.py"
         "${_config_defs}/debug_visualizations_settings.py"
+        "${_config_defs}/scene_view_settings.py"
         "${_config_defs}/default_viewport_config.py"
         "${_config_defs}/make_mesh_args.py"
         "${_config_defs}/add_lights_args.py"
@@ -661,6 +662,9 @@ set(_config_sources
     ${_config_out}/debug_visualizations_settings.hpp
     ${_config_out}/debug_visualizations_settings_serialization.hpp
     ${_config_out}/debug_visualizations_settings.cpp
+    ${_config_out}/scene_view_settings.hpp
+    ${_config_out}/scene_view_settings_serialization.hpp
+    ${_config_out}/scene_view_settings.cpp
     ${_config_out}/make_mesh_args.hpp
     ${_config_out}/make_mesh_args_serialization.hpp
     ${_config_out}/make_mesh_args.cpp

@@ -61,6 +61,7 @@ static constexpr const char* c_renderer_choice_strings[] = {
 class App_message_bus;
 class App_rendering;
 class App_scenes;
+class Editor_settings_store;
 class Physics_window;
 class Post_processing;
 class Post_processing_node;
@@ -88,6 +89,7 @@ class Viewport_scene_view
 {
 public:
     Viewport_scene_view(
+        Editor_settings_store*                      editor_settings_store,
         const Viewport_config_data&                 viewport_config_data,
         App_context&                                context,
         erhe::rendergraph::Rendergraph&             rendergraph,
@@ -162,12 +164,17 @@ private:
     // viewport for 3d camera
     erhe::math::Viewport               m_projection_viewport  {0, 0, 0, 0};
 
-    erhe::scene_renderer::Shader_debug m_shader_debug         {erhe::scene_renderer::Shader_debug::none};
-    Renderer_choice                    m_renderer_choice      {Renderer_choice::forward};
-    bool                               m_is_scene_view_hovered{false};
-    bool                               m_show_navigation_gizmo{true};
-    bool                               m_relative_hold_enable{false};
+    erhe::scene_renderer::Shader_debug m_shader_debug                   {erhe::scene_renderer::Shader_debug::none};
+    Renderer_choice                    m_renderer_choice                {Renderer_choice::forward};
+    bool                               m_is_scene_view_hovered          {false};
+    bool                               m_show_navigation_gizmo          {true};
+    bool                               m_relative_hold_enable           {false};
+    bool                               m_show_visual_style_popup        {false};
+    bool                               m_show_scene_and_camera_popup    {false};
+    bool                               m_show_debug_visualizations_popup{false};
     std::unique_ptr<ImViewGuizmo::Context> m_navigation_gizmo;
+    Property_editor m_property_editor;
+
 };
 
 }

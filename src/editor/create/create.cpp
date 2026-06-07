@@ -43,8 +43,8 @@ Create::Create(
     : Tool    {context, tools, Tool_flags::background}
     , m_window{imgui_renderer, imgui_windows, "Create", "create", [this]() { window_imgui(); }}
 {
-    set_base_priority  (c_priority);
-    set_description    ("Create");
+    set_base_priority(c_priority);
+    set_description  ("Create");
 }
 
 

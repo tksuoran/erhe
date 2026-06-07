@@ -33,13 +33,11 @@
 namespace editor {
 
 Brush_preview::Brush_preview(
-    erhe::graphics::Device&            graphics_device,
-    erhe::graphics::Command_buffer&    init_command_buffer,
-    App_context&                       app_context,
-    erhe::scene_renderer::Mesh_memory& mesh_memory,
-    Programs&                          programs
+    erhe::graphics::Device&         graphics_device,
+    erhe::graphics::Command_buffer& init_command_buffer,
+    App_context&                    app_context
 )
-    : Scene_preview{graphics_device, init_command_buffer, app_context, mesh_memory, programs}
+    : Scene_preview{graphics_device, init_command_buffer, app_context}
 {
     make_preview_scene();
 }

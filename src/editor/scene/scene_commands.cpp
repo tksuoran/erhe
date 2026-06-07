@@ -665,6 +665,7 @@ auto Scene_commands::create_new_rendertarget(erhe::scene::Node* parent) -> std::
         *m_context.imgui_windows,
         *m_context.app_rendering,
         *m_context.app_settings,
+        *m_context.editor_settings_store,
         *m_context.post_processing,
         *m_context.tools,
         "rt scene view",

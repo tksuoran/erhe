@@ -146,9 +146,15 @@ Headset_view::Headset_view(
 #endif
     App_context&                    app_context,
     App_rendering&                  app_rendering,
-    App_settings&                   app_settings
+    App_settings&                   app_settings,
+    Editor_settings_store&          editor_settings_store
 )
-    : Scene_view               {app_context, make_viewport_config(viewport_config_data)}
+    : Scene_view{
+        app_context,
+        &editor_settings_store,
+        "Headset",
+        make_viewport_config(viewport_config_data)
+    }
     , erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Headset", "headset", true}
     , m_translate_x            {}
     , m_translate_y            {}

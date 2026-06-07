@@ -5,6 +5,9 @@
 #include "app_context.hpp"
 #include "app_settings.hpp"
 #include "editor_log.hpp"
+#include "editor_settings_store.hpp"
+#include "config/generated/editor_settings_config.hpp"
+#include "config/generated/editor_settings_config_serialization.hpp"
 
 #include "erhe_graphics/device.hpp"
 
@@ -26,6 +29,8 @@
 #include "erhe_profile/profile.hpp"
 
 #include <glm/gtx/matrix_operation.hpp>
+
+#include <algorithm>
 
 using erhe::geometry::mesh_facet_normalf;
 using erhe::geometry::to_glm_vec3;
@@ -52,13 +57,63 @@ auto Hover_entry::get_name() const -> const std::string&
     return empty_string;
 }
 
-Scene_view::Scene_view(App_context& context, Viewport_config viewport_config)
-    : m_context        {context}
-    , m_viewport_config{viewport_config}
+Scene_view::Scene_view(
+    App_context&           context,
+    Editor_settings_store* editor_settings_store,
+    std::string_view       settings_key,
+    Viewport_config        viewport_config
+)
+    : m_context              {context}
+    , m_editor_settings_store{editor_settings_store}
+    , m_settings_key         {settings_key}
+    , m_viewport_config      {viewport_config}
 {
+    if ((m_editor_settings_store == nullptr) || m_settings_key.empty()) {
+        return;
+    }
+
+    const Editor_settings_config& settings = m_editor_settings_store->get_settings();
+    const auto i = std::find_if(
+        settings.scene_views.begin(),
+        settings.scene_views.end(),
+        [this](const Scene_view_settings& entry) {
+            return entry.name == m_settings_key;
+        }
+    );
+    if (i != settings.scene_views.end()) {
+        m_debug_visualizations.read_config(i->debug_visualizations);
+    } else {
+        // No saved entry for this view yet: the global slot acts as the
+        // defaults for new views.
+        m_debug_visualizations.read_config(settings.debug_visualizations);
+    }
+
+    m_collect_callback_id = m_editor_settings_store->register_collect_callback(
+        [this](Editor_settings_config& settings_out) {
+            auto j = std::find_if(
+                settings_out.scene_views.begin(),
+                settings_out.scene_views.end(),
+                [this](const Scene_view_settings& entry) {
+                    return entry.name == m_settings_key;
+                }
+            );
+            if (j == settings_out.scene_views.end()) {
+                Scene_view_settings new_entry{};
+                new_entry.name = m_settings_key;
+                settings_out.scene_views.push_back(std::move(new_entry));
+                j = std::prev(settings_out.scene_views.end());
+            }
+            m_debug_visualizations.write_config(j->debug_visualizations);
+        }
+    );
 }
 
-Scene_view::~Scene_view() noexcept = default;
+Scene_view::~Scene_view() noexcept
+{
+    if (m_collect_callback_id.has_value()) {
+        m_editor_settings_store->unregister_collect_callback(m_collect_callback_id.value());
+    }
+}
 
 void Scene_view::set_scene_root(const std::shared_ptr<Scene_root>& scene_root)
 {
@@ -68,6 +123,11 @@ void Scene_view::set_scene_root(const std::shared_ptr<Scene_root>& scene_root)
 auto Scene_view::get_scene_root() const -> std::shared_ptr<Scene_root>
 {
     return m_scene_root.lock();
+}
+
+void Scene_view::render_debug_visualizations(const Render_context& context)
+{
+    m_debug_visualizations.render(context);
 }
 
 void Scene_view::set_shadow_fit_override_camera(const std::weak_ptr<erhe::scene::Camera>& camera)

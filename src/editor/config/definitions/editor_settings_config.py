@@ -1,13 +1,17 @@
 from erhe_codegen import *
 
 struct("Editor_settings_config",
-    version=4,
+    version=5,
     short_desc="Editor settings",
     long_desc="Runtime-editable settings saved to editor_settings.json.",
     developer=False,
     fields=[
         field("camera_controls",      StructRef("Camera_controls_config"), added_in=1),
+        # Defaults for new scene views: a view with no entry in scene_views
+        # reads this slot at construction. Per-view state is persisted in
+        # scene_views below.
         field("debug_visualizations", StructRef("Debug_visualizations_settings"), added_in=2),
+        field("scene_views",          Vector(StructRef("Scene_view_settings")), added_in=5),
         field("developer",            StructRef("Developer_config"),       added_in=1),
         field("grid",                 StructRef("Grid_config"),            added_in=1),
         field("headset",              StructRef("Headset_config"),         added_in=1),

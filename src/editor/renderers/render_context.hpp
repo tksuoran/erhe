@@ -34,25 +34,17 @@ public:
     [[nodiscard]] auto get_scene      () const -> const erhe::scene::Scene*;
     [[nodiscard]] auto get            (const erhe::renderer::Debug_renderer_config& config) const -> erhe::renderer::Primitive_renderer;
 
-    erhe::graphics::Command_buffer*                          command_buffer        {nullptr};
-    erhe::graphics::Render_command_encoder*                  encoder               {nullptr};
-    erhe::graphics::Render_pass*                             render_pass           {nullptr};
-    App_context&                                             app_context;
-    Scene_view&                                              scene_view;
-    Viewport_config&                                         viewport_config;
-    erhe::scene::Camera*                                     camera                {nullptr};
-    Viewport_scene_view*                                     viewport_scene_view   {nullptr};
-    erhe::math::Viewport                                     viewport              {0, 0, 0, 0};
-    erhe::scene_renderer::Shader_debug                       shader_debug          {erhe::scene_renderer::Shader_debug::none};
-    // Per-eye render inputs. Size 1 for single-view passes (desktop
-    // viewports, previews, XR single-view fallback), size N (>= 2) for
-    // multiview (XR stereo). Forward_renderer /
-    // Content_wide_line_renderer feed this directly to the camera
-    // buffer; the multiview pipeline is selected when size >= 2.
-    // The backing Camera_view_input(s) must outlive every use of this
-    // span -- callers declare them in the same stack frame as the
-    // Render_context.
-    std::span<const erhe::scene_renderer::Camera_view_input> views;
+    erhe::graphics::Command_buffer*         command_buffer     {nullptr};
+    erhe::graphics::Render_command_encoder* encoder            {nullptr};
+    erhe::graphics::Render_pass*            render_pass        {nullptr};
+    App_context&                            app_context;
+    Scene_view&                             scene_view;
+    Viewport_config&                        viewport_config;
+    erhe::scene::Camera*                    camera             {nullptr};
+    Viewport_scene_view*                    viewport_scene_view{nullptr};
+    erhe::math::Viewport                    viewport           {0, 0, 0, 0};
+    erhe::scene_renderer::Shader_debug      shader_debug       {erhe::scene_renderer::Shader_debug::none};
+    std::span<const erhe::scene_renderer::Camera_view_input> views; // multiview
 };
 
 }

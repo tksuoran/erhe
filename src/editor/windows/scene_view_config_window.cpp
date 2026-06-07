@@ -90,7 +90,7 @@ void Scene_view_config_window::imgui(App_context& context, Scene_view& scene_vie
 
         ImGui::TableNextRow();
         ImGui::TableNextColumn();
-        ImGui::TextUnformatted("Override Shadow Fit Target Camera");
+        ImGui::TextUnformatted("Shadow Camera Override");
         ImGui::TableNextColumn();
         if (scene_root) {
             // When set, the shadow frustum fit (and the shadow fit debug
@@ -107,7 +107,7 @@ void Scene_view_config_window::imgui(App_context& context, Scene_view& scene_vie
 
         ImGui::TableNextRow();
         ImGui::TableNextColumn();
-        ImGui::TextUnformatted("Debug");
+        ImGui::TextUnformatted("Shader Debug");
         ImGui::TableNextColumn();
 
         erhe::scene_renderer::Shader_debug shader_debug = viewport_scene_view->get_shader_debug();

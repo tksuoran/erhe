@@ -31,13 +31,11 @@ using Depth_stencil_state  = erhe::graphics::Depth_stencil_state;
 using Color_blend_state    = erhe::graphics::Color_blend_state;
 
 Scene_preview::Scene_preview(
-    erhe::graphics::Device&            graphics_device,
-    erhe::graphics::Command_buffer&    init_command_buffer,
-    App_context&                       context,
-    erhe::scene_renderer::Mesh_memory& /*mesh_memory*/,
-    Programs&                          /*programs*/
+    erhe::graphics::Device&         graphics_device,
+    erhe::graphics::Command_buffer& init_command_buffer,
+    App_context&                    context
 )
-    : Scene_view{context, Viewport_config{}}
+    : Scene_view{context, nullptr, {}, Viewport_config{}} // previews do not persist settings
     , m_context{context}
     , m_y_flip{graphics_device.get_info().coordinate_conventions.clip_space_y_flip == erhe::math::Clip_space_y_flip::enabled}
     , m_render_pipeline{

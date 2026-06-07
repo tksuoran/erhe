@@ -13,13 +13,7 @@
 
 namespace editor {
 
-Viewport_config_window::Viewport_config_window(erhe::imgui::Imgui_renderer& imgui_renderer, erhe::imgui::Imgui_windows& imgui_windows, App_context& app_context)
-    : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Viewport config", "viewport_config"}
-    , m_context                {app_context}
-{
-}
-
-void Viewport_config_window::render_style_ui(Render_style_data& render_style)
+void Viewport_config_window::render_style_ui(Render_style_data& render_style, bool& edited)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -31,6 +25,10 @@ void Viewport_config_window::render_style_ui(Render_style_data& render_style)
 
     if (ImGui::TreeNodeEx("Polygon Fill", flags)) {
         ImGui::Checkbox("Visible", &render_style.polygon_fill);
+        if (ImGui::IsItemDeactivatedAfterEdit()) {
+            edited = true;
+        }
+
         //if (render_style.polygon_fill) {
         //    ImGui::Text       ("Polygon Offset");
         //    ImGui::Checkbox   ("Enable", &render_style.polygon_offset_enable);
@@ -44,69 +42,95 @@ void Viewport_config_window::render_style_ui(Render_style_data& render_style)
     using Primitive_interface_settings = erhe::scene_renderer::Primitive_interface_settings;
     if (ImGui::TreeNodeEx("Edge Lines", flags)) {
         ImGui::Checkbox("Visible", &render_style.edge_lines);
+        if (ImGui::IsItemDeactivatedAfterEdit()) {
+            edited = true;
+        }
         if (render_style.edge_lines) {
-            ImGui::SliderFloat("Width",          &render_style.line_width, 0.0f, 20.0f);
-            ImGui::ColorEdit4 ("Constant Color", &render_style.line_color.x,     ImGuiColorEditFlags_Float);
+            ImGui::SliderFloat("Width", &render_style.line_width, 0.0f, 20.0f);
+            if (ImGui::IsItemDeactivatedAfterEdit()) {
+                edited = true;
+            }
+
+            ImGui::ColorEdit4("Constant Color", &render_style.line_color.x, ImGuiColorEditFlags_Float);
+            if (ImGui::IsItemDeactivatedAfterEdit()) {
+                edited = true;
+            }
+
             erhe::imgui::make_combo(
                 "Color Source",
                 render_style.edge_lines_color_source,
                 Primitive_interface_settings::c_primitive_color_source_strings_data.data(),
                 static_cast<int>(Primitive_interface_settings::c_primitive_color_source_strings_data.size())
             );
+            if (ImGui::IsItemDeactivatedAfterEdit()) {
+                edited = true;
+            }
         }
         ImGui::TreePop();
     }
 
     if (ImGui::TreeNodeEx("Polygon Centroids", flags)) {
         ImGui::Checkbox("Visible", &render_style.polygon_centroids);
+        if (ImGui::IsItemDeactivatedAfterEdit()) {
+            edited = true;
+        }
+
         if (render_style.polygon_centroids) {
             ImGui::ColorEdit4("Constant Color", &render_style.centroid_color.x, ImGuiColorEditFlags_Float);
+            if (ImGui::IsItemDeactivatedAfterEdit()) {
+                edited = true;
+            }
+
             erhe::imgui::make_combo(
                 "Color Source",
                 render_style.polygon_centroids_color_source,
                 Primitive_interface_settings::c_primitive_color_source_strings_data.data(),
                 static_cast<int>(Primitive_interface_settings::c_primitive_color_source_strings_data.size())
             );
+            if (ImGui::IsItemDeactivatedAfterEdit()) {
+                edited = true;
+            }
+
         }
         ImGui::TreePop();
     }
 
     if (ImGui::TreeNodeEx("Corner Points", flags)) {
-        ImGui::Checkbox  ("Visible",        &render_style.corner_points);
-        ImGui::ColorEdit4("Constant Color", &render_style.corner_color.x,   ImGuiColorEditFlags_Float);
+        ImGui::Checkbox("Visible", &render_style.corner_points);
+        if (ImGui::IsItemDeactivatedAfterEdit()) {
+            edited = true;
+        }
+
+        ImGui::ColorEdit4("Constant Color", &render_style.corner_color.x, ImGuiColorEditFlags_Float);
+        if (ImGui::IsItemDeactivatedAfterEdit()) {
+            edited = true;
+        }
+
         erhe::imgui::make_combo(
             "Color Source",
             render_style.corner_points_color_source,
             Primitive_interface_settings::c_primitive_color_source_strings_data.data(),
             static_cast<int>(Primitive_interface_settings::c_primitive_color_source_strings_data.size())
         );
+        if (ImGui::IsItemDeactivatedAfterEdit()) {
+            edited = true;
+        }
+
         ImGui::TreePop();
     }
 
     if (render_style.polygon_centroids || render_style.corner_points) {
         ImGui::SliderFloat("Point Size", &render_style.point_size, 0.0f, 20.0f);
+        if (ImGui::IsItemDeactivatedAfterEdit()) {
+            edited = true;
+        }
     }
 }
 
-void Viewport_config_window::set_edit_data(Viewport_config* edit_data)
-{
-    m_edit_data = edit_data;
-}
-
-void Viewport_config_window::imgui()
+void Viewport_config_window::imgui(Viewport_config& edit_data)
 {
     ERHE_PROFILE_FUNCTION();
 
-    // Auto-lookup viewport when not yet associated
-    if ((m_edit_data == nullptr) && (m_context.scene_views != nullptr)) {
-        std::shared_ptr<Viewport_scene_view> view = m_context.scene_views->hover_scene_view();
-        if (!view) {
-            view = m_context.scene_views->last_scene_view();
-        }
-        if (view) {
-            m_edit_data = &view->get_config();
-        }
-    }
 
     const ImGuiTreeNodeFlags flags{
         ImGuiTreeNodeFlags_Framed            |
@@ -116,40 +140,46 @@ void Viewport_config_window::imgui()
         ImGuiTreeNodeFlags_DefaultOpen
     };
 
-    if (m_edit_data != nullptr) {
-        const std::string before = serialize(*m_edit_data);
+    const std::string before = serialize(edit_data);
 
-        ImGui::SliderFloat("Gizmo Scale", &m_edit_data->gizmo_scale, 1.0f, 20.0f, "%.2f");
-        ImGui::ColorEdit4("Clear Color", &m_edit_data->clear_color.x, ImGuiColorEditFlags_Float);
+    bool edited = false;
+    auto collect = [&](const bool value) {
+        static_cast<void>(value);
+        edited = edited || ImGui::IsItemDeactivatedAfterEdit();
+    };
+    collect(ImGui::SliderFloat("Gizmo Scale", &edit_data.gizmo_scale, 1.0f, 20.0f, "%.2f"));
+    collect(ImGui::ColorEdit4("Clear Color", &edit_data.clear_color.x, ImGuiColorEditFlags_Float));
 
-        if (ImGui::TreeNodeEx("Default Style", flags)) {
-            render_style_ui(m_edit_data->render_style_not_selected);
-            ImGui::TreePop();
-        }
+    if (ImGui::TreeNodeEx("Default Style", flags)) {
+        render_style_ui(edit_data.render_style_not_selected, edited);
+        ImGui::TreePop();
+    }
 
-        if (ImGui::TreeNodeEx("Selection", flags)) {
-            render_style_ui(m_edit_data->render_style_selected);
-            ImGui::TreePop();
-        }
+    if (ImGui::TreeNodeEx("Selection", flags)) {
+        render_style_ui(edit_data.render_style_selected, edited);
+        ImGui::TreePop();
+    }
 
-        if (ImGui::TreeNodeEx("Selection Outline", flags)) {
-            ImGui::ColorEdit4 ("Color Low",  &m_edit_data->selection_highlight_low.x,  ImGuiColorEditFlags_Float);
-            ImGui::ColorEdit4 ("Color High", &m_edit_data->selection_highlight_high.x, ImGuiColorEditFlags_Float);
-            ImGui::SliderFloat("Width Low",  &m_edit_data->selection_highlight_width_low,  -20.0f, 0.0f, "%.2f");
-            ImGui::SliderFloat("Width High", &m_edit_data->selection_highlight_width_high, -20.0f, 0.0f, "%.2f");
-            ImGui::SliderFloat("Frequency",  &m_edit_data->selection_highlight_frequency,    0.0f, 1.0f, "%.2f");
-            ImGui::TreePop();
-        }
+    if (ImGui::TreeNodeEx("Selection Outline", flags)) {
+        collect(ImGui::ColorEdit4 ("Color Low",  &edit_data.selection_highlight_low.x,  ImGuiColorEditFlags_Float));
+        collect(ImGui::ColorEdit4 ("Color High", &edit_data.selection_highlight_high.x, ImGuiColorEditFlags_Float));
+        collect(ImGui::SliderFloat("Width Low",  &edit_data.selection_highlight_width_low,  -20.0f, 0.0f, "%.2f"));
+        collect(ImGui::SliderFloat("Width High", &edit_data.selection_highlight_width_high, -20.0f, 0.0f, "%.2f"));
+        collect(ImGui::SliderFloat("Frequency",  &edit_data.selection_highlight_frequency,    0.0f, 1.0f, "%.2f"));
+        ImGui::TreePop();
+    }
 
-        if (ImGui::TreeNodeEx("Debug Visualizations", flags)) {
-            erhe::imgui::make_combo("Light",  m_edit_data->debug_visualizations.light,  c_visualization_mode_strings, IM_ARRAYSIZE(c_visualization_mode_strings));
-            erhe::imgui::make_combo("Camera", m_edit_data->debug_visualizations.camera, c_visualization_mode_strings, IM_ARRAYSIZE(c_visualization_mode_strings));
-            ImGui::TreePop();
-        }
+    if (ImGui::TreeNodeEx("Debug Visualizations", flags)) {
+        collect(erhe::imgui::make_combo("Light",  edit_data.debug_visualizations.light,  c_visualization_mode_strings, IM_ARRAYSIZE(c_visualization_mode_strings)));
+        collect(erhe::imgui::make_combo("Camera", edit_data.debug_visualizations.camera, c_visualization_mode_strings, IM_ARRAYSIZE(c_visualization_mode_strings)));
+        ImGui::TreePop();
+    }
 
-        const std::string after = serialize(*m_edit_data);
+    if (edited) {
+        const std::string after = serialize(edit_data);
         if (before != after) {
-            erhe::codegen::save_config(*m_edit_data, "config/editor/default_viewport_config.json");
+            // TODO Path needs to be scene view specific - add path to edit_data
+            erhe::codegen::save_config(edit_data, "config/editor/default_viewport_config.json");
         }
     }
 }

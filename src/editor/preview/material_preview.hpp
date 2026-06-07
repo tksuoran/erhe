@@ -11,15 +11,14 @@ public:
         erhe::graphics::Device&            graphics_device,
         erhe::graphics::Command_buffer&    init_command_buffer,
         App_context&                       app_context,
-        erhe::scene_renderer::Mesh_memory& mesh_memory,
-        Programs&                          programs
+        erhe::scene_renderer::Mesh_memory& mesh_memory
     );
     ~Material_preview() noexcept;
 
     void render_preview(const std::shared_ptr<erhe::primitive::Material>& material);
     void render_preview(
-        const std::shared_ptr<erhe::graphics::Texture>&    texture,
-        const std::shared_ptr<erhe::primitive::Material>&  material
+        const std::shared_ptr<erhe::graphics::Texture>&   texture,
+        const std::shared_ptr<erhe::primitive::Material>& material
     );
     void show_preview  ();
 

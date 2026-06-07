@@ -106,6 +106,15 @@ constexpr vec3 axis_z         { 0.0f,  0.0f, 1.0f};
 
 }
 
+// Debug_visualizations::Debug_visualizations()
+// {
+// }
+// 
+// Debug_visualizations::~Debug_visualizations() noexcept
+// {
+// }
+
+#if 0
 Debug_visualizations::Debug_visualizations(
     erhe::graphics::Device&                  graphics_device,
     erhe::graphics::Command_buffer&          init_command_buffer,
@@ -148,6 +157,7 @@ Debug_visualizations::Debug_visualizations(
 }
 
 Debug_visualizations::~Debug_visualizations() noexcept = default;
+#endif
 
 void Debug_visualizations::read_config(const Debug_visualizations_settings& settings)
 {
@@ -340,7 +350,7 @@ void Debug_visualizations::write_config(Debug_visualizations_settings& settings)
 auto Debug_visualizations::get_selected_camera(const Render_context& render_context) -> std::shared_ptr<erhe::scene::Camera>
 {
     const auto* scene     = render_context.get_scene();
-    const auto& selection = m_context.selection->get_selected_items();
+    const auto& selection = render_context.app_context.selection->get_selected_items();
 
     for (const auto& item : selection) {
         const auto& node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
@@ -564,7 +574,7 @@ void Debug_visualizations::light_visualization(
 
 void Debug_visualizations::directional_light_visualization(const Light_visualization_context& context)
 {
-    const auto shadow_render_node = m_context.app_rendering->get_shadow_node_for_view(context.render_context.scene_view);
+    const auto shadow_render_node = context.render_context.app_context.app_rendering->get_shadow_node_for_view(context.render_context.scene_view);
     if (!shadow_render_node) {
         return;
     }
@@ -641,7 +651,7 @@ void Debug_visualizations::shadow_frustum_fit_visualization(const Render_context
     // Gated only by m_shadow_fit_debug - independent of the lights
     // visualization mode (which gates light_visualization()) and of
     // m_shadow_debug (which gates the shadow texel visualization).
-    const auto shadow_render_node = m_context.app_rendering->get_shadow_node_for_view(context.scene_view);
+    const auto shadow_render_node = context.app_context.app_rendering->get_shadow_node_for_view(context.scene_view);
     if (!shadow_render_node) {
         return;
     }
@@ -1082,7 +1092,7 @@ void Debug_visualizations::camera_visualization(const Render_context& render_con
         const auto      p_window   = render_context.viewport.project_to_screen_space(view_clip_from_world, p, 0.0f, 1.0f, render_context.scene_view.get_conventions());
         const uint32_t  text_color = 0xffffccaau;
         const glm::vec3 point_in_window_z_negated{p_window.x, p_window.y, -p_window.z};
-        m_context.text_renderer->print(point_in_window_z_negated, text_color, fmt::format("{}", i));
+        render_context.app_context.text_renderer->print(point_in_window_z_negated, text_color, fmt::format("{}", i));
     }
 
     if (m_frustum_box) {
@@ -1182,7 +1192,7 @@ void Debug_visualizations::selection_visualization(const Render_context& context
 
     const auto& viewport_config = context.viewport_scene_view->get_config();
     erhe::renderer::Primitive_renderer line_renderer = context.get({erhe::graphics::Primitive_type::line, 2, true, true});
-    const auto& selection = m_context.selection->get_selected_items();
+    const auto& selection = context.app_context.selection->get_selected_items();
 
     m_selection_bounding_volume.reset();
     for (const auto& item : selection) {
@@ -1253,7 +1263,7 @@ void Debug_visualizations::selection_visualization(const Render_context& context
                          point_in_window.y,
                         -point_in_window.z
                     };
-                    m_context.text_renderer->print(
+                    context.app_context.text_renderer->print(
                         point_in_window_z_negated,
                         text_color,
                         fmt::format("{}.{}", i, j)
@@ -1262,8 +1272,8 @@ void Debug_visualizations::selection_visualization(const Render_context& context
             }
         }
 
-        erhe::math::Aabb        selection_bounding_box;
-        erhe::math::Sphere      selection_bounding_sphere;
+        erhe::math::Aabb   selection_bounding_box;
+        erhe::math::Sphere selection_bounding_sphere;
         erhe::math::calculate_bounding_volume(m_selection_bounding_volume, selection_bounding_box, selection_bounding_sphere);
         const float box_volume    = selection_bounding_box.volume();
         const float sphere_volume = selection_bounding_sphere.volume();
@@ -1484,7 +1494,7 @@ void Debug_visualizations::physics_nodes_visualization(const Render_context& con
                 context.scene_view.get_conventions()
             );
             const auto label_text = "<" + node->describe() + ">"; // node_physics->describe();
-            const glm::vec2 label_size = m_context.text_renderer->measure(label_text).size();
+            const glm::vec2 label_size = context.app_context.text_renderer->measure(label_text).size();
             const glm::vec3 p3_in_window_z_negated{
                  p3_in_window.x - label_size.x * 0.5,
                  p3_in_window.y - label_size.y * 0.5,
@@ -1493,7 +1503,7 @@ void Debug_visualizations::physics_nodes_visualization(const Render_context& con
             glm::vec4 label_text_color{0.3f, 1.0f, 0.3f, 1.0f};
             const uint32_t text_color = erhe::math::convert_float4_to_uint32(label_text_color);
 
-            m_context.text_renderer->print(
+            context.app_context.text_renderer->print(
                 p3_in_window_z_negated,
                 text_color,
                 label_text
@@ -1559,7 +1569,7 @@ void Debug_visualizations::physics_nodes_visualization(const Render_context& con
         const JPH::Vec3 camera_position_jolt{camera_position.x, camera_position.y, camera_position.z};
         app_context.jolt_debug_renderer->SetCameraPos(camera_position_jolt);
         erhe::physics::IWorld& world = scene_root->get_physics_world();
-        world.debug_draw(*m_context.jolt_debug_renderer);
+        world.debug_draw(*app_context.jolt_debug_renderer);
     }
 #endif
 }
@@ -1615,22 +1625,20 @@ void Debug_visualizations::mesh_labels(const Render_context& context, erhe::scen
     if ((node == nullptr) || (camera == nullptr)) {
         return;
     }
-    const auto      projection_transforms = camera->projection_transforms(
+    const auto projection_transforms = camera->projection_transforms(
         context.viewport,
         context.scene_view.get_reverse_depth(),
         context.scene_view.get_depth_range(),
         context.scene_view.get_conventions()
     );
-    const glm::mat4 clip_from_world       = projection_transforms.clip_from_world.get_matrix();
-    const glm::mat4 world_from_node       = node->world_from_node();
+    const glm::mat4 clip_from_world = projection_transforms.clip_from_world.get_matrix();
+    const glm::mat4 world_from_node = node->world_from_node();
 
     erhe::renderer::Primitive_renderer line_renderer = context.get({erhe::graphics::Primitive_type::line, 2, true, true});
 
     erhe::scene::Mesh* hovered_scene_mesh{nullptr};
-    if (m_hover_scene_view != nullptr) {
-        const Hover_entry& content_hover = m_hover_scene_view->get_hover(Hover_entry::content_slot);
-        hovered_scene_mesh = content_hover.scene_mesh_weak.lock().get();
-    }
+    const Hover_entry& content_hover = context.scene_view.get_hover(Hover_entry::content_slot);
+    hovered_scene_mesh = content_hover.scene_mesh_weak.lock().get();
 
     for (erhe::scene::Mesh_primitive& mesh_primitive : scene_mesh->get_mutable_primitives()) {
         const erhe::primitive::Primitive& primitive = *mesh_primitive.primitive.get();
@@ -1803,15 +1811,16 @@ void Debug_visualizations::label(
         1.0f,
         context.scene_view.get_conventions()
     );
-    const glm::vec2 label_size = m_context.text_renderer->measure(label_text).size();
+    const glm::vec2 label_size = context.app_context.text_renderer->measure(label_text).size();
     const glm::vec3 p3_in_window_z_negated{
          p3_in_window.x - label_size.x * 0.5,
          p3_in_window.y - label_size.y * 0.5,
         -p3_in_window.z
     };
-    m_context.text_renderer->print(p3_in_window_z_negated, text_color, label_text);
+    context.app_context.text_renderer->print(p3_in_window_z_negated, text_color, label_text);
 }
 
+#if 0
 void Debug_visualizations::shadow_debug(const Render_context& render_context)
 {
     const std::shared_ptr<Scene_root>& scene_root = render_context.scene_view.get_scene_root();
@@ -1828,6 +1837,7 @@ void Debug_visualizations::shadow_debug(const Render_context& render_context)
     };
     m_shadow_texel_renderer->render(parameters);
 }
+#endif
 
 void Debug_visualizations::world_axes_visualization(const Render_context& render_context)
 {
@@ -1850,10 +1860,16 @@ void Debug_visualizations::render(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION();
 
+    // render_viewport_renderables() runs twice per viewport: first the CPU
+    // phase (no encoder) where debug lines / labels are generated, then the
+    // encoder phase for renderables that issue draw calls. Everything below
+    // generates lines / labels and must run only in the CPU phase.
     if (context.encoder != nullptr) {
+#if 0
         if (m_shadow_debug) {
             shadow_debug(context);
         }
+#endif
         return;
     }
 
@@ -1863,13 +1879,13 @@ void Debug_visualizations::render(const Render_context& context)
 
     if (
         m_tool_hide &&
-        m_context.transform_tool->is_transform_tool_active()
+        context.app_context.transform_tool->is_transform_tool_active()
     ) {
         return;
     }
 
     std::shared_ptr<erhe::scene::Camera> selected_camera;
-    const auto& selection = m_context.selection->get_selected_items();
+    const auto& selection = context.app_context.selection->get_selected_items();
     for (const auto& item : selection) {
         if (erhe::is<erhe::scene::Camera>(item)) {
             selected_camera = std::dynamic_pointer_cast<erhe::scene::Camera>(item);
@@ -1968,25 +1984,21 @@ void Debug_visualizations::make_combo(const char* label, Visualization_mode& vis
     );
 }
 
-void Debug_visualizations::imgui()
+void Debug_visualizations::imgui(Scene_view& scene_view)
 {
     ERHE_PROFILE_FUNCTION();
 
     Property_editor& p = m_property_editor;
-    if (m_hover_scene_view == nullptr) {
-        ImGui::Text("- No Scene_view - ");
+    const auto scene_view_camera = scene_view.get_camera();
+    if (!scene_view_camera) {
+        ImGui::Text("- Scene_view without Camera - ");
     } else {
-        const auto scene_view_camera = m_hover_scene_view->get_camera();
-        if (!scene_view_camera) {
-            ImGui::Text("- Scene_view without Camera - ");
-        } else {
-            const std::string text = fmt::format(
-                "- Scene_view with Camera {} @ {} - ",
-                scene_view_camera->get_name(),
-                glm::vec3{scene_view_camera->get_node()->position_in_world()}
-            );
-            ImGui::TextUnformatted(text.c_str());
-        }
+        const std::string text = fmt::format(
+            "- Scene_view with Camera {} @ {} - ",
+            scene_view_camera->get_name(),
+            glm::vec3{scene_view_camera->get_node()->position_in_world()}
+        );
+        ImGui::TextUnformatted(text.c_str());
     }
 
     p.reset();

@@ -3,6 +3,9 @@
 #include "config/generated/editor_settings_config.hpp"
 #include "config/generated/editor_settings_config_serialization.hpp"
 #include "erhe_codegen/config_io.hpp"
+#include "erhe_verify/verify.hpp"
+
+#include <algorithm>
 
 namespace editor {
 
@@ -11,15 +14,38 @@ Editor_settings_store::Editor_settings_store(Editor_settings_config& settings)
 {
 }
 
-void Editor_settings_store::register_collect_callback(Collect_callback callback)
+auto Editor_settings_store::register_collect_callback(Collect_callback callback) -> std::size_t
 {
-    m_collect_callbacks.push_back(std::move(callback));
+    const std::lock_guard<std::mutex> lock{m_callbacks_mutex};
+    const std::size_t callback_id = m_next_callback_id++;
+    m_collect_callbacks.push_back(Callback_entry{callback_id, std::move(callback)});
+    return callback_id;
+}
+
+void Editor_settings_store::unregister_collect_callback(const std::size_t callback_id)
+{
+    const std::lock_guard<std::mutex> lock{m_callbacks_mutex};
+    const auto i = std::find_if(
+        m_collect_callbacks.begin(),
+        m_collect_callbacks.end(),
+        [callback_id](const Callback_entry& entry) {
+            return entry.id == callback_id;
+        }
+    );
+    ERHE_VERIFY(i != m_collect_callbacks.end());
+    m_collect_callbacks.erase(i);
+}
+
+auto Editor_settings_store::get_settings() const -> const Editor_settings_config&
+{
+    return m_settings;
 }
 
 void Editor_settings_store::collect()
 {
-    for (const Collect_callback& callback : m_collect_callbacks) {
-        callback(m_settings);
+    const std::lock_guard<std::mutex> lock{m_callbacks_mutex};
+    for (const Callback_entry& entry : m_collect_callbacks) {
+        entry.callback(m_settings);
     }
 }
 

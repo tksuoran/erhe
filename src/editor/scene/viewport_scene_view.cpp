@@ -54,6 +54,7 @@
 #include <glm/gtx/matrix_operation.hpp>
 
 #include <imgui/imgui.h>
+#include <imgui/imgui_internal.h>
 
 using erhe::geometry::mesh_facet_normalf;
 using erhe::geometry::to_glm_vec3;
@@ -64,6 +65,7 @@ using erhe::geometry::to_glm_vec3;
 #define ICON_MDI_DOTS_TRIANGLE                            "\xf3\xb1\x97\xbe" // U+F15FE
 #define ICON_MDI_EYE                                      "\xf3\xb0\x88\x88" // U+F0208
 #define ICON_MDI_PALETTE                                  "\xf3\xb0\x8f\x98" // U+F03D8
+#define ICON_MDI_EYE_SETTINGS_OUTLINE                     "\xf3\xb0\xa1\xae" // U+F086E
 
 namespace editor {
 
@@ -79,6 +81,7 @@ using erhe::graphics::Texture;
 int Viewport_scene_view::s_serial = 0;
 
 Viewport_scene_view::Viewport_scene_view(
+    Editor_settings_store*                      editor_settings_store,
     const Viewport_config_data&                 viewport_config_data,
     App_context&                                context,
     erhe::rendergraph::Rendergraph&             rendergraph,
@@ -89,7 +92,7 @@ Viewport_scene_view::Viewport_scene_view(
     const std::shared_ptr<erhe::scene::Camera>& camera,
     int                                         msaa_sample_count
 )
-    : Scene_view              {context, make_viewport_config(viewport_config_data)}
+    : Scene_view              {context, editor_settings_store, name, make_viewport_config(viewport_config_data)}
     , Texture_rendergraph_node{
         erhe::rendergraph::Texture_rendergraph_node_create_info{
             .rendergraph          = rendergraph,
@@ -734,6 +737,21 @@ auto Viewport_scene_view::get_navigation_gizmo() -> ImViewGuizmo::Context&
     return *m_navigation_gizmo;
 }
 
+auto BeginPopupWithTitleAndOpen(ImGuiID id, const char* name, bool* open, ImGuiWindowFlags extra_window_flags) -> bool
+{
+    ImGuiContext& g = *GImGui;
+    if (!ImGui::IsPopupOpen(id, ImGuiPopupFlags_None)) {
+        g.NextWindowData.ClearFlags();
+        return false;
+    }
+
+    bool is_open = ImGui::Begin(name, open, extra_window_flags | ImGuiWindowFlags_Popup | ImGuiWindowFlags_NoDocking);
+    if (!is_open) {
+        ImGui::EndPopup();
+    }
+    return is_open;
+}
+
 void Viewport_scene_view::viewport_toolbar()
 {
     ImGui::PushID("Viewport_scene_view::viewport_toolbar()");
@@ -765,68 +783,59 @@ void Viewport_scene_view::viewport_toolbar()
         return pressed;
     };
 
-    {
-        ImGui::PushID("viewport toolbar debug");
-        icon_button(
-            ICON_MDI_AXIS_ARROW "##navigation_gizmo",
-            "N##navigation_gizmo",
-            "Show/Hide Navigation Gizmo",
-            m_show_navigation_gizmo
-        );
-        ImGui::PopID();
-    }
-
-    bool show_viewport_config = m_context.viewport_config_window->is_window_visible();
-    bool viewport_config_pressed = icon_button(
-        ICON_MDI_EYE "##viewport_config",
-        "...##viewport_config",
-        "Show/Hide Viewport Config",
-        show_viewport_config
+    icon_button(
+        ICON_MDI_AXIS_ARROW "##navigation_gizmo",
+        "N##navigation_gizmo",
+        "Show/Hide Navigation Gizmo",
+        m_show_navigation_gizmo
     );
-    const ImGuiID viewport_config_id = ImGui::GetID("ViewportConfigPopup");
-    if (viewport_config_pressed) {
-        ImGui::OpenPopup(viewport_config_id, ImGuiPopupFlags_None);
-        // Open the popup below the mouse cursor; without this the popup
-        // window restores the position from the previous time it was open
-        // (BeginPopupEx() does not add ImGuiWindowFlags_NoSavedSettings the
-        // way BeginPopup() does). ImGuiCond_Always because the popup window
-        // does not count as appearing when it is reopened on the same frame
-        // a click outside closed it (the button press), which blocks
-        // ImGuiCond_Appearing; this runs only on the press frame anyway.
-        ImGui::SetNextWindowPos(ImGui::GetMousePos(), ImGuiCond_Always);
-    }
-    if (ImGui::BeginPopupEx(viewport_config_id, ImGuiWindowFlags_None)) {
-        Scene_view_config_window::imgui(m_context, *this);
-        ImGui::EndPopup();
-    }
 
-    //// TODO Tool_flags::viewport_toolbar
+    auto popup_button = [&](
+        const char* icon,
+        const char* title,
+        ImGuiID     popup_id,
+        bool&       is_open,
+        auto        content_fn
+    ) {
+        ImGui::PushFont(icon_font, font_size);
+        const bool pressed = ImGui::Button(icon);
+        ImGui::PopFont();
+        ImGui::SetItemTooltip("%s", title);
+        if (pressed) {
+            ImGui::OpenPopup(popup_id, ImGuiPopupFlags_None);
+        }
+        if (BeginPopupWithTitleAndOpen(popup_id, title, &is_open, ImGuiWindowFlags_AlwaysAutoResize)) {
+            content_fn();
+            ImGui::EndPopup();
+        }
+    };
+
+    popup_button(
+        ICON_MDI_EYE "##ViewportVisualStyle",                      // icon
+        "Visual Style",                                            // title
+        ImGui::GetID("ViewportVisualStylePopup"),                  // popup_id
+        m_show_visual_style_popup,                                 // is_open
+        [this]() { Viewport_config_window::imgui(get_config()); }  // content_fn
+    );
+    popup_button(
+        ICON_MDI_DOTS_TRIANGLE "##ViewportSceneAndCamera",              // icon
+        "Scene and Camera",                                             // title
+        ImGui::GetID("ViewportSceneAndCameraPopup"),                    // popup_id
+        m_show_scene_and_camera_popup,                                  // is_open
+        [this]() { Scene_view_config_window::imgui(m_context, *this); } // content_fn
+    );
+    popup_button(
+        ICON_MDI_EYE_SETTINGS_OUTLINE "##ViewportDebugVisualizations",      // icon
+        "Debug Visualization",                                              // title
+        ImGui::GetID("ViewportDebugVisualizations"),                        // popup_id
+        m_show_debug_visualizations_popup,                                  // is_open
+        [this]() { m_debug_visualizations.imgui(*this); } // content_fn
+    );
+
     m_context.selection_tool->viewport_toolbar();
     m_context.transform_tool->viewport_toolbar();
     //// m_context.grid_tool->viewport_toolbar(hovered);
     //// TODO m_physics_window.viewport_toolbar(hovered);
-
-    ImGui::SameLine();
-    ImGui::SetNextItemWidth(110.0f);
-
-    std::shared_ptr<Scene_root> scene_root = get_scene_root();
-
-    bool show_scene_view_config = m_context.scene_view_config_window->is_window_visible();
-    bool scene_view_config_pressed = icon_button(
-        ICON_MDI_DOTS_TRIANGLE "##scene_view_config",
-        "S##scene_view_config",
-        "Show/Hide Scene View Config",
-        show_scene_view_config
-    );
-    if (scene_view_config_pressed) { 
-        m_context.scene_view_config_window->set_window_visibility(show_scene_view_config);
-        if (show_scene_view_config) {
-            m_context.scene_view_config_window->set_scene_view(this);
-        }
-    }
-    if (!scene_root) {
-        return;
-    }
 }
 
 void Viewport_scene_view::set_shader_debug(erhe::scene_renderer::Shader_debug shader_debug)

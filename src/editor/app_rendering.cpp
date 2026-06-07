@@ -943,6 +943,11 @@ void App_rendering::render_viewport_renderables(const Render_context& context)
     for (auto* renderable : m_renderables) {
         renderable->render(context);
     }
+
+    // Per-view renderables: each Scene_view owns its own Debug_visualizations
+    // instance, so it is dispatched through the view named in the context
+    // instead of the global m_renderables registry.
+    context.scene_view.render_debug_visualizations(context);
 }
 
 void App_rendering::render_composer(const Render_context& context)

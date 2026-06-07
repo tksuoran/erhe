@@ -49,6 +49,7 @@ class Xr_perf_metric_plot;
 class App_message_bus;
 class App_rendering;
 class App_settings;
+class Editor_settings_store;
 class Fly_camera_tool;
 class Hud;
 class Scene_builder;
@@ -109,7 +110,8 @@ public:
 #endif
         App_context&                    context,
         App_rendering&                  app_rendering,
-        App_settings&                   app_settings
+        App_settings&                   app_settings,
+        Editor_settings_store&          editor_settings_store
     );
     // Defined out-of-line so the unique_ptr<Xr_perf_metric_plot> deleter
     // can see the full plot definition (instead of forcing every TU that

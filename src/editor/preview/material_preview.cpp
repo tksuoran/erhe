@@ -37,10 +37,9 @@ Material_preview::Material_preview(
     erhe::graphics::Device&            graphics_device,
     erhe::graphics::Command_buffer&    init_command_buffer,
     App_context&                       app_context,
-    erhe::scene_renderer::Mesh_memory& mesh_memory,
-    Programs&                          programs
+    erhe::scene_renderer::Mesh_memory& mesh_memory
 )
-    : Scene_preview{graphics_device, init_command_buffer, app_context, mesh_memory, programs}
+    : Scene_preview{graphics_device, init_command_buffer, app_context}
 {
     make_preview_scene(mesh_memory);
 

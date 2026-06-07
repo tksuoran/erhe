@@ -2,6 +2,7 @@
 
 #include "renderers/viewport_config.hpp"
 #include "scene/node_raytrace_mask.hpp"
+#include "tools/debug_visualizations.hpp"
 
 #include "erhe_math/math_util.hpp"
 
@@ -12,6 +13,8 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <string>
+#include <string_view>
 
 namespace erhe::rendergraph { class Rendergraph_node; }
 namespace erhe::geometry    { class Geometry; }
@@ -27,8 +30,10 @@ namespace editor {
 class App_context;
 class App_message;
 class App_message_bus;
+class Editor_settings_store;
 class Grid;
 class Raytrace_primitive;
+class Render_context;
 class Scene_root;
 class Shadow_render_node;
 class Viewport_scene_view;
@@ -89,7 +94,17 @@ public:
 class Scene_view
 {
 public:
-    Scene_view(App_context& context, Viewport_config viewport_config);
+    // settings_key is the stable name under which this view's settings are
+    // persisted in Editor_settings_config::scene_views ("Default Viewport",
+    // "Headset", ...). Pass a null editor_settings_store or an empty key for
+    // views whose settings should not persist (previews). Views sharing a
+    // key also share the persisted entry; the last collected view wins.
+    Scene_view(
+        App_context&           context,
+        Editor_settings_store* editor_settings_store,
+        std::string_view       settings_key,
+        Viewport_config        viewport_config
+    );
     virtual ~Scene_view() noexcept;
 
     // Virtual interface
@@ -129,6 +144,12 @@ public:
     void update_hover_with_raytrace();
     void update_grid_hover         ();
 
+    // Called by App_rendering::render_viewport_renderables() so that the
+    // per-view Debug_visualizations renders alongside the globally
+    // registered Renderables. The Render_context names the view being
+    // rendered, so the correct instance is selected by construction.
+    void render_debug_visualizations(const Render_context& context);
+
     [[nodiscard]] auto get_config                               () -> Viewport_config&;
     [[nodiscard]] auto get_world_from_control                   () const -> std::optional<glm::mat4>;
     [[nodiscard]] auto get_control_from_world                   () const -> std::optional<glm::mat4>;
@@ -150,9 +171,13 @@ protected:
     void merge_hover(std::size_t slot, const Hover_entry& candidate);
 
     App_context&                       m_context;
+    Editor_settings_store*             m_editor_settings_store{nullptr};
+    std::string                        m_settings_key;
+    std::optional<std::size_t>         m_collect_callback_id;
     std::optional<glm::mat4>           m_world_from_control;
     std::optional<glm::mat4>           m_control_from_world;
     Viewport_config                    m_viewport_config;
+    Debug_visualizations               m_debug_visualizations;
     bool                               m_hover_update_pending{true};
     std::weak_ptr<Scene_root>          m_scene_root;
     std::weak_ptr<erhe::scene::Camera> m_shadow_fit_override_camera;
