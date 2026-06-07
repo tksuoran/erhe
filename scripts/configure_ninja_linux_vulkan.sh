@@ -4,10 +4,10 @@
 # OpenGL variant: configure_ninja_linux.sh
 # ERHE_SPIRV is forced ON for Vulkan by CMakeLists.txt, so it is not passed here.
 
-mkdir -p build/ninja-vulkan
+mkdir -p build_ninja_linux_vulkan
 cmake \
     -G "Ninja" \
-    -B build/ninja-vulkan \
+    -B build_ninja_linux_vulkan \
     -S . \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_EXPORT_COMPILE_COMMANDS=1 \
