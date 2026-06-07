@@ -3,6 +3,8 @@
 #include "renderable.hpp"
 #include "windows/property_editor.hpp"
 
+#include "config/generated/debug_visualizations_settings.hpp"
+
 #include "erhe_graphics/render_pipeline.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_imgui/imgui_window.hpp"
@@ -12,8 +14,6 @@
 #include "erhe_math/math_util.hpp"
 
 #include <memory>
-
-struct Debug_visualizations_settings;
 
 namespace erhe::graphics { class Command_buffer; }
 namespace erhe::imgui    { class Imgui_windows; }
@@ -53,30 +53,14 @@ class Debug_visualizations
     : public Renderable
 {
 public:
-    //Debug_visualizations();
-    //~Debug_visualizations() noexcept;
-    //Debug_visualizations(
-    //    erhe::graphics::Device&                  graphics_device,
-    //    erhe::graphics::Command_buffer&          init_command_buffer,
-    //    erhe::imgui::Imgui_renderer&             imgui_renderer,
-    //    erhe::imgui::Imgui_windows&              imgui_windows,
-    //    erhe::scene_renderer::Program_interface& program_interface,
-    //    App_context&                             context,
-    //    App_message_bus&                         app_message_bus,
-    //    App_rendering&                           app_rendering,
-    //    Programs&                                programs,
-    //    const Debug_visualizations_settings&     settings
-    //);
-    //~Debug_visualizations() noexcept;
-
     // Implements Renderable
     void render(const Render_context& context) override;
 
     void imgui(Scene_view& scene_view);
 
-    // Copies settings into / out of the live window state. Persistence is
-    // owned by Editor_settings_store, which calls write_config through a
-    // registered collect callback.
+    // Whole-struct copy in / out of m_settings. Persistence is owned by
+    // Scene_view, whose collect callback (registered with
+    // Editor_settings_store) calls write_config.
     void read_config (const Debug_visualizations_settings& settings);
     void write_config(Debug_visualizations_settings& settings) const;
 
@@ -94,6 +78,7 @@ private:
     };
 
 #if 0
+    // TODO Fix
     void shadow_debug            (const Render_context& render_context);
 #endif
     void world_axes_visualization(const Render_context& render_context);
@@ -129,121 +114,24 @@ private:
 
     void make_combo(const char* label, Visualization_mode& visualization);
 
-    //erhe::message_bus::Subscription<Hover_scene_view_message> m_hover_scene_view_subscription;
-    //App_context&                                               m_context;
-    //Scene_view*                                                m_hover_scene_view{nullptr};
     erhe::math::Bounding_volume_combiner m_selection_bounding_volume;
 
-    Visualization_mode m_lights                 {Visualization_mode::all};
-    Visualization_mode m_cameras                {Visualization_mode::selected};
-    Visualization_mode m_layouts                {Visualization_mode::all};
-    Visualization_mode m_skins                  {Visualization_mode::off};
-    Visualization_mode m_node_axis_visualization{Visualization_mode::off};
-    Visualization_mode m_physics_visualization  {Visualization_mode::off};
-    Visualization_mode m_vertex_labels          {Visualization_mode::off};
-    Visualization_mode m_facet_labels           {Visualization_mode::off};
-    Visualization_mode m_edge_labels            {Visualization_mode::off};
-    Visualization_mode m_corner_labels          {Visualization_mode::off};
-    Visualization_mode m_raytrace_visualization {Visualization_mode::off};
+    // Persisted settings, used in place (rendering reads them, imgui()
+    // edits them). Defaults come from the generated struct, which mirrors
+    // debug_visualizations_settings.py. Scene_view owns persistence via
+    // read_config() / write_config().
+    Debug_visualizations_settings m_settings;
 
-    bool m_vertex_positions{false};
+    // Live-only tuning knob, not persisted.
+    float m_selection_node_axis_width{2.0f};
 
-    float     m_gap                              {0.003f};
-    bool      m_tool_hide                        {false};
-    bool      m_world_axes                       {false};
-    bool      m_shadow_debug                     {false};
-    bool      m_selection                        {true};
-    bool      m_selection_bounding_points_visible{false};
-    bool      m_selection_box                    {false};
-    bool      m_selection_sphere                 {false};
-    bool      m_selection_convex_hull            {false};
-    bool      m_selection_convex_hull_projected  {false};
-    bool      m_selection_parts                  {false};
-    float     m_selection_node_axis_width        {2.0f};
-    glm::vec4 m_selection_major_color            {2.0f, 1.6f, 0.1f, 1.0f};
-    glm::vec4 m_selection_minor_color            {2.0f, 1.6f, 0.1f, 0.5f};
-    glm::vec4 m_group_selection_major_color      {2.0f, 1.2f, 0.1f, 1.0f};
-    glm::vec4 m_group_selection_minor_color      {2.0f, 1.2f, 0.1f, 0.5f};
-    float     m_selection_major_width            {4.0f};
-    float     m_selection_minor_width            {2.0f};
-
-    float     m_camera_visualization_width       {8.0f};
-    glm::vec4 m_camera_line_color                {1.0f, 1.0f, 1.0f, 1.0f};
-    bool      m_camera_cull_test                 {false};
-
-    float     m_layout_visualization_width       {2.0f};
-    glm::vec4 m_layout_line_color                {0.2f, 0.8f, 1.0f, 1.0f};
-
-    bool      m_debug_convex_hull                {false};
-    int       m_convex_hull_edge                 {0};
-
-    float     m_light_visualization_width        {8.0f};
-
-    bool      m_frustum_box                      {false};
-    bool      m_frustum_planes                   {false};
-
-    // Shadow frustum fit visualizations; independent of m_shadow_debug (which
-    // gates the shadow texel visualization). Drawn only when
-    // m_shadow_fit_debug is on and the Shadow Frustum Fit setting
-    // collect_debug is enabled. Negative line widths are in pixels and do
-    // not scale by distance.
-    bool      m_shadow_fit_debug                 {false};
-    bool      m_shadow_fit_casters               {false};
-    bool      m_shadow_fit_caster_hull           {false};
-    bool      m_shadow_fit_receivers             {false};
-    bool      m_shadow_fit_volume_planes         {true};
-    bool      m_shadow_fit_points                {true};
-    bool      m_shadow_fit_light_plane_hull      {true};
-    bool      m_shadow_fit_box_fit               {false};
-    bool      m_shadow_fit_box_frustum           {false};
-    bool      m_shadow_fit_box_cap               {false};
-    bool      m_shadow_fit_box_final             {false};
-    glm::vec4 m_shadow_fit_casters_color         {0.7f, 0.7f, 0.7f, 0.6f};
-    float     m_shadow_fit_casters_width         {1.0f};
-    glm::vec4 m_shadow_fit_caster_hull_color     {1.0f, 1.0f, 1.0f, 0.8f};
-    float     m_shadow_fit_caster_hull_width     {1.0f};
-    glm::vec4 m_shadow_fit_receivers_color       {0.4f, 0.8f, 1.0f, 1.0f};
-    float     m_shadow_fit_receivers_width       {2.0f};
-    glm::vec4 m_shadow_fit_volume_planes_color   {1.0f, 0.6f, 0.0f, 0.5f};
-    float     m_shadow_fit_volume_planes_width   {8.0f};
-    glm::vec4 m_shadow_fit_points_color          {0.2f, 1.0f, 1.0f, 1.0f};
-    float     m_shadow_fit_points_width          {1.0f};
-    glm::vec4 m_shadow_fit_light_plane_hull_color{1.0f, 0.0f, 1.0f, 0.7f};
-    float     m_shadow_fit_light_plane_hull_width{2.0f};
-    glm::vec4 m_shadow_fit_obb_color             {1.0f, 0.3f, 0.6f, 1.0f};
-    float     m_shadow_fit_obb_width             {1.0f};
-    glm::vec4 m_shadow_fit_obb_edge_color        {0.4f, 1.0f, 0.1f, 1.0f};
-    float     m_shadow_fit_obb_edge_width        {3.0f};
-    glm::vec4 m_shadow_fit_box_fit_color         {1.0f, 0.2f, 0.2f, 1.0f};
-    glm::vec4 m_shadow_fit_box_frustum_color     {1.0f, 1.0f, 0.2f, 1.0f};
-    glm::vec4 m_shadow_fit_box_cap_color         {0.3f, 0.5f, 1.0f, 1.0f};
-    glm::vec4 m_shadow_fit_box_final_color       {0.2f, 1.0f, 0.2f, 1.0f};
-    float     m_shadow_fit_box_width             {2.0f};
-
-    int       m_sphere_step_count                {80};
-    int       m_max_labels                       {400};
-    glm::vec4 m_vertex_label_text_color          {0.3f, 1.0f, 0.3f, 1.0f};
-    glm::vec4 m_vertex_label_line_color          {0.0f, 0.8f, 0.0f, 1.0f};
-    float     m_vertex_label_line_width          {1.0f};
-    float     m_vertex_label_line_length         {0.1f};
-    glm::vec4 m_edge_label_text_color            {1.0f, 0.3f, 0.3f, 1.0f};
-    float     m_edge_label_text_offset           {0.1f};
-    glm::vec4 m_edge_label_line_color            {0.8f, 0.0f, 0.0f, 1.0f};
-    float     m_edge_label_line_width            {1.0f};
-    float     m_edge_label_line_length           {0.5f};
-    glm::vec4 m_facet_label_text_color           {1.0f, 1.0f, 5.0f, 1.0f};
-    glm::vec4 m_facet_label_line_color           {1.0f, 0.5f, 0.0f, 1.0f};
-    float     m_facet_label_line_width           {1.0f};
-    float     m_facet_label_line_length          {0.1f};
-    glm::vec4 m_corner_label_text_color          {0.5f, 1.0f, 1.0f, 1.0f};
-    glm::vec4 m_corner_label_line_color          {0.0f, 0.5f, 0.5f, 1.0f};
-    float     m_corner_label_line_length         {0.05f};
-    float     m_corner_label_line_width          {1.0f};
-
-    // erhe::graphics::Vertex_input_state                    m_empty_vertex_input;
-    // std::unique_ptr<erhe::scene_renderer::Texel_renderer> m_shadow_texel_renderer;
-    // erhe::graphics::Base_render_pipeline                  m_shadow_texel_pipeline;
     Property_editor m_property_editor;
+
+#if 0 // Shadow debug / Texel_renderer is currently broken
+    erhe::graphics::Vertex_input_state                    m_empty_vertex_input;
+    std::unique_ptr<erhe::scene_renderer::Texel_renderer> m_shadow_texel_renderer;
+    erhe::graphics::Base_render_pipeline                  m_shadow_texel_pipeline;
+#endif
 };
 
 }

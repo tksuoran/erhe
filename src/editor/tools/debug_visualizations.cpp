@@ -161,192 +161,13 @@ Debug_visualizations::~Debug_visualizations() noexcept = default;
 
 void Debug_visualizations::read_config(const Debug_visualizations_settings& settings)
 {
-    m_lights                            = settings.lights;
-    m_cameras                           = settings.cameras;
-    m_layouts                           = settings.layouts;
-    m_skins                             = settings.skins;
-    m_node_axis_visualization           = settings.node_axises;
-    m_physics_visualization             = settings.physics;
-    m_raytrace_visualization            = settings.raytrace;
-    m_vertex_labels                     = settings.vertex_labels;
-    m_facet_labels                      = settings.facet_labels;
-    m_edge_labels                       = settings.edge_labels;
-    m_corner_labels                     = settings.corner_labels;
-    m_world_axes                        = settings.world_axes;
-    m_shadow_debug                      = settings.shadow_debug;
-    m_shadow_fit_debug                  = settings.shadow_fit_debug;
-    m_shadow_fit_casters                = settings.shadow_fit_casters;
-    m_shadow_fit_caster_hull            = settings.shadow_fit_caster_hull;
-    m_shadow_fit_receivers              = settings.shadow_fit_receivers;
-    m_shadow_fit_volume_planes          = settings.shadow_fit_volume_planes;
-    m_shadow_fit_points                 = settings.shadow_fit_points;
-    m_shadow_fit_light_plane_hull       = settings.shadow_fit_light_plane_hull;
-    m_shadow_fit_box_fit                = settings.shadow_fit_box_fit;
-    m_shadow_fit_box_frustum            = settings.shadow_fit_box_frustum;
-    m_shadow_fit_box_cap                = settings.shadow_fit_box_cap;
-    m_shadow_fit_box_final              = settings.shadow_fit_box_final;
-    m_shadow_fit_casters_color          = settings.shadow_fit_casters_color;
-    m_shadow_fit_casters_width          = settings.shadow_fit_casters_width;
-    m_shadow_fit_caster_hull_color      = settings.shadow_fit_caster_hull_color;
-    m_shadow_fit_caster_hull_width      = settings.shadow_fit_caster_hull_width;
-    m_shadow_fit_receivers_color        = settings.shadow_fit_receivers_color;
-    m_shadow_fit_receivers_width        = settings.shadow_fit_receivers_width;
-    m_shadow_fit_volume_planes_color    = settings.shadow_fit_volume_planes_color;
-    m_shadow_fit_volume_planes_width    = settings.shadow_fit_volume_planes_width;
-    m_shadow_fit_points_color           = settings.shadow_fit_points_color;
-    m_shadow_fit_points_width           = settings.shadow_fit_points_width;
-    m_shadow_fit_light_plane_hull_color = settings.shadow_fit_light_plane_hull_color;
-    m_shadow_fit_light_plane_hull_width = settings.shadow_fit_light_plane_hull_width;
-    m_shadow_fit_obb_color              = settings.shadow_fit_obb_color;
-    m_shadow_fit_obb_width              = settings.shadow_fit_obb_width;
-    m_shadow_fit_obb_edge_color         = settings.shadow_fit_obb_edge_color;
-    m_shadow_fit_obb_edge_width         = settings.shadow_fit_obb_edge_width;
-    m_shadow_fit_box_fit_color          = settings.shadow_fit_box_fit_color;
-    m_shadow_fit_box_frustum_color      = settings.shadow_fit_box_frustum_color;
-    m_shadow_fit_box_cap_color          = settings.shadow_fit_box_cap_color;
-    m_shadow_fit_box_final_color        = settings.shadow_fit_box_final_color;
-    m_shadow_fit_box_width              = settings.shadow_fit_box_width;
-    m_selection                         = settings.selection;
-    m_selection_bounding_points_visible = settings.selection_bounding_points;
-    m_selection_box                     = settings.selection_box;
-    m_selection_sphere                  = settings.selection_sphere;
-    m_selection_parts                   = settings.selection_parts;
-    m_selection_convex_hull             = settings.selection_convex_hull;
-    m_selection_convex_hull_projected   = settings.selection_convex_hull_projected;
-    m_debug_convex_hull                 = settings.debug_convex_hull;
-    m_convex_hull_edge                  = settings.convex_hull_edge;
-    m_selection_major_color             = settings.selection_major_color;
-    m_selection_minor_color             = settings.selection_minor_color;
-    m_group_selection_major_color       = settings.group_selection_major_color;
-    m_group_selection_minor_color       = settings.group_selection_minor_color;
-    m_selection_major_width             = settings.selection_major_width;
-    m_selection_minor_width             = settings.selection_minor_width;
-    m_sphere_step_count                 = settings.sphere_step_count;
-    m_gap                               = settings.gap;
-    m_tool_hide                         = settings.tool_hide;
-    m_frustum_box                       = settings.frustum_box;
-    m_frustum_planes                    = settings.frustum_planes;
-    m_light_visualization_width         = settings.light_line_width;
-    m_camera_cull_test                  = settings.camera_cull_test;
-    m_camera_visualization_width        = settings.camera_line_width;
-    m_camera_line_color                 = settings.camera_line_color;
-    m_layout_visualization_width        = settings.layout_line_width;
-    m_layout_line_color                 = settings.layout_line_color;
-    m_max_labels                        = settings.max_labels;
-    m_vertex_positions                  = settings.vertex_positions;
-    m_vertex_label_text_color           = settings.vertex_label_text_color;
-    m_vertex_label_line_color           = settings.vertex_label_line_color;
-    m_vertex_label_line_width           = settings.vertex_label_line_width;
-    m_vertex_label_line_length          = settings.vertex_label_line_length;
-    m_edge_label_text_color             = settings.edge_label_text_color;
-    m_edge_label_text_offset            = settings.edge_label_text_offset;
-    m_edge_label_line_color             = settings.edge_label_line_color;
-    m_edge_label_line_width             = settings.edge_label_line_width;
-    m_edge_label_line_length            = settings.edge_label_line_length;
-    m_facet_label_text_color            = settings.facet_label_text_color;
-    m_facet_label_line_color            = settings.facet_label_line_color;
-    m_facet_label_line_width            = settings.facet_label_line_width;
-    m_facet_label_line_length           = settings.facet_label_line_length;
-    m_corner_label_text_color           = settings.corner_label_text_color;
-    m_corner_label_line_color           = settings.corner_label_line_color;
-    m_corner_label_line_width           = settings.corner_label_line_width;
-    m_corner_label_line_length          = settings.corner_label_line_length;
+    m_settings = settings;
 }
 
 void Debug_visualizations::write_config(Debug_visualizations_settings& settings) const
 {
-    settings.lights                          = m_lights;
-    settings.cameras                         = m_cameras;
-    settings.layouts                         = m_layouts;
-    settings.skins                           = m_skins;
-    settings.node_axises                     = m_node_axis_visualization;
-    settings.physics                         = m_physics_visualization;
-    settings.raytrace                        = m_raytrace_visualization;
-    settings.vertex_labels                   = m_vertex_labels;
-    settings.facet_labels                    = m_facet_labels;
-    settings.edge_labels                     = m_edge_labels;
-    settings.corner_labels                   = m_corner_labels;
-    settings.world_axes                      = m_world_axes;
-    settings.shadow_debug                    = m_shadow_debug;
-    settings.shadow_fit_debug                = m_shadow_fit_debug;
-    settings.shadow_fit_casters              = m_shadow_fit_casters;
-    settings.shadow_fit_caster_hull          = m_shadow_fit_caster_hull;
-    settings.shadow_fit_receivers            = m_shadow_fit_receivers;
-    settings.shadow_fit_volume_planes        = m_shadow_fit_volume_planes;
-    settings.shadow_fit_points               = m_shadow_fit_points;
-    settings.shadow_fit_light_plane_hull     = m_shadow_fit_light_plane_hull;
-    settings.shadow_fit_box_fit              = m_shadow_fit_box_fit;
-    settings.shadow_fit_box_frustum          = m_shadow_fit_box_frustum;
-    settings.shadow_fit_box_cap              = m_shadow_fit_box_cap;
-    settings.shadow_fit_box_final            = m_shadow_fit_box_final;
-    settings.shadow_fit_casters_color        = m_shadow_fit_casters_color;
-    settings.shadow_fit_casters_width        = m_shadow_fit_casters_width;
-    settings.shadow_fit_caster_hull_color    = m_shadow_fit_caster_hull_color;
-    settings.shadow_fit_caster_hull_width    = m_shadow_fit_caster_hull_width;
-    settings.shadow_fit_receivers_color      = m_shadow_fit_receivers_color;
-    settings.shadow_fit_receivers_width      = m_shadow_fit_receivers_width;
-    settings.shadow_fit_volume_planes_color  = m_shadow_fit_volume_planes_color;
-    settings.shadow_fit_volume_planes_width  = m_shadow_fit_volume_planes_width;
-    settings.shadow_fit_points_color         = m_shadow_fit_points_color;
-    settings.shadow_fit_points_width         = m_shadow_fit_points_width;
-    settings.shadow_fit_light_plane_hull_color = m_shadow_fit_light_plane_hull_color;
-    settings.shadow_fit_light_plane_hull_width = m_shadow_fit_light_plane_hull_width;
-    settings.shadow_fit_obb_color            = m_shadow_fit_obb_color;
-    settings.shadow_fit_obb_width            = m_shadow_fit_obb_width;
-    settings.shadow_fit_obb_edge_color       = m_shadow_fit_obb_edge_color;
-    settings.shadow_fit_obb_edge_width       = m_shadow_fit_obb_edge_width;
-    settings.shadow_fit_box_fit_color        = m_shadow_fit_box_fit_color;
-    settings.shadow_fit_box_frustum_color    = m_shadow_fit_box_frustum_color;
-    settings.shadow_fit_box_cap_color        = m_shadow_fit_box_cap_color;
-    settings.shadow_fit_box_final_color      = m_shadow_fit_box_final_color;
-    settings.shadow_fit_box_width            = m_shadow_fit_box_width;
-    settings.selection                       = m_selection;
-    settings.selection_bounding_points       = m_selection_bounding_points_visible;
-    settings.selection_box                   = m_selection_box;
-    settings.selection_sphere                = m_selection_sphere;
-    settings.selection_parts                 = m_selection_parts;
-    settings.selection_convex_hull           = m_selection_convex_hull;
-    settings.selection_convex_hull_projected = m_selection_convex_hull_projected;
-    settings.debug_convex_hull               = m_debug_convex_hull;
-    settings.convex_hull_edge                = m_convex_hull_edge;
-    settings.selection_major_color           = m_selection_major_color;
-    settings.selection_minor_color           = m_selection_minor_color;
-    settings.group_selection_major_color     = m_group_selection_major_color;
-    settings.group_selection_minor_color     = m_group_selection_minor_color;
-    settings.selection_major_width           = m_selection_major_width;
-    settings.selection_minor_width           = m_selection_minor_width;
-    settings.sphere_step_count               = m_sphere_step_count;
-    settings.gap                             = m_gap;
-    settings.tool_hide                       = m_tool_hide;
-    settings.frustum_box                     = m_frustum_box;
-    settings.frustum_planes                  = m_frustum_planes;
-    settings.light_line_width                = m_light_visualization_width;
-    settings.camera_cull_test                = m_camera_cull_test;
-    settings.camera_line_width               = m_camera_visualization_width;
-    settings.camera_line_color               = m_camera_line_color;
-    settings.layout_line_width               = m_layout_visualization_width;
-    settings.layout_line_color               = m_layout_line_color;
-    settings.max_labels                      = m_max_labels;
-    settings.vertex_positions                = m_vertex_positions;
-    settings.vertex_label_text_color         = m_vertex_label_text_color;
-    settings.vertex_label_line_color         = m_vertex_label_line_color;
-    settings.vertex_label_line_width         = m_vertex_label_line_width;
-    settings.vertex_label_line_length        = m_vertex_label_line_length;
-    settings.edge_label_text_color           = m_edge_label_text_color;
-    settings.edge_label_text_offset          = m_edge_label_text_offset;
-    settings.edge_label_line_color           = m_edge_label_line_color;
-    settings.edge_label_line_width           = m_edge_label_line_width;
-    settings.edge_label_line_length          = m_edge_label_line_length;
-    settings.facet_label_text_color          = m_facet_label_text_color;
-    settings.facet_label_line_color          = m_facet_label_line_color;
-    settings.facet_label_line_width          = m_facet_label_line_width;
-    settings.facet_label_line_length         = m_facet_label_line_length;
-    settings.corner_label_text_color         = m_corner_label_text_color;
-    settings.corner_label_line_color         = m_corner_label_line_color;
-    settings.corner_label_line_width         = m_corner_label_line_width;
-    settings.corner_label_line_length        = m_corner_label_line_length;
+    settings = m_settings;
 }
-
 auto Debug_visualizations::get_selected_camera(const Render_context& render_context) -> std::shared_ptr<erhe::scene::Camera>
 {
     const auto* scene     = render_context.get_scene();
@@ -422,28 +243,28 @@ void Debug_visualizations::mesh_visualization(const Render_context& render_conte
             );
         }
 
-        if (m_selection_parts) {
-            if (m_selection_box || (box_smaller && !m_selection_sphere)) {
-                line_renderer.set_thickness(m_selection_major_width);
+        if (m_settings.selection_parts) {
+            if (m_settings.selection_box || (box_smaller && !m_settings.selection_sphere)) {
+                line_renderer.set_thickness(m_settings.selection_major_width);
                 line_renderer.add_cube(
                     node->world_from_node(),
-                    m_selection_major_color,
-                    buffer_mesh.bounding_box.min - glm::vec3{m_gap, m_gap, m_gap},
-                    buffer_mesh.bounding_box.max + glm::vec3{m_gap, m_gap, m_gap}
+                    m_settings.selection_major_color,
+                    buffer_mesh.bounding_box.min - glm::vec3{m_settings.gap, m_settings.gap, m_settings.gap},
+                    buffer_mesh.bounding_box.max + glm::vec3{m_settings.gap, m_settings.gap, m_settings.gap}
                 );
             }
-            if (m_selection_sphere || (!box_smaller && !m_selection_box)) {
+            if (m_settings.selection_sphere || (!box_smaller && !m_settings.selection_box)) {
                 if (used_camera) {
                     line_renderer.add_sphere(
                         node->world_from_node_transform(),
-                        m_selection_major_color,
-                        m_selection_minor_color,
-                        m_selection_major_width,
-                        m_selection_minor_width,
+                        m_settings.selection_major_color,
+                        m_settings.selection_minor_color,
+                        m_settings.selection_major_width,
+                        m_settings.selection_minor_width,
                         buffer_mesh.bounding_sphere.center,
-                        buffer_mesh.bounding_sphere.radius + m_gap,
+                        buffer_mesh.bounding_sphere.radius + m_settings.gap,
                         &camera_world_from_node_transform,
-                        m_sphere_step_count
+                        m_settings.sphere_step_count
                     );
                 }
             }
@@ -592,9 +413,9 @@ void Debug_visualizations::directional_light_visualization(const Light_visualiza
     const glm::mat4 world_from_light_clip   = light_projection_transforms->clip_from_world.get_inverse_matrix();
     const glm::mat4 world_from_light_camera = light_projection_transforms->world_from_light_camera.get_matrix();
 
-    line_renderer.set_thickness(m_light_visualization_width);
+    line_renderer.set_thickness(m_settings.light_line_width);
 
-    if (m_frustum_box) {
+    if (m_settings.frustum_box) {
         line_renderer.add_cube(
             world_from_light_clip,
             context.light_color,
@@ -603,7 +424,7 @@ void Debug_visualizations::directional_light_visualization(const Light_visualiza
         );
     }
 
-    if (m_frustum_planes) {
+    if (m_settings.frustum_planes) {
         const glm::mat4 clip_from_world = light_projection_transforms->clip_from_world.get_matrix();
         std::array<glm::vec4, 6> planes = erhe::math::extract_frustum_planes(clip_from_world, 0.0f, 1.0f);
         for (const glm::vec4& plane : planes) {
@@ -648,9 +469,9 @@ void Debug_visualizations::shadow_frustum_fit_visualization(const Render_context
     // Tight shadow frustum fit intermediates; collected per light only when
     // the Shadow Frustum Fit setting "Collect Debug Data" is enabled. Each
     // element has its own toggle in the Shadow Fit group of this window.
-    // Gated only by m_shadow_fit_debug - independent of the lights
+    // Gated only by m_settings.shadow_fit_debug - independent of the lights
     // visualization mode (which gates light_visualization()) and of
-    // m_shadow_debug (which gates the shadow texel visualization).
+    // m_settings.shadow_debug (which gates the shadow texel visualization).
     const auto shadow_render_node = context.app_context.app_rendering->get_shadow_node_for_view(context.scene_view);
     if (!shadow_render_node) {
         return;
@@ -665,18 +486,18 @@ void Debug_visualizations::shadow_frustum_fit_visualization(const Render_context
 
         // Per-caster world AABBs gathered for the fit (8 corners each,
         // min corner first, max corner last)
-        if (m_shadow_fit_casters) {
-            line_renderer.set_thickness(m_shadow_fit_casters_width);
+        if (m_settings.shadow_fit_casters) {
+            line_renderer.set_thickness(m_settings.shadow_fit_casters_width);
             const std::vector<glm::vec3>& points = fit_debug.caster_aabb_points;
             for (std::size_t i = 0, end = points.size() / 8; i < end; ++i) {
-                line_renderer.add_cube(glm::mat4{1.0f}, m_shadow_fit_casters_color, points[(i * 8) + 0], points[(i * 8) + 7]);
+                line_renderer.add_cube(glm::mat4{1.0f}, m_settings.shadow_fit_casters_color, points[(i * 8) + 0], points[(i * 8) + 7]);
             }
         }
 
         // Convex hull around the caster bounds, before clipping to F_shadow
-        if (m_shadow_fit_caster_hull) {
-            const glm::vec4 color = m_shadow_fit_caster_hull_color;
-            const float     width = m_shadow_fit_caster_hull_width;
+        if (m_settings.shadow_fit_caster_hull) {
+            const glm::vec4 color = m_settings.shadow_fit_caster_hull_color;
+            const float     width = m_settings.shadow_fit_caster_hull_width;
             const erhe::math::Convex_hull& hull = fit_debug.caster_hull;
             for (const std::array<std::size_t, 3>& triangle : hull.triangle_indices) {
                 const std::size_t i0 = triangle[0];
@@ -695,9 +516,9 @@ void Debug_visualizations::shadow_frustum_fit_visualization(const Render_context
         }
 
         // Receiver volume (main camera view frustum) used by the fit
-        if (m_shadow_fit_receivers && fit_debug.receiver_corners_valid) {
-            const glm::vec4 color = m_shadow_fit_receivers_color;
-            const float     width = m_shadow_fit_receivers_width;
+        if (m_settings.shadow_fit_receivers && fit_debug.receiver_corners_valid) {
+            const glm::vec4 color = m_settings.shadow_fit_receivers_color;
+            const float     width = m_settings.shadow_fit_receivers_width;
             const std::array<glm::vec3, 8>& c = fit_debug.receiver_corners;
             // Corner order from erhe::math::extract_frustum_corners()
             constexpr std::array<std::array<std::size_t, 2>, 12> edges{{
@@ -711,17 +532,17 @@ void Debug_visualizations::shadow_frustum_fit_visualization(const Render_context
         }
 
         // Shadow caster volume (F_shadow) planes
-        if (m_shadow_fit_volume_planes) {
-            line_renderer.set_thickness(m_shadow_fit_volume_planes_width);
+        if (m_settings.shadow_fit_volume_planes) {
+            line_renderer.set_thickness(m_settings.shadow_fit_volume_planes_width);
             for (const glm::vec4& plane : fit_debug.shadow_volume_planes) {
-                line_renderer.add_plane(m_shadow_fit_volume_planes_color, plane);
+                line_renderer.add_plane(m_settings.shadow_fit_volume_planes_color, plane);
             }
         }
 
         // Fit point set (clipped caster hull points or view frustum corners)
-        if (m_shadow_fit_points) {
-            const glm::vec4 color = m_shadow_fit_points_color;
-            const float     width = m_shadow_fit_points_width;
+        if (m_settings.shadow_fit_points) {
+            const glm::vec4 color = m_settings.shadow_fit_points_color;
+            const float     width = m_settings.shadow_fit_points_width;
             const float marker_radius = 0.05f;
             for (const glm::vec3& p : fit_debug.fit_points) {
                 line_renderer.add_line(color, width, p - marker_radius * axis_x, color, width, p + marker_radius * axis_x);
@@ -732,13 +553,13 @@ void Debug_visualizations::shadow_frustum_fit_visualization(const Render_context
 
         // Light plane hull, minimum area OBB and its supporting edge
         // (present when Optimize Rotation is enabled)
-        if (m_shadow_fit_light_plane_hull) {
+        if (m_settings.shadow_fit_light_plane_hull) {
             const glm::mat4& world_from_light_plane = fit_debug.world_from_light_plane;
             auto to_world = [&world_from_light_plane](const glm::vec2 p) -> glm::vec3 {
                 return glm::vec3{world_from_light_plane * glm::vec4{p.x, p.y, 0.0f, 1.0f}};
             };
-            const glm::vec4 hull_color = m_shadow_fit_light_plane_hull_color;
-            const float     hull_width = m_shadow_fit_light_plane_hull_width;
+            const glm::vec4 hull_color = m_settings.shadow_fit_light_plane_hull_color;
+            const float     hull_width = m_settings.shadow_fit_light_plane_hull_width;
             for (std::size_t i = 0, count = fit_debug.light_plane_hull.size(); i < count; ++i) {
                 line_renderer.add_line(
                     hull_color, hull_width, to_world(fit_debug.light_plane_hull[i]),
@@ -754,14 +575,14 @@ void Debug_visualizations::shadow_frustum_fit_visualization(const Render_context
                     to_world(original_from_edge * glm::vec2{obb.aabb_max.x, obb.aabb_max.y}),
                     to_world(original_from_edge * glm::vec2{obb.aabb_min.x, obb.aabb_max.y})
                 };
-                const glm::vec4 obb_color = m_shadow_fit_obb_color;
-                const float     obb_width = m_shadow_fit_obb_width;
+                const glm::vec4 obb_color = m_settings.shadow_fit_obb_color;
+                const float     obb_width = m_settings.shadow_fit_obb_width;
                 for (std::size_t i = 0, count = obb_corners.size(); i < count; ++i) {
                     line_renderer.add_line(obb_color, obb_width, obb_corners[i], obb_color, obb_width, obb_corners[(i + 1) % count]);
                 }
                 line_renderer.add_line(
-                    m_shadow_fit_obb_edge_color, m_shadow_fit_obb_edge_width, to_world(obb.edge_a),
-                    m_shadow_fit_obb_edge_color, m_shadow_fit_obb_edge_width, to_world(obb.edge_b)
+                    m_settings.shadow_fit_obb_edge_color, m_settings.shadow_fit_obb_edge_width, to_world(obb.edge_a),
+                    m_settings.shadow_fit_obb_edge_color, m_settings.shadow_fit_obb_edge_width, to_world(obb.edge_b)
                 );
             }
         }
@@ -777,12 +598,12 @@ void Debug_visualizations::shadow_frustum_fit_visualization(const Render_context
                 glm::vec4       color;
             };
             const std::array<Step_visualization, 4> step_visualizations{{
-                { Shadow_fit_step::fit_points,         m_shadow_fit_box_fit,     m_shadow_fit_box_fit_color     },
-                { Shadow_fit_step::frustum_constraint, m_shadow_fit_box_frustum, m_shadow_fit_box_frustum_color },
-                { Shadow_fit_step::shadow_range_cap,   m_shadow_fit_box_cap,     m_shadow_fit_box_cap_color     },
-                { Shadow_fit_step::stabilized,         m_shadow_fit_box_final,   m_shadow_fit_box_final_color   }
+                { Shadow_fit_step::fit_points,         m_settings.shadow_fit_box_fit,     m_settings.shadow_fit_box_fit_color     },
+                { Shadow_fit_step::frustum_constraint, m_settings.shadow_fit_box_frustum, m_settings.shadow_fit_box_frustum_color },
+                { Shadow_fit_step::shadow_range_cap,   m_settings.shadow_fit_box_cap,     m_settings.shadow_fit_box_cap_color     },
+                { Shadow_fit_step::stabilized,         m_settings.shadow_fit_box_final,   m_settings.shadow_fit_box_final_color   }
             }};
-            line_renderer.set_thickness(m_shadow_fit_box_width);
+            line_renderer.set_thickness(m_settings.shadow_fit_box_width);
             for (const Step_visualization& v : step_visualizations) {
                 const auto& box = fit_debug.step_boxes[static_cast<std::size_t>(v.step)];
                 if (!v.enabled || !box.valid) {
@@ -812,7 +633,7 @@ void Debug_visualizations::point_light_visualization(const Light_visualization_c
     const auto pnp = scale * glm::normalize( axis_x - axis_y + axis_z);
     const auto ppn = scale * glm::normalize( axis_x + axis_y - axis_z);
     const auto ppp = scale * glm::normalize( axis_x + axis_y + axis_z);
-    line_renderer.set_thickness(m_light_visualization_width);
+    line_renderer.set_thickness(m_settings.light_line_width);
     line_renderer.add_lines(
         node->world_from_node(),
         context.light_color,
@@ -864,7 +685,7 @@ void Debug_visualizations::spot_light_visualization(const Light_visualization_co
     //    ? time - floor(time)
     //    : 0.5f;
 
-    line_renderer.set_thickness(m_light_visualization_width);
+    line_renderer.set_thickness(m_settings.light_line_width);
 
     for (int i = 0; i < light_cone_sides; ++i) {
         const float t0 = glm::two_pi<float>() * static_cast<float>(i    ) / static_cast<float>(light_cone_sides);
@@ -1056,7 +877,7 @@ void Debug_visualizations::camera_visualization(const Render_context& render_con
     const mat4 world_from_clip = camera_node->world_from_node() * node_from_clip;
 
     erhe::renderer::Primitive_renderer line_renderer = render_context.get({erhe::graphics::Primitive_type::line, 2, true, true});
-    line_renderer.set_thickness(m_camera_visualization_width);
+    line_renderer.set_thickness(m_settings.camera_line_width);
 
     std::array<glm::vec4, 6> planes  = erhe::math::extract_frustum_planes (clip_from_world, 0.0f, 1.0f);
     std::array<glm::vec3, 8> corners = erhe::math::extract_frustum_corners(world_from_clip, 0.0f, 1.0f);
@@ -1095,17 +916,17 @@ void Debug_visualizations::camera_visualization(const Render_context& render_con
         render_context.app_context.text_renderer->print(point_in_window_z_negated, text_color, fmt::format("{}", i));
     }
 
-    if (m_frustum_box) {
+    if (m_settings.frustum_box) {
         line_renderer.add_cube(
             world_from_clip,
-            m_camera_line_color,
+            m_settings.camera_line_color,
             clip_min_corner,
             clip_max_corner,
             true
         );
     }
 
-    if (m_frustum_planes) {
+    if (m_settings.frustum_planes) {
         line_renderer.add_plane(glm::vec4{1.0f, 0.0f, 0.0f, 1.0f}, planes[0]); // R Left
         line_renderer.add_plane(glm::vec4{0.0f, 1.0f, 0.0f, 1.0f}, planes[1]); // G Right
         line_renderer.add_plane(glm::vec4{0.0f, 0.0f, 1.0f, 1.0f}, planes[2]); // B Bottom
@@ -1114,7 +935,7 @@ void Debug_visualizations::camera_visualization(const Render_context& render_con
         line_renderer.add_plane(glm::vec4{1.0f, 0.0f, 1.0f, 1.0f}, planes[5]); // M Far
     }
 
-    if (m_camera_cull_test) {
+    if (m_settings.camera_cull_test) {
         const auto scene_root = render_context.scene_view.get_scene_root();
         if (!scene_root) {
             return;
@@ -1154,7 +975,7 @@ void Debug_visualizations::camera_visualization(const Render_context& render_con
                         sphere_in_world.center,
                         sphere_in_world.radius,
                         &(render_context.get_camera_node()->world_from_node_transform()),
-                        m_sphere_step_count
+                        m_settings.sphere_step_count
                     );
                 }
             }
@@ -1172,10 +993,10 @@ void Debug_visualizations::layout_visualization(const Render_context& render_con
     }
 
     erhe::renderer::Primitive_renderer line_renderer = render_context.get({erhe::graphics::Primitive_type::line, 2, true, true});
-    line_renderer.set_thickness(m_layout_visualization_width);
+    line_renderer.set_thickness(m_settings.layout_line_width);
     line_renderer.add_cube(
         node.world_from_node(),
-        m_layout_line_color,
+        m_settings.layout_line_color,
         layout.volume.min,
         layout.volume.max
     );
@@ -1201,7 +1022,7 @@ void Debug_visualizations::selection_visualization(const Render_context& context
             if (node->get_scene() != scene) {
                 continue;
             }
-            if (m_node_axis_visualization == Visualization_mode::selected) {
+            if (m_settings.node_axises == Visualization_mode::selected) {
                 const glm::vec4 red  {1.0f, 0.0f, 0.0f, 1.0f};
                 const glm::vec4 green{0.0f, 1.0f, 0.0f, 1.0f};
                 const glm::vec4 blue {0.0f, 0.0f, 1.0f, 1.0f};
@@ -1232,8 +1053,8 @@ void Debug_visualizations::selection_visualization(const Render_context& context
         }
     }
 
-    if ((m_selection_bounding_volume.get_element_count() > 1) || !m_selection_parts) {
-        if (m_selection_bounding_points_visible) {
+    if ((m_selection_bounding_volume.get_element_count() > 1) || !m_settings.selection_parts) {
+        if (m_settings.selection_bounding_points) {
             const erhe::scene::Camera* camera = context.camera;
             const auto projection_transforms = camera->projection_transforms(
                 context.viewport,
@@ -1278,30 +1099,30 @@ void Debug_visualizations::selection_visualization(const Render_context& context
         const float box_volume    = selection_bounding_box.volume();
         const float sphere_volume = selection_bounding_sphere.volume();
         if (
-            m_selection_box ||
+            m_settings.selection_box ||
             (
-                m_selection_parts &&
+                m_settings.selection_parts &&
                 (
-                    !m_selection_sphere &&
+                    !m_settings.selection_sphere &&
                     (box_volume > 0.0f) &&
                     (box_volume < sphere_volume)
                 )
             )
         ) {
-            line_renderer.set_thickness(m_selection_major_width);
+            line_renderer.set_thickness(m_settings.selection_major_width);
             line_renderer.add_cube(
                 glm::mat4{1.0f},
-                m_group_selection_major_color,
-                selection_bounding_box.min - glm::vec3{m_gap, m_gap, m_gap},
-                selection_bounding_box.max + glm::vec3{m_gap, m_gap, m_gap}
+                m_settings.group_selection_major_color,
+                selection_bounding_box.min - glm::vec3{m_settings.gap, m_settings.gap, m_settings.gap},
+                selection_bounding_box.max + glm::vec3{m_settings.gap, m_settings.gap, m_settings.gap}
             );
         }
         if (
-            m_selection_sphere ||
+            m_settings.selection_sphere ||
             (
-                m_selection_parts &&
+                m_settings.selection_parts &&
                 (
-                    !m_selection_box &&
+                    !m_settings.selection_box &&
                     (sphere_volume > 0.0f) &&
                     (sphere_volume < box_volume)
                 )
@@ -1311,22 +1132,22 @@ void Debug_visualizations::selection_visualization(const Render_context& context
             if (camera_node != nullptr) {
                 line_renderer.add_sphere(
                     erhe::scene::Transform{},
-                    m_group_selection_major_color,
-                    m_group_selection_minor_color,
-                    m_selection_major_width,
-                    m_selection_minor_width,
+                    m_settings.group_selection_major_color,
+                    m_settings.group_selection_minor_color,
+                    m_settings.selection_major_width,
+                    m_settings.selection_minor_width,
                     selection_bounding_sphere.center,
-                    selection_bounding_sphere.radius + m_gap,
+                    selection_bounding_sphere.radius + m_settings.gap,
                     &(camera_node->world_from_node_transform()),
-                    m_sphere_step_count
+                    m_settings.sphere_step_count
                 );
             }
         }
     }
 
-    if (m_selection_convex_hull || m_selection_convex_hull_projected) {
+    if (m_settings.selection_convex_hull || m_settings.selection_convex_hull_projected) {
         erhe::math::Convex_hull selection_convex_hull = erhe::math::calculate_bounding_convex_hull(m_selection_bounding_volume);
-        if (m_selection_convex_hull) {
+        if (m_settings.selection_convex_hull) {
             for (const std::array<std::size_t, 3>& triangle : selection_convex_hull.triangle_indices) {
                 const std::size_t i0 = triangle[0];
                 const std::size_t i1 = triangle[1];
@@ -1336,38 +1157,38 @@ void Debug_visualizations::selection_visualization(const Render_context& context
                 const glm::vec3   p2 = selection_convex_hull.points[i2];
                 if (i0 < i1) {
                     line_renderer.add_line(
-                        m_group_selection_major_color,
-                        m_selection_major_width,
+                        m_settings.group_selection_major_color,
+                        m_settings.selection_major_width,
                         p0,
-                        m_group_selection_major_color,
-                        m_selection_major_width,
+                        m_settings.group_selection_major_color,
+                        m_settings.selection_major_width,
                         p1
                     );
                 }
                 if (i1 < i2) {
                     line_renderer.add_line(
-                        m_group_selection_major_color,
-                        m_selection_major_width,
+                        m_settings.group_selection_major_color,
+                        m_settings.selection_major_width,
                         p1,
-                        m_group_selection_major_color,
-                        m_selection_major_width,
+                        m_settings.group_selection_major_color,
+                        m_settings.selection_major_width,
                         p2
                     );
                 }
                 if (i2 < i0) {
                     line_renderer.add_line(
-                        m_group_selection_major_color,
-                        m_selection_major_width,
+                        m_settings.group_selection_major_color,
+                        m_settings.selection_major_width,
                         p2,
-                        m_group_selection_major_color,
-                        m_selection_major_width,
+                        m_settings.group_selection_major_color,
+                        m_settings.selection_major_width,
                         p0
                     );
                 }
             }
         }
         std::shared_ptr<erhe::scene::Camera> selected_camera = get_selected_camera(context);
-        if (m_selection_convex_hull_projected && selected_camera) {
+        if (m_settings.selection_convex_hull_projected && selected_camera) {
             erhe::scene::Node* camera_node     = selected_camera->get_node();
             const mat4         clip_from_node  = selected_camera->projection()->get_projection_matrix(
                 1.0f,
@@ -1412,7 +1233,7 @@ void Debug_visualizations::selection_visualization(const Render_context& context
 
                 const erhe::math::Min_area_obb_2d obb = erhe::math::calculate_min_area_obb_2d(
                     ndc_convex_hull,
-                    m_debug_convex_hull ? m_convex_hull_edge : -1
+                    m_settings.debug_convex_hull ? m_settings.convex_hull_edge : -1
                 );
                 const glm::vec2 edge_aabb_min      = obb.aabb_min;
                 const glm::vec2 edge_aabb_max      = obb.aabb_max;
@@ -1466,7 +1287,7 @@ void Debug_visualizations::physics_nodes_visualization(const Render_context& con
 
     for (erhe::scene::Mesh_layer* layer : scene_root->layers().mesh_layers()) {
         for (const auto& mesh : layer->meshes) {
-            if (!should_visualize(m_physics_visualization, mesh)) {
+            if (!should_visualize(m_settings.physics, mesh)) {
                 continue;
             }
             const auto* node = mesh->get_node();
@@ -1576,7 +1397,7 @@ void Debug_visualizations::physics_nodes_visualization(const Render_context& con
 
 void Debug_visualizations::raytrace_nodes_visualization(const Render_context& context)
 {
-    if (m_raytrace_visualization == Visualization_mode::off) {
+    if (m_settings.raytrace == Visualization_mode::off) {
         return;
     }
 
@@ -1599,7 +1420,7 @@ void Debug_visualizations::raytrace_nodes_visualization(const Render_context& co
             if (node == nullptr) {
                 continue;
             }
-            if (!should_visualize(m_raytrace_visualization, node)) {
+            if (!should_visualize(m_settings.raytrace, node)) {
                 continue;
             }
 
@@ -1655,7 +1476,7 @@ void Debug_visualizations::mesh_labels(const Render_context& context, erhe::scen
         const GEO::Mesh&       geo_mesh         = geometry->get_mesh();
         const Mesh_attributes& attributes       = geometry->get_attributes();
 
-        if (should_visualize(m_vertex_labels, is_mesh_selected, is_mesh_hovered)) {
+        if (should_visualize(m_settings.vertex_labels, is_mesh_selected, is_mesh_hovered)) {
             int label_count = 0;
             for (GEO::index_t vertex : geo_mesh.vertices) {
                 const glm::vec3 p0 = to_glm_vec3(get_pointf(geo_mesh.vertices, vertex));
@@ -1669,19 +1490,19 @@ void Debug_visualizations::mesh_labels(const Render_context& context, erhe::scen
                         n = to_glm_vec3(vertex_normal.value());
                     }
                 }
-                const glm::vec3 p = p0 + m_vertex_label_line_length * n;
+                const glm::vec3 p = p0 + m_settings.vertex_label_line_length * n;
 
-                line_renderer.set_thickness(m_vertex_label_line_width);
+                line_renderer.set_thickness(m_settings.vertex_label_line_width);
                 line_renderer.add_lines(
                     world_from_node,
-                    m_vertex_label_line_color,
+                    m_settings.vertex_label_line_color,
                     { { p0, p } }
                 );
 
-                const std::string label_text = m_vertex_positions ? fmt::format("{}: {}", vertex, p0) : fmt::format("{}", vertex);
-                const uint32_t    text_color = erhe::math::convert_float4_to_uint32(m_vertex_label_text_color);
+                const std::string label_text = m_settings.vertex_positions ? fmt::format("{}: {}", vertex, p0) : fmt::format("{}", vertex);
+                const uint32_t    text_color = erhe::math::convert_float4_to_uint32(m_settings.vertex_label_text_color);
                 label(context, clip_from_world, world_from_node, p, text_color, label_text);
-                if (++label_count >= m_max_labels) {
+                if (++label_count >= m_settings.max_labels) {
                     break;
                 }
             }
@@ -1693,9 +1514,9 @@ void Debug_visualizations::mesh_labels(const Render_context& context, erhe::scen
         //    polygon_normals = geometry->polygon_attributes().find<glm::vec3>(erhe::geometry::c_polygon_normals);
         //}
 
-        if (should_visualize(m_edge_labels, is_mesh_selected, is_mesh_hovered)) {
+        if (should_visualize(m_settings.edge_labels, is_mesh_selected, is_mesh_hovered)) {
             int label_count = 0;
-            const float t = m_edge_label_line_length;
+            const float t = m_settings.edge_label_line_length;
             for (GEO::index_t edge : geo_mesh.edges) {
                 const GEO::index_t edge_a = geo_mesh.edges.vertex(edge, 0);
                 const GEO::index_t edge_b = geo_mesh.edges.vertex(edge, 1);
@@ -1711,12 +1532,12 @@ void Debug_visualizations::mesh_labels(const Render_context& context, erhe::scen
                 const GEO::vec3f a  = get_pointf(geo_mesh.vertices, edge_a) + 0.001f * n;
                 const GEO::vec3f b  = get_pointf(geo_mesh.vertices, edge_b) + 0.001f * n;
                 const GEO::vec3f p0 = (a + b) / 2.0f;
-                const GEO::vec3f p  = p0 + m_edge_label_text_offset * n;
+                const GEO::vec3f p  = p0 + m_settings.edge_label_text_offset * n;
 
-                line_renderer.set_thickness(m_edge_label_line_width);
+                line_renderer.set_thickness(m_settings.edge_label_line_width);
                 line_renderer.add_lines(
                     world_from_node,
-                    m_edge_label_line_color,
+                    m_settings.edge_label_line_color,
                     {
                         {
                             to_glm_vec3(t * a + (1.0f - t) * p0),
@@ -1730,15 +1551,15 @@ void Debug_visualizations::mesh_labels(const Render_context& context, erhe::scen
                 );
 
                 const std::string label_text = fmt::format("{}", edge);
-                const uint32_t    text_color = erhe::math::convert_float4_to_uint32(m_edge_label_text_color);
+                const uint32_t    text_color = erhe::math::convert_float4_to_uint32(m_settings.edge_label_text_color);
                 label(context, clip_from_world, world_from_node, to_glm_vec3(p), text_color, label_text);
-                if (++label_count >= m_max_labels) {
+                if (++label_count >= m_settings.max_labels) {
                     break;
                 }
             }
         }
 
-        if (should_visualize(m_facet_labels, is_mesh_selected, is_mesh_hovered)) {
+        if (should_visualize(m_settings.facet_labels, is_mesh_selected, is_mesh_hovered)) {
             int label_count = 0;
             for (GEO::index_t facet : geo_mesh.facets) {
                 if (!attributes.facet_centroid.has(facet)) {
@@ -1746,46 +1567,46 @@ void Debug_visualizations::mesh_labels(const Render_context& context, erhe::scen
                 }
                 const GEO::vec3f p = attributes.facet_centroid.get(facet);
                 const GEO::vec3f n = GEO::normalize(mesh_facet_normalf(geo_mesh, facet));
-                const GEO::vec3f l = p + m_facet_label_line_length * n;
+                const GEO::vec3f l = p + m_settings.facet_label_line_length * n;
 
-                line_renderer.set_thickness(m_facet_label_line_width);
+                line_renderer.set_thickness(m_settings.facet_label_line_width);
                 line_renderer.add_lines(
                     world_from_node,
-                    m_facet_label_line_color,
+                    m_settings.facet_label_line_color,
                     {{ to_glm_vec3(p), to_glm_vec3(l) }}
                 );
 
                 {
                     const std::string label_text = fmt::format("{}", facet);
-                    const glm::vec4   p4_in_node = glm::vec4{to_glm_vec3(p) + m_facet_label_line_length * to_glm_vec3(n), 1.0f};
-                    const uint32_t    text_color = erhe::math::convert_float4_to_uint32(m_facet_label_text_color);
+                    const glm::vec4   p4_in_node = glm::vec4{to_glm_vec3(p) + m_settings.facet_label_line_length * to_glm_vec3(n), 1.0f};
+                    const uint32_t    text_color = erhe::math::convert_float4_to_uint32(m_settings.facet_label_text_color);
 
                     label(context, clip_from_world, world_from_node, p4_in_node, text_color, label_text);
                 }
 
-                if (should_visualize(m_corner_labels, is_mesh_selected, is_mesh_hovered)) {
+                if (should_visualize(m_settings.corner_labels, is_mesh_selected, is_mesh_hovered)) {
                     for (GEO::index_t corner : geo_mesh.facets.corners(facet)) {
                         const GEO::index_t vertex      = geo_mesh.facet_corners.vertex(corner);
                         const GEO::vec3f   corner_p    = get_pointf(geo_mesh.vertices, vertex);
                         const GEO::vec3f   to_centroid = GEO::normalize(l - corner_p);
-                        const GEO::vec3f   label_p     = corner_p + m_corner_label_line_length * to_centroid;
+                        const GEO::vec3f   label_p     = corner_p + m_settings.corner_label_line_length * to_centroid;
 
-                        line_renderer.set_thickness(m_corner_label_line_width);
+                        line_renderer.set_thickness(m_settings.corner_label_line_width);
                         line_renderer.add_lines(
                             world_from_node,
-                            m_corner_label_line_color,
+                            m_settings.corner_label_line_color,
                             {{ to_glm_vec3(corner_p), to_glm_vec3(label_p) }}
                         );
 
                         const std::string label_text = fmt::format("{}", corner);
-                        const uint32_t    text_color = erhe::math::convert_float4_to_uint32(m_corner_label_text_color);
+                        const uint32_t    text_color = erhe::math::convert_float4_to_uint32(m_settings.corner_label_text_color);
                         label(context, clip_from_world, world_from_node, to_glm_vec3(label_p), text_color, label_text);
-                        if (++label_count >= m_max_labels) {
+                        if (++label_count >= m_settings.max_labels) {
                             break;
                         }
                     }
                 }
-                if (++label_count >= m_max_labels) {
+                if (++label_count >= m_settings.max_labels) {
                     break;
                 }
             }
@@ -1866,19 +1687,19 @@ void Debug_visualizations::render(const Render_context& context)
     // generates lines / labels and must run only in the CPU phase.
     if (context.encoder != nullptr) {
 #if 0
-        if (m_shadow_debug) {
+        if (m_settings.shadow_debug) {
             shadow_debug(context);
         }
 #endif
         return;
     }
 
-    if (m_world_axes) {
+    if (m_settings.world_axes) {
         world_axes_visualization(context);
     }
 
     if (
-        m_tool_hide &&
+        m_settings.tool_hide &&
         context.app_context.transform_tool->is_transform_tool_active()
     ) {
         return;
@@ -1892,7 +1713,7 @@ void Debug_visualizations::render(const Render_context& context)
         }
     }
 
-    if (m_selection) {
+    if (m_settings.selection) {
         selection_visualization(context);
     }
 
@@ -1904,7 +1725,7 @@ void Debug_visualizations::render(const Render_context& context)
     erhe::renderer::Primitive_renderer line_renderer = context.get({erhe::graphics::Primitive_type::line, 2, true, true});
 
     for (const auto& node : scene_root->get_hosted_scene()->get_flat_nodes()) {
-        if (node && should_visualize(m_node_axis_visualization, node)) {
+        if (node && should_visualize(m_settings.node_axises, node)) {
             const glm::vec4 red  {1.0f, 0.0f, 0.0f, 1.0f};
             const glm::vec4 green{0.0f, 1.0f, 0.0f, 1.0f};
             const glm::vec4 blue {0.0f, 0.0f, 1.0f, 1.0f};
@@ -1923,30 +1744,30 @@ void Debug_visualizations::render(const Render_context& context)
     }
 
     for (const auto& light : scene_root->layers().light()->lights) {
-        if (should_visualize(m_lights, light)) {
+        if (should_visualize(m_settings.lights, light)) {
             light_visualization(context, selected_camera, light.get());
         }
     }
 
-    if (m_shadow_fit_debug) {
+    if (m_settings.shadow_fit_debug) {
         shadow_frustum_fit_visualization(context);
     }
 
     //if (m_viewport_config->debug_visualizations.camera == Visualization_mode::all)
     for (const auto& camera : scene_root->get_scene().get_cameras()) {
-        if (should_visualize(m_cameras, camera)) {
+        if (should_visualize(m_settings.cameras, camera)) {
             camera_visualization(context, camera.get());
         }
     }
 
-    if (m_layouts != Visualization_mode::off) {
+    if (m_settings.layouts != Visualization_mode::off) {
         for (const auto& node : scene_root->get_hosted_scene()->get_flat_nodes()) {
             if (!node) {
                 continue;
             }
             for (const auto& attachment : node->get_attachments()) {
                 const auto& layout = std::dynamic_pointer_cast<erhe::scene::Layout>(attachment);
-                if (layout && (should_visualize(m_layouts, layout) || should_visualize(m_layouts, node))) {
+                if (layout && (should_visualize(m_settings.layouts, layout) || should_visualize(m_settings.layouts, node))) {
                     layout_visualization(context, *node, *layout);
                 }
             }
@@ -1955,11 +1776,11 @@ void Debug_visualizations::render(const Render_context& context)
 
     // Skins can be shared by multiple meshes.
     // Visualize each skin only once.
-    if (m_skins != Visualization_mode::off) {
+    if (m_settings.skins != Visualization_mode::off) {
         std::set<erhe::scene::Skin*> skins;
         for (erhe::scene::Mesh_layer* layer : scene_root->layers().mesh_layers()) {
             for (const auto& mesh : layer->meshes) {
-                if (mesh->skin && should_visualize(m_skins, mesh)) {
+                if (mesh->skin && should_visualize(m_settings.skins, mesh)) {
                     skins.insert(mesh->skin.get());
                 }
             }
@@ -2002,15 +1823,15 @@ void Debug_visualizations::imgui(Scene_view& scene_view)
     }
 
     p.reset();
-    p.add_entry("Node Axises", [this](){ make_combo("##", m_node_axis_visualization); });
-    p.add_entry("Physics",     [this](){ make_combo("##", m_physics_visualization  ); });
-    p.add_entry("Raytrace",    [this](){ make_combo("##", m_raytrace_visualization ); });
+    p.add_entry("Node Axises", [this](){ make_combo("##", m_settings.node_axises); });
+    p.add_entry("Physics",     [this](){ make_combo("##", m_settings.physics  ); });
+    p.add_entry("Raytrace",    [this](){ make_combo("##", m_settings.raytrace ); });
 
-    p.add_entry("World Axes",   [this](){ ImGui::Checkbox   ("##", &m_world_axes); });
-    p.add_entry("Shadow Debug", [this](){ ImGui::Checkbox   ("##", &m_shadow_debug); }); // shadow texel visualization
-    p.add_entry("Shadow Fit",   [this](){ ImGui::Checkbox   ("##", &m_shadow_fit_debug); });
+    p.add_entry("World Axes",   [this](){ ImGui::Checkbox   ("##", &m_settings.world_axes); });
+    p.add_entry("Shadow Debug", [this](){ ImGui::Checkbox   ("##", &m_settings.shadow_debug); }); // shadow texel visualization
+    p.add_entry("Shadow Fit",   [this](){ ImGui::Checkbox   ("##", &m_settings.shadow_fit_debug); });
 
-    if (m_shadow_fit_debug) {
+    if (m_settings.shadow_fit_debug) {
         // Shadow frustum fit visualizations; data is collected per light only
         // when the Shadow Frustum Fit setting "Collect Debug Data" is enabled.
         // Each row: enable, color, line width (negative widths are in pixels
@@ -2028,26 +1849,26 @@ void Debug_visualizations::imgui(Scene_view& scene_view)
             }
         };
         p.push_group("Shadow Fit", ImGuiTreeNodeFlags_None);
-        p.add_entry("Casters",          [this, shadow_fit_entry](){ shadow_fit_entry(&m_shadow_fit_casters,          &m_shadow_fit_casters_color,          &m_shadow_fit_casters_width); });
-        p.add_entry("Caster Hull",      [this, shadow_fit_entry](){ shadow_fit_entry(&m_shadow_fit_caster_hull,      &m_shadow_fit_caster_hull_color,      &m_shadow_fit_caster_hull_width); });
-        p.add_entry("Receivers",        [this, shadow_fit_entry](){ shadow_fit_entry(&m_shadow_fit_receivers,        &m_shadow_fit_receivers_color,        &m_shadow_fit_receivers_width); });
-        p.add_entry("Volume Planes",    [this, shadow_fit_entry](){ shadow_fit_entry(&m_shadow_fit_volume_planes,    &m_shadow_fit_volume_planes_color,    &m_shadow_fit_volume_planes_width); });
-        p.add_entry("Fit Points",       [this, shadow_fit_entry](){ shadow_fit_entry(&m_shadow_fit_points,           &m_shadow_fit_points_color,           &m_shadow_fit_points_width); });
-        p.add_entry("Light Plane Hull", [this, shadow_fit_entry](){ shadow_fit_entry(&m_shadow_fit_light_plane_hull, &m_shadow_fit_light_plane_hull_color, &m_shadow_fit_light_plane_hull_width); });
-        p.add_entry("OBB",              [this, shadow_fit_entry](){ shadow_fit_entry(nullptr,                        &m_shadow_fit_obb_color,              &m_shadow_fit_obb_width); });
-        p.add_entry("OBB Edge",         [this, shadow_fit_entry](){ shadow_fit_entry(nullptr,                        &m_shadow_fit_obb_edge_color,         &m_shadow_fit_obb_edge_width); });
-        p.add_entry("Box: Points",      [this, shadow_fit_entry](){ shadow_fit_entry(&m_shadow_fit_box_fit,          &m_shadow_fit_box_fit_color,          nullptr); });
-        p.add_entry("Box: Frustum",     [this, shadow_fit_entry](){ shadow_fit_entry(&m_shadow_fit_box_frustum,      &m_shadow_fit_box_frustum_color,      nullptr); });
-        p.add_entry("Box: Range Cap",   [this, shadow_fit_entry](){ shadow_fit_entry(&m_shadow_fit_box_cap,          &m_shadow_fit_box_cap_color,          nullptr); });
-        p.add_entry("Box: Final",       [this, shadow_fit_entry](){ shadow_fit_entry(&m_shadow_fit_box_final,        &m_shadow_fit_box_final_color,        nullptr); });
-        p.add_entry("Box Width",        [this](){ ImGui::SetNextItemWidth(80.0f); ImGui::DragFloat("##", &m_shadow_fit_box_width, 0.1f, -100.0f, 100.0f, "%.1f"); });
+        p.add_entry("Casters",          [this, shadow_fit_entry](){ shadow_fit_entry(&m_settings.shadow_fit_casters,          &m_settings.shadow_fit_casters_color,          &m_settings.shadow_fit_casters_width); });
+        p.add_entry("Caster Hull",      [this, shadow_fit_entry](){ shadow_fit_entry(&m_settings.shadow_fit_caster_hull,      &m_settings.shadow_fit_caster_hull_color,      &m_settings.shadow_fit_caster_hull_width); });
+        p.add_entry("Receivers",        [this, shadow_fit_entry](){ shadow_fit_entry(&m_settings.shadow_fit_receivers,        &m_settings.shadow_fit_receivers_color,        &m_settings.shadow_fit_receivers_width); });
+        p.add_entry("Volume Planes",    [this, shadow_fit_entry](){ shadow_fit_entry(&m_settings.shadow_fit_volume_planes,    &m_settings.shadow_fit_volume_planes_color,    &m_settings.shadow_fit_volume_planes_width); });
+        p.add_entry("Fit Points",       [this, shadow_fit_entry](){ shadow_fit_entry(&m_settings.shadow_fit_points,           &m_settings.shadow_fit_points_color,           &m_settings.shadow_fit_points_width); });
+        p.add_entry("Light Plane Hull", [this, shadow_fit_entry](){ shadow_fit_entry(&m_settings.shadow_fit_light_plane_hull, &m_settings.shadow_fit_light_plane_hull_color, &m_settings.shadow_fit_light_plane_hull_width); });
+        p.add_entry("OBB",              [this, shadow_fit_entry](){ shadow_fit_entry(nullptr,                        &m_settings.shadow_fit_obb_color,              &m_settings.shadow_fit_obb_width); });
+        p.add_entry("OBB Edge",         [this, shadow_fit_entry](){ shadow_fit_entry(nullptr,                        &m_settings.shadow_fit_obb_edge_color,         &m_settings.shadow_fit_obb_edge_width); });
+        p.add_entry("Box: Points",      [this, shadow_fit_entry](){ shadow_fit_entry(&m_settings.shadow_fit_box_fit,          &m_settings.shadow_fit_box_fit_color,          nullptr); });
+        p.add_entry("Box: Frustum",     [this, shadow_fit_entry](){ shadow_fit_entry(&m_settings.shadow_fit_box_frustum,      &m_settings.shadow_fit_box_frustum_color,      nullptr); });
+        p.add_entry("Box: Range Cap",   [this, shadow_fit_entry](){ shadow_fit_entry(&m_settings.shadow_fit_box_cap,          &m_settings.shadow_fit_box_cap_color,          nullptr); });
+        p.add_entry("Box: Final",       [this, shadow_fit_entry](){ shadow_fit_entry(&m_settings.shadow_fit_box_final,        &m_settings.shadow_fit_box_final_color,        nullptr); });
+        p.add_entry("Box Width",        [this](){ ImGui::SetNextItemWidth(80.0f); ImGui::DragFloat("##", &m_settings.shadow_fit_box_width, 0.1f, -100.0f, 100.0f, "%.1f"); });
         p.pop_group();
     }
 
     p.push_group("Selection",  ImGuiTreeNodeFlags_None); //ImGuiTreeNodeFlags_DefaultOpen);
-    p.add_entry("Selection",       [this](){ ImGui::Checkbox   ("##", &m_selection); });
-    p.add_entry("Bounding points", [this](){ ImGui::Checkbox   ("##", &m_selection_bounding_points_visible); });
-    if (m_selection_bounding_points_visible) {
+    p.add_entry("Selection",       [this](){ ImGui::Checkbox   ("##", &m_settings.selection); });
+    p.add_entry("Bounding points", [this](){ ImGui::Checkbox   ("##", &m_settings.selection_bounding_points); });
+    if (m_settings.selection_bounding_points) {
         erhe::math::Aabb   selection_bounding_box;
         erhe::math::Sphere selection_bounding_sphere;
         erhe::math::calculate_bounding_volume(m_selection_bounding_volume, selection_bounding_box, selection_bounding_sphere);
@@ -2057,75 +1878,75 @@ void Debug_visualizations::imgui(Scene_view& scene_view)
         p.add_entry("Sphere radius", [this, selection_bounding_sphere](){ ImGui::Text("%f", selection_bounding_sphere.radius); });
         p.add_entry("Sphere Volume", [this, sphere_volume            ](){ ImGui::Text("%f", sphere_volume); });
     }
-    p.add_entry("Selection Box",            [this](){ ImGui::Checkbox   ("##", &m_selection_box); });
-    p.add_entry("Selection Sphere",         [this](){ ImGui::Checkbox   ("##", &m_selection_sphere); });
-    p.add_entry("Selection Parts",          [this](){ ImGui::Checkbox   ("##", &m_selection_parts); });
-    p.add_entry("Selection Convex Hull",    [this](){ ImGui::Checkbox   ("##", &m_selection_convex_hull); });
-    p.add_entry("Selection Projected Hull", [this](){ ImGui::Checkbox   ("##", &m_selection_convex_hull_projected); });
-    p.add_entry("Debug Convex Hull",        [this](){ ImGui::Checkbox   ("##", &m_debug_convex_hull); });
-    p.add_entry("Convex Hull Edge",         [this](){ ImGui::InputInt("##", &m_convex_hull_edge, 1, 10, ImGuiInputTextFlags_None); });
+    p.add_entry("Selection Box",            [this](){ ImGui::Checkbox   ("##", &m_settings.selection_box); });
+    p.add_entry("Selection Sphere",         [this](){ ImGui::Checkbox   ("##", &m_settings.selection_sphere); });
+    p.add_entry("Selection Parts",          [this](){ ImGui::Checkbox   ("##", &m_settings.selection_parts); });
+    p.add_entry("Selection Convex Hull",    [this](){ ImGui::Checkbox   ("##", &m_settings.selection_convex_hull); });
+    p.add_entry("Selection Projected Hull", [this](){ ImGui::Checkbox   ("##", &m_settings.selection_convex_hull_projected); });
+    p.add_entry("Debug Convex Hull",        [this](){ ImGui::Checkbox   ("##", &m_settings.debug_convex_hull); });
+    p.add_entry("Convex Hull Edge",         [this](){ ImGui::InputInt("##", &m_settings.convex_hull_edge, 1, 10, ImGuiInputTextFlags_None); });
 
-    p.add_entry("Selection Major Color", [this](){ ImGui::ColorEdit4 ("##", &m_selection_major_color.x, ImGuiColorEditFlags_Float); });
-    p.add_entry("Selection Minor Color", [this](){ ImGui::ColorEdit4 ("##", &m_selection_minor_color.x, ImGuiColorEditFlags_Float); });
-    p.add_entry("Group Major Color",     [this](){ ImGui::ColorEdit4 ("##", &m_group_selection_major_color.x, ImGuiColorEditFlags_Float); });
-    p.add_entry("Group Minor Color",     [this](){ ImGui::ColorEdit4 ("##", &m_group_selection_minor_color.x, ImGuiColorEditFlags_Float); });
-    p.add_entry("Selection Major Width", [this](){ ImGui::SliderFloat("##", &m_selection_major_width, 0.1f, 100.0f); });
-    p.add_entry("Selection Minor Width", [this](){ ImGui::SliderFloat("##", &m_selection_minor_width, 0.1f, 100.0f); });
+    p.add_entry("Selection Major Color", [this](){ ImGui::ColorEdit4 ("##", &m_settings.selection_major_color.x, ImGuiColorEditFlags_Float); });
+    p.add_entry("Selection Minor Color", [this](){ ImGui::ColorEdit4 ("##", &m_settings.selection_minor_color.x, ImGuiColorEditFlags_Float); });
+    p.add_entry("Group Major Color",     [this](){ ImGui::ColorEdit4 ("##", &m_settings.group_selection_major_color.x, ImGuiColorEditFlags_Float); });
+    p.add_entry("Group Minor Color",     [this](){ ImGui::ColorEdit4 ("##", &m_settings.group_selection_minor_color.x, ImGuiColorEditFlags_Float); });
+    p.add_entry("Selection Major Width", [this](){ ImGui::SliderFloat("##", &m_settings.selection_major_width, 0.1f, 100.0f); });
+    p.add_entry("Selection Minor Width", [this](){ ImGui::SliderFloat("##", &m_settings.selection_minor_width, 0.1f, 100.0f); });
     p.pop_group();
 
-    p.add_entry("Sphere Step Count",     [this](){ ImGui::SliderInt  ("##", &m_sphere_step_count, 1, 200); });
-    p.add_entry("Gap",                   [this](){ ImGui::SliderFloat("##", &m_gap, 0.0001f, 0.1f); });
-    p.add_entry("Tool Hide",             [this](){ ImGui::Checkbox   ("##", &m_tool_hide); });
-    //ImGui::Checkbox   ("Raytrace",              &m_raytrace_visualization);
+    p.add_entry("Sphere Step Count",     [this](){ ImGui::SliderInt  ("##", &m_settings.sphere_step_count, 1, 200); });
+    p.add_entry("Gap",                   [this](){ ImGui::SliderFloat("##", &m_settings.gap, 0.0001f, 0.1f); });
+    p.add_entry("Tool Hide",             [this](){ ImGui::Checkbox   ("##", &m_settings.tool_hide); });
+    //ImGui::Checkbox   ("Raytrace",              &m_settings.raytrace);
 
-    p.add_entry("Frustum Box",       [this](){ ImGui::Checkbox("##", &m_frustum_box); });
-    p.add_entry("Frustum Planes",    [this](){ ImGui::Checkbox("##", &m_frustum_planes); });
-    p.add_entry("Lights",            [this](){ make_combo("##", m_lights); });
-    if (m_lights != Visualization_mode::off) {
-        p.add_entry("Light Line Width", [this](){ ImGui::SliderFloat("##", &m_light_visualization_width, 0.1f, 100.0f); });
+    p.add_entry("Frustum Box",       [this](){ ImGui::Checkbox("##", &m_settings.frustum_box); });
+    p.add_entry("Frustum Planes",    [this](){ ImGui::Checkbox("##", &m_settings.frustum_planes); });
+    p.add_entry("Lights",            [this](){ make_combo("##", m_settings.lights); });
+    if (m_settings.lights != Visualization_mode::off) {
+        p.add_entry("Light Line Width", [this](){ ImGui::SliderFloat("##", &m_settings.light_line_width, 0.1f, 100.0f); });
     }
-    p.add_entry("Cameras",           [this](){ make_combo("##", m_cameras); });
-    if (m_cameras != Visualization_mode::off) {
-        p.add_entry("Camera Cull Test",  [this](){ ImGui::Checkbox   ("##", &m_camera_cull_test); });
-        p.add_entry("Camera Line Width", [this](){ ImGui::SliderFloat("##", &m_camera_visualization_width, 0.1f, 100.0f); });
-        p.add_entry("Camera Line Color", [this](){ ImGui::ColorEdit4 ("##", &m_camera_line_color.x, ImGuiColorEditFlags_Float); });
-    }
-
-    p.add_entry("Layouts",           [this](){ make_combo("##", m_layouts); });
-    if (m_layouts != Visualization_mode::off) {
-        p.add_entry("Layout Line Width", [this](){ ImGui::SliderFloat("##", &m_layout_visualization_width, 0.1f, 100.0f); });
-        p.add_entry("Layout Line Color", [this](){ ImGui::ColorEdit4 ("##", &m_layout_line_color.x, ImGuiColorEditFlags_Float); });
+    p.add_entry("Cameras",           [this](){ make_combo("##", m_settings.cameras); });
+    if (m_settings.cameras != Visualization_mode::off) {
+        p.add_entry("Camera Cull Test",  [this](){ ImGui::Checkbox   ("##", &m_settings.camera_cull_test); });
+        p.add_entry("Camera Line Width", [this](){ ImGui::SliderFloat("##", &m_settings.camera_line_width, 0.1f, 100.0f); });
+        p.add_entry("Camera Line Color", [this](){ ImGui::ColorEdit4 ("##", &m_settings.camera_line_color.x, ImGuiColorEditFlags_Float); });
     }
 
-    p.add_entry("Skins",          [this](){ make_combo("##", m_skins); });
+    p.add_entry("Layouts",           [this](){ make_combo("##", m_settings.layouts); });
+    if (m_settings.layouts != Visualization_mode::off) {
+        p.add_entry("Layout Line Width", [this](){ ImGui::SliderFloat("##", &m_settings.layout_line_width, 0.1f, 100.0f); });
+        p.add_entry("Layout Line Color", [this](){ ImGui::ColorEdit4 ("##", &m_settings.layout_line_color.x, ImGuiColorEditFlags_Float); });
+    }
+
+    p.add_entry("Skins",          [this](){ make_combo("##", m_settings.skins); });
 
     p.push_group("Annotiations", ImGuiTreeNodeFlags_None); //ImGuiTreeNodeFlags_DefaultOpen);
-    p.add_entry("Max Labels", [this](){ ImGui::SliderInt("##", &m_max_labels, 0, 2000); });
+    p.add_entry("Max Labels", [this](){ ImGui::SliderInt("##", &m_settings.max_labels, 0, 2000); });
     
-    p.add_entry("Show Vertices",    [this](){ make_combo("##", m_vertex_labels); });
-    p.add_entry("Vertex Positions", [this](){ ImGui::Checkbox("##", &m_vertex_positions); });
-    p.add_entry("Show Facets",      [this](){ make_combo("##", m_facet_labels ); });
-    p.add_entry("Show Edges",       [this](){ make_combo("##", m_edge_labels  ); });
-    p.add_entry("Show Corners",     [this](){ make_combo("##", m_corner_labels); });
+    p.add_entry("Show Vertices",    [this](){ make_combo("##", m_settings.vertex_labels); });
+    p.add_entry("Vertex Positions", [this](){ ImGui::Checkbox("##", &m_settings.vertex_positions); });
+    p.add_entry("Show Facets",      [this](){ make_combo("##", m_settings.facet_labels ); });
+    p.add_entry("Show Edges",       [this](){ make_combo("##", m_settings.edge_labels  ); });
+    p.add_entry("Show Corners",     [this](){ make_combo("##", m_settings.corner_labels); });
 
     p.push_group("Style", ImGuiTreeNodeFlags_None); //ImGuiTreeNodeFlags_DefaultOpen);
-    p.add_entry("Vertex Label Text Color",  [this](){ ImGui::ColorEdit4 ("##", &m_vertex_label_text_color.x, ImGuiColorEditFlags_Float); });
-    p.add_entry("Vertex Label Line Color",  [this](){ ImGui::ColorEdit4 ("##", &m_vertex_label_line_color.x, ImGuiColorEditFlags_Float); });
-    p.add_entry("Vertex Label Line Width",  [this](){ ImGui::SliderFloat("##", &m_vertex_label_line_width,   0.0f, 4.0f); });
-    p.add_entry("Vertex Label Line Length", [this](){ ImGui::SliderFloat("##", &m_vertex_label_line_length,  0.0f, 1.0f); });
-    p.add_entry("Edge Label Text Color",    [this](){ ImGui::ColorEdit4 ("##", &m_edge_label_text_color.x,   ImGuiColorEditFlags_Float); });
-    p.add_entry("Edge Label Text Offset",   [this](){ ImGui::SliderFloat("##", &m_edge_label_text_offset,    0.0f, 1.0f); });
-    p.add_entry("Edge Label Line Color",    [this](){ ImGui::ColorEdit4 ("##", &m_edge_label_line_color.x,   ImGuiColorEditFlags_Float); });
-    p.add_entry("Edge Label Line Width",    [this](){ ImGui::SliderFloat("##", &m_edge_label_line_width,     0.0f, 4.0f); });
-    p.add_entry("Edge Label Line Length",   [this](){ ImGui::SliderFloat("##", &m_edge_label_line_length,    0.0f, 1.0f); });
-    p.add_entry("Facet Label Text Color",   [this](){ ImGui::ColorEdit4 ("##", &m_facet_label_text_color.x,  ImGuiColorEditFlags_Float); });
-    p.add_entry("Facet Label Line Color",   [this](){ ImGui::ColorEdit4 ("##", &m_facet_label_line_color.x,  ImGuiColorEditFlags_Float); });
-    p.add_entry("Facet Label Line Width",   [this](){ ImGui::SliderFloat("##", &m_facet_label_line_width,    0.0f, 4.0f); });
-    p.add_entry("Facet Label Line Length",  [this](){ ImGui::SliderFloat("##", &m_facet_label_line_length,   0.0f, 1.0f); });
-    p.add_entry("Corner Label Text Color",  [this](){ ImGui::ColorEdit4 ("##", &m_corner_label_text_color.x, ImGuiColorEditFlags_Float); });
-    p.add_entry("Corner Label Line Color",  [this](){ ImGui::ColorEdit4 ("##", &m_corner_label_line_color.x, ImGuiColorEditFlags_Float); });
-    p.add_entry("Corner Label Line Width",  [this](){ ImGui::SliderFloat("##", &m_corner_label_line_width,   0.0f, 4.0f); });
-    p.add_entry("Corner Label Line Length", [this](){ ImGui::SliderFloat("##", &m_corner_label_line_length,  0.0f, 1.0f); });
+    p.add_entry("Vertex Label Text Color",  [this](){ ImGui::ColorEdit4 ("##", &m_settings.vertex_label_text_color.x, ImGuiColorEditFlags_Float); });
+    p.add_entry("Vertex Label Line Color",  [this](){ ImGui::ColorEdit4 ("##", &m_settings.vertex_label_line_color.x, ImGuiColorEditFlags_Float); });
+    p.add_entry("Vertex Label Line Width",  [this](){ ImGui::SliderFloat("##", &m_settings.vertex_label_line_width,   0.0f, 4.0f); });
+    p.add_entry("Vertex Label Line Length", [this](){ ImGui::SliderFloat("##", &m_settings.vertex_label_line_length,  0.0f, 1.0f); });
+    p.add_entry("Edge Label Text Color",    [this](){ ImGui::ColorEdit4 ("##", &m_settings.edge_label_text_color.x,   ImGuiColorEditFlags_Float); });
+    p.add_entry("Edge Label Text Offset",   [this](){ ImGui::SliderFloat("##", &m_settings.edge_label_text_offset,    0.0f, 1.0f); });
+    p.add_entry("Edge Label Line Color",    [this](){ ImGui::ColorEdit4 ("##", &m_settings.edge_label_line_color.x,   ImGuiColorEditFlags_Float); });
+    p.add_entry("Edge Label Line Width",    [this](){ ImGui::SliderFloat("##", &m_settings.edge_label_line_width,     0.0f, 4.0f); });
+    p.add_entry("Edge Label Line Length",   [this](){ ImGui::SliderFloat("##", &m_settings.edge_label_line_length,    0.0f, 1.0f); });
+    p.add_entry("Facet Label Text Color",   [this](){ ImGui::ColorEdit4 ("##", &m_settings.facet_label_text_color.x,  ImGuiColorEditFlags_Float); });
+    p.add_entry("Facet Label Line Color",   [this](){ ImGui::ColorEdit4 ("##", &m_settings.facet_label_line_color.x,  ImGuiColorEditFlags_Float); });
+    p.add_entry("Facet Label Line Width",   [this](){ ImGui::SliderFloat("##", &m_settings.facet_label_line_width,    0.0f, 4.0f); });
+    p.add_entry("Facet Label Line Length",  [this](){ ImGui::SliderFloat("##", &m_settings.facet_label_line_length,   0.0f, 1.0f); });
+    p.add_entry("Corner Label Text Color",  [this](){ ImGui::ColorEdit4 ("##", &m_settings.corner_label_text_color.x, ImGuiColorEditFlags_Float); });
+    p.add_entry("Corner Label Line Color",  [this](){ ImGui::ColorEdit4 ("##", &m_settings.corner_label_line_color.x, ImGuiColorEditFlags_Float); });
+    p.add_entry("Corner Label Line Width",  [this](){ ImGui::SliderFloat("##", &m_settings.corner_label_line_width,   0.0f, 4.0f); });
+    p.add_entry("Corner Label Line Length", [this](){ ImGui::SliderFloat("##", &m_settings.corner_label_line_length,  0.0f, 1.0f); });
     p.pop_group();
     p.pop_group();
     p.show_entries();
