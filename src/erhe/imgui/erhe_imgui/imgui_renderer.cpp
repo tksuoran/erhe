@@ -215,10 +215,12 @@ namespace {
     erhe::graphics::Bind_group_layout_create_info create_info{
         .bindings = {
             {
-                draw_parameter_block.get_binding_point(),
-                (draw_parameter_block.get_type() == erhe::graphics::Shader_resource::Type::shader_storage_block)
+                .binding_point = draw_parameter_block.get_binding_point(),
+                .type = (draw_parameter_block.get_type() == erhe::graphics::Shader_resource::Type::shader_storage_block)
                     ? erhe::graphics::Binding_type::storage_buffer
-                    : erhe::graphics::Binding_type::uniform_buffer
+                    : erhe::graphics::Binding_type::uniform_buffer,
+                // draw.scale/translate in the vertex stage; draw_parameters[].texture in fragment.
+                .stage_flags = erhe::graphics::Shader_stage_flags::vertex | erhe::graphics::Shader_stage_flags::fragment
             },
             // Slot 0: array texture (sampler2DArray) for glyph-atlas style
             // draws. Dedicated: bound via set_sampled_image(), not in the
@@ -229,7 +231,8 @@ namespace {
                 .sampler_aspect  = erhe::graphics::Sampler_aspect::color,
                 .name            = "s_texture_array",
                 .glsl_type       = erhe::graphics::Glsl_type::sampler_2d_array,
-                .is_texture_heap = false
+                .is_texture_heap = false,
+                .stage_flags     = erhe::graphics::Shader_stage_flags::fragment
             }
         },
         .debug_label = "ImGui"
@@ -249,7 +252,8 @@ namespace {
             .name            = "s_textures",
             .glsl_type       = erhe::graphics::Glsl_type::sampler_2d,
             .is_texture_heap = true,
-            .array_size      = array_size
+            .array_size      = array_size,
+            .stage_flags     = erhe::graphics::Shader_stage_flags::fragment
         });
     }
     return create_info;
