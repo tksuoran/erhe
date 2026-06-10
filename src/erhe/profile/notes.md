@@ -23,7 +23,11 @@ depending on the selected backend.
 
 ## Dependencies
 - Optional externals (compile-time selected): Tracy, Superluminal PerformanceAPI, NVTX3
-- `erhe::gl` -- for Tracy OpenGL integration (when `ERHE_TRACY_GL` is defined)
+- `erhe::gl` -- linked on the OpenGL backend; profile.hpp's Tracy OpenGL GPU
+  backend includes `erhe_gl/dynamic_load.hpp` to reach the gl* timestamp-query
+  entry points.
+- `volk::volk` -- linked on the Vulkan backend; profile.hpp's Tracy Vulkan GPU
+  backend (`tracy/TracyVulkan.hpp`) calls the Vulkan entry points through volk.
 
 ## Notes
 - Backend is selected via `ERHE_PROFILE_LIBRARY` CMake option: `tracy`, `superluminal`, `nvtx`, or `none`.

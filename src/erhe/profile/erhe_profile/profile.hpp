@@ -10,8 +10,8 @@
 #pragma warning(disable : 4714)
 #endif
 
-#if defined(ERHE_PROFILE_LIBRARY_TRACY)
-#   if defined(TRACY_ENABLE) && defined(ERHE_TRACY_GL)
+#if defined(ERHE_PROFILE_LIBRARY_TRACY) && defined(TRACY_ENABLE)
+#   if defined(ERHE_GRAPHICS_API_OPENGL)
 #       include "erhe_gl/dynamic_load.hpp"
 #       define glGenQueries          gl::glGenQueries
 #       define glGetInteger64v       gl::glGetInteger64v
@@ -22,10 +22,14 @@
 #   endif
 #   include <tracy/Tracy.hpp>
 
-#   if defined(ERHE_TRACY_GL)
+#   if defined(ERHE_GRAPHICS_API_OPENGL)
 #       include "tracy/TracyOpenGL.hpp"
 #   endif
-#   if defined(TRACY_ENABLE) && defined(ERHE_TRACY_GL)
+#   if defined(ERHE_GRAPHICS_API_VULKAN)
+#       include "volk.h"
+#       include "tracy/TracyVulkan.hpp"
+#   endif
+#   if defined(ERHE_GRAPHICS_API_OPENGL)
 #       undef glGenQueries
 #       undef glGetInteger64v
 #       undef glGetQueryiv
@@ -48,7 +52,18 @@
 #   define ERHE_PROFILE_MESSAGE_LITERAL(erhe_profile_message) TracyMessageL(erhe_profile_message)
 #   define ERHE_PROFILE_GPU_SCOPE(erhe_profile_id) TracyGpuZone(erhe_profile_id.data())
 #   define ERHE_PROFILE_GPU_CONTEXT TracyGpuContext
-#   define ERHE_PROFILE_FRAME_END FrameMark; TracyGpuCollect
+
+#   if defined(ERHE_GRAPHICS_API_OPENGL)
+#       define ERHE_PROFILE_FRAME_END FrameMark; TracyGpuCollect
+#   elif defined(ERHE_GRAPHICS_API_VULKAN)
+        // The Vulkan GPU collect (TracyVkCollect) needs an explicit context +
+        // command buffer, so it is issued by the Vulkan Device_impl once per
+        // frame (see maybe_reset_gpu_timer_slice), not from this context-free
+        // macro. Only the CPU frame marker belongs here.
+#       define ERHE_PROFILE_FRAME_END FrameMark;
+#   else
+#       define ERHE_PROFILE_FRAME_END FrameMark;
+#   endif
 
 #   define ERHE_PROFILE_MUTEX_DECLARATION(Type, mutex_variable) tracy::Lockable<Type> mutex_variable
 #   define ERHE_PROFILE_MUTEX(Type, mutex_variable) TracyLockable(Type, mutex_variable)
