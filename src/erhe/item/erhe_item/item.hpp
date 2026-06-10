@@ -42,7 +42,13 @@ public:
     static constexpr uint64_t negative_determinant      = (1u << 22);
     static constexpr uint64_t lock_edit                 = (1u << 23);
     static constexpr uint64_t show_in_developer_ui      = (1u << 24);
-    static constexpr uint64_t count                     = 25;
+    // Transient, set by the shadow frustum fit debug visualization: this
+    // shadow caster's world bounds intersect the selected light's shadow
+    // caster volume (F_shadow), i.e. it can contribute to that light's shadow
+    // map. Recomputed each frame the visualization runs; not authored or
+    // serialized (like selected / hovered_*).
+    static constexpr uint64_t affects_shadow            = (1u << 25);
+    static constexpr uint64_t count                     = 26;
 
     static constexpr const char* c_bit_labels[] =
     {
@@ -71,6 +77,7 @@ public:
         "Negative Determinant",
         "Lock Edit",
         "Show In Developer UI",
+        "Affects Shadow",
     };
 
     [[nodiscard]] static auto to_string(uint64_t mask) -> std::string;
