@@ -106,6 +106,4 @@ target_link_libraries(${_target}
         erhe::verify
 )
 
-target_compile_definitions(${_target} PUBLIC -DERHE_TRACY_GL)
-
 erhe_target_settings(${_target} "erhe")
