@@ -56,7 +56,8 @@ enum class Shader_debug : uint16_t
     occlusion          = 26,
     emissive           = 27,
     shadowmap_texels   = 28,
-    misc               = 29
+    misc               = 29,
+    shadow_visibility  = 30
 };
 
 // User-visible display strings matching the Shader_debug enum, in
@@ -91,7 +92,8 @@ inline constexpr const char* c_shader_debug_strings[] = {
     "Occlusion",
     "Emissive",
     "Shadowmap Texels",
-    "Debug Miscellaneous"
+    "Debug Miscellaneous",
+    "Shadow Visibility"
 };
 
 #define ERHE_SHADER_BOOL(X) \
@@ -111,7 +113,8 @@ inline constexpr const char* c_shader_debug_strings[] = {
     X(USE_VERTEX_VARYING_ANISO_CONTROL) \
     X(VARIANT_DEPTH_ONLY)               \
     X(VARIANT_ID_RENDER)                \
-    X(VARIANT_BRUSH_PREVIEW)
+    X(VARIANT_BRUSH_PREVIEW)            \
+    X(VARIANT_SHADOW_DISTANCE)
 
 #define ERHE_SHADER_INT(X) \
     X(LIGHT_COUNT_DIRECTIONAL_SHADOWMAPPED)     \
@@ -123,6 +126,10 @@ inline constexpr const char* c_shader_debug_strings[] = {
     X(BXDF_MODEL)                               \
     X(MATERIAL_BLENDING_MODE)                   \
     X(SHADER_DEBUG)                             \
+    X(SHADOW_FILTER)                            \
+    X(SHADOW_BIAS)                              \
+    X(SHADOW_TECHNIQUE)                         \
+    X(SHADOW_DEPTH_BITS)                        \
     X(SHADER_MULTIVIEW_COUNT)                   \
     X(BASE_COLOR_TEX_COORD)                     \
     X(METALLIC_ROUGHNESS_TEX_COORD)             \

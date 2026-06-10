@@ -24,7 +24,7 @@
 // the fragment shader either has no body (depth-only) or emits a packed
 // ID color directly. Use this gate at every "skip lit machinery" #if so
 // both variants stay in lock-step.
-#if defined(ERHE_VARIANT_DEPTH_ONLY) || defined(ERHE_VARIANT_ID_RENDER)
+#if defined(ERHE_VARIANT_DEPTH_ONLY) || defined(ERHE_VARIANT_ID_RENDER) || defined(ERHE_VARIANT_SHADOW_DISTANCE)
 #  define ERHE_VARIANT_POSITION_PASS 1
 #endif
 

@@ -7,6 +7,7 @@
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/light.hpp"
 #include "erhe_scene/light_frustum_fit.hpp"
+#include "erhe_math/aabb.hpp"
 #include "erhe_math/viewport.hpp"
 #include "erhe_scene_renderer/shader_key.hpp"
 
@@ -69,6 +70,10 @@ public:
 
 static constexpr uint32_t c_texture_heap_slot_shadow_compare   {0};
 static constexpr uint32_t c_texture_heap_slot_shadow_no_compare{1};
+// Color-aspect binding for the Shadow_technique_mode::distance R32F distance
+// map. Separate from the two depth-aspect shadow samplers above because a
+// color texture cannot bind to a depth-aspect combined-image-sampler.
+static constexpr uint32_t c_texture_heap_slot_shadow_distance  {2};
 
 class Light_interface
 {
@@ -89,6 +94,9 @@ public:
     erhe::graphics::Shader_resource light_struct;
     Light_block                     offsets;
     std::size_t                     light_index_offset;
+    // Per-pass coefficient the distance caster multiplies fwidth() by, =
+    // cdd*(1+pcfRadius) (Shadow_technique_mode::distance). 0 for the depth path.
+    std::size_t                     shadow_distance_bias_coeff_offset;
     erhe::graphics::Sampler         shadow_sampler_compare;
     erhe::graphics::Sampler         shadow_sampler_no_compare;
 };
@@ -106,7 +114,8 @@ public:
         bool                                                        reverse_depth,
         erhe::math::Depth_range                                     depth_range,
         const erhe::math::Coordinate_conventions&                   conventions = erhe::math::Coordinate_conventions{},
-        std::span<const glm::vec3>                                  in_caster_world_points = {},
+        std::span<const erhe::math::Aabb>                           in_caster_world_aabbs = {},
+        std::span<const erhe::math::Aabb>                           in_receiver_world_aabbs = {},
         const erhe::scene::Shadow_frustum_fit_settings*             fit_settings = nullptr
     );
 
@@ -119,13 +128,29 @@ public:
     erhe::scene::Light_projection_parameters              parameters;
     std::vector<erhe::scene::Light_projection_transforms> light_projection_transforms;
     std::shared_ptr<erhe::graphics::Texture>              shadow_map_texture;
+    // Shadow_technique_mode::distance R32F distance map (the fwidth-biased
+    // distances the caster wrote). Null for the depth technique; the receiver
+    // then samples shadow_map_texture through the depth samplers instead.
+    std::shared_ptr<erhe::graphics::Texture>              shadow_distance_texture;
 
-    // Frame-lifetime backing storage for parameters.caster_world_points and
-    // parameters.fit_debug_out; fit_debug_data is parallel to
-    // light_projection_transforms and filled only when
-    // fit_settings->collect_debug is enabled.
-    std::vector<glm::vec3>                                  caster_world_points;
+    // Frame-lifetime backing storage for parameters.fit_debug_out; parallel
+    // to light_projection_transforms, and resized (then filled by the fit)
+    // only when fit_settings->collect_debug is enabled - with the setting off
+    // the fit performs no debug-collection work at all, so the algorithm can
+    // be profiled on its own. (parameters' AABB spans are not backed here;
+    // they point at caller storage during apply() and are reset before it
+    // returns.)
     std::vector<erhe::scene::Shadow_frustum_fit_debug_data> fit_debug_data;
+
+    // Cross-light cache for the light-independent part of the receiver cull
+    // volume build (see Shadow_fit_receiver_cache). Invalidated at the start
+    // of each apply() pass; buffers keep their capacity across frames.
+    erhe::scene::Shadow_fit_receiver_cache fit_receiver_cache;
+
+    // Persistent scratch buffers for the per-light tight fit (see
+    // Shadow_fit_scratch). Cleared (capacity kept) by the fit at point of
+    // use, so steady-state fits perform no heap allocations.
+    erhe::scene::Shadow_fit_scratch fit_scratch;
 
     //Variant_counts                                        counts{};
 
@@ -163,7 +188,7 @@ public:
         const Light_projections*                light_projections
     );
 
-    auto update_control(std::size_t light_index) -> erhe::graphics::Ring_buffer_range;
+    auto update_control(std::size_t light_index, float shadow_distance_bias_coeff = 0.0f) -> erhe::graphics::Ring_buffer_range;
 
     void bind_light_buffer  (erhe::graphics::Command_encoder& encoder, const erhe::graphics::Ring_buffer_range& range);
     void bind_control_buffer(erhe::graphics::Command_encoder& encoder, const erhe::graphics::Ring_buffer_range& range);
@@ -174,6 +199,10 @@ private:
     erhe::graphics::Ring_buffer_client       m_light_buffer;
     erhe::graphics::Ring_buffer_client       m_control_buffer;
     std::shared_ptr<erhe::graphics::Texture> m_fallback_shadow_texture;
+    // 1x1 R32F color texture bound to s_shadow_distance whenever no distance
+    // map is active (depth technique), so the color-aspect binding always has
+    // a valid texture. Mirrors m_fallback_shadow_texture for the depth path.
+    std::shared_ptr<erhe::graphics::Texture> m_fallback_distance_texture;
 };
 
 } // namespace erhe::scene_renderer

@@ -13,14 +13,16 @@ constexpr int c_edge_line_joint_vertex_binding_point  = 2;
 constexpr int c_view_binding_point                    = 3;
 
 [[nodiscard]] auto make_block_binding(
-    const erhe::graphics::Shader_resource& block
+    const erhe::graphics::Shader_resource& block,
+    const uint32_t                         stage_flags // Shader_stage_flags bitmask
 ) -> erhe::graphics::Bind_group_layout_binding
 {
     return erhe::graphics::Bind_group_layout_binding{
         .binding_point = block.get_binding_point(),
         .type          = (block.get_type() == erhe::graphics::Shader_resource::Type::shader_storage_block)
             ? erhe::graphics::Binding_type::storage_buffer
-            : erhe::graphics::Binding_type::uniform_buffer
+            : erhe::graphics::Binding_type::uniform_buffer,
+        .stage_flags   = stage_flags
     };
 }
 
@@ -59,7 +61,10 @@ Content_wide_line_interface::Content_wide_line_interface(
         graphics_device,
         erhe::graphics::Bind_group_layout_create_info{
             .bindings = {
-                make_block_binding(view_block)
+                // Geometry-shader line path: view read in content_edge_lines.vert
+                // (transform) and content_edge_lines.geom (viewport expand).
+                // content_edge_lines.frag does not read view.
+                make_block_binding(view_block, erhe::graphics::Shader_stage_flags::vertex | erhe::graphics::Shader_stage_flags::geometry)
             },
             .debug_label       = "Content wide line geometry",
             .uses_texture_heap = false
@@ -118,8 +123,10 @@ Content_wide_line_interface::Content_wide_line_interface(
             graphics_device,
             erhe::graphics::Bind_group_layout_create_info{
                 .bindings = {
-                    make_block_binding(view_block),
-                    make_block_binding(*joint_block)
+                    make_block_binding(view_block, erhe::graphics::Shader_stage_flags::vertex | erhe::graphics::Shader_stage_flags::geometry),
+                    // joint: skinning runs in the vertex stage only
+                    // (erhe_skinning.glsl included by content_edge_lines.vert).
+                    make_block_binding(*joint_block, erhe::graphics::Shader_stage_flags::vertex)
                 },
                 .debug_label       = "Content wide line geometry skinned",
                 .uses_texture_heap = false
@@ -192,9 +199,10 @@ Content_wide_line_interface::Content_wide_line_interface(
         graphics_device,
         erhe::graphics::Bind_group_layout_create_info{
             .bindings = {
-                {c_edge_line_vertex_binding_point, erhe::graphics::Binding_type::storage_buffer},
-                {c_triangle_vertex_binding_point,  erhe::graphics::Binding_type::storage_buffer},
-                make_block_binding(view_block)
+                // Compute path: the .comp reads edge_line_vertex + view and writes triangle_vertex.
+                {.binding_point = c_edge_line_vertex_binding_point, .type = erhe::graphics::Binding_type::storage_buffer, .stage_flags = erhe::graphics::Shader_stage_flags::compute},
+                {.binding_point = c_triangle_vertex_binding_point,  .type = erhe::graphics::Binding_type::storage_buffer, .stage_flags = erhe::graphics::Shader_stage_flags::compute},
+                make_block_binding(view_block, erhe::graphics::Shader_stage_flags::compute)
             },
             .debug_label       = "Content wide line",
             .uses_texture_heap = false
@@ -205,8 +213,10 @@ Content_wide_line_interface::Content_wide_line_interface(
         graphics_device,
         erhe::graphics::Bind_group_layout_create_info{
             .bindings = {
-                {c_triangle_vertex_binding_point, erhe::graphics::Binding_type::storage_buffer},
-                make_block_binding(view_block)
+                // Graphics path draws the computed triangles: line_after_compute.vert
+                // pulls triangle_vertex + view; line_after_compute.frag reads view.
+                {.binding_point = c_triangle_vertex_binding_point, .type = erhe::graphics::Binding_type::storage_buffer, .stage_flags = erhe::graphics::Shader_stage_flags::vertex},
+                make_block_binding(view_block, erhe::graphics::Shader_stage_flags::vertex | erhe::graphics::Shader_stage_flags::fragment)
             },
             .debug_label       = "Content wide line graphics",
             .uses_texture_heap = false
@@ -222,11 +232,12 @@ Content_wide_line_interface::Content_wide_line_interface(
             graphics_device,
             erhe::graphics::Bind_group_layout_create_info{
                 .bindings = {
-                    {c_edge_line_vertex_binding_point,       erhe::graphics::Binding_type::storage_buffer},
-                    {c_triangle_vertex_binding_point,        erhe::graphics::Binding_type::storage_buffer},
-                    {c_edge_line_joint_vertex_binding_point, erhe::graphics::Binding_type::storage_buffer},
-                    make_block_binding(view_block),
-                    make_block_binding(*joint_block)
+                    // Skinned compute path: all read/written by compute_before_content_line.comp.
+                    {.binding_point = c_edge_line_vertex_binding_point,       .type = erhe::graphics::Binding_type::storage_buffer, .stage_flags = erhe::graphics::Shader_stage_flags::compute},
+                    {.binding_point = c_triangle_vertex_binding_point,        .type = erhe::graphics::Binding_type::storage_buffer, .stage_flags = erhe::graphics::Shader_stage_flags::compute},
+                    {.binding_point = c_edge_line_joint_vertex_binding_point, .type = erhe::graphics::Binding_type::storage_buffer, .stage_flags = erhe::graphics::Shader_stage_flags::compute},
+                    make_block_binding(view_block, erhe::graphics::Shader_stage_flags::compute),
+                    make_block_binding(*joint_block, erhe::graphics::Shader_stage_flags::compute)
                 },
                 .debug_label       = "Content wide line skinned",
                 .uses_texture_heap = false

@@ -56,6 +56,9 @@ Light_interface::Light_interface(erhe::graphics::Device& graphics_device, const 
     , light_index_offset{
         light_control_block.add_uint("light_index")->get_offset_in_parent()
     }
+    , shadow_distance_bias_coeff_offset{
+        light_control_block.add_float("shadow_distance_bias_coeff")->get_offset_in_parent()
+    }
     , shadow_sampler_compare{
         graphics_device,
         erhe::graphics::Sampler_create_info{
@@ -133,12 +136,32 @@ Light_buffer::Light_buffer(
             }
         )
     }
+    , m_fallback_distance_texture{
+        std::make_shared<erhe::graphics::Texture>(
+            graphics_device,
+            erhe::graphics::Texture_create_info {
+                .device            = graphics_device,
+                .usage_mask        = erhe::graphics::Image_usage_flag_bit_mask::sampled | erhe::graphics::Image_usage_flag_bit_mask::transfer_dst,
+                .type              = erhe::graphics::Texture_type::texture_2d_array,
+                .pixelformat       = erhe::dataformat::Format::format_32_scalar_float,
+                .width             = 1,
+                .height            = 1,
+                .depth             = 1,
+                .array_layer_count = 1,
+                .debug_label       = "Light_buffer::m_fallback_distance_texture"
+            }
+        )
+    }
 {
     // Initialize fallback shadow texture contents (clear to far-plane depth) and
     // leave it in DEPTH_STENCIL_READ_ONLY_OPTIMAL. A bare UNDEFINED -> READ_ONLY
     // transition would discard contents and is flagged by the validation layer
     // as a best-practices error.
     init_command_buffer.clear_texture(*m_fallback_shadow_texture.get(), {1.0, 0.0, 0.0, 0.0});
+    // Same for the distance-map fallback (color R32F): clear to a far value so a
+    // stray sample resolves to "lit". The shader's max_u32 sentinel normally
+    // short-circuits before sampling, so the exact value only matters defensively.
+    init_command_buffer.clear_texture(*m_fallback_distance_texture.get(), {1.0, 0.0, 0.0, 0.0});
 }
 
 void Light_projections::apply(
@@ -150,14 +173,19 @@ void Light_projections::apply(
     const bool                                                  reverse_depth,
     const erhe::math::Depth_range                               depth_range,
     const erhe::math::Coordinate_conventions&                   conventions,
-    const std::span<const glm::vec3>                            in_caster_world_points,
+    const std::span<const erhe::math::Aabb>                     in_caster_world_aabbs,
+    const std::span<const erhe::math::Aabb>                     in_receiver_world_aabbs,
     const erhe::scene::Shadow_frustum_fit_settings*             fit_settings
 )
 {
-    // Copy caster points into member storage: parameters (and the span in
-    // it) outlives this call, so the span must not point at caller locals.
-    caster_world_points.assign(in_caster_world_points.begin(), in_caster_world_points.end());
-
+    ERHE_PROFILE_FUNCTION();
+    // The AABB spans point directly at caller storage. They are consumed only
+    // by the per-light fit calls in the loop below and reset right after it,
+    // so the member parameters (which outlives this call) never holds dangling
+    // spans and no per-frame copy of the AABBs is needed.
+    // Invalidate (not clear - buffers keep capacity) the cross-light receiver
+    // cache; the first tight directional fit of this pass refills it.
+    fit_receiver_cache.valid = false;
     parameters = erhe::scene::Light_projection_parameters{
         .view_camera          = view_camera,
         .main_camera_viewport = view_camera_viewport,
@@ -166,7 +194,10 @@ void Light_projections::apply(
         .depth_range          = depth_range,
         .conventions          = conventions,
         .fit_settings         = fit_settings,
-        .caster_world_points  = caster_world_points
+        .caster_world_aabbs   = in_caster_world_aabbs,
+        .receiver_world_aabbs = in_receiver_world_aabbs,
+        .receiver_cache       = &fit_receiver_cache,
+        .fit_scratch          = &fit_scratch
     };
     shadow_map_texture = in_shadow_map_texture;
 
@@ -191,7 +222,9 @@ void Light_projections::apply(
         parameters.fit_debug_out = collect_fit_debug ? &fit_debug_data[i] : nullptr;
         light_projection_transforms.push_back(light->projection_transforms(parameters));
     }
-    parameters.fit_debug_out = nullptr;
+    parameters.fit_debug_out        = nullptr;
+    parameters.caster_world_aabbs   = {};
+    parameters.receiver_world_aabbs = {};
 
     auto type_index_of = [](erhe::scene::Light_type type) -> std::size_t {
         switch (type) {
@@ -498,9 +531,20 @@ void Light_buffer::bind_shadow_samplers(
     // dedicated (non-texture-heap) samplers.
     encoder.set_sampled_image(c_texture_heap_slot_shadow_compare,    *shadow_map_texture, *compare_sampler);
     encoder.set_sampled_image(c_texture_heap_slot_shadow_no_compare, *shadow_map_texture, *no_compare_sampler);
+
+    // Distance map (Shadow_technique_mode::distance) -> s_shadow_distance. Falls
+    // back to the 1x1 R32F texture when no distance map is active (depth
+    // technique) so the color-aspect binding always has a valid texture.
+    erhe::graphics::Texture* shadow_distance_texture = (light_projections != nullptr)
+        ? light_projections->shadow_distance_texture.get()
+        : nullptr;
+    if (shadow_distance_texture == nullptr) {
+        shadow_distance_texture = m_fallback_distance_texture.get();
+    }
+    encoder.set_sampled_image(c_texture_heap_slot_shadow_distance, *shadow_distance_texture, *no_compare_sampler);
 }
 
-auto Light_buffer::update_control(const std::size_t light_index) -> erhe::graphics::Ring_buffer_range
+auto Light_buffer::update_control(const std::size_t light_index, const float shadow_distance_bias_coeff) -> erhe::graphics::Ring_buffer_range
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -513,7 +557,8 @@ auto Light_buffer::update_control(const std::size_t light_index) -> erhe::graphi
     using erhe::graphics::write;
 
     const auto uint_light_index = static_cast<uint32_t>(light_index);
-    write(gpu_data, write_offset + 0, as_span(uint_light_index));
+    write(gpu_data, m_light_interface.light_index_offset,                as_span(uint_light_index));
+    write(gpu_data, m_light_interface.shadow_distance_bias_coeff_offset, as_span(shadow_distance_bias_coeff));
     write_offset += entry_size;
 
     buffer_range.bytes_written(write_offset);

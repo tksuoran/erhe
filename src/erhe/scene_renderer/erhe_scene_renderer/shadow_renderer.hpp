@@ -6,6 +6,7 @@
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_dataformat/dataformat.hpp"
+#include "erhe_math/aabb.hpp"
 #include "erhe_math/viewport.hpp"
 #include "erhe_scene_renderer/camera_buffer.hpp"
 #include "erhe_scene_renderer/draw_indirect_buffer.hpp"
@@ -15,6 +16,8 @@
 //#include "erhe_scene_renderer/mesh_memory.hpp"
 #include "erhe_scene_renderer/primitive_buffer.hpp"
 
+#include <array>
+#include <cstddef>
 #include <initializer_list>
 #include <span>
 
@@ -46,6 +49,21 @@ class Scene_root;
 class Scene_view;
 class Settings;
 class Shader_variant_cache;
+
+// Face culling used while rasterizing shadow casters into the shadow map.
+// cull_front (the default) keeps only back faces -- reduces peter-panning on
+// closed meshes; cull_back keeps front faces -- lets single-sided geometry
+// cast shadows from the side facing the light; cull_none rasterizes both
+// sides. The values index Shadow_renderer's per-cull-mode caster pipelines, so
+// keep them contiguous from 0 and in sync with the editor's Shadow_cull_mode
+// codegen enum (src/editor/config/definitions/shadow_cull_mode.py).
+enum class Shadow_cull_mode : unsigned int
+{
+    cull_front = 0,
+    cull_back  = 1,
+    cull_none  = 2
+};
+inline constexpr std::size_t shadow_cull_mode_count = 3;
 
 class Shadow_renderer
 {
@@ -94,6 +112,28 @@ public:
         // Optional tight directional shadow frustum fit settings;
         // nullptr gives the legacy stable fit. Must outlive the render call.
         const erhe::scene::Shadow_frustum_fit_settings*                    fit_settings{nullptr};
+
+        // Rasterizer (hardware) depth bias applied while rendering the shadow
+        // map -- a caster-side acne / peter-panning control, orthogonal to the
+        // receiver-side bias in the forward shader. Both default to 0 (no
+        // bias). Set per pass via Render_command_encoder::set_depth_bias().
+        float                                                              depth_bias_constant{0.0f};
+        float                                                              depth_bias_slope{0.0f};
+
+        // Face culling for the shadow caster pass; selects one of the
+        // per-cull-mode pipelines. Defaults to cull_front (back faces only),
+        // the historical behavior.
+        Shadow_cull_mode                                                   cull_mode{Shadow_cull_mode::cull_front};
+
+        // Shadow_technique_mode::distance support. When use_distance is true the
+        // caster runs a fragment shader (VARIANT_SHADOW_DISTANCE) that writes the
+        // fwidth-biased light-space depth into distance_texture (color attachment
+        // of the render passes), and the receiver compares against it with no
+        // bias. distance_bias_coeff is cdd*(1+pcfRadius), the per-pass coefficient
+        // the caster multiplies fwidth() by. Defaults keep the depth technique.
+        std::shared_ptr<erhe::graphics::Texture>                           distance_texture{};
+        bool                                                               use_distance{false};
+        float                                                              distance_bias_coeff{0.0f};
     };
 
     auto render(const Render_parameters& parameters) -> bool;
@@ -115,7 +155,8 @@ public:
     // typically passes the scene_root's content + controller layers.
     void prewarm_pipelines(
         std::span<const std::unique_ptr<erhe::graphics::Render_pass>>            render_passes,
-        const std::vector<std::span<const std::shared_ptr<erhe::scene::Mesh>>>&  mesh_spans
+        const std::vector<std::span<const std::shared_ptr<erhe::scene::Mesh>>>&  mesh_spans,
+        Shadow_cull_mode                                                         cull_mode
     );
 
 private:
@@ -124,10 +165,14 @@ private:
     Shader_variant_cache&                         m_shader_variant_cache;
     erhe::graphics::Fragment_outputs              m_empty_fragment_outputs;
     erhe::graphics::Bind_group_layout*            m_bind_group_layout{nullptr};
-    // Declared before m_pipeline: used in its rasterization state init.
+    // Declared before the pipelines: used in their rasterization state init.
     bool                                          m_y_flip{false};
-    erhe::graphics::Base_render_pipeline          m_pipeline;
-    erhe::graphics::Base_render_pipeline          m_pipeline_depth_clamp; // selected by Shadow_frustum_fit_settings::depth_clamp
+    // Shadow caster pipelines, one per Shadow_cull_mode (indexed by its value).
+    // m_pipelines_depth_clamp[] are the depth-clamp siblings, selected by
+    // Shadow_frustum_fit_settings::depth_clamp. Both built in the constructor;
+    // only the pipeline for the active cull mode ever builds GPU pipelines.
+    std::array<erhe::graphics::Base_render_pipeline, shadow_cull_mode_count> m_pipelines;
+    std::array<erhe::graphics::Base_render_pipeline, shadow_cull_mode_count> m_pipelines_depth_clamp;
     std::shared_ptr<erhe::graphics::Texture>      m_dummy_texture;
     erhe::graphics::Sampler                       m_fallback_sampler;
 
@@ -141,6 +186,10 @@ private:
     // TODO Re-add per-cascade GPU timers; the cascade Render_pass objects
     // are owned by Shadow_render_node, so the timers should live there.
     std::unique_ptr<erhe::graphics::Texture_heap> m_texture_heap;
+    // Per-render() caster / receiver world AABB gather for the tight frustum
+    // fit; members (cleared each call) so the vectors keep their capacity.
+    std::vector<erhe::math::Aabb>                 m_caster_world_aabbs;
+    std::vector<erhe::math::Aabb>                 m_receiver_world_aabbs;
 };
 
 

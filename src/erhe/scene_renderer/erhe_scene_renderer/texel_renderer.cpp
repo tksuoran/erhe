@@ -22,6 +22,18 @@ Texel_renderer::Texel_renderer(
 )
     : m_graphics_device  {graphics_device}
     , m_program_interface{program_interface}
+    , m_pipeline{
+        graphics_device,
+        erhe::graphics::Base_render_pipeline_create_info{
+            .debug_label    = erhe::utility::Debug_label{"Shadow_debug"},
+            .input_assembly = erhe::graphics::Input_assembly_state::triangle,
+            .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
+            // Reverse-Z is static, so the depth state is baked from
+            // Device::get_reverse_depth() here; shader stages are supplied per
+            // draw via Render_parameters::shader_stages.
+            .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled(graphics_device.get_reverse_depth())
+        }
+    }
     , m_camera_buffer    {graphics_device, program_interface.camera_interface}
     , m_light_buffer     {graphics_device, init_command_buffer, program_interface.light_interface}
     , m_fallback_sampler{
@@ -48,6 +60,8 @@ Texel_renderer::Texel_renderer(
 {
 }
 
+Texel_renderer::~Texel_renderer() = default;
+
 void Texel_renderer::render(const Render_parameters& parameters)
 {
     ERHE_PROFILE_FUNCTION();
@@ -60,6 +74,13 @@ void Texel_renderer::render(const Render_parameters& parameters)
         parameters.render_encoder.get_command_buffer(),
         "Texel_renderer::render()"
     };
+
+    // The encoder builds its descriptor set against this layout; it must be set
+    // before any buffer / sampler binds below (in particular the shadow sampler
+    // bound via Light_buffer::bind_shadow_samplers and the texture heap). Every
+    // other renderer does this first; omitting it leaves s_shadow_no_compare
+    // unbound, so textureSize() returns 0.
+    parameters.render_encoder.set_bind_group_layout(m_program_interface.bind_group_layout.get());
 
     parameters.render_encoder.set_viewport_rect(viewport.x, viewport.y, viewport.width, viewport.height);
 
@@ -87,19 +108,16 @@ void Texel_renderer::render(const Render_parameters& parameters)
 
     m_texture_heap->bind(parameters.render_encoder);
 
-    erhe::graphics::Base_render_pipeline& pipeline = parameters.pipeline;
-
     erhe::graphics::Texture* shadowmap_texture = parameters.light_projections->shadow_map_texture.get();
     uint32_t texel_count_x = shadowmap_texture->get_width();
     uint32_t texel_count_y = shadowmap_texture->get_height();
 
-    // TODO
-    erhe::graphics::Render_pipeline* render_pipeline = pipeline.get_pipeline_for(
+    erhe::graphics::Render_pipeline* render_pipeline = m_pipeline.get_pipeline_for(
         parameters.render_pass.get_descriptor(),
-        nullptr,
-        nullptr,
-        nullptr,
-        nullptr
+        nullptr, // color_blend (defaults to color_blend_disabled)
+        parameters.shader_stages,
+        nullptr, // vertex_input  (gl_VertexID-driven, no vertex buffers)
+        nullptr  // vertex_format
     );
     if (render_pipeline == nullptr) {
         return;
@@ -108,7 +126,7 @@ void Texel_renderer::render(const Render_parameters& parameters)
 
     const std::size_t texel_count  = texel_count_x * texel_count_y;
     const std::size_t vertex_count = texel_count * 6;
-    parameters.render_encoder.draw_primitives(pipeline.data.input_assembly.primitive_topology, 0, vertex_count);
+    parameters.render_encoder.draw_primitives(m_pipeline.data.input_assembly.primitive_topology, 0, vertex_count);
 
     camera_buffer_range.value().release();
     light_range.release();

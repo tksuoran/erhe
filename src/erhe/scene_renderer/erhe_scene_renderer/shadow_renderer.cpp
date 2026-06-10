@@ -10,6 +10,7 @@
 #include "erhe_graphics/draw_indirect.hpp"
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/scoped_debug_group.hpp"
+#include "erhe_graphics/scoped_gpu_zone.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_graphics/texture.hpp"
@@ -51,37 +52,6 @@ Shadow_renderer::Shadow_renderer(
     , m_empty_fragment_outputs{}
     , m_bind_group_layout{program_interface.bind_group_layout.get()}
     , m_y_flip{graphics_device.get_info().coordinate_conventions.clip_space_y_flip == erhe::math::Clip_space_y_flip::enabled}
-    , m_pipeline{
-        m_graphics_device,
-        erhe::graphics::Base_render_pipeline_create_info{
-            .debug_label       = erhe::utility::Debug_label{"Shadow Renderer"},
-            .input_assembly    = Input_assembly_state::triangle,
-            // Cull front faces: only back faces write shadow depth. For
-            // closed meshes this reduces peter-panning compared to
-            // rasterizing both sides. Caveat: open / single-sided meshes
-            // no longer cast shadows from their front side. Light
-            // projections are built with the same device coordinate
-            // conventions as viewport passes, so the same y-flip winding
-            // compensation applies.
-            .rasterization     = Rasterization_state::cull_mode_front_ccw.with_winding_flip_if(m_y_flip),
-            .depth_stencil     = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(graphics_device.get_reverse_depth()),
-            .bind_group_layout = m_bind_group_layout
-        }
-    }
-    , m_pipeline_depth_clamp{
-        m_graphics_device,
-        erhe::graphics::Base_render_pipeline_create_info{
-            .debug_label       = erhe::utility::Debug_label{"Shadow Renderer Depth Clamp"},
-            .input_assembly    = Input_assembly_state::triangle,
-            // Same front-face culling and y-flip winding compensation as
-            // m_pipeline above, plus depth clamping: toggling
-            // Shadow_frustum_fit_settings::depth_clamp must only change
-            // depth clamping, not the culling behavior.
-            .rasterization     = Rasterization_state::cull_mode_front_ccw_depth_clamp.with_winding_flip_if(m_y_flip),
-            .depth_stencil     = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(graphics_device.get_reverse_depth()),
-            .bind_group_layout = m_bind_group_layout
-        }
-    }
     , m_dummy_texture{graphics_device.create_dummy_texture(init_command_buffer, erhe::dataformat::Format::format_8_vec4_srgb)}
     , m_fallback_sampler{
         graphics_device,
@@ -112,6 +82,36 @@ Shadow_renderer::Shadow_renderer(
         )
     }
 {
+    // Build one shadow caster pipeline per Shadow_cull_mode, plus a depth-clamp
+    // sibling for each. Cull front (only back faces write depth) reduces
+    // peter-panning on closed meshes; cull back lets single-sided geometry cast
+    // shadows from the lit side; cull none rasterizes both sides. Light
+    // projections use the same device coordinate conventions as viewport
+    // passes, so the same y-flip winding compensation applies. Depth bias is
+    // enabled so the magnitudes (App_settings preset) can be applied per pass
+    // via encoder.set_depth_bias(). The depth-clamp variants differ ONLY in
+    // depth clamping (Shadow_frustum_fit_settings::depth_clamp), not culling.
+    const bool reverse_depth = graphics_device.get_reverse_depth();
+    auto build_pipeline = [&](const char* label, const Rasterization_state& rasterization) -> erhe::graphics::Base_render_pipeline {
+        return erhe::graphics::Base_render_pipeline{
+            m_graphics_device,
+            erhe::graphics::Base_render_pipeline_create_info{
+                .debug_label       = erhe::utility::Debug_label{label},
+                .input_assembly    = Input_assembly_state::triangle,
+                .rasterization     = rasterization.with_depth_bias().with_winding_flip_if(m_y_flip),
+                .depth_stencil     = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
+                .bind_group_layout = m_bind_group_layout
+            }
+        };
+    };
+
+    using Cull = Shadow_cull_mode;
+    m_pipelines[static_cast<std::size_t>(Cull::cull_front)] = build_pipeline("Shadow Renderer Cull Front", Rasterization_state::cull_mode_front_ccw);
+    m_pipelines[static_cast<std::size_t>(Cull::cull_back )] = build_pipeline("Shadow Renderer Cull Back",  Rasterization_state::cull_mode_back_ccw );
+    m_pipelines[static_cast<std::size_t>(Cull::cull_none )] = build_pipeline("Shadow Renderer Cull None",  Rasterization_state::cull_mode_none     );
+    m_pipelines_depth_clamp[static_cast<std::size_t>(Cull::cull_front)] = build_pipeline("Shadow Renderer Cull Front Depth Clamp", Rasterization_state::cull_mode_front_ccw_depth_clamp);
+    m_pipelines_depth_clamp[static_cast<std::size_t>(Cull::cull_back )] = build_pipeline("Shadow Renderer Cull Back Depth Clamp",  Rasterization_state::cull_mode_back_ccw_depth_clamp );
+    m_pipelines_depth_clamp[static_cast<std::size_t>(Cull::cull_none )] = build_pipeline("Shadow Renderer Cull None Depth Clamp",  Rasterization_state::cull_mode_none_depth_clamp     );
 }
 
 Shadow_renderer::~Shadow_renderer() noexcept = default;
@@ -133,30 +133,49 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
         .require_at_least_one_bit_clear = 0u
     };
 
-    // Gather world space shadow caster bounds (8 AABB corners per mesh) for
-    // the tight directional shadow frustum fit. Light_projections::apply()
-    // copies the points into frame-lifetime storage.
-    std::vector<glm::vec3> caster_world_points;
-    if ((parameters.fit_settings != nullptr) && parameters.fit_settings->fit_to_casters) {
+    // Gather one world-space AABB per shadow caster for the tight directional
+    // shadow frustum fit. The per-light contribution filter - culling casters
+    // whose bounds cannot shadow a visible receiver - needs each caster's
+    // bounds individually and depends on the light direction, so it runs per
+    // light inside the fit (Light::tight_directional_light_projection_transforms);
+    // here we only collect the candidates. Light_projections::apply() borrows
+    // these vectors as spans for the duration of the call; no copy is made.
+    std::vector<erhe::math::Aabb>& caster_world_aabbs   = m_caster_world_aabbs;
+    std::vector<erhe::math::Aabb>& receiver_world_aabbs = m_receiver_world_aabbs;
+    caster_world_aabbs.clear();
+    receiver_world_aabbs.clear();
+    const bool gather_casters = (parameters.fit_settings != nullptr) && parameters.fit_settings->fit_to_casters;
+    // Receiver bounds refine the caster cull (Shadow_frustum_fit_settings::
+    // fit_to_receivers) and are only consumed when casters are also fitted.
+    const bool gather_receivers = gather_casters && parameters.fit_settings->fit_to_receivers;
+    if (gather_casters || gather_receivers) {
+        ERHE_PROFILE_SCOPE("shadow: gather caster/receiver bounds");
         for (const auto& meshes : mesh_spans) {
             for (const std::shared_ptr<erhe::scene::Mesh>& mesh : meshes) {
-                if (!mesh || !shadow_filter(mesh->get_flag_bits())) {
+                if (!mesh) {
                     continue;
+                }
+                // Receivers are all visible content meshes; casters additionally
+                // require the shadow_cast flag (shadow_filter). Every caster is a
+                // receiver, so compute the world AABB once and bucket it into both.
+                const uint64_t flag_bits = mesh->get_flag_bits();
+                if ((flag_bits & erhe::Item_flags::visible) == 0) {
+                    continue;
+                }
+                const bool is_caster = gather_casters && shadow_filter(flag_bits);
+                if (!gather_receivers && !is_caster) {
+                    continue; // nothing to gather for this mesh; skip the AABB compute
                 }
                 const erhe::math::Aabb aabb = mesh->get_aabb_world();
                 if (!aabb.is_valid()) {
                     continue;
                 }
-                const glm::vec3& a = aabb.min;
-                const glm::vec3& b = aabb.max;
-                caster_world_points.push_back(glm::vec3{a.x, a.y, a.z});
-                caster_world_points.push_back(glm::vec3{a.x, a.y, b.z});
-                caster_world_points.push_back(glm::vec3{a.x, b.y, a.z});
-                caster_world_points.push_back(glm::vec3{a.x, b.y, b.z});
-                caster_world_points.push_back(glm::vec3{b.x, a.y, a.z});
-                caster_world_points.push_back(glm::vec3{b.x, a.y, b.z});
-                caster_world_points.push_back(glm::vec3{b.x, b.y, a.z});
-                caster_world_points.push_back(glm::vec3{b.x, b.y, b.z});
+                if (gather_receivers) {
+                    receiver_world_aabbs.push_back(aabb);
+                }
+                if (is_caster) {
+                    caster_world_aabbs.push_back(aabb);
+                }
             }
         }
     }
@@ -171,14 +190,21 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
         parameters.reverse_depth,
         parameters.depth_range,
         parameters.conventions,
-        caster_world_points,
+        caster_world_aabbs,
+        receiver_world_aabbs,
         parameters.fit_settings
     );
+
+    // Make the distance map (if any) reachable to the forward pass'
+    // bind_shadow_samplers via the shared Light_projections. Null for the depth
+    // technique, in which case the receiver uses the depth samplers instead.
+    parameters.light_projections.shadow_distance_texture = parameters.distance_texture;
 
     erhe::graphics::Scoped_debug_group debug_group{
         parameters.command_buffer,
         erhe::utility::Debug_label{"Shadow_renderer::render()"}
     };
+    erhe::graphics::Scoped_gpu_zone gpu_zone{parameters.command_buffer, "Shadow_renderer::render()"};
 
     using Ring_buffer_range          = erhe::graphics::Ring_buffer_range;
     using Draw_indirect_buffer_range = erhe::scene_renderer::Draw_indirect_buffer_range;
@@ -194,8 +220,13 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
 
     // Depth clamping preserves casters outside the (tightly fitted) light
     // space near plane by clamping their depth instead of clipping them.
-    const bool use_depth_clamp = (parameters.fit_settings != nullptr) && parameters.fit_settings->depth_clamp;
-    erhe::graphics::Base_render_pipeline& base_pipeline = use_depth_clamp ? m_pipeline_depth_clamp : m_pipeline;
+    // Face culling is the active graphics preset's Shadow_cull_mode; both
+    // dimensions index the pre-built pipeline set.
+    const bool        use_depth_clamp = (parameters.fit_settings != nullptr) && parameters.fit_settings->depth_clamp;
+    const std::size_t cull_index      = static_cast<std::size_t>(parameters.cull_mode);
+    erhe::graphics::Base_render_pipeline& base_pipeline = use_depth_clamp
+        ? m_pipelines_depth_clamp[cull_index]
+        : m_pipelines[cull_index];
 
     erhe::graphics::Render_pass* previous_render_pass = nullptr;
     for (const auto& light : lights) {
@@ -230,6 +261,11 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
             parameters.light_camera_viewport.width,
             parameters.light_camera_viewport.height
         );
+        // Hardware depth bias for the shadow (caster) pass. Both shadow
+        // pipelines enable depth bias, so this must be set before their draws;
+        // 0/0 means no bias. The sign that reduces acne depends on the depth
+        // convention -- negative values are valid for experimentation.
+        encoder.set_depth_bias(parameters.depth_bias_constant, parameters.depth_bias_slope, 0.0f);
         m_material_buffer.bind(encoder, material_range);
         m_joint_buffer.bind(encoder, joint_range);
         m_light_buffer.bind_light_buffer(encoder, light_range);
@@ -264,7 +300,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
         );
         m_camera_buffer.bind(encoder, camera_range);
 
-        Ring_buffer_range control_range = m_light_buffer.update_control(light_index);
+        Ring_buffer_range control_range = m_light_buffer.update_control(light_index, parameters.distance_bias_coeff);
         m_light_buffer.bind_control_buffer(encoder, control_range);
 
         m_texture_heap->bind(encoder);
@@ -273,9 +309,16 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
 
         Shader_key environment_key{};
         std::vector<Render_bucket> buckets;
-        const uint32_t boolean_mask_force_enable = erhe::scene_renderer::make_shader_bool_mask(
+        uint32_t boolean_mask_force_enable = erhe::scene_renderer::make_shader_bool_mask(
             erhe::scene_renderer::Shader_bool::VARIANT_DEPTH_ONLY
         );
+        if (parameters.use_distance) {
+            // Distance technique: also run the caster fragment shader that writes
+            // the fwidth-biased light-space depth into the color attachment.
+            boolean_mask_force_enable |= erhe::scene_renderer::make_shader_bool_mask(
+                erhe::scene_renderer::Shader_bool::VARIANT_SHADOW_DISTANCE
+            );
+        }
         const uint32_t boolean_mask_force_disable = 0; // TODO
 
         for (const auto& meshes : mesh_spans) {
@@ -327,7 +370,9 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
             // the light, same as for non-mirrored casters.
             erhe::graphics::Render_pipeline* render_pipeline = base_pipeline.get_pipeline_for(
                 parameters.render_passes[shadow_index]->get_descriptor(),
-                &erhe::graphics::Color_blend_state::color_writes_disabled,
+                parameters.use_distance
+                    ? &erhe::graphics::Color_blend_state::color_blend_disabled   // write biased distance to the color attachment
+                    : &erhe::graphics::Color_blend_state::color_writes_disabled, // depth-only
                 &reloadable_shader_stages->shader_stages,
                 vertex_input.vertex_input.get(),
                 &vertex_input.vertex_format,
@@ -397,7 +442,8 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
 
 void Shadow_renderer::prewarm_pipelines(
     std::span<const std::unique_ptr<erhe::graphics::Render_pass>>           render_passes,
-    const std::vector<std::span<const std::shared_ptr<erhe::scene::Mesh>>>& mesh_spans
+    const std::vector<std::span<const std::shared_ptr<erhe::scene::Mesh>>>& mesh_spans,
+    const Shadow_cull_mode                                                  cull_mode
 )
 {
     ERHE_PROFILE_FUNCTION();
@@ -456,12 +502,15 @@ void Shadow_renderer::prewarm_pipelines(
         // operation, and warming the flipped sibling here avoids a
         // first-mirrored-mesh pipeline-compile hitch. Both the regular
         // and the depth-clamp base pipelines are warmed so toggling
-        // Shadow_frustum_fit_settings::depth_clamp does not hitch.
+        // Shadow_frustum_fit_settings::depth_clamp does not hitch. Only the
+        // active cull mode is warmed -- changing it is a rare settings action
+        // that compiles the other mode's pipelines once, on demand.
+        const std::size_t cull_index = static_cast<std::size_t>(cull_mode);
         for (const std::unique_ptr<erhe::graphics::Render_pass>& render_pass : render_passes) {
             if (!render_pass) {
                 continue;
             }
-            for (erhe::graphics::Base_render_pipeline* base_pipeline : { &m_pipeline, &m_pipeline_depth_clamp }) {
+            for (erhe::graphics::Base_render_pipeline* base_pipeline : { &m_pipelines[cull_index], &m_pipelines_depth_clamp[cull_index] }) {
                 for (const bool front_face_flip : { false, true }) {
                     static_cast<void>(
                         base_pipeline->get_pipeline_for(

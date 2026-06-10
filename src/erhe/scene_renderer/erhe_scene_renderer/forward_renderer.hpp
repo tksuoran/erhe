@@ -128,6 +128,22 @@ public:
         Primitive_interface_settings                           primitive_settings{};
         const erhe::Item_filter                                filter{};
         Shader_debug                                           shader_debug{Shader_debug::none};
+        // Shadow map filtering method, plumbed to the shader as the
+        // ERHE_SHADOW_FILTER compile-time variant axis. The value is the PCF
+        // kernel width in texels (0 = hard, 2 = 2x2, 4 = 4x4, 6 = 6x6).
+        uint32_t                                               shadow_filter{0};
+        // Depth-bias method for the wide-kernel PCF path, plumbed as the
+        // ERHE_SHADOW_BIAS variant axis (0 = slope-scaled, 1 = receiver-plane).
+        uint32_t                                               shadow_bias{1};
+        // Shadow technique, plumbed as the ERHE_SHADOW_TECHNIQUE variant axis
+        // (0 = depth + receiver-plane bias, 1 = distance map + baked fwidth bias).
+        uint32_t                                               shadow_technique{0};
+        // Shadow map depth bit count (graphics preset), plumbed as the
+        // ERHE_SHADOW_DEPTH_BITS variant axis. The depth receiver snaps its
+        // hard-path reference to this UNORM format's quantization grid; 32
+        // (D32_SFLOAT -- there is no 32-bit UNORM depth) and 0 mean "float / no
+        // snap".
+        uint32_t                                               shadow_depth_bits{0};
         const glm::uvec4&                                      debug_joint_indices{0, 0, 0, 0};
         const std::span<glm::vec4>&                            debug_joint_colors{};
         // When non-null, bypass the Shader_variant_cache lookup and use
@@ -184,6 +200,20 @@ public:
         uint32_t                                                    shader_key_force_enable_mask {0};
         uint32_t                                                    shader_key_force_disable_mask{0};
         Shader_debug                                                shader_debug{Shader_debug::none};
+        // Shadow filtering method to prewarm (ERHE_SHADOW_FILTER axis).
+        // Single-valued like shader_debug: warm the active mode so there is
+        // no first-frame compile-on-miss; switching modes at runtime compiles
+        // the other variant once, on demand.
+        uint32_t                                                    shadow_filter{0};
+        // Shadow bias method to prewarm (ERHE_SHADOW_BIAS axis). Same
+        // single-valued, warm-the-active-mode policy as shadow_filter.
+        uint32_t                                                    shadow_bias{1};
+        // Shadow technique to prewarm (ERHE_SHADOW_TECHNIQUE axis). Same
+        // single-valued, warm-the-active-mode policy as shadow_filter.
+        uint32_t                                                    shadow_technique{0};
+        // Shadow map depth bit count to prewarm (ERHE_SHADOW_DEPTH_BITS axis).
+        // Same single-valued, warm-the-active-mode policy as shadow_filter.
+        uint32_t                                                    shadow_depth_bits{0};
     };
 
     // Returns the number of Device::warmup_render_pipeline calls issued

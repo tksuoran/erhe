@@ -188,6 +188,10 @@ void Forward_renderer::render(const Render_parameters& parameters)
     environment_key.set(Shader_int::LIGHT_COUNT_POINT_NOT_SHADOWMAPPED,       static_cast<uint32_t>(partition.per_type_nonshadow[2]));
     environment_key.set(Shader_int::LIGHT_COUNT_POINT_SHADOWMAPPED,           static_cast<uint32_t>(partition.per_type_shadow   [2]));
     environment_key.set(Shader_int::SHADER_DEBUG,                             static_cast<uint32_t>(parameters.shader_debug)); // TODO proper conversion
+    environment_key.set(Shader_int::SHADOW_FILTER,                            parameters.shadow_filter);
+    environment_key.set(Shader_int::SHADOW_BIAS,                              parameters.shadow_bias);
+    environment_key.set(Shader_int::SHADOW_TECHNIQUE,                         parameters.shadow_technique);
+    environment_key.set(Shader_int::SHADOW_DEPTH_BITS,                        parameters.shadow_depth_bits);
     // SHADER_MULTIVIEW_COUNT: 0 for single-view (views.size() == 1),
     // N for multiview (views.size() >= 2). This matches the prewarm
     // convention (multiview_view_counts uses 0u for the single-view
@@ -468,6 +472,10 @@ auto Forward_renderer::prewarm_standard_variants(const Prewarm_parameters& param
             environment_key.set(Shader_int::LIGHT_COUNT_POINT_NOT_SHADOWMAPPED,       static_cast<uint32_t>(parameters.light_partition.per_type_nonshadow[2]));
             environment_key.set(Shader_int::LIGHT_COUNT_POINT_SHADOWMAPPED,           static_cast<uint32_t>(parameters.light_partition.per_type_shadow   [2]));
             environment_key.set(Shader_int::SHADER_DEBUG,                             static_cast<uint32_t>(parameters.shader_debug));
+            environment_key.set(Shader_int::SHADOW_FILTER,                            parameters.shadow_filter);
+            environment_key.set(Shader_int::SHADOW_BIAS,                              parameters.shadow_bias);
+            environment_key.set(Shader_int::SHADOW_TECHNIQUE,                         parameters.shadow_technique);
+            environment_key.set(Shader_int::SHADOW_DEPTH_BITS,                        parameters.shadow_depth_bits);
             environment_key.set(Shader_int::SHADER_MULTIVIEW_COUNT,                   view_count);
 
             std::vector<Render_bucket> buckets;

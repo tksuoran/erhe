@@ -52,17 +52,32 @@ Program_interface::Program_interface(
             ? erhe::graphics::Binding_type::storage_buffer
             : erhe::graphics::Binding_type::uniform_buffer;
     };
+    // Per-buffer shader-stage visibility for the shared scene layout. Stages are
+    // the union over every pipeline that binds this layout (forward, shadow, id,
+    // sky, grid, tool, ...); the layout is bound only by vertex+fragment
+    // pipelines (the line/edge geometry and compute paths use the separate
+    // Content_wide_line_interface view block, not these blocks).
+    using Stage = erhe::graphics::Shader_stage_flags;
     erhe::graphics::Bind_group_layout_create_info layout_create_info{
         .bindings = {
-            {material_buffer_binding_point,      to_binding_type(material_interface.material_block)},
-            {light_buffer_binding_point,         to_binding_type(light_interface.light_block)},
-            {light_control_buffer_binding_point, to_binding_type(light_interface.light_control_block)},
-            {primitive_buffer_binding_point,     to_binding_type(primitive_interface.primitive_block)},
-            {camera_buffer_binding_point,        to_binding_type(camera_interface.camera_block)},
-            {cube_instance_buffer_binding_point, to_binding_type(cube_interface.cube_instance_block)},
-            {cube_control_buffer_binding_point,  to_binding_type(cube_interface.cube_control_block)},
-            {joint_buffer_binding_point,         to_binding_type(joint_interface.joint_block)},
-            {glyph_buffer_binding_point,         to_binding_type(glyph_interface.glyph_block)},
+            // material: standard.frag/brdf_slice.frag shading, textured.vert.
+            {.binding_point = material_buffer_binding_point,      .type = to_binding_type(material_interface.material_block),     .stage_flags = Stage::vertex | Stage::fragment},
+            // light: lighting in standard.frag/erhe_light.glsl + shadow_debug.vert.
+            {.binding_point = light_buffer_binding_point,         .type = to_binding_type(light_interface.light_block),          .stage_flags = Stage::vertex | Stage::fragment},
+            // light_control: depth_to_color.frag only.
+            {.binding_point = light_control_buffer_binding_point, .type = to_binding_type(light_interface.light_control_block),  .stage_flags = Stage::fragment},
+            // primitive: transforms in *.vert + material index / fields in *.frag.
+            {.binding_point = primitive_buffer_binding_point,     .type = to_binding_type(primitive_interface.primitive_block),  .stage_flags = Stage::vertex | Stage::fragment},
+            // camera: clip_from_world in *.vert + camera pos/exposure in *.frag.
+            {.binding_point = camera_buffer_binding_point,        .type = to_binding_type(camera_interface.camera_block),        .stage_flags = Stage::vertex | Stage::fragment},
+            // cube_instance/cube_control: Cube_renderer is unused/rotted; declare
+            // vertex so the binding is valid (no shader reads these today).
+            {.binding_point = cube_instance_buffer_binding_point, .type = to_binding_type(cube_interface.cube_instance_block),   .stage_flags = Stage::vertex},
+            {.binding_point = cube_control_buffer_binding_point,  .type = to_binding_type(cube_interface.cube_control_block),    .stage_flags = Stage::vertex},
+            // joint: skinning in *.vert (erhe_skinning.glsl) only.
+            {.binding_point = joint_buffer_binding_point,         .type = to_binding_type(joint_interface.joint_block),          .stage_flags = Stage::vertex},
+            // glyph: grid axis-label coverage in grid.frag only.
+            {.binding_point = glyph_buffer_binding_point,         .type = to_binding_type(glyph_interface.glyph_block),          .stage_flags = Stage::fragment},
             // The shadow samplers are wired in as immutable samplers in the
             // descriptor set layout. The Vulkan portability subset on
             // MoltenVK rejects comparison samplers via push descriptors
@@ -79,7 +94,9 @@ Program_interface::Program_interface(
                 .name              = "s_shadow_compare",
                 .glsl_type         = erhe::graphics::Glsl_type::sampler_2d_array_shadow,
                 .is_texture_heap   = false,
-                .immutable_sampler = &light_interface.shadow_sampler_compare
+                .immutable_sampler = &light_interface.shadow_sampler_compare,
+                // Compared shadow lookups happen in the fragment stage (lighting).
+                .stage_flags       = erhe::graphics::Shader_stage_flags::fragment
             },
             {
                 .binding_point     = c_texture_heap_slot_shadow_no_compare,
@@ -88,7 +105,24 @@ Program_interface::Program_interface(
                 .name              = "s_shadow_no_compare",
                 .glsl_type         = erhe::graphics::Glsl_type::sampler_2d_array,
                 .is_texture_heap   = false,
-                .immutable_sampler = &light_interface.shadow_sampler_no_compare
+                .immutable_sampler = &light_interface.shadow_sampler_no_compare,
+                // Raw shadow-depth reads happen in the fragment stage (lighting)
+                // and in the vertex stage (the shadow-texel debug shader reads
+                // textureSize/textureLod in shadow_debug.vert).
+                .stage_flags       = erhe::graphics::Shader_stage_flags::vertex | erhe::graphics::Shader_stage_flags::fragment
+            },
+            {
+                // Color-aspect distance map for Shadow_technique_mode::distance
+                // (the caster bakes the fwidth slope bias into R32F distances).
+                // The receiver compares against it without any shader-side bias.
+                .binding_point     = c_texture_heap_slot_shadow_distance,
+                .type              = erhe::graphics::Binding_type::combined_image_sampler,
+                .sampler_aspect    = erhe::graphics::Sampler_aspect::color,
+                .name              = "s_shadow_distance",
+                .glsl_type         = erhe::graphics::Glsl_type::sampler_2d_array,
+                .is_texture_heap   = false,
+                .immutable_sampler = &light_interface.shadow_sampler_no_compare,
+                .stage_flags       = erhe::graphics::Shader_stage_flags::fragment
             },
         },
         .debug_label = "Scene renderer"

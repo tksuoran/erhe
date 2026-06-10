@@ -127,6 +127,19 @@ void main()
     return;
 #endif
 
+#if defined(ERHE_VARIANT_SHADOW_DISTANCE)
+    // Shadow_technique_mode::distance caster (the "bias-free" path). Store the
+    // light-space depth with a slope+resolution bias baked in via fwidth (=
+    // |ddx|+|ddy|), so the receiver compares with no bias.
+    // light_control_block.shadow_distance_bias_coeff is cdd*(1+pcfRadius),
+    // direction-aware (cdd = clip_depth_direction). For the orthographic
+    // directional light gl_FragCoord.z is linear, so fwidth(z) is a true slope
+    // bias; see doc/shadows.md ("distance / fwidth alternative").
+    float ls_depth = gl_FragCoord.z;
+    out_color = vec4(ls_depth + light_control_block.shadow_distance_bias_coeff * fwidth(ls_depth));
+    return;
+#endif
+
 // The lit-path locals + light loops reference v_material_index,
 // v_position, v_texcoord_0/1, the material/light/camera blocks, and the
 // BxDF/light/srgb/texture includes -- all gated on POSITION_PASS at the
@@ -619,6 +632,33 @@ void main()
             float N_dot_B = dot(N, B);
             float T_dot_B = dot(T, B);
             out_color.rgb = vec3(N_dot_T, N_dot_B, T_dot_B);
+        }
+#  elif ERHE_SHADER_DEBUG == 30 // shadow_visibility
+        {
+            // Shadow / light visibility factor for the first shadow-mapped
+            // light: 0.0 = fully shadowed, 1.0 = fully lit. The light buckets
+            // are ordered directional-shadowed, directional-unshadowed,
+            // spot-shadowed, ... so the first shadow-mapped light is light 0
+            // when any directional light casts shadows, otherwise the first
+            // spot-shadowed light. Point shadows are not sampled and so are
+            // not selected here. sample_light_visibility() returns 1.0 when no
+            // shadow map is bound, so this shows white when shadows are off.
+#    if ERHE_LIGHT_COUNT_DIRECTIONAL_SHADOWMAPPED > 0
+            uint  shadow_light_index    = 0u;
+            Light shadow_light          = light_block.lights[shadow_light_index];
+            vec3  shadow_point_to_light = shadow_light.direction_and_outer_spot_cos.xyz;
+            float shadow_N_dot_L        = dot(N, normalize(shadow_point_to_light));
+            out_color.rgb = vec3(sample_light_visibility(v_position, shadow_light_index, shadow_N_dot_L));
+#    elif ERHE_LIGHT_COUNT_SPOT_SHADOWMAPPED > 0
+            uint  shadow_light_index    = uint(ERHE_LIGHT_COUNT_DIRECTIONAL_SHADOWMAPPED + ERHE_LIGHT_COUNT_DIRECTIONAL_NOT_SHADOWMAPPED);
+            Light shadow_light          = light_block.lights[shadow_light_index];
+            vec3  shadow_point_to_light = shadow_light.position_and_inner_spot_cos.xyz - v_position.xyz;
+            float shadow_N_dot_L        = dot(N, normalize(shadow_point_to_light));
+            out_color.rgb = vec3(sample_light_visibility(v_position, shadow_light_index, shadow_N_dot_L));
+#    else
+            // No shadow-mapped light in this shader variant.
+            out_color.rgb = vec3(0.0);
+#    endif
         }
 #  endif
         out_color.a = 1.0;
