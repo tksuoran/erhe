@@ -1,7 +1,7 @@
 {
     "windows": {
-        "Content_library_238": true,
-        "asset_browser": false,
+        "Content_library_243": true,
+        "asset_browser": true,
         "clipboard": false,
         "commands": false,
         "composer": false,

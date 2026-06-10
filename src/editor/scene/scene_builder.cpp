@@ -151,7 +151,7 @@ void Scene_builder::add_cameras(const Add_cameras_args& args)
         vec3{0.0f, camera_elevation, camera_distance},
         vec3{0.0f, 0.25f, 0.0f},
         0.03f,
-        128.0f,
+        64.0f,
         args.camera_exposure,
         args.shadow_range
     );
@@ -161,8 +161,8 @@ void Scene_builder::add_cameras(const Add_cameras_args& args)
         "Camera B",
         vec3{-7.0f, 1.0f, 0.0f},
         vec3{ 0.0f, 0.5f, 0.0f},
-        1.0f,
-        1000.0f,
+        0.01f,
+        64.0f,
         args.camera_exposure,
         args.shadow_range
     );
@@ -778,8 +778,8 @@ void Scene_builder::add_room(const Add_room_args& args)
             erhe::primitive::Material_create_info{
                 .name = "Floor",
                 .data = {
-                    //.base_color = glm::vec3{0.07f, 0.07f, 0.07f},
-                    .base_color = glm::vec3{0.27f, 0.27f, 0.27f}, // temp for shadow debug with single directional light source
+                    .base_color = glm::vec3{0.07f, 0.07f, 0.07f},
+                    //.base_color = glm::vec3{0.27f, 0.27f, 0.27f}, // temp for shadow debug with single directional light source
                     .roughness  = glm::vec2{0.9f, 0.9f},
                     .metallic   = 0.01f // TODO 0.0f ?
                 }
@@ -1303,7 +1303,7 @@ void Scene_builder::add_lights(const Add_lights_args& args)
         light_nodes.push_back(
             make_directional_light(
                 "X",
-                vec3{1.0f, 1.0f, 0.0f}, // pos
+                vec3{0.0f, 2.0f, 0.0f}, // pos
                 vec3{1.0f, 1.0f, 1.0f}, // color
                 2.0f,                   // intensity
                 cast_shadow
