@@ -7,6 +7,7 @@
 #include "erhe_scene/scene_log.hpp"
 #include "erhe_utility/bit_helpers.hpp"
 #include "erhe_math/math_util.hpp"
+#include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
 namespace erhe::scene {
@@ -128,6 +129,7 @@ auto Light::spot_light_projection(const Light_projection_parameters& parameters)
 
 auto Light::projection_transforms(const Light_projection_parameters& parameters) const -> Light_projection_transforms
 {
+    ERHE_PROFILE_FUNCTION();
     switch (type) {
         case Light_type::directional: {
             return directional_light_projection_transforms(parameters);
@@ -146,6 +148,7 @@ auto Light::projection_transforms(const Light_projection_parameters& parameters)
 
 auto Light::directional_light_projection_transforms(const Light_projection_parameters& parameters) const -> Light_projection_transforms
 {
+    ERHE_PROFILE_FUNCTION();
     const bool use_tight_fit =
         (parameters.fit_settings != nullptr) &&
         parameters.fit_settings->any_tightening_enabled();
@@ -158,6 +161,7 @@ auto Light::stable_directional_light_projection_transforms(
     const Light_projection_parameters& parameters
 ) const -> Light_projection_transforms
 {
+    ERHE_PROFILE_FUNCTION();
     // Overview of the stable directional light projection transforms algorithm:
     //
     // - Define bounding sphere around view camare, based on view camera
@@ -248,6 +252,7 @@ auto Light::assemble_directional_light_projection_transforms(
     const glm::mat4&                   light_camera_from_world
 ) const -> Light_projection_transforms
 {
+    ERHE_PROFILE_FUNCTION();
     // Calculate and return projection matrices for light projection camera:
     //  - clip from node   (for light as node)
     //  - clip from world
@@ -281,6 +286,7 @@ auto Light::assemble_directional_light_projection_transforms(
 
 auto Light::spot_light_projection_transforms(const Light_projection_parameters& parameters) const -> Light_projection_transforms
 {
+    ERHE_PROFILE_FUNCTION();
     const Projection light_projection = projection(parameters);
     const auto clip_from_light_camera = light_projection.clip_from_node_transform(parameters.shadow_map_viewport, parameters.reverse_depth, parameters.depth_range);
     const Node* const node = get_node();

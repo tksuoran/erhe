@@ -3,6 +3,7 @@
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/node_attachment.hpp"
 #include "erhe_scene/trs_transform.hpp"
+#include "erhe_math/aabb.hpp"
 
 #include <memory>
 #include <span>
@@ -25,6 +26,8 @@ public:
     // radius = Camera::get_shadow_range()).
     bool  fit_to_view_frustum   {false}; // fit light-space extents to the main camera view frustum corners
     bool  fit_to_casters        {false}; // fit to the shadow caster convex hull clipped to the extruded shadow volume (F_shadow)
+    bool  fit_to_receivers      {true};  // cull casters against the receiver volume (view frustum intersected with receiver bounds) extruded toward the light; refines fit_to_casters and has no effect without it
+    bool  fit_to_receivers_hull {true};  // use the tighter convex receiver hull (clipped to the view frustum) instead of a bounding box for the receiver cull volume
     bool  optimize_rotation     {false}; // rotating calipers roll around the light direction for minimum area coverage
     bool  near_from_main_frustum{false}; // near distance from the F_main plane most facing the light (relies on depth_clamp for closer casters)
     bool  depth_clamp           {false}; // depth-clamp rasterization in the shadow pass
@@ -47,6 +50,8 @@ public:
 };
 
 class Shadow_frustum_fit_debug_data; // see light_frustum_fit.hpp
+class Shadow_fit_receiver_cache;     // see light_frustum_fit.hpp
+class Shadow_fit_scratch;            // see light_frustum_fit.hpp
 
 class Light_projection_parameters
 {
@@ -59,10 +64,26 @@ public:
     erhe::math::Coordinate_conventions conventions;
 
     // Optional tight frustum fit inputs; defaults give the legacy stable fit.
-    // Pointers and span must outlive the use of these parameters.
-    const Shadow_frustum_fit_settings* fit_settings       {nullptr};
-    std::span<const glm::vec3>         caster_world_points{};
-    Shadow_frustum_fit_debug_data*     fit_debug_out      {nullptr};
+    // Pointers and spans must outlive the use of these parameters.
+    // One world-space AABB per shadow caster; the tight directional fit filters
+    // these per light against the shadow caster volume F_shadow before fitting.
+    // receiver_world_aabbs holds one world-space AABB per visible receiver
+    // (used only when fit_to_receivers is enabled) to build the tighter
+    // receiver-aware caster cull volume.
+    const Shadow_frustum_fit_settings* fit_settings        {nullptr};
+    std::span<const erhe::math::Aabb>  caster_world_aabbs  {};
+    std::span<const erhe::math::Aabb>  receiver_world_aabbs{};
+    Shadow_frustum_fit_debug_data*     fit_debug_out       {nullptr};
+    // Optional cache for the light-independent part of the receiver cull
+    // volume build, shared across the lights of one apply() pass (see
+    // Shadow_fit_receiver_cache). When null, each fit uses a local cache
+    // (correct, but redoes the shared receiver work per light).
+    Shadow_fit_receiver_cache*         receiver_cache      {nullptr};
+    // Optional persistent scratch buffers for the per-light tight fit (see
+    // Shadow_fit_scratch); buffers are cleared (capacity kept) at point of
+    // use, so steady-state fits perform no heap allocations. When null, each
+    // fit uses a local instance (correct, but allocates per call).
+    Shadow_fit_scratch*                fit_scratch         {nullptr};
 };
 
 class Light;
