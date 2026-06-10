@@ -172,9 +172,9 @@ The legacy stand-alone shaders are folded in as variant axes:
   `anisotropic_brdf` (with a 1e-7 roughness floor) for ENGINE_READY.
 - `circular_brushed_metal` is the `USE_CIRCULAR_BRUSHED_METAL`
   boolean axis driven by `material.use_circular_brushed_metal`.
-- The 28 `standard_debug` ERHE_DEBUG_* modes became the
-  `Shader_debug` enum stored per `Viewport_scene_view`. The new
-  `SHADER_DEBUG` count axis selects one of 29 (`none` + 28)
+- The `standard_debug` ERHE_DEBUG_* modes became the
+  `Shader_debug` enum stored per `Viewport_scene_view`. The
+  `SHADER_DEBUG` count axis selects one of 31 (`none` + 30)
   variants; `standard.frag` emits an `#if ERHE_SHADER_DEBUG == N`
   override block per value at the end of `main()` that fully
   replaces the lit colour.

@@ -6,6 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **erhe** is a C++ graphics library and editor for OpenGL, vulkan and metal. It features a render graph system, full 3D scene graph, physics (Jolt), geometry manipulation (Catmull-Clark, Conway operators via Geogram), and an ImGui-based editor application.
 
+## Session handoff: `next_prompt.txt`
+
+When an untracked `next_prompt.txt` exists in the repo root, it is a handoff written by an older Claude Code session so that work can continue with fresh context: read it first and continue the work it describes. Once it has been read and the work is done, simply delete the file - do not update it or keep it around. Notes about the work done must already be in the commit messages for that work, so no information is lost by deleting it. (Writing a new `next_prompt.txt` is only warranted when handing off still-unfinished work to a future session.)
+
 ## `src/rendering_test/` is rotten
 
 `src/rendering_test/` (the standalone `rendering_test` executable, its own duplicated shaders under `res/rendering_test/shaders/`, and its `cell_*.cpp` files) is in a known-bad state and slated for re-implementation. Do not invest effort in keeping it consistent when refactoring shared code (e.g. `erhe::scene_renderer`). Acceptable failure modes when touching shared infrastructure:
@@ -291,6 +295,17 @@ See [`doc/editor_improvements.md`](doc/editor_improvements.md) for the prioritiz
 ## No Band-Aid Fixes
 
 Every proposed solution must be evaluated with the question: "is this just a band-aid?" If the answer is yes, the solution must be rejected. A band-aid is any change that masks, works around, or tolerates the symptom of a bug without addressing the root cause - for example, a defensive null check that lets shutdown proceed when an object should not have been null in the first place, a try/catch that swallows an unexpected error, or a "tolerant" code path that accommodates state the system was not supposed to enter. Find and fix the actual cause; do not paper over it.
+
+## Run-time Memory Allocation Discipline
+
+Be mindful about memory allocations: actively avoid heap allocations in run-time (per-frame / hot path) code whenever possible. Steady-state frames should perform no allocations.
+
+- Do not create `std::vector` or other allocating containers as locals in per-frame code. Move them into persistent scratch/cache objects that are cleared (capacity kept) at point of use, so capacity reaches a high-water mark and allocation traffic stops. Example pattern: `erhe::scene::Shadow_fit_scratch` / `Shadow_fit_receiver_cache`, owned by `Light_projections` and passed via `Light_projection_parameters`.
+- Hot functions must not return containers by value; provide out-parameter variants that clear-and-fill caller-owned buffers (a by-value convenience wrapper may remain for cold callers, e.g. debug visualization).
+- For provably bounded sets, prefer fixed capacity (`std::array` + count, exposed via a `std::span` accessor) over heap vectors (e.g. `erhe::math::Shadow_volume_planes`).
+- Internal temporaries of leaf functions may use function-local `static thread_local` buffers (precedent: the persistent QuickHull instance and the clip scratch in `math_util.cpp`); never let such a buffer stay live across a nested call that could reuse it, and never pass a function's own thread_local as its out buffer.
+- Reset persistent containers with `clear()`, never by assigning a fresh default-constructed object (which deallocates).
+- Debug-only paths (e.g. behind `collect_debug`) may allocate.
 
 ## Git Workflow
 
