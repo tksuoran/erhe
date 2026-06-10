@@ -5,6 +5,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/constants.hpp>
 
+#include <array>
 #include <cstdint>
 #include <optional>
 #include <span>
@@ -778,13 +779,31 @@ private:
     std::vector<glm::vec3> m_points;
 };
 
+// Triangles wind counter-clockwise viewed from outside the hull, so
+// cross(p1 - p0, p2 - p0) points outward. point_in_convex_hull() and
+// clip_convex_hull_points_to_frustum() rely on this orientation.
 class Convex_hull
 {
 public:
     std::vector<glm::vec3>             points;
     std::vector<std::array<size_t, 3>> triangle_indices;
+
+    // Empties the hull keeping vector capacity (for persistent scratch reuse;
+    // assigning a fresh Convex_hull{} would deallocate).
+    void clear()
+    {
+        points.clear();
+        triangle_indices.clear();
+    }
 };
 
+// Out-parameter variants clear and refill the caller-owned output, so a
+// persistent output buffer stops allocating once it reaches steady-state
+// capacity; hot (per-frame) callers must use these. The by-value overloads
+// are convenience wrappers for cold callers (e.g. debug visualization).
+              void calculate_bounding_convex_hull(std::span<const glm::vec3> points, Convex_hull& out_hull);
+              void calculate_bounding_convex_hull(std::span<const glm::vec2> point_cloud, std::vector<glm::vec2>& out_hull);
+[[nodiscard]] auto calculate_bounding_convex_hull(std::span<const glm::vec3> points) -> Convex_hull;
 [[nodiscard]] auto calculate_bounding_convex_hull(const Bounding_volume_source& source) -> Convex_hull;
 [[nodiscard]] auto calculate_bounding_convex_hull(const std::vector<glm::vec2>& point_cloud) -> std::vector<glm::vec2>;
 
@@ -1017,6 +1036,15 @@ static constexpr size_t plane_far    = 5;
     const Aabb&                     aabb
 ) -> bool;
 
+// Conservative AABB test against an arbitrary set of inward-facing planes
+// (same plane convention as extract_frustum_planes()). Returns false only when
+// the AABB lies fully outside one plane (definitely disjoint), true otherwise
+// (intersects or inside, with possible false positives near the volume's
+// silhouette edges; never a false negative). Suitable for the open shadow
+// caster volume from build_shadow_caster_volume_planes(), which has a variable
+// plane count and no bounded corner set.
+[[nodiscard]] auto aabb_in_convex_volume(std::span<const glm::vec4> planes, const Aabb& aabb) -> bool;
+
 [[nodiscard]] auto plane_point_distance(const glm::vec4& plane, const glm::vec3& point) -> float;
 [[nodiscard]] auto sphere_in_frustum(
     const std::array<glm::vec4, 6>& planes,
@@ -1056,14 +1084,47 @@ public:
 // NOTE: Vertices of the clipped volume formed purely by plane-plane-plane
 // intersections inside the hull are not produced; callers which need those
 // must add them separately (see point_in_convex_hull()).
+// The out-parameter variant clears and refills out_points (see the
+// calculate_bounding_convex_hull() note); hot callers must use it.
+              void clip_convex_hull_points_by_planes(const Convex_hull& hull, std::span<const glm::vec4> planes, std::vector<glm::vec3>& out_points);
 [[nodiscard]] auto clip_convex_hull_points_by_planes(const Convex_hull& hull, std::span<const glm::vec4> planes) -> std::vector<glm::vec3>;
+
+// Returns the vertices of the convex intersection (hull intersected with the
+// frustum), computed completely by clipping BOTH surfaces against each other: the
+// hull surface against the frustum planes, and the frustum surface against the
+// hull's face planes, then unioning. Unlike clip_convex_hull_points_by_planes()
+// (plus adding frustum corners inside the hull) this also yields the
+// frustum-edge-through-hull-face vertices, so it does not drop the near part of the
+// hull when the frustum apex lies inside it. Re-hull the result for the clipped
+// convex body. Returns an empty vector when either body is degenerate.
+// The out-parameter variant clears and refills out_points (see the
+// calculate_bounding_convex_hull() note); hot callers must use it.
+void clip_convex_hull_points_to_frustum(
+    const Convex_hull&              hull,
+    const std::array<glm::vec4, 6>& frustum_planes,
+    const std::array<glm::vec3, 8>& frustum_corners,
+    std::vector<glm::vec3>&         out_points
+);
+[[nodiscard]] auto clip_convex_hull_points_to_frustum(
+    const Convex_hull&              hull,
+    const std::array<glm::vec4, 6>& frustum_planes,
+    const std::array<glm::vec3, 8>& frustum_corners
+) -> std::vector<glm::vec3>;
 
 class Shadow_volume_planes
 {
 public:
-    std::vector<glm::vec4> planes;             // inward-facing planes bounding the shadow caster volume
+    // At most one plane per F_main face; fixed capacity keeps this class
+    // allocation-free (it is built per light per frame).
+    std::array<glm::vec4, 6> planes     {};    // inward-facing planes bounding the shadow caster volume (first plane_count entries)
+    std::size_t              plane_count{0};
     glm::vec4 light_facing_plane{0.0f};        // F_main plane whose inward normal is most opposed to the light direction; defines the shadow near distance
     glm::vec4 far_cap_plane     {0.0f};        // F_main plane whose inward normal is most aligned with the light direction; far cap of the volume
+
+    [[nodiscard]] auto planes_span() const -> std::span<const glm::vec4>
+    {
+        return std::span<const glm::vec4>{planes.data(), plane_count};
+    }
 };
 
 // Builds the shadow caster volume ("F_shadow") plane set for a directional
@@ -1073,6 +1134,87 @@ public:
 // the volume is open toward the light and contains every potential caster.
 // main_frustum_planes must be inward-facing (from extract_frustum_planes())
 // and light_direction points from the scene toward the light.
+//
+// This is the OPEN volume: it has no lateral closure (no silhouette side
+// planes), so it is a conservative superset of the exact swept frustum and
+// can collapse to a single plane when the light is near-antiparallel to the
+// view direction. It is sufficient for clipping a caster convex hull (the hull
+// already bounds the casters laterally) but NOT for per-caster culling, which
+// needs the lateral closure - see build_shadow_caster_silhouette().
 [[nodiscard]] auto build_shadow_caster_volume_planes(const std::array<glm::vec4, 6>& main_frustum_planes, const glm::vec3& light_direction) -> Shadow_volume_planes;
+
+class Shadow_caster_silhouette
+{
+public:
+    // At most one plane/edge per frustum edge; fixed capacity keeps this
+    // class allocation-free (it is built per light per frame).
+    std::array<glm::vec4, 12>                planes{}; // inward-facing side planes that close the swept volume laterally (first count entries)
+    std::array<std::array<glm::vec3, 2>, 12> edges {}; // the world-space silhouette edges the side planes were swept from (for visualization; first count entries)
+    std::size_t                              count {0};
+
+    [[nodiscard]] auto planes_span() const -> std::span<const glm::vec4>
+    {
+        return std::span<const glm::vec4>{planes.data(), count};
+    }
+    [[nodiscard]] auto edges_span() const -> std::span<const std::array<glm::vec3, 2>>
+    {
+        return std::span<const std::array<glm::vec3, 2>>{edges.data(), count};
+    }
+};
+
+// Builds the silhouette side planes that close the shadow caster volume
+// laterally. A frustum edge between a kept face and a dropped face (same
+// kept/dropped test as build_shadow_caster_volume_planes) is a silhouette edge;
+// the plane through that edge containing the light direction bounds the volume
+// there. Together with build_shadow_caster_volume_planes()'s kept face planes
+// these are the exact bounding planes of the frustum extruded toward the light,
+// which is what per-caster culling must test against. Edges parallel to the
+// light (degenerate swept plane) are skipped. main_frustum_planes/corners from
+// extract_frustum_planes()/extract_frustum_corners(); light_direction points
+// from the scene toward the light.
+[[nodiscard]] auto build_shadow_caster_silhouette(
+    const std::array<glm::vec4, 6>& main_frustum_planes,
+    const std::array<glm::vec3, 8>& main_frustum_corners,
+    const glm::vec3&                light_direction
+) -> Shadow_caster_silhouette;
+
+// Builds the inward-facing caster-cull filter planes for a convex receiver body
+// (given as a point hull), extruded toward the light. The body's silhouette as
+// seen along the light is the 2D convex hull of the hull points projected onto a
+// plane perpendicular to the light; each silhouette edge swept along the light is
+// a lateral side plane, and a single flat far cap (perpendicular to the light,
+// through the point furthest from the light) closes the away-from-light side. The
+// result bounds the extruded body and is open toward the light. Only hull.points
+// is used (triangle topology is not needed). Clears and refills out_planes,
+// leaving it empty when the body is degenerate (fewer than 3 points, or a
+// silhouette that collapses to a line - e.g. receivers edge-on to the light),
+// so the caller can fall back to a coarser body. When out_far_plane_hull is
+// non-null it receives the world-space silhouette polygon (the 2D hull lifted
+// back onto the far plane), in order, for visualization.
+void build_shadow_caster_cull_planes_from_hull(
+    const Convex_hull&      hull,
+    const glm::vec3&        light_direction,
+    std::vector<glm::vec4>& out_planes,
+    std::vector<glm::vec3>* out_far_plane_hull = nullptr
+);
+
+// Convex polyhedron formed by intersecting a set of inward-facing half-spaces
+// (the convex_polyhedron_from_planes() result below).
+class Convex_polyhedron
+{
+public:
+    std::vector<glm::vec3>                   vertices;      // plane-plane-plane intersections inside all half-spaces
+    std::vector<std::array<std::size_t, 2>>  edges;         // unique vertex index pairs
+    std::vector<std::vector<std::size_t>>    face_vertices; // one entry per input plane: its face's vertex indices, ordered CCW about the plane normal (empty when the plane has no bounded face)
+};
+
+// Intersects the inward-facing half-spaces `planes` (convention: point p is
+// inside a plane when dot(vec4{p, 1}, plane) >= 0, as for extract_frustum_planes())
+// into a convex polyhedron: vertices, edges, and one face polygon per input
+// plane. O(n^3) in the plane count, intended for small sets (frustum / shadow
+// volume). The intersection must be bounded for every plane to get a face; an
+// unbounded (open) set leaves the open planes' faces empty, so add a cap plane
+// first if a closed result is needed.
+[[nodiscard]] auto convex_polyhedron_from_planes(std::span<const glm::vec4> planes, float tolerance = 1e-3f) -> Convex_polyhedron;
 
 } // namespace erhe::math
