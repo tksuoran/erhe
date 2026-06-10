@@ -36,6 +36,7 @@ public:
     erhe::graphics::Reloadable_shader_stages brdf_slice;
     erhe::graphics::Reloadable_shader_stages sky;
     erhe::graphics::Reloadable_shader_stages grid;
+    erhe::graphics::Reloadable_shader_stages shadow_debug;
     //erhe::graphics::Reloadable_shader_stages points;
 
     // TODO remove - use variants

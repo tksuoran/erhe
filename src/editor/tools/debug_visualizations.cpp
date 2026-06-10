@@ -1,11 +1,14 @@
 #include "tools/debug_visualizations.hpp"
 
 #include "config/generated/debug_visualizations_settings.hpp"
+#include "config/generated/editor_settings_config.hpp"
 
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
 #include "app_rendering.hpp"
 #include "app_settings.hpp"
+#include "editor_log.hpp"
+#include "scene/shadow_fit_debug.hpp"
 #include "renderers/render_context.hpp"
 #include "renderers/programs.hpp"
 #include "rendergraph/shadow_render_node.hpp"
@@ -46,6 +49,7 @@
 #include "erhe_scene_renderer/texel_renderer.hpp"
 
 #include <imgui/imgui.h>
+#include <nlohmann/json.hpp>
 
 #if defined(ERHE_PHYSICS_LIBRARY_JOLT)
 #   include <Jolt/Jolt.h>
@@ -105,59 +109,6 @@ constexpr vec3 axis_z         { 0.0f,  0.0f, 1.0f};
 }
 
 }
-
-// Debug_visualizations::Debug_visualizations()
-// {
-// }
-// 
-// Debug_visualizations::~Debug_visualizations() noexcept
-// {
-// }
-
-#if 0
-Debug_visualizations::Debug_visualizations(
-    erhe::graphics::Device&                  graphics_device,
-    erhe::graphics::Command_buffer&          init_command_buffer,
-    erhe::imgui::Imgui_renderer&             imgui_renderer,
-    erhe::imgui::Imgui_windows&              imgui_windows,
-    erhe::scene_renderer::Program_interface& program_interface,
-    App_context&                             context,
-    App_message_bus&                         app_message_bus,
-    App_rendering&                           app_rendering,
-    Programs&                                /*programs*/,
-    const Debug_visualizations_settings&     settings
-)
-    : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Debug Visualizations", "debug_visualizations"}
-    , m_context{context}
-    , m_empty_vertex_input{graphics_device, erhe::graphics::Vertex_input_state_data{}}
-    , m_shadow_texel_renderer{std::make_unique<erhe::scene_renderer::Texel_renderer>(graphics_device, init_command_buffer, program_interface)}
-    , m_shadow_texel_pipeline{
-        graphics_device,
-        erhe::graphics::Base_render_pipeline_create_info{
-            .debug_label    = erhe::utility::Debug_label{"Shadow_debug"},
-            //.shader_stages  = programs.debug_shadow.shader_stages(),
-            .input_assembly = erhe::graphics::Input_assembly_state::triangle,
-            .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
-            .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled(graphics_device.get_reverse_depth())
-        }
-    }
-{
-    app_rendering.add(this);
-
-    read_config(settings);
-
-    m_hover_scene_view_subscription = app_message_bus.hover_scene_view.subscribe(
-        [&](Hover_scene_view_message& message) {
-            m_hover_scene_view = message.scene_view;
-        }
-    );
-    // Reverse-Z is static; the shadow-texel pipeline's depth state is baked from
-    // Device::get_reverse_depth() above, so there is no graphics-settings
-    // subscription to rebuild it.
-}
-
-Debug_visualizations::~Debug_visualizations() noexcept = default;
-#endif
 
 void Debug_visualizations::read_config(const Debug_visualizations_settings& settings)
 {
@@ -479,26 +430,83 @@ void Debug_visualizations::shadow_frustum_fit_visualization(const Render_context
 
     erhe::renderer::Primitive_renderer line_renderer = context.get({erhe::graphics::Primitive_type::line, 3, true, true});
     const auto& light_projections = shadow_render_node->get_light_projections();
-    for (const erhe::scene::Shadow_frustum_fit_debug_data& fit_debug : light_projections.fit_debug_data) {
-        if (!fit_debug.valid) {
+
+    // One-shot dump of the whole fit debug geometry (all lights) to the log,
+    // triggered by the imgui() button. Consumed here so it fires once.
+    if (m_shadow_fit_dump_requested) {
+        m_shadow_fit_dump_requested = false;
+        log_debug_visualization->info("Shadow fit debug dump:\n{}", dump_shadow_fit_debug(light_projections).dump(2));
+    }
+
+    const std::vector<erhe::scene::Light_projection_transforms>&    transforms     = light_projections.light_projection_transforms;
+    const std::vector<erhe::scene::Shadow_frustum_fit_debug_data>&  fit_debug_data = light_projections.fit_debug_data;
+
+    // The fit - and the per-caster affecting / culled classification - is per
+    // light, so visualize the single light selected in imgui(). Fall back to
+    // the first light with valid fit debug data when nothing is selected (or
+    // the selection has no valid fit this frame).
+    const std::shared_ptr<erhe::scene::Light> selected_light = m_shadow_fit_light.lock();
+    const erhe::scene::Shadow_frustum_fit_debug_data* fit_debug_ptr = nullptr;
+    const erhe::scene::Light*                         resolved_light = nullptr;
+    const std::size_t light_count = (transforms.size() < fit_debug_data.size()) ? transforms.size() : fit_debug_data.size();
+    for (std::size_t i = 0; i < light_count; ++i) {
+        if (!fit_debug_data[i].valid) {
             continue;
         }
+        if (selected_light && (transforms[i].light == selected_light.get())) {
+            fit_debug_ptr  = &fit_debug_data[i];
+            resolved_light = transforms[i].light;
+            break;
+        }
+        if (fit_debug_ptr == nullptr) {
+            fit_debug_ptr  = &fit_debug_data[i]; // first valid entry, used unless the selected light is found
+            resolved_light = transforms[i].light;
+        }
+    }
+    if (fit_debug_ptr == nullptr) {
+        return;
+    }
+    {
+        const erhe::scene::Shadow_frustum_fit_debug_data& fit_debug = *fit_debug_ptr;
 
-        // Per-caster world AABBs gathered for the fit (8 corners each,
-        // min corner first, max corner last)
-        if (m_settings.shadow_fit_casters) {
-            line_renderer.set_thickness(m_settings.shadow_fit_casters_width);
-            const std::vector<glm::vec3>& points = fit_debug.caster_aabb_points;
-            for (std::size_t i = 0, end = points.size() / 8; i < end; ++i) {
-                line_renderer.add_cube(glm::mat4{1.0f}, m_settings.shadow_fit_casters_color, points[(i * 8) + 0], points[(i * 8) + 7]);
+        // Casters: classify every visible shadow caster against the selected
+        // light's shadow caster volume F_shadow (the same test the fit applies
+        // to its gathered casters - erhe::math::aabb_in_convex_volume), tag the
+        // mesh with Item_flags::affects_shadow, and draw it in the affecting or
+        // culled color. shadow_volume_planes is empty when fit_to_casters did
+        // not run, in which case there is nothing to classify against.
+        if (m_settings.shadow_fit_casters && !fit_debug.shadow_volume_planes.empty()) {
+            const std::shared_ptr<Scene_root> scene_root = context.scene_view.get_scene_root();
+            if (scene_root) {
+                line_renderer.set_thickness(m_settings.shadow_fit_casters_width);
+                // Matches Shadow_renderer's shadow_filter (visible + shadow_cast).
+                const uint64_t require_bits = erhe::Item_flags::visible | erhe::Item_flags::shadow_cast;
+                for (erhe::scene::Mesh_layer* layer : scene_root->layers().mesh_layers()) {
+                    for (const std::shared_ptr<erhe::scene::Mesh>& mesh : layer->meshes) {
+                        if (!mesh || ((mesh->get_flag_bits() & require_bits) != require_bits)) {
+                            continue;
+                        }
+                        const erhe::math::Aabb aabb = mesh->get_aabb_world();
+                        if (!aabb.is_valid()) {
+                            continue;
+                        }
+                        const bool affects = erhe::math::aabb_in_convex_volume(fit_debug.shadow_volume_planes, aabb);
+                        mesh->set_flag_bits(erhe::Item_flags::affects_shadow, affects);
+                        line_renderer.add_cube(
+                            glm::mat4{1.0f},
+                            affects ? m_settings.shadow_fit_casters_color : m_settings.shadow_fit_casters_culled_color,
+                            aabb.min,
+                            aabb.max
+                        );
+                    }
+                }
             }
         }
 
-        // Convex hull around the caster bounds, before clipping to F_shadow
-        if (m_settings.shadow_fit_caster_hull) {
-            const glm::vec4 color = m_settings.shadow_fit_caster_hull_color;
-            const float     width = m_settings.shadow_fit_caster_hull_width;
-            const erhe::math::Convex_hull& hull = fit_debug.caster_hull;
+        // Draws a convex hull as its unique triangle edges (each undirected
+        // edge appears twice in the triangle list; the index-order tests keep
+        // one of the two).
+        const auto draw_hull_edges = [&line_renderer](const erhe::math::Convex_hull& hull, const glm::vec4& color, const float width) {
             for (const std::array<std::size_t, 3>& triangle : hull.triangle_indices) {
                 const std::size_t i0 = triangle[0];
                 const std::size_t i1 = triangle[1];
@@ -513,13 +521,19 @@ void Debug_visualizations::shadow_frustum_fit_visualization(const Render_context
                     line_renderer.add_line(color, width, hull.points[i2], color, width, hull.points[i0]);
                 }
             }
+        };
+
+        // Convex hull around the caster bounds, before clipping to F_shadow
+        if (m_settings.shadow_fit_caster_hull) {
+            draw_hull_edges(fit_debug.caster_hull, m_settings.shadow_fit_caster_hull_color, m_settings.shadow_fit_caster_hull_width);
         }
 
-        // Receiver volume (main camera view frustum) used by the fit
-        if (m_settings.shadow_fit_receivers && fit_debug.receiver_corners_valid) {
-            const glm::vec4 color = m_settings.shadow_fit_receivers_color;
-            const float     width = m_settings.shadow_fit_receivers_width;
-            const std::array<glm::vec3, 8>& c = fit_debug.receiver_corners;
+        // Step 1: view frustum (F_main, truncated to the shadow range) - the
+        // region shadow receivers are filtered against.
+        if (m_settings.shadow_fit_view_frustum && fit_debug.view_frustum_corners_valid) {
+            const glm::vec4 color = m_settings.shadow_fit_view_frustum_color;
+            const float     width = m_settings.shadow_fit_view_frustum_width;
+            const std::array<glm::vec3, 8>& c = fit_debug.view_frustum_corners;
             // Corner order from erhe::math::extract_frustum_corners()
             constexpr std::array<std::array<std::size_t, 2>, 12> edges{{
                 {0, 1}, {1, 3}, {3, 2}, {2, 0}, // near rectangle
@@ -531,11 +545,170 @@ void Debug_visualizations::shadow_frustum_fit_visualization(const Render_context
             }
         }
 
-        // Shadow caster volume (F_shadow) planes
-        if (m_settings.shadow_fit_volume_planes) {
-            line_renderer.set_thickness(m_settings.shadow_fit_volume_planes_width);
-            for (const glm::vec4& plane : fit_debug.shadow_volume_planes) {
-                line_renderer.add_plane(m_settings.shadow_fit_volume_planes_color, plane);
+        // Step 2: shadow receivers - every visible content-mesh world AABB,
+        // colored by whether it passes the view frustum filter (and so
+        // contributes to the receiver-aware caster cull, fit_to_receivers) or
+        // fails it. This is the same erhe::math::aabb_in_frustum filter
+        // build_receiver_cull_planes applies, evaluated here independent of
+        // whether fit_to_receivers is enabled.
+        if (m_settings.shadow_fit_receivers && fit_debug.view_frustum_corners_valid) {
+            const std::shared_ptr<Scene_root> scene_root = context.scene_view.get_scene_root();
+            if (scene_root) {
+                erhe::scene::Mesh_layer* const content_layer = scene_root->layers().content();
+                if (content_layer != nullptr) {
+                    line_renderer.set_thickness(m_settings.shadow_fit_receivers_width);
+                    for (const std::shared_ptr<erhe::scene::Mesh>& mesh : content_layer->meshes) {
+                        if (!mesh || ((mesh->get_flag_bits() & erhe::Item_flags::visible) == 0)) {
+                            continue;
+                        }
+                        const erhe::math::Aabb aabb = mesh->get_aabb_world();
+                        if (!aabb.is_valid()) {
+                            continue;
+                        }
+                        const bool passes = erhe::math::aabb_in_frustum(
+                            fit_debug.view_frustum_planes, fit_debug.view_frustum_corners, aabb
+                        );
+                        line_renderer.add_cube(
+                            glm::mat4{1.0f},
+                            passes ? m_settings.shadow_fit_receivers_color : m_settings.shadow_fit_receivers_culled_color,
+                            aabb.min,
+                            aabb.max
+                        );
+                    }
+                }
+            }
+        }
+
+        // Receiver hull: convex hull of the receivers that intersect the view
+        // frustum - the body extruded toward the light into the caster cull
+        // volume (the receiver analogue of the caster hull). Drawn unclipped
+        // (the raw receiver cluster hull) and/or clipped to the view frustum
+        // (mirroring build_receiver_cull_planes: receivers only matter where
+        // they are actually visible). Built from the same passing receivers as
+        // the receiver boxes above, independent of whether fit_to_receivers is
+        // enabled.
+        if ((m_settings.shadow_fit_receiver_hull || m_settings.shadow_fit_receiver_hull_unclipped) && fit_debug.view_frustum_corners_valid) {
+            const std::shared_ptr<Scene_root> scene_root = context.scene_view.get_scene_root();
+            if (scene_root) {
+                erhe::scene::Mesh_layer* const content_layer = scene_root->layers().content();
+                if (content_layer != nullptr) {
+                    std::vector<glm::vec3> receiver_points;
+                    for (const std::shared_ptr<erhe::scene::Mesh>& mesh : content_layer->meshes) {
+                        if (!mesh || ((mesh->get_flag_bits() & erhe::Item_flags::visible) == 0)) {
+                            continue;
+                        }
+                        const erhe::math::Aabb aabb = mesh->get_aabb_world();
+                        if (!aabb.is_valid() ||
+                            !erhe::math::aabb_in_frustum(fit_debug.view_frustum_planes, fit_debug.view_frustum_corners, aabb)) {
+                            continue;
+                        }
+                        const glm::vec3& a = aabb.min;
+                        const glm::vec3& b = aabb.max;
+                        receiver_points.push_back(glm::vec3{a.x, a.y, a.z});
+                        receiver_points.push_back(glm::vec3{a.x, a.y, b.z});
+                        receiver_points.push_back(glm::vec3{a.x, b.y, a.z});
+                        receiver_points.push_back(glm::vec3{a.x, b.y, b.z});
+                        receiver_points.push_back(glm::vec3{b.x, a.y, a.z});
+                        receiver_points.push_back(glm::vec3{b.x, a.y, b.z});
+                        receiver_points.push_back(glm::vec3{b.x, b.y, a.z});
+                        receiver_points.push_back(glm::vec3{b.x, b.y, b.z});
+                    }
+                    if (receiver_points.size() >= 4) {
+                        const erhe::math::Convex_hull hull = erhe::math::calculate_bounding_convex_hull(receiver_points);
+                        if (m_settings.shadow_fit_receiver_hull_unclipped) {
+                            draw_hull_edges(hull, m_settings.shadow_fit_receiver_hull_unclipped_color, m_settings.shadow_fit_receiver_hull_unclipped_width);
+                        }
+                        if (m_settings.shadow_fit_receiver_hull) {
+                            // Clip the receiver hull to the view frustum.
+                            // clip_convex_hull_points_to_frustum computes the
+                            // complete convex intersection, then the clipped
+                            // point set is re-hulled.
+                            std::vector<glm::vec3> clipped = erhe::math::clip_convex_hull_points_to_frustum(hull, fit_debug.view_frustum_planes, fit_debug.view_frustum_corners);
+                            if (clipped.size() >= 4) {
+                                const erhe::math::Convex_hull clipped_hull = erhe::math::calculate_bounding_convex_hull(clipped);
+                                draw_hull_edges(clipped_hull, m_settings.shadow_fit_receiver_hull_color, m_settings.shadow_fit_receiver_hull_width);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Caster-cull volume planes: the convex polyhedron those half-spaces
+        // bound. The volume is open toward the light (its light-facing cap is
+        // the one missing plane), so a synthetic cap one shadow range beyond
+        // the frustum toward the light is added only to bound it for display;
+        // the cap's own orientation indicator is not drawn. Drawn as the
+        // polyhedron's intersection edges and vertices, plus an add_plane()
+        // orientation indicator at the center of each real plane's face.
+        if (m_settings.shadow_fit_volume_planes &&
+            !fit_debug.shadow_volume_planes.empty() &&
+            fit_debug.view_frustum_corners_valid &&
+            (resolved_light != nullptr) &&
+            (resolved_light->get_node() != nullptr))
+        {
+            const glm::vec4 color = m_settings.shadow_fit_volume_planes_color;
+            const float     width = m_settings.shadow_fit_volume_planes_width;
+
+            const glm::vec3 light_direction = glm::normalize(glm::vec3{resolved_light->get_node()->direction_in_world()});
+            const float     shadow_range    = light_projections.parameters.view_camera->get_shadow_range();
+            float s_max = glm::dot(fit_debug.view_frustum_corners[0], light_direction);
+            for (const glm::vec3& corner : fit_debug.view_frustum_corners) {
+                const float s = glm::dot(corner, light_direction);
+                if (s > s_max) {
+                    s_max = s;
+                }
+            }
+
+            const std::size_t      real_plane_count = fit_debug.shadow_volume_planes.size();
+            std::vector<glm::vec4> capped_planes    = fit_debug.shadow_volume_planes;
+            capped_planes.push_back(glm::vec4{-light_direction, s_max + shadow_range}); // synthetic cap
+
+            const erhe::math::Convex_polyhedron polyhedron = erhe::math::convex_polyhedron_from_planes(capped_planes);
+
+            line_renderer.set_thickness(width);
+            for (const std::array<std::size_t, 2>& edge : polyhedron.edges) {
+                line_renderer.add_line(color, width, polyhedron.vertices[edge[0]], color, width, polyhedron.vertices[edge[1]]);
+            }
+
+            const float marker = 0.05f * shadow_range;
+            for (const glm::vec3& v : polyhedron.vertices) {
+                line_renderer.add_line(color, width, v - marker * axis_x, color, width, v + marker * axis_x);
+                line_renderer.add_line(color, width, v - marker * axis_y, color, width, v + marker * axis_y);
+                line_renderer.add_line(color, width, v - marker * axis_z, color, width, v + marker * axis_z);
+            }
+
+            // Orientation indicator at each real plane's face center (skip the
+            // synthetic cap, the last plane).
+            for (std::size_t p = 0; (p < real_plane_count) && (p < polyhedron.face_vertices.size()); ++p) {
+                const std::vector<std::size_t>& face = polyhedron.face_vertices[p];
+                if (face.size() < 3) {
+                    continue;
+                }
+                glm::vec3 centroid{0.0f};
+                for (const std::size_t vi : face) {
+                    centroid += polyhedron.vertices[vi];
+                }
+                centroid /= static_cast<float>(face.size());
+                line_renderer.add_plane_indicator(color, centroid, glm::vec3{fit_debug.shadow_volume_planes[p]});
+            }
+        }
+
+        // Far plane hull: the receiver silhouette (the 2D hull of the clipped
+        // receiver hull projected along the light onto the flat far cap, lifted
+        // back to 3D) the receiver caster-cull volume side planes are swept from.
+        // Drawn directly from the stored polygon (not via
+        // convex_polyhedron_from_planes), so it shows the silhouette the fit
+        // actually built, independent of the volume reconstruction.
+        if (m_settings.shadow_fit_far_plane_hull && (fit_debug.receiver_far_plane_hull.size() >= 2)) {
+            const glm::vec4   color = m_settings.shadow_fit_far_plane_hull_color;
+            const float       width = m_settings.shadow_fit_far_plane_hull_width;
+            const std::size_t count = fit_debug.receiver_far_plane_hull.size();
+            for (std::size_t i = 0; i < count; ++i) {
+                line_renderer.add_line(
+                    color, width, fit_debug.receiver_far_plane_hull[i],
+                    color, width, fit_debug.receiver_far_plane_hull[(i + 1) % count]
+                );
             }
         }
 
@@ -1641,24 +1814,26 @@ void Debug_visualizations::label(
     context.app_context.text_renderer->print(p3_in_window_z_negated, text_color, label_text);
 }
 
-#if 0
 void Debug_visualizations::shadow_debug(const Render_context& render_context)
 {
     const std::shared_ptr<Scene_root>& scene_root = render_context.scene_view.get_scene_root();
     const Scene_layers&                layers     = scene_root->layers();
     ERHE_VERIFY(render_context.render_pass != nullptr);
+    // The Texel_renderer is a single shared instance owned by Editor; the
+    // shadow_debug shader program is owned by Programs. Both are reached via
+    // App_context (Debug_visualizations is per-view and default-constructed, so
+    // it cannot own either).
     erhe::scene_renderer::Texel_renderer::Render_parameters parameters{
         .render_encoder    = *render_context.encoder,
-        .pipeline          = m_shadow_texel_pipeline,
+        .shader_stages     = &render_context.app_context.programs->shadow_debug.shader_stages,
         .render_pass       = *render_context.render_pass,
         .camera            = render_context.camera,
         .light_projections = render_context.scene_view.get_light_projections(),
         .lights            = layers.light()->lights,
         .viewport          = render_context.viewport
     };
-    m_shadow_texel_renderer->render(parameters);
+    render_context.app_context.texel_renderer->render(parameters);
 }
-#endif
 
 void Debug_visualizations::world_axes_visualization(const Render_context& render_context)
 {
@@ -1686,11 +1861,9 @@ void Debug_visualizations::render(const Render_context& context)
     // encoder phase for renderables that issue draw calls. Everything below
     // generates lines / labels and must run only in the CPU phase.
     if (context.encoder != nullptr) {
-#if 0
         if (m_settings.shadow_debug) {
             shadow_debug(context);
         }
-#endif
         return;
     }
 
@@ -1805,7 +1978,7 @@ void Debug_visualizations::make_combo(const char* label, Visualization_mode& vis
     );
 }
 
-void Debug_visualizations::imgui(Scene_view& scene_view)
+void Debug_visualizations::imgui(Scene_view& scene_view, App_context& app_context)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -1848,11 +2021,77 @@ void Debug_visualizations::imgui(Scene_view& scene_view)
                 ImGui::DragFloat("##w", width, 0.1f, -100.0f, 100.0f, "%.1f");
             }
         };
+        const std::shared_ptr<Scene_root> shadow_fit_scene_root = scene_view.get_scene_root();
         p.push_group("Shadow Fit", ImGuiTreeNodeFlags_None);
-        p.add_entry("Casters",          [this, shadow_fit_entry](){ shadow_fit_entry(&m_settings.shadow_fit_casters,          &m_settings.shadow_fit_casters_color,          &m_settings.shadow_fit_casters_width); });
+        // Master switch for the fit's debug-data collection
+        // (Shadow_frustum_fit_settings::collect_debug; the same setting as in
+        // the Settings window, edited live). Every element below renders from
+        // the collected data, so they are all empty while this is off. Keep it
+        // off when profiling: with collection off the fit performs no
+        // debug-related work at all.
+        Editor_settings_config* const editor_settings = app_context.editor_settings;
+        if (editor_settings != nullptr) {
+            p.add_entry("Collect Debug Data", [editor_settings]() {
+                ImGui::Checkbox("##", &editor_settings->shadow_frustum_fit.collect_debug);
+            });
+        }
+        // Dump the current view's fit debug geometry once to the log (also
+        // available over MCP as get_shadow_fit_debug). Needs Collect Debug on.
+        p.add_entry("Dump", [this]() {
+            if (ImGui::Button("Dump to Log")) {
+                m_shadow_fit_dump_requested = true;
+            }
+        });
+        // The fit and its caster classification target a single light.
+        p.add_entry("Fit Light", [this, shadow_fit_scene_root]() {
+            const std::shared_ptr<erhe::scene::Light> current = m_shadow_fit_light.lock();
+            ImGui::SetNextItemWidth(180.0f);
+            if (ImGui::BeginCombo("##fit_light", current ? current->get_name().c_str() : "(first shadow light)")) {
+                if (shadow_fit_scene_root) {
+                    for (const std::shared_ptr<erhe::scene::Light>& light : shadow_fit_scene_root->layers().light()->lights) {
+                        if (!light) {
+                            continue;
+                        }
+                        const bool is_selected = (light == current);
+                        if (ImGui::Selectable(light->get_name().c_str(), is_selected)) {
+                            m_shadow_fit_light = light;
+                        }
+                        if (is_selected) {
+                            ImGui::SetItemDefaultFocus();
+                        }
+                    }
+                }
+                ImGui::EndCombo();
+            }
+        });
+        // Casters: enable, affecting color, culled color, line width.
+        p.add_entry("Casters", [this]() {
+            ImGui::Checkbox("##v", &m_settings.shadow_fit_casters);
+            ImGui::SameLine();
+            ImGui::ColorEdit4("##affecting", &m_settings.shadow_fit_casters_color.x,        ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_Float);
+            ImGui::SameLine();
+            ImGui::ColorEdit4("##culled",    &m_settings.shadow_fit_casters_culled_color.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_Float);
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(80.0f);
+            ImGui::DragFloat("##w", &m_settings.shadow_fit_casters_width, 0.1f, -100.0f, 100.0f, "%.1f");
+        });
         p.add_entry("Caster Hull",      [this, shadow_fit_entry](){ shadow_fit_entry(&m_settings.shadow_fit_caster_hull,      &m_settings.shadow_fit_caster_hull_color,      &m_settings.shadow_fit_caster_hull_width); });
-        p.add_entry("Receivers",        [this, shadow_fit_entry](){ shadow_fit_entry(&m_settings.shadow_fit_receivers,        &m_settings.shadow_fit_receivers_color,        &m_settings.shadow_fit_receivers_width); });
+        p.add_entry("View Frustum",     [this, shadow_fit_entry](){ shadow_fit_entry(&m_settings.shadow_fit_view_frustum,     &m_settings.shadow_fit_view_frustum_color,     &m_settings.shadow_fit_view_frustum_width); });
+        // Receivers: enable, passing color, culled color, line width.
+        p.add_entry("Receivers", [this]() {
+            ImGui::Checkbox("##v", &m_settings.shadow_fit_receivers);
+            ImGui::SameLine();
+            ImGui::ColorEdit4("##pass",   &m_settings.shadow_fit_receivers_color.x,        ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_Float);
+            ImGui::SameLine();
+            ImGui::ColorEdit4("##culled", &m_settings.shadow_fit_receivers_culled_color.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_Float);
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(80.0f);
+            ImGui::DragFloat("##w", &m_settings.shadow_fit_receivers_width, 0.1f, -100.0f, 100.0f, "%.1f");
+        });
+        p.add_entry("Receiver Hull Unclipped", [this, shadow_fit_entry](){ shadow_fit_entry(&m_settings.shadow_fit_receiver_hull_unclipped, &m_settings.shadow_fit_receiver_hull_unclipped_color, &m_settings.shadow_fit_receiver_hull_unclipped_width); });
+        p.add_entry("Receiver Hull Clipped",   [this, shadow_fit_entry](){ shadow_fit_entry(&m_settings.shadow_fit_receiver_hull,           &m_settings.shadow_fit_receiver_hull_color,           &m_settings.shadow_fit_receiver_hull_width); });
         p.add_entry("Volume Planes",    [this, shadow_fit_entry](){ shadow_fit_entry(&m_settings.shadow_fit_volume_planes,    &m_settings.shadow_fit_volume_planes_color,    &m_settings.shadow_fit_volume_planes_width); });
+        p.add_entry("Far Plane Hull",   [this, shadow_fit_entry](){ shadow_fit_entry(&m_settings.shadow_fit_far_plane_hull,   &m_settings.shadow_fit_far_plane_hull_color,   &m_settings.shadow_fit_far_plane_hull_width); });
         p.add_entry("Fit Points",       [this, shadow_fit_entry](){ shadow_fit_entry(&m_settings.shadow_fit_points,           &m_settings.shadow_fit_points_color,           &m_settings.shadow_fit_points_width); });
         p.add_entry("Light Plane Hull", [this, shadow_fit_entry](){ shadow_fit_entry(&m_settings.shadow_fit_light_plane_hull, &m_settings.shadow_fit_light_plane_hull_color, &m_settings.shadow_fit_light_plane_hull_width); });
         p.add_entry("OBB",              [this, shadow_fit_entry](){ shadow_fit_entry(nullptr,                        &m_settings.shadow_fit_obb_color,              &m_settings.shadow_fit_obb_width); });

@@ -327,6 +327,8 @@ erhe_target_sources_grouped(
     scene/scene_serialization.hpp
     scene/scene_view.cpp
     scene/scene_view.hpp
+    scene/shadow_fit_debug.cpp
+    scene/shadow_fit_debug.hpp
     scene/viewport_scene_view.cpp
     scene/viewport_scene_view.hpp
     scene/viewport_scene_views.cpp
@@ -556,6 +558,10 @@ erhe_codegen_generate(
         "${_config_defs}/window_config.py"
         "${_config_defs}/imgui_settings_config.py"
         "${_config_defs}/icon_settings_config.py"
+        "${_config_defs}/shadow_filter_mode.py"
+        "${_config_defs}/shadow_bias_mode.py"
+        "${_config_defs}/shadow_cull_mode.py"
+        "${_config_defs}/shadow_technique_mode.py"
         "${_config_defs}/graphics_preset_entry.py"
         "${_config_defs}/graphics_presets_config.py"
         "${_config_defs}/fly_camera_config.py"
@@ -637,6 +643,14 @@ set(_config_sources
     ${_config_out}/icon_settings_config.hpp
     ${_config_out}/icon_settings_config_serialization.hpp
     ${_config_out}/icon_settings_config.cpp
+    ${_config_out}/shadow_filter_mode.hpp
+    ${_config_out}/shadow_filter_mode.cpp
+    ${_config_out}/shadow_bias_mode.hpp
+    ${_config_out}/shadow_bias_mode.cpp
+    ${_config_out}/shadow_cull_mode.hpp
+    ${_config_out}/shadow_cull_mode.cpp
+    ${_config_out}/shadow_technique_mode.hpp
+    ${_config_out}/shadow_technique_mode.cpp
     ${_config_out}/graphics_preset_entry.hpp
     ${_config_out}/graphics_preset_entry_serialization.hpp
     ${_config_out}/graphics_preset_entry.cpp

@@ -3,6 +3,7 @@
 #include "app_context.hpp"
 #include "app_rendering.hpp"
 #include "app_scenes.hpp"
+#include "app_settings.hpp"
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
 #include "preview/brush_preview.hpp"
@@ -58,6 +59,22 @@ void prewarm_all(
     ) {
         return;
     }
+
+    // Prewarm the shadow filtering variant the runtime forward path will use
+    // by default (the active graphics preset's Shadow_filter_mode); switching
+    // modes at runtime compiles the other variant once, on demand.
+    const uint32_t shadow_filter = (context.app_settings != nullptr)
+        ? static_cast<uint32_t>(context.app_settings->graphics.current_graphics_preset.shadow_filter)
+        : 0u;
+    const uint32_t shadow_bias = (context.app_settings != nullptr)
+        ? static_cast<uint32_t>(context.app_settings->graphics.current_graphics_preset.shadow_bias)
+        : 1u;
+    const uint32_t shadow_technique = (context.app_settings != nullptr)
+        ? static_cast<uint32_t>(context.app_settings->graphics.current_graphics_preset.shadow_technique)
+        : 0u;
+    const uint32_t shadow_depth_bits = (context.app_settings != nullptr)
+        ? static_cast<uint32_t>(context.app_settings->graphics.current_graphics_preset.shadow_depth_bits)
+        : 0u;
 
     // Collect the view counts the runtime forward path will encounter.
     // Single-view (view_count = 0, matches base.views.size() == 1 at runtime) is
@@ -158,7 +175,11 @@ void prewarm_all(
                 .light_partition               = partition,
                 .shader_key_force_enable_mask  = data.shader_key_force_enable_mask,
                 .shader_key_force_disable_mask = data.shader_key_force_disable_mask,
-                .shader_debug                  = erhe::scene_renderer::Shader_debug::none
+                .shader_debug                  = erhe::scene_renderer::Shader_debug::none,
+                .shadow_filter                 = shadow_filter,
+                .shadow_bias                   = shadow_bias,
+                .shadow_technique              = shadow_technique,
+                .shadow_depth_bits             = shadow_depth_bits
             };
             forward_pipeline_warmups += context.forward_renderer->prewarm_standard_variants(params);
         }
@@ -180,15 +201,22 @@ void prewarm_all(
             shadow_mesh_spans.push_back(controller_layer->meshes);
         }
 
+        // Warm only the shadow caster pipelines for the active cull mode (the
+        // active graphics preset's Shadow_cull_mode); switching modes at
+        // runtime compiles the other modes' pipelines once, on demand.
+        const erhe::scene_renderer::Shadow_cull_mode shadow_cull_mode = (context.app_settings != nullptr)
+            ? static_cast<erhe::scene_renderer::Shadow_cull_mode>(context.app_settings->graphics.current_graphics_preset.shadow_cull_mode)
+            : erhe::scene_renderer::Shadow_cull_mode::cull_front;
+
         if (shadow_nodes.empty()) {
-            context.shadow_renderer->prewarm_pipelines({}, shadow_mesh_spans);
+            context.shadow_renderer->prewarm_pipelines({}, shadow_mesh_spans, shadow_cull_mode);
             ++shadow_calls;
         } else {
             for (const std::shared_ptr<Shadow_render_node>& shadow_node : shadow_nodes) {
                 if (!shadow_node) {
                     continue;
                 }
-                context.shadow_renderer->prewarm_pipelines(shadow_node->get_render_passes(), shadow_mesh_spans);
+                context.shadow_renderer->prewarm_pipelines(shadow_node->get_render_passes(), shadow_mesh_spans, shadow_cull_mode);
                 ++shadow_calls;
             }
         }

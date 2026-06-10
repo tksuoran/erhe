@@ -414,7 +414,7 @@ public:
             for (const bool button_down : m_input_state->mouse_button) {
                 any_mouse_button_down = any_mouse_button_down || button_down;
             }
-            m_app_settings.settings_store().update(!any_mouse_button_down);
+            m_app_settings.update(*m_app_message_bus.get(), !any_mouse_button_down);
         }
 
         // - Apply all command bindings (OpenXR bindings were already executed above)
@@ -1122,6 +1122,17 @@ public:
                 );
             }
             ERHE_TASK_FOOTER( .name("Shadow_renderer") );
+
+            ERHE_TASK_HEADER(texel_renderer_task)
+            {
+                ERHE_GET_GL_CONTEXT
+                m_texel_renderer = std::make_unique<erhe::scene_renderer::Texel_renderer>(
+                    *m_graphics_device.get(),
+                    *m_app_context.current_command_buffer,
+                    *m_program_interface.get()
+                );
+            }
+            ERHE_TASK_FOOTER( .name("Texel_renderer") );
 
             ERHE_TASK_HEADER(content_wide_line_renderer_task)
             {
@@ -2166,6 +2177,7 @@ public:
         m_app_context.text_renderer            = m_text_renderer         .get();
         m_app_context.forward_renderer         = m_forward_renderer      .get();
         m_app_context.shadow_renderer          = m_shadow_renderer       .get();
+        m_app_context.texel_renderer           = m_texel_renderer        .get();
         m_app_context.shader_variant_cache     = m_shader_variant_cache  .get();
         m_app_context.context_window           = m_window                .get();
         m_app_context.brdf_slice               = m_brdf_slice            .get();
@@ -2485,9 +2497,7 @@ public:
                 m_close_requested = true;
             }
 
-#if defined(ERHE_GRAPHICS_API_OPENGL)
             ERHE_PROFILE_FRAME_END
-#endif // TODO
         }
         m_run_stopped = true;
     }
@@ -2554,6 +2564,7 @@ public:
     std::unique_ptr<Programs                              >           m_programs;
     std::unique_ptr<erhe::scene_renderer::Forward_renderer>           m_forward_renderer;
     std::unique_ptr<erhe::scene_renderer::Shadow_renderer >           m_shadow_renderer;
+    std::unique_ptr<erhe::scene_renderer::Texel_renderer >            m_texel_renderer;
     std::unique_ptr<erhe::scene_renderer::Mesh_memory     >           m_mesh_memory;
     std::unique_ptr<erhe::scene_renderer::Content_wide_line_interface> m_content_wide_line_interface;
     std::unique_ptr<erhe::scene_renderer::Content_wide_line_renderer>  m_content_wide_line_renderer;

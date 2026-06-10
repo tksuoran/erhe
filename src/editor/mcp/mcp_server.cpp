@@ -1,5 +1,6 @@
 #include "mcp/mcp_server.hpp"
 #include "app_context.hpp"
+#include "app_rendering.hpp"
 #include "app_scenes.hpp"
 #include "app_settings.hpp"
 #include "brushes/brush.hpp"
@@ -11,8 +12,12 @@
 #include "operations/operation_stack.hpp"
 #include "erhe_math/math_util.hpp"
 #include "editor_log.hpp"
+#include "rendergraph/shadow_render_node.hpp"
 #include "scene/scene_root.hpp"
+#include "scene/shadow_fit_debug.hpp"
 #include "tools/selection_tool.hpp"
+
+#include "erhe_scene_renderer/light_buffer.hpp"
 
 #include "erhe_commands/command.hpp"
 #include "erhe_commands/commands.hpp"
@@ -518,6 +523,7 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "get_selection")       result = query_selection       (req->arguments);
         else if (req->tool_name == "get_undo_redo_stack") result = query_undo_redo_stack (req->arguments);
         else if (req->tool_name == "get_async_status")   result = query_async_status    (req->arguments);
+        else if (req->tool_name == "get_shadow_fit_debug")result = query_shadow_fit_debug(req->arguments);
         else if (req->tool_name == "select_items")       result = action_select_items   (req->arguments);
         else if (req->tool_name == "place_brush")        result = action_place_brush    (req->arguments);
         else if (req->tool_name == "toggle_physics")     result = action_toggle_physics (req->arguments);
@@ -555,6 +561,7 @@ void Mcp_server::refresh_tool_list()
     m_tool_infos.push_back({"get_selection",        "Get currently selected items",                          schema_no_args()});
     m_tool_infos.push_back({"get_undo_redo_stack", "Get undo/redo operation stacks",                       schema_no_args()});
     m_tool_infos.push_back({"get_async_status",   "Get pending/running async operation counts",          schema_no_args()});
+    m_tool_infos.push_back({"get_shadow_fit_debug","Dump directional shadow frustum fit debug geometry per shadow node: F_shadow planes, their bounded face quads (the truncated view-frustum faces caster AABBs are tested against), and receiver frustum corners. Needs the Shadow Fit 'Collect Debug' setting enabled.", schema_no_args()});
     m_tool_infos.push_back({"select_items",        "Select items by ID (scene nodes, materials, etc.)",   {
         {"type", "object"},
         {"properties", {
@@ -961,6 +968,30 @@ auto Mcp_server::query_scene_lights(const json& args) -> std::string
     }
 
     return make_json_content({{"lights", lights}}).dump();
+}
+
+auto Mcp_server::query_shadow_fit_debug(const json& args) -> std::string
+{
+    static_cast<void>(args);
+    if (m_context.app_rendering == nullptr) {
+        json r = make_text_content("App_rendering not available");
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    const std::vector<std::shared_ptr<Shadow_render_node>>& shadow_nodes = m_context.app_rendering->get_all_shadow_nodes();
+    json nodes = json::array();
+    for (std::size_t i = 0; i < shadow_nodes.size(); ++i) {
+        const std::shared_ptr<Shadow_render_node>& node = shadow_nodes[i];
+        if (!node) {
+            continue;
+        }
+        json node_json = dump_shadow_fit_debug(node->get_light_projections());
+        node_json["shadow_node_index"] = i;
+        nodes.push_back(node_json);
+    }
+
+    return make_json_content({{"shadow_nodes", nodes}}).dump();
 }
 
 auto Mcp_server::query_scene_materials(const json& args) -> std::string

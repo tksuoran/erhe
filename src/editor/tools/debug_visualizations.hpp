@@ -5,8 +5,6 @@
 
 #include "config/generated/debug_visualizations_settings.hpp"
 
-#include "erhe_graphics/render_pipeline.hpp"
-#include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_imgui/imgui_window.hpp"
 #include "erhe_renderer/generated/visualization_mode.hpp"
 #include "app_message.hpp"
@@ -27,7 +25,6 @@ namespace erhe::scene {
 }
 namespace erhe::scene_renderer {
     class Program_interface;
-    class Texel_renderer;
 }
 
 namespace editor {
@@ -56,13 +53,18 @@ public:
     // Implements Renderable
     void render(const Render_context& context) override;
 
-    void imgui(Scene_view& scene_view);
+    void imgui(Scene_view& scene_view, App_context& app_context);
 
     // Whole-struct copy in / out of m_settings. Persistence is owned by
     // Scene_view, whose collect callback (registered with
     // Editor_settings_store) calls write_config.
     void read_config (const Debug_visualizations_settings& settings);
     void write_config(Debug_visualizations_settings& settings) const;
+
+    // True when the shadow-texel visualization is enabled. The viewport uses
+    // this to insert a vertex-stage shadow-map sync barrier before its render
+    // pass, since Texel_renderer samples the shadow map in the vertex stage.
+    [[nodiscard]] auto is_shadow_debug_enabled() const -> bool { return m_settings.shadow_debug; }
 
 private:
     [[nodiscard]] auto get_selected_camera(const Render_context& render_context) -> std::shared_ptr<erhe::scene::Camera>;
@@ -77,10 +79,7 @@ private:
         glm::vec4                            half_light_color{0};
     };
 
-#if 0
-    // TODO Fix
     void shadow_debug            (const Render_context& render_context);
-#endif
     void world_axes_visualization(const Render_context& render_context);
 
     void mesh_visualization(const Render_context& render_context, erhe::scene::Mesh* mesh);
@@ -125,13 +124,18 @@ private:
     // Live-only tuning knob, not persisted.
     float m_selection_node_axis_width{2.0f};
 
-    Property_editor m_property_editor;
+    // Light the shadow frustum fit visualization targets (the fit and its
+    // caster affecting/culled classification are per light). Live-only
+    // selection, chosen in imgui(); defaults to the first light with valid
+    // fit debug data.
+    std::weak_ptr<erhe::scene::Light> m_shadow_fit_light;
 
-#if 0 // Shadow debug / Texel_renderer is currently broken
-    erhe::graphics::Vertex_input_state                    m_empty_vertex_input;
-    std::unique_ptr<erhe::scene_renderer::Texel_renderer> m_shadow_texel_renderer;
-    erhe::graphics::Base_render_pipeline                  m_shadow_texel_pipeline;
-#endif
+    // Set by the "Dump Shadow Fit to Log" button; consumed once on the next
+    // shadow_frustum_fit_visualization() so the dump is emitted a single time
+    // rather than every frame.
+    bool m_shadow_fit_dump_requested{false};
+
+    Property_editor m_property_editor;
 };
 
 }

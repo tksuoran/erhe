@@ -27,6 +27,14 @@ public:
     void apply_limits                 (Graphics_preset_entry& graphics_preset);
     void select_active_graphics_preset(App_message_bus& app_message_bus);
 
+    // Per-frame: auto-apply the active preset (sync it into
+    // current_graphics_preset and broadcast a Graphics_settings_message on
+    // change) and auto-save the preset file when the list changes. allow_save
+    // is false while a mouse button is held so a slider drag coalesces into a
+    // single write. Mirrors Editor_settings_store::update(); the first call
+    // records the baseline without writing.
+    void update                       (App_message_bus& app_message_bus, bool openxr, bool allow_save);
+
     Graphics_preset_entry              current_graphics_preset;
     std::vector<Graphics_preset_entry> graphics_presets;
     std::vector<const char*>           msaa_sample_count_entry_s_strings;
@@ -34,6 +42,12 @@ public:
     std::vector<int>                   msaa_sample_count_entry_values;
     int                                max_shadow_resolution{4};
     int                                max_depth_layers{1};
+
+private:
+    // Auto-save bookkeeping for graphics_presets.json (mirrors
+    // Editor_settings_store's last-saved-state comparison).
+    bool                               m_presets_baseline_initialized{false};
+    std::string                        m_last_saved_presets;
 };
 
 // The editor's settings root: owns Editor_settings_store (which owns the
@@ -52,6 +66,11 @@ public:
     App_settings();
 
     void apply_limits(erhe::graphics::Device& instance, App_message_bus& message_bus, float window_scale_factor);
+
+    // Per-frame settings tick: autosaves editor_settings.json (via the store)
+    // and auto-applies + auto-saves the graphics presets. allow_save is false
+    // while a mouse button is held so drags coalesce into a single write.
+    void update(App_message_bus& app_message_bus, bool allow_save);
 
     // Hydrates live state from the loaded config and the graphics presets
     // file. Called once at startup (after the headset.openxr override

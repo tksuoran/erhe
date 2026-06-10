@@ -32,6 +32,7 @@
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/render_pipeline.hpp"
 #include "erhe_graphics/scoped_debug_group.hpp"
+#include "erhe_graphics/scoped_gpu_zone.hpp"
 #include "erhe_math/math_util.hpp"
 #if defined(ERHE_GRAPHICS_API_OPENGL)
 #   include "erhe_gl/wrapper_functions.hpp"
@@ -339,8 +340,9 @@ void App_rendering::handle_graphics_settings_changed(Graphics_preset_entry* grap
     // editor init to match native_depth_range (zero_to_one when supported); it
     // must not be toggled per preset.
     ERHE_VERIFY(m_context.current_command_buffer != nullptr);
+    const bool distance_technique = (graphics_preset != nullptr) && (graphics_preset->shadow_technique == Shadow_technique_mode::distance);
     for (const auto& node : m_all_shadow_render_nodes) {
-        node->reconfigure(*m_context.graphics_device, *m_context.current_command_buffer, resolution, light_count, graphics_preset->shadow_depth_bits);
+        node->reconfigure(*m_context.graphics_device, *m_context.current_command_buffer, resolution, light_count, graphics_preset->shadow_depth_bits, distance_technique);
     }
 }
 
@@ -954,10 +956,9 @@ void App_rendering::render_composer(const Render_context& context)
 {
     // log_frame->trace("App_rendering::render_composer()");
 
-    static constexpr std::string_view c_id_main{"Main"};
-    //ERHE_PROFILE_GPU_SCOPE(c_id_main);
     ERHE_VERIFY(context.command_buffer != nullptr);
     erhe::graphics::Scoped_debug_group pass_scope{*context.command_buffer, "App_rendering::render_composer()"};
+    erhe::graphics::Scoped_gpu_zone   gpu_zone  {*context.command_buffer, "Main"};
 
     update_sky_parameters();
 

@@ -26,6 +26,7 @@ namespace erhe::scene_renderer {
     class Mesh_memory;
     class Shadow_renderer;
     class Shader_variant_cache;
+    class Texel_renderer;
 }
 namespace erhe::commands { class Commands; }
 namespace erhe::window { class Context_window; }
@@ -137,6 +138,7 @@ public:
     erhe::scene_renderer::Content_wide_line_renderer* content_wide_line_renderer{nullptr};
     erhe::scene_renderer::Forward_renderer*           forward_renderer          {nullptr};
     erhe::scene_renderer::Shadow_renderer*            shadow_renderer           {nullptr};
+    erhe::scene_renderer::Texel_renderer*             texel_renderer            {nullptr};
     erhe::scene_renderer::Shader_variant_cache*       shader_variant_cache      {nullptr};
 
     erhe::window::Context_window*      context_window       {nullptr};

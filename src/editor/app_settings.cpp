@@ -175,6 +175,55 @@ void Graphics_settings::select_active_graphics_preset(App_message_bus& app_messa
     }
 }
 
+void Graphics_settings::update(App_message_bus& app_message_bus, const bool openxr, const bool allow_save)
+{
+    if (graphics_presets.empty()) {
+        return;
+    }
+
+    // Auto-apply: keep current_graphics_preset (what the renderer reads) in
+    // sync with the active preset, matched by name. Broadcast a
+    // Graphics_settings_message on change so subscribers (shadow map
+    // reconfigure, MSAA, etc.) react. This replaces the former manual "Use"
+    // button.
+    for (Graphics_preset_entry& graphics_preset : graphics_presets) {
+        if (graphics_preset.name != current_graphics_preset.name) {
+            continue;
+        }
+        apply_limits(graphics_preset);
+        if (serialize(graphics_preset) != serialize(current_graphics_preset)) {
+            current_graphics_preset = graphics_preset;
+            app_message_bus.graphics_settings.queue_message(
+                Graphics_settings_message{
+                    .graphics_preset = &current_graphics_preset
+                }
+            );
+        }
+        break;
+    }
+
+    // Auto-save: write the preset list to its file when it changes. Mirrors
+    // Editor_settings_store: the first tick records the baseline (so launching
+    // the editor does not rewrite the file) and writes are coalesced while a
+    // mouse button is held (allow_save == false during slider drags).
+    Graphics_presets_config presets_config;
+    presets_config.presets = graphics_presets;
+    std::string serialized = serialize(presets_config);
+    if (!m_presets_baseline_initialized) {
+        m_last_saved_presets           = std::move(serialized);
+        m_presets_baseline_initialized = true;
+    } else if (allow_save && (serialized != m_last_saved_presets)) {
+        write_presets(openxr);
+        m_last_saved_presets = std::move(serialized);
+    }
+}
+
+void App_settings::update(App_message_bus& app_message_bus, const bool allow_save)
+{
+    m_store.update(allow_save);
+    graphics.update(app_message_bus, m_openxr, allow_save);
+}
+
 void App_settings::read(const bool openxr)
 {
     log_startup->debug("App_settings::read()");

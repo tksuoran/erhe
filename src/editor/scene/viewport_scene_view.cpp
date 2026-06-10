@@ -358,6 +358,19 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
         }
     }
 
+    // Shadow-texel debug visualization sync. Texel_renderer samples the shadow
+    // map in the VERTEX stage (textureSize/textureLod in shadow_debug.vert). The
+    // shadow render pass's producer->consumer barrier only makes the shadow map
+    // available to fragment-stage reads (the forward renderer samples it there),
+    // so the vertex-stage read is a read-after-write hazard. Insert an extra
+    // barrier (outside the render pass) making prior writes visible to
+    // vertex-stage texture fetches -- only when the visualization is active, so
+    // the common path pays no extra synchronization. Mirrors the content-wide-
+    // line compute->vertex barrier above.
+    if (m_debug_visualizations.is_shadow_debug_enabled()) {
+        command_buffer.memory_barrier(erhe::graphics::Memory_barrier_mask::texture_fetch_barrier_bit);
+    }
+
     m_render_target.update(m_projection_viewport.width, m_projection_viewport.height, nullptr);
 
     ERHE_VERIFY(m_render_target.get_render_pass());
@@ -829,7 +842,7 @@ void Viewport_scene_view::viewport_toolbar()
         "Debug Visualization",                                              // title
         ImGui::GetID("ViewportDebugVisualizations"),                        // popup_id
         m_show_debug_visualizations_popup,                                  // is_open
-        [this]() { m_debug_visualizations.imgui(*this); } // content_fn
+        [this]() { m_debug_visualizations.imgui(*this, m_context); } // content_fn
     );
 
     m_context.selection_tool->viewport_toolbar();

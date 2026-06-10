@@ -43,7 +43,7 @@ public:
     auto inputs_allowed() const -> bool override;
 
     // Public API
-    void reconfigure(erhe::graphics::Device& graphics_device, erhe::graphics::Command_buffer& command_buffer, int resolution, int light_count, int depth_bits);
+    void reconfigure(erhe::graphics::Device& graphics_device, erhe::graphics::Command_buffer& command_buffer, int resolution, int light_count, int depth_bits, bool distance_technique);
 
     [[nodiscard]] auto get_scene_view       () -> Scene_view&;
     [[nodiscard]] auto get_scene_view       () const -> const Scene_view&;
@@ -63,6 +63,17 @@ private:
     App_context&                                              m_context;
     Scene_view&                                               m_scene_view;
     std::shared_ptr<erhe::graphics::Texture>                  m_texture;
+    // Shadow_technique_mode::distance R32F distance map (color attachment of the
+    // render passes). Allocated only while the distance technique is active;
+    // null otherwise (a full-resolution R32F array is large). m_distance_technique
+    // tracks the last-configured technique so execute_rendergraph_node can
+    // reconfigure lazily when the preset flips; the cached resolution / light
+    // count / depth bits let it re-call reconfigure with the same dimensions.
+    std::shared_ptr<erhe::graphics::Texture>                  m_distance_texture;
+    bool                                                      m_distance_technique{false};
+    int                                                       m_resolution {0};
+    int                                                       m_light_count{0};
+    int                                                       m_depth_bits {0};
     std::vector<std::unique_ptr<erhe::graphics::Render_pass>> m_render_passes;
     std::vector<std::string>                                  m_gpu_timer_labels;
     std::vector<std::unique_ptr<erhe::graphics::Gpu_timer>>   m_gpu_timers;

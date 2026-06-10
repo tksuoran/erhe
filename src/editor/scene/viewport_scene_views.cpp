@@ -369,8 +369,37 @@ auto Scene_views::open_new_viewport_scene_view(
 
 void Scene_views::open_new_viewport_scene_view_node()
 {
+    // Clone the scene and camera for the new viewport from a source scene view:
+    //  1. the latest hovered scene view, if it is still alive;
+    //  2. otherwise the single existing scene view, if exactly one exists;
+    //  3. otherwise none - the new viewport is created empty (no scene to clone).
+    std::shared_ptr<Viewport_scene_view> source = m_last_scene_view.lock();
+    if (!source && (m_viewport_scene_views.size() == 1)) {
+        source = m_viewport_scene_views.front();
+    }
+
+    const std::shared_ptr<Scene_root>          scene_root = source ? source->get_scene_root() : std::shared_ptr<Scene_root>{};
+    const std::shared_ptr<erhe::scene::Camera> camera     = source ? source->get_camera()     : std::shared_ptr<erhe::scene::Camera>{};
+
+    const std::string name              = fmt::format("Viewport_scene_view {}", m_viewport_scene_views.size());
+    const int         msaa_sample_count = m_app_context.app_settings->graphics.current_graphics_preset.msaa_sample_count;
+
     std::shared_ptr<erhe::rendergraph::Rendergraph_node> rendergraph_output_node{};
-    auto viewport_scene_view = open_new_viewport_scene_view(rendergraph_output_node);
+    std::shared_ptr<Viewport_scene_view> viewport_scene_view = create_viewport_scene_view(
+        m_viewport_config_data,
+        *m_app_context.graphics_device,
+        *m_app_context.rendergraph,
+        *m_app_context.imgui_windows,
+        *m_app_context.app_rendering,
+        *m_app_context.app_settings,
+        *m_app_context.post_processing,
+        *m_app_context.tools,
+        name,
+        scene_root,
+        camera,
+        msaa_sample_count,
+        rendergraph_output_node
+    );
     create_viewport_window(
         *m_app_context.imgui_renderer,
         *m_app_context.imgui_windows,

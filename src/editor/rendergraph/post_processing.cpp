@@ -11,6 +11,7 @@
 #include "erhe_graphics/render_command_encoder.hpp"
 #include "erhe_graphics/ring_buffer.hpp"
 #include "erhe_graphics/scoped_debug_group.hpp"
+#include "erhe_graphics/scoped_gpu_zone.hpp"
 #include "erhe_graphics/shader_stages.hpp"
 #include "erhe_graphics/span.hpp"
 #include "erhe_graphics/texture.hpp"
@@ -401,10 +402,8 @@ void Post_processing_node::execute_rendergraph_node(erhe::graphics::Command_buff
         return;
     }
 
-    static constexpr std::string_view c_post_processing{"Post_processing"};
-
     ERHE_PROFILE_FUNCTION();
-    //ERHE_PROFILE_GPU_SCOPE(c_post_processing)
+    erhe::graphics::Scoped_gpu_zone gpu_zone{command_buffer, "Post_processing"};
 
     const bool can_post_process = update_size();
     if (!can_post_process) {
@@ -490,7 +489,8 @@ Post_processing::Post_processing(erhe::graphics::Device& d, erhe::graphics::Comm
         d,
         erhe::graphics::Bind_group_layout_create_info{
             .bindings = {
-                {.binding_point = 0, .type = erhe::graphics::Binding_type::uniform_buffer},
+                // post_processing.texel_scale read in the downsample/upsample fragment shaders.
+                {.binding_point = 0, .type = erhe::graphics::Binding_type::uniform_buffer, .stage_flags = erhe::graphics::Shader_stage_flags::fragment},
                 // s_input / s_downsample / s_upsample are scalar named samplers
                 // bound via Render_command_encoder::set_sampled_image() before
                 // each draw. Declared on the bind group layout so the backend
@@ -503,7 +503,8 @@ Post_processing::Post_processing(erhe::graphics::Device& d, erhe::graphics::Comm
                     .sampler_aspect  = erhe::graphics::Sampler_aspect::color,
                     .name            = "s_input",
                     .glsl_type       = erhe::graphics::Glsl_type::sampler_2d,
-                    .is_texture_heap = false
+                    .is_texture_heap = false,
+                    .stage_flags     = erhe::graphics::Shader_stage_flags::fragment
                 },
                 {
                     .binding_point   = s_downsample_texture,
@@ -511,7 +512,8 @@ Post_processing::Post_processing(erhe::graphics::Device& d, erhe::graphics::Comm
                     .sampler_aspect  = erhe::graphics::Sampler_aspect::color,
                     .name            = "s_downsample",
                     .glsl_type       = erhe::graphics::Glsl_type::sampler_2d,
-                    .is_texture_heap = false
+                    .is_texture_heap = false,
+                    .stage_flags     = erhe::graphics::Shader_stage_flags::fragment
                 },
                 {
                     .binding_point   = s_upsample_texture,
@@ -519,7 +521,8 @@ Post_processing::Post_processing(erhe::graphics::Device& d, erhe::graphics::Comm
                     .sampler_aspect  = erhe::graphics::Sampler_aspect::color,
                     .name            = "s_upsample",
                     .glsl_type       = erhe::graphics::Glsl_type::sampler_2d,
-                    .is_texture_heap = false
+                    .is_texture_heap = false,
+                    .stage_flags     = erhe::graphics::Shader_stage_flags::fragment
                 },
                 {
                     .binding_point   = s_downsample_dst_texture,
@@ -527,7 +530,8 @@ Post_processing::Post_processing(erhe::graphics::Device& d, erhe::graphics::Comm
                     .sampler_aspect  = erhe::graphics::Sampler_aspect::color,
                     .name            = "s_downsample_dst",
                     .glsl_type       = erhe::graphics::Glsl_type::sampler_2d,
-                    .is_texture_heap = false
+                    .is_texture_heap = false,
+                    .stage_flags     = erhe::graphics::Shader_stage_flags::fragment
                 }
             },
             .debug_label = "Post processing"

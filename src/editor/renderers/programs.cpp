@@ -40,6 +40,7 @@ Programs::Programs(erhe::graphics::Device& graphics_device, erhe::scene_renderer
     //, textured               {graphics_device, "textured-not_loaded"}
     , sky                    {graphics_device, "sky-not_loaded"}
     , grid                   {graphics_device, "grid-not_loaded"}
+    , shadow_debug           {graphics_device, "shadow_debug-not_loaded"}
     //, points                 {graphics_device, "points-not_loaded"}
     , depth_to_color         {graphics_device, "depth_to_color-not_loaded"}
     //, id                     {graphics_device, "id-not_loaded"}
@@ -87,6 +88,9 @@ void Programs::load_programs(
     // and c_view_index = 0u (no behaviour change).
     add_shader(sky           , CI{ .name = "sky" , .view_count = static_cast<uint32_t>(program_interface.config.view_count) } );
     add_shader(grid          , CI{ .name = "grid", .view_count = static_cast<uint32_t>(program_interface.config.view_count) } );
+    // shadow_debug reads camera.cameras[c_view_index] in its vertex stage, so it
+    // is compiled with the session view_count exactly like sky/grid above.
+    add_shader(shadow_debug  , CI{ .name = "shadow_debug", .view_count = static_cast<uint32_t>(program_interface.config.view_count) } );
     add_shader(brdf_slice    , CI{ .name = "brdf_slice"    } );
     add_shader(depth_to_color, CI{ .name = "depth_to_color"} );
     add_shader(tool          , CI{ .name = "tool", .vertex_format = &mesh_memory.vertex_format_not_skinned } );

@@ -7,6 +7,10 @@
 #include "editor_settings_store.hpp"
 #include "config/generated/developer_config.hpp"
 #include "config/generated/editor_settings_config.hpp"
+#include "config/generated/shadow_filter_mode.hpp"
+#include "config/generated/shadow_bias_mode.hpp"
+#include "config/generated/shadow_cull_mode.hpp"
+#include "config/generated/shadow_technique_mode.hpp"
 #include "erhe_scene_renderer/generated/mesh_memory_config.hpp"
 #include "config/generated/renderer_config.hpp"
 #include "config/generated/text_renderer_config.hpp"
@@ -299,6 +303,19 @@ void Settings_window::imgui()
     ImGui::NewLine();
 
     if (!graphics_presets.empty()) {
+        // The preset selected in the "Edit" combo above is the active preset:
+        // editing any of its fields auto-applies and auto-saves through
+        // App_settings::update(), so there is no separate "Use" / "Save
+        // Presets" step. Keep the edit index in range (Remove may have shrunk
+        // the list) before adopting its name as the active preset.
+        if (m_graphics_preset_index < 0) {
+            m_graphics_preset_index = 0;
+        }
+        if (m_graphics_preset_index >= static_cast<int>(graphics_presets.size())) {
+            m_graphics_preset_index = static_cast<int>(graphics_presets.size()) - 1;
+        }
+        graphics.current_graphics_preset.name = graphics_presets.at(m_graphics_preset_index).name;
+
         add_entry("Preset Name", [this](){
             Graphics_preset_entry& graphics_preset = get_graphics_preset();
             ImGui::InputText("##", &graphics_preset.name);
@@ -336,6 +353,86 @@ void Settings_window::imgui()
         add_entry("Shadows Enabled", [this]() {
             Graphics_preset_entry& graphics_preset = get_graphics_preset();
             ImGui::Checkbox("##", &graphics_preset.shadow_enable);
+        });
+        add_entry("Shadow Filtering", [this]() {
+            Graphics_preset_entry&          graphics_preset = get_graphics_preset();
+            const Shadow_filter_mode        current         = graphics_preset.shadow_filter;
+            const erhe::codegen::Enum_info& enum_info        = get_enum_info(static_cast<const Shadow_filter_mode*>(nullptr));
+            if (ImGui::BeginCombo("##", std::string{::to_string(current)}.c_str())) {
+                for (const erhe::codegen::Enum_value_info& value_info : enum_info.values) {
+                    const Shadow_filter_mode mode     = static_cast<Shadow_filter_mode>(value_info.value);
+                    const bool               selected = (mode == current);
+                    if (ImGui::Selectable(value_info.name, selected)) {
+                        graphics_preset.shadow_filter = mode;
+                    }
+                    if (selected) {
+                        ImGui::SetItemDefaultFocus();
+                    }
+                }
+                ImGui::EndCombo();
+            }
+        });
+        add_entry("Shadow Bias", [this]() {
+            Graphics_preset_entry&          graphics_preset = get_graphics_preset();
+            const Shadow_bias_mode          current         = graphics_preset.shadow_bias;
+            const erhe::codegen::Enum_info& enum_info        = get_enum_info(static_cast<const Shadow_bias_mode*>(nullptr));
+            if (ImGui::BeginCombo("##", std::string{::to_string(current)}.c_str())) {
+                for (const erhe::codegen::Enum_value_info& value_info : enum_info.values) {
+                    const Shadow_bias_mode mode     = static_cast<Shadow_bias_mode>(value_info.value);
+                    const bool             selected = (mode == current);
+                    if (ImGui::Selectable(value_info.name, selected)) {
+                        graphics_preset.shadow_bias = mode;
+                    }
+                    if (selected) {
+                        ImGui::SetItemDefaultFocus();
+                    }
+                }
+                ImGui::EndCombo();
+            }
+        });
+        add_entry("Shadow Cull Mode", [this]() {
+            Graphics_preset_entry&          graphics_preset = get_graphics_preset();
+            const Shadow_cull_mode          current         = graphics_preset.shadow_cull_mode;
+            const erhe::codegen::Enum_info& enum_info        = get_enum_info(static_cast<const Shadow_cull_mode*>(nullptr));
+            if (ImGui::BeginCombo("##", std::string{::to_string(current)}.c_str())) {
+                for (const erhe::codegen::Enum_value_info& value_info : enum_info.values) {
+                    const Shadow_cull_mode mode     = static_cast<Shadow_cull_mode>(value_info.value);
+                    const bool             selected = (mode == current);
+                    if (ImGui::Selectable(value_info.name, selected)) {
+                        graphics_preset.shadow_cull_mode = mode;
+                    }
+                    if (selected) {
+                        ImGui::SetItemDefaultFocus();
+                    }
+                }
+                ImGui::EndCombo();
+            }
+        });
+        add_entry("Shadow Technique", [this]() {
+            Graphics_preset_entry&          graphics_preset = get_graphics_preset();
+            const Shadow_technique_mode     current         = graphics_preset.shadow_technique;
+            const erhe::codegen::Enum_info& enum_info        = get_enum_info(static_cast<const Shadow_technique_mode*>(nullptr));
+            if (ImGui::BeginCombo("##", std::string{::to_string(current)}.c_str())) {
+                for (const erhe::codegen::Enum_value_info& value_info : enum_info.values) {
+                    const Shadow_technique_mode mode     = static_cast<Shadow_technique_mode>(value_info.value);
+                    const bool                  selected = (mode == current);
+                    if (ImGui::Selectable(value_info.name, selected)) {
+                        graphics_preset.shadow_technique = mode;
+                    }
+                    if (selected) {
+                        ImGui::SetItemDefaultFocus();
+                    }
+                }
+                ImGui::EndCombo();
+            }
+        });
+        add_entry("Shadow Depth Bias (constant)", [this]() {
+            Graphics_preset_entry& graphics_preset = get_graphics_preset();
+            ImGui::DragFloat("##", &graphics_preset.shadow_depth_bias_constant, 0.05f, -16.0f, 16.0f, "%.2f");
+        });
+        add_entry("Shadow Depth Bias (slope)", [this]() {
+            Graphics_preset_entry& graphics_preset = get_graphics_preset();
+            ImGui::DragFloat("##", &graphics_preset.shadow_depth_bias_slope, 0.05f, -16.0f, 16.0f, "%.2f");
         });
         add_entry("Shadow Resolution", [this](){
             Graphics_preset_entry& graphics_preset = get_graphics_preset();
@@ -426,29 +523,17 @@ void Settings_window::imgui()
         if (ImGui::Button("Remove", button_size)) {
             graphics_presets.erase(graphics_presets.begin() + m_graphics_preset_index);
         }
-
-        ImGui::SameLine();
-        if (ImGui::Button("Use", button_size)) {
-            m_context.app_settings->graphics.current_graphics_preset = graphics_presets.at(m_graphics_preset_index);
-            m_context.app_message_bus->graphics_settings.queue_message(
-                Graphics_settings_message{
-                    .graphics_preset = &m_context.app_settings->graphics.current_graphics_preset
-                }
-            );
-        }
+        // No "Use" button: the edited preset is the active preset and is
+        // applied automatically by App_settings::update().
     });
     pop_group();
 
-    // Everything stored in editor_settings.json autosaves through the
-    // settings store; these buttons only cover the graphics preset list,
-    // which lives in its own file (graphics_presets.json).
+    // The graphics preset list (graphics_presets.json) auto-applies and
+    // auto-saves through App_settings::update(), like editor_settings.json.
+    // "Load Presets" remains for re-reading the file from disk on demand.
     add_entry("", [this, button_size](){
         if (ImGui::Button("Load Presets", button_size)) {
             m_context.app_settings->read(m_context.OpenXR);
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Save Presets", button_size)) {
-            m_context.app_settings->graphics.write_presets(m_context.OpenXR);
         }
     });
 

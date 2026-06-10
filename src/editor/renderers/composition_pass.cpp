@@ -2,6 +2,7 @@
 
 #include "app_context.hpp"
 #include "app_rendering.hpp"
+#include "app_settings.hpp"
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
 #include "erhe_scene_renderer/content_wide_line_renderer.hpp"
@@ -228,6 +229,10 @@ void Composition_pass::render(const Render_context& context)
                                 : erhe::scene_renderer::Primitive_interface_settings{},
                     .filter                 = data.filter,
                     .shader_debug           = context.shader_debug,
+                    .shadow_filter          = static_cast<uint32_t>(context.app_context.app_settings->graphics.current_graphics_preset.shadow_filter),
+                    .shadow_bias            = static_cast<uint32_t>(context.app_context.app_settings->graphics.current_graphics_preset.shadow_bias),
+                    .shadow_technique       = static_cast<uint32_t>(context.app_context.app_settings->graphics.current_graphics_preset.shadow_technique),
+                    .shadow_depth_bits      = static_cast<uint32_t>(context.app_context.app_settings->graphics.current_graphics_preset.shadow_depth_bits),
                     .debug_joint_indices    = context.app_context.app_rendering->debug_joint_indices,
                     .debug_joint_colors     = context.app_context.app_rendering->debug_joint_colors,
                     .shader_stages_override = data.shader_stages,

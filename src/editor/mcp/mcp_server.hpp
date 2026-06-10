@@ -48,7 +48,7 @@ struct Mcp_tool_info
 //
 // Query tools: list_scenes, get_scene_nodes, get_node_details,
 //   get_scene_cameras, get_scene_lights, get_scene_materials,
-//   get_material_details, get_selection
+//   get_material_details, get_selection, get_shadow_fit_debug
 //
 // The server runs on a background thread and dispatches all requests
 // to the main editor thread for thread safety.
@@ -102,6 +102,7 @@ private:
     auto query_selection        (const nlohmann::json& args) -> std::string;
     auto query_undo_redo_stack  (const nlohmann::json& args) -> std::string;
     auto query_async_status     (const nlohmann::json& args) -> std::string;
+    auto query_shadow_fit_debug (const nlohmann::json& args) -> std::string;
     auto action_select_items    (const nlohmann::json& args) -> std::string;
     auto action_place_brush     (const nlohmann::json& args) -> std::string;
     auto action_toggle_physics  (const nlohmann::json& args) -> std::string;
