@@ -9,6 +9,20 @@
 
 namespace erhe {
 
+namespace {
+uint64_t s_item_mutation_serial{0};
+}
+
+auto get_item_mutation_serial() -> uint64_t
+{
+    return s_item_mutation_serial;
+}
+
+void bump_item_mutation_serial()
+{
+    ++s_item_mutation_serial;
+}
+
 auto Item_flags::to_string(const uint64_t flags) -> std::string
 {
     std::stringstream ss;
@@ -136,6 +150,9 @@ void Item_base::set_flag_bits(const uint64_t mask, const bool value)
     }
 
     if (m_flag_bits != old_flag_bits) {
+        if (((old_flag_bits ^ m_flag_bits) & ~Item_flags::transient) != 0u) {
+            bump_item_mutation_serial();
+        }
         handle_flag_bits_update(old_flag_bits, m_flag_bits);
     }
 }
@@ -264,6 +281,7 @@ void Item_base::set_name(const std::string_view name)
 {
     m_name = name;
     m_debug_label = erhe::utility::Debug_label{fmt::format("{}##{}", name, get_id())};
+    bump_item_mutation_serial();
 }
 
 auto Item_base::describe(int level) const -> std::string

@@ -72,6 +72,19 @@ public:
         erhe::imgui::Imgui_renderer& imgui_renderer
     );
 
+    class Item_icon
+    {
+    public:
+        ImFont*          font      {nullptr}; // resolved icon font (never null when code is set)
+        const char*      code      {nullptr}; // nullptr = no icon
+        glm::vec4        color     {1.0f, 1.0f, 1.0f, 1.0f};
+        const glm::vec3* live_color{nullptr}; // when set, overrides color at draw time (light / material tint)
+    };
+
+    [[nodiscard]] auto get_item_icon     (const std::shared_ptr<erhe::Item_base>& item) const -> Item_icon;
+    [[nodiscard]] auto get_icon_width    (const Item_icon& icon) const -> float;
+    [[nodiscard]] auto get_icon_font_size() const -> float;
+
     void item_icon(const std::shared_ptr<erhe::Item_base>& item, float scale);
     void draw_icon(const char* code, glm::vec4 color, ImFont* font = nullptr, float size = 0.0f);
     auto icon_button(

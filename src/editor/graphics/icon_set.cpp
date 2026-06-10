@@ -9,6 +9,8 @@
 #include "erhe_scene/light.hpp"
 #include "erhe_scene/skin.hpp"
 
+#include <bit>
+
 #define ICON_MDI_BRUSH                                    "\xf3\xb0\x83\xa3" // U+F00E3
 
 namespace editor {
@@ -127,6 +129,22 @@ auto Icon_set::get_icon(const erhe::scene::Light_type type) const -> const char*
     }
 }
 
+auto Icon_set::get_icon_font_size() const -> float
+{
+    return
+        m_context.imgui_renderer->get_imgui_settings().scale_factor *
+        m_context.imgui_renderer->get_imgui_settings().icon_font_size;
+}
+
+auto Icon_set::get_icon_width(const Item_icon& icon) const -> float
+{
+    if (icon.code == nullptr) {
+        return 0.0f;
+    }
+    ImFont* icon_font = (icon.font != nullptr) ? icon.font : m_context.imgui_renderer->icon_font();
+    return icon_font->CalcTextSizeA(get_icon_font_size(), FLT_MAX, 0.0f, icon.code).x;
+}
+
 void Icon_set::draw_icon(const char* code, glm::vec4 color, ImFont* font, float size)
 {
     if (code == nullptr) {
@@ -134,9 +152,7 @@ void Icon_set::draw_icon(const char* code, glm::vec4 color, ImFont* font, float 
     }
 
     ImFont*     icon_font = (font != nullptr) ? font : m_context.imgui_renderer->icon_font();
-    const float font_size =
-        m_context.imgui_renderer->get_imgui_settings().scale_factor *
-        m_context.imgui_renderer->get_imgui_settings().icon_font_size;
+    const float font_size = get_icon_font_size();
 
     ImGui::PushFont(icon_font, size == 0.0f ? font_size : size);
     ImGui::PushStyleColor(ImGuiCol_Text, color);
@@ -162,9 +178,7 @@ auto Icon_set::icon_button(
     }
 
     ImFont*     icon_font = (font != nullptr) ? font : m_context.imgui_renderer->icon_font();
-    const float font_size =
-        m_context.imgui_renderer->get_imgui_settings().scale_factor *
-        m_context.imgui_renderer->get_imgui_settings().icon_font_size;
+    const float font_size = get_icon_font_size();
 
     ImGui::PushID        (id);
     ImGui::PushFont      (icon_font, size == 0.0f ? font_size : size);
@@ -181,65 +195,77 @@ auto Icon_set::icon_button(
     return result;
 }
 
-void Icon_set::item_icon(const std::shared_ptr<erhe::Item_base>& item, const float scale)
+auto Icon_set::get_item_icon(const std::shared_ptr<erhe::Item_base>& item) const -> Item_icon
 {
-    ImFont*                    icon_font{nullptr};
-    std::optional<const char*> icon_code{};
-    glm::vec4 tint_color{0.8f, 0.8f, 0.8f, 1.0f}; // TODO  item->get_wireframe_color(); ?
+    using namespace erhe::utility;
 
-    const auto content_node = std::dynamic_pointer_cast<Content_library_node>(item);
-    if (content_node) {
-        if (content_node->item) {
-            item_icon(content_node->item, scale);
-        } else {
-            // Content libray node without item is considered folder
-            draw_icon(icons.folder, tint_color);
-        }
-        return;
-    }
+    Item_icon icon{};
+    icon.font  = m_context.imgui_renderer->icon_font();
+    icon.color = glm::vec4{0.8f, 0.8f, 0.8f, 1.0f}; // TODO  item->get_wireframe_color(); ?
 
     const uint64_t type_mask = item->get_type();
-    using namespace erhe::utility;
-    for (uint64_t bit_position = 0; bit_position < erhe::Item_type::count; ++bit_position) {
-        const uint64_t bit_mask = (uint64_t{1} << bit_position);
-        if (test_bit_set(type_mask, bit_mask)) {
-            const auto& icon_opt = type_icons.at(bit_position);
-            if (icon_opt.has_value()) {
-                const auto& type_icon = icon_opt.value();
-                icon_font = type_icon.font;
-                icon_code = type_icon.code;
-                if (type_icon.color.has_value()) {
-                    tint_color = type_icon.color.value();
-                }
-                break;
+
+    if (test_bit_set(type_mask, erhe::Item_type::content_library_node)) {
+        const auto content_node = std::static_pointer_cast<Content_library_node>(item);
+        if (content_node->item) {
+            return get_item_icon(content_node->item);
+        }
+        // Content libray node without item is considered folder
+        icon.code = icons.folder;
+        return icon;
+    }
+
+    // Visit only the set type bits, lowest first (same order as scanning all positions)
+    for (uint64_t bits = type_mask; bits != 0u; bits = bits & (bits - 1u)) {
+        const unsigned int bit_position = static_cast<unsigned int>(std::countr_zero(bits));
+        if (bit_position >= type_icons.size()) {
+            break;
+        }
+        const auto& icon_opt = type_icons[bit_position];
+        if (icon_opt.has_value()) {
+            const auto& type_icon = icon_opt.value();
+            if (type_icon.font != nullptr) {
+                icon.font = type_icon.font;
             }
+            icon.code = type_icon.code;
+            if (type_icon.color.has_value()) {
+                icon.color = type_icon.color.value();
+            }
+            break;
         }
     }
 
     if (erhe::scene::is_bone(item)) {
-        icon_code = icons.bone;
+        icon.code = icons.bone;
     }
-    const auto& material = std::dynamic_pointer_cast<erhe::primitive::Material>(item);
-    if (material) {
-        tint_color = glm::vec4{material->data.base_color, 1.0f};
-        icon_code = icons.material;
+    if (test_bit_set(type_mask, erhe::Item_type::material)) {
+        const auto material = std::static_pointer_cast<erhe::primitive::Material>(item);
+        icon.color      = glm::vec4{material->data.base_color, 1.0f};
+        icon.live_color = &material->data.base_color;
+        icon.code       = icons.material;
     }
-    const auto& light = std::dynamic_pointer_cast<erhe::scene::Light>(item);
-    if (light) {
-        tint_color = glm::vec4{light->color, 1.0f};
+    if (test_bit_set(type_mask, erhe::Item_type::light)) {
+        const auto light = std::static_pointer_cast<erhe::scene::Light>(item);
+        icon.color      = glm::vec4{light->color, 1.0f};
+        icon.live_color = &light->color;
         switch (light->type) {
             //using enum erhe::scene::Light_type;
-            case erhe::scene::Light_type::spot:        icon_code = icons.spot_light; break;
-            case erhe::scene::Light_type::directional: icon_code = icons.directional_light; break;
-            case erhe::scene::Light_type::point:       icon_code = icons.point_light; break;
+            case erhe::scene::Light_type::spot:        icon.code = icons.spot_light; break;
+            case erhe::scene::Light_type::directional: icon.code = icons.directional_light; break;
+            case erhe::scene::Light_type::point:       icon.code = icons.point_light; break;
             default: break;
         }
     }
 
-    if (icon_code.has_value()) {
-        draw_icon(icon_code.value(), tint_color, icon_font);
-    }
+    return icon;
+}
 
+void Icon_set::item_icon(const std::shared_ptr<erhe::Item_base>& item, const float scale)
+{
+    static_cast<void>(scale);
+    const Item_icon icon = get_item_icon(item);
+    const glm::vec4 color = (icon.live_color != nullptr) ? glm::vec4{*icon.live_color, 1.0f} : icon.color;
+    draw_icon(icon.code, color, icon.font);
 }
 
 }

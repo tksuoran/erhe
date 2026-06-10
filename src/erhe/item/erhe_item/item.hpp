@@ -50,6 +50,13 @@ public:
     static constexpr uint64_t affects_shadow            = (1u << 25);
     static constexpr uint64_t count                     = 26;
 
+    // High-frequency presentation-state bits (selection, hover, per-frame debug
+    // visualization, transform-derived state) that never affect item tree row
+    // structure or filtering. Changes to only these bits do not bump the item
+    // mutation serial, so they do not invalidate cached item tree rows.
+    static constexpr uint64_t transient =
+        selected | hovered_in_viewport | hovered_in_item_tree | negative_determinant | affects_shadow;
+
     static constexpr const char* c_bit_labels[] =
     {
         "No Message",
@@ -211,6 +218,7 @@ class Item_filter
 {
 public:
     [[nodiscard]] auto operator()(uint64_t filter_bits) const -> bool;
+    [[nodiscard]] auto operator==(const Item_filter&) const -> bool = default;
 
     [[nodiscard]] auto describe() const -> std::string;
 
@@ -219,6 +227,15 @@ public:
     uint64_t require_all_bits_clear        {0};
     uint64_t require_at_least_one_bit_clear{0};
 };
+
+// Monotonic counter incremented whenever item state that can affect item tree
+// rows changes: hierarchy children, node attachments, item names, and
+// non-transient flag bits (see Item_flags::transient). Consumers (the editor
+// item tree) compare it across frames to detect when cached row lists are
+// stale. Item mutations are main-thread only; the counter is intentionally a
+// plain (non-atomic) integer.
+[[nodiscard]] auto get_item_mutation_serial() -> uint64_t;
+void bump_item_mutation_serial();
 
 // https://herbsutter.com/2019/10/03/gotw-ish-solution-the-clonable-pattern/
 

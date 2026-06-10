@@ -35,6 +35,7 @@
 #include <imgui/imgui.h>
 #include <imgui/imgui_internal.h>
 
+#include <algorithm>
 #include <limits>
 
 #define ICON_MDI_FILTER                                   "\xf3\xb0\x88\xb2" // U+F0232
@@ -57,11 +58,19 @@ Item_tree::Item_tree(App_context& context)
 void Item_tree::set_root(const std::shared_ptr<erhe::Hierarchy>& root)
 {
     m_root = root;
+    m_flat_rows_dirty = true;
 }
 
 void Item_tree::set_item_filter(const erhe::Item_filter& filter)
 {
     m_filter = filter;
+    m_flat_rows_dirty = true;
+}
+
+void Item_tree::clear_cached_rows()
+{
+    m_flat_rows.clear();
+    m_flat_rows_dirty = true;
 }
 
 void Item_tree::set_item_callback(std::function<bool(const std::shared_ptr<erhe::Item_base>&)> fun)
@@ -367,7 +376,7 @@ void Item_tree::attach_selection_to(const std::shared_ptr<erhe::Item_base>& targ
 
 void Item_tree::drag_and_drop_source(const std::shared_ptr<erhe::Item_base>& item)
 {
-    ERHE_PROFILE_FUNCTION();
+    ERHE_PROFILE_SCOPE("drag_and_drop_source"); // named zone: no per-row callstack capture
 
     // log_tree_frame->trace("DnD source: '{}'", item->describe());
 
@@ -378,10 +387,10 @@ void Item_tree::drag_and_drop_source(const std::shared_ptr<erhe::Item_base>& ite
         const auto& selection = m_context.selection->get_selected_items();
         if (is_in(item, selection)) {
             for (const auto& selection_item : selection) {
-                item_icon_and_text(selection_item, 0);
+                item_icon_and_text(selection_item);
             }
         } else {
-            item_icon_and_text(item, 0);
+            item_icon_and_text(item);
         }
         ImGui::EndDragDropSource();
     }
@@ -714,6 +723,7 @@ void Item_tree::set_item_selection_terminator(const std::shared_ptr<erhe::Item_b
 {
     auto& range_selection = m_context.selection->range_selection();
     range_selection.set_terminator(item);
+    m_range_selection_edited = true; // feed range selection entries this frame
 }
 
 void Item_tree::set_item_selection(const std::shared_ptr<erhe::Item_base>& item, bool selected)
@@ -727,7 +737,7 @@ void Item_tree::set_item_selection(const std::shared_ptr<erhe::Item_base>& item,
 
 void Item_tree::item_update_selection(const std::shared_ptr<erhe::Item_base>& item)
 {
-    ERHE_PROFILE_FUNCTION();
+    ERHE_PROFILE_SCOPE("item_update_selection"); // named zone: no per-row callstack capture
 
     auto& range_selection = m_context.selection->range_selection();
 
@@ -1087,152 +1097,144 @@ void Item_tree::root_popup_menu()
     ImGui::PopStyleVar(1);
 }
 
-auto Item_tree::item_icon_and_text(const std::shared_ptr<erhe::Item_base>& item, const unsigned int visual_flags) -> Tree_node_state
+namespace {
+
+// Content library leaf nodes are labeled with their payload item
+[[nodiscard]] auto get_label_item(const std::shared_ptr<erhe::Item_base>& item) -> const std::shared_ptr<erhe::Item_base>&
 {
-    ERHE_PROFILE_FUNCTION();
+    const auto content_library_node = std::dynamic_pointer_cast<Content_library_node>(item);
+    if (content_library_node && (content_library_node->get_child_count() == 0) && content_library_node->item) {
+        return content_library_node->item;
+    }
+    return item;
+}
 
-    using namespace erhe::utility;
-    bool update       = test_bit_set(visual_flags, item_visual_flag_update);
-    bool force_expand = test_bit_set(visual_flags, item_visual_flag_force_expand);
-    bool table_row    = test_bit_set(visual_flags, item_visual_flag_table_row);
+}
 
-    if (table_row) {
-        ImGui::PushID(m_row++);
+void Item_tree::imgui_row(const Flat_row& row)
+{
+    // Named zone instead of ERHE_PROFILE_FUNCTION(): the latter captures a
+    // 32-frame callstack per zone (ZoneScopedS), which costs microseconds and
+    // would dominate the measurement of this per-row function.
+    ERHE_PROFILE_SCOPE("row");
+
+    {
+        ERHE_PROFILE_SCOPE("table_row");
         ImGui::TableNextRow(ImGuiTableRowFlags_None);
         ImGui::TableSetColumnIndex(0);
     }
-    ERHE_DEFER( if (table_row) ImGui::PopID(); );
 
-    bool expand = test_bit_set(item->get_flag_bits(), erhe::Item_flags::expand);
-    if (force_expand) {
-        expand = true;
+    const ImVec2 row_pos   = ImGui::GetCursorScreenPos();
+    const float  row_right = row_pos.x + ImGui::GetContentRegionAvail().x;
+
+    const ImGuiTreeNodeFlags flags =
+        row.tree_node_flags |
+        (row.item->is_selected() ? ImGuiTreeNodeFlags_Selected : ImGuiTreeNodeFlags_None);
+
+    // Tree node with an empty visible label; the icon and the label text are drawn manually
+    // below, after the interaction handlers - those must see the tree node as the last item.
+    {
+        ERHE_PROFILE_SCOPE("tree_node");
+        ImGui::TreeNodeEx(row.debug_label.data(), flags, "%s", "");
     }
 
-    bool thumbnail_drawn = false;
-    const auto& content_library_node = std::dynamic_pointer_cast<Content_library_node>(item);
-    if (content_library_node) {
-        const auto& brush = std::dynamic_pointer_cast<Brush>(content_library_node->item);
-        static_cast<void>(brush);
-        if (brush && m_context.thumbnails) {
+    bool consumed = false;
+    if (m_item_callback) {
+        ERHE_PROFILE_SCOPE("callback");
+        consumed = m_item_callback(row.item);
+    }
+
+    {
+        ERHE_PROFILE_SCOPE("interact");
+        const bool is_item_toggled_open = ImGui::IsItemToggledOpen();
+        if (is_item_toggled_open) {
+            m_toggled_open = true;
+            m_flat_rows_dirty = true; // open/close changes the visible row set
+        }
+        if (!m_toggled_open) {
+            item_popup_menu(row.item);
+
+            if (!consumed) {
+                ERHE_PROFILE_SCOPE("update");
+                item_update_selection(row.item);
+            }
+        }
+    }
+
+    // Row visuals from the precomputed layout. The icon glyphs and the label
+    // are passive decorations (the tree node owns all row interaction), so
+    // they are emitted directly into the draw list, skipping per-item ImGui
+    // submission entirely.
+    {
+        ERHE_PROFILE_SCOPE("decor");
+        ImDrawList* const draw_list = ImGui::GetWindowDrawList();
+        const ImGuiStyle& style     = ImGui::GetStyle();
+
+        bool thumbnail_drawn = false;
+        if (row.brush && m_context.thumbnails) {
+            ImGui::SameLine();
+            const std::shared_ptr<Brush>& brush = row.brush;
             thumbnail_drawn = m_context.thumbnails->draw(
                 brush,
                 [this, brush](const std::shared_ptr<erhe::graphics::Texture>& texture, unsigned int texture_layer, int64_t time) {
-                    // log_tree->trace("Rendering preview for brush {}", brush->get_name());
                     m_context.brush_preview->render_preview(texture, texture_layer, brush, time);
-                }
+                },
+                m_cached_icon_font_size // keep row height identical to icon-only rows
+            );
+        }
+        if (!thumbnail_drawn && (row.primary_icon.code != nullptr)) {
+            const Row_icon& icon  = row.primary_icon;
+            const glm::vec4 color = (icon.live_color != nullptr) ? glm::vec4{*icon.live_color, 1.0f} : icon.color;
+            draw_list->AddText(
+                icon.font,
+                m_cached_icon_font_size,
+                ImVec2{row_pos.x + m_icon_x_offset, row_pos.y + m_icon_y_offset},
+                ImGui::GetColorU32(ImVec4{color.x, color.y, color.z, color.w}),
+                icon.code
+            );
+        }
+
+        float icons_start_x = row_right - row.right_icons_width;
+        if (row.right_icon_count > 0) {
+            // Never draw the right-aligned icons over a long label
+            const float label_end_x = row_pos.x + row.label_x_offset + row.label_width;
+            icons_start_x = std::max(icons_start_x, label_end_x + style.ItemInnerSpacing.x);
+        }
+
+        // Label, clipped so it does not run under the right-aligned icons
+        const ImVec4 label_clip{row_pos.x, row_pos.y, icons_start_x - style.ItemInnerSpacing.x, row_pos.y + ImGui::GetFrameHeight()};
+        draw_list->AddText(
+            ImGui::GetFont(),
+            ImGui::GetFontSize(),
+            ImVec2{row_pos.x + row.label_x_offset, row_pos.y + m_label_y_offset},
+            ImGui::GetColorU32(ImGuiCol_Text),
+            row.label_text.data(),
+            row.label_text.data() + row.label_text.size(),
+            0.0f,
+            (row.right_icon_count > 0) ? &label_clip : nullptr
+        );
+
+        for (std::size_t i = 0; i < row.right_icon_count; ++i) {
+            const Row_icon& icon  = row.right_icons[i];
+            const glm::vec4 color = (icon.live_color != nullptr) ? glm::vec4{*icon.live_color, 1.0f} : icon.color;
+            draw_list->AddText(
+                icon.font,
+                m_cached_icon_font_size,
+                ImVec2{icons_start_x + icon.x_offset, row_pos.y + m_icon_y_offset},
+                ImGui::GetColorU32(ImVec4{color.x, color.y, color.z, color.w}),
+                icon.code
             );
         }
     }
-    if (!thumbnail_drawn) {
-        m_context.icon_set->item_icon(item, m_ui_scale);
-    }
+}
 
-    const auto& node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
-    if (!m_context.app_settings->node_tree_expand_attachments && node) {
-        for (const auto& node_attachment : node->get_attachments()) {
-            m_context.icon_set->item_icon(node_attachment, m_ui_scale);
-        }
-    }
-    ImGui::TableSetColumnIndex(1);
-    ImGui::SetNextItemWidth(-FLT_MIN); 
-
-    const auto& hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy     >(item);
-    const auto& scene     = std::dynamic_pointer_cast<erhe::scene::Scene  >(item);
-
-    const erhe::utility::Debug_label debug_label = [&item, &content_library_node](){
-        if (content_library_node) {
-            const std::size_t child_count = content_library_node->get_child_count();
-            if ((child_count == 0) && content_library_node->item) {
-                return content_library_node->item->get_debug_label();
-            }
-        }
-        return item->get_debug_label();
-    }();
-
-    bool is_leaf = true;
-    if (hierarchy && (hierarchy->get_child_count(m_filter) > 0)) {
-        is_leaf = false;
-    }
-    if (scene && scene->get_root_node() && scene->get_root_node()->get_child_count(m_filter) > 0) {
-        is_leaf = false;
-    }
-
-    ////bool is_last_selected = false;
-    ////if (!item->is_selected()) {
-    ////    std::shared_ptr<erhe::Item_base> item_for_last_selected = (content_library_node && content_library_node->item) ? content_library_node->item : item;
-    ////    std::shared_ptr<erhe::Item_base> last_selected_item = m_context.selection->get_last_selected(item_for_last_selected->get_type() );
-    ////    if (item_for_last_selected == last_selected_item) {
-    ////        is_last_selected = true;
-    ////         ImGuiStyle& style = ImGui::GetCurrentContext()->Style;
-    ////         ImVec4 not_selected_color  = style.Colors[ImGuiCol_WindowBg];
-    ////         ImVec4 selected_color      = style.Colors[ImGuiCol_Header];
-    ////         ImVec4 last_selected_color{
-    ////             0.5f * (not_selected_color.x + selected_color.x),
-    ////             0.5f * (not_selected_color.y + selected_color.y),
-    ////             0.5f * (not_selected_color.z + selected_color.z),
-    ////             0.5f * (not_selected_color.w + selected_color.w)
-    ////         };
-    ////         ImGui::PushStyleColor(ImGuiCol_Header, last_selected_color);
-    ////    }
-    ////}
-
-    const ImGuiTreeNodeFlags flags =
-        ImGuiTreeNodeFlags_SpanAvailWidth |
-        ImGuiTreeNodeFlags_SpanAllColumns |
-        (expand ? ImGuiTreeNodeFlags_DefaultOpen : ImGuiTreeNodeFlags_None) |
-        (is_leaf
-            ? (ImGuiTreeNodeFlags_NoTreePushOnOpen | ImGuiTreeNodeFlags_Leaf)
-            : ImGuiTreeNodeFlags_OpenOnArrow
-        ) |
-        (update && (item->is_selected()) ? ImGuiTreeNodeFlags_Selected : ImGuiTreeNodeFlags_None);
-        ////(update && (item->is_selected() || is_last_selected) ? ImGuiTreeNodeFlags_Selected : ImGuiTreeNodeFlags_None);
-
-    const bool item_node_open = ImGui::TreeNodeEx(debug_label.data(), flags);
-    //// if (is_last_selected) {
-    ////     ImGui::PopStyleColor();
-    //// }
-
-    const bool consumed = m_item_callback ? m_item_callback(item) : false;
-
-#if 0
-    std::stringstream ss;
-    if (ImGui::IsItemClicked()) ss << "clicked ";
-    if (ImGui::IsItemToggledOpen()) ss << "toggled_open ";
-    if (ImGui::IsItemToggledSelection()) ss << "toggled_selection ";
-    //if (ImGui::IsItemHovered()) ss << "hovered ";
-    //if (ImGui::IsItemActive()) ss << "active ";
-    if (ImGui::IsItemActivated()) ss << "activated ";
-    if (ImGui::IsItemDeactivated()) ss << "deactivated ";
-    //if (ImGui::IsItemFocused()) ss << "focused ";
-    //if (ImGui::IsItemVisible()) ss << "visible ";
-    if (ImGui::IsItemEdited()) ss << "edited ";
-    const std::string message = ss.str();
-    if (!message.empty())
-    {
-        log_tree->info("{} {}", item->get_label(), message);
-    }
-#endif
-
-    const bool is_item_toggled_open = ImGui::IsItemToggledOpen();
-    if (is_item_toggled_open) {
-        m_toggled_open = true;
-    }
-    if (!m_toggled_open) {
-        item_popup_menu(item);
-
-        if (update) {
-            ERHE_PROFILE_SCOPE("update");
-            if (!consumed) {
-                item_update_selection(item);
-            }
-        }
-    }
-    //// log_frame->info("{} - is_leaf = {}", item->get_label(), is_leaf);
-
-    return Tree_node_state{
-        .is_open       = item_node_open,
-        .need_tree_pop = !is_leaf
-    };
+// Simple icon + name line used for the drag-and-drop payload preview
+void Item_tree::item_icon_and_text(const std::shared_ptr<erhe::Item_base>& item)
+{
+    m_context.icon_set->item_icon(item, m_ui_scale); // ends with SameLine()
+    const std::shared_ptr<erhe::Item_base>& label_item = get_label_item(item);
+    const std::string& name = label_item->get_name();
+    ImGui::TextUnformatted(name.c_str(), name.c_str() + name.size());
 }
 
 auto Item_tree::should_show(const std::shared_ptr<erhe::Item_base>& item) -> Show_mode
@@ -1269,54 +1271,125 @@ auto Item_tree::should_show(const std::shared_ptr<erhe::Item_base>& item) -> Sho
     return Show_mode::Hide;
 }
 
-void Item_tree::imgui_item_node(const std::shared_ptr<erhe::Item_base>& item)
+void Item_tree::flatten_visible_rows(const std::shared_ptr<erhe::Item_base>& item, const float indent)
 {
     // Special handling for invisible parents (scene root)
     if (erhe::utility::test_bit_set(item->get_flag_bits(), erhe::Item_flags::invisible_parent)) {
         const auto& hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(item);
         if (hierarchy) {
             for (const auto& child_node : hierarchy->get_children()) {
-                imgui_item_node(child_node);
+                flatten_visible_rows(child_node, indent);
             }
         }
         return;
     }
 
-    ERHE_PROFILE_FUNCTION();
+    ERHE_PROFILE_SCOPE("flatten_visible_rows"); // named zone: no per-call callstack capture
 
     const Show_mode show = should_show(item);
     if (show == Show_mode::Hide) {
         //// log_tree->info("filtered {}", item->describe());
         return;
     }
+    const bool force_expand = (show == Show_mode::Show_expanded);
 
-    m_context.selection->range_selection().entry(item);
-
-    unsigned int flags = item_visual_flag_update | item_visual_flag_table_row;
-    if (show == Show_mode::Show_expanded) {
-        flags |= item_visual_flag_force_expand;
+    const auto& hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy   >(item);
+    const auto& scene     = std::dynamic_pointer_cast<erhe::scene::Scene>(item);
+    const auto& node      = std::dynamic_pointer_cast<erhe::scene::Node >(item);
+    bool is_leaf = true;
+    if (hierarchy && (hierarchy->get_child_count(m_filter) > 0)) {
+        is_leaf = false;
     }
-    const auto tree_node_state = item_icon_and_text(item, flags);
-    if (tree_node_state.is_open) {
-        if (m_context.app_settings->node_tree_expand_attachments) {
-            const auto& node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
-            if (node) {
-                const float attachment_indent = 15.0f; // TODO
-                ImGui::Indent(attachment_indent);
-                for (const auto& node_attachment : node->get_attachments()) {
-                    imgui_item_node(node_attachment);
+    if (scene && scene->get_root_node() && scene->get_root_node()->get_child_count(m_filter) > 0) {
+        is_leaf = false;
+    }
+
+    const bool expand =
+        erhe::utility::test_bit_set(item->get_flag_bits(), erhe::Item_flags::expand) ||
+        force_expand;
+
+    const std::shared_ptr<erhe::Item_base>& label_item   = get_label_item(item);
+    const erhe::utility::Debug_label        debug_label  = label_item->get_debug_label(); // "<name>##<id>" - tree node id
+
+    {
+        // NOTE: this reference must not be held across the recursive calls
+        // below; they can reallocate m_flat_rows.
+        Flat_row& row = m_flat_rows.emplace_back();
+        row.item        = item;
+        row.indent      = indent;
+        row.debug_label = debug_label;
+        row.label_text  = std::string_view{label_item->get_name()};
+
+        row.tree_node_flags =
+            ImGuiTreeNodeFlags_SpanAvailWidth |
+            ImGuiTreeNodeFlags_NoTreePushOnOpen | // rows are flat; indentation comes from the row list
+            (expand ? ImGuiTreeNodeFlags_DefaultOpen : ImGuiTreeNodeFlags_None) |
+            (is_leaf ? ImGuiTreeNodeFlags_Leaf : ImGuiTreeNodeFlags_OpenOnArrow);
+
+        Icon_set&         icon_set = *m_context.icon_set;
+        const ImGuiStyle& style    = ImGui::GetStyle();
+
+        // Primary visual: brush thumbnail (drawn live) or a resolved icon
+        const auto& content_library_node = std::dynamic_pointer_cast<Content_library_node>(item);
+        if (content_library_node && m_context.thumbnails) {
+            row.brush = std::dynamic_pointer_cast<Brush>(content_library_node->item);
+        }
+        float primary_width = m_cached_icon_font_size; // thumbnails are square
+        if (!row.brush) {
+            const Icon_set::Item_icon icon = icon_set.get_item_icon(item);
+            row.primary_icon = Row_icon{.font = icon.font, .code = icon.code, .color = icon.color, .live_color = icon.live_color};
+            primary_width = icon_set.get_icon_width(icon);
+        }
+        row.label_x_offset = m_icon_x_offset + primary_width + style.ItemInnerSpacing.x;
+        row.label_width    = ImGui::CalcTextSize(row.label_text.data(), row.label_text.data() + row.label_text.size()).x;
+
+        // Attachment icons, right-aligned at render time using these offsets
+        if (node && !m_context.app_settings->node_tree_expand_attachments) {
+            const float icon_spacing = style.ItemSpacing.x;
+            float x = 0.0f;
+            for (const auto& node_attachment : node->get_attachments()) {
+                if (row.right_icon_count >= Flat_row::max_right_icon_count) {
+                    break; // out of slots; remaining attachment icons are dropped
                 }
-                ImGui::Unindent(attachment_indent);
+                const Icon_set::Item_icon icon = icon_set.get_item_icon(node_attachment);
+                if (icon.code == nullptr) {
+                    continue;
+                }
+                const float width = icon_set.get_icon_width(icon);
+                row.right_icons[row.right_icon_count] = Row_icon{
+                    .font = icon.font, .code = icon.code, .color = icon.color, .live_color = icon.live_color, .x_offset = x
+                };
+                ++row.right_icon_count;
+                row.right_icons_width = x + width;
+                x += width + icon_spacing;
             }
         }
-        const auto& hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(item);
-        if (hierarchy) {
-            for (const auto& child_node : hierarchy->get_children()) {
-                imgui_item_node(child_node);
+    }
+
+    // ImGui treats leaf tree nodes as always open (TreeNodeUpdateNextOpen); for
+    // non-leaf rows the open state lives in ImGui per-window storage, keyed by
+    // the same ID and with the same default imgui_row passes to TreeNodeEx.
+    bool is_open = true;
+    if (!is_leaf) {
+        const ImGuiID id = ImGui::GetID(debug_label.data());
+        is_open = ImGui::GetStateStorage()->GetInt(id, expand ? 1 : 0) != 0;
+    }
+    if (!is_open) {
+        return;
+    }
+
+    if (m_context.app_settings->node_tree_expand_attachments) {
+        if (node) {
+            const float attachment_indent = 15.0f; // TODO
+            for (const auto& node_attachment : node->get_attachments()) {
+                flatten_visible_rows(node_attachment, indent + attachment_indent);
             }
         }
-        if (tree_node_state.need_tree_pop) {
-            ImGui::TreePop();
+    }
+    if (hierarchy) {
+        const float indent_spacing = ImGui::GetStyle().IndentSpacing;
+        for (const auto& child_node : hierarchy->get_children()) {
+            flatten_visible_rows(child_node, indent + indent_spacing);
         }
     }
 }
@@ -1345,7 +1418,6 @@ void Item_tree::imgui_tree(float ui_scale)
     ///ImGui::PushStyleColor(ImGuiCol_Header, last_selected_color);
 
     m_ui_scale = ui_scale;
-    m_row = 0;
 
     const std::size_t root_id = m_root->get_id();
     const int table_id = static_cast<int>(root_id);
@@ -1360,18 +1432,19 @@ void Item_tree::imgui_tree(float ui_scale)
     ImGui::TextUnformatted(ICON_MDI_FILTER);
     ImGui::PopFont();
     ImGui::SameLine();
-    m_text_filter.Draw("##Filter", -FLT_MIN);
+    if (m_text_filter.Draw("##Filter", -FLT_MIN)) {
+        m_flat_rows_dirty = true;
+    }
 
     ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2{0.0f, 0.0f});
     ERHE_DEFER( ImGui::PopStyleVar(1); );
 
-    bool table_visible = ImGui::BeginTable("##", 2, ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable | ImGuiTableFlags_NoClip);
+    bool table_visible = ImGui::BeginTable("##", 1, ImGuiTableFlags_RowBg);
     if (!table_visible) {
         return;
     }
 
-    ImGui::TableSetupColumn("icons", /*ImGuiTableColumnFlags_IndentDisable |*/ ImGuiTableColumnFlags_NoClip | ImGuiTableColumnFlags_WidthFixed,   50.0f);
-    ImGui::TableSetupColumn("entry", ImGuiTableColumnFlags_IndentEnable  | ImGuiTableColumnFlags_WidthStretch,  1.0f);
+    ImGui::TableSetupColumn("entry", ImGuiTableColumnFlags_WidthStretch);
 
 #if 0 //// TODO
     ImGui::Checkbox("Expand Attachments", &m_context.app_settings->node_tree_expand_attachments);
@@ -1427,14 +1500,68 @@ void Item_tree::imgui_tree(float ui_scale)
         m_context.app_scenes->register_scene_root(scene_root);
     }
 #endif
-    //// const auto& scene_roots = m_context.app_scenes->get_scene_roots();
-    //// for (const auto& scene_root : scene_roots) {
-    ////     const auto& scene = scene_root->get_scene();
-    ////     for (const auto& node : scene.get_root_node()->get_children()) {
-    ////         imgui_item_node(node);
-    ////     }
-    //// }
-    imgui_item_node(m_root);
+    // Flatten the visible tree into uniform-height rows, then submit only the
+    // on-screen range. The flattened list is cached across frames: it is
+    // rebuilt when the item mutation serial moves (any hierarchy, attachment,
+    // name or non-transient flag change anywhere), or when this tree's own
+    // inputs change (open/close toggle, text filter, root, item filter,
+    // expand-attachments mode, indent spacing). flatten_visible_rows() must
+    // run inside the BeginTable scope so its ImGui::GetID() calls match the
+    // TreeNodeEx IDs.
+    const uint64_t item_mutation_serial = erhe::get_item_mutation_serial();
+    const bool     expand_attachments   = m_context.app_settings->node_tree_expand_attachments;
+    const float    indent_spacing       = ImGui::GetStyle().IndentSpacing;
+    const float    font_size            = ImGui::GetFontSize();
+    const float    icon_font_size       = m_context.icon_set->get_icon_font_size();
+    const bool rebuild =
+        m_flat_rows_dirty ||
+        (m_last_mutation_serial != item_mutation_serial) ||
+        !(m_cached_filter == m_filter) ||
+        (m_cached_expand_attachments != expand_attachments) ||
+        (m_cached_indent_spacing != indent_spacing) ||
+        (m_cached_font_size != font_size) ||
+        (m_cached_icon_font_size != icon_font_size);
+    if (rebuild) {
+        ERHE_PROFILE_SCOPE("flatten");
+        m_flat_rows_dirty           = false;
+        m_last_mutation_serial      = item_mutation_serial;
+        m_cached_filter             = m_filter;
+        m_cached_expand_attachments = expand_attachments;
+        m_cached_indent_spacing     = indent_spacing;
+        m_cached_font_size          = font_size;
+        m_cached_icon_font_size     = icon_font_size;
+        // Row layout constants: the empty-label tree node advances the cursor
+        // by FontSize + 2 * FramePadding.x (+ ItemSpacing.x); icon glyphs are
+        // vertically centered in the frame height, the label sits at the tree
+        // node text baseline.
+        const ImGuiStyle& style = ImGui::GetStyle();
+        m_icon_x_offset  = font_size + 2.0f * style.FramePadding.x + style.ItemSpacing.x;
+        m_icon_y_offset  = std::max(0.0f, (ImGui::GetFrameHeight() - icon_font_size) * 0.5f);
+        m_label_y_offset = style.FramePadding.y;
+        m_flat_rows.clear();
+        flatten_visible_rows(m_root, 0.0f);
+    }
+
+    {
+        ERHE_PROFILE_SCOPE("rows");
+        ImGuiListClipper clipper;
+        clipper.Begin(static_cast<int>(m_flat_rows.size()), -1.0f);
+        while (clipper.Step()) {
+            for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; ++i) {
+                const Flat_row& row = m_flat_rows[i];
+                // Indent must be applied before the row's TableNextRow(), which
+                // snapshots the window indent for the cell start position.
+                if (row.indent > 0.0f) {
+                    ImGui::Indent(row.indent);
+                }
+                imgui_row(row);
+                if (row.indent > 0.0f) {
+                    ImGui::Unindent(row.indent);
+                }
+            }
+        }
+        clipper.End();
+    }
 
     for (const auto& fun : m_operations) {
         fun();
@@ -1446,6 +1573,16 @@ void Item_tree::imgui_tree(float ui_scale)
         m_operation.reset();
     }
 
+    // Range selection entries are needed only on frames where this tree set a
+    // terminator (range_selection.end() ignores them otherwise). Feed every
+    // visible row in top-to-bottom order, which end() requires.
+    if (m_range_selection_edited) {
+        auto& range_selection = m_context.selection->range_selection();
+        for (const Flat_row& row : m_flat_rows) {
+            range_selection.entry(row.item);
+        }
+        m_range_selection_edited = false;
+    }
     m_context.selection->range_selection().end();
 
     if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
@@ -1500,6 +1637,13 @@ void Item_tree_window::on_begin()
 void Item_tree_window::on_end()
 {
     ImGui::PopStyleVar(2);
+}
+
+void Item_tree_window::hidden()
+{
+    // Drop cached rows so a hidden tree does not keep deleted items alive
+    // through the cached shared_ptrs; rebuilt when the window is shown again.
+    clear_cached_rows();
 }
 
 void Item_tree_window::imgui()

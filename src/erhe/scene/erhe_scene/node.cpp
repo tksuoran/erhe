@@ -198,6 +198,7 @@ void Node::handle_add_attachment(const std::shared_ptr<Node_attachment>& attachm
     log->trace("'{}'::handle_add_attachment '{}'", describe(), attachment->get_name());
     position = std::min(node_data.attachments.size(), position);
     node_data.attachments.insert(node_data.attachments.begin() + position, attachment);
+    erhe::bump_item_mutation_serial();
 }
 
 void Node::handle_remove_attachment(Node_attachment* const attachment_to_remove)
@@ -214,6 +215,7 @@ void Node::handle_remove_attachment(Node_attachment* const attachment_to_remove)
     if (i != node_data.attachments.end()) {
         log->trace("Removing attachment '{}' from node '{}'", attachment_to_remove->get_name(), get_name());
         node_data.attachments.erase(i, node_data.attachments.end());
+        erhe::bump_item_mutation_serial();
     } else {
         log->error(
             "attachment '{}' cannot be removed from node '{}': attachment not found",

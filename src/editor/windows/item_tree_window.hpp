@@ -8,9 +8,13 @@
 
 #include <imgui/imgui.h>
 
+#include <glm/glm.hpp>
+
+#include <array>
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <string_view>
 
 namespace erhe {
     class Hierarchy;
@@ -22,6 +26,7 @@ namespace editor {
 
 class App_scenes;
 class App_settings;
+class Brush;
 class Icon_set;
 class Operation;
 class Operation_stack;
@@ -36,13 +41,6 @@ enum class Placement : unsigned int {
 enum class Selection_usage : unsigned int {
     Selection_ignored = 0,
     Selection_used
-};
-
-class Tree_node_state
-{
-public:
-    bool is_open      {false};
-    bool need_tree_pop{false};
 };
 
 class Item_tree
@@ -61,6 +59,7 @@ public:
 
     void set_root                       (const std::shared_ptr<erhe::Hierarchy>& root);
     void set_item_filter                (const erhe::Item_filter& filter);
+    void clear_cached_rows              ();
     void set_item_callback              (std::function<bool(const std::shared_ptr<erhe::Item_base>&)> fun);
     void set_hover_callback             (std::function<void()> fun);
     void add_item_context_menu_callback (Context_menu_callback fun);
@@ -87,14 +86,46 @@ private:
     void root_popup_menu              ();
     void item_popup_menu              (const std::shared_ptr<erhe::Item_base>& item);
 
-    static constexpr unsigned int item_visual_flag_none         = 0;
-    static constexpr unsigned int item_visual_flag_update       = 1 << 0;
-    static constexpr unsigned int item_visual_flag_force_expand = 1 << 1;
-    static constexpr unsigned int item_visual_flag_table_row    = 1 << 2;
+    // A resolved icon glyph ready to draw: no type queries or measurement at render time
+    class Row_icon
+    {
+    public:
+        ImFont*          font      {nullptr};
+        const char*      code      {nullptr}; // nullptr = no icon
+        glm::vec4        color     {1.0f, 1.0f, 1.0f, 1.0f};
+        const glm::vec3* live_color{nullptr}; // overrides color at draw time (light / material tint)
+        float            x_offset  {0.0f};    // from the right-icons block start
+    };
 
-    auto item_icon_and_text           (const std::shared_ptr<erhe::Item_base>& item, unsigned int visual_flags) -> Tree_node_state;
+    // One entry per currently visible tree row, fully resolved and laid out so
+    // that rendering needs no casts, no icon resolution and no text
+    // measurement. Rendering submits only the on-screen range through
+    // ImGuiListClipper. Cached across frames; rebuilt when the item mutation
+    // serial moves or when this tree's own inputs (open/close state, filters,
+    // root, fonts, layout) change.
+    class Flat_row
+    {
+    public:
+        static constexpr std::size_t max_right_icon_count = 6;
+
+        std::shared_ptr<erhe::Item_base>           item;
+        std::shared_ptr<Brush>                     brush;              // brush thumbnail rows (content library)
+        erhe::utility::Debug_label                 debug_label;        // "<name>##<id>" - tree node id
+        std::string_view                           label_text;         // points into the item name; cache is rebuilt on rename
+        ImGuiTreeNodeFlags                         tree_node_flags{0}; // everything except Selected (queried live)
+        float                                      indent         {0.0f};
+        Row_icon                                   primary_icon;
+        float                                      label_x_offset {0.0f}; // from row content start
+        float                                      label_width    {0.0f};
+        std::array<Row_icon, max_right_icon_count> right_icons;
+        std::size_t                                right_icon_count {0};
+        float                                      right_icons_width{0.0f};
+    };
+
+    void imgui_row                    (const Flat_row& row);
+    void item_icon_and_text           (const std::shared_ptr<erhe::Item_base>& item); // drag payload preview
     void item_update_selection        (const std::shared_ptr<erhe::Item_base>& item);
-    void imgui_item_node              (const std::shared_ptr<erhe::Item_base>& item);
+    void flatten_visible_rows         (const std::shared_ptr<erhe::Item_base>& item, float indent);
 
     enum class Show_mode : unsigned int {
         Hide          = 0,
@@ -138,7 +169,21 @@ private:
     unsigned int                       m_popup_id{0};
     bool                               m_shift_down_range_selection_started{false};
     float                              m_ui_scale{1.0f};
-    int                                m_row{0};
+
+    std::vector<Flat_row>              m_flat_rows;
+    bool                               m_flat_rows_dirty{true};
+    uint64_t                           m_last_mutation_serial{0};
+    erhe::Item_filter                  m_cached_filter{};
+    bool                               m_cached_expand_attachments{false};
+    float                              m_cached_indent_spacing{0.0f};
+    float                              m_cached_font_size{0.0f};
+    float                              m_cached_icon_font_size{0.0f};
+    bool                               m_range_selection_edited{false};
+
+    // Row layout constants derived from font and style at rebuild time
+    float                              m_icon_x_offset {0.0f}; // primary icon, from row content start
+    float                              m_icon_y_offset {0.0f}; // icon glyphs, from row top
+    float                              m_label_y_offset{0.0f}; // label text, from row top
 };
 
 class Item_tree_window : public erhe::imgui::Imgui_window, public Item_tree
@@ -156,6 +201,7 @@ public:
     void imgui   () override;
     void on_begin() override;
     void on_end  () override;
+    void hidden  () override;
 };
 
 }

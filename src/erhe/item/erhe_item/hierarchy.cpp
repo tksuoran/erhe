@@ -247,6 +247,7 @@ void Hierarchy::handle_add_child(const std::shared_ptr<Hierarchy>& child, std::s
 
     position = std::min(m_children.size(), position);
     m_children.insert(m_children.begin() + position, child);
+    bump_item_mutation_serial();
 }
 
 void Hierarchy::handle_remove_child(Hierarchy* const child)
@@ -263,6 +264,7 @@ void Hierarchy::handle_remove_child(Hierarchy* const child)
     if (i != m_children.end()) {
         log->trace("Removing child '{}' from '{}'", child->describe(), describe());
         m_children.erase(i, m_children.end());
+        bump_item_mutation_serial();
     } else {
         log->error("child '{}' cannot be removed from parent '{}': child not found", child->describe(), describe());
     }
@@ -312,6 +314,9 @@ auto Hierarchy::get_children() const -> const std::vector<std::shared_ptr<Hierar
 
 auto Hierarchy::get_mutable_children() -> std::vector<std::shared_ptr<Hierarchy>>&
 {
+    // Mutable access bypasses the add/remove child hooks (e.g. reorder within
+    // the same parent); conservatively assume the caller mutates the children.
+    bump_item_mutation_serial();
     return m_children;
 }
 
