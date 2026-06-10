@@ -61,6 +61,10 @@ void Render_command_encoder::set_scissor_rect(int x, int y, int width, int heigh
 {
     m_impl->set_scissor_rect(x, y, width, height);
 }
+void Render_command_encoder::set_depth_bias(float constant_factor, float slope_factor, float clamp)
+{
+    m_impl->set_depth_bias(constant_factor, slope_factor, clamp);
+}
 void Render_command_encoder::set_index_buffer(const Buffer* buffer)
 {
     m_impl->set_index_buffer(buffer);

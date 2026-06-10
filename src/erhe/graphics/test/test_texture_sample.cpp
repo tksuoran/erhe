@@ -102,7 +102,8 @@ TEST_F(Gpu_test, texture_sample_nearest)
                     .binding_point = 0,
                     .type          = erhe::graphics::Binding_type::combined_image_sampler,
                     .name          = "s_texture",
-                    .glsl_type     = erhe::graphics::Glsl_type::sampler_2d
+                    .glsl_type     = erhe::graphics::Glsl_type::sampler_2d,
+                    .stage_flags   = erhe::graphics::Shader_stage_flags::fragment
                 }
             },
             .debug_label       = erhe::utility::Debug_label{"sample layout"},

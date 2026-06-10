@@ -62,6 +62,13 @@ void Render_command_encoder_impl::set_scissor_rect(const int x, const int y, con
     static_cast<void>(height);
 }
 
+void Render_command_encoder_impl::set_depth_bias(const float constant_factor, const float slope_factor, const float clamp)
+{
+    static_cast<void>(constant_factor);
+    static_cast<void>(slope_factor);
+    static_cast<void>(clamp);
+}
+
 void Render_command_encoder_impl::set_index_buffer(const Buffer* const buffer)
 {
     static_cast<void>(buffer);

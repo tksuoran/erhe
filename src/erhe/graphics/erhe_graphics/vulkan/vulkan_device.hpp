@@ -4,6 +4,7 @@
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/shader_monitor.hpp"
 #include "erhe_dataformat/dataformat.hpp"
+#include "erhe_profile/profile.hpp"
 
 #include "volk.h"
 // vma forward declaration
@@ -242,6 +243,12 @@ public:
     [[nodiscard]] auto get_present_queue_family_index   () const -> uint32_t;
     [[nodiscard]] auto get_graphics_queue               () const -> VkQueue;
     [[nodiscard]] auto get_present_queue                () const -> VkQueue;
+#if defined(ERHE_PROFILE_LIBRARY_TRACY) && defined(TRACY_ENABLE)
+    // Tracy Vulkan GPU profiling context (created in vulkan_device_init.cpp,
+    // null until then / when GPU timestamps are unsupported). Used by
+    // erhe::graphics::Scoped_gpu_zone to open TracyVkZone scopes.
+    [[nodiscard]] auto get_tracy_vk_ctx                 () const -> TracyVkCtx { return m_tracy_vk_ctx; }
+#endif
     [[nodiscard]] auto get_capabilities                 () const -> const Capabilities&;
     [[nodiscard]] auto get_driver_properties            () const -> const VkPhysicalDeviceDriverProperties&;
     [[nodiscard]] auto get_portability_subset_features  () const -> const VkPhysicalDevicePortabilitySubsetFeaturesKHR&;
@@ -462,6 +469,13 @@ private:
     std::array<bool,                  s_max_gpu_timers> m_gpu_timer_slot_used{};
     std::array<std::array<bool, s_max_gpu_timers>, s_number_of_frames_in_flight> m_gpu_timer_fired{};
     std::array<bool, s_number_of_frames_in_flight>                              m_gpu_timer_reset_pending{};
+
+#if defined(ERHE_PROFILE_LIBRARY_TRACY) && defined(TRACY_ENABLE)
+    // Tracy Vulkan GPU profiling context, created in vulkan_device_init.cpp
+    // when GPU timestamps are supported and destroyed in ~Device_impl. The
+    // per-frame TracyVkCollect is issued from maybe_reset_gpu_timer_slice.
+    TracyVkCtx  m_tracy_vk_ctx{nullptr};
+#endif
 
     // Active render pass tracking
     static Device_impl*  s_device_impl;

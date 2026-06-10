@@ -28,6 +28,7 @@ public:
     void set_viewport_rect        (int x, int y, int width, int height);
     void set_viewport_depth_range (float min_depth, float max_depth);
     void set_scissor_rect         (int x, int y, int width, int height);
+    void set_depth_bias           (float constant_factor, float slope_factor, float clamp);
     void set_index_buffer         (const Buffer* buffer);
     void set_vertex_buffer        (const Buffer* buffer, std::uintptr_t offset, std::uintptr_t index);
     void draw_primitives          (Primitive_type primitive_type, std::uintptr_t vertex_start, std::uintptr_t vertex_count, std::uintptr_t instance_count) const;

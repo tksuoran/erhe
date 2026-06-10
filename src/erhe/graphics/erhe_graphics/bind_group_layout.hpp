@@ -66,6 +66,20 @@ public:
     // is VK_FALSE there). The pointed-to Sampler must outlive the
     // Bind_group_layout. OpenGL and Metal backends ignore this field.
     const Sampler*   immutable_sampler{nullptr};
+
+    // Shader stages this binding is accessed in (Shader_stage_flags bitmask).
+    // Honored by the Vulkan backend's VkDescriptorSetLayoutBinding::stageFlags;
+    // OpenGL and Metal are not stage-scoped and ignore it.
+    //
+    // Defaults to Shader_stage_flags::none to force every binding -- buffers
+    // (UBO/SSBO) and samplers alike -- to declare its stages explicitly. The
+    // Vulkan backend treats a none binding as a configuration error rather than
+    // silently assuming a stage, so callers must set this to exactly the stages
+    // the resource is read in: e.g. a UBO read only in the vertex shader is
+    // Shader_stage_flags::vertex; a sampler read in fragment is
+    // Shader_stage_flags::fragment; the shadow-texel debug sampler read in the
+    // vertex stage is vertex|fragment.
+    uint32_t         stage_flags{Shader_stage_flags::none};
 };
 
 class Bind_group_layout_create_info

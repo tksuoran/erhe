@@ -314,7 +314,9 @@ void Render_command_encoder_impl::set_render_pipeline_state(
             .polygonMode             = to_vk_polygon_mode(data.rasterization.polygon_mode),
             .cullMode                = to_vk_cull_mode(data.rasterization.face_cull_enable, data.rasterization.cull_face_mode),
             .frontFace               = to_vk_front_face(data.rasterization.front_face_direction),
-            .depthBiasEnable         = VK_FALSE,
+            // Magnitudes are dynamic (VK_DYNAMIC_STATE_DEPTH_BIAS) and set per
+            // pass via Render_command_encoder::set_depth_bias().
+            .depthBiasEnable         = data.rasterization.depth_bias_enable ? VK_TRUE : VK_FALSE,
             .depthBiasConstantFactor = 0.0f,
             .depthBiasClamp          = 0.0f,
             .depthBiasSlopeFactor    = 0.0f,
@@ -377,14 +379,15 @@ void Render_command_encoder_impl::set_render_pipeline_state(
 
         const VkDynamicState dynamic_states[] = {
             VK_DYNAMIC_STATE_VIEWPORT,
-            VK_DYNAMIC_STATE_SCISSOR
+            VK_DYNAMIC_STATE_SCISSOR,
+            VK_DYNAMIC_STATE_DEPTH_BIAS
         };
 
         const VkPipelineDynamicStateCreateInfo dynamic_state{
             .sType             = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
             .pNext             = nullptr,
             .flags             = 0,
-            .dynamicStateCount = 2,
+            .dynamicStateCount = data.rasterization.depth_bias_enable ? 3u : 2u,
             .pDynamicStates    = dynamic_states
         };
 
@@ -480,6 +483,17 @@ void Render_command_encoder_impl::set_scissor_rect(const int x, const int y, con
         }
     };
     vkCmdSetScissor(command_buffer, 0, 1, &scissor);
+}
+
+void Render_command_encoder_impl::set_depth_bias(const float constant_factor, const float slope_factor, const float clamp)
+{
+    VkCommandBuffer command_buffer = m_command_buffer.get_impl().get_vulkan_command_buffer();
+    if (command_buffer == VK_NULL_HANDLE) {
+        return;
+    }
+    // Pipelines that enable depth bias declare VK_DYNAMIC_STATE_DEPTH_BIAS, so
+    // the magnitudes are supplied here (Vulkan order: constant, clamp, slope).
+    vkCmdSetDepthBias(command_buffer, constant_factor, clamp, slope_factor);
 }
 
 void Render_command_encoder_impl::set_index_buffer(const Buffer* const buffer)

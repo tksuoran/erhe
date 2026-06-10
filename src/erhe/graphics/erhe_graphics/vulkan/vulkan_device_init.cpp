@@ -1681,6 +1681,44 @@ Device_impl::Device_impl(
                     "GPU timers enabled: timestampValidBits={} timestampPeriod={} max_timers={}",
                     timestamp_valid_bits, m_gpu_timer_timestamp_period, s_max_gpu_timers
                 );
+#if defined(ERHE_PROFILE_LIBRARY_TRACY) && defined(TRACY_ENABLE)
+                // Tracy GPU (Vulkan) profiling context. Tracy records a
+                // calibration into a one-shot command buffer and submits +
+                // waits on it internally, so a throwaway transient pool is
+                // enough. Created here, where timestamp support is confirmed;
+                // the per-frame TracyVkCollect and the shutdown TracyVkDestroy
+                // live in vulkan_device.cpp.
+                if (m_vulkan_graphics_queue != VK_NULL_HANDLE) {
+                    const VkCommandPoolCreateInfo tracy_pool_create_info{
+                        .sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+                        .pNext            = nullptr,
+                        .flags            = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT,
+                        .queueFamilyIndex = m_graphics_queue_family_index
+                    };
+                    VkCommandPool tracy_command_pool = VK_NULL_HANDLE;
+                    if (vkCreateCommandPool(m_vulkan_device, &tracy_pool_create_info, nullptr, &tracy_command_pool) == VK_SUCCESS) {
+                        const VkCommandBufferAllocateInfo tracy_cb_allocate_info{
+                            .sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+                            .pNext              = nullptr,
+                            .commandPool        = tracy_command_pool,
+                            .level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+                            .commandBufferCount = 1
+                        };
+                        VkCommandBuffer tracy_command_buffer = VK_NULL_HANDLE;
+                        if (vkAllocateCommandBuffers(m_vulkan_device, &tracy_cb_allocate_info, &tracy_command_buffer) == VK_SUCCESS) {
+                            m_tracy_vk_ctx = TracyVkContext(
+                                m_vulkan_physical_device, m_vulkan_device, m_vulkan_graphics_queue, tracy_command_buffer
+                            );
+                            static constexpr char tracy_ctx_name[] = "erhe graphics queue";
+                            TracyVkContextName(m_tracy_vk_ctx, tracy_ctx_name, static_cast<uint16_t>(sizeof(tracy_ctx_name) - 1));
+                            log_startup->info("Tracy Vulkan GPU profiling context created");
+                        }
+                        // TracyVkContext submitted + waited on tracy_command_buffer
+                        // internally, so the transient pool can be freed now.
+                        vkDestroyCommandPool(m_vulkan_device, tracy_command_pool, nullptr);
+                    }
+                }
+#endif
             }
         }
     }

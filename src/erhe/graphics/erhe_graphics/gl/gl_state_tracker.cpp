@@ -400,6 +400,12 @@ void Rasterization_state_tracker::execute(const Rasterization_state& state)
         gl::disable(gl::Enable_cap::depth_clamp);
     }
 
+    if (state.depth_bias_enable) {
+        gl::enable(gl::Enable_cap::polygon_offset_fill);
+    } else {
+        gl::disable(gl::Enable_cap::polygon_offset_fill);
+    }
+
     gl::front_face(state.front_face_direction);
     gl::polygon_mode(gl::Material_face::front_and_back, state.polygon_mode);
 #else
@@ -425,6 +431,16 @@ void Rasterization_state_tracker::execute(const Rasterization_state& state)
     } else {
         gl::disable(gl::Enable_cap::depth_clamp);
         m_cache.depth_clamp_enable = false;
+    }
+
+    // Polygon offset enable; the factors are set per pass by
+    // Render_command_encoder::set_depth_bias() (glPolygonOffset).
+    if (state.depth_bias_enable) {
+        gl::enable(gl::Enable_cap::polygon_offset_fill);
+        m_cache.depth_bias_enable = true;
+    } else {
+        gl::disable(gl::Enable_cap::polygon_offset_fill);
+        m_cache.depth_bias_enable = false;
     }
 
     if (m_cache.front_face_direction != state.front_face_direction) {

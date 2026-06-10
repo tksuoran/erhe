@@ -5,6 +5,7 @@
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 #include "erhe_graphics/sampler.hpp"
+#include "erhe_verify/verify.hpp"
 
 #include <vector>
 
@@ -20,6 +21,21 @@ auto to_vulkan_descriptor_type(const Binding_type type) -> VkDescriptorType
         case Binding_type::combined_image_sampler: return VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         default:                                   return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     }
+}
+
+auto to_vulkan_shader_stage_flags(const uint32_t stage_flags) -> VkShaderStageFlags
+{
+    // all maps to VK_SHADER_STAGE_ALL (covers tessellation too, matching the
+    // previous default for buffer bindings); narrower masks map bit by bit.
+    if (stage_flags == Shader_stage_flags::all) {
+        return VK_SHADER_STAGE_ALL;
+    }
+    VkShaderStageFlags result = 0;
+    if ((stage_flags & Shader_stage_flags::vertex)   != 0u) { result |= VK_SHADER_STAGE_VERTEX_BIT;   }
+    if ((stage_flags & Shader_stage_flags::fragment) != 0u) { result |= VK_SHADER_STAGE_FRAGMENT_BIT; }
+    if ((stage_flags & Shader_stage_flags::geometry) != 0u) { result |= VK_SHADER_STAGE_GEOMETRY_BIT; }
+    if ((stage_flags & Shader_stage_flags::compute)  != 0u) { result |= VK_SHADER_STAGE_COMPUTE_BIT;  }
+    return result;
 }
 
 } // anonymous namespace
@@ -86,9 +102,23 @@ Bind_group_layout_impl::Bind_group_layout_impl(
     immutable_sampler_storage.reserve(create_info.bindings.size());
 
     for (const Bind_group_layout_binding& binding : create_info.bindings) {
-        VkShaderStageFlags stage_flags = VK_SHADER_STAGE_ALL;
+        // Stage visibility is declared per binding, not assumed from the binding
+        // type. Every binding -- buffer (UBO/SSBO) and combined_image_sampler
+        // alike -- must declare the stages it is accessed in. Leaving stage_flags
+        // at the default Shader_stage_flags::none is a configuration error:
+        // silently mapping it to a stage (to 0 = invisible, or to all = the
+        // opposite) would reintroduce the stage-mismatch hazard, so it is caught
+        // here.
+        if (binding.stage_flags == Shader_stage_flags::none) {
+            ERHE_FATAL(
+                "Bind_group_layout binding %u ('%.*s') declares no shader stages (Shader_stage_flags::none); set Bind_group_layout_binding::stage_flags to the stages it is accessed in",
+                binding.binding_point,
+                static_cast<int>(binding.name.size()),
+                binding.name.data()
+            );
+        }
+        const VkShaderStageFlags stage_flags = to_vulkan_shader_stage_flags(binding.stage_flags);
         if (binding.type == Binding_type::combined_image_sampler) {
-            stage_flags = VK_SHADER_STAGE_FRAGMENT_BIT;
             m_has_sampler_bindings = true;
         }
         // Sampler bindings are offset past buffer bindings in Vulkan

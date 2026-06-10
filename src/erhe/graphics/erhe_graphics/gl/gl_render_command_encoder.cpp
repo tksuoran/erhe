@@ -105,6 +105,16 @@ void Render_command_encoder_impl::set_scissor_rect(const int x, const int y, con
     );
 }
 
+void Render_command_encoder_impl::set_depth_bias(const float constant_factor, const float slope_factor, const float clamp)
+{
+    // GL_POLYGON_OFFSET_FILL is enabled/disabled by the rasterization state
+    // tracker (from Rasterization_state::depth_bias_enable). glPolygonOffset
+    // takes (factor=slope, units=constant); the clamp is not portably
+    // available before GL 4.6 / ARB_polygon_offset_clamp, so it is ignored.
+    static_cast<void>(clamp);
+    gl::polygon_offset(slope_factor, constant_factor);
+}
+
 void Render_command_encoder_impl::set_index_buffer(const Buffer* const buffer)
 {
     m_device.get_impl().m_gl_state_tracker.vertex_input.set_index_buffer(buffer);

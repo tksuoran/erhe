@@ -415,6 +415,17 @@ void Render_command_encoder_impl::set_scissor_rect(const int x, const int y, con
     encoder->setScissorRect(rect);
 }
 
+void Render_command_encoder_impl::set_depth_bias(const float constant_factor, const float slope_factor, const float clamp)
+{
+    MTL::RenderCommandEncoder* encoder = Render_pass_impl::get_active_mtl_encoder();
+    if (encoder == nullptr) {
+        return;
+    }
+    // Metal applies depth bias as render-encoder state (no pipeline flag):
+    // setDepthBias:slopeScale:clamp:.
+    encoder->setDepthBias(constant_factor, slope_factor, clamp);
+}
+
 void Render_command_encoder_impl::set_index_buffer(const Buffer* const buffer)
 {
     if (buffer != nullptr) {

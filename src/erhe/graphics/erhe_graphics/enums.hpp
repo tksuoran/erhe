@@ -3,6 +3,7 @@
 #include "erhe_dataformat/dataformat.hpp"
 
 #include <cstddef>
+#include <cstdint>
 #include <string>
 #include <type_traits> // enable_if
 
@@ -210,6 +211,24 @@ enum class Shader_type : unsigned int
     geometry_shader        = 3,
     tess_control_shader    = 4,
     tess_evaluation_shader = 5
+};
+
+// Bitmask of pipeline shader stages a descriptor binding is visible to.
+// Mirrors VkShaderStageFlags. Only the Vulkan backend honors it; OpenGL and
+// Metal samplers are not stage-scoped and ignore it. Combine bits with bitwise
+// OR. A binding must include every stage that reads it -- e.g. a sampler
+// fetched in the vertex stage (a gl_VertexID-driven shader, or vertex pulling
+// via texelFetch) must include 'vertex', otherwise the descriptor is invisible
+// there and textureSize()/texture()/texelFetch() read as zero.
+class Shader_stage_flags
+{
+public:
+    static constexpr uint32_t none     = 0u;
+    static constexpr uint32_t vertex   = 1u << 0;
+    static constexpr uint32_t fragment = 1u << 1;
+    static constexpr uint32_t geometry = 1u << 2;
+    static constexpr uint32_t compute  = 1u << 3;
+    static constexpr uint32_t all      = vertex | fragment | geometry | compute;
 };
 
 enum class Stencil_face_direction : unsigned int

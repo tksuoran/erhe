@@ -177,6 +177,13 @@ Device_impl::~Device_impl() noexcept
 {
     vkDeviceWaitIdle(m_vulkan_device);
 
+#if defined(ERHE_PROFILE_LIBRARY_TRACY) && defined(TRACY_ENABLE)
+    if (m_tracy_vk_ctx != nullptr) {
+        TracyVkDestroy(m_tracy_vk_ctx);
+        m_tracy_vk_ctx = nullptr;
+    }
+#endif
+
     if (m_gpu_timer_query_pool != VK_NULL_HANDLE) {
         vkDestroyQueryPool(m_vulkan_device, m_gpu_timer_query_pool, nullptr);
         m_gpu_timer_query_pool = VK_NULL_HANDLE;
@@ -2073,6 +2080,16 @@ void Device_impl::maybe_reset_gpu_timer_slice(VkCommandBuffer cb)
         static_cast<uint32_t>(slice_base),
         static_cast<uint32_t>(slice_size)
     );
+
+#if defined(ERHE_PROFILE_LIBRARY_TRACY) && defined(TRACY_ENABLE)
+    // Tracy GPU collect rides the same once-per-frame, first-cb-of-the-frame,
+    // outside-any-render-pass point as the query-pool reset above. It operates
+    // on Tracy's own internal query pool, so it does not conflict with the
+    // erhe GPU-timer reset.
+    if (m_tracy_vk_ctx != nullptr) {
+        TracyVkCollect(m_tracy_vk_ctx, cb);
+    }
+#endif
 }
 
 } // namespace erhe::graphics

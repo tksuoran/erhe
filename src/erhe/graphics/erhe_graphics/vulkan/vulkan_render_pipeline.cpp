@@ -135,7 +135,9 @@ Render_pipeline_impl::Render_pipeline_impl(Device& device, const Render_pipeline
         .polygonMode             = to_vk_polygon_mode(base.rasterization.polygon_mode),
         .cullMode                = to_vk_cull_mode   (base.rasterization.face_cull_enable, base.rasterization.cull_face_mode),
         .frontFace               = to_vk_front_face  (base.rasterization.front_face_direction),
-        .depthBiasEnable         = VK_FALSE,
+        // Magnitudes are dynamic (VK_DYNAMIC_STATE_DEPTH_BIAS below) and set
+        // per pass via Render_command_encoder::set_depth_bias().
+        .depthBiasEnable         = base.rasterization.depth_bias_enable ? VK_TRUE : VK_FALSE,
         .depthBiasConstantFactor = 0.0f,
         .depthBiasClamp          = 0.0f,
         .depthBiasSlopeFactor    = 0.0f,
@@ -212,16 +214,20 @@ Render_pipeline_impl::Render_pipeline_impl(Device& device, const Render_pipeline
         }
     };
 
+    // VK_DYNAMIC_STATE_DEPTH_BIAS is only added when the pipeline enables depth
+    // bias, so pipelines that don't use it are not obliged to call
+    // vkCmdSetDepthBias before every draw.
     const VkDynamicState dynamic_states[] = {
         VK_DYNAMIC_STATE_VIEWPORT,
-        VK_DYNAMIC_STATE_SCISSOR
+        VK_DYNAMIC_STATE_SCISSOR,
+        VK_DYNAMIC_STATE_DEPTH_BIAS
     };
 
     const VkPipelineDynamicStateCreateInfo dynamic_state{
         .sType             = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
         .pNext             = nullptr,
         .flags             = 0,
-        .dynamicStateCount = 2,
+        .dynamicStateCount = base.rasterization.depth_bias_enable ? 3u : 2u,
         .pDynamicStates    = dynamic_states
     };
 

@@ -172,7 +172,8 @@ TEST_F(Gpu_test, texture_3d_sample_voxels)
                     .binding_point = 0,
                     .type          = erhe::graphics::Binding_type::combined_image_sampler,
                     .name          = "s_texture",
-                    .glsl_type     = erhe::graphics::Glsl_type::sampler_3d
+                    .glsl_type     = erhe::graphics::Glsl_type::sampler_3d,
+                    .stage_flags   = erhe::graphics::Shader_stage_flags::fragment
                 }
             },
             .debug_label       = erhe::utility::Debug_label{"volume sample layout"},
