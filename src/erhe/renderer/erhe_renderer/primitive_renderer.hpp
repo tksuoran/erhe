@@ -85,6 +85,12 @@ public:
 
     void add_plane(const glm::vec4& color, const glm::vec4& plane);
 
+    // Draws the orientation indicator add_plane() uses - a center marker, a
+    // stub along the normal, and a tangent/bitangent cross - at an explicit
+    // point (e.g. the center of a bounded face) rather than at the plane's
+    // closest point to the world origin. The bounding quad is not drawn.
+    void add_plane_indicator(const glm::vec4& color, const glm::vec3& center, const glm::vec3& normal);
+
     void add_cube(
         const glm::mat4& transform,
         const glm::vec4& color,

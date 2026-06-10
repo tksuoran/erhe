@@ -174,18 +174,17 @@ void Primitive_renderer::add_lines(const std::initializer_list<Line> lines)
     }
 }
 
-void Primitive_renderer::add_plane(const glm::vec4& color, const glm::vec4& plane)
+void Primitive_renderer::add_plane_indicator(const glm::vec4& color, const glm::vec3& center, const glm::vec3& normal)
 {
-    glm::vec3 center = erhe::math::get_point_on_plane(plane);
-    glm::vec3 normal{plane};
+    const glm::vec3 unit_normal = glm::normalize(normal);
     glm::vec3 tangent;
     glm::vec3 bitangent;
-    erhe::math::get_plane_basis(normal, tangent, bitangent);
-    glm::vec4 zero{0.0f, 0.0f, 0.0f, 0.0f};
+    erhe::math::get_plane_basis(unit_normal, tangent, bitangent);
+    const glm::vec4 zero{0.0f, 0.0f, 0.0f, 0.0f};
 
-    make_lines(9);
-    put(center,          m_half_line_thickness * 5.0f, color);
-    put(center + normal, 0.0f, zero);
+    make_lines(5);
+    put(center,               m_half_line_thickness * 5.0f, color);
+    put(center + unit_normal, 0.0f, zero);
 
     put(center - tangent,        m_half_line_thickness, zero);
     put(center,           0.7f * m_half_line_thickness, color);
@@ -196,7 +195,18 @@ void Primitive_renderer::add_plane(const glm::vec4& color, const glm::vec4& plan
     put(center,             0.7f * m_half_line_thickness, color);
     put(center,             0.7f * m_half_line_thickness, color);
     put(center + bitangent,        m_half_line_thickness, zero);
+}
 
+void Primitive_renderer::add_plane(const glm::vec4& color, const glm::vec4& plane)
+{
+    const glm::vec3 center = erhe::math::get_point_on_plane(plane);
+    const glm::vec3 normal{plane};
+    add_plane_indicator(color, center, normal);
+
+    glm::vec3 tangent;
+    glm::vec3 bitangent;
+    erhe::math::get_plane_basis(glm::normalize(normal), tangent, bitangent);
+    make_lines(4);
     put(center + tangent - bitangent, m_half_line_thickness, color);
     put(center + tangent + bitangent, m_half_line_thickness, color);
 

@@ -160,14 +160,18 @@ Text_renderer::Text_renderer(
         graphics_device,
         [&]{
             std::vector<erhe::graphics::Bind_group_layout_binding> bindings{
-                {m_projection_block.get_binding_point(),
-                    (m_projection_block.get_type() == erhe::graphics::Shader_resource::Type::shader_storage_block)
+                {.binding_point = m_projection_block.get_binding_point(),
+                    .type = (m_projection_block.get_type() == erhe::graphics::Shader_resource::Type::shader_storage_block)
                         ? erhe::graphics::Binding_type::storage_buffer
-                        : erhe::graphics::Binding_type::uniform_buffer},
-                {m_vertex_ssbo_block.get_binding_point(),
-                    (m_vertex_ssbo_block.get_type() == erhe::graphics::Shader_resource::Type::shader_storage_block)
+                        : erhe::graphics::Binding_type::uniform_buffer,
+                    // projection.clip_from_window / vertex_data_offset read in text.vert only.
+                    .stage_flags = erhe::graphics::Shader_stage_flags::vertex},
+                {.binding_point = m_vertex_ssbo_block.get_binding_point(),
+                    .type = (m_vertex_ssbo_block.get_type() == erhe::graphics::Shader_resource::Type::shader_storage_block)
                         ? erhe::graphics::Binding_type::storage_buffer
-                        : erhe::graphics::Binding_type::uniform_buffer},
+                        : erhe::graphics::Binding_type::uniform_buffer,
+                    // Vertex pulling: vertex data read in text.vert only.
+                    .stage_flags = erhe::graphics::Shader_stage_flags::vertex},
                 // s_texture: bound via Render_command_encoder::set_sampled_image()
                 // before each draw. Declared on the layout so the Vulkan
                 // pipeline layout has matching descriptor slots, the shader
@@ -179,7 +183,9 @@ Text_renderer::Text_renderer(
                     .sampler_aspect  = erhe::graphics::Sampler_aspect::color,
                     .name            = "s_texture",
                     .glsl_type       = erhe::graphics::Glsl_type::sampler_2d,
-                    .is_texture_heap = false
+                    .is_texture_heap = false,
+                    // Glyph atlas sampled in the fragment stage (text.frag).
+                    .stage_flags     = erhe::graphics::Shader_stage_flags::fragment
                 }
             };
             if (m_use_buffer_texture) {
@@ -191,7 +197,9 @@ Text_renderer::Text_renderer(
                     .sampler_aspect  = erhe::graphics::Sampler_aspect::color,
                     .name            = "s_vertex_data",
                     .glsl_type       = erhe::graphics::Glsl_type::unsigned_int_sampler_buffer,
-                    .is_texture_heap = false
+                    .is_texture_heap = false,
+                    // Vertex pulling: texelFetch(s_vertex_data, ...) in text.vert.
+                    .stage_flags     = erhe::graphics::Shader_stage_flags::vertex
                 });
             }
             return erhe::graphics::Bind_group_layout_create_info{

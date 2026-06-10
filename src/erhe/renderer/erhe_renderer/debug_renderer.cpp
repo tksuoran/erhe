@@ -122,17 +122,22 @@ Debug_renderer_program_interface::Debug_renderer_program_interface(
             .debug_label       = "Debug renderer",
             .uses_texture_heap = false
         };
+        // line_vertex/triangle_vertex are read/written only by compute_before_line.comp.
         if (line_vertex_buffer_block) {
-            layout_info.bindings.push_back({line_vertex_buffer_block->get_binding_point(), erhe::graphics::Binding_type::storage_buffer});
+            layout_info.bindings.push_back({.binding_point = line_vertex_buffer_block->get_binding_point(), .type = erhe::graphics::Binding_type::storage_buffer, .stage_flags = erhe::graphics::Shader_stage_flags::compute});
         }
         if (triangle_vertex_buffer_block) {
-            layout_info.bindings.push_back({triangle_vertex_buffer_block->get_binding_point(), erhe::graphics::Binding_type::storage_buffer});
+            layout_info.bindings.push_back({.binding_point = triangle_vertex_buffer_block->get_binding_point(), .type = erhe::graphics::Binding_type::storage_buffer, .stage_flags = erhe::graphics::Shader_stage_flags::compute});
         }
+        // This layout is shared across the compute, simple (line_simple.vert), and
+        // geometry (debug_line.vert/.geom + line_after_compute.frag) tiers, so view
+        // is read in all of compute, vertex, geometry, and fragment.
         layout_info.bindings.push_back({
-            view_block->get_binding_point(),
-            (view_block->get_type() == erhe::graphics::Shader_resource::Type::shader_storage_block)
+            .binding_point = view_block->get_binding_point(),
+            .type = (view_block->get_type() == erhe::graphics::Shader_resource::Type::shader_storage_block)
                 ? erhe::graphics::Binding_type::storage_buffer
-                : erhe::graphics::Binding_type::uniform_buffer
+                : erhe::graphics::Binding_type::uniform_buffer,
+            .stage_flags = erhe::graphics::Shader_stage_flags::compute | erhe::graphics::Shader_stage_flags::vertex | erhe::graphics::Shader_stage_flags::geometry | erhe::graphics::Shader_stage_flags::fragment
         });
         return std::make_unique<erhe::graphics::Bind_group_layout>(graphics_device, layout_info);
     };
@@ -192,11 +197,14 @@ Debug_renderer_program_interface::Debug_renderer_program_interface(
             graphics_device,
             erhe::graphics::Bind_group_layout_create_info{
                 .bindings = {
-                    {triangle_vertex_buffer_block->get_binding_point(), erhe::graphics::Binding_type::storage_buffer},
-                    {view_block->get_binding_point(),
-                        (view_block->get_type() == erhe::graphics::Shader_resource::Type::shader_storage_block)
+                    // Graphics path: line_after_compute.vert pulls triangle_vertex;
+                    // .vert + .frag read view.
+                    {.binding_point = triangle_vertex_buffer_block->get_binding_point(), .type = erhe::graphics::Binding_type::storage_buffer, .stage_flags = erhe::graphics::Shader_stage_flags::vertex},
+                    {.binding_point = view_block->get_binding_point(),
+                        .type = (view_block->get_type() == erhe::graphics::Shader_resource::Type::shader_storage_block)
                             ? erhe::graphics::Binding_type::storage_buffer
-                            : erhe::graphics::Binding_type::uniform_buffer},
+                            : erhe::graphics::Binding_type::uniform_buffer,
+                        .stage_flags = erhe::graphics::Shader_stage_flags::vertex | erhe::graphics::Shader_stage_flags::fragment},
                 },
                 .debug_label       = "Debug renderer graphics",
                 .uses_texture_heap = false
