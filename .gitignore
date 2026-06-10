@@ -22,7 +22,11 @@ src/editor/res/fonts/materialdesignicons.css
 !src/editor/cache/bvh/keep
 !src/editor/cache/tinybvh/keep
 build
+build_ninja
+build_ninja_linux
 build_ninja_linux_vulkan
+build_ninja_osx
+build_ninja_windows
 build_vs2022_opengl
 build_vs2026_opengl
 build_vs2026_opengl_no_tracy

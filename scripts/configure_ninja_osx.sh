@@ -4,10 +4,10 @@
 #-DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=lld \
 #-DCMAKE_SHARED_LINKER_FLAGS=-fuse-ld=lld \
 
-mkdir -p build/ninja
+mkdir -p build_ninja_osx
 cmake \
     -G "Ninja" \
-    -B build/ninja \
+    -B build_ninja_osx \
     -S . \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_EXPORT_COMPILE_COMMANDS=1 \

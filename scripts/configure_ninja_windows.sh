@@ -6,11 +6,11 @@
 
 #    --fresh \
 
-mkdir -p build/ninja
+mkdir -p build_ninja_windows
 cmake \
     --fresh \
     -G "Ninja" \
-    -B build/ninja \
+    -B build_ninja_windows \
     -S . \
     -DCMAKE_BUILD_TYPE=Debug \
     -DCMAKE_EXPORT_COMPILE_COMMANDS=1 \

@@ -61,7 +61,7 @@ cmake --build build_xcode_metal  --target editor --config Debug
 
 ```bash
 scripts/configure_ninja_linux.sh
-cmake --build build --target editor
+cmake --build build_ninja_linux --target editor
 ```
 
 Required packages: `libwayland-dev libxkbcommon-dev xorg-dev` (Ubuntu) or equivalent.

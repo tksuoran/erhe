@@ -77,7 +77,7 @@ build erhe on Windows.
 git clone https://github.com/tksuoran/erhe
 cd erhe
 scripts/configure_ninja_linux.sh
-cmake --build build --target editor
+cmake --build build_ninja_linux --target editor
 ```
 
 ### macOS (command line)

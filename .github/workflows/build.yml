@@ -48,7 +48,7 @@ jobs:
             api: opengl
             shell: bash
             configure: bash scripts/configure_ninja_linux.sh
-            build_dir: build/ninja
+            build_dir: build_ninja_linux
             config: Release
 
           - name: Linux (Ninja / Vulkan)
@@ -56,7 +56,7 @@ jobs:
             api: vulkan
             shell: bash
             configure: bash scripts/configure_ninja_linux_vulkan.sh
-            build_dir: build/ninja-vulkan
+            build_dir: build_ninja_linux_vulkan
             config: Release
 
           - name: macOS (Xcode / Metal)

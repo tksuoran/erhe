@@ -23,7 +23,7 @@ cd erhe
 scripts\configure_vs2026_opengl.bat
 
 # Linux
-scripts/configure_ninja_linux.sh && cmake --build build --target editor
+scripts/configure_ninja_linux.sh && cmake --build build_ninja_linux --target editor
 
 # macOS
 scripts/configure_xcode_metal.sh && cmake --build build_xcode_metal --target editor --config Debug
