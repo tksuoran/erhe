@@ -51,10 +51,11 @@ set_option(ERHE_AUDIO_LIBRARY              "Audio library. Either miniaudio or n
 set_option(ERHE_FONT_RASTERIZATION_LIBRARY "Font rasterization library. Either freetype or none"                        "freetype" "freetype;none")
 set_option(ERHE_GLTF_LIBRARY               "GLTF library. Either fastgltf or none"                                      "fastgltf" "fastgltf;none")
 set_option(ERHE_GUI_LIBRARY                "GUI library. Either imgui or none"                                          "imgui"    "imgui;none")
-set_option(ERHE_GRAPHICS_API           "Graphics library to use with erhe. Either opengl, vulkan, metal or none"    "opengl"   "opengl;vulkan;metal;none")
+set_option(ERHE_GRAPHICS_API               "Graphics library to use with erhe. Either opengl, vulkan, metal or none"    "opengl"   "opengl;vulkan;metal;none")
+set_option(ERHE_NAVIGATION_LIBRARY         "Navigation mesh library. Either recastnavigation or none"                   "none"     "recastnavigation;none")
 set_option(ERHE_PHYSICS_LIBRARY            "Physics library to use with erhe. Either jolt or none"                      "jolt"     "jolt;none")
 set_option(ERHE_PROFILE_LIBRARY            "Profile library to use with erhe. Either nvtx, superluminal, tracy or none" "none"     "nvtx;superluminal;tracy;none")
-set_option(ERHE_RAYTRACE_LIBRARY           "Raytrace library to use with erhe. Either embree, bvh, tinybvh or none"    "bvh"      "embree;bvh;tinybvh;none")
+set_option(ERHE_RAYTRACE_LIBRARY           "Raytrace library to use with erhe. Either embree, bvh, tinybvh or none"     "bvh"      "embree;bvh;tinybvh;none")
 set_option(ERHE_SVG_LIBRARY                "SVG loading library. Either plutosvg or none"                               "plutosvg" "plutosvg;none")
 set_option(ERHE_TEXT_LAYOUT_LIBRARY        "Text layout library. Either freetype, harfbuzz or none"                     "harfbuzz" "harfbuzz;freetype;none")
 set_option(ERHE_WINDOW_LIBRARY             "Window library to use with erhe. Either glfw, sdl or none"                  "sdl"      "sdl;glfw;none")
@@ -484,16 +485,23 @@ else ()
     add_definitions(-DERHE_WINDOW_LIBRARY_NONE)
 endif ()
 
-CPMAddPackage(
-    NAME              recastnavigation
-    GIT_TAG           9f4ce64458dfae86e1239c525ddc219c4e9e06f1 # main 2026-06; last release v1.6.0 (2023) predates CMake 3.5+ minimum requirement
-    GIT_SHALLOW       TRUE
-    GITHUB_REPOSITORY recastnavigation/recastnavigation
-    OPTIONS
-             "RECASTNAVIGATION_DEMO OFF"
-            "RECASTNAVIGATION_TESTS OFF"
-        "RECASTNAVIGATION_EXAMPLES OFF"
-)
+if (${ERHE_NAVIGATION_LIBRARY} STREQUAL "recastnavigation")
+    CPMAddPackage(
+        NAME              recastnavigation
+        GIT_TAG           9f4ce64458dfae86e1239c525ddc219c4e9e06f1 # main 2026-06; last release v1.6.0 (2023) predates CMake 3.5+ minimum requirement
+        GIT_SHALLOW       TRUE
+        GITHUB_REPOSITORY recastnavigation/recastnavigation
+        OPTIONS
+                "RECASTNAVIGATION_DEMO OFF"
+               "RECASTNAVIGATION_TESTS OFF"
+            "RECASTNAVIGATION_EXAMPLES OFF"
+    )
+    message(STATUS "Erhe configured to use recastnavigation for navigation meshes.")
+    add_definitions(-DERHE_NAVIGATION_LIBRARY_RECASTNAVIGATION)
+else ()
+    message(STATUS "Erhe configured to disable navigation meshes.")
+    add_definitions(-DERHE_NAVIGATION_LIBRARY_NONE)
+endif ()
 
 CPMAddPackage(
     NAME              simdjson

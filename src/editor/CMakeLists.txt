@@ -822,11 +822,6 @@ target_link_libraries(
         imgui
         imgui_gradient::imgui_gradient
         rapidjson
-        RecastNavigation::Recast
-        RecastNavigation::Detour
-        RecastNavigation::DetourCrowd
-        RecastNavigation::DetourTileCache
-        RecastNavigation::DebugUtils
         RectangleBinPack
         # reflectcpp::reflectcpp
         Taskflow
@@ -865,6 +860,17 @@ if (${ERHE_SVG_LIBRARY} STREQUAL "plutosvg")
 endif ()
 if (${ERHE_AUDIO_LIBRARY} STREQUAL "miniaudio")
     target_link_libraries(${_target} PRIVATE miniaudio)
+endif ()
+if (${ERHE_NAVIGATION_LIBRARY} STREQUAL "recastnavigation")
+    target_link_libraries(
+        ${_target}
+        PRIVATE
+            RecastNavigation::Recast
+            RecastNavigation::Detour
+            RecastNavigation::DetourCrowd
+            RecastNavigation::DetourTileCache
+            RecastNavigation::DebugUtils
+    )
 endif ()
 # erhe::xr is always linked because it owns Headset_config (used by editor
 # settings serialization regardless of XR backend). The OpenXR loader is only

@@ -75,6 +75,7 @@ Required packages: `libwayland-dev libxkbcommon-dev xorg-dev` (Ubuntu) or equiva
 | Option | Default | Notes |
 |--------|---------|-------|
 | `ERHE_GRAPHICS_API` | - | `opengl`, `vulkan`, or `none` (headless) |
+| `ERHE_NAVIGATION_LIBRARY` | `recastnavigation` | `recastnavigation` or `none` |
 | `ERHE_PHYSICS_LIBRARY` | `jolt` | `jolt` or `none` |
 | `ERHE_RAYTRACE_LIBRARY` | `bvh` | `bvh`, `tinybvh`, `embree`, or `none` (none uses GPU ID-buffer picking) |
 | `ERHE_PROFILE_LIBRARY` | `tracy` | `tracy`, `nvtx`, `superluminal`, or `none` |
