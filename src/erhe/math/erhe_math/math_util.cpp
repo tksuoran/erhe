@@ -724,6 +724,26 @@ void calculate_bounding_volume(
     const Sphere sphere = optimal_enclosing_sphere(points);
     bounding_sphere.radius = sphere.radius;
     bounding_sphere.center = sphere.center;
+
+    // Post-processing: optimal_enclosing_sphere() accepts the first candidate
+    // that contains all points within absolute epsilon tolerances, which can
+    // leave the center visibly off the symmetry axis when the true minimal
+    // sphere is supported by only two points (e.g. a capsule's poles).
+    // Try the bounding box center as an alternative center; keep it when the
+    // sphere centered there enclosing all points is smaller.
+    const vec3 box_center = bounding_box.center();
+    float max_distance_squared = 0.0f;
+    for (const vec3& point : points) {
+        const vec3 offset = point - box_center;
+        max_distance_squared = std::max(max_distance_squared, glm::dot(offset, offset));
+    }
+    // Pad so downstream exact containment tests (distance2 <= radius * radius)
+    // hold for the farthest point despite floating point rounding.
+    const float box_center_radius = std::sqrt(max_distance_squared) + 1e-4f;
+    if (box_center_radius < bounding_sphere.radius) {
+        bounding_sphere.center = box_center;
+        bounding_sphere.radius = box_center_radius;
+    }
 }
 
 [[nodiscard]] auto transform(const glm::mat4& m, const Sphere& sphere) -> Sphere
