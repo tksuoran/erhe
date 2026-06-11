@@ -822,6 +822,11 @@ target_link_libraries(
         imgui
         imgui_gradient::imgui_gradient
         rapidjson
+        RecastNavigation::Recast
+        RecastNavigation::Detour
+        RecastNavigation::DetourCrowd
+        RecastNavigation::DetourTileCache
+        RecastNavigation::DebugUtils
         RectangleBinPack
         # reflectcpp::reflectcpp
         Taskflow

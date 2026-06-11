@@ -485,6 +485,17 @@ else ()
 endif ()
 
 CPMAddPackage(
+    NAME              recastnavigation
+    GIT_TAG           9f4ce64458dfae86e1239c525ddc219c4e9e06f1 # main 2026-06; last release v1.6.0 (2023) predates CMake 3.5+ minimum requirement
+    GIT_SHALLOW       TRUE
+    GITHUB_REPOSITORY recastnavigation/recastnavigation
+    OPTIONS
+             "RECASTNAVIGATION_DEMO OFF"
+            "RECASTNAVIGATION_TESTS OFF"
+        "RECASTNAVIGATION_EXAMPLES OFF"
+)
+
+CPMAddPackage(
     NAME              simdjson
     VERSION           4.6.3
     GIT_SHALLOW       TRUE
