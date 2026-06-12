@@ -11,6 +11,7 @@ CPMAddPackage(
 set(_target "erhe_geometry_tests")
 add_executable(${_target}
     main.cpp
+    test_capsule.cpp
     test_chamfer_diagnostics.cpp
     test_chamfer_self_intersection.cpp
     test_geometry_operation.cpp

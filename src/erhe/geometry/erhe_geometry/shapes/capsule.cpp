@@ -9,21 +9,27 @@
 
 namespace erhe::geometry::shapes {
 
-// Capsule on the Y axis, centered at origin: a cylindrical mid-section of the
-// given length with hemispherical caps of the given radius at both ends.
+// Capsule on the Y axis, centered at origin: sphere caps of bottom_radius and
+// top_radius joined by the cone tangent to both spheres, i.e. the convex hull
+// of the two spheres (a swept-sphere / tapered capsule). With equal radii this
+// reduces to the classic capsule: a cylinder with hemisphere caps.
 //
 // Stack indexing, with M = hemisphere_stack_count and stack_count = 2 * M + 1:
-//   stack 0           = bottom pole (singular vertex at y = -length / 2 - radius)
-//   stack 1 .. M      = bottom hemisphere rings; stack M is the bottom junction
-//                       ring at y = -length / 2
-//   stack M + 1       = top junction ring at y = +length / 2; the cylinder body
-//                       is the single quad row between stacks M and M + 1
-//   stack M + 1 .. 2M = top hemisphere rings
-//   stack 2M + 1      = top pole (singular vertex at y = +length / 2 + radius)
+//   stack 0           = bottom pole (singular vertex at y = -length / 2 - bottom_radius)
+//   stack 1 .. M      = bottom cap rings; stack M is the bottom junction ring
+//   stack M + 1       = top junction ring; the cone body is the single quad
+//                       row between stacks M and M + 1
+//   stack M + 1 .. 2M = top cap rings
+//   stack 2M + 1      = top pole (singular vertex at y = +length / 2 + top_radius)
 //
-// The junction rings are ordinary interior rings shared by the cap and body
-// quads; at theta == 0 the hemisphere normal equals the radial cylinder
-// normal, so shading is continuous across the junctions by construction.
+// Tangent continuity: when the radii differ the caps are NOT exact
+// hemispheres. The common tangent cone touches both spheres at latitude angle
+// alpha, with sin(alpha) = (bottom_radius - top_radius) / length, so the
+// bottom cap spans latitudes [-pi/2, alpha] and the top cap spans
+// [alpha, pi/2]. The junction rings are ordinary interior rings shared by the
+// cap and body quads; at latitude alpha the cap (sphere) normal equals the
+// cone normal, so the surface normal is continuous across the junctions by
+// construction.
 class Capsule_builder
 {
 public:
@@ -42,20 +48,36 @@ public:
         GEO::vec2f texcoord {0.0f};
     };
 
-    Capsule_builder(GEO::Mesh& mesh, const scalar radius, const scalar length, const int slice_count, const int hemisphere_stack_count)
+    Capsule_builder(
+        GEO::Mesh&   mesh,
+        const scalar bottom_radius,
+        const scalar top_radius,
+        const scalar length,
+        const int    slice_count,
+        const int    hemisphere_stack_count
+    )
         : mesh                  {mesh}
         , attributes            {mesh}
-        , radius                {radius}
+        , bottom_radius         {bottom_radius}
+        , top_radius            {top_radius}
         , length                {length}
         , half_length           {scalar{0.5} * length}
         , slice_count           {slice_count}
         , hemisphere_stack_count{hemisphere_stack_count}
         , stack_count           {2 * hemisphere_stack_count + 1}
-        , cap_arc               {radius * half_pi}
-        , total_arc             {scalar{2.0} * cap_arc + length}
+        , sin_alpha             {(bottom_radius == top_radius) ? scalar{0.0} : (bottom_radius - top_radius) / length}
+        , alpha                 {std::asin(sin_alpha)}
+        , bottom_cap_arc        {bottom_radius * (half_pi + alpha)}
+        , top_cap_arc           {top_radius * (half_pi - alpha)}
+        , body_slant            {length * std::cos(alpha)}
+        , total_arc             {bottom_cap_arc + body_slant + top_cap_arc}
     {
         geo_assert(slice_count >= 3);
         geo_assert(hemisphere_stack_count >= 1);
+        geo_assert(bottom_radius > scalar{0.0});
+        geo_assert(top_radius > scalar{0.0});
+        // The tangent cone exists only while neither sphere contains the other
+        geo_assert((bottom_radius == top_radius) || (std::abs(bottom_radius - top_radius) < length));
     }
 
     void build()
@@ -79,7 +101,7 @@ public:
 
         // Bottom fan
         bottom_vertex = vertex++;
-        set_pointf(mesh.vertices, bottom_vertex, GEO::vec3f{0.0f, -half_length - radius, 0.0f});
+        set_pointf(mesh.vertices, bottom_vertex, GEO::vec3f{0.0f, -half_length - bottom_radius, 0.0f});
         attributes.vertex_normal.set(bottom_vertex, GEO::vec3f{0.0f, -1.0f, 0.0f});
         GEO::index_t facet = mesh.facets.create_triangles(slice_count);
         for (int slice = 0; slice < slice_count; ++slice) {
@@ -103,15 +125,15 @@ public:
                 (
                     get_pointf(mesh.vertices, v0) +
                     get_pointf(mesh.vertices, v1) +
-                    GEO::vec3f{0.0f, -half_length - radius, 0.0f}
+                    GEO::vec3f{0.0f, -half_length - bottom_radius, 0.0f}
                 ) / 3.0f;
             attributes.facet_centroid     .set(facet, flat_centroid_location);
             attributes.facet_aniso_control.set(facet, anisotropic_no_texcoord);
             facet++;
         }
 
-        // Middle quads, bottom up: bottom hemisphere rows, the single cylinder
-        // body row (stack M -> M + 1), then top hemisphere rows
+        // Middle quads, bottom up: bottom cap rows, the single cone body row
+        // (stack M -> M + 1), then top cap rows
         facet = mesh.facets.create_quads((stack_count - 2) * slice_count);
         for (int stack = 1; stack < (stack_count - 1); ++stack) {
             for (int slice = 0; slice < slice_count; ++slice) {
@@ -135,7 +157,7 @@ public:
 
         // Top fan
         top_vertex = vertex++;
-        set_pointf(mesh.vertices, top_vertex, GEO::vec3f{0.0f, half_length + radius, 0.0f});
+        set_pointf(mesh.vertices, top_vertex, GEO::vec3f{0.0f, half_length + top_radius, 0.0f});
         attributes.vertex_normal.set(top_vertex, GEO::vec3f{0.0f, 1.0f, 0.0f});
         facet = mesh.facets.create_triangles(slice_count);
         for (int slice = 0; slice < slice_count; ++slice) {
@@ -158,7 +180,7 @@ public:
             const GEO::index_t v1 = get_vertex(slice + 1, stack);
             const GEO::vec3f position_p0  = get_pointf(mesh.vertices, v0);
             const GEO::vec3f position_p1  = get_pointf(mesh.vertices, v1);
-            const GEO::vec3f position_tip = GEO::vec3f{0.0f, half_length + radius, 0.0f};
+            const GEO::vec3f position_tip = GEO::vec3f{0.0f, half_length + top_radius, 0.0f};
 
             const GEO::vec3f flat_centroid_location = (position_p0 + position_p1 + position_tip) / 3.0f;
 
@@ -171,14 +193,19 @@ public:
 private:
     GEO::Mesh&      mesh;
     Mesh_attributes attributes;
-    const scalar    radius;
-    const scalar    length;      // length of the cylindrical mid-section only
+    const scalar    bottom_radius;
+    const scalar    top_radius;
+    const scalar    length;         // axial distance between the two cap sphere centers
     const scalar    half_length;
     const int       slice_count;
     const int       hemisphere_stack_count;
-    const int       stack_count; // 2 * hemisphere_stack_count + 1
-    const scalar    cap_arc;     // profile arc length of one hemisphere cap
-    const scalar    total_arc;   // profile arc length from pole to pole
+    const int       stack_count;    // 2 * hemisphere_stack_count + 1
+    const scalar    sin_alpha;      // (bottom_radius - top_radius) / length
+    const scalar    alpha;          // latitude angle of both junction rings; 0 when the radii are equal
+    const scalar    bottom_cap_arc; // profile arc length of the bottom cap
+    const scalar    top_cap_arc;    // profile arc length of the top cap
+    const scalar    body_slant;     // profile (slant) length of the cone body
+    const scalar    total_arc;      // profile arc length from pole to pole
 
     std::map<std::pair<int, int>, GEO::index_t> key_to_vertex;
     GEO::index_t                                top_vertex   {0};
@@ -191,11 +218,11 @@ private:
         const scalar m = static_cast<scalar>(hemisphere_stack_count);
         scalar arc;
         if (stack <= m) {
-            arc = cap_arc * (stack / m);
+            arc = bottom_cap_arc * (stack / m);
         } else if (stack >= m + scalar{1.0}) {
-            arc = cap_arc + length + cap_arc * ((stack - (m + scalar{1.0})) / m);
+            arc = bottom_cap_arc + body_slant + top_cap_arc * ((stack - (m + scalar{1.0})) / m);
         } else {
-            arc = cap_arc + (stack - m) * length;
+            arc = bottom_cap_arc + (stack - m) * body_slant;
         }
         return arc / total_arc;
     }
@@ -208,21 +235,30 @@ private:
 
         const scalar m = static_cast<scalar>(hemisphere_stack_count);
 
-        // Piecewise profile: latitude angle theta is 0 at both junction rings
+        // Piecewise profile: latitude angle theta is alpha at both junction
+        // rings. Every profile point is sphere_center + sphere_radius * N: on
+        // the caps the sphere is the fixed cap sphere; on the cone body the
+        // contact point of the swept sphere moves linearly from one junction
+        // ring to the other as both the center and the radius are lerped.
         scalar theta;
-        scalar center_y;
+        scalar sphere_center_y;
+        scalar sphere_radius;
         if (stack <= m) {
-            // Bottom hemisphere: pole (stack == 0) up to the bottom junction ring (stack == m)
-            theta    = -half_pi + half_pi * (stack / m);
-            center_y = -half_length;
+            // Bottom cap: pole (stack == 0) up to the bottom junction ring (stack == m)
+            theta           = -half_pi + (half_pi + alpha) * (stack / m);
+            sphere_center_y = -half_length;
+            sphere_radius   = bottom_radius;
         } else if (stack >= m + scalar{1.0}) {
-            // Top hemisphere: top junction ring (stack == m + 1) up to the pole (stack == stack_count)
-            theta    = half_pi * ((stack - (m + scalar{1.0})) / m);
-            center_y = half_length;
+            // Top cap: top junction ring (stack == m + 1) up to the pole (stack == stack_count)
+            theta           = alpha + (half_pi - alpha) * ((stack - (m + scalar{1.0})) / m);
+            sphere_center_y = half_length;
+            sphere_radius   = top_radius;
         } else {
-            // Cylinder body between the junction rings (fractional stacks)
-            theta    = scalar{0.0};
-            center_y = -half_length + (stack - m) * length;
+            // Cone body between the junction rings (fractional stacks)
+            const scalar rel = stack - m;
+            theta           = alpha;
+            sphere_center_y = -half_length + rel * length;
+            sphere_radius   = bottom_radius + rel * (top_radius - bottom_radius);
         }
 
         const scalar sin_theta = std::sin(theta);
@@ -240,9 +276,9 @@ private:
         const GEO::vec3f T{T_x, T_y, T_z};
         const GEO::vec3f B = GEO::normalize(GEO::cross(N, T));
 
-        const auto xP = static_cast<float>(radius * N_x);
-        const auto yP = static_cast<float>(center_y + radius * N_y);
-        const auto zP = static_cast<float>(radius * N_z);
+        const auto xP = static_cast<float>(sphere_radius * N_x);
+        const auto yP = static_cast<float>(sphere_center_y + sphere_radius * N_y);
+        const auto zP = static_cast<float>(sphere_radius * N_z);
 
         const auto s = static_cast<float>(rel_slice);
         const auto t = static_cast<float>(v_of_stack(stack));
@@ -317,9 +353,15 @@ private:
 
 void make_capsule(GEO::Mesh& mesh, const float radius, const float length, const int slice_count, const int hemisphere_stack_count)
 {
+    make_capsule(mesh, radius, radius, length, slice_count, hemisphere_stack_count);
+}
+
+void make_capsule(GEO::Mesh& mesh, const float bottom_radius, const float top_radius, const float length, const int slice_count, const int hemisphere_stack_count)
+{
     Capsule_builder builder{
         mesh,
-        static_cast<Capsule_builder::scalar>(radius),
+        static_cast<Capsule_builder::scalar>(bottom_radius),
+        static_cast<Capsule_builder::scalar>(top_radius),
         static_cast<Capsule_builder::scalar>(length),
         slice_count,
         hemisphere_stack_count
