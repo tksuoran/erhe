@@ -43,8 +43,8 @@ void Time::prepare_update()
     m_host_system_last_frame_duration_ns = host_system_frame_duration_ns;
 
     // Cap frame duration to 25ms. This causes time dilation
-    if (simulation_frame_duration_ns > 25'000'000'000) {
-        simulation_frame_duration_ns = 25'000'000'000;
+    if (simulation_frame_duration_ns > 25'000'000) {
+        simulation_frame_duration_ns = 25'000'000;
     }
 
     //m_current_time = new_time;
