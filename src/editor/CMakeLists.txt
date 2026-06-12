@@ -257,6 +257,8 @@ erhe_target_sources_grouped(
     parsers/geogram.hpp
     parsers/gltf.cpp
     parsers/gltf.hpp
+    parsers/gltf_physics_import.cpp
+    parsers/gltf_physics_import.hpp
     parsers/json_polyhedron.cpp
     parsers/json_polyhedron.hpp
     parsers/wavefront_obj.cpp
@@ -307,6 +309,8 @@ erhe_target_sources_grouped(
     rendertarget_mesh.hpp
     rendertarget_view.hpp
     robin_hood.h
+    scene/collision_shape_from_mesh.cpp
+    scene/collision_shape_from_mesh.hpp
     scene/debug_draw.cpp
     scene/debug_draw.hpp
     scene/frame_controller.cpp

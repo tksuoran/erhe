@@ -5,6 +5,7 @@ erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
     erhe_gltf/gltf_log.cpp
     erhe_gltf/gltf_log.hpp
+    erhe_gltf/gltf_physics.hpp
     erhe_gltf/image_transfer.cpp
     erhe_gltf/image_transfer.hpp
 )

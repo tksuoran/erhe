@@ -5,6 +5,7 @@
 #include "editor_log.hpp"
 #include "parsers/gltf.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
+#include "scene/collision_shape_from_mesh.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_root.hpp"
 
@@ -43,8 +44,6 @@
 #include <cmath>
 #include <limits>
 #include <unordered_map>
-
-using erhe::geometry::make_convex_hull;
 
 namespace editor {
 
@@ -509,86 +508,6 @@ auto deserialize_collision_shape(const Collision_shape_data& data) -> std::share
     }
 
     return deserialize_primitive_shape(data.type, data.half_extents, data.radius, data.axis, data.length, data.top_radius);
-}
-
-// Builds a collision shape from the mesh geometry attached to a node: a convex
-// hull (usable with dynamic bodies) or a triangle mesh (static / kinematic
-// bodies only). Uses the first mesh primitive with non-empty Geometry; returns
-// nullptr when the node has no usable geometry (or hull construction fails).
-auto build_shape_from_node_mesh(const erhe::scene::Node* node, const bool convex_hull) -> std::shared_ptr<erhe::physics::ICollision_shape>
-{
-    if (node == nullptr) {
-        return {};
-    }
-    const auto mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node);
-    if (!mesh) {
-        return {};
-    }
-    for (const auto& prim : mesh->get_primitives()) {
-        if (!prim.primitive || !prim.primitive->render_shape) {
-            continue;
-        }
-        const auto& geom = prim.primitive->render_shape->get_geometry_const();
-        if (!geom || (geom->get_mesh().vertices.nb() == 0)) {
-            continue;
-        }
-        const GEO::Mesh& geo_mesh = geom->get_mesh();
-
-        if (convex_hull) {
-            GEO::Mesh convex_hull_mesh{};
-            if (!make_convex_hull(geo_mesh, convex_hull_mesh)) {
-                return {};
-            }
-            const GEO::index_t vertex_count = convex_hull_mesh.vertices.nb();
-            std::vector<float> coordinates(3 * vertex_count);
-            for (GEO::index_t v = 0; v < vertex_count; ++v) {
-                const float* ptr = convex_hull_mesh.vertices.single_precision_point_ptr(v);
-                coordinates[(3 * v) + 0] = ptr[0];
-                coordinates[(3 * v) + 1] = ptr[1];
-                coordinates[(3 * v) + 2] = ptr[2];
-            }
-            return erhe::physics::ICollision_shape::create_convex_hull_shape_shared(
-                coordinates.data(),
-                static_cast<int>(vertex_count),
-                static_cast<int>(3 * sizeof(float))
-            );
-        }
-
-        // Triangle mesh: all vertices plus fan-triangulated facets.
-        const GEO::index_t vertex_count = geo_mesh.vertices.nb();
-        std::vector<float> coordinates(3 * vertex_count);
-        for (GEO::index_t v = 0; v < vertex_count; ++v) {
-            const float* ptr = geo_mesh.vertices.single_precision_point_ptr(v);
-            coordinates[(3 * v) + 0] = ptr[0];
-            coordinates[(3 * v) + 1] = ptr[1];
-            coordinates[(3 * v) + 2] = ptr[2];
-        }
-        std::vector<uint32_t> indices;
-        for (GEO::index_t facet = 0, facet_count = geo_mesh.facets.nb(); facet < facet_count; ++facet) {
-            const GEO::index_t corners_begin = geo_mesh.facets.corners_begin(facet);
-            const GEO::index_t corners_end   = geo_mesh.facets.corners_end(facet);
-            if ((corners_end - corners_begin) < 3) {
-                continue;
-            }
-            const GEO::index_t first_vertex = geo_mesh.facet_corners.vertex(corners_begin);
-            for (GEO::index_t corner = corners_begin + 1; (corner + 1) < corners_end; ++corner) {
-                indices.push_back(first_vertex);
-                indices.push_back(geo_mesh.facet_corners.vertex(corner));
-                indices.push_back(geo_mesh.facet_corners.vertex(corner + 1));
-            }
-        }
-        if (indices.empty()) {
-            return {};
-        }
-        return erhe::physics::ICollision_shape::create_mesh_shape_shared(
-            coordinates.data(),
-            static_cast<int>(vertex_count),
-            static_cast<int>(3 * sizeof(float)),
-            indices.data(),
-            static_cast<int>(indices.size() / 3)
-        );
-    }
-    return {};
 }
 
 // A mesh is geometry-normative if any of its primitives has a Geometry object.

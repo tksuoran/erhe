@@ -2,6 +2,8 @@
 
 #include "parsers/gltf.hpp"
 
+#include "parsers/gltf_physics_import.hpp"
+
 #include "app_context.hpp"
 #include "content_library/content_library.hpp"
 #include "scene/scene_root.hpp"
@@ -374,6 +376,13 @@ void import_gltf(
             );
         }
     }
+
+    // KHR_physics_rigid_bodies / KHR_implicit_shapes: shared physics items go
+    // through content-library attach operations; Node_physics / Node_joint
+    // attachments are attached directly to the imported nodes (like meshes)
+    // and enter the scene with the insert operation below. Must run after
+    // mesh finalization above (mesh-sourced collision shapes need Geometry).
+    import_gltf_physics(context, gltf_data, scene_root, path, operations);
 
     operations.push_back(
         std::make_shared<Item_insert_remove_operation>(

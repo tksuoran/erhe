@@ -1,5 +1,7 @@
 #pragma once
 
+#include "gltf_physics.hpp"
+
 #include <memory>
 #include <filesystem>
 #include <vector>
@@ -48,6 +50,7 @@ public:
     std::vector<std::shared_ptr<erhe::graphics::Texture>>   images;
     std::vector<std::shared_ptr<erhe::graphics::Sampler>>   samplers;
     std::vector<std::string>                                extensions;
+    Gltf_physics_data                                       physics;
 };
 
 class Gltf_scan

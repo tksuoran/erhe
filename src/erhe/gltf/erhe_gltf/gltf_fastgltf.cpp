@@ -836,6 +836,9 @@ public:
         for (std::size_t i = 0, end = m_asset->animations.size(); i < end; ++i) {
             parse_animation(i);
         }
+
+        log_gltf->trace("parsing physics");
+        parse_physics();
     }
 
 private:
@@ -1946,6 +1949,255 @@ private:
         std::shared_ptr<erhe::scene::Mesh> erhe_mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(erhe_node.get());
         erhe_mesh->skin = m_data_out.skins[skin_index];
     }
+
+#if FASTGLTF_ENABLE_KHR_PHYSICS_RIGID_BODIES
+    // Resolves a glTF node index referenced by physics data to the parsed
+    // erhe node. Returns nullptr (with a warning) for nodes that were not
+    // parsed (e.g. nodes outside the first scene).
+    [[nodiscard]] auto resolve_physics_node(const std::size_t node_index, const char* purpose) -> std::shared_ptr<erhe::scene::Node>
+    {
+        if ((node_index >= m_data_out.nodes.size()) || !m_data_out.nodes[node_index]) {
+            log_gltf->warn("glTF physics: {} references node {} which is not in the parsed scene - skipping", purpose, node_index);
+            return {};
+        }
+        return m_data_out.nodes[node_index];
+    }
+
+    [[nodiscard]] static auto to_physics_combine_mode(const fastgltf::CombineMode combine_mode) -> Physics_combine_mode
+    {
+        switch (combine_mode) {
+            case fastgltf::CombineMode::Average:  return Physics_combine_mode::e_average;
+            case fastgltf::CombineMode::Minimum:  return Physics_combine_mode::e_minimum;
+            case fastgltf::CombineMode::Maximum:  return Physics_combine_mode::e_maximum;
+            case fastgltf::CombineMode::Multiply: return Physics_combine_mode::e_multiply;
+            default:                              return Physics_combine_mode::e_average;
+        }
+    }
+
+    [[nodiscard]] auto to_physics_geometry(const fastgltf::Geometry& geometry, const char* purpose) -> Physics_node_geometry
+    {
+        Physics_node_geometry out{};
+        if (geometry.shape.has_value()) {
+            out.shape_index = geometry.shape.value();
+        }
+        if (geometry.node.has_value()) {
+            out.node = resolve_physics_node(geometry.node.value(), purpose);
+        }
+        out.convex_hull = geometry.convexHull;
+        return out;
+    }
+
+    // Maps KHR_implicit_shapes + KHR_physics_rigid_bodies data parsed by
+    // fastgltf into the plain-data Gltf_physics_data carried in Gltf_data.
+    // The editor performs all further mapping to erhe::physics types.
+    void parse_physics()
+    {
+        ERHE_PROFILE_FUNCTION();
+
+        Gltf_physics_data& physics = m_data_out.physics;
+
+        physics.shapes.reserve(m_asset->shapes.size());
+        for (const fastgltf::Shape& shape : m_asset->shapes) {
+            Physics_shape out{};
+            std::visit(
+                fastgltf::visitor{
+                    [&out](const fastgltf::SphereShape& sphere) {
+                        out.type   = Physics_shape_type::e_sphere;
+                        out.radius = static_cast<float>(sphere.radius);
+                    },
+                    [&out](const fastgltf::BoxShape& box) {
+                        out.type = Physics_shape_type::e_box;
+                        out.size = glm::vec3{box.size[0], box.size[1], box.size[2]};
+                    },
+                    [&out](const fastgltf::CapsuleShape& capsule) {
+                        out.type          = Physics_shape_type::e_capsule;
+                        out.height        = static_cast<float>(capsule.height);
+                        out.radius_bottom = static_cast<float>(capsule.radiusBottom);
+                        out.radius_top    = static_cast<float>(capsule.radiusTop);
+                    },
+                    [&out](const fastgltf::CylinderShape& cylinder) {
+                        out.type          = Physics_shape_type::e_cylinder;
+                        out.height        = static_cast<float>(cylinder.height);
+                        out.radius_bottom = static_cast<float>(cylinder.radiusBottom);
+                        out.radius_top    = static_cast<float>(cylinder.radiusTop);
+                    }
+                },
+                shape
+            );
+            physics.shapes.push_back(out);
+        }
+
+        physics.materials.reserve(m_asset->physicsMaterials.size());
+        for (const fastgltf::PhysicsMaterial& material : m_asset->physicsMaterials) {
+            Physics_material_description out{};
+            // fastgltf physics materials carry no name; the editor synthesizes one.
+            out.static_friction     = static_cast<float>(material.staticFriction);
+            out.dynamic_friction    = static_cast<float>(material.dynamicFriction);
+            out.restitution         = static_cast<float>(material.restitution);
+            out.friction_combine    = to_physics_combine_mode(material.frictionCombine);
+            out.restitution_combine = to_physics_combine_mode(material.restitutionCombine);
+            physics.materials.push_back(std::move(out));
+        }
+
+        physics.collision_filters.reserve(m_asset->collisionFilters.size());
+        for (const fastgltf::CollisionFilter& filter : m_asset->collisionFilters) {
+            Physics_collision_filter_description out{};
+            for (const auto& system : filter.collisionSystems) {
+                out.collision_systems.emplace_back(system.data(), system.size());
+            }
+            for (const auto& system : filter.collideWithSystems) {
+                out.collide_with_systems.emplace_back(system.data(), system.size());
+            }
+            for (const auto& system : filter.notCollideWithSystems) {
+                out.not_collide_with_systems.emplace_back(system.data(), system.size());
+            }
+            physics.collision_filters.push_back(std::move(out));
+        }
+
+        physics.joints.reserve(m_asset->physicsJoints.size());
+        for (const fastgltf::PhysicsJoint& joint : m_asset->physicsJoints) {
+            Physics_joint_description out{};
+            out.limits.reserve(joint.limits.size());
+            for (const fastgltf::JointLimit& limit : joint.limits) {
+                Physics_joint_limit out_limit{};
+                for (const uint8_t axis : limit.linearAxes) {
+                    out_limit.linear_axes.push_back(static_cast<int>(axis));
+                }
+                for (const uint8_t axis : limit.angularAxes) {
+                    out_limit.angular_axes.push_back(static_cast<int>(axis));
+                }
+                if (limit.min.has_value()) {
+                    out_limit.min = static_cast<float>(limit.min.value());
+                }
+                if (limit.max.has_value()) {
+                    out_limit.max = static_cast<float>(limit.max.value());
+                }
+                if (limit.stiffness.has_value()) {
+                    out_limit.stiffness = static_cast<float>(limit.stiffness.value());
+                }
+                out_limit.damping = static_cast<float>(limit.damping);
+                out.limits.push_back(std::move(out_limit));
+            }
+            out.drives.reserve(joint.drives.size());
+            for (const fastgltf::JointDrive& drive : joint.drives) {
+                Physics_joint_drive out_drive{};
+                out_drive.type = (drive.type == fastgltf::DriveType::Angular)
+                    ? Physics_drive_type::e_angular
+                    : Physics_drive_type::e_linear;
+                out_drive.mode = (drive.mode == fastgltf::DriveMode::Acceleration)
+                    ? Physics_drive_mode::e_acceleration
+                    : Physics_drive_mode::e_force;
+                out_drive.axis            = static_cast<int>(drive.axis);
+                out_drive.max_force       = static_cast<float>(drive.maxForce);
+                out_drive.position_target = static_cast<float>(drive.positionTarget);
+                out_drive.velocity_target = static_cast<float>(drive.velocityTarget);
+                out_drive.stiffness       = static_cast<float>(drive.stiffness);
+                out_drive.damping         = static_cast<float>(drive.damping);
+                out.drives.push_back(out_drive);
+            }
+            physics.joints.push_back(std::move(out));
+        }
+
+        for (std::size_t node_index = 0, end = m_asset->nodes.size(); node_index < end; ++node_index) {
+            const fastgltf::Node& node = m_asset->nodes[node_index];
+            if (!node.physicsRigidBody) {
+                continue;
+            }
+            std::shared_ptr<erhe::scene::Node> erhe_node = resolve_physics_node(node_index, "rigid body");
+            if (!erhe_node) {
+                continue;
+            }
+            const fastgltf::PhysicsRigidBody& rigid_body = *node.physicsRigidBody.get();
+            Physics_node_description description{};
+            description.node = erhe_node;
+
+            if (rigid_body.motion.has_value()) {
+                const fastgltf::Motion& motion = rigid_body.motion.value();
+                Physics_node_motion out_motion{};
+                out_motion.is_kinematic = motion.isKinematic;
+                if (motion.mass.has_value()) {
+                    out_motion.mass = static_cast<float>(motion.mass.value());
+                }
+                out_motion.center_of_mass = glm::vec3{motion.centerOfMass[0], motion.centerOfMass[1], motion.centerOfMass[2]};
+                if (motion.inertialDiagonal.has_value()) {
+                    const fastgltf::math::fvec3& d = motion.inertialDiagonal.value();
+                    out_motion.inertia_diagonal = glm::vec3{d[0], d[1], d[2]};
+                }
+                if (motion.inertialOrientation.has_value()) {
+                    const fastgltf::math::fvec4& q = motion.inertialOrientation.value();
+                    out_motion.inertia_orientation = glm::quat{q[3], q[0], q[1], q[2]}; // glm has [w x y z], glTF has [x y z w]
+                }
+                out_motion.linear_velocity  = glm::vec3{motion.linearVelocity[0], motion.linearVelocity[1], motion.linearVelocity[2]};
+                out_motion.angular_velocity = glm::vec3{motion.angularVelocity[0], motion.angularVelocity[1], motion.angularVelocity[2]};
+                out_motion.gravity_factor   = static_cast<float>(motion.gravityFactor);
+                description.motion = out_motion;
+            }
+
+            if (rigid_body.collider.has_value()) {
+                const fastgltf::Collider& collider = rigid_body.collider.value();
+                Physics_node_collider out_collider{};
+                out_collider.geometry = to_physics_geometry(collider.geometry, "collider geometry");
+                if (collider.physicsMaterial.has_value()) {
+                    out_collider.material_index = collider.physicsMaterial.value();
+                }
+                if (collider.collisionFilter.has_value()) {
+                    out_collider.filter_index = collider.collisionFilter.value();
+                }
+                description.collider = std::move(out_collider);
+            }
+
+            if (rigid_body.trigger.has_value()) {
+                Physics_node_trigger out_trigger{};
+                std::visit(
+                    fastgltf::visitor{
+                        [this, &out_trigger](const fastgltf::GeometryTrigger& geometry_trigger) {
+                            out_trigger.geometry = to_physics_geometry(geometry_trigger.geometry, "trigger geometry");
+                            if (geometry_trigger.collisionFilter.has_value()) {
+                                out_trigger.filter_index = geometry_trigger.collisionFilter.value();
+                            }
+                        },
+                        [this, &out_trigger](const fastgltf::NodeTrigger& node_trigger) {
+                            for (const std::size_t trigger_node_index : node_trigger.nodes) {
+                                std::shared_ptr<erhe::scene::Node> trigger_node = resolve_physics_node(trigger_node_index, "compound trigger");
+                                if (trigger_node) {
+                                    out_trigger.compound_nodes.push_back(std::move(trigger_node));
+                                }
+                            }
+                        }
+                    },
+                    rigid_body.trigger.value()
+                );
+                description.trigger = std::move(out_trigger);
+            }
+
+            if (rigid_body.joint.has_value()) {
+                const fastgltf::Joint& joint = rigid_body.joint.value();
+                Physics_node_joint out_joint{};
+                out_joint.connected_node   = resolve_physics_node(joint.connectedNode, "joint connected node");
+                out_joint.joint_index      = joint.joint;
+                out_joint.enable_collision = joint.enableCollision;
+                description.joint = std::move(out_joint);
+            }
+
+            physics.node_physics.push_back(std::move(description));
+        }
+
+        if (!physics.node_physics.empty() || !physics.shapes.empty() || !physics.materials.empty() || !physics.collision_filters.empty() || !physics.joints.empty()) {
+            log_gltf->info(
+                "glTF physics: {} shapes, {} materials, {} collision filters, {} joints, {} rigid body nodes",
+                physics.shapes.size(),
+                physics.materials.size(),
+                physics.collision_filters.size(),
+                physics.joints.size(),
+                physics.node_physics.size()
+            );
+        }
+    }
+#else
+    void parse_physics()
+    {
+    }
+#endif
 };
 
 [[nodiscard]] auto format_duration(std::chrono::steady_clock::duration duration) -> std::string
@@ -2006,6 +2258,8 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
         fastgltf::Extensions::KHR_materials_emissive_strength     |
         fastgltf::Extensions::KHR_materials_sheen                 |
         //fastgltf::Extensions::KHR_draco_mesh_compression          |
+        fastgltf::Extensions::KHR_implicit_shapes                 |
+        fastgltf::Extensions::KHR_physics_rigid_bodies            |
         fastgltf::Extensions::KHR_materials_unlit;
     // Collect erhe-specific extras during parsing. The parser callback
     // runs before parse_material(), so we accumulate into a per-index map
@@ -2173,6 +2427,8 @@ auto scan_gltf(std::filesystem::path path) -> Gltf_scan
         fastgltf::Extensions::KHR_materials_emissive_strength     |
         fastgltf::Extensions::KHR_materials_sheen                 |
         //fastgltf::Extensions::KHR_draco_mesh_compression          | TODO
+        fastgltf::Extensions::KHR_implicit_shapes                 |
+        fastgltf::Extensions::KHR_physics_rigid_bodies            |
         fastgltf::Extensions::KHR_materials_unlit;
     fastgltf::Parser fastgltf_parser{extensions};
     fastgltf::Expected<fastgltf::Asset> asset_expected = fastgltf_parser.loadGltf(
