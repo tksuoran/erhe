@@ -956,7 +956,18 @@ Edit_state::Edit_state(
     p.show_entries();
 
     if (m_translate_state.value_changed) {
-        transform_tool.adjust_translation(m_translation - shared.world_from_anchor_initial_state.get_translation());
+        if (m_use_world_mode) {
+            transform_tool.adjust_translation(m_translation - shared.world_from_anchor_initial_state.get_translation());
+        } else {
+            // In local mode m_translation is in parent space; apply it directly
+            // to parent_from_node instead of treating it as a world space value.
+            transform_tool.touch();
+            Trs_transform parent_from_node = shared.entries.front().parent_from_node_before;
+            parent_from_node.set_translation(m_translation);
+            m_first_node->set_parent_from_node(parent_from_node);
+            shared.world_from_anchor.set(m_first_node->world_from_node());
+            transform_tool.update_transforms();
+        }
     }
 
     if (m_rotate_quaternion_state.value_changed) {
@@ -1005,15 +1016,37 @@ Edit_state::Edit_state(
     }
 
     if (m_scale_state.value_changed) {
-        Trs_transform n = shared.world_from_anchor_initial_state;
-        n.set_scale(m_scale);
-        transform_tool.adjust(n.get_matrix());
+        if (m_use_world_mode) {
+            Trs_transform n = shared.world_from_anchor_initial_state;
+            n.set_scale(m_scale);
+            transform_tool.adjust(n.get_matrix());
+        } else {
+            // In local mode m_scale is in parent space; apply it directly
+            // to parent_from_node instead of treating it as a world space value.
+            transform_tool.touch();
+            Trs_transform parent_from_node = shared.entries.front().parent_from_node_before;
+            parent_from_node.set_scale(m_scale);
+            m_first_node->set_parent_from_node(parent_from_node);
+            shared.world_from_anchor.set(m_first_node->world_from_node());
+            transform_tool.update_transforms();
+        }
     }
 
     if (m_skew_state.value_changed) {
-        Trs_transform n = shared.world_from_anchor_initial_state;
-        n.set_skew(m_skew);
-        transform_tool.adjust(n.get_matrix());
+        if (m_use_world_mode) {
+            Trs_transform n = shared.world_from_anchor_initial_state;
+            n.set_skew(m_skew);
+            transform_tool.adjust(n.get_matrix());
+        } else {
+            // In local mode m_skew is in parent space; apply it directly
+            // to parent_from_node instead of treating it as a world space value.
+            transform_tool.touch();
+            Trs_transform parent_from_node = shared.entries.front().parent_from_node_before;
+            parent_from_node.set_skew(m_skew);
+            m_first_node->set_parent_from_node(parent_from_node);
+            shared.world_from_anchor.set(m_first_node->world_from_node());
+            transform_tool.update_transforms();
+        }
     }
 
     Value_edit_state edit_state;
