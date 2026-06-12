@@ -327,6 +327,8 @@ erhe_target_sources_grouped(
     scene/node_raytrace.hpp
     scene/node_raytrace_mask.hpp
     scene/make_mesh_config.hpp
+    scene/physics_edits.cpp
+    scene/physics_edits.hpp
     scene/scene_builder.cpp
     scene/scene_builder.hpp
     scene/scene_commands.cpp

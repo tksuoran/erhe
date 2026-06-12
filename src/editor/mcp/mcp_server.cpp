@@ -6,6 +6,7 @@
 #include "brushes/brush.hpp"
 #include "brushes/brush_placement.hpp"
 #include "content_library/content_library.hpp"
+#include "operations/item_insert_remove_operation.hpp"
 #include "operations/item_parent_change_operation.hpp"
 #include "operations/material_change_operation.hpp"
 #include "operations/operation.hpp"
@@ -15,7 +16,11 @@
 #include "erhe_math/math_util.hpp"
 #include "editor_log.hpp"
 #include "rendergraph/shadow_render_node.hpp"
+#include "scene/collision_shape_from_mesh.hpp"
+#include "scene/node_joint.hpp"
 #include "scene/node_physics.hpp"
+#include "scene/physics_edits.hpp"
+#include "scene/scene_commands.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/scene_serialization.hpp"
 #include "scene/shadow_fit_debug.hpp"
@@ -31,6 +36,10 @@
 #include "erhe_file/file.hpp"
 #include "erhe_gltf/gltf.hpp"
 #include "erhe_graphics/texture.hpp"
+#include "erhe_physics/collision_filter.hpp"
+#include "erhe_physics/icollision_shape.hpp"
+#include "erhe_physics/physics_joint_settings.hpp"
+#include "erhe_physics/physics_material.hpp"
 #include "erhe_primitive/build_info.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_scene/camera.hpp"
@@ -108,6 +117,236 @@ auto make_json_content(const json& data) -> json
             {"type", "text"},
             {"text", data.dump(2)}
         }}}
+    };
+}
+
+// Error result for tools/call: a text content block with isError set.
+auto make_error_content(const std::string& message) -> std::string
+{
+    json r = make_text_content(message);
+    r["isError"] = true;
+    return r.dump();
+}
+
+auto get_vec3(const json& args, const char* key, const glm::vec3 fallback) -> glm::vec3
+{
+    const json value = args.value(key, json{});
+    if (value.is_array() && (value.size() >= 3)) {
+        return glm::vec3{value[0].get<float>(), value[1].get<float>(), value[2].get<float>()};
+    }
+    return fallback;
+}
+
+// Finds a node by the integer args[id_key], or by the string args[name_key].
+auto find_node_in_scene(Scene_root& scene_root, const json& args, const char* id_key, const char* name_key) -> std::shared_ptr<erhe::scene::Node>
+{
+    const std::size_t node_id   = args.value(id_key, std::size_t{0});
+    const std::string node_name = args.value(name_key, "");
+    if ((node_id == 0) && node_name.empty()) {
+        return {};
+    }
+    for (const std::shared_ptr<erhe::scene::Node>& node : scene_root.get_scene().get_flat_nodes()) {
+        if ((node_id != 0) ? (node->get_id() == node_id) : (node->get_name() == node_name)) {
+            return node;
+        }
+    }
+    return {};
+}
+
+template <typename T>
+auto find_library_item(const std::shared_ptr<Content_library_node>& folder, const std::string& name) -> std::shared_ptr<T>
+{
+    if (!folder || name.empty()) {
+        return {};
+    }
+    for (const std::shared_ptr<T>& item : folder->get_all<T>()) {
+        if (item->get_name() == name) {
+            return item;
+        }
+    }
+    return {};
+}
+
+auto parse_axis(const std::string& axis) -> erhe::physics::Axis
+{
+    if (axis == "x") { return erhe::physics::Axis::X; }
+    if (axis == "z") { return erhe::physics::Axis::Z; }
+    return erhe::physics::Axis::Y;
+}
+
+auto parse_motion_mode(const std::string& motion_mode, const erhe::physics::Motion_mode fallback) -> erhe::physics::Motion_mode
+{
+    if (motion_mode == "static")                 { return erhe::physics::Motion_mode::e_static; }
+    if (motion_mode == "kinematic")              { return erhe::physics::Motion_mode::e_kinematic_physical; }
+    if (motion_mode == "kinematic_physical")     { return erhe::physics::Motion_mode::e_kinematic_physical; }
+    if (motion_mode == "kinematic_non_physical") { return erhe::physics::Motion_mode::e_kinematic_non_physical; }
+    if (motion_mode == "dynamic")                { return erhe::physics::Motion_mode::e_dynamic; }
+    return fallback;
+}
+
+auto motion_mode_to_string(const erhe::physics::Motion_mode motion_mode) -> const char*
+{
+    switch (motion_mode) {
+        case erhe::physics::Motion_mode::e_static:                 return "static";
+        case erhe::physics::Motion_mode::e_kinematic_non_physical: return "kinematic_non_physical";
+        case erhe::physics::Motion_mode::e_kinematic_physical:     return "kinematic_physical";
+        case erhe::physics::Motion_mode::e_dynamic:                return "dynamic";
+        default:                                                   return "invalid";
+    }
+}
+
+auto parse_combine_mode(const std::string& combine_mode, const erhe::physics::Combine_mode fallback) -> erhe::physics::Combine_mode
+{
+    if (combine_mode == "average")  { return erhe::physics::Combine_mode::e_average; }
+    if (combine_mode == "minimum")  { return erhe::physics::Combine_mode::e_minimum; }
+    if (combine_mode == "maximum")  { return erhe::physics::Combine_mode::e_maximum; }
+    if (combine_mode == "multiply") { return erhe::physics::Combine_mode::e_multiply; }
+    return fallback;
+}
+
+auto combine_mode_to_string(const erhe::physics::Combine_mode combine_mode) -> const char*
+{
+    switch (combine_mode) {
+        case erhe::physics::Combine_mode::e_average:  return "average";
+        case erhe::physics::Combine_mode::e_minimum:  return "minimum";
+        case erhe::physics::Combine_mode::e_maximum:  return "maximum";
+        case erhe::physics::Combine_mode::e_multiply: return "multiply";
+        default:                                      return "average";
+    }
+}
+
+// Builds a collision shape from tool arguments. "auto" (the default) builds
+// a convex hull from the node's mesh, falling back to a unit box when the
+// node has no usable mesh geometry. Returns nullptr with error set on
+// failure.
+auto build_collision_shape_from_args(const json& args, const erhe::scene::Node* node, std::string& error) -> std::shared_ptr<erhe::physics::ICollision_shape>
+{
+    using erhe::physics::ICollision_shape;
+    const std::string shape         = args.value("shape", "auto");
+    const glm::vec3   half_extents  = get_vec3(args, "half_extents", glm::vec3{0.5f});
+    const float       radius        = args.value("radius", 0.5f);
+    const float       bottom_radius = args.value("bottom_radius", 0.5f);
+    const float       top_radius    = args.value("top_radius", 0.5f);
+    const float       length        = args.value("length", 1.0f);
+    const erhe::physics::Axis axis  = parse_axis(args.value("axis", "y"));
+
+    if (shape == "auto") {
+        std::shared_ptr<ICollision_shape> hull = build_shape_from_node_mesh(node, true);
+        if (hull) {
+            return hull;
+        }
+        return ICollision_shape::create_box_shape_shared(half_extents);
+    }
+    if (shape == "box") {
+        return ICollision_shape::create_box_shape_shared(half_extents);
+    }
+    if (shape == "sphere") {
+        return ICollision_shape::create_sphere_shape_shared(radius);
+    }
+    if (shape == "capsule") {
+        return ICollision_shape::create_capsule_shape_shared(axis, radius, length);
+    }
+    if (shape == "tapered_capsule") {
+        return ICollision_shape::create_tapered_capsule_shape_shared(axis, bottom_radius, top_radius, length);
+    }
+    if (shape == "cylinder") {
+        return ICollision_shape::create_cylinder_shape_shared(axis, half_extents);
+    }
+    if (shape == "tapered_cylinder") {
+        return ICollision_shape::create_tapered_cylinder_shape_shared(axis, bottom_radius, top_radius, length);
+    }
+    if ((shape == "convex_hull") || (shape == "mesh")) {
+        std::shared_ptr<ICollision_shape> mesh_shape = build_shape_from_node_mesh(node, shape == "convex_hull");
+        if (!mesh_shape) {
+            error = "Node '" + node->get_name() + "' has no usable mesh geometry for shape '" + shape + "'";
+        }
+        return mesh_shape;
+    }
+    error = "Unknown shape: " + shape;
+    return {};
+}
+
+// Replaces out with limits parsed from a JSON array of limit objects.
+void parse_joint_limits(const json& limits_json, std::vector<erhe::physics::Joint_limit>& out)
+{
+    out.clear();
+    for (const json& limit_json : limits_json) {
+        erhe::physics::Joint_limit limit{};
+        const json linear_axes  = limit_json.value("linear_axes", json::array());
+        const json angular_axes = limit_json.value("angular_axes", json::array());
+        for (std::size_t i = 0; (i < 3) && (i < linear_axes.size()); ++i) {
+            limit.linear_axes[i] = linear_axes[i].get<bool>();
+        }
+        for (std::size_t i = 0; (i < 3) && (i < angular_axes.size()); ++i) {
+            limit.angular_axes[i] = angular_axes[i].get<bool>();
+        }
+        if (limit_json.contains("min"))       { limit.min       = limit_json["min"].get<float>(); }
+        if (limit_json.contains("max"))       { limit.max       = limit_json["max"].get<float>(); }
+        if (limit_json.contains("stiffness")) { limit.stiffness = limit_json["stiffness"].get<float>(); }
+        limit.damping = limit_json.value("damping", 0.0f);
+        out.push_back(limit);
+    }
+}
+
+// Replaces out with drives parsed from a JSON array of drive objects.
+void parse_joint_drives(const json& drives_json, std::vector<erhe::physics::Joint_drive>& out)
+{
+    out.clear();
+    for (const json& drive_json : drives_json) {
+        erhe::physics::Joint_drive drive{};
+        drive.type = (drive_json.value("type", "linear") == "angular")
+            ? erhe::physics::Drive_type::e_angular
+            : erhe::physics::Drive_type::e_linear;
+        drive.mode = (drive_json.value("mode", "force") == "acceleration")
+            ? erhe::physics::Drive_mode::e_acceleration
+            : erhe::physics::Drive_mode::e_force;
+        drive.axis = drive_json.value("axis", 0);
+        if (drive_json.contains("max_force")) {
+            drive.max_force = drive_json["max_force"].get<float>();
+        }
+        drive.position_target = drive_json.value("position_target", 0.0f);
+        drive.velocity_target = drive_json.value("velocity_target", 0.0f);
+        drive.stiffness       = drive_json.value("stiffness", 0.0f);
+        drive.damping         = drive_json.value("damping", 0.0f);
+        out.push_back(drive);
+    }
+}
+
+auto joint_settings_to_json(const erhe::physics::Physics_joint_settings& settings) -> json
+{
+    json limits = json::array();
+    for (const erhe::physics::Joint_limit& limit : settings.limits) {
+        json limit_json = {
+            {"linear_axes",  {limit.linear_axes[0], limit.linear_axes[1], limit.linear_axes[2]}},
+            {"angular_axes", {limit.angular_axes[0], limit.angular_axes[1], limit.angular_axes[2]}},
+            {"damping",      limit.damping}
+        };
+        if (limit.min.has_value())       { limit_json["min"]       = limit.min.value(); }
+        if (limit.max.has_value())       { limit_json["max"]       = limit.max.value(); }
+        if (limit.stiffness.has_value()) { limit_json["stiffness"] = limit.stiffness.value(); }
+        limits.push_back(limit_json);
+    }
+    json drives = json::array();
+    for (const erhe::physics::Joint_drive& drive : settings.drives) {
+        json drive_json = {
+            {"type",            (drive.type == erhe::physics::Drive_type::e_angular) ? "angular" : "linear"},
+            {"mode",            (drive.mode == erhe::physics::Drive_mode::e_acceleration) ? "acceleration" : "force"},
+            {"axis",            drive.axis},
+            {"position_target", drive.position_target},
+            {"velocity_target", drive.velocity_target},
+            {"stiffness",       drive.stiffness},
+            {"damping",         drive.damping}
+        };
+        if (std::isfinite(drive.max_force)) {
+            drive_json["max_force"] = drive.max_force;
+        }
+        drives.push_back(drive_json);
+    }
+    return {
+        {"name",   settings.get_name()},
+        {"id",     settings.get_id()},
+        {"limits", limits},
+        {"drives", drives}
     };
 }
 
@@ -546,6 +785,17 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "export_gltf")        result = action_export_gltf    (req->arguments);
         else if (req->tool_name == "import_gltf")        result = action_import_gltf    (req->arguments);
         else if (req->tool_name == "wake_physics_bodies") result = action_wake_physics_bodies(req->arguments);
+        else if (req->tool_name == "get_physics_items")  result = query_physics_items   (req->arguments);
+        else if (req->tool_name == "create_physics_body") result = action_create_physics_body(req->arguments);
+        else if (req->tool_name == "edit_physics_body")  result = action_edit_physics_body(req->arguments);
+        else if (req->tool_name == "create_physics_joint") result = action_create_physics_joint(req->arguments);
+        else if (req->tool_name == "edit_physics_joint") result = action_edit_physics_joint(req->arguments);
+        else if (req->tool_name == "create_physics_material") result = action_create_physics_material(req->arguments);
+        else if (req->tool_name == "edit_physics_material")   result = action_edit_physics_material(req->arguments);
+        else if (req->tool_name == "create_collision_filter") result = action_create_collision_filter(req->arguments);
+        else if (req->tool_name == "edit_collision_filter")   result = action_edit_collision_filter(req->arguments);
+        else if (req->tool_name == "create_physics_joint_settings") result = action_create_physics_joint_settings(req->arguments);
+        else if (req->tool_name == "edit_physics_joint_settings")   result = action_edit_physics_joint_settings(req->arguments);
         else                                              result = execute_command       (req->tool_name);
 
         req->result_promise.set_value(std::move(result));
@@ -707,6 +957,179 @@ void Mcp_server::refresh_tool_list()
         {"required", json::array({"scene_name", "path"})}
     }});
     m_tool_infos.push_back({"wake_physics_bodies", "Activate all dynamic rigid bodies in a scene (bodies enter the world deactivated)", schema_scene_name()});
+
+    m_tool_infos.push_back({"get_physics_items", "List the shared physics content-library items (physics materials, collision filters, joint settings) with full properties", schema_scene_name()});
+
+    const json node_ref_properties = {
+        {"node_id",   {{"type", "integer"}, {"description", "Node ID (preferred over node_name when both given)"}}},
+        {"node_name", {{"type", "string"},  {"description", "Node name (used when node_id is absent)"}}}
+    };
+    const json shape_properties = {
+        {"shape",         {{"type", "string"}, {"enum", json::array({"auto", "box", "sphere", "capsule", "tapered_capsule", "cylinder", "tapered_cylinder", "convex_hull", "mesh"})}, {"description", "Collision shape; auto (default) = convex hull from the node's mesh, unit box when the node has no mesh. mesh shapes are static/kinematic only."}}},
+        {"half_extents",  {{"type", "array"},  {"items", {{"type", "number"}}}, {"minItems", 3}, {"maxItems", 3}, {"description", "Box / cylinder half extents [x, y, z] (default [0.5, 0.5, 0.5])"}}},
+        {"radius",        {{"type", "number"}, {"description", "Sphere / capsule radius (default 0.5)"}}},
+        {"bottom_radius", {{"type", "number"}, {"description", "Tapered capsule / cylinder bottom radius (default 0.5)"}}},
+        {"top_radius",    {{"type", "number"}, {"description", "Tapered capsule / cylinder top radius (default 0.5)"}}},
+        {"length",        {{"type", "number"}, {"description", "Capsule / tapered shape axial length (default 1.0)"}}},
+        {"axis",          {{"type", "string"}, {"enum", json::array({"x", "y", "z"})}, {"description", "Shape axis (default y)"}}}
+    };
+    const json body_properties = {
+        {"motion_mode",      {{"type", "string"}, {"enum", json::array({"static", "kinematic", "kinematic_non_physical", "dynamic"})}, {"description", "Motion mode (default dynamic; kinematic = kinematic physical)"}}},
+        {"mass",             {{"type", "number"}, {"description", "Mass; 0 = spec infinite-mass convention; omitted = derived from the shape"}}},
+        {"friction",         {{"type", "number"}, {"description", "Scalar friction (overridden by a physics material)"}}},
+        {"restitution",      {{"type", "number"}, {"description", "Scalar restitution (overridden by a physics material)"}}},
+        {"linear_damping",   {{"type", "number"}, {"description", "Linear damping"}}},
+        {"angular_damping",  {{"type", "number"}, {"description", "Angular damping"}}},
+        {"gravity_factor",   {{"type", "number"}, {"description", "Gravity factor (default 1.0)"}}},
+        {"is_trigger",       {{"type", "boolean"}, {"description", "Create as a sensor / trigger volume"}}},
+        {"linear_velocity",  {{"type", "array"}, {"items", {{"type", "number"}}}, {"minItems", 3}, {"maxItems", 3}, {"description", "Initial linear velocity [x, y, z] (world space, applied at body creation)"}}},
+        {"angular_velocity", {{"type", "array"}, {"items", {{"type", "number"}}}, {"minItems", 3}, {"maxItems", 3}, {"description", "Initial angular velocity [x, y, z] (world space, applied at body creation)"}}},
+        {"center_of_mass",   {{"type", "array"}, {"items", {{"type", "number"}}}, {"minItems", 3}, {"maxItems", 3}, {"description", "Center of mass offset [x, y, z]"}}},
+        {"material_name",    {{"type", "string"}, {"description", "Physics material name from the content library (empty string clears)"}}},
+        {"filter_name",      {{"type", "string"}, {"description", "Collision filter name from the content library (empty string clears)"}}}
+    };
+    json create_body_properties = {{"scene_name", {{"type", "string"}, {"description", "Name of the scene"}}}};
+    create_body_properties.update(node_ref_properties);
+    create_body_properties.update(shape_properties);
+    create_body_properties.update(body_properties);
+    m_tool_infos.push_back({"create_physics_body", "Attach a new rigid body (Node_physics) to a scene node (undoable). One rigid body per node.", {
+        {"type", "object"},
+        {"properties", create_body_properties},
+        {"required", json::array({"scene_name"})}
+    }});
+    m_tool_infos.push_back({"edit_physics_body", "Edit the rigid body attached to a scene node. Only fields supplied are changed; shape fields replace the collision shape (recreates the body).", {
+        {"type", "object"},
+        {"properties", create_body_properties},
+        {"required", json::array({"scene_name"})}
+    }});
+
+    json joint_properties = {
+        {"scene_name",          {{"type", "string"},  {"description", "Name of the scene"}}},
+        {"connected_node_id",   {{"type", "integer"}, {"description", "Connected node ID (no connected node = constrain to the world)"}}},
+        {"connected_node_name", {{"type", "string"},  {"description", "Connected node name"}}},
+        {"settings_name",       {{"type", "string"},  {"description", "Physics joint settings name from the content library (empty = free six-dof joint)"}}},
+        {"enable_collision",    {{"type", "boolean"}, {"description", "Keep collision enabled between the joined bodies (default false)"}}}
+    };
+    joint_properties.update(node_ref_properties);
+    m_tool_infos.push_back({"create_physics_joint", "Attach a new joint (Node_joint) to a scene node (undoable): joins the nearest self-or-ancestor rigid body of the node to that of the connected node (or the world)", {
+        {"type", "object"},
+        {"properties", joint_properties},
+        {"required", json::array({"scene_name"})}
+    }});
+    json edit_joint_properties = joint_properties;
+    edit_joint_properties.update(json{
+        {"joint_index",      {{"type", "integer"}, {"description", "Index among the node's joint attachments (default 0)"}}},
+        {"connect_to_world", {{"type", "boolean"}, {"description", "Clear the connected node (constrain to the world)"}}},
+        {"rebuild",          {{"type", "boolean"}, {"description", "Rebuild the constraint, re-capturing joint frames from current node transforms"}}}
+    });
+    m_tool_infos.push_back({"edit_physics_joint", "Edit a joint attached to a scene node. Only fields supplied are changed; changes rebuild the constraint.", {
+        {"type", "object"},
+        {"properties", edit_joint_properties},
+        {"required", json::array({"scene_name"})}
+    }});
+
+    const json physics_material_value_properties = {
+        {"static_friction",     {{"type", "number"}, {"description", "Static friction (default 0.6)"}}},
+        {"dynamic_friction",    {{"type", "number"}, {"description", "Dynamic friction (default 0.6)"}}},
+        {"restitution",         {{"type", "number"}, {"description", "Restitution (default 0.0)"}}},
+        {"friction_combine",    {{"type", "string"}, {"enum", json::array({"average", "minimum", "maximum", "multiply"})}, {"description", "Friction combine mode"}}},
+        {"restitution_combine", {{"type", "string"}, {"enum", json::array({"average", "minimum", "maximum", "multiply"})}, {"description", "Restitution combine mode"}}}
+    };
+    json create_physics_material_properties = {
+        {"scene_name", {{"type", "string"}, {"description", "Name of the scene"}}},
+        {"name",       {{"type", "string"}, {"description", "Name for the new physics material (must not already exist)"}}}
+    };
+    create_physics_material_properties.update(physics_material_value_properties);
+    m_tool_infos.push_back({"create_physics_material", "Create a shared physics material in the scene's content library (undoable)", {
+        {"type", "object"},
+        {"properties", create_physics_material_properties},
+        {"required", json::array({"scene_name", "name"})}
+    }});
+    json edit_physics_material_properties = create_physics_material_properties;
+    edit_physics_material_properties["name"] = {{"type", "string"}, {"description", "Name of the physics material to edit"}};
+    edit_physics_material_properties["new_name"] = {{"type", "string"}, {"description", "Rename the physics material"}};
+    m_tool_infos.push_back({"edit_physics_material", "Edit a shared physics material; changes re-apply to all bodies using it. Only fields supplied are changed.", {
+        {"type", "object"},
+        {"properties", edit_physics_material_properties},
+        {"required", json::array({"scene_name", "name"})}
+    }});
+
+    const json collision_filter_value_properties = {
+        {"collision_systems",        {{"type", "array"}, {"items", {{"type", "string"}}}, {"description", "Systems the body belongs to"}}},
+        {"collide_with_systems",     {{"type", "array"}, {"items", {{"type", "string"}}}, {"description", "Non-empty = collide only with these systems (allowlist)"}}},
+        {"not_collide_with_systems", {{"type", "array"}, {"items", {{"type", "string"}}}, {"description", "Used when collide_with_systems is empty: never collide with these"}}}
+    };
+    json create_collision_filter_properties = {
+        {"scene_name", {{"type", "string"}, {"description", "Name of the scene"}}},
+        {"name",       {{"type", "string"}, {"description", "Name for the new collision filter (must not already exist)"}}}
+    };
+    create_collision_filter_properties.update(collision_filter_value_properties);
+    m_tool_infos.push_back({"create_collision_filter", "Create a shared collision filter in the scene's content library (undoable)", {
+        {"type", "object"},
+        {"properties", create_collision_filter_properties},
+        {"required", json::array({"scene_name", "name"})}
+    }});
+    json edit_collision_filter_properties = create_collision_filter_properties;
+    edit_collision_filter_properties["name"] = {{"type", "string"}, {"description", "Name of the collision filter to edit"}};
+    edit_collision_filter_properties["new_name"] = {{"type", "string"}, {"description", "Rename the collision filter"}};
+    m_tool_infos.push_back({"edit_collision_filter", "Edit a shared collision filter; system lists supplied replace the existing lists and re-apply to all bodies using the filter", {
+        {"type", "object"},
+        {"properties", edit_collision_filter_properties},
+        {"required", json::array({"scene_name", "name"})}
+    }});
+
+    const json joint_settings_value_properties = {
+        {"limits", {
+            {"type", "array"},
+            {"description", "Per-axis limit entries"},
+            {"items", {
+                {"type", "object"},
+                {"properties", {
+                    {"linear_axes",  {{"type", "array"}, {"items", {{"type", "boolean"}}}, {"minItems", 3}, {"maxItems", 3}, {"description", "Translation axes [x, y, z] this limit applies to"}}},
+                    {"angular_axes", {{"type", "array"}, {"items", {{"type", "boolean"}}}, {"minItems", 3}, {"maxItems", 3}, {"description", "Rotation axes [x, y, z] this limit applies to"}}},
+                    {"min",          {{"type", "number"}, {"description", "Lower bound (absent = unbounded)"}}},
+                    {"max",          {{"type", "number"}, {"description", "Upper bound (absent = unbounded; min == max fixes the axis)"}}},
+                    {"stiffness",    {{"type", "number"}, {"description", "Soft limit spring stiffness (absent = hard limit)"}}},
+                    {"damping",      {{"type", "number"}, {"description", "Soft limit damping"}}}
+                }}
+            }}
+        }},
+        {"drives", {
+            {"type", "array"},
+            {"description", "Drive (motor) entries"},
+            {"items", {
+                {"type", "object"},
+                {"properties", {
+                    {"type",            {{"type", "string"},  {"enum", json::array({"linear", "angular"})}}},
+                    {"mode",            {{"type", "string"},  {"enum", json::array({"force", "acceleration"})}}},
+                    {"axis",            {{"type", "integer"}, {"minimum", 0}, {"maximum", 2}}},
+                    {"max_force",       {{"type", "number"},  {"description", "Maximum force (absent = unlimited)"}}},
+                    {"position_target", {{"type", "number"}}},
+                    {"velocity_target", {{"type", "number"}}},
+                    {"stiffness",       {{"type", "number"},  {"description", "> 0 selects a position motor, else a velocity motor"}}},
+                    {"damping",         {{"type", "number"}}}
+                }}
+            }}
+        }}
+    };
+    json create_joint_settings_properties = {
+        {"scene_name", {{"type", "string"}, {"description", "Name of the scene"}}},
+        {"name",       {{"type", "string"}, {"description", "Name for the new joint settings (must not already exist)"}}}
+    };
+    create_joint_settings_properties.update(joint_settings_value_properties);
+    m_tool_infos.push_back({"create_physics_joint_settings", "Create shared physics joint settings (limits + drives) in the scene's content library (undoable)", {
+        {"type", "object"},
+        {"properties", create_joint_settings_properties},
+        {"required", json::array({"scene_name", "name"})}
+    }});
+    json edit_joint_settings_properties = create_joint_settings_properties;
+    edit_joint_settings_properties["name"] = {{"type", "string"}, {"description", "Name of the joint settings to edit"}};
+    edit_joint_settings_properties["new_name"] = {{"type", "string"}, {"description", "Rename the joint settings"}};
+    m_tool_infos.push_back({"edit_physics_joint_settings", "Edit shared physics joint settings; limits / drives arrays supplied replace the existing ones and all joints using the settings are rebuilt", {
+        {"type", "object"},
+        {"properties", edit_joint_settings_properties},
+        {"required", json::array({"scene_name", "name"})}
+    }});
 
     // Editor commands
     const auto& registered_commands = m_commands.get_commands();
@@ -920,6 +1343,36 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
                 att_json["brush_name"] = brush->get_name();
                 att_json["brush_id"]   = brush->get_id();
             }
+        }
+
+        auto node_physics = std::dynamic_pointer_cast<Node_physics>(att);
+        if (node_physics) {
+            att_json["motion_mode"]    = motion_mode_to_string(node_physics->get_motion_mode());
+            att_json["is_trigger"]     = node_physics->is_trigger();
+            att_json["gravity_factor"] = node_physics->get_gravity_factor();
+            const std::shared_ptr<erhe::physics::ICollision_shape>& shape = node_physics->get_collision_shape();
+            att_json["collision_shape"] = shape ? shape->describe() : "";
+            const std::shared_ptr<erhe::physics::Physics_material>& physics_material = node_physics->get_physics_material();
+            att_json["physics_material"] = physics_material ? physics_material->get_name() : "";
+            const std::shared_ptr<erhe::physics::Collision_filter>& collision_filter = node_physics->get_collision_filter();
+            att_json["collision_filter"] = collision_filter ? collision_filter->get_name() : "";
+            const erhe::physics::IRigid_body* rigid_body = node_physics->get_rigid_body();
+            if (rigid_body != nullptr) {
+                att_json["mass"]        = rigid_body->get_mass();
+                att_json["friction"]    = rigid_body->get_friction();
+                att_json["restitution"] = rigid_body->get_restitution();
+                att_json["is_active"]   = rigid_body->is_active();
+            }
+        }
+
+        auto node_joint = std::dynamic_pointer_cast<Node_joint>(att);
+        if (node_joint) {
+            const std::shared_ptr<erhe::scene::Node> connected = node_joint->get_connected_node();
+            att_json["connected_node"]   = connected ? connected->get_name() : "(world)";
+            const std::shared_ptr<erhe::physics::Physics_joint_settings>& settings = node_joint->get_settings();
+            att_json["joint_settings"]   = settings ? settings->get_name() : "";
+            att_json["enable_collision"] = node_joint->get_enable_collision();
+            att_json["constraint"]       = (node_joint->get_constraint() != nullptr) ? "created" : "pending";
         }
 
         attachments.push_back(att_json);
@@ -2291,6 +2744,652 @@ auto Mcp_server::action_wake_physics_bodies(const json& args) -> std::string
     return make_json_content({
         {"woken", woken}
     }).dump();
+}
+
+auto Mcp_server::query_physics_items(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        return make_error_content("Scene not found: " + scene_name);
+    }
+    const std::shared_ptr<Content_library> library = sr->get_content_library();
+    if (!library) {
+        return make_error_content("Scene has no content library: " + scene_name);
+    }
+
+    json materials = json::array();
+    for (const std::shared_ptr<erhe::physics::Physics_material>& material : library->physics_materials->get_all<erhe::physics::Physics_material>()) {
+        materials.push_back({
+            {"name",                material->get_name()},
+            {"id",                  material->get_id()},
+            {"static_friction",     material->static_friction},
+            {"dynamic_friction",    material->dynamic_friction},
+            {"restitution",         material->restitution},
+            {"friction_combine",    combine_mode_to_string(material->friction_combine)},
+            {"restitution_combine", combine_mode_to_string(material->restitution_combine)}
+        });
+    }
+    json filters = json::array();
+    for (const std::shared_ptr<erhe::physics::Collision_filter>& filter : library->collision_filters->get_all<erhe::physics::Collision_filter>()) {
+        filters.push_back({
+            {"name",                      filter->get_name()},
+            {"id",                        filter->get_id()},
+            {"collision_systems",         filter->collision_systems},
+            {"collide_with_systems",      filter->collide_with_systems},
+            {"not_collide_with_systems",  filter->not_collide_with_systems}
+        });
+    }
+    json joint_settings = json::array();
+    for (const std::shared_ptr<erhe::physics::Physics_joint_settings>& settings : library->physics_joints->get_all<erhe::physics::Physics_joint_settings>()) {
+        joint_settings.push_back(joint_settings_to_json(*settings));
+    }
+    return make_json_content({
+        {"physics_materials",      materials},
+        {"collision_filters",      filters},
+        {"physics_joint_settings", joint_settings}
+    }).dump();
+}
+
+auto Mcp_server::action_create_physics_body(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        return make_error_content("Scene not found: " + scene_name);
+    }
+    const std::shared_ptr<erhe::scene::Node> node = find_node_in_scene(*sr, args, "node_id", "node_name");
+    if (!node) {
+        return make_error_content("Node not found (give node_id or node_name)");
+    }
+    if (erhe::scene::get_attachment<Node_physics>(node.get())) {
+        return make_error_content("Node already has a rigid body: " + node->get_name());
+    }
+    const std::shared_ptr<Content_library> library = sr->get_content_library();
+    if (!library) {
+        return make_error_content("Scene has no content library: " + scene_name);
+    }
+
+    erhe::physics::IRigid_body_create_info create_info{};
+    create_info.motion_mode = parse_motion_mode(args.value("motion_mode", "dynamic"), erhe::physics::Motion_mode::e_dynamic);
+
+    std::string shape_error;
+    create_info.collision_shape = build_collision_shape_from_args(args, node.get(), shape_error);
+    if (!create_info.collision_shape) {
+        return make_error_content(shape_error);
+    }
+    if ((args.value("shape", "auto") == "mesh") && (create_info.motion_mode == erhe::physics::Motion_mode::e_dynamic)) {
+        return make_error_content("Triangle mesh shapes are static / kinematic only (Jolt restriction); use convex_hull for dynamic bodies");
+    }
+
+    if (args.contains("mass")) {
+        create_info.mass = args["mass"].get<float>();
+    }
+    create_info.friction         = args.value("friction",        create_info.friction);
+    create_info.restitution      = args.value("restitution",     create_info.restitution);
+    create_info.linear_damping   = args.value("linear_damping",  create_info.linear_damping);
+    create_info.angular_damping  = args.value("angular_damping", create_info.angular_damping);
+    create_info.gravity_factor   = args.value("gravity_factor",  create_info.gravity_factor);
+    create_info.is_sensor        = args.value("is_trigger",      false);
+    create_info.linear_velocity  = get_vec3(args, "linear_velocity",  create_info.linear_velocity);
+    create_info.angular_velocity = get_vec3(args, "angular_velocity", create_info.angular_velocity);
+
+    const std::string material_name = args.value("material_name", "");
+    if (!material_name.empty()) {
+        create_info.physics_material = find_library_item<erhe::physics::Physics_material>(library->physics_materials, material_name);
+        if (!create_info.physics_material) {
+            return make_error_content("Physics material not found: " + material_name);
+        }
+    }
+    const std::string filter_name = args.value("filter_name", "");
+    if (!filter_name.empty()) {
+        create_info.collision_filter = find_library_item<erhe::physics::Collision_filter>(library->collision_filters, filter_name);
+        if (!create_info.collision_filter) {
+            return make_error_content("Collision filter not found: " + filter_name);
+        }
+    }
+
+    const glm::vec3 center_of_mass = get_vec3(args, "center_of_mass", glm::vec3{0.0f});
+    if (center_of_mass != glm::vec3{0.0f}) {
+        create_info.collision_shape = erhe::physics::ICollision_shape::create_offset_center_of_mass_shape_shared(create_info.collision_shape, center_of_mass);
+    }
+    create_info.debug_label = node->get_name();
+
+    const std::shared_ptr<Node_physics> node_physics = m_context.scene_commands->create_new_rigid_body(node.get(), create_info);
+    if (!node_physics) {
+        return make_error_content("Failed to create rigid body on node: " + node->get_name());
+    }
+    return make_json_content({
+        {"created",     true},
+        {"queued",      true}, // the attach operation executes on the next editor frame
+        {"node",        node->get_name()},
+        {"node_id",     node->get_id()},
+        {"shape",       create_info.collision_shape->describe()},
+        {"motion_mode", motion_mode_to_string(create_info.motion_mode)}
+    }).dump();
+}
+
+auto Mcp_server::action_edit_physics_body(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        return make_error_content("Scene not found: " + scene_name);
+    }
+    const std::shared_ptr<erhe::scene::Node> node = find_node_in_scene(*sr, args, "node_id", "node_name");
+    if (!node) {
+        return make_error_content("Node not found (give node_id or node_name)");
+    }
+    const std::shared_ptr<Node_physics> node_physics = erhe::scene::get_attachment<Node_physics>(node.get());
+    if (!node_physics) {
+        return make_error_content("Node has no rigid body: " + node->get_name());
+    }
+    const std::shared_ptr<Content_library> library = sr->get_content_library();
+    if (!library) {
+        return make_error_content("Scene has no content library: " + scene_name);
+    }
+
+    // Validate everything before applying anything, so an error leaves the
+    // body unchanged.
+    const erhe::physics::Motion_mode motion_mode = args.contains("motion_mode")
+        ? parse_motion_mode(args["motion_mode"].get<std::string>(), node_physics->get_motion_mode())
+        : node_physics->get_motion_mode();
+    std::shared_ptr<erhe::physics::ICollision_shape> new_shape{};
+    if (args.contains("shape")) {
+        std::string shape_error;
+        new_shape = build_collision_shape_from_args(args, node.get(), shape_error);
+        if (!new_shape) {
+            return make_error_content(shape_error);
+        }
+        if ((args["shape"].get<std::string>() == "mesh") && (motion_mode == erhe::physics::Motion_mode::e_dynamic)) {
+            return make_error_content("Triangle mesh shapes are static / kinematic only (Jolt restriction); use convex_hull for dynamic bodies");
+        }
+    }
+    std::shared_ptr<erhe::physics::Physics_material> material{};
+    if (args.contains("material_name")) {
+        const std::string material_name = args["material_name"].get<std::string>();
+        if (!material_name.empty()) {
+            material = find_library_item<erhe::physics::Physics_material>(library->physics_materials, material_name);
+            if (!material) {
+                return make_error_content("Physics material not found: " + material_name);
+            }
+        }
+    }
+    std::shared_ptr<erhe::physics::Collision_filter> filter{};
+    if (args.contains("filter_name")) {
+        const std::string filter_name = args["filter_name"].get<std::string>();
+        if (!filter_name.empty()) {
+            filter = find_library_item<erhe::physics::Collision_filter>(library->collision_filters, filter_name);
+            if (!filter) {
+                return make_error_content("Collision filter not found: " + filter_name);
+            }
+        }
+    }
+
+    json applied = json::array();
+    if (args.contains("motion_mode")) {
+        node_physics->set_motion_mode(motion_mode);
+        applied.push_back("motion_mode");
+    }
+    // Body-recreating edits first so live scalar edits below land on the
+    // final rigid body.
+    if (new_shape) {
+        node_physics->set_collision_shape(new_shape);
+        applied.push_back("shape");
+    }
+    if (args.contains("is_trigger")) {
+        node_physics->set_trigger(args["is_trigger"].get<bool>());
+        applied.push_back("is_trigger");
+    }
+    if (args.contains("center_of_mass")) {
+        node_physics->set_center_of_mass_offset(get_vec3(args, "center_of_mass", glm::vec3{0.0f}));
+        applied.push_back("center_of_mass");
+    }
+    if (args.contains("gravity_factor")) {
+        node_physics->set_gravity_factor(args["gravity_factor"].get<float>());
+        applied.push_back("gravity_factor");
+    }
+    if (args.contains("linear_velocity")) {
+        node_physics->set_initial_linear_velocity(get_vec3(args, "linear_velocity", glm::vec3{0.0f}));
+        applied.push_back("linear_velocity");
+    }
+    if (args.contains("angular_velocity")) {
+        node_physics->set_initial_angular_velocity(get_vec3(args, "angular_velocity", glm::vec3{0.0f}));
+        applied.push_back("angular_velocity");
+    }
+    if (args.contains("material_name")) {
+        node_physics->set_physics_material(material);
+        applied.push_back("material_name");
+    }
+    if (args.contains("filter_name")) {
+        node_physics->set_collision_filter(filter);
+        applied.push_back("filter_name");
+    }
+
+    erhe::physics::IRigid_body* rigid_body = node_physics->get_rigid_body();
+    const bool wants_live_edit =
+        args.contains("mass")        || args.contains("friction") || args.contains("restitution") ||
+        args.contains("linear_damping") || args.contains("angular_damping");
+    if (wants_live_edit && (rigid_body == nullptr)) {
+        return make_error_content("Rigid body is not live (node not attached to a scene); mass / friction / restitution / damping not applied");
+    }
+    if (rigid_body != nullptr) {
+        if (args.contains("mass")) {
+            rigid_body->set_mass_properties(args["mass"].get<float>(), rigid_body->get_local_inertia());
+            applied.push_back("mass");
+        }
+        if (args.contains("friction")) {
+            rigid_body->set_friction(args["friction"].get<float>());
+            applied.push_back("friction");
+        }
+        if (args.contains("restitution")) {
+            rigid_body->set_restitution(args["restitution"].get<float>());
+            applied.push_back("restitution");
+        }
+        if (args.contains("linear_damping") || args.contains("angular_damping")) {
+            rigid_body->set_damping(
+                args.value("linear_damping",  rigid_body->get_linear_damping()),
+                args.value("angular_damping", rigid_body->get_angular_damping())
+            );
+            if (args.contains("linear_damping"))  { applied.push_back("linear_damping"); }
+            if (args.contains("angular_damping")) { applied.push_back("angular_damping"); }
+        }
+    }
+
+    const std::shared_ptr<erhe::physics::ICollision_shape>& shape = node_physics->get_collision_shape();
+    return make_json_content({
+        {"node",        node->get_name()},
+        {"applied",     applied},
+        {"motion_mode", motion_mode_to_string(node_physics->get_motion_mode())},
+        {"shape",       shape ? shape->describe() : ""},
+        {"is_trigger",  node_physics->is_trigger()}
+    }).dump();
+}
+
+auto Mcp_server::action_create_physics_joint(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        return make_error_content("Scene not found: " + scene_name);
+    }
+    const std::shared_ptr<erhe::scene::Node> node = find_node_in_scene(*sr, args, "node_id", "node_name");
+    if (!node) {
+        return make_error_content("Node not found (give node_id or node_name)");
+    }
+
+    std::shared_ptr<erhe::scene::Node> connected{};
+    if (args.contains("connected_node_id") || args.contains("connected_node_name")) {
+        connected = find_node_in_scene(*sr, args, "connected_node_id", "connected_node_name");
+        if (!connected) {
+            return make_error_content("Connected node not found");
+        }
+        if (connected == node) {
+            return make_error_content("Connected node must differ from the joint node");
+        }
+    }
+
+    std::shared_ptr<erhe::physics::Physics_joint_settings> settings{};
+    const std::string settings_name = args.value("settings_name", "");
+    if (!settings_name.empty()) {
+        const std::shared_ptr<Content_library> library = sr->get_content_library();
+        settings = find_library_item<erhe::physics::Physics_joint_settings>(library ? library->physics_joints : std::shared_ptr<Content_library_node>{}, settings_name);
+        if (!settings) {
+            return make_error_content("Joint settings not found: " + settings_name);
+        }
+    }
+    const bool enable_collision = args.value("enable_collision", false);
+
+    const std::shared_ptr<Node_joint> node_joint = m_context.scene_commands->create_new_joint(node.get(), connected, settings, enable_collision);
+    if (!node_joint) {
+        return make_error_content("Failed to create joint on node: " + node->get_name());
+    }
+    return make_json_content({
+        {"created",          true},
+        {"queued",           true}, // the attach operation executes on the next editor frame
+        {"node",             node->get_name()},
+        {"node_id",          node->get_id()},
+        {"connected_node",   connected ? connected->get_name() : "(world)"},
+        {"settings",         settings ? settings->get_name() : ""},
+        {"enable_collision", enable_collision}
+    }).dump();
+}
+
+auto Mcp_server::action_edit_physics_joint(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        return make_error_content("Scene not found: " + scene_name);
+    }
+    const std::shared_ptr<erhe::scene::Node> node = find_node_in_scene(*sr, args, "node_id", "node_name");
+    if (!node) {
+        return make_error_content("Node not found (give node_id or node_name)");
+    }
+    std::vector<std::shared_ptr<Node_joint>> joints;
+    for (const std::shared_ptr<erhe::scene::Node_attachment>& attachment : node->get_attachments()) {
+        const std::shared_ptr<Node_joint> node_joint = std::dynamic_pointer_cast<Node_joint>(attachment);
+        if (node_joint) {
+            joints.push_back(node_joint);
+        }
+    }
+    if (joints.empty()) {
+        return make_error_content("Node has no joint: " + node->get_name());
+    }
+    const std::size_t joint_index = args.value("joint_index", std::size_t{0});
+    if (joint_index >= joints.size()) {
+        return make_error_content("joint_index out of range: node has " + std::to_string(joints.size()) + " joint(s)");
+    }
+    const std::shared_ptr<Node_joint> node_joint = joints[joint_index];
+
+    json applied = json::array();
+    if (args.value("connect_to_world", false)) {
+        node_joint->set_connected_node({});
+        applied.push_back("connect_to_world");
+    } else if (args.contains("connected_node_id") || args.contains("connected_node_name")) {
+        const std::shared_ptr<erhe::scene::Node> connected = find_node_in_scene(*sr, args, "connected_node_id", "connected_node_name");
+        if (!connected) {
+            return make_error_content("Connected node not found");
+        }
+        if (connected == node) {
+            return make_error_content("Connected node must differ from the joint node");
+        }
+        node_joint->set_connected_node(connected);
+        applied.push_back("connected_node");
+    }
+    if (args.contains("settings_name")) {
+        const std::string settings_name = args["settings_name"].get<std::string>();
+        if (settings_name.empty()) {
+            node_joint->set_settings({});
+        } else {
+            const std::shared_ptr<Content_library> library = sr->get_content_library();
+            const std::shared_ptr<erhe::physics::Physics_joint_settings> settings =
+                find_library_item<erhe::physics::Physics_joint_settings>(library ? library->physics_joints : std::shared_ptr<Content_library_node>{}, settings_name);
+            if (!settings) {
+                return make_error_content("Joint settings not found: " + settings_name);
+            }
+            node_joint->set_settings(settings);
+        }
+        applied.push_back("settings");
+    }
+    if (args.contains("enable_collision")) {
+        node_joint->set_enable_collision(args["enable_collision"].get<bool>());
+        applied.push_back("enable_collision");
+    }
+    if (args.value("rebuild", false)) {
+        node_joint->rebuild();
+        applied.push_back("rebuild");
+    }
+
+    const std::shared_ptr<erhe::scene::Node> connected = node_joint->get_connected_node();
+    const std::shared_ptr<erhe::physics::Physics_joint_settings>& settings = node_joint->get_settings();
+    return make_json_content({
+        {"node",             node->get_name()},
+        {"applied",          applied},
+        {"connected_node",   connected ? connected->get_name() : "(world)"},
+        {"settings",         settings ? settings->get_name() : ""},
+        {"enable_collision", node_joint->get_enable_collision()},
+        {"constraint",       (node_joint->get_constraint() != nullptr) ? "created" : "pending"}
+    }).dump();
+}
+
+auto Mcp_server::action_create_physics_material(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        return make_error_content("Scene not found: " + scene_name);
+    }
+    const std::shared_ptr<Content_library> library = sr->get_content_library();
+    if (!library) {
+        return make_error_content("Scene has no content library: " + scene_name);
+    }
+    const std::string name = args.value("name", "");
+    if (name.empty()) {
+        return make_error_content("name is required");
+    }
+    if (find_library_item<erhe::physics::Physics_material>(library->physics_materials, name)) {
+        return make_error_content("Physics material already exists: " + name);
+    }
+
+    auto item = std::make_shared<erhe::physics::Physics_material>(name);
+    item->static_friction     = args.value("static_friction",  item->static_friction);
+    item->dynamic_friction    = args.value("dynamic_friction", item->dynamic_friction);
+    item->restitution         = args.value("restitution",      item->restitution);
+    item->friction_combine    = parse_combine_mode(args.value("friction_combine",    ""), item->friction_combine);
+    item->restitution_combine = parse_combine_mode(args.value("restitution_combine", ""), item->restitution_combine);
+
+    m_context.operation_stack->queue(
+        std::make_shared<Item_insert_remove_operation>(
+            Item_insert_remove_operation::Parameters{
+                .context = m_context,
+                .item    = std::make_shared<Content_library_node>(item),
+                .parent  = library->physics_materials,
+                .mode    = Item_insert_remove_operation::Mode::insert
+            }
+        )
+    );
+    return make_json_content({
+        {"created", true},
+        {"queued",  true}, // the insert operation executes on the next editor frame
+        {"name",    name},
+        {"id",      item->get_id()}
+    }).dump();
+}
+
+auto Mcp_server::action_edit_physics_material(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        return make_error_content("Scene not found: " + scene_name);
+    }
+    const std::shared_ptr<Content_library> library = sr->get_content_library();
+    if (!library) {
+        return make_error_content("Scene has no content library: " + scene_name);
+    }
+    const std::string name = args.value("name", "");
+    const std::shared_ptr<erhe::physics::Physics_material> item = find_library_item<erhe::physics::Physics_material>(library->physics_materials, name);
+    if (!item) {
+        return make_error_content("Physics material not found: " + name);
+    }
+
+    json applied = json::array();
+    if (args.contains("new_name")) {
+        item->set_name(args["new_name"].get<std::string>());
+        applied.push_back("new_name");
+    }
+    if (args.contains("static_friction"))  { item->static_friction  = args["static_friction"].get<float>();  applied.push_back("static_friction"); }
+    if (args.contains("dynamic_friction")) { item->dynamic_friction = args["dynamic_friction"].get<float>(); applied.push_back("dynamic_friction"); }
+    if (args.contains("restitution"))      { item->restitution      = args["restitution"].get<float>();      applied.push_back("restitution"); }
+    if (args.contains("friction_combine")) {
+        item->friction_combine = parse_combine_mode(args["friction_combine"].get<std::string>(), item->friction_combine);
+        applied.push_back("friction_combine");
+    }
+    if (args.contains("restitution_combine")) {
+        item->restitution_combine = parse_combine_mode(args["restitution_combine"].get<std::string>(), item->restitution_combine);
+        applied.push_back("restitution_combine");
+    }
+    reapply_physics_material(m_context, item);
+
+    return make_json_content({
+        {"name",                item->get_name()},
+        {"applied",             applied},
+        {"static_friction",     item->static_friction},
+        {"dynamic_friction",    item->dynamic_friction},
+        {"restitution",         item->restitution},
+        {"friction_combine",    combine_mode_to_string(item->friction_combine)},
+        {"restitution_combine", combine_mode_to_string(item->restitution_combine)}
+    }).dump();
+}
+
+auto Mcp_server::action_create_collision_filter(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        return make_error_content("Scene not found: " + scene_name);
+    }
+    const std::shared_ptr<Content_library> library = sr->get_content_library();
+    if (!library) {
+        return make_error_content("Scene has no content library: " + scene_name);
+    }
+    const std::string name = args.value("name", "");
+    if (name.empty()) {
+        return make_error_content("name is required");
+    }
+    if (find_library_item<erhe::physics::Collision_filter>(library->collision_filters, name)) {
+        return make_error_content("Collision filter already exists: " + name);
+    }
+
+    auto item = std::make_shared<erhe::physics::Collision_filter>(name);
+    if (args.contains("collision_systems"))        { item->collision_systems        = args["collision_systems"].get<std::vector<std::string>>(); }
+    if (args.contains("collide_with_systems"))     { item->collide_with_systems     = args["collide_with_systems"].get<std::vector<std::string>>(); }
+    if (args.contains("not_collide_with_systems")) { item->not_collide_with_systems = args["not_collide_with_systems"].get<std::vector<std::string>>(); }
+
+    m_context.operation_stack->queue(
+        std::make_shared<Item_insert_remove_operation>(
+            Item_insert_remove_operation::Parameters{
+                .context = m_context,
+                .item    = std::make_shared<Content_library_node>(item),
+                .parent  = library->collision_filters,
+                .mode    = Item_insert_remove_operation::Mode::insert
+            }
+        )
+    );
+    return make_json_content({
+        {"created", true},
+        {"queued",  true}, // the insert operation executes on the next editor frame
+        {"name",    name},
+        {"id",      item->get_id()}
+    }).dump();
+}
+
+auto Mcp_server::action_edit_collision_filter(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        return make_error_content("Scene not found: " + scene_name);
+    }
+    const std::shared_ptr<Content_library> library = sr->get_content_library();
+    if (!library) {
+        return make_error_content("Scene has no content library: " + scene_name);
+    }
+    const std::string name = args.value("name", "");
+    const std::shared_ptr<erhe::physics::Collision_filter> item = find_library_item<erhe::physics::Collision_filter>(library->collision_filters, name);
+    if (!item) {
+        return make_error_content("Collision filter not found: " + name);
+    }
+
+    json applied = json::array();
+    if (args.contains("new_name")) {
+        item->set_name(args["new_name"].get<std::string>());
+        applied.push_back("new_name");
+    }
+    if (args.contains("collision_systems")) {
+        item->collision_systems = args["collision_systems"].get<std::vector<std::string>>();
+        applied.push_back("collision_systems");
+    }
+    if (args.contains("collide_with_systems")) {
+        item->collide_with_systems = args["collide_with_systems"].get<std::vector<std::string>>();
+        applied.push_back("collide_with_systems");
+    }
+    if (args.contains("not_collide_with_systems")) {
+        item->not_collide_with_systems = args["not_collide_with_systems"].get<std::vector<std::string>>();
+        applied.push_back("not_collide_with_systems");
+    }
+    reapply_collision_filter(m_context, item);
+
+    return make_json_content({
+        {"name",                     item->get_name()},
+        {"applied",                  applied},
+        {"collision_systems",        item->collision_systems},
+        {"collide_with_systems",     item->collide_with_systems},
+        {"not_collide_with_systems", item->not_collide_with_systems}
+    }).dump();
+}
+
+auto Mcp_server::action_create_physics_joint_settings(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        return make_error_content("Scene not found: " + scene_name);
+    }
+    const std::shared_ptr<Content_library> library = sr->get_content_library();
+    if (!library) {
+        return make_error_content("Scene has no content library: " + scene_name);
+    }
+    const std::string name = args.value("name", "");
+    if (name.empty()) {
+        return make_error_content("name is required");
+    }
+    if (find_library_item<erhe::physics::Physics_joint_settings>(library->physics_joints, name)) {
+        return make_error_content("Joint settings already exist: " + name);
+    }
+
+    auto item = std::make_shared<erhe::physics::Physics_joint_settings>(name);
+    if (args.contains("limits")) {
+        parse_joint_limits(args["limits"], item->limits);
+    }
+    if (args.contains("drives")) {
+        parse_joint_drives(args["drives"], item->drives);
+    }
+
+    m_context.operation_stack->queue(
+        std::make_shared<Item_insert_remove_operation>(
+            Item_insert_remove_operation::Parameters{
+                .context = m_context,
+                .item    = std::make_shared<Content_library_node>(item),
+                .parent  = library->physics_joints,
+                .mode    = Item_insert_remove_operation::Mode::insert
+            }
+        )
+    );
+    json result = joint_settings_to_json(*item);
+    result["created"] = true;
+    result["queued"]  = true; // the insert operation executes on the next editor frame
+    return make_json_content(result).dump();
+}
+
+auto Mcp_server::action_edit_physics_joint_settings(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        return make_error_content("Scene not found: " + scene_name);
+    }
+    const std::shared_ptr<Content_library> library = sr->get_content_library();
+    if (!library) {
+        return make_error_content("Scene has no content library: " + scene_name);
+    }
+    const std::string name = args.value("name", "");
+    const std::shared_ptr<erhe::physics::Physics_joint_settings> item = find_library_item<erhe::physics::Physics_joint_settings>(library->physics_joints, name);
+    if (!item) {
+        return make_error_content("Joint settings not found: " + name);
+    }
+
+    json applied = json::array();
+    if (args.contains("new_name")) {
+        item->set_name(args["new_name"].get<std::string>());
+        applied.push_back("new_name");
+    }
+    if (args.contains("limits")) {
+        parse_joint_limits(args["limits"], item->limits);
+        applied.push_back("limits");
+    }
+    if (args.contains("drives")) {
+        parse_joint_drives(args["drives"], item->drives);
+        applied.push_back("drives");
+    }
+    // Joints using these settings only pick up changes when their constraint
+    // is recreated; rebuild them all.
+    rebuild_joints_using_settings(m_context, item);
+
+    json result = joint_settings_to_json(*item);
+    result["applied"] = applied;
+    return make_json_content(result).dump();
 }
 
 } // namespace editor

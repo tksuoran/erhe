@@ -177,6 +177,15 @@ auto Node_physics::get_collision_shape() const -> const std::shared_ptr<erhe::ph
     return m_create_info.collision_shape;
 }
 
+void Node_physics::set_collision_shape(const std::shared_ptr<erhe::physics::ICollision_shape>& collision_shape)
+{
+    if (m_create_info.collision_shape == collision_shape) {
+        return;
+    }
+    m_create_info.collision_shape = collision_shape;
+    recreate_rigid_body();
+}
+
 auto Node_physics::get_motion_mode() const -> Motion_mode
 {
     return m_motion_mode;

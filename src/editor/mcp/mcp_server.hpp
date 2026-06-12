@@ -116,6 +116,17 @@ private:
     auto action_export_gltf     (const nlohmann::json& args) -> std::string;
     auto action_import_gltf     (const nlohmann::json& args) -> std::string;
     auto action_wake_physics_bodies(const nlohmann::json& args) -> std::string;
+    auto query_physics_items    (const nlohmann::json& args) -> std::string;
+    auto action_create_physics_body(const nlohmann::json& args) -> std::string;
+    auto action_edit_physics_body  (const nlohmann::json& args) -> std::string;
+    auto action_create_physics_joint(const nlohmann::json& args) -> std::string;
+    auto action_edit_physics_joint  (const nlohmann::json& args) -> std::string;
+    auto action_create_physics_material(const nlohmann::json& args) -> std::string;
+    auto action_edit_physics_material  (const nlohmann::json& args) -> std::string;
+    auto action_create_collision_filter(const nlohmann::json& args) -> std::string;
+    auto action_edit_collision_filter  (const nlohmann::json& args) -> std::string;
+    auto action_create_physics_joint_settings(const nlohmann::json& args) -> std::string;
+    auto action_edit_physics_joint_settings  (const nlohmann::json& args) -> std::string;
     auto execute_command        (const std::string& tool_name) -> std::string;
 
     erhe::commands::Commands& m_commands;

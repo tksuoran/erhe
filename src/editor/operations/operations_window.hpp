@@ -127,6 +127,9 @@ public:
 
     void create_material();
     void create_brush();
+    void create_physics_material();
+    void create_collision_filter();
+    void create_joint_settings();
 
 private:
     void async_for_selected_nodes_with_mesh(std::function<void(Mesh_operation_parameters&&)> op);
@@ -187,6 +190,9 @@ private:
 
     erhe::commands::Lambda_command m_create_material;
     erhe::commands::Lambda_command m_create_brush;
+    erhe::commands::Lambda_command m_create_physics_material;
+    erhe::commands::Lambda_command m_create_collision_filter;
+    erhe::commands::Lambda_command m_create_joint_settings;
 
     Scene_view*                    m_hover_scene_view     {nullptr};
     Scene_view*                    m_last_hover_scene_view{nullptr};

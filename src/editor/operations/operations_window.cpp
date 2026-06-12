@@ -39,6 +39,9 @@
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_math/math_util.hpp"
+#include "erhe_physics/collision_filter.hpp"
+#include "erhe_physics/physics_joint_settings.hpp"
+#include "erhe_physics/physics_material.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_scene/mesh.hpp"
@@ -120,6 +123,9 @@ Operations::Operations(
     , m_load_scene_command    {commands, "File.LoadScene",                     [this]() -> bool { load_scene     (); return true; } }
     , m_create_material       {commands, "Create.Material",                    [this]() -> bool { create_material(); return true; } }
     , m_create_brush          {commands, "Create.Brush",                       [this]() -> bool { create_brush   (); return true; } }
+    , m_create_physics_material{commands, "Create.PhysicsMaterial",            [this]() -> bool { create_physics_material(); return true; } }
+    , m_create_collision_filter{commands, "Create.CollisionFilter",            [this]() -> bool { create_collision_filter(); return true; } }
+    , m_create_joint_settings {commands, "Create.JointSettings",               [this]() -> bool { create_joint_settings(); return true; } }
 {
     commands.register_command(&m_merge_command         );
     commands.register_command(&m_triangulate_command   );
@@ -154,6 +160,9 @@ Operations::Operations(
     commands.register_command(&m_load_scene_command);
     commands.register_command(&m_create_material);
     commands.register_command(&m_create_brush);
+    commands.register_command(&m_create_physics_material);
+    commands.register_command(&m_create_collision_filter);
+    commands.register_command(&m_create_joint_settings);
 
     commands.bind_command_to_menu(&m_merge_command,            "Geometry.Merge");
     commands.bind_command_to_menu(&m_triangulate_command,      "Geometry.Triangulate");
@@ -190,6 +199,9 @@ Operations::Operations(
     commands.bind_command_to_menu(&m_load_scene_command,  "File.Load Scene");
     commands.bind_command_to_menu(&m_create_material,     "Create.Material");
     commands.bind_command_to_menu(&m_create_brush,        "Create.Brush from Selection");
+    commands.bind_command_to_menu(&m_create_physics_material, "Create.Physics Material");
+    commands.bind_command_to_menu(&m_create_collision_filter, "Create.Collision Filter");
+    commands.bind_command_to_menu(&m_create_joint_settings,   "Create.Joint Settings");
 
     m_make_mesh_config.instance_count = scene_config.instance_count;
     m_make_mesh_config.instance_gap   = scene_config.instance_gap;
@@ -1024,6 +1036,78 @@ void Operations::create_material()
     );
 
     m_context.operation_stack->queue(make_material_operation);
+}
+
+void Operations::create_physics_material()
+{
+    std::shared_ptr<Scene_root> scene_root = get_target_scene_root();
+    if (!scene_root) {
+        return;
+    }
+
+    std::shared_ptr<Content_library> content_library = scene_root->get_content_library();
+
+    auto new_physics_material = std::make_shared<erhe::physics::Physics_material>("New Physics Material");
+    std::shared_ptr<Content_library_node> new_content_library_node = std::make_shared<Content_library_node>(new_physics_material);
+
+    m_context.operation_stack->queue(
+        std::make_shared<Item_insert_remove_operation>(
+            Item_insert_remove_operation::Parameters{
+                .context = m_context,
+                .item    = new_content_library_node,
+                .parent  = content_library->physics_materials,
+                .mode    = Item_insert_remove_operation::Mode::insert
+            }
+        )
+    );
+}
+
+void Operations::create_collision_filter()
+{
+    std::shared_ptr<Scene_root> scene_root = get_target_scene_root();
+    if (!scene_root) {
+        return;
+    }
+
+    std::shared_ptr<Content_library> content_library = scene_root->get_content_library();
+
+    auto new_collision_filter = std::make_shared<erhe::physics::Collision_filter>("New Collision Filter");
+    std::shared_ptr<Content_library_node> new_content_library_node = std::make_shared<Content_library_node>(new_collision_filter);
+
+    m_context.operation_stack->queue(
+        std::make_shared<Item_insert_remove_operation>(
+            Item_insert_remove_operation::Parameters{
+                .context = m_context,
+                .item    = new_content_library_node,
+                .parent  = content_library->collision_filters,
+                .mode    = Item_insert_remove_operation::Mode::insert
+            }
+        )
+    );
+}
+
+void Operations::create_joint_settings()
+{
+    std::shared_ptr<Scene_root> scene_root = get_target_scene_root();
+    if (!scene_root) {
+        return;
+    }
+
+    std::shared_ptr<Content_library> content_library = scene_root->get_content_library();
+
+    auto new_joint_settings = std::make_shared<erhe::physics::Physics_joint_settings>("New Joint Settings");
+    std::shared_ptr<Content_library_node> new_content_library_node = std::make_shared<Content_library_node>(new_joint_settings);
+
+    m_context.operation_stack->queue(
+        std::make_shared<Item_insert_remove_operation>(
+            Item_insert_remove_operation::Parameters{
+                .context = m_context,
+                .item    = new_content_library_node,
+                .parent  = content_library->physics_joints,
+                .mode    = Item_insert_remove_operation::Mode::insert
+            }
+        )
+    );
 }
 
 void Operations::create_brush()

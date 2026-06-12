@@ -13,6 +13,7 @@
 #include "scene/scene_commands.hpp"
 #include "scene/node_raytrace.hpp"
 #include "scene/node_raytrace_mask.hpp"
+#include "tools/selection_tool.hpp"
 #include "windows/item_tree_window.hpp"
 
 #include "erhe_physics/iworld.hpp"
@@ -358,6 +359,36 @@ auto Scene_root::make_browser_window(
                     deferred_operations.push_back(
                         [&context, parent_node]() {
                             context.scene_commands->create_new_layout(parent_node.get());
+                        }
+                    );
+                    close = true;
+                }
+                ImGui::EndMenu();
+            }
+            if (ImGui::BeginMenu("Attach")) {
+                const bool has_rigid_body = static_cast<bool>(erhe::scene::get_attachment<Node_physics>(node.get()));
+                if (ImGui::MenuItem("Rigid Body", nullptr, false, !has_rigid_body)) {
+                    deferred_operations.push_back(
+                        [&context, node]() {
+                            context.scene_commands->create_new_rigid_body(node.get());
+                        }
+                    );
+                    close = true;
+                }
+                if (ImGui::MenuItem("Joint")) {
+                    deferred_operations.push_back(
+                        [&context, node]() {
+                            // Connect to the first selected node other than
+                            // the menu node, when there is one in this scene.
+                            std::shared_ptr<erhe::scene::Node> connected{};
+                            for (const std::shared_ptr<erhe::Item_base>& selected_item : context.selection->get_selected_items()) {
+                                const std::shared_ptr<erhe::scene::Node> other = std::dynamic_pointer_cast<erhe::scene::Node>(selected_item);
+                                if (other && (other != node) && (other->get_item_host() == node->get_item_host())) {
+                                    connected = other;
+                                    break;
+                                }
+                            }
+                            context.scene_commands->create_new_joint(node.get(), connected);
                         }
                     );
                     close = true;

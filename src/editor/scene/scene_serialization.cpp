@@ -625,7 +625,8 @@ auto save_scene(
     // Shared physics asset collection: referenced Physics_material /
     // Collision_filter / Physics_joint_settings items get file-local 1-based
     // ids in encounter order and are written to the top-level arrays.
-    // Library items not referenced by any body / joint are not serialized.
+    // Library items not referenced by any body / joint are appended after
+    // the node passes so that editor-authored assets survive save / load.
     std::unordered_map<const erhe::physics::Physics_material*,       uint64_t> material_id_map;
     std::unordered_map<const erhe::physics::Collision_filter*,       uint64_t> filter_id_map;
     std::unordered_map<const erhe::physics::Physics_joint_settings*, uint64_t> joint_id_map;
@@ -778,6 +779,23 @@ auto save_scene(
                     .enable_collision  = node_joint->get_enable_collision(),
                 }
             );
+        }
+    }
+
+    // Serialize content-library physics items no body / joint references,
+    // so that assets created in the editor are not lost on save / load.
+    {
+        const std::shared_ptr<Content_library> content_library = scene_root.get_content_library();
+        if (content_library) {
+            for (const std::shared_ptr<erhe::physics::Physics_material>& material : content_library->physics_materials->get_all<erhe::physics::Physics_material>()) {
+                static_cast<void>(get_material_id(material));
+            }
+            for (const std::shared_ptr<erhe::physics::Collision_filter>& filter : content_library->collision_filters->get_all<erhe::physics::Collision_filter>()) {
+                static_cast<void>(get_filter_id(filter));
+            }
+            for (const std::shared_ptr<erhe::physics::Physics_joint_settings>& settings : content_library->physics_joints->get_all<erhe::physics::Physics_joint_settings>()) {
+                static_cast<void>(get_joint_id(settings));
+            }
         }
     }
 

@@ -43,6 +43,11 @@ public:
     [[nodiscard]] auto get_rigid_body() const -> const erhe::physics::IRigid_body*;
     [[nodiscard]] auto get_collision_shape() const -> const std::shared_ptr<erhe::physics::ICollision_shape>&;
 
+    // Replaces the collision shape wholesale (any center-of-mass offset
+    // wrapper carried by the old shape is dropped; set it again afterwards
+    // if needed). Changing the shape recreates the rigid body.
+    void set_collision_shape(const std::shared_ptr<erhe::physics::ICollision_shape>& collision_shape);
+
     void before_physics_simulation();
     void after_physics_simulation();
 

@@ -20,6 +20,7 @@
 #include "scene/frame_controller.hpp"
 #include "scene/node_joint.hpp"
 #include "scene/node_physics.hpp"
+#include "scene/physics_edits.hpp"
 #include "scene/scene_commands.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
@@ -959,41 +960,6 @@ namespace {
 constexpr const char* c_combine_mode_names[] = { "Average", "Minimum", "Maximum", "Multiply" };
 constexpr const char* c_drive_type_names  [] = { "Linear", "Angular" };
 constexpr const char* c_drive_mode_names  [] = { "Force", "Acceleration" };
-
-// Re-assigns the edited material to every scene body using it so the physics
-// backend re-snapshots the values (the per-body snapshot does not track the
-// shared item).
-void reapply_physics_material(App_context& context, const std::shared_ptr<erhe::physics::Physics_material>& physics_material)
-{
-    if (context.app_scenes == nullptr) {
-        return;
-    }
-    for (const std::shared_ptr<Scene_root>& scene_root : context.app_scenes->get_scene_roots()) {
-        for (const std::shared_ptr<erhe::scene::Node>& node : scene_root->get_scene().get_flat_nodes()) {
-            const std::shared_ptr<Node_physics> node_physics = erhe::scene::get_attachment<Node_physics>(node.get());
-            if (node_physics && (node_physics->get_physics_material() == physics_material)) {
-                node_physics->set_physics_material(physics_material);
-            }
-        }
-    }
-}
-
-// Re-assigns the edited filter to every scene body using it so the physics
-// backend recompiles the filter snapshot.
-void reapply_collision_filter(App_context& context, const std::shared_ptr<erhe::physics::Collision_filter>& collision_filter)
-{
-    if (context.app_scenes == nullptr) {
-        return;
-    }
-    for (const std::shared_ptr<Scene_root>& scene_root : context.app_scenes->get_scene_roots()) {
-        for (const std::shared_ptr<erhe::scene::Node>& node : scene_root->get_scene().get_flat_nodes()) {
-            const std::shared_ptr<Node_physics> node_physics = erhe::scene::get_attachment<Node_physics>(node.get());
-            if (node_physics && (node_physics->get_collision_filter() == collision_filter)) {
-                node_physics->set_collision_filter(collision_filter);
-            }
-        }
-    }
-}
 
 // Checkbox toggling presence + drag editing the value of an optional float.
 void optional_float_editor(std::optional<float>& value, const float default_value)

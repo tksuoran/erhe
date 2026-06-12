@@ -245,6 +245,101 @@ curl -X POST http://127.0.0.1:8080/mcp \
 
 Returns: `{pending, running}`
 
+## Physics Tools
+
+Create and edit KHR_physics_rigid_bodies features: rigid body / joint node attachments and the shared content-library items (physics materials, collision filters, joint settings). Creation tools queue undoable operations ("queued": true in the response - the object exists on the next editor frame). Edit tools apply immediately. Nodes are addressed by `node_id` (preferred) or `node_name`.
+
+### get_physics_items
+
+List the shared physics content-library items with full properties.
+
+```bash
+curl -X POST http://127.0.0.1:8080/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"get_physics_items","arguments":{"scene_name":"Default Scene"}}}'
+```
+
+Returns: `{physics_materials: [...], collision_filters: [...], physics_joint_settings: [...]}`
+
+### create_physics_body / edit_physics_body
+
+Attach a rigid body (Node_physics) to a node / edit it. One rigid body per node. `get_node_details` reports the body state (`motion_mode`, `collision_shape`, `mass`, `is_trigger`, `physics_material`, `collision_filter`, ...).
+
+```bash
+curl -X POST http://127.0.0.1:8080/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"create_physics_body","arguments":{"scene_name":"Default Scene","node_name":"Cube","shape":"box","half_extents":[0.5,0.5,0.5],"motion_mode":"dynamic","mass":2.0}}}'
+```
+
+Parameters (all optional except `scene_name` + node reference):
+- `shape` - `auto` (default: convex hull from the node's mesh, unit box without one), `box`, `sphere`, `capsule`, `tapered_capsule`, `cylinder`, `tapered_cylinder`, `convex_hull`, `mesh` (static/kinematic only); with shape params `half_extents`, `radius`, `bottom_radius`, `top_radius`, `length`, `axis`
+- `motion_mode` - `static`, `kinematic`, `kinematic_non_physical`, `dynamic` (default)
+- `mass`, `friction`, `restitution`, `linear_damping`, `angular_damping`, `gravity_factor`
+- `is_trigger` - create as sensor/trigger volume
+- `linear_velocity`, `angular_velocity` - initial velocities `[x, y, z]` (applied at body creation)
+- `center_of_mass` - `[x, y, z]` offset
+- `material_name`, `filter_name` - shared item names from the content library (empty string clears in edit)
+
+`edit_physics_body` takes the same fields; only fields supplied are changed. Shape fields replace the collision shape and recreate the body. `mass` / `friction` / `restitution` / damping edit the live body.
+
+### create_physics_joint / edit_physics_joint
+
+Attach a joint (Node_joint) to a node / edit it. The joint joins the nearest self-or-ancestor rigid body of its node to that of the connected node (no connected node = the world).
+
+```bash
+curl -X POST http://127.0.0.1:8080/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"create_physics_joint","arguments":{"scene_name":"Default Scene","node_name":"Door","connected_node_name":"Frame","settings_name":"Hinge","enable_collision":false}}}'
+```
+
+Parameters: node reference, `connected_node_id`/`connected_node_name` (optional), `settings_name` (optional, empty = free six-dof joint), `enable_collision` (default false). `edit_physics_joint` additionally takes `joint_index` (default 0, for nodes with several joints), `connect_to_world` (clear the connected node) and `rebuild` (re-capture joint frames from current node transforms).
+
+### create_physics_material / edit_physics_material
+
+Shared physics material in the content library.
+
+```bash
+curl -X POST http://127.0.0.1:8080/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"create_physics_material","arguments":{"scene_name":"Default Scene","name":"Ice","static_friction":0.05,"dynamic_friction":0.02,"restitution":0.1,"friction_combine":"minimum"}}}'
+```
+
+Fields: `static_friction`, `dynamic_friction`, `restitution`, `friction_combine`, `restitution_combine` (`average`/`minimum`/`maximum`/`multiply`). Edits re-apply the material to all bodies using it. `edit_physics_material` also takes `new_name`.
+
+### create_collision_filter / edit_collision_filter
+
+Shared collision filter (collision-system lists).
+
+```bash
+curl -X POST http://127.0.0.1:8080/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"create_collision_filter","arguments":{"scene_name":"Default Scene","name":"Debris","collision_systems":["debris"],"not_collide_with_systems":["debris"]}}}'
+```
+
+Fields: `collision_systems`, `collide_with_systems` (allowlist), `not_collide_with_systems` (denylist, used when the allowlist is empty). In edit, lists supplied replace the existing lists and re-apply to all bodies using the filter.
+
+### create_physics_joint_settings / edit_physics_joint_settings
+
+Shared joint settings (per-axis limits + drives).
+
+```bash
+curl -X POST http://127.0.0.1:8080/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"create_physics_joint_settings","arguments":{"scene_name":"Default Scene","name":"Hinge","limits":[{"linear_axes":[true,true,true],"min":0,"max":0},{"angular_axes":[false,true,false],"min":-1.57,"max":1.57},{"angular_axes":[true,false,true],"min":0,"max":0}]}}}'
+```
+
+`limits` entries: `linear_axes`/`angular_axes` (`[x, y, z]` booleans), `min`, `max` (absent = unbounded; min == max fixes the axis), `stiffness` (absent = hard limit), `damping`. `drives` entries: `type` (`linear`/`angular`), `mode` (`force`/`acceleration`), `axis` (0-2), `max_force`, `position_target`, `velocity_target`, `stiffness` (> 0 selects a position motor), `damping`. In edit, arrays supplied replace the existing ones and all joints using the settings are rebuilt automatically.
+
+### wake_physics_bodies
+
+Activate all dynamic rigid bodies in a scene (bodies enter the world deactivated).
+
+```bash
+curl -X POST http://127.0.0.1:8080/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"wake_physics_bodies","arguments":{"scene_name":"Default Scene"}}}'
+```
+
 ## Notes
 
 - `get_node_details` includes `brush_name`, `brush_id`, `locked`, `tags`, and mesh `vertex_count`/`facet_count` for nodes with attachments
