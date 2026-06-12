@@ -782,6 +782,7 @@ auto Mcp_server::process_queued_requests() -> int
         else if (req->tool_name == "transform_selection") result = action_transform_selection(req->arguments);
         else if (req->tool_name == "place_brush")        result = action_place_brush    (req->arguments);
         else if (req->tool_name == "create_shape")       result = action_create_shape   (req->arguments);
+        else if (req->tool_name == "create_node")        result = action_create_node    (req->arguments);
         else if (req->tool_name == "toggle_physics")     result = action_toggle_physics (req->arguments);
         else if (req->tool_name == "reparent_node")      result = action_reparent_node  (req->arguments);
         else if (req->tool_name == "lock_items")         result = action_lock_items     (req->arguments);
@@ -896,6 +897,17 @@ void Mcp_server::refresh_tool_list()
             {"minor_steps",    {{"type", "integer"}, {"description", "torus: minor steps"}}}
         }},
         {"required", json::array({"scene_name", "shape"})}
+    }});
+    m_tool_infos.push_back({"create_node",         "Create an empty scene node (undoable), optionally parented and positioned. Useful as a physics joint anchor: create_physics_joint captures its joint frames from the joint / connected node world transforms, so coincident anchor child nodes on the two bodies give a clean joint pivot.", {
+        {"type", "object"},
+        {"properties", {
+            {"scene_name",       {{"type", "string"},  {"description", "Name of the scene"}}},
+            {"name",             {{"type", "string"},  {"description", "Name for the new node (default 'new empty node')"}}},
+            {"parent_node_id",   {{"type", "integer"}, {"description", "Parent node ID (default: scene root)"}}},
+            {"parent_node_name", {{"type", "string"},  {"description", "Parent node name (alternative to parent_node_id)"}}},
+            {"position",         {{"type", "array"},   {"items", {{"type", "number"}}}, {"minItems", 3}, {"maxItems", 3}, {"description", "World position [x, y, z] (default [0, 0, 0])"}}}
+        }},
+        {"required", json::array({"scene_name"})}
     }});
     m_tool_infos.push_back({"toggle_physics",     "Toggle dynamic physics simulation on/off",              schema_no_args()});
     m_tool_infos.push_back({"reparent_node",     "Set a node's parent (by node IDs)",                    {
@@ -2326,6 +2338,58 @@ auto Mcp_server::action_create_shape(const json& args) -> std::string
     }
 
     return make_json_content(result).dump();
+}
+
+auto Mcp_server::action_create_node(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        json r = make_text_content("Scene not found: " + scene_name);
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    std::shared_ptr<erhe::scene::Node> parent{};
+    if (args.contains("parent_node_id") || args.contains("parent_node_name")) {
+        parent = find_node_in_scene(*sr, args, "parent_node_id", "parent_node_name");
+        if (!parent) {
+            json r = make_text_content("Parent node not found");
+            r["isError"] = true;
+            return r.dump();
+        }
+    } else {
+        parent = sr->get_hosted_scene()->get_root_node();
+    }
+
+    const std::shared_ptr<erhe::scene::Node> node = m_context.scene_commands->create_new_empty_node(parent.get());
+    if (!node) {
+        json r = make_text_content("Failed to create node");
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    const std::string name = args.value("name", "");
+    if (!name.empty()) {
+        node->set_name(name);
+    }
+
+    glm::vec3 position{0.0f};
+    const json pos_json = args.value("position", json());
+    if (pos_json.is_array() && (pos_json.size() == 3)) {
+        position = glm::vec3{pos_json[0].get<float>(), pos_json[1].get<float>(), pos_json[2].get<float>()};
+    }
+    // The node is not yet attached (the insert executes on the next editor
+    // frame); setting the world transform now is preserved by Node::set_parent.
+    node->set_world_from_node(erhe::math::create_translation<float>(position));
+
+    return make_json_content({
+        {"node_name", node->get_name()},
+        {"node_id",   node->get_id()},
+        {"parent",    parent->get_name()},
+        {"position",  {position.x, position.y, position.z}},
+        {"queued",    true} // the insert operation executes on the next editor frame
+    }).dump();
 }
 
 auto Mcp_server::action_toggle_physics(const json& args) -> std::string
