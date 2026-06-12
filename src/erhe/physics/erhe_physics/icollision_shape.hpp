@@ -4,6 +4,7 @@
 
 #include <glm/glm.hpp>
 
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
@@ -27,6 +28,10 @@ enum class Collision_shape_type : int {
     e_convex_hull,
     e_compound,
     e_uniform_scaling,
+    e_tapered_cylinder,
+    e_mesh,
+    e_scaled,
+    e_offset_center_of_mass,
 };
 
 class ICollision_shape;
@@ -79,6 +84,19 @@ public:
     [[nodiscard]] static auto create_cylinder_shape              (Axis axis, const glm::vec3 half_extents) -> ICollision_shape*;
     [[nodiscard]] static auto create_cylinder_shape_shared       (Axis axis, const glm::vec3 half_extents) -> std::shared_ptr<ICollision_shape>;
 
+    // Triangle mesh shape; usable with static / kinematic bodies only (Jolt restriction; callers enforce).
+    // indices contains 3 * triangle_count vertex indices (counter clockwise winding).
+    [[nodiscard]] static auto create_mesh_shape                  (const float* points, int point_count, int point_stride_bytes, const uint32_t* indices, int triangle_count) -> ICollision_shape*;
+    [[nodiscard]] static auto create_mesh_shape_shared           (const float* points, int point_count, int point_stride_bytes, const uint32_t* indices, int triangle_count) -> std::shared_ptr<ICollision_shape>;
+
+    // Wrapper that shifts the center of mass of the wrapped shape by offset
+    [[nodiscard]] static auto create_offset_center_of_mass_shape       (const std::shared_ptr<ICollision_shape>& shape, glm::vec3 offset) -> ICollision_shape*;
+    [[nodiscard]] static auto create_offset_center_of_mass_shape_shared(const std::shared_ptr<ICollision_shape>& shape, glm::vec3 offset) -> std::shared_ptr<ICollision_shape>;
+
+    // Wrapper that applies non-uniform scale to the wrapped shape
+    [[nodiscard]] static auto create_scaled_shape                (const std::shared_ptr<ICollision_shape>& shape, glm::vec3 scale) -> ICollision_shape*;
+    [[nodiscard]] static auto create_scaled_shape_shared         (const std::shared_ptr<ICollision_shape>& shape, glm::vec3 scale) -> std::shared_ptr<ICollision_shape>;
+
     [[nodiscard]] static auto create_sphere_shape                (float radius) -> ICollision_shape*;
     [[nodiscard]] static auto create_sphere_shape_shared         (float radius) -> std::shared_ptr<ICollision_shape>;
 
@@ -87,8 +105,12 @@ public:
     [[nodiscard]] static auto create_tapered_capsule_shape       (Axis axis, float bottom_radius, float top_radius, float length) -> ICollision_shape*;
     [[nodiscard]] static auto create_tapered_capsule_shape_shared(Axis axis, float bottom_radius, float top_radius, float length) -> std::shared_ptr<ICollision_shape>;
 
-    [[nodiscard]] static auto create_uniform_scaling_shape       (ICollision_shape* shape, float scale) -> ICollision_shape*;
-    [[nodiscard]] static auto create_uniform_scaling_shape_shared(ICollision_shape* shape, float scale) -> std::shared_ptr<ICollision_shape>;
+    // length is the full axial height; a cone is a tapered cylinder with one radius ~0
+    [[nodiscard]] static auto create_tapered_cylinder_shape       (Axis axis, float bottom_radius, float top_radius, float length) -> ICollision_shape*;
+    [[nodiscard]] static auto create_tapered_cylinder_shape_shared(Axis axis, float bottom_radius, float top_radius, float length) -> std::shared_ptr<ICollision_shape>;
+
+    [[nodiscard]] static auto create_uniform_scaling_shape       (const std::shared_ptr<ICollision_shape>& shape, float scale) -> ICollision_shape*;
+    [[nodiscard]] static auto create_uniform_scaling_shape_shared(const std::shared_ptr<ICollision_shape>& shape, float scale) -> std::shared_ptr<ICollision_shape>;
 
                   virtual void calculate_local_inertia           (float mass, glm::mat4& inertia) const = 0;
     [[nodiscard]] virtual auto is_convex                         () const -> bool                       = 0;
@@ -104,6 +126,9 @@ public:
     [[nodiscard]] virtual auto get_top_radius  () const -> std::optional<float>                        { return std::nullopt; }
     [[nodiscard]] virtual auto get_axis        () const -> std::optional<Axis>                         { return std::nullopt; }
     [[nodiscard]] virtual auto get_length      () const -> std::optional<float>                        { return std::nullopt; }
+    [[nodiscard]] virtual auto get_scale       () const -> std::optional<glm::vec3>                    { return std::nullopt; }
+    [[nodiscard]] virtual auto get_offset      () const -> std::optional<glm::vec3>                    { return std::nullopt; }
+    [[nodiscard]] virtual auto get_inner_shape () const -> std::shared_ptr<ICollision_shape>           { return {}; }
     [[nodiscard]] virtual auto get_children    () const -> const std::vector<Compound_child>&          { static const std::vector<Compound_child> empty; return empty; }
 
     //virtual void calculate_principal_axis_transform(

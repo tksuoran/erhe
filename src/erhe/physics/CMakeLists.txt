@@ -14,8 +14,14 @@ if (${ERHE_PHYSICS_LIBRARY} STREQUAL "jolt")
         erhe_physics/jolt/jolt_convex_hull_collision_shape.hpp
         erhe_physics/jolt/jolt_debug_renderer.cpp
         erhe_physics/jolt/jolt_debug_renderer.hpp
+        erhe_physics/jolt/jolt_mesh_shape.cpp
+        erhe_physics/jolt/jolt_mesh_shape.hpp
+        erhe_physics/jolt/jolt_offset_center_of_mass_shape.cpp
+        erhe_physics/jolt/jolt_offset_center_of_mass_shape.hpp
         erhe_physics/jolt/jolt_rigid_body.cpp
         erhe_physics/jolt/jolt_rigid_body.hpp
+        erhe_physics/jolt/jolt_scaled_shape.cpp
+        erhe_physics/jolt/jolt_scaled_shape.hpp
         erhe_physics/jolt/jolt_uniform_scaling_shape.cpp
         erhe_physics/jolt/jolt_uniform_scaling_shape.hpp
         erhe_physics/jolt/jolt_world.cpp
@@ -35,8 +41,14 @@ if (${ERHE_PHYSICS_LIBRARY} STREQUAL "none")
         erhe_physics/null/null_constraint.hpp
         erhe_physics/null/null_convex_hull_collision_shape.cpp
         erhe_physics/null/null_convex_hull_collision_shape.hpp
+        erhe_physics/null/null_mesh_shape.cpp
+        erhe_physics/null/null_mesh_shape.hpp
+        erhe_physics/null/null_offset_center_of_mass_shape.cpp
+        erhe_physics/null/null_offset_center_of_mass_shape.hpp
         erhe_physics/null/null_rigid_body.cpp
         erhe_physics/null/null_rigid_body.hpp
+        erhe_physics/null/null_scaled_shape.cpp
+        erhe_physics/null/null_scaled_shape.hpp
         erhe_physics/null/null_uniform_scaling_shape.cpp
         erhe_physics/null/null_uniform_scaling_shape.hpp
         erhe_physics/null/null_world.cpp

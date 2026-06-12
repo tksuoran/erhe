@@ -10,6 +10,7 @@
 #include <Jolt/Physics/Collision/Shape/RotatedTranslatedShape.h>
 #include <Jolt/Physics/Collision/Shape/SphereShape.h>
 #include <Jolt/Physics/Collision/Shape/TaperedCapsuleShape.h>
+#include <Jolt/Physics/Collision/Shape/TaperedCylinderShape.h>
 
 #include <glm/glm.hpp>
 
@@ -88,6 +89,29 @@ public:
 
 private:
     JPH::Ref<JPH::TaperedCapsuleShapeSettings>    m_tapered_capsule_shape_settings;
+    JPH::Ref<JPH::RotatedTranslatedShapeSettings> m_shape_settings;
+    Axis                                          m_axis;
+    float                                         m_bottom_radius;
+    float                                         m_top_radius;
+    float                                         m_length;
+};
+
+class Jolt_tapered_cylinder_shape : public Jolt_collision_shape
+{
+public:
+    Jolt_tapered_cylinder_shape(Axis axis, float bottom_radius, float top_radius, float length);
+    ~Jolt_tapered_cylinder_shape() noexcept override;
+
+    auto get_shape_settings() -> JPH::ShapeSettings&                  override;
+    [[nodiscard]] auto describe         () const -> std::string          override;
+    [[nodiscard]] auto get_shape_type   () const -> Collision_shape_type override;
+    [[nodiscard]] auto get_bottom_radius() const -> std::optional<float> override;
+    [[nodiscard]] auto get_top_radius   () const -> std::optional<float> override;
+    [[nodiscard]] auto get_axis         () const -> std::optional<Axis>  override;
+    [[nodiscard]] auto get_length       () const -> std::optional<float> override;
+
+private:
+    JPH::Ref<JPH::TaperedCylinderShapeSettings>   m_tapered_cylinder_shape_settings;
     JPH::Ref<JPH::RotatedTranslatedShapeSettings> m_shape_settings;
     Axis                                          m_axis;
     float                                         m_bottom_radius;

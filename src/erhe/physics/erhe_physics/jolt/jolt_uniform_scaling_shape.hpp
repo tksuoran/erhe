@@ -10,14 +10,18 @@ namespace erhe::physics {
 class Jolt_uniform_scaling_shape : public Jolt_collision_shape
 {
 public:
-    Jolt_uniform_scaling_shape(ICollision_shape* shape, float scale);
+    Jolt_uniform_scaling_shape(const std::shared_ptr<ICollision_shape>& shape, float scale);
 
     auto get_shape_settings() -> JPH::ShapeSettings&         override;
-    [[nodiscard]] auto describe      () const -> std::string          override;
-    [[nodiscard]] auto get_shape_type() const -> Collision_shape_type override;
+    [[nodiscard]] auto describe       () const -> std::string                       override;
+    [[nodiscard]] auto get_shape_type () const -> Collision_shape_type              override;
+    [[nodiscard]] auto get_scale      () const -> std::optional<glm::vec3>          override;
+    [[nodiscard]] auto get_inner_shape() const -> std::shared_ptr<ICollision_shape> override;
 
 private:
     JPH::Ref<JPH::ScaledShapeSettings> m_shape_settings;
+    std::shared_ptr<ICollision_shape>  m_inner_shape;
+    float                              m_scale;
 };
 
 } // namespace erhe::physics

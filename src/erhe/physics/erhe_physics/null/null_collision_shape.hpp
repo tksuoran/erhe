@@ -82,6 +82,30 @@ private:
 };
 
 
+class Null_tapered_cylinder_shape : public Null_collision_shape
+{
+public:
+    Null_tapered_cylinder_shape(const Axis axis, const float bottom_radius, const float top_radius, const float length)
+        : m_axis{axis}, m_bottom_radius{bottom_radius}, m_top_radius{top_radius}, m_length{length}
+    {
+    }
+
+    ~Null_tapered_cylinder_shape() noexcept override = default;
+
+    [[nodiscard]] auto get_shape_type    () const -> Collision_shape_type  override { return Collision_shape_type::e_tapered_cylinder; }
+    [[nodiscard]] auto get_bottom_radius () const -> std::optional<float>  override { return m_bottom_radius; }
+    [[nodiscard]] auto get_top_radius    () const -> std::optional<float>  override { return m_top_radius; }
+    [[nodiscard]] auto get_axis          () const -> std::optional<Axis>   override { return m_axis; }
+    [[nodiscard]] auto get_length        () const -> std::optional<float>  override { return m_length; }
+
+private:
+    Axis  m_axis;
+    float m_bottom_radius;
+    float m_top_radius;
+    float m_length;
+};
+
+
 class Null_cone_shape : public Null_collision_shape
 {
 public:

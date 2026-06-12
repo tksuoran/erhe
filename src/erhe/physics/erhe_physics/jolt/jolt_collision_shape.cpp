@@ -90,6 +90,16 @@ auto ICollision_shape::create_tapered_capsule_shape_shared(const Axis axis, cons
     return std::make_shared<Jolt_tapered_capsule_shape>(axis, bottom_radius, top_radius, length);
 }
 
+auto ICollision_shape::create_tapered_cylinder_shape(const Axis axis, const float bottom_radius, const float top_radius, const float length) -> ICollision_shape*
+{
+    return new Jolt_tapered_cylinder_shape(axis, bottom_radius, top_radius, length);
+}
+
+auto ICollision_shape::create_tapered_cylinder_shape_shared(const Axis axis, const float bottom_radius, const float top_radius, const float length) -> std::shared_ptr<ICollision_shape>
+{
+    return std::make_shared<Jolt_tapered_cylinder_shape>(axis, bottom_radius, top_radius, length);
+}
+
 auto ICollision_shape::create_cylinder_shape(const Axis axis, const glm::vec3 half_extents) -> ICollision_shape*
 {
     return new Jolt_cylinder_shape(axis, half_extents);
@@ -300,6 +310,73 @@ auto Jolt_tapered_capsule_shape::get_axis() const -> std::optional<Axis>
 }
 
 auto Jolt_tapered_capsule_shape::get_length() const -> std::optional<float>
+{
+    return m_length;
+}
+
+//
+
+Jolt_tapered_cylinder_shape::Jolt_tapered_cylinder_shape(const Axis axis, const float bottom_radius, const float top_radius, const float length)
+    : m_axis         {axis}
+    , m_bottom_radius{bottom_radius}
+    , m_top_radius   {top_radius}
+    , m_length       {length}
+{
+    // Jolt centers the shape around the origin with the bottom cap disc at
+    // (0, -half_height, 0) and the top cap disc at (0, +half_height, 0).
+    // length is the full axial height; a cone is a tapered cylinder with one
+    // radius ~0 (Jolt clamps the convex radius to the smaller radius internally).
+    m_tapered_cylinder_shape_settings = new JPH::TaperedCylinderShapeSettings(length * 0.5f, top_radius, bottom_radius);
+    const JPH::Vec3 x_axis{1.0f, 0.0f, 0.0f};
+    const JPH::Vec3 y_axis{0.0f, 1.0f, 0.0f};
+    const JPH::Vec3 z_axis{0.0f, 0.0f, 1.0f};
+    m_shape_settings = new JPH::RotatedTranslatedShapeSettings{
+        JPH::Vec3{0.0f, 0.0f, 0.0f},
+        (axis == Axis::Y)
+            ? JPH::Quat::sIdentity()
+            : (axis == Axis::X)
+                ? JPH::Quat::sFromTo(y_axis, x_axis)
+                : JPH::Quat::sFromTo(y_axis, z_axis),
+        m_tapered_cylinder_shape_settings
+    };
+    auto result = m_shape_settings->Create();
+    ERHE_VERIFY(result.IsValid());
+    m_jolt_shape = result.Get();
+}
+
+Jolt_tapered_cylinder_shape::~Jolt_tapered_cylinder_shape() noexcept = default;
+
+auto Jolt_tapered_cylinder_shape::get_shape_settings() -> JPH::ShapeSettings&
+{
+    return *m_shape_settings.GetPtr();
+}
+
+auto Jolt_tapered_cylinder_shape::describe() const -> std::string
+{
+    return "Jolt_tapered_cylinder_shape";
+}
+
+auto Jolt_tapered_cylinder_shape::get_shape_type() const -> Collision_shape_type
+{
+    return Collision_shape_type::e_tapered_cylinder;
+}
+
+auto Jolt_tapered_cylinder_shape::get_bottom_radius() const -> std::optional<float>
+{
+    return m_bottom_radius;
+}
+
+auto Jolt_tapered_cylinder_shape::get_top_radius() const -> std::optional<float>
+{
+    return m_top_radius;
+}
+
+auto Jolt_tapered_cylinder_shape::get_axis() const -> std::optional<Axis>
+{
+    return m_axis;
+}
+
+auto Jolt_tapered_cylinder_shape::get_length() const -> std::optional<float>
 {
     return m_length;
 }

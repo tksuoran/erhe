@@ -12,11 +12,14 @@ Null_rigid_body::Null_rigid_body(
     glm::vec3                      ,
     glm::quat                      
 )
-    : m_world          {world}
-    , m_collision_shape{create_info.collision_shape}
-    , m_mass           {create_info.mass}
-    , m_motion_mode    {create_info.motion_mode}
-    , m_debug_label    {create_info.debug_label}
+    : m_world           {world}
+    , m_collision_shape {create_info.collision_shape}
+    , m_linear_velocity {create_info.linear_velocity}
+    , m_angular_velocity{create_info.angular_velocity}
+    , m_mass            {create_info.mass}
+    , m_motion_mode     {create_info.motion_mode}
+    , m_gravity_factor  {create_info.gravity_factor}
+    , m_debug_label     {create_info.debug_label}
 {
     if (create_info.inertia_override.has_value()) {
         m_local_inertia = create_info.inertia_override.value();

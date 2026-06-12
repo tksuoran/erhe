@@ -259,7 +259,7 @@ auto Brush::create_scaled(const int scale_key) -> Scaled
             const auto scaled_volume          = m_data.volume * scale * scale * scale;
             const auto mass                   = m_data.density * scaled_volume;
             auto       scaled_collision_shape = erhe::physics::ICollision_shape::create_uniform_scaling_shape_shared(
-                m_data.collision_shape.get(),
+                m_data.collision_shape,
                 scale
             );
             scaled_collision_shape->calculate_local_inertia(mass, local_inertia);

@@ -55,6 +55,10 @@ public:
     erhe::physics::Motion_mode        motion_mode      {Motion_mode::e_dynamic};
     glm::vec3                         position         {0.0f, 0.0f, 0.0f};
     glm::quat                         orientation      {1.0f, 0.0f, 0.0f, 0.0f};
+    glm::vec3                         linear_velocity  {0.0f, 0.0f, 0.0f}; // world space, applied at creation
+    glm::vec3                         angular_velocity {0.0f, 0.0f, 0.0f}; // world space, applied at creation
+    float                             gravity_factor   {1.0f};
+    bool                              is_sensor        {false};
 };
 
 class IRigid_body

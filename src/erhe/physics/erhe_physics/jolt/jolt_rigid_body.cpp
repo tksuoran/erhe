@@ -67,6 +67,9 @@ Jolt_rigid_body::Jolt_rigid_body(
             : Layers::NON_COLLIDING
     };
 
+    // KHR_physics_rigid_bodies convention: an explicitly provided mass of 0 means infinite mass.
+    const bool infinite_mass = create_info.mass.has_value() && (create_info.mass.value() == 0.0f);
+
     m_mass_properties = jolt_shape->GetMassProperties();
     if (create_info.inertia_override.has_value()) {
         m_mass_properties.mInertia = to_jolt(create_info.inertia_override.value());
@@ -89,7 +92,8 @@ Jolt_rigid_body::Jolt_rigid_body(
         }
     }
 
-    if (m_mass_properties.mMass == 0.0f) {
+    if ((m_mass_properties.mMass == 0.0f) && !infinite_mass) {
+        // Fallback for shapes that cannot compute a mass (and no explicit mass was given)
         m_mass_properties.mMass = 1.0f;
     }
 
@@ -100,6 +104,17 @@ Jolt_rigid_body::Jolt_rigid_body(
     creation_settings.mMassPropertiesOverride  = m_mass_properties;
     creation_settings.mLinearDamping           = create_info.linear_damping;
     creation_settings.mAngularDamping          = create_info.angular_damping;
+    creation_settings.mLinearVelocity          = to_jolt(create_info.linear_velocity);
+    creation_settings.mAngularVelocity         = to_jolt(create_info.angular_velocity);
+    creation_settings.mGravityFactor           = create_info.gravity_factor;
+    creation_settings.mIsSensor                = create_info.is_sensor;
+
+    if (infinite_mass) {
+        // Jolt asserts mass > 0 at body creation; create with placeholder mass
+        // properties and zero the inverse mass / inverse inertia after creation below.
+        creation_settings.mMassPropertiesOverride.mMass    = 1.0f;
+        creation_settings.mMassPropertiesOverride.mInertia = JPH::Mat44::sIdentity();
+    }
 
     static_assert(sizeof(uintptr_t) <= sizeof(JPH::uint64));
     creation_settings.mUserData = static_cast<JPH::uint64>(reinterpret_cast<uintptr_t>(this));
@@ -110,6 +125,15 @@ Jolt_rigid_body::Jolt_rigid_body(
         m_debug_label = fmt::format("{} (CreateBody() returned nullptr)", create_info.debug_label);
     } else {
         m_debug_label = fmt::format("{} ({})", create_info.debug_label, m_body->GetID().GetIndex());
+        if (infinite_mass && !m_body->IsStatic()) {
+            // KHR_physics_rigid_bodies infinite-mass convention: the body can still be
+            // moved kinematically but does not respond to forces or impulses.
+            JPH::MotionProperties* motion_properties = m_body->GetMotionProperties();
+            if (motion_properties != nullptr) {
+                motion_properties->SetInverseMass(0.0f);
+                motion_properties->SetInverseInertia(JPH::Vec3::sZero(), JPH::Quat::sIdentity());
+            }
+        }
     }
 }
 

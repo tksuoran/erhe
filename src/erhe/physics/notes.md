@@ -9,8 +9,13 @@ a specific engine.
 ## Key Types
 - `IWorld` -- physics world: manages rigid bodies and constraints, steps simulation, debug draws
 - `IRigid_body` -- rigid body with mass, velocity, damping, motion mode, transform
-- `IRigid_body_create_info` -- parameters for creating a rigid body (shape, mass/density, friction, etc.)
-- `ICollision_shape` -- factory for shapes: box, sphere, capsule, tapered capsule, cylinder, convex hull, compound, uniform scaling
+- `IRigid_body_create_info` -- parameters for creating a rigid body (shape, mass/density, friction,
+  initial velocities, gravity factor, sensor flag, etc.); explicit mass 0 means infinite mass
+  (KHR_physics_rigid_bodies convention)
+- `ICollision_shape` -- factory for shapes: box, sphere, capsule, tapered capsule, cylinder,
+  tapered cylinder, convex hull, triangle mesh (static/kinematic bodies only), compound,
+  uniform scaling, non-uniform scaled and center-of-mass offset wrappers; wrappers expose
+  `get_inner_shape()` / `get_scale()` / `get_offset()` introspection
 - `IConstraint` -- joint constraints (currently point-to-point)
 - `IDebug_draw` -- debug rendering interface (wireframe, contacts, AABBs)
 - `Transform` -- basis (mat3) + origin (vec3) transform representation
